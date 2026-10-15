@@ -20,7 +20,7 @@ export const SEED_MAX_TEXT_LENGTH = 1000
 /** Same shape POST /api/posts accepts as an idempotent clientPostId. */
 export const SEED_CLIENT_POST_ID_PATTERN = /^[\w-]{12,128}$/
 export const SEED_DEFAULT_AUTHOR_HANDLE = 'mingle_team'
-export const SEED_DEFAULT_AUTHOR_NAME = 'Mingle 팀'
+export const SEED_DEFAULT_AUTHOR_NAME = 'HashChat 팀'
 
 export type SeedSource = { url: string; checkedAt: string }
 

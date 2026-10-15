@@ -7,7 +7,7 @@ import { SeedRunner } from './seed-runner'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '계정 대량 생성 · Mingle Admin',
+  title: '계정 대량 생성 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

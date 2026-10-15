@@ -291,7 +291,7 @@ interface ConversationItem {
   // rooms (no other real member yet), which keep using avatarSrc/avatarAlt
   // (the generated diarization avatar) instead.
   otherMembers: ConversationChannelOtherMember[];
-  // Account label shown next to the title (a room with a Mingle-run member
+  // Account label shown next to the title (a room with a HashChat-run member
   // reads "운영 계정"); the title itself is a renamable plain string.
   titleAccountBadge: AccountBadgeKind | null;
   titleAccountBadgeLocale: string;
@@ -5448,7 +5448,7 @@ export default function ConversationList({
           className="absolute inset-0 z-[300] flex min-h-0 w-full items-center justify-center bg-[#fcfbf8]"
           role="status"
           aria-live="polite"
-          aria-label={locale === "ko" ? "Mingle 준비 중" : "Preparing Mingle"}
+          aria-label={locale === "ko" ? "HashChat 준비 중" : "Preparing HashChat"}
         >
           <div className="flex flex-col items-center gap-5">
             <MingleWordmark />

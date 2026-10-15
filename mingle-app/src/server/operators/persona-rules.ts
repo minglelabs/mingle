@@ -56,10 +56,10 @@ const EMAIL_PATTERN = /[^\s@]+@[^\s@]+\.[^\s@]+/
 const MENTION_PATTERN = /(^|\s)@[\p{L}\p{N}_.]{2,}/u
 const DIGIT_RUN_PATTERN = /[+(]?\d[\d\s().-]*\d/g
 const PHONE_MIN_DIGITS = 9
-const MINGLE_PATTERN = /mingle|밍글|ミングル/i
+const MINGLE_PATTERN = /mingle|hash\s?chat|밍글|해시\s?챗|ミングル|ハッシュチャット/i
 /** Whole words (so "Badminton" is fine) that would make a persona read as staff or as the brand. */
-const RESERVED_WORDS = new Set(['mingle', 'admin', 'administrator', 'official', 'staff', 'support', 'operator', 'moderator', 'system'])
-const RESERVED_NAME_FRAGMENTS = /밍글|ミングル|관리자|운영|공식|스태프/
+const RESERVED_WORDS = new Set(['mingle', 'hashchat', 'admin', 'administrator', 'official', 'staff', 'support', 'operator', 'moderator', 'system'])
+const RESERVED_NAME_FRAGMENTS = /밍글|해시챗|ミングル|ハッシュチャット|관리자|운영|공식|스태프/
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -112,7 +112,7 @@ export function validateOperatorHandle(value: unknown): FieldResult<string> {
   if (!/^[a-z0-9]/.test(handle) || !/[a-z]/.test(handle) || handle.endsWith('.') || handle.includes('..')) {
     return { ok: false, error: 'invalid_handle' }
   }
-  if (isSearchExcludedHandle(handle) || handle.includes('mingle') || hasReservedWord(handle)) {
+  if (isSearchExcludedHandle(handle) || handle.includes('mingle') || handle.includes('hashchat') || hasReservedWord(handle)) {
     return { ok: false, error: 'reserved_handle' }
   }
   return { ok: true, value: handle }

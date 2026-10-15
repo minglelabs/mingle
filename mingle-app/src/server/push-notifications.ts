@@ -181,7 +181,7 @@ export function resolvePushCopy(message: PushMessage): { title: string; body: st
     return resolvePushNotificationCopy(message.recipientLanguage, message.type, label);
   }
 
-  return { title: "Mingle", body: "You have a new notification." };
+  return { title: "HashChat", body: "You have a new notification." };
 }
 
 function createPushData(message: PushMessage): Record<string, string> {
@@ -509,7 +509,7 @@ export async function sendPushNotificationForUserNotification(notificationId: st
     // An operator / official actor keeps its badge on the lock screen too.
     actorLabel: actor
       ? withAccountBadgeLabel(actor.name?.trim() || `@${actor.handle}`, resolveAccountBadge(actor), recipientLanguage)
-      : "Mingle",
+      : "HashChat",
     recipientLanguage,
     ...(navigationUrl ? { navigationUrl } : {}),
     ...(actor ? {} : { messagePreview: notification.body ?? "" }),
@@ -586,7 +586,7 @@ export async function sendPushNotificationForConversationMessage(args: {
       type: "conversation_message",
       actorId: args.senderUserId,
       // An operator sender is labeled in each recipient's own language:
-      // "Mina (운영 계정)" / "Mina (Run by Mingle)".
+      // "Mina (운영 계정)" / "Mina (Run by HashChat)".
       actorLabel: withAccountBadgeLabel(senderName, senderBadge, recipientLanguage),
       recipientLanguage,
       messagePreview,

@@ -10,7 +10,7 @@ import { OperatorPosts } from './operator-posts'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '운영 계정 · Mingle Admin',
+  title: '운영 계정 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

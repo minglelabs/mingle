@@ -129,7 +129,7 @@ export type GeneratedReservePost = {
 export function buildReserveInstructions(persona: Pick<ReservePersona, 'language'>): string {
   const languageName = getSttLanguageDisplayName(persona.language, 'en') || persona.language
   return [
-    'You ghostwrite short social posts for one person on Mingle, an app where people from different countries chat and learn each other\'s languages.',
+    'You ghostwrite short social posts for one person on HashChat, an app where people from different countries chat and learn each other\'s languages.',
     'The input JSON has "persona" (who is posting), "poster" (what kind of poster this person is: "type", "length" and "voice", their typing habits and quirks), "learner" (the language they are learning and their level), "slots" (one post per slot; each has a number, a "topic", a "shape", a "language" and "photo"), and "alreadyWritten" (the starts of posts this person already has).',
     `Each slot names the language to write in. ${languageName} (${persona.language}) is this person's own language: write those posts exactly the way a native speaker of the persona's age types on their phone to friends, with the slang, abbreviations, sentence endings and written laughter that are normal in that language right now.`,
     'A slot in any other language is written by this person as a learner of it, at the level in "learner". Make the level audible: the mistakes and stiffness that a native speaker of the persona\'s own language really makes in that language, not random errors. Learner posts are simpler and more polite than the person\'s native posts, the poster quirks mostly do not carry over, and a learner may add the same line in their own language underneath.',
@@ -144,7 +144,7 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
     'Every post must differ from the others and from "alreadyWritten" in subject and opening words.',
     'The posts are published on unknown future days. Words like "today", "just now", "earlier" and "tonight" are fine. Never mention a date, weekday, month, season, weather, temperature, holiday, exam period or current event.',
     'Use only facts consistent with the persona. Do not invent a specific employer, school or real person. No politics, religion debate, sexual content, or anything about money or selling.',
-    'Never include contact details, links, other apps, @mentions or phone numbers, and never mention Mingle or being an AI.',
+    'Never include contact details, links, other apps, @mentions or phone numbers, and never mention HashChat or being an AI.',
     'Answer with JSON: {"posts": [{"slot": <number>, "text": "<the post>", "photo": "<photo description or empty>"}]} with exactly one entry per slot.',
   ].join('\n')
 }
@@ -164,7 +164,7 @@ const RESPONSE_SCHEMA: ResponseSchema = {
   required: ['posts'],
 }
 
-const MINGLE_PATTERN = /mingle|밍글|ミングル/i
+const MINGLE_PATTERN = /mingle|hash\s?chat|밍글|해시\s?챗|ミングル|ハッシュチャット/i
 const HASHTAG_PATTERN = /(^|\s)#\S/
 
 /** A usable post text, or null. */

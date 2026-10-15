@@ -41,29 +41,29 @@ const TOAST_BOTTOM_OFFSET = "calc(env(safe-area-inset-bottom, 0px) + 108px)";
 
 export const metadata: Metadata = {
   metadataBase,
-  title: "Mingle, Seamless Translator",
-  description: "Just stay in the conversation. Mingle lets you talk without translating sentence by sentence.",
+  title: "HashChat, Seamless Translator",
+  description: "Just stay in the conversation. HashChat lets you talk without translating sentence by sentence.",
   icons: {
     icon: "/favicon.ico",
   },
   openGraph: {
-    title: "Mingle, Seamless Translator",
-    description: "Just stay in the conversation. Mingle lets you talk without translating sentence by sentence.",
+    title: "HashChat, Seamless Translator",
+    description: "Just stay in the conversation. HashChat lets you talk without translating sentence by sentence.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Mingle - Seamless Translator",
+        alt: "HashChat - Seamless Translator",
       },
     ],
     type: "website",
-    siteName: "Mingle",
+    siteName: "HashChat",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Mingle, Seamless Translator",
-    description: "Just stay in the conversation. Mingle lets you talk without translating sentence by sentence.",
+    title: "HashChat, Seamless Translator",
+    description: "Just stay in the conversation. HashChat lets you talk without translating sentence by sentence.",
     images: ["/og-image.png"],
   },
 };

@@ -15,7 +15,7 @@
 // types: client code imports these types, and pulling a Prisma-backed module
 // into the browser bundle for a type alias is not worth it.
 //
-// Account badges ('operator' = run by Mingle staff, 'official' = the Mingle
+// Account badges ('operator' = run by HashChat staff, 'official' = the HashChat
 // team's own account) are not identifiers: they are the public label every
 // surface showing that name must carry, so they pass through here.
 
@@ -70,7 +70,7 @@ export type PublicSpectateSnapshot = {
   // carry their account id for a client to look them up with.
   sharedBy: PublicSpectateInviter | null;
   utterances: PublicSpectateUtterance[];
-  // Present (true) only when a Mingle-run account was an active member at
+  // Present (true) only when a HashChat-run account was an active member at
   // the snapshot: the page then shows the same disclosure as the room.
   operatorDisclosure?: true;
 };

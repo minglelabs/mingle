@@ -39,8 +39,8 @@ function getPermissionCopy(status: PermissionStatus | null, requestConfig: Nativ
     return {
       title: isKorean ? "카메라 권한이 필요합니다" : "Camera access is required",
       description: isKorean
-        ? "설정에서 Mingle의 카메라 접근을 허용해 주세요."
-        : "Allow Mingle to use the camera in Settings.",
+        ? "설정에서 HashChat의 카메라 접근을 허용해 주세요."
+        : "Allow HashChat to use the camera in Settings.",
       action: requestConfig.settingsLabel ?? (isKorean ? "설정 열기" : "Open settings"),
     };
   }

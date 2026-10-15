@@ -28,7 +28,7 @@ export function readAccountBadgeFlags(record: Record<string, unknown> | null | u
 /**
  * The one badge a room-level label (chat list row title, room header) shows:
  * the strongest badge among the room's OTHER members. `operator` wins, so a
- * room with a Mingle-run account is never shown as merely "official". Room
+ * room with a HashChat-run account is never shown as merely "official". Room
  * titles are renamable plain strings, so the label sits next to the title and
  * is never written into it.
  */

@@ -118,7 +118,7 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
     loading: dictionary.profile.profileLoadingLabel ?? (locale === "ko" ? "불러오는 중" : "Loading"),
     error: dictionary.connect.searchError
       ?? (locale === "ko" ? "목록을 불러오지 못했습니다. 다시 시도해 주세요." : "Could not load the list. Please try again."),
-    userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user"),
+    userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "HashChat 사용자" : "HashChat user"),
     clearSearch: dictionary.connect.clearSearchLabel ?? (locale === "ko" ? "검색어 지우기" : "Clear search"),
     empty: activeTab === "followers"
       ? (dictionary.profile.noFollowersLabel ?? "No followers yet.")

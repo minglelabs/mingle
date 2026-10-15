@@ -32,7 +32,7 @@ export type SerializerAuthorRow = {
   name: string | null
   image: string | null
   /**
-   * Badge flags: the Mingle team's official account / an account run by Mingle
+   * Badge flags: the HashChat team's official account / an account run by HashChat
    * staff (operator). Optional so a caller whose `select` predates a column
    * still type-checks; missing reads as false.
    */

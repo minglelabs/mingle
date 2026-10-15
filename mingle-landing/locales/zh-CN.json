@@ -5,29 +5,29 @@
   "hero": {
     "title1": "逐句停顿的翻译，",
     "title2": "该结束了。",
-    "subtitle": "不再需要每句话都停下来翻译。Mingle让长时间对话持续翻译，说话的同时实时翻译并显示在屏幕上。所有对话都记录在聊天室中，可以邀请对方随时在线继续对话。",
+    "subtitle": "不再需要每句话都停下来翻译。HashChat让长时间对话持续翻译，说话的同时实时翻译并显示在屏幕上。所有对话都记录在聊天室中，可以邀请对方随时在线继续对话。",
     "cta": "下载",
     "tryDemo": "试一试",
     "flirting": {
       "title1": "和外国人谈情说爱，",
       "title2": "语言不再是障碍。",
-      "subtitle": "不要因为语言而犹豫。Mingle实时翻译，让你保持自然的氛围。对话保存在聊天室，随时可以联系。"
+      "subtitle": "不要因为语言而犹豫。HashChat实时翻译，让你保持自然的氛围。对话保存在聊天室，随时可以联系。"
     },
     "working": {
       "title1": "与全球团队协作，",
       "title2": "没有语言障碍。",
-      "subtitle": "与全球团队实时沟通。Mingle在会议中无缝翻译。所有对话都会记录，方便日后查看，还可以随时与队友聊天。"
+      "subtitle": "与全球团队实时沟通。HashChat在会议中无缝翻译。所有对话都会记录，方便日后查看，还可以随时与队友聊天。"
     }
   },
   "valueProposition": {
-    "label": "Why Mingle",
+    "label": "Why HashChat",
     "title": "与外国人交流，自信就是一切",
-    "description": "不会外语也没关系。只需打开Mingle。我们会给你这份自信。",
+    "description": "不会外语也没关系。只需打开HashChat。我们会给你这份自信。",
     "social": {
       "label": "Offline",
       "title": "自信地参加线下聚会。",
       "description": "变身为实时语音翻译器。不用逐句停顿，多种语言也能双向自动翻译，让您专注于对话。",
-      "titleHighlight": "与Mingle一起。"
+      "titleHighlight": "与HashChat一起。"
     },
     "titleHighlight": ""
   },
@@ -39,7 +39,7 @@
   },
   "beforeAfter": {
     "beforeLabel": "Before",
-    "afterLabel": "With Mingle",
+    "afterLabel": "With HashChat",
     "beforeDesc": "用翻译应用一句句翻...",
     "afterDesc": "流畅自然的对话！",
     "problemLabel": "问题",
@@ -60,7 +60,7 @@
   "features": {
     "label": "功能特点",
     "title": "让你专注于对话",
-    "subtitle": "Mingle不仅仅是翻译器。它是让你专注于对话的世界上最舒适的聊天工具。",
+    "subtitle": "HashChat不仅仅是翻译器。它是让你专注于对话的世界上最舒适的聊天工具。",
     "realtime": {
       "title": "实时翻译",
       "desc": "说话的同时翻译就开始了。自然对话，不会中断。"
@@ -89,7 +89,7 @@
   "coreValue": {
     "label": "核心价值",
     "title": "将线下对话延续到在线聊天室",
-    "desc1": "这才是Mingle真正的价值所在。",
+    "desc1": "这才是HashChat真正的价值所在。",
     "desc2": "邀请你在现实中遇到的人加入应用。翻译过的对话会成为永久聊天室。第二天、下周、任何时候都可以继续对话。",
     "desc3": "派对上的偶遇变成真正的友谊的那一刻，这就是",
     "chatDate": "2024年2月4日的对话",
@@ -104,16 +104,16 @@
   "cta": {
     "title1": "和外国人交朋友",
     "title2": "最简单的方式 —",
-    "title2Highlight": "Mingle",
-    "subtitle": "有了Mingle，无论对方说什么语言，你都能进行深度对话。",
+    "title2Highlight": "HashChat",
+    "subtitle": "有了HashChat，无论对方说什么语言，你都能进行深度对话。",
     "button": "立即下载"
   },
   "footer": {
-    "copyright": "© 2026 Mingle. 保留所有权利。"
+    "copyright": "© 2026 HashChat. 保留所有权利。"
   },
   "modal": {
     "title": "中国区上线通知",
-    "subtitle": "Mingle已在全球150个国家受到喜爱。注册邮箱，第一时间获取中国区上线通知。",
+    "subtitle": "HashChat已在全球150个国家受到喜爱。注册邮箱，第一时间获取中国区上线通知。",
     "placeholder": "your@email.com",
     "submit": "通知我",
     "success": "已加入名单！",
@@ -128,7 +128,7 @@
   },
   "partyScenario": {
     "step1Title": "1. 派对相遇",
-    "step1Desc": "用Mingle实时翻译",
+    "step1Desc": "用HashChat实时翻译",
     "step2Title": "2. 邀请加入应用！",
     "step2Desc": "邀请对方加入应用后",
     "step2Highlight": "对话变成聊天室！",
@@ -162,7 +162,7 @@
     "label": "Connect",
     "title1": "与喜欢的朋友",
     "title2": "连接聊天",
-    "description": "与全球超过一千万人连接聊天。语言障碍已被Mingle的AI技术克服。"
+    "description": "与全球超过一千万人连接聊天。语言障碍已被HashChat的AI技术克服。"
   },
   "communication": {
     "title": "任何沟通方式都轻松搞定",
@@ -181,7 +181,7 @@
   },
   "worldMap": {
     "title": "寻找世界各地的朋友",
-    "description": "旅行前，先在Mingle上结交当地朋友。",
+    "description": "旅行前，先在HashChat上结交当地朋友。",
     "label": "Explore"
   }
 }

@@ -80,7 +80,7 @@ describe("/api/profile route", () => {
   it("returns the authenticated user's profile", async () => {
     mockUserFindUnique.mockResolvedValue({
       id: "user_123",
-      name: "Mingle Name",
+      name: "HashChat Name",
       image: null,
       handle: "original.name",
       bio: "Hello",
@@ -95,7 +95,7 @@ describe("/api/profile route", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       id: "user_123",
-      name: "Mingle Name",
+      name: "HashChat Name",
       image: null,
       handle: "original.name",
       bio: "Hello",

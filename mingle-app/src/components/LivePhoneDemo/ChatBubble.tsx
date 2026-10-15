@@ -152,8 +152,8 @@ export interface Utterance {
   // what makes a shared room read as "a conversation with a person" rather
   // than a solo interpreter session.
   speakerImage?: string | null
-  // The sender's account badge ('operator' = run by Mingle staff, 'official'
-  // = the Mingle team's account), shown next to speakerName. Comes from
+  // The sender's account badge ('operator' = run by HashChat staff, 'official'
+  // = the HashChat team's account), shown next to speakerName. Comes from
   // hydration, committed live utterances and live previews (the latter from
   // the sender's signed writer token).
   speakerBadge?: AccountBadgeKind | null

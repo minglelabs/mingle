@@ -162,7 +162,7 @@ describe("chat list and member payloads", () => {
     mocks.memberFindMany.mockResolvedValue([
       memberRow("viewer", "Viewer"),
       memberRow("op", "Mina", { isOperator: true }),
-      memberRow("team", "Mingle", { isOfficial: true }),
+      memberRow("team", "HashChat", { isOfficial: true }),
       memberRow("plain", "Bob"),
     ]);
     mocks.userFindMany.mockResolvedValue([pendingUser("pending-op", "Yuki", { isOperator: true })]);
@@ -181,7 +181,7 @@ describe("chat list and member payloads", () => {
     expect(byId.get("plain")).not.toHaveProperty("isOperator");
     expect(byId.get("plain")).not.toHaveProperty("isOfficial");
     // The label never rides on the (renamable) title string.
-    expect(room.title).toBe("Mina, Mingle, Bob, Yuki");
+    expect(room.title).toBe("Mina, HashChat, Bob, Yuki");
   });
 
   it("keeps a blocked counterpart's label (name stays visible, only the photo is hidden)", async () => {
@@ -202,7 +202,7 @@ describe("chat list and member payloads", () => {
     mocks.memberFindMany.mockResolvedValue([
       memberRow("viewer", "Viewer"),
       memberRow("op", "Mina", { isOperator: true }),
-      memberRow("team", "Mingle", { isOfficial: true }),
+      memberRow("team", "HashChat", { isOfficial: true }),
     ]);
     mocks.userFindMany.mockResolvedValue([pendingUser("pending-op", "Yuki", { isOperator: true })]);
 
@@ -223,7 +223,7 @@ describe("room hydration", () => {
     mocks.memberFindMany.mockResolvedValue([
       memberRow("viewer", "Viewer"),
       memberRow("op", "Mina", { isOperator: true }),
-      memberRow("team", "Mingle", { isOfficial: true }),
+      memberRow("team", "HashChat", { isOfficial: true }),
     ]);
     mocks.messageFindMany.mockResolvedValue([
       message("m3", "viewer", at(3)),
@@ -314,7 +314,7 @@ describe("room hydration", () => {
     const departed = await getConversationHydrationStateForUser({ conversationId: "conv-1", userId: "viewer" });
     expect(departed?.operatorDisclosure).toBe(false);
 
-    mocks.memberFindMany.mockResolvedValue([memberRow("viewer", "Viewer"), memberRow("team", "Mingle", { isOfficial: true })]);
+    mocks.memberFindMany.mockResolvedValue([memberRow("viewer", "Viewer"), memberRow("team", "HashChat", { isOfficial: true })]);
     const official = await getConversationHydrationStateForUser({ conversationId: "conv-1", userId: "viewer" });
     expect(official?.operatorDisclosure).toBe(false);
   });

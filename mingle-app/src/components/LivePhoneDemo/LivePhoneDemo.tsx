@@ -1911,7 +1911,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return mergeConversationMemberProfiles(otherMemberProfiles, viewerProfile)
   }, [initialOtherMembers, session?.user?.name, viewerImage, viewerUserId])
   // Header label for the room: its other members' strongest account badge
-  // (a room with a Mingle-run member reads "운영 계정" next to its title).
+  // (a room with a HashChat-run member reads "운영 계정" next to its title).
   const conversationTitleBadge = useMemo(
     () => resolveRoomAccountBadge(initialOtherMembers),
     [initialOtherMembers],

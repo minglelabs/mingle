@@ -129,7 +129,7 @@ describe('serializeFeedPost', () => {
 
   it('sets author.isOfficial only for official accounts and omits it otherwise', () => {
     const official = serializeFeedPost(
-      makePost({ author: { id: 'author-1', handle: 'mingle_team', name: 'Mingle', image: null, isOfficial: true } }),
+      makePost({ author: { id: 'author-1', handle: 'mingle_team', name: 'HashChat', image: null, isOfficial: true } }),
       makeCtx(),
     )
     expect(official.author.isOfficial).toBe(true)

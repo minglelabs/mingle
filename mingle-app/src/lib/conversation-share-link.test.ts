@@ -18,7 +18,7 @@ describe("conversation share links", () => {
     expect(buildConversationShareAppUrl(token, "launch-2", "mingleconversation")).toBe("mingleconversation://conversation-spectate/cmg123abc?linkNonce=launch-2");
   });
 
-  it("accepts only Mingle conversation-share links for the configured origin", () => {
+  it("accepts only HashChat conversation-share links for the configured origin", () => {
     expect(parseMingleConversationShareLink(`${origin}/s/${token}`, [origin])).toEqual({
       source: "https",
       shareToken: token,

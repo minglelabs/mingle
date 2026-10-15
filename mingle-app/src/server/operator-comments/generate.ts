@@ -63,7 +63,7 @@ export function commentLanguageFor(commenter: Pick<CommenterPersona, 'id' | 'lan
 export function buildCommentInstructions(language: string): string {
   const languageName = getSttLanguageDisplayName(language, 'en') || language
   return [
-    'You ghostwrite one comment that a person leaves under someone else\'s post on Mingle, an app where people from different countries chat and learn each other\'s languages.',
+    'You ghostwrite one comment that a person leaves under someone else\'s post on HashChat, an app where people from different countries chat and learn each other\'s languages.',
     'The input JSON has "commenter" (who is writing), "voice" (their typing habits), "post" (the text, its language and, if it has one, what its photo shows), "existingComments" and "kind" (what this comment does).',
     `Write the comment in ${languageName} (${language}). If "asLearner" is true the commenter is still learning that language, at the level in "learnerLevel": keep it very simple and let the level show. Otherwise write the way a native speaker of the commenter's age types on their phone.`,
     'Length: a few words to one short sentence; never more than two short sentences. Most real comments are under 25 characters.',

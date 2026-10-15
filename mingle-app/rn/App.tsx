@@ -456,7 +456,7 @@ function openNativeExternalUrl(rawUrl: string): void {
     if (!fallbackUrl || fallbackUrl === rawUrl) return;
 
     void Linking.openURL(fallbackUrl).catch(() => {
-      // Ignore external app/browser failures so the Mingle WebView remains intact.
+      // Ignore external app/browser failures so the HashChat WebView remains intact.
     });
   });
 }

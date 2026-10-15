@@ -8,7 +8,7 @@ import { OperatorWizard } from './operator-wizard'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '운영 계정 만들기 · Mingle Admin',
+  title: '운영 계정 만들기 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

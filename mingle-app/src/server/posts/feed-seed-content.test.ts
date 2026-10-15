@@ -37,7 +37,7 @@ function item(overrides: Partial<SeedItem> = {}): SeedItem {
 }
 
 function contentWith(items: SeedItem[]): SeedContent {
-  return { version: 1, authorHandle: 'mingle_team', authorDisplayName: 'Mingle 팀', items }
+  return { version: 1, authorHandle: 'mingle_team', authorDisplayName: 'HashChat 팀', items }
 }
 
 describe('global feed seed content file (posts.v2.json)', () => {

@@ -36,7 +36,7 @@ describe('AccountBadge: kind', () => {
     expect(html).toContain('aria-haspopup="dialog"')
     expect(html).toContain('aria-expanded="false"')
     // Label + description for screen readers, visible label first (label in name).
-    expect(html).toContain('aria-label="운영 계정, Mingle 팀이 운영하는 계정"')
+    expect(html).toContain('aria-label="운영 계정, HashChat 팀이 운영하는 계정"')
     expect(html).toContain('>운영 계정</span>')
     // Nothing of the sheet is rendered until the badge is tapped.
     expect(html).not.toContain('role="dialog"')
@@ -54,9 +54,9 @@ describe('AccountBadge: kind', () => {
     const html = render(resolveAccountBadge({ isOfficial: true }))
     expect(html).toMatch(/^<span data-account-badge="official"/)
     expect(html).toContain('bg-sky-50 text-sky-700 ring-1 ring-sky-200')
-    expect(html).toContain('title="Mingle 공식 계정"')
+    expect(html).toContain('title="HashChat 공식 계정"')
     expect(html).toContain('<span aria-hidden="true">공식</span>')
-    expect(html).toContain('<span class="sr-only">Mingle 공식 계정</span>')
+    expect(html).toContain('<span class="sr-only">HashChat 공식 계정</span>')
     expect(html).not.toContain('<button')
     expect(render('official', 'ko', 'light')).toContain('bg-white/20 text-white ring-1 ring-white/40')
   })
@@ -85,9 +85,9 @@ describe('AccountBadge: copy per locale', () => {
   })
 
   it('reads the English label for an unknown locale and a region tag', () => {
-    expect(operatorBadgeAccessibleName('xx')).toBe('Run by Mingle, This account is run by the Mingle team.')
-    expect(operatorBadgeAccessibleName('ko-KR')).toBe('운영 계정, Mingle 팀이 운영하는 계정')
-    expect(render('operator', 'en')).toContain('>Run by Mingle</span>')
+    expect(operatorBadgeAccessibleName('xx')).toBe('Run by HashChat, This account is run by the HashChat team.')
+    expect(operatorBadgeAccessibleName('ko-KR')).toBe('운영 계정, HashChat 팀이 운영하는 계정')
+    expect(render('operator', 'en')).toContain('>Run by HashChat</span>')
   })
 })
 
@@ -118,7 +118,7 @@ describe('OperatorAccountSheetPanel', () => {
     expect(html).toContain('<h2 id="sheet-title"')
     expect(html).toContain('>운영 계정</h2>')
     expect(html).toContain('<p id="sheet-body"')
-    expect(html).toContain('이 계정은 개인이 아니라 Mingle 팀이 운영합니다. 게시물과 답장은 Mingle 팀원이 작성합니다.')
+    expect(html).toContain('이 계정은 개인이 아니라 HashChat 팀이 운영합니다. 게시물과 답장은 HashChat 팀원이 작성합니다.')
     expect(html).toContain('aria-label="닫기"')
     // The close button is a full-size touch target; the sheet respects the home indicator.
     expect(html).toContain('h-11 w-11')

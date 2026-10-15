@@ -18,7 +18,7 @@ describe('accountBadgeCopy', () => {
 
   it('falls back to English for an unknown locale', () => {
     expect(accountBadgeCopy('xx').official).toBe('Official')
-    expect(accountBadgeCopy('xx').operator).toBe('Run by Mingle')
+    expect(accountBadgeCopy('xx').operator).toBe('Run by HashChat')
   })
 })
 
@@ -48,25 +48,25 @@ describe('accountBadgeCopy: operator accounts', () => {
   it('uses the approved Korean and English wording', () => {
     expect(accountBadgeCopy('ko')).toMatchObject({
       operator: '운영 계정',
-      operatorDescription: 'Mingle 팀이 운영하는 계정',
+      operatorDescription: 'HashChat 팀이 운영하는 계정',
       operatorSheetTitle: '운영 계정',
-      operatorSheetBody: '이 계정은 개인이 아니라 Mingle 팀이 운영합니다. 게시물과 답장은 Mingle 팀원이 작성합니다.',
-      chatDisclosure: '이 대화에는 Mingle 팀이 운영하는 계정이 있습니다. 메시지는 Mingle 팀원이 읽고 답장합니다.',
+      operatorSheetBody: '이 계정은 개인이 아니라 HashChat 팀이 운영합니다. 게시물과 답장은 HashChat 팀원이 작성합니다.',
+      chatDisclosure: '이 대화에는 HashChat 팀이 운영하는 계정이 있습니다. 메시지는 HashChat 팀원이 읽고 답장합니다.',
       pushLabel: '운영 계정',
     })
     expect(accountBadgeCopy('en')).toMatchObject({
-      operator: 'Run by Mingle',
-      operatorDescription: 'This account is run by the Mingle team.',
-      operatorSheetTitle: 'Run by Mingle',
-      operatorSheetBody: 'This account is not a private individual. It is run by the Mingle team, and Mingle staff write its posts and replies.',
-      chatDisclosure: 'A Mingle-run account is in this chat. Mingle staff read and reply to its messages.',
-      pushLabel: 'Run by Mingle',
+      operator: 'Run by HashChat',
+      operatorDescription: 'This account is run by the HashChat team.',
+      operatorSheetTitle: 'Run by HashChat',
+      operatorSheetBody: 'This account is not a private individual. It is run by the HashChat team, and HashChat staff write its posts and replies.',
+      chatDisclosure: 'A HashChat-run account is in this chat. HashChat staff read and reply to its messages.',
+      pushLabel: 'Run by HashChat',
     })
   })
 
   it('keeps the official description free of the operator wording', () => {
-    expect(accountBadgeCopy('ko').officialDescription).toBe('Mingle 공식 계정')
-    expect(accountBadgeCopy('ja').officialDescription).toBe('Mingle公式アカウント')
+    expect(accountBadgeCopy('ko').officialDescription).toBe('HashChat 공식 계정')
+    expect(accountBadgeCopy('ja').officialDescription).toBe('HashChat公式アカウント')
     expect(accountBadgeCopy('ko').officialDescription).not.toContain('운영')
     expect(accountBadgeCopy('ja').officialDescription).not.toContain('運営')
   })
