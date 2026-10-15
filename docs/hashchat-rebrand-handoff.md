@@ -86,6 +86,20 @@ npm i --no-save playwright && npx playwright install chromium && node gen.mjs
 - PR #231 열린 항목: 2.2.0 릴리스 노트 미작성 → 리브랜딩 안내를 같이 넣기
 - 스토어 스크린샷에 옛 로고/이름이 있으면 재촬영 (`scripts/ios-appstore-media.sh`)
 
+## 진행 상황 (2026-10-16)
+
+- 로고: 사용자가 준 최종 일러스트(`branding/hashchat/hashchat-original.png`)로 교체. 이전에 스크립트로 그린 로고는 `branding/hashchat/legacy-drawn/`. 아이콘 전체는 `python3 branding/hashchat/make-icons.py`로 다시 뽑는다 (iOS AppIcon·LaunchLogo, Android mipmap(라운드는 82% 축소 후 원형), Play 512, 웹 아이콘·파비콘). 스플래시 배경은 로고 배경색 `#FCC12F`로 맞춤
+- 이름: 사용자에게 보이는 Mingle/밍글/ミングル/Мингл/मिंगल → HashChat 일괄 치환 완료 (앱·서버·네이티브·랜딩·법률문서·피드 시드·테스트). 회사명 `Mingle Labs`/밍글랩스, `X-Mingle-*` 헤더, 식별자, `@mingle_team` 핸들은 유지
+- 금지어: 운영자 이름·핸들·소개와 예약 게시물 필터에 HashChat/해시챗/ハッシュチャット 추가 (기존 Mingle 유지)
+- 스토어: 제목 `HashChat: …`, 부제·설명 첫 줄·키워드에 Mingle 유지, 2.2.0 릴리스 노트(리브랜딩 + 피드) 15개 언어 작성
+- 테스트: `google-play-console-media-snapshots.test.ts`는 Play 동기화로 새 아이콘을 올리기 전까지 실패하는 게 정상 (스냅샷을 손으로 고치면 업로드가 건너뛰어짐). 나머지 실패 62개는 리브랜딩 전 커밋에서도 동일하게 실패
+
+남은 것
+- 이미지 안 글자: `mingle-app/public/og-image.png`, `google-play-console-info/assets/feature-graphic.png`, 스토어 스크린샷에 "Mingle" 워드마크가 있음 → 새로 제작 필요
+- Android adaptive icon 없음 (최신 기기에서 레거시 아이콘이 축소돼 보일 수 있음)
+- prod DB: 공식 계정 표시 이름, 이미 올라간 시드 게시물 본문의 "Mingle"
+- 실기기 홈 화면에서 아이콘 확인
+
 ## 남은 것 4: 코드 밖 (콘솔 작업)
 
 - App Store Connect 앱 이름, Google Play Console 앱 이름
