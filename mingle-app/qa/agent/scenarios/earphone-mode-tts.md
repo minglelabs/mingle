@@ -2,7 +2,7 @@
 id: earphone-mode-tts
 title: Earphone mode reads translations aloud briskly without breaking STT
 priority: P2
-environment: real-device
+environment: assisted
 tags: [tts, earphone, audio-route, stt]
 taste: [T23, T2, T5]
 paths:
@@ -19,17 +19,17 @@ history:
   - 2026-09-30 — Gemini TTS asked to speak fast in every language; new Korean male voice
 ---
 
-## Simulator part
+## Agent part
 
 1. Open the menu and toggle earphone mode (`live-demo-earphone-mode-toggle`). Screenshot the notice (`live-demo-earphone-mode-notice`).
 2. Pick a language in the notice and confirm. Screenshot the room header or indicator.
-3. Tap a message's TTS button. Note whether playback starts. The simulator plays through the Mac, so judge only that it starts and that the button state changes.
+3. Tap a message's TTS button. Check that playback starts (the button state changes and the device log shows the TTS start) and that the mic state does not change.
 4. Toggle earphone mode off.
 
-Oracle on the simulator: the notice is clear and fits (T16). The selected language is saved. The toggle state is
+Oracle for the agent part: the notice is clear and fits (T16). The selected language is saved. The toggle state is
 obvious (T18). Starting playback does not change the mic state (T2).
 
-## Real-device part (manual checklist)
+## Assisted part (needs a person with AirPods)
 
 - With AirPods connected, start STT and have the counterpart speak. Only the chosen language's translation is read aloud, at a brisk pace (T23).
 - When a translation is revised mid-playback, the old audio is dropped, not queued.

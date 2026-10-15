@@ -2,7 +2,7 @@
 id: native-banner-overlays
 title: The native ad banner never covers UI and stays off focused screens
 priority: P1
-environment: sim
+environment: device
 tags: [banner, safe-area, overlay, layout]
 taste: [T10, T11]
 paths:
@@ -21,7 +21,7 @@ history:
 
 ## Preconditions
 
-- A build with AdMob test IDs (the simulator gets test ads). Signed in.
+- A QA build (it shows AdMob test ads). Signed in.
 
 ## Steps
 
@@ -44,6 +44,6 @@ history:
 
 - Screenshots, QA snapshots.
 
-## Real-device follow-up
+## Manual follow-up
 
-- A real ad fill on TestFlight (simulator test ads can differ in size and timing).
+- A production ad fill on TestFlight (test ads can differ in size and timing).

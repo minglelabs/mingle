@@ -1,6 +1,6 @@
 # Text message fixtures
 
-Typed through the simulator keyboard by `text-message-translation` and related scenarios. Each line lists the
+Typed on the phone by `text-message-translation` and related scenarios. Each line lists the
 message and the intent the translation must keep. Judge the translations against the intent, not word by word.
 
 | # | Language | Message | Intent to preserve |

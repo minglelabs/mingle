@@ -2,7 +2,7 @@
 id: first-launch-and-login
 title: A fresh install asks for the language first and shows a clean, ad-free login
 priority: P0
-environment: sim
+environment: device
 tags: [onboarding, auth, locale, banner, safe-area]
 taste: [T11, T12, T16, T17, T22]
 paths:
@@ -23,8 +23,8 @@ history:
 
 ## Preconditions
 
-- The app is not installed, or was uninstalled with `xcrun simctl uninstall <udid> com.minglelabs.mingle.rn`.
-- The simulator language is Korean (the QA default), unless the run asks for another.
+- A clean first launch: uninstall the app (`xcrun devicectl device uninstall app --device <id> com.minglelabs.mingle.rn`), then run `qa-agent-device.mjs install`. Uninstalling wipes the app's local data on the owner's phone, so ask the owner first.
+- Record the phone's preferred-language order in the run notes; the gate preselects from it.
 
 ## Steps
 
@@ -47,6 +47,6 @@ history:
 
 - The screenshot burst. QA snapshot `uiLocale` and `documentLanguage`, if the bridge is reachable on the login screen.
 
-## Real-device follow-up
+## Manual follow-up
 
-- The Apple and Google sign-in sheets (real accounts are out of scope for the agent).
+- The Apple and Google sign-in sheets (the agent signs in only with the local QA account).

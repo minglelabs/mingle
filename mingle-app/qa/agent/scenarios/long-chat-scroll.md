@@ -2,7 +2,7 @@
 id: long-chat-scroll
 title: A 500-message room scrolls smoothly, keeps its anchor and never hides new messages
 priority: P1
-environment: sim
+environment: device
 tags: [scroll, performance, bubbles, history]
 taste: [T13, T14]
 paths:
@@ -44,6 +44,6 @@ history:
 - QA snapshots: `chatScrollTop`, `chatScrollHeight`, `isAtBottom`, `showScrollToBottom`.
 - `window.__MINGLE_QA__.getLiveDemoChatScrollHandlerMeasurement()` after the swipes. Median ≤ 2 ms passes.
 
-## Real-device follow-up
+## Manual follow-up
 
 - Smoothness verdict: run `pnpm test:qa:ui:ios:scroll-fps` on an iPhone 12-class device ([IOS_SCROLL_FPS_CAPTURE.md](../../mobile-ui/IOS_SCROLL_FPS_CAPTURE.md)).

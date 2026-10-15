@@ -14,7 +14,7 @@ const SCENARIO = `---
 id: composer-photo-attach
 title: Attaching a photo keeps the keyboard open
 priority: P0
-environment: sim
+environment: device
 tags: [composer, keyboard]
 taste: [T1, T10]
 paths:
@@ -102,7 +102,7 @@ test('validateScenario reports a wrong file name, an unknown taste rule and a mi
 
   assert.deepEqual(problems, [
     'y.md: file name must be x.md',
-    'y.md: environment must be one of sim, real-device, manual-only',
+    'y.md: environment must be one of device, assisted, manual-only',
     'y.md: unknown taste rule T99',
     'y.md: history heading not found: 2026-01-01 - Never happened',
   ]);

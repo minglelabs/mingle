@@ -2,7 +2,7 @@
 id: live-voice-translation
 title: Live speech shows partial text, accurate recognition and quick translation
 priority: P0
-environment: real-device
+environment: assisted
 tags: [stt, translation, live, bubbles]
 taste: [T3, T4, T5, T23]
 paths:
@@ -25,14 +25,14 @@ history:
 
 ## Speech source
 
-The simulator listens to the Mac's default input device, and the agent cannot speak. Use the first source that is
-available, and say which one in the report:
+The phone's microphone needs someone to speak, which the agent cannot do. Use the first source that is available,
+and say which one in the report:
 
-1. **Injected audio**: the QA-only audio injection hook (`qaInjectAudio`), with fixtures that carry ground-truth
-   transcripts. This gives a CER score.
-2. **Played audio**: only when the owner agreed to it for this run. Play a fixture through the Mac speakers with
-   `afplay` while the Mac microphone is the input. Recognition accuracy is then "not scored".
-3. **None**: run steps 1, 2 and 6 for the state checks, and put the speech checks on the real-device list.
+1. **Injected audio**: the QA-only audio injection hook (`qaInjectAudio`, from the audio-injection work), with
+   fixtures that carry ground-truth transcripts. This gives a CER score.
+2. **A person**: the owner reads the fixture sentences aloud when the agent asks. Recognition accuracy is scored
+   against the fixture text.
+3. **None**: run steps 1, 2 and 6 for the state checks, and put the speech checks on the manual list.
 
 ## Preconditions
 
@@ -59,10 +59,10 @@ available, and say which one in the report:
 ## Signals
 
 - `app_event_logs` for the run: `stt_session_started`, `stt_turn_started`, `stt_turn_finalized` (count must equal the number of utterances) and `stt_session_stopped`.
-- Device log: `xcrun simctl spawn <udid> log show --last 5m --predicate 'process == "mingle"'`, filtered to `STT`.
+- Device log: `node mingle-app/scripts/qa-agent-device.mjs logs --grep STT`.
 - QA snapshots at start, running and stop.
 
-## Real-device follow-up
+## Manual follow-up
 
 - Real microphone in a quiet room and in a noisy café-like room.
 - AirPods / Bluetooth input (see the 2026-09-30 Bluetooth investigation entry).

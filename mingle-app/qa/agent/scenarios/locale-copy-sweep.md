@@ -2,7 +2,7 @@
 id: locale-copy-sweep
 title: Every UI locale shows complete, fitting copy on the main screens
 priority: P2
-environment: sim
+environment: device
 tags: [i18n, copy, layout, locale]
 taste: [T16, T17]
 paths:
@@ -40,6 +40,6 @@ Switch back to Korean at the end.
 
 - One screenshot set per locale. In the report, list findings as `locale · screen · string`.
 
-## Real-device follow-up
+## Manual follow-up
 
 - None.

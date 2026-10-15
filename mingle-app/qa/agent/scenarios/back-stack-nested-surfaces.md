@@ -2,7 +2,7 @@
 id: back-stack-nested-surfaces
 title: Back closes exactly one surface at a time from any depth
 priority: P1
-environment: sim
+environment: device
 tags: [navigation, back, gestures, menu, profile]
 taste: [T6, T7, T10, T19]
 paths:
@@ -46,6 +46,6 @@ history:
 - Screenshots per gesture.
 - QA snapshot: `menuOpen` and `menuScreen` after each back gesture.
 
-## Real-device follow-up
+## Manual follow-up
 
 - Android hardware back along the same path, one level per press.

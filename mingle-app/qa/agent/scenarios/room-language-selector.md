@@ -2,7 +2,7 @@
 id: room-language-selector
 title: The room language selector opens on the first tap and saves the choice
 priority: P1
-environment: sim
+environment: device
 tags: [language, selector, flags, navigation]
 taste: [T8, T9, T17, T18, T6, T19]
 paths:
@@ -46,6 +46,6 @@ history:
 - Screenshots and the 1-tap success count.
 - QA snapshot after closing.
 
-## Real-device follow-up
+## Manual follow-up
 
 - None.

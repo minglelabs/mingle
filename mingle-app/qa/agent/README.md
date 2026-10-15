@@ -1,8 +1,8 @@
 # Agent QA
 
-Claude tests the Mingle app the way the product owner would. It drives the iOS Simulator by hand, judges what it
-sees against the owner's recorded taste, and hands back a report with screenshots and a short real-device
-checklist. Run it with the `/qa` skill ([`.claude/skills/qa/SKILL.md`](../../../.claude/skills/qa/SKILL.md)).
+Claude tests the Mingle app the way the product owner would. It drives the connected iPhone by hand, judges what
+it sees against the owner's recorded taste, and hands back a report with screenshots and a short manual checklist.
+Run it with the `/qa` skill ([`.claude/skills/qa/SKILL.md`](../../../.claude/skills/qa/SKILL.md)).
 
 This complements the deterministic Appium suite in [`../mobile-ui`](../mobile-ui/README.md). That suite proves
 known regressions stay fixed. Agent QA judges whether the app *feels* right, catches what nobody wrote a test for,
@@ -14,9 +14,9 @@ and scores translation quality.
 | --- | --- |
 | [taste.md](taste.md) | The owner's UX rules (T1–T23), each traced to entries in [the UI/UX history](../../../docs/ui-ux-codex-thread-history.md). |
 | [rubric.md](rubric.md) | Verdicts, severity anchors, the translation 1–5 scale, responsiveness thresholds. |
-| [scenarios/](scenarios) | 16 scenarios with frontmatter (`id`, `priority`, `environment`, `tags`, `taste`, `paths`, `history`). |
+| [scenarios/](scenarios) | 16 scenarios with frontmatter (`id`, `priority`, `environment`, `tags`, `taste`, `paths`, `history`). `environment` is `device` (the agent runs it end to end), `assisted` (parts need a person: speaking, AirPods) or `manual-only`. |
 | [fixtures/](fixtures) | Inputs the scenarios type or send. |
-| `local/` | Gitignored: the local QA account. |
+| `local/` | Gitignored: the local QA account, the device session and the Appium log. |
 | `runs/` | Gitignored: screenshots, notes, `results.json` and `report.html` per run. |
 
 Scripts in `mingle-app/scripts/`:
@@ -24,14 +24,21 @@ Scripts in `mingle-app/scripts/`:
 | Script | Purpose |
 | --- | --- |
 | `qa-agent-scenarios.mjs list \| select \| check` | Lists the catalog, selects scenarios for a diff, and validates frontmatter, path globs, history headings and taste ids. |
-| `qa-agent-sim.sh servers \| build \| device \| install` | Checks the devbox servers, builds a Release simulator app with the QA bridge (all URLs local), and boots, installs and launches it. |
-| `qa-agent-webview.mjs pages \| snapshot \| eval` | Reads the WebView's QA bridge state over the simulator's Web Inspector socket. No Appium server or WebDriverAgent needed. |
+| `qa-agent-device.mjs` | Drives the connected iPhone over Appium XCUITest (real-device mode, WDA signed with the team ID): `devices`, `servers`, `install`, `start`, `screenshot`, `tap`, `long-press`, `swipe`, `type`, `alert`, `snapshot`, `eval`, `app`, `logs`, `stop`. |
 
 ## Running
 
-1. Start the local stack in this worktree: `scripts/devbox up --profile local` (Claude never starts it).
-2. In Claude Code: `/qa` (scenarios for the current diff), `/qa all`, `/qa P0`, or `/qa <scenario-id>`.
-3. Open the published report. Work through the real-device checklist on a phone. Tell Claude where you disagree.
+1. Start the local stack in this worktree, reachable from the phone over Wi-Fi (Claude asks before starting it):
+   ```bash
+   scripts/devbox profile --profile local --host <Mac LAN IP>
+   scripts/devbox up --profile local
+   ```
+2. Connect the iPhone by USB, unlocked and trusted, with Developer Mode on.
+3. In Claude Code: `/qa` (scenarios for the current diff), `/qa all`, `/qa P0`, or `/qa <scenario-id>`.
+4. Open the published report. Work through the manual checklist. Tell Claude where you disagree.
+
+The phone is shared with other sessions. Claude checks that no other session is installing to it or running on
+it before installing the QA build, which replaces whatever Mingle build is on the phone.
 
 ## Calibration
 
@@ -49,7 +56,9 @@ node mingle-app/scripts/qa-agent-scenarios.mjs check
 
 ## Limits
 
-- iOS Simulator only. Android and physical devices are not driven yet. Their checks go on the checklist.
-- The simulator has no camera and hears the Mac's microphone, so speech accuracy is scored only when injected audio
-  is available. It shows AdMob test ads, and its frame rate is not an iPhone's, so the scroll-jank verdict needs
-  `pnpm test:qa:ui:ios:scroll-fps` on a device.
+- iPhone only. Android is not driven yet. Its checks go on the checklist.
+- The agent cannot speak, so speech accuracy is scored only with injected audio or when the owner reads the
+  fixture sentences.
+- QA builds show AdMob test ads.
+- Appium screenshots are too slow to show dropped frames, so the scroll-jank verdict comes from
+  `pnpm test:qa:ui:ios:scroll-fps`.

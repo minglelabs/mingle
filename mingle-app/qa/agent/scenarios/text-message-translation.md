@@ -2,7 +2,7 @@
 id: text-message-translation
 title: Typed messages translate naturally and the keyboard stays open
 priority: P0
-environment: sim
+environment: device
 tags: [composer, keyboard, translation, bubbles]
 taste: [T1, T3, T4, T9, T15]
 paths:
@@ -48,6 +48,6 @@ history:
 - QA snapshot: `isComposerOpen` stays `true` during the whole sequence.
 - Time from Send to the translation rows being visible, estimated from successive screenshots (rubric latency column).
 
-## Real-device follow-up
+## Manual follow-up
 
-- The software keyboard on a real iPhone (the simulator may use the hardware keyboard): the keyboard must stay up after Send.
+- None.

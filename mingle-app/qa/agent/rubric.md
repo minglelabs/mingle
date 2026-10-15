@@ -12,7 +12,7 @@ functional bug.
 | `concern` | The flow worked, but there is at least one S2 finding, or an S1 finding seen only once that could not be reproduced. |
 | `fail` | At least one S0 or S1 finding was reproduced, or an oracle check clearly failed. |
 | `blocked` | The scenario could not run (environment, login, build, or a preceding step failed). Say what blocked it. Never report a blocked scenario as passed. |
-| `manual` | The oracle needs something the simulator cannot provide (real microphone, Bluetooth, real ads, push, haptics). The step goes on the real-device checklist. |
+| `manual` | The oracle needs something the agent cannot do on the phone: speak, connect AirPods, see a production ad fill, receive a push from another account, feel haptics. The step goes on the manual checklist. |
 
 ## Finding severity
 
@@ -29,8 +29,8 @@ Rules:
   showed it, for example `2/3`.
 - Every finding records its evidence: a screenshot path, a QA bridge snapshot field, a log line or an
   `app_event_logs` row. A finding with no evidence is at most S3.
-- Do not grade the simulator itself. Simulator-only artefacts (missing camera, no real audio input, simulator
-  keyboard quirks) are noted as environment limits, not findings.
+- Do not grade the test setup itself. QA-build artefacts (AdMob test ads, local devbox latency, Appium's own
+  screenshot delay) are noted as environment limits, not findings.
 
 ## Translation quality (1–5 per dimension)
 
@@ -67,11 +67,11 @@ Screenshots cannot show frame rate. Use numbers, and say which device they came 
 | Long-chat scroll (500 messages) | No hitch you can see; handler median ≤ 2 ms | Occasional hitch | Repeated hitches or stalls | [IOS_SCROLL_FPS_CAPTURE.md](../mobile-ui/IOS_SCROLL_FPS_CAPTURE.md) on a real iPhone |
 | Screen transition | One continuous slide; no white or black flash | One-frame flash | Flash plus content swap or re-layout | Screenshots taken during the transition |
 
-Simulator frame rates are not the iPhone's. Scroll smoothness on the simulator is at most a `concern` signal.
-The final scroll-jank verdict always goes on the real-device checklist.
+Appium screenshots are too slow to show dropped frames, so scroll smoothness seen through them is at most a
+`concern` signal. The scroll-jank verdict comes from `pnpm test:qa:ui:ios:scroll-fps` on the phone.
 
 ## Report expectations
 
 For each scenario the report shows: verdict, findings ordered by severity, the taste rules involved, 1–4 key
-screenshots, the snapshot or log evidence, and what is left for a real device. The report opens with a summary:
-counts by verdict, the S0/S1 findings, and the real-device checklist.
+screenshots, the snapshot or log evidence, and what is left for a person to check. The report opens with a summary:
+counts by verdict, the S0/S1 findings, and the manual checklist.

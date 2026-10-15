@@ -1,7 +1,9 @@
 // Pure helpers for the agent QA scenario catalog (mingle-app/qa/agent/scenarios).
 // The CLI wrapper is scripts/qa-agent-scenarios.mjs.
 
-export const SCENARIO_ENVIRONMENTS = ['sim', 'real-device', 'manual-only'];
+// device: the agent runs it end to end on the connected iPhone. assisted: the agent runs it, but parts need a
+// person (speaking, AirPods). manual-only: a person runs it from the checklist.
+export const SCENARIO_ENVIRONMENTS = ['device', 'assisted', 'manual-only'];
 export const SCENARIO_PRIORITIES = ['P0', 'P1', 'P2'];
 const REQUIRED_FIELDS = ['id', 'title', 'priority', 'environment', 'tags', 'taste', 'paths'];
 const NO_HISTORY_PREFIX = 'No history entry';

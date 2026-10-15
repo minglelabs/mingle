@@ -2,7 +2,7 @@
 id: list-warm-tab-switch
 title: Switching tabs shows complete screens immediately, with no flashes
 priority: P1
-environment: sim
+environment: device
 tags: [conversation-list, tabs, local-first, my-page]
 taste: [T12, T3, T9]
 paths:
@@ -42,6 +42,6 @@ history:
 - The screenshot bursts.
 - List QA snapshot: `conversationCount` stays constant across tab switches.
 
-## Real-device follow-up
+## Manual follow-up
 
 - The cold-start time on a real device over a cellular-like network.

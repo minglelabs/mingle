@@ -2,7 +2,7 @@
 id: stt-survives-navigation
 title: Leaving and re-entering a live room keeps STT running without loops or false alerts
 priority: P0
-environment: sim
+environment: device
 tags: [stt, navigation, conversation-list, back]
 taste: [T2, T5, T6, T22]
 paths:
@@ -51,6 +51,6 @@ history:
 - `app_event_logs`: no `stt_session_stopped` before step 8.
 - Screenshots during each transition.
 
-## Real-device follow-up
+## Manual follow-up
 
-- Android system back for the same path (Android is not covered by this simulator run).
+- Android system back for the same path (the agent drives the iPhone only).

@@ -2,7 +2,7 @@
 id: bubble-display-modes
 title: Message bubbles read like a messenger in both display modes
 priority: P1
-environment: sim
+environment: device
 tags: [bubbles, translation, layout, flags]
 taste: [T8, T13, T15, T17, T18]
 paths:
@@ -45,6 +45,6 @@ history:
 - Screenshots, zoomed on the bubble edges.
 - For a disputed layout, use `getBoundingClientRect` on the bubble through the WebView helper.
 
-## Real-device follow-up
+## Manual follow-up
 
-- None, unless the simulator fonts differ visibly from the device's.
+- None.

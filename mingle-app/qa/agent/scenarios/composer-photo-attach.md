@@ -2,7 +2,7 @@
 id: composer-photo-attach
 title: Attaching a photo keeps the keyboard and speech recognition alive
 priority: P0
-environment: sim
+environment: device
 tags: [composer, keyboard, photo, stt, overlay]
 taste: [T1, T2, T10, T19]
 paths:
@@ -20,7 +20,7 @@ history:
 
 ## Preconditions
 
-- Signed in, inside a room. The simulator photo library has the default sample photos.
+- Signed in, inside a room. The phone's photo library has at least two photos. Send them only into the QA account's own rooms.
 - The microphone permission is granted. Speech is not needed; only the running state matters.
 
 ## Steps
@@ -51,6 +51,6 @@ Voice mode:
 - `app_event_logs` since the step started: `event_type = 'stt_session_stopped'` must be absent. If present, record `metadata->>'reason'` and `metadata->>'source'`.
 - Screenshots of the menu and of the bottom edge.
 
-## Real-device follow-up
+## Manual follow-up
 
-- The banner overlap only shows with a real AdMob fill. Repeat step 2 on a TestFlight build.
+- With a production AdMob fill (TestFlight), repeat step 2. QA builds show test ads.

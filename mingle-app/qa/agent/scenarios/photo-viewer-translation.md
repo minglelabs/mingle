@@ -2,7 +2,7 @@
 id: photo-viewer-translation
 title: The photo viewer translates text in place and closes with a swipe
 priority: P1
-environment: sim
+environment: device
 tags: [photo, translation, viewer, gestures]
 taste: [T16, T21, T7, T3]
 paths:
@@ -22,7 +22,7 @@ history:
 ## Preconditions
 
 - Signed in, in a room with English and Korean set.
-- Two photos with clear foreign-language signage are in the simulator's library (`xcrun simctl addmedia <udid> <files>`). The verified fixtures from [docs/photo-translation-verification.md](../../../../docs/photo-translation-verification.md) live outside Git. If they are not on this machine, render two simple sign images (one horizontal Japanese line, one vertical Japanese banner) into `qa/agent/local/`.
+- Two photos with clear foreign-language signage are in the phone's photo library. The verified fixtures from [docs/photo-translation-verification.md](../../../../docs/photo-translation-verification.md) live outside Git. If the phone has no suitable photo, ask the owner to save two (one horizontal Japanese line, one vertical Japanese banner) before running this scenario.
 
 ## Steps
 
@@ -45,6 +45,6 @@ history:
 
 - Screenshots. The device log for photo-translation fetch errors.
 
-## Real-device follow-up
+## Manual follow-up
 
-- Camera capture (the simulator has no camera).
+- Camera capture of a real sign (the agent cannot aim the camera).

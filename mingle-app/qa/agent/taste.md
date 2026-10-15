@@ -185,11 +185,13 @@ top-corner X.
 
 ### T22. No false alarms and no unrequested prompts
 Error toasts appear only when the operation really failed, and empty is shown differently from failed. No
-permission prompt without a user action that needs it. No foreground push banner for the room being read.
+permission prompt without a user action that needs it. Exception: the notification prompt right after sign-in is
+intended (2026-08-17 entry; confirmed in the 2026-10-15 dry run). No foreground push banner for the room being read.
 - 2026-05-04 - Live Chat Conversation List Status Race And Misleading Open/Pause Alerts
 - 2026-08-13 - My Page Safety History Empty and Auth States
 - 2026-08-24 — Remove unsolicited iOS Bonjour permission prompt
 - 2026-08-24 — Suppress iOS foreground message alerts
+- 2026-08-17 - Request native permission for account notifications
 
 ### T23. Speech output is brisk and clean
 TTS should sound quick and natural; the owner judged a 1.4x stretch still too slow. Stopping STT must not cut or

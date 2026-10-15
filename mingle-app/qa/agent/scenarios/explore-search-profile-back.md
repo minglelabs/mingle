@@ -2,7 +2,7 @@
 id: explore-search-profile-back
 title: Search keeps its results across profile visits and never opens the keyboard by itself
 priority: P2
-environment: sim
+environment: device
 tags: [search, keyboard, profile, back, scroll]
 taste: [T1, T8, T9, T14, T6]
 paths:
@@ -42,6 +42,6 @@ history:
 
 - Screenshots.
 
-## Real-device follow-up
+## Manual follow-up
 
 - None.
