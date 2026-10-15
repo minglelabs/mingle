@@ -68,11 +68,15 @@ Run these from the worktree root.
    ```bash
    scripts/devbox up --profile local --host "$(ipconfig getifaddr en0)"
    ```
-3. Install the QA build (Release + QA bridge: the JS bundle is embedded, so no Metro, and the WebView is
-   inspectable). The first build takes about 10 minutes, so run it in the background. Skip the install when the
-   phone already runs a QA build from this worktree and nothing under `mingle-app/rn/**` changed.
+3. Build the QA app, then install it. `build` makes a Release build with the QA bridge on: the JS bundle is
+   embedded (no Metro), the WebView is inspectable, every web and fallback URL points at this worktree's devbox, and
+   ads use Google's test units, so production ads are never requested. The first build takes about 10 minutes, so
+   run it in the background. Only the native shell is built (web changes are served live by devbox), so rebuild
+   only when `mingle-app/rn/**` changed or no build exists. Installing replaces the Mingle app on the shared phone
+   (see the ground rules); `--fresh` uninstalls first and wipes the app's data, so ask before using it.
    ```bash
-   node mingle-app/scripts/qa-agent-device.mjs install
+   node mingle-app/scripts/qa-agent-device.mjs build
+   node mingle-app/scripts/qa-agent-device.mjs install [--fresh]
    ```
 4. Start the device session. The first run builds and signs WebDriverAgent (team `3RFBMN8TKZ`), which can take
    several minutes. It prints the screen size in points.

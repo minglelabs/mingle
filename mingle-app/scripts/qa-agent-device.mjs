@@ -5,7 +5,8 @@
 //
 //   node scripts/qa-agent-device.mjs devices                    # connected iPhones (hardware UDIDs)
 //   node scripts/qa-agent-device.mjs servers                    # is this worktree's devbox reachable from the phone?
-//   node scripts/qa-agent-device.mjs install [--udid U]         # build + install + launch the QA-bridge app (devbox mobile)
+//   node scripts/qa-agent-device.mjs build                      # Release + QA bridge build for the phone (test ads, local URLs)
+//   node scripts/qa-agent-device.mjs install [--udid U] [--fresh] # install + launch it; --fresh uninstalls first
 //   node scripts/qa-agent-device.mjs start [--udid U]           # start Appium + a session on the phone
 //   node scripts/qa-agent-device.mjs screenshot <file.png>
 //   node scripts/qa-agent-device.mjs tap <x> <y>
@@ -414,18 +415,76 @@ async function cmdServers() {
   if (!ok) process.exitCode = 1;
 }
 
-function cmdInstall(args) {
-  const udid = resolveUdid(readOption(args, '--udid'));
+// Google's published AdMob test banner unit for iOS. QA builds must never request production ads.
+const ADMOB_TEST_BANNER_UNIT_IOS = 'ca-app-pub-3940256099942544/2934735716';
+const QA_DERIVED_DATA = path.join(REPO_ROOT, '.devbox-cache/ios/qa-agent-device');
+const QA_XCCONFIG = path.join(REPO_ROOT, '.devbox-cache/ios/qa-agent-device.runtime.xcconfig');
+const QA_APP_PATH = path.join(QA_DERIVED_DATA, 'Build/Products/Release-iphoneos/mingle.app');
+
+// Release build with the QA bridge on: the JS bundle is embedded (no Metro), the WebView is inspectable,
+// every web and fallback URL points at this worktree's devbox, and ads use Google's test units.
+function cmdBuild() {
   const host = resolveDevboxHost();
   if (host === '127.0.0.1' || host === 'localhost') {
     fail('devbox points at 127.0.0.1, which the phone cannot reach. Restart it with scripts/devbox up --profile local --host <Mac LAN IP>.');
   }
-  // Release build with the QA bridge: the JS bundle is embedded, so no Metro server is needed,
-  // and the WebView is inspectable for snapshots.
-  execFileSync(path.join(REPO_ROOT, 'scripts/devbox'), ['mobile', '--platform', 'ios', '--profile', 'local', '--host', host, '--ios-udid', udid, '--qa-bridge'], {
-    cwd: REPO_ROOT,
-    stdio: 'inherit',
+  const runtime = fs.readFileSync(path.join(APP_ROOT, 'rn/ios/devbox.runtime.xcconfig'), 'utf8');
+  const value = (key) => new RegExp(`^${key} = (.*)$`, 'm').exec(runtime)?.[1] ?? fail(`${key} missing from devbox.runtime.xcconfig`);
+  const qaConfig = runtime
+    .replace(/^NEXT_PUBLIC_RN_QA_BRIDGE_ENABLED = .*$/m, 'NEXT_PUBLIC_RN_QA_BRIDGE_ENABLED = 1')
+    .replace(/^MINGLE_LEGACY_SITE_URL = .*$/m, `MINGLE_LEGACY_SITE_URL = ${value('NEXT_PUBLIC_SITE_URL')}`)
+    .replace(/^MINGLE_LEGACY_WS_URL = .*$/m, `MINGLE_LEGACY_WS_URL = ${value('NEXT_PUBLIC_WS_URL')}`)
+    .replace(/^NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = .*$/m, `NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = ${ADMOB_TEST_BANNER_UNIT_IOS}`);
+  fs.mkdirSync(path.dirname(QA_XCCONFIG), { recursive: true });
+  fs.writeFileSync(QA_XCCONFIG, qaConfig);
+  execFileSync('xcodebuild', [
+    '-allowProvisioningUpdates',
+    '-workspace', path.join(APP_ROOT, 'rn/ios/mingle.xcworkspace'),
+    '-scheme', 'mingle',
+    '-configuration', 'Release',
+    '-destination', 'generic/platform=iOS',
+    '-derivedDataPath', QA_DERIVED_DATA,
+    '-xcconfig', QA_XCCONFIG,
+    'build', '-quiet',
+  ], {
+    cwd: path.join(APP_ROOT, 'rn/ios'),
+    env: { ...process.env, NEXT_PUBLIC_API_NAMESPACE: value('NEXT_PUBLIC_API_NAMESPACE') },
+    stdio: ['ignore', 'inherit', 'inherit'],
   });
+  const plist = (key) => {
+    try {
+      return execFileSync('plutil', ['-extract', key, 'raw', path.join(QA_APP_PATH, 'Info.plist')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    } catch {
+      return '';
+    }
+  };
+  const built = {
+    app: QA_APP_PATH,
+    webUrl: plist('MingleWebAppBaseURL'),
+    fallbackUrl: plist('MingleLegacyWebAppBaseURL'),
+    qaBridge: plist('MingleQaBridgeEnabled'),
+    bannerUnit: plist('MingleAdBannerUnitIdIos'),
+    admobApp: plist('GADApplicationIdentifier'),
+  };
+  if (built.qaBridge !== '1' || !built.webUrl.includes(host) || !built.fallbackUrl.includes(host)) fail(`QA build is misconfigured: ${JSON.stringify(built)}`);
+  console.log(JSON.stringify(built));
+}
+
+// Installs the QA build and launches it. --fresh uninstalls first, which wipes the app's local data.
+function cmdInstall(args) {
+  const udid = resolveUdid(readOption(args, '--udid'));
+  const fresh = args.includes('--fresh');
+  if (!fs.existsSync(QA_APP_PATH)) fail('No QA build yet; run `node scripts/qa-agent-device.mjs build` first.');
+  if (fresh) {
+    try {
+      execFileSync('xcrun', ['devicectl', 'device', 'uninstall', 'app', '--device', udid, BUNDLE_ID], { stdio: 'ignore' });
+    } catch {
+      // Not installed.
+    }
+  }
+  execFileSync('xcrun', ['devicectl', 'device', 'install', 'app', '--device', udid, QA_APP_PATH], { stdio: 'ignore' });
+  execFileSync('xcrun', ['devicectl', 'device', 'process', 'launch', '--device', udid, BUNDLE_ID], { stdio: 'ignore' });
+  console.log(JSON.stringify({ installed: QA_APP_PATH, udid, fresh }));
 }
 
 async function main() {
@@ -433,6 +492,7 @@ async function main() {
   switch (command) {
     case 'devices': console.log(JSON.stringify(listDevices(), null, 2)); break;
     case 'servers': await cmdServers(); break;
+    case 'build': cmdBuild(); break;
     case 'install': cmdInstall(args); break;
     case 'start': await cmdStart(args); break;
     case 'screenshot': await cmdScreenshot(args); break;
