@@ -34,6 +34,7 @@ import {
   runCommand,
   safeDeleteSession,
   startAppiumServer,
+  switchToNative,
   switchToWebView,
   waitFor,
 } from './mobile-ui-qa.mjs';
@@ -105,11 +106,32 @@ async function clickVisibleMicButton(driver) {
   await buttons[index].click();
 }
 
+// First mic use on a physical iPhone shows the microphone permission alert.
+async function acceptIosPermissionAlertIfPresent(driver, timeoutMs = 4_000) {
+  if (String(driver.capabilities.platformName || '').toLowerCase() !== 'ios') return false;
+  await switchToNative(driver);
+  let accepted = false;
+  const startedAt = Date.now();
+  while (!accepted && Date.now() - startedAt < timeoutMs) {
+    try {
+      await driver.acceptAlert();
+      accepted = true;
+    } catch {
+      await delay(500);
+    }
+  }
+  await switchToWebView(driver);
+  if (accepted) log('accepted an iOS permission alert');
+  return accepted;
+}
+
 async function ensureMicRunning(driver) {
   const snapshot = await getSnapshot(driver);
   if (snapshot?.micVisualState === 'running') return snapshot;
   if (snapshot?.micVisualState !== 'connecting') {
     await clickVisibleMicButton(driver);
+    const permission = await readQa(driver, () => window.__MINGLE_LAST_NATIVE_MIC_PERMISSION ?? null);
+    if (permission !== 'granted') await acceptIosPermissionAlertIfPresent(driver);
   }
   return await waitFor(async () => {
     const next = await getSnapshot(driver);
