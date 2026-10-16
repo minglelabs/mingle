@@ -54,6 +54,8 @@ export type FeedPostViewProps = {
    * preview, so the body opens where the reader is looking.
    */
   centerExpandSlot?: ReactNode;
+  /** Image posts: expand / collapse control pinned to the end of the snippet's last line. */
+  snippetToggleSlot?: ReactNode;
   /** Text-only cards: the "Collapse" control shown right under the expanded body. */
   centerCollapseSlot?: ReactNode;
   /** aria-label describing the card for screen readers. */
@@ -101,6 +103,7 @@ export default function FeedPostView({
   actionSlot,
   controlSlot,
   centerExpandSlot,
+  snippetToggleSlot,
   centerCollapseSlot,
   ariaLabel,
   overlaySlot,
@@ -278,6 +281,7 @@ export default function FeedPostView({
           {/* Body text for image posts (collapsed snippet). Kept, invisible,
               while expanded so the row below does not shift. */}
           {imageUrl && displayText ? (
+            <div className="relative">
             <p
               ref={expanded ? undefined : previewClampRef}
               className={`line-clamp-3 text-sm leading-relaxed${expanded ? " invisible" : ""}`}
@@ -291,6 +295,10 @@ export default function FeedPostView({
             >
               {displayText}
             </p>
+            {snippetToggleSlot ? (
+              <div className="pointer-events-auto absolute bottom-0 right-0">{snippetToggleSlot}</div>
+            ) : null}
+            </div>
           ) : null}
 
           {controlSlot}
