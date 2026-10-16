@@ -1,25 +1,25 @@
 {
   "shots": [
     {
-      "id": "01-feed",
-      "capture": "captures/{lang}/feed.png",
+      "id": "01-friends",
       "caption": {
-        "en": "Everyday moments\nfrom around the world",
-        "ko": "전 세계 친구들의\n일상을 한 피드에서",
-        "ja": "世界中の友だちの毎日を\nひとつのフィードで",
-        "zh-cn": "全球朋友的日常\n尽在一个动态",
-        "zh-tw": "全球朋友的日常\n盡在一個動態",
-        "ar": "لحظات يومية\nمن حول العالم",
-        "de": "Alltagsmomente\naus aller Welt",
-        "es": "Momentos del día a día\nde todo el mundo",
-        "fr": "Le quotidien\ndu monde entier",
-        "hi": "दुनिया भर के दोस्तों के\nरोज़ के पल",
-        "it": "Momenti di ogni giorno\nda tutto il mondo",
-        "pt": "Momentos do dia a dia\ndo mundo todo",
-        "ru": "Повседневные моменты\nсо всего мира",
-        "th": "เรื่องราวในแต่ละวัน\nจากเพื่อนทั่วโลก",
-        "vi": "Khoảnh khắc mỗi ngày\ntừ khắp thế giới"
-      }
+        "ko": "언어가 달라도\n친구가 되는 곳",
+        "en": "Make friends\nin any language",
+        "ja": "言葉が違っても\n友だちになれる場所",
+        "zh-cn": "语言不同\n也能成为朋友",
+        "zh-tw": "語言不同\n也能成為朋友",
+        "ar": "كوّن صداقات\nبأي لغة",
+        "de": "Freunde finden\nin jeder Sprache",
+        "es": "Haz amigos\nen cualquier idioma",
+        "fr": "Faites-vous des amis\ndans toutes les langues",
+        "hi": "किसी भी भाषा में\nदोस्त बनाइए",
+        "it": "Fai amicizia\nin ogni lingua",
+        "pt": "Faça amigos\nem qualquer idioma",
+        "ru": "Находите друзей\nна любом языке",
+        "th": "ภาษาต่างกัน\nก็เป็นเพื่อนกันได้",
+        "vi": "Kết bạn\nbằng mọi ngôn ngữ"
+      },
+      "fullBleed": "hero/group.jpg"
     },
     {
       "id": "02-translation",
