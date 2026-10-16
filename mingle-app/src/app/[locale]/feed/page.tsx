@@ -3,6 +3,7 @@ import FeedShell from "@/components/feed/feed-shell";
 import BottomTabBar from "@/components/bottom-tab-bar";
 import PostingFeedRouteGuard from "@/components/feed/posting-feed-route-guard";
 import { notFound } from "next/navigation";
+import { isAppleOAuthConfigured, isGoogleOAuthConfigured } from "@/lib/auth-options";
 
 type FeedPageProps = {
   params: Promise<{ locale: string }>;
@@ -25,6 +26,8 @@ export default async function FeedPage({ params }: FeedPageProps) {
           <FeedShell
             locale={locale}
             dictionary={dictionary}
+            appleOAuthEnabled={isAppleOAuthConfigured()}
+            googleOAuthEnabled={isGoogleOAuthConfigured()}
             tabBar={<BottomTabBar activeRoute="feed" dictionary={dictionary} locale={locale} variant="glass" />}
           />
         </div>

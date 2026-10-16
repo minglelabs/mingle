@@ -17,7 +17,8 @@ import { feedEvents, feedPostContext, feedSurfaceForSource, trackFeedEvent } fro
 import { useReducedMotion } from "@/components/feed/use-reduced-motion";
 import { useFeedSource } from "@/components/feed/use-feed-source";
 import type { LikeState } from "@/components/feed/use-feed-like";
-import { composeLoginHref, loginHref } from "@/components/feed/login-redirect";
+import FeedLoginSheet from "@/components/feed/feed-login-sheet";
+import { composeLoginReturnHref, loginReturnHref } from "@/components/feed/login-redirect";
 import {
   createDeepLinkCommentLatch,
   createFeedRestoreSession,
@@ -47,8 +48,14 @@ type FeedShellProps = {
   startPostId?: string | null;
   /** Viewer route uses history back instead of the compose/notification chrome. */
   isViewer?: boolean;
-  /** Home feed only: the notification panel opens over the feed (like main's conversation list). */
+  /**
+   * App copy: the notification panel (home feed) and the sign-in gate (both
+   * modes) need it.
+   */
   dictionary?: AppDictionary;
+  /** Sign-in providers the server has configured (the gate shows only these). */
+  appleOAuthEnabled?: boolean;
+  googleOAuthEnabled?: boolean;
   /**
    * The glass tab bar, laid over the bottom of the cards. The shell renders it
    * so it can follow the ink tone of the post on screen.
@@ -77,7 +84,7 @@ const PULL_REFRESH_ROW_PX = 60;
 /** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
 
-export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary, tabBar, menuLabel }: FeedShellProps) {
+export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary, appleOAuthEnabled = false, googleOAuthEnabled = false, tabBar, menuLabel }: FeedShellProps) {
   const underTabBar = Boolean(tabBar);
   const copy = useMemo(() => feedCopy(locale), [locale]);
   const reducedMotion = useReducedMotion();
@@ -158,7 +165,12 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
 
-  const anyOverlayOpen = Boolean(commentPostId || actionPostId || zoomSrc || notificationsOpen || composeOpen);
+  // Signed out: the sign-in gate's return path while it is open.
+  const [loginReturnTo, setLoginReturnTo] = useState<string | null>(null);
+
+  const anyOverlayOpen = Boolean(
+    commentPostId || actionPostId || zoomSrc || notificationsOpen || composeOpen || loginReturnTo,
+  );
 
   const notifications = useUnreadNotifications(viewerId);
 
@@ -306,19 +318,29 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   }, [notifications]);
 
   // ── Handlers ──
+  // Signed-out like / comment / compose opens the app's own sign-in gate over
+  // the feed (the conversation tab's screen, native Apple / Google in the app),
+  // never the web-only Google route. A completed sign-in returns here.
   const goToLogin = useCallback(
     (postId?: string | null) => {
-      router.push(loginHref(locale, postId ?? activePost?.id ?? null));
+      // The viewer returns to itself (its own list and position); the home
+      // feed returns pinned on the post the viewer was acting on.
+      setLoginReturnTo(
+        isViewer
+          ? `${window.location.pathname}${window.location.search}`
+          : loginReturnHref(locale, postId ?? activePost?.id ?? null),
+      );
     },
-    [router, locale, activePost],
+    [isViewer, locale, activePost],
   );
+  const closeLogin = useCallback(() => setLoginReturnTo(null), []);
 
   // Compose slides in over the feed (like the notification panel); signed-out
-  // viewers still go to sign-in first.
+  // viewers sign in first and land on compose.
   const openCompose = useCallback(() => {
     if (viewerId) setComposeOpen(true);
-    else router.push(composeLoginHref(locale));
-  }, [router, viewerId, locale]);
+    else setLoginReturnTo(composeLoginReturnHref(locale));
+  }, [viewerId, locale]);
   const closeCompose = useCallback(() => setComposeOpen(false), []);
 
   // The bell slides the notification panel in over the feed (same panel and
@@ -524,6 +546,18 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   // Compose is reachable from every mode: the empty state's button opens it in
   // the viewer too, which has no header and no notification panel.
   const composePanel = (
+    <>
+    {dictionary ? (
+      <FeedLoginSheet
+        returnTo={loginReturnTo}
+        locale={locale}
+        dictionary={dictionary}
+        appleOAuthEnabled={appleOAuthEnabled}
+        googleOAuthEnabled={googleOAuthEnabled}
+        closeLabel={copy.closeImage}
+        onClose={closeLogin}
+      />
+    ) : null}
     <ComposeOverlay
       open={composeOpen}
       locale={locale}
@@ -532,6 +566,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       // progress. Viewer: no banner here, so keep the default (go to the feed).
       onPublished={isViewer ? undefined : closeCompose}
     />
+    </>
   );
 
   const notificationPanel = !isViewer && dictionary ? (
