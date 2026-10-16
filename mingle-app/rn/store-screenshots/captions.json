@@ -2,7 +2,7 @@
   "shots": [
     {
       "id": "01-feed",
-      "capture": "captures/01-feed.png",
+      "capture": "captures/{lang}/feed.png",
       "caption": {
         "en": "Everyday moments\nfrom around the world",
         "ko": "전 세계 친구들의\n일상을 한 피드에서",
@@ -23,7 +23,7 @@
     },
     {
       "id": "02-translation",
-      "capture": "captures/02-translation.png",
+      "capture": "captures/{lang}/translation.png",
       "caption": {
         "en": "Written in any language,\nread in yours",
         "ko": "어떤 언어로 써도\n내 언어로 읽어요",
@@ -44,7 +44,7 @@
     },
     {
       "id": "03-comments",
-      "capture": "captures/03-comments.png",
+      "capture": "captures/{lang}/comments.png",
       "caption": {
         "en": "Comments are\ntranslated too",
         "ko": "댓글도\n자동으로 번역돼요",
@@ -65,7 +65,7 @@
     },
     {
       "id": "04-group-chat",
-      "capture": "captures/04-group-chat.png",
+      "capture": "captures/{lang}/chat.png",
       "caption": {
         "en": "Chat in many languages,\ntranslated live",
         "ko": "여러 언어로 나누는\n실시간 통역 대화",
@@ -86,7 +86,7 @@
     },
     {
       "id": "05-search",
-      "capture": "captures/05-search.png",
+      "capture": "captures/{lang}/search.png",
       "caption": {
         "en": "Find people and posts\nyou're into",
         "ko": "관심 있는 사람과\n게시물을 찾아보세요",
@@ -106,29 +106,8 @@
       }
     },
     {
-      "id": "06-profile",
-      "capture": "captures/06-profile.png",
-      "caption": {
-        "en": "Follow friends\nfrom other countries",
-        "ko": "다른 나라 친구를\n팔로우해 보세요",
-        "ja": "海外の友だちを\nフォローしよう",
-        "zh-cn": "关注来自\n其他国家的朋友",
-        "zh-tw": "追蹤來自\n其他國家的朋友",
-        "ar": "تابع أصدقاء\nمن دول أخرى",
-        "de": "Folge Freunden\naus anderen Ländern",
-        "es": "Sigue a amigos\nde otros países",
-        "fr": "Suivez des amis\nd'autres pays",
-        "hi": "दूसरे देशों के दोस्तों\nको फ़ॉलो करें",
-        "it": "Segui amici\ndi altri paesi",
-        "pt": "Siga amigos\nde outros países",
-        "ru": "Подписывайтесь на друзей\nиз других стран",
-        "th": "ติดตามเพื่อน\nจากต่างประเทศ",
-        "vi": "Theo dõi bạn bè\ntừ các quốc gia khác"
-      }
-    },
-    {
-      "id": "07-hash-rush",
-      "capture": "captures/07-hash-rush.png",
+      "id": "06-hash-rush",
+      "capture": "captures/{lang}/hash-rush.png",
       "caption": {
         "en": "Race hamsters with friends\nin Hash Rush",
         "ko": "친구들과 햄스터 레이스\nHash Rush",
@@ -148,8 +127,8 @@
       }
     },
     {
-      "id": "08-hash-rush-maps",
-      "capture": "captures/08-hash-rush-maps.png",
+      "id": "07-hash-rush-maps",
+      "capture": "captures/{lang}/hash-rush-maps.png",
       "caption": {
         "en": "Grab the seed,\nbe first home",
         "ko": "해바라기씨를 물고\n집에 먼저 오면 승리",

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Render the App Store / Google Play screenshot set from captions.json.
 
-Each slide is an HTML page (headline + phone frame around a real device capture)
+Each slide is an HTML page (headline + phone frame + iOS status bar around a capture
+from capture.mjs)
 rendered by headless Chrome, so every script (Arabic, Thai, Hindi, CJK) is shaped
 by the browser. Output replaces the PNGs in
   appstore-connect-info/upload/<locale>/ and google-play-console-info/upload/<locale>/
 
 Needs Google Chrome and pngquant. Run from anywhere:  python3 mingle-app/rn/store-screenshots/render.py [--only ko,en]
-Captures are 1170x2532 iPhone screenshots in captures/ (taken on a device via Appium).
+Captures are captures/<lang>/<screen>.png at 1170x2391 (390x797 pt @3x, the screen under the status bar).
 """
 import argparse
 import html
@@ -16,6 +17,8 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+
+from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 RN = HERE.parent
@@ -43,16 +46,35 @@ h1{{position:absolute;top:150px;left:60px;right:60px;margin:0;text-align:center;
 .phone{{position:absolute;left:84px;top:560px;width:1122px;height:2440px;border-radius:150px;
   background:#1F2430;box-shadow:0 40px 90px rgba(120,80,0,.28)}}
 .screen{{position:absolute;left:36px;top:36px;width:1050px;height:2272px;border-radius:118px;overflow:hidden;background:#000}}
-.screen img{{width:100%;height:100%;display:block}}
+.bar{{height:126px;background:{bar};color:{ink};position:relative;font-family:-apple-system,"SF Pro Text",sans-serif}}
+.bar .time{{position:absolute;left:110px;top:40px;font-size:46px;font-weight:600;letter-spacing:-.5px}}
+.bar .right{{position:absolute;right:92px;top:46px;display:flex;gap:16px;align-items:center}}
+.bar svg{{fill:{ink}}}
+.screen img{{width:100%;height:2146px;display:block}}
 .island{{position:absolute;left:50%;top:30px;width:290px;height:84px;margin-left:-145px;border-radius:42px;background:#000}}
 </style></head><body>
 <h1 id="t">{caption}</h1>
-<div class="phone"><div class="screen"><img src="{img}"><div class="island"></div></div></div>
+<div class="phone"><div class="screen">
+<div class="bar"><span class="time">9:41</span><span class="right">
+<svg width="48" height="30" viewBox="0 0 48 30"><rect x="0" y="20" width="8" height="10" rx="2"/><rect x="13" y="14" width="8" height="16" rx="2"/><rect x="26" y="7" width="8" height="23" rx="2"/><rect x="39" y="0" width="8" height="30" rx="2"/></svg>
+<svg width="42" height="30" viewBox="0 0 42 30"><path d="M21 30l-6-7a8.5 8.5 0 0 1 12 0zM8 16a18 18 0 0 1 26 0l-4 4.5a12 12 0 0 0-18 0zM1 9a27.5 27.5 0 0 1 40 0l-4 4.5a21.5 21.5 0 0 0-32 0z"/></svg>
+<svg width="70" height="32" viewBox="0 0 70 32"><rect x="1.5" y="1.5" width="60" height="29" rx="9" fill="none" stroke="{ink}" stroke-width="3" opacity=".45"/><rect x="6" y="6" width="51" height="20" rx="5"/><rect x="64" y="10" width="4.5" height="12" rx="2" opacity=".45"/></svg>
+</span></div>
+<img src="{img}"><div class="island"></div></div></div>
 <script>
 // lines never wrap; shrink the headline until the longest line fits the width
 const t=document.getElementById('t');let s=118;
 while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
 </script></body></html>"""
+
+
+def status_bar_colors(capture: Path) -> tuple[str, str]:
+    """Bar background continues the page's top edge; ink is black or white for contrast."""
+    im = Image.open(capture).convert("RGB")
+    strip = im.crop((0, 0, im.width, 6)).resize((1, 1), Image.BOX)
+    r, g, b = strip.getpixel((0, 0))
+    ink = "#000" if (0.299 * r + 0.587 * g + 0.114 * b) > 150 else "#fff"
+    return f"rgb({r},{g},{b})", ink
 
 
 def render(html_text: str, out: Path, work: Path) -> None:
@@ -82,11 +104,14 @@ def main() -> None:
                 continue
             for shot in cfg["shots"]:
                 out = work / f"{lang}-{shot['id']}.png"
+                capture = HERE / shot["capture"].format(lang=lang)
+                bar, ink = status_bar_colors(capture)
                 render(PAGE.format(
+                    bar=bar, ink=ink,
                     lang=lang, dir="rtl" if lang == "ar" else "ltr", W=W, H=H,
                     font=FONT.get(lang, '"SF Pro Display"'),
                     caption=html.escape(shot["caption"][lang]),
-                    img=(HERE / shot["capture"]).as_uri(),
+                    img=capture.as_uri(),
                 ), out, work)
                 rendered[(lang, shot["id"])] = out
             print("rendered", lang)
