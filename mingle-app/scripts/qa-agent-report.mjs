@@ -9,7 +9,7 @@
 //   "environment": { "branch", "commit", "device", "ios", "server", "startedAt", "build" },
 //   "summary": "two or three sentences",
 //   "scenarios": [{
-//     "id", "title", "verdict": "pass|concern|fail|blocked|manual",
+//     "id", "title", "target": "phone|simulator", "verdict": "pass|concern|fail|blocked|manual",
 //     "oracle": [{ "check", "status": "held|failed|unchecked", "note" }],
 //     "findings": [{ "severity": "S0|S1|S2|S3", "taste": ["T12"], "summary", "repro", "evidence": ["..."] }],
 //     "screenshots": [{ "file": "shots/x.png", "caption" }],
@@ -99,7 +99,7 @@ function renderScenario(runDir, scenario) {
   return `<section class="scenario" id="${escapeHtml(scenario.id)}">
     <header class="scenario-head">
       <span class="verdict v-${escapeHtml(scenario.verdict)}">${escapeHtml(VERDICT_LABEL[scenario.verdict] || scenario.verdict)}</span>
-      <div><h3>${inline(scenario.title)}</h3><p class="id">${escapeHtml(scenario.id)}</p></div>
+      <div><h3>${inline(scenario.title)}</h3><p class="id">${escapeHtml(scenario.id)}${scenario.target ? ` · ran on ${escapeHtml(scenario.target)}` : ''}</p></div>
     </header>
     ${findingItems ? `<h4>Findings</h4><ul class="findings">${findingItems}</ul>` : '<p class="clean">No findings.</p>'}
     ${oracle ? `<h4>Oracle checks</h4><ul class="oracle">${oracle}</ul>` : ''}

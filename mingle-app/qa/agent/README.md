@@ -1,6 +1,7 @@
 # Agent QA
 
-Claude tests the Mingle app the way the product owner would. It drives the connected iPhone by hand, judges what
+Claude tests the Mingle app the way the product owner would. It drives the connected iPhone by hand (or an iOS
+Simulator when the phone is not connected or is busy), judges what
 it sees against the owner's recorded taste, and hands back a report with screenshots and a short manual checklist.
 Run it with the `/qa` skill ([`.claude/skills/qa/SKILL.md`](../../../.claude/skills/qa/SKILL.md)).
 
@@ -56,7 +57,8 @@ node mingle-app/scripts/qa-agent-scenarios.mjs check
 
 ## Limits
 
-- iPhone only. Android is not driven yet. Its checks go on the checklist.
+- iPhone or iOS Simulator. Android is not driven yet. On the simulator, phone-only checks (real microphone,
+  earphones, production ads, real performance) are reported as pending.
 - The agent cannot speak, so speech accuracy is scored only with injected audio or when the owner reads the
   fixture sentences.
 - QA builds show AdMob test ads.

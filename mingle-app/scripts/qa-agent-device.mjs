@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-// Drives the Mingle app on a connected physical iPhone for the /qa skill, through Appium
+// Drives the Mingle app on the connected iPhone (or, as a fallback, an iOS Simulator) for the /qa skill, through Appium
 // XCUITest (the same real-device path as scripts/mobile-ui-qa.mjs). One Appium server and
 // one session stay open across calls, so each command is a quick WebDriver request.
 //
 //   node scripts/qa-agent-device.mjs devices                    # connected iPhones (hardware UDIDs)
 //   node scripts/qa-agent-device.mjs servers                    # is this worktree's devbox reachable from the phone?
-//   node scripts/qa-agent-device.mjs build                      # Release + QA bridge build for the phone (test ads, local URLs)
-//   node scripts/qa-agent-device.mjs install [--udid U] [--fresh] # install + launch it; --fresh uninstalls first
+//   node scripts/qa-agent-device.mjs build [--sim]              # Release + QA bridge build (test ads, local URLs)
+//   node scripts/qa-agent-device.mjs install [--sim] [--fresh]  # install + launch on the phone or the QA simulator
 //   node scripts/qa-agent-device.mjs prepare-wda                # compile WebDriverAgent locally (no install)
-//   node scripts/qa-agent-device.mjs start [--udid U]           # start Appium + a session on the phone
+//   node scripts/qa-agent-device.mjs start [--sim] [--udid U]   # start Appium + a session (phone by default)
 //   node scripts/qa-agent-device.mjs screenshot <file.png>
 //   node scripts/qa-agent-device.mjs tap <x> <y>
 //   node scripts/qa-agent-device.mjs long-press <x> <y> [ms]
@@ -158,6 +158,34 @@ function resolveUdid(requested) {
   return devices[0].udid;
 }
 
+// Simulator fallback (allowed when the phone is not connected or is busy): one QA device,
+// created on demand from the newest installed iOS runtime. The runtime itself is never touched.
+const SIM_NAME = process.env.MINGLE_QA_SIM_NAME || 'Mingle QA iPhone 17';
+const SIM_DEVICE_TYPE = 'com.apple.CoreSimulator.SimDeviceType.iPhone-17';
+
+function simctlJson(...args) {
+  return JSON.parse(execFileSync('xcrun', ['simctl', 'list', ...args, '-j'], { encoding: 'utf8' }));
+}
+
+function ensureSimulator() {
+  const { devices } = simctlJson('devices', 'available');
+  let device = Object.values(devices).flat().find((candidate) => candidate.name === SIM_NAME);
+  if (!device) {
+    const runtime = simctlJson('runtimes').runtimes.filter((entry) => entry.platform === 'iOS' && entry.isAvailable).pop()
+      || fail('No iOS simulator runtime is installed.');
+    const udid = execFileSync('xcrun', ['simctl', 'create', SIM_NAME, SIM_DEVICE_TYPE, runtime.identifier], { encoding: 'utf8' }).trim();
+    device = { udid, state: 'Shutdown' };
+  }
+  if (device.state !== 'Booted') execFileSync('xcrun', ['simctl', 'boot', device.udid], { stdio: 'ignore' });
+  execFileSync('xcrun', ['simctl', 'bootstatus', device.udid, '-b'], { stdio: 'ignore' });
+  return device.udid;
+}
+
+function isSimulatorUdid(udid) {
+  const { devices } = simctlJson('devices');
+  return Object.values(devices).flat().some((device) => device.udid === udid);
+}
+
 async function appium(state, method, route, body) {
   const url = `http://127.0.0.1:${state.port}${route.replace(':session', state.sessionId)}`;
   const response = await fetch(url, {
@@ -209,7 +237,9 @@ async function windowSize(state) {
 }
 
 async function cmdStart(args) {
-  const udid = resolveUdid(readOption(args, '--udid'));
+  const sim = args.includes('--sim');
+  const udid = sim ? ensureSimulator() : resolveUdid(readOption(args, '--udid'));
+  const simulator = sim || isSimulatorUdid(udid);
   const port = Number(readOption(args, '--port')) || DEFAULT_APPIUM_PORT;
   const previous = readState();
   if (previous?.sessionId && previous.udid === udid && await isAppiumUp(previous.port)) {
@@ -229,15 +259,17 @@ async function cmdStart(args) {
     'appium:bundleId': BUNDLE_ID,
     'appium:noReset': true,
     'appium:newCommandTimeout': 3600,
-    'appium:xcodeOrgId': DEFAULT_TEAM_ID,
-    'appium:xcodeSigningId': process.env.MINGLE_UI_QA_IOS_XCODE_SIGNING_ID || 'Apple Development',
     'appium:includeSafariInWebviews': false,
     'appium:webviewConnectTimeout': 20_000,
     'appium:wdaLaunchTimeout': 180_000,
     'appium:wdaConnectionTimeout': 180_000,
   };
-  capabilities['appium:updatedWDABundleId'] = WDA_BUNDLE_ID;
-  if (fs.existsSync(path.join(WDA_DERIVED_DATA, 'Build/Products'))) {
+  if (!simulator) {
+    capabilities['appium:xcodeOrgId'] = DEFAULT_TEAM_ID;
+    capabilities['appium:xcodeSigningId'] = process.env.MINGLE_UI_QA_IOS_XCODE_SIGNING_ID || 'Apple Development';
+    capabilities['appium:updatedWDABundleId'] = WDA_BUNDLE_ID;
+  }
+  if (!simulator && fs.existsSync(path.join(WDA_DERIVED_DATA, 'Build/Products'))) {
     // Built by `prepare-wda`, so the session start only installs and launches it.
     capabilities['appium:derivedDataPath'] = WDA_DERIVED_DATA;
     capabilities['appium:usePrebuiltWDA'] = true;
@@ -249,9 +281,9 @@ async function cmdStart(args) {
   });
   const payload = await response.json();
   if (!response.ok) fail(`Session start failed: ${payload?.value?.message || JSON.stringify(payload).slice(0, 500)}\nAppium log: ${APPIUM_LOG_PATH}`);
-  const state = { udid, port, sessionId: payload.value.sessionId, appiumPid: appiumPid ?? previous?.appiumPid ?? null, logCursor: new Date().toISOString() };
+  const state = { udid, simulator, port, sessionId: payload.value.sessionId, appiumPid: appiumPid ?? previous?.appiumPid ?? null, logCursor: new Date().toISOString() };
   writeState(state);
-  console.log(JSON.stringify({ udid, sessionId: state.sessionId, points: await windowSize(state) }));
+  console.log(JSON.stringify({ udid, target: simulator ? 'simulator' : 'phone', sessionId: state.sessionId, points: await windowSize(state) }));
 }
 
 async function cmdScreenshot(args) {
@@ -442,13 +474,15 @@ function cmdPrepareWda() {
 
 // Google's published AdMob test banner unit for iOS. QA builds must never request production ads.
 const ADMOB_TEST_BANNER_UNIT_IOS = 'ca-app-pub-3940256099942544/2934735716';
-const QA_DERIVED_DATA = path.join(REPO_ROOT, '.devbox-cache/ios/qa-agent-device');
+const qaDerivedData = (sim) => path.join(REPO_ROOT, sim ? '.devbox-cache/ios/qa-agent-sim' : '.devbox-cache/ios/qa-agent-device');
 const QA_XCCONFIG = path.join(REPO_ROOT, '.devbox-cache/ios/qa-agent-device.runtime.xcconfig');
-const QA_APP_PATH = path.join(QA_DERIVED_DATA, 'Build/Products/Release-iphoneos/mingle.app');
+const qaAppPath = (sim) => path.join(qaDerivedData(sim), `Build/Products/Release-${sim ? 'iphonesimulator' : 'iphoneos'}/mingle.app`);
 
 // Release build with the QA bridge on: the JS bundle is embedded (no Metro), the WebView is inspectable,
 // every web and fallback URL points at this worktree's devbox, and ads use Google's test units.
-function cmdBuild() {
+function cmdBuild(args) {
+  const sim = args.includes('--sim');
+  const QA_APP_PATH = qaAppPath(sim);
   const host = resolveDevboxHost();
   if (host === '127.0.0.1' || host === 'localhost') {
     fail('devbox points at 127.0.0.1, which the phone cannot reach. Restart it with scripts/devbox up --profile local --host <Mac LAN IP>.');
@@ -467,8 +501,8 @@ function cmdBuild() {
     '-workspace', path.join(APP_ROOT, 'rn/ios/mingle.xcworkspace'),
     '-scheme', 'mingle',
     '-configuration', 'Release',
-    '-destination', 'generic/platform=iOS',
-    '-derivedDataPath', QA_DERIVED_DATA,
+    '-destination', sim ? 'generic/platform=iOS Simulator' : 'generic/platform=iOS',
+    '-derivedDataPath', qaDerivedData(sim),
     '-xcconfig', QA_XCCONFIG,
     'build', '-quiet',
   ], {
@@ -497,9 +531,32 @@ function cmdBuild() {
 
 // Installs the QA build and launches it. --fresh uninstalls first, which wipes the app's local data.
 function cmdInstall(args) {
-  const udid = resolveUdid(readOption(args, '--udid'));
+  const sim = args.includes('--sim');
+  const appPath = qaAppPath(sim);
+  if (!fs.existsSync(appPath)) fail(`No QA build yet; run \`node scripts/qa-agent-device.mjs build${sim ? ' --sim' : ''}\` first.`);
   const fresh = args.includes('--fresh');
-  if (!fs.existsSync(QA_APP_PATH)) fail('No QA build yet; run `node scripts/qa-agent-device.mjs build` first.');
+  if (sim) {
+    const udid = ensureSimulator();
+    if (fresh) {
+      try {
+        execFileSync('xcrun', ['simctl', 'uninstall', udid, BUNDLE_ID], { stdio: 'ignore' });
+      } catch {
+        // Not installed.
+      }
+    }
+    execFileSync('xcrun', ['simctl', 'install', udid, appPath], { stdio: 'ignore' });
+    for (const service of ['microphone', 'photos']) {
+      try {
+        execFileSync('xcrun', ['simctl', 'privacy', udid, 'grant', service, BUNDLE_ID], { stdio: 'ignore' });
+      } catch {
+        // Older runtimes lack some services.
+      }
+    }
+    execFileSync('xcrun', ['simctl', 'launch', udid, BUNDLE_ID], { stdio: 'ignore' });
+    console.log(JSON.stringify({ installed: appPath, udid, target: 'simulator', fresh }));
+    return;
+  }
+  const udid = resolveUdid(readOption(args, '--udid'));
   if (fresh) {
     try {
       execFileSync('xcrun', ['devicectl', 'device', 'uninstall', 'app', '--device', udid, BUNDLE_ID], { stdio: 'ignore' });
@@ -507,9 +564,9 @@ function cmdInstall(args) {
       // Not installed.
     }
   }
-  execFileSync('xcrun', ['devicectl', 'device', 'install', 'app', '--device', udid, QA_APP_PATH], { stdio: 'ignore' });
+  execFileSync('xcrun', ['devicectl', 'device', 'install', 'app', '--device', udid, appPath], { stdio: 'ignore' });
   execFileSync('xcrun', ['devicectl', 'device', 'process', 'launch', '--device', udid, BUNDLE_ID], { stdio: 'ignore' });
-  console.log(JSON.stringify({ installed: QA_APP_PATH, udid, fresh }));
+  console.log(JSON.stringify({ installed: appPath, udid, target: 'phone', fresh }));
 }
 
 async function main() {
@@ -517,7 +574,7 @@ async function main() {
   switch (command) {
     case 'devices': console.log(JSON.stringify(listDevices(), null, 2)); break;
     case 'servers': await cmdServers(); break;
-    case 'build': cmdBuild(); break;
+    case 'build': cmdBuild(args); break;
     case 'prepare-wda': cmdPrepareWda(); break;
     case 'install': cmdInstall(args); break;
     case 'start': await cmdStart(args); break;

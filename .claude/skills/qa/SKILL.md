@@ -1,9 +1,9 @@
 ---
 name: qa
-description: Agent-driven UI/UX QA of the Mingle iOS app on the connected physical iPhone. Picks scenarios from the branch diff (or all, or by id), installs a QA-bridge build served by this worktree's devbox over LAN, drives the phone like a user through Appium XCUITest (real-device mode), judges each scenario against the owner's taste rules and rubric, and publishes an HTML report with screenshots and a manual checklist. Use when the user asks to QA, test or check the app's UI/UX, translation or speech flows, or says /qa.
+description: Agent-driven UI/UX QA of the Mingle iOS app on the connected iPhone, falling back to an iOS Simulator when the phone is not connected or is busy. Picks scenarios from the branch diff (or all, or by id), installs a QA-bridge build served by this worktree's devbox over LAN, drives the phone like a user through Appium XCUITest (real-device mode), judges each scenario against the owner's taste rules and rubric, and publishes an HTML report with screenshots and a manual checklist. Use when the user asks to QA, test or check the app's UI/UX, translation or speech flows, or says /qa.
 ---
 
-# /qa — agent-driven UI/UX QA on the iPhone
+# /qa — agent-driven UI/UX QA on the iPhone (simulator fallback)
 
 You are the QA tester for the Mingle app. Use the app on the owner's connected iPhone like a picky user, and judge
 it the way the product owner would. Everything you need is in `mingle-app/qa/agent/`:
@@ -24,7 +24,11 @@ it the way the product owner would. Everything you need is in `mingle-app/qa/age
 
 ## Ground rules
 
-- **Physical iPhone only. Never boot, create or use an iOS Simulator.** The owner has said this twice.
+- **Target: the connected iPhone first.** Use it when `devices` lists it and no other session is using it. Otherwise
+  fall back to the QA simulator (`--sim` on `build`, `install` and `start`) for what a simulator can cover: layout,
+  navigation, typed-text translation, scroll, and STT with injected WAV audio. Mark phone-only checks (real
+  microphone, earphones/Bluetooth, production AdMob fill, real performance) as `manual` with "needs the phone".
+  Create the simulator device only when needed (the driver does it); **never delete or reinstall the iOS runtime.**
 - **Never start or restart devbox, Metro or any dev server without asking the owner first** (CLAUDE.md).
 - **The phone is shared.** Before installing, uninstalling or launching anything, check that no other session is
   using it (the "Linked sessions" note, `list_sessions`, running `devbox --with-ios-install` processes). If one is,
@@ -59,8 +63,9 @@ Then continue without waiting.
 
 Run these from the worktree root.
 
-1. Phone: `node mingle-app/scripts/qa-agent-device.mjs devices` must list exactly one iPhone (USB, unlocked,
-   trusted, Developer Mode on). Otherwise ask the owner to connect it.
+1. Target: `node mingle-app/scripts/qa-agent-device.mjs devices` lists connected iPhones. Exactly one, free
+   (see the ground rules) → phone. None, or busy → simulator: add `--sim` to `build`, `install` and `start` below
+   and say so in the run notes.
 2. Servers:
    ```bash
    node mingle-app/scripts/qa-agent-device.mjs servers
@@ -144,8 +149,10 @@ For each scenario, decide the verdict from `rubric.md`:
 4. Look at the screens as the owner would, beyond the oracle. Anything that breaks a taste rule is a finding, even
    when the scenario's checks passed.
 
+Record for every scenario where it ran (`target: phone|simulator`); the report shows it on each card.
+
 Write `results.json` in the run folder:
-`{ scenarios: [{ id, verdict, findings: [{severity, taste, summary, repro, evidence}], translationScores, manualChecks }], environment }`.
+`{ scenarios: [{ id, target, verdict, findings: [{severity, taste, summary, repro, evidence}], translationScores, manualChecks }], environment }`.
 
 ## 6. Report
 
