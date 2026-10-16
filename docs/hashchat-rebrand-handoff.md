@@ -95,7 +95,9 @@ npm i --no-save playwright && npx playwright install chromium && node gen.mjs
 - 테스트: `google-play-console-media-snapshots.test.ts`는 Play 동기화로 새 아이콘을 올리기 전까지 실패하는 게 정상 (스냅샷을 손으로 고치면 업로드가 건너뛰어짐). 나머지 실패 62개는 리브랜딩 전 커밋에서도 동일하게 실패
 
 남은 것
-- 이미지 안 글자: `mingle-app/public/og-image.png`, `google-play-console-info/assets/feature-graphic.png`, 스토어 스크린샷에 "Mingle" 워드마크가 있음 → 새로 제작 필요
+- 스토어 스크린샷: 새로 만듦(2026-10-16). 피드·번역·댓글·다국어 대화·검색·프로필 + Hash Rush 2장, 15개 언어. 원본·문구·렌더 스크립트는 `mingle-app/rn/store-screenshots/`. Hash Rush는 아직 앱에 없으니 게임을 넣기 전에 출시하면 07·08을 빼야 함
+- 이미지 안 글자: `mingle-app/public/og-image.png`, `google-play-console-info/assets/feature-graphic.png`에 "Mingle" 워드마크가 남아 있음 → 새로 제작 필요
+- 버그(posting-feed): 피드에서 좋아요·글쓰기 → `src/components/feed/login-redirect.ts`가 `/auth/signin`으로 보내 웹 Google 로그인만 뜸. 기존 로그인 화면(대화 탭)으로 보내야 함
 - Android adaptive icon 없음 (최신 기기에서 레거시 아이콘이 축소돼 보일 수 있음)
 - prod DB: 공식 계정 표시 이름, 이미 올라간 시드 게시물 본문의 "Mingle"
 - 실기기 홈 화면에서 아이콘 확인
