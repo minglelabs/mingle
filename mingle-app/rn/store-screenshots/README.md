@@ -15,6 +15,7 @@ Files:
 - `capture.mjs`: loads each screen in headless Chrome at iPhone size (390x797 pt @3x, the area under the status bar) and writes `captures/<lang>/<screen>.png`.
 - `chat.json`: the four chat lines in all languages, partner languages per viewer, room title and the "collapse" label.
 - `captions.json`: headline per slide and language, and which language each upload locale folder gets.
+- `previews/<nn>-<lang>.jpg`: one sheet per language with its 7 slides, for review.
 - `render.py`: draws each slide (headline, phone frame, iOS status bar, capture) with headless Chrome at 1290x2796, compresses it with pngquant and replaces the PNGs in `../appstore-connect-info/upload/<locale>/` and `../google-play-console-info/upload/<locale>/`.
 
 ## Run

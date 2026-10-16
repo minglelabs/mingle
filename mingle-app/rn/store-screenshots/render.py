@@ -55,7 +55,7 @@ h1{{position:absolute;top:150px;left:60px;right:60px;margin:0;text-align:center;
 </style></head><body>
 <h1 id="t">{caption}</h1>
 <div class="phone"><div class="screen">
-<div class="bar"><span class="time">9:41</span><span class="right">
+<div class="bar" dir="ltr"><span class="time">9:41</span><span class="right">
 <svg width="48" height="30" viewBox="0 0 48 30"><rect x="0" y="20" width="8" height="10" rx="2"/><rect x="13" y="14" width="8" height="16" rx="2"/><rect x="26" y="7" width="8" height="23" rx="2"/><rect x="39" y="0" width="8" height="30" rx="2"/></svg>
 <svg width="42" height="30" viewBox="0 0 42 30"><path d="M21 30l-6-7a8.5 8.5 0 0 1 12 0zM8 16a18 18 0 0 1 26 0l-4 4.5a12 12 0 0 0-18 0zM1 9a27.5 27.5 0 0 1 40 0l-4 4.5a21.5 21.5 0 0 0-32 0z"/></svg>
 <svg width="70" height="32" viewBox="0 0 70 32"><rect x="1.5" y="1.5" width="60" height="29" rx="9" fill="none" stroke="{ink}" stroke-width="3" opacity=".45"/><rect x="6" y="6" width="51" height="20" rx="5"/><rect x="64" y="10" width="4.5" height="12" rx="2" opacity=".45"/></svg>
