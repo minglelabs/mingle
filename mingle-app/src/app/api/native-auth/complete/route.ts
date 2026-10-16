@@ -64,7 +64,7 @@ function redirectToApp(params: {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="refresh" content="0;url=${redirectUrl}" />
-    <title>Return to Mingle</title>
+    <title>Return to HashChat</title>
     <style>
       body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fff; color: #111827; }
       main { min-height: 100dvh; display: grid; place-items: center; padding: 24px; text-align: center; }
@@ -77,9 +77,9 @@ function redirectToApp(params: {
   <body>
     <main>
       <section class="card">
-        <h1>Returning to Mingle</h1>
+        <h1>Returning to HashChat</h1>
         <p>If the app does not open automatically, tap the button below.</p>
-        <a href="${redirectUrl}" id="open-app">Open Mingle App</a>
+        <a href="${redirectUrl}" id="open-app">Open HashChat App</a>
       </section>
     </main>
     <script>
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
   try {
     bridgeToken = createNativeAuthBridgeToken({
       sub: subject,
-      name: name || "Mingle User",
+      name: name || "HashChat User",
       email,
       provider,
       callbackUrl,

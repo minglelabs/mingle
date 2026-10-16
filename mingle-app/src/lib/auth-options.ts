@@ -82,7 +82,7 @@ async function upsertUserForCredentialsSignIn(args: {
         create: {
           id: idHint,
           email: normalizedEmail ?? undefined,
-          name: normalizedName ?? "Mingle User",
+          name: normalizedName ?? "HashChat User",
           handle,
           externalUserId: normalizedExternalUserId ?? idHint,
           firstSeenAt: now,
@@ -105,7 +105,7 @@ async function upsertUserForCredentialsSignIn(args: {
         where: { email: normalizedEmail },
         create: {
           email: normalizedEmail,
-          name: normalizedName ?? "Mingle User",
+          name: normalizedName ?? "HashChat User",
           handle,
           externalUserId: normalizedExternalUserId ?? undefined,
           firstSeenAt: now,
@@ -124,7 +124,7 @@ async function upsertUserForCredentialsSignIn(args: {
     { id: normalizedExternalUserId, name: normalizedName },
     (handle) => prisma.user.create({
       data: {
-        name: normalizedName ?? "Mingle User",
+        name: normalizedName ?? "HashChat User",
         handle,
         externalUserId: normalizedExternalUserId ?? undefined,
         firstSeenAt: now,
@@ -257,7 +257,7 @@ function buildProviders(): NextAuthOptions["providers"] {
 
         return {
           id: user.id,
-          name: user.name || "Mingle User",
+          name: user.name || "HashChat User",
           email: user.email || email,
           externalUserId: user.externalUserId || null,
         };
@@ -284,7 +284,7 @@ function buildProviders(): NextAuthOptions["providers"] {
 
         return {
           id: user.id,
-          name: user.name || "Mingle User",
+          name: user.name || "HashChat User",
           email: user.email || "",
           externalUserId: user.externalUserId || null,
         };
@@ -452,7 +452,7 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
           create: {
             id: userId,
             email: email ?? undefined,
-            name: name ?? "Mingle User",
+            name: name ?? "HashChat User",
             handle,
             externalUserId: userId,
             firstSeenAt: now,
@@ -559,7 +559,7 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
         if (typeof token.sub === "string" && token.sub.trim()) {
           sessionUser.id = token.sub.trim();
         }
-        sessionUser.name = sessionUser.name ?? token.name ?? "Mingle User";
+        sessionUser.name = sessionUser.name ?? token.name ?? "HashChat User";
         sessionUser.email = sessionUser.email ?? token.email ?? "";
         if (typeof token.externalUserId === "string" && token.externalUserId.trim()) {
           sessionUser.externalUserId = token.externalUserId.trim();

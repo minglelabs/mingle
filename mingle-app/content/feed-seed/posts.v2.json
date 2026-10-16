@@ -1,7 +1,7 @@
 {
   "version": 2,
   "authorHandle": "mingle_team",
-  "authorDisplayName": "Mingle 팀",
+  "authorDisplayName": "HashChat 팀",
   "notes": "Global seed: 300 short posts in en, es, fr, ru, vi, hi, ar, ja, zh-CN and zh-TW (Korean phrases, community questions, general travel/etiquette tips). No 'fact' items, so no sources to re-check. Same trust rules as v1. Run with --content content/feed-seed/posts.v2.json; ids do not overlap v1.",
   "items": [
     {
@@ -322,7 +322,7 @@
       "kind": "question",
       "topic": "korean",
       "language": "en",
-      "text": "Mingle friends, which Korean expression sounds the cutest to you?"
+      "text": "HashChat friends, which Korean expression sounds the cutest to you?"
     },
     {
       "key": "global-es-phrase-01",

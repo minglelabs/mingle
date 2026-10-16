@@ -5,29 +5,29 @@
   "hero": {
     "title1": "Sentence-by-sentence translation,",
     "title2": "no more.",
-    "subtitle": "No more stopping after every sentence to translate. Mingle keeps long conversations flowing continuously, translating in real-time as you speak and showing it on screen. Every conversation is saved in a chat room, and you can invite others to continue talking online anytime.",
+    "subtitle": "No more stopping after every sentence to translate. HashChat keeps long conversations flowing continuously, translating in real-time as you speak and showing it on screen. Every conversation is saved in a chat room, and you can invite others to continue talking online anytime.",
     "cta": "Download",
     "tryDemo": "Try it out",
     "flirting": {
       "title1": "Flirting with foreigners,",
       "title2": "just got easier.",
-      "subtitle": "Don't let language hold you back. Mingle translates in real-time so you can keep the vibe going naturally. Your conversation is saved as a chat room, so you can reconnect anytime."
+      "subtitle": "Don't let language hold you back. HashChat translates in real-time so you can keep the vibe going naturally. Your conversation is saved as a chat room, so you can reconnect anytime."
     },
     "working": {
       "title1": "Working with global teams,",
       "title2": "without language barriers.",
-      "subtitle": "Communicate with your global team in real-time. Mingle translates seamlessly during meetings. All conversations are recorded for later review, and you can continue chatting with teammates anytime."
+      "subtitle": "Communicate with your global team in real-time. HashChat translates seamlessly during meetings. All conversations are recorded for later review, and you can continue chatting with teammates anytime."
     }
   },
   "valueProposition": {
-    "label": "Why Mingle",
+    "label": "Why HashChat",
     "title": "Talking to Foreigners? Confidence is Everything",
-    "description": "Don't speak their language? No problem. Just turn on Mingle. We'll give you the confidence.",
+    "description": "Don't speak their language? No problem. Just turn on HashChat. We'll give you the confidence.",
     "social": {
       "label": "Offline",
       "title": "Join offline meetups with confidence.",
       "description": "Transforms into a real-time voice translator. Automatically translates multiple languages both ways without stopping at each sentence, so you can just focus on the conversation.",
-      "titleHighlight": "With Mingle."
+      "titleHighlight": "With HashChat."
     },
     "titleHighlight": ""
   },
@@ -39,7 +39,7 @@
   },
   "beforeAfter": {
     "beforeLabel": "Before",
-    "afterLabel": "With Mingle",
+    "afterLabel": "With HashChat",
     "beforeDesc": "Translating one sentence at a time...",
     "afterDesc": "Seamless natural conversation!",
     "problemLabel": "Problem",
@@ -60,7 +60,7 @@
   "features": {
     "label": "Features",
     "title": "So you can focus on the conversation",
-    "subtitle": "Mingle is not just a translator. It's the world's most comfortable messenger that lets you focus only on the conversation.",
+    "subtitle": "HashChat is not just a translator. It's the world's most comfortable messenger that lets you focus only on the conversation.",
     "realtime": {
       "title": "Real-time Translation",
       "desc": "Translation starts as you speak. Natural conversation without interruption."
@@ -89,7 +89,7 @@
   "coreValue": {
     "label": "Core Value",
     "title": "Continue your offline conversation in an online chat room",
-    "desc1": "This is the true value of Mingle.",
+    "desc1": "This is the true value of HashChat.",
     "desc2": "Invite the person you met in real life to your app. Your translated conversation becomes a permanent chat room. Continue talking the next day, next week, or anytime.",
     "desc3": "The moment a chance meeting at a party becomes a real friendship, that's",
     "chatDate": "Conversation from Feb 4, 2024",
@@ -104,20 +104,20 @@
   "cta": {
     "title1": "The easiest way to",
     "title2": "befriend anyone —",
-    "title2Highlight": "Mingle",
-    "subtitle": "With Mingle, you can have deep conversations with anyone, no matter what language they speak.",
+    "title2Highlight": "HashChat",
+    "subtitle": "With HashChat, you can have deep conversations with anyone, no matter what language they speak.",
     "button": "Download Now"
   },
   "footer": {
-    "copyright": "© 2026 Mingle. All rights reserved."
+    "copyright": "© 2026 HashChat. All rights reserved."
   },
   "modal": {
     "title": "Join the Waitlist",
-    "subtitle": "Mingle is already loved by millions worldwide. Be the first to know when we launch in your area.",
+    "subtitle": "HashChat is already loved by millions worldwide. Be the first to know when we launch in your area.",
     "placeholder": "your@email.com",
     "submit": "Notify Me",
     "success": "You're on the list!",
-    "successDesc": "We'll let you know as soon as Mingle launches near you!",
+    "successDesc": "We'll let you know as soon as HashChat launches near you!",
     "error": "Something went wrong. Please try again.",
     "close": "Close",
     "feedbackPlaceholder": "Share any features you'd like to see or what you're excited about"
@@ -162,7 +162,7 @@
     "label": "Connect",
     "title1": "Connect and chat",
     "title2": "with friends you like",
-    "description": "Connect and chat with over 10 million people worldwide. Mingle's AI technology has overcome the language barrier."
+    "description": "Connect and chat with over 10 million people worldwide. HashChat's AI technology has overcome the language barrier."
   },
   "communication": {
     "title": "Any type of communication, easily",
@@ -181,7 +181,7 @@
   },
   "worldMap": {
     "title": "Find anyone around the world",
-    "description": "Before you travel, make local friends on Mingle first.",
+    "description": "Before you travel, make local friends on HashChat first.",
     "label": "Explore"
   }
 }

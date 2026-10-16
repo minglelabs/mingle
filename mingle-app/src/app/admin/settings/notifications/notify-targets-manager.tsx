@@ -116,7 +116,7 @@ export function NotifyTargetsManager({ initialTargets }: { initialTargets: Admin
     <div className="mt-5 space-y-5">
       <form onSubmit={addTarget} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" noValidate>
         <label htmlFor="notify-target-handle" className="block text-[15px] font-semibold text-slate-900">
-          본인 Mingle 계정 핸들
+          본인 HashChat 계정 핸들
         </label>
         <div className="mt-2 flex items-stretch gap-2">
           <div className="flex min-w-0 flex-1 items-center rounded-xl border border-slate-300 bg-white px-3 focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-200">

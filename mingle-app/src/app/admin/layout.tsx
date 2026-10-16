@@ -5,7 +5,7 @@ import { getAdminContext } from "@/server/admin/guard";
 import { AdminShell } from "./_components/admin-shell";
 
 export const metadata: Metadata = {
-  title: { default: "Mingle Admin", template: "%s · Mingle Admin" },
+  title: { default: "HashChat Admin", template: "%s · HashChat Admin" },
   robots: { index: false, follow: false },
 };
 

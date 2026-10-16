@@ -27,7 +27,7 @@ export function AdminShell({
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-sky-100 text-sky-700">
             <ShieldCheck className="h-4 w-4" aria-hidden="true" />
           </span>
-          <span className="text-[15px] font-semibold tracking-tight text-slate-900">Mingle Admin</span>
+          <span className="text-[15px] font-semibold tracking-tight text-slate-900">HashChat Admin</span>
         </div>
       </header>
       <div className="flex min-h-0 w-full flex-1 flex-col lg:flex-row">

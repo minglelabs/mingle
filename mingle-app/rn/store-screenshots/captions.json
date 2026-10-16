@@ -1,0 +1,191 @@
+{
+  "shots": [
+    {
+      "id": "01-feed",
+      "capture": "captures/01-feed.png",
+      "caption": {
+        "en": "Everyday moments\nfrom around the world",
+        "ko": "전 세계 친구들의\n일상을 한 피드에서",
+        "ja": "世界中の友だちの毎日を\nひとつのフィードで",
+        "zh-cn": "全球朋友的日常\n尽在一个动态",
+        "zh-tw": "全球朋友的日常\n盡在一個動態",
+        "ar": "لحظات يومية\nمن حول العالم",
+        "de": "Alltagsmomente\naus aller Welt",
+        "es": "Momentos del día a día\nde todo el mundo",
+        "fr": "Le quotidien\ndu monde entier",
+        "hi": "दुनिया भर के दोस्तों के\nरोज़ के पल",
+        "it": "Momenti di ogni giorno\nda tutto il mondo",
+        "pt": "Momentos do dia a dia\ndo mundo todo",
+        "ru": "Повседневные моменты\nсо всего мира",
+        "th": "เรื่องราวในแต่ละวัน\nจากเพื่อนทั่วโลก",
+        "vi": "Khoảnh khắc mỗi ngày\ntừ khắp thế giới"
+      }
+    },
+    {
+      "id": "02-translation",
+      "capture": "captures/02-translation.png",
+      "caption": {
+        "en": "Written in any language,\nread in yours",
+        "ko": "어떤 언어로 써도\n내 언어로 읽어요",
+        "ja": "どの言語の投稿も\n自分の言語で読める",
+        "zh-cn": "无论用什么语言写\n都能用你的语言读",
+        "zh-tw": "無論用什麼語言寫\n都能用你的語言讀",
+        "ar": "مكتوب بأي لغة\nاقرأه بلغتك",
+        "de": "In jeder Sprache geschrieben,\nin deiner gelesen",
+        "es": "Escrito en cualquier idioma,\nleído en el tuyo",
+        "fr": "Écrit dans toutes les langues,\nlu dans la vôtre",
+        "hi": "किसी भी भाषा में लिखा\nअपनी भाषा में पढ़ें",
+        "it": "Scritto in qualsiasi lingua,\nletto nella tua",
+        "pt": "Escrito em qualquer idioma,\nlido no seu",
+        "ru": "Написано на любом языке,\nчитайте на своём",
+        "th": "เขียนภาษาไหนก็ได้\nอ่านเป็นภาษาของคุณ",
+        "vi": "Viết bằng ngôn ngữ nào\ncũng đọc bằng tiếng của bạn"
+      }
+    },
+    {
+      "id": "03-comments",
+      "capture": "captures/03-comments.png",
+      "caption": {
+        "en": "Comments are\ntranslated too",
+        "ko": "댓글도\n자동으로 번역돼요",
+        "ja": "コメントも\n自動で翻訳",
+        "zh-cn": "评论也会\n自动翻译",
+        "zh-tw": "留言也會\n自動翻譯",
+        "ar": "التعليقات أيضاً\nتُترجم تلقائياً",
+        "de": "Auch Kommentare\nwerden übersetzt",
+        "es": "Los comentarios\ntambién se traducen",
+        "fr": "Les commentaires\naussi sont traduits",
+        "hi": "कमेंट भी\nअपने-आप अनुवादित",
+        "it": "Anche i commenti\nvengono tradotti",
+        "pt": "Os comentários\ntambém são traduzidos",
+        "ru": "Комментарии\nтоже переводятся",
+        "th": "คอมเมนต์ก็\nแปลให้อัตโนมัติ",
+        "vi": "Bình luận cũng\nđược dịch tự động"
+      }
+    },
+    {
+      "id": "04-group-chat",
+      "capture": "captures/04-group-chat.png",
+      "caption": {
+        "en": "Chat in many languages,\ntranslated live",
+        "ko": "여러 언어로 나누는\n실시간 통역 대화",
+        "ja": "いくつもの言語で話せる\nリアルタイム通訳チャット",
+        "zh-cn": "多种语言同时聊\n实时口译对话",
+        "zh-tw": "多種語言同時聊\n即時口譯對話",
+        "ar": "دردشة بعدة لغات\nمع ترجمة فورية",
+        "de": "Chats in vielen Sprachen,\nlive übersetzt",
+        "es": "Chats en varios idiomas,\ntraducidos al instante",
+        "fr": "Discutez en plusieurs langues,\ntraduites en direct",
+        "hi": "कई भाषाओं में चैट\nलाइव अनुवाद के साथ",
+        "it": "Chat in più lingue,\ntradotte dal vivo",
+        "pt": "Conversas em vários idiomas,\ntraduzidas ao vivo",
+        "ru": "Чаты на разных языках\nс живым переводом",
+        "th": "แชตหลายภาษา\nแปลแบบเรียลไทม์",
+        "vi": "Trò chuyện nhiều ngôn ngữ,\ndịch trực tiếp"
+      }
+    },
+    {
+      "id": "05-search",
+      "capture": "captures/05-search.png",
+      "caption": {
+        "en": "Find people and posts\nyou're into",
+        "ko": "관심 있는 사람과\n게시물을 찾아보세요",
+        "ja": "気になる人や\n投稿を見つけよう",
+        "zh-cn": "找到感兴趣的\n人和帖子",
+        "zh-tw": "找到感興趣的\n人和貼文",
+        "ar": "اعثر على أشخاص\nومنشورات تهمك",
+        "de": "Finde Menschen und Beiträge,\ndie dich interessieren",
+        "es": "Encuentra personas\ny publicaciones a tu gusto",
+        "fr": "Trouvez des personnes\net des publications",
+        "hi": "अपनी पसंद के लोग\nऔर पोस्ट खोजें",
+        "it": "Trova persone e post\nche ti interessano",
+        "pt": "Encontre pessoas\ne publicações do seu gosto",
+        "ru": "Находите людей\nи посты по интересам",
+        "th": "ค้นหาคนและโพสต์\nที่คุณสนใจ",
+        "vi": "Tìm người và bài đăng\nbạn quan tâm"
+      }
+    },
+    {
+      "id": "06-profile",
+      "capture": "captures/06-profile.png",
+      "caption": {
+        "en": "Follow friends\nfrom other countries",
+        "ko": "다른 나라 친구를\n팔로우해 보세요",
+        "ja": "海外の友だちを\nフォローしよう",
+        "zh-cn": "关注来自\n其他国家的朋友",
+        "zh-tw": "追蹤來自\n其他國家的朋友",
+        "ar": "تابع أصدقاء\nمن دول أخرى",
+        "de": "Folge Freunden\naus anderen Ländern",
+        "es": "Sigue a amigos\nde otros países",
+        "fr": "Suivez des amis\nd'autres pays",
+        "hi": "दूसरे देशों के दोस्तों\nको फ़ॉलो करें",
+        "it": "Segui amici\ndi altri paesi",
+        "pt": "Siga amigos\nde outros países",
+        "ru": "Подписывайтесь на друзей\nиз других стран",
+        "th": "ติดตามเพื่อน\nจากต่างประเทศ",
+        "vi": "Theo dõi bạn bè\ntừ các quốc gia khác"
+      }
+    },
+    {
+      "id": "07-hash-rush",
+      "capture": "captures/07-hash-rush.png",
+      "caption": {
+        "en": "Race hamsters with friends\nin Hash Rush",
+        "ko": "친구들과 햄스터 레이스\nHash Rush",
+        "ja": "友だちとハムスターレース\nHash Rush",
+        "zh-cn": "和朋友一起赛仓鼠\nHash Rush",
+        "zh-tw": "和朋友一起賽倉鼠\nHash Rush",
+        "ar": "سباق الهامستر مع الأصدقاء\nHash Rush",
+        "de": "Hamsterrennen mit Freunden\nin Hash Rush",
+        "es": "Carreras de hámsters\ncon amigos en Hash Rush",
+        "fr": "Courses de hamsters\nentre amis : Hash Rush",
+        "hi": "दोस्तों के साथ हैम्स्टर रेस\nHash Rush",
+        "it": "Corse di criceti\ncon gli amici: Hash Rush",
+        "pt": "Corrida de hamsters\ncom amigos: Hash Rush",
+        "ru": "Гонки хомяков с друзьями\nв Hash Rush",
+        "th": "แข่งแฮมสเตอร์กับเพื่อน\nHash Rush",
+        "vi": "Đua hamster cùng bạn bè\ntrong Hash Rush"
+      }
+    },
+    {
+      "id": "08-hash-rush-maps",
+      "capture": "captures/08-hash-rush-maps.png",
+      "caption": {
+        "en": "Grab the seed,\nbe first home",
+        "ko": "해바라기씨를 물고\n집에 먼저 오면 승리",
+        "ja": "ひまわりの種をくわえて\n先に帰れば勝ち",
+        "zh-cn": "叼起葵花籽\n先回家就赢",
+        "zh-tw": "叼起葵花籽\n先回家就贏",
+        "ar": "التقط البذرة\nوكن أول من يعود",
+        "de": "Schnapp dir den Kern,\nsei zuerst zu Hause",
+        "es": "Atrapa la semilla\ny llega primero a casa",
+        "fr": "Attrapez la graine,\nrentrez le premier",
+        "hi": "बीज उठाओ\nऔर सबसे पहले घर पहुँचो",
+        "it": "Prendi il seme,\ntorna a casa per primo",
+        "pt": "Pegue a semente\ne chegue primeiro em casa",
+        "ru": "Хватай семечко\nи беги домой первым",
+        "th": "คาบเมล็ดทานตะวัน\nกลับบ้านก่อนชนะ",
+        "vi": "Ngậm hạt hướng dương,\nvề nhà trước là thắng"
+      }
+    }
+  ],
+  "uploadLocales": {
+    "ar-SA": "ar",
+    "de-DE": "de",
+    "en-US": "en",
+    "es-ES": "es",
+    "fr-CA": "fr",
+    "fr-FR": "fr",
+    "hi": "hi",
+    "it": "it",
+    "ja": "ja",
+    "ko": "ko",
+    "pt-BR": "pt",
+    "pt-PT": "pt",
+    "ru": "ru",
+    "th": "th",
+    "vi": "vi",
+    "zh-Hans": "zh-cn",
+    "zh-Hant": "zh-tw"
+  }
+}

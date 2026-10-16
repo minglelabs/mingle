@@ -59,7 +59,7 @@ export const koDictionary: BaseAppDictionarySource = {
     searchingLabel: "검색 중...",
     searchNoResults: "검색 결과가 없습니다.",
     searchError: "검색하지 못했습니다. 다시 시도해 주세요.",
-    userFallbackLabel: "Mingle 사용자",
+    userFallbackLabel: "HashChat 사용자",
     followAction: "팔로우",
     followingAction: "팔로잉",
     followError: "팔로우 상태를 변경하지 못했습니다.",

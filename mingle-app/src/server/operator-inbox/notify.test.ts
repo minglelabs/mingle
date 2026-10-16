@@ -146,7 +146,7 @@ describe('notifyOperatorInboxActivity', () => {
       { userId: 'op_2', name: 'Mina', handle: 'mina_op' },
       { userId: 'op_3', name: 'Sol', handle: 'sol' },
     ])
-    m.userFindUnique.mockResolvedValue({ name: 'Mingle', handle: 'mingle_team', isOfficial: true, isOperator: false })
+    m.userFindUnique.mockResolvedValue({ name: 'HashChat', handle: 'mingle_team', isOfficial: true, isOperator: false })
     await notifyOperatorInboxActivity(activity({ kind: 'photo', preview: null, conversationId: 'conv_photo' }))
 
     const [ko, en] = await builtPushes([
@@ -154,8 +154,8 @@ describe('notifyOperatorInboxActivity', () => {
       { userId: 'staff_en', language: 'en' },
     ])
     expect(ko.messagePreview).toBeUndefined()
-    expect(resolvePushCopy(ko)).toEqual({ title: '@luca.kr, Mina 외 1명에게 새 메시지', body: 'Mingle (공식): 사진을 보냈습니다' })
-    expect(resolvePushCopy(en)).toEqual({ title: 'New message for @luca.kr, Mina and 1 more', body: 'Mingle (Official): Sent a photo' })
+    expect(resolvePushCopy(ko)).toEqual({ title: '@luca.kr, Mina 외 1명에게 새 메시지', body: 'HashChat (공식): 사진을 보냈습니다' })
+    expect(resolvePushCopy(en)).toEqual({ title: 'New message for @luca.kr, Mina and 1 more', body: 'HashChat (Official): Sent a photo' })
   })
 
   it('does not push when no staff target is configured, and then does not hold the room window', async () => {

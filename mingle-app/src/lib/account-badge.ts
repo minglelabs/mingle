@@ -5,7 +5,7 @@ import { accountBadgeCopy } from '@/i18n/account-badge-copy'
  * another user's name renders through this (plus `<AccountBadge>`), never by
  * reading `isOfficial` itself.
  *
- * - `official`: the Mingle team's own account, labeled "공식" / "Official".
+ * - `official`: the HashChat team's own account, labeled "공식" / "Official".
  */
 export type AccountBadgeKind = 'official'
 
@@ -20,7 +20,7 @@ export function resolveAccountBadge(flags: AccountBadgeFlags | null | undefined)
 
 /**
  * Name plus badge as plain text, for surfaces that cannot render the badge
- * component (OS push, share text): "Mingle Team (공식)" / "Mingle Team (Official)".
+ * component (OS push, share text): "HashChat Team (공식)" / "HashChat Team (Official)".
  * `locale` is any language tag (unknown -> English). Without a badge the label
  * is returned unchanged.
  */

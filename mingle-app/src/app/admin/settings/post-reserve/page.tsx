@@ -10,7 +10,7 @@ import { PostReserveForm } from './post-reserve-form'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '잠재 글 · Mingle Admin',
+  title: '잠재 글 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

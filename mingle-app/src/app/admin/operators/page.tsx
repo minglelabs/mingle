@@ -9,7 +9,7 @@ import { countryLabel, koreanLanguageName } from './_lib/options'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '운영 계정 · Mingle Admin',
+  title: '운영 계정 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 
@@ -44,7 +44,7 @@ export default async function OperatorsPage({ searchParams }: OperatorsPageProps
       <header className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-slate-900">운영 계정</h1>
-          <p className="mt-0.5 break-words text-sm text-slate-500">Mingle 팀이 운영하는 계정 {list.total}개</p>
+          <p className="mt-0.5 break-words text-sm text-slate-500">HashChat 팀이 운영하는 계정 {list.total}개</p>
         </div>
         <Link
           href="/admin/operators/new"

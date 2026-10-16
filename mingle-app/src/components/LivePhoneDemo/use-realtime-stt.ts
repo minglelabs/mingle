@@ -3124,7 +3124,7 @@ export default function useRealtimeSTT({
   const [leaveNotices, setLeaveNotices] = useState<ConversationLeaveNotice[]>([])
   const [inviteNotices, setInviteNotices] = useState<ConversationInviteNotice[]>([])
   // Server-owned like the notices: whether the room has an active member run
-  // by Mingle staff (hydration's operatorDisclosure). Drives the pinned
+  // by HashChat staff (hydration's operatorDisclosure). Drives the pinned
   // disclosure notice; false until the first hydration response.
   const [operatorDisclosure, setOperatorDisclosure] = useState(false)
   // Membership/invites are deliberately server-authoritative, never optimistic

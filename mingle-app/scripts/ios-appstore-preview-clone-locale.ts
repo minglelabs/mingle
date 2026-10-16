@@ -163,7 +163,7 @@ Usage:
 
 Defaults:
   --api-base http://localhost:4318
-  --source-project-name "Mingle 한국어"
+  --source-project-name "HashChat 한국어"
   --i18n-json rn/appstore-connect-info/appstore-connect-info.i18n.json
 `);
 }
@@ -180,7 +180,7 @@ function parseArgs(argv: string[]): Options {
 
   const options: Options = {
     apiBase: 'http://localhost:4318',
-    sourceProjectName: 'Mingle 한국어',
+    sourceProjectName: 'HashChat 한국어',
     targetProjectName: '',
     locale: '',
     i18nJsonPath: 'rn/appstore-connect-info/appstore-connect-info.i18n.json',

@@ -8,7 +8,7 @@ import { AvatarGrid, type AvatarGridItem } from './avatar-grid'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '사진 검수 · Mingle Admin',
+  title: '사진 검수 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

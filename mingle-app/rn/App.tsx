@@ -456,7 +456,7 @@ function openNativeExternalUrl(rawUrl: string): void {
     if (!fallbackUrl || fallbackUrl === rawUrl) return;
 
     void Linking.openURL(fallbackUrl).catch(() => {
-      // Ignore external app/browser failures so the Mingle WebView remains intact.
+      // Ignore external app/browser failures so the HashChat WebView remains intact.
     });
   });
 }
@@ -520,7 +520,7 @@ function parseOptionalSonioxManualFinalizeSilenceMs(value: unknown): number | un
   return Math.floor(parsed);
 }
 
-const STARTUP_SPLASH_BACKGROUND = '#F3C35A';
+const STARTUP_SPLASH_BACKGROUND = '#FCC12F';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const STARTUP_SPLASH_LOGO = require('./ios/mingle/Images.xcassets/LaunchLogo.imageset/launch-logo.png');
 const {

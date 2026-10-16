@@ -15,7 +15,7 @@ const MORE_LINKS = [
   { href: "/admin/reports", icon: Flag, title: "신고함", description: "신고 처리, 숨김과 이용 제한" },
   { href: "/admin/dashboard", icon: ChartLine, title: "대시보드", description: "사용시간, 메시지, DAU, 가입자 추이" },
   { href: "/admin/conversations", icon: MessagesSquare, title: "대화록", description: "외부 사용자 ID로 대화방과 메시지 조회" },
-  { href: "/admin/settings/notifications", icon: Bell, title: "알림 설정", description: "인박스 알림을 받을 내 Mingle 계정" },
+  { href: "/admin/settings/notifications", icon: Bell, title: "알림 설정", description: "인박스 알림을 받을 내 HashChat 계정" },
   { href: "/admin/settings/auto-reply", icon: Bot, title: "AI 자동 답장", description: "N분 안에 답하지 못한 대화에 AI가 답장" },
   { href: "/admin/settings/automation", icon: Wand2, title: "자동 생성", description: "사진·계정·글 자동 생성 규칙과 수동 실행" },
   { href: "/admin/operators/avatars", icon: Images, title: "사진 검수", description: "운영 계정 프로필 사진 모아 보기·다시 만들기" },
@@ -52,7 +52,7 @@ export default async function AdminMorePage() {
           href="/"
           prefetch={false}
         >
-          Mingle 앱으로 돌아가기
+          HashChat 앱으로 돌아가기
           <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
         </Link>
       </div>

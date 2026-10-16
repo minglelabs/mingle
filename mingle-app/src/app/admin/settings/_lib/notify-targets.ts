@@ -7,7 +7,7 @@ import { identityBadgeFlags, USER_IDENTITY_SELECT, type IdentityBadgeFlags } fro
 
 /**
  * Staff notification targets (app_admin_notify_targets): a staff member's OWN
- * Mingle account, whose devices receive an `operator_inbox_message` push when
+ * HashChat account, whose devices receive an `operator_inbox_message` push when
  * a user writes to an operator account (see notifyOperatorInboxActivity).
  */
 export type AdminNotifyTargetDto = {

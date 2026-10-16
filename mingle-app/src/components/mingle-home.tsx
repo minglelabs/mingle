@@ -1391,10 +1391,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
             : ""}
         </div>
 
-        {/* Top Mingle text logo area */}
+        {/* Top HashChat text logo area */}
         <div className="flex flex-1 items-center justify-center">
           <span className="text-[2.8rem] font-extrabold leading-[1.08] text-[#2D2A1E]">
-            Mingle
+            HashChat
           </span>
         </div>
 

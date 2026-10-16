@@ -74,9 +74,9 @@ model User {
   inAppNotificationsEnabled    Boolean   @default(true) @map("in_app_notifications_enabled")
   moderationHiddenAt           DateTime? @map("moderation_hidden_at")
   moderationRestrictedAt       DateTime? @map("moderation_restricted_at")
-  /// The Mingle team's own official account (spec item 84): content it posts carries the "Official" badge. Display only; never affects ranking or counts. Not an operator account (see `isOperator`).
+  /// The HashChat team's own official account (spec item 84): content it posts carries the "Official" badge. Display only; never affects ranking or counts. Not an operator account (see `isOperator`).
   isOfficial                   Boolean   @default(false) @map("is_official")
-  /// Operator account run by Mingle staff (admin operator accounts): labeled "운영 계정" wherever its name is shown. Display and admin scoping only; never affects ranking or counts. Never true together with `isOfficial` (DB check app_users_operator_not_official_chk).
+  /// Operator account run by HashChat staff (admin operator accounts): labeled "운영 계정" wherever its name is shown. Display and admin scoping only; never affects ranking or counts. Never true together with `isOfficial` (DB check app_users_operator_not_official_chk).
   isOperator                   Boolean   @default(false) @map("is_operator")
   firstSeenAt                  DateTime  @default(now()) @map("first_seen_at")
   lastSeenAt                   DateTime  @default(now()) @map("last_seen_at")
@@ -142,7 +142,7 @@ model UserFollow {
 model UserNotification {
   id          String    @id @default(cuid())
   recipientId String    @map("recipient_id")
-  // Null for notifications sent by the Mingle team (feedback and report replies).
+  // Null for notifications sent by the HashChat team (feedback and report replies).
   actorId     String?   @map("actor_id")
   type        String    @default("follow")
   postId      String?   @map("post_id")
@@ -979,7 +979,7 @@ model OperatorPostJob {
   @@map("app_operator_post_jobs")
 }
 
-/// A staff member's OWN Mingle account that receives operator-inbox pushes.
+/// A staff member's OWN HashChat account that receives operator-inbox pushes.
 model AdminNotifyTarget {
   userId             String   @id @map("user_id")
   createdBySessionId String?  @map("created_by_session_id")

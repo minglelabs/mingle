@@ -90,7 +90,7 @@ const NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
   "comment",
   "comment_reply",
   "report_resolved",
-  // Sent by the Mingle team: a feedback or report reply, or a report outcome.
+  // Sent by the HashChat team: a feedback or report reply, or a report outcome.
   ...TEAM_NOTIFICATION_TYPES,
 ]);
 
@@ -462,9 +462,9 @@ export default function NotificationPanel({
   const readNotifications = notifications.filter((notification) => notification.isRead);
 
   const resolveActorName = useCallback((actor: NotificationActor | null): string => {
-    if (!actor) return dictionary.connect.userFallbackLabel ?? "Mingle user";
+    if (!actor) return dictionary.connect.userFallbackLabel ?? "HashChat user";
     return actor.name
-      || (actor.handle ? formatHandle(actor.handle) : (dictionary.connect.userFallbackLabel ?? "Mingle user"));
+      || (actor.handle ? formatHandle(actor.handle) : (dictionary.connect.userFallbackLabel ?? "HashChat user"));
   }, [dictionary.connect.userFallbackLabel]);
 
   const resolveMessage = useCallback((notification: NotificationRecord): string => {

@@ -108,7 +108,7 @@ describe('reserve post generation', () => {
     expect(cleanReservePost('  오늘 커피 맛있다  ')).toBe('오늘 커피 맛있다')
     expect(cleanReservePost('카톡 주세요 https://example.com')).toBeNull()
     expect(cleanReservePost('맛집 #서울')).toBeNull()
-    expect(cleanReservePost('Mingle 재밌네')).toBeNull()
+    expect(cleanReservePost('HashChat 재밌네')).toBeNull()
     expect(cleanReservePost('가'.repeat(401))).toBeNull()
     expect(cleanReservePost(3)).toBeNull()
   })

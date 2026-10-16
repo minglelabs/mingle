@@ -61,14 +61,14 @@ describe('resolveOperatorInboxPushCopy', () => {
     expect(copyFor('ko', { operatorNames: [], senderLabel: '', kind: 'text' }))
       .toEqual({ title: '운영 계정 새 메시지', body: '알 수 없는 사용자: …' })
     expect(copyFor('en', { operatorNames: ['  '], senderLabel: ' ', kind: 'text' }, ' '))
-      .toEqual({ title: 'New message for a Mingle-run account', body: 'Someone: …' })
+      .toEqual({ title: 'New message for a HashChat-run account', body: 'Someone: …' })
   })
 
   it('still accepts a plain actor label (generic title)', () => {
     expect(resolveOperatorInboxPushCopy({ recipientLanguage: 'ko', actorLabel: 'Ada', messagePreview: 'hello' }))
       .toEqual({ title: '운영 계정 새 메시지', body: 'Ada: hello' })
     expect(resolveOperatorInboxPushCopy({ recipientLanguage: 'ja', actorLabel: 'Ada', messagePreview: 'hello' }))
-      .toEqual({ title: 'New message for a Mingle-run account', body: 'Ada: hello' })
+      .toEqual({ title: 'New message for a HashChat-run account', body: 'Ada: hello' })
   })
 })
 

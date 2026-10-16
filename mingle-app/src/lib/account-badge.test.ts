@@ -20,18 +20,18 @@ describe('resolveAccountBadge', () => {
 describe('withAccountBadgeLabel', () => {
   it('appends the operator label in Korean and English', () => {
     expect(withAccountBadgeLabel('Mina', 'operator', 'ko')).toBe('Mina (운영 계정)')
-    expect(withAccountBadgeLabel('Mina', 'operator', 'en')).toBe('Mina (Run by Mingle)')
+    expect(withAccountBadgeLabel('Mina', 'operator', 'en')).toBe('Mina (Run by HashChat)')
   })
 
   it('appends the official label in Korean and English', () => {
-    expect(withAccountBadgeLabel('Mingle', 'official', 'ko')).toBe('Mingle (공식)')
-    expect(withAccountBadgeLabel('Mingle', 'official', 'en')).toBe('Mingle (Official)')
+    expect(withAccountBadgeLabel('HashChat', 'official', 'ko')).toBe('HashChat (공식)')
+    expect(withAccountBadgeLabel('HashChat', 'official', 'en')).toBe('HashChat (Official)')
   })
 
   it('resolves region tags and falls back to English for an unknown language', () => {
     expect(withAccountBadgeLabel('Mina', 'operator', 'ko-KR')).toBe('Mina (운영 계정)')
-    expect(withAccountBadgeLabel('Mina', 'operator', 'xx')).toBe('Mina (Run by Mingle)')
-    expect(withAccountBadgeLabel('Mina', 'operator', '')).toBe('Mina (Run by Mingle)')
+    expect(withAccountBadgeLabel('Mina', 'operator', 'xx')).toBe('Mina (Run by HashChat)')
+    expect(withAccountBadgeLabel('Mina', 'operator', '')).toBe('Mina (Run by HashChat)')
   })
 
   it('leaves the name of an account without a badge unchanged', () => {
