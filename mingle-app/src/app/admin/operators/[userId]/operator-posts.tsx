@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { reservePosterProfile } from '@/server/operator-post-reserve/generate'
 
 const PREVIEW_COUNT = 20
+/** `is_deleted` is null on most rows, which `{ not: true }` would leave out. */
+const NOT_DELETED = { OR: [{ isDeleted: null }, { isDeleted: false }] }
 
 const DATE_FORMAT = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
@@ -18,9 +20,9 @@ type OperatorPostsProps = { userId: string; showAll: boolean }
 export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
   const take = showAll ? undefined : PREVIEW_COUNT
   const [publishedCount, published, queuedCount, queued] = await Promise.all([
-    prisma.post.count({ where: { authorId: userId, isDeleted: { not: true } } }),
+    prisma.post.count({ where: { authorId: userId, ...NOT_DELETED } }),
     prisma.post.findMany({
-      where: { authorId: userId, isDeleted: { not: true } },
+      where: { authorId: userId, ...NOT_DELETED },
       orderBy: { publishedAt: 'desc' },
       take,
       select: {
@@ -56,7 +58,7 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
                 {post.imageObjectKey ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={`/api/posts/${post.id}/image`}
+                    src={`/admin/api/posts/${post.id}/image`}
                     alt="글 사진"
                     width={post.imageWidth ?? undefined}
                     height={post.imageHeight ?? undefined}
