@@ -57,6 +57,12 @@ import {
   type NativeShellCapabilities,
 } from './src/nativeCapabilities';
 import {
+  NATIVE_IAP_EVENT,
+  createNativeIapBridge,
+  sanitizeIapProductIds,
+  type NativeIapBridge,
+} from './src/nativeIap';
+import {
   startNativeBrowserAuthSession,
   type NativeAuthProvider,
 } from './src/nativeAuth';
@@ -736,6 +742,13 @@ type NativeAudioRouteRequestCommand = {
   payload?: Record<string, unknown>;
 };
 
+// Coin store purchases (see src/nativeIap.ts).
+type NativeIapCommand =
+  | { type: 'iap_get_products'; payload?: { productIds?: unknown; requestId?: unknown } }
+  | { type: 'iap_purchase'; payload?: { productId?: unknown } }
+  | { type: 'iap_finish'; payload?: { transactionId?: unknown } }
+  | { type: 'iap_restore'; payload?: Record<string, never> };
+
 type NativeOpenAppSettingsCommand = {
   type: 'native_open_app_settings';
   payload?: {
@@ -888,7 +901,8 @@ type WebViewCommand =
   | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand
   | NativeQaSetSttStatusCommand
-  | NativePictureInPictureCommand;
+  | NativePictureInPictureCommand
+  | NativeIapCommand;
 
 type NativeSttEvent =
   | {
@@ -2682,6 +2696,22 @@ function AppInner(): React.JSX.Element {
     emitQrScannerToWeb({ type: 'cancel' });
   }, [emitQrScannerToWeb]);
 
+  // Created on first use: the store library is not touched until the coin store asks for it.
+  const nativeIapBridgeRef = useRef<NativeIapBridge | null>(null);
+  const getNativeIapBridge = useCallback((): NativeIapBridge => {
+    if (!nativeIapBridgeRef.current) {
+      nativeIapBridgeRef.current = createNativeIapBridge({
+        emit: (payload) => {
+          const serialized = JSON.stringify(payload);
+          webViewRef.current?.injectJavaScript(
+            `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_IAP_EVENT)}, { detail: ${serialized} })); true;`,
+          );
+        },
+      });
+    }
+    return nativeIapBridgeRef.current;
+  }, []);
+
   const emitLocationToWeb = useCallback((payload: NativeLocationEvent) => {
     if (!isPageReadyRef.current || !webViewRef.current) {
       pendingNativeLocationEventsRef.current.push(payload);
@@ -4234,6 +4264,29 @@ function AppInner(): React.JSX.Element {
         console.log(`[Web→NativeSTT] setAec enabled=${enabled}`);
       }
       void setNativeSttAec(enabled);
+      return;
+    }
+
+    if (parsed.type === 'iap_get_products') {
+      const requestId = typeof parsed.payload?.requestId === 'string' ? parsed.payload.requestId : undefined;
+      void getNativeIapBridge().getProducts(sanitizeIapProductIds(parsed.payload?.productIds), requestId);
+      return;
+    }
+
+    if (parsed.type === 'iap_purchase') {
+      const [productId] = sanitizeIapProductIds([parsed.payload?.productId]);
+      if (productId) void getNativeIapBridge().purchase(productId);
+      return;
+    }
+
+    if (parsed.type === 'iap_finish') {
+      const transactionId = typeof parsed.payload?.transactionId === 'string' ? parsed.payload.transactionId : '';
+      if (transactionId) void getNativeIapBridge().finish(transactionId);
+      return;
+    }
+
+    if (parsed.type === 'iap_restore') {
+      void getNativeIapBridge().restore();
       return;
     }
 

@@ -86,7 +86,10 @@ import {
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
-import { BarChart3, Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
+import CoinBalanceChip, { formatCoinCount } from "@/components/coins/coin-balance-chip";
+import { getCoinCopy } from "@/i18n/coin-copy";
+import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
+import { BarChart3, Check, ChevronLeft, ChevronRight, Coins, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -429,6 +432,10 @@ function ProfileSettingsPanel({
   open: boolean;
   sessionStatus: SessionStatus;
 }) {
+  const coinWalletState = useCoinWallet().wallet;
+  const coinBillingActive = isCoinBillingActive(coinWalletState);
+  const coinWallet = coinWalletState ?? { balance: 0 };
+  const coinCopy = getCoinCopy(locale);
   const [blocks, setBlocks] = useState<BlockedUserRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -899,6 +906,18 @@ function ProfileSettingsPanel({
           </header>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
+            {coinBillingActive ? (
+              <button
+                type="button"
+                onClick={openCoinStore}
+                className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-left transition active:bg-amber-100"
+              >
+                <Coins size={20} strokeWidth={2} className="text-amber-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{coinCopy.storeTitle}</span>
+                <span className="text-[14px] font-bold tabular-nums text-amber-700">{formatCoinCount(coinWallet.balance, locale)}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-amber-500" aria-hidden="true" />
+              </button>
+            ) : null}
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <button
                 type="button"
@@ -1629,6 +1648,7 @@ function ProfileEditPanel({
 
 export default function MyPage({ dictionary, initialProfile, locale }: MyPageProps) {
   const { data: session, status: sessionStatus } = useSession();
+  const coinBillingActive = isCoinBillingActive(useCoinWallet().wallet);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState<ProfileRecord>(() => initialProfile ?? ({
@@ -2256,18 +2276,23 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           paddingTop: "env(safe-area-inset-top, 44px)",
         }}
       >
-        <div aria-hidden="true" className="h-10 w-10 shrink-0" />
+        {/* Both sides share a width so the name stays centered next to the coin chip. */}
+        <div className={`flex shrink-0 items-center ${coinBillingActive ? "w-[84px]" : "h-10 w-10"}`}>
+          <CoinBalanceChip locale={locale} />
+        </div>
         <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-bold text-slate-950">
           {name}
         </h1>
-        <button
-          type="button"
-          onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
-          className="flex h-10 w-10 items-center justify-center rounded-full transition"
-          aria-label={dictionary.profile.menuLabel}
-        >
-          <Menu size={23} strokeWidth={2.2} />
-        </button>
+        <div className={`flex shrink-0 justify-end ${coinBillingActive ? "w-[84px]" : ""}`}>
+          <button
+            type="button"
+            onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
+            className="flex h-10 w-10 items-center justify-center rounded-full transition"
+            aria-label={dictionary.profile.menuLabel}
+          >
+            <Menu size={23} strokeWidth={2.2} />
+          </button>
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

@@ -6,6 +6,8 @@ import { getConversationSessionKeyForMember, isMessageSenderBlockedInConversatio
 import { CONVERSATION_IMAGE_MAX_BYTES } from '@/lib/conversation-image'
 import { putConversationImage, getConversationImage, deleteConversationImage } from '@/server/conversation-image-storage'
 import { isConversationImageTextEnabled, runConversationImageTextJob } from '@/server/conversation-image-text'
+import { resolveCoinBillingMode } from '@/server/coins/config'
+import { canSpendCoins } from '@/server/coins/wallet'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
 import { authorizeConversationImageScope as authorize, readStoredConversationImage as storedImage } from './conversation-image-access'
@@ -82,9 +84,12 @@ export async function postConversationImage(request: NextRequest, conversationId
     // after() so it never delays the push, and non-fatal: a missing table or a
     // provider failure must never turn a committed photo into a failed send.
     if (stored && isConversationImageTextEnabled()) {
-      const job = { messageId, sessionKey: scope.sessionKey, imageSha256: sha256, objectKey: stored.objectKey, jpeg: stored.data }
+      // Coins: the uploader pays for the eager OCR; with no coins the photo is sent without it.
+      const billedUserId = resolveCoinBillingMode() === 'off' ? null : scope.userId
+      const job = { messageId, sessionKey: scope.sessionKey, imageSha256: sha256, objectKey: stored.objectKey, jpeg: stored.data, billedUserId }
       after(async () => {
         try {
+          if (billedUserId && !(await canSpendCoins(billedUserId))) return
           await runConversationImageTextJob(job)
         } catch (error) {
           console.error('[conversation-image] text job failed', error instanceof Error ? error.name : 'unknown')

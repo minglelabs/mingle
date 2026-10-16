@@ -45,6 +45,9 @@ function buildContext(requestTtsModel: string | undefined) {
       resolveConversationSessionKey: () => 'session-1',
       getOrCreateTrackingUserId: () => 'tracking-1',
       buildTrackingRequestHeaders: () => ({}),
+      // Coin balance side effects of the response; irrelevant to the request wiring.
+      applyCoinBalanceFromHeaders: () => {},
+      notifyCoinsExhausted: () => {},
     },
   }
 }
