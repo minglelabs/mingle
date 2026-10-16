@@ -526,6 +526,11 @@ function parseOptionalSonioxManualFinalizeSilenceMs(value: unknown): number | un
 }
 
 const STARTUP_SPLASH_BACKGROUND = '#F3C35A';
+// After the document finishes loading, the web app still needs to hydrate before
+// its first real screen (e.g. the language picker) is painted. The splash waits
+// for the web's native_first_screen_ready message; this is the ceiling for pages
+// or older web deployments that never send it.
+const STARTUP_SPLASH_FIRST_SCREEN_FALLBACK_MS = 3000;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const STARTUP_SPLASH_LOGO = require('./ios/mingle/Images.xcassets/LaunchLogo.imageset/launch-logo.png');
 const {
@@ -854,6 +859,10 @@ type NativeRemountWebViewCommand = {
   };
 };
 
+type NativeFirstScreenReadyCommand = {
+  type: 'native_first_screen_ready';
+};
+
 type NativeQaSetSttStatusCommand = {
   type: 'native_qa_set_stt_status';
   payload?: {
@@ -888,6 +897,7 @@ type WebViewCommand =
   | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand
   | NativeQaSetSttStatusCommand
+  | NativeFirstScreenReadyCommand
   | NativePictureInPictureCommand;
 
 type NativeSttEvent =
@@ -2214,6 +2224,7 @@ function AppInner(): React.JSX.Element {
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startupSplashFirstScreenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null);
   const [currentWebPathname, setCurrentWebPathname] = useState(() => parseWebPathname(webUrl));
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
@@ -2264,6 +2275,13 @@ function AppInner(): React.JSX.Element {
       }
     };
   }, [startupSplashVisible]);
+
+  useEffect(() => () => {
+    if (startupSplashFirstScreenTimeoutRef.current) {
+      clearTimeout(startupSplashFirstScreenTimeoutRef.current);
+      startupSplashFirstScreenTimeoutRef.current = null;
+    }
+  }, []);
 
   const iosTopSafeAreaHeight = Platform.OS === 'ios'
     ? (safeAreaInsets.top > 0 ? safeAreaInsets.top : iosTopTapOverlayHeight)
@@ -3957,6 +3975,16 @@ function AppInner(): React.JSX.Element {
       flushPendingNativeSttMessagesToWeb();
     }
 
+    if (parsed.type === 'native_first_screen_ready') {
+      initialLoadSettledRef.current = true;
+      if (startupSplashFirstScreenTimeoutRef.current) {
+        clearTimeout(startupSplashFirstScreenTimeoutRef.current);
+        startupSplashFirstScreenTimeoutRef.current = null;
+      }
+      setStartupSplashVisible(false);
+      return;
+    }
+
     if (parsed.type === 'native_qr_scanner_open') {
       setQrScannerRequest(parsed.payload ?? {});
       return;
@@ -4669,7 +4697,20 @@ function AppInner(): React.JSX.Element {
     isPageReadyRef.current = true;
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
-      setStartupSplashVisible(false);
+      // The document is loaded but not hydrated yet; hiding the splash here would
+      // expose a blank frame before the first real screen. Wait for the web's
+      // native_first_screen_ready message, with a fallback instead of the
+      // load-time ceiling.
+      if (startupSplashTimeoutRef.current) {
+        clearTimeout(startupSplashTimeoutRef.current);
+        startupSplashTimeoutRef.current = null;
+      }
+      if (!startupSplashFirstScreenTimeoutRef.current) {
+        startupSplashFirstScreenTimeoutRef.current = setTimeout(() => {
+          startupSplashFirstScreenTimeoutRef.current = null;
+          setStartupSplashVisible(false);
+        }, STARTUP_SPLASH_FIRST_SCREEN_FALLBACK_MS);
+      }
     }
     // onLoadEnd is NOT proof of success: on Android it fires BEFORE onError
     // for a failed load. The tracker only commits success (clearing the

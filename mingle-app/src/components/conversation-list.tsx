@@ -174,6 +174,11 @@ import {
   shouldRunRealtimeFallbackRefresh,
 } from "@/lib/realtime-fallback-poll";
 import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
+import { postNativeFirstScreenReady } from "@/lib/native-first-screen-ready";
+import {
+  LANGUAGE_ONBOARDING_COVER_ATTRIBUTE,
+  LANGUAGE_ONBOARDING_PENDING_ATTRIBUTE,
+} from "@/lib/language-onboarding-bootstrap";
 import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
@@ -3507,7 +3512,16 @@ export default function ConversationList({
       : "ready";
     resolvedLanguageOnboardingPhase = nextLanguageOnboardingPhase;
     setLanguageOnboardingPhase(nextLanguageOnboardingPhase);
+    if (nextLanguageOnboardingPhase === "ready") {
+      document.documentElement.removeAttribute(LANGUAGE_ONBOARDING_PENDING_ATTRIBUTE);
+    }
   }, []);
+
+  useEffect(() => {
+    // Native ignores repeats once its startup splash is gone.
+    if (languageOnboardingPhase !== "selection" && languageOnboardingPhase !== "ready") return;
+    return postNativeFirstScreenReady();
+  }, [languageOnboardingPhase]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -5350,6 +5364,7 @@ export default function ConversationList({
 
     resolvedLanguageOnboardingPhase = "ready";
     setLanguageOnboardingPhase("ready");
+    document.documentElement.removeAttribute(LANGUAGE_ONBOARDING_PENDING_ATTRIBUTE);
   }, [locale, sessionStatus]);
 
   const languageOnboardingDefaultLanguage = useMemo(() => {
@@ -5371,6 +5386,16 @@ export default function ConversationList({
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
 
       <NativePushRegistration />
+
+      {languageOnboardingPhase === "resolving" ? (
+        // Server-rendered placeholder for the language picker; CSS only shows it when
+        // the pre-paint bootstrap script marked onboarding as pending.
+        <div
+          {...{ [LANGUAGE_ONBOARDING_COVER_ATTRIBUTE]: "" }}
+          className="absolute inset-0 z-[300] bg-[#fcfbf8]"
+          aria-hidden
+        />
+      ) : null}
 
       {shouldShowLanguageBootstrapShell ? (
         <div
