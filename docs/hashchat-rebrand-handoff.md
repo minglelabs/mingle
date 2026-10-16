@@ -98,7 +98,7 @@ npm i --no-save playwright && npx playwright install chromium && node gen.mjs
 - 스토어 스크린샷: 언어별로 새로 만듦(2026-10-16). 7장 × 15개 언어: 사진 피드, 다른 언어 글 번역, 댓글 번역, 3개 언어 대화, 검색, Hash Rush 2장. 각 언어 UI와 그 언어로 번역된 글·댓글을 헤드리스 Chrome으로 devbox에서 캡처(대화방만 `chat.json`으로 그림). 방법은 `mingle-app/rn/store-screenshots/README.md`. Hash Rush를 넣기 전에 출시하면 06·07을 빼야 함
 - Play 그래픽 이미지(1024×500)와 웹·랜딩 og-image: 새 로고로 교체 완료 (`branding/hashchat/banner.py`)
 - 피드 로그인 버그: posting-feed에서 수정 완료 (`feed-login-sheet.tsx`)
-- 번역 버그(확인 필요): 일부 번역이 원문 그대로 `ready`로 저장됨. 로컬 DB에서 중국어 글 `rs-cmuwrmyrd0003…`의 한국어 번역은 지우고 다시 받아도 중국어 원문으로 저장됐다. 원문과 같은 번역 행이 더 있음(예: 한국어 글의 일본어 번역). 모델이 번역을 안 하고 원문을 돌려줄 때 걸러내는 검사가 필요해 보임
+- 번역 버그: 수정함. 모델이 원문을 그대로 돌려주면 `ready`로 저장되던 문제. 이제 다시 요청하고, 그래도 원문이면 `failed`로 둠. 이미 저장된 복사본은 읽을 때 번역 없음으로 보고 다음 요청 때 새로 번역함 (`src/server/translation/untranslated-copy.ts`)
 - Android adaptive icon 없음 (최신 기기에서 레거시 아이콘이 축소돼 보일 수 있음)
 - prod DB: 공식 계정 표시 이름, 이미 올라간 시드 게시물 본문의 "Mingle"
 - 실기기 홈 화면에서 아이콘 확인
