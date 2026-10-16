@@ -273,7 +273,7 @@ function LoginView({ error, next }: { error: string; next: string }) {
               <ShieldCheck className="h-6 w-6" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold">Mingle Admin</h1>
+              <h1 className="text-xl font-semibold">HashChat Admin</h1>
               <p className="text-sm text-slate-500">운영 도구 로그인</p>
             </div>
           </div>

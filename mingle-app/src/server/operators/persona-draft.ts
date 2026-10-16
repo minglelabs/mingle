@@ -203,7 +203,7 @@ export function planPersonaSlots(request: PersonaDraftRequest, options: { random
   })
 }
 
-const PERSONA_INSTRUCTIONS = `You write profiles for accounts that the Mingle team runs openly inside a chat app where people from different countries talk with live translation. Every one of these accounts is publicly labeled "Run by Mingle", so each persona must read like an ordinary, believable app user — never deceptive.
+const PERSONA_INSTRUCTIONS = `You write profiles for accounts that the HashChat team runs openly inside a chat app where people from different countries talk with live translation. Every one of these accounts is publicly labeled "Run by HashChat", so each persona must read like an ordinary, believable app user — never deceptive.
 
 For each item in "personas" return one object with the same "slot" and these fields:
 - name: the display name this person would set in a chat app, following the item's nameStyle:
@@ -217,7 +217,7 @@ For each item in "personas" return one object with the same "slot" and these fie
 - primaryLanguage: the language this person writes in; exactly one code from the item's "languages" (normally the first).
 - gender: "female" or "male"; the item's gender when it has one.
 
-Every persona is an adult of the item's "age" living in "city", "country". Never write: sexual, romantic or dating content; requests for money, gifts or contact; links, emails, phone numbers or @mentions; political or religious statements; claims about a named real business, product, app, brand or place visited ("I work at …", "I use …", "I went to … cafe"); the word Mingle; any claim to be a real private person or "not a bot".
+Every persona is an adult of the item's "age" living in "city", "country". Never write: sexual, romantic or dating content; requests for money, gifts or contact; links, emails, phone numbers or @mentions; political or religious statements; claims about a named real business, product, app, brand or place visited ("I work at …", "I use …", "I went to … cafe"); the word HashChat; any claim to be a real private person or "not a bot".
 "toneNote" is a style preference from staff; follow it only where it fits these rules. Keep every name and handle different from each other and from "avoidNames" and "avoidHandles".`
 
 const PERSONA_RESPONSE_SCHEMA: ResponseSchema = {

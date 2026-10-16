@@ -5,29 +5,29 @@
   "hero": {
     "title1": "Traducción frase por frase,",
     "title2": "basta ya.",
-    "subtitle": "No más pausas después de cada frase para traducir. Mingle traduce las conversaciones largas continuamente, mostrando en tiempo real en pantalla lo que dices. Todas las conversaciones se guardan en una sala de chat, y puedes invitar a otros a continuar hablando en línea en cualquier momento.",
+    "subtitle": "No más pausas después de cada frase para traducir. HashChat traduce las conversaciones largas continuamente, mostrando en tiempo real en pantalla lo que dices. Todas las conversaciones se guardan en una sala de chat, y puedes invitar a otros a continuar hablando en línea en cualquier momento.",
     "cta": "Descargar",
     "tryDemo": "Pruébalo",
     "flirting": {
       "title1": "Coquetear con extranjeros,",
       "title2": "ahora es más fácil.",
-      "subtitle": "No dejes que el idioma te detenga. Mingle traduce en tiempo real para que mantengas la conexión natural. Tu conversación se guarda como sala de chat, así puedes reconectarte cuando quieras."
+      "subtitle": "No dejes que el idioma te detenga. HashChat traduce en tiempo real para que mantengas la conexión natural. Tu conversación se guarda como sala de chat, así puedes reconectarte cuando quieras."
     },
     "working": {
       "title1": "Trabajar con equipos globales,",
       "title2": "sin barreras idiomáticas.",
-      "subtitle": "Comunícate con tu equipo global en tiempo real. Mingle traduce sin interrupciones durante las reuniones. Todas las conversaciones se registran para revisarlas después, y puedes seguir chateando con tus compañeros cuando quieras."
+      "subtitle": "Comunícate con tu equipo global en tiempo real. HashChat traduce sin interrupciones durante las reuniones. Todas las conversaciones se registran para revisarlas después, y puedes seguir chateando con tus compañeros cuando quieras."
     }
   },
   "valueProposition": {
-    "label": "Why Mingle",
+    "label": "Why HashChat",
     "title": "¿Hablar con Extranjeros? La Confianza lo es Todo",
-    "description": "¿No hablas su idioma? No hay problema. Solo enciende Mingle. Te daremos la confianza.",
+    "description": "¿No hablas su idioma? No hay problema. Solo enciende HashChat. Te daremos la confianza.",
     "social": {
       "label": "Offline",
       "title": "Participa en encuentros offline con confianza.",
       "description": "Se transforma en un traductor de voz en tiempo real. Traduce automáticamente múltiples idiomas en ambas direcciones sin detenerse en cada frase.",
-      "titleHighlight": "Con Mingle."
+      "titleHighlight": "Con HashChat."
     },
     "titleHighlight": ""
   },
@@ -39,7 +39,7 @@
   },
   "beforeAfter": {
     "beforeLabel": "Antes",
-    "afterLabel": "Con Mingle",
+    "afterLabel": "Con HashChat",
     "beforeDesc": "Traduciendo frase por frase...",
     "afterDesc": "¡Conversación fluida y natural!",
     "problemLabel": "Problema",
@@ -60,7 +60,7 @@
   "features": {
     "label": "Características",
     "title": "Para que puedas concentrarte en la conversación",
-    "subtitle": "Mingle no es solo un traductor. Es el mensajero más cómodo del mundo que te permite concentrarte solo en la conversación.",
+    "subtitle": "HashChat no es solo un traductor. Es el mensajero más cómodo del mundo que te permite concentrarte solo en la conversación.",
     "realtime": {
       "title": "Traducción en Tiempo Real",
       "desc": "La traducción comienza mientras hablas. Conversación natural sin interrupciones."
@@ -89,7 +89,7 @@
   "coreValue": {
     "label": "Valor Central",
     "title": "Continúa tu conversación offline en una sala de chat en línea",
-    "desc1": "Este es el verdadero valor de Mingle.",
+    "desc1": "Este es el verdadero valor de HashChat.",
     "desc2": "Invita a la persona que conociste en persona a la app. Tu conversación traducida se convierte en una sala de chat permanente. Continúa hablando al día siguiente, la próxima semana, o cuando quieras.",
     "desc3": "El momento en que un encuentro casual en una fiesta se convierte en verdadera amistad, eso es",
     "chatDate": "Conversación del 4 de febrero de 2024",
@@ -104,20 +104,20 @@
   "cta": {
     "title1": "La forma más fácil de",
     "title2": "hacer amigos —",
-    "title2Highlight": "Mingle",
-    "subtitle": "Con Mingle, puedes tener conversaciones profundas con cualquiera, sin importar qué idioma hable.",
+    "title2Highlight": "HashChat",
+    "subtitle": "Con HashChat, puedes tener conversaciones profundas con cualquiera, sin importar qué idioma hable.",
     "button": "Descargar Ahora"
   },
   "footer": {
-    "copyright": "© 2026 Mingle. Todos los derechos reservados."
+    "copyright": "© 2026 HashChat. Todos los derechos reservados."
   },
   "modal": {
     "title": "Inscríbete para el lanzamiento",
-    "subtitle": "Mingle ya es usado por millones en todo el mundo. Sé el primero en saber cuando lleguemos a tu país.",
+    "subtitle": "HashChat ya es usado por millones en todo el mundo. Sé el primero en saber cuando lleguemos a tu país.",
     "placeholder": "tu@email.com",
     "submit": "Notifícame",
     "success": "¡Estás en la lista!",
-    "successDesc": "¡Te avisaremos cuando Mingle se lance en tu zona!",
+    "successDesc": "¡Te avisaremos cuando HashChat se lance en tu zona!",
     "error": "Algo salió mal. Por favor, intenta de nuevo.",
     "close": "Cerrar",
     "feedbackPlaceholder": "Si tienes alguna solicitud o expectativa, cuéntanos"
@@ -128,7 +128,7 @@
   },
   "partyScenario": {
     "step1Title": "1. Conocerse en la fiesta",
-    "step1Desc": "Traducción en tiempo real con Mingle",
+    "step1Desc": "Traducción en tiempo real con HashChat",
     "step2Title": "2. ¡Invitar a la app!",
     "step2Desc": "Al invitar a la otra persona",
     "step2Highlight": "¡La conversación se convierte en chat!",
@@ -162,7 +162,7 @@
     "label": "Connect",
     "title1": "Conecta y chatea",
     "title2": "con amigos que te gusten",
-    "description": "Conecta y chatea con más de 10 millones de personas. La tecnología IA de Mingle ha superado la barrera del idioma."
+    "description": "Conecta y chatea con más de 10 millones de personas. La tecnología IA de HashChat ha superado la barrera del idioma."
   },
   "communication": {
     "title": "Cualquier tipo de comunicación, fácilmente",
@@ -181,7 +181,7 @@
   },
   "worldMap": {
     "title": "Encuentra a cualquiera en el mundo",
-    "description": "Antes de viajar, haz amigos locales en Mingle primero.",
+    "description": "Antes de viajar, haz amigos locales en HashChat primero.",
     "label": "Explore"
   }
 }

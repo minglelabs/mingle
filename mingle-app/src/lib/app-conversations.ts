@@ -130,8 +130,8 @@ export type ConversationHydrationUtterance = {
   // has 2+ real members. Null in a solo room, where bubbles keep using the
   // generated animal avatar instead.
   speakerImage: string | null;
-  // The sender's account badge ('operator' = run by Mingle staff,
-  // 'official' = the Mingle team's own account). Gated exactly like
+  // The sender's account badge ('operator' = run by HashChat staff,
+  // 'official' = the HashChat team's own account). Gated exactly like
   // speakerName and present only when the sender carries a badge. The live
   // committed utterance published over realtime uses the same field name.
   speakerBadge?: AccountBadgeKind;
@@ -188,7 +188,7 @@ export type ConversationHydrationState = {
   inviteNotices: ConversationHydrationInviteNotice[];
   // UI chrome like the notices above, not a message: true while the room has
   // an ACTIVE, materialized member (a membership row with leftAt null) whose
-  // account is run by Mingle staff. Clients show the pinned "Mingle staff
+  // account is run by HashChat staff. Clients show the pinned "HashChat staff
   // read and reply in this chat" disclosure from it, in 1:1 and group rooms
   // alike. A pending invitee does not count until their row exists.
   operatorDisclosure: boolean;

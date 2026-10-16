@@ -6,7 +6,7 @@ vi.mock('./profile-bio', () => ({ getPublishedBioText: async (_id: string, bio: 
 import { calculateProfileAge, serializeUserProfile, userProfileSelect } from './user-profile'
 
 const row = {
-  id: 'u1', name: 'Mingle', image: null, imageObjectKey: null,
+  id: 'u1', name: 'HashChat', image: null, imageObjectKey: null,
   imageCropScale: null, imageCropX: null, imageCropY: null, handle: 'mingle_team', bio: null,
   birthDate: null, nationality: null, primaryLanguages: [], defaultConversationLanguages: [],
   locationLatitude: null, locationLongitude: null, locationCity: null, locationCountry: null, locationCountryCode: null,

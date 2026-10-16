@@ -31,7 +31,7 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
     if (isAppInForeground()) return
 
     val notification = message.notification
-    val title = notification?.title?.takeIf { it.isNotBlank() } ?: message.data["title"] ?: "Mingle"
+    val title = notification?.title?.takeIf { it.isNotBlank() } ?: message.data["title"] ?: "HashChat"
     val body = notification?.body?.takeIf { it.isNotBlank() }
       ?: message.data["body"]
       ?: "You have a new notification."
@@ -87,10 +87,10 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
       manager.createNotificationChannel(
         NotificationChannel(
           CHANNEL_ID,
-          "Mingle notifications",
+          "HashChat notifications",
           NotificationManager.IMPORTANCE_HIGH,
         ).apply {
-          description = "Notifications from Mingle"
+          description = "Notifications from HashChat"
         },
       )
     }

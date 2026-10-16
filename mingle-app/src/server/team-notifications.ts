@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { TeamNotificationType } from "@/lib/user-notification-types";
 import { sendPushNotificationForUserNotification } from "@/server/push-notifications";
 
-// Tells a user that the Mingle team answered their feedback or handled their
+// Tells a user that the HashChat team answered their feedback or handled their
 // report: one row in the in-app notification list plus a push. Never throws,
 // so the admin action that triggered it is not affected.
 export async function notifyUserFromTeam(args: {

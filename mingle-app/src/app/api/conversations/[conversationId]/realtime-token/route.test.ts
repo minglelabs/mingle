@@ -135,7 +135,7 @@ describe("/api/conversations/[conversationId]/realtime-token route", () => {
 
   it.each([
     [{ name: "Mina", isOfficial: false, isOperator: true }, "operator"],
-    [{ name: "Mingle", isOfficial: true, isOperator: false }, "official"],
+    [{ name: "HashChat", isOfficial: true, isOperator: false }, "official"],
   ] as const)("signs the sender's own badge into the live-writer claim (%o)", async (sender, badge) => {
     mockGetConversationSessionKeyForMember.mockResolvedValue("session-a");
     mockMintConversationRealtimeToken.mockReturnValue("read");

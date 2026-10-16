@@ -15,7 +15,7 @@ import { encodeOperatorInboxActorLabel } from '@/server/operator-inbox/push-copy
  * - publishes the admin inbox realtime topic (content-free), so an open
  *   `/admin/inbox` refetches;
  * - when the sender is NOT an operator, pushes `operator_inbox_message` to
- *   every AdminNotifyTarget (staff's own Mingle accounts) except the sender,
+ *   every AdminNotifyTarget (staff's own HashChat accounts) except the sender,
  *   at most once per room every 20 s. The tap opens `/admin/inbox/<id>`.
  * Rooms without an operator cost one indexed lookup and nothing else. It
  * never throws, and every call site still wraps it so a failure can never

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mingle",
+  title: "HashChat",
   description: "Mobile-responsive translator app",
 };
 

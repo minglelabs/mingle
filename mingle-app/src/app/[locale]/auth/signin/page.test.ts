@@ -12,7 +12,7 @@ vi.mock("next/navigation", () => ({
 
 import LocaleSignInPage from "@/app/[locale]/auth/signin/page";
 import { composeHref, feedHref, postViewerHref } from "@/lib/feed-routes";
-import { composeLoginHref, loginHref } from "@/components/feed/login-redirect";
+import { composeLoginReturnHref, loginReturnHref } from "@/components/feed/login-redirect";
 
 async function expectRedirect(promise: Promise<unknown>): Promise<string> {
   try {
@@ -85,10 +85,9 @@ describe("[locale]/auth/signin page", () => {
     expect(await callbackFor(path)).toBe(path);
   });
 
-  it("round-trips the callbackUrl built by the feed login helpers", async () => {
-    for (const href of [loginHref("ko", "post_123"), loginHref("en"), composeLoginHref("ja")]) {
-      const params = new URL(href, "https://mingle.local").searchParams;
-      expect(await callbackFor(params.get("callbackUrl") ?? undefined)).toBe(params.get("callbackUrl"));
+  it("accepts the return paths the feed sign-in gate uses as its callback", async () => {
+    for (const path of [loginReturnHref("ko", "post_123"), loginReturnHref("en"), composeLoginReturnHref("ja")]) {
+      expect(await callbackFor(path)).toBe(path);
     }
   });
 

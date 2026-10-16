@@ -92,9 +92,9 @@ export type UserProfile = {
   location: UserProfileLocation | null;
   followersCount: number;
   followingCount: number;
-  /** The Mingle team's official account; present (true) only then. */
+  /** The HashChat team's official account; present (true) only then. */
   isOfficial?: boolean;
-  /** An account run by Mingle staff; present (true) only then. */
+  /** An account run by HashChat staff; present (true) only then. */
   isOperator?: boolean;
 };
 

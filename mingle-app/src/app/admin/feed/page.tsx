@@ -10,7 +10,7 @@ import { OperatorAvatar, OperatorsMain } from '../operators/_components/operator
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '피드 미리보기 · Mingle Admin',
+  title: '피드 미리보기 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

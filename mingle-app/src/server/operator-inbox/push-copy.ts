@@ -61,9 +61,9 @@ const KOREAN_COPY: Copy = {
 }
 
 const ENGLISH_COPY: Copy = {
-  genericTitle: 'New message for a Mingle-run account',
+  genericTitle: 'New message for a HashChat-run account',
   title: (operators) => `New message for ${operators}`,
-  genericCommentTitle: 'New comment for a Mingle-run account',
+  genericCommentTitle: 'New comment for a HashChat-run account',
   commentTitle: (operators) => `New comment for ${operators}`,
   moreOperators: (count) => ` and ${count} more`,
   unknownSender: 'Someone',
@@ -123,7 +123,7 @@ function formatOperatorNames(names: string[], copy: Copy): string {
 
 /**
  * Title and body of the `operator_inbox_message` push, which tells staff (on
- * their OWN Mingle accounts, see AdminNotifyTarget) that a user wrote to an
+ * their OWN HashChat accounts, see AdminNotifyTarget) that a user wrote to an
  * operator account. `resolvePushCopy` in `@/server/push-notifications`
  * delegates here for that type.
  *

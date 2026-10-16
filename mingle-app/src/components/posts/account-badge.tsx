@@ -28,7 +28,7 @@ const CHIP_CLASS =
 
 /**
  * The account badge next to another user's name. Shows the "Official" chip
- * for the Mingle team's own account.
+ * for the HashChat team's own account.
  */
 export default function AccountBadge({ kind, locale, tone = "dark", className }: AccountBadgeProps) {
   if (kind === "official") return <OfficialBadge locale={locale} tone={tone} className={className} />;

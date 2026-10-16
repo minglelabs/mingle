@@ -20,6 +20,7 @@ import type {
   FeedPostImageDto,
   FeedPostTranslationState,
 } from '@/lib/feed-post-dto'
+import { isUntranslatedCopy } from '@/server/translation/untranslated-copy'
 
 // ---------------------------------------------------------------------------
 // Row shapes
@@ -32,7 +33,7 @@ export type SerializerAuthorRow = {
   name: string | null
   image: string | null
   /**
-   * Badge flags: the Mingle team's official account / an account run by Mingle
+   * Badge flags: the HashChat team's official account / an account run by HashChat
    * staff (operator). Optional so a caller whose `select` predates a column
    * still type-checks; missing reads as false.
    */
@@ -186,7 +187,7 @@ function isPositiveInt(value: number | null | undefined): value is number {
  *   consulted because the loader only ever indexes current-version rows.
  */
 export function deriveTranslation(
-  post: Pick<SerializerPostRow, 'sourceLanguage'>,
+  post: Pick<SerializerPostRow, 'sourceLanguage'> & Partial<Pick<SerializerPostRow, 'sourceText'>>,
   displayLanguage: string | null,
   translation: SerializerTranslationRow | undefined,
 ): { translationState: FeedPostTranslationState; displayText: string | null; displayLanguage: string | null } {
@@ -205,6 +206,11 @@ export function deriveTranslation(
     return { translationState: 'none', displayText: null, displayLanguage }
   }
   if (translation.status === 'ready') {
+    // A stored copy of the source is no translation: reading it as `none`
+    // makes the card request one, which replaces the copy.
+    if (isUntranslatedCopy(post.sourceText, displayLanguage, translation.text)) {
+      return { translationState: 'none', displayText: null, displayLanguage }
+    }
     return { translationState: 'ready', displayText: translation.text ?? null, displayLanguage }
   }
   if (translation.status === 'failed') {

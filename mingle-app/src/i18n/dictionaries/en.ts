@@ -59,7 +59,7 @@ export const enDictionary: BaseAppDictionarySource = {
     searchingLabel: "Searching...",
     searchNoResults: "No results found.",
     searchError: "Could not search. Please try again.",
-    userFallbackLabel: "Mingle user",
+    userFallbackLabel: "HashChat user",
     followAction: "Follow",
     followingAction: "Following",
     followError: "Could not update follow status.",

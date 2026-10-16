@@ -15,7 +15,7 @@ type ConversationOperatorDisclosureProps = {
 }
 
 /**
- * Pinned notice for a chat room with a Mingle-run (operator) member:
+ * Pinned notice for a chat room with a HashChat-run (operator) member:
  * `chatDisclosure` from account-badge-copy, rendered from the hydration's
  * `operatorDisclosure`. It sticks to the top of the room timeline and can
  * never be dismissed; tapping only collapses it to one line (and back). The

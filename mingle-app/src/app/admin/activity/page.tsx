@@ -5,7 +5,7 @@ import { AdminSplitPlaceholder } from '../_components/admin-split-frame'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '알림 · Mingle Admin',
+  title: '알림 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

@@ -496,7 +496,7 @@ function ProfileSettingsPanel({
     appLanguage: dictionary.profile.appLanguageLabel ?? (locale === "ko" ? "앱 이용 언어" : "App language"),
     appLanguageTitle: dictionary.profile.appLanguageTitle ?? (locale === "ko" ? "앱 이용 언어" : "App language"),
     appLanguageDescription: dictionary.profile.appLanguageDescription
-      ?? (locale === "ko" ? "Mingle UI와 UX에 사용할 언어를 선택하세요." : "Choose the language used for the Mingle interface."),
+      ?? (locale === "ko" ? "HashChat UI와 UX에 사용할 언어를 선택하세요." : "Choose the language used for the HashChat interface."),
     defaultLanguages: managementCopy.defaultLanguages,
     defaultLanguagesTitle: managementCopy.defaultLanguages,
     defaultLanguagesDescription: managementCopy.defaultLanguagesDescription,
@@ -539,7 +539,7 @@ function ProfileSettingsPanel({
     withdrawAccountAction: dictionary.profile.withdrawAccountAction ?? (locale === "ko" ? "탈퇴하기" : "Delete Account"),
     withdrawAccountFailed: dictionary.profile.withdrawAccountFailed ?? (locale === "ko" ? "탈퇴 처리에 실패했습니다." : "Failed to delete account."),
     reportedUser: dictionary.profile.settingsReportedUserLabel ?? (locale === "ko" ? "신고한 사용자" : "Reported user"),
-    userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user"),
+    userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "HashChat 사용자" : "HashChat user"),
     myMessage: dictionary.profile.settingsMyMessageLabel ?? (locale === "ko" ? "신고 내용" : "Your report"),
     teamReply: dictionary.profile.settingsTeamReplyLabel ?? (locale === "ko" ? "운영진 답변" : "Team reply"),
     reasonLabels: {

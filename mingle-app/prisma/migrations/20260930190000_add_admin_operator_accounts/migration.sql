@@ -118,7 +118,7 @@ ALTER TABLE "app_operator_post_jobs" ADD CONSTRAINT "app_operator_post_jobs_oper
 ALTER TABLE "app_admin_notify_targets" ADD CONSTRAINT "app_admin_notify_targets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddCheckConstraint
--- One badge per account: an operator account (run by Mingle staff) is never
--- also the official Mingle team account. Prisma does not model CHECK
+-- One badge per account: an operator account (run by HashChat staff) is never
+-- also the official HashChat team account. Prisma does not model CHECK
 -- constraints, so this line is maintained by hand.
 ALTER TABLE "app_users" ADD CONSTRAINT "app_users_operator_not_official_chk" CHECK (NOT ("is_operator" AND "is_official"));

@@ -8,7 +8,7 @@ import { PostThreadView } from '../../_components/post-thread-view'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '댓글 · Mingle Admin',
+  title: '댓글 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

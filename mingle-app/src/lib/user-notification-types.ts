@@ -1,4 +1,4 @@
-// Notifications sent by the Mingle team: no actor user, text in `body`.
+// Notifications sent by the HashChat team: no actor user, text in `body`.
 export const TEAM_NOTIFICATION_TYPES = ["feedback_reply", "report_reply", "report_status"] as const;
 export type TeamNotificationType = (typeof TEAM_NOTIFICATION_TYPES)[number];
 

@@ -101,7 +101,7 @@ function hasNativeConversationShareHistoryEntry(): boolean {
 // may not have it installed), this renders as an overlay on top of whatever
 // screen was already open — same pattern as NativeProfileLinkOverlay — since
 // a viewer opening this deep link natively is, by definition, already using
-// the app. No "Open in Mingle App" / store buttons, a real back button, and
+// the app. No "Open in HashChat App" / store buttons, a real back button, and
 // the app's own safe-area/back-gesture conventions instead of the marketing
 // card's fixed layout.
 export default function NativeConversationShareOverlay() {
@@ -379,7 +379,7 @@ export default function NativeConversationShareOverlay() {
             className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
             style={{ touchAction: "pan-y" }}
           >
-            {/* Shown before the viewer decides to join a room with a Mingle-run member. */}
+            {/* Shown before the viewer decides to join a room with a HashChat-run member. */}
             {state?.operatorDisclosure ? <ConversationOperatorDisclosure locale={spectateLocale} /> : null}
             {status === "loading" ? (
               <div className="flex h-full items-center justify-center text-slate-400">

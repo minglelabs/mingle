@@ -49,7 +49,7 @@ class NativeQrImageModule(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
           put(
             MediaStore.Images.Media.RELATIVE_PATH,
-            "${Environment.DIRECTORY_PICTURES}/Mingle",
+            "${Environment.DIRECTORY_PICTURES}/HashChat",
           )
           put(MediaStore.Images.Media.IS_PENDING, 1)
         }

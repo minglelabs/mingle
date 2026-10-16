@@ -8,16 +8,16 @@ import { NotifyTargetsManager } from './notify-targets-manager'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '알림 설정 · Mingle Admin',
+  title: '알림 설정 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 
 const RETURN_TO = '/admin/settings/notifications'
 
-const GUIDANCE = '이 계정으로 Mingle 앱에 로그인된 기기에서 알림을 받습니다. 알림을 누르면 앱 안에서 관리자 인박스가 열리고, 처음 한 번은 관리자 로그인이 필요합니다.'
+const GUIDANCE = '이 계정으로 HashChat 앱에 로그인된 기기에서 알림을 받습니다. 알림을 누르면 앱 안에서 관리자 인박스가 열리고, 처음 한 번은 관리자 로그인이 필요합니다.'
 
 /**
- * Staff notification targets: which staff members' OWN Mingle accounts get a
+ * Staff notification targets: which staff members' OWN HashChat accounts get a
  * push when a user writes to an operator account.
  */
 export default async function AdminNotificationSettingsPage() {

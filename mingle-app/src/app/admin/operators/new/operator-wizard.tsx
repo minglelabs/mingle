@@ -388,7 +388,7 @@ export function OperatorWizard({
 
       <div className="mt-3">
         <Notice tone="info">
-          만든 계정은 앱에서 이름 옆에 항상 &lsquo;운영 계정&rsquo; 표시가 붙고, 대화방에도 Mingle 팀이 운영한다는 안내가 나옵니다.
+          만든 계정은 앱에서 이름 옆에 항상 &lsquo;운영 계정&rsquo; 표시가 붙고, 대화방에도 HashChat 팀이 운영한다는 안내가 나옵니다.
         </Notice>
       </div>
 

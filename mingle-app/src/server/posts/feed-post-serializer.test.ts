@@ -114,6 +114,16 @@ describe('deriveTranslation', () => {
     ).toBe('failed')
     expect(deriveTranslation({ sourceLanguage: 'en' }, 'ko', undefined).translationState).toBe('none')
   })
+
+  it('reads a stored copy of the source as no translation', () => {
+    const zh = '今晚又是公司楼下那家快餐店的生煎包，底都煎糊了。'
+    const copy = { postId: 'p1', bodyVersion: 1, language: 'ko', status: 'ready', text: zh }
+    expect(deriveTranslation({ sourceLanguage: 'zh-CN', sourceText: zh }, 'ko', copy)).toEqual({
+      translationState: 'none',
+      displayText: null,
+      displayLanguage: 'ko',
+    })
+  })
 })
 
 describe('serializeFeedPost', () => {
@@ -129,7 +139,7 @@ describe('serializeFeedPost', () => {
 
   it('sets author.isOfficial only for official accounts and omits it otherwise', () => {
     const official = serializeFeedPost(
-      makePost({ author: { id: 'author-1', handle: 'mingle_team', name: 'Mingle', image: null, isOfficial: true } }),
+      makePost({ author: { id: 'author-1', handle: 'mingle_team', name: 'HashChat', image: null, isOfficial: true } }),
       makeCtx(),
     )
     expect(official.author.isOfficial).toBe(true)
