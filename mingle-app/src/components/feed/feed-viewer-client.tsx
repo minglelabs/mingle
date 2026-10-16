@@ -3,6 +3,7 @@
 import FeedShell from "@/components/feed/feed-shell";
 import type { FeedSource } from "@/lib/feed-routes";
 import type { ReactNode } from "react";
+import type { AppDictionary } from "@/i18n";
 
 type FeedViewerClientProps = {
   locale: string;
@@ -11,6 +12,9 @@ type FeedViewerClientProps = {
   /** The glass tab bar, floating over the bottom of the cards. */
   tabBar?: ReactNode;
   menuLabel?: string;
+  dictionary?: AppDictionary;
+  appleOAuthEnabled?: boolean;
+  googleOAuthEnabled?: boolean;
 };
 
 /**
@@ -19,7 +23,7 @@ type FeedViewerClientProps = {
  * chevron, native back gesture / hardware back) returns to the profile grid or
  * search results the viewer was opened from.
  */
-export default function FeedViewerClient({ locale, source, startPostId, tabBar, menuLabel }: FeedViewerClientProps) {
+export default function FeedViewerClient({ locale, source, startPostId, tabBar, menuLabel, dictionary, appleOAuthEnabled, googleOAuthEnabled }: FeedViewerClientProps) {
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
       <FeedShell
@@ -29,6 +33,9 @@ export default function FeedViewerClient({ locale, source, startPostId, tabBar, 
         isViewer
         tabBar={tabBar}
         menuLabel={menuLabel}
+        dictionary={dictionary}
+        appleOAuthEnabled={appleOAuthEnabled}
+        googleOAuthEnabled={googleOAuthEnabled}
       />
     </main>
   );

@@ -254,6 +254,24 @@ describe('avatar generation', () => {
       expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes'), model: 'gpt-image-2' })
       expect(fetchImpl.mock.calls[1][0]).toBe('https://api.openai.com/v1/images/generations')
     })
+
+    it('sends chatgpt-app models to the ChatGPT app bridge with its own key', async () => {
+      vi.stubEnv('OPERATOR_CHATGPT_IMAGE_KEY', 'bridge-key')
+      const data = Buffer.from('png-bytes').toString('base64')
+      const fetchImpl = vi.fn(async () => chatReply(`![image](data:image/png;base64,${data})`))
+      const result = await requestAvatarImage('p', { model: 'chatgpt-app/image', fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes'), model: 'chatgpt-app/image' })
+      const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
+      expect(url).toBe('http://127.0.0.1:10310/v1/chat/completions')
+      expect((init.headers as Record<string, string>).authorization).toBe('Bearer bridge-key')
+      expect(resolveImageProxyUrl({ OPERATOR_CHATGPT_IMAGE_URL: 'https://bridge.example/' } as unknown as NodeJS.ProcessEnv, 'chatgpt-app/image')).toBe('https://bridge.example')
+    })
+
+    it('keeps the reason the bridge gives for a failure', async () => {
+      const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: { code: 'image_limit' } }), { status: 429 }))
+      const result = await requestAvatarImage('p', { model: 'chatgpt-app/image', fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: false, error: 'image_request_failed', detail: 'http_429_image_limit' })
+    })
   })
 
   it('is not_operator for an unknown account', async () => {

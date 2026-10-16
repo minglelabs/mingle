@@ -17,6 +17,10 @@ const CALL_TIMEOUT_MS = 120_000
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
 const OPENAI_ENDPOINT = 'https://api.openai.com/v1/images/generations'
 const DEFAULT_IMAGE_PROXY_URL = 'http://127.0.0.1:10100'
+/** `scripts/chatgpt-image-bridge.mjs`, which draws with the ChatGPT desktop app. */
+const DEFAULT_CHATGPT_APP_URL = 'http://127.0.0.1:10310'
+/** The bridge draws one image at a time, so a request may wait behind others. */
+const CHATGPT_APP_TIMEOUT_MS = 10 * 60_000
 const PROXY_UNREACHABLE = 'proxy_unreachable'
 
 export function resolveAvatarImageModel(env: NodeJS.ProcessEnv = process.env): string {
@@ -41,8 +45,20 @@ export function isProxyImageModel(model: string): boolean {
   return model.includes('/')
 }
 
-export function resolveImageProxyUrl(env: NodeJS.ProcessEnv = process.env): string {
-  return (env.OPERATOR_IMAGE_PROXY_URL?.trim() || DEFAULT_IMAGE_PROXY_URL).replace(/\/+$/, '')
+/** `chatgpt-app/*` models are drawn by the ChatGPT app bridge on a staff Mac. */
+export function isChatgptAppImageModel(model: string): boolean {
+  return model.startsWith('chatgpt-app/')
+}
+
+export function resolveImageProxyUrl(env: NodeJS.ProcessEnv = process.env, model = ''): string {
+  const url = isChatgptAppImageModel(model)
+    ? env.OPERATOR_CHATGPT_IMAGE_URL?.trim() || DEFAULT_CHATGPT_APP_URL
+    : env.OPERATOR_IMAGE_PROXY_URL?.trim() || DEFAULT_IMAGE_PROXY_URL
+  return url.replace(/\/+$/, '')
+}
+
+function resolveImageProxyKey(model: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return (isChatgptAppImageModel(model) ? env.OPERATOR_CHATGPT_IMAGE_KEY : env.OPERATOR_IMAGE_PROXY_KEY)?.trim() || undefined
 }
 
 export type AvatarGenerationErrorCode =
@@ -81,8 +97,8 @@ function readProxyReply(content: unknown): string {
  * path on the proxy is ever fetched.
  */
 async function requestProxyImage(prompt: string, model: string, fetchImpl: typeof fetch, signal: AbortSignal): Promise<AvatarImageResult> {
-  const base = resolveImageProxyUrl()
-  const key = process.env.OPERATOR_IMAGE_PROXY_KEY?.trim()
+  const base = resolveImageProxyUrl(process.env, model)
+  const key = resolveImageProxyKey(model)
   let response: Response
   try {
     response = await fetchImpl(`${base}/v1/chat/completions`, {
@@ -95,7 +111,11 @@ async function requestProxyImage(prompt: string, model: string, fetchImpl: typeo
     if (signal.aborted) return { ok: false, error: 'image_timeout' }
     return { ok: false, error: 'image_unavailable', detail: PROXY_UNREACHABLE }
   }
-  if (!response.ok) return { ok: false, error: 'image_request_failed', detail: `http_${response.status}` }
+  if (!response.ok) {
+    // The bridge says why in its body (a usage limit, a refusal); keep that for staff.
+    const reason = await response.json().then((body: { error?: { code?: string } }) => body.error?.code, () => undefined)
+    return { ok: false, error: response.status === 422 ? 'image_refused' : 'image_request_failed', detail: reason ? `http_${response.status}_${reason}` : `http_${response.status}` }
+  }
   const payload = await response.json() as { choices?: Array<{ message?: { content?: unknown } }> }
   const reply = readProxyReply(payload.choices?.[0]?.message?.content)
   const inline = /data:image\/[a-z+]+;base64,([A-Za-z0-9+/=]+)/.exec(reply)
@@ -113,7 +133,7 @@ export async function requestAvatarImage(
   options: { model?: string; fetchImpl?: typeof fetch } = {},
 ): Promise<AvatarImageResult> {
   let model = options.model ?? resolveAvatarImageModel()
-  const signal = AbortSignal.timeout(CALL_TIMEOUT_MS)
+  const signal = AbortSignal.timeout(isChatgptAppImageModel(model) ? CHATGPT_APP_TIMEOUT_MS : CALL_TIMEOUT_MS)
   if (isProxyImageModel(model)) {
     try {
       const viaProxy = await requestProxyImage(prompt, model, options.fetchImpl ?? fetch, signal)

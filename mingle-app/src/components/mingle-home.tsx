@@ -82,6 +82,11 @@ type MingleHomeProps = {
   isVisible?: boolean;
   /** Render only the existing authentication surface without mounting a room. */
   authOnly?: boolean;
+  /**
+   * Auth gate only: where a completed sign-in lands. Defaults to the
+   * conversation list; the feed passes the post (or compose) the viewer was on.
+   */
+  authCallbackUrl?: string;
   enableNativeBannerBridge?: boolean;
   onStartRecordingRequested?: () => Promise<{
     switchedFromLiveConversation: boolean;
@@ -461,7 +466,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const nativeAuthTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const callbackUrl = buildPathWithCurrentSearchParams(`/${props.locale}/conversations`);
+  const callbackUrl = props.authCallbackUrl
+    ?? buildPathWithCurrentSearchParams(`/${props.locale}/conversations`);
   const signedOutCallbackUrl = buildPathWithCurrentSearchParams(`/${props.locale}`);
   const localeSegment = useMemo(
     () => resolveLegalDocumentPathSegment(props.locale),
