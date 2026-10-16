@@ -119,7 +119,7 @@ describe("/api/users/[userId] route", () => {
     expect(mockUserFindUnique.mock.calls[0][0].select.isOfficial).toBe(true);
   });
 
-  it("marks an operator account's public profile, and never an ordinary one", async () => {
+  it("shows an operator account's public profile like an ordinary one", async () => {
     mockUserFindUnique.mockReset();
     mockUserFindUnique.mockResolvedValueOnce({
       id: "op",
@@ -139,7 +139,7 @@ describe("/api/users/[userId] route", () => {
       params: Promise.resolve({ userId: "op" }),
     })).json();
 
-    expect(operatorProfile.isOperator).toBe(true);
+    expect(operatorProfile).not.toHaveProperty("isOperator");
     expect(operatorProfile).not.toHaveProperty("isOfficial");
     expect(mockUserFindUnique.mock.calls[0][0].select).toMatchObject({ isOperator: true, isOfficial: true });
 

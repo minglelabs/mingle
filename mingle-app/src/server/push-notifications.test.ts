@@ -171,15 +171,15 @@ describe('sendPushNotificationForConversationMessage', () => {
     })
   }
 
-  it('labels an operator sender in each recipient\'s own language', async () => {
+  it('shows an operator sender like a regular one, in each recipient\'s own language', async () => {
     roomWith({ isOperator: true })
     await send()
     expect(m.userFindMany).toHaveBeenCalledWith(expect.objectContaining({
       select: expect.objectContaining({ isOfficial: true, isOperator: true }),
     }))
     expect(sentBodyByToken()).toEqual({
-      'fcm-ko': 'Mina (운영 계정)님: 안녕',
-      'fcm-en': 'Mina (Run by Mingle): 안녕',
+      'fcm-ko': 'Mina님: 안녕',
+      'fcm-en': 'Mina: 안녕',
     })
     const [first] = sentMessages()
     expect(first.data).toMatchObject({ type: 'conversation_message', conversationId: 'chan_1', notificationId: 'msg_1' })
@@ -206,7 +206,7 @@ describe('sendPushNotificationForConversationMessage', () => {
 })
 
 describe('sendPushNotificationForUserNotification', () => {
-  it('labels an operator actor in the recipient\'s language', async () => {
+  it('shows an operator actor like a regular one in the recipient\'s language', async () => {
     m.notificationFindUnique.mockResolvedValue({
       id: 'notif_1',
       type: 'follow',
@@ -218,7 +218,7 @@ describe('sendPushNotificationForUserNotification', () => {
     await sendPushNotificationForUserNotification('notif_1')
     expect(m.notificationFindUnique.mock.calls[0][0].select.actor.select).toMatchObject({ isOfficial: true, isOperator: true })
     expect(sentMessages()).toHaveLength(1)
-    expect(sentMessages()[0].notification).toEqual({ title: '새 팔로워', body: 'Mina (운영 계정)님이 회원님을 팔로우했습니다.' })
+    expect(sentMessages()[0].notification).toEqual({ title: '새 팔로워', body: 'Mina님이 회원님을 팔로우했습니다.' })
   })
 })
 

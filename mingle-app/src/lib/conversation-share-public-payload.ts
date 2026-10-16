@@ -60,7 +60,7 @@ export type PublicSpectateUtterance = {
   speakerAlias: string | null;
   speakerImage: string | null;
   // The sender's account badge, present only when they carry one.
-  speakerBadge?: AccountBadgeKind;
+  speakerBadge?: string;
 };
 
 export type PublicSpectateSnapshot = {
@@ -91,7 +91,7 @@ type ShareSnapshotUtteranceInput = {
   speakerName: string | null;
   speakerUserId: string | null;
   speakerImage: string | null;
-  speakerBadge?: AccountBadgeKind;
+  speakerBadge?: string;
 };
 
 type ShareSnapshotInput = {

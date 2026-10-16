@@ -157,7 +157,7 @@ describe("chat list and member payloads", () => {
     expect(pendingCall?.[0].select).toMatchObject({ isOfficial: true, isOperator: true });
   });
 
-  it("puts isOperator / isOfficial on otherMembers only when true (list row title + avatars)", async () => {
+  it("puts isOfficial on otherMembers only when true; operators look like ordinary members (list row title + avatars)", async () => {
     mocks.conversationFindMany.mockResolvedValue([conversationRecord({ pendingInviteeUserIds: ["pending-op"] })]);
     mocks.memberFindMany.mockResolvedValue([
       memberRow("viewer", "Viewer"),
@@ -170,13 +170,15 @@ describe("chat list and member payloads", () => {
     const [room] = await listConversationChannelsForUser("viewer", { includeMessageSummaries: false });
 
     expect(room.otherMembers).toEqual([
-      expect.objectContaining({ userId: "op", isOperator: true }),
+      expect.objectContaining({ userId: "op" }),
       expect.objectContaining({ userId: "team", isOfficial: true }),
       expect.objectContaining({ userId: "plain" }),
-      expect.objectContaining({ userId: "pending-op", isOperator: true }),
+      expect.objectContaining({ userId: "pending-op" }),
     ]);
     const byId = new Map(room.otherMembers.map((member) => [member.userId, member]));
+    expect(byId.get("op")).not.toHaveProperty("isOperator");
     expect(byId.get("op")).not.toHaveProperty("isOfficial");
+    expect(byId.get("pending-op")).not.toHaveProperty("isOperator");
     expect(byId.get("team")).not.toHaveProperty("isOperator");
     expect(byId.get("plain")).not.toHaveProperty("isOperator");
     expect(byId.get("plain")).not.toHaveProperty("isOfficial");
@@ -184,7 +186,7 @@ describe("chat list and member payloads", () => {
     expect(room.title).toBe("Mina, Mingle, Bob, Yuki");
   });
 
-  it("keeps a blocked counterpart's label (name stays visible, only the photo is hidden)", async () => {
+  it("keeps a blocked counterpart's name visible, only the photo is hidden", async () => {
     mocks.memberFindMany.mockResolvedValue([
       memberRow("viewer", "Viewer"),
       memberRow("op", "Mina", { isOperator: true }),
@@ -194,7 +196,7 @@ describe("chat list and member payloads", () => {
     const [room] = await listConversationChannelsForUser("viewer", { includeMessageSummaries: false });
 
     expect(room.isBlockedCounterpart).toBe(true);
-    expect(room.otherMembers).toEqual([expect.objectContaining({ userId: "op", image: null, isOperator: true })]);
+    expect(room.otherMembers).toEqual([expect.objectContaining({ userId: "op", image: null })]);
   });
 
   it("puts the flags on the participants-panel member summaries, including a pending invitee", async () => {
@@ -211,15 +213,16 @@ describe("chat list and member payloads", () => {
     const byId = new Map((members ?? []).map((member) => [member.userId, member]));
     expect(byId.get("viewer")).not.toHaveProperty("isOperator");
     expect(byId.get("viewer")).not.toHaveProperty("isOfficial");
-    expect(byId.get("op")).toMatchObject({ isOperator: true });
+    expect(byId.get("op")).not.toHaveProperty("isOperator");
     expect(byId.get("op")).not.toHaveProperty("isOfficial");
     expect(byId.get("team")).toMatchObject({ isOfficial: true });
-    expect(byId.get("pending-op")).toMatchObject({ isOperator: true, blocked: false });
+    expect(byId.get("pending-op")).toMatchObject({ blocked: false });
+    expect(byId.get("pending-op")).not.toHaveProperty("isOperator");
   });
 });
 
 describe("room hydration", () => {
-  it("labels the operator's bubbles with speakerBadge and leaves ordinary senders without the key", async () => {
+  it("labels only the official account's bubbles with speakerBadge; operators and ordinary senders get no key", async () => {
     mocks.memberFindMany.mockResolvedValue([
       memberRow("viewer", "Viewer"),
       memberRow("op", "Mina", { isOperator: true }),
@@ -234,7 +237,8 @@ describe("room hydration", () => {
     const state = await getConversationHydrationStateForUser({ conversationId: "conv-1", userId: "viewer" });
     const [fromOperator, fromOfficial, fromViewer] = state?.utterances ?? [];
 
-    expect(fromOperator).toMatchObject({ speakerUserId: "op", speakerName: "Mina", speakerBadge: "operator" });
+    expect(fromOperator).toMatchObject({ speakerUserId: "op", speakerName: "Mina" });
+    expect(fromOperator).not.toHaveProperty("speakerBadge");
     expect(fromOfficial).toMatchObject({ speakerUserId: "team", speakerBadge: "official" });
     expect(fromViewer).not.toHaveProperty("speakerBadge");
   });
@@ -249,7 +253,7 @@ describe("room hydration", () => {
     expect(state?.utterances[0]).not.toHaveProperty("speakerBadge");
   });
 
-  it("labels invite and leave notice actors only when they carry a badge", async () => {
+  it("labels invite and leave notice actors only when they are official (operators look ordinary)", async () => {
     mocks.conversationFindFirst.mockResolvedValue(conversationRecord({ pendingInviteeUserIds: ["pending-op"] }));
     mocks.memberFindMany.mockResolvedValue([
       memberRow("viewer", "Viewer"),
@@ -267,14 +271,18 @@ describe("room hydration", () => {
     const state = await getConversationHydrationStateForUser({ conversationId: "conv-1", userId: "viewer" });
 
     const [inviteOperator, inviteByOperator, invitePlain] = state?.inviteNotices ?? [];
-    expect(inviteOperator).toMatchObject({ inviteeName: "Mina", inviteeBadge: "operator" });
+    expect(inviteOperator).toMatchObject({ inviteeName: "Mina" });
+    expect(inviteOperator).not.toHaveProperty("inviteeBadge");
     expect(inviteOperator).not.toHaveProperty("invitedByBadge");
-    expect(inviteByOperator).toMatchObject({ inviteeName: "Yuki", inviteeBadge: "operator", invitedByBadge: "operator" });
+    expect(inviteByOperator).toMatchObject({ inviteeName: "Yuki" });
+    expect(inviteByOperator).not.toHaveProperty("inviteeBadge");
+    expect(inviteByOperator).not.toHaveProperty("invitedByBadge");
     expect(invitePlain).not.toHaveProperty("inviteeBadge");
     expect(invitePlain).not.toHaveProperty("invitedByBadge");
 
     const leaves = new Map((state?.leaveNotices ?? []).map((notice) => [notice.userId, notice]));
-    expect(leaves.get("gone-op")).toMatchObject({ name: "Sora", isOperator: true });
+    expect(leaves.get("gone-op")).toMatchObject({ name: "Sora" });
+    expect(leaves.get("gone-op")).not.toHaveProperty("isOperator");
     expect(leaves.get("gone")).not.toHaveProperty("isOperator");
     expect(leaves.get("gone")).not.toHaveProperty("isOfficial");
   });
@@ -302,7 +310,7 @@ describe("room hydration", () => {
     mocks.memberFindMany.mockResolvedValue([memberRow("viewer", "Viewer")]);
     mocks.userFindMany.mockResolvedValue([pendingUser("pending-op", "Yuki", { isOperator: true })]);
     const pending = await getConversationHydrationStateForUser({ conversationId: "conv-1", userId: "viewer" });
-    expect(pending?.conversation.otherMembers).toEqual([expect.objectContaining({ userId: "pending-op", isOperator: true })]);
+    expect(pending?.conversation.otherMembers).toEqual([expect.objectContaining({ userId: "pending-op" })]);
     expect(pending?.operatorDisclosure).toBe(false);
 
     mocks.conversationFindFirst.mockResolvedValue(conversationRecord());
@@ -335,7 +343,8 @@ describe("room hydration", () => {
     ]);
     const before = await getConversationHydrationStateForShare({ shareToken: "tok" });
     expect(before?.operatorDisclosure).toBe(true);
-    expect(before?.utterances[0]).toMatchObject({ speakerName: "Mina", speakerBadge: "operator" });
+    expect(before?.utterances[0]).toMatchObject({ speakerName: "Mina" });
+    expect(before?.utterances[0]).not.toHaveProperty("speakerBadge");
 
     mocks.memberFindMany.mockResolvedValue([
       memberRow("viewer", "Viewer"),

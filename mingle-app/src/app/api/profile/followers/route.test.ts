@@ -75,7 +75,7 @@ describe("profile follow list routes", () => {
     }));
   });
 
-  it("labels an operator in both lists (asking the DB for the badge flags) and nobody else", async () => {
+  it("shows an operator in both lists like anyone else (asking the DB for the badge flags)", async () => {
     const operator = {
       id: "op", handle: "mingle.mina", name: "Mina", image: null,
       imageCropScale: 1, imageCropX: 0, imageCropY: 0, isOfficial: false, isOperator: true,
@@ -87,7 +87,7 @@ describe("profile follow list routes", () => {
     mockFindMany.mockResolvedValueOnce([{ follower: operator }, { follower: member }]).mockResolvedValueOnce([]);
     const followers = await (await getFollowers(new NextRequest("https://example.com/api/profile/followers"))).json();
     expect(followers.users).toEqual([
-      { id: "op", handle: "mingle.mina", name: "Mina", image: null, isOperator: true, isFollowing: false, isFollowedBy: true },
+      { id: "op", handle: "mingle.mina", name: "Mina", image: null, isFollowing: false, isFollowedBy: true },
       { id: "member", handle: "fan", name: "Fan", image: null, isFollowing: false, isFollowedBy: true },
     ]);
     expect(mockFindMany.mock.calls[0][0].select).toEqual({ follower: { select: USER_IDENTITY_SELECT } });
@@ -96,7 +96,7 @@ describe("profile follow list routes", () => {
     mockFindMany.mockResolvedValueOnce([{ following: operator }]).mockResolvedValueOnce([]);
     const following = await (await getFollowing(new NextRequest("https://example.com/api/profile/following"))).json();
     expect(following.users).toEqual([
-      { id: "op", handle: "mingle.mina", name: "Mina", image: null, isOperator: true, isFollowing: true, isFollowedBy: false },
+      { id: "op", handle: "mingle.mina", name: "Mina", image: null, isFollowing: true, isFollowedBy: false },
     ]);
     expect(mockFindMany.mock.calls[0][0].select).toEqual({ following: { select: USER_IDENTITY_SELECT } });
   });

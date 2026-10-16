@@ -142,12 +142,12 @@ describe('serializeFeedPost', () => {
     expect(serializeFeedPost(makePost(), makeCtx()).author).not.toHaveProperty('isOfficial')
   })
 
-  it('sets author.isOperator only for operator accounts and omits it otherwise', () => {
+  it('never sets author.isOperator, even for operator accounts', () => {
     const operator = serializeFeedPost(
       makePost({ author: { id: 'author-1', handle: 'mingle.mina', name: 'Mina', image: null, isOfficial: false, isOperator: true } }),
       makeCtx(),
     )
-    expect(operator.author).toEqual({ id: 'author-1', handle: 'mingle.mina', name: 'Mina', imageUrl: null, isOperator: true })
+    expect(operator.author).toEqual({ id: 'author-1', handle: 'mingle.mina', name: 'Mina', imageUrl: null })
     const member = serializeFeedPost(
       makePost({ author: { id: 'author-1', handle: 'alice', name: 'Alice', image: null, isOfficial: false, isOperator: false } }),
       makeCtx(),

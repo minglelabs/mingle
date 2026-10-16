@@ -11,7 +11,7 @@ import { inboxPersonLabel } from './inbox-format'
 export const STAFF_KOREAN = 'ko'
 
 /** A room message as the admin room keeps it (hydration shape, plus the optional live badge). */
-export type RoomUtterance = ConversationHydrationUtterance & { speakerBadge?: 'official' | 'operator' }
+export type RoomUtterance = ConversationHydrationUtterance
 
 function sortKey(utterance: RoomUtterance): number {
   return utterance.serverCreatedAtMs ?? utterance.createdAtMs

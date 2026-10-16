@@ -78,7 +78,7 @@ describe('reaction participant list', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store')
     expect(mocks.reactions).toHaveBeenCalledWith({ where: { messageId: 'message-db', kind: 'heart' }, orderBy: { userId: 'asc' }, take: 51, select: { userId: true, user: { select: { name: true, handle: true, isOfficial: true, isOperator: true } } } })
   })
-  it('labels a Mingle-run or official participant and adds nothing for ordinary users', async () => {
+  it('labels an official participant and adds nothing for operator or ordinary users', async () => {
     mocks.reactions.mockResolvedValue([
       { userId: 'op', user: { name: 'Mina', handle: 'mina', isOfficial: false, isOperator: true } },
       { userId: 'team', user: { name: 'Mingle', handle: 'mingle_team', isOfficial: true, isOperator: false } },
@@ -86,7 +86,7 @@ describe('reaction participant list', () => {
     ])
     const response = await getMessageReactions(query('id=client&kind=heart'), 'room')
     expect((await response.json()).participants).toEqual([
-      { id: 'op', name: 'Mina', handle: 'mina', mine: false, isOperator: true },
+      { id: 'op', name: 'Mina', handle: 'mina', mine: false },
       { id: 'team', name: 'Mingle', handle: 'mingle_team', mine: false, isOfficial: true },
       { id: 'viewer', name: 'Alice', handle: 'alice', mine: true },
     ])

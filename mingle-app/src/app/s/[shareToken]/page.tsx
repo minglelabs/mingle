@@ -7,6 +7,7 @@ import { getConversationHydrationStateForShare } from "@/lib/app-conversations";
 import { toPublicSpectateSnapshot } from "@/lib/conversation-share-public-payload";
 import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
 import { getUserProfile } from "@/server/user-profile";
+import { readAccountBadgeKind } from "@/components/LivePhoneDemo/chat-account-badge.logic";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 import type { ConversationSpectateState } from "@/components/use-conversation-spectate";
 
@@ -102,7 +103,7 @@ export default async function ConversationSpectatePage({ params }: ConversationS
             // same mapping in useConversationSpectate.
             speakerUserId: utterance.speakerAlias,
             speakerImage: utterance.speakerImage,
-            ...(utterance.speakerBadge ? { speakerBadge: utterance.speakerBadge } : {}),
+            ...(readAccountBadgeKind(utterance.speakerBadge) ? { speakerBadge: readAccountBadgeKind(utterance.speakerBadge)! } : {}),
           })),
         };
       } else {

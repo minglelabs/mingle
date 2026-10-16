@@ -55,7 +55,7 @@ describe("/api/account/blocks route", () => {
     });
   });
 
-  it("labels a blocked operator account, and only that one", async () => {
+  it("shows a blocked operator account like any other user", async () => {
     mockUserBlockFindMany.mockResolvedValue([
       {
         id: "block_1",
@@ -71,7 +71,7 @@ describe("/api/account/blocks route", () => {
 
     const { blocks } = await (await GET()).json();
 
-    expect(blocks[0].user).toEqual({ id: "op", handle: "mingle.mina", name: "Mina", image: null, isOperator: true });
+    expect(blocks[0].user).toEqual({ id: "op", handle: "mingle.mina", name: "Mina", image: null });
     expect(blocks[1].user).toEqual({ id: "member", handle: "fan", name: "Fan", image: null });
   });
 

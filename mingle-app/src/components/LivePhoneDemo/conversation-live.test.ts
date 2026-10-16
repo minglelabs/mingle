@@ -33,7 +33,7 @@ describe('remote live message lifecycle', () => {
       sender.flush(frame => {
         const accepted = server.accept({ ...frame, writerToken: 'unused' }, writer)!
         expect(accepted.utterance.targetLanguages).toEqual(['ko', 'ja'])
-        return remote.accept(accepted)
+        return remote.accept(accepted as unknown as PreviewEvent)
       }, Date.now() + 2000)
       return remote.visible([], 'bob')[0] as typeof draft
     }
