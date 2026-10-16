@@ -11,6 +11,7 @@ import { detectSourceLanguage } from '@/server/translation/detect-source-languag
 import { resolvePostSourceLanguage } from '@/server/translation/post-chinese-variants'
 import { onDemandTranslationDeps } from '@/server/translation/on-demand-translation-deps'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
+import { isUntranslatedCopy } from '@/server/translation/untranslated-copy'
 
 export const runtime = 'nodejs'
 
@@ -35,7 +36,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   const post = await prisma.post.findFirst({
     where: visibleSinglePostWhere(postId, viewerId),
-    select: { bodyVersion: true, sourceLanguage: true },
+    select: { bodyVersion: true, sourceLanguage: true, sourceText: true },
   })
   if (!post) return json({ error: 'not_found' }, { status: 404 })
 
@@ -48,7 +49,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   return json({
     postId,
     translations: rows
-      .filter((row) => row.language !== post.sourceLanguage && row.text)
+      .filter((row) => row.language !== post.sourceLanguage && row.text && !isUntranslatedCopy(post.sourceText, row.language, row.text))
       .map((row) => ({ language: row.language, text: row.text })),
   })
 }

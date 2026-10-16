@@ -20,6 +20,7 @@ import { markPostViewedQuietly } from '@/server/feed/post-view'
 import { USER_IDENTITY_SELECT, identityBadgeFlags } from '@/server/identity/user-identity-select'
 import { serializeListUserIdentity } from '@/server/identity/list-user-identity'
 import { isOwnedPostImageKey } from '@/server/posts/post-image-keys'
+import { isUntranslatedCopy } from '@/server/translation/untranslated-copy'
 
 /** Wire shape of a comment photo; served by GET /posts/{postId}/comments/{commentId}/image. */
 function serializeCommentImage(c: {
@@ -176,7 +177,7 @@ export async function GET(request: NextRequest, context: Ctx) {
         const ready = c.translations.find(
           (t) => t.bodyVersion === c.bodyVersion && canonicalizeTranslationLanguageCode(t.language) === canonicalDisplay,
         )
-        if (ready?.text) {
+        if (ready?.text && !isUntranslatedCopy(c.sourceText, canonicalDisplay, ready.text)) {
           translationState = 'ready'
           displayText = ready.text
           displayLang = displayLanguage
