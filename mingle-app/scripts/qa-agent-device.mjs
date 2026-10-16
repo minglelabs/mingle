@@ -411,7 +411,7 @@ async function cmdServers() {
   }
   let sttListening = false;
   try {
-    execFileSync('nc', ['-z', host, env.DEVBOX_STT_PORT], { stdio: 'ignore' });
+    execFileSync('nc', ['-z', '-G', '3', host, env.DEVBOX_STT_PORT], { stdio: 'ignore', timeout: 5000 });
     sttListening = true;
   } catch {
     sttListening = false;
