@@ -68,6 +68,20 @@ while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
 </script></body></html>"""
 
 
+HERO_PAGE = """<!doctype html>
+<html lang="{lang}" dir="{dir}"><head><meta charset="utf-8"><style>
+html,body{{margin:0;width:{W}px;height:{H}px;overflow:hidden}}
+body{{background:url("{img}") center/cover no-repeat;font-family:{font},-apple-system,"SF Pro Display","Helvetica Neue",sans-serif}}
+body::before{{content:"";position:absolute;inset:0 0 auto 0;height:900px;background:linear-gradient(180deg,rgba(0,0,0,.28),rgba(0,0,0,0))}}
+h1{{position:absolute;top:210px;left:60px;right:60px;margin:0;text-align:center;font-size:132px;line-height:1.14;font-weight:800;
+  letter-spacing:-1px;color:#fff;white-space:pre;text-shadow:0 6px 30px rgba(0,0,0,.35)}}
+</style></head><body><h1 id="t">{caption}</h1>
+<script>
+const t=document.getElementById('t');let s=132;
+while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
+</script></body></html>"""
+
+
 def status_bar_colors(capture: Path) -> tuple[str, str]:
     """Bar background continues the page's top edge; ink is black or white for contrast."""
     im = Image.open(capture).convert("RGB")
@@ -80,11 +94,17 @@ def status_bar_colors(capture: Path) -> tuple[str, str]:
 def render(html_text: str, out: Path, work: Path) -> None:
     page = work / "slide.html"
     page.write_text(html_text, encoding="utf-8")
-    subprocess.run(
-        [CHROME, "--headless=new", "--hide-scrollbars", "--force-device-scale-factor=1",
-         f"--window-size={W},{H}", "--virtual-time-budget=3000", f"--screenshot={out}", page.as_uri()],
-        check=True, capture_output=True,
-    )
+    cmd = [CHROME, "--headless=new", "--hide-scrollbars", "--force-device-scale-factor=1",
+           f"--window-size={W},{H}", "--virtual-time-budget=3000", f"--screenshot={out}", page.as_uri()]
+    # headless Chrome sometimes exits non-zero at teardown after writing the file,
+    # and now and then writes nothing; trust the file, and try again without one
+    for attempt in range(3):
+        out.unlink(missing_ok=True)
+        subprocess.run(cmd, capture_output=True)
+        if out.exists() and out.stat().st_size > 0:
+            break
+    else:
+        raise RuntimeError(f"Chrome could not render {out.name}")
     # ~3 MB -> ~0.8 MB per slide with no visible loss (brew install pngquant)
     subprocess.run(["pngquant", "--quality=80-95", "--speed=1", "--force", "--ext=.png", str(out)], check=True)
 
@@ -104,6 +124,15 @@ def main() -> None:
                 continue
             for shot in cfg["shots"]:
                 out = work / f"{lang}-{shot['id']}.png"
+                if shot.get("fullBleed"):
+                    render(HERO_PAGE.format(
+                        lang=lang, dir="rtl" if lang == "ar" else "ltr", W=W, H=H,
+                        font=FONT.get(lang, '"SF Pro Display"'),
+                        caption=html.escape(shot["caption"][lang]),
+                        img=(HERE / shot["fullBleed"]).as_uri(),
+                    ), out, work)
+                    rendered[(lang, shot["id"])] = out
+                    continue
                 capture = HERE / shot["capture"].format(lang=lang)
                 bar, ink = status_bar_colors(capture)
                 render(PAGE.format(

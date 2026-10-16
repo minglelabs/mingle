@@ -4,8 +4,8 @@ Source for the App Store and Google Play screenshot set: 7 slides in 15 language
 
 | # | Screen | Source |
 |---|---|---|
-| 01 | Feed photo post | app (`/{locale}/feed?postId=…`) |
-| 02 | A post written in another language, read in yours | app |
+| 01 | Full-bleed photo of friends from many countries | `hero/group.jpg` (drawn with the ChatGPT app bridge, `scripts/chatgpt-image-bridge.mjs`; sky extended to the slide height from `group-original.png`) |
+| 02 | A post written in another language, read in yours | app (`/{locale}/feed?postId=…`) |
 | 03 | Comments, translated | app (comment sheet) |
 | 04 | Group chat in three languages | drawn from `chat.json` with the app's bubble layout (a real room needs real members) |
 | 05 | Search: people and posts | app (`/{locale}/connect`, query "ki") |
