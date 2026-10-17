@@ -441,7 +441,7 @@ const FILTERS: readonly Option[] = [
 
 const LIGHTING: readonly Option[] = [
   ['daylight', 5, 'ordinary daylight'], ['window', 3, 'soft light from a window'], ['golden', 2, 'low evening sun'], ['fluorescent', 2, 'flat indoor fluorescent light'],
-  ['warm_lamp', 2, 'warm indoor lamp light'], ['night', 1.2, 'at night, lit only by street lamps, shop signs or room lights, no flash: the face is about as dim as its surroundings and lit unevenly from the side, with the grain and slight smearing of phone night mode'], ['neon', 0.8, 'colored neon light at night'],
+  ['warm_lamp', 2, 'warm indoor lamp light'], ['night', 1.2, 'at night under street lamps and city lights'], ['neon', 0.8, 'colored neon light at night'],
   ['overcast', 1.5, 'grey overcast light'], ['screen', 0.4, 'lit only by a screen in a dark room'],
 ]
 

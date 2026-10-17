@@ -25,7 +25,6 @@ const SCENE = [
  */
 const LIGHT = [
   'Light: only what the place itself gives, with its natural falloff and direction (from a window, the sky, ceiling lights or street lamps); soft shadows under the chin, nose and furniture; mixed color temperatures where different lights meet; whites that are slightly grey or slightly warm, not pure.',
-  'A face gets no more light than its surroundings: no flash, no spotlight or frontal key light on the face, no face brighter or cleaner than the background around it. In dim places the face is dim too.',
   'Colors are muted and true to life, like an uncorrected phone photo: no boosted saturation, no HDR halo, no teal-and-orange grade, no glow, no rim light, no dramatic shadows.',
 ]
 
