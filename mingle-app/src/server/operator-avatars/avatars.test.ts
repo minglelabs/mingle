@@ -117,7 +117,7 @@ describe('avatar taxonomy', () => {
         expect(spec.prompt).toContain('face: ')
         expect(spec.prompt).toContain('what people notice about the face')
         if (spec.attributes.attractiveness !== 'ordinary') {
-          expect(spec.attributes.flesh).toBe('lean')
+          expect(['lean', 'youthful']).toContain(spec.attributes.flesh)
           expect(spec.prompt).toContain('the most noticeable traits, kept exactly as described')
         }
         // A high forehead always gets hair over or around it, and the head stays in proportion.
@@ -394,9 +394,9 @@ describe('describeFace', () => {
       const signature = prompt.split('kept exactly as described: ')[1]?.split('; ') ?? []
       expect(signature.length).toBeGreaterThanOrEqual(2)
       expect(signature.length).toBeLessThanOrEqual(3)
-      expect(attributes.flesh).toBe('lean')
+      expect(['lean', 'youthful']).toContain(attributes.flesh)
       expect(prompt).not.toMatch(/puffy|bulbous|heavy chin|a long face|broad, round face|dark under-eye|sparse/)
-      expect(prompt).not.toMatch(/short midface|lift when smiling|wide mouth for the face|a short lower face with a small chin|short face whose/)
+      expect(prompt).not.toMatch(/slightly long midface|wide mouth for the face|short face whose|bone structure shows/)
     }
   })
 

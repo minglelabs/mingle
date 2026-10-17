@@ -16,6 +16,14 @@
  * - "Wide face" is drawn as a chubby face unless the flesh is called lean: the
  *   width has to come from bone.
  * - A long face drawn on purpose looks too long; it stays out of pretty faces.
+ * - Ten real faces the founder scores 100 each differ from the AI beauty in
+ *   at least one place, and mostly in the same few: soft youthful fullness in
+ *   the cheeks over a small, narrow jaw instead of hollow model cheeks; a
+ *   short, rounded chin instead of a long V; a small, low or short nose
+ *   instead of a high, thin, pointed one; a small but full mouth; eyes that
+ *   are horizontally long, heavy-lidded, slightly downturned or wide-set
+ *   instead of big round double-lidded ones; a short midface. Fullness only
+ *   hurt when it came with a broad jaw or a wide mouth.
  * - Two outlines that real untypical beauties have and the model never draws
  *   unasked: a soft round outline whose fullness sits only mid-cheek and ends
  *   in a slim short chin (fullness along the jaw is what made faces chubby),
@@ -56,6 +64,7 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
   ]],
   ['flesh', [
     ['lean', 3, 'lean flesh and a clean jawline, any width coming from bone, not fullness', 'common'],
+    ['youthful', 3, 'soft, youthful fullness in the cheeks over a small, narrow bone structure, the jaw staying narrow and smooth', 'common'],
     ['soft', 2, 'soft cheeks over a still visible jawline', 'common'],
     ['full', 1, 'full, round cheeks that soften the jawline', 'plain'],
   ]],
@@ -88,7 +97,7 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
     ['inner_fold', 3, 'a thin inner double-eyelid crease that starts inside the inner corner', 'common'],
     ['parallel', 2, 'clear parallel double eyelids', 'common'],
     ['monolid', 1.5, 'monolids', 'distinctive'],
-    ['hidden', 1.2, 'a hidden crease that shows only toward the outer corners', 'distinctive'],
+    ['hidden', 1.5, 'a heavy upper lid with a hidden crease that shows only toward the outer corners', 'distinctive'],
     ['puffy', 0.8, 'heavy, puffy monolids', 'plain'],
   ]],
   ['eyeShape', [
@@ -120,7 +129,7 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
     ['medium', 3, 'a straight nose bridge of medium height', 'common'],
     ['high', 1.2, 'a high, straight nose bridge', 'distinctive'],
     ['bump', 1, 'a nose bridge with a small bump', 'distinctive'],
-    ['low_soft', 1.2, 'a low, soft nose bridge', 'distinctive'],
+    ['low_soft', 2, 'a low, soft nose bridge', 'distinctive'],
     ['flat_wide', 0.8, 'a flat, wide nose bridge', 'plain'],
   ]],
   ['noseTip', [
@@ -146,7 +155,7 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
   ['mouthWidth', [
     ['average', 4, '', 'common'],
     ['wide', 1.3, 'a wide mouth for the face', 'distinctive'],
-    ['small', 1, 'a small mouth', 'distinctive'],
+    ['small', 2, 'a small but full mouth', 'distinctive'],
   ]],
   ['lipLine', [
     ['soft_bow', 3, 'a soft cupid\'s bow', 'common'],
@@ -164,21 +173,21 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
 
 /** Axes kept fixed for a pretty face: a full, round face or a long one stops reading as pretty. */
 const PRETTY_FIXED: Readonly<Record<string, readonly string[]>> = {
-  flesh: ['lean'],
+  flesh: ['lean', 'youthful'],
 }
 
 /**
- * Distinctive traits that still pulled a striking face down to a cute, round
- * one when scored (a short compact face, a short midface, full lifting
- * cheeks, a wide mouth), or broke the harmony (a longer midface made a
- * pretty face plain); they stay for ordinary and pleasant faces only.
+ * Distinctive traits that pulled a striking face down when scored: a broad
+ * short face and a wide mouth (a short midface and full cheeks were fine
+ * once the jaw and mouth stayed small, as the reference faces show), a
+ * longer midface that broke the harmony, and a bony face that read as
+ * masculine. They stay for ordinary and pleasant faces only.
  */
 const NOT_FOR_STRIKING: Readonly<Record<string, readonly string[]>> = {
-  faceShape: ['short_cheekbone'],
-  cheekbones: ['apple'],
-  lowerFace: ['short'],
-  midface: ['short', 'slightly_long'],
+  midface: ['slightly_long'],
   mouthWidth: ['wide'],
+  // A bony face with prominent front cheekbones read as masculine (scored 50).
+  faceShape: ['short_cheekbone', 'lean_front_cheekbones'],
 }
 
 /** How many distinctive and plain traits each grade gets. */
