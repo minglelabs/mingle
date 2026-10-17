@@ -303,6 +303,20 @@ const SUBTLE_TRAITS: ReadonlyArray<readonly [area: string, options: readonly Opt
 ]
 
 /**
+ * How often each area is picked. Bone structure (face shape, cheekbones,
+ * forehead, chin, midface) made faces clearly less typical; details that
+ * match the model's own cute beauty (a round face, dimples, wide-set eyes
+ * with a bubbly look) were absorbed and changed nothing (2026-10).
+ */
+const AREA_WEIGHTS: Readonly<Record<string, number>> = {
+  faceShape: 2, cheeks: 1.8, forehead: 1.5, chin: 1.5, midface: 1.5, jaw: 1.3, lips: 1.3, noseBridge: 1.3,
+  dimples: 0.4,
+}
+
+/** Options that match the model's default cute face; picked less often. */
+const CUTE_DEFAULTS = new Set(['faceShape:round', 'eyeSpacing:wide'])
+
+/**
  * Three or four subtle details from different areas, kept as subtle_<area>
  * in the attributes. Forcing one onto the eyes, nose or mouth felt rigid;
  * with this many picks from the whole list they land there often anyway.
@@ -312,8 +326,12 @@ export function subtleTraits(take: Picker, random: Random, gender: 'female' | 'm
   const pool = areas.map((_, index) => index)
   const picked: string[] = []
   for (let left = random() < 0.5 ? 3 : 4; left > 0 && pool.length; left -= 1) {
-    const [area, options] = areas[takeOne(random, pool)]
-    picked.push(take(`subtle_${area}`, options))
+    // Weighted by area: bone structure moved the face most, cute details the least.
+    const total = pool.reduce((sum, index) => sum + (AREA_WEIGHTS[areas[index][0]] ?? 1), 0)
+    let roll = random() * total
+    const at = pool.findIndex((index) => (roll -= AREA_WEIGHTS[areas[index][0]] ?? 1) < 0)
+    const [area, options] = areas[pool.splice(at < 0 ? pool.length - 1 : at, 1)[0]]
+    picked.push(take(`subtle_${area}`, options.map(([key, weight, text]) => [key, weight * (CUTE_DEFAULTS.has(`${area}:${key}`) ? 0.4 : 1), text] as const)))
   }
   return `very subtle details of a real face, each only just visible: ${picked.join('; ')}`
 }
