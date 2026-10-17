@@ -84,6 +84,29 @@ const PULL_REFRESH_ROW_PX = 60;
 /** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
 
+const FREE_VIEW_LIMIT = 10;
+const FREE_VIEW_STORAGE_KEY = "mingle.feed.freeViews";
+
+/** True when a signed-out viewer may see `postId` (already seen, or still under the limit). */
+function claimFreeView(postId: string): boolean {
+  let seen: string[] = [];
+  try {
+    const raw = window.localStorage.getItem(FREE_VIEW_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(parsed)) seen = parsed.filter((id): id is string => typeof id === "string");
+  } catch {
+    // Storage unavailable: fall back to an empty history.
+  }
+  if (seen.includes(postId)) return true;
+  if (seen.length >= FREE_VIEW_LIMIT) return false;
+  try {
+    window.localStorage.setItem(FREE_VIEW_STORAGE_KEY, JSON.stringify([...seen, postId]));
+  } catch {
+    // Not persisted; the limit then only holds for this page.
+  }
+  return true;
+}
+
 export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary, appleOAuthEnabled = false, googleOAuthEnabled = false, tabBar, menuLabel }: FeedShellProps) {
   const underTabBar = Boolean(tabBar);
   const copy = useMemo(() => feedCopy(locale), [locale]);
@@ -479,6 +502,20 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     },
     [scrollEl, cardPixelHeight, reducedMotion],
   );
+
+  // Signed-out viewers get FREE_VIEW_LIMIT distinct posts (remembered across
+  // visits); moving onto one more snaps back and opens the sign-in sheet.
+  const activePostId = activePost?.id ?? null;
+  useEffect(() => {
+    if (viewerId || !activePostId) return;
+    if (claimFreeView(activePostId)) return;
+    const idx = activeIndexRef.current;
+    if (idx > 0) scrollToIndex(idx - 1);
+    goToLogin(activePostId);
+    // goToLogin / scrollToIndex identities change with the active post;
+    // only a new post should re-run the check.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewerId, activePostId]);
 
   const handleExpandChange = useCallback(
     (postId: string, expanded: boolean, scrollTop: number) => {
