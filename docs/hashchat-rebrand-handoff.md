@@ -1,5 +1,7 @@
 # HashChat 리브랜딩 인수인계 (2026-10-15)
 
+> 배포할 때 할 일은 `docs/hashchat-release-checklist.md`에 정리돼 있다.
+
 Mingle → **HashChat** 으로 앱 이름·로고·스토어 정보를 전부 바꾸는 작업. PR #231(`feat/posting-feed`, 2.2.0) 배포와 같이 나간다.
 
 ## 브랜치
