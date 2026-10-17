@@ -110,25 +110,33 @@ describe('avatar taxonomy', () => {
         expect(spec.prompt).toContain('The face is not visible')
         expect(spec.attributes.build).toBeTruthy()
       }
-      // A country with a known look fixes the face itself instead of a random face shape.
-      if (spec.category === 'face') expect(spec.prompt).toContain('a typical Korean face')
+      if (spec.category === 'face') {
+        expect(spec.prompt).toContain('unmistakably Korean features')
+        // The face is described by proportion, a few axes away from the ordinary middle.
+        const axes = ['faceWidth', 'widest', 'midface', 'philtrum', 'chin', 'eyeSpacing', 'eyeShape', 'eyeHeight', 'nose', 'mouth']
+        const distinct = axes.filter((axis) => spec.attributes[axis] && spec.attributes[axis] !== 'average').length
+        expect(distinct).toBeGreaterThanOrEqual(3)
+        expect(distinct).toBeLessThanOrEqual(4)
+        expect(spec.prompt).toContain('face proportions:')
+        expect(spec.prompt).toContain('what people notice about the face')
+        expect(spec.prompt).not.toMatch(/beautiful|good-looking/i)
+      }
     }
   })
 
-  it('draws Japanese women with Japanese makeup, hair and dress, and leaves other faces to the random features', () => {
+  it('draws Japanese women with Japanese makeup, hair and dress', () => {
     const japanese: AvatarPersona = { gender: 'female', name: 'ゆき', age: 24, country: 'JP', countryName: 'Japan', city: 'Tokyo', bio: null }
     let faces = 0
     for (let index = 0; index < 300; index += 1) {
       const spec = pickAvatarSpec(japanese, seededRandom(`jp:${index}`))
       if (spec.category !== 'face') continue
       faces += 1
-      expect(spec.prompt).toContain('a typical Japanese face')
+      expect(spec.prompt).toContain('unmistakably Japanese features')
       if (spec.attributes.makeup !== 'none') expect(spec.prompt).toContain('Japanese-style makeup')
-      expect(spec.attributes.faceShape).toBeUndefined()
     }
     expect(faces).toBeGreaterThan(20)
     const us = pickAvatarSpec(american, seededRandom('us-face'))
-    expect(us.prompt).not.toContain('a typical')
+    expect(us.prompt).not.toContain('unmistakably')
   })
 
   it('keeps selfies coherent: no full-body framing, eyes on the screen, no flash, filter or finger', () => {

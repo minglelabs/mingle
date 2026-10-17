@@ -280,45 +280,45 @@ const NAME_ANCESTRY_BOOST = 20
 type CountryLook = { face?: string; makeup?: string; hair?: { female?: string; male?: string }; dress?: { female?: string; male?: string } }
 const COUNTRY_LOOKS: Record<string, CountryLook> = {
   JP: {
-    face: 'a typical Japanese face: soft and slightly round with a gentle jawline, a low, small nose bridge, a small mouth',
+    face: 'unmistakably Japanese features',
     makeup: 'Japanese-style makeup: a matte, soft-focus base, pink blush placed high right under the eyes and a touch across the nose, visible but not heavy, a little shimmer on the under-eye puffiness, brown mascara and thin brown liner, softly arched light-brown brows, a filled-in coral or red-brown lip following the natural lip shape (not a gradient lip)',
     hair: { female: 'often dyed a soft milk-tea or ash brown, often a bob with inward-curled ends or see-through bangs', male: 'often a soft mushroom or center-parted cut, sometimes dyed light brown' },
     dress: { female: 'the loose, layered Japanese everyday style in muted earth tones', male: 'the loose, layered Japanese everyday style in muted tones' },
   },
   KR: {
-    face: 'a typical Korean face',
-    makeup: 'Korean-style makeup: a dewy, glowing base, straight soft brows, a hint of blush on the apples of the cheeks, a gradient lip',
+    face: 'unmistakably Korean features',
+    makeup: 'Korean-style makeup: a fresh, lightly luminous base that still shows skin texture, straight soft brows, a hint of blush on the apples of the cheeks, a gradient lip',
     hair: { female: 'often long and loosely waved, or a layered cut with face-framing strands', male: 'often a comma-hair or down-perm cut' },
     dress: { female: 'the clean, coordinated Korean everyday style', male: 'the clean, coordinated Korean everyday style with a relaxed fit' },
   },
   CN: {
-    face: 'a typical Chinese face',
+    face: 'unmistakably Chinese features',
     makeup: 'Chinese-style makeup: a smooth matte base, defined straight brows, eyeliner that lifts slightly at the outer corner, a full, solid red or rose lip',
     hair: { female: 'often long and straight, or with soft curtain bangs', male: 'often short with a textured top' },
   },
   TW: {
-    face: 'a typical Taiwanese face',
+    face: 'unmistakably Taiwanese features',
     makeup: 'Taiwanese-style makeup: light and fresh, a thin base, soft natural brows, a sheer pink lip',
     hair: { female: 'often shoulder-length with thin bangs', male: 'often short and neat' },
   },
   TH: {
-    face: 'a typical Thai face',
-    makeup: 'Thai-style makeup: a glowing base, defined brows, soft warm bronze eyeshadow, a rosy or peach lip',
+    face: 'unmistakably Thai features',
+    makeup: 'Thai-style makeup: a light, fresh base, defined brows, soft warm bronze eyeshadow, a rosy or peach lip',
     dress: { female: 'light clothes for hot weather', male: 'light clothes for hot weather' },
   },
   VN: {
-    face: 'a typical Vietnamese face',
+    face: 'unmistakably Vietnamese features',
     makeup: 'Vietnamese-style makeup: a light base, natural brows, a coral or red lip',
     dress: { female: 'light clothes for warm weather', male: 'light clothes for warm weather' },
   },
   ID: {
-    face: 'a typical Indonesian face',
+    face: 'unmistakably Indonesian features',
     makeup: 'Indonesian-style makeup: a matte base, defined brows, a warm nude or brick lip',
     dress: { female: 'light clothes for hot weather, sometimes a hijab', male: 'light clothes for hot weather' },
   },
   PH: {
-    face: 'a typical Filipino face',
-    makeup: 'Filipino-style makeup: a light glowy base, peachy blush, a nude or rosy lip',
+    face: 'unmistakably Filipino features',
+    makeup: 'Filipino-style makeup: a light, fresh base, peachy blush, a nude or rosy lip',
     dress: { female: 'light clothes for hot weather', male: 'light clothes for hot weather' },
   },
 }
@@ -350,9 +350,30 @@ const DYED_HAIR: readonly Option[] = [
   ['pink', 0.7, 'dyed pastel pink'], ['blue', 0.5, 'dyed dark blue'], ['red_dye', 1, 'dyed wine red'],
 ]
 
-const FACE_SHAPES: readonly Option[] = [
-  ['round', 3, 'a round face'], ['oval', 4, 'an oval face'], ['square', 2, 'a square jaw'], ['long', 2, 'a long face'], ['heart', 2, 'a heart-shaped face'],
+/**
+ * The face described by proportion, not by type. Asked for an attractive
+ * face, the image model averages every face toward the same layout (big
+ * round eyes, a tiny pointed nose, a V-line chin, perfect symmetry); naming
+ * shapes ("a round face") does not stop it, but naming where things sit and
+ * how long they are does (2026-10). Each axis has an ordinary middle, and
+ * `faceProportions` makes sure every face leaves the middle on a few axes.
+ */
+const FACE_PROPORTIONS: ReadonlyArray<readonly [axis: string, options: readonly Option[]]> = [
+  ['faceWidth', [['narrow', 1, 'the face is narrow and long for its width'], ['average', 2, ''], ['wide', 1.2, 'the face is fairly wide for its length']]],
+  ['widest', [['cheekbones', 1.5, 'widest at the cheekbones, which sit high and slightly prominent'], ['average', 2, ''], ['jaw', 0.8, 'widest at a straight, fairly broad jaw'], ['forehead', 0.8, 'widest at the forehead and temples, narrowing to the chin']]],
+  ['midface', [['short', 1.3, 'a short midface, little distance between the eyes and the mouth'], ['average', 2, ''], ['long', 1, 'a long midface, a good distance between the eyes and the mouth']]],
+  ['philtrum', [['short', 1, 'a short philtrum'], ['average', 2.5, ''], ['long', 0.8, 'a longer philtrum']]],
+  ['chin', [['small_round', 1.3, 'a short lower face with a small, softly rounded chin and a jaw that narrows gently without a V-line point'], ['average', 1.5, ''], ['long', 0.8, 'a longer lower face with a defined chin'], ['square', 0.8, 'a squarish jaw and a flat chin']]],
+  ['eyeSpacing', [['close', 0.8, 'eyes set a little closer together than average'], ['average', 2, ''], ['wide', 1.3, 'eyes set a little wider apart than average']]],
+  ['eyeShape', [['long_narrow', 1.5, 'eyes long and fairly narrow horizontally rather than big and round'], ['average', 1.5, ''], ['small', 0.8, 'small eyes'], ['round', 0.8, 'round eyes, not oversized']]],
+  ['eyeHeight', [['low', 0.8, 'eyes sitting slightly low on the face'], ['average', 3, ''], ['high', 0.8, 'eyes sitting slightly high on the face']]],
+  ['nose', [['short_soft', 1.3, 'a short nose with a soft, rounded tip'], ['average', 1.5, ''], ['long_straight', 1, 'a long, straight nose'], ['wide', 1, 'a nose with some width at the nostrils'], ['low_bridge', 1, 'a low nose bridge']]],
+  ['mouth', [['wide', 1.3, 'a wide mouth, about as wide as the space between the pupils or more'], ['average', 1.5, ''], ['small', 1, 'a small mouth'], ['full_lower', 1, 'a fuller lower lip'], ['thin', 0.8, 'thin lips']]],
 ]
+/** Every face leaves the ordinary middle on this many axes: fewer averages out, more looks odd. */
+const MIN_DISTINCT_PROPORTIONS = 3
+const MAX_DISTINCT_PROPORTIONS = 4
+
 
 const SKIN_FEATURES: readonly Option[] = [
   ['clear', 5, 'ordinary skin with visible pores'], ['freckles', 1, 'a few freckles'], ['mole', 1.5, 'a small mole on the cheek'],
@@ -364,24 +385,28 @@ const EYES: readonly Option[] = [
   ['narrow', 2, 'narrow eyes'], ['downturned', 1.5, 'slightly downturned eyes'], ['upturned', 1.5, 'slightly upturned eyes'],
 ]
 
-const NOSE_MOUTH: readonly Option[] = [
-  ['low_nose', 2, 'a low nose bridge'], ['high_nose', 2, 'a high nose bridge'], ['wide_nose', 2, 'a wide nose'], ['thin_lips', 2, 'thin lips'],
-  ['full_lips', 2, 'full lips'], ['snaggle', 0.6, 'one slightly crooked tooth showing'], ['braces', 0.4, 'braces on the teeth'], ['plain', 4, 'unremarkable nose and lips'],
-]
-
 const EYEBROWS: readonly Option[] = [
   ['thick', 3, 'thick eyebrows'], ['thin', 2, 'thin eyebrows'], ['straight', 3, 'straight eyebrows'], ['arched', 2, 'arched eyebrows'],
 ]
 
 /**
  * A profile picture is the best photo someone has of themself, so most look
- * at least pleasant; a feed where everyone looks like a model still reads as
- * fake, which is why realism comes from the photo, not from plain faces.
+ * at least likable. The words "beautiful" and "good-looking" are left out on
+ * purpose: they pull the face toward the averaged AI beauty. Attractiveness
+ * comes from the charm point and the proportions instead.
  */
 const ATTRACTIVENESS: readonly Option[] = [
-  ['ordinary', 30, 'an ordinary, average-looking person'],
-  ['pleasant', 40, 'a pleasant-looking person, not model-like'],
-  ['striking', 30, 'a good-looking person, still clearly an ordinary non-professional'],
+  ['ordinary', 30, 'an ordinary-looking person'],
+  ['pleasant', 40, 'a likable, pleasant face'],
+  ['striking', 30, 'a face people remember and find attractive for its own proportions, not because it is typical'],
+]
+
+/** What people notice first about the face; gives it a specific appeal without averaging it. */
+const CHARM_POINTS: readonly Option[] = [
+  ['eye_smile', 3, 'the way the eyes curve into crescents when smiling'], ['wide_smile', 2.5, 'a wide, slightly lopsided smile showing the upper teeth, one slightly uneven'],
+  ['dimples', 1.5, 'dimples when smiling'], ['clear_skin', 1.5, 'clear skin with a natural flush'], ['beauty_mark', 1.5, 'a small beauty mark near the eye or lip'],
+  ['brows', 1.5, 'expressive brows'], ['gaze', 1.5, 'a calm, direct gaze'], ['snaggle', 1, 'a small snaggletooth when smiling'], ['neck', 1, 'a long neck and clean jawline'],
+  ['lip_corners', 1.5, 'mouth corners that turn up naturally even at rest'],
 ]
 
 const HAIR_LENGTH: Record<'female' | 'male', readonly Option[]> = {
@@ -499,6 +524,7 @@ const LIGHTING: readonly Option[] = [
   ['daylight', 5, 'ordinary daylight'], ['window', 3, 'soft light from a window'], ['golden', 2, 'low evening sun'], ['fluorescent', 2, 'flat indoor fluorescent light'],
   ['warm_lamp', 2, 'warm indoor lamp light'], ['night', 1.2, 'at night under street lamps and city lights'], ['neon', 0.8, 'colored neon light at night'],
   ['overcast', 1.5, 'grey overcast light'], ['screen', 0.4, 'lit only by a screen in a dark room'],
+  ['side_sun', 2.5, 'low late-afternoon sun from one side, warm on one side of the face and on the wall or street behind, the other side in soft shade'],
   ['backlit_shade', 3, 'late afternoon in shade with the bright sky behind as the main light, so the person is slightly backlit: the face a little darker and duller than the sky and as lit as the shade around it, the sky blown out to near white'],
 ]
 
@@ -509,7 +535,7 @@ const FLAWS: readonly Option[] = [
 
 type ShotEnv = 'indoor' | 'outdoor' | 'any'
 const INDOOR_ONLY_LIGHT = new Set(['window', 'fluorescent', 'warm_lamp', 'screen'])
-const OUTDOOR_ONLY_LIGHT = new Set(['golden', 'overcast', 'neon', 'backlit_shade', 'night'])
+const OUTDOOR_ONLY_LIGHT = new Set(['golden', 'overcast', 'neon', 'backlit_shade', 'night', 'side_sun'])
 
 function lightingFor(env: ShotEnv): readonly Option[] {
   if (env === 'indoor') return LIGHTING.filter((option) => !OUTDOOR_ONLY_LIGHT.has(option[0]))
@@ -605,6 +631,30 @@ function ageBand(age: number | null, gender: 'female' | 'male' | null = null): s
 
 type Picker = (axis: string, options: readonly Option[]) => string
 
+/**
+ * "Face proportions: …" with at least MIN_DISTINCT_PROPORTIONS axes away from
+ * the ordinary middle; axes left in the middle are not mentioned.
+ */
+function faceProportions(take: Picker, random: Random): string {
+  const lines = FACE_PROPORTIONS.map(([axis, options]) => take(axis, options))
+  const indexes = FACE_PROPORTIONS.map((_, index) => index)
+  const middle = indexes.filter((index) => !lines[index])
+  // Push randomly chosen middle axes to a distinct option until enough stand out…
+  while (FACE_PROPORTIONS.length - middle.length < MIN_DISTINCT_PROPORTIONS && middle.length) {
+    const index = middle.splice(Math.floor(random() * middle.length), 1)[0]
+    const [axis, options] = FACE_PROPORTIONS[index]
+    lines[index] = take(axis, options.filter((option) => option[0] !== 'average'))
+  }
+  // …and send randomly chosen distinct ones back to the middle when too many do.
+  const distinct = indexes.filter((index) => lines[index])
+  while (distinct.length > MAX_DISTINCT_PROPORTIONS) {
+    const index = distinct.splice(Math.floor(random() * distinct.length), 1)[0]
+    const [axis, options] = FACE_PROPORTIONS[index]
+    lines[index] = take(axis, options.filter((option) => option[0] === 'average'))
+  }
+  return `face proportions: ${lines.filter(Boolean).join('; ')}`
+}
+
 /** Who the person is, as far as this kind of photo shows them. */
 function describePerson(
   persona: AvatarPersona,
@@ -638,14 +688,14 @@ function describePerson(
     parts.push(`${take('hairLength', HAIR_LENGTH[table])} ${color} hair, ${take('hairStyle', HAIR_STYLE[table])}${trend && young ? ` (people of this age there: ${trend})` : ''}`)
   }
   if (show.face) {
-    // The country look already fixes the face shape, nose and mouth, and its makeup the brows.
+    // A country makeup style already fixes the brows.
     const styled = Boolean(look?.makeup) && gender === 'female'
     parts.push(
-      look?.face ? '' : take('faceShape', FACE_SHAPES),
+      faceProportions(take, random),
       take('eyes', EYES),
       styled ? '' : take('eyebrows', EYEBROWS),
-      look?.face ? '' : take('noseMouth', NOSE_MOUTH),
       take('skinFeature', SKIN_FEATURES),
+      `what people notice about the face: ${take('charm', CHARM_POINTS)}`,
     )
     if (gender === 'male') parts.push(take('facialHair', FACIAL_HAIR))
     if (gender === 'female') {

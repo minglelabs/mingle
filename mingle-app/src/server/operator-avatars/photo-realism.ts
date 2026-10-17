@@ -62,7 +62,7 @@ const FLAWS = [
   'the focus landed a little off',
 ]
 
-const AVOID = 'Avoid everything that marks an AI, stock or retouched image: a face lit more brightly than its surroundings, a retouched or beauty-filtered face, perfectly arranged hair, an overall plastic sheen, glossy or airbrushed skin, oversaturated colors, shallow depth of field, a magazine or advertising look.'
+const AVOID = 'Keep any face proportions exactly as described; do not average them toward a typical face. Avoid everything that marks an AI, stock or retouched image: an averaged beauty face with big round eyes, a tiny pointed nose and a V-line chin, a face lit more brightly than its surroundings, a retouched or beauty-filtered face, perfectly arranged hair, an overall plastic sheen, glossy or airbrushed skin, oversaturated colors, shallow depth of field, a magazine or advertising look.'
 
 /** `count` different flaws for one photo. */
 function pickFlaws(random: Random, count: number): string[] {
