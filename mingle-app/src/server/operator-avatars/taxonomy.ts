@@ -436,6 +436,9 @@ const HAIR_STYLE: Record<'female' | 'male', readonly Option[]> = {
   ],
 }
 
+/** Hairstyles that need hair long enough to tie. */
+const TIED_STYLES = new Set(['ponytail', 'bun', 'braid', 'half_up', 'low_tie', 'claw_clip', 'tied'])
+
 const FACIAL_HAIR: readonly Option[] = [
   ['none', 6, 'clean-shaven'], ['stubble', 2, 'light stubble'], ['mustache', 0.6, 'a mustache'], ['beard', 1, 'a short beard'], ['full_beard', 0.4, 'a full beard'],
 ]
@@ -481,6 +484,11 @@ const POSTURE: readonly Option[] = [
   ['bed_stomach', 0.6, 'lying on the stomach on a bed, feet up'], ['chair_turned', 0.8, 'sitting sideways on a chair, one arm over the backrest'],
   ['twirl', 0.6, 'mid-turn, the clothes and hair swinging'], ['stretch', 0.6, 'stretching the arms up overhead'], ['curb', 0.8, 'sitting on a curb or low ledge'],
 ]
+
+/** Back photos where the person is simply standing, so a posture can be added. */
+const BACK_STANDING_SUBTYPES = new Set(['sea_gaze', 'sunset_gaze', 'window_gaze', 'viewpoint', 'travel_landmark', 'head_shoulders', 'far_small'])
+/** Standing postures that fit a back photo. */
+const BACK_POSTURES = POSTURE.filter((option) => ['upright', 'slouch', 'lean', 'relaxed', 'foot_pop', 'railing', 'stretch'].includes(option[0]))
 
 /**
  * Expressions written as what the face does (brows, eyes, mouth, nose,
@@ -561,8 +569,12 @@ const OUTFITS: Record<'everyday' | 'fitted' | 'sport', readonly Option[]> = {
 /** Outfit keys only picked for a woman. */
 const FEMALE_ONLY_OUTFITS = new Set(['dress', 'fitted_dress', 'crop', 'leggings'])
 
-function outfitsFor(options: readonly Option[], gender: 'female' | 'male' | null): readonly Option[] {
-  return gender === 'female' ? options : options.filter((option) => !FEMALE_ONLY_OUTFITS.has(option[0]))
+/** Outfits too warm for countries whose dress note asks for light clothes. */
+const WARM_OUTFITS = new Set(['hoodie', 'sweatshirt', 'knit', 'coat', 'puffer', 'scarf', 'fleece', 'leather', 'cardigan', 'coat_layer', 'slim_knit'])
+
+function outfitsFor(options: readonly Option[], gender: 'female' | 'male' | null, persona?: AvatarPersona): readonly Option[] {
+  const hot = gender ? /light clothes/.test(COUNTRY_LOOKS[(persona?.country ?? '').toUpperCase()]?.dress?.[gender] ?? '') : false
+  return options.filter((option) => (gender === 'female' || !FEMALE_ONLY_OUTFITS.has(option[0])) && !(hot && WARM_OUTFITS.has(option[0])))
 }
 
 // ─── 4. How it was shot, and where ───────────────────────────────────────────
@@ -600,7 +612,7 @@ const LIGHTING: readonly Option[] = [
   ['daylight', 5, 'ordinary daylight'], ['window', 3, 'soft light from a window'], ['golden', 2, 'low evening sun'], ['fluorescent', 2, 'flat indoor fluorescent light'],
   ['warm_lamp', 2, 'warm indoor lamp light'], ['night', 1.2, 'at night under street lamps and city lights'], ['neon', 0.8, 'colored neon light at night'],
   ['overcast', 1.5, 'grey overcast light'], ['screen', 0.4, 'lit only by a screen in a dark room'],
-  ['side_sun', 2.5, 'low late-afternoon sun from one side, warm on one side of the face and on the wall or street behind, the other side in soft shade'],
+  ['side_sun', 2.5, 'low late-afternoon sun from one side, warm on one side of the person and on the wall or street behind, the other side in soft shade'],
   ['backlit_shade', 3, 'late afternoon in shade with the bright sky behind as the main light, so the person is slightly backlit: the face a little darker and duller than the sky and as lit as the shade around it, the sky blown out to near white'],
 ]
 
@@ -743,7 +755,10 @@ function describePerson(
     const dyed = young && random() < 0.18
     const color = take('hairColor', dyed ? DYED_HAIR : NATURAL_HAIR[ancestry])
     const trend = look?.hair?.[table]
-    const hair = [`${take('hairLength', HAIR_LENGTH[table])} ${color} hair, ${take('hairStyle', HAIR_STYLE[table])}`]
+    const length = take('hairLength', HAIR_LENGTH[table])
+    // Short hair and bobs are too short to tie up.
+    const styles = ['short', 'bob', 'buzz'].includes(attributes.hairLength) ? HAIR_STYLE[table].filter((option) => !TIED_STYLES.has(option[0])) : HAIR_STYLE[table]
+    const hair = [`${length} ${color} hair, ${take('hairStyle', styles)}`]
     // The fringe and hairline change how the forehead, and so the whole face, reads.
     if (table === 'female') hair.push(take('fringe', foreheadFringe(attributes)))
     const forehead = table === 'female' ? ['none', 'curtain', 'wispy'].includes(attributes.fringe) : attributes.hairStyle !== 'fringe'
@@ -838,12 +853,14 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     lines.push(`Expression and pose: ${[take('expression', EXPRESSIONS), take('headPose', HEAD_POSES), take('handPose', handPoses), bodyPose].filter(Boolean).join(', ')}.`)
     // Selfie takers look at their own face on the screen, which sits just below the lens.
     if (selfie && GAZE_AT_SCREEN_SUBTYPES.has(subtype.key)) lines.push('Gaze: looking at their own face on the phone screen just below the lens, so the face is toward the camera and the eyes look almost straight into it, only a tiny bit lower; the eyes are on the phone, not looking away, sideways or down.')
-    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}${dressNote(persona, gender)}.`)
+    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender, persona))}${dressNote(persona, gender)}.`)
     lines.push(`Setting: ${takeLocation(mirror ? 'mirror' : random() < 0.55 ? 'indoor' : 'outdoor')}, consistent with ${place}.`)
   } else if (category === 'back') {
     lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: true }, take, random, attributes)}. The face is not visible at all.`)
-    lines.push(`Framing: ${subtype.text}; ${take('posture', POSTURE)}; taken by a friend from behind.`)
-    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}${dressNote(persona, gender)}.`)
+    // The subtype already fixes what the body does unless the person is just standing somewhere.
+    const posture = BACK_STANDING_SUBTYPES.has(subtype.key) ? `; ${take('posture', BACK_POSTURES)}` : ''
+    lines.push(`Framing: ${subtype.text}${posture}; taken by a friend from behind.`)
+    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender, persona))}${dressNote(persona, gender)}.`)
     lines.push(`Setting: consistent with ${subtype.key === 'travel_landmark' ? 'a trip abroad' : place}.`)
     env = ['window_gaze', 'concert'].includes(subtype.key) ? 'indoor' : 'outdoor'
   } else if (category === 'body') {
@@ -851,7 +868,7 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     const mirror = ['mirror_neck_down', 'mirror_phone_up'].includes(subtype.key)
     lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: false }, take, random, attributes)}. The face is not visible: it is out of frame, turned away or hidden.`)
     lines.push(`Framing: ${subtype.text}; ${take('posture', POSTURE)}.`)
-    if (subtype.key !== 'silhouette' && subtype.key !== 'shadow') lines.push(`Wearing ${take('outfit', outfitsFor(sport ? OUTFITS.sport : OUTFITS.fitted, gender))}. The photo shows the outfit and the person's build in a natural, non-suggestive way.`)
+    if (subtype.key !== 'silhouette' && subtype.key !== 'shadow') lines.push(`Wearing ${take('outfit', outfitsFor(sport ? OUTFITS.sport : OUTFITS.fitted, gender, persona))}. The photo shows the outfit and the person's build in a natural, non-suggestive way.`)
     if (mirror) lines.push(`Setting: ${takeLocation('mirror')}.`)
     else if (['elevator_mirror', 'fitting_room', 'gym_mirror'].includes(subtype.key)) {
       env = 'indoor'
@@ -864,7 +881,7 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     lines.push(`Account owner: ${describePerson(persona, { face: !hidden, body: false, hair: true }, take, random, attributes)}.`)
     lines.push(`Framing: ${subtype.text}. The others are ordinary adults of a similar age and background, each looking different from the account owner.`)
     if (!hidden) lines.push(`Expression: ${take('expression', EXPRESSIONS)}.`)
-    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}${dressNote(persona, gender)}.`)
+    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender, persona))}${dressNote(persona, gender)}.`)
     lines.push(`Setting: consistent with ${subtype.key === 'trip_group' ? 'a trip' : place}.`)
     env = subtype.key === 'table_group' ? 'indoor' : ['trip_group', 'friends_back', 'team'].includes(subtype.key) ? 'outdoor' : 'any'
   } else if (category === 'part') {

@@ -26,11 +26,12 @@ const CAMERA = [
   'Phone-camera rendering: slightly over-sharpened edges, small-sensor noise in the shadows, auto white balance a bit off (slightly too warm or too cool).',
 ]
 
-const LIGHT = [
-  'Light: only what the place itself gives, with its natural falloff (the sky, a window, ceiling lights or street lamps); soft shadows under the chin, nose and furniture; mixed color temperatures where different lights meet; whites that are slightly grey or slightly warm, not pure.',
-  'Any face is lit like its surroundings and no more brightly: no extra light falling on the face.',
-  'Colors are muted and true to life, like an uncorrected phone photo: no boosted saturation, no HDR halo, no color grade, no glow, no rim light, no dramatic shadows.',
-]
+/** The camera line for photos without a person: the beauty-app words only invite a face. */
+const CAMERA_NO_PEOPLE = 'Straight out of the phone\'s default camera app: no portrait mode, no editing. The background is as sharp as the subject, no artificial bokeh.'
+
+const LIGHT = 'Light: only what the place itself gives, with its natural falloff (the sky, a window, ceiling lights or street lamps); soft natural shadows; mixed color temperatures where different lights meet; whites that are slightly grey or slightly warm, not pure.'
+const FACE_LIGHT = 'Any face is lit like its surroundings and no more brightly: no extra light falling on the face.'
+const COLORS = 'Colors are muted and true to life, like an uncorrected phone photo: no boosted saturation, no HDR halo, no color grade, no glow, no rim light, no dramatic shadows.'
 
 const TEXTURE = 'Every surface has its real texture and only the shine it really has: matte walls, fabric with visible weave or knit ribs and pilling, faded denim, scuffed leather, smudged glass, worn wood, dull metal. Nothing looks waxed, glossy, plastic or rendered.'
 
@@ -62,7 +63,8 @@ const FLAWS = [
   'the focus landed a little off',
 ]
 
-const AVOID = 'Keep any face proportions exactly as described; do not average them toward a typical face. Avoid everything that marks an AI, stock or retouched image: an averaged beauty face with big round eyes, a tiny pointed nose and a V-line chin, a face lit more brightly than its surroundings, a retouched or beauty-filtered face, perfectly arranged hair, an overall plastic sheen, glossy or airbrushed skin, oversaturated colors, shallow depth of field, a magazine or advertising look.'
+const AVOID_FACE = 'Keep any face proportions exactly as described; do not average them toward a typical face. Avoid an averaged beauty face with big round eyes, a tiny pointed nose and a V-line chin, a face lit more brightly than its surroundings, a retouched or beauty-filtered face, perfectly arranged hair, glossy or airbrushed skin.'
+const AVOID = 'Avoid everything that marks an AI, stock or retouched image: an overall plastic sheen, oversaturated colors, shallow depth of field, a magazine or advertising look.'
 
 /** `count` different flaws for one photo. */
 function pickFlaws(random: Random, count: number): string[] {
@@ -84,13 +86,16 @@ export function phonePhotoRealism(
   const environment = options.environment ?? 'any'
   const people = options.people !== false
   return [
-    ...CAMERA,
-    ...LIGHT,
+    ...(people ? CAMERA : [CAMERA_NO_PEOPLE, CAMERA[1]]),
+    LIGHT,
+    ...(people ? [FACE_LIGHT] : []),
+    COLORS,
     TEXTURE,
     `The background has a few everyday colors that do not match the scene, such as ${CLASHING_COLORS[environment]}.`,
     ...(people ? [SKIN, HAIR[environment], PEOPLE] : []),
     // People taking their own photo frame it with some care, so fewer flaws there.
     `Imperfections in this photo: ${pickFlaws(random, people ? 2 : 3).join('; ')}.`,
+    ...(people ? [AVOID_FACE] : []),
     AVOID,
   ].join('\n')
 }
