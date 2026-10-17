@@ -142,7 +142,7 @@ describe('avatar taxonomy', () => {
       if (spec.category !== 'face') continue
       faces += 1
       expect(spec.prompt).toContain('unmistakably Japanese features')
-      if (spec.attributes.makeup !== 'none') expect(spec.prompt).toContain('Japanese-style makeup')
+      if (!['none', 'minimal'].includes(spec.attributes.makeup)) expect(spec.prompt).toContain('Japanese-style makeup')
     }
     expect(faces).toBeGreaterThan(20)
     const us = pickAvatarSpec(american, seededRandom('us-face'))

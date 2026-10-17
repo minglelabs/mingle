@@ -289,8 +289,8 @@ const COUNTRY_LOOKS: Record<string, CountryLook> = {
   KR: {
     face: 'unmistakably Korean features',
     makeup: 'Korean-style makeup: a fresh, lightly luminous base that still shows skin texture, straight soft brows, a hint of blush on the apples of the cheeks, a gradient lip',
-    hair: { female: 'often long and loosely waved, or a layered cut with face-framing strands', male: 'often a comma-hair or down-perm cut' },
-    dress: { female: 'the clean, coordinated Korean everyday style', male: 'the clean, coordinated Korean everyday style with a relaxed fit' },
+    hair: { female: 'anything from a blunt bob or a wolf cut to a loose perm or long layers', male: 'often a comma-hair or down-perm cut' },
+    dress: { female: 'a Korean everyday style of her own, whether sporty, vintage, street or clean', male: 'a Korean everyday style of his own, whether sporty, street or clean, with a relaxed fit' },
   },
   CN: {
     face: 'unmistakably Chinese features',
@@ -417,14 +417,16 @@ const CHARM_POINTS: readonly Option[] = [
 ]
 
 const HAIR_LENGTH: Record<'female' | 'male', readonly Option[]> = {
-  female: [['short', 1, 'short'], ['bob', 2.5, 'chin-length bob'], ['medium', 3.5, 'shoulder-length'], ['long', 4, 'long'], ['very_long', 1, 'very long']],
+  female: [['short', 1.5, 'short'], ['bob', 3.5, 'chin-length bob'], ['medium', 3.5, 'shoulder-length'], ['long', 2.5, 'long'], ['very_long', 0.5, 'very long']],
   male: [['buzz', 1.5, 'buzz-cut'], ['short', 5, 'short'], ['medium', 2.5, 'medium-length'], ['long', 0.7, 'long'], ['thinning', 0.5, 'thinning']],
 }
 
 const HAIR_STYLE: Record<'female' | 'male', readonly Option[]> = {
   female: [
-    ['straight', 4, 'straight hair worn down'], ['wavy', 3, 'loosely waved hair'], ['curly', 1.5, 'curly hair'], ['ponytail', 2.5, 'hair in a ponytail'],
-    ['bun', 2, 'hair in a messy bun'], ['braid', 1, 'hair in a braid'], ['half_up', 1.5, 'hair half tied up'], ['low_tie', 2, 'hair loosely tied back'],
+    ['straight', 2.5, 'straight hair worn down'], ['wavy', 2, 'loosely waved hair'], ['curly', 1.5, 'curly hair'], ['ponytail', 2.5, 'hair in a ponytail'],
+    ['bun', 2, 'hair in a messy bun'], ['braid', 1, 'hair in a braid'], ['half_up', 1.5, 'hair half tied up with a scrunchie'], ['low_tie', 2, 'hair loosely tied back'],
+    ['claw_clip', 2, 'hair twisted up in a lopsided bun with a claw clip'], ['perm', 1.5, 'a loose wavy perm'], ['wolf', 1.2, 'a layered, slightly grown-out wolf cut'],
+    ['tucked', 2, 'hair tucked behind one ear with a plain bobby pin'], ['roots', 1, 'dyed hair with the roots grown out'],
   ],
   male: [
     ['neat', 3, 'neatly cut hair'], ['messy', 3, 'slightly messy hair'], ['side_part', 2.5, 'side-parted hair'], ['fringe', 2.5, 'hair with a fringe over the forehead'],
@@ -436,9 +438,19 @@ const FACIAL_HAIR: readonly Option[] = [
   ['none', 6, 'clean-shaven'], ['stubble', 2, 'light stubble'], ['mustache', 0.6, 'a mustache'], ['beard', 1, 'a short beard'], ['full_beard', 0.4, 'a full beard'],
 ]
 
+/**
+ * Makeup shapes the face the model draws: with full makeup it reaches for the
+ * typical idol face (defined eyes, glossy lips), and an almost bare face came
+ * out clearly untypical while still pretty (2026-10). So bare and minimal
+ * faces are common, as they are in real selfies.
+ */
 const MAKEUP: readonly Option[] = [
-  ['none', 1.5, 'no makeup'], ['light', 4, 'light everyday makeup'], ['regular', 3.5, 'everyday makeup'], ['bold', 0.7, 'noticeable makeup'],
+  ['none', 3, 'no makeup'], ['minimal', 3.5, 'almost no makeup: sunscreen, brows filled in lightly, a lip balm'],
+  ['light', 2.5, 'light everyday makeup'], ['regular', 1.5, 'everyday makeup'], ['bold', 0.6, 'a bolder look with smudged liner and a matte lip'],
 ]
+
+/** Makeup levels too light to carry a country makeup style. */
+const BARE_MAKEUP = new Set(['none', 'minimal'])
 
 const ACCESSORIES: readonly Option[] = [
   ['none', 10, ''], ['horn_glasses', 2, 'thick-framed glasses'], ['metal_glasses', 2, 'thin metal-framed glasses'], ['earrings', 1.5, 'small earrings'],
@@ -477,6 +489,8 @@ const OUTFITS: Record<'everyday' | 'fitted' | 'sport', readonly Option[]> = {
     ['puffer', 1, 'a padded jacket'], ['scarf', 0.7, 'a sweater with a scarf'], ['suit', 0.7, 'office clothes with a lanyard'], ['uniform', 0.4, 'a work uniform'],
     ['oversized', 1.5, 'oversized streetwear'], ['vintage', 0.8, 'vintage-style clothes'], ['all_black', 1, 'all-black clothes'], ['band_tee', 0.7, 'a faded band T-shirt with no readable text'],
     ['pajamas', 0.6, 'comfortable home clothes'], ['sleeveless', 0.8, 'a sleeveless top'], ['traditional', 0.4, 'the traditional dress of their country'],
+    ['jersey', 1, 'an oversized vintage football jersey with no readable text'], ['fleece', 1, 'a half-zip fleece'], ['windbreaker', 1, 'a nylon windbreaker'],
+    ['leather', 0.8, 'a worn leather jacket over a striped tee'], ['rugby', 0.6, 'a striped rugby shirt'], ['cardigan', 1, 'a cardigan over a plain top'],
   ],
   fitted: [
     ['jeans_tee', 3, 'a tucked-in T-shirt and jeans'], ['slim_knit', 2, 'a fitted knit top and trousers'], ['crop', 1.5, 'a cropped top and high-waisted trousers'],
@@ -691,7 +705,7 @@ function describePerson(
     if (gender === 'male') parts.push(take('facialHair', FACIAL_HAIR))
     if (gender === 'female') {
       const makeup = take('makeup', MAKEUP)
-      parts.push(look?.makeup && attributes.makeup !== 'none' ? `${makeup} in ${look.makeup}` : makeup)
+      parts.push(look?.makeup && !BARE_MAKEUP.has(attributes.makeup) ? `${makeup} in ${look.makeup}` : makeup)
     }
     parts.push(take('accessory', ACCESSORIES))
   }
