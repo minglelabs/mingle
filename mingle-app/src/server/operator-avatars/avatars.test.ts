@@ -145,7 +145,7 @@ describe('avatar taxonomy', () => {
       const spec = pickAvatarSpec(korean, seededRandom(`pose:${index}`))
       if (spec.category !== 'face' && spec.category !== 'partial') continue
       expressions.add(spec.attributes.expression)
-      expect(spec.attributes.headPose).toBeTruthy()
+      if (!['profile', 'high_angle', 'low_angle', 'head_down', 'look_back', 'lying_down'].includes(spec.subtype)) expect(spec.attributes.headPose).toBeTruthy()
       if (spec.attributes.shooter === 'selfie') expect(['arms_crossed', 'pocket', 'cheeks_cupped', 'frame_face', 'hood_strings']).not.toContain(spec.attributes.handPose)
       if (spec.attributes.bodyPose) expect(['waist', 'full']).toContain(spec.attributes.distance)
     }

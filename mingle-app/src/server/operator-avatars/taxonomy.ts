@@ -791,6 +791,8 @@ const OTHER_SHOOTER_SUBTYPES = new Set(['profile', 'look_back', 'laughing', 'hea
 /** Face angles where a selfie taker looks at the screen; the others look elsewhere on purpose. */
 const GAZE_AT_SCREEN_SUBTYPES = new Set(['front', 'high_angle', 'low_angle', 'lying_down', 'hand_cover', 'mask', 'cap_brim', 'hair_cover', 'object_cover'])
 /** Hand poses that need the hand holding the phone. */
+/** Face angles that already fix how the head is held. */
+const HEAD_FIXED_SUBTYPES = new Set(['profile', 'high_angle', 'low_angle', 'head_down', 'look_back', 'lying_down'])
 /** Face photos whose subtype already uses the hands. */
 const HANDS_BUSY_SUBTYPES = new Set(['mirror_phone', 'hand_cover', 'object_cover', 'pet_cover'])
 const TWO_HAND_POSES = new Set(['arms_crossed', 'pocket', 'cheeks_cupped', 'frame_face', 'hood_strings'])
@@ -857,7 +859,10 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     const handPoses = handsBusy ? HAND_POSES.filter((option) => option[0] === 'none') : selfie ? HAND_POSES.filter((option) => !TWO_HAND_POSES.has(option[0])) : HAND_POSES
     // A body pose only shows when the frame reaches below the waist.
     const bodyPose = ['waist', 'full'].includes(attributes.distance) ? take('bodyPose', FRAMED_BODY_POSES) : ''
-    lines.push(`Expression and pose: ${[take('expression', EXPRESSIONS), take('headPose', HEAD_POSES), take('handPose', handPoses), bodyPose].filter(Boolean).join(', ')}.`)
+    // Some angles already fix the head, and "caught laughing" fixes the expression.
+    const headPose = HEAD_FIXED_SUBTYPES.has(subtype.key) ? '' : take('headPose', HEAD_POSES)
+    const expression = subtype.key === 'laughing' ? '' : take('expression', EXPRESSIONS)
+    lines.push(`Expression and pose: ${[expression, headPose, take('handPose', handPoses), bodyPose].filter(Boolean).join(', ') || 'natural'}.`)
     // Selfie takers look at their own face on the screen, which sits just below the lens.
     if (selfie && GAZE_AT_SCREEN_SUBTYPES.has(subtype.key)) lines.push('Gaze: looking at their own face on the phone screen just below the lens, so the face is toward the camera and the eyes look almost straight into it, only a tiny bit lower; the eyes are on the phone, not looking away, sideways or down.')
     lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender, persona))}${dressNote(persona, gender)}.`)
