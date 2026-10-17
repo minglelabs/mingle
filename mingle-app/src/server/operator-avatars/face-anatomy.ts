@@ -16,6 +16,10 @@
  * - "Wide face" is drawn as a chubby face unless the flesh is called lean: the
  *   width has to come from bone.
  * - A long face drawn on purpose looks too long; it stays out of pretty faces.
+ * - Two outlines that real untypical beauties have and the model never draws
+ *   unasked: a soft round outline whose fullness sits only mid-cheek and ends
+ *   in a slim short chin (fullness along the jaw is what made faces chubby),
+ *   and a lean face with prominent front cheekbones instead of an egg oval.
  * - "A small face", a high forehead and a small chin, with the hair pulled
  *   back and no bangs, drew an oversized skull above the forehead. The face
  *   is never called small, the head is said to be in proportion, and a high
@@ -43,6 +47,8 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
     ['short_cheekbone', 1.5, 'a short face whose widest part is broad, high cheekbones', 'distinctive'],
     ['soft_square', 1.2, 'a softly square face, the jaw corners faintly visible on each side', 'distinctive'],
     ['diamond', 1, 'a diamond-shaped face: a narrower forehead and chin, widest at the cheekbones', 'distinctive'],
+    ['soft_round_slim_chin', 1.5, 'a soft, rounded outline widest across the middle of the cheeks, curving smoothly with no corners to a slim, short chin; soft flesh on the cheeks but none along the jaw', 'distinctive'],
+    ['lean_front_cheekbones', 1.5, 'a lean face whose bone structure shows, not a smooth egg-shaped oval: prominent front cheekbones that catch the light with a slight hollow below them, and a jaw that is neither angular nor V-shaped', 'distinctive'],
     ['high_forehead', 1.2, 'a high, wide forehead over a short lower face', 'distinctive'],
     ['long', 1, 'a long face', 'plain'],
     ['round_broad', 1, 'a broad, round face', 'plain'],
@@ -164,13 +170,14 @@ const PRETTY_FIXED: Readonly<Record<string, readonly string[]>> = {
 /**
  * Distinctive traits that still pulled a striking face down to a cute, round
  * one when scored (a short compact face, a short midface, full lifting
- * cheeks, a wide mouth); they stay for ordinary and pleasant faces only.
+ * cheeks, a wide mouth), or broke the harmony (a longer midface made a
+ * pretty face plain); they stay for ordinary and pleasant faces only.
  */
 const NOT_FOR_STRIKING: Readonly<Record<string, readonly string[]>> = {
   faceShape: ['short_cheekbone'],
   cheekbones: ['apple'],
   lowerFace: ['short'],
-  midface: ['short'],
+  midface: ['short', 'slightly_long'],
   mouthWidth: ['wide'],
 }
 
