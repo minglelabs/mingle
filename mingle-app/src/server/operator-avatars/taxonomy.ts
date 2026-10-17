@@ -526,7 +526,7 @@ const HAND_POSES: readonly Option[] = [
   ['hair', 1, 'a hand pushing the hair back'], ['tuck_hair', 1.2, 'tucking hair behind one ear'], ['earring', 0.6, 'touching an earring'],
   ['cover_mouth', 1, 'a hand resting lightly near the mouth'], ['sweater_paw', 0.8, 'a sleeve pulled over the hand, held near the face'],
   ['head_top', 0.6, 'a hand resting on top of the head'], ['shade_eyes', 0.5, 'a hand shading the eyes from the sun'],
-  ['glasses', 0.6, 'pushing up a pair of glasses'], ['collar', 0.6, 'holding the jacket collar'], ['straw', 0.8, 'sipping a drink through a straw'],
+  ['glasses', 0.6, 'pushing up a pair of glasses'], ['collar', 0.6, 'fiddling with the neckline of the top'], ['straw', 0.8, 'sipping a drink through a straw'],
   ['cup', 1.2, 'holding a cup'], ['food', 0.6, 'holding a snack up near the face'], ['flower', 0.5, 'holding a flower near the face'],
   ['point', 0.5, 'pointing at the camera'], ['pocket', 1, 'a hand in a pocket'], ['arms_crossed', 0.6, 'arms crossed'],
   ['cheeks_cupped', 0.6, 'both hands cupping the cheeks'], ['frame_face', 0.4, 'both hands framing the face'], ['hood_strings', 0.5, 'both hands pulling the hood strings'],
@@ -750,7 +750,7 @@ function describePerson(
   // The face is picked before the hair: a high forehead needs hair over it.
   const striking = attributes.attractiveness === 'striking'
   const face = !show.face ? '' : striking
-    ? `the overall impression of the face: ${take('impression', IMPRESSIONS[table])}; ${subtleTraits(take, random, table)}; ${STRIKING_REAL_FACE}`
+    ? `the overall impression of the face: ${take('impression', IMPRESSIONS[table])}; ${subtleTraits(take, random, table, ancestry === 'east_asian' || ancestry === 'southeast_asian')}; ${STRIKING_REAL_FACE}`
     : describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade)
   if (show.hair) {
     const young = persona.age === null || persona.age < 35
@@ -832,7 +832,8 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     return take('location', LOCATIONS[kind])
   }
   const shot = () => [
-    take('quality', mirrorShot ? QUALITIES.filter((option) => option[0] !== 'front_cam') : QUALITIES),
+    // Front-camera distortion only comes from a selfie.
+    take('quality', mirrorShot || (attributes.shooter && attributes.shooter !== 'selfie') ? QUALITIES.filter((option) => option[0] !== 'front_cam') : QUALITIES),
     take('lighting', lightingFor(env)),
     take('filter', FILTERS),
     take('flaw', flawsFor(mirrorShot)),

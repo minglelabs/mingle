@@ -320,11 +320,13 @@ const CUTE_DEFAULTS = new Set(['faceShape:round', 'eyeSpacing:wide', 'chin:weak'
  * in the attributes. Forcing one onto the eyes, nose or mouth felt rigid;
  * with this many picks from the whole list they land there often anyway.
  */
-export function subtleTraits(take: Picker, random: Random, gender: 'female' | 'male'): string {
-  // "Strong for a woman" only makes sense on a woman.
-  const areas = gender === 'male'
-    ? SUBTLE_TRAITS.map(([area, options]) => [area, area === 'chin' ? options.filter((option) => option[0] !== 'strong') : options] as const)
-    : SUBTLE_TRAITS
+export function subtleTraits(take: Picker, random: Random, gender: 'female' | 'male', eastAsianEyes = true): string {
+  const areas = SUBTLE_TRAITS
+    // "Strong for a woman" only makes sense on a woman.
+    .map(([area, options]) => [area, area === 'chin' && gender === 'male' ? options.filter((option) => option[0] !== 'strong') : options] as const)
+    // Monolids and inner-fold creases are East and Southeast Asian eyelids.
+    .filter(([area]) => eastAsianEyes || area !== 'eyelid')
+    .map(([area, options]) => [area, area === 'eyeShape' && !eastAsianEyes ? options.filter((option) => option[0] !== 'inner_fold') : options] as const)
   const pool = areas.map((_, index) => index)
   const picked: string[] = []
   for (let left = random() < 0.5 ? 3 : 4; left > 0 && pool.length; left -= 1) {
