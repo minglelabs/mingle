@@ -373,23 +373,6 @@ const ATTRACTIVENESS: readonly Option[] = [
   ['striking', 30, 'not the typical AI beauty: a face with a distinctive look of its own, and still overwhelmingly beautiful, the kind of face people turn to look at; the distinctiveness adds to the beauty, never takes away from it'],
 ]
 
-/**
- * Small marks of a real person for a striking face. Asked in the abstract,
- * the model draws a beauty that is nearly flawless (95) but has an AI
- * finish: perfect symmetry, glassy eyes, silky uniform hair, spotless skin.
- * Two of these lower that certainty without touching the face's beauty.
- */
-const REAL_PERSON_TELLS: readonly Option[] = [
-  ['asymmetry', 3, 'the slight natural asymmetry of a real face: one eye a touch smaller or one brow a little higher'],
-  ['uneven_smile', 2, 'a smile that lifts one corner of the mouth a little more'],
-  ['blemish', 2.5, 'one or two tiny blemishes or a faint healed spot on the skin'],
-  ['brow_hairs', 2, 'brows with a few stray hairs, not perfectly groomed'],
-  ['matte_eyes', 2.5, 'eyes with ordinary, small reflections, not glassy or sparkling'],
-  ['hair_flyaways', 2.5, 'hair with some frizz and static flyaways, not silky or uniform'],
-  ['dry_lips', 1.5, 'lips with their real texture, a little dry at the center'],
-  ['makeup_wear', 1.5, 'makeup worn a few hours, slightly faded on the lips and creased at the eyes'],
-]
-
 /** The overall impression of a striking face, the way Koreans describe faces (고양이상, 강아지상 …). */
 const IMPRESSIONS: Record<'female' | 'male', readonly Option[]> = {
   female: [
@@ -633,13 +616,6 @@ function ageBand(age: number | null, gender: 'female' | 'male' | null = null): s
 
 type Picker = (axis: string, options: readonly Option[]) => string
 
-/** Two different marks of a real person, kept as tell1/tell2 in the attributes. */
-function realPersonTells(take: Picker, random: Random): string {
-  const first = REAL_PERSON_TELLS[Math.floor(random() * REAL_PERSON_TELLS.length)]
-  const rest = REAL_PERSON_TELLS.filter((option) => option[0] !== first[0])
-  return [take('tell1', [first]), take('tell2', rest)].join('; ')
-}
-
 /** Who the person is, as far as this kind of photo shows them. */
 function describePerson(
   persona: AvatarPersona,
@@ -667,7 +643,7 @@ function describePerson(
   if (show.face && look?.face) parts.push(`with ${look.face}`)
   // The face is picked before the hair: a high forehead needs hair over it.
   const striking = attributes.attractiveness === 'striking'
-  const face = !show.face ? '' : striking ? `the overall impression of the face: ${take('impression', IMPRESSIONS[table])}; ${realPersonTells(take, random)}` : describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade)
+  const face = !show.face ? '' : striking ? `the overall impression of the face: ${take('impression', IMPRESSIONS[table])}` : describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade)
   if (show.hair) {
     const young = persona.age === null || persona.age < 35
     const dyed = young && random() < 0.18

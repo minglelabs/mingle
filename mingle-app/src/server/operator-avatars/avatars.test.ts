@@ -117,10 +117,6 @@ describe('avatar taxonomy', () => {
         if (spec.attributes.attractiveness === 'striking') {
           expect(spec.prompt).toContain('not the typical AI beauty')
           expect(spec.prompt).toContain('the overall impression of the face: ')
-          // Two different marks of a real person keep it from an AI finish.
-          expect(spec.attributes.tell1).toBeTruthy()
-          expect(spec.attributes.tell2).toBeTruthy()
-          expect(spec.attributes.tell1).not.toBe(spec.attributes.tell2)
           expect(spec.prompt).not.toContain('unlike a typical pretty face')
           expect(spec.prompt).not.toContain('what people notice about the face')
         } else {
