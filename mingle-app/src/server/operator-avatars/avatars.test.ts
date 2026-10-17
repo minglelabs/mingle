@@ -113,17 +113,12 @@ describe('avatar taxonomy', () => {
       }
       if (spec.category === 'face') {
         expect(spec.prompt).toContain('unmistakably Korean features')
-        // The face is described feature by feature: a few distinctive traits on a pretty middle.
-        expect(spec.prompt).toContain('face: ')
+        // Only the one to three traits that break the typical face are named.
         expect(spec.prompt).toContain('what people notice about the face')
-        if (spec.attributes.attractiveness !== 'ordinary') {
-          expect(['lean', 'youthful']).toContain(spec.attributes.flesh)
-          expect(spec.prompt).toContain('the most noticeable traits, kept exactly as described')
-        }
-        // A high forehead always gets hair over or around it, and the head stays in proportion.
-        expect(spec.prompt).toContain('the skull and the top of the head are in natural proportion')
+        if (spec.attributes.attractiveness !== 'ordinary') expect(spec.prompt).toContain('face, unlike a typical pretty face: ')
         if (['high_round', 'broad'].includes(spec.attributes.forehead) || spec.attributes.faceShape === 'high_forehead') {
           expect(spec.attributes.fringe).not.toBe('none')
+          expect(spec.prompt).toContain('the head in natural proportion to the face')
         }
         expect(spec.prompt).not.toMatch(/beautiful|good-looking/i)
       }
@@ -388,13 +383,12 @@ describe('describeFace', () => {
     return { prompt: describeFace(take, random, grade), attributes }
   }
 
-  it('gives a pretty face two or three distinctive traits and nothing plain', () => {
+  it('names one or two distinctive traits on a pretty face and nothing plain', () => {
     for (let index = 0; index < 200; index += 1) {
-      const { prompt, attributes } = kinds('striking', `striking:${index}`)
-      const signature = prompt.split('kept exactly as described: ')[1]?.split('; ') ?? []
-      expect(signature.length).toBeGreaterThanOrEqual(2)
-      expect(signature.length).toBeLessThanOrEqual(3)
-      expect(['lean', 'youthful']).toContain(attributes.flesh)
+      const { prompt } = kinds('striking', `striking:${index}`)
+      const traits = prompt.split('unlike a typical pretty face: ')[1]?.split('; ').filter((trait) => !trait.startsWith('the head in')) ?? []
+      expect(traits.length).toBeGreaterThanOrEqual(1)
+      expect(traits.length).toBeLessThanOrEqual(2)
       expect(prompt).not.toMatch(/puffy|bulbous|heavy chin|a long face|broad, round face|dark under-eye|sparse/)
       expect(prompt).not.toMatch(/slightly long midface|wide mouth for the face|short face whose|bone structure shows/)
     }
@@ -402,6 +396,6 @@ describe('describeFace', () => {
 
   it('lets ordinary faces carry plain traits', () => {
     const plain = Array.from({ length: 100 }, (_, index) => kinds('ordinary', `ordinary:${index}`).prompt).filter((prompt) => /puffy|bulbous|heavy chin|a long face|broad, round face|round cheeks|flat|thin lips|small, narrow eyes|low, narrow forehead|long midface|long philtrum|large nose|sparse|dark under-eye|wide, square jaw/.test(prompt))
-    expect(plain.length).toBeGreaterThan(90)
+    expect(plain.length).toBeGreaterThan(80)
   })
 })

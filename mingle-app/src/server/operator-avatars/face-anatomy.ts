@@ -33,6 +33,12 @@
  *   is never called small, the head is said to be in proportion, and a high
  *   forehead gets bangs or face-framing hair (see `foreheadFringe`).
  *
+ * - Spelling out every feature (and adding "do not …" lists) lowered the
+ *   score every time; the model's own face is pretty, and the best drafts
+ *   named only two or three traits. So only the traits that break the
+ *   typical face are named; the axes' common options are kept as the middle
+ *   those traits are picked against.
+ *
  * Every option is one of three kinds: `common` (the pretty middle),
  * `distinctive` (off the ideal yet attractive) and `plain` (off the ideal in a
  * way that makes the face more ordinary). The attractiveness grade decides how
@@ -171,11 +177,6 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
   ]],
 ]
 
-/** Axes kept fixed for a pretty face: a full, round face or a long one stops reading as pretty. */
-const PRETTY_FIXED: Readonly<Record<string, readonly string[]>> = {
-  flesh: ['lean', 'youthful'],
-}
-
 /**
  * Distinctive traits that pulled a striking face down when scored: a broad
  * short face and a wide mouth (a short midface and full cheeks were fine
@@ -192,9 +193,9 @@ const NOT_FOR_STRIKING: Readonly<Record<string, readonly string[]>> = {
 
 /** How many distinctive and plain traits each grade gets. */
 const GRADE_MIX: Record<FaceGrade, { distinctive: readonly [min: number, max: number]; plain: readonly [min: number, max: number] }> = {
-  striking: { distinctive: [2, 3], plain: [0, 0] },
-  pleasant: { distinctive: [2, 3], plain: [0, 1] },
-  ordinary: { distinctive: [1, 2], plain: [2, 3] },
+  striking: { distinctive: [1, 2], plain: [0, 0] },
+  pleasant: { distinctive: [1, 2], plain: [0, 1] },
+  ordinary: { distinctive: [0, 1], plain: [1, 2] },
 }
 
 function between(random: Random, [min, max]: readonly [number, number]): number {
@@ -206,37 +207,37 @@ function takeOne(random: Random, pool: number[]): number {
 }
 
 /**
- * "face: …; the most noticeable traits, kept exactly as described: …".
- * Picks which axes carry the distinctive and plain traits, then takes every
- * axis from the kind it was given; the rest stay in the pretty middle.
+ * "face, unlike a typical pretty face: …" naming only the one to three
+ * traits that break the typical face. The model's own default face is
+ * already pretty; spelling out every feature, or adding "do not …" lists,
+ * broke its harmony and scored lower every time (the best drafts named
+ * two or three things), so the other features are left to it.
  */
 export function describeFace(take: Picker, random: Random, grade: FaceGrade): string {
   const mix = GRADE_MIX[grade]
   const kinds = new Map<number, Kind>()
   const usable = (axis: string, feature: Feature) => !(grade === 'striking' && NOT_FOR_STRIKING[axis]?.includes(feature[0]))
   const withKind = (kind: Kind) =>
-    FACE_AXES.map((_, index) => index).filter((index) => !kinds.has(index) && FACE_AXES[index][1].some((feature) => feature[3] === kind && usable(FACE_AXES[index][0], feature)) && !(grade !== 'ordinary' && FACE_AXES[index][0] in PRETTY_FIXED))
+    FACE_AXES.map((_, index) => index).filter((index) => !kinds.has(index) && FACE_AXES[index][1].some((feature) => feature[3] === kind && usable(FACE_AXES[index][0], feature)))
   for (const kind of ['distinctive', 'plain'] as const) {
     const pool = withKind(kind)
     for (let count = between(random, mix[kind]); count > 0 && pool.length; count -= 1) kinds.set(takeOne(random, pool), kind)
   }
 
-  const lines: string[] = []
-  const signature: string[] = []
+  const traits: string[] = []
+  let highForehead = false
   FACE_AXES.forEach(([axis, features], index) => {
-    const kind = kinds.get(index) ?? 'common'
-    const fixed = grade !== 'ordinary' ? PRETTY_FIXED[axis] : undefined
-    const excluded = grade === 'striking' ? NOT_FOR_STRIKING[axis] ?? [] : []
-    const options = features.filter((feature) => (fixed ? fixed.includes(feature[0]) : feature[3] === kind) && !excluded.includes(feature[0])).map(([key, weight, text]) => [key, weight, text] as const)
-    const text = take(axis, options)
-    if (!text) return
-    lines.push(text)
-    if (kind === 'distinctive') signature.push(text)
+    const kind = kinds.get(index)
+    if (!kind) return
+    const options = features.filter((feature) => feature[3] === kind && usable(axis, feature))
+    const text = take(axis, options.map(([key, weight, label]) => [key, weight, label] as const))
+    const key = options.find((feature) => feature[2] === text)?.[0] ?? ''
+    if (HIGH_FOREHEADS.has(key)) highForehead = true
+    if (text) traits.push(text)
   })
-  // "Small face", a high forehead and a small chin made the model shrink the face inside an ordinary head, leaving an oversized skull above the forehead.
-  lines.push('the face is of ordinary size for the head; the skull and the top of the head are in natural proportion, not enlarged')
-  const kept = signature.length ? `; the most noticeable traits, kept exactly as described: ${signature.join('; ')}` : ''
-  return `face: ${lines.join('; ')}${kept}`
+  if (!traits.length) return ''
+  // A high forehead made the model draw an oversized skull above it.
+  return `face, unlike a typical pretty face: ${traits.join('; ')}${highForehead ? '; the head in natural proportion to the face' : ''}`
 }
 
 /** Forehead traits that need hair over or around the forehead to keep the head in proportion. */
