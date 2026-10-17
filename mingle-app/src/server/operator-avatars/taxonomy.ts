@@ -506,10 +506,18 @@ type ShotEnv = 'indoor' | 'outdoor' | 'any'
 const INDOOR_ONLY_LIGHT = new Set(['window', 'fluorescent', 'warm_lamp', 'screen'])
 const OUTDOOR_ONLY_LIGHT = new Set(['golden', 'overcast', 'neon', 'backlit_shade', 'night', 'side_sun'])
 
-function lightingFor(env: ShotEnv): readonly Option[] {
-  if (env === 'indoor') return LIGHTING.filter((option) => !OUTDOOR_ONLY_LIGHT.has(option[0]))
-  if (env === 'outdoor') return LIGHTING.filter((option) => !INDOOR_ONLY_LIGHT.has(option[0]))
-  return LIGHTING
+/**
+ * Light that keeps a striking face striking. The same face scored 85 evenly
+ * lit and 40 with side sun putting half of it in shade; harsh, dim or colored
+ * light makes a beautiful face plain.
+ */
+const FLATTERING_LIGHT = new Set(['daylight', 'window', 'golden', 'overcast', 'warm_lamp'])
+
+function lightingFor(env: ShotEnv, flattering = false): readonly Option[] {
+  const light = flattering ? LIGHTING.filter((option) => FLATTERING_LIGHT.has(option[0])) : LIGHTING
+  if (env === 'indoor') return light.filter((option) => !OUTDOOR_ONLY_LIGHT.has(option[0]))
+  if (env === 'outdoor') return light.filter((option) => !INDOOR_ONLY_LIGHT.has(option[0]))
+  return light
 }
 
 /** Mirror smudges only make sense in a mirror shot. */
@@ -700,9 +708,11 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     mirrorShot = kind === 'mirror'
     return take('location', LOCATIONS[kind])
   }
+  // Decided by the time the shot is described: describePerson has run.
+  const striking = () => attributes.attractiveness === 'striking' && ['face', 'partial'].includes(category)
   const shot = () => [
     take('quality', mirrorShot ? QUALITIES.filter((option) => option[0] !== 'front_cam') : QUALITIES),
-    take('lighting', lightingFor(env)),
+    take('lighting', lightingFor(env, striking())),
     take('filter', FILTERS),
     take('flaw', flawsFor(mirrorShot)),
   ].filter(Boolean).join('; ')
@@ -771,7 +781,7 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
   }
 
   if (category !== 'other') lines.push(`Camera and light: ${shot()}.`)
-  lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category), environment: env }))
+  lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category), environment: env, clearSkin: striking() }))
   lines.push(RULES)
 
   const categoryKo = AVATAR_CATEGORIES.find((entry) => entry.key === category)?.ko ?? category

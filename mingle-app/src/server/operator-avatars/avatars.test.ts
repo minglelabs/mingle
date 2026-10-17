@@ -113,6 +113,11 @@ describe('avatar taxonomy', () => {
       }
       if (spec.category === 'face') {
         expect(spec.prompt).toContain('unmistakably Korean features')
+        // A striking face gets light and skin that keep it striking.
+        if (spec.attributes.attractiveness === 'striking') {
+          expect(['daylight', 'window', 'golden', 'overcast', 'warm_lamp']).toContain(spec.attributes.lighting)
+          expect(spec.prompt).toContain('clear, healthy skin')
+        }
         // Only the one to three traits that break the typical face are named.
         expect(spec.prompt).toContain('what people notice about the face')
         if (spec.attributes.attractiveness !== 'ordinary') expect(spec.prompt).toContain('face, subtly unlike a typical pretty face: ')
