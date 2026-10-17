@@ -291,13 +291,22 @@ const SUBTLE_TRAITS: ReadonlyArray<readonly [area: string, options: readonly Opt
   ['hair', [['thin_hair', 0.6, 'hair very slightly thin in volume']]],
   ['smileLines', [['nasolabial', 0.6, 'the faintest smile lines beside the nose']]],
   ['dimples', [['dimples', 0.7, 'small dimples']]],
+  // Added beyond the founder's list, in the same spirit.
+  ['eyeShape', [['downturned', 0.8, 'outer eye corners turned very slightly down'], ['small_eyes', 0.6, 'eyes very slightly small for the face'], ['inner_fold', 0.8, 'a thin inner-fold crease that hides near the inner corner']]],
+  ['noseShape', [['wide_nostrils', 0.6, 'nostrils very slightly wide'], ['short_nose', 0.7, 'a very slightly short nose'], ['bump', 0.5, 'a tiny bump on the nose bridge']]],
+  ['lipShape', [['thin_upper', 0.7, 'a very slightly thin upper lip'], ['soft_line', 0.7, 'a soft lip line, not sharply drawn'], ['corners_down', 0.5, 'mouth corners very slightly turned down at rest']]],
+  ['brows', [['uneven_brows', 0.7, 'brows very slightly uneven'], ['sparse_tail', 0.6, 'brows a little sparse toward the tail'], ['low_brows', 0.6, 'brows sitting very slightly low over the eyes']]],
+  ['ears', [['ears_out', 0.5, 'ears that stick out very slightly']]],
+  ['skinMarks', [['freckles', 0.6, 'a few faint freckles'], ['moles', 0.7, 'two or three small moles on the face']]],
+  ['jaw', [['jaw_corners', 0.6, 'jaw corners faintly visible']]],
+  ['hairline', [['uneven_hairline', 0.6, 'a slightly uneven hairline with baby hairs']]],
 ]
 
 /** Areas of the eyes, nose and mouth: every striking face gets one detail there, since those read as most typical. */
-const FEATURE_AREAS = new Set(['eyeSpacing', 'eyeCorners', 'eyelid', 'lips', 'noseBridge', 'noseTip'])
+const FEATURE_AREAS = new Set(['eyeSpacing', 'eyeCorners', 'eyelid', 'eyeShape', 'lips', 'lipShape', 'noseBridge', 'noseTip', 'noseShape'])
 
 /**
- * One subtle detail on the eyes, nose or mouth plus one or two elsewhere,
+ * One subtle detail on the eyes, nose or mouth plus two or three elsewhere,
  * each from a different area, kept as subtle_<area> in the attributes.
  */
 export function subtleTraits(take: Picker, random: Random, gender: 'female' | 'male'): string {
@@ -313,7 +322,7 @@ export function subtleTraits(take: Picker, random: Random, gender: 'female' | 'm
   }
   const picked = [
     ...pickFrom(areas.filter(([area]) => FEATURE_AREAS.has(area)), 1),
-    ...pickFrom(areas.filter(([area]) => !FEATURE_AREAS.has(area)), random() < 0.5 ? 1 : 2),
+    ...pickFrom(areas.filter(([area]) => !FEATURE_AREAS.has(area)), random() < 0.5 ? 2 : 3),
   ]
   return `very subtle details of a real face, each only just visible: ${picked.join('; ')}`
 }
