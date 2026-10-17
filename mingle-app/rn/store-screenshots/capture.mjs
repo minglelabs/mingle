@@ -12,7 +12,7 @@
 //   cd mingle-app/rn/store-screenshots && npm install
 //   node capture.mjs [--base http://localhost:8538] [--only ko,en]
 //
-// Output: captures/<lang>/{feed,translation,comments,chat,search,hash-rush,hash-rush-maps}.png
+// Output: captures/<lang>/{translation,comments,chat,search,hash-rush,hash-rush-maps}.png
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -199,7 +199,6 @@ for (const lang of Object.keys(LANGS)) {
   await fs.mkdir(dir, { recursive: true });
   const translatePost = lang.startsWith('zh') ? TRANSLATE_POST.zh : (TRANSLATE_POST[lang] || TRANSLATE_POST.default);
 
-  await capture(lang, dir, 'feed', `${BASE}/${route}/feed?postId=${FEED_POST[lang] || FEED_POST.default}&${NATIVE_QUERY}`, null, { translatePost: true });
   await capture(lang, dir, 'translation', `${BASE}/${route}/feed?postId=${translatePost}&${NATIVE_QUERY}`, null, { translatePost: true });
   await capture(lang, dir, 'comments', `${BASE}/${route}/feed?postId=${COMMENT_POST}&${NATIVE_QUERY}`, async (p) => {
     // the comment button is the second round icon button on the active card
