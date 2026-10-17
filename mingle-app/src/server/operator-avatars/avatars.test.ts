@@ -120,7 +120,7 @@ describe('avatar taxonomy', () => {
           expect(spec.attributes.fringe).not.toBe('none')
           expect(spec.prompt).toContain('the head in natural proportion to the face')
         }
-        expect(spec.prompt).not.toMatch(/beautiful|good-looking/i)
+        if (spec.attributes.attractiveness !== 'striking') expect(spec.prompt).not.toMatch(/beautiful|good-looking/i)
       }
     }
   })

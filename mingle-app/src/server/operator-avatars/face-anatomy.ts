@@ -187,6 +187,9 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
 const NOT_FOR_STRIKING: Readonly<Record<string, readonly string[]>> = {
   midface: ['slightly_long'],
   mouthWidth: ['wide'],
+  // A heavy upper lid and a short rounded chin drew the same plain, round face twice (50).
+  eyeCrease: ['hidden'],
+  lowerFace: ['short', 'soft_weak'],
   // A bony face with prominent front cheekbones read as masculine (scored 50).
   faceShape: ['short_cheekbone', 'lean_front_cheekbones'],
 }

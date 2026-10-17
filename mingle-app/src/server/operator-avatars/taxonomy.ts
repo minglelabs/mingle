@@ -360,14 +360,14 @@ const SKIN_FEATURES: readonly Option[] = [
 
 /**
  * A profile picture is the best photo someone has of themself, so most look
- * at least likable. The words "beautiful" and "good-looking" are left out on
- * purpose: they pull the face toward the averaged AI beauty. Attractiveness
- * comes from the face anatomy (see face-anatomy.ts) and the charm point.
+ * at least likable. Beauty words alone pull the face toward the averaged AI
+ * beauty, and leaving them out made faces plain; a striking face says it
+ * plainly and gets one or two untypical traits from face-anatomy.ts.
  */
 const ATTRACTIVENESS: readonly Option[] = [
   ['ordinary', 30, 'an ordinary-looking person'],
-  ['pleasant', 40, 'a likable, pleasant face'],
-  ['striking', 30, 'a striking, very pretty face that is not the typical AI or golden-ratio beauty'],
+  ['pleasant', 40, 'a likable, pretty face'],
+  ['striking', 30, 'exceptionally beautiful, the kind of face people turn to look at, yet not the typical AI beauty'],
 ]
 
 /** What people notice first about the face; gives it a specific appeal without averaging it. */
