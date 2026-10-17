@@ -47,7 +47,7 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
     ['short_cheekbone', 1.5, 'a short face whose widest part is broad, high cheekbones', 'distinctive'],
     ['soft_square', 1.2, 'a softly square face, the jaw corners faintly visible on each side', 'distinctive'],
     ['diamond', 1, 'a diamond-shaped face: a narrower forehead and chin, widest at the cheekbones', 'distinctive'],
-    ['soft_round_slim_chin', 1.5, 'a soft, rounded outline widest across the middle of the cheeks, curving smoothly with no corners to a slim, short chin; soft flesh on the cheeks but none along the jaw', 'distinctive'],
+    ['soft_round_slim_chin', 1.5, 'a soft, rounded outline widest across the middle of the cheeks, curving smoothly with no corners to a slim, short chin, with soft flesh on the cheeks but none along the jaw', 'distinctive'],
     ['lean_front_cheekbones', 1.5, 'a lean face whose bone structure shows, not a smooth egg-shaped oval: prominent front cheekbones that catch the light with a slight hollow below them, and a jaw that is neither angular nor V-shaped', 'distinctive'],
     ['high_forehead', 1.2, 'a high, wide forehead over a short lower face', 'distinctive'],
     ['long', 1, 'a long face', 'plain'],
