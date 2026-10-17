@@ -388,6 +388,14 @@ const STRIKING_STYLES: readonly Option[] = [
   ['one_trait', 1, 'not the typical AI beauty: a distinctive look of their own, and still overwhelmingly beautiful, the kind of face people turn to look at; the distinctiveness adds to the beauty, never takes away from it'],
 ]
 
+/**
+ * Always added to a striking face. With them the same prompt scored 95 and
+ * was no longer typical; without them it came out typical (2026-10). The
+ * asymmetry works on the face itself; the flyaways were tested together
+ * with it and stay with it.
+ */
+const STRIKING_REAL_FACE = 'the slight natural asymmetry of a real face: one eye a touch smaller or one brow a little higher; hair with some frizz and static flyaways, not silky or uniform'
+
 /** The overall impression of a striking face, the way Koreans describe faces (고양이상, 강아지상 …). */
 const IMPRESSIONS: Record<'female' | 'male', readonly Option[]> = {
   female: [
@@ -660,7 +668,7 @@ function describePerson(
   // The face is picked before the hair: a high forehead needs hair over it.
   const striking = attributes.attractiveness === 'striking'
   const face = !show.face ? '' : striking
-    ? [`the overall impression of the face: ${take('impression', IMPRESSIONS[table])}`, attributes.strikingStyle === 'one_trait' ? describeFace(take, random, 'striking') : ''].filter(Boolean).join('; ')
+    ? [`the overall impression of the face: ${take('impression', IMPRESSIONS[table])}`, attributes.strikingStyle === 'one_trait' ? describeFace(take, random, 'striking') : '', STRIKING_REAL_FACE].filter(Boolean).join('; ')
     : describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade)
   if (show.hair) {
     const young = persona.age === null || persona.age < 35

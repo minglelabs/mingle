@@ -117,6 +117,7 @@ describe('avatar taxonomy', () => {
         if (spec.attributes.attractiveness === 'striking') {
           expect(spec.prompt).toContain('not the typical AI beauty')
           expect(spec.prompt).toContain('the overall impression of the face: ')
+          expect(spec.prompt).toContain('the slight natural asymmetry of a real face')
           if (spec.attributes.strikingStyle === 'real_proportions') {
             expect(spec.prompt).toContain('no one would take for an AI-generated face')
             expect(spec.prompt).not.toContain('unlike a typical pretty face')
