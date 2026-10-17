@@ -43,9 +43,6 @@ const CLASHING_COLORS: Record<PhotoEnvironment, string> = {
 
 const SKIN = 'Skin: real, matte skin with visible pores, fine texture and slight unevenness in tone, a little natural shine only on the forehead or nose, makeup that sits on the skin rather than looking airbrushed. No smooth, porcelain, waxy or glossy skin.'
 
-/** For a striking face: heavy pores and dullness made the same face score far lower. */
-const CLEAR_SKIN = 'Skin: clear, healthy skin with fine natural texture and a soft natural sheen, makeup that sits on the skin, not airbrushed or plastic.'
-
 const PEOPLE = 'Clothes crease and hang naturally; the expression is relaxed and caught mid-moment, not a posed photo smile.'
 
 const HAIR: Record<PhotoEnvironment, string> = {
@@ -82,7 +79,7 @@ function pickFlaws(random: Random, count: number): string[] {
  */
 export function phonePhotoRealism(
   random: Random = Math.random,
-  options: { people?: boolean; environment?: PhotoEnvironment; clearSkin?: boolean } = {},
+  options: { people?: boolean; environment?: PhotoEnvironment } = {},
 ): string {
   const environment = options.environment ?? 'any'
   const people = options.people !== false
@@ -91,7 +88,7 @@ export function phonePhotoRealism(
     ...LIGHT,
     TEXTURE,
     `The background has a few everyday colors that do not match the scene, such as ${CLASHING_COLORS[environment]}.`,
-    ...(people ? [options.clearSkin ? CLEAR_SKIN : SKIN, HAIR[environment], PEOPLE] : []),
+    ...(people ? [SKIN, HAIR[environment], PEOPLE] : []),
     // People taking their own photo frame it with some care, so fewer flaws there.
     `Imperfections in this photo: ${pickFlaws(random, people ? 2 : 3).join('; ')}.`,
     AVOID,
