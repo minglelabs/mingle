@@ -253,7 +253,7 @@ const HIGH_FOREHEADS = new Set(['high_forehead', 'high_round', 'broad'])
 
 /** The fringe options a face can take: a high forehead with nothing over it looks like an oversized head. */
 export function foreheadFringe(attributes: Record<string, string>): readonly Option[] {
-  const high = HIGH_FOREHEADS.has(attributes.faceShape) || HIGH_FOREHEADS.has(attributes.forehead)
+  const high = HIGH_FOREHEADS.has(attributes.faceShape) || HIGH_FOREHEADS.has(attributes.forehead) || ['wide', 'broad_flat'].includes(attributes.subtle_forehead)
   return high ? FRINGE.filter((option) => option[0] !== 'none') : FRINGE
 }
 

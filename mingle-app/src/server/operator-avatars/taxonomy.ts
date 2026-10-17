@@ -570,11 +570,13 @@ const OUTFITS: Record<'everyday' | 'fitted' | 'sport', readonly Option[]> = {
 const FEMALE_ONLY_OUTFITS = new Set(['dress', 'fitted_dress', 'crop', 'leggings'])
 
 /** Outfits too warm for countries whose dress note asks for light clothes. */
-const WARM_OUTFITS = new Set(['hoodie', 'sweatshirt', 'knit', 'coat', 'puffer', 'scarf', 'fleece', 'leather', 'cardigan', 'coat_layer', 'slim_knit'])
+const WARM_OUTFITS = new Set(['hoodie', 'sweatshirt', 'knit', 'coat', 'puffer', 'scarf', 'fleece', 'leather', 'cardigan', 'coat_layer', 'slim_knit', 'blazer', 'suit'])
 
 function outfitsFor(options: readonly Option[], gender: 'female' | 'male' | null, persona?: AvatarPersona): readonly Option[] {
-  const hot = gender ? /light clothes/.test(COUNTRY_LOOKS[(persona?.country ?? '').toUpperCase()]?.dress?.[gender] ?? '') : false
-  return options.filter((option) => (gender === 'female' || !FEMALE_ONLY_OUTFITS.has(option[0])) && !(hot && WARM_OUTFITS.has(option[0])))
+  const look = COUNTRY_LOOKS[(persona?.country ?? '').toUpperCase()]
+  const hot = gender ? /light clothes/.test(look?.dress?.[gender] ?? '') : false
+  // Traditional dress only where the country's look is known to include one in everyday photos.
+  return options.filter((option) => (gender === 'female' || !FEMALE_ONLY_OUTFITS.has(option[0])) && !(hot && WARM_OUTFITS.has(option[0])) && !(option[0] === 'traditional' && !look))
 }
 
 // ─── 4. How it was shot, and where ───────────────────────────────────────────
