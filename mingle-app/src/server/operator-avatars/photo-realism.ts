@@ -81,21 +81,23 @@ function pickFlaws(random: Random, count: number): string[] {
  */
 export function phonePhotoRealism(
   random: Random = Math.random,
-  options: { people?: boolean; environment?: PhotoEnvironment } = {},
+  options: { people?: boolean; faces?: boolean; environment?: PhotoEnvironment } = {},
 ): string {
   const environment = options.environment ?? 'any'
   const people = options.people !== false
+  // A back or body photo has a person but no visible face.
+  const faces = options.faces ?? people
   return [
     ...(people ? CAMERA : [CAMERA_NO_PEOPLE, CAMERA[1]]),
     LIGHT,
-    ...(people ? [FACE_LIGHT] : []),
+    ...(faces ? [FACE_LIGHT] : []),
     COLORS,
     TEXTURE,
     `The background has a few everyday colors that do not match the scene, such as ${CLASHING_COLORS[environment]}.`,
     ...(people ? [SKIN, HAIR[environment], PEOPLE] : []),
     // People taking their own photo frame it with some care, so fewer flaws there.
     `Imperfections in this photo: ${pickFlaws(random, people ? 2 : 3).join('; ')}.`,
-    ...(people ? [AVOID_FACE] : []),
+    ...(faces ? [AVOID_FACE] : []),
     AVOID,
   ].join('\n')
 }

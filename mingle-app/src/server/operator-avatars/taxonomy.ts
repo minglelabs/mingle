@@ -789,6 +789,8 @@ const OTHER_SHOOTER_SUBTYPES = new Set(['profile', 'look_back', 'laughing', 'hea
 /** Face angles where a selfie taker looks at the screen; the others look elsewhere on purpose. */
 const GAZE_AT_SCREEN_SUBTYPES = new Set(['front', 'high_angle', 'low_angle', 'lying_down', 'hand_cover', 'mask', 'cap_brim', 'hair_cover', 'object_cover'])
 /** Hand poses that need the hand holding the phone. */
+/** Face photos whose subtype already uses the hands. */
+const HANDS_BUSY_SUBTYPES = new Set(['mirror_phone', 'hand_cover', 'object_cover', 'pet_cover'])
 const TWO_HAND_POSES = new Set(['arms_crossed', 'pocket', 'cheeks_cupped', 'frame_face', 'hood_strings'])
 
 /** ", dressed the way young people in Japan often dress (…)" when the country has a known style. */
@@ -847,7 +849,9 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     const distance = take('distance', selfie ? DISTANCES.filter((option) => option[0] !== 'full') : DISTANCES)
     lines.push(`Subject: ${describePerson(persona, { face: true, body: false, hair: true }, take, random, attributes)}.`)
     lines.push(`Framing: ${subtype.text}; ${selfie ? (SELFIE_SUBTYPES.has(subtype.key) ? 'a front-camera selfie with the arm stretched out' : 'a front-camera selfie, the phone held up in front at about eye level with the arm stretched out') : shooter}; ${distance}; ${take('composition', COMPOSITIONS)}.`)
-    const handPoses = selfie ? HAND_POSES.filter((option) => !TWO_HAND_POSES.has(option[0])) : HAND_POSES
+    // Covering the face with a hand, an object or a pet already uses the free hand.
+    const handsBusy = HANDS_BUSY_SUBTYPES.has(subtype.key)
+    const handPoses = handsBusy ? HAND_POSES.filter((option) => option[0] === 'none') : selfie ? HAND_POSES.filter((option) => !TWO_HAND_POSES.has(option[0])) : HAND_POSES
     // A body pose only shows when the frame reaches below the waist.
     const bodyPose = ['waist', 'full'].includes(attributes.distance) ? take('bodyPose', FRAMED_BODY_POSES) : ''
     lines.push(`Expression and pose: ${[take('expression', EXPRESSIONS), take('headPose', HEAD_POSES), take('handPose', handPoses), bodyPose].filter(Boolean).join(', ')}.`)
@@ -902,7 +906,7 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
   }
 
   if (category !== 'other') lines.push(`Camera and light: ${shot()}.`)
-  lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category), environment: env }))
+  lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category), faces: ['face', 'partial', 'group'].includes(category), environment: env }))
   lines.push(RULES)
 
   const categoryKo = AVATAR_CATEGORIES.find((entry) => entry.key === category)?.ko ?? category
