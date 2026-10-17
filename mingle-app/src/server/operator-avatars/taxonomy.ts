@@ -369,12 +369,23 @@ const SKIN_FEATURES: readonly Option[] = [
  * pulled it back toward the typical face; saying the proportions are a real
  * person's that no one would take for AI made the nose and face shape less
  * typical (90), and one mild trait such as slightly wide-set eyes kept 95
- * while easing the typical look. Striking faces get all three.
+ * while easing the typical look (see STRIKING_STYLES).
  */
 const ATTRACTIVENESS: readonly Option[] = [
   ['ordinary', 30, 'an ordinary-looking person'],
   ['pleasant', 40, 'a likable, pretty face'],
-  ['striking', 30, 'not the typical AI beauty: a face with the specific, slightly unexpected proportions of a real person, the kind no one would take for an AI-generated face, and still overwhelmingly beautiful, the kind of face people turn to look at; the distinctiveness adds to the beauty, never takes away from it'],
+  ['striking', 30, ''],
+]
+
+/**
+ * The two ways of asking for a striking face that scored well (2026-10):
+ * real-person proportions in the abstract (90, the least typical), or a
+ * distinctive look plus one mild named trait (95). A combination of both was
+ * not better on a single try, so each account gets one of the two.
+ */
+const STRIKING_STYLES: readonly Option[] = [
+  ['real_proportions', 1, 'not the typical AI beauty: a face with the specific, slightly unexpected proportions of a real person, the kind no one would take for an AI-generated face, and still overwhelmingly beautiful, the kind of face people turn to look at; the distinctiveness adds to the beauty, never takes away from it'],
+  ['one_trait', 1, 'not the typical AI beauty: a distinctive look of their own, and still overwhelmingly beautiful, the kind of face people turn to look at; the distinctiveness adds to the beauty, never takes away from it'],
 ]
 
 /** The overall impression of a striking face, the way Koreans describe faces (고양이상, 강아지상 …). */
@@ -643,12 +654,13 @@ function describePerson(
   // The country look describes the country's majority, the first ancestry in its table.
   const look = people && people[0][1] === ancestry && people[0][0] === person[2] ? COUNTRY_LOOKS[country] : undefined
 
-  const parts: string[] = [`${who} ${ageBand(persona.age, gender)}`, take('attractiveness', ATTRACTIVENESS), take('skin', SKIN_TONES[ancestry])]
+  const attractiveness = take('attractiveness', ATTRACTIVENESS)
+  const parts: string[] = [`${who} ${ageBand(persona.age, gender)}`, attractiveness || take('strikingStyle', STRIKING_STYLES), take('skin', SKIN_TONES[ancestry])]
   if (show.face && look?.face) parts.push(`with ${look.face}`)
   // The face is picked before the hair: a high forehead needs hair over it.
   const striking = attributes.attractiveness === 'striking'
   const face = !show.face ? '' : striking
-    ? [`the overall impression of the face: ${take('impression', IMPRESSIONS[table])}`, describeFace(take, random, 'striking')].filter(Boolean).join('; ')
+    ? [`the overall impression of the face: ${take('impression', IMPRESSIONS[table])}`, attributes.strikingStyle === 'one_trait' ? describeFace(take, random, 'striking') : ''].filter(Boolean).join('; ')
     : describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade)
   if (show.hair) {
     const young = persona.age === null || persona.age < 35
