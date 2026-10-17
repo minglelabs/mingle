@@ -12,6 +12,7 @@
  * existing character, no text or logo in the image.
  */
 import { phonePhotoRealism } from './photo-realism'
+import { describeFace, FRINGE, HAIRLINE, type FaceGrade } from './face-anatomy'
 export const AVATAR_SPEC_VERSION = 1
 
 export type AvatarCategory = 'face' | 'partial' | 'back' | 'body' | 'part' | 'group' | 'object' | 'animal' | 'scenery' | 'other'
@@ -350,29 +351,6 @@ const DYED_HAIR: readonly Option[] = [
   ['pink', 0.7, 'dyed pastel pink'], ['blue', 0.5, 'dyed dark blue'], ['red_dye', 1, 'dyed wine red'],
 ]
 
-/**
- * The face described by proportion, not by type. Asked for an attractive
- * face, the image model averages every face toward the same layout (big
- * round eyes, a tiny pointed nose, a V-line chin, perfect symmetry); naming
- * shapes ("a round face") does not stop it, but naming where things sit and
- * how long they are does (2026-10). Each axis has an ordinary middle, and
- * `faceProportions` makes sure every face leaves the middle on a few axes.
- */
-const FACE_PROPORTIONS: ReadonlyArray<readonly [axis: string, options: readonly Option[]]> = [
-  ['faceWidth', [['narrow', 1, 'the face is narrow and long for its width'], ['average', 2, ''], ['wide', 1.2, 'the face is fairly wide for its length']]],
-  ['widest', [['cheekbones', 1.5, 'widest at the cheekbones, which sit high and slightly prominent'], ['average', 2, ''], ['jaw', 0.8, 'widest at a straight, fairly broad jaw'], ['forehead', 0.8, 'widest at the forehead and temples, narrowing to the chin']]],
-  ['midface', [['short', 1.3, 'a short midface, little distance between the eyes and the mouth'], ['average', 2, ''], ['long', 1, 'a long midface, a good distance between the eyes and the mouth']]],
-  ['philtrum', [['short', 1, 'a short philtrum'], ['average', 2.5, ''], ['long', 0.8, 'a longer philtrum']]],
-  ['chin', [['small_round', 1.3, 'a short lower face with a small, softly rounded chin and a jaw that narrows gently without a V-line point'], ['average', 1.5, ''], ['long', 0.8, 'a longer lower face with a defined chin'], ['square', 0.8, 'a squarish jaw and a flat chin']]],
-  ['eyeSpacing', [['close', 0.8, 'eyes set a little closer together than average'], ['average', 2, ''], ['wide', 1.3, 'eyes set a little wider apart than average']]],
-  ['eyeShape', [['long_narrow', 1.5, 'eyes long and fairly narrow horizontally rather than big and round'], ['average', 1.5, ''], ['small', 0.8, 'small eyes'], ['round', 0.8, 'round eyes, not oversized']]],
-  ['eyeHeight', [['low', 0.8, 'eyes sitting slightly low on the face'], ['average', 3, ''], ['high', 0.8, 'eyes sitting slightly high on the face']]],
-  ['nose', [['short_soft', 1.3, 'a short nose with a soft, rounded tip'], ['average', 1.5, ''], ['long_straight', 1, 'a long, straight nose'], ['wide', 1, 'a nose with some width at the nostrils'], ['low_bridge', 1, 'a low nose bridge']]],
-  ['mouth', [['wide', 1.3, 'a wide mouth, about as wide as the space between the pupils or more'], ['average', 1.5, ''], ['small', 1, 'a small mouth'], ['full_lower', 1, 'a fuller lower lip'], ['thin', 0.8, 'thin lips']]],
-]
-/** Every face leaves the ordinary middle on this many axes: fewer averages out, more looks odd. */
-const MIN_DISTINCT_PROPORTIONS = 3
-const MAX_DISTINCT_PROPORTIONS = 4
 
 
 const SKIN_FEATURES: readonly Option[] = [
@@ -380,25 +358,16 @@ const SKIN_FEATURES: readonly Option[] = [
   ['acne_marks', 1.5, 'faint acne marks'], ['flush', 1, 'slightly flushed cheeks'], ['fine_lines', 1, 'faint lines around the eyes'],
 ]
 
-const EYES: readonly Option[] = [
-  ['monolid', 2, 'monolid eyes'], ['inner_fold', 2, 'subtle inner double eyelids'], ['double', 3, 'double eyelids'], ['large', 2, 'large eyes'],
-  ['narrow', 2, 'narrow eyes'], ['downturned', 1.5, 'slightly downturned eyes'], ['upturned', 1.5, 'slightly upturned eyes'],
-]
-
-const EYEBROWS: readonly Option[] = [
-  ['thick', 3, 'thick eyebrows'], ['thin', 2, 'thin eyebrows'], ['straight', 3, 'straight eyebrows'], ['arched', 2, 'arched eyebrows'],
-]
-
 /**
  * A profile picture is the best photo someone has of themself, so most look
  * at least likable. The words "beautiful" and "good-looking" are left out on
  * purpose: they pull the face toward the averaged AI beauty. Attractiveness
- * comes from the charm point and the proportions instead.
+ * comes from the face anatomy (see face-anatomy.ts) and the charm point.
  */
 const ATTRACTIVENESS: readonly Option[] = [
   ['ordinary', 30, 'an ordinary-looking person'],
   ['pleasant', 40, 'a likable, pleasant face'],
-  ['striking', 30, 'a face people remember and find attractive for its own proportions, not because it is typical'],
+  ['striking', 30, 'a striking, very pretty face that is not the typical AI or golden-ratio beauty'],
 ]
 
 /** What people notice first about the face; gives it a specific appeal without averaging it. */
@@ -417,7 +386,7 @@ const HAIR_LENGTH: Record<'female' | 'male', readonly Option[]> = {
 const HAIR_STYLE: Record<'female' | 'male', readonly Option[]> = {
   female: [
     ['straight', 4, 'straight hair worn down'], ['wavy', 3, 'loosely waved hair'], ['curly', 1.5, 'curly hair'], ['ponytail', 2.5, 'hair in a ponytail'],
-    ['bun', 2, 'hair in a messy bun'], ['braid', 1, 'hair in a braid'], ['half_up', 1.5, 'hair half tied up'], ['bangs', 2.5, 'hair with a fringe'],
+    ['bun', 2, 'hair in a messy bun'], ['braid', 1, 'hair in a braid'], ['half_up', 1.5, 'hair half tied up'], ['low_tie', 2, 'hair loosely tied back'],
   ],
   male: [
     ['neat', 3, 'neatly cut hair'], ['messy', 3, 'slightly messy hair'], ['side_part', 2.5, 'side-parted hair'], ['fringe', 2.5, 'hair with a fringe over the forehead'],
@@ -631,30 +600,6 @@ function ageBand(age: number | null, gender: 'female' | 'male' | null = null): s
 
 type Picker = (axis: string, options: readonly Option[]) => string
 
-/**
- * "Face proportions: …" with at least MIN_DISTINCT_PROPORTIONS axes away from
- * the ordinary middle; axes left in the middle are not mentioned.
- */
-function faceProportions(take: Picker, random: Random): string {
-  const lines = FACE_PROPORTIONS.map(([axis, options]) => take(axis, options))
-  const indexes = FACE_PROPORTIONS.map((_, index) => index)
-  const middle = indexes.filter((index) => !lines[index])
-  // Push randomly chosen middle axes to a distinct option until enough stand out…
-  while (FACE_PROPORTIONS.length - middle.length < MIN_DISTINCT_PROPORTIONS && middle.length) {
-    const index = middle.splice(Math.floor(random() * middle.length), 1)[0]
-    const [axis, options] = FACE_PROPORTIONS[index]
-    lines[index] = take(axis, options.filter((option) => option[0] !== 'average'))
-  }
-  // …and send randomly chosen distinct ones back to the middle when too many do.
-  const distinct = indexes.filter((index) => lines[index])
-  while (distinct.length > MAX_DISTINCT_PROPORTIONS) {
-    const index = distinct.splice(Math.floor(random() * distinct.length), 1)[0]
-    const [axis, options] = FACE_PROPORTIONS[index]
-    lines[index] = take(axis, options.filter((option) => option[0] === 'average'))
-  }
-  return `face proportions: ${lines.filter(Boolean).join('; ')}`
-}
-
 /** Who the person is, as far as this kind of photo shows them. */
 function describePerson(
   persona: AvatarPersona,
@@ -685,15 +630,16 @@ function describePerson(
     const dyed = young && random() < 0.18
     const color = take('hairColor', dyed ? DYED_HAIR : NATURAL_HAIR[ancestry])
     const trend = look?.hair?.[table]
-    parts.push(`${take('hairLength', HAIR_LENGTH[table])} ${color} hair, ${take('hairStyle', HAIR_STYLE[table])}${trend && young ? ` (people of this age there: ${trend})` : ''}`)
+    const hair = [`${take('hairLength', HAIR_LENGTH[table])} ${color} hair, ${take('hairStyle', HAIR_STYLE[table])}`]
+    // The fringe and hairline change how the forehead, and so the whole face, reads.
+    if (table === 'female') hair.push(take('fringe', FRINGE))
+    const forehead = table === 'female' ? ['none', 'curtain', 'wispy'].includes(attributes.fringe) : attributes.hairStyle !== 'fringe'
+    if (show.face && forehead) hair.push(take('hairline', HAIRLINE))
+    parts.push(`${hair.join(', ')}${trend && young ? ` (people of this age there: ${trend})` : ''}`)
   }
   if (show.face) {
-    // A country makeup style already fixes the brows.
-    const styled = Boolean(look?.makeup) && gender === 'female'
     parts.push(
-      faceProportions(take, random),
-      take('eyes', EYES),
-      styled ? '' : take('eyebrows', EYEBROWS),
+      describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade),
       take('skinFeature', SKIN_FEATURES),
       `what people notice about the face: ${take('charm', CHARM_POINTS)}`,
     )

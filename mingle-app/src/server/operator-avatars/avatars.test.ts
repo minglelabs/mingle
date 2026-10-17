@@ -31,6 +31,7 @@ import { __resetAvatarFailuresForTests, runOperatorAutomation } from '@/server/o
 import { DEFAULT_SEED_PLAN, mostUnderrepresentedCountry } from '@/server/operators/seed-plan'
 import { generateOperatorAvatar, isProxyImageModel, requestAvatarImage, resolveAvatarImageModel, resolveImageProxyUrl } from './generate'
 import { AVATAR_CATEGORIES, AVATAR_SUBTYPES, pickAvatarSpec, seededRandom, type AvatarPersona } from './taxonomy'
+import { describeFace, type FaceGrade } from './face-anatomy'
 
 const NOW = new Date('2026-10-03T03:00:00.000Z')
 const korean: AvatarPersona = { gender: 'female', name: '민아', age: 26, country: 'KR', countryName: 'South Korea', city: 'Seoul', bio: '커피랑 산책' }
@@ -112,13 +113,13 @@ describe('avatar taxonomy', () => {
       }
       if (spec.category === 'face') {
         expect(spec.prompt).toContain('unmistakably Korean features')
-        // The face is described by proportion, a few axes away from the ordinary middle.
-        const axes = ['faceWidth', 'widest', 'midface', 'philtrum', 'chin', 'eyeSpacing', 'eyeShape', 'eyeHeight', 'nose', 'mouth']
-        const distinct = axes.filter((axis) => spec.attributes[axis] && spec.attributes[axis] !== 'average').length
-        expect(distinct).toBeGreaterThanOrEqual(3)
-        expect(distinct).toBeLessThanOrEqual(4)
-        expect(spec.prompt).toContain('face proportions:')
+        // The face is described feature by feature: a few distinctive traits on a pretty middle.
+        expect(spec.prompt).toContain('face: ')
         expect(spec.prompt).toContain('what people notice about the face')
+        if (spec.attributes.attractiveness !== 'ordinary') {
+          expect(spec.attributes.flesh).toBe('lean')
+          expect(spec.prompt).toContain('the most noticeable traits, kept exactly as described')
+        }
         expect(spec.prompt).not.toMatch(/beautiful|good-looking/i)
       }
     }
@@ -365,5 +366,36 @@ describe('automation rules', () => {
     mocks.accountGroupBy.mockResolvedValue([{ personaCountry: 'KR', _count: { _all: 3 } }])
     expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'off', account: 'target_reached' })
     expect(mocks.drafts).not.toHaveBeenCalled()
+  })
+})
+
+describe('describeFace', () => {
+  const kinds = (grade: FaceGrade, seed: string) => {
+    const attributes: Record<string, string> = {}
+    const random = seededRandom(seed)
+    const take = (axis: string, options: ReadonlyArray<readonly [string, number, string]>) => {
+      const total = options.reduce((sum, option) => sum + option[1], 0)
+      let roll = random() * total
+      const option = options.find((candidate) => (roll -= candidate[1]) < 0) ?? options[options.length - 1]
+      attributes[axis] = option[0]
+      return option[2]
+    }
+    return { prompt: describeFace(take, random, grade), attributes }
+  }
+
+  it('gives a pretty face two or three distinctive traits and nothing plain', () => {
+    for (let index = 0; index < 200; index += 1) {
+      const { prompt, attributes } = kinds('striking', `striking:${index}`)
+      const signature = prompt.split('kept exactly as described: ')[1]?.split('; ') ?? []
+      expect(signature.length).toBeGreaterThanOrEqual(2)
+      expect(signature.length).toBeLessThanOrEqual(3)
+      expect(attributes.flesh).toBe('lean')
+      expect(prompt).not.toMatch(/puffy|bulbous|heavy chin|a long face|broad, round face|dark under-eye|sparse/)
+    }
+  })
+
+  it('lets ordinary faces carry plain traits', () => {
+    const plain = Array.from({ length: 100 }, (_, index) => kinds('ordinary', `ordinary:${index}`).prompt).filter((prompt) => /puffy|bulbous|heavy chin|a long face|broad, round face|round cheeks|flat|thin lips|small, narrow eyes|low, narrow forehead|long midface|long philtrum|large nose|sparse|dark under-eye|wide, square jaw/.test(prompt))
+    expect(plain.length).toBeGreaterThan(90)
   })
 })
