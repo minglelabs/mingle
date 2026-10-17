@@ -516,7 +516,7 @@ const HAND_POSES: readonly Option[] = [
   ['none', 7, ''], ['peace', 1.5, 'making a peace sign'], ['peace_chin', 0.8, 'a peace sign under the chin'], ['finger_heart', 0.8, 'making a finger heart'],
   ['chin', 1.2, 'chin resting on a hand'], ['fist_chin', 0.6, 'chin propped on a loose fist'], ['cheek', 0.7, 'a finger pressed to the cheek'],
   ['hair', 1, 'a hand pushing the hair back'], ['tuck_hair', 1.2, 'tucking hair behind one ear'], ['earring', 0.6, 'touching an earring'],
-  ['cover_mouth', 1, 'fingertips resting near the mouth'], ['sweater_paw', 0.8, 'a sleeve pulled over the hand, held near the face'],
+  ['cover_mouth', 1, 'a hand resting lightly near the mouth'], ['sweater_paw', 0.8, 'a sleeve pulled over the hand, held near the face'],
   ['head_top', 0.6, 'a hand resting on top of the head'], ['shade_eyes', 0.5, 'a hand shading the eyes from the sun'],
   ['glasses', 0.6, 'pushing up a pair of glasses'], ['collar', 0.6, 'holding the jacket collar'], ['straw', 0.8, 'sipping a drink through a straw'],
   ['cup', 1.2, 'holding a cup'], ['food', 0.6, 'holding a snack up near the face'], ['flower', 0.5, 'holding a flower near the face'],
