@@ -681,7 +681,7 @@ function describePerson(
   // The face is picked before the hair: a high forehead needs hair over it.
   const striking = attributes.attractiveness === 'striking'
   const face = !show.face ? '' : striking
-    ? `the overall impression of the face: ${take('impression', IMPRESSIONS[table])}; ${subtleTraits(take, random, random() < 0.5 ? 1 : 2, table)}; ${STRIKING_REAL_FACE}`
+    ? `the overall impression of the face: ${take('impression', IMPRESSIONS[table])}; ${subtleTraits(take, random, table)}; ${STRIKING_REAL_FACE}`
     : describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade)
   if (show.hair) {
     const young = persona.age === null || persona.age < 35
