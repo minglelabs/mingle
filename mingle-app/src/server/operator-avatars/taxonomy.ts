@@ -360,15 +360,31 @@ const SKIN_FEATURES: readonly Option[] = [
 
 /**
  * A profile picture is the best photo someone has of themself, so most look
- * at least likable. Beauty words alone pull the face toward the averaged AI
- * beauty, and leaving them out made faces plain; a striking face says it
- * plainly and gets one or two untypical traits from face-anatomy.ts.
+ * at least likable. Ordinary and pleasant faces get untypical traits from
+ * face-anatomy.ts. A striking face gets no features at all: every attempt to
+ * spell out an untypical beauty feature by feature broke the face's harmony
+ * (50 to 90 at best), while asking for an untypical, overwhelming beauty in
+ * the abstract and letting the model choose scored 80 to 85 and did not look
+ * typical (2026-10). An impression word keeps striking faces from converging.
  */
 const ATTRACTIVENESS: readonly Option[] = [
   ['ordinary', 30, 'an ordinary-looking person'],
   ['pleasant', 40, 'a likable, pretty face'],
-  ['striking', 30, 'exceptionally beautiful, the kind of face people turn to look at, yet not the typical AI beauty'],
+  ['striking', 30, 'not the typical AI beauty: a face with a distinctive look of its own, and still overwhelmingly beautiful, the kind of face people turn to look at; the distinctiveness adds to the beauty, never takes away from it'],
 ]
+
+/** The overall impression of a striking face, the way Koreans describe faces (고양이상, 강아지상 …). */
+const IMPRESSIONS: Record<'female' | 'male', readonly Option[]> = {
+  female: [
+    ['cat', 2, 'cat-like'], ['puppy', 2, 'puppy-like and sweet'], ['fox', 1.5, 'fox-like'], ['rabbit', 1.2, 'rabbit-like and lively'],
+    ['innocent', 2, 'innocent and clear'], ['chic', 1.5, 'chic and cool'], ['graceful', 1.5, 'graceful and elegant'],
+    ['bright', 1.5, 'bright and bubbly'], ['dreamy', 1, 'soft and dreamy'], ['exotic', 0.8, 'a little exotic'],
+  ],
+  male: [
+    ['puppy', 2, 'puppy-like and warm'], ['cat', 1.5, 'cat-like'], ['wolf', 1.2, 'sharp and wolfish'], ['gentle', 2, 'gentle and calm'],
+    ['boyish', 1.5, 'boyish and bright'], ['chic', 1.5, 'chic and cool'], ['rugged', 1, 'rugged and manly'], ['dreamy', 1, 'soft and dreamy'],
+  ],
+}
 
 /** What people notice first about the face; gives it a specific appeal without averaging it. */
 const CHARM_POINTS: readonly Option[] = [
@@ -626,7 +642,8 @@ function describePerson(
   const parts: string[] = [`${who} ${ageBand(persona.age, gender)}`, take('attractiveness', ATTRACTIVENESS), take('skin', SKIN_TONES[ancestry])]
   if (show.face && look?.face) parts.push(`with ${look.face}`)
   // The face is picked before the hair: a high forehead needs hair over it.
-  const face = show.face ? describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade) : ''
+  const striking = attributes.attractiveness === 'striking'
+  const face = !show.face ? '' : striking ? `the overall impression of the face: ${take('impression', IMPRESSIONS[table])}` : describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade)
   if (show.hair) {
     const young = persona.age === null || persona.age < 35
     const dyed = young && random() < 0.18
@@ -643,7 +660,8 @@ function describePerson(
     parts.push(
       face,
       take('skinFeature', SKIN_FEATURES),
-      `what people notice about the face: ${take('charm', CHARM_POINTS)}`,
+      // A named charm point is one more feature for the model to bend; striking faces are left whole.
+      striking ? '' : `what people notice about the face: ${take('charm', CHARM_POINTS)}`,
     )
     if (gender === 'male') parts.push(take('facialHair', FACIAL_HAIR))
     if (gender === 'female') {
