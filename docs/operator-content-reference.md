@@ -102,3 +102,19 @@ Line break after every clause; note-style endings (`~함`, `~음`, `~는 거임`
 5. **Engagement.** Likes and comments on operator posts should be mostly near zero, with an occasional popular post, as on the newest feed.
 6. **Native-speaker role.** Korean and Japanese accounts are the natives learners look for: answering "what does this mean", correcting a learner's sentence and replying to introductions is as typical for them as posting.
 7. **Profile pictures.** The existing taxonomy (face, partly hidden, from behind, body, object, animal, scenery, several people) covers what was seen; cartoon or illustration avatars are more common than its 1% "other" share.
+
+## Making generated photos look like phone photos
+
+Worked out in October 2026 by drafting profile photos in ChatGPT and comparing them with real phone photos. The rules live in `mingle-app/src/server/operator-avatars/photo-realism.ts` (every photo) and `taxonomy.ts` (profile photos).
+
+What gave drafts away, most noticeable first:
+
+1. **The face lit more brightly than the place.** A face that is evenly and frontally bright in a shaded alley or at night reads as pasted in. The face gets only the light the place gives; a shaded spot with a bright sky behind (face a little dull, sky blown out) looked the most real. Naming a flash at all, even to forbid it, pulled the picture toward a flash look, so prompts never mention it.
+2. **Eyes staring into the lens.** A selfie taker looks at their own face on the screen just below the lens. Saying only "slightly below the lens" made the model look away entirely; describing the phone held at eye level and the eyes on the screen worked.
+3. **Retouching.** Prompts say the photo comes straight out of the camera app with no beauty app, face slimming, eye enlarging, skin smoothing or added glow, and ask for matte skin with pores and only natural shine.
+4. **Hair arranged strand by strand.** A light breeze outdoors (a few loose strands, split bangs, flyaways) and a few flyaways indoors; a strong wind ruined the hairstyle.
+5. **Every color matching.** People coordinate their outfits, so the outfit stays coordinated; the background gets a few everyday clashing colors (a neon sign, a blue bin, a red fire extinguisher box, an orange cone).
+6. **Contradictions in the prompt.** A selfie that is also a full-body shot, park scenery with window light, film-camera looks next to phone-camera lines: the model averages them into a staged picture. Selfies never get full-body framing, light follows indoor or outdoor, and non-phone looks and color filters were removed.
+7. **Every East Asian woman drawn the same way.** Nationality alone gave Korean-looking faces. Each country with a known look (`COUNTRY_LOOKS`) adds its face, makeup, hair trend and dress style; for Japan that meant matte base, blush high under the eyes and across the nose, softly arched brows, a full coral or red-brown lip, milk-tea brown hair with an inward-curled bob or see-through bangs, and loose layered muted clothes.
+
+What did not need fixing: pretty faces (a profile picture is someone's best photo), mushy far background details nobody looks at, and forced flaws such as a fingertip in the frame (people frame their own photos with care).

@@ -110,7 +110,35 @@ describe('avatar taxonomy', () => {
         expect(spec.prompt).toContain('The face is not visible')
         expect(spec.attributes.build).toBeTruthy()
       }
-      if (spec.category === 'face') expect(spec.attributes.faceShape).toBeTruthy()
+      // A country with a known look fixes the face itself instead of a random face shape.
+      if (spec.category === 'face') expect(spec.prompt).toContain('a typical Korean face')
+    }
+  })
+
+  it('draws Japanese women with Japanese makeup, hair and dress, and leaves other faces to the random features', () => {
+    const japanese: AvatarPersona = { gender: 'female', name: 'ゆき', age: 24, country: 'JP', countryName: 'Japan', city: 'Tokyo', bio: null }
+    let faces = 0
+    for (let index = 0; index < 300; index += 1) {
+      const spec = pickAvatarSpec(japanese, seededRandom(`jp:${index}`))
+      if (spec.category !== 'face') continue
+      faces += 1
+      expect(spec.prompt).toContain('a typical Japanese face')
+      if (spec.attributes.makeup !== 'none') expect(spec.prompt).toContain('Japanese-style makeup')
+      expect(spec.attributes.faceShape).toBeUndefined()
+    }
+    expect(faces).toBeGreaterThan(20)
+    const us = pickAvatarSpec(american, seededRandom('us-face'))
+    expect(us.prompt).not.toContain('a typical')
+  })
+
+  it('keeps selfies coherent: no full-body framing, eyes on the screen, no flash, filter or finger', () => {
+    for (let index = 0; index < 1500; index += 1) {
+      const spec = pickAvatarSpec(korean, seededRandom(`selfie:${index}`))
+      expect(spec.prompt).not.toMatch(/flash|beauty filter|fingertip|photo-booth/i)
+      if (['face', 'partial'].includes(spec.category)) expect(spec.prompt).not.toMatch(/film camera/i)
+      if (spec.attributes.shooter !== 'selfie') continue
+      expect(spec.attributes.distance).not.toBe('full')
+      if (spec.subtype === 'front') expect(spec.prompt).toContain('looking at their own face on the phone screen')
     }
   })
 })

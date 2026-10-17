@@ -269,6 +269,60 @@ const NAME_ANCESTRY_HINTS: ReadonlyArray<readonly [RegExp, AncestryKey]> = [
 ]
 const NAME_ANCESTRY_BOOST = 20
 
+/**
+ * How people from one country tend to look, style themselves and dress.
+ * Without it the image model draws every East Asian woman with the same
+ * Korean-style face and makeup (a "Japanese woman" came out looking Korean or
+ * Chinese until her makeup, hair and clothes were spelled out, 2026-10). Only
+ * used for the country's majority ancestry; trends, not rules, so each line
+ * says "often".
+ */
+type CountryLook = { face?: string; makeup?: string; hair?: { female?: string; male?: string }; dress?: { female?: string; male?: string } }
+const COUNTRY_LOOKS: Record<string, CountryLook> = {
+  JP: {
+    face: 'a typical Japanese face: soft and slightly round with a gentle jawline, a low, small nose bridge, a small mouth',
+    makeup: 'Japanese-style makeup: a matte, soft-focus base, pink blush placed high right under the eyes and a touch across the nose, visible but not heavy, a little shimmer on the under-eye puffiness, brown mascara and thin brown liner, softly arched light-brown brows, a filled-in coral or red-brown lip following the natural lip shape (not a gradient lip)',
+    hair: { female: 'often dyed a soft milk-tea or ash brown, often a bob with inward-curled ends or see-through bangs', male: 'often a soft mushroom or center-parted cut, sometimes dyed light brown' },
+    dress: { female: 'the loose, layered Japanese everyday style in muted earth tones', male: 'the loose, layered Japanese everyday style in muted tones' },
+  },
+  KR: {
+    face: 'a typical Korean face',
+    makeup: 'Korean-style makeup: a dewy, glowing base, straight soft brows, a hint of blush on the apples of the cheeks, a gradient lip',
+    hair: { female: 'often long and loosely waved, or a layered cut with face-framing strands', male: 'often a comma-hair or down-perm cut' },
+    dress: { female: 'the clean, coordinated Korean everyday style', male: 'the clean, coordinated Korean everyday style with a relaxed fit' },
+  },
+  CN: {
+    face: 'a typical Chinese face',
+    makeup: 'Chinese-style makeup: a smooth matte base, defined straight brows, eyeliner that lifts slightly at the outer corner, a full, solid red or rose lip',
+    hair: { female: 'often long and straight, or with soft curtain bangs', male: 'often short with a textured top' },
+  },
+  TW: {
+    face: 'a typical Taiwanese face',
+    makeup: 'Taiwanese-style makeup: light and fresh, a thin base, soft natural brows, a sheer pink lip',
+    hair: { female: 'often shoulder-length with thin bangs', male: 'often short and neat' },
+  },
+  TH: {
+    face: 'a typical Thai face',
+    makeup: 'Thai-style makeup: a glowing base, defined brows, soft warm bronze eyeshadow, a rosy or peach lip',
+    dress: { female: 'light clothes for hot weather', male: 'light clothes for hot weather' },
+  },
+  VN: {
+    face: 'a typical Vietnamese face',
+    makeup: 'Vietnamese-style makeup: a light base, natural brows, a coral or red lip',
+    dress: { female: 'light clothes for warm weather', male: 'light clothes for warm weather' },
+  },
+  ID: {
+    face: 'a typical Indonesian face',
+    makeup: 'Indonesian-style makeup: a matte base, defined brows, a warm nude or brick lip',
+    dress: { female: 'light clothes for hot weather, sometimes a hijab', male: 'light clothes for hot weather' },
+  },
+  PH: {
+    face: 'a typical Filipino face',
+    makeup: 'Filipino-style makeup: a light glowy base, peachy blush, a nude or rosy lip',
+    dress: { female: 'light clothes for hot weather', male: 'light clothes for hot weather' },
+  },
+}
+
 const SKIN_TONES: Record<AncestryKey, readonly Option[]> = {
   east_asian: [['fair', 3, 'fair skin'], ['light', 4, 'light skin'], ['light_medium', 2, 'light-medium skin'], ['tan', 1, 'lightly tanned skin']],
   southeast_asian: [['light_medium', 3, 'light-medium skin'], ['tan', 4, 'tan skin'], ['brown', 3, 'brown skin']],
@@ -351,7 +405,7 @@ const FACIAL_HAIR: readonly Option[] = [
 ]
 
 const MAKEUP: readonly Option[] = [
-  ['none', 1.5, 'no makeup'], ['light', 4, 'light everyday makeup'], ['regular', 3.5, 'regular makeup'], ['bold', 0.7, 'noticeable makeup'],
+  ['none', 1.5, 'no makeup'], ['light', 4, 'light everyday makeup'], ['regular', 3.5, 'everyday makeup'], ['bold', 0.7, 'noticeable makeup'],
 ]
 
 const ACCESSORIES: readonly Option[] = [
@@ -427,32 +481,35 @@ const COMPOSITIONS: readonly Option[] = [
   ['centered', 4, 'subject centered'], ['off_center', 3, 'subject off to one side'], ['tilted', 1.5, 'the frame slightly tilted'], ['cut_off', 1.5, 'the top of the head cut off by the frame'],
 ]
 
+/**
+ * Phone photos only: film, instant, photo-booth, DSLR and ID-photo looks
+ * fought the phone-camera realism lines and read as staged.
+ */
 const QUALITIES: readonly Option[] = [
   ['new_phone', 5, 'shot on a recent smartphone'], ['old_phone', 1, 'shot on an older smartphone, slightly noisy and soft'],
-  ['front_cam', 2, 'front-camera wide-angle distortion'], ['film', 1.5, 'the look of a cheap film camera, grainy with muted colors'],
-  ['instant', 0.7, 'the look of an instant-film print'], ['photo_booth', 0.7, 'the look of a photo-booth strip frame, plain backdrop'],
-  ['dslr', 1, 'shot on a camera with a softly blurred background'], ['id_photo', 0.3, 'the look of an ID photo against a plain backdrop'],
+  ['front_cam', 2, 'mild front-camera wide-angle distortion'],
 ]
 
+/** Color filters fought the true-to-life color line; black and white is the one kept, as people do use it. */
 const FILTERS: readonly Option[] = [
-  ['none', 6, 'no filter'], ['beauty', 1.5, 'a mild smoothing beauty filter'], ['warm', 1.5, 'a warm color filter'], ['cool', 1, 'a cool, slightly faded color filter'],
-  ['bw', 0.8, 'black and white'], ['vintage', 0.8, 'a faded vintage filter'],
+  ['none', 12, 'no filter'], ['bw', 0.8, 'black and white'],
 ]
 
 const LIGHTING: readonly Option[] = [
   ['daylight', 5, 'ordinary daylight'], ['window', 3, 'soft light from a window'], ['golden', 2, 'low evening sun'], ['fluorescent', 2, 'flat indoor fluorescent light'],
   ['warm_lamp', 2, 'warm indoor lamp light'], ['night', 1.2, 'at night under street lamps and city lights'], ['neon', 0.8, 'colored neon light at night'],
   ['overcast', 1.5, 'grey overcast light'], ['screen', 0.4, 'lit only by a screen in a dark room'],
+  ['backlit_shade', 3, 'late afternoon in shade with the bright sky behind as the main light, so the person is slightly backlit: the face a little darker and duller than the sky and as lit as the shade around it, the sky blown out to near white'],
 ]
 
 const FLAWS: readonly Option[] = [
   ['none', 5, ''], ['soft_focus', 2, 'focus slightly missed'], ['slight_blur', 1.5, 'a little motion blur'], ['overexposed', 1, 'slightly overexposed highlights'],
-  ['mirror_smudge', 1, 'smudges on the mirror or lens'], ['clutter', 2, 'everyday clutter visible in the background'], ['finger', 0.3, 'a fingertip at the edge of the frame'],
+  ['mirror_smudge', 1, 'smudges on the mirror or lens'], ['clutter', 2, 'everyday clutter visible in the background'],
 ]
 
 type ShotEnv = 'indoor' | 'outdoor' | 'any'
 const INDOOR_ONLY_LIGHT = new Set(['window', 'fluorescent', 'warm_lamp', 'screen'])
-const OUTDOOR_ONLY_LIGHT = new Set(['golden', 'overcast', 'neon'])
+const OUTDOOR_ONLY_LIGHT = new Set(['golden', 'overcast', 'neon', 'backlit_shade', 'night'])
 
 function lightingFor(env: ShotEnv): readonly Option[] {
   if (env === 'indoor') return LIGHTING.filter((option) => !OUTDOOR_ONLY_LIGHT.has(option[0]))
@@ -549,33 +606,70 @@ function ageBand(age: number | null, gender: 'female' | 'male' | null = null): s
 type Picker = (axis: string, options: readonly Option[]) => string
 
 /** Who the person is, as far as this kind of photo shows them. */
-function describePerson(persona: AvatarPersona, show: { face: boolean; body: boolean; hair: boolean }, take: Picker, random: Random): string {
+function describePerson(
+  persona: AvatarPersona,
+  show: { face: boolean; body: boolean; hair: boolean },
+  take: Picker,
+  random: Random,
+  attributes: Record<string, string>,
+): string {
   const gender = genderOf(persona)
   // Unknown gender: the picker still needs one table; the prompt lets the name decide.
   const table = gender ?? (random() < 0.5 ? 'female' : 'male')
-  const people = COUNTRY_PEOPLE[(persona.country ?? '').toUpperCase()]
+  const country = (persona.country ?? '').toUpperCase()
+  const people = COUNTRY_PEOPLE[country]
   const hinted = NAME_ANCESTRY_HINTS.find(([pattern]) => pattern.test(persona.name ?? ''))?.[1]
   const person = people
     ? pick(people.map(([label, ancestry, weight]) => [ancestry, weight * (ancestry === hinted ? NAME_ANCESTRY_BOOST : 1), label] as const), random)
-    : (['mixed', 1, persona.countryName ? `person from ${persona.countryName}` : 'person'] as const)
+    : (['mixed', 1, ''] as const)
   const ancestry = person[0] as AncestryKey
   const noun = gender === 'female' ? 'woman' : gender === 'male' ? 'man' : `person whose gender fits the given name "${persona.name ?? ''}"`
+  const who = person[2] ? `a ${person[2]} ${noun}` : `a ${noun}${persona.countryName ? ` from ${persona.countryName}` : ''}`
+  // The country look describes the country's majority, the first ancestry in its table.
+  const look = people && people[0][1] === ancestry && people[0][0] === person[2] ? COUNTRY_LOOKS[country] : undefined
 
-  const parts: string[] = [`a ${person[2]} ${noun} ${ageBand(persona.age, gender)}`, take('attractiveness', ATTRACTIVENESS), take('skin', SKIN_TONES[ancestry])]
+  const parts: string[] = [`${who} ${ageBand(persona.age, gender)}`, take('attractiveness', ATTRACTIVENESS), take('skin', SKIN_TONES[ancestry])]
+  if (show.face && look?.face) parts.push(`with ${look.face}`)
   if (show.hair) {
     const young = persona.age === null || persona.age < 35
     const dyed = young && random() < 0.18
     const color = take('hairColor', dyed ? DYED_HAIR : NATURAL_HAIR[ancestry])
-    parts.push(`${take('hairLength', HAIR_LENGTH[table])} ${color} hair, ${take('hairStyle', HAIR_STYLE[table])}`)
+    const trend = look?.hair?.[table]
+    parts.push(`${take('hairLength', HAIR_LENGTH[table])} ${color} hair, ${take('hairStyle', HAIR_STYLE[table])}${trend && young ? ` (people of this age there: ${trend})` : ''}`)
   }
   if (show.face) {
-    parts.push(take('faceShape', FACE_SHAPES), take('eyes', EYES), take('eyebrows', EYEBROWS), take('noseMouth', NOSE_MOUTH), take('skinFeature', SKIN_FEATURES))
+    // The country look already fixes the face shape, nose and mouth, and its makeup the brows.
+    const styled = Boolean(look?.makeup) && gender === 'female'
+    parts.push(
+      look?.face ? '' : take('faceShape', FACE_SHAPES),
+      take('eyes', EYES),
+      styled ? '' : take('eyebrows', EYEBROWS),
+      look?.face ? '' : take('noseMouth', NOSE_MOUTH),
+      take('skinFeature', SKIN_FEATURES),
+    )
     if (gender === 'male') parts.push(take('facialHair', FACIAL_HAIR))
-    if (gender === 'female') parts.push(take('makeup', MAKEUP))
+    if (gender === 'female') {
+      const makeup = take('makeup', MAKEUP)
+      parts.push(look?.makeup && attributes.makeup !== 'none' ? `${makeup} in ${look.makeup}` : makeup)
+    }
     parts.push(take('accessory', ACCESSORIES))
   }
   if (show.body) parts.push(take('build', BUILD[table]), take('height', HEIGHT))
   return parts.filter(Boolean).join(', ')
+}
+
+/** Face angles that only a selfie can take, and ones that need someone else holding the phone. */
+const SELFIE_SUBTYPES = new Set(['high_angle', 'low_angle', 'lying_down'])
+const OTHER_SHOOTER_SUBTYPES = new Set(['profile', 'look_back', 'laughing', 'head_down'])
+/** Face angles where a selfie taker looks at the screen; the others look elsewhere on purpose. */
+const GAZE_AT_SCREEN_SUBTYPES = new Set(['front', 'high_angle', 'low_angle', 'lying_down', 'hand_cover', 'mask', 'cap_brim', 'hair_cover', 'object_cover'])
+/** Hand poses that need the hand holding the phone. */
+const TWO_HAND_POSES = new Set(['arms_crossed', 'pocket'])
+
+/** ", dressed the way young people in Japan often dress (…)" when the country has a known style. */
+function dressNote(persona: AvatarPersona, gender: 'female' | 'male' | null): string {
+  const dress = gender ? COUNTRY_LOOKS[(persona.country ?? '').toUpperCase()]?.dress?.[gender] : undefined
+  return dress ? `, styled in ${dress}; the outfit is well coordinated` : '; the outfit is well coordinated'
 }
 
 const RULES = [
@@ -618,21 +712,32 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
 
   if (category === 'face' || category === 'partial') {
     const mirror = subtype.key === 'mirror_phone'
-    lines.push(`Subject: ${describePerson(persona, { face: true, body: false, hair: true }, take, random)}.`)
-    lines.push(`Framing: ${subtype.text}; ${mirror ? 'a mirror selfie' : take('shooter', SHOOTERS)}; ${take('distance', DISTANCES)}; ${take('composition', COMPOSITIONS)}.`)
-    lines.push(`Expression and pose: ${[take('expression', EXPRESSIONS), take('handPose', HAND_POSES)].filter(Boolean).join(', ')}.`)
-    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}.`)
+    // Some angles only a selfie can take, some only someone else can; the rest take either.
+    const shooters = SELFIE_SUBTYPES.has(subtype.key)
+      ? SHOOTERS.filter((option) => option[0] === 'selfie')
+      : OTHER_SHOOTER_SUBTYPES.has(subtype.key) ? SHOOTERS.filter((option) => option[0] !== 'selfie') : SHOOTERS
+    const shooter = mirror ? 'a mirror selfie' : take('shooter', shooters)
+    const selfie = attributes.shooter === 'selfie'
+    // An arm's length does not reach a full-body shot.
+    const distance = take('distance', selfie ? DISTANCES.filter((option) => option[0] !== 'full') : DISTANCES)
+    lines.push(`Subject: ${describePerson(persona, { face: true, body: false, hair: true }, take, random, attributes)}.`)
+    lines.push(`Framing: ${subtype.text}; ${selfie ? (SELFIE_SUBTYPES.has(subtype.key) ? 'a front-camera selfie with the arm stretched out' : 'a front-camera selfie, the phone held up in front at about eye level with the arm stretched out') : shooter}; ${distance}; ${take('composition', COMPOSITIONS)}.`)
+    const handPoses = selfie ? HAND_POSES.filter((option) => !TWO_HAND_POSES.has(option[0])) : HAND_POSES
+    lines.push(`Expression and pose: ${[take('expression', EXPRESSIONS), take('handPose', handPoses)].filter(Boolean).join(', ')}.`)
+    // Selfie takers look at their own face on the screen, which sits just below the lens.
+    if (selfie && GAZE_AT_SCREEN_SUBTYPES.has(subtype.key)) lines.push('Gaze: looking at their own face on the phone screen just below the lens, so the face is toward the camera and the eyes look almost straight into it, only a tiny bit lower; the eyes are on the phone, not looking away, sideways or down.')
+    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}${dressNote(persona, gender)}.`)
     lines.push(`Setting: ${takeLocation(mirror ? 'mirror' : random() < 0.55 ? 'indoor' : 'outdoor')}, consistent with ${place}.`)
   } else if (category === 'back') {
-    lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: true }, take, random)}. The face is not visible at all.`)
+    lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: true }, take, random, attributes)}. The face is not visible at all.`)
     lines.push(`Framing: ${subtype.text}; ${take('posture', POSTURE)}; taken by a friend from behind.`)
-    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}.`)
+    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}${dressNote(persona, gender)}.`)
     lines.push(`Setting: consistent with ${subtype.key === 'travel_landmark' ? 'a trip abroad' : place}.`)
     env = ['window_gaze', 'concert'].includes(subtype.key) ? 'indoor' : 'outdoor'
   } else if (category === 'body') {
     const sport = ['gym_mirror', 'after_run', 'yoga', 'hiking', 'sports_kit', 'beach_rashguard'].includes(subtype.key)
     const mirror = ['mirror_neck_down', 'mirror_phone_up'].includes(subtype.key)
-    lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: false }, take, random)}. The face is not visible: it is out of frame, turned away or hidden.`)
+    lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: false }, take, random, attributes)}. The face is not visible: it is out of frame, turned away or hidden.`)
     lines.push(`Framing: ${subtype.text}; ${take('posture', POSTURE)}.`)
     if (subtype.key !== 'silhouette' && subtype.key !== 'shadow') lines.push(`Wearing ${take('outfit', outfitsFor(sport ? OUTFITS.sport : OUTFITS.fitted, gender))}. The photo shows the outfit and the person's build in a natural, non-suggestive way.`)
     if (mirror) lines.push(`Setting: ${takeLocation('mirror')}.`)
@@ -644,10 +749,10 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     else lines.push(`Setting: ${takeLocation(random() < 0.4 ? 'indoor' : 'outdoor')}, consistent with ${place}.`)
   } else if (category === 'group') {
     const hidden = subtype.key === 'friends_back'
-    lines.push(`Account owner: ${describePerson(persona, { face: !hidden, body: false, hair: true }, take, random)}.`)
+    lines.push(`Account owner: ${describePerson(persona, { face: !hidden, body: false, hair: true }, take, random, attributes)}.`)
     lines.push(`Framing: ${subtype.text}. The others are ordinary adults of a similar age and background, each looking different from the account owner.`)
     if (!hidden) lines.push(`Expression: ${take('expression', EXPRESSIONS)}.`)
-    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}.`)
+    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}${dressNote(persona, gender)}.`)
     lines.push(`Setting: consistent with ${subtype.key === 'trip_group' ? 'a trip' : place}.`)
     env = subtype.key === 'table_group' ? 'indoor' : ['trip_group', 'friends_back', 'team'].includes(subtype.key) ? 'outdoor' : 'any'
   } else if (category === 'part') {
@@ -668,7 +773,7 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
   }
 
   if (category !== 'other') lines.push(`Camera and light: ${shot()}.`)
-  lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category) }))
+  lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category), environment: env }))
   lines.push(RULES)
 
   const categoryKo = AVATAR_CATEGORIES.find((entry) => entry.key === category)?.ko ?? category
