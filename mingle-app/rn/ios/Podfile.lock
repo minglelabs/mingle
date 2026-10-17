@@ -2078,7 +2078,7 @@ SPEC CHECKSUMS:
   FBLazyVector: 974207232af1c5372a56239516ccc450a6420bfd
   Google-Mobile-Ads-SDK: 8429bef6ee1a4e322b0a5571b64217ed8317a3d5
   GoogleUserMessagingPlatform: befe603da6501006420c206222acd449bba45a9c
-  hermes-engine: 3fc62077a92e9d220c14e4208fec400e4c7f3323
+  hermes-engine: dd60c08ae915f6713aa5098dce70221d7d14043b
   RCTDeprecation: 8ae59687fd548d481aa5ce8014ac7cd9b47e7316
   RCTRequired: d711b3887891fab6a77c6b9cdc49a3d8b171e36a
   RCTSwiftUI: 96986e49a4fdc2c2103929dee2641e1b57edf33d
@@ -2150,7 +2150,7 @@ SPEC CHECKSUMS:
   ReactCodegen: 904bb187c58c08994570abb1ce35bb0a90ca318f
   ReactCommon: 29d84e7853265c34c504a79f8670d0b18af74b27
   ReactNativeCameraKit: 3d3f6c2aa5ebe24b341f96087d994b4d6764204d
-  ReactNativeDependencies: 2ee9c4aac029165bc90d3d18f6cbfea57f8e49f2
+  ReactNativeDependencies: 329216871f13ffb5ae67df5e0edf23c4588361b2
   RNGoogleMobileAds: ae9d28f5e6e784e3135e54a1d0aba4739171fc0f
   RNPermissions: fc0597955f0d27ef862a3ee490dde79f0cc1d24e
   Yoga: b8206e6746bd28c028572774cece66d5348240c1
