@@ -12,7 +12,7 @@
  * existing character, no text or logo in the image.
  */
 import { phonePhotoRealism } from './photo-realism'
-import { describeFace, FRINGE, HAIRLINE, type FaceGrade } from './face-anatomy'
+import { describeFace, foreheadFringe, HAIRLINE, type FaceGrade } from './face-anatomy'
 export const AVATAR_SPEC_VERSION = 1
 
 export type AvatarCategory = 'face' | 'partial' | 'back' | 'body' | 'part' | 'group' | 'object' | 'animal' | 'scenery' | 'other'
@@ -625,6 +625,8 @@ function describePerson(
 
   const parts: string[] = [`${who} ${ageBand(persona.age, gender)}`, take('attractiveness', ATTRACTIVENESS), take('skin', SKIN_TONES[ancestry])]
   if (show.face && look?.face) parts.push(`with ${look.face}`)
+  // The face is picked before the hair: a high forehead needs hair over it.
+  const face = show.face ? describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade) : ''
   if (show.hair) {
     const young = persona.age === null || persona.age < 35
     const dyed = young && random() < 0.18
@@ -632,14 +634,14 @@ function describePerson(
     const trend = look?.hair?.[table]
     const hair = [`${take('hairLength', HAIR_LENGTH[table])} ${color} hair, ${take('hairStyle', HAIR_STYLE[table])}`]
     // The fringe and hairline change how the forehead, and so the whole face, reads.
-    if (table === 'female') hair.push(take('fringe', FRINGE))
+    if (table === 'female') hair.push(take('fringe', foreheadFringe(attributes)))
     const forehead = table === 'female' ? ['none', 'curtain', 'wispy'].includes(attributes.fringe) : attributes.hairStyle !== 'fringe'
     if (show.face && forehead) hair.push(take('hairline', HAIRLINE))
     parts.push(`${hair.join(', ')}${trend && young ? ` (people of this age there: ${trend})` : ''}`)
   }
   if (show.face) {
     parts.push(
-      describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade),
+      face,
       take('skinFeature', SKIN_FEATURES),
       `what people notice about the face: ${take('charm', CHARM_POINTS)}`,
     )

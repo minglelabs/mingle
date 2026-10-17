@@ -120,6 +120,11 @@ describe('avatar taxonomy', () => {
           expect(spec.attributes.flesh).toBe('lean')
           expect(spec.prompt).toContain('the most noticeable traits, kept exactly as described')
         }
+        // A high forehead always gets hair over or around it, and the head stays in proportion.
+        expect(spec.prompt).toContain('the skull and the top of the head are in natural proportion')
+        if (['high_round', 'broad'].includes(spec.attributes.forehead) || spec.attributes.faceShape === 'high_forehead') {
+          expect(spec.attributes.fringe).not.toBe('none')
+        }
         expect(spec.prompt).not.toMatch(/beautiful|good-looking/i)
       }
     }

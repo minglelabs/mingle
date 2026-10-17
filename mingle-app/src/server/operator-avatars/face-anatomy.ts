@@ -16,6 +16,10 @@
  * - "Wide face" is drawn as a chubby face unless the flesh is called lean: the
  *   width has to come from bone.
  * - A long face drawn on purpose looks too long; it stays out of pretty faces.
+ * - "A small face", a high forehead and a small chin, with the hair pulled
+ *   back and no bangs, drew an oversized skull above the forehead. The face
+ *   is never called small, the head is said to be in proportion, and a high
+ *   forehead gets bangs or face-framing hair (see `foreheadFringe`).
  *
  * Every option is one of three kinds: `common` (the pretty middle),
  * `distinctive` (off the ideal yet attractive) and `plain` (off the ideal in a
@@ -39,7 +43,7 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
     ['short_cheekbone', 1.5, 'a short face whose widest part is broad, high cheekbones', 'distinctive'],
     ['soft_square', 1.2, 'a softly square face, the jaw corners faintly visible on each side', 'distinctive'],
     ['diamond', 1, 'a diamond-shaped face: a narrower forehead and chin, widest at the cheekbones', 'distinctive'],
-    ['small_high_forehead', 1.2, 'a small face with a high, wide forehead and a short lower face', 'distinctive'],
+    ['high_forehead', 1.2, 'a high, wide forehead over a short lower face', 'distinctive'],
     ['long', 1, 'a long face', 'plain'],
     ['round_broad', 1, 'a broad, round face', 'plain'],
     ['wide_jaw', 0.8, 'a wide, square jaw', 'plain'],
@@ -213,8 +217,19 @@ export function describeFace(take: Picker, random: Random, grade: FaceGrade): st
     lines.push(text)
     if (kind === 'distinctive') signature.push(text)
   })
+  // "Small face", a high forehead and a small chin made the model shrink the face inside an ordinary head, leaving an oversized skull above the forehead.
+  lines.push('the face is of ordinary size for the head; the skull and the top of the head are in natural proportion, not enlarged')
   const kept = signature.length ? `; the most noticeable traits, kept exactly as described: ${signature.join('; ')}` : ''
   return `face: ${lines.join('; ')}${kept}`
+}
+
+/** Forehead traits that need hair over or around the forehead to keep the head in proportion. */
+const HIGH_FOREHEADS = new Set(['high_forehead', 'high_round', 'broad'])
+
+/** The fringe options a face can take: a high forehead with nothing over it looks like an oversized head. */
+export function foreheadFringe(attributes: Record<string, string>): readonly Option[] {
+  const high = HIGH_FOREHEADS.has(attributes.faceShape) || HIGH_FOREHEADS.has(attributes.forehead)
+  return high ? FRINGE.filter((option) => option[0] !== 'none') : FRINGE
 }
 
 /** Fringe and hairline: they change how the forehead and the whole face read. */
