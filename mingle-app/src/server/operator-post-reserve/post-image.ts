@@ -1,6 +1,7 @@
 import sharp from 'sharp'
 import { prisma } from '@/lib/prisma'
 import { requestAvatarImage } from '@/server/operator-avatars/generate'
+import { phonePhotoRealism } from '@/server/operator-avatars/photo-realism'
 import { newPostImageKey } from '@/server/posts/post-image-keys'
 import { putPostImage } from '@/server/posts/post-image-storage'
 
@@ -10,13 +11,14 @@ import { putPostImage } from '@/server/posts/post-image-storage'
  * like a phone snapshot and forbids people, so an account's posts never show
  * a face that would have to match its profile picture.
  */
-export function buildPostImagePrompt(description: string, place: string | null = null): string {
+export function buildPostImagePrompt(description: string, place: string | null = null, random: () => number = Math.random): string {
   return [
     'A casual photo someone took on their phone and posted on social media.',
     `It shows: ${description}`,
     ...(place ? [`Taken in ${place}: the street, shops, packaging and objects look like that place, and any writing that happens to be visible is in the local language and script, small and incidental.`] : []),
-    'It must look like a real, unedited snapshot from an ordinary person\'s phone gallery: slightly off-center or tilted, ordinary uneven light, a bit of everyday clutter, not a studio, stock or advertising photo.',
-    'No face and no recognizable person in the image; a hand or a person seen from far behind is fine. Square 1:1 image. No captions, watermarks, logos, brand names, borders or frames.',
+    'It must look like a real, unedited snapshot from an ordinary person\'s phone gallery.',
+    phonePhotoRealism(random, { people: false }),
+    `No face and no recognizable person in the image; a hand or a person seen from far behind is fine. ${random() < 0.75 ? 'Vertical 3:4' : 'Horizontal 4:3'} image, like a phone photo. No captions, watermarks, logos, brand names, borders or frames.`,
   ].join('\n')
 }
 

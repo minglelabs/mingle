@@ -11,6 +11,7 @@
  * (never underwear, swimwear-only or a sexualized pose), no real person, no
  * existing character, no text or logo in the image.
  */
+import { phonePhotoRealism } from './photo-realism'
 export const AVATAR_SPEC_VERSION = 1
 
 export type AvatarCategory = 'face' | 'partial' | 'back' | 'body' | 'part' | 'group' | 'object' | 'animal' | 'scenery' | 'other'
@@ -55,15 +56,15 @@ function pick(options: readonly Option[], random: Random): Option {
 // ─── 1. Kind of photo ────────────────────────────────────────────────────────
 
 export const AVATAR_CATEGORIES: ReadonlyArray<{ key: AvatarCategory; ko: string; weight: number }> = [
-  { key: 'face', ko: '얼굴 위주', weight: 27 },
-  { key: 'partial', ko: '얼굴 일부·가림', weight: 14 },
-  { key: 'back', ko: '뒷모습', weight: 11 },
-  { key: 'body', ko: '몸 위주', weight: 13 },
-  { key: 'part', ko: '손·발·부분', weight: 5 },
+  { key: 'face', ko: '얼굴 위주', weight: 30 },
+  { key: 'partial', ko: '얼굴 일부·가림', weight: 20 },
+  { key: 'back', ko: '뒷모습', weight: 9 },
+  { key: 'body', ko: '몸 위주', weight: 17 },
+  { key: 'part', ko: '손·발·부분', weight: 3 },
   { key: 'group', ko: '여러 명', weight: 5 },
-  { key: 'object', ko: '사물', weight: 12 },
-  { key: 'animal', ko: '동물', weight: 8 },
-  { key: 'scenery', ko: '풍경·장소', weight: 4 },
+  { key: 'object', ko: '사물', weight: 8 },
+  { key: 'animal', ko: '동물', weight: 5 },
+  { key: 'scenery', ko: '풍경·장소', weight: 3 },
   { key: 'other', ko: '기타', weight: 1 },
 ]
 
@@ -78,7 +79,7 @@ const CATEGORY_COUNTRY_FACTORS: Record<'shy' | 'forward', Partial<Record<AvatarC
 
 /** Bio keywords (any language of the persona table) that pull the photo toward a subject. */
 const BIO_HINTS: ReadonlyArray<{ pattern: RegExp; category: AvatarCategory; subtype?: string; factor: number }> = [
-  { pattern: /cat|고양이|猫|ねこ|gato|chat\b|katze|kedi|mèo|แมว|kucing/i, category: 'animal', subtype: 'cat', factor: 4 },
+  { pattern: /cat|고양이|猫|ねこ|gato|chat\b|katze|kedi|mèo|แมว|kucing/i, category: 'animal', subtype: 'cat', factor: 6 },
   { pattern: /dog|강아지|犬|いぬ|perro|cachorro|chien|hund|köpek|chó|หมา|anjing/i, category: 'animal', subtype: 'dog', factor: 4 },
   { pattern: /gym|헬스|운동|筋トレ|ジム|fitness|academia|gimnasio|workout|健身/i, category: 'body', subtype: 'gym_mirror', factor: 3 },
   { pattern: /coffee|커피|카페|コーヒー|カフェ|café|kaffee|kahve|cà phê|咖啡/i, category: 'object', subtype: 'coffee', factor: 2.5 },
@@ -318,11 +319,15 @@ const EYEBROWS: readonly Option[] = [
   ['thick', 3, 'thick eyebrows'], ['thin', 2, 'thin eyebrows'], ['straight', 3, 'straight eyebrows'], ['arched', 2, 'arched eyebrows'],
 ]
 
-/** Most people look ordinary; a feed where everyone looks like a model reads as fake. */
+/**
+ * A profile picture is the best photo someone has of themself, so most look
+ * at least pleasant; a feed where everyone looks like a model still reads as
+ * fake, which is why realism comes from the photo, not from plain faces.
+ */
 const ATTRACTIVENESS: readonly Option[] = [
-  ['ordinary', 60, 'an ordinary, average-looking person'],
-  ['pleasant', 25, 'a pleasant-looking person, not model-like'],
-  ['striking', 15, 'a good-looking person, still clearly an ordinary non-professional'],
+  ['ordinary', 30, 'an ordinary, average-looking person'],
+  ['pleasant', 40, 'a pleasant-looking person, not model-like'],
+  ['striking', 30, 'a good-looking person, still clearly an ordinary non-professional'],
 ]
 
 const HAIR_LENGTH: Record<'female' | 'male', readonly Option[]> = {
@@ -346,7 +351,7 @@ const FACIAL_HAIR: readonly Option[] = [
 ]
 
 const MAKEUP: readonly Option[] = [
-  ['none', 3, 'no makeup'], ['light', 4, 'light everyday makeup'], ['regular', 2.5, 'regular makeup'], ['bold', 0.7, 'noticeable makeup'],
+  ['none', 1.5, 'no makeup'], ['light', 4, 'light everyday makeup'], ['regular', 3.5, 'regular makeup'], ['bold', 0.7, 'noticeable makeup'],
 ]
 
 const ACCESSORIES: readonly Option[] = [
@@ -423,7 +428,7 @@ const COMPOSITIONS: readonly Option[] = [
 ]
 
 const QUALITIES: readonly Option[] = [
-  ['new_phone', 5, 'shot on a recent smartphone'], ['old_phone', 2.5, 'shot on an older smartphone, slightly noisy and soft'],
+  ['new_phone', 5, 'shot on a recent smartphone'], ['old_phone', 1, 'shot on an older smartphone, slightly noisy and soft'],
   ['front_cam', 2, 'front-camera wide-angle distortion'], ['film', 1.5, 'the look of a cheap film camera, grainy with muted colors'],
   ['instant', 0.7, 'the look of an instant-film print'], ['photo_booth', 0.7, 'the look of a photo-booth strip frame, plain backdrop'],
   ['dslr', 1, 'shot on a camera with a softly blurred background'], ['id_photo', 0.3, 'the look of an ID photo against a plain backdrop'],
@@ -574,7 +579,7 @@ function describePerson(persona: AvatarPersona, show: { face: boolean; body: boo
 }
 
 const RULES = [
-  'It must look like a real, unedited photo from an ordinary person\'s phone gallery: not a studio, stock or advertising photo, no perfect symmetry, no glossy retouched skin.',
+  'It must look like a real, unedited photo from an ordinary person\'s phone gallery.',
   'Square 1:1 image. No text, captions, watermarks, logos, brand names, borders or frames anywhere in the image.',
   'Any person shown is an adult, fully and ordinarily dressed. Not a real, identifiable or famous person, and no existing character.',
 ].join(' ')
@@ -663,6 +668,7 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
   }
 
   if (category !== 'other') lines.push(`Camera and light: ${shot()}.`)
+  lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category) }))
   lines.push(RULES)
 
   const categoryKo = AVATAR_CATEGORIES.find((entry) => entry.key === category)?.ko ?? category
