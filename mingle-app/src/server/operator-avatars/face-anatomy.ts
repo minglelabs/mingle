@@ -302,27 +302,18 @@ const SUBTLE_TRAITS: ReadonlyArray<readonly [area: string, options: readonly Opt
   ['hairline', [['uneven_hairline', 0.6, 'a slightly uneven hairline with baby hairs']]],
 ]
 
-/** Areas of the eyes, nose and mouth: every striking face gets one detail there, since those read as most typical. */
-const FEATURE_AREAS = new Set(['eyeSpacing', 'eyeCorners', 'eyelid', 'eyeShape', 'lips', 'lipShape', 'noseBridge', 'noseTip', 'noseShape'])
-
 /**
- * One subtle detail on the eyes, nose or mouth plus two or three elsewhere,
- * each from a different area, kept as subtle_<area> in the attributes.
+ * Three or four subtle details from different areas, kept as subtle_<area>
+ * in the attributes. Forcing one onto the eyes, nose or mouth felt rigid;
+ * with this many picks from the whole list they land there often anyway.
  */
 export function subtleTraits(take: Picker, random: Random, gender: 'female' | 'male'): string {
   const areas = SUBTLE_TRAITS.filter(([area]) => !(gender === 'male' && area === 'chin'))
-  const pickFrom = (candidates: typeof areas, count: number) => {
-    const pool = candidates.map((_, index) => index)
-    const picked: string[] = []
-    for (let left = count; left > 0 && pool.length; left -= 1) {
-      const [area, options] = candidates[takeOne(random, pool)]
-      picked.push(take(`subtle_${area}`, options))
-    }
-    return picked
+  const pool = areas.map((_, index) => index)
+  const picked: string[] = []
+  for (let left = random() < 0.5 ? 3 : 4; left > 0 && pool.length; left -= 1) {
+    const [area, options] = areas[takeOne(random, pool)]
+    picked.push(take(`subtle_${area}`, options))
   }
-  const picked = [
-    ...pickFrom(areas.filter(([area]) => FEATURE_AREAS.has(area)), 1),
-    ...pickFrom(areas.filter(([area]) => !FEATURE_AREAS.has(area)), random() < 0.5 ? 2 : 3),
-  ]
   return `very subtle details of a real face, each only just visible: ${picked.join('; ')}`
 }

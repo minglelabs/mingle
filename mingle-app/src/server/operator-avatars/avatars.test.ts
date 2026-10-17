@@ -118,10 +118,8 @@ describe('avatar taxonomy', () => {
           expect(spec.prompt).toContain('not the typical AI beauty')
           expect(spec.prompt).toContain('the overall impression of the face: ')
           expect(spec.prompt).toContain('the slight natural asymmetry of a real face')
-          // One subtle detail on the eyes, nose or mouth, and two or three elsewhere.
+          // Three or four subtle real-face details, each from a different area.
           const subtle = Object.keys(spec.attributes).filter((key) => key.startsWith('subtle_'))
-          const features = ['eyeSpacing', 'eyeCorners', 'eyelid', 'eyeShape', 'lips', 'lipShape', 'noseBridge', 'noseTip', 'noseShape'].map((area) => `subtle_${area}`)
-          expect(subtle.filter((key) => features.includes(key))).toHaveLength(1)
           expect(subtle.length).toBeGreaterThanOrEqual(3)
           expect(subtle.length).toBeLessThanOrEqual(4)
           expect(spec.prompt).toContain('very subtle details of a real face')
