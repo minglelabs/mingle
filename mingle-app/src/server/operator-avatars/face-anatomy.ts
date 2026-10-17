@@ -200,7 +200,8 @@ const NOT_FOR_STRIKING: Readonly<Record<string, readonly string[]>> = {
 
 /** How many distinctive and plain traits each grade gets. */
 const GRADE_MIX: Record<FaceGrade, { distinctive: readonly [min: number, max: number]; plain: readonly [min: number, max: number] }> = {
-  striking: { distinctive: [1, 2], plain: [0, 0] },
+  // Striking faces are asked for in the abstract; one mild trait eases the typical look without costing beauty.
+  striking: { distinctive: [1, 1], plain: [0, 0] },
   pleasant: { distinctive: [1, 2], plain: [0, 1] },
   ordinary: { distinctive: [0, 1], plain: [1, 2] },
 }

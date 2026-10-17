@@ -365,12 +365,16 @@ const SKIN_FEATURES: readonly Option[] = [
  * spell out an untypical beauty feature by feature broke the face's harmony
  * (50 to 90 at best), while asking for an untypical, overwhelming beauty in
  * the abstract and letting the model choose scored 80 to 85 and did not look
- * typical (2026-10). An impression word keeps striking faces from converging.
+ * typical (2026-10). An impression word ("fox-like") raised it to 95 but
+ * pulled it back toward the typical face; saying the proportions are a real
+ * person's that no one would take for AI made the nose and face shape less
+ * typical (90), and one mild trait such as slightly wide-set eyes kept 95
+ * while easing the typical look. Striking faces get all three.
  */
 const ATTRACTIVENESS: readonly Option[] = [
   ['ordinary', 30, 'an ordinary-looking person'],
   ['pleasant', 40, 'a likable, pretty face'],
-  ['striking', 30, 'not the typical AI beauty: a face with a distinctive look of its own, and still overwhelmingly beautiful, the kind of face people turn to look at; the distinctiveness adds to the beauty, never takes away from it'],
+  ['striking', 30, 'not the typical AI beauty: a face with the specific, slightly unexpected proportions of a real person, the kind no one would take for an AI-generated face, and still overwhelmingly beautiful, the kind of face people turn to look at; the distinctiveness adds to the beauty, never takes away from it'],
 ]
 
 /** The overall impression of a striking face, the way Koreans describe faces (고양이상, 강아지상 …). */
@@ -643,7 +647,9 @@ function describePerson(
   if (show.face && look?.face) parts.push(`with ${look.face}`)
   // The face is picked before the hair: a high forehead needs hair over it.
   const striking = attributes.attractiveness === 'striking'
-  const face = !show.face ? '' : striking ? `the overall impression of the face: ${take('impression', IMPRESSIONS[table])}` : describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade)
+  const face = !show.face ? '' : striking
+    ? [`the overall impression of the face: ${take('impression', IMPRESSIONS[table])}`, describeFace(take, random, 'striking')].filter(Boolean).join('; ')
+    : describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade)
   if (show.hair) {
     const young = persona.age === null || persona.age < 35
     const dyed = young && random() < 0.18

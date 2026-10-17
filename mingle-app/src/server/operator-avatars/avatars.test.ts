@@ -117,7 +117,8 @@ describe('avatar taxonomy', () => {
         if (spec.attributes.attractiveness === 'striking') {
           expect(spec.prompt).toContain('not the typical AI beauty')
           expect(spec.prompt).toContain('the overall impression of the face: ')
-          expect(spec.prompt).not.toContain('unlike a typical pretty face')
+          expect(spec.prompt).toContain('no one would take for an AI-generated face')
+          expect(spec.prompt).toContain('face, subtly unlike a typical pretty face: ')
           expect(spec.prompt).not.toContain('what people notice about the face')
         } else {
           expect(spec.prompt).toContain('what people notice about the face')
@@ -390,12 +391,11 @@ describe('describeFace', () => {
     return { prompt: describeFace(take, random, grade), attributes }
   }
 
-  it('names one or two distinctive traits on a pretty face and nothing plain', () => {
+  it('names exactly one mild distinctive trait on a striking face and nothing plain', () => {
     for (let index = 0; index < 200; index += 1) {
       const { prompt } = kinds('striking', `striking:${index}`)
       const traits = prompt.split('unlike a typical pretty face: ')[1]?.split('; ').filter((trait) => !trait.startsWith('the head in')) ?? []
-      expect(traits.length).toBeGreaterThanOrEqual(1)
-      expect(traits.length).toBeLessThanOrEqual(2)
+      expect(traits.length).toBe(1)
       expect(prompt).not.toMatch(/puffy|bulbous|heavy chin|a long face|broad, round face|dark under-eye|sparse/)
       expect(prompt).not.toMatch(/slightly long midface|wide mouth for the face|short face whose|bone structure shows/)
     }
