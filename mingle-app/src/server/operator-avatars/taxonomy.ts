@@ -12,7 +12,7 @@
  * existing character, no text or logo in the image.
  */
 import { phonePhotoRealism } from './photo-realism'
-import { describeFace, foreheadFringe, HAIRLINE, type FaceGrade } from './face-anatomy'
+import { describeFace, foreheadFringe, HAIRLINE, subtleTraits, type FaceGrade } from './face-anatomy'
 export const AVATAR_SPEC_VERSION = 1
 
 export type AvatarCategory = 'face' | 'partial' | 'back' | 'body' | 'part' | 'group' | 'object' | 'animal' | 'scenery' | 'other'
@@ -681,7 +681,7 @@ function describePerson(
   // The face is picked before the hair: a high forehead needs hair over it.
   const striking = attributes.attractiveness === 'striking'
   const face = !show.face ? '' : striking
-    ? `the overall impression of the face: ${take('impression', IMPRESSIONS[table])}; ${STRIKING_REAL_FACE}`
+    ? `the overall impression of the face: ${take('impression', IMPRESSIONS[table])}; ${subtleTraits(take, random, random() < 0.5 ? 1 : 2, table)}; ${STRIKING_REAL_FACE}`
     : describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade)
   if (show.hair) {
     const young = persona.age === null || persona.age < 35

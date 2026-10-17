@@ -118,6 +118,11 @@ describe('avatar taxonomy', () => {
           expect(spec.prompt).toContain('not the typical AI beauty')
           expect(spec.prompt).toContain('the overall impression of the face: ')
           expect(spec.prompt).toContain('the slight natural asymmetry of a real face')
+          // One or two subtle real-face details from different areas.
+          const subtle = Object.keys(spec.attributes).filter((key) => key.startsWith('subtle_'))
+          expect(subtle.length).toBeGreaterThanOrEqual(1)
+          expect(subtle.length).toBeLessThanOrEqual(2)
+          expect(spec.prompt).toContain('very subtle details of a real face')
           expect(spec.prompt).toContain('a distinctive look of their own')
           expect(spec.prompt).not.toContain('unlike a typical pretty face')
           expect(spec.prompt).not.toContain('what people notice about the face')

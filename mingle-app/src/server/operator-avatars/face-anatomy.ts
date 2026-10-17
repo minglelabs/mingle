@@ -267,3 +267,40 @@ export const HAIRLINE: readonly Option[] = [
   ['straight', 3, 'a straight hairline'], ['rounded', 2.5, 'a rounded hairline with fine baby hairs'],
   ['widows_peak', 1, 'a small widow\'s peak'], ['m_shape', 1, 'a hairline slightly receding at the temples'],
 ]
+
+/**
+ * Real-face details the founder picked out (2026-10): each one, only just
+ * visible, makes a beautiful face read as a real person's instead of the
+ * typical AI face, without costing beauty. Grouped by area so one face never
+ * gets two contradicting details (wide-set and close-set eyes). Every text
+ * says "very slightly": the model exaggerates anything named plainly.
+ */
+const SUBTLE_TRAITS: ReadonlyArray<readonly [area: string, options: readonly Option[]]> = [
+  ['eyeSpacing', [['wide', 1, 'eyes set very slightly wide apart'], ['close', 0.7, 'eyes set very slightly close together']]],
+  ['eyeCorners', [['short_corners', 1, 'very slightly short inner and outer eye corners, not elongated']]],
+  ['eyelid', [['monolid', 1, 'monolids']]],
+  ['midface', [['long', 0.8, 'a very slightly long midface'], ['short', 0.8, 'a very slightly short midface']]],
+  ['lips', [['natural_lips', 1, 'natural, unfilled lips, not plump'], ['small_mouth', 1, 'a very slightly small mouth']]],
+  ['noseBridge', [['low_root', 1, 'a nose bridge that stays low between the eyes even though the tip is high']]],
+  ['noseTip', [['pointed_tip', 0.8, 'a very slightly pointed nose tip'], ['round_tip', 0.8, 'a softly round nose tip']]],
+  ['faceShape', [['round', 1, 'a very slightly round face rather than an egg-shaped oval'], ['long', 0.8, 'a face very slightly longer than an egg-shaped oval']]],
+  ['cheeks', [['lean_cheeks', 0.6, 'very slightly lean cheeks'], ['cheekbones', 0.8, 'very slightly prominent front and side cheekbones']]],
+  ['philtrum', [['long', 0.7, 'a very slightly long philtrum'], ['short', 0.7, 'a very slightly short philtrum']]],
+  ['chin', [['weak', 0.8, 'a very slightly weak, small chin'], ['strong', 0.6, 'a chin very slightly strong for a woman']]],
+  ['forehead', [['broad_flat', 0.7, 'a very slightly broad, flat forehead'], ['wide', 0.7, 'a very slightly wide forehead'], ['narrow', 0.6, 'a very slightly narrow forehead']]],
+  ['hair', [['thin_hair', 0.6, 'hair very slightly thin in volume']]],
+  ['smileLines', [['nasolabial', 0.6, 'the faintest smile lines beside the nose']]],
+  ['dimples', [['dimples', 0.7, 'small dimples']]],
+]
+
+/** `count` subtle real-face details from different areas, kept as subtle_<area> in the attributes. */
+export function subtleTraits(take: Picker, random: Random, count: number, gender: 'female' | 'male'): string {
+  const areas = SUBTLE_TRAITS.filter(([area]) => !(gender === 'male' && area === 'chin'))
+  const pool = areas.map((_, index) => index)
+  const picked: string[] = []
+  for (let left = count; left > 0 && pool.length; left -= 1) {
+    const [area, options] = areas[takeOne(random, pool)]
+    picked.push(take(`subtle_${area}`, options))
+  }
+  return picked.length ? `very subtle details of a real face, each only just visible: ${picked.join('; ')}` : ''
+}
