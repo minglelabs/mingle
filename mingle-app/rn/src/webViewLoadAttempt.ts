@@ -20,12 +20,12 @@
 //   event arrives (only the error Android dispatches right behind a premature
 //   onLoadEnd can disprove it);
 // - a failure sticks until the next attempt, which is a WebView remount
-//   (retry / fallback switch). onLoadStart must not clear it: on Android it
+//   (retry). onLoadStart must not clear it: on Android it
 //   belongs to the very load that failed, and after any failure the error
 //   overlay covers the WebView until the user retries anyway.
 export const WEBVIEW_LOAD_SUCCESS_SETTLE_MS = 300;
 
-// How long a retried / fallback load may stay silent before the "reconnecting"
+// How long a retried load may stay silent before the "reconnecting"
 // spinner turns back into the error overlay with its retry button. Some loads
 // never report back at all (iOS drops failures after the navigation committed,
 // since react-native-webview has no didFailNavigation handler; a hung
@@ -36,7 +36,7 @@ export const WEBVIEW_RETRY_STALL_TIMEOUT_MS = 30_000;
 type TimerHandle = ReturnType<typeof setTimeout>;
 
 export type WebViewLoadAttemptTracker = {
-  /** A new WebView instance mounted (retry, fallback switch, debug remount). */
+  /** A new WebView instance mounted (retry, debug remount). */
   beginAttempt: () => void;
   /** onLoadStart. Confirms a pending finish; does NOT clear a failure. */
   loadStarted: () => void;

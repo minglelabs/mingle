@@ -11,7 +11,7 @@ import PhotoTranslateControl from './PhotoTranslateControl'
 import PhotoTranslationOverlay from './PhotoTranslationOverlay'
 import PhotoTranslationStatusChip from './PhotoTranslationStatusChip'
 import { ZoomableConversationImage, type ConversationImagePagerHandlers, type ConversationImageStage } from './ZoomableConversationImage'
-import { conversationImageSrc, findConversationImageIndex } from './conversation-image-gallery.logic'
+import { conversationImagePath, findConversationImageIndex, withConversationImageRetry } from './conversation-image-gallery.logic'
 import { usePhotoTranslationRoom, type PhotoTranslationRoom } from './photo-translation-context'
 import {
   PHOTO_TRANSLATION_OFF,
@@ -99,13 +99,15 @@ type ConversationImageViewerProps = {
   initialMessageId: string
   locale: string
   onClose: () => void
+  /** Where a photo is loaded from (without the retry marker); defaults to the member image route. */
+  resolvePath?: (image: ConversationMessageImage) => string
 }
 
 export default function ConversationImageViewer(props: ConversationImageViewerProps) {
   return props.images.length ? <ConversationImageViewerContent {...props} /> : null
 }
 
-function ConversationImageViewerContent({ images, initialMessageId, locale, onClose }: ConversationImageViewerProps) {
+function ConversationImageViewerContent({ images, initialMessageId, locale, onClose, resolvePath = conversationImagePath }: ConversationImageViewerProps) {
   const copy = resolveConversationImageCopy(locale)
   const reducedMotion = useReducedMotion() ?? false
   const room = usePhotoTranslationRoom()
@@ -230,7 +232,7 @@ function ConversationImageViewerContent({ images, initialMessageId, locale, onCl
             return <div key={image.messageId} data-conversation-image-slide={slideIndex} className="absolute inset-y-0 w-full"
               style={{ left: `${slideIndex * 100}%` }}>
               <ZoomableConversationImage
-                src={conversationImageSrc(image, retries[image.messageId] ?? 0)}
+                src={withConversationImageRetry(resolvePath(image), retries[image.messageId] ?? 0)}
                 alt={count > 1 ? `${copy.image} ${slideIndex + 1}/${count}` : copy.image}
                 width={image.width} height={image.height}
                 active={isActive} pager={pager}

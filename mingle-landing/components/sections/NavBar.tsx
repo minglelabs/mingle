@@ -102,7 +102,7 @@ export default function NavBar({ version, basePath }: NavBarProps) {
     <nav className="fixed top-0 left-0 right-0 z-50 py-5 bg-white/80 backdrop-blur-xl border-b border-gray-100">
       <div className="max-w-6xl mx-auto px-6 flex justify-between items-center">
         <div className="text-2xl font-extrabold bg-gradient-to-r from-accent-primary to-accent-secondary bg-clip-text text-transparent">
-          Mingle
+          HashChat
         </div>
         <div className="flex items-center gap-4">
           <LanguageSelector version={version} basePath={basePath} />

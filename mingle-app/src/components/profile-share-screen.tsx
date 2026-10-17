@@ -99,7 +99,7 @@ export default function ProfileShareScreen({
   const requestedUserId = initialUserId.trim();
   const profileUserId = requestedUserId || profileRecordId || sessionUserId;
   const fallbackUserName = dictionary.connect.userFallbackLabel
-    ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user");
+    ?? (locale === "ko" ? "HashChat 사용자" : "HashChat user");
   const name = profileName
     || (requestedUserId ? fallbackUserName : session?.user?.name?.trim() || dictionary.titles.my);
   const profileHandle = formatHandle(rawHandle);
@@ -123,7 +123,7 @@ export default function ProfileShareScreen({
     qrUnavailable: dictionary.profile.profileShareQrUnavailableMessage ?? "Your profile link is not ready yet.",
     qrScannerUnavailable: dictionary.profile.profileShareQrScannerUnavailableMessage
       ?? "QR scanning is not available on this device.",
-    qrInvalid: dictionary.profile.profileShareQrInvalidMessage ?? "This is not a Mingle profile QR code.",
+    qrInvalid: dictionary.profile.profileShareQrInvalidMessage ?? "This is not a HashChat profile QR code.",
     qrScanFailed: dictionary.profile.profileShareQrScanFailedMessage ?? "Could not process this QR code.",
     qrSaving: dictionary.profile.profileShareQrSavingLabel ?? "Saving your QR code...",
     qrDownloaded: dictionary.profile.profileShareQrDownloadedMessage ?? "QR code downloaded.",
@@ -401,7 +401,7 @@ export default function ProfileShareScreen({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={qrDataUrl}
-              alt={`${name} Mingle profile QR code`}
+              alt={`${name} HashChat profile QR code`}
               className="h-64 w-64 rounded-xl"
             />
           ) : (
