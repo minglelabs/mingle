@@ -472,16 +472,69 @@ const BUILD: Record<'female' | 'male', readonly Option[]> = {
 }
 
 const HEIGHT: readonly Option[] = [['short', 2, 'on the short side'], ['average', 5, 'of average height'], ['tall', 2, 'on the tall side']]
-const POSTURE: readonly Option[] = [['upright', 3, 'standing upright'], ['slouch', 2, 'slouching a little'], ['lean', 2, 'weight on one leg'], ['relaxed', 3, 'in a relaxed stance']]
-
-const EXPRESSIONS: readonly Option[] = [
-  ['neutral', 3, 'a neutral expression'], ['slight_smile', 4, 'a slight smile'], ['big_smile', 2.5, 'a wide smile'], ['playful', 1.5, 'a playful expression'],
-  ['sleepy', 1, 'a sleepy look'], ['serious', 1.5, 'a serious look'], ['eyes_closed', 0.7, 'eyes closed, smiling'], ['eating', 0.5, 'mid-bite, eating'],
+/** How the body is held in a back or body photo. */
+const POSTURE: readonly Option[] = [
+  ['upright', 2, 'standing upright'], ['slouch', 1.5, 'slouching a little'], ['lean', 2, 'weight on one leg, one hip out'], ['relaxed', 2, 'in a relaxed stance'],
+  ['foot_pop', 1, 'one foot popped up behind'], ['walking', 2, 'caught mid-step while walking'], ['wall_lean', 1.5, 'leaning back against a wall'],
+  ['railing', 1, 'leaning forward on a railing'], ['stairs', 1.2, 'sitting on steps, knees together'], ['squat', 1, 'squatting low, arms resting on the knees'],
+  ['cross_legged', 1, 'sitting cross-legged on the floor'], ['hug_knees', 0.8, 'sitting with the knees pulled up and the arms around them'],
+  ['bed_stomach', 0.6, 'lying on the stomach on a bed, feet up'], ['chair_turned', 0.8, 'sitting sideways on a chair, one arm over the backrest'],
+  ['twirl', 0.6, 'mid-turn, the clothes and hair swinging'], ['stretch', 0.6, 'stretching the arms up overhead'], ['curb', 0.8, 'sitting on a curb or low ledge'],
 ]
 
+/**
+ * Expressions written as what the face does (brows, eyes, mouth, nose,
+ * cheeks), not as emotion names: "surprised" alone gives one stock face,
+ * while real profile photos show many different surprises, smiles and pouts.
+ */
+const EXPRESSIONS: readonly Option[] = [
+  // Smiles
+  ['slight_smile', 3, 'a slight closed-lip smile'], ['half_smile', 2, 'a half smile lifting one corner of the mouth'],
+  ['eye_smile', 2.5, 'a smile that reaches the eyes, the eyes curving into crescents'], ['grin', 1.5, 'a wide grin showing the teeth, the nose scrunched a little'],
+  ['shy_smile', 1.5, 'a shy smile with the chin dipped and the eyes glancing up'], ['cool_smile', 1.2, 'a faint smile in the mouth only, the eyes calm and cool'],
+  ['laugh', 1.5, 'caught laughing, mouth open, eyes squeezed nearly shut'], ['holding_laugh', 1, 'trying not to laugh, lips pressed together, cheeks pushed up'],
+  ['smirk', 0.8, 'a teasing smirk, one brow slightly raised'],
+  // Neutral and cool
+  ['neutral', 2.5, 'a neutral, relaxed face'], ['blank_stare', 1.5, 'a blank stare into the lens, lips slightly parted'],
+  ['unimpressed', 0.8, 'chin slightly lifted, eyelids half lowered, unimpressed'], ['side_eye', 0.8, 'eyes slid sideways toward the lens without turning the head'],
+  ['serious', 1, 'a serious look, the jaw relaxed'], ['dreamy', 1, 'a dreamy, unfocused gaze, lips relaxed'],
+  // Surprises
+  ['small_o', 0.8, 'brows up and lips parted in a small "o"'], ['mock_shock', 0.6, 'a mock-shocked face, mouth wide open'],
+  ['startled', 0.6, 'eyes a little wide, mouth closed, mildly startled'], ['mid_blink', 0.5, 'caught mid-blink, eyes half shut'],
+  // Pouts and playful faces
+  ['pout', 1.2, 'lips pushed out in a small pout'], ['puffed', 0.8, 'cheeks puffed out with air'], ['kissy', 0.6, 'lips puckered as if blowing a kiss'],
+  ['tongue', 0.8, 'the tip of the tongue poking out at one side'], ['wink', 1, 'winking with one eye, the mouth smiling'],
+  ['lip_bite', 0.6, 'lightly biting the lower lip'], ['nose_scrunch', 0.8, 'nose scrunched up playfully'], ['raised_brow', 0.6, 'one eyebrow raised'],
+  ['sulk', 0.6, 'a pretend sulk, the lower lip out and brows drawn together'], ['squint_sun', 0.8, 'squinting a little against the sun'],
+  // In the middle of something
+  ['talking', 0.8, 'mid-sentence, the mouth half open as if talking'], ['sleepy', 0.8, 'sleepy, heavy eyelids, just woken up'],
+  ['eyes_closed', 0.7, 'eyes closed, smiling softly'], ['eating', 0.5, 'mid-bite, eating'], ['yawn', 0.3, 'caught mid-yawn'],
+]
+
+/** Hands in a face photo. Keys in TWO_HAND_POSES need both hands, so a selfie cannot take them. */
 const HAND_POSES: readonly Option[] = [
-  ['none', 8, ''], ['peace', 2, 'making a peace sign'], ['chin', 1.5, 'chin resting on a hand'], ['cheek', 0.7, 'a finger pressed to the cheek'],
-  ['hair', 1, 'a hand in the hair'], ['cup', 1.5, 'holding a cup'], ['pocket', 1, 'a hand in a pocket'], ['arms_crossed', 0.6, 'arms crossed'],
+  ['none', 7, ''], ['peace', 1.5, 'making a peace sign'], ['peace_chin', 0.8, 'a peace sign under the chin'], ['finger_heart', 0.8, 'making a finger heart'],
+  ['chin', 1.2, 'chin resting on a hand'], ['fist_chin', 0.6, 'chin propped on a loose fist'], ['cheek', 0.7, 'a finger pressed to the cheek'],
+  ['hair', 1, 'a hand pushing the hair back'], ['tuck_hair', 1.2, 'tucking hair behind one ear'], ['earring', 0.6, 'touching an earring'],
+  ['cover_mouth', 1, 'fingertips resting near the mouth'], ['sweater_paw', 0.8, 'a sleeve pulled over the hand, held near the face'],
+  ['head_top', 0.6, 'a hand resting on top of the head'], ['shade_eyes', 0.5, 'a hand shading the eyes from the sun'],
+  ['glasses', 0.6, 'pushing up a pair of glasses'], ['collar', 0.6, 'holding the jacket collar'], ['straw', 0.8, 'sipping a drink through a straw'],
+  ['cup', 1.2, 'holding a cup'], ['food', 0.6, 'holding a snack up near the face'], ['flower', 0.5, 'holding a flower near the face'],
+  ['point', 0.5, 'pointing at the camera'], ['pocket', 1, 'a hand in a pocket'], ['arms_crossed', 0.6, 'arms crossed'],
+  ['cheeks_cupped', 0.6, 'both hands cupping the cheeks'], ['frame_face', 0.4, 'both hands framing the face'], ['hood_strings', 0.5, 'both hands pulling the hood strings'],
+]
+
+/** Head angle in a face photo; most photos tilt the head somehow. */
+const HEAD_POSES: readonly Option[] = [
+  ['straight', 3, ''], ['tilt', 3, 'the head tilted to one side'], ['chin_down', 1.5, 'chin tucked down, looking up at the lens'],
+  ['chin_up', 1, 'chin raised a little'], ['lean_in', 1, 'leaning in toward the camera'], ['lean_back', 1, 'leaning back against something'],
+  ['shoulder', 0.8, 'the cheek resting against the raised shoulder'], ['turned', 1.2, 'the body turned away, the face turned back to the lens'],
+]
+
+/** What the body does when a face photo shows it from the waist down. */
+const FRAMED_BODY_POSES: readonly Option[] = [
+  ['standing', 3, ''], ['sitting_table', 2, 'sitting at a table, elbows on it'], ['sitting_floor', 1, 'sitting on the floor'], ['stairs', 1, 'sitting on steps'],
+  ['squat', 0.8, 'squatting low'], ['walking', 1.2, 'walking toward the camera'], ['wall_lean', 1.2, 'leaning against a wall'], ['bed', 0.8, 'sitting on a bed with the legs folded'],
 ]
 
 const OUTFITS: Record<'everyday' | 'fitted' | 'sport', readonly Option[]> = {
@@ -721,7 +774,7 @@ const OTHER_SHOOTER_SUBTYPES = new Set(['profile', 'look_back', 'laughing', 'hea
 /** Face angles where a selfie taker looks at the screen; the others look elsewhere on purpose. */
 const GAZE_AT_SCREEN_SUBTYPES = new Set(['front', 'high_angle', 'low_angle', 'lying_down', 'hand_cover', 'mask', 'cap_brim', 'hair_cover', 'object_cover'])
 /** Hand poses that need the hand holding the phone. */
-const TWO_HAND_POSES = new Set(['arms_crossed', 'pocket'])
+const TWO_HAND_POSES = new Set(['arms_crossed', 'pocket', 'cheeks_cupped', 'frame_face', 'hood_strings'])
 
 /** ", dressed the way young people in Japan often dress (…)" when the country has a known style. */
 function dressNote(persona: AvatarPersona, gender: 'female' | 'male' | null): string {
@@ -780,7 +833,9 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     lines.push(`Subject: ${describePerson(persona, { face: true, body: false, hair: true }, take, random, attributes)}.`)
     lines.push(`Framing: ${subtype.text}; ${selfie ? (SELFIE_SUBTYPES.has(subtype.key) ? 'a front-camera selfie with the arm stretched out' : 'a front-camera selfie, the phone held up in front at about eye level with the arm stretched out') : shooter}; ${distance}; ${take('composition', COMPOSITIONS)}.`)
     const handPoses = selfie ? HAND_POSES.filter((option) => !TWO_HAND_POSES.has(option[0])) : HAND_POSES
-    lines.push(`Expression and pose: ${[take('expression', EXPRESSIONS), take('handPose', handPoses)].filter(Boolean).join(', ')}.`)
+    // A body pose only shows when the frame reaches below the waist.
+    const bodyPose = ['waist', 'full'].includes(attributes.distance) ? take('bodyPose', FRAMED_BODY_POSES) : ''
+    lines.push(`Expression and pose: ${[take('expression', EXPRESSIONS), take('headPose', HEAD_POSES), take('handPose', handPoses), bodyPose].filter(Boolean).join(', ')}.`)
     // Selfie takers look at their own face on the screen, which sits just below the lens.
     if (selfie && GAZE_AT_SCREEN_SUBTYPES.has(subtype.key)) lines.push('Gaze: looking at their own face on the phone screen just below the lens, so the face is toward the camera and the eyes look almost straight into it, only a tiny bit lower; the eyes are on the phone, not looking away, sideways or down.')
     lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}${dressNote(persona, gender)}.`)

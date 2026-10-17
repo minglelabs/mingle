@@ -139,6 +139,19 @@ describe('avatar taxonomy', () => {
     }
   })
 
+  it('varies expression, head angle and hands, and keeps two-hand poses out of selfies', () => {
+    const expressions = new Set<string>()
+    for (let index = 0; index < 400; index += 1) {
+      const spec = pickAvatarSpec(korean, seededRandom(`pose:${index}`))
+      if (spec.category !== 'face' && spec.category !== 'partial') continue
+      expressions.add(spec.attributes.expression)
+      expect(spec.attributes.headPose).toBeTruthy()
+      if (spec.attributes.shooter === 'selfie') expect(['arms_crossed', 'pocket', 'cheeks_cupped', 'frame_face', 'hood_strings']).not.toContain(spec.attributes.handPose)
+      if (spec.attributes.bodyPose) expect(['waist', 'full']).toContain(spec.attributes.distance)
+    }
+    expect(expressions.size).toBeGreaterThan(25)
+  })
+
   it('draws Japanese women with Japanese makeup, hair and dress', () => {
     const japanese: AvatarPersona = { gender: 'female', name: 'ゆき', age: 24, country: 'JP', countryName: 'Japan', city: 'Tokyo', bio: null }
     let faces = 0
