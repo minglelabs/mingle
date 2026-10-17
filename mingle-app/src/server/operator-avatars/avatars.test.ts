@@ -391,6 +391,7 @@ describe('describeFace', () => {
       expect(signature.length).toBeLessThanOrEqual(3)
       expect(attributes.flesh).toBe('lean')
       expect(prompt).not.toMatch(/puffy|bulbous|heavy chin|a long face|broad, round face|dark under-eye|sparse/)
+      expect(prompt).not.toMatch(/short midface|lift when smiling|wide mouth for the face|a short lower face with a small chin|short face whose/)
     }
   })
 

@@ -157,6 +157,19 @@ const PRETTY_FIXED: Readonly<Record<string, readonly string[]>> = {
   flesh: ['lean'],
 }
 
+/**
+ * Distinctive traits that still pulled a striking face down to a cute, round
+ * one when scored (a short compact face, a short midface, full lifting
+ * cheeks, a wide mouth); they stay for ordinary and pleasant faces only.
+ */
+const NOT_FOR_STRIKING: Readonly<Record<string, readonly string[]>> = {
+  faceShape: ['short_cheekbone'],
+  cheekbones: ['apple'],
+  lowerFace: ['short'],
+  midface: ['short'],
+  mouthWidth: ['wide'],
+}
+
 /** How many distinctive and plain traits each grade gets. */
 const GRADE_MIX: Record<FaceGrade, { distinctive: readonly [min: number, max: number]; plain: readonly [min: number, max: number] }> = {
   striking: { distinctive: [2, 3], plain: [0, 0] },
@@ -180,8 +193,9 @@ function takeOne(random: Random, pool: number[]): number {
 export function describeFace(take: Picker, random: Random, grade: FaceGrade): string {
   const mix = GRADE_MIX[grade]
   const kinds = new Map<number, Kind>()
+  const usable = (axis: string, feature: Feature) => !(grade === 'striking' && NOT_FOR_STRIKING[axis]?.includes(feature[0]))
   const withKind = (kind: Kind) =>
-    FACE_AXES.map((_, index) => index).filter((index) => !kinds.has(index) && FACE_AXES[index][1].some((feature) => feature[3] === kind) && !(grade !== 'ordinary' && FACE_AXES[index][0] in PRETTY_FIXED))
+    FACE_AXES.map((_, index) => index).filter((index) => !kinds.has(index) && FACE_AXES[index][1].some((feature) => feature[3] === kind && usable(FACE_AXES[index][0], feature)) && !(grade !== 'ordinary' && FACE_AXES[index][0] in PRETTY_FIXED))
   for (const kind of ['distinctive', 'plain'] as const) {
     const pool = withKind(kind)
     for (let count = between(random, mix[kind]); count > 0 && pool.length; count -= 1) kinds.set(takeOne(random, pool), kind)
@@ -192,7 +206,8 @@ export function describeFace(take: Picker, random: Random, grade: FaceGrade): st
   FACE_AXES.forEach(([axis, features], index) => {
     const kind = kinds.get(index) ?? 'common'
     const fixed = grade !== 'ordinary' ? PRETTY_FIXED[axis] : undefined
-    const options = features.filter((feature) => (fixed ? fixed.includes(feature[0]) : feature[3] === kind)).map(([key, weight, text]) => [key, weight, text] as const)
+    const excluded = grade === 'striking' ? NOT_FOR_STRIKING[axis] ?? [] : []
+    const options = features.filter((feature) => (fixed ? fixed.includes(feature[0]) : feature[3] === kind) && !excluded.includes(feature[0])).map(([key, weight, text]) => [key, weight, text] as const)
     const text = take(axis, options)
     if (!text) return
     lines.push(text)
