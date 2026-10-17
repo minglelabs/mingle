@@ -17,12 +17,26 @@ const CAMERA = [
 
 const SCENE = [
   'The place looks used and real: scuffs, scratches, dust, fingerprints, cables, receipts, a half-empty cup, signs or furniture cut off at the edge of the frame.',
-  'Ordinary light from whatever is there (a window, ceiling lights, overcast sky), never cinematic: no rim light, no golden glow, no dramatic shadows, no color grading.',
 ]
 
-const PEOPLE = 'If a person is in the frame: real skin texture with pores, small blemishes and uneven tone; flyaway hairs; creased clothes; an unposed, in-between expression or a small natural smile, not a model\'s pose; ordinary proportions.'
+/**
+ * Light, skin and surfaces are where generated photos give themselves away
+ * most: everything has the same plastic sheen. These lines go in every photo.
+ */
+const LIGHT = [
+  'Light: real daylight or room light with its natural falloff, brighter near the window and duller deeper inside; soft shadows under the chin, nose and furniture; mixed color temperature where daylight meets indoor bulbs; whites that are slightly grey or slightly warm, not pure.',
+  'Colors are muted and true to life, like an uncorrected phone photo: no boosted saturation, no HDR halo, no teal-and-orange grade, no glow, no rim light, no dramatic shadows.',
+]
 
-const AVOID = 'Avoid everything that marks an AI or stock image: centered symmetric composition, perfectly clean surfaces, glossy or airbrushed skin, glowing light, shallow depth of field, a magazine or advertising look, an overly pretty "aesthetic" scene.'
+const TEXTURE = [
+  'Every surface has its real texture and only the shine it really has: matte walls, fabric with visible weave or knit ribs and pilling, faded denim, scuffed leather, smudged and scratched glass, worn wood, dull metal. Nothing looks waxed, glossy, plastic or rendered.',
+]
+
+const SKIN = 'Skin: real, matte skin with visible pores, fine texture and slight unevenness in tone, a little natural shine only on the forehead or nose, makeup that sits on the skin rather than looking airbrushed; individual hair strands and flyaways, hair that is not perfectly shiny. No smooth, porcelain, waxy or glossy skin, no beauty-filter look.'
+
+const PEOPLE = 'If a person is in the frame: creased clothes that hang naturally; an unposed, in-between expression or a small natural smile, not a model\'s pose; ordinary proportions.'
+
+const AVOID = 'Avoid everything that marks an AI or stock image: an overall plastic sheen, centered symmetric composition, perfectly clean surfaces, glossy or airbrushed skin, glowing light, oversaturated colors, shallow depth of field, a magazine or advertising look, an overly pretty "aesthetic" scene.'
 
 const FLAWS = [
   'the frame is tilted a few degrees',
@@ -49,8 +63,10 @@ function pickFlaws(random: Random): string[] {
 export function phonePhotoRealism(random: Random = Math.random, options: { people?: boolean } = {}): string {
   return [
     ...CAMERA,
+    ...LIGHT,
     ...SCENE,
-    ...(options.people === false ? [] : [PEOPLE]),
+    ...TEXTURE,
+    ...(options.people === false ? [] : [SKIN, PEOPLE]),
     `Imperfections in this photo: ${pickFlaws(random).join('; ')}.`,
     AVOID,
   ].join('\n')
