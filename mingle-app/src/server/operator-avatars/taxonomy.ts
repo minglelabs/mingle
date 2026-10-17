@@ -858,7 +858,11 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     // Selfie takers look at their own face on the screen, which sits just below the lens.
     if (selfie && GAZE_AT_SCREEN_SUBTYPES.has(subtype.key)) lines.push('Gaze: looking at their own face on the phone screen just below the lens, so the face is toward the camera and the eyes look almost straight into it, only a tiny bit lower; the eyes are on the phone, not looking away, sideways or down.')
     lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender, persona))}${dressNote(persona, gender)}.`)
-    lines.push(`Setting: ${takeLocation(mirror ? 'mirror' : random() < 0.55 ? 'indoor' : 'outdoor')}, consistent with ${place}.`)
+    // Lying down happens on a bed or sofa at home.
+    const setting = subtype.key === 'lying_down'
+      ? (env = 'indoor', take('location', LOCATIONS.indoor.filter((option) => ['bedroom', 'living_room'].includes(option[0]))))
+      : takeLocation(mirror ? 'mirror' : random() < 0.55 ? 'indoor' : 'outdoor')
+    lines.push(`Setting: ${setting}, consistent with ${place}.`)
   } else if (category === 'back') {
     lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: true }, take, random, attributes)}. The face is not visible at all.`)
     // The subtype already fixes what the body does unless the person is just standing somewhere.

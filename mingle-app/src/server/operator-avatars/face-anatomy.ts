@@ -286,7 +286,7 @@ const SUBTLE_TRAITS: ReadonlyArray<readonly [area: string, options: readonly Opt
   ['faceShape', [['round', 1, 'a very slightly round face rather than an egg-shaped oval'], ['long', 0.8, 'a face very slightly longer than an egg-shaped oval']]],
   ['cheeks', [['lean_cheeks', 0.6, 'very slightly lean cheeks'], ['cheekbones', 0.8, 'very slightly prominent front and side cheekbones']]],
   ['philtrum', [['long', 0.7, 'a very slightly long philtrum'], ['short', 0.7, 'a very slightly short philtrum']]],
-  ['chin', [['weak', 0.8, 'a very slightly weak, small chin'], ['strong', 0.6, 'a chin very slightly strong for a woman']]],
+  ['chin', [['weak', 0.8, 'a very slightly weak, small chin'], ['strong', 0.6, 'a chin very slightly strong for a woman'], ['jaw_corners', 0.6, 'jaw corners faintly visible']]],
   ['forehead', [['broad_flat', 0.7, 'a very slightly broad, flat forehead'], ['wide', 0.7, 'a very slightly wide forehead'], ['narrow', 0.6, 'a very slightly narrow forehead']]],
   ['hair', [['thin_hair', 0.6, 'hair very slightly thin in volume']]],
   ['smileLines', [['nasolabial', 0.6, 'the faintest smile lines beside the nose']]],
@@ -298,7 +298,6 @@ const SUBTLE_TRAITS: ReadonlyArray<readonly [area: string, options: readonly Opt
   ['brows', [['uneven_brows', 0.7, 'brows very slightly uneven'], ['sparse_tail', 0.6, 'brows a little sparse toward the tail'], ['low_brows', 0.6, 'brows sitting very slightly low over the eyes']]],
   ['ears', [['ears_out', 0.5, 'ears that stick out very slightly']]],
   ['skinMarks', [['freckles', 0.6, 'a few faint freckles'], ['moles', 0.7, 'two or three small moles on the face']]],
-  ['jaw', [['jaw_corners', 0.6, 'jaw corners faintly visible']]],
   ['hairline', [['uneven_hairline', 0.6, 'a slightly uneven hairline with baby hairs']]],
 ]
 
@@ -309,7 +308,7 @@ const SUBTLE_TRAITS: ReadonlyArray<readonly [area: string, options: readonly Opt
  * with a bubbly look) were absorbed and changed nothing (2026-10).
  */
 const AREA_WEIGHTS: Readonly<Record<string, number>> = {
-  faceShape: 2, cheeks: 1.8, forehead: 1.5, chin: 1.5, midface: 1.5, jaw: 1.3, lips: 1.3, noseBridge: 1.3,
+  faceShape: 2, cheeks: 1.8, forehead: 1.5, chin: 1.6, midface: 1.5, lips: 1.3, noseBridge: 1.3,
   dimples: 0.4,
 }
 
@@ -322,7 +321,10 @@ const CUTE_DEFAULTS = new Set(['faceShape:round', 'eyeSpacing:wide', 'chin:weak'
  * with this many picks from the whole list they land there often anyway.
  */
 export function subtleTraits(take: Picker, random: Random, gender: 'female' | 'male'): string {
-  const areas = SUBTLE_TRAITS.filter(([area]) => !(gender === 'male' && area === 'chin'))
+  // "Strong for a woman" only makes sense on a woman.
+  const areas = gender === 'male'
+    ? SUBTLE_TRAITS.map(([area, options]) => [area, area === 'chin' ? options.filter((option) => option[0] !== 'strong') : options] as const)
+    : SUBTLE_TRAITS
   const pool = areas.map((_, index) => index)
   const picked: string[] = []
   for (let left = random() < 0.5 ? 3 : 4; left > 0 && pool.length; left -= 1) {
