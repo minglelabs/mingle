@@ -314,7 +314,7 @@ const AREA_WEIGHTS: Readonly<Record<string, number>> = {
 }
 
 /** Options that match the model's default cute face; picked less often. */
-const CUTE_DEFAULTS = new Set(['faceShape:round', 'eyeSpacing:wide'])
+const CUTE_DEFAULTS = new Set(['faceShape:round', 'eyeSpacing:wide', 'chin:weak', 'eyeShape:downturned'])
 
 /**
  * Three or four subtle details from different areas, kept as subtle_<area>

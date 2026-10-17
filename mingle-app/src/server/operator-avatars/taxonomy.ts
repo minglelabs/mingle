@@ -398,9 +398,11 @@ const STRIKING_REAL_FACE = 'the slight natural asymmetry of a real face: one eye
 /** The overall impression of a striking face, the way Koreans describe faces (고양이상, 강아지상 …). */
 const IMPRESSIONS: Record<'female' | 'male', readonly Option[]> = {
   female: [
-    ['cat', 2, 'cat-like'], ['puppy', 2, 'puppy-like and sweet'], ['fox', 1.5, 'fox-like'], ['rabbit', 1.2, 'rabbit-like and lively'],
-    ['innocent', 2, 'innocent and clear'], ['chic', 1.5, 'chic and cool'], ['graceful', 1.5, 'graceful and elegant'],
-    ['bright', 1.5, 'bright and bubbly'], ['dreamy', 1, 'soft and dreamy'], ['exotic', 0.8, 'a little exotic'],
+    // Sharp or cool impressions kept the subtle details visible; sweet, bubbly ones matched the model's own
+    // cute beauty and absorbed them (2026-10), so they are picked less.
+    ['cat', 3, 'cat-like'], ['fox', 3, 'fox-like'], ['chic', 2.5, 'chic and cool'], ['graceful', 2, 'graceful and elegant'], ['exotic', 1.2, 'a little exotic'],
+    ['innocent', 1.2, 'innocent and clear'], ['puppy', 0.8, 'puppy-like and sweet'], ['rabbit', 0.6, 'rabbit-like and lively'],
+    ['bright', 0.6, 'bright and bubbly'], ['dreamy', 0.8, 'soft and dreamy'],
   ],
   male: [
     ['puppy', 2, 'puppy-like and warm'], ['cat', 1.5, 'cat-like'], ['wolf', 1.2, 'sharp and wolfish'], ['gentle', 2, 'gentle and calm'],
