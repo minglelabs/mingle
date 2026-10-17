@@ -24,7 +24,8 @@ const SCENE = [
  * most: everything has the same plastic sheen. These lines go in every photo.
  */
 const LIGHT = [
-  'Light: real daylight or room light with its natural falloff, brighter near the window and duller deeper inside; soft shadows under the chin, nose and furniture; mixed color temperature where daylight meets indoor bulbs; whites that are slightly grey or slightly warm, not pure.',
+  'Light: only what the place itself gives, with its natural falloff and direction (from a window, the sky, ceiling lights or street lamps); soft shadows under the chin, nose and furniture; mixed color temperatures where different lights meet; whites that are slightly grey or slightly warm, not pure.',
+  'A face gets no more light than its surroundings: no flash, no spotlight or frontal key light on the face, no face brighter or cleaner than the background around it. In dim places the face is dim too.',
   'Colors are muted and true to life, like an uncorrected phone photo: no boosted saturation, no HDR halo, no teal-and-orange grade, no glow, no rim light, no dramatic shadows.',
 ]
 
