@@ -115,7 +115,7 @@ describe('avatar taxonomy', () => {
         expect(spec.prompt).toContain('unmistakably Korean features')
         // Only the one to three traits that break the typical face are named.
         expect(spec.prompt).toContain('what people notice about the face')
-        if (spec.attributes.attractiveness !== 'ordinary') expect(spec.prompt).toContain('face, unlike a typical pretty face: ')
+        if (spec.attributes.attractiveness !== 'ordinary') expect(spec.prompt).toContain('face, subtly unlike a typical pretty face: ')
         if (['high_round', 'broad'].includes(spec.attributes.forehead) || spec.attributes.faceShape === 'high_forehead') {
           expect(spec.attributes.fringe).not.toBe('none')
           expect(spec.prompt).toContain('the head in natural proportion to the face')

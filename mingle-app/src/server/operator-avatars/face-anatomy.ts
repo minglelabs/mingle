@@ -38,6 +38,10 @@
  *   named only two or three traits. So only the traits that break the
  *   typical face are named; the axes' common options are kept as the middle
  *   those traits are picked against.
+ * - The model exaggerates whatever is named: "noticeably wide-set eyes" and
+ *   "a full upper lip" came out as staring eyes and filler lips. Distinctive
+ *   traits are worded mildly ("slightly", "a little"), and the line says the
+ *   face is only subtly unlike a typical one.
  *
  * Every option is one of three kinds: `common` (the pretty middle),
  * `distinctive` (off the ideal yet attractive) and `plain` (off the ideal in a
@@ -82,7 +86,7 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
   ]],
   ['cheekbones', [
     ['average', 4, '', 'common'],
-    ['high_hollow', 1.3, 'high, prominent cheekbones with a slight hollow below them', 'distinctive'],
+    ['high_hollow', 1.3, 'slightly high cheekbones', 'distinctive'],
     ['apple', 1.2, 'full, rounded front cheeks that lift when smiling', 'distinctive'],
     ['flat', 0.8, 'flat cheekbones', 'plain'],
   ]],
@@ -108,14 +112,14 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
   ]],
   ['eyeShape', [
     ['almond', 3, 'almond eyes of medium size', 'common'],
-    ['long_narrow', 1.5, 'long, narrow eyes', 'distinctive'],
+    ['long_narrow', 1.5, 'slightly long, narrow eyes', 'distinctive'],
     ['downturned', 1.5, 'slightly downturned, soft eyes', 'distinctive'],
-    ['lifted', 1.5, 'eyes with lifted outer corners', 'distinctive'],
+    ['lifted', 1.5, 'eyes whose outer corners lift slightly', 'distinctive'],
     ['small', 0.8, 'small, narrow eyes', 'plain'],
   ]],
   ['eyeSpacing', [
     ['average', 4, '', 'common'],
-    ['wide', 1.5, 'eyes set noticeably wide apart', 'distinctive'],
+    ['wide', 1.5, 'eyes set a little wider apart than usual', 'distinctive'],
     ['close', 0.7, 'eyes set a little close together', 'distinctive'],
   ]],
   ['eyeDetail', [
@@ -127,14 +131,14 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
   ['brows', [
     ['straight', 3, 'straight, natural brows', 'common'],
     ['soft_arch', 2, 'softly arched brows', 'common'],
-    ['low_thick', 1.2, 'thick, straight brows set low, close above the eyes', 'distinctive'],
+    ['low_thick', 1.2, 'slightly low, straight brows', 'distinctive'],
     ['high_light', 1, 'light, thin brows set high above the eyes', 'distinctive'],
     ['sparse', 0.6, 'sparse, uneven brows', 'plain'],
   ]],
   ['noseBridge', [
     ['medium', 3, 'a straight nose bridge of medium height', 'common'],
-    ['high', 1.2, 'a high, straight nose bridge', 'distinctive'],
-    ['bump', 1, 'a nose bridge with a small bump', 'distinctive'],
+    ['high', 1.2, 'a slightly higher nose bridge', 'distinctive'],
+    ['bump', 1, 'a very small bump on the nose bridge', 'distinctive'],
     ['low_soft', 2, 'a low, soft nose bridge', 'distinctive'],
     ['flat_wide', 0.8, 'a flat, wide nose bridge', 'plain'],
   ]],
@@ -153,9 +157,9 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
   ]],
   ['lipFullness', [
     ['lower_fuller', 3, 'full lips, the lower one a little fuller', 'common'],
-    ['upper_full', 1.2, 'a full upper lip, as full as the lower one', 'distinctive'],
+    ['upper_full', 1.2, 'an upper lip a little fuller than usual', 'distinctive'],
     ['thin_upper', 1, 'a thin upper lip over a fuller lower lip', 'distinctive'],
-    ['plump', 1, 'plump, slightly pouting lips', 'distinctive'],
+    ['plump', 1, 'lips that pout very slightly at rest', 'distinctive'],
     ['thin', 0.8, 'thin lips', 'plain'],
   ]],
   ['mouthWidth', [
@@ -165,7 +169,7 @@ const FACE_AXES: ReadonlyArray<readonly [axis: string, features: readonly Featur
   ]],
   ['lipLine', [
     ['soft_bow', 3, 'a soft cupid\'s bow', 'common'],
-    ['sharp_bow', 1.2, 'a sharp, clearly drawn cupid\'s bow', 'distinctive'],
+    ['sharp_bow', 1.2, 'a slightly defined cupid\'s bow', 'distinctive'],
     ['m_shape', 1, 'an M-shaped upper lip', 'distinctive'],
     ['corners_up', 1.2, 'mouth corners that turn up at rest', 'distinctive'],
     ['corners_down', 0.8, 'mouth corners that turn down slightly at rest', 'distinctive'],
@@ -240,7 +244,7 @@ export function describeFace(take: Picker, random: Random, grade: FaceGrade): st
   })
   if (!traits.length) return ''
   // A high forehead made the model draw an oversized skull above it.
-  return `face, unlike a typical pretty face: ${traits.join('; ')}${highForehead ? '; the head in natural proportion to the face' : ''}`
+  return `face, subtly unlike a typical pretty face: ${traits.join('; ')}${highForehead ? '; the head in natural proportion to the face' : ''}`
 }
 
 /** Forehead traits that need hair over or around the forehead to keep the head in proportion. */
