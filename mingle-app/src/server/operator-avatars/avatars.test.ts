@@ -100,7 +100,7 @@ describe('avatar taxonomy', () => {
   it('describes the person from the account and never shows the face in a back or body photo', () => {
     for (let index = 0; index < 400; index += 1) {
       const spec = pickAvatarSpec(korean, seededRandom(`rules:${index}`))
-      expect(spec.prompt).toContain('No text, captions, watermarks')
+      expect(spec.prompt).toMatch(/No (other )?text, captions, watermarks/)
       expect(spec.prompt).toContain('adult')
       expect(spec.labelKo).toContain(' · ')
       if (['face', 'partial', 'back', 'body'].includes(spec.category)) {

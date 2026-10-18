@@ -65,8 +65,8 @@ export const AVATAR_CATEGORIES: ReadonlyArray<{ key: AvatarCategory; ko: string;
   { key: 'group', ko: '여러 명', weight: 5 },
   { key: 'object', ko: '사물', weight: 8 },
   { key: 'animal', ko: '동물', weight: 5 },
-  { key: 'scenery', ko: '풍경·장소', weight: 3 },
-  { key: 'other', ko: '기타', weight: 1 },
+  { key: 'scenery', ko: '풍경·장소', weight: 4 },
+  { key: 'other', ko: '그림·글자', weight: 5 },
 ]
 
 /** East Asian profiles hide the face more; Western and Latin American ones show it more. */
@@ -196,6 +196,8 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('plant', '화분', 1.5, 'a potted plant by a window'),
     sub('flowers', '꽃다발', 2, 'a small bouquet of flowers held in a hand'),
     sub('plush', '인형·피규어', 1.5, 'a soft toy sitting on a bed'),
+    sub('single_flower', '꽃 한 송이', 1.5, 'one flower up close (a rose, a tulip or a white peony)'),
+    sub('mascot', '마스코트 조형물', 1, 'a big cute mascot statue or costumed character in front of a shop or at a tourist spot, photographed on the street'),
     sub('rain_window', '비 오는 창문', 1.5, 'raindrops on a window with blurred city lights behind'),
   ],
   animal: [
@@ -219,9 +221,13 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('landmark', '여행지', 1.5, 'a famous kind of landmark photographed like a tourist would'),
   ],
   other: [
-    sub('doodle', '낙서풍 자화상', 3, 'a simple hand-drawn doodle self-portrait on paper, in an original style'),
-    sub('watercolor', '수채화', 2, 'a small amateur watercolor painting of a landscape'),
-    sub('emoji_plain', '단색 배경', 1, 'a plain pastel background with one small simple shape in the center'),
+    sub('anime_icon', '애니풍 그림', 3, 'an anime-style drawing of an original character, cropped to the head and shoulders like a profile icon'),
+    sub('sticker_char', '캐릭터 스티커', 2.5, 'a cute, simple cartoon animal or blob character in the style of a messenger-app sticker, on a plain white background, with two or three hand-drawn words in a speech bubble in the everyday language of {country}'),
+    sub('handwriting', '손글씨', 2, 'a word or two (a name or a short phrase) handwritten with a brush pen on plain paper in the language and script of {country}, photographed on a desk'),
+    sub('lettering', '글자 이미지', 1, 'a short word or a name in loose hand-lettered script on a soft pastel background'),
+    sub('doodle', '낙서풍 자화상', 2, 'a simple hand-drawn doodle self-portrait on paper, in an original style'),
+    sub('watercolor', '수채화', 1, 'a small amateur watercolor painting of a landscape'),
+    sub('emoji_plain', '단색 배경', 0.5, 'a plain pastel background with one small simple shape in the center'),
   ],
 }
 
@@ -803,6 +809,17 @@ function dressNote(persona: AvatarPersona, gender: 'female' | 'male' | null): st
   return dress ? `, styled in ${dress}; the outfit is well coordinated` : '; the outfit is well coordinated'
 }
 
+/** Pictures made in an app, not photographed: the phone-photo lines would turn them into photos. */
+const DIGITAL_SUBTYPES = new Set(['anime_icon', 'sticker_char', 'lettering', 'emoji_plain'])
+/** Pictures whose subject is a few words. */
+const LETTER_SUBTYPES = new Set(['sticker_char', 'handwriting', 'lettering'])
+
+const DIGITAL_RULES = [
+  'Square 1:1 image: a flat digital picture as saved from a drawing app, not a photo.',
+  'An original design: no existing character from any anime, game, manga or brand, and not a real or famous person. Any person drawn is an adult.',
+  'No text, captions, watermarks, logos, signatures, borders or frames.',
+].join(' ')
+
 const RULES = [
   'It must look like a real, unedited photo from an ordinary person\'s phone gallery.',
   'Square 1:1 image. No text, captions, watermarks, logos, brand names, borders or frames anywhere in the image.',
@@ -914,12 +931,17 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     lines.push(`Subject: ${subtype.text}, as seen in or near ${place}. No people as the subject.`)
     env = 'outdoor'
   } else {
-    lines.push(`Subject: ${subtype.text}. No photographic person in the image.`)
+    lines.push(`Subject: ${subtype.text.replace('{country}', persona.countryName ?? 'the persona\'s country')}. No photographic person in the image.`)
+    if (LETTER_SUBTYPES.has(subtype.key)) lines.push('The words are the subject: spelled correctly, something a young person there would really write, and nothing else is written anywhere.')
   }
 
-  if (category !== 'other') lines.push(`Camera and light: ${shot()}.`)
-  lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category), faces: ['face', 'partial', 'group'].includes(category), environment: env }))
-  lines.push(RULES)
+  if (category === 'other' && DIGITAL_SUBTYPES.has(subtype.key)) {
+    lines.push(LETTER_SUBTYPES.has(subtype.key) ? DIGITAL_RULES.replace('No text, captions,', 'No other text, captions,') : DIGITAL_RULES)
+  } else {
+    if (category !== 'other') lines.push(`Camera and light: ${shot()}.`)
+    lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category), faces: ['face', 'partial', 'group'].includes(category), environment: env }))
+    lines.push(LETTER_SUBTYPES.has(subtype.key) ? RULES.replace('No text, captions,', 'No other text, captions,') : RULES)
+  }
 
   const categoryKo = AVATAR_CATEGORIES.find((entry) => entry.key === category)?.ko ?? category
   return {
