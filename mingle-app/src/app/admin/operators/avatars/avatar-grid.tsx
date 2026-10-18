@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { ImageOff, Loader2, RefreshCw, Send } from 'lucide-react'
+import ImageZoomOverlay from '@/components/feed/image-zoom-overlay'
 import LanguageFlag from '@/components/language-flag'
 
 export type AvatarGridItem = {
@@ -32,6 +33,7 @@ type Filter = 'all' | 'missing' | 'generated'
 function Card({ item, onChange }: { item: AvatarGridItem; onChange: (next: AvatarGridItem) => void }) {
   const [busy, setBusy] = useState<'avatar' | 'post' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [zoom, setZoom] = useState(false)
 
   const call = async (kind: 'avatar' | 'post') => {
     if (busy) return
@@ -60,11 +62,12 @@ function Card({ item, onChange }: { item: AvatarGridItem; onChange: (next: Avata
 
   return (
     <li className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+      {item.image ? <ImageZoomOverlay open={zoom} src={item.image} alt={`${item.name ?? item.handle} 프로필 사진`} closeLabel="닫기" reducedMotion={false} onClose={() => setZoom(false)} /> : null}
       <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-slate-100">
         {item.image ? (
           // Profile photos are external/signed URLs; next/image optimization is not configured for them.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.image} alt={`${item.name ?? item.handle} 프로필 사진`} loading="lazy" className="h-full w-full object-cover" />
+          <img src={item.image} alt={`${item.name ?? item.handle} 프로필 사진`} loading="lazy" className="h-full w-full cursor-zoom-in object-cover" onClick={() => setZoom(true)} />
         ) : (
           <span className="flex h-full w-full items-center justify-center text-slate-400">
             <ImageOff size={28} aria-label="사진 없음" />

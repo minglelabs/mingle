@@ -5,7 +5,10 @@ import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/admin/guard'
 import { getFeed } from '@/server/feed/feed-service'
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
-import { OperatorAvatar, OperatorsMain } from '../operators/_components/operator-ui'
+import { OperatorsMain } from '../operators/_components/operator-ui'
+import { ZoomableAvatar } from '../operators/_components/zoomable-avatar'
+import { PostBody } from './_components/post-body'
+import { ZoomableImage } from './_components/zoomable-image'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +53,14 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
     select: { id: true, primaryLanguages: true },
   })
   const authorLanguages = new Map(authors.map((author) => [author.id, author.primaryLanguages]))
+  const versions = await prisma.post.findMany({
+    where: { id: { in: postIds } },
+    select: { id: true, bodyVersion: true, translations: { where: { status: 'ready', text: { not: null } }, select: { bodyVersion: true, language: true, text: true }, orderBy: { language: 'asc' } } },
+  })
+  const translationsByPost = new Map(versions.map((post) => [
+    post.id,
+    post.translations.filter((translation) => translation.bodyVersion === post.bodyVersion).map((translation) => ({ language: translation.language, text: translation.text! })),
+  ]))
   const comments = postIds.length
     ? await prisma.postComment.findMany({
         where: { postId: { in: postIds }, moderationHiddenAt: null, author: visibleCommentsWhere(postIds[0], viewer?.id ?? null).author },
@@ -100,7 +111,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
             return (
               <li key={post.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="flex items-center gap-3">
-                  <OperatorAvatar image={post.author.image} name={post.author.name} size={40} languages={authorLanguages.get(post.author.id)} />
+                  <ZoomableAvatar image={post.author.image} name={post.author.name} size={40} languages={authorLanguages.get(post.author.id)} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-slate-900">{post.author.name || '이름 없음'}</p>
                     <p className="truncate text-xs text-slate-500">
@@ -113,10 +124,15 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                   ) : null}
                 </div>
 
-                {post.sourceText ? <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{post.sourceText}</p> : null}
+                {post.sourceText ? (
+                  <PostBody
+                    sourceText={post.sourceText}
+                    sourceLanguage={post.sourceLanguage}
+                    translations={(translationsByPost.get(post.id) ?? []).filter((translation) => translation.language !== post.sourceLanguage)}
+                  />
+                ) : null}
                 {post.imageObjectKey ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <ZoomableImage
                     src={`/api/posts/${post.id}/image`}
                     alt="글 사진"
                     width={post.imageWidth ?? undefined}
@@ -137,7 +153,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                   <ul className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                     {postComments.slice(0, COMMENTS_PER_POST).map((comment) => (
                       <li key={comment.id} className={`flex items-start gap-2 ${comment.parentId ? 'pl-8' : ''}`}>
-                        <OperatorAvatar image={comment.author.image} name={comment.author.name} size={24} />
+                        <ZoomableAvatar image={comment.author.image} name={comment.author.name} size={24} />
                         <p className="min-w-0 flex-1 break-words text-sm text-slate-800">
                           <span className="font-semibold">{comment.author.name || '이름 없음'}</span> {comment.sourceText}
                         </p>
