@@ -816,7 +816,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
 
       <div
         ref={setScrollEl}
-        className="min-h-0 flex-1 overflow-y-auto bg-black"
+        className="no-scrollbar min-h-0 flex-1 overflow-y-auto bg-black"
         onScroll={handleScroll}
         onTouchStart={markUserGesture}
         onWheel={markUserGesture}
@@ -857,6 +857,11 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
               }}
               onOpenActions={(id) => setActionPostId(id)}
               onOpenAuthor={(authorId) => {
+                // Profiles are for signed-in readers only (the profile API answers 401).
+                if (!viewerId) {
+                  goToLogin(post.id);
+                  return;
+                }
                 const ctx = analyticsFor(key);
                 if (ctx) trackFeedEvent(feedEvents.profileOpened(ctx));
                 router.push(`/${locale}/users/${encodeURIComponent(authorId)}`);
