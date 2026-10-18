@@ -12,13 +12,30 @@ import { putPostImage } from '@/server/posts/post-image-storage'
  * a face that would have to match its profile picture.
  */
 export function buildPostImagePrompt(description: string, place: string | null = null, random: () => number = Math.random): string {
+  if (isScreenshot(description)) return buildScreenshotPrompt(description, place)
   return [
     'A casual photo someone took on their phone and posted on social media.',
     `It shows: ${description}`,
     ...(place ? [`Taken in ${place}: the street, shops, packaging and objects look like that place, and any writing that happens to be visible is in the local language and script, small and incidental.`] : []),
     'It must look like a real, unedited snapshot from an ordinary person\'s phone gallery.',
     phonePhotoRealism(random, { people: false }),
-    `No face and no recognizable person in the image; a hand or a person seen from far behind is fine. ${random() < 0.75 ? 'Vertical 3:4' : 'Horizontal 4:3'} image, like a phone photo. No captions, watermarks, logos, brand names, borders or frames.`,
+    `No face and no recognizable person in the image; a hand or a person seen from far behind is fine. Not a photo of a phone, tablet or computer screen. ${random() < 0.75 ? 'Vertical 3:4' : 'Horizontal 4:3'} image, like a phone photo. No captions, watermarks, logos, brand names, borders or frames.`,
+  ].join('\n')
+}
+
+/** What is on someone's screen is shared as a screenshot; nobody photographs their own phone. */
+function isScreenshot(description: string): boolean {
+  return /\bscreen ?(shot|capture)\b|\b(smart)?phone screen\b/i.test(description)
+}
+
+function buildScreenshotPrompt(description: string, place: string | null): string {
+  return [
+    'A screenshot saved on a phone and posted on social media.',
+    `It shows: ${description}`,
+    'Only what the screen displays, edge to edge, with the phone\'s status bar at the top: not a photo of a phone, no hand, no device frame, no background around it.',
+    ...(place ? [`The phone belongs to someone living in ${place}: the status bar and app look like what people there use.`] : []),
+    'A plain everyday app screen with its usual look; every word spelled correctly and in the language the description implies.',
+    'Vertical 9:19.5 image, like a phone screenshot. No watermarks, real app names or logos, borders or frames.',
   ].join('\n')
 }
 

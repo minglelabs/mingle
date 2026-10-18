@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import ProfileLanguageFlagStack from '@/components/profile-language-flag-stack'
 
 /**
  * Presentational pieces shared by the operator admin pages. Phone-first
@@ -33,7 +34,16 @@ export function InactiveChip() {
   )
 }
 
-export function OperatorAvatar({ image, name, size = 48 }: { image: string | null; name: string | null; size?: number }) {
+/** The account's photo; with `languages`, their primary-language flags sit on it as in the app. */
+export function OperatorAvatar({ image, name, size = 48, languages }: { image: string | null; name: string | null; size?: number; languages?: readonly string[] }) {
+  if (languages?.length) {
+    return (
+      <span className="relative inline-flex shrink-0">
+        <OperatorAvatar image={image} name={name} size={size} />
+        <ProfileLanguageFlagStack languages={languages} size={size} />
+      </span>
+    )
+  }
   const style = { width: size, height: size }
   if (image) {
     return (

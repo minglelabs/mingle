@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/admin/guard'
-import { countryLabel, koreanLanguageName } from '../_lib/options'
+import { countryLabel } from '../_lib/options'
 import { AvatarGrid, type AvatarGridItem } from './avatar-grid'
 
 export const dynamic = 'force-dynamic'
@@ -39,7 +39,7 @@ export default async function AdminOperatorAvatarsPage() {
     image: row.image,
     label: specLabel(row.operatorAccount?.avatarSpec),
     country: row.operatorAccount?.personaCountry ? countryLabel(row.operatorAccount.personaCountry) : null,
-    language: row.primaryLanguages[0] ? koreanLanguageName(row.primaryLanguages[0]) : null,
+    languages: row.primaryLanguages,
   }))
 
   return (

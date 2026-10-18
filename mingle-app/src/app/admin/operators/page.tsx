@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Plus, Search, UserRound } from 'lucide-react
 import { requireAdmin } from '@/server/admin/guard'
 import { listOperatorAccounts, normalizeOperatorSearch } from '@/server/operators/operator-admin-query'
 import { InactiveChip, OperatorAvatar, OperatorChip, OperatorsMain } from './_components/operator-ui'
-import { countryLabel, koreanLanguageName } from './_lib/options'
+import { countryLabel } from './_lib/options'
 
 export const dynamic = 'force-dynamic'
 
@@ -102,7 +102,7 @@ export default async function OperatorsPage({ searchParams }: OperatorsPageProps
                 href={`/admin/operators/${encodeURIComponent(item.id)}`}
                 className="flex min-h-[72px] items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 active:bg-slate-50"
               >
-                <OperatorAvatar image={item.image} name={item.name} size={48} />
+                <OperatorAvatar image={item.image} name={item.name} size={48} languages={item.primaryLanguage ? [item.primaryLanguage] : []} />
                 <span className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span className="truncate text-[15px] font-semibold text-slate-900">{item.name || '이름 없음'}</span>
@@ -111,7 +111,7 @@ export default async function OperatorsPage({ searchParams }: OperatorsPageProps
                   </span>
                   <span className="mt-0.5 block break-all text-sm text-slate-500">@{item.handle}</span>
                   <span className="mt-0.5 block break-words text-xs text-slate-500">
-                    {countryLabel(item.personaCountry)} · {koreanLanguageName(item.primaryLanguage)}
+                    {countryLabel(item.personaCountry)}
                   </span>
                 </span>
                 <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />

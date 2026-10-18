@@ -148,7 +148,7 @@ export function OperatorEditor({
 
       <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-4" aria-label="계정 정보">
         <div className="flex items-center gap-4">
-          <OperatorAvatar image={account.image} name={account.name} size={80} />
+          <OperatorAvatar image={account.image} name={account.name} size={80} languages={account.primaryLanguage ? [account.primaryLanguage] : []} />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <span className="min-w-0 break-words text-lg font-semibold text-slate-900">{account.name || '이름 없음'}</span>
