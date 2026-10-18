@@ -21,6 +21,8 @@ export type DemoAccount = {
   needsFace?: boolean
   /** Text the image prompt must contain, for a look the plan fixes (e.g. 'white American'). */
   mustMention?: string
+  /** Draws to skip: a photo staff rejected moves the account to its next draw. */
+  redraws?: number
   existing?: boolean
 }
 
@@ -47,7 +49,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
     name: '林晓', handle: 'linxiao.sh', gender: 'female', age: 22, nationality: 'CN', residence: { country: 'CN', city: 'Shanghai' }, primaryLanguage: 'zh-CN',
     bio: '上海大学生，自学韩语中📚 想找韩国朋友一起练口语，可以教你中文～',
-    posts: ['A5', 'B7'],
+    posts: ['A5', 'B7'], redraws: 1,
   },
   {
     name: 'Yuki', handle: 'yuki_whsl', gender: 'female', age: 23, nationality: 'JP', residence: { country: 'KR', city: 'Seoul' }, primaryLanguage: 'ja',

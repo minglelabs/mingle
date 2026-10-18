@@ -7,7 +7,8 @@ import type { DemoAccount } from './accounts'
  * The draw is seeded by the handle, so the same spec comes back every run;
  * `skip` moves to a later draw that still meets the account's constraints.
  */
-export function demoAvatarSpec(account: DemoAccount, skip = 0): AvatarSpec {
+export function demoAvatarSpec(account: DemoAccount, extraSkip = 0): AvatarSpec {
+  let skip = (account.redraws ?? 0) + extraSkip
   const persona = {
     gender: account.gender, name: account.name, age: account.age, bio: account.bio,
     // The nationality decides the look; the place is where the account lives.
