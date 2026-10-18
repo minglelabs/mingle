@@ -32,6 +32,7 @@
 import { prisma } from '@/lib/prisma'
 import { visiblePostWhere } from '@/server/posts/post-visibility'
 import { USER_IDENTITY_SELECT } from '@/server/identity/user-identity-select'
+import { applyStarterOrder, loadStarterFeed, starterSegmentFor, starterSegmentOfUser, type StarterSegment } from './starter-feed'
 import {
   type FeedCandidate,
   type FeedCursor,
@@ -96,8 +97,8 @@ type CacheEntry = { snapshot: RankedSnapshot; expiresAt: number }
 
 const snapshotCache = new Map<string, CacheEntry>()
 
-function cacheKey(viewerId: string | null, snapshotAt: Date, avoidFirstAuthorId: string | null): string {
-  return [viewerId ?? '', snapshotAt.toISOString(), avoidFirstAuthorId ?? ''].join('\u0000')
+function cacheKey(viewerId: string | null, snapshotAt: Date, avoidFirstAuthorId: string | null, segment: StarterSegment): string {
+  return [viewerId ?? '', snapshotAt.toISOString(), avoidFirstAuthorId ?? '', segment].join('\u0000')
 }
 
 /** Test-only: drop every cached snapshot. */
@@ -109,6 +110,7 @@ async function rankSnapshot(
   viewerId: string | null,
   snapshotAt: Date,
   avoidFirstAuthorId: string | null,
+  segment: StarterSegment,
 ): Promise<RankedSnapshot> {
   const posts = await prisma.post.findMany({
     where: {
@@ -180,7 +182,9 @@ async function rankSnapshot(
     viewed: viewed.has(p.id),
   }))
 
-  const ids = rankFeed(candidates, followedAuthorIds, snapshotAt, { avoidFirstAuthorId })
+  const ranked = rankFeed(candidates, followedAuthorIds, snapshotAt, { avoidFirstAuthorId })
+  const starter = await loadStarterFeed()
+  const ids = starter ? applyStarterOrder(ranked, starter[segment], viewed) : ranked
   return { ids, authorById, viewed }
 }
 
@@ -188,13 +192,14 @@ async function loadRankedSnapshot(
   viewerId: string | null,
   snapshotAt: Date,
   avoidFirstAuthorId: string | null,
+  segment: StarterSegment,
 ): Promise<RankedSnapshot> {
-  const key = cacheKey(viewerId, snapshotAt, avoidFirstAuthorId)
+  const key = cacheKey(viewerId, snapshotAt, avoidFirstAuthorId, segment)
   const nowMs = Date.now()
   const hit = snapshotCache.get(key)
   if (hit && hit.expiresAt > nowMs) return hit.snapshot
 
-  const snapshot = await rankSnapshot(viewerId, snapshotAt, avoidFirstAuthorId)
+  const snapshot = await rankSnapshot(viewerId, snapshotAt, avoidFirstAuthorId, segment)
 
   snapshotCache.delete(key)
   snapshotCache.set(key, { snapshot, expiresAt: nowMs + FEED_SNAPSHOT_TTL_MS })
@@ -237,8 +242,14 @@ export async function getFeed(
   viewerId: string | null,
   rawCursor: string | null,
   rawLimit: number | null,
+  /**
+   * Which starter list leads the feed. Defaults to the viewer's own segment;
+   * a signed-out reader's comes from `language` (their display language).
+   */
+  options: { starterSegment?: StarterSegment; language?: string | null } = {},
 ): Promise<FeedResult> {
   const limit = Math.max(1, Math.min(rawLimit ?? DEFAULT_LIMIT, MAX_LIMIT))
+  const segment = options.starterSegment ?? (viewerId ? await starterSegmentOfUser(viewerId) : starterSegmentFor(options.language))
 
   let snapshotAt: Date
   let offset: number
@@ -260,7 +271,7 @@ export async function getFeed(
     avoidFirstAuthorId = null
   }
 
-  let snapshot = await loadRankedSnapshot(viewerId, snapshotAt, avoidFirstAuthorId)
+  let snapshot = await loadRankedSnapshot(viewerId, snapshotAt, avoidFirstAuthorId, segment)
   if (snapshot.ids.length === 0) return { posts: [], nextCursor: null }
 
   if (offset >= snapshot.ids.length) {
@@ -268,7 +279,7 @@ export async function getFeed(
     avoidFirstAuthorId = snapshot.authorById.get(snapshot.ids[snapshot.ids.length - 1]) ?? null
     snapshotAt = new Date()
     offset = 0
-    snapshot = await loadRankedSnapshot(viewerId, snapshotAt, avoidFirstAuthorId)
+    snapshot = await loadRankedSnapshot(viewerId, snapshotAt, avoidFirstAuthorId, segment)
     if (snapshot.ids.length === 0) return { posts: [], nextCursor: null }
   }
 

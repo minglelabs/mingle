@@ -4,6 +4,7 @@ import { Heart, MessageCircle } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/admin/guard'
 import { getFeed } from '@/server/feed/feed-service'
+import { loadStarterFeed, type StarterSegment } from '@/server/feed/starter-feed'
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
 import { OperatorsMain } from '../operators/_components/operator-ui'
 import { ZoomableAvatar } from '../operators/_components/zoomable-avatar'
@@ -18,6 +19,11 @@ export const metadata: Metadata = {
 }
 
 const PAGE_SIZE = 20
+
+const STARTER_VIEWS: ReadonlyArray<{ key: string; segment: StarterSegment; label: string }> = [
+  { key: 'new-ko', segment: 'ko', label: '신규 한국인' },
+  { key: 'new-foreign', segment: 'foreign', label: '신규 외국인' },
+]
 const COMMENTS_PER_POST = 5
 
 type FeedPreviewPageProps = { searchParams: Promise<{ as?: string; cursor?: string }> }
@@ -45,7 +51,11 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
     select: { id: true, name: true, handle: true },
   })
   const viewer = operators.find((operator) => operator.id === as) ?? null
-  const feed = await getFeed(viewer?.id ?? null, cursor?.trim() || null, PAGE_SIZE)
+  // A new reader of either segment: no account, no views, so the starter list leads exactly as it will.
+  const starterView = (STARTER_VIEWS.find((view) => view.key === as) ?? null)
+  const feed = await getFeed(viewer?.id ?? null, cursor?.trim() || null, PAGE_SIZE, starterView ? { starterSegment: starterView.segment } : {})
+  const starter = await loadStarterFeed()
+  const starterOrder = new Map((starterView && starter ? starter[starterView.segment] : []).map((id, index) => [id, index + 1]))
 
   const postIds = feed.posts.map((post) => post.id)
   const authors = await prisma.user.findMany({
@@ -82,15 +92,24 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
   return (
     <OperatorsMain>
       <h1 className="text-xl font-bold text-slate-900">피드 미리보기</h1>
-      <p className="mt-1 text-sm text-slate-500">앱 홈 피드와 같은 추천 순서입니다. 보기만 하며 조회 기록은 남지 않습니다.</p>
+      <p className="mt-1 text-sm text-slate-500">앱 홈 피드와 같은 추천 순서입니다. 보기만 하며 조회 기록은 남지 않습니다. 신규 한국인·외국인은 막 가입한 유저가 보는 순서이고, 번호는 정해 둔 첫 피드 순서입니다.</p>
 
       <nav className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1" aria-label="누구의 피드로 볼지">
         <Link
           href={query({})}
-          className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${viewer ? 'border-slate-200 bg-white text-slate-600' : 'border-sky-600 bg-sky-600 text-white'}`}
+          className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${viewer || starterView ? 'border-slate-200 bg-white text-slate-600' : 'border-sky-600 bg-sky-600 text-white'}`}
         >
           비로그인
         </Link>
+        {STARTER_VIEWS.map((view) => (
+          <Link
+            key={view.key}
+            href={query({ as: view.key })}
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${starterView?.key === view.key ? 'border-amber-500 bg-amber-500 text-white' : 'border-amber-200 bg-amber-50 text-amber-800'}`}
+          >
+            {view.label}
+          </Link>
+        ))}
         {operators.map((operator) => (
           <Link
             key={operator.id}
@@ -110,6 +129,9 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
             const postComments = commentsByPost.get(post.id) ?? []
             return (
               <li key={post.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                {starterOrder.has(post.id) ? (
+                  <p className="mb-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">첫 피드 {starterOrder.get(post.id)}번</p>
+                ) : null}
                 <div className="flex items-center gap-3">
                   <ZoomableAvatar image={post.author.image} name={post.author.name} size={40} languages={authorLanguages.get(post.author.id)} />
                   <div className="min-w-0 flex-1">
@@ -172,7 +194,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
 
       {feed.nextCursor ? (
         <Link
-          href={query({ as: viewer?.id ?? null, cursor: feed.nextCursor })}
+          href={query({ as: viewer?.id ?? starterView?.key ?? null, cursor: feed.nextCursor })}
           className="mt-3 flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 active:bg-slate-100"
         >
           다음 글 보기
