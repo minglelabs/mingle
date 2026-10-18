@@ -831,6 +831,21 @@ const RULES = [
  * not fixed by the account (gender, age, country and city are), so a new
  * `random` gives the same account a different photo.
  */
+/**
+ * The whole look of the account's person (face, hair and build), for photos
+ * of them other than the profile picture. Pass a random seeded per account so
+ * every photo describes the same person.
+ */
+export function describeAccountLook(persona: AvatarPersona, random: Random): string {
+  const attributes: Record<string, string> = {}
+  const take: Picker = (axis, options) => {
+    const option = pick(options, random)
+    attributes[axis] = option[0]
+    return option[2]
+  }
+  return describePerson(persona, { face: true, body: true, hair: true }, take, random, attributes)
+}
+
 export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.random): AvatarSpec {
   const category = pickCategory(persona, random)
   const subtype = pickSubtype(category, persona, random)

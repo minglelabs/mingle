@@ -11,7 +11,8 @@
  * `POST /v1/images/generations` and `GET /health`.
  *
  *   node scripts/chatgpt-image-bridge.mjs                 serve (restarts ChatGPT with the debug port if needed)
- *   node scripts/chatgpt-image-bridge.mjs draw "prompt"   draw one image into ./chatgpt-image.png
+ *   node scripts/chatgpt-image-bridge.mjs draw [--ref photo.jpg] "prompt"
+ *                                                       draw one image into ./chatgpt-image.png
  *   node scripts/chatgpt-image-bridge.mjs install         keep it running with launchd
  *   node scripts/chatgpt-image-bridge.mjs uninstall
  *
@@ -20,7 +21,7 @@
  * the bridge through a tunnel), CHATGPT_CDP_PORT (9333).
  */
 import { execFile } from 'node:child_process'
-import { writeFile, mkdir, rm } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -144,7 +145,7 @@ function resetDelayMs(text) {
   return Number(match[1]) * unit
 }
 
-async function draw(prompt) {
+async function draw(prompt, reference = null) {
   if (Date.now() < limitedUntil) throw new BridgeError(429, 'image_limit', `${limitMessage} (until ${new Date(limitedUntil).toISOString()})`)
   await ensureApp()
   const page = await connect()
@@ -159,9 +160,27 @@ async function draw(prompt) {
       return false })()`)
     if (!opened) throw new BridgeError(503, 'app_ui_changed', 'could not open a new chat')
 
+    if (reference) {
+      // Pasting a file is how a person attaches a photo; the upload shows as a thumbnail in the composer.
+      const attached = await page.evaluate(`(async () => { ${PAGE_HELPERS}
+        const box = composer(); box.focus()
+        const blob = await (await fetch(${JSON.stringify(reference)})).blob()
+        const data = new DataTransfer()
+        data.items.add(new File([blob], 'reference.' + (blob.type.split('/')[1] || 'jpg'), { type: blob.type }))
+        box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+        const form = box.closest('form') ?? document
+        for (let i = 0; i < 75; i += 1) {
+          await new Promise((r) => setTimeout(r, 200))
+          const thumb = [...form.querySelectorAll('img')].some((img) => shown(img) && img.naturalWidth > 0)
+          const uploading = [...form.querySelectorAll('[role=progressbar], circle')].some(shown)
+          if (thumb && !uploading) return true
+        }
+        return false })()`)
+      if (!attached) throw new BridgeError(503, 'app_ui_changed', 'could not attach the reference photo')
+    }
     const typed = await page.evaluate(`(() => { ${PAGE_HELPERS}
       const box = composer(); box.focus()
-      document.execCommand('insertText', false, ${JSON.stringify(`Create an image: ${prompt}`)})
+      document.execCommand('insertText', false, ${JSON.stringify(`${reference ? 'Using the attached photo of this person, create a new image' : 'Create an image'}: ${prompt}`)})
       return box.innerText.trim().length > 0 })()`)
     if (!typed) throw new BridgeError(503, 'app_ui_changed', 'could not type into the composer')
     await sleep(400)
@@ -207,8 +226,8 @@ async function draw(prompt) {
 
 // One drawing at a time: the app has one composer.
 let queue = Promise.resolve()
-function drawQueued(prompt) {
-  const job = queue.then(() => draw(prompt))
+function drawQueued(prompt, reference) {
+  const job = queue.then(() => draw(prompt, reference))
   queue = job.catch(() => {})
   return job
 }
@@ -218,16 +237,27 @@ function drawQueued(prompt) {
 function readBody(request) {
   return new Promise((done, fail) => {
     let body = ''
-    request.on('data', (chunk) => { body += chunk; if (body.length > 1_000_000) request.destroy() })
+    request.on('data', (chunk) => { body += chunk; if (body.length > 20_000_000) request.destroy() })
     request.on('end', () => { try { done(body ? JSON.parse(body) : {}) } catch { fail(new BridgeError(400, 'bad_json')) } })
     request.on('error', fail)
   })
 }
 
+function lastUserContent(body) {
+  return [...(body.messages ?? [])].reverse().find((message) => message.role === 'user')?.content
+}
+
+/** The first image attached to the request as a data URL, if any: a photo of the person to draw again. */
+function referenceFrom(path, body) {
+  const content = path === '/v1/chat/completions' ? lastUserContent(body) : null
+  const url = Array.isArray(content) ? content.find((part) => part?.type === 'image_url')?.image_url?.url : null
+  return typeof url === 'string' && url.startsWith('data:image/') ? url : null
+}
+
 function promptFrom(path, body) {
   if (path === '/v1/images/generations') return typeof body.prompt === 'string' ? body.prompt : ''
-  const last = [...(body.messages ?? [])].reverse().find((message) => message.role === 'user')
-  const content = Array.isArray(last?.content) ? last.content.map((part) => part?.text ?? '').join('\n') : last?.content
+  const last = lastUserContent(body)
+  const content = Array.isArray(last) ? last.map((part) => part?.text ?? '').join('\n') : last
   return typeof content === 'string' ? content.replace(/^Generate this image\.\s*/i, '') : ''
 }
 
@@ -248,10 +278,12 @@ function serve() {
     }
     const started = Date.now()
     try {
-      const prompt = promptFrom(path, await readBody(request)).trim()
+      const body = await readBody(request)
+      const prompt = promptFrom(path, body).trim()
       if (!prompt) throw new BridgeError(400, 'empty_prompt')
-      log('draw', JSON.stringify(prompt.slice(0, 80)))
-      const image = await drawQueued(prompt)
+      const reference = referenceFrom(path, body)
+      log('draw', reference ? '(with reference)' : '', JSON.stringify(prompt.slice(0, 80)))
+      const image = await drawQueued(prompt, reference)
       log('done', `${image.width}x${image.height}`, `${Math.round((Date.now() - started) / 1000)}s`)
       if (path === '/v1/images/generations') return reply(response, 200, { created: Math.floor(Date.now() / 1000), data: [{ b64_json: image.base64 }] })
       return reply(response, 200, {
@@ -305,13 +337,17 @@ async function uninstall() {
 const [command, ...rest] = process.argv.slice(2)
 if (!command || command === 'serve') serve()
 else if (command === 'draw') {
-  const image = await draw(rest.join(' '))
+  // draw [--ref photo.jpg] <prompt>
+  const refAt = rest.indexOf('--ref')
+  const refPath = refAt >= 0 ? rest.splice(refAt, 2)[1] : null
+  const reference = refPath ? `data:image/${refPath.endsWith('.png') ? 'png' : 'jpeg'};base64,${(await readFile(refPath)).toString('base64')}` : null
+  const image = await draw(rest.join(' '), reference)
   const out = resolve('chatgpt-image.png')
   await writeFile(out, Buffer.from(image.base64, 'base64'))
   console.log(`${out} ${image.width}x${image.height}`)
 } else if (command === 'install') await install()
 else if (command === 'uninstall') await uninstall()
 else {
-  console.error('usage: chatgpt-image-bridge.mjs [serve | draw <prompt> | install | uninstall]')
+  console.error('usage: chatgpt-image-bridge.mjs [serve | draw [--ref photo] <prompt> | install | uninstall]')
   process.exit(1)
 }

@@ -16,6 +16,7 @@ export const AVATAR_DEFAULT_IMAGE_QUALITY = 'low'
 const CALL_TIMEOUT_MS = 120_000
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models'
 const OPENAI_ENDPOINT = 'https://api.openai.com/v1/images/generations'
+const OPENAI_EDITS_ENDPOINT = 'https://api.openai.com/v1/images/edits'
 const DEFAULT_IMAGE_PROXY_URL = 'http://127.0.0.1:10100'
 /** `scripts/chatgpt-image-bridge.mjs`, which draws with the ChatGPT desktop app. */
 const DEFAULT_CHATGPT_APP_URL = 'http://127.0.0.1:10310'
@@ -76,6 +77,9 @@ export type AvatarGenerationResult =
 
 type ImagePart = { inlineData?: { mimeType?: string; data?: string }; inline_data?: { mime_type?: string; data?: string } }
 
+/** A photo the image model must draw the same person from. */
+export type AvatarReference = { bytes: Buffer; mimeType: string }
+
 export type AvatarImageResult =
   /** `model` is the one that drew the image, which differs from the configured one after a fallback. */
   | { ok: true; bytes: Buffer; model: string }
@@ -96,7 +100,7 @@ function readProxyReply(content: unknown): string {
  * (or inlines it as a data URL). The reply is model output, so nothing but a
  * path on the proxy is ever fetched.
  */
-async function requestProxyImage(prompt: string, model: string, fetchImpl: typeof fetch, signal: AbortSignal): Promise<AvatarImageResult> {
+async function requestProxyImage(prompt: string, model: string, fetchImpl: typeof fetch, signal: AbortSignal, reference?: AvatarReference): Promise<AvatarImageResult> {
   const base = resolveImageProxyUrl(process.env, model)
   const key = resolveImageProxyKey(model)
   let response: Response
@@ -104,7 +108,7 @@ async function requestProxyImage(prompt: string, model: string, fetchImpl: typeo
     response = await fetchImpl(`${base}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: `Generate this image.\n\n${prompt}` }] }),
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: proxyContent(`Generate this image.\n\n${prompt}`, reference) }] }),
       signal,
     })
   } catch (error) {
@@ -127,16 +131,25 @@ async function requestProxyImage(prompt: string, model: string, fetchImpl: typeo
   return { ok: true, bytes: Buffer.from(await artifact.arrayBuffer()), model }
 }
 
+function dataUrl(reference: AvatarReference): string {
+  return `data:${reference.mimeType};base64,${reference.bytes.toString('base64')}`
+}
+
+function proxyContent(text: string, reference?: AvatarReference) {
+  return reference ? [{ type: 'text', text }, { type: 'image_url', image_url: { url: dataUrl(reference) } }] : text
+}
+
 /** One image-model call. Returns the image bytes or an error code; never throws. */
 export async function requestAvatarImage(
   prompt: string,
-  options: { model?: string; fetchImpl?: typeof fetch } = {},
+  options: { model?: string; fetchImpl?: typeof fetch; reference?: AvatarReference } = {},
 ): Promise<AvatarImageResult> {
+  const reference = options.reference
   let model = options.model ?? resolveAvatarImageModel()
   const signal = AbortSignal.timeout(isChatgptAppImageModel(model) ? CHATGPT_APP_TIMEOUT_MS : CALL_TIMEOUT_MS)
   if (isProxyImageModel(model)) {
     try {
-      const viaProxy = await requestProxyImage(prompt, model, options.fetchImpl ?? fetch, signal)
+      const viaProxy = await requestProxyImage(prompt, model, options.fetchImpl ?? fetch, signal, reference)
       // A proxy that cannot be reached at all means this is not the machine it runs on
       // (a deployed server): draw with the API model instead. A proxy that answers with
       // an error (quota, refusal) is reported as it is, so nothing is paid for silently.
@@ -152,12 +165,23 @@ export async function requestAvatarImage(
   if (!apiKey) return { ok: false, error: 'image_unavailable' }
   try {
     if (openAi) {
-      const response = await (options.fetchImpl ?? fetch)(OPENAI_ENDPOINT, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, prompt, size: '1024x1024', quality: resolveAvatarImageQuality(), n: 1 }),
-        signal,
-      })
+      let response: Response
+      if (reference) {
+        const form = new FormData()
+        form.append('model', model)
+        form.append('prompt', prompt)
+        form.append('size', '1024x1024')
+        form.append('quality', resolveAvatarImageQuality())
+        form.append('image[]', new Blob([new Uint8Array(reference.bytes)], { type: reference.mimeType }), 'reference')
+        response = await (options.fetchImpl ?? fetch)(OPENAI_EDITS_ENDPOINT, { method: 'POST', headers: { authorization: `Bearer ${apiKey}` }, body: form, signal })
+      } else {
+        response = await (options.fetchImpl ?? fetch)(OPENAI_ENDPOINT, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({ model, prompt, size: '1024x1024', quality: resolveAvatarImageQuality(), n: 1 }),
+          signal,
+        })
+      }
       if (!response.ok) {
         // 400 here is nearly always the content filter turning the prompt down.
         return { ok: false, error: response.status === 400 ? 'image_refused' : 'image_request_failed', detail: `http_${response.status}` }
@@ -170,7 +194,7 @@ export async function requestAvatarImage(
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        contents: [{ role: 'user', parts: [{ text: prompt }, ...(reference ? [{ inlineData: { mimeType: reference.mimeType, data: reference.bytes.toString('base64') } }] : [])] }],
         generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '1:1' } },
       }),
       signal,

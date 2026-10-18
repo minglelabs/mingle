@@ -138,9 +138,11 @@ describe('reserve post generation', () => {
     const posts = await generateReservePosts({
       persona: { ...persona, language: 'ja' }, topics: ['food'], existingTexts: [], random: () => 0, seed: 'op_ja',
     })
-    expect(posts).toEqual([{ topic: 'food', text: '오늘 라멘 먹었어요', language: 'ko', imagePrompt: 'a bowl of ramen on a counter' }])
+    // random() = 0 picks the first photo kind, a photo of the poster, and tags the description with it.
+    expect(posts).toEqual([{ topic: 'food', text: '오늘 라멘 먹었어요', language: 'ko', imagePrompt: '[self] a bowl of ramen on a counter' }])
     const request = mocks.generateJson.mock.calls[0][0]
-    expect(request.input.slots[0]).toMatchObject({ language: 'ko', photo: true })
+    expect(request.input.slots[0]).toMatchObject({ language: 'ko', photo: 'self' })
+    expect(request.input.slots[0].setup).toEqual(expect.any(String))
     expect(request.input.learner.language).toBe('ko')
   })
 

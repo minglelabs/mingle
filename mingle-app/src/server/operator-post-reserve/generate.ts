@@ -2,6 +2,7 @@ import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
 import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
 import { hasContactDetails } from '@/server/operators/persona-rules'
+import { encodePostPhoto, pickPostPhoto } from './post-photo'
 import { learnerPlan, posterProfile, type LearnerPlan, type PosterProfile } from './poster-profile'
 
 /**
@@ -13,7 +14,7 @@ import { learnerPlan, posterProfile, type LearnerPlan, type PosterProfile } from
  */
 export const RESERVE_CHUNK_SIZE = 20
 export const RESERVE_POST_MAX_CHARS = 400
-const IMAGE_PROMPT_MAX_CHARS = 400
+const IMAGE_PROMPT_MAX_CHARS = 600
 const AVOID_SAMPLE_MAX = 40
 const AVOID_SAMPLE_CHARS = 60
 const CALL_TIMEOUT_MS = 120_000
@@ -133,7 +134,9 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
     'The input JSON has "persona" (who is posting), "poster" (what kind of poster this person is: "type", "length" and "voice", their typing habits and quirks), "learner" (the language they are learning and their level), "slots" (one post per slot; each has a number, a "topic", a "shape", a "language" and "photo"), and "alreadyWritten" (the starts of posts this person already has).',
     `Each slot names the language to write in. ${languageName} (${persona.language}) is this person's own language: write those posts exactly the way a native speaker of the persona's age types on their phone to friends, with the slang, abbreviations, sentence endings and written laughter that are normal in that language right now.`,
     'A slot in any other language is written by this person as a learner of it, at the level in "learner". Make the level audible: the mistakes and stiffness that a native speaker of the persona\'s own language really makes in that language, not random errors. Learner posts are simpler and more polite than the person\'s native posts, the poster quirks mostly do not carry over, and a learner may add the same line in their own language underneath.',
-    'When a slot has "photo": true, the post goes out with one phone photo. Write the text as a caption or remark that fits it, and describe the photo in "photo" in English, in one sentence, as a casual phone snapshot: what is in it, where, and how it is framed. The photo never shows a face or a recognizable person: food, a drink, a desk or notebook, a street, a view, a shop front, a pet, an object, a hand holding something, feet on a path. What is on their own screen (notes, a chat, a map, a playlist, a score) is a screenshot: start the description with "Screenshot of", and never describe a photo of a phone or computer screen. When "photo" is false, leave "photo" empty.',
+    'When a slot has "photo", the post goes out with one phone photo of that kind; when "photo" is false there is no photo and "photo" stays empty. Write the text as a caption or remark that fits the photo, and describe the photo in "photo" in English, in one or two sentences, as a casual phone snapshot: what is in it, where, and how it is framed.',
+    'Photo kinds: "self" shows the poster with their face; "self_faceless" shows the poster but not their face; "self_back" shows the poster from behind; "friends" shows the poster with friends; "scene" shows no recognizable person (food, a drink, a desk, a street, a view, a shop front, a pet, an object, a hand holding something). A slot with the poster in it also has a "setup" (who took it, framing, pose): follow it, and pick a concrete place in the persona\'s city and an outfit that fit the post and the person. Refer to the poster as "the poster" and never describe their face, hair or body: that is added later. Everyone is an adult; no school uniforms.',
+    'What is on their own screen (notes, a chat, a map, a playlist, a score) is a screenshot, not a "scene": start the description with "Screenshot of", and never describe a photo of a phone or computer screen.',
     'People post in wildly different ways, and "poster" is how this one does. It comes first: where it conflicts with the general advice below, "poster" wins. Let the type, length and voice show clearly across the set, so that this person could not be mistaken for another account. Register and punctuation hold in every post; each quirk shows in only about one post in three, never in all of them, and never in the same position twice in a row.',
     'Follow each slot\'s "shape" literally. The shapes differ on purpose: the posts must not share one length, one rhythm or one sentence ending.',
     'What makes a post sound human: it is about one specific thing (the actual dish, the actual title, the number of hours, the exact annoying thing), it starts in the middle without setting the scene, and it does not explain how the writer feels about it.',
@@ -212,7 +215,7 @@ export async function generateReservePosts(args: {
       topic: briefs.get(topic) ?? topic,
       shape: pickShape(random, profile.shapeFactors).brief,
       language,
-      photo: topic === 'photo_caption' || random() < profile.photoShare,
+      photo: topic === 'photo_caption' || random() < profile.photoShare ? pickPostPhoto(random) : null,
     }
   })
   const seen = new Set(args.existingTexts.map(reservePostKey))
@@ -223,7 +226,7 @@ export async function generateReservePosts(args: {
       persona: args.persona,
       poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
       learner: { language: learner.language, level: learner.level.brief },
-      slots,
+      slots: slots.map((slot) => ({ ...slot, photo: slot.photo ? slot.photo.kind : false, ...(slot.photo?.setup ? { setup: slot.photo.setup } : {}) })),
       alreadyWritten: args.existingTexts.slice(-AVOID_SAMPLE_MAX).map((text) => Array.from(text).slice(0, AVOID_SAMPLE_CHARS).join('')),
     },
     responseSchema: RESPONSE_SCHEMA,
@@ -249,8 +252,9 @@ export async function generateReservePosts(args: {
     if (!key || seen.has(key)) continue
     seen.add(key)
     usedSlots.add(slot)
-    const photo = slots[slot - 1].photo && typeof item.photo === 'string' ? item.photo.replace(/\s+/g, ' ').trim().slice(0, IMAGE_PROMPT_MAX_CHARS) : ''
-    result.push({ topic: args.topics[slot - 1], text, language: slots[slot - 1].language, imagePrompt: photo || null })
+    const plan = slots[slot - 1].photo
+    const photo = plan && typeof item.photo === 'string' ? item.photo.replace(/\s+/g, ' ').trim().slice(0, IMAGE_PROMPT_MAX_CHARS) : ''
+    result.push({ topic: args.topics[slot - 1], text, language: slots[slot - 1].language, imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo) : null })
   }
   return result
 }

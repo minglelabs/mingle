@@ -4,7 +4,8 @@
  *
  *   pnpm tsx scripts/post-photo-by-hand.ts prompts <dir> [limit]
  *     writes <dir>/<reserveId>.prompt.txt for each such post, oldest first,
- *     with the same prompt the worker would have sent;
+ *     with the same prompt the worker would have sent, and for a photo of
+ *     the poster <dir>/<reserveId>.ref.jpg, the photo to attach with it;
  *
  *   pnpm tsx scripts/post-photo-by-hand.ts store <dir>
  *     attaches every <dir>/<reserveId>.(png|jpg|jpeg|webp) to its post if the
@@ -15,7 +16,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { prisma } from '../src/lib/prisma'
-import { buildPostImagePrompt, reservePostPlace, storeReservePostImage } from '../src/server/operator-post-reserve/post-image'
+import { buildPostImagePrompt, reservePostPerson, reservePostPlace, storeReservePostImage } from '../src/server/operator-post-reserve/post-image'
+import { decodePostPhoto } from '../src/server/operator-post-reserve/post-photo'
 
 async function main() {
   const host = new URL(process.env.DATABASE_URL ?? 'postgresql://unset').hostname
@@ -35,7 +37,9 @@ async function main() {
 
   if (mode === 'prompts') {
     for (const row of pending.slice(0, limit ? Number(limit) : undefined)) {
-      fs.writeFileSync(path.join(dir, `${row.id}.prompt.txt`), buildPostImagePrompt(row.imagePrompt!, await reservePostPlace(row.operatorUserId)))
+      const withPerson = decodePostPhoto(row.imagePrompt!).kind === 'scene' ? null : await reservePostPerson(row.operatorUserId)
+      fs.writeFileSync(path.join(dir, `${row.id}.prompt.txt`), buildPostImagePrompt(row.imagePrompt!, await reservePostPlace(row.operatorUserId), Math.random, withPerson?.person ?? null))
+      if (withPerson?.reference) fs.writeFileSync(path.join(dir, `${row.id}.ref.jpg`), withPerson.reference.bytes)
     }
     console.log(`${pending.length} posts without their photo; wrote ${Math.min(pending.length, limit ? Number(limit) : pending.length)} prompts`)
   } else {

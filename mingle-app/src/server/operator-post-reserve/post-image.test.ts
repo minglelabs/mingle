@@ -25,3 +25,27 @@ describe('post photo prompt', () => {
     expect(prompt).not.toContain('casual photo')
   })
 })
+
+describe('photos of the poster', () => {
+  const person = { look: 'a Japanese woman in her early twenties, short black hair', hasReference: true }
+
+  it('describes the poster and keeps the face of the attached photo', () => {
+    const prompt = buildPostImagePrompt('[self] the poster on a rooftop holding her hair', 'Seoul, South Korea', () => 0.5, person)
+    expect(prompt).toContain('It shows: the poster on a rooftop holding her hair')
+    expect(prompt).toContain('The poster: a Japanese woman in her early twenties')
+    expect(prompt).toContain('The attached photo shows this same person')
+    expect(prompt).toContain('face is clearly visible')
+    expect(prompt).toContain('no school uniforms')
+    expect(prompt).not.toContain('No face and no recognizable person')
+  })
+
+  it('hides the face when the kind says so, and says nothing of a photo that is not attached', () => {
+    const prompt = buildPostImagePrompt('[self_faceless] outfit from above', null, () => 0.5, { ...person, hasReference: false })
+    expect(prompt).toContain('face is not visible')
+    expect(prompt).not.toContain('attached photo')
+  })
+
+  it('draws an untagged description as a scene without people', () => {
+    expect(buildPostImagePrompt('a bowl of ramen', null, () => 0.5, person)).toContain('No face and no recognizable person')
+  })
+})
