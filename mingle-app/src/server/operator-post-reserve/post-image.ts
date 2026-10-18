@@ -24,24 +24,34 @@ export function buildPostImagePrompt(description: string, place: string | null =
 
 export type ReservePostImage = { objectKey: string; width: number; height: number }
 
+/** The place line of a post photo: the author's city and country. */
+export async function reservePostPlace(operatorUserId: string): Promise<string | null> {
+  const author = await prisma.user.findUnique({ where: { id: operatorUserId }, select: { locationCity: true, locationCountry: true } })
+  return [author?.locationCity, author?.locationCountry].filter(Boolean).join(', ') || null
+}
+
+/** Re-encodes a drawn photo and stores it as a post image of the operator. Throws when storing fails. */
+export async function storeReservePostImage(operatorUserId: string, bytes: Buffer): Promise<ReservePostImage> {
+  const image = await sharp(bytes, { limitInputPixels: 80_000_000 })
+    .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
+    .flatten({ background: '#ffffff' })
+    .jpeg({ quality: 85 })
+    .toBuffer({ resolveWithObject: true })
+  const objectKey = newPostImageKey(operatorUserId)
+  await putPostImage(objectKey, image.data)
+  return { objectKey, width: image.info.width, height: image.info.height }
+}
+
 /** Draws and stores the photo. Null when it cannot be drawn or stored; never throws. */
 export async function drawReservePostImage(operatorUserId: string, description: string): Promise<ReservePostImage | null> {
   try {
-    const author = await prisma.user.findUnique({ where: { id: operatorUserId }, select: { locationCity: true, locationCountry: true } })
-    const place = [author?.locationCity, author?.locationCountry].filter(Boolean).join(', ') || null
+    const place = await reservePostPlace(operatorUserId)
     const drawn = await requestAvatarImage(buildPostImagePrompt(description, place))
     if (!drawn.ok) {
       console.warn('[operator-post-reserve] image_failed', { operatorUserId, error: drawn.error, detail: drawn.detail })
       return null
     }
-    const image = await sharp(drawn.bytes, { limitInputPixels: 80_000_000 })
-      .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
-      .flatten({ background: '#ffffff' })
-      .jpeg({ quality: 85 })
-      .toBuffer({ resolveWithObject: true })
-    const objectKey = newPostImageKey(operatorUserId)
-    await putPostImage(objectKey, image.data)
-    return { objectKey, width: image.info.width, height: image.info.height }
+    return await storeReservePostImage(operatorUserId, drawn.bytes)
   } catch (error) {
     console.warn('[operator-post-reserve] image_failed', { operatorUserId, error: error instanceof Error ? error.name : 'unknown' })
     return null
