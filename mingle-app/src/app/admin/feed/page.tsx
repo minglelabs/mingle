@@ -6,6 +6,7 @@ import { requireAdmin } from '@/server/admin/guard'
 import { getFeed } from '@/server/feed/feed-service'
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
 import { OperatorAvatar, OperatorsMain } from '../operators/_components/operator-ui'
+import { koreanLanguageName } from '../operators/_lib/options'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,6 +46,11 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
   const feed = await getFeed(viewer?.id ?? null, cursor?.trim() || null, PAGE_SIZE)
 
   const postIds = feed.posts.map((post) => post.id)
+  const authors = await prisma.user.findMany({
+    where: { id: { in: [...new Set(feed.posts.map((post) => post.author.id))] } },
+    select: { id: true, primaryLanguages: true },
+  })
+  const authorLanguage = new Map(authors.map((author) => [author.id, author.primaryLanguages[0] ?? null]))
   const comments = postIds.length
     ? await prisma.postComment.findMany({
         where: { postId: { in: postIds }, moderationHiddenAt: null, author: visibleCommentsWhere(postIds[0], viewer?.id ?? null).author },
@@ -99,8 +105,8 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-slate-900">{post.author.name || '이름 없음'}</p>
                     <p className="truncate text-xs text-slate-500">
-                      @{post.author.handle} · {relativeTime(post.publishedAt, now)}
-                      {post.sourceLanguage ? ` · ${post.sourceLanguage}` : ''}
+                      @{post.author.handle} · 주요 언어 {koreanLanguageName(authorLanguage.get(post.author.id))} · {relativeTime(post.publishedAt, now)}
+                      {post.sourceLanguage ? ` · 글 ${koreanLanguageName(post.sourceLanguage)}` : ''}
                     </p>
                   </div>
                   {post.author.isOperator ? (

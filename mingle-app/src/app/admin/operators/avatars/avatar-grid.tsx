@@ -12,6 +12,7 @@ export type AvatarGridItem = {
   /** Korean summary of the spec the current AI photo was made from; null for an uploaded or missing photo. */
   label: string | null
   country: string | null
+  language: string | null
 }
 
 const ERROR_COPY: Record<string, string> = {
@@ -75,7 +76,7 @@ function Card({ item, onChange }: { item: AvatarGridItem; onChange: (next: Avata
       </div>
       <Link href={`/admin/operators/${encodeURIComponent(item.id)}`} className="mt-2 min-w-0 px-1">
         <span className="block truncate text-sm font-semibold text-slate-900">{item.name || '이름 없음'}</span>
-        <span className="block truncate text-xs text-slate-500">@{item.handle}{item.country ? ` · ${item.country}` : ''}</span>
+        <span className="block truncate text-xs text-slate-500">@{item.handle}{item.country ? ` · ${item.country}` : ''}{item.language ? ` · ${item.language}` : ''}</span>
       </Link>
       <p className="mt-1 min-h-8 break-words px-1 text-xs leading-4 text-slate-500">{item.label ?? (item.image ? '직접 올린 사진' : '사진 없음')}</p>
       <div className="mt-1 flex gap-1.5">
