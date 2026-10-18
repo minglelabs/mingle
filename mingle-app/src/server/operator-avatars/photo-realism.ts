@@ -23,8 +23,7 @@ export type PhotoEnvironment = 'indoor' | 'outdoor' | 'any'
 
 const CAMERA = [
   'Straight out of the phone\'s default camera app: no portrait mode, no beauty app, no face slimming, no eye enlarging, no skin smoothing, no added blush or glow. The background is as sharp as the subject, no artificial bokeh.',
-  // Asking for noise and over-sharpening made the image model smear and halo the whole photo.
-  'Phone-camera rendering: the crisp, full-resolution detail of a recent phone camera, with auto white balance a bit off (slightly too warm or too cool).',
+  'Phone-camera rendering: slightly over-sharpened edges, small-sensor noise in the shadows, auto white balance a bit off (slightly too warm or too cool).',
 ]
 
 /** The camera line for photos without a person: the beauty-app words only invite a face. */

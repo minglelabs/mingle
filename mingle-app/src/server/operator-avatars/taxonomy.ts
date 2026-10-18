@@ -601,7 +601,7 @@ const COMPOSITIONS: readonly Option[] = [
  * fought the phone-camera realism lines and read as staged.
  */
 const QUALITIES: readonly Option[] = [
-  ['new_phone', 5, 'shot on a recent smartphone'],
+  ['new_phone', 5, 'shot on a recent smartphone'], ['old_phone', 1, 'shot on an older smartphone, slightly noisy and soft'],
   ['front_cam', 2, 'mild front-camera wide-angle distortion'],
 ]
 
