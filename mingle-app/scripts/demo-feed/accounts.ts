@@ -156,7 +156,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
     name: '海斗', handle: 'kaito.mz', gender: 'male', age: 25, nationality: 'JP', residence: { country: 'JP', city: 'Tokyo' }, primaryLanguage: 'ja',
     bio: '東京で美容師してます✂️ 韓国のヘアトレンドが好きで韓国語勉強中',
-    posts: [], needsFace: true, striking: true,
+    posts: [], needsFace: true, striking: true, redraws: 1,
   },
   {
     name: 'Lucas', handle: 'lucas.frr', gender: 'male', age: 26, nationality: 'BR', residence: { country: 'KR', city: 'Seoul' }, primaryLanguage: 'pt',
