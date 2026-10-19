@@ -160,7 +160,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                     width={post.imageWidth ?? undefined}
                     height={post.imageHeight ?? undefined}
                     loading="lazy"
-                    className="mt-3 h-auto max-h-[28rem] w-full rounded-xl border border-slate-200 object-cover"
+                    className="mt-3 h-auto max-h-[80vh] w-full rounded-xl border border-slate-200 bg-slate-900 object-contain"
                   />
                 ) : null}
 
