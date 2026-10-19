@@ -1,7 +1,7 @@
 import sharp from 'sharp'
 import { prisma } from '@/lib/prisma'
 import { loadAvatarPersona, requestAvatarImage, type AvatarReference } from '@/server/operator-avatars/generate'
-import { phonePhotoRealism } from '@/server/operator-avatars/photo-realism'
+import { lensForShot, phonePhotoRealism } from '@/server/operator-avatars/photo-realism'
 import { describeAccountLook, seededRandom, type AvatarSpec } from '@/server/operator-avatars/taxonomy'
 import { newPostImageKey } from '@/server/posts/post-image-keys'
 import { getPostImage, putPostImage } from '@/server/posts/post-image-storage'
@@ -39,7 +39,7 @@ export function buildPostImagePrompt(
       `It shows: ${description}`,
       ...placeLine,
       'It must look like a real, unedited snapshot from an ordinary person\'s phone gallery.',
-      phonePhotoRealism(random, { people: false }),
+      phonePhotoRealism(random, { people: false, lens: 'main' }),
       `No face and no recognizable person in the image; a hand or a person seen from far behind is fine. Not a photo of a phone, tablet or computer screen. ${frame}`,
     ].join('\n')
   }
@@ -59,7 +59,7 @@ export function buildPostImagePrompt(
     PERSON_LINES[kind],
     ...placeLine,
     'It must look like a real, unedited snapshot, not a photoshoot: an ordinary moment, the outfit the person would really wear there.',
-    phonePhotoRealism(random, { people: true, faces, focusOnPerson: true }),
+    phonePhotoRealism(random, { people: true, faces, focusOnPerson: true, lens: lensForShot(description) }),
     `Everyone in the image is an adult; no school uniforms. Not a photo of a phone, tablet or computer screen. ${frame}`,
   ].join('\n')
 }

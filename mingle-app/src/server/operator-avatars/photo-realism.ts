@@ -23,8 +23,30 @@ export type PhotoEnvironment = 'indoor' | 'outdoor' | 'any'
 
 const CAMERA = [
   'Straight out of the phone\'s default camera app: no portrait mode, no beauty app, no face slimming, no eye enlarging, no skin smoothing, no added blush or glow. The background is as sharp as the subject, no artificial bokeh.',
-  'Phone-camera rendering: slightly over-sharpened edges, small-sensor noise in the shadows, auto white balance a bit off (slightly too warm or too cool).',
+  // Real photos are less crisp than renders; the staff-approved café shot
+  // (2026-10) came from asking for a soft, compressed, shared-online look.
+  'Phone-camera rendering, less crisp than a render: a little soft overall, slightly low resolution and JPEG-compressed like a photo shared on Instagram, small-sensor noise in the shadows, auto white balance a bit off (slightly too warm or too cool).',
 ]
+
+/**
+ * Which phone camera took it. A focal length tells the model how far the
+ * camera stood and how the perspective falls; the portrait lens of a real
+ * camera (85mm) does not fit a phone photo.
+ */
+export type PhoneLens = 'front' | 'main' | 'zoom'
+const LENS: Record<PhoneLens, string> = {
+  front: 'Lens: the phone\'s front camera (about 24mm wide) at arm\'s length: a slight wide-angle perspective, the face a little larger than the shoulders.',
+  main: 'Lens: the phone\'s main camera (about 26mm wide): a natural wide view with the surroundings in frame.',
+  zoom: 'Lens: the phone\'s 2x camera (about 50mm), taken from a few steps away: a normal, undistorted perspective.',
+}
+
+/** The lens a described shot was taken with: a selfie is the front camera, someone photographing a person is usually the 2x. */
+export function lensForShot(description: string): PhoneLens {
+  if (/mirror/i.test(description)) return 'main'
+  if (/selfie|front[- ]camera/i.test(description)) return 'front'
+  if (/\b(friend|someone|stranger)\b[^.]{0,40}\b(took|snapped|shot|photographed)\b/i.test(description)) return 'zoom'
+  return 'main'
+}
 
 /**
  * For photos where the person is the point (posts of the poster): a real lens
@@ -47,7 +69,7 @@ const WORLD = 'The world in the photo is physically right. The sun rises in the 
 
 const LIGHT = 'Light: only what the place itself gives, with its natural falloff (the sky, a window, ceiling lights or street lamps); soft natural shadows; mixed color temperatures where different lights meet; whites that are slightly grey or slightly warm, not pure.'
 const FACE_LIGHT = 'Any face is lit like its surroundings and no more brightly: no extra light falling on the face.'
-const COLORS = 'Colors are muted and true to life, like an uncorrected phone photo: no boosted saturation, no HDR halo, no color grade, no glow, no rim light, no dramatic shadows.'
+const COLORS = 'Colors are muted and true to life, like an uncorrected phone photo, with moderate contrast: no boosted saturation, no HDR halo, no color grade, no glow, no rim light, no dramatic shadows.'
 
 const TEXTURE = 'Every surface has its real texture and only the shine it really has: matte walls, fabric with visible weave or knit ribs and pilling, faded denim, scuffed leather, smudged glass, worn wood, dull metal. Nothing looks waxed, glossy, plastic or rendered.'
 
@@ -97,7 +119,7 @@ function pickFlaws(random: Random, count: number): string[] {
  */
 export function phonePhotoRealism(
   random: Random = Math.random,
-  options: { people?: boolean; faces?: boolean; environment?: PhotoEnvironment; focusOnPerson?: boolean } = {},
+  options: { people?: boolean; faces?: boolean; environment?: PhotoEnvironment; focusOnPerson?: boolean; lens?: PhoneLens } = {},
 ): string {
   const environment = options.environment ?? 'any'
   const people = options.people !== false
@@ -105,6 +127,7 @@ export function phonePhotoRealism(
   const faces = options.faces ?? people
   return [
     ...(people ? [options.focusOnPerson ? CAMERA_FOCUSED : CAMERA[0], CAMERA[1]] : [CAMERA_NO_PEOPLE, CAMERA[1]]),
+    ...(options.lens ? [LENS[options.lens]] : []),
     LIGHT,
     WORLD,
     ...(faces ? [FACE_LIGHT] : []),

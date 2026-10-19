@@ -55,3 +55,13 @@ describe('photos of the poster', () => {
     expect(buildPostImagePrompt('a bowl of ramen', null, () => 0.5, person)).toContain('No face and no recognizable person')
   })
 })
+
+describe('lens for a shot', () => {
+  it('picks the phone camera the description implies', async () => {
+    const { lensForShot } = await import('@/server/operator-avatars/photo-realism')
+    expect(lensForShot('A front-camera selfie at a café window')).toBe('front')
+    expect(lensForShot('A mirror selfie in a hair salon')).toBe('main')
+    expect(lensForShot('A friend took it standing a few steps away')).toBe('zoom')
+    expect(lensForShot('Haeundae beach in the evening')).toBe('main')
+  })
+})
