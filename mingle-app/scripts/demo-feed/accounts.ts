@@ -112,4 +112,55 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     bio: '일본어·영어 공부 중🇯🇵🇺🇸 한국어 배우는 분들이랑 언어교환하고 싶어요. 편하게 말 걸어주세요!',
     posts: ['B10'],
   },
+  // Ten more faces for the feed (2026-10): seven women and three men people stop scrolling for.
+  {
+    name: '하은', handle: 'haeun.log', gender: 'female', age: 24, nationality: 'KR', residence: { country: 'KR', city: 'Seoul' }, primaryLanguage: 'ko',
+    bio: '연남동 사는 직장인. 퇴근하고 일본어 공부해요. 맛집 정보 교환 환영 🍜',
+    posts: [], needsFace: true, striking: true,
+  },
+  {
+    name: '紗良', handle: 'sara.ueno', gender: 'female', age: 22, nationality: 'JP', residence: { country: 'JP', city: 'Osaka' }, primaryLanguage: 'ja',
+    bio: '大阪の大学生🎓 来年ソウルに交換留学予定！韓国語の友達ほしいです',
+    posts: [], needsFace: true, striking: true,
+  },
+  {
+    name: '芷晴', handle: 'zhiqing.lin', gender: 'female', age: 23, nationality: 'TW', residence: { country: 'TW', city: 'Taipei' }, primaryLanguage: 'zh-TW',
+    bio: '台北上班族，韓劇重度愛好者。想找韓國朋友練習口說 🙌',
+    posts: [], needsFace: true, striking: true,
+  },
+  {
+    name: 'Pim', handle: 'pim.chanya', gender: 'female', age: 24, nationality: 'TH', residence: { country: 'TH', city: 'Bangkok' }, primaryLanguage: 'th',
+    bio: 'สาวกรุงเทพฯ ชอบเที่ยวเกาหลี 🇰🇷 กำลังเรียนภาษาเกาหลีอยู่ค่ะ',
+    posts: [], needsFace: true, striking: true,
+  },
+  {
+    name: 'Chloé', handle: 'chloe.mrt', gender: 'female', age: 25, nationality: 'FR', residence: { country: 'FR', city: 'Paris' }, primaryLanguage: 'fr',
+    bio: 'Parisienne, graphiste. J\'apprends le coréen pour mon voyage à Séoul 🇰🇷',
+    posts: [], needsFace: true, striking: true,
+  },
+  {
+    name: 'Sofía', handle: 'sofi.alv', gender: 'female', age: 23, nationality: 'MX', residence: { country: 'MX', city: 'Mexico City' }, primaryLanguage: 'es',
+    bio: 'CDMX 🇲🇽 fan del k-pop desde la prepa. Aprendo coreano y te enseño español',
+    posts: [], needsFace: true, striking: true,
+  },
+  {
+    name: 'Ava', handle: 'ava.kim.la', gender: 'female', age: 22, nationality: 'US', residence: { country: 'US', city: 'Los Angeles' }, primaryLanguage: 'en',
+    bio: 'LA girl 🇺🇸 obsessed with Korean food and dramas. Learning Korean, happy to help with English!',
+    posts: [], needsFace: true, striking: true,
+  },
+  {
+    name: '시우', handle: 'siwoo.j', gender: 'male', age: 26, nationality: 'KR', residence: { country: 'KR', city: 'Seoul' }, primaryLanguage: 'ko',
+    bio: '성수에서 일하는 디자이너. 영어 회화 같이 연습할 친구 찾아요 ☕',
+    posts: [], needsFace: true, striking: true,
+  },
+  {
+    name: '海斗', handle: 'kaito.mz', gender: 'male', age: 25, nationality: 'JP', residence: { country: 'JP', city: 'Tokyo' }, primaryLanguage: 'ja',
+    bio: '東京で美容師してます✂️ 韓国のヘアトレンドが好きで韓国語勉強中',
+    posts: [], needsFace: true, striking: true,
+  },
+  {
+    name: 'Lucas', handle: 'lucas.frr', gender: 'male', age: 26, nationality: 'BR', residence: { country: 'KR', city: 'Seoul' }, primaryLanguage: 'pt',
+    bio: 'Carioca em Seul há 2 anos 🇧🇷🇰🇷 trabalho com marketing. Bora trocar idiomas?',
+    posts: [], needsFace: true, striking: true,
+  },
 ]
