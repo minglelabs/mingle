@@ -32,16 +32,18 @@ describe('photos of the poster', () => {
   it('describes the poster and keeps the face of the attached photo', () => {
     const prompt = buildPostImagePrompt('[self] the poster on a rooftop holding her hair', 'Seoul, South Korea', () => 0.5, person)
     expect(prompt).toContain('It shows: the poster on a rooftop holding her hair')
-    expect(prompt).toContain('The poster: a Japanese woman in her early twenties')
-    expect(prompt).toContain('The attached photo shows this same person')
+    expect(prompt).toContain('The poster is the person in the attached photo')
+    expect(prompt).toContain('completely different photo')
+    expect(prompt).not.toContain('The poster: a Japanese woman')
     expect(prompt).toContain('face is clearly visible')
     expect(prompt).toContain('no school uniforms')
     expect(prompt).not.toContain('No face and no recognizable person')
   })
 
-  it('hides the face when the kind says so, and says nothing of a photo that is not attached', () => {
+  it('hides the face when the kind says so, and describes the look when no photo is attached', () => {
     const prompt = buildPostImagePrompt('[self_faceless] outfit from above', null, () => 0.5, { ...person, hasReference: false })
     expect(prompt).toContain('face is not visible')
+    expect(prompt).toContain('The poster: a Japanese woman')
     expect(prompt).not.toContain('attached photo')
   })
 

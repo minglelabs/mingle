@@ -22,7 +22,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'A1', handle: 'misaki.tkm', language: 'ja', place: 'Seoul, South Korea',
     text: '初めてのソウル旅行、3日目！明日どこ行けばいいか教えてください🙏',
-    photo: '[self] A front-camera selfie in a narrow Seongsu-dong alley, red-brick warehouse walls and a small café sign behind her, the strap of a tote bag on her shoulder, a little tired from walking all day but happy.',
+    photo: '[self] A friend took it from across a Seongsu-dong alley: she is mid-step with a paper shopping bag on one arm, glancing sideways at a shop window rather than at the camera, hair tied up, a long beige trench coat and jeans; her whole body is in the frame, small against the red-brick buildings.',
   },
   {
     slot: 'A2', handle: 'lari.souza', language: 'pt',
@@ -33,7 +33,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'A4', handle: 'dan.in.seoul', language: 'en',
     text: '3 years in Seoul and my Korean is still ‘americano one please’ level 😅 Anyone want to correct my Korean?',
-    photo: '[self] A front-camera selfie at a café window seat, an iced americano on the sill, the street outside a little overexposed, a slightly awkward grin.',
+    photo: '[self] A friend took it across the table at a Korean barbecue place: he holds tongs over the grill and laughs at something off camera, looking down at the meat, in a navy hoodie; smoke, side dishes and a green soju bottle in front of him.',
   },
   {
     slot: 'A5', handle: 'linxiao.sh', language: 'zh-CN',

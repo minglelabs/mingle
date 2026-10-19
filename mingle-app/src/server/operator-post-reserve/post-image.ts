@@ -47,8 +47,14 @@ export function buildPostImagePrompt(
   return [
     'A casual photo of the person who posts it, from their phone gallery, posted on their social media.',
     `It shows: ${description}`,
-    `The poster: ${person.look}.`,
-    ...(person.hasReference ? ['The attached photo shows this same person: keep their face, hair and build exactly as in it, so the two photos are unmistakably the same person. Everything else is new: the outfit, place, pose, expression, head angle, framing and light come from this description; do not repeat the attached photo\'s pose, hand position or expression.'] : []),
+    // With a photo of them, the photo alone says who they are: a written look on top of it
+    // pulls the model back to the photo, and it redraws the same picture in a new place.
+    ...(person.hasReference
+      ? [
+          'The poster is the person in the attached photo. Use it only to know who they are (face, hair, build); the attached picture itself must not show up in the new one.',
+          'This is a completely different photo taken on another day: a different place, outfit, camera distance, camera angle, head angle, expression, gesture and light. Nothing of the attached photo\'s framing, background, clothes, pose, hand position or expression may carry over; if it would look like the same shot moved somewhere else, it is wrong.',
+        ]
+      : [`The poster: ${person.look}.`]),
     PERSON_LINES[kind],
     ...placeLine,
     'It must look like a real, unedited snapshot, not a photoshoot: an ordinary moment, the outfit the person would really wear there.',

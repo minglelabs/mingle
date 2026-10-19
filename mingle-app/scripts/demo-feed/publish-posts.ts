@@ -6,6 +6,12 @@
  *     writes <dir>/<slot>.prompt.txt for each photo post not yet published,
  *     and <dir>/<slot>.ref.jpg when the photo shows the poster;
  *
+ *   pnpm tsx scripts/demo-feed/publish-posts.ts redraw <dir> <slot...>
+ *     writes the prompts again for published posts whose photo is redone;
+ *
+ *   pnpm tsx scripts/demo-feed/publish-posts.ts rephoto <dir> <slot...>
+ *     replaces those posts' photos with <dir>/<slot>.(png|jpg|jpeg|webp);
+ *
  *   pnpm tsx scripts/demo-feed/publish-posts.ts publish <dir>
  *     publishes every post not yet published whose photo (if it has one) is
  *     in <dir>/<slot>.(png|jpg|jpeg|webp), then saves the starter feed.
@@ -33,8 +39,9 @@ async function authorId(handle: string): Promise<string> {
 async function main() {
   const host = new URL(process.env.DATABASE_URL ?? 'postgresql://unset').hostname
   if (!['127.0.0.1', 'localhost', '::1'].includes(host)) throw new Error(`not a local database: ${host}`)
-  const [mode, dir] = process.argv.slice(2)
-  if (!['prompts', 'publish'].includes(mode) || !dir) throw new Error('usage: prompts|publish <dir>')
+  const [mode, dir, ...slots] = process.argv.slice(2)
+  if (!['prompts', 'publish', 'redraw', 'rephoto'].includes(mode) || !dir) throw new Error('usage: prompts|publish <dir> | redraw|rephoto <dir> <slot...>')
+  const redo = new Set(slots.map((slot) => slot.toUpperCase()))
   fs.mkdirSync(dir, { recursive: true })
 
   const published = new Set((await prisma.post.findMany({ where: { id: { in: DEMO_POSTS.map(postIdOf) } }, select: { id: true } })).map((post) => post.id))
@@ -43,10 +50,21 @@ async function main() {
       if (!published.has(post.existingPostId)) throw new Error(`${post.slot}: post ${post.existingPostId} not found`)
       continue
     }
-    if (published.has(postIdOf(post))) continue
+    const isRedo = mode === 'redraw' || mode === 'rephoto'
+    if (isRedo && !redo.has(post.slot)) continue
+    if (!isRedo && published.has(postIdOf(post))) continue
     const author = await authorId(post.handle)
 
-    if (mode === 'prompts') {
+    if (mode === 'rephoto') {
+      const file = ['png', 'jpg', 'jpeg', 'webp'].map((ext) => path.join(dir, `${post.slot}.${ext}`)).find((candidate) => fs.existsSync(candidate))
+      if (!file || !published.has(postIdOf(post))) throw new Error(`${post.slot}: photo or post missing`)
+      const image = await storeReservePostImage(author, fs.readFileSync(file))
+      await prisma.post.update({ where: { id: postIdOf(post) }, data: { imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height } })
+      console.log(`${post.slot}: photo replaced`)
+      continue
+    }
+
+    if (mode === 'prompts' || mode === 'redraw') {
       if (!post.photo) continue
       const withPerson = decodePostPhoto(post.photo).kind === 'scene' ? null : await reservePostPerson(author)
       const place = post.place ?? await reservePostPlace(author)
