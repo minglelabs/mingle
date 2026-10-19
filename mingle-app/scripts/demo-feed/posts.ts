@@ -133,7 +133,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B11', handle: 'seoyun.daily', language: 'ko',
     text: '벚꽃 말고 은행나무 보러 오세요. 지금 서울 제일 예쁠 때예요 🍂',
-    photo: '[self] A friend took it from a few steps away on the Deoksugung stone-wall road in late October: she walks under yellow ginkgo trees and has just turned back toward the camera, smiling with her lips closed, one hand tucking hair behind her ear; a camel coat over a cream knit and a long skirt, a small shoulder bag. Yellow leaves on the path, a few people walking behind, the old stone wall to one side. Soft afternoon daylight.',
+    photo: '[self] A friend took it from a few steps away on the Deoksugung stone-wall road in late October: she walks under yellow ginkgo trees and has turned her whole upper body back toward the camera, smiling with her lips closed, one hand tucking hair behind her ear; a camel coat over a cream knit and a long skirt, a small shoulder bag. Yellow leaves on the path, a few people walking behind, the old stone wall to one side. Soft afternoon daylight.',
   },
   {
     slot: 'B12', handle: 'taeyun.s', language: 'ko',
