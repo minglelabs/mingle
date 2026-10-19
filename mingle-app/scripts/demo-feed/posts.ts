@@ -103,6 +103,6 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B10', handle: 'jihoon.lx', language: 'ko',
     text: '일본어/영어 공부 중이에요. 한국어 배우는 분들 저랑 언어 교환해요 🙋‍♂️',
-    photo: 'Japanese and English study notebooks open on a desk with handwritten notes in both languages, a pen and a can of coffee beside them.',
+    photo: 'His study notebook open on a café table: a page of Japanese and English vocabulary jotted in a hurry by a Korean guy in his twenties, in blue ballpoint with a few red corrections: slanted, uneven, cramped toward the margin, some words crossed out and rewritten, arrows between words, a couple of circled ones, a highlighter streak, the bottom of the page still empty. A plain unbranded can of coffee and a pen beside it; a textbook behind it is out of focus.',
   },
 ]
