@@ -26,6 +26,15 @@ const CAMERA = [
   'Phone-camera rendering: slightly over-sharpened edges, small-sensor noise in the shadows, auto white balance a bit off (slightly too warm or too cool).',
 ]
 
+/**
+ * For photos where the person is the point (posts of the poster): a real lens
+ * focuses on one distance, so the person is sharp and what is far behind
+ * them goes soft, and the skin is simply clean; the ordinary look comes from
+ * the camera, not from blemishes.
+ */
+const CAMERA_FOCUSED = 'Straight out of the phone\'s main camera: no portrait mode, no beauty app, no face slimming, no eye enlarging. The focus is on the person: they are sharp, things a few meters behind them are noticeably soft, and far-off signs and writing are blurred and unreadable, the natural falloff of a real lens rather than an artificial portrait blur.'
+const SKIN_CLEAN = 'Skin: clean and clear, healthy, an even tone with a natural matte finish; no blemishes, rough patches, redness, stubble shadow or grime, and not airbrushed or plastic either.'
+
 /** The camera line for photos without a person: the beauty-app words only invite a face. */
 const CAMERA_NO_PEOPLE = 'Straight out of the phone\'s default camera app: no portrait mode, no editing. The background is as sharp as the subject, no artificial bokeh.'
 
@@ -81,23 +90,23 @@ function pickFlaws(random: Random, count: number): string[] {
  */
 export function phonePhotoRealism(
   random: Random = Math.random,
-  options: { people?: boolean; faces?: boolean; environment?: PhotoEnvironment } = {},
+  options: { people?: boolean; faces?: boolean; environment?: PhotoEnvironment; focusOnPerson?: boolean } = {},
 ): string {
   const environment = options.environment ?? 'any'
   const people = options.people !== false
   // A back or body photo has a person but no visible face.
   const faces = options.faces ?? people
   return [
-    ...(people ? CAMERA : [CAMERA_NO_PEOPLE, CAMERA[1]]),
+    ...(people ? [options.focusOnPerson ? CAMERA_FOCUSED : CAMERA[0], CAMERA[1]] : [CAMERA_NO_PEOPLE, CAMERA[1]]),
     LIGHT,
     ...(faces ? [FACE_LIGHT] : []),
     COLORS,
     TEXTURE,
     `The background has a few everyday colors that do not match the scene, such as ${CLASHING_COLORS[environment]}.`,
-    ...(people ? [SKIN, HAIR[environment], PEOPLE] : []),
+    ...(people ? [options.focusOnPerson ? SKIN_CLEAN : SKIN, HAIR[environment], PEOPLE] : []),
     // People taking their own photo frame it with some care, so fewer flaws there.
     `Imperfections in this photo: ${pickFlaws(random, people ? 2 : 3).join('; ')}.`,
     ...(faces ? [AVOID_FACE] : []),
-    AVOID,
+    options.focusOnPerson ? AVOID.replace('shallow depth of field, ', '') : AVOID,
   ].join('\n')
 }

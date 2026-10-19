@@ -57,10 +57,9 @@ export function buildPostImagePrompt(
         ]
       : [`The poster: ${person.look}.`]),
     PERSON_LINES[kind],
-    'The phone camera is what makes it look ordinary (a little noise, softness, compression), not the people: skin is clear and healthy, with no blemishes, rough patches or grime added.',
     ...placeLine,
     'It must look like a real, unedited snapshot, not a photoshoot: an ordinary moment, the outfit the person would really wear there.',
-    phonePhotoRealism(random, { people: true, faces }),
+    phonePhotoRealism(random, { people: true, faces, focusOnPerson: true }),
     `Everyone in the image is an adult; no school uniforms. Not a photo of a phone, tablet or computer screen. ${frame}`,
   ].join('\n')
 }
