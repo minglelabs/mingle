@@ -360,7 +360,7 @@ const DYED_HAIR: readonly Option[] = [
 
 
 const SKIN_FEATURES: readonly Option[] = [
-  ['clear', 5, 'ordinary skin with visible pores'], ['freckles', 1, 'a few freckles'], ['mole', 1.5, 'a small mole on the cheek'],
+  ['clear', 5, 'ordinary, clear skin'], ['freckles', 1, 'a few freckles'], ['mole', 1.5, 'a small mole on the cheek'],
   ['acne_marks', 1.5, 'faint acne marks'], ['flush', 1, 'slightly flushed cheeks'], ['fine_lines', 1, 'faint lines around the eyes'],
 ]
 
@@ -607,7 +607,7 @@ const COMPOSITIONS: readonly Option[] = [
  * fought the phone-camera realism lines and read as staged.
  */
 const QUALITIES: readonly Option[] = [
-  ['new_phone', 5, 'shot on a recent smartphone'], ['old_phone', 1, 'shot on an older smartphone, slightly noisy and soft'],
+  ['new_phone', 5, 'shot on a recent smartphone'], ['old_phone', 1, 'shot on an older smartphone, slightly soft'],
   ['front_cam', 2, 'mild front-camera wide-angle distortion'],
 ]
 

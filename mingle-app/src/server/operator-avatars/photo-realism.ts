@@ -25,7 +25,10 @@ const CAMERA = [
   'Straight out of the phone\'s default camera app: no portrait mode, no beauty app, no face slimming, no eye enlarging, no skin smoothing, no added blush or glow. The background is as sharp as the subject, no artificial bokeh.',
   // Real photos are less crisp than renders; the staff-approved café shot
   // (2026-10) came from asking for a soft, compressed, shared-online look.
-  'Phone-camera rendering, less crisp than a render: a little soft overall, slightly low resolution and JPEG-compressed like a photo shared on Instagram, small-sensor noise in the shadows, auto white balance a bit off (slightly too warm or too cool).',
+  // Asking for sensor noise, pores and fabric pilling piled up into a gritty,
+  // crawling micro-texture over skin and every surface, the giveaway of a
+  // generated photo (2026-10); tones stay smooth and clean instead.
+  'Phone-camera rendering, less crisp than a render: a little soft overall and slightly low resolution, like a photo shared on Instagram; smooth, clean tonal gradations on skin, walls and sky, with no grain, no noise speckle and no gritty, crawling micro-texture anywhere; auto white balance a bit off (slightly too warm or too cool).',
 ]
 
 /**
@@ -73,7 +76,7 @@ const LIGHT = 'Light: only what the place itself gives, with its natural falloff
 const FACE_LIGHT = 'Any face is lit like its surroundings and no more brightly: no extra light falling on the face.'
 const COLORS = 'Colors are muted and true to life, like an uncorrected phone photo, with moderate contrast: no boosted saturation, no HDR halo, no color grade, no glow, no rim light, no dramatic shadows.'
 
-const TEXTURE = 'Every surface has its real texture and only the shine it really has: matte walls, fabric with visible weave or knit ribs and pilling, faded denim, scuffed leather, smudged glass, worn wood, dull metal. Nothing looks waxed, glossy, plastic or rendered.'
+const TEXTURE = 'Every surface has its real material and only the shine it really has: matte walls, knit and cotton fabric, faded denim, scuffed leather, smudged glass, worn wood, dull metal, all rendered softly at the level of detail a phone really resolves, not over-detailed. Nothing looks waxed, glossy, plastic or rendered.'
 
 /** Everyday objects whose colors clash with the scene; they are what a styled picture leaves out. */
 const CLASHING_COLORS: Record<PhotoEnvironment, string> = {
@@ -82,7 +85,7 @@ const CLASHING_COLORS: Record<PhotoEnvironment, string> = {
   any: 'a bright plastic bottle, a colored sign, a blue bin, a red or orange object off to one side',
 }
 
-const SKIN = 'Skin: real, matte skin with visible pores, fine texture and slight unevenness in tone, makeup that sits on the skin rather than looking airbrushed. No shine or sweat sheen anywhere on the face; no smooth, porcelain, waxy or glossy skin.'
+const SKIN = 'Skin: real, matte skin with slight unevenness in tone, pores only faintly visible up close, makeup that sits on the skin rather than looking airbrushed; the skin is smooth in tone, never gritty, grainy or crawling with texture. No shine or sweat sheen anywhere on the face; no porcelain, waxy or glossy skin.'
 
 const PEOPLE = 'Clothes crease and hang naturally; the expression is relaxed and caught mid-moment, not a posed photo smile.'
 
