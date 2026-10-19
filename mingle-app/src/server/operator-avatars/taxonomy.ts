@@ -399,7 +399,7 @@ const STRIKING = 'not the typical AI beauty: a distinctive look of their own, an
  * asymmetry works on the face itself; the flyaways were tested together
  * with it and stay with it.
  */
-const STRIKING_REAL_FACE = 'the slight natural asymmetry of a real face: one eye a touch smaller or one brow a little higher; hair with some frizz and static flyaways, not silky or uniform'
+const STRIKING_REAL_FACE = 'the slight natural asymmetry of a real face: one eye a touch smaller or one brow a little higher; hair with a little natural unevenness, not silky or uniform'
 
 /** The overall impression of a striking face, the way Koreans describe faces (고양이상, 강아지상 …). */
 const IMPRESSIONS: Record<'female' | 'male', readonly Option[]> = {
@@ -626,7 +626,7 @@ const LIGHTING: readonly Option[] = [
 
 const FLAWS: readonly Option[] = [
   ['none', 5, ''], ['soft_focus', 2, 'focus slightly missed'], ['slight_blur', 1.5, 'a little motion blur'], ['overexposed', 1, 'slightly overexposed highlights'],
-  ['mirror_smudge', 1, 'smudges on the mirror or lens'], ['clutter', 2, 'everyday clutter visible in the background'],
+  ['mirror_smudge', 1, 'smudges on the mirror or lens'], ['clutter', 2, 'an ordinary lived-in background, a little untidy'],
 ]
 
 type ShotEnv = 'indoor' | 'outdoor' | 'any'

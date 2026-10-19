@@ -22,7 +22,7 @@ type Random = () => number
 export type PhotoEnvironment = 'indoor' | 'outdoor' | 'any'
 
 const CAMERA = [
-  'Straight out of the phone\'s default camera app: no portrait mode, no beauty app, no face slimming, no eye enlarging, no skin smoothing, no added blush or glow. The background is as sharp as the subject, no artificial bokeh.',
+  'Straight out of the phone\'s default camera app: no portrait mode, no beauty app, no face slimming, no eye enlarging, no skin smoothing, no added blush or glow. The background is a little softer than the subject, the way a phone\'s main camera renders things further away, never an artificial portrait blur.',
   // Real photos are less crisp than renders; the staff-approved café shot
   // (2026-10) came from asking for a soft, compressed, shared-online look.
   // Asking for sensor noise, pores and fabric pilling piled up into a gritty,
@@ -63,7 +63,7 @@ const CAMERA_FOCUSED = 'Straight out of the phone\'s main camera: no portrait mo
 const SKIN_CLEAN = 'Skin: plain and matte, simply clean: an even natural tone, no shine, sweat or glossy highlights on the forehead, nose or cheeks, no painted-on color or contouring, no blemishes, rough patches, redness, stubble shadow or grime, and not airbrushed or plastic either.'
 
 /** The camera line for photos without a person: the beauty-app words only invite a face. */
-const CAMERA_NO_PEOPLE = 'Straight out of the phone\'s default camera app: no portrait mode, no editing. The background is as sharp as the subject, no artificial bokeh.'
+const CAMERA_NO_PEOPLE = 'Straight out of the phone\'s default camera app: no portrait mode, no editing. Whatever is further away is a little softer than the subject, never an artificial portrait blur.'
 
 /**
  * Mistakes staff caught in drawn photos (2026-10): a sunset over Haeundae,
@@ -75,6 +75,13 @@ const WORLD = 'The world in the photo is physically right. The sun rises in the 
 const LIGHT = 'Light: only what the place itself gives, with its natural falloff (the sky, a window, ceiling lights or street lamps); soft natural shadows; mixed color temperatures where different lights meet; whites that are slightly grey or slightly warm, not pure.'
 const FACE_LIGHT = 'Any face is lit like its surroundings and no more brightly: no extra light falling on the face.'
 const COLORS = 'Colors are muted and true to life, like an uncorrected phone photo, with moderate contrast: no boosted saturation, no HDR halo, no color grade, no glow, no rim light, no dramatic shadows.'
+
+/**
+ * Detail density. Image models crowd a scene with small decorative objects
+ * and render every one of them, which turns into a gritty, crawling texture
+ * (staff and a ChatGPT image community found the same, 2026-10).
+ */
+const DETAIL = 'Controlled detail density: a few clear things in the scene rather than a crowd of small objects; no random decorative clutter; the background is simpler and less detailed than the subject. Skin sits between the two AI extremes: neither gritty and textured nor smooth, uniform and glossy, just quiet matte skin with soft natural variation in tone.'
 
 const TEXTURE = 'Every surface has its real material and only the shine it really has: matte walls, knit and cotton fabric, faded denim, scuffed leather, smudged glass, worn wood, dull metal, all rendered softly at the level of detail a phone really resolves, not over-detailed. Nothing looks waxed, glossy, plastic or rendered.'
 
@@ -90,9 +97,9 @@ const SKIN = 'Skin: real, matte skin with slight unevenness in tone, pores only 
 const PEOPLE = 'Clothes crease and hang naturally; the expression is relaxed and caught mid-moment, not a posed photo smile.'
 
 const HAIR: Record<PhotoEnvironment, string> = {
-  outdoor: 'Hair: a light breeze, so a few strands are out of place: one or two loose strands across the face, the bangs (if any) slightly split, a few flyaways on top. The hairstyle keeps its shape.',
-  indoor: 'Hair: not arranged for the photo: a few flyaways on top, a loose strand or two, slightly uneven ends. The hairstyle keeps its shape.',
-  any: 'Hair: not arranged for the photo: a few loose strands and flyaways. The hairstyle keeps its shape.',
+  outdoor: 'Hair: a light breeze moves it a little, one loose strand across the face at most. The hair reads as soft clumps and locks the way a phone resolves it, not hundreds of individually drawn strands. The hairstyle keeps its shape.',
+  indoor: 'Hair: not arranged for the photo, slightly uneven, one loose strand at most. The hair reads as soft clumps and locks the way a phone resolves it, not hundreds of individually drawn strands. The hairstyle keeps its shape.',
+  any: 'Hair: not arranged for the photo, one loose strand at most. The hair reads as soft clumps and locks the way a phone resolves it, not hundreds of individually drawn strands. The hairstyle keeps its shape.',
 }
 
 const FLAWS = [
@@ -107,7 +114,7 @@ const FLAWS = [
 ]
 
 const AVOID_FACE = 'Keep any face proportions exactly as described; do not average them toward a typical face. Avoid an averaged beauty face with big round eyes, a tiny pointed nose and a V-line chin, a face lit more brightly than its surroundings, a retouched or beauty-filtered face, perfectly arranged hair, glossy or airbrushed skin.'
-const AVOID = 'Avoid everything that marks an AI, stock or retouched image: an overall plastic sheen, oversaturated colors, shallow depth of field, a magazine or advertising look.'
+const AVOID = 'Avoid everything that marks an AI, stock or retouched image: an overall plastic sheen, gritty or noisy micro-texture, excessive fine detail, over-rendered backgrounds, messy individually drawn hair strands, excessive bloom, oversaturated colors, shallow depth of field, a magazine or advertising look.'
 
 /** `count` different flaws for one photo. */
 function pickFlaws(random: Random, count: number): string[] {
@@ -138,7 +145,8 @@ export function phonePhotoRealism(
     ...(faces ? [FACE_LIGHT] : []),
     COLORS,
     TEXTURE,
-    `The background has a few everyday colors that do not match the scene, such as ${CLASHING_COLORS[environment]}.`,
+    DETAIL,
+    `Somewhere in the background one everyday object whose color does not match the scene, such as ${CLASHING_COLORS[environment]}.`,
     ...(people ? [options.focusOnPerson ? SKIN_CLEAN : SKIN, HAIR[environment], PEOPLE] : []),
     // People taking their own photo frame it with some care, so fewer flaws there.
     `Imperfections in this photo: ${pickFlaws(random, people ? 2 : 3).join('; ')}.`,
