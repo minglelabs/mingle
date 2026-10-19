@@ -33,7 +33,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'A4', handle: 'dan.in.seoul', language: 'en',
     text: '3 years in Seoul and my Korean is still ‘americano one please’ level 😅 Anyone want to correct my Korean?',
-    photo: '[self] A friend took it across the table at a Korean barbecue place: he holds tongs over the grill and laughs at something off camera, looking down at the meat, in a navy hoodie; smoke, side dishes and a green soju bottle in front of him.',
+    photo: '[self] A friend took it across the table at a Korean barbecue place: he holds tongs over the grill and laughs at something off camera, looking down at the meat, in a grey beanie and an olive work jacket, no glasses today, a few days of stubble; smoke, side dishes and a green soju bottle in front of him.',
   },
   {
     slot: 'A5', handle: 'linxiao.sh', language: 'zh-CN',
