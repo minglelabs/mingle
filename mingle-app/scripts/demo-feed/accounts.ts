@@ -30,6 +30,11 @@ export type DemoAccount = {
 
 export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
+    name: '태윤', handle: 'taeyun.s', gender: 'male', age: 27, nationality: 'KR', residence: { country: 'KR', city: 'Seoul' }, primaryLanguage: 'ko',
+    bio: '서울 토박이, 주말엔 카페랑 전시 다니는 사람. 영어·일본어 조금씩 공부 중이에요 :)',
+    posts: ['B0'], needsFace: true, striking: true, redraws: 2,
+  },
+  {
     name: '莉奈', handle: 'rina.sel', gender: 'female', age: 23, nationality: 'JP', residence: { country: 'KR', city: 'Seoul' }, primaryLanguage: 'ja',
     bio: 'ソウルで語学留学中🇰🇷 カフェ巡りと韓国コスメが好き。日本語教えます！',
     posts: ['A0'], needsFace: true, striking: true, redraws: 11,

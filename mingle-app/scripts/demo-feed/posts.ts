@@ -64,6 +64,11 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   },
   { slot: 'B1', handle: 'seoyun.daily', language: 'ko', existingPostId: 'cmvb31snm0004shx1uy1mp6i7' },
   {
+    slot: 'B0', handle: 'taeyun.s', language: 'ko',
+    text: '성수에서 전시 보고 커피 한 잔. 주말에 같이 전시 다닐 외국인 친구 구해요 🙂',
+    photo: '[self] A friend took it across a window table at a Seongsu café: he leans back with an iced coffee in one hand, looking out the window with a half smile, hair pushed back off his forehead, a plain white tee under an open navy overshirt; hard daylight from the window on one side of his face, the street and parked bikes outside.',
+  },
+  {
     slot: 'B2', handle: 'lari.souza', language: 'pt',
     text: 'Rio Han + frango frito no pôr do sol. Seul, você venceu 🍗',
     photo: '[self_faceless] A picnic mat at a Han River park at sunset: a box of Korean fried chicken and two cans of beer, her legs and sneakers on the mat, the river and a bridge glowing orange behind.',
@@ -81,7 +86,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B5', handle: 'dohyun.k', language: 'ko',
     text: '한복 입고 가면 경복궁 입장 무료예요. 외국인 친구들 꼭 해봐요 👘',
-    photo: '[friends] Him and two foreign friends, all in rented hanbok, posed in front of a palace gate at Gyeongbokgung, taken by a passerby, everyone squinting a little in the light.',
+    photo: '[friends] A slightly crooked front-camera selfie at arm\'s length of him and two foreign friends in rented hanbok in front of a Gyeongbokgung gate, in harsh midday sun: everyone squints, foreheads a little shiny with sweat, hair blown around by wind, hard shadows under the eyes and nose; one friend is half cut off at the edge, one is mid-laugh with the mouth open, he squints with both eyes against the sun (no wink, no smirk); nobody is posing well. Tourists walk through the background.',
   },
   { slot: 'B6', handle: 'dan.in.seoul', language: 'en', text: '3 years living in Seoul. Things I still can’t get used to: 1) people running for the bus at 2am 2) delivery in 15 min 3) no trash cans anywhere' },
   {
