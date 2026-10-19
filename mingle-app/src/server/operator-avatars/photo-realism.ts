@@ -44,6 +44,8 @@ const LENS: Record<PhoneLens, string> = {
 export function lensForShot(description: string): PhoneLens {
   if (/mirror/i.test(description)) return 'main'
   if (/selfie|front[- ]camera/i.test(description)) return 'front'
+  // Across a table the friend is within arm's reach: the main camera, not the zoom.
+  if (/across (a|the) [^.]{0,40}table/i.test(description)) return 'main'
   if (/\b(friend|someone|stranger)\b[^.]{0,40}\b(took|snapped|shot|photographed)\b/i.test(description)) return 'zoom'
   return 'main'
 }

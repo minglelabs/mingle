@@ -62,6 +62,7 @@ describe('lens for a shot', () => {
     expect(lensForShot('A front-camera selfie at a café window')).toBe('front')
     expect(lensForShot('A mirror selfie in a hair salon')).toBe('main')
     expect(lensForShot('A friend took it standing a few steps away')).toBe('zoom')
+    expect(lensForShot('A friend took it across the table at a barbecue place')).toBe('main')
     expect(lensForShot('Haeundae beach in the evening')).toBe('main')
   })
 })
