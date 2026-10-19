@@ -954,7 +954,7 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     lines.push(LETTER_SUBTYPES.has(subtype.key) ? DIGITAL_RULES.replace('No text, captions,', 'No other text, captions,') : DIGITAL_RULES)
   } else {
     if (category !== 'other') lines.push(`Camera and light: ${shot()}.`)
-    lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category), faces: ['face', 'partial', 'group'].includes(category), environment: env }))
+    lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category), faces: ['face', 'partial', 'group'].includes(category), environment: env, scene: lines.join(' ') }))
     lines.push(LETTER_SUBTYPES.has(subtype.key) ? RULES.replace('No text, captions,', 'No other text, captions,') : RULES)
   }
 

@@ -39,7 +39,7 @@ export function buildPostImagePrompt(
       `It shows: ${description}`,
       ...placeLine,
       'It must look like a real, unedited snapshot from an ordinary person\'s phone gallery.',
-      phonePhotoRealism(random, { people: false, lens: 'main' }),
+      phonePhotoRealism(random, { people: false, lens: 'main', scene: `${description} ${place ?? ''}` }),
       `No face and no recognizable person in the image; a hand or a person seen from far behind is fine. Not a photo of a phone, tablet or computer screen. ${frame}`,
     ].join('\n')
   }
@@ -59,7 +59,7 @@ export function buildPostImagePrompt(
     PERSON_LINES[kind],
     ...placeLine,
     'It must look like a real, unedited snapshot, not a photoshoot: an ordinary moment, the outfit the person would really wear there.',
-    phonePhotoRealism(random, { people: true, faces, focusOnPerson: true, lens: lensForShot(description) }),
+    phonePhotoRealism(random, { people: true, faces, focusOnPerson: true, lens: lensForShot(description), scene: `${description} ${place ?? ''}` }),
     `Everyone in the image is an adult; no school uniforms. Not a photo of a phone, tablet or computer screen. ${frame}`,
   ].join('\n')
 }

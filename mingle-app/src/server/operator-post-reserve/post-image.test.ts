@@ -66,3 +66,26 @@ describe('lens for a shot', () => {
     expect(lensForShot('Haeundae beach in the evening')).toBe('main')
   })
 })
+
+describe('off-color background objects', () => {
+  it('reads the kind of place from the description', async () => {
+    const { sceneKindOf } = await import('@/server/operator-avatars/photo-realism')
+    expect(sceneKindOf('sitting on stone steps by the river under cherry blossoms')).toBe('nature')
+    expect(sceneKindOf('a window table at a bright Seongsu café')).toBe('eatery')
+    expect(sceneKindOf('lying on a bed, phone held above the face')).toBe('home')
+    expect(sceneKindOf('walking down a Seongsu-dong street')).toBe('street')
+  })
+
+  it('never puts a traffic cone or a bin into a park, and often adds nothing', async () => {
+    const { phonePhotoRealism } = await import('@/server/operator-avatars/photo-realism')
+    let none = 0
+    for (let seed = 1; seed <= 40; seed += 1) {
+      let x = seed
+      const random = () => ((x = (x * 9301 + 49297) % 233280) / 233280)
+      const block = phonePhotoRealism(random, { people: true, environment: 'outdoor', scene: 'a riverside park under cherry blossoms' })
+      expect(block).not.toMatch(/cone|bin\b/i)
+      if (block.includes('Add no stray objects')) none += 1
+    }
+    expect(none).toBeGreaterThan(5)
+  })
+})

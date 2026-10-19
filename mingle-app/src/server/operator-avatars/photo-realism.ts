@@ -85,11 +85,57 @@ const DETAIL = 'Controlled detail density: a few clear things in the scene rathe
 
 const TEXTURE = 'Every surface has its real material and only the shine it really has: matte walls, knit and cotton fabric, faded denim, scuffed leather, smudged glass, worn wood, dull metal, all rendered softly at the level of detail a phone really resolves, not over-detailed. Nothing looks waxed, glossy, plastic or rendered.'
 
-/** Everyday objects whose colors clash with the scene; they are what a styled picture leaves out. */
-const CLASHING_COLORS: Record<PhotoEnvironment, string> = {
-  outdoor: 'a bright green or neon shop sign, a blue plastic trash bin, a red fire extinguisher box on a wall, an orange traffic cone, a parked scooter',
-  indoor: 'a bright plastic water bottle, a colored charger cable, a red or yellow takeaway bag, a green plant pot, a sticky note on the wall',
-  any: 'a bright plastic bottle, a colored sign, a blue bin, a red or orange object off to one side',
+/**
+ * The kind of place a photo is taken in, read from its description, so an
+ * off-color object in the background is one that really belongs there.
+ */
+export type SceneKind = 'nature' | 'street' | 'eatery' | 'home' | 'indoor'
+
+export function sceneKindOf(text: string, environment: PhotoEnvironment = 'any'): SceneKind {
+  const t = text.toLowerCase()
+  if (/(?<!\p{L})(café|cafe|coffee|restaurant|bar|pub|pojangmacha|barbecue|bbq|diner|bakery|noraebang|karaoke|food court|izakaya|market stall)(?!\p{L})/u.test(t)) return 'eatery'
+  if (/(?<!\p{L})(bedroom|living room|bed|sofa|couch|desk|kitchen|dorm|apartment|home|room)(?!\p{L})/u.test(t)) return 'home'
+  if (/(?<!\p{L})(park|forest|mountain|summit|hiking|trail|beach|sea|coast|river|lake|riverside|garden|field|meadow|cherry blossom|ginkgo|trees|countryside|valley|waterfall|island|hangang)(?!\p{L})/u.test(t)) return 'nature'
+  if (/(?<!\p{L})(street|alley|road|crosswalk|sidewalk|station|subway|bus stop|downtown|shop window|shopping|neighborhood|city)(?!\p{L})/u.test(t)) return 'street'
+  return environment === 'outdoor' ? 'street' : 'indoor'
+}
+
+/**
+ * Off-color things a styled picture leaves out, each one that belongs in that
+ * kind of place. Staff caught the same orange cone and blue-green bin in
+ * photo after photo, a cone even in a riverside park (2026-10): one object is
+ * drawn per photo, from the place's own pool, and many photos get none.
+ */
+const OFF_COLOR_OBJECTS: Record<SceneKind, readonly string[]> = {
+  nature: [
+    'someone far off in a bright red jacket', 'a child\'s yellow balloon in the distance', 'a picnic mat with a loud check pattern a few meters away',
+    'a turquoise rental bike leaning on a rail', 'a dog in a neon-green harness passing by', 'a pink umbrella someone is carrying in the distance',
+    'a faded orange park sign', 'a purple jacket hung over a bench',
+  ],
+  street: [
+    'a red delivery scooter parked at the curb', 'a passer-by in a mustard-yellow coat', 'a pink shop awning', 'a stack of colored plastic crates outside a shop',
+    'a lime-green bicycle locked to a rail', 'a red postbox', 'a striped parasol over a street stall', 'a white van with a bright logo-less blue stripe',
+    'a grey recycling bin with a yellow lid', 'a hand-written sale sign in red marker',
+  ],
+  eatery: [
+    'a red squeeze bottle of sauce', 'a customer\'s yellow raincoat on the next chair', 'a pink takeaway bag on a counter', 'a bright green glass bottle on another table',
+    'an orange tray stacked by the counter', 'a blue cooler box under a table', 'a potted plant in a loud turquoise pot',
+  ],
+  home: [
+    'a bright green water bottle', 'a pink charger cable trailing off a desk', 'a yellow sticky note on the wall', 'an orange laundry basket in a corner',
+    'a red snack bag on a shelf', 'a teal mug', 'a purple hair tie on the table', 'a striped beach towel over a chair',
+  ],
+  indoor: [
+    'a red fire extinguisher on a wall', 'a bright yellow wet-floor sign', 'a lime-green notice on a board', 'a pink umbrella leaning by a door',
+    'an orange chair among grey ones', 'a blue water dispenser bottle',
+  ],
+}
+
+/** One off-color object for this photo, or none: real photos do not all have one. */
+function offColorObject(random: Random, kind: SceneKind): string | null {
+  if (random() < 0.5) return null
+  const pool = OFF_COLOR_OBJECTS[kind]
+  return pool[Math.floor(random() * pool.length)]
 }
 
 const SKIN = 'Skin: real, matte skin with slight unevenness in tone, pores only faintly visible up close, makeup that sits on the skin rather than looking airbrushed; the skin is smooth in tone, never gritty, grainy or crawling with texture. No shine or sweat sheen anywhere on the face; no porcelain, waxy or glossy skin.'
@@ -131,12 +177,13 @@ function pickFlaws(random: Random, count: number): string[] {
  */
 export function phonePhotoRealism(
   random: Random = Math.random,
-  options: { people?: boolean; faces?: boolean; environment?: PhotoEnvironment; focusOnPerson?: boolean; lens?: PhoneLens } = {},
+  options: { people?: boolean; faces?: boolean; environment?: PhotoEnvironment; focusOnPerson?: boolean; lens?: PhoneLens; scene?: string } = {},
 ): string {
   const environment = options.environment ?? 'any'
   const people = options.people !== false
   // A back or body photo has a person but no visible face.
   const faces = options.faces ?? people
+  const offColor = offColorObject(random, sceneKindOf(options.scene ?? '', environment))
   return [
     ...(people ? [options.focusOnPerson ? CAMERA_FOCUSED : CAMERA[0], CAMERA[1]] : [CAMERA_NO_PEOPLE, CAMERA[1]]),
     ...(options.lens ? [LENS[options.lens]] : []),
@@ -146,7 +193,7 @@ export function phonePhotoRealism(
     COLORS,
     TEXTURE,
     DETAIL,
-    `Somewhere in the background one everyday object whose color does not match the scene, such as ${CLASHING_COLORS[environment]}.`,
+    ...(offColor ? [`Somewhere in the background, small and incidental: ${offColor}. Nothing else is added just for color.`] : ['Add no stray objects just for color; the place keeps only what it really has.']),
     ...(people ? [options.focusOnPerson ? SKIN_CLEAN : SKIN, HAIR[environment], PEOPLE] : []),
     // People taking their own photo frame it with some care, so fewer flaws there.
     `Imperfections in this photo: ${pickFlaws(random, people ? 2 : 3).join('; ')}.`,
