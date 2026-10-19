@@ -85,22 +85,35 @@ const PULL_REFRESH_ROW_PX = 60;
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
 
 const FREE_VIEW_LIMIT = 10;
+const FREE_VIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
 const FREE_VIEW_STORAGE_KEY = "mingle.feed.freeViews";
 
-/** True when a signed-out viewer may see `postId` (already seen, or still under the limit). */
+/**
+ * True when a signed-out viewer may see `postId` (already seen, or still under
+ * the limit). The count starts over a day after the first post it counted.
+ */
 function claimFreeView(postId: string): boolean {
+  const now = Date.now();
+  let since = now;
   let seen: string[] = [];
   try {
     const raw = window.localStorage.getItem(FREE_VIEW_STORAGE_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    if (Array.isArray(parsed)) seen = parsed.filter((id): id is string => typeof id === "string");
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    // The old format (a bare id list) has no start time; it starts over.
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const stored = parsed as { since?: unknown; ids?: unknown };
+      if (typeof stored.since === "number" && now - stored.since < FREE_VIEW_WINDOW_MS && Array.isArray(stored.ids)) {
+        since = stored.since;
+        seen = stored.ids.filter((id): id is string => typeof id === "string");
+      }
+    }
   } catch {
     // Storage unavailable: fall back to an empty history.
   }
   if (seen.includes(postId)) return true;
   if (seen.length >= FREE_VIEW_LIMIT) return false;
   try {
-    window.localStorage.setItem(FREE_VIEW_STORAGE_KEY, JSON.stringify([...seen, postId]));
+    window.localStorage.setItem(FREE_VIEW_STORAGE_KEY, JSON.stringify({ since, ids: [...seen, postId] }));
   } catch {
     // Not persisted; the limit then only holds for this page.
   }
@@ -512,8 +525,8 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     [scrollEl, cardPixelHeight, reducedMotion],
   );
 
-  // Signed-out viewers get FREE_VIEW_LIMIT distinct posts (remembered across
-  // visits); moving onto one more snaps back and opens the sign-in sheet.
+  // Signed-out viewers get FREE_VIEW_LIMIT distinct posts a day (remembered
+  // across visits); moving onto one more snaps back and opens the sign-in sheet.
   const activePostId = activePost?.id ?? null;
   useEffect(() => {
     if (viewerId || !activePostId) return;
