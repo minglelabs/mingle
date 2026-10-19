@@ -32,7 +32,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'A2', handle: 'lari.souza', language: 'pt',
     text: 'Primeira semana escrevendo em coreano ✍️ Qual ficou mais feia? Podem ser sinceros 😭',
-    photo: 'A grid notebook open on a café table with a first week of Korean practice in pencil: a few short words (안녕하세요, 감사합니다, 사랑해요, 친구) written over and over, clearly by an adult copying an unfamiliar script for the first time. The letters are wobbly and uneven: sizes jump around, syllables lean and drift off the grid, ㅇ drawn too big, ㄹ squashed, strokes too long, a few syllables erased and rewritten with grey smudges, one crossed out; nothing about it looks like a font or a textbook. An eraser and eraser crumbs beside it.',
+    photo: 'A grid notebook open on a café table with a first week of Korean practice in pencil: a few short words (안녕하세요, 감사합니다, 사랑해요, 친구) written over and over, clearly by an adult copying an unfamiliar script for the first time. The letters are wobbly and uneven: sizes jump around, syllables lean and drift off the grid, ㅇ drawn too big, ㄹ squashed, strokes too long, one syllable crossed out; nothing about it looks like a font or a textbook. Clean pages with no eraser marks, a mechanical pencil beside the notebook.',
   },
   { slot: 'A3', handle: 'seoyun.daily', language: 'ko', existingPostId: 'cmvb31snm0004shx1uy1mp6i7' },
   {
