@@ -22,7 +22,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'A0', handle: 'rina.sel', language: 'ja',
     text: '韓国の美容室で初めて髪切ってもらった！似合ってる？💇‍♀️',
-    photo: '[self] A mirror selfie in a Seoul hair salon right after the cut, taken in the narrow mirror at her station: the mirror\'s black frame runs down one side of the picture and the shelf of products below it, the phone held at chest height in the reflection. A fresh shoulder-length layered cut with see-through bangs, just blow-dried, a cream knit top. She is laughing at herself with her mouth open and eyes crinkled, head tipped slightly back, her free hand lifting the ends of her new hair; a stylist sweeping the floor behind her.',
+    photo: '[self] A mirror selfie in a Seoul hair salon right after the cut, taken in the mirror at her station, standing a little to one side of it: along the right edge of the picture the mirror ends in a thin silver edge, and past it the real salon wall and the next station are visible, unreflected; the shelf of products below the mirror, the phone held at chest height in the reflection. A fresh shoulder-length layered cut with see-through bangs, just blow-dried, a cream knit top. She is laughing at herself with her mouth open and eyes crinkled, head tipped slightly back, her free hand lifting the ends of her new hair; a stylist sweeping the floor behind her.',
   },
   {
     slot: 'A1', handle: 'misaki.tkm', language: 'ja', place: 'Seoul, South Korea',
