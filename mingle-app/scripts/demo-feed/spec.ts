@@ -18,6 +18,7 @@ export function demoAvatarSpec(account: DemoAccount, extraSkip = 0): AvatarSpec 
     const spec = pickAvatarSpec(persona, seededRandom(`demo-feed:${account.handle}:${draw}`))
     if (account.needsFace && spec.category !== 'face') continue
     if (account.mustMention && !spec.prompt.includes(account.mustMention)) continue
+    if (account.striking && spec.attributes.attractiveness !== 'striking') continue
     if (skip-- > 0) continue
     return spec
   }

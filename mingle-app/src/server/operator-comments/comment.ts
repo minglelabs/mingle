@@ -25,7 +25,8 @@ export type GeneratedCommentResult =
  */
 export async function commentOnPostAsOperator(
   ctx: AdminContext | null,
-  input: { operatorUserId: string; postId: string; now?: Date },
+  /** `photo` describes the post's photo when the post has no latent-post row to read it from. */
+  input: { operatorUserId: string; postId: string; now?: Date; photo?: string | null },
 ): Promise<GeneratedCommentResult> {
   try {
     const check = await checkOperatorForPosting(input.operatorUserId)
@@ -67,7 +68,7 @@ export async function commentOnPostAsOperator(
         language,
       },
       // The planned photo is only described when it was actually drawn and attached.
-      post: { text: post.sourceText, language: post.sourceLanguage, photo: post.imageObjectKey ? reserve?.imagePrompt ?? null : null },
+      post: { text: post.sourceText, language: post.sourceLanguage, photo: post.imageObjectKey ? input.photo ?? reserve?.imagePrompt ?? null : null },
       existingComments: comments.map((comment) => comment.sourceText ?? '').filter(Boolean),
     })
     if (!generated) return { ok: false, error: 'generation_failed' }

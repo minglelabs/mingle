@@ -1,5 +1,5 @@
 /**
- * The 20 posts of the hand-planned demo feed, in the order a new reader
+ * The posts of the hand-planned demo feed, in the order a new reader
  * sees them: set A for Korean readers, set B for everyone else. A post
  * written earlier is referenced by id; the others are published by
  * `publish-posts.ts`. `photo` is the stored photo description (a kind tag
@@ -19,6 +19,11 @@ export type DemoPost = {
 }
 
 export const DEMO_POSTS: readonly DemoPost[] = [
+  {
+    slot: 'A0', handle: 'rina.sel', language: 'ja',
+    text: '韓国の美容室で初めて髪切ってもらった！似合ってる？💇‍♀️',
+    photo: '[self] A mirror selfie in a Seoul hair salon right after the cut, the phone held at chest height so her whole face shows: a fresh shoulder-length layered cut with see-through bangs, just blow-dried, a cream knit top; the salon chairs, a stylist and hair products behind her in the mirror. She looks pleased with it, a small shy smile at the screen.',
+  },
   {
     slot: 'A1', handle: 'misaki.tkm', language: 'ja', place: 'Seoul, South Korea',
     text: '初めてのソウル旅行、3日目！明日どこ行けばいいか教えてください🙏',

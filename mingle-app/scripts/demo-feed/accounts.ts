@@ -21,12 +21,19 @@ export type DemoAccount = {
   needsFace?: boolean
   /** Text the image prompt must contain, for a look the plan fixes (e.g. 'white American'). */
   mustMention?: string
+  /** The plan needs a face people stop scrolling for. */
+  striking?: boolean
   /** Draws to skip: a photo staff rejected moves the account to its next draw. */
   redraws?: number
   existing?: boolean
 }
 
 export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
+  {
+    name: '莉奈', handle: 'rina.sel', gender: 'female', age: 23, nationality: 'JP', residence: { country: 'KR', city: 'Seoul' }, primaryLanguage: 'ja',
+    bio: 'ソウルで語学留学中🇰🇷 カフェ巡りと韓国コスメが好き。日本語教えます！',
+    posts: ['A0'], needsFace: true, striking: true, redraws: 11,
+  },
   {
     name: '美咲', handle: 'misaki.tkm', gender: 'female', age: 24, nationality: 'JP', residence: { country: 'JP', city: 'Tokyo' }, primaryLanguage: 'ja',
     bio: '東京で事務やってます。韓ドラきっかけで韓国語勉強中🇰🇷 ソウルのおすすめ教えてほしいです',
