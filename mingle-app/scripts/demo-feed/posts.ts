@@ -71,7 +71,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B2', handle: 'lari.souza', language: 'pt',
     text: 'Rio Han + frango frito no pôr do sol. Seul, você venceu 🍗',
-    photo: '[self_faceless] A picnic mat at a Han River park at sunset: a box of Korean fried chicken and two cans of beer, her legs and sneakers on the mat, the river and a bridge glowing orange behind.',
+    photo: '[self_faceless] A picnic mat at Yeouido Hangang Park at sunset, looking west downstream: the sun is going down over the river beyond the bridges to the west, the sky orange; a box of Korean fried chicken and two cans of beer, her legs and sneakers on the mat, people sitting on the grass. No Lotte World Tower anywhere in the frame (it stands far to the east, away from the sunset).',
   },
   {
     slot: 'B3', handle: 'junho.bsn', language: 'ko',
