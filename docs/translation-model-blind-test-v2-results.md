@@ -33,4 +33,4 @@
 
 - **GPT와 Gemini의 평가표가 완전히 같다.** 받은 응답이 중복 복사된 것으로 보이므로, 실질적인 독립 평가는 2개다. 중복을 빼고 2개만 평균해도 순위는 같다.
 - **평가자도 LLM이라 자기 계열 선호가 있을 수 있다.** Claude 평가는 Haiku에게, GPT 평가는 GPT-6 Luna에게 조금 더 후했다. 다만 순위를 바꿀 정도는 아니다.
-- 1차 블라인드(사람 평가자 3명, 5종)와 순위가 일치한다. GPT-6 Luna가 1위, Haiku가 2위였다. 다만 Gemini는 이번에 DeepSeek 두 버전보다 아래로, Mercury 3 다음인 꼴찌에서 두 번째였다.
+- [1차 블라인드](translation-model-blind-test-results.md)(평가자 3명, 5종)와 순위가 같다. GPT-6 Luna > Haiku > DeepSeek 두 버전 > Gemini 순이다. 새로 넣은 Mercury 3는 그 아래인 꼴찌다.
