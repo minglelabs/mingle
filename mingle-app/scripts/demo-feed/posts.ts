@@ -22,7 +22,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'A0', handle: 'rina.sel', language: 'ja',
     text: '韓国の美容室で初めて髪切ってもらった！似合ってる？💇‍♀️',
-    photo: '[self] A mirror selfie in a Seoul hair salon right after the cut, the phone held at chest height so her whole face shows: a fresh shoulder-length layered cut with see-through bangs, just blow-dried, a cream knit top; the salon chairs, a stylist and hair products behind her in the mirror. She looks pleased with it, a small shy smile at the screen.',
+    photo: '[self] A mirror selfie in a Seoul hair salon right after the cut, taken in the narrow mirror at her station: the mirror\'s black frame runs down one side of the picture and the shelf of products below it, the phone held at chest height in the reflection. A fresh shoulder-length layered cut with see-through bangs, just blow-dried, a cream knit top. She is laughing at herself with her mouth open and eyes crinkled, head tipped slightly back, her free hand lifting the ends of her new hair; a stylist sweeping the floor behind her.',
   },
   {
     slot: 'A1', handle: 'misaki.tkm', language: 'ja', place: 'Seoul, South Korea',
@@ -40,11 +40,6 @@ export const DEMO_POSTS: readonly DemoPost[] = [
     text: '3 years in Seoul and my Korean is still ‘americano one please’ level 😅 Anyone want to correct my Korean?',
     photo: '[self] A friend took it across the table at a Korean barbecue place: he holds tongs over the grill and laughs at something off camera, looking down at the meat, in a grey beanie and an olive work jacket, no glasses today, a few days of stubble; smoke, side dishes and a green soju bottle in front of him.',
   },
-  {
-    slot: 'A5', handle: 'linxiao.sh', language: 'zh-CN',
-    text: '背了一周的韩语单词，\'눈치\'到底怎么翻译成中文？',
-    photo: 'A Korean vocabulary textbook open on a dorm desk with sticky notes on the pages, next to a brown sugar bubble milk tea with a wide straw.',
-  },
   { slot: 'A6', handle: 'yuki_whsl', language: 'ja', text: '\'괜찮아\'って何でこんなに意味が多いの？ 大丈夫？ いらない？ 本当に？' },
   {
     slot: 'A7', handle: 'mai.ngx', language: 'vi',
@@ -61,6 +56,11 @@ export const DEMO_POSTS: readonly DemoPost[] = [
     slot: 'A10', handle: 'yuxuan.w', language: 'zh-CN',
     text: '韩国朋友一见面就问\'밥 먹었어?\'，原来是在打招呼！',
     photo: '[friends] A front-camera selfie of her and a Korean friend at a Korean restaurant table crowded with banchan, a stew bubbling in a stone pot and rice bowls, both mid-laugh.',
+  },
+  {
+    slot: 'A5', handle: 'linxiao.sh', language: 'zh-CN',
+    text: '背了一周的韩语单词，\'눈치\'到底怎么翻译成中文？',
+    photo: 'A Korean vocabulary textbook lying open on a dorm desk, shot from a low side angle so the printed pages recede and the small print is soft and unreadable, colorful sticky notes sticking out of the edges; a brown sugar bubble milk tea with a wide straw sharp in the foreground.',
   },
   { slot: 'B1', handle: 'seoyun.daily', language: 'ko', existingPostId: 'cmvb31snm0004shx1uy1mp6i7' },
   {

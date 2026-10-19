@@ -147,4 +147,6 @@ What gave drafts away, most noticeable first:
 14. **The physical world.** Staff caught a sunset over Haeundae (it faces east), a Han River sunset behind Lotte World Tower (it stands east of the riverside parks) and a right leg ending in a left foot. Every photo prompt now states that sunsets face west, landmarks stand where they really are, and bodies are anatomically right, and the post generator is told the same when it describes the photo.
 15. **Writing in the photo.** A beginner's handwriting came out like a font; it has to be described as wobbly, uneven and corrected. Korean in a pasted prompt was garbled by a non-UTF-8 clipboard, so a notebook word came out wrong; prompts go in as an attached text file.
 
+16. **Mirror selfies and small print.** A mirror selfie with no mirror in sight reads as impossible; the mirror's edge or frame is in the picture unless it is a whole wall. Pages of small print came out as crisp invented characters; small print is shown at an angle, covered or soft. In a starter feed, no more than two of the first ten posts are study notebooks or textbooks.
+
 What did not need fixing: pretty faces (a profile picture is someone's best photo), mushy far background details nobody looks at, and forced flaws such as a fingertip in the frame (people frame their own photos with care).
