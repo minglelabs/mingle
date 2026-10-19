@@ -74,6 +74,7 @@ describe('off-color background objects', () => {
     expect(sceneKindOf('a window table at a bright Seongsu café')).toBe('eatery')
     expect(sceneKindOf('lying on a bed, phone held above the face')).toBe('home')
     expect(sceneKindOf('walking down a Seongsu-dong street')).toBe('street')
+    expect(sceneKindOf('Setting: on a train or subway, consistent with Seoul')).toBe('transit')
   })
 
   it('never puts a traffic cone or a bin into a park, and often adds nothing', async () => {

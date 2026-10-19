@@ -89,14 +89,15 @@ const TEXTURE = 'Every surface has its real material and only the shine it reall
  * The kind of place a photo is taken in, read from its description, so an
  * off-color object in the background is one that really belongs there.
  */
-export type SceneKind = 'nature' | 'street' | 'eatery' | 'home' | 'indoor'
+export type SceneKind = 'nature' | 'street' | 'eatery' | 'home' | 'transit' | 'indoor'
 
 export function sceneKindOf(text: string, environment: PhotoEnvironment = 'any'): SceneKind {
   const t = text.toLowerCase()
+  if (/(?<!\p{L})(train|subway|metro|bus|carriage|platform|airplane|plane|ktx)(?!\p{L})/u.test(t)) return 'transit'
   if (/(?<!\p{L})(café|cafe|coffee|restaurant|bar|pub|pojangmacha|barbecue|bbq|diner|bakery|noraebang|karaoke|food court|izakaya|market stall)(?!\p{L})/u.test(t)) return 'eatery'
   if (/(?<!\p{L})(bedroom|living room|bed|sofa|couch|desk|kitchen|dorm|apartment|home|room)(?!\p{L})/u.test(t)) return 'home'
   if (/(?<!\p{L})(park|forest|mountain|summit|hiking|trail|beach|sea|coast|river|lake|riverside|garden|field|meadow|cherry blossom|ginkgo|trees|countryside|valley|waterfall|island|hangang)(?!\p{L})/u.test(t)) return 'nature'
-  if (/(?<!\p{L})(street|alley|road|crosswalk|sidewalk|station|subway|bus stop|downtown|shop window|shopping|neighborhood|city)(?!\p{L})/u.test(t)) return 'street'
+  if (/(?<!\p{L})(street|alley|road|crosswalk|sidewalk|downtown|shop window|shopping|neighborhood|city)(?!\p{L})/u.test(t)) return 'street'
   return environment === 'outdoor' ? 'street' : 'indoor'
 }
 
@@ -124,6 +125,9 @@ const OFF_COLOR_OBJECTS: Record<SceneKind, readonly string[]> = {
   home: [
     'a bright green water bottle', 'a pink charger cable trailing off a desk', 'a yellow sticky note on the wall', 'an orange laundry basket in a corner',
     'a red snack bag on a shelf', 'a teal mug', 'a purple hair tie on the table', 'a striped beach towel over a chair',
+  ],
+  transit: [
+    'a passenger\'s bright yellow backpack', 'a pink seat among blue ones', 'a lime-green line color on the route map above the doors', 'someone\'s red shopping bag on the floor',
   ],
   indoor: [
     'a red fire extinguisher on a wall', 'a bright yellow wet-floor sign', 'a lime-green notice on a board', 'a pink umbrella leaning by a door',
