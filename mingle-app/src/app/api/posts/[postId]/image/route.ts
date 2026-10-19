@@ -141,7 +141,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
         'Content-Type': 'image/jpeg',
-        'Cache-Control': 'private, no-store',
+        // Kept by this viewer's browser for a while (never by a shared cache),
+        // so scrolling back and forth does not fetch the photo again.
+        'Cache-Control': 'private, max-age=600',
         'X-Content-Type-Options': 'nosniff',
       },
     })

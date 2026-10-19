@@ -369,7 +369,11 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     },
     [isViewer, locale, activePost],
   );
-  const closeLogin = useCallback(() => setLoginReturnTo(null), []);
+  const closeLogin = useCallback(() => {
+    setLoginReturnTo(null);
+    // Land exactly on the active post, whatever the scroll did under the sheet.
+    if (scrollEl) scrollEl.scrollTop = activeIndexRef.current * cardPixelHeight();
+  }, [scrollEl, cardPixelHeight]);
 
   // Compose slides in over the feed (like the notification panel); signed-out
   // viewers sign in first and land on compose.
@@ -526,18 +530,33 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   );
 
   // Signed-out viewers get FREE_VIEW_LIMIT distinct posts a day (remembered
-  // across visits); moving onto one more snaps back and opens the sign-in sheet.
+  // across visits); landing on one more snaps back and opens the sign-in sheet.
+  // The check waits until the swipe has settled: the sheet locks the feed's
+  // scrolling, which mid-swipe would freeze it between two posts.
   const activePostId = activePost?.id ?? null;
   useEffect(() => {
-    if (viewerId || !activePostId) return;
+    if (viewerId || !activePostId || !scrollEl) return;
     if (claimFreeView(activePostId)) return;
-    const idx = activeIndexRef.current;
-    if (idx > 0) scrollToIndex(idx - 1);
-    goToLogin(activePostId);
-    // goToLogin / scrollToIndex identities change with the active post;
-    // only a new post should re-run the check.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const idx = activeIndexRef.current;
+        if (posts[idx]?.id !== activePostId) return;
+        scrollEl.scrollTop = Math.max(0, idx - 1) * cardPixelHeight();
+        goToLogin(activePostId);
+      }, 150);
+    };
+    settle();
+    scrollEl.addEventListener("scroll", settle, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      scrollEl.removeEventListener("scroll", settle);
+    };
+    // goToLogin / cardPixelHeight / posts identities change with the active
+    // post; only a new post should re-run the check.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewerId, activePostId]);
+  }, [viewerId, activePostId, scrollEl]);
 
   const handleExpandChange = useCallback(
     (postId: string, expanded: boolean, scrollTop: number) => {
@@ -868,7 +887,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
               reducedMotion={reducedMotion}
               restoreExpanded={saved?.expanded ?? false}
               restoreScrollTop={saved?.scrollTop ?? 0}
-              eagerImage={idx <= activeIndex + 1}
+              eagerImage={idx <= activeIndex + 2}
               isActive={idx === activeIndex && !anyOverlayOpen}
               analytics={analyticsFor(key)}
               onExpandStateChange={(exp, st) => handleExpandChange(post.id, exp, st)}
