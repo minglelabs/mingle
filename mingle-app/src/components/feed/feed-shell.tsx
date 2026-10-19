@@ -423,6 +423,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   useEffect(() => {
     if (!scrollEl) return;
     let startY: number | null = null;
+    let startX = 0;
 
     const onStart = (event: TouchEvent) => {
       startY = null;
@@ -433,10 +434,18 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
         if (node.scrollTop > 0) return;
       }
       startY = event.touches[0].clientY;
+      startX = event.touches[0].clientX;
     };
     const onMove = (event: TouchEvent) => {
       if (startY === null) return;
       const dy = event.touches[0].clientY - startY;
+      // A sideways swipe moves between a post's photos; it is not a pull.
+      if (Math.abs(event.touches[0].clientX - startX) > Math.abs(dy)) {
+        startY = null;
+        setPullDragging(false);
+        setPullProgress(0);
+        return;
+      }
       if (dy <= 0 || scrollEl.scrollTop > 0) {
         // Upward: this is a normal swipe to the next post.
         if (dy < 0) startY = null;

@@ -154,14 +154,24 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                   />
                 ) : null}
                 {post.imageObjectKey ? (
-                  <ZoomableImage
-                    src={`/api/posts/${post.id}/image`}
-                    alt="글 사진"
-                    width={post.imageWidth ?? undefined}
-                    height={post.imageHeight ?? undefined}
-                    loading="lazy"
-                    className="mt-3 h-auto max-h-[80vh] w-full rounded-xl border border-slate-200 bg-slate-900 object-contain"
-                  />
+                  <div className={`mt-3 flex gap-2 ${post.extraImages.length ? 'no-scrollbar snap-x snap-mandatory overflow-x-auto' : ''}`}>
+                    {[
+                      { src: `/api/posts/${post.id}/image`, width: post.imageWidth, height: post.imageHeight },
+                      ...post.extraImages.map((image) => ({ src: `/api/posts/${post.id}/image?index=${image.position}`, width: image.imageWidth, height: image.imageHeight })),
+                    ].map((photo, index, all) => (
+                      <div key={photo.src} className={all.length > 1 ? 'w-[85%] shrink-0 snap-center' : 'w-full'}>
+                        <ZoomableImage
+                          src={photo.src}
+                          alt={`글 사진 ${index + 1}`}
+                          width={photo.width ?? undefined}
+                          height={photo.height ?? undefined}
+                          loading="lazy"
+                          className="h-auto max-h-[80vh] w-full rounded-xl border border-slate-200 bg-slate-900 object-contain"
+                        />
+                        {all.length > 1 ? <p className="mt-1 text-center text-xs text-slate-500">{index + 1}/{all.length}</p> : null}
+                      </div>
+                    ))}
+                  </div>
                 ) : null}
 
                 <div className="mt-3 flex items-center gap-4 text-sm text-slate-600">

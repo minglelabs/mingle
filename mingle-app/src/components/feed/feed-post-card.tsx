@@ -221,6 +221,10 @@ export default function FeedPostCard({
   const [imageAttempt, setImageAttempt] = useState(0);
   const [measuredImage, setMeasuredImage] = useState<{ width: number; height: number } | null>(null);
   const imageAspect = imageAspectRatio(post.image, measuredImage);
+  const carouselImages = useMemo(
+    () => (post.images && post.images.length > 1 ? post.images.map((image) => ({ url: image.url, aspect: imageAspectRatio(image) })) : undefined),
+    [post.images],
+  );
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
     if (img.naturalWidth > 0 && img.naturalHeight > 0) {
@@ -423,8 +427,10 @@ export default function FeedPostCard({
         lastTapRef.current = null;
         singleTapTimerRef.current = null;
         // Confirmed single tap: open image zoom if the tap landed on the image.
-        if (onImage && !imageFailed && post.image?.url) {
-          onOpenImage(post.image.url);
+        // The photo under the finger: in a carousel, the one being shown.
+        const tapped = targetEl.closest("[data-feed-image]")?.getAttribute("src") ?? post.image?.url;
+        if (onImage && !imageFailed && tapped) {
+          onOpenImage(tapped);
         }
       }, 320);
     },
@@ -769,6 +775,7 @@ export default function FeedPostCard({
         imageRetryLabel={copy.retry}
         imageAttempt={imageAttempt}
         imageAspect={imageAspect}
+        images={carouselImages}
         onImageLoad={handleImageLoad}
         imageLoading={eagerImage ? "eager" : "lazy"}
         previewClampRef={previewClampRef}

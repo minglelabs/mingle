@@ -55,6 +55,11 @@ export type FeedPostDto = {
   /** A key of POST_BACKGROUND catalog in `@/lib/post-backgrounds`. */
   backgroundKey: string
   image: FeedPostImageDto | null
+  /**
+   * Every photo in order, the first being `image`; swiped through sideways on
+   * the card. Optional on the wire: absent means just `image`.
+   */
+  images?: FeedPostImageDto[]
   likeCount: number
   commentCount: number
   likedByMe: boolean

@@ -5,6 +5,7 @@ import {
   serializeFeedPost,
   serializeFeedPosts,
   serializePostImage,
+  serializePostImages,
   type SerializerContext,
   type SerializerPostRow,
   type SerializerTranslationRow,
@@ -211,5 +212,18 @@ describe('serializeFeedPost', () => {
   it('serializeFeedPosts preserves order', () => {
     const posts = [makePost({ id: 'a' }), makePost({ id: 'b' }), makePost({ id: 'c' })]
     expect(serializeFeedPosts(posts, makeCtx()).map((d) => d.id)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('serializePostImages', () => {
+  it('lists the first photo then the rest by position, each with its own URL and size', () => {
+    expect(serializePostImages('p1', 'post-images/u/a.jpg', 960, 1280, [
+      { position: 2, imageWidth: 1280, imageHeight: 960 },
+      { position: 1, imageWidth: null, imageHeight: null },
+    ])).toEqual([
+      { url: '/api/posts/p1/image', width: 960, height: 1280 },
+      { url: '/api/posts/p1/image?index=1', width: null, height: null },
+      { url: '/api/posts/p1/image?index=2', width: 1280, height: 960 },
+    ])
   })
 })

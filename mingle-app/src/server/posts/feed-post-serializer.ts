@@ -60,6 +60,8 @@ export type SerializerPostRow = {
    */
   imageWidth?: number | null
   imageHeight?: number | null
+  /** The 2nd to 10th photo, by position. Optional: a caller that does not select them shows one photo. */
+  extraImages?: Array<{ position: number; imageWidth: number | null; imageHeight: number | null }>
   visibility: string
   deletedAt: Date | null
   likeCount: number
@@ -168,6 +170,26 @@ export function serializePostImage(
   }
 }
 
+/** All photos of a post in order: the first from the post row, the rest by position. */
+export function serializePostImages(
+  postId: string,
+  imageObjectKey: string,
+  imageWidth: number | null | undefined,
+  imageHeight: number | null | undefined,
+  extraImages: ReadonlyArray<{ position: number; imageWidth: number | null; imageHeight: number | null }>,
+): FeedPostImageDto[] {
+  const first = serializePostImage(postId, imageObjectKey, imageWidth, imageHeight)!
+  const rest = [...extraImages].sort((a, b) => a.position - b.position).map((image) => {
+    const valid = isPositiveInt(image.imageWidth) && isPositiveInt(image.imageHeight)
+    return {
+      url: `/api/posts/${encodeURIComponent(postId)}/image?index=${image.position}`,
+      width: valid ? image.imageWidth : null,
+      height: valid ? image.imageHeight : null,
+    }
+  })
+  return [first, ...rest]
+}
+
 function isPositiveInt(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
 }
@@ -256,6 +278,9 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
     ...(translationLanguages.length > 0 ? { translationLanguages } : {}),
     backgroundKey: post.backgroundKey ?? '',
     image: serializePostImage(post.id, post.imageObjectKey, post.imageWidth, post.imageHeight),
+    ...(post.imageObjectKey && post.extraImages?.length
+      ? { images: serializePostImages(post.id, post.imageObjectKey, post.imageWidth, post.imageHeight, post.extraImages) }
+      : {}),
     likeCount: post.likeCount,
     commentCount: post.commentCount,
     likedByMe: ctx.viewerId != null && ctx.likedPostIds.has(post.id),

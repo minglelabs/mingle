@@ -2,7 +2,7 @@
 
 import { resolveBackgroundPreset } from "@/lib/post-backgrounds";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 export type FeedPostViewColors = {
   background: string;
@@ -72,6 +72,11 @@ export type FeedPostViewProps = {
   imageAttempt?: number;
   /** CSS aspect-ratio ("w / h") from the DTO or measured after load. */
   imageAspect?: string | null;
+  /**
+   * Every photo of a post with more than one, in order; swiped through
+   * sideways (the feed itself pages vertically). `imageUrl` is the first.
+   */
+  images?: ReadonlyArray<{ url: string; aspect: string | null }>;
   onImageLoad?: React.ReactEventHandler<HTMLImageElement>;
   /** Off-screen cards load lazily; the active and next card pass "eager". */
   imageLoading?: "eager" | "lazy";
@@ -114,6 +119,7 @@ export default function FeedPostView({
   imageRetryLabel,
   imageAttempt = 0,
   imageAspect = null,
+  images,
   onImageLoad,
   imageLoading = "lazy",
   previewClampRef,
@@ -135,9 +141,14 @@ export default function FeedPostView({
     >
       {overlaySlot}
 
+      {/* Several photos: a sideways carousel, each photo whole as below. */}
+      {imageUrl && images && images.length > 1 ? (
+        <PhotoCarousel images={images} loading={imageLoading} />
+      ) : null}
+
       {/* Image backdrop: whole photo (object-contain, never cropped); the
           letterbox shows the post background. */}
-      {imageUrl ? (
+      {imageUrl && !(images && images.length > 1) ? (
         imageFailed ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-800 px-8 text-center">
             <p className="text-sm" style={{ color: "#e2e8f0" }} role="status">
@@ -309,5 +320,67 @@ export default function FeedPostView({
         ) : null}
       </div>
     </article>
+  );
+}
+
+/** CSS that shows a photo whole inside its container, keeping its ratio. */
+function photoFit(aspect: string | null): React.CSSProperties | undefined {
+  return aspect
+    ? { aspectRatio: aspect, width: `min(100cqw, calc(100cqh * (${aspect})))`, height: "auto", maxHeight: "100%" }
+    : undefined;
+}
+
+/**
+ * The photos of a post side by side, one per screen: a native horizontal
+ * scroll with snapping, so a sideways swipe moves between photos while a
+ * vertical swipe still pages the feed. A counter and dots show the position.
+ */
+function PhotoCarousel({
+  images,
+  loading,
+}: {
+  images: ReadonlyArray<{ url: string; aspect: string | null }>;
+  loading: "eager" | "lazy";
+}) {
+  const [index, setIndex] = useState(0);
+  return (
+    <>
+      <div
+        className="no-scrollbar absolute inset-0 flex snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain"
+        data-feed-carousel
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setIndex(Math.min(images.length - 1, Math.max(0, Math.round(el.scrollLeft / Math.max(1, el.clientWidth)))));
+        }}
+      >
+        {images.map((image, i) => (
+          <div key={image.url} className="relative flex h-full w-full shrink-0 snap-center items-center justify-center [container-type:size]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image.url}
+              alt=""
+              data-feed-image
+              className="h-full w-full object-contain"
+              style={photoFit(image.aspect)}
+              draggable={false}
+              loading={i === 0 ? loading : "lazy"}
+              decoding="async"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
+      <span
+        className="pointer-events-none absolute right-3 rounded-full bg-black/55 px-2 py-0.5 text-[12px] font-semibold tabular-nums text-white"
+        style={{ top: "calc(env(safe-area-inset-top, 44px) + 60px)" }}
+      >
+        {index + 1}/{images.length}
+      </span>
+      <div className="pointer-events-none absolute inset-x-0 flex justify-center gap-1.5" style={{ top: "calc(env(safe-area-inset-top, 44px) + 68px)" }}>
+        {images.map((image, i) => (
+          <span key={image.url} className={`h-1.5 w-1.5 rounded-full ${i === index ? "bg-white" : "bg-white/45"}`} />
+        ))}
+      </div>
+    </>
   );
 }

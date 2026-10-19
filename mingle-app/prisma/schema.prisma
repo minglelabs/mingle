@@ -721,6 +721,7 @@ model Post {
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
   author        User                  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  extraImages   PostImage[]
   translations  PostTranslation[]
   comments      PostComment[]
   likes         PostLike[]
@@ -734,6 +735,22 @@ model Post {
   @@index([authorId, createdAt], map: "app_posts_author_created_at_idx")
   @@index([visibility, isDeleted, moderationHiddenAt, publishedAt], map: "app_posts_feed_filter_idx")
   @@map("app_posts")
+}
+
+/// The 2nd to 10th photo of a post (position 1-9); the first stays on the
+/// post row (`imageObjectKey`), so everything that shows one photo keeps working.
+model PostImage {
+  id             String  @id @default(cuid())
+  postId         String  @map("post_id")
+  position       Int
+  imageObjectKey String  @map("image_object_key")
+  imageWidth     Int?    @map("image_width")
+  imageHeight    Int?    @map("image_height")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, position], map: "app_post_images_post_position_key")
+  @@map("app_post_images")
 }
 
 model PostTranslation {

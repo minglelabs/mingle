@@ -59,6 +59,8 @@ export interface FeedResultPost {
   imageObjectKey: string | null
   imageWidth: number | null
   imageHeight: number | null
+  /** The 2nd to 10th photo, by position. */
+  extraImages: Array<{ position: number; imageWidth: number | null; imageHeight: number | null }>
   visibility: string
   deletedAt: Date | null
   likeCount: number
@@ -225,6 +227,7 @@ export const FEED_PAGE_SELECT = {
   imageObjectKey: true,
   imageWidth: true,
   imageHeight: true,
+  extraImages: { select: { position: true, imageWidth: true, imageHeight: true }, orderBy: { position: 'asc' as const } },
   visibility: true,
   deletedAt: true,
   likeCount: true,
