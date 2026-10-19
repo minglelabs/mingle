@@ -121,7 +121,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
     name: '紗良', handle: 'sara.ueno', gender: 'female', age: 22, nationality: 'JP', residence: { country: 'JP', city: 'Osaka' }, primaryLanguage: 'ja',
     bio: '大阪の大学生🎓 来年ソウルに交換留学予定！韓国語の友達ほしいです',
-    posts: [], needsFace: true, striking: true, redraws: 1,
+    posts: [], needsFace: true, striking: true,
   },
   {
     name: '芷晴', handle: 'zhiqing.lin', gender: 'female', age: 23, nationality: 'TW', residence: { country: 'TW', city: 'Taipei' }, primaryLanguage: 'zh-TW',
