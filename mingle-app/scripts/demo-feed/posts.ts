@@ -71,12 +71,12 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B2', handle: 'lari.souza', language: 'pt',
     text: 'Rio Han + frango frito no pôr do sol. Seul, você venceu 🍗',
-    photo: '[self_faceless] A picnic mat at Yeouido Hangang Park at sunset, looking west downstream: the sun is going down over the river beyond the bridges to the west, the sky orange; a box of Korean fried chicken and two cans of beer, her legs and sneakers on the mat, people sitting on the grass. No Lotte World Tower anywhere in the frame (it stands far to the east, away from the sunset).',
+    photo: '[self_faceless] A picnic mat at Yeouido Hangang Park at sunset, looking west downstream: the sun is going down over the river beyond the bridges to the west, the sky orange; a box of Korean fried chicken and two cans of beer, her legs stretched out on the mat in sneakers (each leg ending in its own correct foot), people sitting on the grass. No Lotte World Tower anywhere in the frame (it stands far to the east, away from the sunset).',
   },
   {
     slot: 'B3', handle: 'junho.bsn', language: 'ko',
     text: '부산 여행 오는 분들, 현지인 맛집 물어보면 알려드려요 🌊',
-    photo: 'Haeundae beach at sunset, the curve of the sand and the high-rise skyline behind it, a few people walking along the waterline.',
+    photo: 'Haeundae beach in the early evening after the sun has gone down behind the city (Haeundae faces east, so there is no sun over the sea): the sky over the water is soft blue and pale pink, the curve of the sand and the high-rise skyline with the first lights on, a few people walking along the waterline.',
   },
   {
     slot: 'B4', handle: 'yuki_whsl', language: 'ja',
@@ -86,7 +86,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B5', handle: 'dohyun.k', language: 'ko',
     text: '한복 입고 가면 경복궁 입장 무료예요. 외국인 친구들 꼭 해봐요 👘',
-    photo: '[friends] A slightly crooked front-camera selfie at arm\'s length of him and two foreign friends in rented hanbok in front of a Gyeongbokgung gate, in harsh midday sun: everyone squints, foreheads a little shiny with sweat, hair blown around by wind, hard shadows under the eyes and nose; one friend is half cut off at the edge, one is mid-laugh with the mouth open, he squints with both eyes against the sun (no wink, no smirk); nobody is posing well. Tourists walk through the background.',
+    photo: '[friends] A slightly crooked front-camera selfie at arm\'s length of him and two foreign friends in rented hanbok in front of a Gyeongbokgung gate, in harsh midday sun: everyone squints, skin plain and matte with no shine, hair blown around by wind, hard shadows under the eyes and nose; one friend is half cut off at the edge, one is mid-laugh with the mouth open, he squints with both eyes against the sun (no wink, no smirk); nobody is posing well. Tourists walk through the background.',
   },
   { slot: 'B6', handle: 'dan.in.seoul', language: 'en', text: '3 years living in Seoul. Things I still can’t get used to: 1) people running for the bus at 2am 2) delivery in 15 min 3) no trash cans anywhere' },
   {

@@ -138,4 +138,13 @@ What gave drafts away, most noticeable first:
 9. **Light that a real afternoon gives.** Low late-afternoon sun from one side, warm on one side of the face and the wall behind and soft shade on the other, looked as real as the backlit shade.
 12. **A clean, sharp image.** Replacing the phone noise and over-sharpening line with "crisp, full-resolution detail" and dropping the "older smartphone, slightly noisy and soft" camera made the photos worse: the noisy, slightly smeared draw read as the most real. Both stay.
 
+13. **Photos of the poster in posts (2026-10).** Drawn from the profile photo attached as a reference:
+    - With a written look as well as the photo, the model redrew the profile picture in a new place (same pose, sweater, window). With a photo attached the written look is dropped, the photo only says who it is, and the scene, outfit, distance, angle, expression and gesture must all be new.
+    - "Recognizable but not identical" changed the features too (double eyelids, a Japanese look on a Korean account). The face stays exactly the same; only hair styling, glasses, makeup and light change between photos.
+    - "Visible pores, slight unevenness" and "a little shine" made skin dirty or shiny, the clearest AI tell on men. Poster photos ask for plain, matte, clean skin; the ordinary look comes from the camera (noise, softness), never from the skin.
+    - "The background is as sharp as the subject" left far signs readable. A real lens focuses on the person: a few meters behind is soft, far writing unreadable, without a portrait-mode blur.
+    - Dim, moody interiors read as staged; cafés are bright unless the scene says otherwise.
+14. **The physical world.** Staff caught a sunset over Haeundae (it faces east), a Han River sunset behind Lotte World Tower (it stands east of the riverside parks) and a right leg ending in a left foot. Every photo prompt now states that sunsets face west, landmarks stand where they really are, and bodies are anatomically right, and the post generator is told the same when it describes the photo.
+15. **Writing in the photo.** A beginner's handwriting came out like a font; it has to be described as wobbly, uneven and corrected. Korean in a pasted prompt was garbled by a non-UTF-8 clipboard, so a notebook word came out wrong; prompts go in as an attached text file.
+
 What did not need fixing: pretty faces (a profile picture is someone's best photo), mushy far background details nobody looks at, and forced flaws such as a fingertip in the frame (people frame their own photos with care).

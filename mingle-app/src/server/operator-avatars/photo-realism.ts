@@ -33,10 +33,17 @@ const CAMERA = [
  * the camera, not from blemishes.
  */
 const CAMERA_FOCUSED = 'Straight out of the phone\'s main camera: no portrait mode, no beauty app, no face slimming, no eye enlarging. The focus is on the person: they are sharp, things a few meters behind them are noticeably soft, and far-off signs and writing are blurred and unreadable, the natural falloff of a real lens rather than an artificial portrait blur.'
-const SKIN_CLEAN = 'Skin: clean and clear, healthy, an even tone with a natural matte finish; no blemishes, rough patches, redness, stubble shadow or grime, and not airbrushed or plastic either.'
+const SKIN_CLEAN = 'Skin: plain and matte, simply clean: an even natural tone, no shine, sweat or glossy highlights on the forehead, nose or cheeks, no painted-on color or contouring, no blemishes, rough patches, redness, stubble shadow or grime, and not airbrushed or plastic either.'
 
 /** The camera line for photos without a person: the beauty-app words only invite a face. */
 const CAMERA_NO_PEOPLE = 'Straight out of the phone\'s default camera app: no portrait mode, no editing. The background is as sharp as the subject, no artificial bokeh.'
+
+/**
+ * Mistakes staff caught in drawn photos (2026-10): a sunset over Haeundae,
+ * which faces east; a Han River sunset behind Lotte World Tower, which
+ * stands east of where people watch it; a right leg ending in a left foot.
+ */
+const WORLD = 'The world in the photo is physically right. The sun rises in the east and sets in the west: a sunset or a setting sun only ever appears in a view facing west, so a coast or riverbank facing east (Haeundae, Gwangalli, the east coast) gets a sunrise or a sky lit from behind the camera, never a sun setting into the water. Real landmarks appear only where they really stand as seen from that spot. Bodies are anatomically right: a right leg ends in a right foot and a left leg in a left foot, shoes are a matching pair, hands have five fingers, limbs join where they should.'
 
 const LIGHT = 'Light: only what the place itself gives, with its natural falloff (the sky, a window, ceiling lights or street lamps); soft natural shadows; mixed color temperatures where different lights meet; whites that are slightly grey or slightly warm, not pure.'
 const FACE_LIGHT = 'Any face is lit like its surroundings and no more brightly: no extra light falling on the face.'
@@ -51,7 +58,7 @@ const CLASHING_COLORS: Record<PhotoEnvironment, string> = {
   any: 'a bright plastic bottle, a colored sign, a blue bin, a red or orange object off to one side',
 }
 
-const SKIN = 'Skin: real, matte skin with visible pores, fine texture and slight unevenness in tone, a little natural shine only on the forehead or nose, makeup that sits on the skin rather than looking airbrushed. No smooth, porcelain, waxy or glossy skin.'
+const SKIN = 'Skin: real, matte skin with visible pores, fine texture and slight unevenness in tone, makeup that sits on the skin rather than looking airbrushed. No shine or sweat sheen anywhere on the face; no smooth, porcelain, waxy or glossy skin.'
 
 const PEOPLE = 'Clothes crease and hang naturally; the expression is relaxed and caught mid-moment, not a posed photo smile.'
 
@@ -99,6 +106,7 @@ export function phonePhotoRealism(
   return [
     ...(people ? [options.focusOnPerson ? CAMERA_FOCUSED : CAMERA[0], CAMERA[1]] : [CAMERA_NO_PEOPLE, CAMERA[1]]),
     LIGHT,
+    WORLD,
     ...(faces ? [FACE_LIGHT] : []),
     COLORS,
     TEXTURE,
