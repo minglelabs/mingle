@@ -66,7 +66,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B0', handle: 'taeyun.s', language: 'ko',
     text: '성수에서 전시 보고 커피 한 잔. 주말에 같이 전시 다닐 외국인 친구 구해요 🙂',
-    photo: '[self] A friend took it across a window table at a bright Seongsu café on a sunny afternoon: he leans back with an iced coffee in one hand, looking out the window with a half smile, freshly shaved with clear, clean skin, his natural black hair loosely falling over the forehead, a plain white tee under an open navy overshirt. The café is airy and well lit by big windows, white walls and light wood; the window side of his face is brighter than the other, and the photo is a little soft and noisy like an ordinary phone shot.',
+    photo: '[self] A quick candid a friend snapped across a small table at a bright, white-walled Seongsu café in the afternoon, without telling him: he has just looked up from his phone, laughing at something the friend said, eyes narrowed, one hand still holding the phone on the table. Shot slightly from above and a little crooked, cut off at the chest, his left shoulder partly out of frame. Freshly shaved, clean plain skin, natural black hair a bit flattened on one side, a grey crewneck sweatshirt. On the table: a clear plastic takeout cup of iced americano with condensation and a paper straw, a crumpled napkin, his earbuds case and a half-eaten salt bread on a paper sheet. The big window behind him is bright and a little blown out, so his face is slightly darker than the room and lit from the side; the edge of the friend\'s cup is blurry in the near corner. Ordinary phone shot: a bit soft, a little noisy, nothing arranged.',
   },
   {
     slot: 'B2', handle: 'lari.souza', language: 'pt',
