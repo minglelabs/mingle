@@ -271,3 +271,47 @@ Gemini 2.5 Flash-Lite · GPT-6 Luna · Claude Haiku 5.5 · DeepSeek v4.1 Flash 1
 | Claude Haiku 5.5 | 1.8s | 내일 회의 말인데, 좀 | About tomorrow's meeting, it's just a bit |
 | DeepSeek 1017 (OpenRouter 기본) | 3.8s | 내일 회의인데, 좀 | About tomorrow's meeting, just a bit— |
 | DeepSeek 1017 (공식 고정) | 1.4s | 내일 회의인데, 잠깐 | About tomorrow's meeting, just a bit |
+
+## 추가: Mercury 3 (2026-10-20)
+
+- `inception/mercury-3`를 OpenRouter로 호출했다. 기존 DeepSeek와 같은 방식(strict json_schema, `reasoning.effort: none`)이고, 같은 메시지 20개를 3회씩 총 60콜 보냈다.
+- reasoning 토큰은 60콜 전부 0이었다. 1차 실행에서 15건이 Inception 쪽 429(속도 제한)로 실패해, 그 회차만 3초 간격으로 다시 돌려 채웠다.
+- 블라인드 평가는 Mercury 3 추가 전에 끝나서, 평가자 점수에는 포함되지 않는다.
+
+| 모델 | 성공 | 지연 중간값 / 하위 10% | 판별 정확도 (src / mix / fs) | 번역 안 된 채 남은 텍스트 | 1천 건당 (OpenRouter 표준가) |
+|---|---|---|---|---|---|
+| Mercury 3 | 60/60 (재시도 후) | **0.8s** / 1.1s | 48 / 48 / 51 (51건 중) | 3 | $0.12 |
+| (참고) GPT-6 Luna | 60/60 | 1.4s / 1.7s | 51 / 51 / 51 | 0 | $0.10 |
+
+- **좋았던 점:** 지금까지 비교한 모델 중 가장 빠르다. 일반 구어·비즈니스·중국어 번역은 무난하다.
+- **문제점:**
+  - 11번(혼용 한·일): 일본어 칸에 원문을 그대로 넣었다.
+  - 12번(혼용 한·영): 혼용 여부를 false로 판단했다.
+  - 13번(한글로 적은 일본어 발음): 한국어 칸에 발음을 그대로 반복했고, 伺います를 영어 "inquire"로 오역했다.
+  - 15번: 베트남어 "anh"을 "오빠"로 옮겼다.
+  - 16번: "was started by him first"처럼 어색한 수동태를 썼다.
+  - 20번: ちょっと를 "잠깐 / just a moment"로 오역했다.
+- **판단:** 품질은 Gemini·DeepSeek와 비슷하고, GPT-6 Luna·Haiku보다는 낮다.
+
+### Mercury 3 메시지별 결과 (1회차 번역 + 3회 지연 중간값)
+
+1. **아 진짜 오늘 회사에서 개빡쳤는데 부장님이 또 야근하라고 해서 그냥 퇴사각 재고 있음** — 0.9s · src=ko mix=F fs=F · en: Ugh, I’m so pissed off at work today. The department head told me to work overtime again, so I’m just thinking about quitting. / ja: あー本当に今日会社でむかついてるんだけど、部長がまた残業しろって言うから、もう辞めること考えてる。
+2. **혹시 다음 주 화요일 오후 세 시쯤에 미팅 가능하실까요? 안 되시면 편하신 시간 알려주세요.** — 0.7s · src=ko mix=F fs=F · en: Would it be possible for you to meet next Tuesday around 3 p.m.? If not, please let me know a time that works for you. / zh-CN: 请问下周二下午三点左右可以见面吗？如果不行的话，请告诉我您方便的时间。
+3. **그 영화 완전 내 스타일이야, 보는 내내 소름 돋았고 마지막 반전은 진짜 미쳤다 ㄹㅇ** — 1.2s · src=ko mix=F fs=F · en: That movie is totally my style, I got chills the whole time, and the final twist was insane, fr / ja: あの映画は完全に私のタイプだ、見ている間ずっと鳥肌が立って、最後のどんでん返しは本当にやばかった、マジで
+4. **어 그러니까 내가 말한 건 그 그 뭐지 아 맞다 그 카페 강남역 십일번 출구 쪽에 있는 거** — 1.0s · src=ko mix=F fs=F · en: Oh, so what I was saying is, um, what was it—ah, right, it’s that café near exit 11 at Gangnam Station. / ja: あーだから、私が言ってたのは、その、あの、なんだっけ、あそうだ、そのカフェは江南駅の11番出口の辺りにあるやつ。
+5. **Honestly I'm on the fence about it, but if it doesn't pan out we can always go back to the drawing board.** — 1.0s · src=en mix=F fs=F · ko: 솔직히 그것에 대해 고민 중이지만, 잘 안 되면 언제든지 원점에서 다시 시작할 수 있어. / ja: 正直、それについては迷っているけど、うまくいかなければいつでも振り出しに戻れる。
+6. **Dude, no way, you actually pulled it off? That's insane, drinks are on me tonight.** — 0.9s · src=en mix=F fs=F · ko: 야, 설마, 진짜 해냈어? 정말 미쳤네, 오늘 밤 술은 내가 쏜다. / es: Tío, no puede ser, ¿en serio lo lograste? Eso es una locura, esta noche los tragos los pago yo.
+7. **えー、マジで？それ先に言ってよ、もう予約しちゃったじゃん。** — 0.8s · src=ja mix=F fs=F · ko: 어, 진짜? 그걸 먼저 말해줬어야지, 벌써 예약해버렸잖아. / en: Eh, seriously? You should've said that earlier—I've already made a reservation.
+8. **本日はお忙しいところお時間をいただき、誠にありがとうございます。早速ですが本題に入らせていただきます。** — 1.0s · src=ja mix=F fs=F · ko: 오늘 바쁘신 중에 시간을 내주셔서 정말로 감사합니다. 바로 본론으로 들어가겠습니다. / en: Thank you very much for taking time out of your busy schedule today. Let me get straight to the main topic.
+9. **这个周末我们去爬山吧，听说那边的风景特别好，顺便还能吃顿火锅。** — 0.9s · src=zh-CN mix=F fs=F · zh-TW: 這個週末我們去爬山吧，聽說那邊的風景特別好，順便還能吃頓火鍋。 / ko: 이번 주말에 우리 등산 가자, 저쪽 경치가 정말 좋다고 들었어, 겸사겸사 훠궈도 먹을 수 있어. / en: Let's go hiking this weekend. I heard the scenery there is really nice, and we can also grab hotpot while we're at it.
+10. **我覺得這個方案還不錯，不過預算可能要再討論一下，你們覺得呢？** — 1.0s · src=zh-TW mix=F fs=F · zh-CN: 我觉得这个方案还不错，不过预算可能要再讨论一下，你们觉得呢？ / ko: 이 방안은 괜찮다고 생각하지만, 예산은 다시 논의해야 할 수도 있습니다. 여러분은 어떻게 생각하세요?
+11. **そんな답답해서 죽겠다고 내가 진짜로.** — 0.9s · src=ja mix=T fs=T · ko: 그렇게 답답해서 죽겠다고 내가 진짜로. / ja: そんな답답해서 죽겠다고 내가 진짜로. / en: I’m really dying from being so frustrated like that.
+12. **이번 sprint에서 deadline 맞추려면 그 feature는 일단 빼고 가는 게 맞을 것 같아요.** — 1.1s · src=ko mix=F fs=T · en: To meet the deadline this sprint, I think we should drop that feature for now. / ja: 今回のスプリントで締め切りに間に合わせるには、その機能はひとまず外して進めるのが正しいと思います。
+13. **료카이데스, 스구니 우카가이마스.** — 0.9s · src=ja mix=F fs=T · ko: 료카이데스, 스구니 우카가이마스 / ja: 了解です、すぐに伺います / en: Understood, I will inquire immediately.
+14. **¿Dónde está la estación de metro más cercana? Creo que me perdí.** — 0.6s · src=es mix=F fs=F · ko: 가장 가까운 지하철 역이 어디에 있나요? 길을 잃은 것 같아요. / en: Where is the nearest metro station? I think I got lost. / ja: 一番近い地下鉄の駅はどこですか？道に迷ったと思います。
+15. **Anh ơi, cho em hỏi cái này bao nhiêu tiền vậy? Có giảm giá không anh?** — 0.6s · src=vi mix=F fs=F · ko: 오빠, 이거 얼마예요? 할인 있어요? / en: Hey, can I ask how much this is? Is there a discount?
+16. **근데 그거 걔가 먼저 시작한 거야.** — 0.6s · src=ko mix=F fs=F · en: But that was started by him first. / ja: でも、それは彼が先に始めたんだ。
+17. **응 ㅇㅋ 이따 봐** — 0.8s · src=ko mix=F fs=F · en: Okay, see you later. / ja: うん、オーケー、あとでね。
+18. **내일 아침에 공항 가는 길에 혹시** — 0.6s · en: On the way to the airport tomorrow morning, if by any chance... / ja: 明日の朝、空港に向かう途中で、もし...
+19. **So what I was trying to say is that if we** — 0.5s · ko: 그래서 제가 말하려던 것은 만약 우리가 / ja: だから私が言おうとしていたのは、もし私たちが
+20. **明日の会議なんだけど、ちょっと** — 0.4s · ko: 내일 회의에 대해서인데, 잠깐 / en: About tomorrow's meeting, just a moment
