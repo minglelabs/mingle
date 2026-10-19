@@ -52,7 +52,7 @@ export function buildPostImagePrompt(
     ...(person.hasReference
       ? [
           'The poster is the person in the attached photo. Use it only to know who they are (face, hair, build); the attached picture itself must not show up in the new one.',
-          'They look the way one person looks across different photos, recognizable but not identical: the hair a little longer or shorter and styled differently (tied, parted the other way, under a cap or beanie), glasses off or a different pair, different makeup or a bit of stubble, and another camera and light make the face read slightly differently.',
+          'The face itself stays exactly the same as in the attached photo: the same eye shape and eyelids, nose, mouth, jawline, skin tone and apparent ethnicity, so anyone would say it is the same person. Only what a person changes between days may differ: how the hair is styled (parted, pushed back, tied, under a cap), glasses on or off, makeup, and the camera and light.',
           'This is a completely different photo taken on another day: a different place, outfit, camera distance, camera angle, head angle, expression, gesture and light. Nothing of the attached photo\'s framing, background, clothes, pose, hand position or expression may carry over; if it would look like the same shot moved somewhere else, it is wrong.',
         ]
       : [`The poster: ${person.look}.`]),
