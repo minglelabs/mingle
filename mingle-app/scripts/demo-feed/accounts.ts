@@ -121,7 +121,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
     name: '紗良', handle: 'sara.ueno', gender: 'female', age: 22, nationality: 'JP', residence: { country: 'JP', city: 'Osaka' }, primaryLanguage: 'ja',
     bio: '大阪の大学生🎓 来年ソウルに交換留学予定！韓国語の友達ほしいです',
-    posts: [], needsFace: true, striking: true,
+    posts: [], needsFace: true, striking: true, redraws: 1,
   },
   {
     name: '芷晴', handle: 'zhiqing.lin', gender: 'female', age: 23, nationality: 'TW', residence: { country: 'TW', city: 'Taipei' }, primaryLanguage: 'zh-TW',
@@ -151,7 +151,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
     name: '시우', handle: 'siwoo.j', gender: 'male', age: 26, nationality: 'KR', residence: { country: 'KR', city: 'Seoul' }, primaryLanguage: 'ko',
     bio: '성수에서 일하는 디자이너. 영어 회화 같이 연습할 친구 찾아요 ☕',
-    posts: [], needsFace: true, striking: true,
+    posts: [], needsFace: true, striking: true, redraws: 1,
   },
   {
     name: '海斗', handle: 'kaito.mz', gender: 'male', age: 25, nationality: 'JP', residence: { country: 'JP', city: 'Tokyo' }, primaryLanguage: 'ja',

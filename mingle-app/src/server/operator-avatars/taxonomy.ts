@@ -504,7 +504,7 @@ const BACK_POSTURES = POSTURE.filter((option) => ['upright', 'slouch', 'lean', '
 const EXPRESSIONS: readonly Option[] = [
   // Smiles
   ['slight_smile', 3, 'a slight closed-lip smile'], ['half_smile', 2, 'a half smile lifting one corner of the mouth'],
-  ['eye_smile', 2.5, 'a smile that reaches the eyes, the eyes curving into crescents'], ['grin', 1.5, 'a wide grin showing the teeth, the nose scrunched a little'],
+  ['eye_smile', 2.5, 'a smile that reaches the eyes, the eyes curving into crescents'], ['grin', 1.5, 'a wide, easy grin showing the teeth'],
   ['shy_smile', 1.5, 'a shy smile with the chin dipped and the eyes glancing up'], ['cool_smile', 1.2, 'a faint smile in the mouth only, the eyes calm and cool'],
   ['laugh', 1.5, 'caught laughing, mouth open, eyes squeezed nearly shut'], ['holding_laugh', 1, 'trying not to laugh, lips pressed together, cheeks pushed up'],
   ['smirk', 0.8, 'a teasing smirk, one brow slightly raised'],
@@ -518,7 +518,7 @@ const EXPRESSIONS: readonly Option[] = [
   // Pouts and playful faces
   ['pout', 1.2, 'lips pushed out in a small pout'], ['puffed', 0.8, 'cheeks puffed out with air'], ['kissy', 0.6, 'lips puckered as if blowing a kiss'],
   ['tongue', 0.8, 'the tip of the tongue poking out at one side'], ['wink', 1, 'winking with one eye, the mouth smiling'],
-  ['lip_bite', 0.6, 'lightly biting the lower lip'], ['nose_scrunch', 0.8, 'nose scrunched up playfully'], ['raised_brow', 0.6, 'one eyebrow raised'],
+  ['lip_bite', 0.6, 'lightly biting the lower lip'], ['nose_scrunch', 0.8, 'a small playful pout'], ['raised_brow', 0.6, 'one eyebrow raised'],
   ['sulk', 0.6, 'a pretend sulk, the lower lip out and brows drawn together'], ['squint_sun', 0.8, 'squinting a little against the sun'],
   // In the middle of something
   ['talking', 0.8, 'mid-sentence, the mouth half open as if talking'], ['sleepy', 0.8, 'sleepy, heavy eyelids, just woken up'],
