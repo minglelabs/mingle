@@ -8,7 +8,8 @@ import { loadStarterFeed, type StarterSegment } from '@/server/feed/starter-feed
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
 import { OperatorsMain } from '../operators/_components/operator-ui'
 import { ZoomableAvatar } from '../operators/_components/zoomable-avatar'
-import { PhoneCard } from './_components/phone-card'
+import { PostBody } from './_components/post-body'
+import { ZoomableImage } from './_components/zoomable-image'
 
 export const dynamic = 'force-dynamic'
 
@@ -145,22 +146,23 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                   ) : null}
                 </div>
 
-                <div className="mt-3">
-                  <PhoneCard
-                    post={{
-                      id: post.id,
-                      sourceText: post.sourceText,
-                      sourceLanguage: post.sourceLanguage,
-                      backgroundKey: post.backgroundKey,
-                      imageWidth: post.imageWidth,
-                      imageHeight: post.imageHeight,
-                      hasImage: Boolean(post.imageObjectKey),
-                      author: { name: post.author.name, handle: post.author.handle, image: post.author.image },
-                    }}
-                    authorLanguages={authorLanguages.get(post.author.id) ?? []}
+                {post.sourceText ? (
+                  <PostBody
+                    sourceText={post.sourceText}
+                    sourceLanguage={post.sourceLanguage}
                     translations={(translationsByPost.get(post.id) ?? []).filter((translation) => translation.language !== post.sourceLanguage)}
                   />
-                </div>
+                ) : null}
+                {post.imageObjectKey ? (
+                  <ZoomableImage
+                    src={`/api/posts/${post.id}/image`}
+                    alt="글 사진"
+                    width={post.imageWidth ?? undefined}
+                    height={post.imageHeight ?? undefined}
+                    loading="lazy"
+                    className="mt-3 h-auto max-h-[28rem] w-full rounded-xl border border-slate-200 object-cover"
+                  />
+                ) : null}
 
                 <div className="mt-3 flex items-center gap-4 text-sm text-slate-600">
                   <span className="inline-flex items-center gap-1"><Heart className="h-4 w-4" aria-hidden="true" />{post.likeCount}</span>
