@@ -62,6 +62,31 @@ export const DEMO_POSTS: readonly DemoPost[] = [
     text: '背了一周的韩语单词，\'눈치\'到底怎么翻译成中文？',
     photo: 'A Korean vocabulary textbook lying open on a dorm desk, shot from a low side angle so the printed pages recede and the small print is soft and unreadable, colorful sticky notes sticking out of the edges; a brown sugar bubble milk tea with a wide straw sharp in the foreground.',
   },
+  {
+    slot: 'A11', handle: 'rina.sel', language: 'ja',
+    text: '初めての漢江ピクニック🧺 コンビニのラーメン、なんでこんなに美味しいの？',
+    photo: '[self] A friend took it from a few steps away at Banpo Hangang Park on a clear autumn afternoon: she sits cross-legged on a picnic mat on the grass, holding a paper bowl of convenience-store ramen with chopsticks halfway to her mouth, laughing with her eyes squeezed shut because the friend just said something; a light beige cardigan over a white tee, hair half tied up with a claw clip. Beside her a crumpled convenience-store bag, a can of soda and a phone on the mat; people on other mats and the river behind, the bridge soft in the distance. Daylight from a high sun, no sunset.',
+  },
+  {
+    slot: 'A12', handle: 'em.ldn', language: 'en',
+    text: 'Booked my first trip to Seoul for December!! 🇰🇷 Say something nice to me in Korean so I can practise reading it 🥹',
+    photo: '[self] A front-camera selfie at arm\'s length on a London street on a drizzly afternoon: she grins with her nose a little scrunched, raindrops on her hair, a black puffer jacket zipped up to her chin and a cream knit scarf; a red double-decker bus soft behind her, wet pavement, grey sky.',
+  },
+  {
+    slot: 'A13', handle: 'ayaka.sel', language: 'ja',
+    text: '会社の同期と退勤後チメク🍗🍺 韓国語の冗談がやっとわかるようになってきた！',
+    photo: '[friends] A slightly crooked front-camera selfie at a crowded Korean fried chicken pub after work: her and two Korean coworkers (a woman and a man in office clothes, lanyards still on) squeezed into the frame around a small table with a tray of fried chicken, a pitcher of beer and pickled radish; everyone mid-laugh, one coworker half cut off at the edge. Warm ceiling lights, a busy room behind them.',
+  },
+  {
+    slot: 'A14', handle: 'yuxuan.w', language: 'zh-CN',
+    text: '第一次去韩国汗蒸幕！韩国朋友教我把毛巾叠成羊角头🐑 好可爱',
+    photo: '[friends] A front-camera selfie in the common hall of a Korean jjimjilbang: her and a Korean friend in the matching orange jjimjilbang T-shirts and shorts, each wearing a towel folded into the little sheep-horn shape on the head, sitting on the heated floor, both laughing; a boiled egg and a cup of sikhye in front of them, other guests lying on mats behind.',
+  },
+  {
+    slot: 'A15', handle: 'lari.souza', language: 'pt',
+    text: 'Fui no noraebang pela primeira vez e errei a letra inteira kkkkk Qual música coreana eu treino pra próxima? 🎤',
+    photo: '[friends] A friend snapped it from the sofa inside a small Korean noraebang room: she stands holding a microphone, singing with her eyes closed and one arm thrown up, a tambourine in a friend\'s hand at the edge of the frame; the room is dim with colored disco light spots on the walls, the lyrics screen a bright soft blur behind her, a bit of motion blur on her raised hand.',
+  },
   { slot: 'B1', handle: 'seoyun.daily', language: 'ko', existingPostId: 'cmvb31snm0004shx1uy1mp6i7' },
   {
     slot: 'B0', handle: 'taeyun.s', language: 'ko',
@@ -104,5 +129,30 @@ export const DEMO_POSTS: readonly DemoPost[] = [
     slot: 'B10', handle: 'jihoon.lx', language: 'ko',
     text: '일본어/영어 공부 중이에요. 한국어 배우는 분들 저랑 언어 교환해요 🙋‍♂️',
     photo: 'His study notebook open on a café table: a page of Japanese and English vocabulary jotted in a hurry by a Korean guy in his twenties, in blue ballpoint with a few red corrections: slanted, uneven, cramped toward the margin, some words crossed out and rewritten, arrows between words, a couple of circled ones, a highlighter streak, the bottom of the page still empty. A plain unbranded can of coffee and a pen beside it; a textbook behind it is out of focus.',
+  },
+  {
+    slot: 'B11', handle: 'seoyun.daily', language: 'ko',
+    text: '벚꽃 말고 은행나무 보러 오세요. 지금 서울 제일 예쁠 때예요 🍂',
+    photo: '[self] A friend took it from a few steps away on the Deoksugung stone-wall road in late October: she walks under yellow ginkgo trees and has just turned back toward the camera, smiling with her lips closed, one hand tucking hair behind her ear; a camel coat over a cream knit and a long skirt, a small shoulder bag. Yellow leaves on the path, a few people walking behind, the old stone wall to one side. Soft afternoon daylight.',
+  },
+  {
+    slot: 'B12', handle: 'taeyun.s', language: 'ko',
+    text: '한강에서 따릉이 타다가 한 컷 🚲 주말에 같이 탈 외국인 친구 구해요',
+    photo: '[self] A friend took it from a few steps away on the riverside bike path at Yeouido Hangang Park on a sunny afternoon: he stands next to a green public rental bike, one hand on the handlebar, laughing and looking slightly off camera, a little out of breath; a plain white tee and black track pants, a cap pushed back a bit. Cyclists and runners passing behind, the river and the bridges beyond. High sun, no sunset.',
+  },
+  {
+    slot: 'B13', handle: 'dohyun.k', language: 'ko',
+    text: '주말에 북한산 올라갔는데 외국인 등산객 진짜 많더라고요. 다음에 같이 갈 사람? ⛰️',
+    photo: '[self] A friend took it from a few steps below on the bare granite near the Bukhansan summit on a clear midday: he sits on the rock with his forearms on his knees, grinning and squinting in the sun, a little windblown; a navy windbreaker, a small hiking backpack, a water bottle beside him. Seoul spreads out far below behind him, hazy toward the horizon, other hikers resting on the rocks.',
+  },
+  {
+    slot: 'B14', handle: 'minji.k', language: 'ko',
+    text: '퇴근하고 망원시장에서 떡볶이 + 튀김. 외국인 친구들 오면 여기 꼭 데려가요',
+    photo: '[self_faceless] Her hand holding a paper cup of tteokbokki with a toothpick stuck in a rice cake, at a busy stall in Mangwon Market in the early evening; a plate of mixed fried snacks on the steel counter, steam over the big flat pan of red sauce behind, the stall\'s hanging bulbs and the market crowd soft in the background.',
+  },
+  {
+    slot: 'B15', handle: 'jihoon.lx', language: 'ko',
+    text: '퇴근길 성수동. 요즘 일본어로 혼잣말하면서 걸어요 ㅋㅋ 같이 연습할 분?',
+    photo: '[self] A friend took it from a few steps away on a Seongsu-dong street in the early evening after work: he walks toward the camera with one hand in his coat pocket and earbuds in, looking down with a small private smile; a charcoal wool coat over a grey hoodie, a tote bag on his shoulder. Red-brick buildings and shop lights coming on behind, people walking past, the sky already dim blue.',
   },
 ]
