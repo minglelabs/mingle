@@ -67,7 +67,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'A11', handle: 'rina.sel', language: 'ja',
     text: '初めての漢江ピクニック🧺 コンビニのラーメン、なんでこんなに美味しいの？',
-    photo: '[self] A friend took it from a few steps away at Banpo Hangang Park on a clear autumn afternoon: she sits cross-legged on a picnic mat on the grass, holding real Han River ramen with chopsticks halfway to her mouth: the convenience store\'s disposable white paper ramen bowl (a round white paper tub about 16 cm across and 8 cm deep, wider than it is tall but clearly a deep bowl, plain white with small red cooking-instruction pictograms and fine red warning text printed near the bottom of its side), the noodles cooked in it in the store\'s instant ramen machine, red spicy broth inside, laughing because the friend just said something, her eyes curved into soft crescents but still open, brows and forehead completely relaxed; a light beige cardigan over a white tee, hair half tied up with a claw clip. Beside her a crumpled convenience-store bag, a can of soda and a phone on the mat; people on other mats and the river behind, the bridge soft in the distance. Daylight from a high sun, no sunset.',
+    photo: '[self] A friend took it from a few steps away at a Hangang park picnic spot in warm late-afternoon sun: she sits on a dark picnic mat on the dirt and dry leaves, holding the white paper tub of Han River ramen with red spicy broth in one hand and wooden chopsticks in the other, eyes closed, blowing because it is hot; a loose black knit cardigan slipping off one shoulder over a white floral cami, grey sweatpants, long hair half tied back. A picnic table and green bushes behind her.',
   },
   {
     slot: 'A12', handle: 'em.ldn', language: 'en',
