@@ -8,6 +8,7 @@ import { loadStarterFeed, type StarterSegment } from '@/server/feed/starter-feed
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
 import { OperatorsMain } from '../operators/_components/operator-ui'
 import { ZoomableAvatar } from '../operators/_components/zoomable-avatar'
+import { OperatorPostEditor } from './_components/operator-post-editor'
 import { PostBody } from './_components/post-body'
 import { ZoomableImage } from './_components/zoomable-image'
 
@@ -156,7 +157,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                 {post.imageObjectKey ? (
                   <div className={`mt-3 flex gap-2 ${post.extraImages.length ? 'no-scrollbar snap-x snap-mandatory overflow-x-auto' : ''}`}>
                     {[
-                      { src: `/api/posts/${post.id}/image`, width: post.imageWidth, height: post.imageHeight },
+                      { src: `/api/posts/${post.id}/image?k=${encodeURIComponent(post.imageObjectKey.slice(-16))}`, width: post.imageWidth, height: post.imageHeight },
                       ...post.extraImages.map((image) => ({ src: `/api/posts/${post.id}/image?index=${image.position}`, width: image.imageWidth, height: image.imageHeight })),
                     ].map((photo, index, all) => (
                       <div key={photo.src} className={all.length > 1 ? 'w-[85%] shrink-0 snap-center' : 'w-full'}>
@@ -172,6 +173,10 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                       </div>
                     ))}
                   </div>
+                ) : null}
+
+                {post.author.isOperator ? (
+                  <OperatorPostEditor key={`${post.id}:${post.bodyVersion}`} postId={post.id} text={post.sourceText} hasPhoto={Boolean(post.imageObjectKey)} />
                 ) : null}
 
                 <div className="mt-3 flex items-center gap-4 text-sm text-slate-600">

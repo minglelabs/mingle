@@ -24,6 +24,8 @@ export type AdminAuditAction =
   | 'settings.post_reserve'
   | 'settings.automation'
   | 'operator_post.reserve_published'
+  | 'operator_post.edit_photo'
+  | 'operator_post.edit_text'
   | 'notify_target.add'
   | 'notify_target.remove'
 
