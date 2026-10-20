@@ -1,5 +1,6 @@
 "use client";
 
+import { appShellCopy } from "@/i18n/app-shell-copy";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import {
@@ -113,6 +114,14 @@ export default function ProfileShareScreen({
     return buildProfileLinkUrl(profileOrigin, profileUserId) ?? "";
   }, [profileOrigin, profileUserId]);
   const qrDataUrl = qrData?.profileUrl === profileUrl ? qrData.dataUrl : null;
+  const shell = appShellCopy(locale);
+  const cameraCopy = {
+    permissionTitle: shell.cameraPermissionTitle,
+    permissionBody: shell.cameraPermissionBody,
+    unavailableTitle: shell.cameraUnavailableTitle,
+    unavailableBody: shell.cameraUnavailableBody,
+    retryLabel: shell.retry,
+  };
   const copy = {
     copyLink: dictionary.profile.profileShareCopyLinkLabel ?? "Copy link",
     copied: dictionary.profile.profileShareCopiedMessage ?? "Profile link copied.",
@@ -245,9 +254,10 @@ export default function ProfileShareScreen({
         instruction: copy.qrInstruction,
         cancelLabel: copy.back,
         settingsLabel: copy.qrSettings,
+        ...cameraCopy,
       },
     }));
-  }, [copy.back, copy.qrInstruction, copy.qrScan, copy.qrScannerUnavailable, copy.qrSettings, showStatus]);
+  }, [copy.back, copy.qrInstruction, copy.qrScan, copy.qrScannerUnavailable, copy.qrSettings, showStatus, locale]);
 
   const handleDownloadQr = useCallback(() => {
     if (!qrDataUrl) {

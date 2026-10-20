@@ -7,7 +7,7 @@ const REQUIRED_KEYS: (keyof FeedCopy)[] = [
   'expand', 'collapse', 'translateShow', 'translateHide', 'translating', 'translateFailed',
   'openImage', 'closeImage', 'nextPost', 'previousPost', 'followFailed', 'likeFailed',
   'rateLimited', 'loading', 'loadingMore', 'loadMoreFailed', 'imageFailed', 'retry',
-  'feedLoadFailed', 'emptyTitle', 'emptyAction', 'postUnavailable',
+  'feedLoadFailed', 'emptyTitle', 'emptyAction', 'postUnavailable', 'loginToContinue',
 ]
 
 describe('feed copy', () => {

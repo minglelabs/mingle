@@ -1,5 +1,6 @@
 "use client";
 
+import { appShellCopy } from "@/i18n/app-shell-copy";
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
@@ -5448,7 +5449,7 @@ export default function ConversationList({
           className="absolute inset-0 z-[300] flex min-h-0 w-full items-center justify-center bg-[#fcfbf8]"
           role="status"
           aria-live="polite"
-          aria-label={locale === "ko" ? "HashChat 준비 중" : "Preparing HashChat"}
+          aria-label={appShellCopy(locale).preparing}
         >
           <div className="flex flex-col items-center gap-5">
             <MingleWordmark />
