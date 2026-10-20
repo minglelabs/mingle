@@ -164,7 +164,9 @@ export function serializePostImage(
   if (!imageObjectKey) return null
   const valid = isPositiveInt(imageWidth) && isPositiveInt(imageHeight)
   return {
-    url: `/api/posts/${encodeURIComponent(postId)}/image`,
+    // Versioned by the stored object, so a replaced photo is a new URL and
+    // never comes from a cache of the old one.
+    url: `/api/posts/${encodeURIComponent(postId)}/image?v=${imageVersion(imageObjectKey)}`,
     width: valid ? imageWidth : null,
     height: valid ? imageHeight : null,
   }
@@ -188,6 +190,16 @@ export function serializePostImages(
     }
   })
   return [first, ...rest]
+}
+
+/** A short, stable tag for an object key (FNV-1a, base 36). */
+function imageVersion(objectKey: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < objectKey.length; i += 1) {
+    hash ^= objectKey.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash.toString(36)
 }
 
 function isPositiveInt(value: number | null | undefined): value is number {

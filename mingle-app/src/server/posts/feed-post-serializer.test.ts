@@ -68,13 +68,18 @@ describe('serializePostImage', () => {
   it('builds the app image route path with null dimensions', () => {
     const img = serializePostImage('p 1', 'post-images/x.jpg')
     expect(img).not.toBeNull()
-    expect(img!.url).toBe('/api/posts/p%201/image')
+    expect(img!.url).toMatch(/^\/api\/posts\/p%201\/image\?v=\w+$/)
     expect(img!.width).toBeNull()
     expect(img!.height).toBeNull()
   })
+  it('gives a replaced photo a new URL', () => {
+    expect(serializePostImage('p1', 'posts/a.jpg')!.url).not.toBe(serializePostImage('p1', 'posts/b.jpg')!.url)
+    expect(serializePostImage('p1', 'posts/a.jpg')!.url).toBe(serializePostImage('p1', 'posts/a.jpg')!.url)
+  })
+
   it('passes stored pixel dimensions through', () => {
     const img = serializePostImage('p1', 'post-images/x.jpg', 1536, 2048)
-    expect(img).toEqual({ url: '/api/posts/p1/image', width: 1536, height: 2048 })
+    expect(img).toEqual({ url: expect.stringMatching(/^\/api\/posts\/p1\/image\?v=\w+$/), width: 1536, height: 2048 })
   })
   it('drops a partial or invalid dimension pair', () => {
     expect(serializePostImage('p1', 'k', 100, null)).toMatchObject({ width: null, height: null })
@@ -221,7 +226,7 @@ describe('serializePostImages', () => {
       { position: 2, imageWidth: 1280, imageHeight: 960 },
       { position: 1, imageWidth: null, imageHeight: null },
     ])).toEqual([
-      { url: '/api/posts/p1/image', width: 960, height: 1280 },
+      { url: expect.stringMatching(/^\/api\/posts\/p1\/image\?v=\w+$/), width: 960, height: 1280 },
       { url: '/api/posts/p1/image?index=1', width: null, height: null },
       { url: '/api/posts/p1/image?index=2', width: 1280, height: 960 },
     ])
