@@ -55,9 +55,9 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   },
   { slot: 'A9', handle: 'minji.k', language: 'ko', text: '영어 단어 100개 외우고 뒤돌면 90개 까먹음 ㅋㅋ 다들 어떻게 외워요?' },
   {
-    slot: 'A10', handle: 'yuxuan.w', language: 'zh-CN',
-    text: '韩国朋友一见面就问\'밥 먹었어?\'，原来是在打招呼！',
-    photo: '[friends] A front-camera selfie of her and a Korean friend at a Korean restaurant table crowded with banchan, a stew bubbling in a stone pot and rice bowls, both mid-laugh.',
+    slot: 'A14', handle: 'yuxuan.w', language: 'zh-CN',
+    text: '第一次去韩国汗蒸幕！韩国朋友教我把毛巾叠成羊角头🐑 好可爱',
+    photo: '[friends] A front-camera selfie in the common hall of a Korean jjimjilbang: her and a Korean friend in the matching orange jjimjilbang T-shirts and shorts, each wearing a towel folded into the little sheep-horn shape on the head, sitting on the heated floor, both laughing; a boiled egg and a cup of sikhye in front of them, other guests lying on mats behind.',
   },
   {
     slot: 'A5', handle: 'linxiao.sh', language: 'zh-CN',
@@ -80,9 +80,9 @@ export const DEMO_POSTS: readonly DemoPost[] = [
     photo: '[friends] A slightly crooked front-camera selfie at a crowded Korean fried chicken pub after work, taken by her male coworker: his arm reaches out from the right edge holding the phone, so he is closest to the camera and half cut off at the edge, while she sits in the middle with both hands free, and the other coworker (a woman) leans in on the left; both coworkers in office clothes with lanyards still on, around a small table with a tray of fried chicken, a pitcher of beer and pickled radish; everyone mid-laugh. Warm ceiling lights, a busy room behind them.',
   },
   {
-    slot: 'A14', handle: 'yuxuan.w', language: 'zh-CN',
-    text: '第一次去韩国汗蒸幕！韩国朋友教我把毛巾叠成羊角头🐑 好可爱',
-    photo: '[friends] A front-camera selfie in the common hall of a Korean jjimjilbang: her and a Korean friend in the matching orange jjimjilbang T-shirts and shorts, each wearing a towel folded into the little sheep-horn shape on the head, sitting on the heated floor, both laughing; a boiled egg and a cup of sikhye in front of them, other guests lying on mats behind.',
+    slot: 'A10', handle: 'yuxuan.w', language: 'zh-CN',
+    text: '韩国朋友一见面就问\'밥 먹었어?\'，原来是在打招呼！',
+    photo: '[friends] A front-camera selfie of her and a Korean friend at a Korean restaurant table crowded with banchan, a stew bubbling in a stone pot and rice bowls, both mid-laugh.',
   },
   {
     slot: 'A15', handle: 'lari.souza', language: 'pt',
