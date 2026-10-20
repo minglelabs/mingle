@@ -8,7 +8,8 @@
  * more likes than there are operator accounts, the rest is added to the count
  * only (who liked is not shown anywhere yet). Comments are AI-written by
  * operator accounts through the app's own comment path, always fewer than the
- * likes. A post that already has likes is left alone, so it is safe to rerun.
+ * likes. A post that already has likes is left alone, so it is safe to rerun;
+ * a post with its own `reactions` target is topped up to it instead.
  * Refuses any database that is not on this machine.
  */
 import { prisma } from '../../src/lib/prisma'
@@ -51,12 +52,16 @@ async function main() {
     const id = postIdOf(post)
     if (seen.has(id)) continue
     seen.add(id)
-    const row = await prisma.post.findUnique({ where: { id }, select: { authorId: true, likeCount: true, publishedAt: true } })
-    if (!row || row.likeCount > 0) continue
+    const row = await prisma.post.findUnique({ where: { id }, select: { authorId: true, likeCount: true, commentCount: true, publishedAt: true } })
+    if (!row) continue
+    const topUp = post.reactions && row.likeCount < post.reactions.likes
+    if (row.likeCount > 0 && !topUp) continue
     const random = seededRandom(`demo-feed-reactions:${id}`)
-    const { likes, comments } = plan(post, random)
+    const target = post.reactions ?? plan(post, random)
+    const likes = target.likes
+    const comments = target.comments - (topUp ? row.commentCount : 0)
     const others = shuffled(operators.filter((operator) => operator !== row.authorId), random)
-    const likers = others.slice(0, Math.min(likes, Math.round(others.length * 0.8)))
+    const likers = others.slice(0, Math.min(likes, Math.round(others.length * (post.reactions ? 1 : 0.8))))
     const after = (minutes: number) => new Date(row.publishedAt.getTime() + minutes * 60_000)
 
     await prisma.$transaction([

@@ -16,6 +16,8 @@ export type DemoPost = {
   place?: string
   /** A post that already exists. */
   existingPostId?: string
+  /** A standout post: tops its likes and comments up to these counts. */
+  reactions?: { likes: number; comments: number }
 }
 
 export const DEMO_POSTS: readonly DemoPost[] = [
@@ -133,7 +135,8 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B11', handle: 'seoyun.daily', language: 'ko',
     text: '벚꽃 말고 은행나무 보러 오세요. 지금 서울 제일 예쁠 때예요 🍂',
-    photo: '[self] A friend took it from a few steps away on the Deoksugung stone-wall road in late October: she walks under yellow ginkgo trees and her body is in clean side profile to the camera (her near shoulder toward the lens, chest facing along the path, never her back to the camera); she turns her head only about 45 degrees toward the camera, so her face is in three-quarter view with the neck relaxed and straight, and her eyes slide the rest of the way to meet the camera, smiling with her lips closed, one hand tucking hair behind her ear; a camel coat over a cream knit and a long skirt, a small shoulder bag. Yellow leaves on the path, a few people walking behind, the old stone wall to one side. Soft, slightly hazy afternoon daylight falls on her exactly as on the path and the wall around her: the same direction, color and softness, the same haze and the same slight softness of focus, so she clearly stands in that street and was photographed in it, never a cut-out pasted onto the background.',
+    photo: '[self] A friend took it from a few steps behind her on the Deoksugung stone-wall road in late October: she has stopped under the yellow ginkgo trees in a mustard-yellow coat and turns her head back over her shoulder to look at the camera, ginkgo leaves on the path, the old stone wall beside her, soft afternoon daylight.',
+    reactions: { likes: 143, comments: 14 },
   },
   {
     slot: 'B12', handle: 'taeyun.s', language: 'ko',
@@ -144,6 +147,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
     slot: 'B13', handle: 'dohyun.k', language: 'ko',
     text: '주말에 북한산 올라갔는데 외국인 등산객 진짜 많더라고요. 다음에 같이 갈 사람? ⛰️',
     photo: '[self] A friend took it from a few steps below on the bare granite near the Bukhansan summit on a hazy late morning, the sun veiled by thin high haze so the light is bright but soft: he sits on the rock with his forearms on his knees, grinning, a little windblown, his skin matte and dry; a navy windbreaker, a small hiking backpack, a water bottle beside him. Seoul spreads out far below behind him, hazy toward the horizon, other hikers resting on the rocks.',
+    reactions: { likes: 118, comments: 12 },
   },
   {
     slot: 'B14', handle: 'minji.k', language: 'ko',
