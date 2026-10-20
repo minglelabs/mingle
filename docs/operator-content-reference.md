@@ -155,3 +155,10 @@ What did not need fixing: pretty faces (a profile picture is someone's best phot
 19. **Gritty micro-texture.** Generated photos showed a crawling, gritty texture over skin and every surface (staff: "자글자글"). The prompts themselves asked for it: small-sensor noise, visible pores, fabric pilling, an older phone's noise. Those lines now ask for smooth, clean tonal gradations with no grain or noise speckle, pores only faintly visible, and surfaces at the detail a phone really resolves. Feeding a generated photo back as a reference or for edits adds to it, as with moiré (17).
 20. **Detail density.** A ChatGPT image community post (dcinside, 2026-06) traced the gritty texture to scenes crowded with small decorative objects, hair drawn strand by strand and over-rendered backgrounds, and cut it by suppressing them. Our prompts asked for exactly those (everyday clutter, several clashing objects, flyaways, a background as sharp as the subject). They now ask for a few clear things in the scene, one clashing object, hair as soft clumps, a background a little softer than the subject, and skin between gritty and glossy-uniform.
 21. **The same cone and bin everywhere.** The prompt listed the same examples every time (an orange traffic cone, a blue plastic bin…), so nearly every photo had a cone or a blue-green bin, even a cherry-blossom riverside. Now the place is read from the description (nature, street, café or restaurant, home, other indoor), half the photos get no off-color object at all, and the rest get one object drawn from that place's own pool, named once, never as a list of examples.
+22. **Grit survives every prompt; denoise afterwards.** Asking for smooth skin
+    reduces it but GPT images still carry speckled skin up close. A light
+    non-local-means pass after download cleans it without plastic skin:
+    `ffmpeg -i in.png -vf "nlmeans=s=4:p=7:r=15" out.png`. Profiles without an
+    avatarSpec (e.g. seoyun.daily) fall back to an old post photo as the face
+    reference, so the face drifts; crop the face from the profile photo and
+    attach that instead.
