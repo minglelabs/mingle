@@ -65,7 +65,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'A11', handle: 'rina.sel', language: 'ja',
     text: '初めての漢江ピクニック🧺 コンビニのラーメン、なんでこんなに美味しいの？',
-    photo: '[self] A friend took it from a few steps away at Banpo Hangang Park on a clear autumn afternoon: she sits cross-legged on a picnic mat on the grass, holding a paper bowl of convenience-store ramen with chopsticks halfway to her mouth, laughing with her eyes squeezed shut because the friend just said something; a light beige cardigan over a white tee, hair half tied up with a claw clip. Beside her a crumpled convenience-store bag, a can of soda and a phone on the mat; people on other mats and the river behind, the bridge soft in the distance. Daylight from a high sun, no sunset.',
+    photo: '[self] A friend took it from a few steps away at Banpo Hangang Park on a clear autumn afternoon: she sits cross-legged on a picnic mat on the grass, holding real Han River ramen with chopsticks halfway to her mouth: the convenience store\'s disposable white paper ramen bowl, wide and fairly deep (about 16 cm across, thick paper walls, a plain white rim), with small red cooking-instruction pictograms and fine red warning text printed around the side, the noodles cooked in it in the store\'s instant ramen machine, red spicy broth inside, laughing with her eyes squeezed shut because the friend just said something; a light beige cardigan over a white tee, hair half tied up with a claw clip. Beside her a crumpled convenience-store bag, a can of soda and a phone on the mat; people on other mats and the river behind, the bridge soft in the distance. Daylight from a high sun, no sunset.',
   },
   {
     slot: 'A12', handle: 'em.ldn', language: 'en',
@@ -133,7 +133,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B11', handle: 'seoyun.daily', language: 'ko',
     text: '벚꽃 말고 은행나무 보러 오세요. 지금 서울 제일 예쁠 때예요 🍂',
-    photo: '[self] A friend took it from a few steps away on the Deoksugung stone-wall road in late October: she walks under yellow ginkgo trees and has turned her whole upper body back toward the camera, smiling with her lips closed, one hand tucking hair behind her ear; a camel coat over a cream knit and a long skirt, a small shoulder bag. Yellow leaves on the path, a few people walking behind, the old stone wall to one side. Soft afternoon daylight.',
+    photo: '[self] A friend took it from a few steps away on the Deoksugung stone-wall road in late October: she walks under yellow ginkgo trees and her body is in clean side profile to the camera (her near shoulder toward the lens, chest facing along the path, never her back to the camera); she turns her head only about 45 degrees toward the camera, so her face is in three-quarter view with the neck relaxed and straight, and her eyes slide the rest of the way to meet the camera, smiling with her lips closed, one hand tucking hair behind her ear; a camel coat over a cream knit and a long skirt, a small shoulder bag. Yellow leaves on the path, a few people walking behind, the old stone wall to one side. Soft afternoon daylight.',
   },
   {
     slot: 'B12', handle: 'taeyun.s', language: 'ko',
