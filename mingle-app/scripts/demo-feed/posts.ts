@@ -143,7 +143,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B13', handle: 'dohyun.k', language: 'ko',
     text: '주말에 북한산 올라갔는데 외국인 등산객 진짜 많더라고요. 다음에 같이 갈 사람? ⛰️',
-    photo: '[self] A friend took it from a few steps below on the bare granite near the Bukhansan summit on a clear midday: he sits on the rock with his forearms on his knees, grinning and squinting in the sun, a little windblown; a navy windbreaker, a small hiking backpack, a water bottle beside him. Seoul spreads out far below behind him, hazy toward the horizon, other hikers resting on the rocks.',
+    photo: '[self] A friend took it from a few steps below on the bare granite near the Bukhansan summit on a hazy late morning, the sun veiled by thin high haze so the light is bright but soft: he sits on the rock with his forearms on his knees, grinning, a little windblown, his skin matte and dry; a navy windbreaker, a small hiking backpack, a water bottle beside him. Seoul spreads out far below behind him, hazy toward the horizon, other hikers resting on the rocks.',
   },
   {
     slot: 'B14', handle: 'minji.k', language: 'ko',
@@ -153,6 +153,6 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B15', handle: 'jihoon.lx', language: 'ko',
     text: '퇴근길 성수동. 요즘 일본어로 혼잣말하면서 걸어요 ㅋㅋ 같이 연습할 분?',
-    photo: '[self] A friend took it from a few steps away on a Seongsu-dong street in the early evening after work: he walks toward the camera with one hand in his coat pocket and earbuds in, looking down with a small private smile; a charcoal wool coat over a grey hoodie, a tote bag on his shoulder. Red-brick buildings and shop lights coming on behind, people walking past, the sky already dim blue.',
+    photo: '[self] A friend snapped it quickly from about three meters away on a Seongsu-dong street just after sunset, without asking him to stop: he is mid-step walking toward the camera, one hand in his coat pocket, earbuds in, glancing down with a small private smile; a charcoal wool coat over a grey hoodie, a tote bag on his shoulder. His whole upper body and legs to the knees are in the frame, slightly off center. The light is the dim blue of dusk plus warm shop windows from the side, so his face is a little dark and unevenly lit; the phone struggles in the low light, the picture a little soft and his moving hand slightly blurred. Red-brick buildings, people walking past.',
   },
 ]
