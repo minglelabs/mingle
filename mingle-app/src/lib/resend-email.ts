@@ -24,7 +24,7 @@ export async function sendPasswordResetEmail(args: {
   }
 
   const text = [
-    "Mingle password reset",
+    "HashChat password reset",
     "",
     "A password reset request was received for your account.",
     `Reset link: ${args.resetUrl}`,
@@ -33,7 +33,7 @@ export async function sendPasswordResetEmail(args: {
   ].join("\n");
 
   const html = [
-    "<p><strong>Mingle password reset</strong></p>",
+    "<p><strong>HashChat password reset</strong></p>",
     "<p>A password reset request was received for your account.</p>",
     `<p><a href="${args.resetUrl}" target="_blank" rel="noopener noreferrer">Reset password</a></p>`,
     "<p>If you did not request this, you can ignore this email.</p>",
@@ -48,7 +48,7 @@ export async function sendPasswordResetEmail(args: {
     body: JSON.stringify({
       from: config.fromEmail,
       to: [args.to],
-      subject: "Reset your Mingle password",
+      subject: "Reset your HashChat password",
       text,
       html,
     }),

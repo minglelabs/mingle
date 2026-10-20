@@ -19,11 +19,11 @@ export function GET() {
             components: [
               {
                 "/": "/p/*",
-                comment: "Mingle shared profile links",
+                comment: "HashChat shared profile links",
               },
               {
                 "/": "/s/*",
-                comment: "Mingle shared conversation links",
+                comment: "HashChat shared conversation links",
               },
             ],
           },

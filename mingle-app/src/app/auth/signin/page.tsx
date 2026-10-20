@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { resolveSignInCallbackUrl } from "@/app/[locale]/auth/signin/callback-url";
 import { resolveNativeOAuthProvider, resolveSafeCallbackPath } from "@/lib/native-auth-bridge";
 
 type SignInPageProps = {
@@ -15,19 +16,9 @@ function takeFirst(value: string | string[] | undefined): string {
 }
 
 function resolveCallbackUrl(rawValue: string): string {
-  const trimmed = rawValue.trim();
-  if (!trimmed) return "/";
-
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-      return parsed.toString();
-    }
-  } catch {
-    // Fallback below for relative callback paths.
-  }
-
-  return resolveSafeCallbackPath(trimmed, "/");
+  // Same guard as the localized sign-in page: only same-origin relative paths
+  // survive (open-redirect fix), then the shared path normalisation.
+  return resolveSafeCallbackPath(resolveSignInCallbackUrl(rawValue), "/");
 }
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {

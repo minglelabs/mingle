@@ -14,5 +14,5 @@ export default function MingleWordmark({
     ? `${DEFAULT_CLASS_NAME} ${className}`
     : DEFAULT_CLASS_NAME;
 
-  return <span className={resolvedClassName}>Mingle</span>;
+  return <span className={resolvedClassName}>HashChat</span>;
 }

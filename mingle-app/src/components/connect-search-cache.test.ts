@@ -30,7 +30,7 @@ function buildSearchResult(isFollowing = false) {
   return {
     id: "user-2",
     handle: "mingle-user",
-    name: "Mingle User",
+    name: "HashChat User",
     image: "https://example.com/avatar.png",
     isFollowing,
   };
