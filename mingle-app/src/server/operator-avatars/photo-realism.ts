@@ -22,7 +22,7 @@ type Random = () => number
 export type PhotoEnvironment = 'indoor' | 'outdoor' | 'any'
 
 const CAMERA = [
-  'Straight out of the phone\'s default camera app: no portrait mode, no beauty app, no face slimming, no eye enlarging, no skin smoothing, no added blush or glow. The background is a little softer than the subject, the way a phone\'s main camera renders things further away, never an artificial portrait blur.',
+  'Straight out of the phone\'s default camera app: no portrait mode, no beauty app, no face slimming, no eye enlarging, no added blush or glow. The background is a little softer than the subject, the way a phone\'s main camera renders things further away, never an artificial portrait blur.',
   // Real photos are less crisp than renders; the staff-approved café shot
   // (2026-10) came from asking for a soft, compressed, shared-online look.
   // Asking for sensor noise, pores and fabric pilling piled up into a gritty,
@@ -60,7 +60,7 @@ export function lensForShot(description: string): PhoneLens {
  * the camera, not from blemishes.
  */
 const CAMERA_FOCUSED = 'Straight out of the phone\'s main camera: no portrait mode, no beauty app, no face slimming, no eye enlarging. The focus is on the person: they are sharp, things a few meters behind them are noticeably soft, and far-off signs and writing are blurred and unreadable, the natural falloff of a real lens rather than an artificial portrait blur.'
-const SKIN_CLEAN = 'Skin: plain and matte, simply clean: an even natural tone, no shine, sweat or glossy highlights on the forehead, nose or cheeks, no painted-on color or contouring, no blemishes, rough patches, redness, stubble shadow or grime, and not airbrushed or plastic either.'
+const SKIN_CLEAN = 'Skin: smooth and soft, the way a phone renders a face at an ordinary distance: an even natural tone with no visible pores or fine texture, matte, with no shine, sweat or glossy highlights on the forehead, nose or cheeks, no painted-on color or contouring, no blemishes, rough patches, redness, stubble shadow or grime; still real skin, not plastic, waxy or porcelain.'
 
 /** The camera line for photos without a person: the beauty-app words only invite a face. */
 const CAMERA_NO_PEOPLE = 'Straight out of the phone\'s default camera app: no portrait mode, no editing. Whatever is further away is a little softer than the subject, never an artificial portrait blur.'
@@ -81,7 +81,7 @@ const COLORS = 'Colors are muted and true to life, like an uncorrected phone pho
  * and render every one of them, which turns into a gritty, crawling texture
  * (staff and a ChatGPT image community found the same, 2026-10).
  */
-const DETAIL = 'Controlled detail density: a few clear things in the scene rather than a crowd of small objects; no random decorative clutter; the background is simpler and less detailed than the subject. Skin sits between the two AI extremes: neither gritty and textured nor smooth, uniform and glossy, just quiet matte skin with soft natural variation in tone.'
+const DETAIL = 'Controlled detail density: a few clear things in the scene rather than a crowd of small objects; no random decorative clutter; the background is simpler and less detailed than the subject. Skin is smooth and soft rather than textured: matte, never glossy or waxy, with soft natural variation in tone.'
 
 const TEXTURE = 'Every surface has its real material and only the shine it really has: matte walls, knit and cotton fabric, faded denim, scuffed leather, smudged glass, worn wood, dull metal, all rendered softly at the level of detail a phone really resolves, not over-detailed. Nothing looks waxed, glossy, plastic or rendered.'
 
@@ -142,7 +142,7 @@ function offColorObject(random: Random, kind: SceneKind): string | null {
   return pool[Math.floor(random() * pool.length)]
 }
 
-const SKIN = 'Skin: real, matte skin with slight unevenness in tone, pores only faintly visible up close, makeup that sits on the skin rather than looking airbrushed; the skin is smooth in tone, never gritty, grainy or crawling with texture. No shine or sweat sheen anywhere on the face; no porcelain, waxy or glossy skin.'
+const SKIN = 'Skin: smooth and soft at phone distance, an even matte tone with only slight natural variation; pores and fine texture are not visible; makeup sits on the skin rather than looking airbrushed; never gritty, grainy or crawling with texture. No shine or sweat sheen anywhere on the face; no porcelain, waxy or glossy skin.'
 
 const PEOPLE = 'Clothes crease and hang naturally; the expression is relaxed and caught mid-moment, not a posed photo smile.'
 

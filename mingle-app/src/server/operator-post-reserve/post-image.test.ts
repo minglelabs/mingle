@@ -39,7 +39,7 @@ describe('photos of the poster', () => {
     expect(prompt).toContain('no school uniforms')
     expect(prompt).not.toContain('No face and no recognizable person')
     expect(prompt).toContain('The focus is on the person')
-    expect(prompt).toContain('Skin: plain and matte')
+    expect(prompt).toContain('Skin: smooth and soft, the way a phone renders')
     expect(prompt).toContain('sets in the west')
     expect(prompt).not.toContain('as sharp as the subject')
   })
