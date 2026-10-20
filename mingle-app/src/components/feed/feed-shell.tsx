@@ -88,12 +88,8 @@ const FREE_VIEW_LIMIT = 10;
 const FREE_VIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
 const FREE_VIEW_STORAGE_KEY = "mingle.feed.freeViews";
 
-/**
- * True when a signed-out viewer may see `postId` (already seen, or still under
- * the limit). The count starts over a day after the first post it counted.
- */
-function claimFreeView(postId: string): boolean {
-  const now = Date.now();
+/** The free views counted so far today (the count starts over a day after the first). */
+function readFreeViews(now = Date.now()): { since: number; seen: string[] } {
   let since = now;
   let seen: string[] = [];
   try {
@@ -110,6 +106,15 @@ function claimFreeView(postId: string): boolean {
   } catch {
     // Storage unavailable: fall back to an empty history.
   }
+  return { since, seen };
+}
+
+/**
+ * True when a signed-out viewer may see `postId` (already seen, or still under
+ * the limit).
+ */
+function claimFreeView(postId: string): boolean {
+  const { since, seen } = readFreeViews();
   if (seen.includes(postId)) return true;
   if (seen.length >= FREE_VIEW_LIMIT) return false;
   try {
@@ -203,6 +208,11 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
 
   // Signed out: the sign-in gate's return path while it is open.
   const [loginReturnTo, setLoginReturnTo] = useState<string | null>(null);
+  // The gate opened because the free views ran out (it then says so).
+  const [loginForLimit, setLoginForLimit] = useState(false);
+  // Signed out with no free views left: the first post the viewer may not
+  // see. The feed ends just before it.
+  const [freeLockIndex, setFreeLockIndex] = useState<number | null>(null);
 
   const anyOverlayOpen = Boolean(
     commentPostId || actionPostId || zoomSrc || notificationsOpen || composeOpen || loginReturnTo,
@@ -369,8 +379,11 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     },
     [isViewer, locale, activePost],
   );
+  const goToLoginRef = useRef(goToLogin);
+  goToLoginRef.current = goToLogin;
   const closeLogin = useCallback(() => {
     setLoginReturnTo(null);
+    setLoginForLimit(false);
     // Land exactly on the active post, whatever the scroll did under the sheet.
     if (scrollEl) scrollEl.scrollTop = activeIndexRef.current * cardPixelHeight();
   }, [scrollEl, cardPixelHeight]);
@@ -530,13 +543,25 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   );
 
   // Signed-out viewers get FREE_VIEW_LIMIT distinct posts a day (remembered
-  // across visits); landing on one more snaps back and opens the sign-in sheet.
-  // The check waits until the swipe has settled: the sheet locks the feed's
-  // scrolling, which mid-swipe would freeze it between two posts.
+  // across visits). Once they run out the feed ends before the next unseen
+  // post, and pulling past the end opens the sign-in sheet (below).
+  // Landing on a locked post anyway (a restored position) snaps back and opens
+  // the sheet; that check waits until the swipe has settled, since the sheet
+  // locks the feed's scrolling, which mid-swipe would freeze it between posts.
   const activePostId = activePost?.id ?? null;
   useEffect(() => {
-    if (viewerId || !activePostId || !scrollEl) return;
-    if (claimFreeView(activePostId)) return;
+    if (viewerId || !activePostId || !scrollEl) {
+      setFreeLockIndex(null);
+      return;
+    }
+    if (claimFreeView(activePostId)) {
+      const { seen } = readFreeViews();
+      const lock = seen.length < FREE_VIEW_LIMIT
+        ? -1
+        : posts.findIndex((post, idx) => idx > activeIndexRef.current && !seen.includes(post.id));
+      setFreeLockIndex(lock === -1 ? null : lock);
+      return;
+    }
     let timer: ReturnType<typeof setTimeout> | undefined;
     const settle = () => {
       clearTimeout(timer);
@@ -544,6 +569,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
         const idx = activeIndexRef.current;
         if (posts[idx]?.id !== activePostId) return;
         scrollEl.scrollTop = Math.max(0, idx - 1) * cardPixelHeight();
+        setLoginForLimit(true);
         goToLogin(activePostId);
       }, 150);
     };
@@ -554,9 +580,81 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       scrollEl.removeEventListener("scroll", settle);
     };
     // goToLogin / cardPixelHeight / posts identities change with the active
-    // post; only a new post should re-run the check.
+    // post; only a new post (or more loaded posts) should re-run the check.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewerId, activePostId, scrollEl]);
+  }, [viewerId, activePostId, scrollEl, posts.length]);
+
+  // At the locked end, an upward drag stretches the feed up to a fifth of a
+  // card, springs back on release and then opens the sign-in sheet (a wheel
+  // nudge on the desktop does the same).
+  const lockedPostId = freeLockIndex === null ? null : posts[freeLockIndex]?.id ?? null;
+  useEffect(() => {
+    if (!scrollEl || !lockedPostId || anyOverlayOpen) return;
+    const maxStretch = () => cardPixelHeight() * 0.2;
+    const atEnd = () => scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 2;
+    let startY: number | null = null;
+    let stretch = 0;
+    let openTimer: ReturnType<typeof setTimeout> | undefined;
+    let wheelBusy = false;
+    const setStretch = (px: number, animate: boolean) => {
+      stretch = px;
+      scrollEl.style.transition = animate ? "transform 340ms cubic-bezier(0.25, 1.3, 0.5, 1)" : "none";
+      scrollEl.style.transform = px > 0 ? `translateY(${-px}px)` : "";
+    };
+    const springBack = () => {
+      const open = stretch > maxStretch() * 0.3;
+      setStretch(0, true);
+      if (!open) return;
+      openTimer = setTimeout(() => {
+        setLoginForLimit(true);
+        goToLoginRef.current(lockedPostId);
+      }, 260);
+    };
+    const onStart = (event: TouchEvent) => {
+      startY = event.touches.length === 1 && atEnd() ? event.touches[0].clientY : null;
+    };
+    const onMove = (event: TouchEvent) => {
+      if (startY === null) return;
+      const dy = startY - event.touches[0].clientY;
+      if (dy <= 0) {
+        if (stretch > 0) setStretch(0, false);
+        return;
+      }
+      if (event.cancelable) event.preventDefault();
+      // Resists more the further it goes, and stops at a fifth of a card.
+      const max = maxStretch();
+      setStretch(max * (1 - Math.exp(-dy / (max * 1.6))), false);
+    };
+    const onEnd = () => {
+      if (startY === null) return;
+      startY = null;
+      if (stretch > 0) springBack();
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY <= 0 || !atEnd() || wheelBusy) return;
+      wheelBusy = true;
+      setStretch(maxStretch() * 0.6, true);
+      openTimer = setTimeout(() => {
+        springBack();
+        wheelBusy = false;
+      }, 200);
+    };
+    scrollEl.addEventListener("touchstart", onStart, { passive: true });
+    scrollEl.addEventListener("touchmove", onMove, { passive: false });
+    scrollEl.addEventListener("touchend", onEnd);
+    scrollEl.addEventListener("touchcancel", onEnd);
+    scrollEl.addEventListener("wheel", onWheel, { passive: true });
+    return () => {
+      clearTimeout(openTimer);
+      setStretch(0, false);
+      scrollEl.style.transition = "";
+      scrollEl.removeEventListener("touchstart", onStart);
+      scrollEl.removeEventListener("touchmove", onMove);
+      scrollEl.removeEventListener("touchend", onEnd);
+      scrollEl.removeEventListener("touchcancel", onEnd);
+      scrollEl.removeEventListener("wheel", onWheel);
+    };
+  }, [scrollEl, lockedPostId, anyOverlayOpen, cardPixelHeight]);
 
   const handleExpandChange = useCallback(
     (postId: string, expanded: boolean, scrollTop: number) => {
@@ -633,6 +731,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
         appleOAuthEnabled={appleOAuthEnabled}
         googleOAuthEnabled={googleOAuthEnabled}
         closeLabel={copy.closeImage}
+        notice={loginForLimit ? copy.loginToContinue : null}
         onClose={closeLogin}
       />
     ) : null}
@@ -812,7 +911,9 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     );
   }
 
-  const showStatusCard = hasMore || loadingMore || loadMoreError;
+  // Signed out with no free views left, the feed ends before the locked post.
+  const shownEntries = freeLockIndex === null ? entries : entries.slice(0, freeLockIndex);
+  const showStatusCard = freeLockIndex === null && (hasMore || loadingMore || loadMoreError);
 
   return (
     <div
@@ -873,7 +974,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
           ...pullFeedStyle,
         }}
       >
-        {entries.map(({ key, post }, idx) => {
+        {shownEntries.map(({ key, post }, idx) => {
           const saved = expandState.get(post.id) ?? restoredPosts[post.id];
           return (
             <FeedPostCard
@@ -912,7 +1013,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
               onFollowed={handleFollowed}
               onToast={setToast}
               onGoPrevious={idx > 0 ? () => scrollToIndex(idx - 1) : undefined}
-              onGoNext={idx < posts.length - 1 ? () => scrollToIndex(idx + 1) : undefined}
+              onGoNext={idx < shownEntries.length - 1 ? () => scrollToIndex(idx + 1) : undefined}
             />
           );
         })}

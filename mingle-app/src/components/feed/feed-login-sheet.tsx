@@ -15,6 +15,8 @@ type FeedLoginSheetProps = {
   appleOAuthEnabled: boolean;
   googleOAuthEnabled: boolean;
   closeLabel: string;
+  /** Shown under the logo, e.g. why the gate opened. */
+  notice?: string | null;
   onClose: () => void;
 };
 
@@ -33,6 +35,7 @@ export default function FeedLoginSheet({
   appleOAuthEnabled,
   googleOAuthEnabled,
   closeLabel,
+  notice = null,
   onClose,
 }: FeedLoginSheetProps) {
   const open = returnTo !== null;
@@ -54,6 +57,7 @@ export default function FeedLoginSheet({
           >
             <MingleHome
               authOnly
+              authNotice={notice}
               authCallbackUrl={returnTo}
               dictionary={dictionary}
               appleOAuthEnabled={appleOAuthEnabled}

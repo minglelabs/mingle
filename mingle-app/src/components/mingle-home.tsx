@@ -82,6 +82,8 @@ type MingleHomeProps = {
   isVisible?: boolean;
   /** Render only the existing authentication surface without mounting a room. */
   authOnly?: boolean;
+  /** Auth-only: a line under the logo, e.g. why sign-in is needed. */
+  authNotice?: string | null;
   /**
    * Auth gate only: where a completed sign-in lands. Defaults to the
    * conversation list; the feed passes the post (or compose) the viewer was on.
@@ -1392,10 +1394,13 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         </div>
 
         {/* Top HashChat text logo area */}
-        <div className="flex flex-1 items-center justify-center">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
           <span className="text-[2.8rem] font-extrabold leading-[1.08] text-[#2D2A1E]">
             HashChat
           </span>
+          {props.authNotice ? (
+            <p className="text-lg font-bold leading-snug text-[#2D2A1E]">{props.authNotice}</p>
+          ) : null}
         </div>
 
         {/* Bottom panel stays mounted; only its inner content swaps conditionally */}

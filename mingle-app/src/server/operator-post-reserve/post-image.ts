@@ -54,6 +54,7 @@ export function buildPostImagePrompt(
           'The poster is the person in the attached photo. Use it only to know who they are (face, hair, build); the attached picture itself must not show up in the new one.',
           'The face itself stays exactly the same as in the attached photo: the same eye shape and eyelids, nose, mouth, jawline, skin tone and apparent ethnicity, so anyone would say it is the same person. Only what a person changes between days may differ: how the hair is styled (parted, pushed back, tied, under a cap), glasses on or off, makeup, and the camera and light.',
           'This is a completely different photo taken on another day: a different place, outfit, camera distance, camera angle, head angle, expression, gesture and light. Nothing of the attached photo\'s framing, background, clothes, pose, hand position or expression may carry over; if it would look like the same shot moved somewhere else, it is wrong.',
+          'The expression comes only from this description, never from the attached photo: a frown, knitted or raised brows, a squint or a tense mouth in the attached photo is a passing look, not part of the face. Unless the description says otherwise, the brows and forehead are relaxed and smooth, also while laughing.',
         ]
       : [`The poster: ${person.look}.`]),
     PERSON_LINES[kind],

@@ -138,7 +138,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   {
     slot: 'B12', handle: 'taeyun.s', language: 'ko',
     text: '한강에서 따릉이 타다가 한 컷 🚲 주말에 같이 탈 외국인 친구 구해요',
-    photo: '[self] A friend took it from a few steps away on the riverside bike path at Yeouido Hangang Park on a sunny afternoon: he stands next to a green public rental bike, one hand on the handlebar, laughing and looking slightly off camera, a little out of breath; a plain white tee and black track pants, a cap pushed back a bit. Cyclists and runners passing behind, the river and the bridges beyond. High sun, no sunset.',
+    photo: '[self] A friend took it from about four meters away on the riverside bike path at Yeouido Hangang Park on a grey, hazy afternoon: he stands beside a green public rental bike with both hands on the handlebars, an ordinary unposed stance, looking at the camera with a small easy smile; a dark green windbreaker, black track pants and white sneakers, a navy cap. His whole body is in the frame and takes up only about half the picture height, with plenty of plain asphalt path in front of him; behind him the river railing, the grey river and a bridge fading into the haze. Flat, even daylight, colors a little washed out.',
   },
   {
     slot: 'B13', handle: 'dohyun.k', language: 'ko',
