@@ -40,7 +40,7 @@ async function main() {
   const host = new URL(process.env.DATABASE_URL ?? 'postgresql://unset').hostname
   if (!['127.0.0.1', 'localhost', '::1'].includes(host)) throw new Error(`not a local database: ${host}`)
   const [mode, dir, ...slots] = process.argv.slice(2)
-  if (!['prompts', 'publish', 'redraw', 'rephoto'].includes(mode) || !dir) throw new Error('usage: prompts|publish <dir> | redraw|rephoto <dir> <slot...>')
+  if (!['prompts', 'publish', 'redraw', 'rephoto', 'retext'].includes(mode) || !dir) throw new Error('usage: prompts|publish <dir> | redraw|rephoto|retext <dir> <slot...>')
   const redo = new Set(slots.map((slot) => slot.toUpperCase()))
   fs.mkdirSync(dir, { recursive: true })
 
@@ -50,10 +50,18 @@ async function main() {
       if (!published.has(post.existingPostId)) throw new Error(`${post.slot}: post ${post.existingPostId} not found`)
       continue
     }
-    const isRedo = mode === 'redraw' || mode === 'rephoto'
+    const isRedo = mode === 'redraw' || mode === 'rephoto' || mode === 'retext'
     if (isRedo && !redo.has(post.slot)) continue
     if (!isRedo && published.has(postIdOf(post))) continue
     const author = await authorId(post.handle)
+
+    if (mode === 'retext') {
+      if (!published.has(postIdOf(post))) throw new Error(`${post.slot}: post missing`)
+      // A new body version: readers get the new text translated on demand.
+      await prisma.post.update({ where: { id: postIdOf(post) }, data: { sourceText: post.text ?? null, bodyVersion: { increment: 1 } } })
+      console.log(`${post.slot}: text replaced`)
+      continue
+    }
 
     if (mode === 'rephoto') {
       const file = ['png', 'jpg', 'jpeg', 'webp'].map((ext) => path.join(dir, `${post.slot}.${ext}`)).find((candidate) => fs.existsSync(candidate))

@@ -152,7 +152,7 @@ export const DEMO_POSTS: readonly DemoPost[] = [
   },
   {
     slot: 'B15', handle: 'jihoon.lx', language: 'ko',
-    text: '퇴근길 성수동. 요즘 일본어로 혼잣말하면서 걸어요 ㅋㅋ 같이 연습할 분?',
-    photo: '[self] A friend snapped it quickly from about three meters away on a Seongsu-dong street just after sunset, without asking him to stop: he is mid-step walking toward the camera, one hand in his coat pocket, earbuds in, glancing down with a small private smile; a charcoal wool coat over a grey hoodie, a tote bag on his shoulder. His whole upper body and legs to the knees are in the frame, slightly off center. The light is the dim blue of dusk plus warm shop windows from the side, so his face is a little dark and unevenly lit; the phone struggles in the low light, the picture a little soft and his moving hand slightly blurred. Red-brick buildings, people walking past.',
+    text: '퇴근길 성수동 골목. 친구가 갑자기 멈춰보래서 한 장 📸 요즘 일본어 공부 중인데 같이 연습할 분?',
+    photo: '[self] A friend took it from about four meters away on a quiet residential side street in Seongsu-dong at dusk on his way home from work: he stands still in the middle of the street, both hands in his coat pockets, looking at the camera with a small easy smile; a charcoal wool coat over a grey hoodie and jeans, a canvas tote on one shoulder. He is in the frame from the thighs up. Red-brick low-rise houses and garden walls, trees and a utility pole behind him, the street fading away with a car parked far down it. Soft, even overcast evening light; his skin clean and smooth, without redness or blemishes.',
   },
 ]
