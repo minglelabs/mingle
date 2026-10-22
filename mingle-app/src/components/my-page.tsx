@@ -6,6 +6,14 @@ import ProfileImageCropper, {
   type ProfileImageCropperChange,
 } from "@/components/profile-image-cropper";
 import ProfileImagePreview from "@/components/profile-image-preview";
+import {
+  clearMyPageProfileCache,
+  createEmptyMyPageProfile,
+  readMyPageProfileCache,
+  readMyPageProfileMemoryCache,
+  writeMyPageProfileCache,
+  type MyPageProfileRecord,
+} from "@/components/my-page-profile-cache";
 import ProfileShareScreen from "@/components/profile-share-screen";
 import FollowListScreen from "@/components/follow-list-screen";
 import ProfileBio from "@/components/profile-bio";
@@ -97,23 +105,7 @@ type MyPageProps = {
   locale: AppLocale;
 };
 
-type ProfileRecord = {
-  bioDraft?: string | null;
-  image: string | null;
-  imageCropScale: number | null;
-  imageCropX: number | null;
-  imageCropY: number | null;
-  handle: string | null;
-  name: string | null;
-  bio: string | null;
-  nationality: string | null;
-  primaryLanguages: string[];
-  defaultConversationLanguages: string[];
-  location: ProfileLocationRecord | null;
-  birthDate?: BirthDateParts | null;
-  followersCount: number;
-  followingCount: number;
-};
+type ProfileRecord = MyPageProfileRecord;
 
 type ProfileDraft = {
   imageFile: File | null;
@@ -837,6 +829,7 @@ function ProfileSettingsPanel({
       }
       await unregisterNativePushToken();
       resetMinglePostHogIdentity();
+      clearMyPageProfileCache();
       await signOut({ callbackUrl: signOutCallbackUrl });
       if (typeof window !== "undefined") {
         window.location.replace(signOutCallbackUrl);
@@ -860,6 +853,7 @@ function ProfileSettingsPanel({
       }
       await unregisterNativePushToken();
       resetMinglePostHogIdentity();
+      clearMyPageProfileCache();
       await signOut({ callbackUrl: signOutCallbackUrl });
       if (typeof window !== "undefined") {
         window.location.replace(signOutCallbackUrl);
@@ -1631,22 +1625,22 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [profile, setProfile] = useState<ProfileRecord>(() => initialProfile ?? ({
-    image: null,
-    imageCropScale: null,
-    imageCropX: null,
-    imageCropY: null,
-    handle: null,
-    name: null,
-    bio: null,
-    nationality: null,
-    primaryLanguages: [],
-    defaultConversationLanguages: [],
-    location: null,
-    birthDate: null,
-    followersCount: 0,
-    followingCount: 0,
-  }));
+  // A native tab switch reuses a prefetched route payload that carries no
+  // profile, so the first frame comes from the last profile this session saw.
+  // Only the memory cache is read here: it is empty on a fresh page load, which
+  // keeps hydration identical to the server render.
+  const [initialProfileSeed] = useState(() => {
+    const seedUserId = session?.user?.id ?? "";
+    const seededProfile = initialProfile ?? readMyPageProfileMemoryCache(seedUserId);
+    return {
+      profile: seededProfile ?? createEmptyMyPageProfile(),
+      ownerUserId: seededProfile ? seedUserId : "",
+    };
+  });
+  const [profile, setProfile] = useState<ProfileRecord>(initialProfileSeed.profile);
+  // The account whose data `profile` currently holds. Empty until a snapshot or
+  // an API response arrives, so a placeholder is never cached as a real profile.
+  const profileOwnerUserIdRef = useRef(initialProfileSeed.ownerUserId);
   const [myPageSurfaceHistory, setMyPageSurfaceHistory] = useState(() => (
     typeof window === "undefined" ? [] : readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE)
   ));
@@ -1884,10 +1878,19 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     if (!sessionUserId) return;
 
     let cancelled = false;
+    if (profileOwnerUserIdRef.current !== sessionUserId) {
+      // Cold start: show the persisted header until the request below lands.
+      const cachedProfile = readMyPageProfileCache(sessionUserId);
+      if (cachedProfile) {
+        profileOwnerUserIdRef.current = sessionUserId;
+        setProfile(cachedProfile);
+      }
+    }
     void fetch(buildClientApiPath("/profile"), { cache: "no-store" })
       .then(async (response) => (response.ok ? response.json() as Promise<Partial<ProfileRecord>> : null))
       .then((data) => {
         if (cancelled || !data) return;
+        profileOwnerUserIdRef.current = sessionUserId;
         setProfile({
           image: typeof data.image === "string" ? data.image : null,
           imageCropScale: typeof data.imageCropScale === "number" ? data.imageCropScale : null,
@@ -1919,6 +1922,11 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       cancelled = true;
     };
   }, [sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId || profileOwnerUserIdRef.current !== sessionUserId) return;
+    writeMyPageProfileCache(sessionUserId, profile);
+  }, [profile, sessionUserId]);
 
   const syncLocationPermission = useCallback(async () => {
     if (!sessionUserId) return;
@@ -2144,6 +2152,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const handleSignOut = useCallback(() => {
     void unregisterNativePushToken().finally(() => {
       resetMinglePostHogIdentity();
+      clearMyPageProfileCache();
       void signOut({ callbackUrl: signOutCallbackUrl }).then(() => {
         if (typeof window !== "undefined") {
           window.location.replace(signOutCallbackUrl);
