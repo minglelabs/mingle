@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "description": "Golden STT/translation utterances for QA audio injection. Audio is rendered locally by `pnpm qa:audio:golden` into test-fixtures/audio/local/golden/ (git ignored); only this manifest is committed.",
+  "generator": {
+    "engine": "macos-say",
+    "sampleRate": 16000,
+    "voices": {
+      "ko": "Yuna",
+      "en": "Samantha",
+      "ja": "Kyoko",
+      "zh": "Tingting",
+      "es": "Mónica"
+    }
+  },
+  "fixtures": [
+    {
+      "id": "ko-greeting-01",
+      "language": "ko",
+      "transcript": "안녕하세요, 만나서 반갑습니다.",
+      "acceptedTranscripts": ["안녕하세요. 만나서 반갑습니다."],
+      "translations": {
+        "en": "Hello, nice to meet you."
+      }
+    },
+    {
+      "id": "ko-directions-01",
+      "language": "ko",
+      "transcript": "지하철역까지 걸어서 얼마나 걸려요?",
+      "acceptedTranscripts": [],
+      "translations": {
+        "en": "How long does it take to walk to the subway station?"
+      }
+    },
+    {
+      "id": "en-restaurant-01",
+      "language": "en",
+      "transcript": "Could we get a table for two by the window?",
+      "acceptedTranscripts": ["Could we get a table for 2 by the window?"],
+      "translations": {
+        "ko": "창가 쪽에 두 명 자리 있을까요?"
+      }
+    },
+    {
+      "id": "en-meeting-01",
+      "language": "en",
+      "transcript": "Let's move the meeting to three o'clock tomorrow.",
+      "acceptedTranscripts": [
+        "Let's move the meeting to 3 o'clock tomorrow.",
+        "Let's move the meeting to 3:00 tomorrow."
+      ],
+      "translations": {
+        "ko": "회의를 내일 세 시로 옮기죠."
+      }
+    },
+    {
+      "id": "ja-shopping-01",
+      "language": "ja",
+      "transcript": "このシャツのもう少し大きいサイズはありますか。",
+      "acceptedTranscripts": [],
+      "translations": {
+        "ko": "이 셔츠 조금 더 큰 사이즈 있나요?",
+        "en": "Do you have this shirt in a slightly larger size?"
+      }
+    },
+    {
+      "id": "ja-hotel-01",
+      "language": "ja",
+      "transcript": "チェックアウトは何時までですか。",
+      "acceptedTranscripts": [],
+      "translations": {
+        "ko": "체크아웃은 몇 시까지인가요?",
+        "en": "What time is checkout?"
+      }
+    },
+    {
+      "id": "zh-taxi-01",
+      "language": "zh",
+      "transcript": "请带我去最近的医院。",
+      "acceptedTranscripts": [],
+      "translations": {
+        "ko": "가장 가까운 병원으로 데려다 주세요.",
+        "en": "Please take me to the nearest hospital."
+      }
+    },
+    {
+      "id": "zh-price-01",
+      "language": "zh",
+      "transcript": "这个多少钱？可以便宜一点吗？",
+      "acceptedTranscripts": [],
+      "translations": {
+        "ko": "이거 얼마예요? 조금 깎아 주실 수 있나요?",
+        "en": "How much is this? Could you make it a little cheaper?"
+      }
+    },
+    {
+      "id": "es-airport-01",
+      "language": "es",
+      "transcript": "¿Dónde está la puerta de embarque número doce?",
+      "acceptedTranscripts": ["¿Dónde está la puerta de embarque número 12?"],
+      "translations": {
+        "ko": "12번 탑승구는 어디에 있나요?",
+        "en": "Where is boarding gate number twelve?"
+      }
+    },
+    {
+      "id": "es-weather-01",
+      "language": "es",
+      "transcript": "Mañana va a llover, así que lleva un paraguas.",
+      "acceptedTranscripts": [],
+      "translations": {
+        "ko": "내일 비가 오니까 우산 챙겨.",
+        "en": "It's going to rain tomorrow, so take an umbrella."
+      }
+    }
+  ]
+}

@@ -35,12 +35,29 @@ type NativeSttStatus = {
   eventSequence?: number;
 };
 
+export type NativeSttQaAudioInjectionOptions = {
+  fixtureId?: string;
+  url?: string;
+  base64?: string;
+  leadingSilenceMs?: number;
+  trailingSilenceMs?: number;
+};
+
+export type NativeSttQaAudioInjectionEvent = {
+  phase: string;
+  fixtureId?: string;
+  atMs?: number;
+  [key: string]: unknown;
+};
+
 type NativeSttModuleType = {
   start(options: NativeSttStartOptions): Promise<{ sampleRate: number }>;
   stop(options?: NativeSttStopOptions): Promise<void>;
   setAec(enabled: boolean): Promise<{ ok: boolean }>;
   getMicrophonePermissionStatus(): Promise<NativeSttMicrophonePermissionStatus>;
   getStatus?: () => Promise<NativeSttStatus>;
+  qaInjectAudio?: (options: NativeSttQaAudioInjectionOptions) => Promise<NativeSttQaAudioInjectionEvent>;
+  qaClearAudioInjection?: () => Promise<{ cleared: boolean }>;
 };
 
 type NativeSttEventMap = {
@@ -56,6 +73,7 @@ type NativeSttEventMap = {
   message: { raw: string; conversationId?: string; sessionId?: string };
   error: { message: string; code?: string; platform?: string; conversationId?: string; sessionId?: string };
   close: { reason: string; conversationId?: string; sessionId?: string };
+  qaAudioInjection: NativeSttQaAudioInjectionEvent;
 };
 
 const nativeModule = NativeModules.NativeSTTModule as NativeSttModuleType | undefined;
@@ -98,6 +116,24 @@ export async function getNativeSttStatus(): Promise<NativeSttStatus> {
     return { status: 'idle', running: false, serverReady: false };
   }
   return nativeModule.getStatus();
+}
+
+// QA-only: the native module rejects these unless the build carries the QA
+// bridge flag (see MingleQaAudioInjector / NativeSttQaAudioInjector).
+export async function qaInjectNativeSttAudio(
+  options: NativeSttQaAudioInjectionOptions,
+): Promise<NativeSttQaAudioInjectionEvent> {
+  if (!nativeModule?.qaInjectAudio) {
+    throw new Error('native_qa_audio_injection_unavailable');
+  }
+  return nativeModule.qaInjectAudio(options);
+}
+
+export async function qaClearNativeSttAudioInjection(): Promise<{ cleared: boolean }> {
+  if (!nativeModule?.qaClearAudioInjection) {
+    return { cleared: false };
+  }
+  return nativeModule.qaClearAudioInjection();
 }
 
 export function addNativeSttListener<T extends keyof NativeSttEventMap>(
