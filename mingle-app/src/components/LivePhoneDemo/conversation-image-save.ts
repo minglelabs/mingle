@@ -7,7 +7,7 @@ export type ConversationImageSaveResult = 'saved' | 'permission' | 'failed'
 
 const NATIVE_IMAGE_SAVE_EVENT = 'mingle:native-image-save'
 const NATIVE_QR_SAVE_EVENT = 'mingle:native-qr-save'
-/** A build with `native_image_save` answers "started" at once; silence means an older build. */
+/** A build that knows `native_image_save` answers a probe with "ready" at once; silence means an older build. */
 const NATIVE_ACK_TIMEOUT_MS = 1500
 const NATIVE_SAVE_TIMEOUT_MS = 30_000
 /** Older builds only take a PNG data URL up to this many characters (rn/App.tsx `handleNativeQrSave`). */
@@ -71,13 +71,16 @@ function waitForEvent(name: string, accept: (detail: NativeSaveDetail) => boolea
 
 async function saveThroughNative(post: (message: string) => void, blob: Blob, fileName: string): Promise<ConversationImageSaveResult> {
   const requestId = `img-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-  const dataUrl = await readAsDataUrl(blob)
   const ofRequest = (detail: NativeSaveDetail) => detail.requestId === requestId
-  const started = waitForEvent(NATIVE_IMAGE_SAVE_EVENT, detail => ofRequest(detail) && detail.type === 'started', NATIVE_ACK_TIMEOUT_MS)
-  const finished = waitForEvent(NATIVE_IMAGE_SAVE_EVENT, detail => ofRequest(detail) && (detail.type === 'success' || detail.type === 'error'), NATIVE_SAVE_TIMEOUT_MS)
-  post(JSON.stringify({ type: 'native_image_save', payload: { requestId, dataUrl, fileName } }))
+  // A tiny probe first, so the answer is never held up by a large photo and an older build that stays
+  // silent can be told apart without risking the photo being saved twice.
+  const ready = waitForEvent(NATIVE_IMAGE_SAVE_EVENT, detail => ofRequest(detail) && detail.type === 'ready', NATIVE_ACK_TIMEOUT_MS)
+  post(JSON.stringify({ type: 'native_image_save', payload: { requestId, probe: true } }))
 
-  if (await started) {
+  if (await ready) {
+    const dataUrl = await readAsDataUrl(blob)
+    const finished = waitForEvent(NATIVE_IMAGE_SAVE_EVENT, detail => ofRequest(detail) && (detail.type === 'success' || detail.type === 'error'), NATIVE_SAVE_TIMEOUT_MS)
+    post(JSON.stringify({ type: 'native_image_save', payload: { requestId, dataUrl, fileName } }))
     const detail = await finished
     return detail?.type === 'success' ? 'saved' : resultFromMessage(detail?.message)
   }
@@ -106,11 +109,20 @@ function saveThroughBrowser(blob: Blob, fileName: string): ConversationImageSave
   }
 }
 
+let queue: Promise<unknown> = Promise.resolve()
+
 /**
  * Saves a chat photo to the device: the app saves it to the photo library (Photos on iOS, the
  * gallery on Android), a browser downloads it.
  */
 export async function saveConversationImage(src: string, fileName: string): Promise<ConversationImageSaveResult> {
+  // One save at a time: the older builds' answer carries no request id to match it to its photo.
+  const run = queue.then(() => saveOnce(src, fileName))
+  queue = run.catch(() => undefined)
+  return run
+}
+
+async function saveOnce(src: string, fileName: string): Promise<ConversationImageSaveResult> {
   try {
     const response = await fetch(src, { credentials: 'include' })
     if (!response.ok) return 'failed'

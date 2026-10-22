@@ -32,20 +32,22 @@ describe('saveConversationImage in the app', () => {
     const posts: Record<string, unknown>[] = []
     installWindow((message, emit) => {
       posts.push(message)
-      const { requestId } = message.payload as { requestId: string }
-      emit('mingle:native-image-save', { type: 'started', requestId })
-      setTimeout(() => emit('mingle:native-image-save', { type: 'success', requestId }), 0)
+      const { requestId, probe } = message.payload as { requestId: string; probe?: boolean }
+      setTimeout(() => emit('mingle:native-image-save', { type: probe ? 'ready' : 'success', requestId }), 0)
     })
     await expect(saveConversationImage('/api/x/image', 'hashchat-m1.jpg')).resolves.toBe('saved')
-    expect(posts).toHaveLength(1)
-    expect(posts[0]).toMatchObject({ type: 'native_image_save', payload: { dataUrl: 'data:image/jpeg;base64,AAAA', fileName: 'hashchat-m1.jpg' } })
+    expect(posts).toHaveLength(2)
+    expect(posts[0]).toMatchObject({ type: 'native_image_save', payload: { probe: true } })
+    expect(posts[0].payload).not.toHaveProperty('dataUrl')
+    expect(posts[1]).toMatchObject({ type: 'native_image_save', payload: { dataUrl: 'data:image/jpeg;base64,AAAA', fileName: 'hashchat-m1.jpg' } })
   })
 
   it('reports a denied photo permission', async () => {
     installWindow((message, emit) => {
-      const { requestId } = message.payload as { requestId: string }
-      emit('mingle:native-image-save', { type: 'started', requestId })
-      setTimeout(() => emit('mingle:native-image-save', { type: 'error', requestId, message: 'Photo library permission was denied.' }), 0)
+      const { requestId, probe } = message.payload as { requestId: string; probe?: boolean }
+      setTimeout(() => emit('mingle:native-image-save', probe
+        ? { type: 'ready', requestId }
+        : { type: 'error', requestId, message: 'Photo library permission was denied.' }), 0)
     })
     await expect(saveConversationImage('/api/x/image', 'a.jpg')).resolves.toBe('permission')
   })

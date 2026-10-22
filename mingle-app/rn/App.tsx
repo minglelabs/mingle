@@ -811,6 +811,8 @@ type NativeImageSaveCommand = {
   type: 'native_image_save';
   payload?: {
     requestId?: string;
+    /** Asks only whether this build can save photos; answered with "ready". */
+    probe?: boolean;
     dataUrl?: string;
     fileName?: string;
   };
@@ -1082,7 +1084,7 @@ type NativeQrSaveEvent =
   | { type: 'success' }
   | { type: 'error'; message: string };
 type NativeImageSaveEvent =
-  | { type: 'started' | 'success'; requestId: string }
+  | { type: 'ready' | 'success'; requestId: string }
   | { type: 'error'; requestId: string; message: string };
 type RecommendUpdatePrompt = {
   title: string;
@@ -2872,7 +2874,10 @@ function AppInner(): React.JSX.Element {
     const dataUrl = typeof payload?.dataUrl === 'string' ? payload.dataUrl.trim() : '';
     const fileName = typeof payload?.fileName === 'string' ? payload.fileName.trim() : '';
     if (!requestId) return;
-    emitImageSaveToWeb({ type: 'started', requestId });
+    if (payload?.probe === true) {
+      emitImageSaveToWeb({ type: 'ready', requestId });
+      return;
+    }
 
     const nativeImageModule = (NativeModules as {
       NativeQrImageModule?: NativeQrImageModule;
