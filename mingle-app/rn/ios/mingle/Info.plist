@@ -57,7 +57,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Mingle lets you choose photos to send in conversations.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Mingle saves QR codes to your Photos.</string>
+	<string>Saves QR codes and chat photos to your Photos.</string>
 	<key>MingleWebAppBaseURL</key>
 	<string>$(NEXT_PUBLIC_SITE_URL)</string>
 	<key>MingleWebAppScheme</key>
