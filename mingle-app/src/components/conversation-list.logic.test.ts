@@ -25,6 +25,7 @@ import {
   readConversationHistoryRouteFromState,
   resolveConversationDisplayMessageCount,
   SEARCH_OVERLAY_HISTORY_STATE_KEY,
+  sortConversationsForDisplay,
   tryAcquireConversationCreateLock,
   upsertConversation,
   updateConversationSummaryStatus,
@@ -195,6 +196,19 @@ describe("conversation-list logic", () => {
 
     expect(compareConversationRecency(newer, older)).toBeLessThan(0);
     expect(compareConversationRecency(older, newer)).toBeGreaterThan(0);
+  });
+
+  it("lifts unread rooms above read ones only in unreadFirst mode", () => {
+    const readNewest = buildConversationSummary({ id: "read-newest", latestMessageAt: "2026-04-12T12:00:00.000Z" });
+    const unreadOld = { ...buildConversationSummary({ id: "unread-old", latestMessageAt: "2026-04-12T08:00:00.000Z" }), unreadMessageCount: 2 };
+    const unreadNew = { ...buildConversationSummary({ id: "unread-new", latestMessageAt: "2026-04-12T10:00:00.000Z" }), unreadMessageCount: 1 };
+    const readOld = buildConversationSummary({ id: "read-old", latestMessageAt: "2026-04-12T07:00:00.000Z" });
+    const input = [readOld, unreadOld, readNewest, unreadNew];
+
+    expect(sortConversationsForDisplay(input, "recent").map((c) => c.id))
+      .toEqual(["read-newest", "unread-new", "unread-old", "read-old"]);
+    expect(sortConversationsForDisplay(input, "unreadFirst").map((c) => c.id))
+      .toEqual(["unread-new", "unread-old", "read-newest", "read-old"]);
   });
 
   it("uses server message counts while preserving optimistic local counts", () => {

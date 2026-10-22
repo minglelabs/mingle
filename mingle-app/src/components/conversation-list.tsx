@@ -5,6 +5,7 @@ import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { resolveNotificationCopy } from "@/i18n/notification-copy";
+import { conversationSortCopy } from "@/i18n/conversation-sort-copy";
 import NotificationPanel from "@/components/notification-panel";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import SlideSurface from "@/components/slide-surface";
@@ -30,7 +31,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bell, Loader2, LogOut, PencilLine, Search, Share2, Trash2, UserRound } from "lucide-react";
+import { ArrowRight, Bell, Check, Loader2, LogOut, PencilLine, Search, Settings, Share2, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
@@ -94,6 +95,10 @@ import {
   calculateConversationRowTooltipPosForRect,
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
+  CONVERSATION_LIST_SORT_MODES,
+  isConversationListSortMode,
+  sortConversationsForDisplay,
+  type ConversationListSortMode,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   findNativeSttRestoreConversation,
   isConversationListRefreshCurrent,
@@ -183,6 +188,7 @@ import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY }
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 
+const LS_KEY_CONVERSATION_LIST_SORT_MODE = "mingle:conversation-list-sort-mode";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
@@ -1880,6 +1886,9 @@ export default function ConversationList({
     [dictionary, locale],
   );
   const notificationCopy = useMemo(() => resolveNotificationCopy(locale), [locale]);
+  const sortCopy = useMemo(() => conversationSortCopy(locale), [locale]);
+  const [conversationSortMode, setConversationSortMode] = useState<ConversationListSortMode>("recent");
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const roomManagementCopy = useMemo(
     () => resolveLivePhoneDemoRoomManagementCopy(locale),
     [locale],
@@ -2276,7 +2285,7 @@ export default function ConversationList({
   }, [authenticatedUserId, languageOnboardingPhase, sessionStatus]);
 
   const conversationItems = useMemo(
-    () => conversations.map((conversation) => (
+    () => sortConversationsForDisplay(conversations, conversationSortMode).map((conversation) => (
       mapConversationSummaryToItem(
         conversation,
         locale,
@@ -2289,8 +2298,35 @@ export default function ConversationList({
         conversationInterimPreviews[conversation.id],
       )
     )),
-    [conversationInterimPreviews, conversationLocalStats, conversations, copy, locale, timeLabelsReady],
+    [
+      conversationInterimPreviews,
+      conversationLocalStats,
+      conversationSortMode,
+      conversations,
+      copy,
+      locale,
+      timeLabelsReady,
+    ],
   );
+
+  useEffect(() => {
+    try {
+      const storedMode = window.localStorage.getItem(LS_KEY_CONVERSATION_LIST_SORT_MODE);
+      if (isConversationListSortMode(storedMode)) setConversationSortMode(storedMode);
+    } catch {
+      // Storage can be unavailable in private mode; keep the default order.
+    }
+  }, []);
+
+  const handleSelectSortMode = useCallback((mode: ConversationListSortMode) => {
+    setConversationSortMode(mode);
+    setShowSortMenu(false);
+    try {
+      window.localStorage.setItem(LS_KEY_CONVERSATION_LIST_SORT_MODE, mode);
+    } catch {
+      // Best effort: the choice still applies for this session.
+    }
+  }, []);
   const unreadConversationMessageCount = useMemo(
     () => conversations.reduce(
       (total, conversation) => total + Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0)),
@@ -5467,6 +5503,51 @@ export default function ConversationList({
               </span>
             ) : null}
           </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowSortMenu((open) => !open)}
+              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
+              aria-label={sortCopy.menuLabel}
+              aria-haspopup="menu"
+              aria-expanded={showSortMenu}
+            >
+              <Settings size={22} strokeWidth={2} />
+            </button>
+            {showSortMenu ? (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  aria-hidden
+                  onClick={() => setShowSortMenu(false)}
+                />
+                <div
+                  role="menu"
+                  aria-label={sortCopy.title}
+                  className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-2xl border border-gray-100 bg-white py-1 shadow-lg"
+                >
+                  <p className="px-4 pb-1 pt-2 text-[12px] font-semibold text-gray-400">
+                    {sortCopy.title}
+                  </p>
+                  {CONVERSATION_LIST_SORT_MODES.map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={conversationSortMode === mode}
+                      onClick={() => handleSelectSortMode(mode)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left text-[15px] text-slate-800 transition active:bg-gray-100"
+                    >
+                      <span>{sortCopy[mode]}</span>
+                      {conversationSortMode === mode ? (
+                        <Check size={18} strokeWidth={2.5} className="text-slate-900" aria-hidden />
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </div>
         </div>
       </header>
 
