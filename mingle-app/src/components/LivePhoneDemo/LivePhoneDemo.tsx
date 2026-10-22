@@ -237,6 +237,7 @@ import {
   resolveLiveDemoMenuTriggerClassName,
 } from './live-phone-demo.chrome-contract'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
+import { CONVERSATION_TOAST_EVENT } from './conversation-image-save'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
 import { formatLivePhoneDemoLeaveNoticeText, resolveLivePhoneDemoConversationLeaveCopy } from './live-phone-demo.leave-copy'
@@ -6297,9 +6298,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const handleCopySuccess = () => {
       showFloatingToast(copyActionCopy.copiedToastLabel)
     }
+    const handleToast = (event: Event) => {
+      const label = (event as CustomEvent<{ label?: unknown }>).detail?.label
+      if (typeof label === 'string' && label) showFloatingToast(label)
+    }
     window.addEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
+    window.addEventListener(CONVERSATION_TOAST_EVENT, handleToast)
     return () => {
       window.removeEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
+      window.removeEventListener(CONVERSATION_TOAST_EVENT, handleToast)
       if (floatingToastTimerRef.current) clearTimeout(floatingToastTimerRef.current)
     }
   }, [copyActionCopy.copiedToastLabel, showFloatingToast])

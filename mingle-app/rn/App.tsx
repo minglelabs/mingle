@@ -179,6 +179,7 @@ type NativePendingProfileLink = {
 };
 type NativeQrImageModule = {
   savePng?: (dataUrl: string, fileName: string) => Promise<unknown>;
+  saveImage?: (dataUrl: string, fileName: string) => Promise<unknown>;
 };
 type NativePushRegistrationInfo = {
   token?: unknown;
@@ -563,6 +564,9 @@ const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
 const NATIVE_QR_SCANNER_EVENT = 'mingle:native-qr-scanner';
 const NATIVE_QR_SAVE_EVENT = 'mingle:native-qr-save';
+const NATIVE_IMAGE_SAVE_EVENT = 'mingle:native-image-save';
+// Chat photos are at most 2048px JPEG/PNG/WebP; the data URL stays well under this.
+const NATIVE_IMAGE_SAVE_MAX_CHARS = 30_000_000;
 const NATIVE_LOCATION_EVENT = 'mingle:native-location';
 const NATIVE_LOCATION_QUEUE_LIMIT = 8;
 const NATIVE_QR_SCANNER_QUEUE_LIMIT = 8;
@@ -803,6 +807,17 @@ type NativeQrSaveCommand = {
   };
 };
 
+type NativeImageSaveCommand = {
+  type: 'native_image_save';
+  payload?: {
+    requestId?: string;
+    /** Asks only whether this build can save photos; answered with "ready". */
+    probe?: boolean;
+    dataUrl?: string;
+    fileName?: string;
+  };
+};
+
 type NativePushRegisterCommand = {
   type: 'native_push_register';
 };
@@ -878,6 +893,7 @@ type WebViewCommand =
   | NativeAuthResetCommand
   | NativeQrScannerOpenCommand
   | NativeQrSaveCommand
+  | NativeImageSaveCommand
   | NativePushRegisterCommand
   | NativeNavigationStateCommand
   | NativeHistoryDebugCommand
@@ -1067,6 +1083,9 @@ type NativeQrScannerEvent =
 type NativeQrSaveEvent =
   | { type: 'success' }
   | { type: 'error'; message: string };
+type NativeImageSaveEvent =
+  | { type: 'ready' | 'success'; requestId: string }
+  | { type: 'error'; requestId: string; message: string };
 type RecommendUpdatePrompt = {
   title: string;
   message: string;
@@ -2841,6 +2860,58 @@ function AppInner(): React.JSX.Element {
     }
   }, [emitQrSaveToWeb]);
 
+  const emitImageSaveToWeb = useCallback((payload: NativeImageSaveEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) return;
+
+    const serialized = JSON.stringify(payload);
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_IMAGE_SAVE_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  // A chat photo saved to the photo library (Photos / gallery), as sent: JPEG, PNG or WebP.
+  const handleNativeImageSave = useCallback(async (payload?: NativeImageSaveCommand['payload']) => {
+    const requestId = typeof payload?.requestId === 'string' ? payload.requestId.trim().slice(0, 64) : '';
+    const dataUrl = typeof payload?.dataUrl === 'string' ? payload.dataUrl.trim() : '';
+    const fileName = typeof payload?.fileName === 'string' ? payload.fileName.trim() : '';
+    if (!requestId) return;
+    if (payload?.probe === true) {
+      emitImageSaveToWeb({ type: 'ready', requestId });
+      return;
+    }
+
+    const nativeImageModule = (NativeModules as {
+      NativeQrImageModule?: NativeQrImageModule;
+    }).NativeQrImageModule;
+    if (!/^data:image\/(jpeg|png|webp);base64,/i.test(dataUrl) || dataUrl.length > NATIVE_IMAGE_SAVE_MAX_CHARS) {
+      emitImageSaveToWeb({ type: 'error', requestId, message: 'native_image_invalid' });
+      return;
+    }
+    if (!nativeImageModule || typeof nativeImageModule.saveImage !== 'function') {
+      emitImageSaveToWeb({ type: 'error', requestId, message: 'native_image_save_unavailable' });
+      return;
+    }
+
+    try {
+      if (Platform.OS === 'android' && Number(Platform.Version) < 29) {
+        const permission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        );
+        if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+          throw new Error('native_image_photo_permission_denied');
+        }
+      }
+
+      await nativeImageModule.saveImage(dataUrl, fileName || 'hashchat-photo.jpg');
+      emitImageSaveToWeb({ type: 'success', requestId });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (__DEV__) {
+        console.warn(`[NativeImageSave] save failed: ${message}`);
+      }
+      emitImageSaveToWeb({ type: 'error', requestId, message: message || 'native_image_save_failed' });
+    }
+  }, [emitImageSaveToWeb]);
+
   const emitPushRegistrationToWeb = useCallback((payload: NativePushRegistrationInfo) => {
     const normalizedPayload: NativePushRegistrationInfo = {
       ...payload,
@@ -3967,6 +4038,11 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_image_save') {
+      void handleNativeImageSave(parsed.payload);
+      return;
+    }
+
     if (
       parsed.type === 'native_pip_start'
       || parsed.type === 'native_pip_update'
@@ -4271,6 +4347,7 @@ function AppInner(): React.JSX.Element {
     handleNativeLocationCheck,
     handleNativeLocationRequest,
     handleNativeQrSave,
+    handleNativeImageSave,
     handleNativeStart,
     handleNativeStop,
     handleNativeStatusRequest,

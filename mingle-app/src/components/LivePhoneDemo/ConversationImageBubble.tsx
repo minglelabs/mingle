@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { type ConversationMessageImage } from '@/lib/conversation-image'
 import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
 import ConversationImageViewer from './ConversationImageViewer'
+import { announceConversationToast, conversationImageFileName, saveConversationImage } from './conversation-image-save'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
 import { useConversationImageGallery } from './conversation-image-gallery-context'
 import { conversationImagePath, conversationImageSrc, findConversationImageIndex } from './conversation-image-gallery.logic'
@@ -26,8 +27,14 @@ export default function ConversationImageBubble({ image, locale }: { image: Conv
   )
   const path = conversationImagePath(image)
   const src = conversationImageSrc(image, retry)
+  const save = useCallback(async () => {
+    announceConversationToast(copy.savingPhoto)
+    const result = await saveConversationImage(conversationImagePath(image), conversationImageFileName(image.messageId))
+    announceConversationToast(result === 'saved' ? copy.photoSaved : result === 'permission' ? copy.photoSavePermission : copy.photoSaveFailed)
+  }, [copy, image])
   return <>
     <CopyableBubbleSurface text={typeof window === 'undefined' ? path : new URL(path, window.location.origin).href} copyBubbleLabel={copy.copyLink}
+      saveLabel={failed ? undefined : copy.savePhoto} onSave={() => { void save() }}
       onActivate={() => { if (!failed) setExpanded(true) }} role="button" aria-label={copy.image}
       className="w-[240px] max-w-full shrink overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
       {failed ? <div className="p-4 text-sm text-slate-500"><p>{copy.loadError}</p><button type="button" className="min-h-11 text-sky-700" onClick={event => { event.stopPropagation(); setFailed(false); setRetry(value => value + 1) }}>{copy.retry}</button></div> :
