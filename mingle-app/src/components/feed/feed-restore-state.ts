@@ -6,8 +6,10 @@ import type { FeedSource } from "@/lib/feed-routes";
  * post's expand + read (scroll) position.
  *
  * Backed by `sessionStorage` so it survives a client route change within the
- * tab but not a full app restart. A missing / corrupt entry degrades to "start
- * from the top", never an error.
+ * tab. It is also mirrored to `localStorage` for a while, because iOS kills the
+ * backgrounded app and the next launch reopens the feed in a fresh WebView
+ * process whose `sessionStorage` is empty. A missing / corrupt entry degrades
+ * to "start from the top", never an error.
  */
 
 export type FeedPostViewState = {
@@ -21,6 +23,9 @@ export type FeedRestoreState = {
 };
 
 const STORAGE_PREFIX = "mingle:feed-restore:";
+const DURABLE_STORAGE_PREFIX = "mingle:feed-restore-durable:";
+// Matches the native shell's restore URL TTL.
+export const FEED_DURABLE_RESTORE_TTL_MS = 12 * 60 * 60 * 1000;
 
 export function feedSourceCacheKey(source: FeedSource): string {
   switch (source.kind) {
@@ -88,6 +93,44 @@ function defaultStorage(): RestoreStorage | null {
   }
 }
 
+function defaultDurableStorage(): RestoreStorage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readDurableRestoreState(raw: string | null, nowMs: number): FeedRestoreState | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { savedAtMs?: unknown; state?: unknown };
+    if (typeof parsed?.savedAtMs !== "number" || nowMs - parsed.savedAtMs > FEED_DURABLE_RESTORE_TTL_MS) {
+      return null;
+    }
+    return parseRestoreState(JSON.stringify(parsed.state ?? null));
+  } catch {
+    return null;
+  }
+}
+
+/** Sign-out / account switch: the next account must not reopen this feed position. */
+export function clearDurableFeedRestoreStates(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const storage = window.localStorage;
+    const keys: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(DURABLE_STORAGE_PREFIX)) keys.push(key);
+    }
+    keys.forEach((key) => storage.removeItem(key));
+  } catch {
+    // Ignore.
+  }
+}
+
 function parseRestoreState(raw: string | null): FeedRestoreState | null {
   if (!raw) return null;
   try {
@@ -115,13 +158,23 @@ export type FeedRestoreSession = {
 export function createFeedRestoreSession(
   source: FeedSource,
   storage: RestoreStorage | null = defaultStorage(),
+  durableStorage: RestoreStorage | null = defaultDurableStorage(),
+  nowMs = Date.now(),
 ): FeedRestoreSession {
   const key = storageKey(source);
+  const durableKey = `${DURABLE_STORAGE_PREFIX}${feedSourceCacheKey(source)}`;
   let initial: FeedRestoreState | null = null;
   try {
     initial = storage ? parseRestoreState(storage.getItem(key)) : null;
   } catch {
     initial = null;
+  }
+  if (!initial) {
+    try {
+      initial = durableStorage ? readDurableRestoreState(durableStorage.getItem(durableKey), nowMs) : null;
+    } catch {
+      initial = null;
+    }
   }
   let ready = false;
   return {
@@ -133,9 +186,14 @@ export function createFeedRestoreSession(
       ready = true;
     },
     persist(state) {
-      if (!ready || !storage) return;
+      if (!ready) return;
       try {
-        storage.setItem(key, JSON.stringify(state));
+        storage?.setItem(key, JSON.stringify(state));
+      } catch {
+        // Storage full / disabled — restore is best-effort.
+      }
+      try {
+        durableStorage?.setItem(durableKey, JSON.stringify({ savedAtMs: Date.now(), state }));
       } catch {
         // Storage full / disabled — restore is best-effort.
       }

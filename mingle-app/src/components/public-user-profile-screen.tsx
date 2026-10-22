@@ -545,7 +545,7 @@ export default function PublicUserProfileScreen({
         <div aria-hidden="true" />
       </header>
 
-      <div ref={profileScrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={profileScrollRef} data-restore-scroll="user-profile" className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex justify-center px-4 pt-12 text-gray-400" aria-live="polite">
             <Loader2 size={26} className="animate-spin" aria-label={copy.loading} />

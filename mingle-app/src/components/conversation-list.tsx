@@ -5558,6 +5558,7 @@ export default function ConversationList({
 
       <div
         ref={conversationListScrollRef}
+        data-restore-scroll="conversation-list"
         className="min-h-0 flex-1 overflow-y-auto"
         style={{
           paddingTop: effectiveNativeTopInsetPx > 0 ? `${effectiveNativeTopInsetPx}px` : "0px",

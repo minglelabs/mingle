@@ -639,6 +639,7 @@ export default function NotificationPanel({
             </header>
 
             <div
+              data-restore-scroll="notifications"
               className="min-h-0 flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
               style={{
                 paddingTop: nativeTopInsetPx > 0 ? `${Math.round(nativeTopInsetPx)}px` : undefined,

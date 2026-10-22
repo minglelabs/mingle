@@ -3,6 +3,7 @@ import {
   createDeepLinkCommentLatch,
   createFeedRestoreSession,
   planFeedStart,
+  FEED_DURABLE_RESTORE_TTL_MS,
   type FeedRestoreState,
 } from "./feed-restore-state";
 
@@ -114,5 +115,38 @@ describe("createDeepLinkCommentLatch (open the sheet once)", () => {
   it("never fires without both ids", () => {
     expect(createDeepLinkCommentLatch("p1", null).take(() => true)).toBeNull();
     expect(createDeepLinkCommentLatch(null, "c1").take(() => true)).toBeNull();
+  });
+});
+
+describe("createFeedRestoreSession (after the app process was killed)", () => {
+  const DURABLE_KEY = "mingle:feed-restore-durable:home";
+
+  it("falls back to the durable copy when sessionStorage starts empty", () => {
+    const durable = memoryStorage({ [DURABLE_KEY]: JSON.stringify({ savedAtMs: 1000, state: saved }) });
+    const session = createFeedRestoreSession({ kind: "home" }, memoryStorage(), durable, 2000);
+    expect(session.initial).toEqual(saved);
+  });
+
+  it("ignores an expired durable copy and prefers the in-tab state", () => {
+    const durable = memoryStorage({ [DURABLE_KEY]: JSON.stringify({ savedAtMs: 1000, state: saved }) });
+    expect(createFeedRestoreSession({ kind: "home" }, memoryStorage(), durable, 1001 + FEED_DURABLE_RESTORE_TTL_MS).initial)
+      .toBeNull();
+
+    const inTab: FeedRestoreState = { activePostId: "p9", posts: {} };
+    const session = createFeedRestoreSession(
+      { kind: "home" },
+      memoryStorage({ [HOME_KEY]: JSON.stringify(inTab) }),
+      durable,
+      2000,
+    );
+    expect(session.initial).toEqual(inTab);
+  });
+
+  it("mirrors writes to the durable copy", () => {
+    const durable = memoryStorage();
+    const session = createFeedRestoreSession({ kind: "home" }, memoryStorage(), durable, 2000);
+    session.markReady();
+    session.persist(saved);
+    expect(JSON.parse(durable.data.get(DURABLE_KEY) ?? "null")?.state).toEqual(saved);
   });
 });

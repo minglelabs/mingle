@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Appearance,
   AppState,
   BackHandler,
   Image,
@@ -110,11 +112,14 @@ import {
   shouldOpenNativeExternalUrl,
 } from './src/externalNavigation';
 import {
-  buildConversationRestoreWebUrl,
+  buildWebRestoreWebUrl,
   classifyConversationWebUrl,
-  readNativeConversationRestorePayload,
+  readNativeLastScreenSnapshot,
+  readNativeWebRestorePayload,
   resolveConversationRestorePayloadFromUrl,
-  type NativeConversationRestorePayload,
+  resolveWebRestorePayloadFromUrl,
+  type NativeLastScreenSnapshot,
+  type NativeWebRestorePayload,
 } from './src/webViewRestore';
 import {
   resolveNativeBannerNavigationState,
@@ -164,6 +169,13 @@ type NativeRuntimeConfig = {
   conversationRestoreUrl?: string;
   conversationRestoreConversationId?: string;
   conversationRestoreCreatedAtMs?: string | number;
+  lastScreenSnapshotPath?: string;
+  lastScreenSnapshotCreatedAtMs?: string | number;
+  lastScreenSnapshotWidth?: string | number;
+  lastScreenSnapshotHeight?: string | number;
+  lastScreenSnapshotColorScheme?: string;
+  // iOS: the process was launched by a URL, universal link or notification tap.
+  launchedFromExternalIntent?: string | boolean;
 };
 type NativeConversationRestoreStorageModule = {
   rememberConversationRestoreUrl?: (
@@ -172,6 +184,10 @@ type NativeConversationRestoreStorageModule = {
     createdAtMs: number,
   ) => Promise<unknown> | void;
   clearConversationRestoreUrl?: () => Promise<unknown> | void;
+  // iOS only. While enabled, the native side captures the window when the app
+  // resigns active so the next cold start can show it instead of the splash.
+  setLastScreenSnapshotEnabled?: (enabled: boolean) => void;
+  clearLastScreenSnapshot?: () => Promise<unknown> | void;
   getPendingProfileLink?: () => Promise<NativePendingProfileLink | null>;
   clearPendingProfileLink?: (sequence: number) => Promise<unknown> | void;
   recordHistoryDebug?: (payload: string) => Promise<unknown> | void;
@@ -464,6 +480,14 @@ function openNativeExternalUrl(rawUrl: string): void {
 const RN_RUNTIME_OS = Platform.OS;
 const NATIVE_RUNTIME_CONFIG = readNativeRuntimeConfig();
 const NATIVE_CONVERSATION_RESTORE_STORAGE = (NativeModules.NativeRuntimeConfigModule || {}) as NativeConversationRestoreStorageModule;
+// A cold start that carries its own destination must not reopen (or flash a
+// capture of) the previous screen first.
+const LAUNCHED_FROM_EXTERNAL_INTENT = NATIVE_RUNTIME_CONFIG.launchedFromExternalIntent === true
+  || NATIVE_RUNTIME_CONFIG.launchedFromExternalIntent === '1';
+const LAST_SCREEN_SNAPSHOT_FADE_MS = 180;
+// Fallbacks for a web build that never sends native_web_restore_ready.
+const LAST_SCREEN_SNAPSHOT_AFTER_LOAD_MAX_MS = 3000;
+const LAST_SCREEN_SNAPSHOT_MAX_MS = 10000;
 const RUNTIME_WEB_APP_BASE_URL = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.webAppBaseUrl,
   readRuntimeEnvValue(['NEXT_PUBLIC_SITE_URL', 'RN_WEB_APP_BASE_URL']),
@@ -857,6 +881,17 @@ type NativeRemountWebViewCommand = {
   };
 };
 
+// The web finished re-applying its saved screen state (scroll positions) after
+// a cold start, so the last-screen capture covering it can fade out.
+type NativeWebRestoreReadyCommand = {
+  type: 'native_web_restore_ready';
+};
+
+// Signed out or switched accounts: forget the last screen and its capture.
+type NativeWebRestoreResetCommand = {
+  type: 'native_web_restore_reset';
+};
+
 type NativeQaSetSttStatusCommand = {
   type: 'native_qa_set_stt_status';
   payload?: {
@@ -890,6 +925,8 @@ type WebViewCommand =
   | NativeSetBannerZoneCommand
   | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand
+  | NativeWebRestoreReadyCommand
+  | NativeWebRestoreResetCommand
   | NativeQaSetSttStatusCommand
   | NativePictureInPictureCommand;
 
@@ -1043,6 +1080,11 @@ type NativeUiEvent = {
   position: NativeBannerPosition;
   topInsetPx: number;
   bottomInsetPx: number;
+} | {
+  // Sent as the app leaves / regains the foreground, so the page can save its
+  // screen state even if WKWebView's own visibilitychange arrives too late.
+  type: 'app_lifecycle';
+  state: 'background' | 'active';
 };
 
 type NativeAuthEvent =
@@ -1509,7 +1551,7 @@ function AppInner(): React.JSX.Element {
   // once the overlay state setters it clears on success exist.
   const loadAttemptTrackerRef = useRef<WebViewLoadAttemptTracker | null>(null);
   const latestNativePipEventRef = useRef<NativePipEvent | null>(null);
-  const { width: windowWidthPx } = useWindowDimensions();
+  const { width: windowWidthPx, height: windowHeightPx } = useWindowDimensions();
   const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
     createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion, RUNTIME_INSTALL_SOURCE),
   );
@@ -1700,62 +1742,61 @@ function AppInner(): React.JSX.Element {
       clientBuild: RUNTIME_CLIENT_INFO.clientBuild,
     });
   }, [defaultNativeBannerPosition, nativeAvailable, nativeInitialBannerInsetPx, webLocale]);
-  const initialConversationRestorePayloadRef = useRef<NativeConversationRestorePayload | null>(
-    readNativeConversationRestorePayload(NATIVE_RUNTIME_CONFIG),
+  const initialWebRestorePayloadRef = useRef<NativeWebRestorePayload | null>(
+    LAUNCHED_FROM_EXTERNAL_INTENT ? null : readNativeWebRestorePayload(NATIVE_RUNTIME_CONFIG),
   );
-  const [conversationRestoreUrlHint, setConversationRestoreUrlHint] = useState(
-    () => initialConversationRestorePayloadRef.current?.url || '',
-  );
-  const lastConversationRestoreUrlRef = useRef(conversationRestoreUrlHint);
-  const persistConversationRestoreUrl = useCallback((payload: NativeConversationRestorePayload) => {
-    lastConversationRestoreUrlRef.current = payload.url;
-    setConversationRestoreUrlHint((current) => (current === payload.url ? current : payload.url));
+  const lastWebRestoreUrlRef = useRef(initialWebRestorePayloadRef.current?.url || '');
+  const currentWebRestorableRef = useRef(Boolean(initialWebRestorePayloadRef.current));
+  const persistWebRestoreUrl = useCallback((payload: NativeWebRestorePayload, force: boolean) => {
+    // Every web command re-reports the current URL; only write when the
+    // screen changed, or when leaving the foreground to refresh the TTL.
+    if (!force && lastWebRestoreUrlRef.current === payload.url) return;
+    lastWebRestoreUrlRef.current = payload.url;
     try {
       void NATIVE_CONVERSATION_RESTORE_STORAGE.rememberConversationRestoreUrl?.(
         payload.url,
-        payload.conversationId,
+        payload.restoreKey,
         payload.createdAtMs,
       );
     } catch {
       // Ignore native persistence failures; the current RN process still keeps the restore hint.
     }
   }, []);
-  const clearConversationRestoreUrl = useCallback(() => {
-    if (!lastConversationRestoreUrlRef.current && !conversationRestoreUrlHint) return;
-    lastConversationRestoreUrlRef.current = '';
-    setConversationRestoreUrlHint('');
-    // Also clear the initial-restore latch so that a subsequent remount
-    // does not reload the old ?conversation=... source URL.  This is a ref-only
+  const clearWebRestoreUrl = useCallback(() => {
+    // Also clear the initial-restore latch so that subsequent fallback/remount
+    // does not reload the old restored source URL.  This is a ref-only
     // write: no state change, no re-render, no WebView reload.
     initialRestoreUrlRef.current = '';
+    if (!lastWebRestoreUrlRef.current) return;
+    lastWebRestoreUrlRef.current = '';
     try {
       void NATIVE_CONVERSATION_RESTORE_STORAGE.clearConversationRestoreUrl?.();
     } catch {
       // Ignore native persistence failures.
     }
-  }, [conversationRestoreUrlHint]);
-  const syncConversationRestoreFromUrl = useCallback((nextUrl?: string) => {
+  }, []);
+  const syncWebRestoreFromUrl = useCallback((nextUrl?: string, force = false) => {
     const normalizedUrl = typeof nextUrl === 'string' ? nextUrl.trim() : '';
     if (!normalizedUrl || normalizedUrl.startsWith('about:') || normalizedUrl.startsWith('data:')) return null;
-    const webUrlKind = classifyConversationWebUrl(normalizedUrl);
-    if (webUrlKind === 'room') {
-      const payload = resolveConversationRestorePayloadFromUrl(normalizedUrl);
-      if (payload) {
-        persistConversationRestoreUrl(payload);
-      }
-      return payload;
+    const payload = resolveWebRestorePayloadFromUrl(normalizedUrl);
+    currentWebRestorableRef.current = Boolean(payload);
+    if (!payload) {
+      clearWebRestoreUrl();
+      return null;
     }
-    if (webUrlKind === 'list' || webUrlKind === null) {
-      clearConversationRestoreUrl();
+    if (payload.restoreKey !== initialWebRestorePayloadRef.current?.restoreKey) {
+      // The user left the restored screen; a later remount must not jump back.
+      initialRestoreUrlRef.current = '';
     }
-    return null;
-  }, [clearConversationRestoreUrl, persistConversationRestoreUrl]);
+    persistWebRestoreUrl(payload, force);
+    return payload;
+  }, [clearWebRestoreUrl, persistWebRestoreUrl]);
   const rememberCurrentWebUrl = useCallback((nextUrl?: string) => {
     const normalizedUrl = typeof nextUrl === 'string' ? nextUrl.trim() : '';
     if (!normalizedUrl || normalizedUrl.startsWith('about:') || normalizedUrl.startsWith('data:')) return;
     lastWebViewUrlRef.current = normalizedUrl;
-    syncConversationRestoreFromUrl(normalizedUrl);
-  }, [syncConversationRestoreFromUrl]);
+    syncWebRestoreFromUrl(normalizedUrl);
+  }, [syncWebRestoreFromUrl]);
   const clearPendingProfileRouteRetries = useCallback(() => {
     pendingProfileRouteRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
     pendingProfileRouteRetryTimersRef.current = [];
@@ -2170,7 +2211,7 @@ function AppInner(): React.JSX.Element {
   useEffect(() => {
     if (
       NATIVE_RUNTIME_CONFIG.conversationRestoreUrl
-      && !initialConversationRestorePayloadRef.current
+      && !initialWebRestorePayloadRef.current
     ) {
       try {
         void NATIVE_CONVERSATION_RESTORE_STORAGE.clearConversationRestoreUrl?.();
@@ -2246,18 +2287,18 @@ function AppInner(): React.JSX.Element {
   const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
   const devWebViewRequestScopeRef = useRef(`wv-${Date.now().toString(36)}`);
   // Latch the initial restore URL once at mount time.
-  // This ref is only cleared after the WebView reaches the conversation list.
+  // This ref is cleared once the WebView leaves the restored screen.
   // It is the only restore input allowed to affect
-  // webViewSource.uri for restore purposes.  Post-mount room/list navigation
+  // webViewSource.uri for restore purposes.  Post-mount navigation
   // updates native storage/ref only and must NOT reach webViewSource to avoid
   // triggering full WebView reloads.
   const initialRestoreUrlRef = useRef(
-    initialConversationRestorePayloadRef.current?.url || '',
+    initialWebRestorePayloadRef.current?.url || '',
   );
   const webUrl = useMemo(() => {
-    // Combine the fixed restore conversationId with the current baseWebUrl so that
+    // Combine the fixed restore screen with the current baseWebUrl so that
     // locale/host changes are still reflected while the restore target stays latched.
-    const initialRestoreWebUrl = buildConversationRestoreWebUrl(
+    const initialRestoreWebUrl = buildWebRestoreWebUrl(
       baseWebUrl,
       initialRestoreUrlRef.current,
     );
@@ -2296,6 +2337,81 @@ function AppInner(): React.JSX.Element {
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // On a cold start that restores the previous screen, cover the loading
+  // WebView with a capture of that screen instead of the splash, until the
+  // page reports that its saved state is back.
+  const [lastScreenSnapshot, setLastScreenSnapshot] = useState<NativeLastScreenSnapshot | null>(() => {
+    if (Platform.OS !== 'ios' || !webUrl || !initialRestoreUrlRef.current) return null;
+    return readNativeLastScreenSnapshot(NATIVE_RUNTIME_CONFIG, {
+      width: windowWidthPx,
+      height: windowHeightPx,
+      colorScheme: Appearance.getColorScheme(),
+    });
+  });
+  const lastScreenSnapshotOpacity = useRef(new Animated.Value(1)).current;
+  const lastScreenSnapshotHidingRef = useRef(false);
+  const hideLastScreenSnapshot = useCallback((animated = true) => {
+    if (lastScreenSnapshotHidingRef.current) return;
+    lastScreenSnapshotHidingRef.current = true;
+    if (!animated) {
+      setLastScreenSnapshot(null);
+      return;
+    }
+    Animated.timing(lastScreenSnapshotOpacity, {
+      toValue: 0,
+      duration: LAST_SCREEN_SNAPSHOT_FADE_MS,
+      useNativeDriver: true,
+    }).start(() => setLastScreenSnapshot(null));
+  }, [lastScreenSnapshotOpacity]);
+  const lastScreenSnapshotVisible = lastScreenSnapshot !== null;
+  useEffect(() => {
+    if (!lastScreenSnapshotVisible) return;
+    const timer = setTimeout(() => hideLastScreenSnapshot(), LAST_SCREEN_SNAPSHOT_MAX_MS);
+    return () => clearTimeout(timer);
+  }, [hideLastScreenSnapshot, lastScreenSnapshotVisible]);
+  useEffect(() => {
+    // An error overlay or a different first screen must never sit under a
+    // picture of the old one.
+    if (lastScreenSnapshotVisible && loadError) hideLastScreenSnapshot(false);
+  }, [hideLastScreenSnapshot, lastScreenSnapshotVisible, loadError]);
+  useEffect(() => {
+    if (!lastScreenSnapshotVisible || startupSplashVisible) return;
+    // The page loaded; an older web build never sends native_web_restore_ready.
+    const timer = setTimeout(() => hideLastScreenSnapshot(), LAST_SCREEN_SNAPSHOT_AFTER_LOAD_MAX_MS);
+    return () => clearTimeout(timer);
+  }, [hideLastScreenSnapshot, lastScreenSnapshotVisible, startupSplashVisible]);
+  // Let the native side capture the window on resign-active only while it
+  // shows a settled, restorable screen of this account.
+  const lastScreenSnapshotCaptureEnabledRef = useRef<boolean | null>(null);
+  const syncLastScreenSnapshotCapture = useCallback(() => {
+    if (Platform.OS !== 'ios') return;
+    const enabled = currentWebRestorableRef.current
+      && initialLoadSettledRef.current
+      && !startupSplashVisible
+      && !lastScreenSnapshotVisible
+      && !loadError;
+    if (lastScreenSnapshotCaptureEnabledRef.current === enabled) return;
+    lastScreenSnapshotCaptureEnabledRef.current = enabled;
+    try {
+      NATIVE_CONVERSATION_RESTORE_STORAGE.setLastScreenSnapshotEnabled?.(enabled);
+    } catch {
+      // Older native builds have no capture support.
+    }
+  }, [lastScreenSnapshotVisible, loadError, startupSplashVisible]);
+  useEffect(() => {
+    syncLastScreenSnapshotCapture();
+  }, [syncLastScreenSnapshotCapture]);
+  const resetWebRestoreState = useCallback(() => {
+    clearWebRestoreUrl();
+    currentWebRestorableRef.current = false;
+    syncLastScreenSnapshotCapture();
+    hideLastScreenSnapshot(false);
+    try {
+      void NATIVE_CONVERSATION_RESTORE_STORAGE.clearLastScreenSnapshot?.();
+    } catch {
+      // Ignore native persistence failures.
+    }
+  }, [clearWebRestoreUrl, hideLastScreenSnapshot, syncLastScreenSnapshotCapture]);
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null);
   const [currentWebPathname, setCurrentWebPathname] = useState(() => parseWebPathname(webUrl));
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
@@ -2480,19 +2596,20 @@ function AppInner(): React.JSX.Element {
     };
   }, [nativeBannerPosition, nativeBannerUnitId]);
 
+  // Ads are re-requested on every return to the foreground anyway
+  // (nativeBannerReloadToken), so drop the banner views while backgrounded to
+  // lower the memory footprint iOS weighs when picking apps to terminate.
+  const [isAppBackgrounded, setIsAppBackgrounded] = useState(() => AppState.currentState === 'background');
   useEffect(() => {
-    let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
-      const leavingActive = previousState === 'active' && nextState !== 'active';
-      previousState = nextState;
-      if (!leavingActive) return;
-      syncConversationRestoreFromUrl(lastWebViewUrlRef.current);
+      if (nextState === 'background') setIsAppBackgrounded(true);
+      else if (nextState === 'active') setIsAppBackgrounded(false);
     });
 
     return () => {
       subscription.remove();
     };
-  }, [syncConversationRestoreFromUrl]);
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -3345,6 +3462,28 @@ function AppInner(): React.JSX.Element {
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
+  useEffect(() => {
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const leavingActive = previousState === 'active' && nextState !== 'active';
+      const becameActive = previousState !== 'active' && nextState === 'active';
+      previousState = nextState;
+      if (becameActive) {
+        emitUiToWeb({ type: 'app_lifecycle', state: 'active' });
+        return;
+      }
+      if (!leavingActive) return;
+      // Refresh the stored screen and its TTL: this may be the last chance
+      // before iOS kills the backgrounded process.
+      syncWebRestoreFromUrl(lastWebViewUrlRef.current, true);
+      emitUiToWeb({ type: 'app_lifecycle', state: 'background' });
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [emitUiToWeb, syncWebRestoreFromUrl]);
+
   const emitBannerLayoutToWeb = useCallback(() => {
     if (!nativeBannerUnitId) return;
     const shouldReserveListTopInset = !shouldHideNativeBanners
@@ -3940,6 +4079,7 @@ function AppInner(): React.JSX.Element {
       ? ((event.nativeEvent as { url: string }).url)
       : '';
     rememberCurrentWebUrl(sourceUrl);
+    syncLastScreenSnapshotCapture();
 
     let parsed: WebViewCommand | null = null;
     try {
@@ -4026,6 +4166,7 @@ function AppInner(): React.JSX.Element {
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
       rememberCurrentWebUrl(url);
+      syncLastScreenSnapshotCapture();
       if (typeof parsed.payload?.canGoBack === 'boolean') {
         setCanWebViewGoBack(parsed.payload.canGoBack);
       }
@@ -4065,6 +4206,16 @@ function AppInner(): React.JSX.Element {
       const updateUrl = requestedUrl || nativeAppUpdateRef.current.updateUrl.trim();
       if (!updateUrl) return;
       void Linking.openURL(updateUrl);
+      return;
+    }
+
+    if (parsed.type === 'native_web_restore_ready') {
+      hideLastScreenSnapshot();
+      return;
+    }
+
+    if (parsed.type === 'native_web_restore_reset') {
+      resetWebRestoreState();
       return;
     }
 
@@ -4270,6 +4421,8 @@ function AppInner(): React.JSX.Element {
     clearAuthDispatchRetryTimer,
     emitTtsToWeb,
     handleDebugWebViewRemount,
+    hideLastScreenSnapshot,
+    resetWebRestoreState,
     handleNativeAuthStart,
     handleNativeLocationCheck,
     handleNativeLocationRequest,
@@ -4280,6 +4433,7 @@ function AppInner(): React.JSX.Element {
     enqueueNativeSttCommand,
     flushPendingNativeSttMessagesToWeb,
     rememberCurrentWebUrl,
+    syncLastScreenSnapshotCapture,
     updateSafeAreaPalette,
   ]);
 
@@ -4838,10 +4992,11 @@ function AppInner(): React.JSX.Element {
 
   const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
     rememberCurrentWebUrl(navigationState.url);
+    syncLastScreenSnapshotCapture();
     setCurrentWebPathname(parseWebPathname(navigationState.url));
     prepareBannerZoneTransition(navigationState.url);
     updateSafeAreaPalette(navigationState.url);
-  }, [prepareBannerZoneTransition, rememberCurrentWebUrl, updateSafeAreaPalette]);
+  }, [prepareBannerZoneTransition, rememberCurrentWebUrl, syncLastScreenSnapshotCapture, updateSafeAreaPalette]);
 
   useEffect(() => {
     if (versionGate.status === 'force_update' && !initialLoadSettledRef.current) {
@@ -5021,7 +5176,21 @@ function AppInner(): React.JSX.Element {
           />
         </View>
       ) : null}
-      {canRenderNativeBanner ? (
+      {lastScreenSnapshot ? (
+        <Animated.View
+          style={[styles.lastScreenSnapshotOverlay, { opacity: lastScreenSnapshotOpacity }]}
+        >
+          <Image
+            alt=""
+            source={{ uri: lastScreenSnapshot.uri, cache: 'reload' }}
+            resizeMode="cover"
+            fadeDuration={0}
+            style={styles.lastScreenSnapshotImage}
+            onError={() => hideLastScreenSnapshot(false)}
+          />
+        </Animated.View>
+      ) : null}
+      {canRenderNativeBanner && !isAppBackgrounded ? (
         <>
           <NativeAdBanner
             adModule={nativeAdModule}
@@ -5111,6 +5280,15 @@ const styles = StyleSheet.create({
   startupSplashLogo: {
     width: 180,
     height: 180,
+  },
+  lastScreenSnapshotOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#ffffff',
+    zIndex: 31,
+  },
+  lastScreenSnapshotImage: {
+    width: '100%',
+    height: '100%',
   },
   errorOverlay: {
     position: 'absolute',

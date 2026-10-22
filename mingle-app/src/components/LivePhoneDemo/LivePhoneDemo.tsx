@@ -263,6 +263,7 @@ import {
   type NativePipState,
 } from '@/lib/native-pip'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
+import { RESTORE_SCROLL_EVENT } from '@/lib/webview-state-restore'
 import {
   buildNativeRemountRestoreUrl,
   rememberNativeRemountRestoreConversation,
@@ -5852,6 +5853,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     userScrollIntentUntilRef.current = Date.now() + USER_SCROLL_INTENT_WINDOW_MS
   }, [])
 
+  // Re-applying the position saved before an OS kill is the user's own scroll
+  // position coming back: it must stop auto-follow just like a manual scroll.
+  useEffect(() => {
+    const node = chatRef.current
+    if (!node) return
+    node.addEventListener(RESTORE_SCROLL_EVENT, markUserScrollIntent)
+    return () => {
+      node.removeEventListener(RESTORE_SCROLL_EVENT, markUserScrollIntent)
+    }
+  }, [markUserScrollIntent])
+
   const isUserScrollIntentActive = useCallback(() => {
     return Date.now() <= userScrollIntentUntilRef.current
   }, [])
@@ -8588,6 +8600,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             <div
               ref={chatRef}
               data-qa="live-demo-chat-scroll"
+              data-restore-scroll="conversation-room"
+              data-restore-anchor="data-utterance-id"
+              data-restore-scroll-default="end"
               onScroll={handleScroll}
               onWheel={markUserScrollIntent}
               onTouchMove={markUserScrollIntent}

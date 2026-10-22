@@ -295,7 +295,7 @@ export default function FollowListScreen({
           <div aria-hidden="true" />
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pb-8">
+        <div data-restore-scroll="follow-list" className="min-h-0 flex-1 overflow-y-auto pb-8">
           <div className="border-b border-gray-100 px-4 pt-3">
             <div className="flex rounded-xl bg-gray-50 p-1" role="tablist" aria-label={`${labels.followers} / ${labels.following}`}>
               {(["followers", "following"] as const).map((tab) => (

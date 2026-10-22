@@ -11,6 +11,7 @@ import NativeBannerRouteGuard from "@/components/native-banner-route-guard";
 import NativeProfileLinkOverlay from "@/components/native-profile-link-overlay";
 import NativeConversationShareOverlay from "@/components/native-conversation-share-overlay";
 import NativePushTapReceiver from "@/components/native-push-tap-receiver";
+import WebViewStateRestore from "@/components/webview-state-restore";
 import RouteTransitionCurtain from "@/components/route-transition-curtain";
 import PostHogAnalyticsProvider from "@/components/posthog-analytics-provider";
 import { TtsSettingsProvider } from "@/context/tts-settings";
@@ -104,6 +105,7 @@ export default async function RootLayout({
                 <NativeConversationShareOverlay />
                 <NativePushTapReceiver />
                 <NativeBannerRouteGuard />
+                <WebViewStateRestore />
                 <RouteTransitionCurtain />
               </MobileCanvasShell>
               <Toaster

@@ -2444,7 +2444,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         </button>
       </header>
 
-      <div ref={profileScrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={profileScrollRef} data-restore-scroll="mypage" className="min-h-0 flex-1 overflow-y-auto">
         <section className="px-4 pb-4 pt-5">
           <div className="flex items-center gap-6 pl-2">
             <div className="flex shrink-0 flex-col items-center">
