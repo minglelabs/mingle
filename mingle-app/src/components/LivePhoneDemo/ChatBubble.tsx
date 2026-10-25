@@ -23,6 +23,7 @@ import ConversationImageBubble from './ConversationImageBubble'
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
 import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
 import { MessageRecallScope } from './MessageRecall'
+import { MessageReadReceipt } from './MessageReadReceipts'
 import { messageRecallCopy } from '@/lib/message-recall'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
@@ -1303,6 +1304,14 @@ function ChatBubble({
       data-chat-bubble-other-meta={isOwnMessage ? undefined : true}
       className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
+      {!isDraft && !isRecalled && (
+        <MessageReadReceipt
+          senderUserId={utterance.speakerUserId}
+          createdAtMs={utterance.createdAtMs}
+          locale={uiLocale}
+          align={isOwnMessage ? 'right' : 'left'}
+        />
+      )}
       {bubbleTimestamp}
       {!messageImage && !isRecalled && bubbleControls}
     </div>

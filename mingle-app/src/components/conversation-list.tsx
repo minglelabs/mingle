@@ -181,6 +181,7 @@ import {
 import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
+import { resolveAccessibilityCopy } from "@/i18n/accessibility-copy";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
@@ -5426,7 +5427,7 @@ export default function ConversationList({
           className="absolute inset-0 z-[300] flex min-h-0 w-full items-center justify-center bg-[#fcfbf8]"
           role="status"
           aria-live="polite"
-          aria-label={locale === "ko" ? "Mingle 준비 중" : "Preparing Mingle"}
+          aria-label={resolveAccessibilityCopy(locale).preparingApp}
         >
           <div className="flex flex-col items-center gap-5">
             <MingleWordmark />
@@ -5440,7 +5441,7 @@ export default function ConversationList({
           className="absolute inset-0 z-[199] bg-transparent"
           role="status"
           aria-live="polite"
-          aria-label={locale === "ko" ? "계정 확인 중" : "Checking account"}
+          aria-label={resolveAccessibilityCopy(locale).checkingAccount}
         />
       ) : null}
 

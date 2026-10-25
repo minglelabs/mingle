@@ -2,6 +2,7 @@
 
 import { normalizeConversationMessageImage } from '@/lib/conversation-image'
 import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
+import { MESSAGE_READ_RECEIPTS_REFRESH_EVENT } from '@/lib/message-read-receipts'
 import { MESSAGE_RECALLED_EVENT, normalizeRecalledMessageIds, type MessageRecalledEventDetail } from '@/lib/message-recall'
 import { parseSttServerError } from '@/lib/stt-server-error'
 
@@ -4111,6 +4112,10 @@ export default function useRealtimeSTT({
           try {
             const frame = JSON.parse(event.data)
             if (socketSessionKey && frame.sessionKey !== socketSessionKey) return
+            if (frame.type === 'read_receipt') {
+              window.dispatchEvent(new CustomEvent(MESSAGE_READ_RECEIPTS_REFRESH_EVENT, { detail: conversationId }))
+              return
+            }
             if (frame.type === 'utterance_preview') {
               if (frame.utterance?.speakerUserId === viewerUserId && typeof frame.orderReceipt === 'string') {
                 rememberLiveVoiceOrder({ ownerIdentity: clientMessageOutboxOwnerIdentity, apiNamespace: finalizationApiNamespace,
@@ -4144,6 +4149,7 @@ export default function useRealtimeSTT({
             }
           } catch { return }
           window.dispatchEvent(new CustomEvent(MESSAGE_REACTIONS_REFRESH_EVENT, { detail: conversationId }))
+          window.dispatchEvent(new CustomEvent(MESSAGE_READ_RECEIPTS_REFRESH_EVENT, { detail: conversationId }))
           void refreshFromServerHydration('push')
         }
         socket.onclose = () => {

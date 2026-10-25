@@ -13,6 +13,7 @@ import {
 } from "react";
 import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { MessageRecallProvider } from "./LivePhoneDemo/MessageRecall";
+import { MessageReadReceiptsProvider } from "./LivePhoneDemo/MessageReadReceipts";
 import { signIn, signOut, useSession } from "next-auth/react";
 import {
   clearNativeAuthAttempt,
@@ -1964,6 +1965,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       {isLiveDemoMounted ? (
         <MessageReactionsProvider conversationId={props.conversationId} active={props.isVisible !== false} enabled={status === "authenticated" && !props.isBlockedCounterpart}>
         <MessageRecallProvider conversationId={props.conversationId} enabled={status === "authenticated"}>
+        <MessageReadReceiptsProvider
+          conversationId={props.conversationId}
+          active={props.isVisible !== false}
+          enabled={status === "authenticated" && props.isMultiMember === true}
+          viewerUserId={typeof session?.user?.id === "string" ? session.user.id : null}
+        >
         <LivePhoneDemo
           ref={livePhoneDemoRef}
           enableAutoTTS
@@ -2041,6 +2048,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           initialUnreadMessageCount={props.initialUnreadMessageCount}
           isMultiMember={props.isMultiMember}
         />
+        </MessageReadReceiptsProvider>
         </MessageRecallProvider>
         </MessageReactionsProvider>
       ) : (

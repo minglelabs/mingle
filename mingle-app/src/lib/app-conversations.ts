@@ -2372,6 +2372,44 @@ export async function markConversationChannelRead(args: {
   return result.count > 0;
 }
 
+export type ConversationReadReceiptMember = {
+  userId: string;
+  joinedAtMs: number;
+  lastReadAtMs: number | null;
+};
+
+// Per-member read cursors for the room's per-message "N unread" badge. Only
+// active members count: someone who left no longer owes the room a read.
+// Membership-gated like the other per-conversation reads (null → 404).
+export async function listConversationReadReceipts(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<{ sessionKey: string; members: ConversationReadReceiptMember[] } | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: {
+      sessionKey: true,
+      members: {
+        where: { leftAt: null },
+        select: { userId: true, joinedAt: true, lastReadAt: true },
+      },
+    },
+  });
+  if (!record) return null;
+  return {
+    sessionKey: record.sessionKey,
+    members: record.members.map((member) => ({
+      userId: member.userId,
+      joinedAtMs: member.joinedAt.getTime(),
+      lastReadAtMs: member.lastReadAt ? member.lastReadAt.getTime() : null,
+    })),
+  };
+}
+
 export type ConversationMemberSummary = {
   userId: string;
   name: string | null;

@@ -7,6 +7,7 @@ import LanguageRadioOption from './LanguageRadioOption'
 
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
 import { resolveFirstUnreadUtteranceId, shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
+import { resolveAccessibilityCopy } from '@/i18n/accessibility-copy'
 import {
   arePlaybackKeyListsEqual,
   buildOriginalBubblePlaybackKey,
@@ -8800,7 +8801,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       minWidth: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
                       height: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
                     }}
-                    aria-label="Scroll to latest"
+                    aria-label={resolveAccessibilityCopy(uiLocale).scrollToLatest}
                   >
                     <ChevronDown size={28} strokeWidth={1.85} />
                   </button>
