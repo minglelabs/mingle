@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { normalizeMessageReplyReference, toRecalledMessageReplyReference, type MessageReplyReference } from "@/lib/message-reply";
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image';
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
@@ -122,6 +123,7 @@ export type ConversationHydrationUtterance = {
   // has 2+ real members. Null in a solo room, where bubbles keep using the
   // generated animal avatar instead.
   speakerImage: string | null;
+  replyTo?: MessageReplyReference;
 };
 
 export type ConversationHydrationCursor = {
@@ -3065,6 +3067,9 @@ async function getConversationHydrationStateForRecord(args: {
     ...(rawMembers ?? []).flatMap((member) => member.selectedLanguages ?? []),
   ];
 
+  const recalledReplyTargetIds = new Set(
+    recalledMessages.map((message) => (message.clientMessageId || "").trim() || `db-${message.id}`),
+  );
   const utterances: ConversationHydrationUtterance[] = orderedMessages.map((message) => {
     const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
     const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
@@ -3083,6 +3088,8 @@ async function getConversationHydrationStateForRecord(args: {
     const metadata = readJsonObject(message.metadata);
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
     const recalled = readMessageRecalledAtMs(metadata) !== null;
+    // A quote of a message its sender later unsent must not keep its text.
+    const replyTo = recalled ? null : normalizeMessageReplyReference(clientMetadata?.replyTo);
     const originalText = recalled ? "" : sourceContent?.text?.trim() || "";
     const storedTargetLanguages = readStringArray(metadata?.translationTargetLanguages);
     // Repairs legacy rows stored as a collapsed `zh` and keeps every Chinese
@@ -3153,6 +3160,9 @@ async function getConversationHydrationStateForRecord(args: {
       speakerImage: (isMultiMemberAtMessage || image) && message.userId && message.userId !== blockedCounterpartUserId
         ? (imageByUserId.get(message.userId) ?? null)
         : null,
+      ...(replyTo ? {
+        replyTo: recalledReplyTargetIds.has(replyTo.id) ? toRecalledMessageReplyReference(replyTo) : replyTo,
+      } : {}),
     };
   }).filter((utterance) => utterance.originalText.length > 0 || utterance.recalled === true);
 

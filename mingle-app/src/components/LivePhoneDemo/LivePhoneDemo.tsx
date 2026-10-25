@@ -8,6 +8,8 @@ import LanguageRadioOption from './LanguageRadioOption'
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
 import { resolveFirstUnreadUtteranceId, shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
 import { resolveAccessibilityCopy } from '@/i18n/accessibility-copy'
+import { MessageReplyComposerBar, MessageReplyProvider } from './MessageReply'
+import type { MessageReplyReference } from '@/lib/message-reply'
 import {
   arePlaybackKeyListsEqual,
   buildOriginalBubblePlaybackKey,
@@ -2089,6 +2091,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
+  // The message the next typed send replies to (set from a bubble's menu).
+  const [replyTarget, setReplyTarget] = useState<MessageReplyReference | null>(null)
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false)
   const [composerHasDraft, setComposerHasDraft] = useState(false)
   const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
@@ -5683,8 +5687,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       text: nextText,
       sourceLanguage: 'unknown',
       speaker: composerCopy.manualSpeakerLabel,
+      replyTo: replyTarget,
     })
     if (!submittedUtteranceId) return
+    setReplyTarget(null)
     composerDraftRef.current = ''
     if (textarea) {
       textarea.value = ''
@@ -5701,7 +5707,44 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } else {
       syncComposerTextareaHeight(composerTextareaRef.current)
     }
-  }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, focusComposerTextarea, submitExternalUtterance, syncComposerTextareaHeight])
+  }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, focusComposerTextarea, replyTarget, submitExternalUtterance, syncComposerTextareaHeight])
+
+  useEffect(() => {
+    setReplyTarget(null)
+  }, [conversationId])
+
+  const handleReplyToMessage = useCallback((reference: MessageReplyReference) => {
+    setReplyTarget(reference)
+    if (isComposerOpen) focusComposerTextarea()
+    else handleToggleComposer()
+  }, [focusComposerTextarea, handleToggleComposer, isComposerOpen])
+
+  const handleCancelReply = useCallback(() => setReplyTarget(null), [])
+
+  // Only messages already in the loaded history can be jumped to.
+  const handleJumpToMessage = useCallback((id: string) => {
+    const row = chatRef.current?.querySelector<HTMLElement>(`[data-utterance-id="${CSS.escape(id)}"]`)
+    if (!row) return
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    row.animate?.(
+      [{ backgroundColor: 'rgba(251, 191, 36, 0.28)' }, { backgroundColor: 'rgba(251, 191, 36, 0)' }],
+      { duration: 1400, easing: 'ease-out' },
+    )
+  }, [])
+
+  const recalledUtteranceIds = useMemo(
+    () => new Set(utterances.filter((utterance) => utterance.recalled).map((utterance) => utterance.id)),
+    [utterances],
+  )
+  const replyRoomContext = useMemo(() => ({
+    locale: uiLocale,
+    viewerUserId,
+    displayLanguages: [...normalizedPreferredDisplayLanguages, preferredDisplayLanguage, resolvedDefaultDisplayLanguage],
+    recalledIds: recalledUtteranceIds,
+    onReply: handleReplyToMessage,
+    onJumpTo: handleJumpToMessage,
+  }), [handleJumpToMessage, handleReplyToMessage, normalizedPreferredDisplayLanguages, preferredDisplayLanguage,
+    recalledUtteranceIds, resolvedDefaultDisplayLanguage, uiLocale, viewerUserId])
 
   useImperativeHandle(ref, () => ({
     startRecording: async () => {
@@ -7142,6 +7185,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   return (
     <PhoneFrame>
+      <MessageReplyProvider value={replyRoomContext}>
       <div
         data-qa="live-demo-root"
         className="relative flex h-full min-h-0 flex-col overflow-hidden"
@@ -9037,6 +9081,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
           >
+            {replyTarget && !isBlockedCounterpart ? (
+              <MessageReplyComposerBar reference={replyTarget} onCancel={handleCancelReply} />
+            ) : null}
             {isBlockedCounterpart ? (
               <div
                 data-qa="live-demo-blocked-bottom-bar"
@@ -9380,6 +9427,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           )}
         </div>
       </div>
+      </MessageReplyProvider>
     </PhoneFrame>
   )
 })

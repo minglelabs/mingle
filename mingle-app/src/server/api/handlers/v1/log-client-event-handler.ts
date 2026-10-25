@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client/index'
+import { normalizeMessageReplyReference } from '@/lib/message-reply'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
@@ -495,6 +496,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
             where: { channel: { sessionKey: tracking.sessionKey }, joinedAt: { lte: message.createdAt },
               OR: [{ leftAt: null }, { leftAt: { gt: message.createdAt } }] },
           }).then(count => count >= 2).catch(() => false)
+          const replyTo = normalizeMessageReplyReference(clientMetadata?.replyTo)
           if (sharedAtMessage) {
             await notifyConversationMessage(tracking.sessionKey, memberUserIds, {
               id: clientMessageId, originalText: sourceText, originalLang: sourceLanguage,
@@ -504,6 +506,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
               targetLanguages: committedTargetLanguages, createdAtMs: message.createdAt.getTime(),
               serverCreatedAtMs: orderStartedAtMs ?? message.createdAt.getTime(), serverMessageId: message.id,
               speakerUserId: userId, speakerName: message.user?.name ?? null, speakerImage: message.user?.image ?? null,
+              ...(replyTo ? { replyTo } : {}),
             })
           } else {
             await notifyConversationMessage(tracking.sessionKey, memberUserIds)
