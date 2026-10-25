@@ -2027,6 +2027,13 @@ export default function ConversationList({
   conversationCacheIdentityRef.current = conversationCacheIdentity;
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
+  // Unread count as it was when each room was last opened (mark-read zeroes the
+  // live one), so the room can anchor on the first unread message on entry.
+  const [entryUnreadMessageCountByConversationId, setEntryUnreadMessageCountByConversationId] = useState<Record<string, number>>(() => (
+    initialConversationToOpen
+      ? { [initialConversationToOpen.id]: Math.max(0, Math.floor(initialConversationToOpen.unreadMessageCount ?? 0)) }
+      : {}
+  ));
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const isSharingConversationRef = useRef(false);
@@ -4351,6 +4358,12 @@ export default function ConversationList({
     // The create-conversation flow sets autoStart before calling openConversationSummary;
     // clearing it here would immediately cancel the auto-start.
     // autoStart is cleared by closeConversationOverlay and explicit call sites only.
+    const entryUnreadMessageCount = Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0));
+    setEntryUnreadMessageCountByConversationId((current) => (
+      current[conversation.id] === entryUnreadMessageCount
+        ? current
+        : { ...current, [conversation.id]: entryUnreadMessageCount }
+    ));
     const openedConversation = conversation.unreadMessageCount
       ? { ...conversation, unreadMessageCount: 0 }
       : conversation;
@@ -5847,6 +5860,7 @@ export default function ConversationList({
                         }}
                         conversationTitle={conversation.title}
                         isBlockedCounterpart={conversation.isBlockedCounterpart}
+                        initialUnreadMessageCount={entryUnreadMessageCountByConversationId[conversation.id] ?? 0}
                         isMultiMember={conversation.isMultiMember}
                         conversationId={conversation.id}
                         preferredDisplayLanguage={preferredDisplayLanguage}

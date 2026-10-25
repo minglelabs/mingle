@@ -6,7 +6,7 @@ import EarphoneModeNoticeContent from './EarphoneModeNotice'
 import LanguageRadioOption from './LanguageRadioOption'
 
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
-import { shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
+import { resolveFirstUnreadUtteranceId, shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
 import {
   arePlaybackKeyListsEqual,
   buildOriginalBubblePlaybackKey,
@@ -1427,6 +1427,10 @@ interface LivePhoneDemoProps {
   // a generic placeholder, the composer/mic are replaced with a "blocked"
   // message, and tapping the counterpart's avatar opens nothing.
   isBlockedCounterpart?: boolean
+  // Unread count captured when the room was opened (before mark-read zeroes
+  // it). When > 0, entry anchors on the first unread message instead of the
+  // bottom so the viewer resumes where they left off.
+  initialUnreadMessageCount?: number
   // See ConversationChannelSummary.isMultiMember — decides whether the
   // room-management menu's row-removal action is "delete" (solo room,
   // deletes for the owner) or "leave" (shared room, removes just the
@@ -1872,6 +1876,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onDefaultDisplayLanguageChange,
   onOpenProfile,
   isBlockedCounterpart = false,
+  initialUnreadMessageCount = 0,
   isMultiMember = false,
 }, ref) {
   // Only used to tell "my" bubbles from "theirs" in a room shared by more
@@ -6212,19 +6217,38 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
     const node = chatRef.current
+    const hasUnread = initialUnreadMessageCount > 0 && Boolean(viewerUserId)
     if (!node || !shouldAnchorConversationEntry({
       isVisible, isStorageHydrated, hasAnchored: hasInitialBottomAnchorRef.current,
       messageCount: utterances.length, isServerPending: isInitialServerHydrationPending,
+      hasUnread,
     })) return
-    node.scrollTop = node.scrollHeight
-    lastDistanceToBottomRef.current = 0
-    shouldAutoScroll.current = true
-    suppressAutoScrollRef.current = false
-    autoScrollSchedulerRef.current.markPerformed()
+    const firstUnreadId = hasUnread
+      ? resolveFirstUnreadUtteranceId({ utterances, unreadCount: initialUnreadMessageCount, viewerUserId })
+      : null
+    const firstUnreadRow = firstUnreadId
+      ? node.querySelector<HTMLElement>(`[data-utterance-id="${CSS.escape(firstUnreadId)}"]`)
+      : null
+    if (firstUnreadRow) {
+      // Instant jump (no smooth scroll): first unread row at the top of the
+      // viewport. updateScrollDerivedState below decides auto-follow from the
+      // resulting distance, so new messages don't yank the viewer down.
+      node.scrollTop += firstUnreadRow.getBoundingClientRect().top - node.getBoundingClientRect().top - 8
+      autoScrollSchedulerRef.current.markPerformed()
+    } else {
+      node.scrollTop = node.scrollHeight
+      lastDistanceToBottomRef.current = 0
+      shouldAutoScroll.current = true
+      suppressAutoScrollRef.current = false
+      autoScrollSchedulerRef.current.markPerformed()
+    }
     hasInitialBottomAnchorRef.current = true
     allowAutoTopPaginationRef.current = true
     updateScrollDerivedState()
-  }, [conversationId, isVisible, isStorageHydrated, isInitialServerHydrationPending, utterances.length, updateScrollDerivedState])
+    // utterances is read only for the one-shot unread lookup; length still
+    // drives re-evaluation like before.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, isVisible, isStorageHydrated, isInitialServerHydrationPending, utterances.length, updateScrollDerivedState, initialUnreadMessageCount, viewerUserId])
 
   // Preserve scroll position after prepending older utterances
   useLayoutEffect(() => {
