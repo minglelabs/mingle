@@ -1074,6 +1074,8 @@ export function normalizeConversationHydrationUtterances(
           && record.serverCreatedAtMs > 0 ? {
             serverCreatedAtMs: record.serverCreatedAtMs,
             ...(typeof record.serverMessageId === 'string' ? { serverMessageId: record.serverMessageId } : {}),
+            ...(typeof record.serverPersistedAtMs === 'number' && Number.isFinite(record.serverPersistedAtMs)
+              ? { serverPersistedAtMs: record.serverPersistedAtMs } : {}),
           } : {}),
         ...(typeof record.speaker === 'string' && record.speaker.trim() ? { speaker: record.speaker.trim() } : {}),
         ...(typeof record.speakerAvatarSeed === 'string' && record.speakerAvatarSeed.trim()
@@ -2587,6 +2589,8 @@ export function mergeServerHydrationUtteranceWithRoomLanguages(
           ? { serverMessageId: existingUtterance.serverMessageId } : {}),
         // A server copy from before the reply's metadata was persisted must
         // not drop the quote the sender's own bubble already shows.
+        ...(normalizedServerUtterance.serverPersistedAtMs === undefined && existingUtterance?.serverPersistedAtMs !== undefined
+          ? { serverPersistedAtMs: existingUtterance.serverPersistedAtMs } : {}),
         ...(normalizedServerUtterance.replyTo === undefined && existingUtterance?.replyTo
           ? { replyTo: existingUtterance.replyTo } : {}),
         // Source delivery is now independent of translation. A raw server

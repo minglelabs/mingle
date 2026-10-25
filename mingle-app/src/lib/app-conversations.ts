@@ -95,6 +95,10 @@ export type ConversationHydrationUtterance = {
   image?: ConversationMessageImage;
   serverCreatedAtMs?: number;
   serverMessageId?: string;
+  // When the server stored the row (server clock). Read receipts compare
+  // against members' server-side read cursors, so they need this, not the
+  // sender's device-clock createdAtMs.
+  serverPersistedAtMs?: number;
   id: string;
   originalText: string;
   // Display-only rendering of originalText in its Chinese variant's script
@@ -3089,7 +3093,7 @@ async function getConversationHydrationStateForRecord(args: {
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
     const recalled = readMessageRecalledAtMs(metadata) !== null;
     // A quote of a message its sender later unsent must not keep its text.
-    const replyTo = recalled ? null : normalizeMessageReplyReference(clientMetadata?.replyTo);
+    const replyTo = recalled ? null : normalizeMessageReplyReference(metadata?.replyTo);
     const originalText = recalled ? "" : sourceContent?.text?.trim() || "";
     const storedTargetLanguages = readStringArray(metadata?.translationTargetLanguages);
     // Repairs legacy rows stored as a collapsed `zh` and keeps every Chinese
@@ -3136,6 +3140,7 @@ async function getConversationHydrationStateForRecord(args: {
           && Number.isSafeInteger(metadata.orderStartedAtMs) && metadata.orderStartedAtMs > 0
           ? metadata.orderStartedAtMs : message.createdAt.getTime(),
         serverMessageId: message.id,
+        serverPersistedAtMs: message.createdAt.getTime(),
       } : {}),
       speaker: readStringValue(clientMetadata?.speaker) ?? readStringValue(metadata?.speaker),
       speakerAvatarSeed:

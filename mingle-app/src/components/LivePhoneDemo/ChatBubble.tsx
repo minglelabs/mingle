@@ -169,6 +169,8 @@ export interface Utterance {
   createdAtMs?: number
   serverCreatedAtMs?: number
   serverMessageId?: string
+  // Server-clock storage time; see ConversationHydrationUtterance.
+  serverPersistedAtMs?: number
   // Snapshot of the message this one replies to (see message-reply.ts).
   replyTo?: MessageReplyReference
 }
@@ -1312,7 +1314,9 @@ function ChatBubble({
       {!isDraft && !isRecalled && (
         <MessageReadReceipt
           senderUserId={utterance.speakerUserId}
-          createdAtMs={utterance.createdAtMs}
+          // Not yet stored → nobody can have read it; createdAtMs (device
+          // clock) is only a stand-in until the server time arrives.
+          createdAtMs={utterance.serverPersistedAtMs ?? utterance.createdAtMs}
           locale={uiLocale}
           align={isOwnMessage ? 'right' : 'left'}
         />
@@ -1419,6 +1423,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.speakerUserId !== nu.speakerUserId) return false
     if (pu.speakerImage !== nu.speakerImage) return false
     if (pu.createdAtMs !== nu.createdAtMs) return false
+    if (pu.serverPersistedAtMs !== nu.serverPersistedAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false
     if (pu.sourceLanguagesMixed !== nu.sourceLanguagesMixed) return false
