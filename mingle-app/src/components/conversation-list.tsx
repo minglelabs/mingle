@@ -3885,6 +3885,9 @@ export default function ConversationList({
       isListOverlayOpen: Boolean(
         isCreateChoiceModalOpen
         || rowActionMenu
+        // The native banner draws above the web view, so the gear menu's
+        // dropdown would sit under it; hide the banner while it is open.
+        || showSortMenu
         || renameDialogConversationId
         || deleteDialogConversationId
         || languageOnboardingModalOpen
@@ -3903,6 +3906,7 @@ export default function ConversationList({
     rowActionMenu,
     sessionStatus,
     showSearch,
+    showSortMenu,
   ]);
 
   useEffect(() => {
