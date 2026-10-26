@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom'
 import { MessageReactionPicker } from './MessageReactions'
 import { MessageRecallMenuItem } from './MessageRecall'
+import { MessageReplyMenuItem } from './MessageReply'
 import { cn } from '@/lib/utils'
 import { copyTextWithFeedback } from './live-phone-demo.copy'
 
@@ -262,6 +263,7 @@ export default function CopyableBubbleSurface({
             </button>
           </>
         )}
+        <MessageReplyMenuItem onDone={closeMenu} />
         <MessageRecallMenuItem onDone={closeMenu} />
       </div>
     </div>,

@@ -181,6 +181,7 @@ import {
 import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
+import { resolveAccessibilityCopy } from "@/i18n/accessibility-copy";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
@@ -2027,6 +2028,13 @@ export default function ConversationList({
   conversationCacheIdentityRef.current = conversationCacheIdentity;
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
+  // Unread count as it was when each room was last opened (mark-read zeroes the
+  // live one), so the room can anchor on the first unread message on entry.
+  const [entryUnreadMessageCountByConversationId, setEntryUnreadMessageCountByConversationId] = useState<Record<string, number>>(() => (
+    initialConversationToOpen
+      ? { [initialConversationToOpen.id]: Math.max(0, Math.floor(initialConversationToOpen.unreadMessageCount ?? 0)) }
+      : {}
+  ));
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const isSharingConversationRef = useRef(false);
@@ -4351,6 +4359,12 @@ export default function ConversationList({
     // The create-conversation flow sets autoStart before calling openConversationSummary;
     // clearing it here would immediately cancel the auto-start.
     // autoStart is cleared by closeConversationOverlay and explicit call sites only.
+    const entryUnreadMessageCount = Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0));
+    setEntryUnreadMessageCountByConversationId((current) => (
+      current[conversation.id] === entryUnreadMessageCount
+        ? current
+        : { ...current, [conversation.id]: entryUnreadMessageCount }
+    ));
     const openedConversation = conversation.unreadMessageCount
       ? { ...conversation, unreadMessageCount: 0 }
       : conversation;
@@ -5413,7 +5427,7 @@ export default function ConversationList({
           className="absolute inset-0 z-[300] flex min-h-0 w-full items-center justify-center bg-[#fcfbf8]"
           role="status"
           aria-live="polite"
-          aria-label={locale === "ko" ? "Mingle 준비 중" : "Preparing Mingle"}
+          aria-label={resolveAccessibilityCopy(locale).preparingApp}
         >
           <div className="flex flex-col items-center gap-5">
             <MingleWordmark />
@@ -5427,7 +5441,7 @@ export default function ConversationList({
           className="absolute inset-0 z-[199] bg-transparent"
           role="status"
           aria-live="polite"
-          aria-label={locale === "ko" ? "계정 확인 중" : "Checking account"}
+          aria-label={resolveAccessibilityCopy(locale).checkingAccount}
         />
       ) : null}
 
@@ -5847,6 +5861,7 @@ export default function ConversationList({
                         }}
                         conversationTitle={conversation.title}
                         isBlockedCounterpart={conversation.isBlockedCounterpart}
+                        initialUnreadMessageCount={entryUnreadMessageCountByConversationId[conversation.id] ?? 0}
                         isMultiMember={conversation.isMultiMember}
                         conversationId={conversation.id}
                         preferredDisplayLanguage={preferredDisplayLanguage}

@@ -2,6 +2,8 @@
 
 import { normalizeConversationMessageImage } from '@/lib/conversation-image'
 import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
+import { MESSAGE_READ_RECEIPTS_REFRESH_EVENT } from '@/lib/message-read-receipts'
+import { normalizeMessageReplyReference, type MessageReplyReference } from '@/lib/message-reply'
 import { MESSAGE_RECALLED_EVENT, normalizeRecalledMessageIds, type MessageRecalledEventDetail } from '@/lib/message-recall'
 import { parseSttServerError } from '@/lib/stt-server-error'
 
@@ -1037,6 +1039,7 @@ export function normalizeConversationHydrationUtterances(
     .filter((utterance) => utterance && typeof utterance === 'object')
     .map((utterance) => {
       const record = utterance as ConversationHydrationUtterance
+      const replyTo = normalizeMessageReplyReference(record.replyTo)
       return normalizeStoredUtterance({
         id: typeof record.id === 'string' ? record.id : '',
         ...(record.recalled === true ? { recalled: true } : {}),
@@ -1071,6 +1074,8 @@ export function normalizeConversationHydrationUtterances(
           && record.serverCreatedAtMs > 0 ? {
             serverCreatedAtMs: record.serverCreatedAtMs,
             ...(typeof record.serverMessageId === 'string' ? { serverMessageId: record.serverMessageId } : {}),
+            ...(typeof record.serverPersistedAtMs === 'number' && Number.isFinite(record.serverPersistedAtMs)
+              ? { serverPersistedAtMs: record.serverPersistedAtMs } : {}),
           } : {}),
         ...(typeof record.speaker === 'string' && record.speaker.trim() ? { speaker: record.speaker.trim() } : {}),
         ...(typeof record.speakerAvatarSeed === 'string' && record.speakerAvatarSeed.trim()
@@ -1088,6 +1093,7 @@ export function normalizeConversationHydrationUtterances(
         ...(typeof record.speakerImage === 'string' && record.speakerImage.trim()
           ? { speakerImage: record.speakerImage.trim() }
           : {}),
+        ...(replyTo ? { replyTo } : {}),
       }, roomLanguages)
     })
     .map((utterance) => (utterance.recalled ? toRecalledUtterance(utterance) : utterance))
@@ -1527,6 +1533,7 @@ interface SubmitExternalUtteranceInput {
   text: string
   sourceLanguage?: string
   speaker?: string
+  replyTo?: MessageReplyReference | null
 }
 
 interface LocalFinalizeResult {
@@ -2580,6 +2587,12 @@ export function mergeServerHydrationUtteranceWithRoomLanguages(
           ? { serverCreatedAtMs: existingUtterance.serverCreatedAtMs } : {}),
         ...(normalizedServerUtterance.serverMessageId === undefined && existingUtterance?.serverMessageId !== undefined
           ? { serverMessageId: existingUtterance.serverMessageId } : {}),
+        // A server copy from before the reply's metadata was persisted must
+        // not drop the quote the sender's own bubble already shows.
+        ...(normalizedServerUtterance.serverPersistedAtMs === undefined && existingUtterance?.serverPersistedAtMs !== undefined
+          ? { serverPersistedAtMs: existingUtterance.serverPersistedAtMs } : {}),
+        ...(normalizedServerUtterance.replyTo === undefined && existingUtterance?.replyTo
+          ? { replyTo: existingUtterance.replyTo } : {}),
         // Source delivery is now independent of translation. A raw server
         // snapshot must not erase the final translation already rendered here.
         // Both sides are canonical here, so the merge is by canonical key and
@@ -4111,6 +4124,10 @@ export default function useRealtimeSTT({
           try {
             const frame = JSON.parse(event.data)
             if (socketSessionKey && frame.sessionKey !== socketSessionKey) return
+            if (frame.type === 'read_receipt') {
+              window.dispatchEvent(new CustomEvent(MESSAGE_READ_RECEIPTS_REFRESH_EVENT, { detail: conversationId }))
+              return
+            }
             if (frame.type === 'utterance_preview') {
               if (frame.utterance?.speakerUserId === viewerUserId && typeof frame.orderReceipt === 'string') {
                 rememberLiveVoiceOrder({ ownerIdentity: clientMessageOutboxOwnerIdentity, apiNamespace: finalizationApiNamespace,
@@ -4144,6 +4161,7 @@ export default function useRealtimeSTT({
             }
           } catch { return }
           window.dispatchEvent(new CustomEvent(MESSAGE_REACTIONS_REFRESH_EVENT, { detail: conversationId }))
+          window.dispatchEvent(new CustomEvent(MESSAGE_READ_RECEIPTS_REFRESH_EVENT, { detail: conversationId }))
           void refreshFromServerHydration('push')
         }
         socket.onclose = () => {
@@ -4864,6 +4882,7 @@ export default function useRealtimeSTT({
       previousStateSourceLanguage?: string
       previousStateSourceText?: string
       fallbackCurrentTurnPreviousState?: CurrentTurnPreviousStatePayload | null
+      replyTo?: MessageReplyReference | null
     },
   ): LocalFinalizeResult | null => {
     const text = normalizeSttTurnText(rawText)
@@ -4901,6 +4920,7 @@ export default function useRealtimeSTT({
       previousStateSourceText: options?.previousStateSourceText,
     })
     if (!localPayload) return null
+    if (options?.replyTo) localPayload.utterance = { ...localPayload.utterance, replyTo: options.replyTo }
     localPayload.utterance = remotePreviews.applyOrder(localPayload.utterance)
     if (isDuplicateTimedSignature({
       previousSig: stopFinalizeDedupRef.current.utteranceId,
@@ -5043,6 +5063,7 @@ export default function useRealtimeSTT({
           speaker: options?.speaker ?? localFinalizeResult.speaker ?? null,
           speakerAvatarSeed: options?.speakerAvatarSeed ?? localFinalizeResult.speakerAvatarSeed ?? null,
           speakerAvatarIndex: options?.speakerAvatarIndex ?? localFinalizeResult.speakerAvatarIndex ?? null,
+          ...(utterance.replyTo ? { replyTo: utterance.replyTo } : {}),
         },
       },
     })
@@ -5089,6 +5110,7 @@ export default function useRealtimeSTT({
       previousStateSourceLanguage: sourceLanguage,
       previousStateSourceText: text,
       fallbackCurrentTurnPreviousState: null,
+      replyTo: input.replyTo ?? null,
     })
 
     if (!localFinalizeResult) return null
