@@ -94,8 +94,6 @@ export type UserProfile = {
   followingCount: number;
   /** The HashChat team's official account; present (true) only then. */
   isOfficial?: boolean;
-  /** An account run by HashChat staff; present (true) only then. */
-  isOperator?: boolean;
 };
 
 export function calculateProfileAge(

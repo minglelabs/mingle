@@ -112,7 +112,6 @@ describe('admin notify targets', () => {
         createdAt: '2026-09-30T09:00:00.000Z',
       })
       expect(targets[1]).toMatchObject({ handle: 'jun', isOfficial: true, active: false, deviceCount: 0 })
-      expect(targets[1].isOperator).toBeUndefined()
       expect(m.targetFindMany.mock.calls[0][0].orderBy).toEqual({ createdAt: 'asc' })
     })
   })

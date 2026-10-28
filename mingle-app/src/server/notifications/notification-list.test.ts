@@ -58,7 +58,7 @@ describe("buildNotificationListResponse", () => {
       row({ id: "3", type: "post_like", postId: "p1", actor: member }),
     ]);
     expect(items[0].actors).toEqual([
-      { id: "op", handle: "op.h", name: "op", image: null, isOperator: true },
+      { id: "op", handle: "op.h", name: "op", image: null },
       { id: "team", handle: "team.h", name: "team", image: null, isOfficial: true },
       { id: "member", handle: "member.h", name: "member", image: null },
     ]);

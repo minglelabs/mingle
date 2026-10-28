@@ -85,9 +85,9 @@ describe('identity surfaces contract: selects', () => {
 })
 
 describe('identity surfaces contract: serializers', () => {
-  it.each(serializers)('%s sends isOperator for an operator account only', (_surface, serialize) => {
+  it.each(serializers)('%s adds no flag for an operator account (it looks like any member)', (_surface, serialize) => {
     const operator = serialize({ isOfficial: false, isOperator: true })
-    expect(operator).toMatchObject({ isOperator: true })
+    expect(operator).not.toHaveProperty('isOperator')
     expect(operator).not.toHaveProperty('isOfficial')
   })
 

@@ -173,10 +173,9 @@ export function OperatorAccountChip({ className }: { className?: string }) {
   );
 }
 
-/** Account-kind chip through the one badge rule (`resolveAccountBadge`): 운영 계정, 공식, or nothing. */
+/** Account-kind chip through the one badge rule (`resolveAccountBadge`): 공식, or nothing. */
 export function AccountBadgeChip({ flags, className }: { flags: AccountBadgeFlags | null | undefined; className?: string }) {
   const kind = resolveAccountBadge(flags);
-  if (kind === "operator") return <OperatorAccountChip className={className} />;
   if (kind === "official") {
     return (
       <AdminChip icon={BadgeCheck} title={BADGE_COPY.officialDescription} className={className}>

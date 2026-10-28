@@ -19,17 +19,15 @@ describe('USER_IDENTITY_SELECT', () => {
 
 describe('identityBadgeFlags', () => {
   it('adds nothing for an ordinary user', () => {
-    expect(identityBadgeFlags({ isOfficial: false, isOperator: false })).toEqual({})
-    expect(identityBadgeFlags({ isOfficial: null, isOperator: null })).toEqual({})
+    expect(identityBadgeFlags({ isOfficial: false })).toEqual({})
+    expect(identityBadgeFlags({ isOfficial: null })).toEqual({})
     expect(identityBadgeFlags({})).toEqual({})
     expect(identityBadgeFlags(null)).toEqual({})
     expect(identityBadgeFlags(undefined)).toEqual({})
   })
 
-  it('adds each flag only when it is true', () => {
-    expect(identityBadgeFlags({ isOfficial: true, isOperator: false })).toEqual({ isOfficial: true })
-    expect(identityBadgeFlags({ isOfficial: false, isOperator: true })).toEqual({ isOperator: true })
-    expect(Object.keys(identityBadgeFlags({ isOperator: true }))).toEqual(['isOperator'])
+  it('adds the official flag only when it is true', () => {
+    expect(identityBadgeFlags({ isOfficial: true })).toEqual({ isOfficial: true })
     expect(Object.keys(identityBadgeFlags({ isOfficial: true }))).toEqual(['isOfficial'])
   })
 })
