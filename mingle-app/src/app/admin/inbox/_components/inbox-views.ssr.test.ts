@@ -59,6 +59,7 @@ const roomView: InboxRoomViewData = {
     },
     usageSec: 0,
     messageCount: 2,
+    recalledMessageIds: [],
     utterances: [
       {
         id: 'u-1-1', originalText: 'Hi Mina!', originalLang: 'en', targetLanguages: ['pt', 'en'],
