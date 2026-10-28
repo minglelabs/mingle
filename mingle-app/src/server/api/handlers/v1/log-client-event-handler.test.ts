@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __resetConversationMessagePushClaimsForTests } from "@/server/conversation-message-push";
 import { NextRequest } from "next/server";
 
 const {
@@ -121,6 +122,7 @@ describe("handleLogClientEventV1", () => {
   afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetConversationMessagePushClaimsForTests();
     mockAfterCallbacks.length = 0;
     mockAfter.mockImplementation((callback: () => void | Promise<void>) => {
       mockAfterCallbacks.push(callback);
@@ -231,7 +233,36 @@ describe("handleLogClientEventV1", () => {
     expect(mockMaybeGenerateConversationTitleForSession).not.toHaveBeenCalled();
     expect(mockMaterializePendingConversationInvitees).toHaveBeenCalledOnce();
     expect(mockNotifyConversationMessage).toHaveBeenCalledOnce();
-    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledOnce();
+    // The push waits for the translation (see the next test).
+    expect(mockSendPushNotificationForConversationMessage).not.toHaveBeenCalled();
+  });
+
+  it("sends the push once, translated, from the translation update of a pending original", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-12T09:00:02.000Z"));
+    try {
+      await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.1.1/log/client-event", {
+        method: "POST", body: JSON.stringify({ eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "durable_push", sourceLanguage: "ko", sourceText: "안녕하세요", translationPending: true }),
+      }));
+      expect(mockSendPushNotificationForConversationMessage).not.toHaveBeenCalled();
+
+      mockAppMessageFindUnique.mockResolvedValue({ createdAt: new Date("2026-04-12T09:00:00.000Z"), metadata: {} });
+      await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v2.1.1/log/client-event", {
+        method: "POST", body: JSON.stringify({ eventType: "stt_turn_finalized", sessionKey: "sess_123", clientMessageId: "durable_push", sourceLanguage: "ko", sourceText: "안녕하세요", translations: { en: "Hello" }, translationUpdate: true }),
+      }));
+      expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledOnce();
+      expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith(expect.objectContaining({
+        sourceText: "안녕하세요", sourceLanguage: "ko", translations: { en: "Hello" },
+      }));
+
+      // The original's fallback finds the push already sent.
+      const pending = Promise.all(mockAfterCallbacks.map((callback) => callback()));
+      await vi.runAllTimersAsync();
+      await pending;
+      expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("persists waiting translation targets with the source and retains them for its final update", async () => {
@@ -526,13 +557,13 @@ describe("handleLogClientEventV1", () => {
       new Date("2026-04-12T09:00:00.000Z"),
     );
     expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123"]);
-    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith({
+    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith(expect.objectContaining({
       messageId: "message_123",
       sessionKey: "sess_123",
       sourceText: "안녕하세요",
       senderUserId: "user_123",
       memberUserIds: ["user_123"],
-    });
+    }));
   });
 
   it("records hydration order diagnostics without creating another conversation message", async () => {
@@ -593,13 +624,13 @@ describe("handleLogClientEventV1", () => {
     expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123", "user_456"], expect.objectContaining({
       id: "client_message_multi", originalText: "안녕하세요", speakerUserId: "user_123", serverMessageId: "message_123",
     }));
-    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith({
+    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith(expect.objectContaining({
       messageId: "message_123",
       sessionKey: "sess_123",
       sourceText: "안녕하세요",
       senderUserId: "user_123",
       memberUserIds: ["user_123", "user_456"],
-    });
+    }));
   });
 
   it("schedules the operator inbox notify after the push without delaying the response", async () => {
@@ -702,13 +733,13 @@ describe("handleLogClientEventV1", () => {
     expect(mockNotifyConversationMessage).toHaveBeenCalledWith("sess_123", ["user_123", "user_456"], expect.objectContaining({
       speakerUserId: "user_123", serverMessageId: "message_123",
     }));
-    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith({
+    expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith(expect.objectContaining({
       messageId: "message_123",
       sessionKey: "sess_123",
       sourceText: "안녕하세요",
       senderUserId: "user_123",
       memberUserIds: ["user_123", "user_456"],
-    });
+    }));
   });
 
   it("still notifies the room even when fetching member ids for the list fan-out fails", async () => {

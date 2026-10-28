@@ -524,10 +524,32 @@ export async function sendPushNotificationForUserNotification(notificationId: st
 // Message pushes deliberately do not create UserNotification rows. The
 // in-app notification panel is reserved for non-message events such as
 // follows; conversation unread state is tracked by each membership cursor.
+/**
+ * The message text a recipient sees in the push: the translation into their own
+ * language when the message has one, otherwise the original.
+ */
+export function pickMessagePushText(args: {
+  sourceText: string;
+  sourceLanguage?: string;
+  translations?: Record<string, string>;
+  recipientLanguage: string;
+}): string {
+  const base = (language: string) => language.trim().toLowerCase().replace("_", "-").split("-")[0] || "";
+  const recipient = args.recipientLanguage.trim().toLowerCase().replace("_", "-");
+  if (!recipient || (args.sourceLanguage && base(args.sourceLanguage) === base(recipient))) return args.sourceText;
+  const entries = Object.entries(args.translations ?? {}).filter(([, text]) => text.trim());
+  const exact = entries.find(([language]) => language.trim().toLowerCase().replace("_", "-") === recipient);
+  const sameBase = entries.find(([language]) => base(language) === base(recipient));
+  return (exact ?? sameBase)?.[1] ?? args.sourceText;
+}
+
 export async function sendPushNotificationForConversationMessage(args: {
   messageId: string;
   sessionKey: string;
   sourceText: string;
+  sourceLanguage?: string;
+  /** Finished translations by language; each recipient sees the one in their own language. */
+  translations?: Record<string, string>;
   senderUserId: string;
   memberUserIds: string[];
 }): Promise<void> {
@@ -566,14 +588,15 @@ export async function sendPushNotificationForConversationMessage(args: {
   const sender = users.find((user) => user.id === args.senderUserId);
   const senderName = sender?.name?.trim() || (sender?.handle ? `@${sender.handle}` : "Someone");
   const senderBadge = resolveAccountBadge(sender);
-  const messagePreview = args.sourceText.replace(/\s+/g, " ").trim().slice(0, 240);
-  if (!messagePreview) return;
+  const toPreview = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 240);
+  if (!toPreview(args.sourceText)) return;
 
   const targetEntries: PushDelivery[] = [];
   for (const recipientUserId of recipientUserIds) {
     const recipient = users.find((user) => user.id === recipientUserId);
     if (!recipient) continue;
     const recipientLanguage = resolveRecipientLanguage(recipient);
+    const messagePreview = toPreview(pickMessagePushText({ ...args, recipientLanguage })) || toPreview(args.sourceText);
     // Build the room URL in the recipient's own locale, matching the web route
     // `/{locale}/conversations?conversation={channelId}`. Falls back to the raw
     // conversationId (the native tap handler rebuilds the room path from it).
