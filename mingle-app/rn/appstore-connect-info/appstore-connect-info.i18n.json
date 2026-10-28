@@ -1,6 +1,6 @@
 {
   "meta": {
-    "shots": 8,
+    "shots": 7,
     "locales": [
       "ar",
       "de",
@@ -28,512 +28,452 @@
       "screenshots": {
         "ko": [
           {
-            "line1": "언어 장벽은 이제 끝",
-            "line2": "대화에만 집중하세요"
+            "line1": "언어가 달라도",
+            "line2": "친구가 되는 곳"
           },
           {
-            "line1": "세개 이상 언어도",
-            "line2": "전방향 통번역"
+            "line1": "어떤 언어로 써도",
+            "line2": "내 언어로 읽어요"
           },
           {
-            "line1": "끊김 없는 번역과",
-            "line2": "실시간 스크립트"
+            "line1": "댓글도",
+            "line2": "자동으로 번역돼요"
           },
           {
-            "line1": "다른 앱 음성까지",
-            "line2": "실시간 자막으로"
+            "line1": "여러 언어로 나누는",
+            "line2": "실시간 통역 대화"
           },
           {
-            "line1": "외국인과 통화도",
-            "line2": "자동 번역 자막"
+            "line1": "관심 있는 사람과",
+            "line2": "게시물을 찾아보세요"
           },
           {
-            "line1": "번역을 음성으로",
-            "line2": "실시간 동시 통역"
+            "line1": "친구들과 햄스터 레이스",
+            "line2": "Hash Rush"
           },
           {
-            "line1": "백그라운드 실행",
-            "line2": "앱 전환 자유롭게"
-          },
-          {
-            "line1": "자동 언어 감지",
-            "line2": "자동 언어 스위칭"
+            "line1": "해바라기씨를 물고",
+            "line2": "집에 먼저 오면 승리"
           }
         ],
         "en": [
           {
-            "line1": "No More",
-            "line2": "Language Barriers"
+            "line1": "Make friends",
+            "line2": "in any language"
           },
           {
-            "line1": "3+ Languages",
-            "line2": "All Directions"
+            "line1": "Written in any language,",
+            "line2": "read in yours"
           },
           {
-            "line1": "Uninterrupted",
-            "line2": "Live Transcripts"
+            "line1": "Comments are",
+            "line2": "translated too"
           },
           {
-            "line1": "Audio from Any App",
-            "line2": "Live Captions"
+            "line1": "Chat in many languages,",
+            "line2": "translated live"
           },
           {
-            "line1": "International Calls",
-            "line2": "Auto Translated Captions"
+            "line1": "Find people and posts",
+            "line2": "you're into"
           },
           {
-            "line1": "Voice Translation",
-            "line2": "Live Interpreting"
+            "line1": "Race hamsters with friends",
+            "line2": "in Hash Rush"
           },
           {
-            "line1": "Runs in the Background",
-            "line2": "Switch Apps Freely"
-          },
-          {
-            "line1": "Language Detect",
-            "line2": "Auto Switch"
+            "line1": "Grab the seed,",
+            "line2": "be first home"
           }
         ],
         "ja": [
           {
-            "line1": "言語の壁はもう終わり",
-            "line2": "会話にだけ集中"
+            "line1": "言葉が違っても",
+            "line2": "友だちになれる場所"
           },
           {
-            "line1": "3言語以上でも",
-            "line2": "全方向の通訳・翻訳"
+            "line1": "どの言語の投稿も",
+            "line2": "自分の言語で読める"
           },
           {
-            "line1": "途切れない翻訳と",
-            "line2": "リアルタイム字幕"
+            "line1": "コメントも",
+            "line2": "自動で翻訳"
           },
           {
-            "line1": "他アプリの音声まで",
-            "line2": "リアルタイム字幕で"
+            "line1": "いくつもの言語で話せる",
+            "line2": "リアルタイム通訳チャット"
           },
           {
-            "line1": "外国人との通話も",
-            "line2": "自動翻訳字幕"
+            "line1": "気になる人や",
+            "line2": "投稿を見つけよう"
           },
           {
-            "line1": "翻訳を音声で",
-            "line2": "リアルタイム同時通訳"
+            "line1": "友だちとハムスターレース",
+            "line2": "Hash Rush"
           },
           {
-            "line1": "バックグラウンド実行",
-            "line2": "アプリ切替も自由に"
-          },
-          {
-            "line1": "自動言語検出",
-            "line2": "自動言語スイッチング"
+            "line1": "ひまわりの種をくわえて",
+            "line2": "先に帰れば勝ち"
           }
         ],
         "zh-cn": [
           {
-            "line1": "语言障碍到此为止",
-            "line2": "只需专注对话"
+            "line1": "语言不同",
+            "line2": "也能成为朋友"
           },
           {
-            "line1": "三种以上语言也可",
-            "line2": "全方向口译与翻译"
+            "line1": "无论用什么语言写",
+            "line2": "都能用你的语言读"
           },
           {
-            "line1": "无缝翻译不断线",
-            "line2": "实时字幕"
+            "line1": "评论也会",
+            "line2": "自动翻译"
           },
           {
-            "line1": "其他应用的语音也能",
-            "line2": "实时字幕显示"
+            "line1": "多种语言同时聊",
+            "line2": "实时口译对话"
           },
           {
-            "line1": "与外国人通话也可",
-            "line2": "自动翻译字幕"
+            "line1": "找到感兴趣的",
+            "line2": "人和帖子"
           },
           {
-            "line1": "翻译可转为语音",
-            "line2": "实时同声传译"
+            "line1": "和朋友一起赛仓鼠",
+            "line2": "Hash Rush"
           },
           {
-            "line1": "后台也能运行",
-            "line2": "自由切换应用"
-          },
-          {
-            "line1": "自动语言检测",
-            "line2": "自动语言切换"
+            "line1": "叼起葵花籽",
+            "line2": "先回家就赢"
           }
         ],
         "zh-tw": [
           {
-            "line1": "語言隔閡就此結束",
-            "line2": "只需專注對話"
+            "line1": "語言不同",
+            "line2": "也能成為朋友"
           },
           {
-            "line1": "三種以上語言也可",
-            "line2": "全方向口譯與翻譯"
+            "line1": "無論用什麼語言寫",
+            "line2": "都能用你的語言讀"
           },
           {
-            "line1": "不間斷翻譯",
-            "line2": "即時字幕"
+            "line1": "留言也會",
+            "line2": "自動翻譯"
           },
           {
-            "line1": "其他App語音也能",
-            "line2": "即時字幕顯示"
+            "line1": "多種語言同時聊",
+            "line2": "即時口譯對話"
           },
           {
-            "line1": "與外國人通話也可",
-            "line2": "自動翻譯字幕"
+            "line1": "找到感興趣的",
+            "line2": "人和貼文"
           },
           {
-            "line1": "翻譯可轉成語音",
-            "line2": "即時同步口譯"
+            "line1": "和朋友一起賽倉鼠",
+            "line2": "Hash Rush"
           },
           {
-            "line1": "背景也能執行",
-            "line2": "自由切換App"
-          },
-          {
-            "line1": "自動語言偵測",
-            "line2": "自動語言切換"
+            "line1": "叼起葵花籽",
+            "line2": "先回家就贏"
           }
         ],
         "th": [
           {
-            "line1": "กำแพงภาษา จบแล้ว",
-            "line2": "โฟกัสแค่บทสนทนา"
+            "line1": "ภาษาต่างกัน",
+            "line2": "ก็เป็นเพื่อนกันได้"
           },
           {
-            "line1": "มากกว่า 3 ภาษา ก็ได้",
-            "line2": "แปลและล่ามได้ทุกทิศทาง"
+            "line1": "เขียนภาษาไหนก็ได้",
+            "line2": "อ่านเป็นภาษาของคุณ"
           },
           {
-            "line1": "แปลต่อเนื่องไม่สะดุด",
-            "line2": "พร้อมสคริปต์เรียลไทม์"
+            "line1": "คอมเมนต์ก็",
+            "line2": "แปลให้อัตโนมัติ"
           },
           {
-            "line1": "เสียงจากแอปอื่นก็ได้",
-            "line2": "แสดงซับแบบเรียลไทม์"
+            "line1": "แชตหลายภาษา",
+            "line2": "แปลแบบเรียลไทม์"
           },
           {
-            "line1": "คุยโทรศัพท์กับชาวต่างชาติ",
-            "line2": "ซับแปลอัตโนมัติ"
+            "line1": "ค้นหาคนและโพสต์",
+            "line2": "ที่คุณสนใจ"
           },
           {
-            "line1": "แปลออกเป็นเสียง",
-            "line2": "ล่ามพร้อมกันแบบเรียลไทม์"
+            "line1": "แข่งแฮมสเตอร์กับเพื่อน",
+            "line2": "Hash Rush"
           },
           {
-            "line1": "ทำงานเบื้องหลัง",
-            "line2": "สลับแอปได้อิสระ"
-          },
-          {
-            "line1": "ตรวจจับภาษาอัตโนมัติ",
-            "line2": "สลับภาษาอัตโนมัติ"
+            "line1": "คาบเมล็ดทานตะวัน",
+            "line2": "กลับบ้านก่อนชนะ"
           }
         ],
         "vi": [
           {
-            "line1": "Hết rào cản ngôn ngữ",
-            "line2": "Chỉ tập trung hội thoại"
+            "line1": "Kết bạn",
+            "line2": "bằng mọi ngôn ngữ"
           },
           {
-            "line1": "Hơn 3 ngôn ngữ",
-            "line2": "Phiên dịch đa chiều"
+            "line1": "Viết bằng ngôn ngữ nào",
+            "line2": "cũng đọc bằng tiếng của bạn"
           },
           {
-            "line1": "Dịch liền mạch",
-            "line2": "Kèm transcript trực tiếp"
+            "line1": "Bình luận cũng",
+            "line2": "được dịch tự động"
           },
           {
-            "line1": "Âm thanh từ app khác",
-            "line2": "Phụ đề thời gian thực"
+            "line1": "Trò chuyện nhiều ngôn ngữ,",
+            "line2": "dịch trực tiếp"
           },
           {
-            "line1": "Gọi với người nước ngoài",
-            "line2": "Phụ đề dịch tự động"
+            "line1": "Tìm người và bài đăng",
+            "line2": "bạn quan tâm"
           },
           {
-            "line1": "Bản dịch thành giọng nói",
-            "line2": "Phiên dịch đồng thời"
+            "line1": "Đua hamster cùng bạn bè",
+            "line2": "trong Hash Rush"
           },
           {
-            "line1": "Chạy nền",
-            "line2": "Chuyển app tự do"
-          },
-          {
-            "line1": "Tự động nhận diện",
-            "line2": "Tự chuyển ngôn ngữ"
+            "line1": "Ngậm hạt hướng dương,",
+            "line2": "về nhà trước là thắng"
           }
         ],
         "hi": [
           {
-            "line1": "अब नहीं",
-            "line2": "भाषा की बाधाएँ"
+            "line1": "किसी भी भाषा में",
+            "line2": "दोस्त बनाइए"
           },
           {
-            "line1": "3+ भाषाएँ",
-            "line2": "हर दिशा में"
+            "line1": "किसी भी भाषा में लिखा",
+            "line2": "अपनी भाषा में पढ़ें"
           },
           {
-            "line1": "बिना रुकावट",
-            "line2": "लाइव ट्रांसक्रिप्ट"
+            "line1": "कमेंट भी",
+            "line2": "अपने-आप अनुवादित"
           },
           {
-            "line1": "किसी भी ऐप का ऑडियो",
-            "line2": "लाइव कैप्शन"
+            "line1": "कई भाषाओं में चैट",
+            "line2": "लाइव अनुवाद के साथ"
           },
           {
-            "line1": "अंतरराष्ट्रीय कॉल",
-            "line2": "स्वतः अनूदित कैप्शन"
+            "line1": "अपनी पसंद के लोग",
+            "line2": "और पोस्ट खोजें"
           },
           {
-            "line1": "वॉइस अनुवाद",
-            "line2": "लाइव इंटरप्रेटिंग"
+            "line1": "दोस्तों के साथ हैम्स्टर रेस",
+            "line2": "Hash Rush"
           },
           {
-            "line1": "बैकग्राउंड में चलता है",
-            "line2": "ऐप्स आसानी से बदलें"
-          },
-          {
-            "line1": "भाषा पहचान",
-            "line2": "ऑटो स्विच"
+            "line1": "बीज उठाओ",
+            "line2": "और सबसे पहले घर पहुँचो"
           }
         ],
         "de": [
           {
-            "line1": "Keine",
-            "line2": "Sprachbarrieren mehr"
+            "line1": "Freunde finden",
+            "line2": "in jeder Sprache"
           },
           {
-            "line1": "3+ Sprachen",
-            "line2": "In alle Richtungen"
+            "line1": "In jeder Sprache geschrieben,",
+            "line2": "in deiner gelesen"
           },
           {
-            "line1": "Unterbrechungsfrei",
-            "line2": "Live-Transkripte"
+            "line1": "Auch Kommentare",
+            "line2": "werden übersetzt"
           },
           {
-            "line1": "Audio aus jeder App",
-            "line2": "Live-Untertitel"
+            "line1": "Chats in vielen Sprachen,",
+            "line2": "live übersetzt"
           },
           {
-            "line1": "Internationale Anrufe",
-            "line2": "Auto-übersetzte Subs"
+            "line1": "Finde Menschen und Beiträge,",
+            "line2": "die dich interessieren"
           },
           {
-            "line1": "Sprachübersetzung",
-            "line2": "Live-Dolmetschen"
+            "line1": "Hamsterrennen mit Freunden",
+            "line2": "in Hash Rush"
           },
           {
-            "line1": "Läuft im Hintergrund",
-            "line2": "Apps frei wechseln"
-          },
-          {
-            "line1": "Spracherkennung",
-            "line2": "Auto-Umschaltung"
+            "line1": "Schnapp dir den Kern,",
+            "line2": "sei zuerst zu Hause"
           }
         ],
         "es": [
           {
-            "line1": "No más",
-            "line2": "barreras de idioma"
+            "line1": "Haz amigos",
+            "line2": "en cualquier idioma"
           },
           {
-            "line1": "3+ idiomas",
-            "line2": "en todas direcciones"
+            "line1": "Escrito en cualquier idioma,",
+            "line2": "leído en el tuyo"
           },
           {
-            "line1": "Sin interrupciones",
-            "line2": "transcripción en vivo"
+            "line1": "Los comentarios",
+            "line2": "también se traducen"
           },
           {
-            "line1": "Audio de cualquier app",
-            "line2": "subtítulos en vivo"
+            "line1": "Chats en varios idiomas,",
+            "line2": "traducidos al instante"
           },
           {
-            "line1": "Llamadas al exterior",
-            "line2": "subtítulos traducidos"
+            "line1": "Encuentra personas",
+            "line2": "y publicaciones a tu gusto"
           },
           {
-            "line1": "Traducción por voz",
-            "line2": "interpretación en vivo"
+            "line1": "Carreras de hámsters",
+            "line2": "con amigos en Hash Rush"
           },
           {
-            "line1": "En segundo plano",
-            "line2": "cambia app libremente"
-          },
-          {
-            "line1": "Detección de idioma",
-            "line2": "cambio automático"
+            "line1": "Atrapa la semilla",
+            "line2": "y llega primero a casa"
           }
         ],
         "fr": [
           {
-            "line1": "Fini les barrières",
-            "line2": "de langue"
+            "line1": "Faites-vous des amis",
+            "line2": "dans toutes les langues"
           },
           {
-            "line1": "3+ langues",
-            "line2": "dans tous les sens"
+            "line1": "Écrit dans toutes les langues,",
+            "line2": "lu dans la vôtre"
           },
           {
-            "line1": "Sans interruption",
-            "line2": "transcription en direct"
+            "line1": "Les commentaires",
+            "line2": "aussi sont traduits"
           },
           {
-            "line1": "Audio de toute app",
-            "line2": "sous-titres en direct"
+            "line1": "Discutez en plusieurs langues,",
+            "line2": "traduites en direct"
           },
           {
-            "line1": "Appels internationaux",
-            "line2": "sous-titres auto-traduits"
+            "line1": "Trouvez des personnes",
+            "line2": "et des publications"
           },
           {
-            "line1": "Traduction vocale",
-            "line2": "interprétation en direct"
+            "line1": "Courses de hamsters",
+            "line2": "entre amis : Hash Rush"
           },
           {
-            "line1": "En arrière-plan",
-            "line2": "changez d’app librement"
-          },
-          {
-            "line1": "Détection de langue",
-            "line2": "bascule auto"
+            "line1": "Attrapez la graine,",
+            "line2": "rentrez le premier"
           }
         ],
         "it": [
           {
-            "line1": "Basta",
-            "line2": "barriere linguistiche"
+            "line1": "Fai amicizia",
+            "line2": "in ogni lingua"
           },
           {
-            "line1": "3+ lingue",
-            "line2": "in tutte le direzioni"
+            "line1": "Scritto in qualsiasi lingua,",
+            "line2": "letto nella tua"
           },
           {
-            "line1": "Senza interruzioni",
-            "line2": "trascrizione live"
+            "line1": "Anche i commenti",
+            "line2": "vengono tradotti"
           },
           {
-            "line1": "Audio da qualsiasi app",
-            "line2": "sottotitoli live"
+            "line1": "Chat in più lingue,",
+            "line2": "tradotte dal vivo"
           },
           {
-            "line1": "Chiamate internazionali",
-            "line2": "sottotitoli auto-tradotti"
+            "line1": "Trova persone e post",
+            "line2": "che ti interessano"
           },
           {
-            "line1": "Traduzione vocale",
-            "line2": "interpretazione live"
+            "line1": "Corse di criceti",
+            "line2": "con gli amici: Hash Rush"
           },
           {
-            "line1": "Funziona in background",
-            "line2": "cambia app liberamente"
-          },
-          {
-            "line1": "Rilevamento lingua",
-            "line2": "cambio automatico"
+            "line1": "Prendi il seme,",
+            "line2": "torna a casa per primo"
           }
         ],
         "pt": [
           {
-            "line1": "Chega de",
-            "line2": "barreiras de idioma"
+            "line1": "Faça amigos",
+            "line2": "em qualquer idioma"
           },
           {
-            "line1": "3+ idiomas",
-            "line2": "em todas as direções"
+            "line1": "Escrito em qualquer idioma,",
+            "line2": "lido no seu"
           },
           {
-            "line1": "Sem interrupções",
-            "line2": "transcrição ao vivo"
+            "line1": "Os comentários",
+            "line2": "também são traduzidos"
           },
           {
-            "line1": "Áudio de qualquer app",
-            "line2": "legendas ao vivo"
+            "line1": "Conversas em vários idiomas,",
+            "line2": "traduzidas ao vivo"
           },
           {
-            "line1": "Chamadas globais",
-            "line2": "legendas traduzidas"
+            "line1": "Encontre pessoas",
+            "line2": "e publicações do seu gosto"
           },
           {
-            "line1": "Tradução por voz",
-            "line2": "interpretação ao vivo"
+            "line1": "Corrida de hamsters",
+            "line2": "com amigos: Hash Rush"
           },
           {
-            "line1": "Em segundo plano",
-            "line2": "troque de app livremente"
-          },
-          {
-            "line1": "Detecção de idioma",
-            "line2": "troca automática"
+            "line1": "Pegue a semente",
+            "line2": "e chegue primeiro em casa"
           }
         ],
         "ru": [
           {
-            "line1": "Больше никаких",
-            "line2": "языковых барьеров"
+            "line1": "Находите друзей",
+            "line2": "на любом языке"
           },
           {
-            "line1": "3+ языка",
-            "line2": "во всех направлениях"
+            "line1": "Написано на любом языке,",
+            "line2": "читайте на своём"
           },
           {
-            "line1": "Без прерываний",
-            "line2": "живые субтитры"
+            "line1": "Комментарии",
+            "line2": "тоже переводятся"
           },
           {
-            "line1": "Звук из приложений",
-            "line2": "живые субтитры"
+            "line1": "Чаты на разных языках",
+            "line2": "с живым переводом"
           },
           {
-            "line1": "Звонки за границу",
-            "line2": "автоперевод субтитров"
+            "line1": "Находите людей",
+            "line2": "и посты по интересам"
           },
           {
-            "line1": "Голосовой перевод",
-            "line2": "синхронный перевод"
+            "line1": "Гонки хомяков с друзьями",
+            "line2": "в Hash Rush"
           },
           {
-            "line1": "Работает в фоне",
-            "line2": "меняйте приложения"
-          },
-          {
-            "line1": "Определение языка",
-            "line2": "авто-переключение"
+            "line1": "Хватай семечко",
+            "line2": "и беги домой первым"
           }
         ],
         "ar": [
           {
-            "line1": "لا مزيد من",
-            "line2": "حواجز اللغة"
+            "line1": "كوّن صداقات",
+            "line2": "بأي لغة"
           },
           {
-            "line1": "3+ لغات",
-            "line2": "بكل الاتجاهات"
+            "line1": "مكتوب بأي لغة",
+            "line2": "اقرأه بلغتك"
           },
           {
-            "line1": "بدون انقطاع",
-            "line2": "نصوص مباشرة"
+            "line1": "التعليقات أيضاً",
+            "line2": "تُترجم تلقائياً"
           },
           {
-            "line1": "صوت من أي تطبيق",
-            "line2": "تسميات توضيحية مباشرة"
+            "line1": "دردشة بعدة لغات",
+            "line2": "مع ترجمة فورية"
           },
           {
-            "line1": "مكالمات دولية",
-            "line2": "تسميات مترجمة تلقائياً"
+            "line1": "اعثر على أشخاص",
+            "line2": "ومنشورات تهمك"
           },
           {
-            "line1": "ترجمة صوتية",
-            "line2": "ترجمة فورية مباشرة"
+            "line1": "سباق الهامستر مع الأصدقاء",
+            "line2": "Hash Rush"
           },
           {
-            "line1": "يعمل في الخلفية",
-            "line2": "بدّل التطبيقات بحرية"
-          },
-          {
-            "line1": "اكتشاف اللغة",
-            "line2": "تبديل تلقائي"
+            "line1": "التقط البذرة",
+            "line2": "وكن أول من يعود"
           }
         ]
       },
