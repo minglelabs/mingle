@@ -15,7 +15,7 @@ describe("public profile age copy", () => {
     expect(formatProfileAge(1, "pt")).toBe("1 ano");
     expect(formatProfileAge(1, "it")).toBe("1 anno");
     expect(formatProfileAge(2, "ru")).toBe("2 года");
-    expect(formatProfileAge(2, "ar")).toBe("٢ سنتان");
+    expect(formatProfileAge(2, "ar")).toBe("2 سنتان");
     expect(formatProfileAge(32, "hi")).toBe("32 वर्ष");
     expect(formatProfileAge(32, "th")).toBe("32 ปี");
     expect(formatProfileAge(32, "vi")).toBe("32 tuổi");

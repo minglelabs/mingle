@@ -4,7 +4,9 @@ export function formatProfileAge(age: number | null | undefined, locale: AppLoca
   if (typeof age !== "number" || !Number.isSafeInteger(age) || age < 0) return null;
 
   const resolvedLocale = resolveLegalDocumentLocale(locale);
-  const count = new Intl.NumberFormat(resolvedLocale).format(age);
+  // Western digits everywhere: whether "ar" defaults to Arabic-Indic digits differs between ICU
+  // versions, so the server and the app WebView could otherwise render the same age differently.
+  const count = new Intl.NumberFormat(resolvedLocale, { numberingSystem: "latn" }).format(age);
 
   switch (resolvedLocale) {
     case "ko":
