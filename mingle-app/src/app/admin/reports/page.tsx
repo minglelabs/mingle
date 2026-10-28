@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { EyeOff, FileText, MessageSquare, Send, ShieldBan, ShieldCheck, UserRound } from "lucide-react";
 import type { AccountBadgeFlags } from "@/lib/account-badge";
 import { prisma } from "@/lib/prisma";
 import { sanitizeAdminReturnTo } from "@/lib/admin-return-to";
 import { requireAdmin } from "@/server/admin/guard";
+import { isNotifiedReportStatus } from "@/lib/user-notification-types";
+import { notifyUserFromTeam } from "@/server/team-notifications";
 import {
   contentModerationToggle,
   hideCommentByModerator,
@@ -25,7 +28,6 @@ import {
   type ModerationAction,
   type ReportStatus,
 } from "@/server/reports/moderation-service";
-import { createPostNotification } from "@/server/notifications/create-post-notification";
 import {
   AccountBadgeChip,
   AdminButton,
@@ -121,7 +123,7 @@ async function createReportReplyAction(formData: FormData) {
   const message = normalizeReportReply(readFormString(formData.get("message")));
   if (!reportId || !message) redirect(withResult(returnTo, "invalid_reply"));
 
-  const report = await prisma.userReport.findUnique({ where: { id: reportId }, select: { id: true, status: true } });
+  const report = await prisma.userReport.findUnique({ where: { id: reportId }, select: { id: true, status: true, reporterId: true } });
   if (!report) redirect(withResult(returnTo, "report_not_found"));
 
   await prisma.$transaction([
@@ -133,6 +135,13 @@ async function createReportReplyAction(formData: FormData) {
       ? [prisma.userReport.update({ where: { id: reportId }, data: { status: "in_review" } })]
       : []),
   ]);
+
+  after(() => notifyUserFromTeam({
+    recipientId: report.reporterId,
+    type: "report_reply",
+    body: message,
+    targetId: reportId,
+  }));
 
   revalidatePath("/admin/reports");
   redirect(withResult(returnTo, "reply_sent"));
@@ -158,7 +167,7 @@ async function saveReportNoteAction(formData: FormData) {
 
 /**
  * Change a report's status. Closing it (resolved / rejected) stamps
- * resolvedAt and notifies the REPORTER (report_resolved). The notification is
+ * resolvedAt and notifies the REPORTER (report_status). The notification is
  * fire-and-forget — the stub never throws, and the real impl must not either.
  */
 async function updateReportStatusAction(formData: FormData) {
@@ -182,9 +191,15 @@ async function updateReportStatusAction(formData: FormData) {
     data: { status, resolvedAt: closing ? new Date() : null },
   });
 
-  // Only notify on a fresh transition INTO a closed state.
-  if (closing && !isClosingStatus(existing.status as ReportStatus)) {
-    await createPostNotification({ type: "report_resolved", recipientId: existing.reporterId, actorId: existing.reporterId, reportId: existing.id });
+  // Only a new final outcome is worth a notification. It is the team notification
+  // (report_status) the shipped app already shows; report_resolved rows are no longer created.
+  if (existing.status !== status && isNotifiedReportStatus(status)) {
+    after(() => notifyUserFromTeam({
+      recipientId: existing.reporterId,
+      type: "report_status",
+      body: status,
+      targetId: existing.id,
+    }));
   }
 
   revalidatePath("/admin/reports");

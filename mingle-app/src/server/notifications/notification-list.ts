@@ -14,6 +14,7 @@
  * carries its badge flag so the panel labels it.
  */
 
+import { isTeamNotificationType } from "@/lib/user-notification-types";
 import {
   serializeListUserIdentity,
   type ListUserIdentity,
@@ -28,10 +29,14 @@ export type RawNotificationRow = {
   type: string;
   postId: string | null;
   commentId: string | null;
+  /** Team notifications: the reply text, or the new report status. */
+  body?: string | null;
+  /** Team notifications: the feedback or report id. */
+  targetId?: string | null;
   readAt: Date | string | null;
   createdAt: Date | string;
-  /** Selected with `USER_IDENTITY_SELECT`; extra columns are dropped. */
-  actor: ListUserIdentityRow<string | null>;
+  /** Selected with `USER_IDENTITY_SELECT`; extra columns are dropped. Null for a team notification. */
+  actor: ListUserIdentityRow<string | null> | null;
 };
 
 export type NotificationListItem = {
@@ -55,11 +60,14 @@ export type NotificationListItem = {
   groupKey: string;
   /** Every distinct actor id in this entry (uncapped, for cross-page merges). */
   actorIds: string[];
+  /** Team notifications only (feedback_reply, report_reply, report_status). */
+  body?: string;
+  targetId?: string | null;
 };
 
 const GROUPED_TYPES = new Set(["post_like", "comment_like"]);
 
-function serializeActor(actor: RawNotificationRow["actor"]): NotificationActor {
+function serializeActor(actor: NonNullable<RawNotificationRow["actor"]>): NotificationActor {
   return serializeListUserIdentity(actor);
 }
 const MAX_ACTORS_PER_GROUP = 3;
@@ -92,6 +100,8 @@ export function buildNotificationListResponse(rows: RawNotificationRow[]): {
 
   // rows arrive newest-first, so the first row seen for a key is the newest.
   for (const row of rows) {
+    // Only team notifications are sent without an actor; any other row whose actor is gone cannot be shown.
+    if (!row.actor && !isTeamNotificationType(row.type)) continue;
     const key = notificationGroupKey(row);
     const existing = groups.get(key);
     const isUnread = row.readAt === null || row.readAt === undefined;
@@ -100,15 +110,15 @@ export function buildNotificationListResponse(rows: RawNotificationRow[]): {
       order.push(key);
       groups.set(key, {
         newest: row,
-        actors: [serializeActor(row.actor)],
-        actorIds: new Set([row.actor.id]),
+        actors: row.actor ? [serializeActor(row.actor)] : [],
+        actorIds: new Set(row.actor ? [row.actor.id] : []),
         anyUnread: isUnread,
       });
       continue;
     }
 
     // Only grouped types accumulate extra actors; unique keys never reach here.
-    if (!existing.actorIds.has(row.actor.id)) {
+    if (row.actor && !existing.actorIds.has(row.actor.id)) {
       existing.actorIds.add(row.actor.id);
       if (existing.actors.length < MAX_ACTORS_PER_GROUP) {
         existing.actors.push(serializeActor(row.actor));
@@ -129,9 +139,10 @@ export function buildNotificationListResponse(rows: RawNotificationRow[]): {
       isRead: !group.anyUnread,
       createdAt: toIso(newest.createdAt),
       actors: group.actors,
-      actorCount: isGrouped ? group.actorIds.size : 1,
+      actorCount: isGrouped ? group.actorIds.size : group.actorIds.size > 0 ? 1 : 0,
       groupKey: key,
       actorIds: [...group.actorIds],
+      ...(isTeamNotificationType(newest.type) ? { body: newest.body ?? "", targetId: newest.targetId ?? null } : {}),
     };
   });
 

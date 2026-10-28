@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     return json({ error: 'invalid_limit' }, { status: 400 })
   }
 
-  const result = await getFeed(viewerId, cursor, limit)
+  const result = await getFeed(viewerId, cursor, limit, { language: displayLanguage ?? request.headers.get('accept-language') })
   const posts = await serializePostsPage(result.posts, { viewerId, rawDisplayLanguage: displayLanguage })
 
   return json({ posts, nextCursor: result.nextCursor })

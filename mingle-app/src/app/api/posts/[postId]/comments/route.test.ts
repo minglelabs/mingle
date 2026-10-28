@@ -137,7 +137,7 @@ describe('GET /api/posts/{postId}/comments', () => {
         id: 'c2', postId: 'post-1', authorId: 'u2', parentId: 'c1',
         replyToUserId: 'u1', bodyVersion: 1, sourceText: 'Reply', sourceLanguage: 'en',
         likeCount: 0, isDeleted: null, createdAt: new Date(), updatedAt: new Date(),
-        author: { id: 'u2', handle: 'mingle', name: 'Mingle', image: null, isOfficial: true },
+        author: { id: 'u2', handle: 'mingle', name: 'HashChat', image: null, isOfficial: true },
         replyToUser: { id: 'u1', handle: 'h1', name: 'd1' }, _count: { replies: 0 }, translations: [],
       },
     ])

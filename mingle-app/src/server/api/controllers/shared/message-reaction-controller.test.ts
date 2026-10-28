@@ -81,13 +81,13 @@ describe('reaction participant list', () => {
   it('labels an official participant and adds nothing for operator or ordinary users', async () => {
     mocks.reactions.mockResolvedValue([
       { userId: 'op', user: { name: 'Mina', handle: 'mina', isOfficial: false, isOperator: true } },
-      { userId: 'team', user: { name: 'Mingle', handle: 'mingle_team', isOfficial: true, isOperator: false } },
+      { userId: 'team', user: { name: 'HashChat', handle: 'mingle_team', isOfficial: true, isOperator: false } },
       { userId: 'viewer', user: { name: 'Alice', handle: 'alice', isOfficial: false, isOperator: false } },
     ])
     const response = await getMessageReactions(query('id=client&kind=heart'), 'room')
     expect((await response.json()).participants).toEqual([
       { id: 'op', name: 'Mina', handle: 'mina', mine: false },
-      { id: 'team', name: 'Mingle', handle: 'mingle_team', mine: false, isOfficial: true },
+      { id: 'team', name: 'HashChat', handle: 'mingle_team', mine: false, isOfficial: true },
       { id: 'viewer', name: 'Alice', handle: 'alice', mine: true },
     ])
   })

@@ -16,8 +16,22 @@ jest.mock('react-native', () => {
     }
   }
 
+  class AnimatedValue {
+    constructor(value) {
+      this.value = value;
+    }
+  }
+
   return {
     Alert: { alert: jest.fn() },
+    Animated: {
+      Value: AnimatedValue,
+      View: createNativeComponent('Animated.View'),
+      timing: jest.fn(() => ({ start: (callback) => callback?.({ finished: true }) })),
+    },
+    Appearance: {
+      getColorScheme: jest.fn(() => 'light'),
+    },
     AppState: {
       currentState: 'active',
       addEventListener: jest.fn(() => ({ remove: jest.fn() })),

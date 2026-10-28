@@ -106,7 +106,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
   return json({ imageObjectKey: objectKey, width, height }, { status: 201 })
 }
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+/** `?index=N` reads the post's N-th photo (0 = the first, on the post row; 1-9 = `PostImage`). */
+function photoIndex(request: NextRequest): number | null {
+  const raw = request.nextUrl.searchParams.get('index')
+  if (raw === null || raw === '' || raw === '0') return 0
+  const index = Number(raw)
+  return Number.isInteger(index) && index >= 1 && index <= 9 ? index : null
+}
+
+export async function GET(request: NextRequest, context: RouteContext) {
   const { postId } = await context.params
   const session = await getServerSession(getAuthOptions())
   const viewerId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
@@ -117,18 +125,25 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     where: imageReadableWhere(postId, viewerId || null),
     select: { authorId: true, imageObjectKey: true },
   })
+  const index = photoIndex(request)
+  if (index === null) return json({ error: 'not_found' }, { status: 404 })
+  const key = !post?.imageObjectKey ? null : index === 0
+    ? post.imageObjectKey
+    : (await prisma.postImage.findUnique({ where: { postId_position: { postId, position: index } }, select: { imageObjectKey: true } }))?.imageObjectKey ?? null
   // Only ever read a key the post's author was issued, never an arbitrary
   // object (e.g. a private conversation image) in the shared bucket.
-  if (!post?.imageObjectKey || !isOwnedPostImageKey(post.imageObjectKey, post.authorId)) {
+  if (!post || !key || !isOwnedPostImageKey(key, post.authorId)) {
     return json({ error: 'not_found' }, { status: 404 })
   }
 
   try {
-    const bytes = await getPostImage(post.imageObjectKey)
+    const bytes = await getPostImage(key)
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
         'Content-Type': 'image/jpeg',
-        'Cache-Control': 'private, no-store',
+        // Kept by this viewer's browser for a while (never by a shared cache),
+        // so scrolling back and forth does not fetch the photo again.
+        'Cache-Control': 'private, max-age=600',
         'X-Content-Type-Options': 'nosniff',
       },
     })

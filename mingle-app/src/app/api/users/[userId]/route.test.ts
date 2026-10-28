@@ -102,7 +102,7 @@ describe("/api/users/[userId] route", () => {
       id: "user_456",
       handle: "mingle",
       image: null,
-      name: "Mingle",
+      name: "HashChat",
       bio: null,
       nationality: null,
       primaryLanguages: [],

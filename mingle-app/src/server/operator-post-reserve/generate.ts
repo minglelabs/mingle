@@ -2,7 +2,8 @@ import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
 import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
 import { hasContactDetails } from '@/server/operators/persona-rules'
-import { posterProfile, type PosterProfile } from './poster-profile'
+import { encodePostPhoto, pickPostPhoto } from './post-photo'
+import { learnerPlan, posterProfile, type LearnerPlan, type PosterProfile } from './poster-profile'
 
 /**
  * Writes latent posts for one operator account: original short posts in the
@@ -13,6 +14,7 @@ import { posterProfile, type PosterProfile } from './poster-profile'
  */
 export const RESERVE_CHUNK_SIZE = 20
 export const RESERVE_POST_MAX_CHARS = 400
+const IMAGE_PROMPT_MAX_CHARS = 600
 const AVOID_SAMPLE_MAX = 40
 const AVOID_SAMPLE_CHARS = 60
 const CALL_TIMEOUT_MS = 120_000
@@ -38,7 +40,10 @@ export const RESERVE_TOPICS: ReadonlyArray<{ key: string; weight: number; brief:
   { key: 'recommendation_request', weight: 3, brief: 'asking others for a recommendation (music, shows, food, places, study methods)' },
   { key: 'thought', weight: 3, brief: 'a light thought or feeling, a mood, a small observation about people or life' },
   { key: 'question_to_everyone', weight: 3, brief: 'an easy question to everyone that invites replies (preferences, habits, this-or-that)' },
-  { key: 'looking_for_friends', weight: 1, brief: 'saying they would like to chat with people and what they like to talk about' },
+  { key: 'looking_for_friends', weight: 5, brief: 'looking for friends or a language partner: what they want to talk about, what they can teach in return, an invitation to message them' },
+  { key: 'self_intro', weight: 4, brief: 'introducing themself: where they are from, what they study or do, what they like; sometimes as a short list of facts on separate lines (age band, city, a personality trait, hobbies)' },
+  { key: 'place_request', weight: 3, brief: 'asking about real places or plans: where to go, what to eat or see in a named city or neighborhood, or whether anyone wants to study or talk together' },
+  { key: 'photo_caption', weight: 4, brief: 'a caption of a few words for the attached photo, nothing more' },
 ]
 
 type Random = () => number
@@ -66,6 +71,11 @@ export function pickReserveTopics(count: number, random: Random = Math.random, f
     picked.push(chosen.key)
   }
   return picked
+}
+
+/** What the account is learning and how often it posts in that language. */
+export function reserveLearnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
+  return learnerPlan(seed, nativeLanguage)
 }
 
 /** The posting personality of an account, by its id. */
@@ -108,14 +118,26 @@ export type ReservePersona = {
   language: string
 }
 
-export type GeneratedReservePost = { topic: string; text: string }
+export type GeneratedReservePost = {
+  topic: string
+  text: string
+  /** The language the post was written in. */
+  language: string
+  /** What the attached photo shows, or null for a text-only post. */
+  imagePrompt: string | null
+}
 
 export function buildReserveInstructions(persona: Pick<ReservePersona, 'language'>): string {
   const languageName = getSttLanguageDisplayName(persona.language, 'en') || persona.language
   return [
-    'You ghostwrite short social posts for one person on Mingle, an app where people from different countries chat and learn each other\'s languages.',
-    'The input JSON has "persona" (who is posting), "poster" (what kind of poster this person is: "type", "length" and "voice", their typing habits and quirks), "slots" (one post per slot; each has a number, a "topic" and a "shape"), and "alreadyWritten" (the starts of posts this person already has).',
-    `Write every post in ${languageName} (${persona.language}) exactly the way a native speaker of the persona's age types on their phone to friends: the slang, abbreviations, sentence endings and written laughter that are normal in that language right now. A person learning another language may add one short phrase in that language when the topic is language learning; otherwise use only ${languageName}.`,
+    'You ghostwrite short social posts for one person on HashChat, an app where people from different countries chat and learn each other\'s languages.',
+    'The input JSON has "persona" (who is posting), "poster" (what kind of poster this person is: "type", "length" and "voice", their typing habits and quirks), "learner" (the language they are learning and their level), "slots" (one post per slot; each has a number, a "topic", a "shape", a "language" and "photo"), and "alreadyWritten" (the starts of posts this person already has).',
+    `Each slot names the language to write in. ${languageName} (${persona.language}) is this person's own language: write those posts exactly the way a native speaker of the persona's age types on their phone to friends, with the slang, abbreviations, sentence endings and written laughter that are normal in that language right now.`,
+    'A slot in any other language is written by this person as a learner of it, at the level in "learner". Make the level audible: the mistakes and stiffness that a native speaker of the persona\'s own language really makes in that language, not random errors. Learner posts are simpler and more polite than the person\'s native posts, the poster quirks mostly do not carry over, and a learner may add the same line in their own language underneath.',
+    'When a slot has "photo", the post goes out with one phone photo of that kind; when "photo" is false there is no photo and "photo" stays empty. Write the text as a caption or remark that fits the photo, and describe the photo in "photo" in English, in one or two sentences, as a casual phone snapshot: what is in it, where, and how it is framed.',
+    'Photo kinds: "self" shows the poster with their face; "self_faceless" shows the poster but not their face; "self_back" shows the poster from behind; "friends" shows the poster with friends; "scene" shows no recognizable person (food, a drink, a desk, a street, a view, a shop front, a pet, an object, a hand holding something). A slot with the poster in it also has a "setup" (who took it, framing, pose): follow it, and pick a concrete place in the persona\'s city and an outfit that fit the post and the person. Refer to the poster as "the poster" and never describe their face, hair or body: that is added later. Everyone is an adult; no school uniforms.',
+    'Get the real world right in the photo: the sun sets only in the west (an east-facing beach like Haeundae or Gwangalli has sunrises, not sunsets), a landmark is only where it really stands as seen from that spot, and anything the description says about the body is anatomically possible.',
+    'What is on their own screen (notes, a chat, a map, a playlist, a score) is a screenshot, not a "scene": start the description with "Screenshot of", and never describe a photo of a phone or computer screen.',
     'People post in wildly different ways, and "poster" is how this one does. It comes first: where it conflicts with the general advice below, "poster" wins. Let the type, length and voice show clearly across the set, so that this person could not be mistaken for another account. Register and punctuation hold in every post; each quirk shows in only about one post in three, never in all of them, and never in the same position twice in a row.',
     'Follow each slot\'s "shape" literally. The shapes differ on purpose: the posts must not share one length, one rhythm or one sentence ending.',
     'What makes a post sound human: it is about one specific thing (the actual dish, the actual title, the number of hours, the exact annoying thing), it starts in the middle without setting the scene, and it does not explain how the writer feels about it.',
@@ -126,8 +148,8 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
     'Every post must differ from the others and from "alreadyWritten" in subject and opening words.',
     'The posts are published on unknown future days. Words like "today", "just now", "earlier" and "tonight" are fine. Never mention a date, weekday, month, season, weather, temperature, holiday, exam period or current event.',
     'Use only facts consistent with the persona. Do not invent a specific employer, school or real person. No politics, religion debate, sexual content, or anything about money or selling.',
-    'Never include contact details, links, other apps, @mentions or phone numbers, and never mention Mingle or being an AI.',
-    'Answer with JSON: {"posts": [{"slot": <number>, "text": "<the post>"}]} with exactly one entry per slot.',
+    'Never include contact details, links, other apps, @mentions or phone numbers, and never mention HashChat or being an AI.',
+    'Answer with JSON: {"posts": [{"slot": <number>, "text": "<the post>", "photo": "<photo description or empty>"}]} with exactly one entry per slot.',
   ].join('\n')
 }
 
@@ -138,7 +160,7 @@ const RESPONSE_SCHEMA: ResponseSchema = {
       type: SchemaType.ARRAY,
       items: {
         type: SchemaType.OBJECT,
-        properties: { slot: { type: SchemaType.INTEGER }, text: { type: SchemaType.STRING } },
+        properties: { slot: { type: SchemaType.INTEGER }, text: { type: SchemaType.STRING }, photo: { type: SchemaType.STRING } },
         required: ['slot', 'text'],
       },
     },
@@ -146,7 +168,7 @@ const RESPONSE_SCHEMA: ResponseSchema = {
   required: ['posts'],
 }
 
-const MINGLE_PATTERN = /mingle|밍글|ミングル/i
+const MINGLE_PATTERN = /mingle|hash\s?chat|밍글|해시\s?챗|ミングル|ハッシュチャット/i
 const HASHTAG_PATTERN = /(^|\s)#\S/
 
 /** A usable post text, or null. */
@@ -185,7 +207,18 @@ export async function generateReservePosts(args: {
   const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
   const random = args.random ?? Math.random
   const profile = reservePosterProfile(args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`)
-  const slots = args.topics.map((topic, index) => ({ slot: index + 1, topic: briefs.get(topic) ?? topic, shape: pickShape(random, profile.shapeFactors).brief }))
+  const seed = args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`
+  const learner = reserveLearnerPlan(seed, args.persona.language)
+  const slots = args.topics.map((topic, index) => {
+    const language = random() < learner.share ? learner.language : args.persona.language
+    return {
+      slot: index + 1,
+      topic: briefs.get(topic) ?? topic,
+      shape: pickShape(random, profile.shapeFactors).brief,
+      language,
+      photo: topic === 'photo_caption' || random() < profile.photoShare ? pickPostPhoto(random) : null,
+    }
+  })
   const seen = new Set(args.existingTexts.map(reservePostKey))
 
   const items = await generate({
@@ -193,14 +226,15 @@ export async function generateReservePosts(args: {
     input: {
       persona: args.persona,
       poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
-      slots,
+      learner: { language: learner.language, level: learner.level.brief },
+      slots: slots.map((slot) => ({ ...slot, photo: slot.photo ? slot.photo.kind : false, ...(slot.photo?.setup ? { setup: slot.photo.setup } : {}) })),
       alreadyWritten: args.existingTexts.slice(-AVOID_SAMPLE_MAX).map((text) => Array.from(text).slice(0, AVOID_SAMPLE_CHARS).join('')),
     },
     responseSchema: RESPONSE_SCHEMA,
     validate: (value) => {
       const posts = (value as { posts?: unknown } | null)?.posts
       if (!Array.isArray(posts)) throw new Error('invalid_posts')
-      return posts as Array<{ slot?: unknown; text?: unknown }>
+      return posts as Array<{ slot?: unknown; text?: unknown; photo?: unknown }>
     },
     model: args.model ?? resolveReserveModel(),
     temperature: 1,
@@ -219,7 +253,9 @@ export async function generateReservePosts(args: {
     if (!key || seen.has(key)) continue
     seen.add(key)
     usedSlots.add(slot)
-    result.push({ topic: args.topics[slot - 1], text })
+    const plan = slots[slot - 1].photo
+    const photo = plan && typeof item.photo === 'string' ? item.photo.replace(/\s+/g, ' ').trim().slice(0, IMAGE_PROMPT_MAX_CHARS) : ''
+    result.push({ topic: args.topics[slot - 1], text, language: slots[slot - 1].language, imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo) : null })
   }
   return result
 }

@@ -53,6 +53,8 @@ export type PublishPostInput = {
   imageObjectKey: string | null
   /** Parsed image size hint; only stored when an image is attached. */
   imageDimensions?: ImageDimensions | null
+  /** The 2nd to 10th photo, in order (already authorized keys). Ignored without `imageObjectKey`. */
+  extraImages?: ReadonlyArray<{ objectKey: string; dimensions: ImageDimensions | null }>
   /** Client language hint; the server detection is authoritative. */
   clientHint?: string | null
   /** Raw idempotency key; a malformed value is ignored (server id, no dedupe). */
@@ -120,6 +122,17 @@ export async function publishPost(input: PublishPostInput): Promise<PublishPostR
   // The preview showed this background; keep it when it is a catalog key.
   const backgroundKey = resolvePublishBackgroundKey(input.backgroundKey)
   const imageColumns = hasImage ? imageDimensionColumns(input.imageDimensions ?? null) : {}
+  const extraImages = hasImage && input.extraImages?.length
+    ? {
+        extraImages: {
+          create: input.extraImages.slice(0, 9).map((image, index) => ({
+            position: index + 1,
+            imageObjectKey: image.objectKey,
+            ...imageDimensionColumns(image.dimensions),
+          })),
+        },
+      }
+    : {}
 
   // ── Image-only post: nothing to translate, publish immediately. ──
   if (text === null) {
@@ -134,6 +147,7 @@ export async function publishPost(input: PublishPostInput): Promise<PublishPostR
             backgroundKey,
             imageObjectKey,
             ...imageColumns,
+            ...extraImages,
             visibility: 'public',
             bodyVersion: 1,
           },
@@ -171,6 +185,7 @@ export async function publishPost(input: PublishPostInput): Promise<PublishPostR
             backgroundKey,
             imageObjectKey,
             ...imageColumns,
+            ...extraImages,
             visibility: 'public',
             bodyVersion: 1,
           },

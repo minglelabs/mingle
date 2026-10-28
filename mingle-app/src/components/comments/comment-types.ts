@@ -12,9 +12,9 @@ export type CommentAuthor = {
   handle: string
   name: string | null
   image: string | null
-  /** The Mingle team's official account; absent means false (same as post authors). */
+  /** The HashChat team's official account; absent means false (same as post authors). */
   isOfficial?: boolean
-  /** An account run by Mingle staff; absent means false (same as post authors). */
+  /** An account run by HashChat staff; absent means false (same as post authors). */
   isOperator?: boolean
 }
 

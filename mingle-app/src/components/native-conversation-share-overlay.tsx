@@ -1,8 +1,9 @@
 "use client";
 
-import { ChevronLeft, Loader2, Smartphone } from "lucide-react";
+import { ChevronLeft, Link2, Loader2, Smartphone } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import ChatBubble from "@/components/LivePhoneDemo/ChatBubble";
 import ConversationOperatorDisclosure from "@/components/LivePhoneDemo/ConversationOperatorDisclosure";
 import { labelNameWithAccountBadge } from "@/components/LivePhoneDemo/chat-account-badge.logic";
@@ -14,6 +15,7 @@ import {
 } from "@/components/conversation-spectate-copy";
 import { useConversationSpectate } from "@/components/use-conversation-spectate";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { buildConversationShareUrl } from "@/lib/conversation-share-link";
 import { DEFAULT_LOCALE, resolveLegalDocumentLocale, resolveSupportedLocaleTag, type AppLocale } from "@/i18n";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
@@ -41,6 +43,49 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// Runs straight from the button tap with the link already known, so the
+// browser treats it as a user-initiated copy. navigator.clipboard only exists
+// in a secure context — a plain-http LAN dev server gets execCommand instead.
+async function copyTextToClipboard(value: string): Promise<void> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) {
+    throw new Error("clipboard_copy_failed");
+  }
+}
+
+// How long the room's own slide-in takes (SlideSurface's SURFACE_TRANSITION
+// is 0.32s), plus a little slack so the room is fully in place underneath.
+const ROOM_ENTER_SETTLE_MS = 380;
+const ROOM_ROUTE_WAIT_TIMEOUT_MS = 2000;
+
+function waitForConversationRoute(conversationId: string): Promise<void> {
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const check = () => {
+      const current = new URLSearchParams(window.location.search).get("conversation");
+      if (current === conversationId || Date.now() - startedAt > ROOM_ROUTE_WAIT_TIMEOUT_MS) {
+        resolve();
+        return;
+      }
+      window.requestAnimationFrame(check);
+    };
+    check();
+  });
+}
+
 function resolveLocale(pathname: string): AppLocale {
   const firstSegment = pathname.split("/").filter(Boolean)[0] ?? "";
   return resolveSupportedLocaleTag(firstSegment) ?? DEFAULT_LOCALE;
@@ -56,7 +101,7 @@ function hasNativeConversationShareHistoryEntry(): boolean {
 // may not have it installed), this renders as an overlay on top of whatever
 // screen was already open — same pattern as NativeProfileLinkOverlay — since
 // a viewer opening this deep link natively is, by definition, already using
-// the app. No "Open in Mingle App" / store buttons, a real back button, and
+// the app. No "Open in HashChat App" / store buttons, a real back button, and
 // the app's own safe-area/back-gesture conventions instead of the marketing
 // card's fixed layout.
 export default function NativeConversationShareOverlay() {
@@ -68,6 +113,7 @@ export default function NativeConversationShareOverlay() {
   const copy = useMemo(() => getConversationSpectateCopy(spectateLocale), [spectateLocale]);
   const [overlay, setOverlay] = useState<ShareOverlayState | null>(null);
   useNativeBannerSuppression(overlay !== null);
+  const [surfaceTransitionMode, setSurfaceTransitionMode] = useState<"animate" | "instant">("animate");
   const overlayRef = useRef<ShareOverlayState | null>(null);
   const requestIdRef = useRef(0);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -100,6 +146,7 @@ export default function NativeConversationShareOverlay() {
 
     const nextOverlay = { ...request, requestId };
     overlayRef.current = nextOverlay;
+    setSurfaceTransitionMode("animate");
     setOverlay(nextOverlay);
     setJoinError(false);
 
@@ -114,6 +161,7 @@ export default function NativeConversationShareOverlay() {
   // on this now-joined overlay.
   const handleJoin = useCallback(async () => {
     const shareToken = overlay?.shareToken;
+    const joiningRequestId = overlay?.requestId;
     if (!shareToken || isJoining || pendingJoinNavigationRef.current) return;
 
     setIsJoining(true);
@@ -146,6 +194,19 @@ export default function NativeConversationShareOverlay() {
         { skipConversationRestore: true, tabRoot: true },
       );
       replaceWithConversationListThenPush(router, conversationListHref, conversationId);
+
+      // Keep this overlay covering the screen until the room has finished
+      // sliding in underneath it, then drop it instantly — closing it first
+      // would briefly reveal whatever was behind it (the conversation list).
+      await waitForConversationRoute(conversationId);
+      await new Promise((resolve) => window.setTimeout(resolve, ROOM_ENTER_SETTLE_MS));
+      // Another share link may have opened over this one while waiting —
+      // that overlay is not this join's to close.
+      if (overlayRef.current?.requestId === joiningRequestId) {
+        setSurfaceTransitionMode("instant");
+        overlayRef.current = null;
+        setOverlay(null);
+      }
     } catch {
       setJoinError(true);
     } finally {
@@ -155,7 +216,21 @@ export default function NativeConversationShareOverlay() {
         joinNavigationReleaseTimerRef.current = null;
       }, 600);
     }
-  }, [isJoining, locale, overlay?.shareToken, router, searchParams]);
+  }, [isJoining, locale, overlay?.requestId, overlay?.shareToken, router, searchParams]);
+
+  const handleCopyLink = useCallback(async () => {
+    const shareToken = overlay?.shareToken;
+    if (!shareToken || typeof window === "undefined") return;
+
+    try {
+      const shareUrl = buildConversationShareUrl(window.location.origin, shareToken);
+      if (!shareUrl) throw new Error("conversation_share_url_missing");
+      await copyTextToClipboard(shareUrl);
+      toast.success(copy.linkCopied);
+    } catch {
+      toast.error(copy.copyLinkError);
+    }
+  }, [copy.copyLinkError, copy.linkCopied, overlay?.shareToken]);
 
   const closeShare = useCallback(() => {
     if (typeof window !== "undefined" && hasNativeConversationShareHistoryEntry()) {
@@ -200,6 +275,9 @@ export default function NativeConversationShareOverlay() {
 
     const handlePopState = () => {
       if (!overlayRef.current) return;
+      // handleJoin consumes this overlay's history entry itself and closes
+      // the overlay once the room is in place — see its comment.
+      if (pendingJoinNavigationRef.current) return;
       if (!hasNativeConversationShareHistoryEntry()) {
         overlayRef.current = null;
         setOverlay(null);
@@ -239,6 +317,7 @@ export default function NativeConversationShareOverlay() {
       onClose={closeShare}
       ariaLabel={roomTitle || inviterName}
       nativeBackPriority={40}
+      transitionMode={surfaceTransitionMode}
       className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
     >
       <header
@@ -300,7 +379,7 @@ export default function NativeConversationShareOverlay() {
             className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
             style={{ touchAction: "pan-y" }}
           >
-            {/* Shown before the viewer decides to join a room with a Mingle-run member. */}
+            {/* Shown before the viewer decides to join a room with a HashChat-run member. */}
             {state?.operatorDisclosure ? <ConversationOperatorDisclosure locale={spectateLocale} /> : null}
             {status === "loading" ? (
               <div className="flex h-full items-center justify-center text-slate-400">
@@ -322,18 +401,31 @@ export default function NativeConversationShareOverlay() {
             className="shrink-0 border-t border-slate-100 px-4 py-3"
             style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
           >
-            {joinError ? (
-              <p className="mb-2 text-center text-[12px] text-rose-500">{copy.joinRoomError}</p>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleJoin}
-              disabled={status === "loading" || isJoining}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#F3C35A] px-5 py-3.5 text-[15px] font-semibold text-[#2D2A1E] shadow-[0_10px_24px_rgba(243,195,90,0.28)] transition active:scale-[0.99] disabled:opacity-60"
-            >
-              {isJoining ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-              {copy.joinRoom}
-            </button>
+            {overlay?.canCopyLink ? (
+              <button
+                type="button"
+                onClick={() => void handleCopyLink()}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#F3C35A] px-5 py-3.5 text-[15px] font-semibold text-[#2D2A1E] shadow-[0_10px_24px_rgba(243,195,90,0.28)] transition active:scale-[0.99]"
+              >
+                <Link2 className="h-4 w-4" aria-hidden="true" />
+                {copy.copyLink}
+              </button>
+            ) : (
+              <>
+                {joinError ? (
+                  <p className="mb-2 text-center text-[12px] text-rose-500">{copy.joinRoomError}</p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleJoin}
+                  disabled={status === "loading" || isJoining}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#F3C35A] px-5 py-3.5 text-[15px] font-semibold text-[#2D2A1E] shadow-[0_10px_24px_rgba(243,195,90,0.28)] transition active:scale-[0.99] disabled:opacity-60"
+                >
+                  {isJoining ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+                  {copy.joinRoom}
+                </button>
+              </>
+            )}
           </div>
         </>
       )}

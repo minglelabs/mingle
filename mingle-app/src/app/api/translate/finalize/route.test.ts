@@ -71,6 +71,13 @@ vi.mock('@/lib/app-analytics', () => {
   }
 })
 
+// These cases exercise the Gemini path through the no-preference fallback, so pin that
+// fallback to Gemini here; the real default is asserted in translation-models.test.ts.
+vi.mock('@/lib/translation-models', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/translation-models')>()),
+  resolveDefaultSelectableTranslationModel: () => 'gemini-2.5-flash-lite',
+}))
+
 vi.mock('@google/generative-ai', () => {
   class GoogleGenerativeAI {
     getGenerativeModel(config?: unknown) {
@@ -112,6 +119,7 @@ function clearTranslationEnv() {
   delete process.env.OPENAI_API_KEY
   delete process.env.OPENAI_BASE_URL
   delete process.env.GEMINI_API_KEY
+  delete process.env.ANTHROPIC_API_KEY
 }
 
 function setGeminiTranslateEnv() {
@@ -137,27 +145,6 @@ function setQwenTranslateEnv(args?: {
 async function importRouteWithEnv() {
   vi.resetModules()
   setGeminiTranslateEnv()
-  process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
-  process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
-  process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
-
-  const mod = await import('@/app/api/translate/finalize/route')
-  return mod.POST
-}
-
-async function importRouteWithQwenEnv(args?: {
-  baseUrl?: string
-  apiKey?: string
-  model?: string
-  extraBody?: Record<string, unknown>
-}) {
-  vi.resetModules()
-  setQwenTranslateEnv({
-    baseUrl: args?.baseUrl ?? 'https://openrouter.ai/api/v1',
-    apiKey: args?.apiKey ?? 'test-qwen-key',
-    model: args?.model,
-    extraBody: args?.extraBody,
-  })
   process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
   process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
   process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
@@ -712,7 +699,7 @@ describe('/api/translate/finalize route', () => {
 
   it('does not immediately retry gemini rate-limit errors when the provider asks for a long retry delay', async () => {
     mockGenerateContent.mockRejectedValueOnce(new Error(
-      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 23.05747353s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"23s"}]',
+      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 23.05747353s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"23s"}]',
     ))
 
     const fetchMock = vi.fn()
@@ -724,7 +711,7 @@ describe('/api/translate/finalize route', () => {
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
       isFinal: true,
-      translationModel: 'gemma-4-31b-it',
+      translationModel: 'gemini-2.5-flash-lite',
     }) as never)
     const json = await res.json()
 
@@ -734,61 +721,8 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('returns an error for repeated gemma requests while a long provider retry delay is still active', async () => {
-    setAuthenticatedTranslationModel('gemma-4-31b-it')
-    let nowMs = 1_000_000
-    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => nowMs)
-
-    mockGenerateContent.mockRejectedValueOnce(new Error(
-      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 59.616803365s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"59s"}]',
-    ))
-
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithEnv()
-
-    try {
-      const firstResponse = await POST(makeJsonRequest({
-        text: 'Like that.',
-        sourceLanguage: 'en',
-        targetLanguages: ['ko', 'ja'],
-        isFinal: false,
-      }) as never)
-      const firstJson = await firstResponse.json()
-
-      expect(firstResponse.status).toBe(502)
-      expect(firstJson).toEqual({ error: 'empty_translation_response' })
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-
-      nowMs += 1_000
-
-      const secondResponse = await POST(makeJsonRequest({
-        text: 'Like that.',
-        sourceLanguage: 'en',
-        targetLanguages: ['ko', 'ja'],
-        isFinal: false,
-        currentTurnPreviousState: {
-          sourceLanguage: 'en',
-          sourceText: 'Like that.',
-          translations: {
-            ko: '그렇게.',
-            ja: 'そんなふうに。',
-          },
-        },
-      }) as never)
-      const secondJson = await secondResponse.json()
-
-      expect(secondResponse.status).toBe(502)
-      expect(secondJson).toEqual({ error: 'empty_translation_response' })
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-      expect(fetchMock).not.toHaveBeenCalled()
-    } finally {
-      nowSpy.mockRestore()
-    }
-  })
-
   it('does not retry openai-compatible 429 errors when no retry delay is provided', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -800,10 +734,10 @@ describe('/api/translate/finalize route', () => {
       ))
 
     vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithQwenEnv({
-      baseUrl: 'https://openrouter.ai/api/v1',
-      model: 'qwen/qwen3.5-9b',
-    })
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+    // No fallback provider configured, so only the selected one is tried.
+    delete process.env.GEMINI_API_KEY
 
     const res = await POST(makeJsonRequest({
       text: 'hello',
@@ -848,101 +782,8 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('supports qwen via an OpenAI-compatible endpoint and strips think blocks', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: '<think>\ninternal reasoning\n</think>\n```json\n{"ko":"안녕하세요"}\n```',
-              },
-              finish_reason: 'stop',
-            },
-          ],
-          usage: {
-            prompt_tokens: 14,
-            completion_tokens: 9,
-            total_tokens: 23,
-          },
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ))
-
-    vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithQwenEnv({
-      baseUrl: 'https://openrouter.ai/api/v1',
-      model: 'qwen/qwen3.5-9b',
-    })
-
-    const res = await POST(makeJsonRequest({
-      text: 'hello',
-      sourceLanguage: 'en',
-      targetLanguages: ['ko'],
-      isFinal: true,
-    }) as never)
-    const json = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(json.provider).toBe('qwen')
-    expect(json.infrastructureProvider).toBe('openrouter')
-    expect(json.model).toBe('qwen/qwen3.5-9b')
-    expect(json.translationPromptTokens).toBe(14)
-    expect(json.translationCompletionTokens).toBe(9)
-    expect(json.translationTotalTokens).toBe(23)
-    expect(json.translations).toEqual({ ko: '안녕하세요' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://openrouter.ai/api/v1/chat/completions',
-      expect.objectContaining({
-        method: 'POST',
-      }),
-    )
-
-    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
-    const body = JSON.parse(String(requestInit.body)) as {
-      model?: string
-      messages?: Array<{ role?: string, content?: string }>
-      extra_body?: Record<string, unknown>
-      response_format?: Record<string, unknown>
-      reasoning?: Record<string, unknown>
-    }
-    const headers = requestInit.headers as Record<string, string>
-
-    expect(headers.Authorization).toBe('Bearer test-qwen-key')
-    expect(headers['X-Title']).toBe('mingle-app')
-    expect(body.model).toBe('qwen/qwen3.5-9b')
-    expect(body.extra_body).toBeUndefined()
-    expect((body as Record<string, unknown>).service_tier).toBeUndefined()
-    expect(body.response_format).toEqual({
-      type: 'json_schema',
-      json_schema: {
-        name: 'translate_finalize_response',
-        strict: true,
-        schema: {
-          type: 'object',
-          properties: {
-            ko: {
-              type: 'string',
-              description: 'Translated text for ko.',
-            },
-          },
-          required: ['ko'],
-          additionalProperties: false,
-        },
-      },
-    })
-    expect(body.reasoning).toEqual({
-      effort: 'none',
-      exclude: true,
-    })
-    expect(body.messages?.[0]?.role).toBe('system')
-    expect(body.messages?.[1]?.role).toBe('user')
-  })
-
-  it('uses a longer timeout for non-final qwen openrouter requests', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+  it('uses a longer timeout for non-final GPT-6 Luna requests', async () => {
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -967,10 +808,8 @@ describe('/api/translate/finalize route', () => {
     })
 
     try {
-      const POST = await importRouteWithQwenEnv({
-        baseUrl: 'https://openrouter.ai/api/v1',
-        model: 'qwen/qwen3.5-9b',
-      })
+      const POST = await importRouteWithEnv()
+      process.env.OPENAI_API_KEY = 'test-openai-key'
 
       const res = await POST(makeJsonRequest({
         text: '아니',
@@ -988,45 +827,6 @@ describe('/api/translate/finalize route', () => {
     } finally {
       timeoutSpy.mockRestore()
     }
-  })
-
-  it('supports gemma 4 via the Google Generative AI SDK when selected in account preferences', async () => {
-    setAuthenticatedTranslationModel('gemma-4-31b-it')
-    mockGenerateContent.mockResolvedValue({
-      response: {
-        text: () => '{"ko":"안녕하세요"}',
-        usageMetadata: {
-          promptTokenCount: 11,
-          candidatesTokenCount: 22,
-          totalTokenCount: 33,
-        },
-      },
-    })
-
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithEnv()
-
-    const res = await POST(makeJsonRequest({
-      text: 'hello',
-      sourceLanguage: 'en',
-      targetLanguages: ['ko'],
-      isFinal: true,
-    }) as never)
-    const json = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(json.provider).toBe('gemma')
-    expect(json.infrastructureProvider).toBe('google')
-    expect(json.model).toBe('gemma-4-31b-it')
-    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-    expect(fetchMock).not.toHaveBeenCalled()
-
-    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as { model?: string }
-    expect(modelConfig.model).toBe('gemma-4-31b-it')
-    const request = mockGenerateContent.mock.calls[0]?.[0] as { serviceTier?: string }
-    expect(request.serviceTier).toBeUndefined()
-    expect(readGeminiUserPrompt(0)).toContain('hello')
   })
 
   it('uses the request translation model before falling back to the DB preference lookup', async () => {
@@ -1130,7 +930,7 @@ describe('/api/translate/finalize route', () => {
     mockGetServerSession.mockResolvedValue(null)
     mockUserFindUnique.mockImplementation(async (args: { where?: Record<string, string> }) => {
       if (args.where?.externalUserId === 'anon_test_user') {
-        return { translationModel: 'qwen/qwen3.5-9b' }
+        return { translationModel: 'gpt-6-luna' }
       }
       return null
     })
@@ -1154,7 +954,7 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
     setGeminiTranslateEnv()
-    process.env.OPENROUTER_API_KEY = 'test-openrouter-key'
+    process.env.OPENAI_API_KEY = 'test-openai-key'
     process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
     process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
     process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
@@ -1172,9 +972,9 @@ describe('/api/translate/finalize route', () => {
     const json = await res.json()
 
     expect(res.status).toBe(200)
-    expect(json.provider).toBe('qwen')
-    expect(json.infrastructureProvider).toBe('openrouter')
-    expect(json.model).toBe('qwen/qwen3.5-9b')
+    expect(json.provider).toBe('openai')
+    expect(json.infrastructureProvider).toBe('openai')
+    expect(json.model).toBe('gpt-6-luna')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
@@ -1184,7 +984,7 @@ describe('/api/translate/finalize route', () => {
     mockAppEventLogFindFirst.mockResolvedValue({ userId: 'user_from_session' })
     mockUserFindUnique.mockImplementation(async (args: { where?: Record<string, string> }) => {
       if (args.where?.id === 'user_from_session') {
-        return { translationModel: 'qwen/qwen3.5-9b' }
+        return { translationModel: 'gpt-6-luna' }
       }
       return null
     })
@@ -1208,7 +1008,7 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
     setGeminiTranslateEnv()
-    process.env.OPENROUTER_API_KEY = 'test-openrouter-key'
+    process.env.OPENAI_API_KEY = 'test-openai-key'
     process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
     process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
     process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
@@ -1227,9 +1027,9 @@ describe('/api/translate/finalize route', () => {
     const json = await res.json()
 
     expect(res.status).toBe(200)
-    expect(json.provider).toBe('qwen')
-    expect(json.infrastructureProvider).toBe('openrouter')
-    expect(json.model).toBe('qwen/qwen3.5-9b')
+    expect(json.provider).toBe('openai')
+    expect(json.infrastructureProvider).toBe('openai')
+    expect(json.model).toBe('gpt-6-luna')
     expect(mockAppEventLogFindFirst).toHaveBeenCalledWith({
       where: {
         sessionKey: 'sess_test_user',
@@ -1240,80 +1040,6 @@ describe('/api/translate/finalize route', () => {
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(mockGenerateContent).not.toHaveBeenCalled()
-  })
-
-  it('defaults qwen to OpenRouter when only TRANSLATE_API_KEY is set', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: '{"ko":"안녕하세요"}',
-              },
-              finish_reason: 'stop',
-            },
-          ],
-          usage: {},
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ))
-
-    vi.stubGlobal('fetch', fetchMock)
-    vi.resetModules()
-    setQwenTranslateEnv({
-      apiKey: 'test-qwen-key',
-      model: 'qwen/qwen3.5-9b',
-    })
-    delete process.env.TRANSLATE_BASE_URL
-    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
-    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
-    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
-    const { POST } = await import('@/app/api/translate/finalize/route')
-
-    const res = await POST(makeJsonRequest({
-      text: 'hello',
-      sourceLanguage: 'en',
-      targetLanguages: ['ko'],
-      isFinal: true,
-    }) as never)
-    const json = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(json.provider).toBe('qwen')
-    expect(json.model).toBe('qwen/qwen3.5-9b')
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://openrouter.ai/api/v1/chat/completions')
-
-    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
-    const body = JSON.parse(String(requestInit.body)) as {
-      response_format?: Record<string, unknown>
-      reasoning?: Record<string, unknown>
-    }
-    const headers = requestInit.headers as Record<string, string>
-    expect(headers.Authorization).toBe('Bearer test-qwen-key')
-    expect(body.response_format).toEqual({
-      type: 'json_schema',
-      json_schema: {
-        name: 'translate_finalize_response',
-        strict: true,
-        schema: {
-          type: 'object',
-          properties: {
-            ko: {
-              type: 'string',
-              description: 'Translated text for ko.',
-            },
-          },
-          required: ['ko'],
-          additionalProperties: false,
-        },
-      },
-    })
-    expect(body.reasoning).toEqual({
-      effort: 'none',
-      exclude: true,
-    })
   })
 
   it('uses the OpenAI API with no reasoning and a strict JSON schema for GPT-6 Luna', async () => {
@@ -1389,8 +1115,8 @@ describe('/api/translate/finalize route', () => {
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
-  it('uses a redetect json schema for qwen OpenRouter requests on versioned routes', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+  it('uses a redetect json schema for GPT-6 Luna requests on versioned routes', async () => {
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1409,11 +1135,8 @@ describe('/api/translate/finalize route', () => {
 
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
-    setQwenTranslateEnv({
-      baseUrl: 'https://openrouter.ai/api/v1',
-      apiKey: 'test-qwen-key',
-      model: 'qwen/qwen3.5-9b',
-    })
+    setGeminiTranslateEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
     process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
     process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
     process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
@@ -1429,7 +1152,7 @@ describe('/api/translate/finalize route', () => {
     const json = await res.json()
 
     expect(res.status).toBe(200)
-    expect(json.provider).toBe('qwen')
+    expect(json.provider).toBe('openai')
     expect(json.sourceLanguage).toBe('ko')
     expect(json.sourceLanguagesMixed).toBe(false)
     expect(json.sourceTextHasForeignScript).toBe(false)
@@ -1490,8 +1213,8 @@ describe('/api/translate/finalize route', () => {
     })
   })
 
-  it('falls back to previous-state translations for non-final qwen provider errors', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+  it('falls back to previous-state translations for non-final GPT-6 Luna provider errors', async () => {
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1504,10 +1227,9 @@ describe('/api/translate/finalize route', () => {
       ))
 
     vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithQwenEnv({
-      baseUrl: 'https://openrouter.ai/api/v1',
-      model: 'qwen/qwen3.5-9b',
-    })
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+    delete process.env.GEMINI_API_KEY
 
     const res = await POST(makeJsonRequest({
       text: '응',
@@ -1532,6 +1254,112 @@ describe('/api/translate/finalize route', () => {
       ja: 'うん。',
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back from GPT-6 Luna to Gemini when OpenAI rejects the request', async () => {
+    setAuthenticatedTranslationModel('gpt-6-luna')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      ))
+    mockGenerateContent.mockResolvedValueOnce({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('gemini')
+    expect(json.model).toBe('gemini-2.5-flash-lite')
+    expect(json.translations).toEqual({ ko: '안녕하세요' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to Claude Haiku when both GPT-6 Luna and Gemini fail', async () => {
+    setAuthenticatedTranslationModel('gpt-6-luna')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      ))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-haiku-5-5',
+          content: [{ type: 'text', text: '{"ko":"안녕하세요"}' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+    mockGenerateContent.mockRejectedValue(new Error(
+      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com: [400 Bad Request] API key not valid.',
+    ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('claude')
+    expect(json.translations).toEqual({ ko: '안녕하세요' })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('api.anthropic.com')
+  })
+
+  it('returns 502 after every fallback provider fails', async () => {
+    setAuthenticatedTranslationModel('gemini-2.5-flash-lite')
+    const fetchMock = vi.fn()
+      .mockResolvedValue(new Response(
+        JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      ))
+    mockGenerateContent.mockRejectedValue(new Error(
+      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com: [400 Bad Request] API key not valid.',
+    ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+
+    expect(res.status).toBe(502)
+    expect(await res.json()).toEqual({ error: 'empty_translation_response' })
+    // Gemini first (selected), then GPT-6 Luna; Haiku has no key here.
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('api.openai.com')
   })
 
   it('falls back to the default model when the user has no stored translation model', async () => {

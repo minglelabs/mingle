@@ -34,7 +34,8 @@ function threadPath(postId: string): string {
   return `/admin/activity/posts/${encodeURIComponent(postId)}`
 }
 
-function CommentRow({ comment, korean, nowMs, focused, isReply, canReply, onReply }: {
+function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply, onReply }: {
+  postId: string
   comment: ThreadComment
   korean: boolean
   nowMs: number
@@ -62,8 +63,16 @@ function CommentRow({ comment, korean, nowMs, focused, isReply, canReply, onRepl
             <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-800">
               {comment.replyTo ? <span className="mr-1 text-sky-700">@{comment.replyTo.label.replace(/^@/, '')}</span> : null}
               {text || (comment.hasImage ? '' : '(내용 없음)')}
-              {comment.hasImage ? <span className="text-slate-500">{text ? ' ' : ''}📷 사진</span> : null}
             </p>
+            {comment.hasImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/admin/api/posts/${postId}/comments/${comment.id}/image`}
+                alt="댓글 사진"
+                loading="lazy"
+                className="mt-1 max-h-60 w-auto max-w-full rounded-lg border border-slate-200"
+              />
+            ) : null}
             <p className="mt-0.5 flex items-center gap-3 text-xs text-slate-500">
               {comment.likeCount > 0 ? (
                 <span className="inline-flex items-center gap-1"><Heart size={12} aria-hidden="true" />{comment.likeCount}</span>
@@ -264,7 +273,10 @@ export function PostThreadView({ initialThread, focusCommentId }: {
           {postText ? (
             <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-800">{postText}</p>
           ) : null}
-          {post.hasImage ? <p className="mt-1 text-sm text-slate-500">📷 사진이 있는 글</p> : null}
+          {post.hasImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`/admin/api/posts/${postId}/image`} alt="글 사진" loading="lazy" className="mt-2 max-h-[28rem] w-auto max-w-full rounded-xl border border-slate-200" />
+          ) : null}
           <p className="mt-2 flex items-center gap-3 text-xs text-slate-500">
             <span className="inline-flex items-center gap-1"><Heart size={13} aria-hidden="true" />{post.likeCount}</span>
             <span className="inline-flex items-center gap-1"><MessageCircle size={13} aria-hidden="true" />{post.commentCount}</span>
@@ -278,6 +290,7 @@ export function PostThreadView({ initialThread, focusCommentId }: {
             {thread.comments.map((comment) => (
               <li key={comment.id}>
                 <CommentRow
+                  postId={postId}
                   comment={comment}
                   korean={korean}
                   nowMs={nowMs}
@@ -289,6 +302,7 @@ export function PostThreadView({ initialThread, focusCommentId }: {
                 {comment.replies.map((reply) => (
                   <CommentRow
                     key={reply.id}
+                    postId={postId}
                     comment={reply}
                     korean={korean}
                     nowMs={nowMs}

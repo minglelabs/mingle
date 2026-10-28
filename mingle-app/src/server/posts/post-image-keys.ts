@@ -47,3 +47,36 @@ export function parseImageKeyInput(input: Record<string, unknown>, userId: strin
   if (value === null || value === '') return { kind: 'clear' }
   return isOwnedPostImageKey(value, userId) ? { kind: 'set', key: value } : { kind: 'invalid' }
 }
+
+/** Most photos one post may carry. */
+export const POST_MAX_IMAGES = 10
+
+export type ImageListInput =
+  | { kind: 'absent' }
+  | { kind: 'set'; images: Array<{ key: string; width: number | null; height: number | null }> }
+  | { kind: 'invalid' }
+
+function edge(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 2048 ? value : null
+}
+
+/**
+ * Parse an optional `images` request field: the post's photos in order, each
+ * `{ imageObjectKey, imageWidth?, imageHeight? }`, 1 to POST_MAX_IMAGES of
+ * them, every key one the server issued to `userId` and none repeated.
+ */
+export function parseImageListInput(input: Record<string, unknown>, userId: string): ImageListInput {
+  if (!('images' in input) || input.images === undefined || input.images === null) return { kind: 'absent' }
+  const list = input.images
+  if (!Array.isArray(list) || list.length === 0 || list.length > POST_MAX_IMAGES) return { kind: 'invalid' }
+  const images: Array<{ key: string; width: number | null; height: number | null }> = []
+  for (const item of list) {
+    const entry = item && typeof item === 'object' ? (item as Record<string, unknown>) : null
+    if (!entry || !isOwnedPostImageKey(entry.imageObjectKey, userId)) return { kind: 'invalid' }
+    if (images.some((image) => image.key === entry.imageObjectKey)) return { kind: 'invalid' }
+    const width = edge(entry.imageWidth)
+    const height = edge(entry.imageHeight)
+    images.push({ key: entry.imageObjectKey, width: width && height ? width : null, height: width && height ? height : null })
+  }
+  return { kind: 'set', images }
+}

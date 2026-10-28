@@ -30,6 +30,13 @@ vi.mock('@/server/posts/post-visibility', () => ({
   visiblePostWhere: () => ({ __visible: true }),
 }))
 
+// No starter list here; its ordering is covered in starter-feed.test.ts.
+vi.mock('./starter-feed', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./starter-feed')>()),
+  loadStarterFeed: async () => null,
+  starterSegmentOfUser: async () => 'foreign',
+}))
+
 vi.mock('@/lib/prisma', () => {
   const pageRow = (p: FakePost) => ({
     id: p.id,

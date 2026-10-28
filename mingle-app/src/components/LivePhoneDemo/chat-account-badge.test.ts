@@ -58,8 +58,8 @@ describe('wire readers', () => {
   })
 
   it('writes the plain-text label for notice sentences, never for an empty name', () => {
-    expect(labelNameWithAccountBadge('Mingle', 'official', 'ko')).toBe('Mingle (공식)')
-    expect(labelNameWithAccountBadge('Mingle', 'official', 'en')).toBe('Mingle (Official)')
+    expect(labelNameWithAccountBadge('HashChat', 'official', 'ko')).toBe('HashChat (공식)')
+    expect(labelNameWithAccountBadge('HashChat', 'official', 'en')).toBe('HashChat (Official)')
     expect(labelNameWithAccountBadge('Bob', null, 'ko')).toBe('Bob')
     expect(labelNameWithAccountBadge('', 'official', 'ko')).toBe('')
   })

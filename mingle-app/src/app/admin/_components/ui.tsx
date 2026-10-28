@@ -164,7 +164,7 @@ export function AdminChip({
   );
 }
 
-/** The "운영 계정" chip: an account run by Mingle staff (same copy as the app badge). */
+/** The "운영 계정" chip: an account run by HashChat staff (same copy as the app badge). */
 export function OperatorAccountChip({ className }: { className?: string }) {
   return (
     <AdminChip tone="accent" icon={UserRoundCog} title={BADGE_COPY.operatorDescription} className={className}>

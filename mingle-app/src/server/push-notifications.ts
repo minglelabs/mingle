@@ -1,11 +1,13 @@
 import { createPrivateKey, createSign } from "node:crypto";
 import { connect } from "node:http2";
+import { resolveTeamNotificationCopy, resolveTeamNotificationText } from "@/i18n/team-notification-copy";
 import { prisma } from "@/lib/prisma";
 import { feedHref } from "@/lib/feed-routes";
 import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { resolveLegalDocumentLocale, resolveSupportedLocaleTag, type LegalDocumentLocale } from "@/i18n/config";
 import { resolvePushNotificationCopy } from "@/i18n/notification-copy";
 import { resolveOperatorInboxPushCopy } from "@/server/operator-inbox/push-copy";
+import { isTeamNotificationType } from "@/lib/user-notification-types";
 
 type PushPlatform = "ios" | "android";
 
@@ -147,33 +149,18 @@ const CONVERSATION_MESSAGE_PUSH_COPY: Record<LegalDocumentLocale, { title: strin
   vi: { title: "Tin nhắn mới", separator: ": " },
 };
 
-const FEEDBACK_REPLY_PUSH_TITLES: Record<string, string> = {
-  ko: "피드백에 답변이 도착했어요",
-  en: "Reply to your feedback",
-  ja: "フィードバックに返信が届きました",
-  "zh-cn": "你的反馈有新回复",
-  "zh-tw": "你的意見回饋有新回覆",
-  es: "Respuesta a tus comentarios",
-  fr: "Réponse à votre commentaire",
-  de: "Antwort auf Ihr Feedback",
-  pt: "Resposta ao seu feedback",
-  it: "Risposta al tuo feedback",
-  ru: "Ответ на ваш отзыв",
-  ar: "رد على ملاحظاتك",
-  hi: "आपके फ़ीडबैक का जवाब आया है",
-  th: "มีคำตอบสำหรับความคิดเห็นของคุณ",
-  vi: "Phản hồi cho góp ý của bạn",
-};
-
 /** Title and body shown on the device, in the recipient's language (unknown -> English). */
 export function resolvePushCopy(message: PushMessage): { title: string; body: string } {
   const label = message.actorLabel || "Someone";
-  if (message.type === "feedback_reply") {
-    const language = message.recipientLanguage.trim().toLowerCase();
-    const preview = (message.messagePreview || "").replace(/\s+/g, " ").trim() || "…";
+  if (isTeamNotificationType(message.type)) {
+    const text = resolveTeamNotificationText(
+      resolveTeamNotificationCopy(message.recipientLanguage),
+      message.type,
+      message.messagePreview,
+    );
     return {
-      title: FEEDBACK_REPLY_PUSH_TITLES[language] ?? FEEDBACK_REPLY_PUSH_TITLES.en,
-      body: preview,
+      title: text.title,
+      body: text.body.replace(/\s+/g, " ").trim().slice(0, 240) || "…",
     };
   }
   if (message.type === "conversation_message") {
@@ -194,7 +181,7 @@ export function resolvePushCopy(message: PushMessage): { title: string; body: st
     return resolvePushNotificationCopy(message.recipientLanguage, message.type, label);
   }
 
-  return { title: "Mingle", body: "You have a new notification." };
+  return { title: "HashChat", body: "You have a new notification." };
 }
 
 function createPushData(message: PushMessage): Record<string, string> {
@@ -477,6 +464,7 @@ export async function sendPushNotificationForUserNotification(notificationId: st
       type: true,
       postId: true,
       commentId: true,
+      body: true,
       recipient: {
         select: {
           language: true,
@@ -497,6 +485,10 @@ export async function sendPushNotificationForUserNotification(notificationId: st
   });
   if (!notification) return;
 
+  // Team notifications have no actor; their text is in `body`.
+  const actor = notification.actor;
+  if (!actor && !isTeamNotificationType(notification.type)) return;
+
   const recipientLanguage = resolveRecipientLanguage(notification.recipient);
   const recipientLocale = resolveSupportedLocaleTag(recipientLanguage) ?? "en";
   const navigationUrl = notification.postId
@@ -504,21 +496,23 @@ export async function sendPushNotificationForUserNotification(notificationId: st
         postId: notification.postId,
         commentId: notification.commentId,
       })
-    : notification.type === "follow"
+    : notification.type === "follow" && actor
       // Follow taps open the new follower's profile (same path the web push-tap
       // receiver resolves for `/{locale}/users/{id}`).
-      ? `/${recipientLocale}/users/${encodeURIComponent(notification.actor.id)}`
+      ? `/${recipientLocale}/users/${encodeURIComponent(actor.id)}`
       : undefined;
 
-  const actorName = notification.actor.name?.trim() || `@${notification.actor.handle}`;
   const message: PushMessage = {
     notificationId: notification.id,
     type: notification.type,
-    actorId: notification.actor.id,
+    actorId: actor?.id ?? "",
     // An operator / official actor keeps its badge on the lock screen too.
-    actorLabel: withAccountBadgeLabel(actorName, resolveAccountBadge(notification.actor), recipientLanguage),
+    actorLabel: actor
+      ? withAccountBadgeLabel(actor.name?.trim() || `@${actor.handle}`, resolveAccountBadge(actor), recipientLanguage)
+      : "HashChat",
     recipientLanguage,
     ...(navigationUrl ? { navigationUrl } : {}),
+    ...(actor ? {} : { messagePreview: notification.body ?? "" }),
   };
   const targets = notification.recipient.pushTokens as PushTarget[];
   await settlePushDeliveries(targets.map((target) => ({
@@ -592,7 +586,7 @@ export async function sendPushNotificationForConversationMessage(args: {
       type: "conversation_message",
       actorId: args.senderUserId,
       // An operator sender is labeled in each recipient's own language:
-      // "Mina (운영 계정)" / "Mina (Run by Mingle)".
+      // "Mina (운영 계정)" / "Mina (Run by HashChat)".
       actorLabel: withAccountBadgeLabel(senderName, senderBadge, recipientLanguage),
       recipientLanguage,
       messagePreview,
@@ -609,61 +603,4 @@ export async function sendPushNotificationForConversationMessage(args: {
   }
 
   await settlePushDeliveries(targetEntries);
-}
-
-// Team replies have no actor user, so like message pushes they do not create
-// UserNotification rows. Anonymous feedback (no account) cannot be pushed to.
-export async function sendPushNotificationForFeedbackReply(args: {
-  replyId: string;
-  recipientUserId: string;
-  replyText: string;
-  feedbackLocale?: string | null;
-}): Promise<void> {
-  const apnsConfig = readApnsConfig();
-  const fcmConfig = readFcmConfig();
-  if (!apnsConfig && !fcmConfig) return;
-
-  const messagePreview = args.replyText.replace(/\s+/g, " ").trim().slice(0, 240);
-  if (!messagePreview) return;
-
-  const recipient = await prisma.user.findUnique({
-    where: { id: args.recipientUserId },
-    select: {
-      language: true,
-      pageLanguage: true,
-      pushTokens: {
-        select: {
-          id: true,
-          platform: true,
-          token: true,
-          environment: true,
-        },
-      },
-    },
-  });
-  if (!recipient) return;
-
-  const message: PushMessage = {
-    notificationId: args.replyId,
-    type: "feedback_reply",
-    actorId: "",
-    actorLabel: "Mingle",
-    recipientLanguage: recipient.pageLanguage?.trim()
-      || recipient.language?.trim()
-      || args.feedbackLocale?.trim()
-      || "en",
-    messagePreview,
-  };
-  const targets = recipient.pushTokens as PushTarget[];
-  const results = await Promise.allSettled(
-    targets.map((target) => sendPushToTarget(target, message, apnsConfig, fcmConfig)),
-  );
-  const invalidTokenIds = results.flatMap((result, index) => (
-    result.status === "fulfilled" && result.value.invalidToken
-      ? [targets[index]?.id]
-      : []
-  ));
-  if (invalidTokenIds.length > 0) {
-    await prisma.userPushToken.deleteMany({ where: { id: { in: invalidTokenIds } } });
-  }
 }

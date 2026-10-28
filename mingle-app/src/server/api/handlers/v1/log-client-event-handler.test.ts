@@ -824,6 +824,27 @@ describe("handleLogClientEventV1", () => {
     );
   });
 
+  it("does not resurrect a message its sender already unsent", async () => {
+    mockAppMessageFindUnique.mockResolvedValue({ createdAt: new Date(), metadata: { recalledAtMs: 1700000001000 } });
+
+    const response = await handleLogClientEventV1(new NextRequest("https://example.com/api/ios/v1.0.11/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized",
+        sessionKey: "sess_123",
+        clientMessageId: "u-1700000000000-1",
+        sourceLanguage: "ko",
+        sourceText: "안녕하세요",
+        translations: { en: "Hello" },
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockAppMessageUpsert).not.toHaveBeenCalled();
+    expect(mockAppMessageContentUpsert).not.toHaveBeenCalled();
+    expect(mockNotifyConversationMessage).not.toHaveBeenCalled();
+  });
+
   it("ignores stale finalized turns after the conversation was cleared", async () => {
     mockAppEventLogFindFirst.mockResolvedValue({
       createdAt: new Date("2026-04-09T00:00:00.000Z"),

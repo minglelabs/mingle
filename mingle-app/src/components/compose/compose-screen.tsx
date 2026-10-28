@@ -16,7 +16,7 @@ import {
   ComposePrimaryButton,
   useKeyboardInset,
 } from './compose-chrome'
-import ComposeEditor from './compose-editor'
+import ComposeEditor, { MAX_POST_PHOTOS } from './compose-editor'
 import { composeGapCopy } from './compose-gap-copy'
 import { postPreviewText } from './draft-preview'
 import {
@@ -123,6 +123,9 @@ export default function ComposeScreen({
   const [text, setText] = useState('')
   const [backgroundKey, setBackgroundKey] = useState<string | null>(null)
   const [image, setImageState] = useState<PendingImage>({ kind: 'none' })
+  // The 2nd to 10th photo. A draft keeps only the first photo; these live with the open composer.
+  const [extras, setExtras] = useState<Array<{ id: string; image: Exclude<PendingImage, { kind: 'none' }> }>>([])
+  const extraSeq = useRef(0)
   const [saveState, setSaveState] = useState<DraftSaveState>({
     saving: false,
     draftId: initialDraftId,
@@ -316,6 +319,7 @@ export default function ComposeScreen({
     setBackgroundKey(randomBackgroundKey())
     uploadSeq.current += 1
     setImage({ kind: 'none' })
+    clearExtras()
     setMode('editor')
   }
 
@@ -327,6 +331,7 @@ export default function ComposeScreen({
     setBackgroundKey(draft.backgroundKey ?? randomBackgroundKey())
     uploadSeq.current += 1
     setImage(draftImage(draft))
+    clearExtras()
     clientPostId.current = generateClientPostId()
     setMode('editor')
   }
@@ -397,6 +402,78 @@ export default function ComposeScreen({
     }
   }
 
+  function clearExtras() {
+    setExtras((prev) => {
+      for (const extra of prev) URL.revokeObjectURL(extra.image.url)
+      return []
+    })
+  }
+
+  /** Photos picked together: the first fills the post's first photo if it is empty, the rest follow. */
+  function handleAddPhotos(prepared: PreparedImage[]) {
+    let rest = prepared
+    if (image.kind === 'none' && rest.length) {
+      handlePickImage(rest[0])
+      rest = rest.slice(1)
+    }
+    const added = rest.slice(0, Math.max(0, MAX_POST_PHOTOS - 1 - extras.length)).map((photo) => ({
+      id: `extra-${++extraSeq.current}`,
+      image: { kind: 'local' as const, prepared: photo, url: URL.createObjectURL(photo.file) },
+    }))
+    if (!added.length) return
+    setExtras((prev) => [...prev, ...added])
+    if (isSignedIn) for (const extra of added) void uploadExtra(extra.id, extra.image.prepared, extra.image.url)
+  }
+
+  // Each extra photo uploads right away too; on failure it stays local and publish uploads it.
+  async function uploadExtra(id: string, prepared: PreparedImage, url: string) {
+    try {
+      const form = new FormData()
+      form.append('file', prepared.file)
+      const res = await fetch(buildClientApiPath('/posts/images'), { method: 'POST', cache: 'no-store', body: form })
+      if (!res.ok) {
+        if (await isAccountRestrictedResponse(res)) setImageRestricted(true)
+        return
+      }
+      const body = (await res.json()) as { imageObjectKey: string; width?: number; height?: number }
+      setExtras((prev) => prev.map((extra) => extra.id !== id ? extra : {
+        id,
+        image: {
+          kind: 'server',
+          objectKey: body.imageObjectKey,
+          url,
+          width: typeof body.width === 'number' ? body.width : prepared.originalWidth,
+          height: typeof body.height === 'number' ? body.height : prepared.originalHeight,
+        },
+      }))
+    } catch {
+      // Keep the local photo; the publish pipeline uploads it.
+    }
+  }
+
+  function handleRemovePhoto(index: number) {
+    if (index > 0) {
+      setExtras((prev) => {
+        const removed = prev[index - 1]
+        if (removed) URL.revokeObjectURL(removed.image.url)
+        return prev.filter((_, i) => i !== index - 1)
+      })
+      return
+    }
+    // Removing the first photo moves the next one up.
+    const [next, ...others] = extras
+    if (!next) {
+      handlePickImage(null)
+      return
+    }
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current)
+    objectUrl.current = next.image.url
+    uploadSeq.current += 1
+    setImage(next.image)
+    setExtras(others)
+    scheduleAutosave(latest.current.text, latest.current.backgroundKey)
+  }
+
   const previewUrl = image.kind === 'none' ? null : image.url
   const dimensions =
     image.kind === 'local'
@@ -406,6 +483,15 @@ export default function ComposeScreen({
         : null
 
   const hasImage = image.kind !== 'none'
+  const photos = [
+    ...(image.kind === 'none' ? [] : [{ id: 'first', image }]),
+    ...extras,
+  ].map(({ id, image: photo }) => ({
+    id,
+    url: photo.url,
+    width: photo.kind === 'local' ? photo.prepared.originalWidth : photo.width,
+    height: photo.kind === 'local' ? photo.prepared.originalHeight : photo.height,
+  }))
   const publishable = canPublish({ sourceText: text, hasImage })
 
   async function handlePublish() {
@@ -434,6 +520,9 @@ export default function ComposeScreen({
         imageFile: image.kind === 'local' ? image.prepared.file : null,
         imageWidth: image.kind === 'server' ? image.width : image.kind === 'local' ? image.prepared.originalWidth : null,
         imageHeight: image.kind === 'server' ? image.height : image.kind === 'local' ? image.prepared.originalHeight : null,
+        extraImages: extras.map(({ image: photo }) => photo.kind === 'server'
+          ? { objectKey: photo.objectKey, file: null, width: photo.width, height: photo.height }
+          : { objectKey: null, file: photo.prepared.file, width: photo.prepared.originalWidth, height: photo.prepared.originalHeight }),
         draftId,
       })
       if (!accepted) {
@@ -632,6 +721,9 @@ export default function ComposeScreen({
           imagePreviewUrl={previewUrl}
           imageDimensions={dimensions}
           onPickImage={handlePickImage}
+          photos={photos}
+          onAddPhotos={handleAddPhotos}
+          onRemovePhoto={handleRemovePhoto}
           author={author}
           autoFocus={!initialDraftId}
           // In the panel, focus once it has slid in (SlideSurface: 320ms).

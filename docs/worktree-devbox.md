@@ -18,9 +18,9 @@
 
 ```dotenv
 DEVBOX_CLOUDFLARE_TUNNEL_TOKEN=...
-DEVBOX_CLOUDFLARE_WEB_HOSTNAME=mingle-app-devbox.photo-for-passport.com
-DEVBOX_CLOUDFLARE_STT_HOSTNAME=mingle-stt-devbox.photo-for-passport.com
-DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME=mingle-messaging-devbox.photo-for-passport.com
+DEVBOX_CLOUDFLARE_WEB_HOSTNAME=mingle-app-devbox.minglelabs.app
+DEVBOX_CLOUDFLARE_STT_HOSTNAME=mingle-stt-devbox.minglelabs.app
+DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME=mingle-messaging-devbox.minglelabs.app
 # Keep this only when Cloudflare should be the default device tunnel provider.
 DEVBOX_TUNNEL_PROVIDER=cloudflare
 DEVBOX_NGROK_WEB_DOMAIN=unalienated-neurotically-ela.ngrok-free.dev

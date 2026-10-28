@@ -69,6 +69,8 @@ export async function GET(request: NextRequest) {
       type: true,
       postId: true,
       commentId: true,
+      body: true,
+      targetId: true,
       readAt: true,
       createdAt: true,
       // Identity + badge flags (official / operator) of the actor.

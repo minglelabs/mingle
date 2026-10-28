@@ -43,7 +43,7 @@ describe('/admin/settings/notifications', () => {
     expect(m.requireAdmin.mock.invocationCallOrder[0]).toBeLessThan(m.listAdminNotifyTargets.mock.invocationCallOrder[0])
     expect(html).toContain('알림 받을 계정')
     expect(html).toContain(
-      '이 계정으로 Mingle 앱에 로그인된 기기에서 알림을 받습니다. 알림을 누르면 앱 안에서 관리자 인박스가 열리고, 처음 한 번은 관리자 로그인이 필요합니다.',
+      '이 계정으로 HashChat 앱에 로그인된 기기에서 알림을 받습니다. 알림을 누르면 앱 안에서 관리자 인박스가 열리고, 처음 한 번은 관리자 로그인이 필요합니다.',
     )
     expect(html).toContain('@mina')
   })

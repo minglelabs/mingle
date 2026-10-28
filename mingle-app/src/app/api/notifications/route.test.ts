@@ -85,6 +85,78 @@ describe("/api/notifications route", () => {
     expect(body.notifications).toHaveLength(30);
   });
 
+  it("returns team notifications with their text and no actor", async () => {
+    mockNotificationFindMany.mockResolvedValue([
+      {
+        id: "notification_3",
+        type: "feedback_reply",
+        postId: null,
+        commentId: null,
+        body: "Thanks for the report!",
+        targetId: "feedback_1",
+        readAt: null,
+        createdAt: new Date("2026-10-05T10:00:00.000Z"),
+        actor: null,
+      },
+      {
+        id: "notification_4",
+        type: "report_status",
+        postId: null,
+        commentId: null,
+        body: "resolved",
+        targetId: "report_1",
+        readAt: null,
+        createdAt: new Date("2026-10-05T09:00:00.000Z"),
+        actor: null,
+      },
+      // A follow row whose actor is gone cannot be rendered.
+      {
+        id: "notification_5",
+        type: "follow",
+        postId: null,
+        commentId: null,
+        body: null,
+        targetId: null,
+        readAt: null,
+        createdAt: new Date("2026-10-05T08:00:00.000Z"),
+        actor: null,
+      },
+    ]);
+
+    const response = await GET(new NextRequest("https://example.com/api/notifications"));
+
+    expect((await response.json()).notifications).toEqual([
+      {
+        id: "notification_3",
+        type: "feedback_reply",
+        postId: null,
+        commentId: null,
+        isRead: false,
+        createdAt: "2026-10-05T10:00:00.000Z",
+        actors: [],
+        actorCount: 0,
+        groupKey: "row:notification_3",
+        actorIds: [],
+        body: "Thanks for the report!",
+        targetId: "feedback_1",
+      },
+      {
+        id: "notification_4",
+        type: "report_status",
+        postId: null,
+        commentId: null,
+        isRead: false,
+        createdAt: "2026-10-05T09:00:00.000Z",
+        actors: [],
+        actorCount: 0,
+        groupKey: "row:notification_4",
+        actorIds: [],
+        body: "resolved",
+        targetId: "report_1",
+      },
+    ]);
+  });
+
   it("requires an authenticated viewer", async () => {
     mockGetServerSession.mockResolvedValue(null);
     const response = await GET(new NextRequest("https://example.com/api/notifications"));
@@ -133,8 +205,7 @@ describe("/api/notifications route", () => {
     expect(typeof body.readBefore).toBe("string");
     const where = mockNotificationFindMany.mock.calls[0][0].where;
     expect(where).toMatchObject({ recipientId: "user_123", createdAt: { lte: expect.any(Date) } });
-    expect(where.actor).toBeDefined();
-    expect(where.OR).toHaveLength(2);
+    expect(where.AND).toHaveLength(2);
   });
 
   it("returns groupKey and actorIds so pages can merge like groups", async () => {

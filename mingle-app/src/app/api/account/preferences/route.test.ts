@@ -127,7 +127,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 1000,
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
-      translationModel: "gemini-2.5-flash-lite",
+      translationModel: "gpt-6-luna",
       ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
@@ -161,7 +161,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 1000,
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
-      translationModel: "gemini-2.5-flash-lite",
+      translationModel: "gpt-6-luna",
       ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
@@ -214,7 +214,7 @@ describe("/api/account/preferences route", () => {
       demoSilenceFinalizeMs: 1000,
       demoEndpointMaxDelayMs: 1800,
       demoEndpointTuningStep: 4,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "gpt-6-luna",
       ttsModel: "gemini-3.8-flash-tts",
       adBannerPosition: "bottom",
       demoInputMode: "text",
@@ -233,7 +233,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 1000,
       sonioxEndpointMaxDelayMs: 1800,
       sonioxEndpointTuningStep: 4,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "gpt-6-luna",
       ttsModel: "gemini-3.8-flash-tts",
       adBannerPosition: "bottom",
       inputMode: "text",
@@ -278,7 +278,7 @@ describe("/api/account/preferences route", () => {
         demoSilenceFinalizeMs: 1000,
         demoEndpointMaxDelayMs: 1900,
         demoEndpointTuningStep: 1,
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
         demoInputMode: null,
       })
       .mockResolvedValueOnce({
@@ -305,7 +305,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 1000,
       sonioxEndpointMaxDelayMs: 1900,
       sonioxEndpointTuningStep: 1,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "gpt-6-luna",
       ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
@@ -355,7 +355,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 1000,
       sonioxEndpointMaxDelayMs: 3000,
       sonioxEndpointTuningStep: 2,
-      translationModel: "gemini-2.5-flash-lite",
+      translationModel: "gpt-6-luna",
       ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
@@ -464,7 +464,7 @@ describe("/api/account/preferences route", () => {
     const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       }),
     }));
     const json = await response.json();
@@ -474,12 +474,12 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_123" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       },
     });
   });
 
-  it("persists the supported gemma 4 translation model through PATCH", async () => {
+  it("persists a non-default translation model through PATCH", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
         id: "user_123",
@@ -488,17 +488,17 @@ describe("/api/account/preferences route", () => {
     });
     mockUserUpdateMany.mockResolvedValue({ count: 1 });
 
-    const gemmaResponse = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+    const gptResponse = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       body: JSON.stringify({
-        translationModel: "gemma-4-31b-it",
+        translationModel: "gpt-6-luna",
       }),
     }));
-    expect(gemmaResponse.status).toBe(200);
+    expect(gptResponse.status).toBe(200);
     expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
       where: { id: "user_123" },
       data: {
-        translationModel: "gemma-4-31b-it",
+        translationModel: "gpt-6-luna",
       },
     });
   });
@@ -545,12 +545,12 @@ describe("/api/account/preferences route", () => {
 
     const mixed = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
-      body: JSON.stringify({ ttsModel: 42, translationModel: "gemma-4-31b-it" }),
+      body: JSON.stringify({ ttsModel: 42, translationModel: "gpt-6-luna" }),
     }));
     expect(mixed.status).toBe(200);
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_123" },
-      data: { translationModel: "gemma-4-31b-it" },
+      data: { translationModel: "gpt-6-luna" },
     });
   });
 
@@ -563,7 +563,7 @@ describe("/api/account/preferences route", () => {
     });
     mockUserFindUnique.mockResolvedValue({
       id: "user_123",
-      translationModel: "gemma-4-31b-it",
+      translationModel: "gpt-6-luna",
       ttsModel: null,
     });
 
@@ -604,7 +604,7 @@ describe("/api/account/preferences route", () => {
     });
     mockUserFindUnique.mockResolvedValue({
       id: "user_123",
-      translationModel: "gemma-4-31b-it",
+      translationModel: "gpt-6-luna",
       ttsModel: "elevenlabs-v3",
     });
 
@@ -613,7 +613,7 @@ describe("/api/account/preferences route", () => {
 
     expect(response.status).toBe(200);
     expect(json.ttsModel).toBeNull();
-    expect(json.translationModel).toBe("gemma-4-31b-it");
+    expect(json.translationModel).toBe("gpt-6-luna");
   });
 
   it("persists a supported ad banner position through PATCH", async () => {
@@ -733,7 +733,7 @@ describe("/api/account/preferences route", () => {
       demoSilenceFinalizeMs: 1500,
       demoEndpointMaxDelayMs: 2200,
       demoEndpointTuningStep: 0,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "gpt-6-luna",
       adBannerPosition: "top",
       demoInputMode: "text",
       demoSpeakerEnabled: true,
@@ -754,7 +754,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 1500,
       sonioxEndpointMaxDelayMs: 2200,
       sonioxEndpointTuningStep: 0,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "gpt-6-luna",
       ttsModel: null,
       adBannerPosition: "top",
       inputMode: "text",
@@ -795,7 +795,7 @@ describe("/api/account/preferences route", () => {
         "x-mingle-user-id": "anon_test_user",
       },
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       }),
     }));
     const json = await response.json();
@@ -805,7 +805,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { externalUserId: "anon_test_user" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       },
     });
   });
@@ -822,7 +822,7 @@ describe("/api/account/preferences route", () => {
       demoSilenceFinalizeMs: 900,
       demoEndpointMaxDelayMs: 1500,
       demoEndpointTuningStep: 3,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "gpt-6-luna",
       adBannerPosition: "bottom",
       demoInputMode: "voice",
       demoSpeakerEnabled: false,
@@ -843,7 +843,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 900,
       sonioxEndpointMaxDelayMs: 1500,
       sonioxEndpointTuningStep: 3,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "gpt-6-luna",
       ttsModel: null,
       adBannerPosition: "bottom",
       inputMode: "voice",
@@ -897,7 +897,7 @@ describe("/api/account/preferences route", () => {
         "x-mingle-session-key": "sess_test_user",
       },
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       }),
     }));
     const json = await response.json();
@@ -907,7 +907,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_from_session" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       },
     });
   });
@@ -930,7 +930,7 @@ describe("/api/account/preferences route", () => {
         "x-mingle-session-key": "sess_local_storage_user",
       },
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       }),
     }));
     const json = await response.json();
@@ -940,14 +940,14 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
       where: { externalUserId: "anon_local_storage_user" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       },
     });
     expect(mockUserUpdateMany).toHaveBeenNthCalledWith(2, {
       where: { id: "user_from_session" },
       data: {
         externalUserId: "anon_local_storage_user",
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       },
     });
   });
@@ -962,7 +962,7 @@ describe("/api/account/preferences route", () => {
         "x-mingle-session-key": "sess_new_desktop_user",
       },
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       }),
     }));
     const json = await response.json();
@@ -994,7 +994,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenLastCalledWith({
       where: { id: "seeded_user_id" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       },
     });
   });
@@ -1014,7 +1014,7 @@ describe("/api/account/preferences route", () => {
         "x-mingle-session-key": "sess_local_storage_user",
       },
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       }),
     }));
     const json = await response.json();
@@ -1024,7 +1024,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
       where: { externalUserId: "anon_local_storage_user" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       },
     });
     expect(mockUpsertTrackedUser).toHaveBeenCalledWith({
@@ -1052,7 +1052,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenLastCalledWith({
       where: { id: "seeded_user_id" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "gpt-6-luna",
       },
     });
   });

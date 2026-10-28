@@ -46,7 +46,7 @@ type AppTopHeaderProps = {
 /**
  * The single top header shared by the feed and the conversation list so the two
  * tabs line up exactly (height, safe-area padding, wordmark, icon size and
- * order). Left: Mingle wordmark. Right: compose (memo + pencil) then the bell
+ * order). Left: HashChat wordmark. Right: compose (memo + pencil) then the bell
  * with its unread dot. Only the color/positioning treatment differs between the
  * two screens, expressed through `variant`.
  */

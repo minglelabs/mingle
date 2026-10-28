@@ -10,7 +10,7 @@ import { AutomationForm } from './automation-form'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '자동 생성 · Mingle Admin',
+  title: '자동 생성 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

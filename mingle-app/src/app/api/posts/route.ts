@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
 import { accountRestrictionGuard } from '@/server/reports/account-restriction'
-import { parseImageKeyInput } from '@/server/posts/post-image-keys'
+import { parseImageKeyInput, parseImageListInput } from '@/server/posts/post-image-keys'
 import { parseImageDimensions } from '@/server/posts/post-image-dimensions'
 import { POST_BODY_MAX_LENGTH, publishPost } from '@/server/posts/publish-post'
 
@@ -41,9 +41,14 @@ export async function POST(request: NextRequest) {
 
   // Only a key the server issued to this user (POST /posts/images) may be
   // attached; a foreign key (another user's, a conversation image) is refused.
-  const imageInput = parseImageKeyInput(input, userId)
-  if (imageInput.kind === 'invalid') return json({ error: 'invalid_image_key' }, { status: 400 })
-  const imageObjectKey = imageInput.kind === 'set' ? imageInput.key : null
+  // `images` (1-10 photos in order) supersedes the single `imageObjectKey`.
+  const imageList = parseImageListInput(input, userId)
+  if (imageList.kind === 'invalid') return json({ error: 'invalid_image_key' }, { status: 400 })
+  const imageInput = imageList.kind === 'set' ? null : parseImageKeyInput(input, userId)
+  if (imageInput?.kind === 'invalid') return json({ error: 'invalid_image_key' }, { status: 400 })
+  const imageObjectKey = imageList.kind === 'set' ? imageList.images[0].key : imageInput?.kind === 'set' ? imageInput.key : null
+  const dimensionsOf = (image: { width: number | null; height: number | null }) =>
+    image.width && image.height ? { imageWidth: image.width, imageHeight: image.height } : null
 
   // Validate sourceText
   const text = typeof sourceText === 'string' ? sourceText : null
@@ -60,7 +65,8 @@ export async function POST(request: NextRequest) {
     authorId: userId,
     text: hasText ? text : null,
     imageObjectKey,
-    imageDimensions: hasImage ? parseImageDimensions(input) : null,
+    imageDimensions: !hasImage ? null : imageList.kind === 'set' ? dimensionsOf(imageList.images[0]) : parseImageDimensions(input),
+    extraImages: imageList.kind === 'set' ? imageList.images.slice(1).map((image) => ({ objectKey: image.key, dimensions: dimensionsOf(image) })) : [],
     clientHint,
     clientPostId,
     backgroundKey: input.backgroundKey,

@@ -7,7 +7,7 @@ import BatchStatusView from '../../_components/batch-status-view'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '배치 상태 · Mingle Admin',
+  title: '배치 상태 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

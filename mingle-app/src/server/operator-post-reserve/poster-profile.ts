@@ -166,8 +166,40 @@ export type PosterProfile = {
   voice: string[]
   shapeFactors: Record<string, number>
   topicFactors: Record<string, number>
+  /** Share of posts that carry a photo. */
+  photoShare: number
   /** Short Korean label for staff. */
   labelKo: string
+}
+
+export type LearnerPlan = {
+  /** The language this person is learning and sometimes posts in. */
+  language: string
+  /** Share of posts written in it. */
+  share: number
+  level: { key: string; ko: string; brief: string }
+}
+
+const LEARNER_LEVELS = [
+  { key: 'beginner', ko: '초급', brief: 'a beginner: very short textbook sentences, the polite form taught first, a wrong particle or word order here and there, sometimes a word left in their own language' },
+  { key: 'intermediate', ko: '중급', brief: 'intermediate: can say what they mean in simple sentences, but the wording is slightly unnatural, mixes stiff written endings with chat endings, and makes an occasional grammar slip' },
+  { key: 'advanced', ko: '고급', brief: 'advanced: nearly natural and uses chat expressions, with only a rare odd word choice' },
+] as const
+
+/**
+ * On a language-exchange app most posts are written in the language being
+ * learned. Accounts from outside Korea learn Korean and post in it often;
+ * Korean accounts are mostly the natives others look for and post in a
+ * foreign language only now and then.
+ */
+export function learnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
+  const random = seeded(`learner:${seed}`)
+  const pickOne = <T,>(items: readonly T[]): T => items[Math.floor(random() * items.length)]
+  const native = nativeLanguage.toLowerCase().split('-')[0]
+  if (native === 'ko') {
+    return { language: pickOne(['en', 'en', 'ja', 'zh']), share: pickOne([0, 0, 0.1, 0.25]), level: pickOne(LEARNER_LEVELS) }
+  }
+  return { language: 'ko', share: pickOne([0.3, 0.5, 0.7, 0.85]), level: pickOne(LEARNER_LEVELS) }
 }
 
 /** The fixed posting personality of one account. `topicKeys` are all topic keys the generator knows. */
@@ -200,5 +232,6 @@ export function posterProfile(seed: string, topicKeys: readonly string[] = []): 
     topicFactors[key] = (topicFactors[key] ?? 1) * factor
   }
 
-  return { type, length, voice, shapeFactors: type.shapes, topicFactors, labelKo: `${type.ko} · ${length.ko}` }
+  const photoShare = type.key === 'minimalist' || type.key === 'foodie' ? 0.8 : [0.35, 0.5, 0.65, 0.8][Math.floor(random() * 4)]
+  return { type, length, voice, shapeFactors: type.shapes, topicFactors, photoShare, labelKo: `${type.ko} · ${length.ko}` }
 }

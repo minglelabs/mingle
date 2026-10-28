@@ -1,6 +1,6 @@
 'use client'
 
-import { Copy, Volume2 } from 'lucide-react'
+import { Copy, Download, Volume2 } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -11,6 +11,8 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { MessageReactionPicker } from './MessageReactions'
+import { MessageRecallMenuItem } from './MessageRecall'
+import { MessageReplyMenuItem } from './MessageReply'
 import { cn } from '@/lib/utils'
 import { copyTextWithFeedback } from './live-phone-demo.copy'
 
@@ -29,6 +31,9 @@ interface CopyableBubbleSurfaceProps extends ComponentPropsWithoutRef<'div'> {
   copyAllBubblesLabel?: string
   playPronunciationLabel?: string
   onPlayPronunciation?: () => void
+  /** A "save" row (chat photos), shown when both are set. */
+  saveLabel?: string
+  onSave?: () => void
   onActivate?: () => void
 }
 
@@ -58,6 +63,8 @@ export default function CopyableBubbleSurface({
   copyAllBubblesLabel,
   playPronunciationLabel,
   onPlayPronunciation,
+  saveLabel,
+  onSave,
   onActivate,
   children,
   className,
@@ -166,6 +173,7 @@ export default function CopyableBubbleSurface({
 
   const showAllCopyButton = Boolean(allText && copyAllBubblesLabel)
   const showPlayPronunciationButton = Boolean(playPronunciationLabel && onPlayPronunciation)
+  const showSaveButton = Boolean(saveLabel && onSave)
 
   const tooltipFixedStyle: React.CSSProperties = tooltipPos
     ? tooltipPos.side === 'above'
@@ -194,11 +202,31 @@ export default function CopyableBubbleSurface({
             event.stopPropagation()
             handleCopy(text)
           }}
-          className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${(showAllCopyButton || showPlayPronunciationButton) ? 'rounded-t-2xl' : 'rounded-2xl'}`}
+          className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${(showAllCopyButton || showPlayPronunciationButton || showSaveButton) ? 'rounded-t-2xl' : 'rounded-2xl'}`}
         >
           <span>{copyBubbleLabel}</span>
           <Copy className="h-4 w-4 shrink-0 text-slate-400" />
         </button>
+        {showSaveButton && (
+          <>
+            <div className="h-px bg-gray-100" />
+            <button
+              type="button"
+              data-copyable-bubble-save-button
+              aria-label={saveLabel}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                closeMenu()
+                onSave?.()
+              }}
+              className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${(showAllCopyButton || showPlayPronunciationButton) ? '' : 'rounded-b-2xl'}`}
+            >
+              <span>{saveLabel}</span>
+              <Download className="h-4 w-4 shrink-0 text-slate-400" />
+            </button>
+          </>
+        )}
         {showAllCopyButton && (
           <>
             <div className="h-px bg-gray-100" />
@@ -235,6 +263,8 @@ export default function CopyableBubbleSurface({
             </button>
           </>
         )}
+        <MessageReplyMenuItem onDone={closeMenu} />
+        <MessageRecallMenuItem onDone={closeMenu} />
       </div>
     </div>,
     document.body,

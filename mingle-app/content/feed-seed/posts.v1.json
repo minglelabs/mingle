@@ -1,8 +1,8 @@
 {
   "version": 1,
   "authorHandle": "mingle_team",
-  "authorDisplayName": "Mingle 팀",
-  "notes": "Launch seed posts for the posting feed. Written by the Mingle team account. No first-person reviews, no clinic/shop promotion, no medical efficacy or safety claims. Every 'fact' item carries official sources; re-check them before each run.",
+  "authorDisplayName": "HashChat 팀",
+  "notes": "Launch seed posts for the posting feed. Written by the HashChat team account. No first-person reviews, no clinic/shop promotion, no medical efficacy or safety claims. Every 'fact' item carries official sources; re-check them before each run.",
   "items": [
     {
       "key": "welcome-team",
@@ -10,7 +10,7 @@
       "kind": "notice",
       "topic": "local",
       "language": "ko",
-      "text": "안녕하세요, Mingle 팀입니다. 서울 여행, 한국어, 현지 생활에 대해 궁금한 것을 자유롭게 올려 주세요. 올린 글은 여러 언어로 번역되어 다른 나라 사람들도 읽을 수 있어요."
+      "text": "안녕하세요, HashChat 팀입니다. 서울 여행, 한국어, 현지 생활에 대해 궁금한 것을 자유롭게 올려 주세요. 올린 글은 여러 언어로 번역되어 다른 나라 사람들도 읽을 수 있어요."
     },
     {
       "key": "tax-refund-minimum-ko",

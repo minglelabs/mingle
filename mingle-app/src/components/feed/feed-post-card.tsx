@@ -221,6 +221,10 @@ export default function FeedPostCard({
   const [imageAttempt, setImageAttempt] = useState(0);
   const [measuredImage, setMeasuredImage] = useState<{ width: number; height: number } | null>(null);
   const imageAspect = imageAspectRatio(post.image, measuredImage);
+  const carouselImages = useMemo(
+    () => (post.images && post.images.length > 1 ? post.images.map((image) => ({ url: image.url, aspect: imageAspectRatio(image) })) : undefined),
+    [post.images],
+  );
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
     if (img.naturalWidth > 0 && img.naturalHeight > 0) {
@@ -423,8 +427,10 @@ export default function FeedPostCard({
         lastTapRef.current = null;
         singleTapTimerRef.current = null;
         // Confirmed single tap: open image zoom if the tap landed on the image.
-        if (onImage && !imageFailed && post.image?.url) {
-          onOpenImage(post.image.url);
+        // The photo under the finger: in a carousel, the one being shown.
+        const tapped = targetEl.closest("[data-feed-image]")?.getAttribute("src") ?? post.image?.url;
+        if (onImage && !imageFailed && tapped) {
+          onOpenImage(tapped);
         }
       }, 320);
     },
@@ -605,32 +611,23 @@ export default function FeedPostCard({
 
   const showRowExpand = showExpand && hasImage;
   const showRowCollapse = expanded && hasImage;
+  // Pinned to the end of the snippet's last line so it never pushes the
+  // language chips; the backdrop hides the clamped text underneath.
+  const snippetToggleSlot =
+    showRowExpand || showRowCollapse ? (
+      <button
+        type="button"
+        data-feed-action
+        onClick={showRowExpand ? handleExpand : handleCollapse}
+        className={`flex items-center gap-1 rounded-full bg-black/45 px-2 text-sm font-semibold leading-relaxed backdrop-blur-sm transition active:scale-95 ${fg.textClass}`}
+      >
+        {showRowCollapse ? <ChevronDown size={12} strokeWidth={2.5} className="rotate-180" aria-hidden="true" /> : null}
+        <span>{showRowExpand ? copy.expand : copy.collapse}</span>
+      </button>
+    ) : null;
   const controlSlot =
-    showRowExpand || showRowCollapse || showLanguageChips ? (
+    showLanguageChips ? (
       <div className="mt-1 flex items-center gap-4">
-        {showRowExpand ? (
-          <button
-            type="button"
-            data-feed-action
-            onClick={handleExpand}
-            className={`${HIT_44} text-xs font-semibold transition ${fg.textClass}`}
-          >
-            {copy.expand}
-          </button>
-        ) : null}
-
-        {showRowCollapse ? (
-          <button
-            type="button"
-            data-feed-action
-            onClick={handleCollapse}
-            className={`${HIT_44} flex items-center gap-1 text-xs font-semibold transition ${fg.textClass}`}
-          >
-            <ChevronDown size={12} strokeWidth={2.5} aria-hidden="true" />
-            <span>{copy.collapse}</span>
-          </button>
-        ) : null}
-
         {showLanguageChips ? (
           <PostLanguageChips
             sourceLanguage={post.sourceLanguage}
@@ -752,6 +749,7 @@ export default function FeedPostCard({
         authorSlot={authorSlot}
         actionSlot={actionSlot}
         controlSlot={controlSlot}
+        snippetToggleSlot={snippetToggleSlot}
         overlaySlot={
           <>
             <HeartBurst visible={showBurst && !reducedMotion} onDone={clearBurst} />
@@ -777,6 +775,7 @@ export default function FeedPostCard({
         imageRetryLabel={copy.retry}
         imageAttempt={imageAttempt}
         imageAspect={imageAspect}
+        images={carouselImages}
         onImageLoad={handleImageLoad}
         imageLoading={eagerImage ? "eager" : "lazy"}
         previewClampRef={previewClampRef}

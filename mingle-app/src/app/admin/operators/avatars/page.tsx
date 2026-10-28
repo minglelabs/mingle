@@ -3,12 +3,13 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/admin/guard'
+import { countryLabel } from '../_lib/options'
 import { AvatarGrid, type AvatarGridItem } from './avatar-grid'
 
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '사진 검수 · Mingle Admin',
+  title: '사진 검수 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 
@@ -27,7 +28,7 @@ export default async function AdminOperatorAvatarsPage() {
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: MAX_ITEMS,
     select: {
-      id: true, name: true, handle: true, image: true,
+      id: true, name: true, handle: true, image: true, primaryLanguages: true,
       operatorAccount: { select: { personaCountry: true, avatarSpec: true } },
     },
   })
@@ -37,7 +38,8 @@ export default async function AdminOperatorAvatarsPage() {
     handle: row.handle,
     image: row.image,
     label: specLabel(row.operatorAccount?.avatarSpec),
-    country: row.operatorAccount?.personaCountry ?? null,
+    country: row.operatorAccount?.personaCountry ? countryLabel(row.operatorAccount.personaCountry) : null,
+    languages: row.primaryLanguages,
   }))
 
   return (

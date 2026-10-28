@@ -79,7 +79,7 @@ describe('people search row (unified search, people screen)', () => {
   function renderPerson(flags: Flags) {
     return render(createElement('ul', null, createElement(PersonRow, {
       person: { id: 'u1', handle: 'mina.park', name: 'Mina', image: null, isFollowing: false, ...flags },
-      labels: { userFallback: 'Mingle 사용자', follow: '팔로우', following: '팔로잉' },
+      labels: { userFallback: 'HashChat 사용자', follow: '팔로우', following: '팔로잉' },
       onOpen: noop,
       canFollow: true,
       isFollowPending: false,

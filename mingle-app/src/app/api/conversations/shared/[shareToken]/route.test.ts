@@ -192,7 +192,7 @@ describe("/api/conversations/shared/[shareToken] route", () => {
       sharedByUserId: "user-owner",
     });
     mockGetUserProfile.mockResolvedValue({
-      id: "user-owner", name: "Mingle", image: null, imageCropScale: null, imageCropX: null, imageCropY: null,
+      id: "user-owner", name: "HashChat", image: null, imageCropScale: null, imageCropX: null, imageCropY: null,
       handle: "mingle_team", isOfficial: true,
     });
 
@@ -206,7 +206,7 @@ describe("/api/conversations/shared/[shareToken] route", () => {
     expect(json.utterances[0]).toMatchObject({ speakerName: "Mina", speakerAlias: "s1", speakerBadge: "operator" });
     expect(json.utterances[1]).not.toHaveProperty("speakerBadge");
     expect(json.sharedBy).toEqual({
-      name: "Mingle", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, isOfficial: true,
+      name: "HashChat", image: null, imageCropScale: null, imageCropX: null, imageCropY: null, isOfficial: true,
     });
     expect(JSON.stringify(json)).not.toContain("private-speaker-user-id");
 

@@ -9,7 +9,7 @@ import { AutoReplyForm } from './auto-reply-form'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'AI 자동 답장 · Mingle Admin',
+  title: 'AI 자동 답장 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

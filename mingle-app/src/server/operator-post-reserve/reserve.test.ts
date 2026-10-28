@@ -41,7 +41,7 @@ const NOW = new Date('2026-10-03T03:00:00.000Z') // 12:00 in Korea
 const HOUR = 60 * 60_000
 const persona = { name: '민아', bio: '커피랑 산책', age: 26, city: 'Seoul', country: 'South Korea', language: 'ko' }
 
-function answer(posts: Array<{ slot: number; text: string }>) {
+function answer(posts: Array<{ slot: number; text: string; photo?: string }>) {
   mocks.generateJson.mockImplementation(async (request: { validate: (value: unknown) => unknown }) => request.validate({ posts }))
 }
 
@@ -108,7 +108,7 @@ describe('reserve post generation', () => {
     expect(cleanReservePost('  오늘 커피 맛있다  ')).toBe('오늘 커피 맛있다')
     expect(cleanReservePost('카톡 주세요 https://example.com')).toBeNull()
     expect(cleanReservePost('맛집 #서울')).toBeNull()
-    expect(cleanReservePost('Mingle 재밌네')).toBeNull()
+    expect(cleanReservePost('HashChat 재밌네')).toBeNull()
     expect(cleanReservePost('가'.repeat(401))).toBeNull()
     expect(cleanReservePost(3)).toBeNull()
   })
@@ -125,12 +125,31 @@ describe('reserve post generation', () => {
       { slot: 3, text: '링크 https://a.example' },
       { slot: 9, text: '없는 슬롯' },
     ])
-    const posts = await generateReservePosts({ persona, topics: ['food', 'thought', 'hobby'], existingTexts: ['이미 있는 글'] })
-    expect(posts).toEqual([{ topic: 'food', text: '김치찌개 끓였는데 생각보다 잘 됐다' }])
+    const posts = await generateReservePosts({ persona, topics: ['food', 'thought', 'hobby'], existingTexts: ['이미 있는 글'], random: () => 0.99 })
+    expect(posts).toEqual([{ topic: 'food', text: '김치찌개 끓였는데 생각보다 잘 됐다', language: 'ko', imagePrompt: null }])
     const request = mocks.generateJson.mock.calls[0][0]
     expect(request.input.slots).toHaveLength(3)
     expect(request.instructions).toContain('(ko)')
     expect(request.instructions).toContain('Never mention a date')
+  })
+
+  it('attaches a photo description and writes learner posts in the language being learned', async () => {
+    answer([{ slot: 1, text: '오늘 라멘 먹었어요', photo: '  a bowl of ramen on a   counter ' }])
+    const posts = await generateReservePosts({
+      persona: { ...persona, language: 'ja' }, topics: ['food'], existingTexts: [], random: () => 0, seed: 'op_ja',
+    })
+    // random() = 0 picks the first photo kind, a photo of the poster, and tags the description with it.
+    expect(posts).toEqual([{ topic: 'food', text: '오늘 라멘 먹었어요', language: 'ko', imagePrompt: '[self] a bowl of ramen on a counter' }])
+    const request = mocks.generateJson.mock.calls[0][0]
+    expect(request.input.slots[0]).toMatchObject({ language: 'ko', photo: 'self' })
+    expect(request.input.slots[0].setup).toEqual(expect.any(String))
+    expect(request.input.learner.language).toBe('ko')
+  })
+
+  it('drops a photo description the slot did not ask for', async () => {
+    answer([{ slot: 1, text: '그냥 글', photo: 'a cat' }])
+    const posts = await generateReservePosts({ persona, topics: ['thought'], existingTexts: [], random: () => 0.99 })
+    expect(posts[0].imagePrompt).toBeNull()
   })
 })
 

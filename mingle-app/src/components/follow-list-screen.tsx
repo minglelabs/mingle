@@ -87,7 +87,7 @@ export default function FollowListScreen({
     loading: dictionary.profile.profileLoadingLabel ?? (locale === "ko" ? "불러오는 중" : "Loading"),
     error: dictionary.connect.searchError
       ?? (locale === "ko" ? "목록을 불러오지 못했습니다. 다시 시도해 주세요." : "Could not load the list. Please try again."),
-    userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user"),
+    userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "HashChat 사용자" : "HashChat user"),
     clearSearch: dictionary.connect.clearSearchLabel ?? (locale === "ko" ? "검색어 지우기" : "Clear search"),
     follow: dictionary.connect.followAction ?? (locale === "ko" ? "팔로우" : "Follow"),
     followError: dictionary.connect.followError ?? (locale === "ko" ? "팔로우하지 못했습니다." : "Could not follow this user."),
@@ -295,7 +295,7 @@ export default function FollowListScreen({
           <div aria-hidden="true" />
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pb-8">
+        <div data-restore-scroll="follow-list" className="min-h-0 flex-1 overflow-y-auto pb-8">
           <div className="border-b border-gray-100 px-4 pt-3">
             <div className="flex rounded-xl bg-gray-50 p-1" role="tablist" aria-label={`${labels.followers} / ${labels.following}`}>
               {(["followers", "following"] as const).map((tab) => (

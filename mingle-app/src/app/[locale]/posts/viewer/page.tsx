@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { getDictionary, isSupportedLocale, type AppLocale } from "@/i18n";
 import BottomTabBar from "@/components/bottom-tab-bar";
-import { getAuthOptions } from "@/lib/auth-options";
+import { getAuthOptions, isAppleOAuthConfigured, isGoogleOAuthConfigured } from "@/lib/auth-options";
 import FeedViewerClient from "@/components/feed/feed-viewer-client";
 import PostingFeedRouteGuard from "@/components/feed/posting-feed-route-guard";
 import { notFound } from "next/navigation";
@@ -50,6 +50,9 @@ export default async function PostsViewerPage({ params, searchParams }: ViewerPa
     <PostingFeedRouteGuard locale={locale}>
       <FeedViewerClient
         menuLabel={dictionary.profile.menuLabel}
+        dictionary={dictionary}
+        appleOAuthEnabled={isAppleOAuthConfigured()}
+        googleOAuthEnabled={isGoogleOAuthConfigured()}
         locale={locale}
         source={kind === "author" ? { kind: "author", authorId } : { kind: "search", query: q }}
         startPostId={postId}

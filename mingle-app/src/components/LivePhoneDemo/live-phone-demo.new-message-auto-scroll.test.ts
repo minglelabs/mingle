@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   shouldAnchorConversationEntry,
+  resolveFirstUnreadUtteranceId,
   deriveNewMessageAutoScrollState,
   resolveNewMessageAutoScrollTargetTop,
   type ChatScrollMessageCountSnapshot,
@@ -48,6 +49,25 @@ describe('new-message near-bottom auto-scroll', () => {
     expect(shouldAnchorConversationEntry({ ...entry, isVisible: false })).toBe(false)
     expect(shouldAnchorConversationEntry({ ...entry, messageCount: 0 })).toBe(false)
     expect(shouldAnchorConversationEntry({ ...entry, messageCount: 0, isServerPending: false })).toBe(true)
+  })
+  it('waits for the server transcript before anchoring an unread entry', () => {
+    const entry = { isVisible: true, isStorageHydrated: true, hasAnchored: false, messageCount: 20, isServerPending: true, hasUnread: true }
+    expect(shouldAnchorConversationEntry(entry)).toBe(false)
+    expect(shouldAnchorConversationEntry({ ...entry, isServerPending: false })).toBe(true)
+  })
+  it('resolves the first unread utterance by counting only other members from the newest', () => {
+    const utterances = [
+      { id: 'a', speakerUserId: 'other' },
+      { id: 'b', speakerUserId: 'other' },
+      { id: 'c', speakerUserId: 'me' },
+      { id: 'd', speakerUserId: null },
+      { id: 'e', speakerUserId: 'other2' },
+    ]
+    expect(resolveFirstUnreadUtteranceId({ utterances, unreadCount: 1, viewerUserId: 'me' })).toBe('e')
+    expect(resolveFirstUnreadUtteranceId({ utterances, unreadCount: 2, viewerUserId: 'me' })).toBe('b')
+    expect(resolveFirstUnreadUtteranceId({ utterances, unreadCount: 10, viewerUserId: 'me' })).toBe('a')
+    expect(resolveFirstUnreadUtteranceId({ utterances, unreadCount: 0, viewerUserId: 'me' })).toBeNull()
+    expect(resolveFirstUnreadUtteranceId({ utterances, unreadCount: 1, viewerUserId: null })).toBeNull()
   })
   it('scrolls to the appended bottom when a committed chat item arrives while the user is at bottom', () => {
     const previousClientHeight = 620

@@ -1,16 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { composeLoginHref, loginHref } from "./login-redirect";
+import { composeLoginReturnHref, loginReturnHref } from "./login-redirect";
 
-const callbackOf = (href: string) => new URLSearchParams(href.split("?")[1]).get("callbackUrl");
-
-describe("composeLoginHref", () => {
+describe("composeLoginReturnHref", () => {
   it("returns to compose after login", () => {
-    const href = composeLoginHref("ko");
-    expect(href.startsWith("/ko/auth/signin?")).toBe(true);
-    expect(callbackOf(href)).toBe("/ko/compose");
+    expect(composeLoginReturnHref("ko")).toBe("/ko/compose");
+  });
+});
+
+describe("loginReturnHref", () => {
+  it("returns to the same post after login", () => {
+    expect(loginReturnHref("ko", "post-9")).toBe("/ko/feed?postId=post-9");
   });
 
-  it("post actions still return to the post", () => {
-    expect(callbackOf(loginHref("en", "p1"))).toBe("/en/feed?postId=p1");
+  it("returns to the plain feed when no post is given", () => {
+    expect(loginReturnHref("en")).toBe("/en/feed");
+    expect(loginReturnHref("en", null)).toBe("/en/feed");
+  });
+
+  it("never builds the web-only Google sign-in route", () => {
+    for (const href of [loginReturnHref("ko", "p1"), loginReturnHref("en"), composeLoginReturnHref("ja")]) {
+      expect(href).not.toContain("/auth/signin");
+      expect(href.startsWith("/")).toBe(true);
+    }
   });
 });

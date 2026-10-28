@@ -20,6 +20,7 @@ import type {
   FeedPostImageDto,
   FeedPostTranslationState,
 } from '@/lib/feed-post-dto'
+import { isUntranslatedCopy } from '@/server/translation/untranslated-copy'
 
 // ---------------------------------------------------------------------------
 // Row shapes
@@ -32,7 +33,7 @@ export type SerializerAuthorRow = {
   name: string | null
   image: string | null
   /**
-   * Badge flags: the Mingle team's official account / an account run by Mingle
+   * Badge flags: the HashChat team's official account / an account run by HashChat
    * staff (operator). Optional so a caller whose `select` predates a column
    * still type-checks; missing reads as false.
    */
@@ -59,6 +60,8 @@ export type SerializerPostRow = {
    */
   imageWidth?: number | null
   imageHeight?: number | null
+  /** The 2nd to 10th photo, by position. Optional: a caller that does not select them shows one photo. */
+  extraImages?: Array<{ position: number; imageWidth: number | null; imageHeight: number | null }>
   visibility: string
   deletedAt: Date | null
   likeCount: number
@@ -161,10 +164,42 @@ export function serializePostImage(
   if (!imageObjectKey) return null
   const valid = isPositiveInt(imageWidth) && isPositiveInt(imageHeight)
   return {
-    url: `/api/posts/${encodeURIComponent(postId)}/image`,
+    // Versioned by the stored object, so a replaced photo is a new URL and
+    // never comes from a cache of the old one.
+    url: `/api/posts/${encodeURIComponent(postId)}/image?v=${imageVersion(imageObjectKey)}`,
     width: valid ? imageWidth : null,
     height: valid ? imageHeight : null,
   }
+}
+
+/** All photos of a post in order: the first from the post row, the rest by position. */
+export function serializePostImages(
+  postId: string,
+  imageObjectKey: string,
+  imageWidth: number | null | undefined,
+  imageHeight: number | null | undefined,
+  extraImages: ReadonlyArray<{ position: number; imageWidth: number | null; imageHeight: number | null }>,
+): FeedPostImageDto[] {
+  const first = serializePostImage(postId, imageObjectKey, imageWidth, imageHeight)!
+  const rest = [...extraImages].sort((a, b) => a.position - b.position).map((image) => {
+    const valid = isPositiveInt(image.imageWidth) && isPositiveInt(image.imageHeight)
+    return {
+      url: `/api/posts/${encodeURIComponent(postId)}/image?index=${image.position}`,
+      width: valid ? image.imageWidth : null,
+      height: valid ? image.imageHeight : null,
+    }
+  })
+  return [first, ...rest]
+}
+
+/** A short, stable tag for an object key (FNV-1a, base 36). */
+function imageVersion(objectKey: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < objectKey.length; i += 1) {
+    hash ^= objectKey.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash.toString(36)
 }
 
 function isPositiveInt(value: number | null | undefined): value is number {
@@ -186,7 +221,7 @@ function isPositiveInt(value: number | null | undefined): value is number {
  *   consulted because the loader only ever indexes current-version rows.
  */
 export function deriveTranslation(
-  post: Pick<SerializerPostRow, 'sourceLanguage'>,
+  post: Pick<SerializerPostRow, 'sourceLanguage'> & Partial<Pick<SerializerPostRow, 'sourceText'>>,
   displayLanguage: string | null,
   translation: SerializerTranslationRow | undefined,
 ): { translationState: FeedPostTranslationState; displayText: string | null; displayLanguage: string | null } {
@@ -205,6 +240,11 @@ export function deriveTranslation(
     return { translationState: 'none', displayText: null, displayLanguage }
   }
   if (translation.status === 'ready') {
+    // A stored copy of the source is no translation: reading it as `none`
+    // makes the card request one, which replaces the copy.
+    if (isUntranslatedCopy(post.sourceText, displayLanguage, translation.text)) {
+      return { translationState: 'none', displayText: null, displayLanguage }
+    }
     return { translationState: 'ready', displayText: translation.text ?? null, displayLanguage }
   }
   if (translation.status === 'failed') {
@@ -250,6 +290,9 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
     ...(translationLanguages.length > 0 ? { translationLanguages } : {}),
     backgroundKey: post.backgroundKey ?? '',
     image: serializePostImage(post.id, post.imageObjectKey, post.imageWidth, post.imageHeight),
+    ...(post.imageObjectKey && post.extraImages?.length
+      ? { images: serializePostImages(post.id, post.imageObjectKey, post.imageWidth, post.imageHeight, post.extraImages) }
+      : {}),
     likeCount: post.likeCount,
     commentCount: post.commentCount,
     likedByMe: ctx.viewerId != null && ctx.likedPostIds.has(post.id),

@@ -92,7 +92,7 @@ export type UserProfile = {
   location: UserProfileLocation | null;
   followersCount: number;
   followingCount: number;
-  /** The Mingle team's official account; present (true) only then. */
+  /** The HashChat team's official account; present (true) only then. */
   isOfficial?: boolean;
 };
 

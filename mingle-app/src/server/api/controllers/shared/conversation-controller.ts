@@ -14,6 +14,7 @@ import {
   listChannelMemberUserIdsBySessionKey,
   listConversationMembersForUser,
   markConversationChannelRead,
+  listConversationReadReceipts,
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
   updateConversationChannelSelectedLanguages,
@@ -258,6 +259,14 @@ export async function patchConversationResponse(
     if (!markedRead) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
+    // Other members' open rooms refresh their per-message unread badges.
+    const sessionKey = await getConversationSessionKeyForMember({
+      conversationId,
+      userId: resolvedUser.userId,
+    });
+    if (sessionKey) {
+      await notifyConversationMessage(sessionKey, [], undefined, { timeoutMs: 1500, readReceipt: true });
+    }
   }
 
   if (!conversation) {
@@ -402,6 +411,35 @@ export async function getConversationMembersResponse(
   }
 
   return NextResponse.json({ members });
+}
+
+export async function getConversationReadReceiptsResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const receipts = await listConversationReadReceipts({
+    conversationId,
+    userId: resolvedUser.userId,
+  });
+
+  if (!receipts) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  return NextResponse.json(
+    { members: receipts.members },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 }
 
 export async function postConversationMembersResponse(

@@ -8,7 +8,7 @@ import AdminPostsScreen from './_components/admin-posts-screen'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '게시물 · Mingle Admin',
+  title: '게시물 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

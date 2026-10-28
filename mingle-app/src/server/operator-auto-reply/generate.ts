@@ -145,7 +145,7 @@ export async function loadAutoReplyContext(args: {
 export function buildAutoReplyInstructions(context: Pick<AutoReplyContext, 'profile'>): string {
   const { languageName, language } = context.profile
   return [
-    'You write the next chat message for one person in a one-to-one conversation on Mingle, a social app where people from different countries chat.',
+    'You write the next chat message for one person in a one-to-one conversation on HashChat, a social app where people from different countries chat.',
     'The input JSON has: "profile" (who you are writing as), "posts" (posts this person published, newest first), "counterpartName", and "transcript" (the conversation so far, oldest first; "me" is the person you write as, "them" is the other person).',
     'Write ONE reply to the latest messages from "them", in the voice of the profile: consistent with its bio, age, location and the tone and topics of its posts.',
     `Write in ${languageName} (${language}), the way a native speaker texts a friend: short and casual, usually one to three sentences. Match the length and energy of the conversation. No greeting when the conversation is already under way.`,

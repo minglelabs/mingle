@@ -34,6 +34,7 @@ export const feedPostRowSelect = {
   imageObjectKey: true,
   imageWidth: true,
   imageHeight: true,
+  extraImages: { select: { position: true, imageWidth: true, imageHeight: true }, orderBy: { position: 'asc' as const } },
   visibility: true,
   deletedAt: true,
   likeCount: true,

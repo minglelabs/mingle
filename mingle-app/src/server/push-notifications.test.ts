@@ -148,7 +148,7 @@ describe('resolvePushCopy: operator_inbox_message (placeholder copy)', () => {
     expect(resolvePushCopy(message({ type: 'operator_inbox_message', recipientLanguage: 'ko', messagePreview: 'hello' })))
       .toEqual({ title: '운영 계정 새 메시지', body: 'Ada: hello' })
     expect(resolvePushCopy(message({ type: 'operator_inbox_message', recipientLanguage: 'ja', messagePreview: 'hello' })))
-      .toEqual({ title: 'New message for a Mingle-run account', body: 'Ada: hello' })
+      .toEqual({ title: 'New message for a HashChat-run account', body: 'Ada: hello' })
   })
 })
 
@@ -246,7 +246,7 @@ describe('sendPushToUsers', () => {
     expect(sentMessages().map((sent) => [sent.token, sent.notification.title, sent.data.url])).toEqual([
       ['fcm-a', '운영 계정 새 메시지', '/admin/inbox/conv_1'],
       ['fcm-b', '운영 계정 새 메시지', '/admin/inbox/conv_1'],
-      ['fcm-c', 'New message for a Mingle-run account', '/admin/inbox/conv_1'],
+      ['fcm-c', 'New message for a HashChat-run account', '/admin/inbox/conv_1'],
     ])
     expect(m.tokenDeleteMany).not.toHaveBeenCalled()
   })

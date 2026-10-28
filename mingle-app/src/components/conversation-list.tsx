@@ -5,6 +5,7 @@ import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { resolveNotificationCopy } from "@/i18n/notification-copy";
+import { conversationSortCopy } from "@/i18n/conversation-sort-copy";
 import NotificationPanel from "@/components/notification-panel";
 import ComposeOverlay from "@/components/compose/compose-overlay";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
@@ -12,6 +13,7 @@ import SlideSurface from "@/components/slide-surface";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
+import { NATIVE_CONVERSATION_SHARE_EVENT } from "@/lib/native-conversation-share-overlay";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -30,7 +32,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bell, Loader2, LogOut, PencilLine, Search, Trash2, UserRound } from "lucide-react";
+import { ArrowRight, Bell, Check, Loader2, LogOut, PencilLine, Search, Settings, Share2, Trash2, UserRound } from "lucide-react";
+import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { getConversationEventsWsUrl } from "@/components/LivePhoneDemo/use-realtime-stt";
@@ -97,6 +100,10 @@ import {
   calculateConversationRowTooltipPosForRect,
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
+  CONVERSATION_LIST_SORT_MODES,
+  isConversationListSortMode,
+  sortConversationsForDisplay,
+  type ConversationListSortMode,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   findNativeSttRestoreConversation,
   isConversationListRefreshCurrent,
@@ -179,6 +186,7 @@ import {
 import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
+import { resolveAccessibilityCopy } from "@/i18n/accessibility-copy";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
 import AppTopHeader from "@/components/app-top-header";
@@ -190,6 +198,7 @@ import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY }
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 
+const LS_KEY_CONVERSATION_LIST_SORT_MODE = "mingle:conversation-list-sort-mode";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
@@ -289,7 +298,7 @@ interface ConversationItem {
   // rooms (no other real member yet), which keep using avatarSrc/avatarAlt
   // (the generated diarization avatar) instead.
   otherMembers: ConversationChannelOtherMember[];
-  // Account label shown next to the title (a room with a Mingle-run member
+  // Account label shown next to the title (a room with a HashChat-run member
   // reads "운영 계정"); the title itself is a renamable plain string.
   titleAccountBadge: AccountBadgeKind | null;
   titleAccountBadgeLocale: string;
@@ -1949,6 +1958,9 @@ export default function ConversationList({
     [dictionary, locale],
   );
   const notificationCopy = useMemo(() => resolveNotificationCopy(locale), [locale]);
+  const sortCopy = useMemo(() => conversationSortCopy(locale), [locale]);
+  const [conversationSortMode, setConversationSortMode] = useState<ConversationListSortMode>("recent");
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const roomManagementCopy = useMemo(
     () => resolveLivePhoneDemoRoomManagementCopy(locale),
     [locale],
@@ -2087,8 +2099,16 @@ export default function ConversationList({
   conversationCacheIdentityRef.current = conversationCacheIdentity;
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
+  // Unread count as it was when each room was last opened (mark-read zeroes the
+  // live one), so the room can anchor on the first unread message on entry.
+  const [entryUnreadMessageCountByConversationId, setEntryUnreadMessageCountByConversationId] = useState<Record<string, number>>(() => (
+    initialConversationToOpen
+      ? { [initialConversationToOpen.id]: Math.max(0, Math.floor(initialConversationToOpen.unreadMessageCount ?? 0)) }
+      : {}
+  ));
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
+  const isSharingConversationRef = useRef(false);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isNativeRuntime, setIsNativeRuntime] = useState(false);
   const [languageOnboardingPhase, setLanguageOnboardingPhase] = useState<LanguageOnboardingPhase>(() => (
@@ -2344,7 +2364,7 @@ export default function ConversationList({
   }, [authenticatedUserId, languageOnboardingPhase, sessionStatus]);
 
   const conversationItems = useMemo(
-    () => conversations.map((conversation) => (
+    () => sortConversationsForDisplay(conversations, conversationSortMode).map((conversation) => (
       mapConversationSummaryToItem(
         conversation,
         locale,
@@ -2357,8 +2377,35 @@ export default function ConversationList({
         conversationInterimPreviews[conversation.id],
       )
     )),
-    [conversationInterimPreviews, conversationLocalStats, conversations, copy, locale, timeLabelsReady],
+    [
+      conversationInterimPreviews,
+      conversationLocalStats,
+      conversationSortMode,
+      conversations,
+      copy,
+      locale,
+      timeLabelsReady,
+    ],
   );
+
+  useEffect(() => {
+    try {
+      const storedMode = window.localStorage.getItem(LS_KEY_CONVERSATION_LIST_SORT_MODE);
+      if (isConversationListSortMode(storedMode)) setConversationSortMode(storedMode);
+    } catch {
+      // Storage can be unavailable in private mode; keep the default order.
+    }
+  }, []);
+
+  const handleSelectSortMode = useCallback((mode: ConversationListSortMode) => {
+    setConversationSortMode(mode);
+    setShowSortMenu(false);
+    try {
+      window.localStorage.setItem(LS_KEY_CONVERSATION_LIST_SORT_MODE, mode);
+    } catch {
+      // Best effort: the choice still applies for this session.
+    }
+  }, []);
   const unreadConversationMessageCount = useMemo(
     () => conversations.reduce(
       (total, conversation) => total + Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0)),
@@ -3909,6 +3956,9 @@ export default function ConversationList({
       isListOverlayOpen: Boolean(
         isCreateChoiceModalOpen
         || rowActionMenu
+        // The native banner draws above the web view, so the gear menu's
+        // dropdown would sit under it; hide the banner while it is open.
+        || showSortMenu
         || renameDialogConversationId
         || deleteDialogConversationId
         || languageOnboardingModalOpen
@@ -3927,6 +3977,7 @@ export default function ConversationList({
     rowActionMenu,
     sessionStatus,
     showSearch,
+    showSortMenu,
   ]);
 
   useEffect(() => {
@@ -4383,6 +4434,12 @@ export default function ConversationList({
     // The create-conversation flow sets autoStart before calling openConversationSummary;
     // clearing it here would immediately cancel the auto-start.
     // autoStart is cleared by closeConversationOverlay and explicit call sites only.
+    const entryUnreadMessageCount = Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0));
+    setEntryUnreadMessageCountByConversationId((current) => (
+      current[conversation.id] === entryUnreadMessageCount
+        ? current
+        : { ...current, [conversation.id]: entryUnreadMessageCount }
+    ));
     const openedConversation = conversation.unreadMessageCount
       ? { ...conversation, unreadMessageCount: 0 }
       : conversation;
@@ -4695,6 +4752,46 @@ export default function ConversationList({
     isImportingLegacyConversation,
     openConversationSummary,
   ]);
+
+  // Long-press "대화방 공유": turn sharing on in the background. If it is
+  // already on, the server keeps the same link and re-takes the snapshot as of
+  // now (see setConversationShareEnabled), so the link shows the conversation
+  // up to this tap. Then open the share screen — the same overlay a share link
+  // opens in the app — so the member sees what recipients will see. Copying
+  // happens there, from its own button: iOS only allows a clipboard write
+  // during the tap itself, and this tap is long over once the link arrives.
+  const handleShareConversation = useCallback((item: ConversationItem) => {
+    setRowActionMenu(null);
+    if (isSharingConversationRef.current) return;
+    isSharingConversationRef.current = true;
+
+    const conversationPath = `/${encodeURIComponent(item.id)}/share`;
+    const headers = buildConversationRequestHeaders(initialTrackingIdentityRef.current);
+
+    void (async () => {
+      try {
+        const response = await fetch(buildConversationApiPath(conversationPath), {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: true }),
+        });
+        if (!response.ok) throw new Error(`conversation_share_enable_failed:${response.status}`);
+        const body = await response.json() as { shareToken?: unknown; shareEnabled?: unknown };
+        const shareToken = body.shareEnabled === true && typeof body.shareToken === "string"
+          ? body.shareToken
+          : null;
+        if (!shareToken) throw new Error("conversation_share_token_missing");
+
+        window.dispatchEvent(new CustomEvent(NATIVE_CONVERSATION_SHARE_EVENT, {
+          detail: { shareToken, canCopyLink: true },
+        }));
+      } catch {
+        toast.error(roomManagementCopy.shareErrorToastLabel);
+      } finally {
+        isSharingConversationRef.current = false;
+      }
+    })();
+  }, [roomManagementCopy.shareErrorToastLabel]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -5405,7 +5502,7 @@ export default function ConversationList({
           className="absolute inset-0 z-[300] flex min-h-0 w-full items-center justify-center bg-[#fcfbf8]"
           role="status"
           aria-live="polite"
-          aria-label={locale === "ko" ? "Mingle 준비 중" : "Preparing Mingle"}
+          aria-label={resolveAccessibilityCopy(locale).preparingApp}
         >
           <div className="flex flex-col items-center gap-5">
             <MingleWordmark />
@@ -5419,7 +5516,7 @@ export default function ConversationList({
           className="absolute inset-0 z-[199] bg-transparent"
           role="status"
           aria-live="polite"
-          aria-label={locale === "ko" ? "계정 확인 중" : "Checking account"}
+          aria-label={resolveAccessibilityCopy(locale).checkingAccount}
         />
       ) : null}
 
@@ -5508,12 +5605,58 @@ export default function ConversationList({
               </span>
             ) : null}
           </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowSortMenu((open) => !open)}
+              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
+              aria-label={sortCopy.menuLabel}
+              aria-haspopup="menu"
+              aria-expanded={showSortMenu}
+            >
+              <Settings size={22} strokeWidth={2} />
+            </button>
+            {showSortMenu ? (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  aria-hidden
+                  onClick={() => setShowSortMenu(false)}
+                />
+                <div
+                  role="menu"
+                  aria-label={sortCopy.title}
+                  className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-2xl border border-gray-100 bg-white py-1 shadow-lg"
+                >
+                  <p className="px-4 pb-1 pt-2 text-[12px] font-semibold text-gray-400">
+                    {sortCopy.title}
+                  </p>
+                  {CONVERSATION_LIST_SORT_MODES.map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={conversationSortMode === mode}
+                      onClick={() => handleSelectSortMode(mode)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left text-[15px] text-slate-800 transition active:bg-gray-100"
+                    >
+                      <span>{sortCopy[mode]}</span>
+                      {conversationSortMode === mode ? (
+                        <Check size={18} strokeWidth={2.5} className="text-slate-900" aria-hidden />
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </div>
         </div>
       </header>
       )}
 
       <div
         ref={conversationListScrollRef}
+        data-restore-scroll="conversation-list"
         className="min-h-0 flex-1 overflow-y-auto"
         style={{
           paddingTop: effectiveNativeTopInsetPx > 0 ? `${effectiveNativeTopInsetPx}px` : "0px",
@@ -5723,6 +5866,15 @@ export default function ConversationList({
                   <div className="h-px bg-gray-100" />
                   <button
                     type="button"
+                    onClick={() => handleShareConversation(rowActionMenu.item)}
+                    className="flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100"
+                  >
+                    <span>{roomManagementCopy.shareToggleLabel}</span>
+                    <Share2 className="h-4 w-4 shrink-0 text-slate-400" />
+                  </button>
+                  <div className="h-px bg-gray-100" />
+                  <button
+                    type="button"
                     onClick={() => {
                       setDeleteDialogConversationId(rowActionMenu.item.id);
                       setRowActionMenu(null);
@@ -5799,6 +5951,7 @@ export default function ConversationList({
                         }}
                         conversationTitle={conversation.title}
                         isBlockedCounterpart={conversation.isBlockedCounterpart}
+                        initialUnreadMessageCount={entryUnreadMessageCountByConversationId[conversation.id] ?? 0}
                         isMultiMember={conversation.isMultiMember}
                         conversationId={conversation.id}
                         preferredDisplayLanguage={preferredDisplayLanguage}

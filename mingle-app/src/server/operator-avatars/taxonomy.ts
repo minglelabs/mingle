@@ -11,6 +11,8 @@
  * (never underwear, swimwear-only or a sexualized pose), no real person, no
  * existing character, no text or logo in the image.
  */
+import { phonePhotoRealism } from './photo-realism'
+import { describeFace, foreheadFringe, HAIRLINE, subtleTraits, type FaceGrade } from './face-anatomy'
 export const AVATAR_SPEC_VERSION = 1
 
 export type AvatarCategory = 'face' | 'partial' | 'back' | 'body' | 'part' | 'group' | 'object' | 'animal' | 'scenery' | 'other'
@@ -55,16 +57,16 @@ function pick(options: readonly Option[], random: Random): Option {
 // ─── 1. Kind of photo ────────────────────────────────────────────────────────
 
 export const AVATAR_CATEGORIES: ReadonlyArray<{ key: AvatarCategory; ko: string; weight: number }> = [
-  { key: 'face', ko: '얼굴 위주', weight: 27 },
-  { key: 'partial', ko: '얼굴 일부·가림', weight: 14 },
-  { key: 'back', ko: '뒷모습', weight: 11 },
-  { key: 'body', ko: '몸 위주', weight: 13 },
-  { key: 'part', ko: '손·발·부분', weight: 5 },
+  { key: 'face', ko: '얼굴 위주', weight: 30 },
+  { key: 'partial', ko: '얼굴 일부·가림', weight: 20 },
+  { key: 'back', ko: '뒷모습', weight: 9 },
+  { key: 'body', ko: '몸 위주', weight: 17 },
+  { key: 'part', ko: '손·발·부분', weight: 3 },
   { key: 'group', ko: '여러 명', weight: 5 },
-  { key: 'object', ko: '사물', weight: 12 },
-  { key: 'animal', ko: '동물', weight: 8 },
+  { key: 'object', ko: '사물', weight: 8 },
+  { key: 'animal', ko: '동물', weight: 5 },
   { key: 'scenery', ko: '풍경·장소', weight: 4 },
-  { key: 'other', ko: '기타', weight: 1 },
+  { key: 'other', ko: '그림·글자', weight: 5 },
 ]
 
 /** East Asian profiles hide the face more; Western and Latin American ones show it more. */
@@ -78,7 +80,7 @@ const CATEGORY_COUNTRY_FACTORS: Record<'shy' | 'forward', Partial<Record<AvatarC
 
 /** Bio keywords (any language of the persona table) that pull the photo toward a subject. */
 const BIO_HINTS: ReadonlyArray<{ pattern: RegExp; category: AvatarCategory; subtype?: string; factor: number }> = [
-  { pattern: /cat|고양이|猫|ねこ|gato|chat\b|katze|kedi|mèo|แมว|kucing/i, category: 'animal', subtype: 'cat', factor: 4 },
+  { pattern: /cat|고양이|猫|ねこ|gato|chat\b|katze|kedi|mèo|แมว|kucing/i, category: 'animal', subtype: 'cat', factor: 6 },
   { pattern: /dog|강아지|犬|いぬ|perro|cachorro|chien|hund|köpek|chó|หมา|anjing/i, category: 'animal', subtype: 'dog', factor: 4 },
   { pattern: /gym|헬스|운동|筋トレ|ジム|fitness|academia|gimnasio|workout|健身/i, category: 'body', subtype: 'gym_mirror', factor: 3 },
   { pattern: /coffee|커피|카페|コーヒー|カフェ|café|kaffee|kahve|cà phê|咖啡/i, category: 'object', subtype: 'coffee', factor: 2.5 },
@@ -194,6 +196,8 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('plant', '화분', 1.5, 'a potted plant by a window'),
     sub('flowers', '꽃다발', 2, 'a small bouquet of flowers held in a hand'),
     sub('plush', '인형·피규어', 1.5, 'a soft toy sitting on a bed'),
+    sub('single_flower', '꽃 한 송이', 1.5, 'one flower up close (a rose, a tulip or a white peony)'),
+    sub('mascot', '마스코트 조형물', 1, 'a big cute mascot statue or costumed character in front of a shop or at a tourist spot, photographed on the street'),
     sub('rain_window', '비 오는 창문', 1.5, 'raindrops on a window with blurred city lights behind'),
   ],
   animal: [
@@ -217,9 +221,13 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('landmark', '여행지', 1.5, 'a famous kind of landmark photographed like a tourist would'),
   ],
   other: [
-    sub('doodle', '낙서풍 자화상', 3, 'a simple hand-drawn doodle self-portrait on paper, in an original style'),
-    sub('watercolor', '수채화', 2, 'a small amateur watercolor painting of a landscape'),
-    sub('emoji_plain', '단색 배경', 1, 'a plain pastel background with one small simple shape in the center'),
+    sub('anime_icon', '애니풍 그림', 3, 'an anime-style drawing of an original character, cropped to the head and shoulders like a profile icon'),
+    sub('sticker_char', '캐릭터 스티커', 2.5, 'a cute, simple cartoon animal or blob character in the style of a messenger-app sticker, on a plain white background, with two or three hand-drawn words in a speech bubble in the everyday language of {country}'),
+    sub('handwriting', '손글씨', 2, 'a word or two (a name or a short phrase) handwritten with a brush pen on plain paper in the language and script of {country}, photographed on a desk'),
+    sub('lettering', '글자 이미지', 1, 'a short word or a name in loose hand-lettered script on a soft pastel background'),
+    sub('doodle', '낙서풍 자화상', 2, 'a simple hand-drawn doodle self-portrait on paper, in an original style'),
+    sub('watercolor', '수채화', 1, 'a small amateur watercolor painting of a landscape'),
+    sub('emoji_plain', '단색 배경', 0.5, 'a plain pastel background with one small simple shape in the center'),
   ],
 }
 
@@ -254,6 +262,74 @@ const COUNTRY_PEOPLE: Record<string, ReadonlyArray<readonly [string, AncestryKey
   TR: [['Turkish', 'middle_eastern', 1]],
 }
 
+/**
+ * Family names that point to an ancestry. In a country with several ancestry
+ * groups the pick leans toward the one the persona's name suggests, so
+ * "Jessica Lee" is not drawn as someone a reader would not expect.
+ */
+const NAME_ANCESTRY_HINTS: ReadonlyArray<readonly [RegExp, AncestryKey]> = [
+  [/\b(lee|kim|park|choi|jung|kang|chen|wang|zhang|liu|li|lin|wu|huang|yang|zhao|chan|wong|ng|tanaka|sato|suzuki|yamamoto|nakamura|kobayashi|watanabe|ito)\b/i, 'east_asian'],
+  [/\b(nguyen|tran|pham|le|vo|santos|reyes|cruz|dela cruz|bautista|wijaya|suharto|siti|putri)\b/i, 'southeast_asian'],
+  [/\b(patel|singh|kumar|sharma|gupta|khan|reddy|iyer|nair|shah|mehta|kaur|das|begum|ahmed)\b/i, 'south_asian'],
+  [/\b(garcia|martinez|rodriguez|lopez|hernandez|gonzalez|perez|sanchez|ramirez|torres|flores|rivera|gomez|diaz|morales|silva|souza|oliveira)\b/i, 'latino'],
+  [/\b(yilmaz|kaya|demir|sahin|celik|ozturk|benali|haddad|mansour|hassan)\b/i, 'middle_eastern'],
+]
+const NAME_ANCESTRY_BOOST = 20
+
+/**
+ * How people from one country tend to look, style themselves and dress.
+ * Without it the image model draws every East Asian woman with the same
+ * Korean-style face and makeup (a "Japanese woman" came out looking Korean or
+ * Chinese until her makeup, hair and clothes were spelled out, 2026-10). Only
+ * used for the country's majority ancestry; trends, not rules, so each line
+ * says "often".
+ */
+type CountryLook = { face?: string; makeup?: string; hair?: { female?: string; male?: string }; dress?: { female?: string; male?: string } }
+const COUNTRY_LOOKS: Record<string, CountryLook> = {
+  JP: {
+    face: 'unmistakably Japanese features',
+    makeup: 'Japanese-style makeup: a matte, soft-focus base, pink blush placed high right under the eyes and a touch across the nose, visible but not heavy, a little shimmer on the under-eye puffiness, brown mascara and thin brown liner, softly arched light-brown brows, a filled-in coral or red-brown lip following the natural lip shape (not a gradient lip)',
+    hair: { female: 'often dyed a soft milk-tea or ash brown, often a bob with inward-curled ends or see-through bangs', male: 'often a soft mushroom or center-parted cut, sometimes dyed light brown' },
+    dress: { female: 'the loose, layered Japanese everyday style in muted earth tones', male: 'the loose, layered Japanese everyday style in muted tones' },
+  },
+  KR: {
+    face: 'unmistakably Korean features',
+    makeup: 'Korean-style makeup: a fresh, lightly luminous base that still shows skin texture, straight soft brows, a hint of blush on the apples of the cheeks, a gradient lip',
+    hair: { female: 'anything from a blunt bob or a wolf cut to a loose perm or long layers', male: 'often a comma-hair or down-perm cut' },
+    dress: { female: 'a Korean everyday style of her own, whether sporty, vintage, street or clean', male: 'a Korean everyday style of his own, whether sporty, street or clean, with a relaxed fit' },
+  },
+  CN: {
+    face: 'unmistakably Chinese features',
+    makeup: 'Chinese-style makeup: a smooth matte base, defined straight brows, eyeliner that lifts slightly at the outer corner, a full, solid red or rose lip',
+    hair: { female: 'often long and straight, or with soft curtain bangs', male: 'often short with a textured top' },
+  },
+  TW: {
+    face: 'unmistakably Taiwanese features',
+    makeup: 'Taiwanese-style makeup: light and fresh, a thin base, soft natural brows, a sheer pink lip',
+    hair: { female: 'often shoulder-length with thin bangs', male: 'often short and neat' },
+  },
+  TH: {
+    face: 'unmistakably Thai features',
+    makeup: 'Thai-style makeup: a light, fresh base, defined brows, soft warm bronze eyeshadow, a rosy or peach lip',
+    dress: { female: 'light clothes for hot weather', male: 'light clothes for hot weather' },
+  },
+  VN: {
+    face: 'unmistakably Vietnamese features',
+    makeup: 'Vietnamese-style makeup: a light base, natural brows, a coral or red lip',
+    dress: { female: 'light clothes for warm weather', male: 'light clothes for warm weather' },
+  },
+  ID: {
+    face: 'unmistakably Indonesian features',
+    makeup: 'Indonesian-style makeup: a matte base, defined brows, a warm nude or brick lip',
+    dress: { female: 'light clothes for hot weather, sometimes a hijab', male: 'light clothes for hot weather' },
+  },
+  PH: {
+    face: 'unmistakably Filipino features',
+    makeup: 'Filipino-style makeup: a light, fresh base, peachy blush, a nude or rosy lip',
+    dress: { female: 'light clothes for hot weather', male: 'light clothes for hot weather' },
+  },
+}
+
 const SKIN_TONES: Record<AncestryKey, readonly Option[]> = {
   east_asian: [['fair', 3, 'fair skin'], ['light', 4, 'light skin'], ['light_medium', 2, 'light-medium skin'], ['tan', 1, 'lightly tanned skin']],
   southeast_asian: [['light_medium', 3, 'light-medium skin'], ['tan', 4, 'tan skin'], ['brown', 3, 'brown skin']],
@@ -281,45 +357,84 @@ const DYED_HAIR: readonly Option[] = [
   ['pink', 0.7, 'dyed pastel pink'], ['blue', 0.5, 'dyed dark blue'], ['red_dye', 1, 'dyed wine red'],
 ]
 
-const FACE_SHAPES: readonly Option[] = [
-  ['round', 3, 'a round face'], ['oval', 4, 'an oval face'], ['square', 2, 'a square jaw'], ['long', 2, 'a long face'], ['heart', 2, 'a heart-shaped face'],
-]
+
 
 const SKIN_FEATURES: readonly Option[] = [
-  ['clear', 5, 'ordinary skin with visible pores'], ['freckles', 1, 'a few freckles'], ['mole', 1.5, 'a small mole on the cheek'],
+  ['clear', 5, 'ordinary, clear skin'], ['freckles', 1, 'a few freckles'], ['mole', 1.5, 'a small mole on the cheek'],
   ['acne_marks', 1.5, 'faint acne marks'], ['flush', 1, 'slightly flushed cheeks'], ['fine_lines', 1, 'faint lines around the eyes'],
 ]
 
-const EYES: readonly Option[] = [
-  ['monolid', 2, 'monolid eyes'], ['inner_fold', 2, 'subtle inner double eyelids'], ['double', 3, 'double eyelids'], ['large', 2, 'large eyes'],
-  ['narrow', 2, 'narrow eyes'], ['downturned', 1.5, 'slightly downturned eyes'], ['upturned', 1.5, 'slightly upturned eyes'],
-]
-
-const NOSE_MOUTH: readonly Option[] = [
-  ['low_nose', 2, 'a low nose bridge'], ['high_nose', 2, 'a high nose bridge'], ['wide_nose', 2, 'a wide nose'], ['thin_lips', 2, 'thin lips'],
-  ['full_lips', 2, 'full lips'], ['snaggle', 0.6, 'one slightly crooked tooth showing'], ['braces', 0.4, 'braces on the teeth'], ['plain', 4, 'unremarkable nose and lips'],
-]
-
-const EYEBROWS: readonly Option[] = [
-  ['thick', 3, 'thick eyebrows'], ['thin', 2, 'thin eyebrows'], ['straight', 3, 'straight eyebrows'], ['arched', 2, 'arched eyebrows'],
-]
-
-/** Most people look ordinary; a feed where everyone looks like a model reads as fake. */
+/**
+ * A profile picture is the best photo someone has of themself, so most look
+ * at least likable. Ordinary and pleasant faces get untypical traits from
+ * face-anatomy.ts. A striking face gets no features at all: every attempt to
+ * spell out an untypical beauty feature by feature broke the face's harmony
+ * (50 to 90 at best), while asking for an untypical, overwhelming beauty in
+ * the abstract and letting the model choose scored 80 to 85 and did not look
+ * typical (2026-10). An impression word ("fox-like") raised it to 95 but
+ * pulled it back toward the typical face; saying the proportions are a real
+ * person's that no one would take for AI made the nose and face shape less
+ * typical (90), and one mild trait such as slightly wide-set eyes kept 95
+ * while easing the typical look (see STRIKING for where it settled).
+ */
 const ATTRACTIVENESS: readonly Option[] = [
-  ['ordinary', 60, 'an ordinary, average-looking person'],
-  ['pleasant', 25, 'a pleasant-looking person, not model-like'],
-  ['striking', 15, 'a good-looking person, still clearly an ordinary non-professional'],
+  ['ordinary', 30, 'an ordinary-looking person'],
+  ['pleasant', 40, 'a likable, pretty face'],
+  ['striking', 30, ''],
+]
+
+/**
+ * How a striking face is asked for, settled over many scored drafts
+ * (2026-10): a distinctive look in the abstract, an impression word, and
+ * natural asymmetry with flyaway hair (95, not typical). Saying the
+ * proportions are a real person's lowered beauty without making the face
+ * less typical once the asymmetry was there (85), and named eye or lip
+ * traits made it more typical (100 but typical).
+ */
+const STRIKING = 'not the typical AI beauty: a distinctive look of their own, and still overwhelmingly beautiful, the kind of face people turn to look at; the distinctiveness adds to the beauty, never takes away from it'
+
+/**
+ * Always added to a striking face. With them the same prompt scored 95 and
+ * was no longer typical; without them it came out typical (2026-10). The
+ * asymmetry works on the face itself; the flyaways were tested together
+ * with it and stay with it.
+ */
+const STRIKING_REAL_FACE = 'the slight natural asymmetry of a real face: one eye a touch smaller or one brow a little higher; hair with a little natural unevenness, not silky or uniform'
+
+/** The overall impression of a striking face, the way Koreans describe faces (고양이상, 강아지상 …). */
+const IMPRESSIONS: Record<'female' | 'male', readonly Option[]> = {
+  female: [
+    // Sharp or cool impressions kept the subtle details visible; sweet, bubbly ones matched the model's own
+    // cute beauty and absorbed them (2026-10), so they are picked less.
+    ['cat', 3, 'cat-like'], ['fox', 3, 'fox-like'], ['chic', 2.5, 'chic and cool'], ['graceful', 2, 'graceful and elegant'], ['exotic', 1.2, 'a little exotic'],
+    ['innocent', 1.2, 'innocent and clear'], ['puppy', 0.8, 'puppy-like and sweet'], ['rabbit', 0.6, 'rabbit-like and lively'],
+    ['bright', 0.6, 'bright and bubbly'], ['dreamy', 0.8, 'soft and dreamy'],
+  ],
+  male: [
+    ['puppy', 2, 'puppy-like and warm'], ['cat', 1.5, 'cat-like'], ['wolf', 1.2, 'sharp and wolfish'], ['gentle', 2, 'gentle and calm'],
+    ['boyish', 1.5, 'boyish and bright'], ['chic', 1.5, 'chic and cool'], ['rugged', 1, 'rugged and manly'], ['dreamy', 1, 'soft and dreamy'],
+  ],
+}
+
+/** What people notice first about the face; gives it a specific appeal without averaging it. */
+const CHARM_POINTS: readonly Option[] = [
+  ['eye_smile', 3, 'the way the eyes curve into crescents when smiling'], ['wide_smile', 2.5, 'a wide, slightly lopsided smile showing the upper teeth, one slightly uneven'],
+  ['dimples', 1.5, 'dimples when smiling'], ['clear_skin', 1.5, 'clear skin with a natural flush'], ['beauty_mark', 1.5, 'a small beauty mark near the eye or lip'],
+  ['brows', 1.5, 'expressive brows'], ['gaze', 1.5, 'a calm, direct gaze'], ['snaggle', 1, 'a small snaggletooth when smiling'], ['neck', 1, 'a long neck and clean jawline'],
+  ['lip_corners', 1.5, 'mouth corners that turn up naturally even at rest'],
 ]
 
 const HAIR_LENGTH: Record<'female' | 'male', readonly Option[]> = {
-  female: [['short', 1, 'short'], ['bob', 2.5, 'chin-length bob'], ['medium', 3.5, 'shoulder-length'], ['long', 4, 'long'], ['very_long', 1, 'very long']],
+  female: [['short', 1.5, 'short'], ['bob', 3.5, 'chin-length bob'], ['medium', 3.5, 'shoulder-length'], ['long', 2.5, 'long'], ['very_long', 0.5, 'very long']],
   male: [['buzz', 1.5, 'buzz-cut'], ['short', 5, 'short'], ['medium', 2.5, 'medium-length'], ['long', 0.7, 'long'], ['thinning', 0.5, 'thinning']],
 }
 
 const HAIR_STYLE: Record<'female' | 'male', readonly Option[]> = {
   female: [
-    ['straight', 4, 'straight hair worn down'], ['wavy', 3, 'loosely waved hair'], ['curly', 1.5, 'curly hair'], ['ponytail', 2.5, 'hair in a ponytail'],
-    ['bun', 2, 'hair in a messy bun'], ['braid', 1, 'hair in a braid'], ['half_up', 1.5, 'hair half tied up'], ['bangs', 2.5, 'hair with a fringe'],
+    ['straight', 2.5, 'straight hair worn down'], ['wavy', 2, 'loosely waved hair'], ['curly', 1.5, 'curly hair'], ['ponytail', 2.5, 'hair in a ponytail'],
+    ['bun', 2, 'hair in a messy bun'], ['braid', 1, 'hair in a braid'], ['half_up', 1.5, 'hair half tied up with a scrunchie'], ['low_tie', 2, 'hair loosely tied back'],
+    ['claw_clip', 2, 'hair twisted up in a lopsided bun with a claw clip'], ['perm', 1.5, 'a loose wavy perm'], ['wolf', 1.2, 'a layered, slightly grown-out wolf cut'],
+    ['tucked', 2, 'hair tucked behind one ear with a plain bobby pin'], ['roots', 1, 'dyed hair with the roots grown out'],
   ],
   male: [
     ['neat', 3, 'neatly cut hair'], ['messy', 3, 'slightly messy hair'], ['side_part', 2.5, 'side-parted hair'], ['fringe', 2.5, 'hair with a fringe over the forehead'],
@@ -327,13 +442,26 @@ const HAIR_STYLE: Record<'female' | 'male', readonly Option[]> = {
   ],
 }
 
+/** Hairstyles that need hair long enough to tie. */
+const TIED_STYLES = new Set(['ponytail', 'bun', 'braid', 'half_up', 'low_tie', 'claw_clip', 'tied'])
+
 const FACIAL_HAIR: readonly Option[] = [
   ['none', 6, 'clean-shaven'], ['stubble', 2, 'light stubble'], ['mustache', 0.6, 'a mustache'], ['beard', 1, 'a short beard'], ['full_beard', 0.4, 'a full beard'],
 ]
 
+/**
+ * Makeup shapes the face the model draws: with full makeup it reaches for the
+ * typical idol face (defined eyes, glossy lips), and an almost bare face came
+ * out clearly untypical while still pretty (2026-10). So bare and minimal
+ * faces are common, as they are in real selfies.
+ */
 const MAKEUP: readonly Option[] = [
-  ['none', 3, 'no makeup'], ['light', 4, 'light everyday makeup'], ['regular', 2.5, 'regular makeup'], ['bold', 0.7, 'noticeable makeup'],
+  ['none', 3, 'no makeup'], ['minimal', 3.5, 'almost no makeup: sunscreen, brows filled in lightly, a lip balm'],
+  ['light', 2.5, 'light everyday makeup'], ['regular', 1.5, 'everyday makeup'], ['bold', 0.6, 'a bolder look with smudged liner and a matte lip'],
 ]
+
+/** Makeup levels too light to carry a country makeup style. */
+const BARE_MAKEUP = new Set(['none', 'minimal'])
 
 const ACCESSORIES: readonly Option[] = [
   ['none', 10, ''], ['horn_glasses', 2, 'thick-framed glasses'], ['metal_glasses', 2, 'thin metal-framed glasses'], ['earrings', 1.5, 'small earrings'],
@@ -353,16 +481,74 @@ const BUILD: Record<'female' | 'male', readonly Option[]> = {
 }
 
 const HEIGHT: readonly Option[] = [['short', 2, 'on the short side'], ['average', 5, 'of average height'], ['tall', 2, 'on the tall side']]
-const POSTURE: readonly Option[] = [['upright', 3, 'standing upright'], ['slouch', 2, 'slouching a little'], ['lean', 2, 'weight on one leg'], ['relaxed', 3, 'in a relaxed stance']]
-
-const EXPRESSIONS: readonly Option[] = [
-  ['neutral', 3, 'a neutral expression'], ['slight_smile', 4, 'a slight smile'], ['big_smile', 2.5, 'a wide smile'], ['playful', 1.5, 'a playful expression'],
-  ['sleepy', 1, 'a sleepy look'], ['serious', 1.5, 'a serious look'], ['eyes_closed', 0.7, 'eyes closed, smiling'], ['eating', 0.5, 'mid-bite, eating'],
+/** How the body is held in a back or body photo. */
+const POSTURE: readonly Option[] = [
+  ['upright', 2, 'standing upright'], ['slouch', 1.5, 'slouching a little'], ['lean', 2, 'weight on one leg, one hip out'], ['relaxed', 2, 'in a relaxed stance'],
+  ['foot_pop', 1, 'one foot popped up behind'], ['walking', 2, 'caught mid-step while walking'], ['wall_lean', 1.5, 'leaning back against a wall'],
+  ['railing', 1, 'leaning forward on a railing'], ['stairs', 1.2, 'sitting on steps, knees together'], ['squat', 1, 'squatting low, arms resting on the knees'],
+  ['cross_legged', 1, 'sitting cross-legged on the floor'], ['hug_knees', 0.8, 'sitting with the knees pulled up and the arms around them'],
+  ['bed_stomach', 0.6, 'lying on the stomach on a bed, feet up'], ['chair_turned', 0.8, 'sitting sideways on a chair, one arm over the backrest'],
+  ['twirl', 0.6, 'mid-turn, the clothes and hair swinging'], ['stretch', 0.6, 'stretching the arms up overhead'], ['curb', 0.8, 'sitting on a curb or low ledge'],
 ]
 
+/** Back photos where the person is simply standing, so a posture can be added. */
+const BACK_STANDING_SUBTYPES = new Set(['sea_gaze', 'sunset_gaze', 'window_gaze', 'viewpoint', 'travel_landmark', 'head_shoulders', 'far_small'])
+/** Standing postures that fit a back photo. */
+const BACK_POSTURES = POSTURE.filter((option) => ['upright', 'slouch', 'lean', 'relaxed', 'foot_pop', 'railing', 'stretch'].includes(option[0]))
+
+/**
+ * Expressions written as what the face does (brows, eyes, mouth, nose,
+ * cheeks), not as emotion names: "surprised" alone gives one stock face,
+ * while real profile photos show many different surprises, smiles and pouts.
+ */
+const EXPRESSIONS: readonly Option[] = [
+  // Smiles
+  ['slight_smile', 3, 'a slight closed-lip smile'], ['half_smile', 2, 'a half smile lifting one corner of the mouth'],
+  ['eye_smile', 2.5, 'a smile that reaches the eyes, the eyes curving into crescents'], ['grin', 1.5, 'a wide, easy grin showing the teeth'],
+  ['shy_smile', 1.5, 'a shy smile with the chin dipped and the eyes glancing up'], ['cool_smile', 1.2, 'a faint smile in the mouth only, the eyes calm and cool'],
+  ['laugh', 1.5, 'caught laughing, mouth open, eyes squeezed nearly shut'], ['holding_laugh', 1, 'trying not to laugh, lips pressed together, cheeks pushed up'],
+  ['smirk', 0.8, 'a teasing smirk, one brow slightly raised'],
+  // Neutral and cool
+  ['neutral', 2.5, 'a neutral, relaxed face'], ['blank_stare', 1.5, 'a blank stare into the lens, lips slightly parted'],
+  ['unimpressed', 0.8, 'chin slightly lifted, eyelids half lowered, unimpressed'], ['side_eye', 0.8, 'eyes slid sideways toward the lens without turning the head'],
+  ['serious', 1, 'a serious look, the jaw relaxed'], ['dreamy', 1, 'a dreamy, unfocused gaze, lips relaxed'],
+  // Surprises
+  ['small_o', 0.8, 'brows up and lips parted in a small "o"'], ['mock_shock', 0.6, 'a mock-shocked face, mouth wide open'],
+  ['startled', 0.6, 'eyes a little wide, mouth closed, mildly startled'], ['mid_blink', 0.5, 'caught mid-blink, eyes half shut'],
+  // Pouts and playful faces
+  ['pout', 1.2, 'lips pushed out in a small pout'], ['puffed', 0.8, 'cheeks puffed out with air'], ['kissy', 0.6, 'lips puckered as if blowing a kiss'],
+  ['tongue', 0.8, 'the tip of the tongue poking out at one side'], ['wink', 1, 'winking with one eye, the mouth smiling'],
+  ['lip_bite', 0.6, 'lightly biting the lower lip'], ['nose_scrunch', 0.8, 'a small playful pout'], ['raised_brow', 0.6, 'one eyebrow raised'],
+  ['sulk', 0.6, 'a pretend sulk, the lower lip out and brows drawn together'], ['squint_sun', 0.8, 'squinting a little against the sun'],
+  // In the middle of something
+  ['talking', 0.8, 'mid-sentence, the mouth half open as if talking'], ['sleepy', 0.8, 'sleepy, heavy eyelids, just woken up'],
+  ['eyes_closed', 0.7, 'eyes closed, smiling softly'], ['eating', 0.5, 'mid-bite, eating'], ['yawn', 0.3, 'caught mid-yawn'],
+]
+
+/** Hands in a face photo. Keys in TWO_HAND_POSES need both hands, so a selfie cannot take them. */
 const HAND_POSES: readonly Option[] = [
-  ['none', 8, ''], ['peace', 2, 'making a peace sign'], ['chin', 1.5, 'chin resting on a hand'], ['cheek', 0.7, 'a finger pressed to the cheek'],
-  ['hair', 1, 'a hand in the hair'], ['cup', 1.5, 'holding a cup'], ['pocket', 1, 'a hand in a pocket'], ['arms_crossed', 0.6, 'arms crossed'],
+  ['none', 7, ''], ['peace', 1.5, 'making a peace sign'], ['peace_chin', 0.8, 'a peace sign under the chin'], ['finger_heart', 0.8, 'making a finger heart'],
+  ['chin', 1.2, 'chin resting on a hand'], ['fist_chin', 0.6, 'chin propped on a loose fist'], ['cheek', 0.7, 'a finger pressed to the cheek'],
+  ['hair', 1, 'a hand pushing the hair back'], ['tuck_hair', 1.2, 'tucking hair behind one ear'], ['earring', 0.6, 'touching an earring'],
+  ['cover_mouth', 1, 'a hand resting lightly near the mouth'], ['sweater_paw', 0.8, 'a sleeve pulled over the hand, held near the face'],
+  ['head_top', 0.6, 'a hand resting on top of the head'], ['shade_eyes', 0.5, 'a hand shading the eyes from the sun'],
+  ['glasses', 0.6, 'pushing up a pair of glasses'], ['collar', 0.6, 'fiddling with the neckline of the top'], ['straw', 0.8, 'sipping a drink through a straw'],
+  ['cup', 1.2, 'holding a cup'], ['food', 0.6, 'holding a snack up near the face'], ['flower', 0.5, 'holding a flower near the face'],
+  ['point', 0.5, 'pointing at the camera'], ['pocket', 1, 'a hand in a pocket'], ['arms_crossed', 0.6, 'arms crossed'],
+  ['cheeks_cupped', 0.6, 'both hands cupping the cheeks'], ['frame_face', 0.4, 'both hands framing the face'], ['hood_strings', 0.5, 'both hands pulling the hood strings'],
+]
+
+/** Head angle in a face photo; most photos tilt the head somehow. */
+const HEAD_POSES: readonly Option[] = [
+  ['straight', 3, ''], ['tilt', 3, 'the head tilted to one side'], ['chin_down', 1.5, 'chin tucked down, looking up at the lens'],
+  ['chin_up', 1, 'chin raised a little'], ['lean_in', 1, 'leaning in toward the camera'], ['lean_back', 1, 'leaning back against something'],
+  ['shoulder', 0.8, 'the cheek resting against the raised shoulder'], ['turned', 1.2, 'the body turned away, the face turned back to the lens'],
+]
+
+/** What the body does when a face photo shows it from the waist down. */
+const FRAMED_BODY_POSES: readonly Option[] = [
+  ['standing', 3, ''], ['sitting_table', 2, 'sitting at a table, elbows on it'], ['sitting_floor', 1, 'sitting on the floor'], ['stairs', 1, 'sitting on steps'],
+  ['squat', 0.8, 'squatting low'], ['walking', 1.2, 'walking toward the camera'], ['wall_lean', 1.2, 'leaning against a wall'], ['bed', 0.8, 'sitting on a bed with the legs folded'],
 ]
 
 const OUTFITS: Record<'everyday' | 'fitted' | 'sport', readonly Option[]> = {
@@ -372,6 +558,8 @@ const OUTFITS: Record<'everyday' | 'fitted' | 'sport', readonly Option[]> = {
     ['puffer', 1, 'a padded jacket'], ['scarf', 0.7, 'a sweater with a scarf'], ['suit', 0.7, 'office clothes with a lanyard'], ['uniform', 0.4, 'a work uniform'],
     ['oversized', 1.5, 'oversized streetwear'], ['vintage', 0.8, 'vintage-style clothes'], ['all_black', 1, 'all-black clothes'], ['band_tee', 0.7, 'a faded band T-shirt with no readable text'],
     ['pajamas', 0.6, 'comfortable home clothes'], ['sleeveless', 0.8, 'a sleeveless top'], ['traditional', 0.4, 'the traditional dress of their country'],
+    ['jersey', 1, 'an oversized vintage football jersey with no readable text'], ['fleece', 1, 'a half-zip fleece'], ['windbreaker', 1, 'a nylon windbreaker'],
+    ['leather', 0.8, 'a worn leather jacket over a striped tee'], ['rugby', 0.6, 'a striped rugby shirt'], ['cardigan', 1, 'a cardigan over a plain top'],
   ],
   fitted: [
     ['jeans_tee', 3, 'a tucked-in T-shirt and jeans'], ['slim_knit', 2, 'a fitted knit top and trousers'], ['crop', 1.5, 'a cropped top and high-waisted trousers'],
@@ -387,8 +575,14 @@ const OUTFITS: Record<'everyday' | 'fitted' | 'sport', readonly Option[]> = {
 /** Outfit keys only picked for a woman. */
 const FEMALE_ONLY_OUTFITS = new Set(['dress', 'fitted_dress', 'crop', 'leggings'])
 
-function outfitsFor(options: readonly Option[], gender: 'female' | 'male' | null): readonly Option[] {
-  return gender === 'female' ? options : options.filter((option) => !FEMALE_ONLY_OUTFITS.has(option[0]))
+/** Outfits too warm for countries whose dress note asks for light clothes. */
+const WARM_OUTFITS = new Set(['hoodie', 'sweatshirt', 'knit', 'coat', 'puffer', 'scarf', 'fleece', 'leather', 'cardigan', 'coat_layer', 'slim_knit', 'blazer', 'suit'])
+
+function outfitsFor(options: readonly Option[], gender: 'female' | 'male' | null, persona?: AvatarPersona): readonly Option[] {
+  const look = COUNTRY_LOOKS[(persona?.country ?? '').toUpperCase()]
+  const hot = gender ? /light clothes/.test(look?.dress?.[gender] ?? '') : false
+  // Traditional dress only where the country's look is known to include one in everyday photos.
+  return options.filter((option) => (gender === 'female' || !FEMALE_ONLY_OUTFITS.has(option[0])) && !(hot && WARM_OUTFITS.has(option[0])) && !(option[0] === 'traditional' && !look))
 }
 
 // ─── 4. How it was shot, and where ───────────────────────────────────────────
@@ -408,32 +602,36 @@ const COMPOSITIONS: readonly Option[] = [
   ['centered', 4, 'subject centered'], ['off_center', 3, 'subject off to one side'], ['tilted', 1.5, 'the frame slightly tilted'], ['cut_off', 1.5, 'the top of the head cut off by the frame'],
 ]
 
+/**
+ * Phone photos only: film, instant, photo-booth, DSLR and ID-photo looks
+ * fought the phone-camera realism lines and read as staged.
+ */
 const QUALITIES: readonly Option[] = [
-  ['new_phone', 5, 'shot on a recent smartphone'], ['old_phone', 2.5, 'shot on an older smartphone, slightly noisy and soft'],
-  ['front_cam', 2, 'front-camera wide-angle distortion'], ['film', 1.5, 'the look of a cheap film camera, grainy with muted colors'],
-  ['instant', 0.7, 'the look of an instant-film print'], ['photo_booth', 0.7, 'the look of a photo-booth strip frame, plain backdrop'],
-  ['dslr', 1, 'shot on a camera with a softly blurred background'], ['id_photo', 0.3, 'the look of an ID photo against a plain backdrop'],
+  ['new_phone', 5, 'shot on a recent smartphone'], ['old_phone', 1, 'shot on an older smartphone, slightly soft'],
+  ['front_cam', 2, 'mild front-camera wide-angle distortion'],
 ]
 
+/** Color filters fought the true-to-life color line; black and white is the one kept, as people do use it. */
 const FILTERS: readonly Option[] = [
-  ['none', 6, 'no filter'], ['beauty', 1.5, 'a mild smoothing beauty filter'], ['warm', 1.5, 'a warm color filter'], ['cool', 1, 'a cool, slightly faded color filter'],
-  ['bw', 0.8, 'black and white'], ['vintage', 0.8, 'a faded vintage filter'],
+  ['none', 12, 'no filter'], ['bw', 0.8, 'black and white'],
 ]
 
 const LIGHTING: readonly Option[] = [
   ['daylight', 5, 'ordinary daylight'], ['window', 3, 'soft light from a window'], ['golden', 2, 'low evening sun'], ['fluorescent', 2, 'flat indoor fluorescent light'],
-  ['warm_lamp', 2, 'warm indoor lamp light'], ['flash', 1, 'direct phone flash in a dark place'], ['neon', 0.8, 'colored neon light at night'],
+  ['warm_lamp', 2, 'warm indoor lamp light'], ['night', 1.2, 'at night under street lamps and city lights'], ['neon', 0.8, 'colored neon light at night'],
   ['overcast', 1.5, 'grey overcast light'], ['screen', 0.4, 'lit only by a screen in a dark room'],
+  ['side_sun', 2.5, 'low late-afternoon sun from one side, warm on one side of the person and on the wall or street behind, the other side in soft shade'],
+  ['backlit_shade', 3, 'late afternoon in shade with the bright sky behind as the main light, so the person is slightly backlit: the face a little darker and duller than the sky and as lit as the shade around it, the sky blown out to near white'],
 ]
 
 const FLAWS: readonly Option[] = [
   ['none', 5, ''], ['soft_focus', 2, 'focus slightly missed'], ['slight_blur', 1.5, 'a little motion blur'], ['overexposed', 1, 'slightly overexposed highlights'],
-  ['mirror_smudge', 1, 'smudges on the mirror or lens'], ['clutter', 2, 'everyday clutter visible in the background'], ['finger', 0.3, 'a fingertip at the edge of the frame'],
+  ['mirror_smudge', 1, 'smudges on the mirror or lens'], ['clutter', 2, 'an ordinary lived-in background, a little untidy'],
 ]
 
 type ShotEnv = 'indoor' | 'outdoor' | 'any'
 const INDOOR_ONLY_LIGHT = new Set(['window', 'fluorescent', 'warm_lamp', 'screen'])
-const OUTDOOR_ONLY_LIGHT = new Set(['golden', 'overcast', 'neon'])
+const OUTDOOR_ONLY_LIGHT = new Set(['golden', 'overcast', 'neon', 'backlit_shade', 'night', 'side_sun'])
 
 function lightingFor(env: ShotEnv): readonly Option[] {
   if (env === 'indoor') return LIGHTING.filter((option) => !OUTDOOR_ONLY_LIGHT.has(option[0]))
@@ -530,36 +728,100 @@ function ageBand(age: number | null, gender: 'female' | 'male' | null = null): s
 type Picker = (axis: string, options: readonly Option[]) => string
 
 /** Who the person is, as far as this kind of photo shows them. */
-function describePerson(persona: AvatarPersona, show: { face: boolean; body: boolean; hair: boolean }, take: Picker, random: Random): string {
+function describePerson(
+  persona: AvatarPersona,
+  show: { face: boolean; body: boolean; hair: boolean },
+  take: Picker,
+  random: Random,
+  attributes: Record<string, string>,
+): string {
   const gender = genderOf(persona)
   // Unknown gender: the picker still needs one table; the prompt lets the name decide.
   const table = gender ?? (random() < 0.5 ? 'female' : 'male')
-  const people = COUNTRY_PEOPLE[(persona.country ?? '').toUpperCase()]
+  const country = (persona.country ?? '').toUpperCase()
+  const people = COUNTRY_PEOPLE[country]
+  const hinted = NAME_ANCESTRY_HINTS.find(([pattern]) => pattern.test(persona.name ?? ''))?.[1]
   const person = people
-    ? pick(people.map(([label, ancestry, weight]) => [ancestry, weight, label] as const), random)
-    : (['mixed', 1, persona.countryName ? `person from ${persona.countryName}` : 'person'] as const)
+    ? pick(people.map(([label, ancestry, weight]) => [ancestry, weight * (ancestry === hinted ? NAME_ANCESTRY_BOOST : 1), label] as const), random)
+    : (['mixed', 1, ''] as const)
   const ancestry = person[0] as AncestryKey
   const noun = gender === 'female' ? 'woman' : gender === 'male' ? 'man' : `person whose gender fits the given name "${persona.name ?? ''}"`
+  const who = person[2] ? `a ${person[2]} ${noun}` : `a ${noun}${persona.countryName ? ` from ${persona.countryName}` : ''}`
+  // The country look describes the country's majority, the first ancestry in its table.
+  const look = people && people[0][1] === ancestry && people[0][0] === person[2] ? COUNTRY_LOOKS[country] : undefined
 
-  const parts: string[] = [`a ${person[2]} ${noun} ${ageBand(persona.age, gender)}`, take('attractiveness', ATTRACTIVENESS), take('skin', SKIN_TONES[ancestry])]
+  const attractiveness = take('attractiveness', ATTRACTIVENESS)
+  const parts: string[] = [`${who} ${ageBand(persona.age, gender)}`, attractiveness || STRIKING, take('skin', SKIN_TONES[ancestry])]
+  if (show.face && look?.face) parts.push(`with ${look.face}`)
+  // The face is picked before the hair: a high forehead needs hair over it.
+  const striking = attributes.attractiveness === 'striking'
+  const face = !show.face ? '' : striking
+    ? `the overall impression of the face: ${take('impression', IMPRESSIONS[table])}; ${subtleTraits(take, random, table, ancestry === 'east_asian' || ancestry === 'southeast_asian')}; ${STRIKING_REAL_FACE}`
+    : describeFace(take, random, (attributes.attractiveness ?? 'pleasant') as FaceGrade)
   if (show.hair) {
     const young = persona.age === null || persona.age < 35
     const dyed = young && random() < 0.18
     const color = take('hairColor', dyed ? DYED_HAIR : NATURAL_HAIR[ancestry])
-    parts.push(`${take('hairLength', HAIR_LENGTH[table])} ${color} hair, ${take('hairStyle', HAIR_STYLE[table])}`)
+    const trend = look?.hair?.[table]
+    const length = take('hairLength', HAIR_LENGTH[table])
+    // Short hair and bobs are too short to tie up.
+    const styles = ['short', 'bob', 'buzz'].includes(attributes.hairLength) ? HAIR_STYLE[table].filter((option) => !TIED_STYLES.has(option[0])) : HAIR_STYLE[table]
+    const hair = [`${length} ${color} hair, ${take('hairStyle', styles)}`]
+    // The fringe and hairline change how the forehead, and so the whole face, reads.
+    if (table === 'female') hair.push(take('fringe', foreheadFringe(attributes)))
+    const forehead = table === 'female' ? ['none', 'curtain', 'wispy'].includes(attributes.fringe) : attributes.hairStyle !== 'fringe'
+    if (show.face && forehead) hair.push(take('hairline', HAIRLINE))
+    parts.push(`${hair.join(', ')}${trend && young ? ` (people of this age there: ${trend})` : ''}`)
   }
   if (show.face) {
-    parts.push(take('faceShape', FACE_SHAPES), take('eyes', EYES), take('eyebrows', EYEBROWS), take('noseMouth', NOSE_MOUTH), take('skinFeature', SKIN_FEATURES))
+    parts.push(
+      face,
+      take('skinFeature', SKIN_FEATURES),
+      // A named charm point is one more feature for the model to bend; striking faces are left whole.
+      striking ? '' : `what people notice about the face: ${take('charm', CHARM_POINTS)}`,
+    )
     if (gender === 'male') parts.push(take('facialHair', FACIAL_HAIR))
-    if (gender === 'female') parts.push(take('makeup', MAKEUP))
+    if (gender === 'female') {
+      const makeup = take('makeup', MAKEUP)
+      parts.push(look?.makeup && !BARE_MAKEUP.has(attributes.makeup) ? `${makeup} in ${look.makeup}` : makeup)
+    }
     parts.push(take('accessory', ACCESSORIES))
   }
   if (show.body) parts.push(take('build', BUILD[table]), take('height', HEIGHT))
   return parts.filter(Boolean).join(', ')
 }
 
+/** Face angles that only a selfie can take, and ones that need someone else holding the phone. */
+const SELFIE_SUBTYPES = new Set(['high_angle', 'low_angle', 'lying_down'])
+const OTHER_SHOOTER_SUBTYPES = new Set(['profile', 'look_back', 'laughing', 'head_down'])
+/** Face angles where a selfie taker looks at the screen; the others look elsewhere on purpose. */
+const GAZE_AT_SCREEN_SUBTYPES = new Set(['front', 'high_angle', 'low_angle', 'lying_down', 'hand_cover', 'mask', 'cap_brim', 'hair_cover', 'object_cover'])
+/** Hand poses that need the hand holding the phone. */
+/** Face angles that already fix how the head is held. */
+const HEAD_FIXED_SUBTYPES = new Set(['profile', 'high_angle', 'low_angle', 'head_down', 'look_back', 'lying_down'])
+/** Face photos whose subtype already uses the hands. */
+const HANDS_BUSY_SUBTYPES = new Set(['mirror_phone', 'hand_cover', 'object_cover', 'pet_cover'])
+const TWO_HAND_POSES = new Set(['arms_crossed', 'pocket', 'cheeks_cupped', 'frame_face', 'hood_strings'])
+
+/** ", dressed the way young people in Japan often dress (…)" when the country has a known style. */
+function dressNote(persona: AvatarPersona, gender: 'female' | 'male' | null): string {
+  const dress = gender ? COUNTRY_LOOKS[(persona.country ?? '').toUpperCase()]?.dress?.[gender] : undefined
+  return dress ? `, styled in ${dress}; the outfit is well coordinated` : '; the outfit is well coordinated'
+}
+
+/** Pictures made in an app, not photographed: the phone-photo lines would turn them into photos. */
+const DIGITAL_SUBTYPES = new Set(['anime_icon', 'sticker_char', 'lettering', 'emoji_plain'])
+/** Pictures whose subject is a few words. */
+const LETTER_SUBTYPES = new Set(['sticker_char', 'handwriting', 'lettering'])
+
+const DIGITAL_RULES = [
+  'Square 1:1 image: a flat digital picture as saved from a drawing app, not a photo.',
+  'An original design: no existing character from any anime, game, manga or brand, and not a real or famous person. Any person drawn is an adult.',
+  'No text, captions, watermarks, logos, signatures, borders or frames.',
+].join(' ')
+
 const RULES = [
-  'It must look like a real, unedited photo from an ordinary person\'s phone gallery: not a studio, stock or advertising photo, no perfect symmetry, no glossy retouched skin.',
+  'It must look like a real, unedited photo from an ordinary person\'s phone gallery.',
   'Square 1:1 image. No text, captions, watermarks, logos, brand names, borders or frames anywhere in the image.',
   'Any person shown is an adult, fully and ordinarily dressed. Not a real, identifiable or famous person, and no existing character.',
 ].join(' ')
@@ -569,6 +831,21 @@ const RULES = [
  * not fixed by the account (gender, age, country and city are), so a new
  * `random` gives the same account a different photo.
  */
+/**
+ * The whole look of the account's person (face, hair and build), for photos
+ * of them other than the profile picture. Pass a random seeded per account so
+ * every photo describes the same person.
+ */
+export function describeAccountLook(persona: AvatarPersona, random: Random): string {
+  const attributes: Record<string, string> = {}
+  const take: Picker = (axis, options) => {
+    const option = pick(options, random)
+    attributes[axis] = option[0]
+    return option[2]
+  }
+  return describePerson(persona, { face: true, body: true, hair: true }, take, random, attributes)
+}
+
 export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.random): AvatarSpec {
   const category = pickCategory(persona, random)
   const subtype = pickSubtype(category, persona, random)
@@ -589,7 +866,8 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     return take('location', LOCATIONS[kind])
   }
   const shot = () => [
-    take('quality', mirrorShot ? QUALITIES.filter((option) => option[0] !== 'front_cam') : QUALITIES),
+    // Front-camera distortion only comes from a selfie.
+    take('quality', mirrorShot || (attributes.shooter && attributes.shooter !== 'selfie') ? QUALITIES.filter((option) => option[0] !== 'front_cam') : QUALITIES),
     take('lighting', lightingFor(env)),
     take('filter', FILTERS),
     take('flaw', flawsFor(mirrorShot)),
@@ -598,23 +876,47 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
 
   if (category === 'face' || category === 'partial') {
     const mirror = subtype.key === 'mirror_phone'
-    lines.push(`Subject: ${describePerson(persona, { face: true, body: false, hair: true }, take, random)}.`)
-    lines.push(`Framing: ${subtype.text}; ${mirror ? 'a mirror selfie' : take('shooter', SHOOTERS)}; ${take('distance', DISTANCES)}; ${take('composition', COMPOSITIONS)}.`)
-    lines.push(`Expression and pose: ${[take('expression', EXPRESSIONS), take('handPose', HAND_POSES)].filter(Boolean).join(', ')}.`)
-    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}.`)
-    lines.push(`Setting: ${takeLocation(mirror ? 'mirror' : random() < 0.55 ? 'indoor' : 'outdoor')}, consistent with ${place}.`)
+    // Some angles only a selfie can take, some only someone else can; the rest take either.
+    const shooters = SELFIE_SUBTYPES.has(subtype.key)
+      ? SHOOTERS.filter((option) => option[0] === 'selfie')
+      : OTHER_SHOOTER_SUBTYPES.has(subtype.key) ? SHOOTERS.filter((option) => option[0] !== 'selfie') : SHOOTERS
+    const shooter = mirror ? 'a mirror selfie' : take('shooter', shooters)
+    const selfie = attributes.shooter === 'selfie'
+    // An arm's length does not reach a full-body shot.
+    const distance = take('distance', selfie ? DISTANCES.filter((option) => option[0] !== 'full') : DISTANCES)
+    lines.push(`Subject: ${describePerson(persona, { face: true, body: false, hair: true }, take, random, attributes)}.`)
+    lines.push(`Framing: ${subtype.text}; ${selfie ? (SELFIE_SUBTYPES.has(subtype.key) ? 'a front-camera selfie with the arm stretched out' : 'a front-camera selfie, the phone held up in front at about eye level with the arm stretched out') : shooter}; ${distance}; ${take('composition', COMPOSITIONS)}.`)
+    // Covering the face with a hand, an object or a pet already uses the free hand.
+    const handsBusy = HANDS_BUSY_SUBTYPES.has(subtype.key)
+    const handPoses = handsBusy ? HAND_POSES.filter((option) => option[0] === 'none') : selfie ? HAND_POSES.filter((option) => !TWO_HAND_POSES.has(option[0])) : HAND_POSES
+    // A body pose only shows when the frame reaches below the waist.
+    const bodyPose = ['waist', 'full'].includes(attributes.distance) ? take('bodyPose', FRAMED_BODY_POSES) : ''
+    // Some angles already fix the head, and "caught laughing" fixes the expression.
+    const headPose = HEAD_FIXED_SUBTYPES.has(subtype.key) ? '' : take('headPose', HEAD_POSES)
+    const expression = subtype.key === 'laughing' ? '' : take('expression', EXPRESSIONS)
+    lines.push(`Expression and pose: ${[expression, headPose, take('handPose', handPoses), bodyPose].filter(Boolean).join(', ') || 'natural'}.`)
+    // Selfie takers look at their own face on the screen, which sits just below the lens.
+    if (selfie && GAZE_AT_SCREEN_SUBTYPES.has(subtype.key)) lines.push('Gaze: looking at their own face on the phone screen just below the lens, so the face is toward the camera and the eyes look almost straight into it, only a tiny bit lower; the eyes are on the phone, not looking away, sideways or down.')
+    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender, persona))}${dressNote(persona, gender)}.`)
+    // Lying down happens on a bed or sofa at home.
+    const setting = subtype.key === 'lying_down'
+      ? (env = 'indoor', take('location', LOCATIONS.indoor.filter((option) => ['bedroom', 'living_room'].includes(option[0]))))
+      : takeLocation(mirror ? 'mirror' : random() < 0.55 ? 'indoor' : 'outdoor')
+    lines.push(`Setting: ${setting}, consistent with ${place}.`)
   } else if (category === 'back') {
-    lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: true }, take, random)}. The face is not visible at all.`)
-    lines.push(`Framing: ${subtype.text}; ${take('posture', POSTURE)}; taken by a friend from behind.`)
-    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}.`)
+    lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: true }, take, random, attributes)}. The face is not visible at all.`)
+    // The subtype already fixes what the body does unless the person is just standing somewhere.
+    const posture = BACK_STANDING_SUBTYPES.has(subtype.key) ? `; ${take('posture', BACK_POSTURES)}` : ''
+    lines.push(`Framing: ${subtype.text}${posture}; taken by a friend from behind.`)
+    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender, persona))}${dressNote(persona, gender)}.`)
     lines.push(`Setting: consistent with ${subtype.key === 'travel_landmark' ? 'a trip abroad' : place}.`)
     env = ['window_gaze', 'concert'].includes(subtype.key) ? 'indoor' : 'outdoor'
   } else if (category === 'body') {
     const sport = ['gym_mirror', 'after_run', 'yoga', 'hiking', 'sports_kit', 'beach_rashguard'].includes(subtype.key)
     const mirror = ['mirror_neck_down', 'mirror_phone_up'].includes(subtype.key)
-    lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: false }, take, random)}. The face is not visible: it is out of frame, turned away or hidden.`)
+    lines.push(`Subject: ${describePerson(persona, { face: false, body: true, hair: false }, take, random, attributes)}. The face is not visible: it is out of frame, turned away or hidden.`)
     lines.push(`Framing: ${subtype.text}; ${take('posture', POSTURE)}.`)
-    if (subtype.key !== 'silhouette' && subtype.key !== 'shadow') lines.push(`Wearing ${take('outfit', outfitsFor(sport ? OUTFITS.sport : OUTFITS.fitted, gender))}. The photo shows the outfit and the person's build in a natural, non-suggestive way.`)
+    if (subtype.key !== 'silhouette' && subtype.key !== 'shadow') lines.push(`Wearing ${take('outfit', outfitsFor(sport ? OUTFITS.sport : OUTFITS.fitted, gender, persona))}. The photo shows the outfit and the person's build in a natural, non-suggestive way.`)
     if (mirror) lines.push(`Setting: ${takeLocation('mirror')}.`)
     else if (['elevator_mirror', 'fitting_room', 'gym_mirror'].includes(subtype.key)) {
       env = 'indoor'
@@ -624,10 +926,10 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     else lines.push(`Setting: ${takeLocation(random() < 0.4 ? 'indoor' : 'outdoor')}, consistent with ${place}.`)
   } else if (category === 'group') {
     const hidden = subtype.key === 'friends_back'
-    lines.push(`Account owner: ${describePerson(persona, { face: !hidden, body: false, hair: true }, take, random)}.`)
+    lines.push(`Account owner: ${describePerson(persona, { face: !hidden, body: false, hair: true }, take, random, attributes)}.`)
     lines.push(`Framing: ${subtype.text}. The others are ordinary adults of a similar age and background, each looking different from the account owner.`)
     if (!hidden) lines.push(`Expression: ${take('expression', EXPRESSIONS)}.`)
-    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender))}.`)
+    lines.push(`Wearing ${take('outfit', outfitsFor(OUTFITS.everyday, gender, persona))}${dressNote(persona, gender)}.`)
     lines.push(`Setting: consistent with ${subtype.key === 'trip_group' ? 'a trip' : place}.`)
     env = subtype.key === 'table_group' ? 'indoor' : ['trip_group', 'friends_back', 'team'].includes(subtype.key) ? 'outdoor' : 'any'
   } else if (category === 'part') {
@@ -644,11 +946,17 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     lines.push(`Subject: ${subtype.text}, as seen in or near ${place}. No people as the subject.`)
     env = 'outdoor'
   } else {
-    lines.push(`Subject: ${subtype.text}. No photographic person in the image.`)
+    lines.push(`Subject: ${subtype.text.replace('{country}', persona.countryName ?? 'the persona\'s country')}. No photographic person in the image.`)
+    if (LETTER_SUBTYPES.has(subtype.key)) lines.push('The words are the subject: spelled correctly, something a young person there would really write, and nothing else is written anywhere.')
   }
 
-  if (category !== 'other') lines.push(`Camera and light: ${shot()}.`)
-  lines.push(RULES)
+  if (category === 'other' && DIGITAL_SUBTYPES.has(subtype.key)) {
+    lines.push(LETTER_SUBTYPES.has(subtype.key) ? DIGITAL_RULES.replace('No text, captions,', 'No other text, captions,') : DIGITAL_RULES)
+  } else {
+    if (category !== 'other') lines.push(`Camera and light: ${shot()}.`)
+    lines.push(phonePhotoRealism(random, { people: ['face', 'partial', 'back', 'body', 'group'].includes(category), faces: ['face', 'partial', 'group'].includes(category), environment: env, scene: lines.join(' ') }))
+    lines.push(LETTER_SUBTYPES.has(subtype.key) ? RULES.replace('No text, captions,', 'No other text, captions,') : RULES)
+  }
 
   const categoryKo = AVATAR_CATEGORIES.find((entry) => entry.key === category)?.ko ?? category
   return {

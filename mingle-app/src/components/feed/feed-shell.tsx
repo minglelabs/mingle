@@ -17,7 +17,8 @@ import { feedEvents, feedPostContext, feedSurfaceForSource, trackFeedEvent } fro
 import { useReducedMotion } from "@/components/feed/use-reduced-motion";
 import { useFeedSource } from "@/components/feed/use-feed-source";
 import type { LikeState } from "@/components/feed/use-feed-like";
-import { composeLoginHref, loginHref } from "@/components/feed/login-redirect";
+import FeedLoginSheet from "@/components/feed/feed-login-sheet";
+import { composeLoginReturnHref, loginReturnHref } from "@/components/feed/login-redirect";
 import {
   createDeepLinkCommentLatch,
   createFeedRestoreSession,
@@ -47,8 +48,14 @@ type FeedShellProps = {
   startPostId?: string | null;
   /** Viewer route uses history back instead of the compose/notification chrome. */
   isViewer?: boolean;
-  /** Home feed only: the notification panel opens over the feed (like main's conversation list). */
+  /**
+   * App copy: the notification panel (home feed) and the sign-in gate (both
+   * modes) need it.
+   */
   dictionary?: AppDictionary;
+  /** Sign-in providers the server has configured (the gate shows only these). */
+  appleOAuthEnabled?: boolean;
+  googleOAuthEnabled?: boolean;
   /**
    * The glass tab bar, laid over the bottom of the cards. The shell renders it
    * so it can follow the ink tone of the post on screen.
@@ -77,7 +84,48 @@ const PULL_REFRESH_ROW_PX = 60;
 /** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
 
-export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary, tabBar, menuLabel }: FeedShellProps) {
+const FREE_VIEW_LIMIT = 10;
+const FREE_VIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
+const FREE_VIEW_STORAGE_KEY = "mingle.feed.freeViews";
+
+/** The free views counted so far today (the count starts over a day after the first). */
+function readFreeViews(now = Date.now()): { since: number; seen: string[] } {
+  let since = now;
+  let seen: string[] = [];
+  try {
+    const raw = window.localStorage.getItem(FREE_VIEW_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    // The old format (a bare id list) has no start time; it starts over.
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const stored = parsed as { since?: unknown; ids?: unknown };
+      if (typeof stored.since === "number" && now - stored.since < FREE_VIEW_WINDOW_MS && Array.isArray(stored.ids)) {
+        since = stored.since;
+        seen = stored.ids.filter((id): id is string => typeof id === "string");
+      }
+    }
+  } catch {
+    // Storage unavailable: fall back to an empty history.
+  }
+  return { since, seen };
+}
+
+/**
+ * True when a signed-out viewer may see `postId` (already seen, or still under
+ * the limit).
+ */
+function claimFreeView(postId: string): boolean {
+  const { since, seen } = readFreeViews();
+  if (seen.includes(postId)) return true;
+  if (seen.length >= FREE_VIEW_LIMIT) return false;
+  try {
+    window.localStorage.setItem(FREE_VIEW_STORAGE_KEY, JSON.stringify({ since, ids: [...seen, postId] }));
+  } catch {
+    // Not persisted; the limit then only holds for this page.
+  }
+  return true;
+}
+
+export default function FeedShell({ locale, source: sourceProp, startPostId = null, isViewer = false, dictionary, appleOAuthEnabled = false, googleOAuthEnabled = false, tabBar, menuLabel }: FeedShellProps) {
   const underTabBar = Boolean(tabBar);
   const copy = useMemo(() => feedCopy(locale), [locale]);
   const reducedMotion = useReducedMotion();
@@ -158,7 +206,17 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
 
-  const anyOverlayOpen = Boolean(commentPostId || actionPostId || zoomSrc || notificationsOpen || composeOpen);
+  // Signed out: the sign-in gate's return path while it is open.
+  const [loginReturnTo, setLoginReturnTo] = useState<string | null>(null);
+  // The gate opened because the free views ran out (it then says so).
+  const [loginForLimit, setLoginForLimit] = useState(false);
+  // Signed out with no free views left: the first post the viewer may not
+  // see. The feed ends just before it.
+  const [freeLockIndex, setFreeLockIndex] = useState<number | null>(null);
+
+  const anyOverlayOpen = Boolean(
+    commentPostId || actionPostId || zoomSrc || notificationsOpen || composeOpen || loginReturnTo,
+  );
 
   const notifications = useUnreadNotifications(viewerId);
 
@@ -306,19 +364,36 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   }, [notifications]);
 
   // ── Handlers ──
+  // Signed-out like / comment / compose opens the app's own sign-in gate over
+  // the feed (the conversation tab's screen, native Apple / Google in the app),
+  // never the web-only Google route. A completed sign-in returns here.
   const goToLogin = useCallback(
     (postId?: string | null) => {
-      router.push(loginHref(locale, postId ?? activePost?.id ?? null));
+      // The viewer returns to itself (its own list and position); the home
+      // feed returns pinned on the post the viewer was acting on.
+      setLoginReturnTo(
+        isViewer
+          ? `${window.location.pathname}${window.location.search}`
+          : loginReturnHref(locale, postId ?? activePost?.id ?? null),
+      );
     },
-    [router, locale, activePost],
+    [isViewer, locale, activePost],
   );
+  const goToLoginRef = useRef(goToLogin);
+  goToLoginRef.current = goToLogin;
+  const closeLogin = useCallback(() => {
+    setLoginReturnTo(null);
+    setLoginForLimit(false);
+    // Land exactly on the active post, whatever the scroll did under the sheet.
+    if (scrollEl) scrollEl.scrollTop = activeIndexRef.current * cardPixelHeight();
+  }, [scrollEl, cardPixelHeight]);
 
   // Compose slides in over the feed (like the notification panel); signed-out
-  // viewers still go to sign-in first.
+  // viewers sign in first and land on compose.
   const openCompose = useCallback(() => {
     if (viewerId) setComposeOpen(true);
-    else router.push(composeLoginHref(locale));
-  }, [router, viewerId, locale]);
+    else setLoginReturnTo(composeLoginReturnHref(locale));
+  }, [viewerId, locale]);
   const closeCompose = useCallback(() => setComposeOpen(false), []);
 
   // The bell slides the notification panel in over the feed (same panel and
@@ -378,6 +453,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   useEffect(() => {
     if (!scrollEl) return;
     let startY: number | null = null;
+    let startX = 0;
 
     const onStart = (event: TouchEvent) => {
       startY = null;
@@ -388,10 +464,18 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
         if (node.scrollTop > 0) return;
       }
       startY = event.touches[0].clientY;
+      startX = event.touches[0].clientX;
     };
     const onMove = (event: TouchEvent) => {
       if (startY === null) return;
       const dy = event.touches[0].clientY - startY;
+      // A sideways swipe moves between a post's photos; it is not a pull.
+      if (Math.abs(event.touches[0].clientX - startX) > Math.abs(dy)) {
+        startY = null;
+        setPullDragging(false);
+        setPullProgress(0);
+        return;
+      }
       if (dy <= 0 || scrollEl.scrollTop > 0) {
         // Upward: this is a normal swipe to the next post.
         if (dy < 0) startY = null;
@@ -457,6 +541,120 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     },
     [scrollEl, cardPixelHeight, reducedMotion],
   );
+
+  // Signed-out viewers get FREE_VIEW_LIMIT distinct posts a day (remembered
+  // across visits). Once they run out the feed ends before the next unseen
+  // post, and pulling past the end opens the sign-in sheet (below).
+  // Landing on a locked post anyway (a restored position) snaps back and opens
+  // the sheet; that check waits until the swipe has settled, since the sheet
+  // locks the feed's scrolling, which mid-swipe would freeze it between posts.
+  const activePostId = activePost?.id ?? null;
+  useEffect(() => {
+    if (viewerId || !activePostId || !scrollEl) {
+      setFreeLockIndex(null);
+      return;
+    }
+    if (claimFreeView(activePostId)) {
+      const { seen } = readFreeViews();
+      const lock = seen.length < FREE_VIEW_LIMIT
+        ? -1
+        : posts.findIndex((post, idx) => idx > activeIndexRef.current && !seen.includes(post.id));
+      setFreeLockIndex(lock === -1 ? null : lock);
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const idx = activeIndexRef.current;
+        if (posts[idx]?.id !== activePostId) return;
+        scrollEl.scrollTop = Math.max(0, idx - 1) * cardPixelHeight();
+        setLoginForLimit(true);
+        goToLogin(activePostId);
+      }, 150);
+    };
+    settle();
+    scrollEl.addEventListener("scroll", settle, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      scrollEl.removeEventListener("scroll", settle);
+    };
+    // goToLogin / cardPixelHeight / posts identities change with the active
+    // post; only a new post (or more loaded posts) should re-run the check.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewerId, activePostId, scrollEl, posts.length]);
+
+  // At the locked end, an upward drag stretches the feed up to a fifth of a
+  // card, springs back on release and then opens the sign-in sheet (a wheel
+  // nudge on the desktop does the same).
+  const lockedPostId = freeLockIndex === null ? null : posts[freeLockIndex]?.id ?? null;
+  useEffect(() => {
+    if (!scrollEl || !lockedPostId || anyOverlayOpen) return;
+    const maxStretch = () => cardPixelHeight() * 0.2;
+    const atEnd = () => scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 2;
+    let startY: number | null = null;
+    let stretch = 0;
+    let openTimer: ReturnType<typeof setTimeout> | undefined;
+    let wheelBusy = false;
+    const setStretch = (px: number, animate: boolean) => {
+      stretch = px;
+      scrollEl.style.transition = animate ? "transform 340ms cubic-bezier(0.25, 1.3, 0.5, 1)" : "none";
+      scrollEl.style.transform = px > 0 ? `translateY(${-px}px)` : "";
+    };
+    const springBack = () => {
+      const open = stretch > maxStretch() * 0.3;
+      setStretch(0, true);
+      if (!open) return;
+      openTimer = setTimeout(() => {
+        setLoginForLimit(true);
+        goToLoginRef.current(lockedPostId);
+      }, 260);
+    };
+    const onStart = (event: TouchEvent) => {
+      startY = event.touches.length === 1 && atEnd() ? event.touches[0].clientY : null;
+    };
+    const onMove = (event: TouchEvent) => {
+      if (startY === null) return;
+      const dy = startY - event.touches[0].clientY;
+      if (dy <= 0) {
+        if (stretch > 0) setStretch(0, false);
+        return;
+      }
+      if (event.cancelable) event.preventDefault();
+      // Resists more the further it goes, and stops at a fifth of a card.
+      const max = maxStretch();
+      setStretch(max * (1 - Math.exp(-dy / (max * 1.6))), false);
+    };
+    const onEnd = () => {
+      if (startY === null) return;
+      startY = null;
+      if (stretch > 0) springBack();
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY <= 0 || !atEnd() || wheelBusy) return;
+      wheelBusy = true;
+      setStretch(maxStretch() * 0.6, true);
+      openTimer = setTimeout(() => {
+        springBack();
+        wheelBusy = false;
+      }, 200);
+    };
+    scrollEl.addEventListener("touchstart", onStart, { passive: true });
+    scrollEl.addEventListener("touchmove", onMove, { passive: false });
+    scrollEl.addEventListener("touchend", onEnd);
+    scrollEl.addEventListener("touchcancel", onEnd);
+    scrollEl.addEventListener("wheel", onWheel, { passive: true });
+    return () => {
+      clearTimeout(openTimer);
+      setStretch(0, false);
+      scrollEl.style.transition = "";
+      scrollEl.removeEventListener("touchstart", onStart);
+      scrollEl.removeEventListener("touchmove", onMove);
+      scrollEl.removeEventListener("touchend", onEnd);
+      scrollEl.removeEventListener("touchcancel", onEnd);
+      scrollEl.removeEventListener("wheel", onWheel);
+    };
+  }, [scrollEl, lockedPostId, anyOverlayOpen, cardPixelHeight]);
 
   const handleExpandChange = useCallback(
     (postId: string, expanded: boolean, scrollTop: number) => {
@@ -524,6 +722,19 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   // Compose is reachable from every mode: the empty state's button opens it in
   // the viewer too, which has no header and no notification panel.
   const composePanel = (
+    <>
+    {dictionary ? (
+      <FeedLoginSheet
+        returnTo={loginReturnTo}
+        locale={locale}
+        dictionary={dictionary}
+        appleOAuthEnabled={appleOAuthEnabled}
+        googleOAuthEnabled={googleOAuthEnabled}
+        closeLabel={copy.closeImage}
+        notice={loginForLimit ? copy.loginToContinue : null}
+        onClose={closeLogin}
+      />
+    ) : null}
     <ComposeOverlay
       open={composeOpen}
       locale={locale}
@@ -532,6 +743,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       // progress. Viewer: no banner here, so keep the default (go to the feed).
       onPublished={isViewer ? undefined : closeCompose}
     />
+    </>
   );
 
   const notificationPanel = !isViewer && dictionary ? (
@@ -699,7 +911,9 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     );
   }
 
-  const showStatusCard = hasMore || loadingMore || loadMoreError;
+  // Signed out with no free views left, the feed ends before the locked post.
+  const shownEntries = freeLockIndex === null ? entries : entries.slice(0, freeLockIndex);
+  const showStatusCard = freeLockIndex === null && (hasMore || loadingMore || loadMoreError);
 
   return (
     <div
@@ -744,7 +958,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
 
       <div
         ref={setScrollEl}
-        className="min-h-0 flex-1 overflow-y-auto bg-black"
+        className="no-scrollbar min-h-0 flex-1 overflow-y-auto bg-black"
         onScroll={handleScroll}
         onTouchStart={markUserGesture}
         onWheel={markUserGesture}
@@ -760,7 +974,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
           ...pullFeedStyle,
         }}
       >
-        {entries.map(({ key, post }, idx) => {
+        {shownEntries.map(({ key, post }, idx) => {
           const saved = expandState.get(post.id) ?? restoredPosts[post.id];
           return (
             <FeedPostCard
@@ -774,7 +988,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
               reducedMotion={reducedMotion}
               restoreExpanded={saved?.expanded ?? false}
               restoreScrollTop={saved?.scrollTop ?? 0}
-              eagerImage={idx <= activeIndex + 1}
+              eagerImage={idx <= activeIndex + 2}
               isActive={idx === activeIndex && !anyOverlayOpen}
               analytics={analyticsFor(key)}
               onExpandStateChange={(exp, st) => handleExpandChange(post.id, exp, st)}
@@ -785,6 +999,11 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
               }}
               onOpenActions={(id) => setActionPostId(id)}
               onOpenAuthor={(authorId) => {
+                // Profiles are for signed-in readers only (the profile API answers 401).
+                if (!viewerId) {
+                  goToLogin(post.id);
+                  return;
+                }
                 const ctx = analyticsFor(key);
                 if (ctx) trackFeedEvent(feedEvents.profileOpened(ctx));
                 router.push(`/${locale}/users/${encodeURIComponent(authorId)}`);
@@ -794,7 +1013,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
               onFollowed={handleFollowed}
               onToast={setToast}
               onGoPrevious={idx > 0 ? () => scrollToIndex(idx - 1) : undefined}
-              onGoNext={idx < posts.length - 1 ? () => scrollToIndex(idx + 1) : undefined}
+              onGoNext={idx < shownEntries.length - 1 ? () => scrollToIndex(idx + 1) : undefined}
             />
           );
         })}

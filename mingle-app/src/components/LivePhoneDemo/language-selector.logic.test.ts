@@ -5,6 +5,7 @@ import { CONVERSATION_HISTORY_ROUTE_STATE_KEY } from "@/components/conversation-
 import {
   buildLanguageSelectorHistoryState,
   buildLanguageSelectorButtonCodes,
+  resolveLanguageSelectorOthersOnlyLanguages,
   buildLanguageSelectorFeaturedItems,
   buildRecentLanguageChipCodes,
   buildLanguageSelectorItems,
@@ -260,6 +261,17 @@ describe("language-selector.logic", () => {
     expect(
       buildLanguageSelectorButtonCodes(["en", "ko", "zh-CN"], ["en", "ja"]),
     ).toEqual(["en", "ko", "zh-CN", "ja"]);
+  });
+
+  it("lists room languages only another member picked", () => {
+    expect(
+      resolveLanguageSelectorOthersOnlyLanguages(["ko", "en", "ja"], ["ko", "en"]),
+    ).toEqual(["ja"]);
+    expect(resolveLanguageSelectorOthersOnlyLanguages(["ko", "en"], ["ko", "en"])).toEqual([]);
+  });
+
+  it("hides no room language while the viewer has no own picks", () => {
+    expect(resolveLanguageSelectorOthersOnlyLanguages(["ko", "ja"], [])).toEqual([]);
   });
 
   it("limits the header button language flags to five codes", () => {

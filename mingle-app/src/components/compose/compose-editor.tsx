@@ -35,7 +35,18 @@ export type ComposeEditorProps = {
   /** Controlled preview (compose overlay: back / edge swipe closes the preview first). */
   previewOpen?: boolean
   onPreviewOpenChange?: (open: boolean) => void
+  /**
+   * Several photos (new post): every photo in order, the first being
+   * `imagePreviewUrl`. With `onAddPhotos` the picker takes many files and the
+   * photos show as a row of thumbnails, each removable.
+   */
+  photos?: ReadonlyArray<{ id: string; url: string; width: number | null; height: number | null }>
+  onAddPhotos?: (prepared: PreparedImage[]) => void
+  onRemovePhoto?: (index: number) => void
 }
+
+/** Most photos one post may carry (the server enforces the same). */
+export const MAX_POST_PHOTOS = 10
 
 /** The counter stays out of the way until the body is close to the limit. */
 const COUNTER_VISIBLE_FROM = Math.floor(MAX_POST_LENGTH * 0.8)
@@ -152,6 +163,29 @@ export default function ComposeEditor(props: ComposeEditorProps) {
     el.style.height = `${el.scrollHeight}px`
   }, [props.sourceText, showPreview])
 
+  const multi = Boolean(props.onAddPhotos)
+  const photoCount = props.photos?.length ?? 0
+
+  async function handleFiles(list: FileList | null) {
+    setImageError(null)
+    const files = Array.from(list ?? []).slice(0, Math.max(0, MAX_POST_PHOTOS - photoCount))
+    if (!files.length) return
+    setPreparing(true)
+    const prepared: PreparedImage[] = []
+    for (const file of files) {
+      try {
+        prepared.push(await prepareComposeImage(file))
+      } catch (err) {
+        setImageError(
+          err instanceof ComposeImageError ? mapImageError(err.reason, copy, gapCopy) : gapCopy.photoLoadFailed,
+        )
+      }
+    }
+    if (prepared.length) props.onAddPhotos?.(prepared)
+    setPreparing(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   async function handleFile(file: File | undefined) {
     setImageError(null)
     if (!file) return
@@ -222,7 +256,34 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             style={{ whiteSpace: 'pre-wrap' }}
           />
 
-          {props.imagePreviewUrl ? (
+          {multi && photoCount > 0 ? (
+            <div className="no-scrollbar -mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1">
+              {props.photos!.map((photo, index) => (
+                <div
+                  key={photo.id}
+                  className="relative h-40 shrink-0 overflow-hidden rounded-2xl border border-foreground/10"
+                  style={{ background: preset.background, aspectRatio: photo.width && photo.height ? `${photo.width} / ${photo.height}` : '3 / 4' }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo.url} alt="" className="h-full w-full object-cover" draggable={false} />
+                  <div className="absolute right-0.5 top-0.5">
+                    <PhotoOverlayButton
+                      label={copy.removePhoto}
+                      onClick={() => {
+                        props.onRemovePhoto?.(index)
+                        setImageError(null)
+                      }}
+                      disabled={props.disabled}
+                    >
+                      <X size={16} strokeWidth={2.6} aria-hidden="true" />
+                    </PhotoOverlayButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {!multi && props.imagePreviewUrl ? (
             <div
               className="relative mt-2 overflow-hidden rounded-2xl border border-foreground/10"
               // The letterbox shows the post's own background, as the feed card does.
@@ -267,9 +328,9 @@ export default function ComposeEditor(props: ComposeEditorProps) {
           {/* Sits right under the text (Threads-style) and moves down as it grows. */}
           <div className="-ml-2 mt-1.5 flex items-center gap-0.5">
             <ToolButton
-              label={props.imagePreviewUrl ? copy.replacePhoto : copy.addPhoto}
+              label={!multi && props.imagePreviewUrl ? copy.replacePhoto : copy.addPhoto}
               onClick={() => fileInputRef.current?.click()}
-              disabled={props.disabled || preparing}
+              disabled={props.disabled || preparing || (multi && photoCount >= MAX_POST_PHOTOS)}
             >
               <ImagePlus size={20} strokeWidth={1.9} aria-hidden="true" />
             </ToolButton>
@@ -302,8 +363,9 @@ export default function ComposeEditor(props: ComposeEditorProps) {
         ref={fileInputRef}
         type="file"
         accept={PICKER_IMAGE_TYPES.join(',')}
+        multiple={multi}
         className="hidden"
-        onChange={(e) => void handleFile(e.target.files?.[0])}
+        onChange={(e) => void (multi ? handleFiles(e.target.files) : handleFile(e.target.files?.[0]))}
       />
 
       {/* Full-screen preview: exactly the feed card, over the editor. */}
@@ -314,6 +376,7 @@ export default function ComposeEditor(props: ComposeEditorProps) {
             text={props.sourceText}
             backgroundKey={preset.key}
             image={previewImage}
+            images={multi ? props.photos?.map((photo) => ({ url: photo.url, width: photo.width, height: photo.height })) : undefined}
             author={props.author}
           />
           <div

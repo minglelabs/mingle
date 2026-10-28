@@ -82,9 +82,9 @@ type PublicUserProfile = {
   followingCount: number;
   isFollowing: boolean;
   isBlocked: boolean;
-  /** The Mingle team's official account; absent means false. */
+  /** The HashChat team's official account; absent means false. */
   isOfficial?: boolean;
-  /** An account run by Mingle staff; absent means false. */
+  /** An account run by HashChat staff; absent means false. */
   isOperator?: boolean;
 };
 
@@ -106,7 +106,7 @@ function getCopy(dictionary: AppDictionary, locale: AppLocale) {
   const isKorean = locale === "ko";
   return {
     back: dictionary.profile.profileShareBackLabel ?? (isKorean ? "뒤로가기" : "Back"),
-    userFallback: dictionary.connect.userFallbackLabel ?? (isKorean ? "Mingle 사용자" : "Mingle user"),
+    userFallback: dictionary.connect.userFallbackLabel ?? (isKorean ? "HashChat 사용자" : "HashChat user"),
     profileLoadError: dictionary.profile.profileLoadError
       ?? (isKorean ? "프로필을 불러오지 못했습니다." : "Could not load this profile."),
     follow: dictionary.connect.followAction ?? (isKorean ? "팔로우" : "Follow"),
@@ -545,7 +545,7 @@ export default function PublicUserProfileScreen({
         <div aria-hidden="true" />
       </header>
 
-      <div ref={profileScrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={profileScrollRef} data-restore-scroll="user-profile" className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex justify-center px-4 pt-12 text-gray-400" aria-live="polite">
             <Loader2 size={26} className="animate-spin" aria-label={copy.loading} />

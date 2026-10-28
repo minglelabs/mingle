@@ -37,7 +37,6 @@ import {
   resolveActiveProviderRateLimitCooldownMs,
   rememberProviderRateLimitCooldown,
   requestTranslationFromProvider,
-  shouldUsePreviousStateFallback,
   normalizeTranslationProvider,
 } from '@/server/translation/translate-texts'
 
@@ -240,6 +239,28 @@ async function resolveSelectedTranslationModel(
   return resolveDefaultSelectableTranslationModel()
 }
 
+// When the selected model errors or answers nothing usable, the request moves on to the
+// next of these (skipping the selected one and any whose API key is missing).
+const TRANSLATION_FALLBACK_MODELS: UserSelectableTranslationModel[] = [
+  'gpt-6-luna',
+  'gemini-2.5-flash-lite',
+  'claude-haiku-5-5',
+]
+
+function resolveFallbackProviderConfigs(selectedModel: UserSelectableTranslationModel): TranslationProviderConfig[] {
+  return TRANSLATION_FALLBACK_MODELS
+    .filter((model) => model !== selectedModel)
+    .map((model) => resolveTranslationProviderConfig(model))
+    .flatMap((resolution) => resolution.ok ? [resolution.config] : [])
+}
+
+function hasUsableTranslationResult(result: TranslationEngineResult | null, isFinal: boolean): boolean {
+  if (!result) return false
+  if (Object.keys(result.translations).length > 0) return true
+  // A blank interim answer is the model saying there is nothing to translate yet, not a failure.
+  return result.emptyReason === 'blank_translations' && !isFinal
+}
+
 // ─── Test fault mode ─────────────────────────────────────────────────────────
 
 function parseFinalizeTestFaultMode(value: unknown): FinalizeTestFaultMode | null {
@@ -417,7 +438,12 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     ensureTrackingContext(request, response, { sessionKeyHint })
     return response
   }
-  const providerConfig = providerResolution.config
+  let providerConfig = providerResolution.config
+  // Test faults exercise the previous-state fallback, so they stay on the selected provider.
+  const providerConfigs = [
+    providerConfig,
+    ...(testFaultMode ? [] : resolveFallbackProviderConfigs(selectedTranslationModel)),
+  ]
 
   const targetLanguages = shouldRedetectSourceLanguage
     ? normalizeSelectedLanguages(targetLanguagesRaw)
@@ -536,16 +562,34 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
 
     let selectedResult: TranslationEngineResult | null = null
     let providerRequestFailureReason: 'provider_error' | 'provider_rate_limit_cooldown' | null = null
-    const activeProviderRateLimitCooldownMs = resolveActiveProviderRateLimitCooldownMs(providerConfig)
-    if (activeProviderRateLimitCooldownMs !== null) {
-      providerRequestFailureReason = 'provider_rate_limit_cooldown'
-      logTranslateFinalizeWarning('provider_rate_limit_cooldown_active', {
-        ...buildTranslateFinalizeLogContext(ctx),
-        provider: providerConfig.provider,
-        model: providerConfig.model,
-        retryInMs: activeProviderRateLimitCooldownMs,
-      })
-    } else {
+    for (const [attemptIndex, attemptConfig] of providerConfigs.entries()) {
+      if (attemptIndex > 0) {
+        logTranslateFinalizeWarning('provider_fallback', {
+          ...buildTranslateFinalizeLogContext(ctx),
+          fromProvider: providerConfig.provider,
+          fromModel: providerConfig.model,
+          toProvider: attemptConfig.provider,
+          toModel: attemptConfig.model,
+          reason: providerRequestFailureReason || 'provider_empty_or_unparseable',
+        })
+      }
+      providerConfig = attemptConfig
+      ctx.provider = attemptConfig.provider
+      selectedResult = null
+      providerRequestFailureReason = null
+
+      const activeProviderRateLimitCooldownMs = resolveActiveProviderRateLimitCooldownMs(providerConfig)
+      if (activeProviderRateLimitCooldownMs !== null) {
+        providerRequestFailureReason = 'provider_rate_limit_cooldown'
+        logTranslateFinalizeWarning('provider_rate_limit_cooldown_active', {
+          ...buildTranslateFinalizeLogContext(ctx),
+          provider: providerConfig.provider,
+          model: providerConfig.model,
+          retryInMs: activeProviderRateLimitCooldownMs,
+        })
+        continue
+      }
+
       try {
         if (testFaultMode === 'provider_empty') {
           selectedResult = null
@@ -579,7 +623,10 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
           provider: providerConfig.provider,
           error: summarizeUnknownError(error),
         })
+        continue
       }
+
+      if (hasUsableTranslationResult(selectedResult, ctx.isFinal)) break
     }
 
     if (
@@ -587,10 +634,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       && !ctx.isFinal
       && !providerRequestFailureReason
     ) {
-      if (
-        shouldUsePreviousStateFallback(selectedResult.provider)
-        && Object.keys(fallbackTranslations).length > 0
-      ) {
+      if (Object.keys(fallbackTranslations).length > 0) {
         logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {
           ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
@@ -621,7 +665,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       })
       if (
         !ctx.isFinal
-        && shouldUsePreviousStateFallback(providerConfig.provider)
         && Object.keys(fallbackTranslations).length > 0
       ) {
         logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {
@@ -700,10 +743,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
           }
         }
 
-        if (
-          shouldUsePreviousStateFallback(selectedResult.provider)
-          && Object.keys(fallbackTranslationsForMissingTargets).length > 0
-        ) {
+        if (Object.keys(fallbackTranslationsForMissingTargets).length > 0) {
           const mergedTranslations = {
             ...fallbackTranslationsForMissingTargets,
             ...translations,
@@ -737,7 +777,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       })
       if (
         !ctx.isFinal
-        && shouldUsePreviousStateFallback(selectedResult.provider)
         && Object.keys(fallbackTranslations).length > 0
       ) {
         logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {

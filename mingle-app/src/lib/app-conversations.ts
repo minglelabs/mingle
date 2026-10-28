@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { normalizeMessageReplyReference, toRecalledMessageReplyReference, type MessageReplyReference } from "@/lib/message-reply";
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image';
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
@@ -9,6 +10,7 @@ import { resolveAccountBadge, type AccountBadgeKind } from "@/lib/account-badge"
 import { normalizeChineseContent } from "@/server/chinese-script-conversion";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
+import { MESSAGE_RECALLED_AT_METADATA_KEY, RECALLED_MESSAGE_ID_LIMIT, readMessageRecalledAtMs } from "@/lib/message-recall";
 
 export { MAX_CONVERSATION_MEMBERS };
 export const APP_CONVERSATION_STATUS_ACTIVE = "active";
@@ -92,9 +94,19 @@ export type ConversationChannelSummary = {
 };
 
 export type ConversationHydrationUtterance = {
+  // The sender unsent this message: an empty placeholder that keeps its place
+  // and sender in the timeline, with no text, translations or photo.
+  recalled?: true;
+  // The viewer's own message. speakerUserId cannot say so: it is withheld for
+  // turns sent while the room was still solo, whoever is reading them now.
+  sentByViewer?: true;
   image?: ConversationMessageImage;
   serverCreatedAtMs?: number;
   serverMessageId?: string;
+  // When the server stored the row (server clock). Read receipts compare
+  // against members' server-side read cursors, so they need this, not the
+  // sender's device-clock createdAtMs.
+  serverPersistedAtMs?: number;
   id: string;
   originalText: string;
   // Display-only rendering of originalText in its Chinese variant's script
@@ -127,6 +139,7 @@ export type ConversationHydrationUtterance = {
   // through readAccountBadgeKind, which filters to the currently supported
   // badge kinds ('official'). Legacy or admin-only values pass through as-is.
   speakerBadge?: string;
+  replyTo?: MessageReplyReference;
 };
 
 export type ConversationHydrationCursor = {
@@ -180,10 +193,14 @@ export type ConversationHydrationState = {
   inviteNotices: ConversationHydrationInviteNotice[];
   // UI chrome like the notices above, not a message: true while the room has
   // an ACTIVE, materialized member (a membership row with leftAt null) whose
-  // account is run by Mingle staff. Clients show the pinned "Mingle staff
+  // account is run by HashChat staff. Clients show the pinned "HashChat staff
   // read and reply in this chat" disclosure from it, in 1:1 and group rooms
   // alike. A pending invitee does not count until their row exists.
   operatorDisclosure: boolean;
+  // Client IDs of messages their sender unsent (see message-recall.ts). The
+  // current page's placeholders only cover its own window, so this is what
+  // lets an open room or a warm cache blank an older bubble too.
+  recalledMessageIds: string[];
 };
 
 type ConversationChannelRecord = {
@@ -264,6 +281,12 @@ function buildVisibleMessageWhere(): Prisma.AppMessageWhereInput {
       { isDeleted: null },
     ],
   };
+}
+
+// A recalled message stays soft-deleted for every other reader; only a
+// member's own timeline keeps it, as an empty placeholder.
+function buildRecalledMessageWhere(): Prisma.AppMessageWhereInput {
+  return { isDeleted: true, metadata: { path: [MESSAGE_RECALLED_AT_METADATA_KEY], gt: 0 } };
 }
 
 function buildVisibleMessageContentWhere(): Prisma.AppMessageContentWhereInput {
@@ -422,9 +445,10 @@ async function listUserDefaultDisplayLanguagesById(
 // record being serialized, same pattern as listChannelMembersByChannelId.
 async function listPendingInviteeProfilesByUserIds(
   userIds: string[],
+  client: Prisma.TransactionClient = prisma,
 ): Promise<Map<string, PendingInviteeProfile>> {
   if (userIds.length === 0) return new Map();
-  const rows = await prisma.user.findMany({
+  const rows = await client.user.findMany({
     where: { id: { in: userIds } },
     select: {
       id: true,
@@ -470,12 +494,13 @@ async function listPendingInviteeProfilesByUserIds(
 
 async function listChannelMembersByChannelId(
   channelIds: string[],
+  client: Prisma.TransactionClient = prisma,
 ): Promise<Map<string, ChannelMemberProfile[]>> {
   if (channelIds.length === 0) {
     return new Map();
   }
 
-  const rows = await prisma.appConversationChannelMember.findMany({
+  const rows = await client.appConversationChannelMember.findMany({
     where: { channelId: { in: channelIds } },
     orderBy: { joinedAt: "asc" },
     select: {
@@ -2396,6 +2421,44 @@ export async function markConversationChannelRead(args: {
   return result.count > 0;
 }
 
+export type ConversationReadReceiptMember = {
+  userId: string;
+  joinedAtMs: number;
+  lastReadAtMs: number | null;
+};
+
+// Per-member read cursors for the room's per-message "N unread" badge. Only
+// active members count: someone who left no longer owes the room a read.
+// Membership-gated like the other per-conversation reads (null → 404).
+export async function listConversationReadReceipts(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<{ sessionKey: string; members: ConversationReadReceiptMember[] } | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: {
+      sessionKey: true,
+      members: {
+        where: { leftAt: null },
+        select: { userId: true, joinedAt: true, lastReadAt: true },
+      },
+    },
+  });
+  if (!record) return null;
+  return {
+    sessionKey: record.sessionKey,
+    members: record.members.map((member) => ({
+      userId: member.userId,
+      joinedAtMs: member.joinedAt.getTime(),
+      lastReadAtMs: member.lastReadAt ? member.lastReadAt.getTime() : null,
+    })),
+  };
+}
+
 export type ConversationMemberSummary = {
   userId: string;
   name: string | null;
@@ -2908,7 +2971,10 @@ async function getConversationHydrationStateForRecord(args: {
     : {};
   const messageWhere: Prisma.AppMessageWhereInput = {
     sessionKey: conversationRecord.sessionKey,
-    ...buildVisibleMessageWhere(),
+    // A public share snapshot shows no trace of an unsent message.
+    ...(args.upperBoundCreatedAt
+      ? buildVisibleMessageWhere()
+      : { OR: [...(buildVisibleMessageWhere().OR ?? []), buildRecalledMessageWhere()] }),
     ...upperBoundWhere,
     ...(beforeDate && beforeMessageId
       ? {
@@ -2929,7 +2995,7 @@ async function getConversationHydrationStateForRecord(args: {
 
   // Independent read queries do not need a sequential transaction. Especially
   // with a remote DB, each serialized round trip delays counterpart messages.
-  const [latestUsageEvent, totalMessageCount, messagesWithLookahead, inviteRecords, membersByChannelId, pendingInviteeProfileById] = await Promise.all([
+  const [latestUsageEvent, totalMessageCount, messagesWithLookahead, inviteRecords, membersByChannelId, pendingInviteeProfileById, recalledMessages] = await Promise.all([
     prisma.appEventLog.findFirst({
       where: {
         sessionKey: conversationRecord.sessionKey,
@@ -2977,6 +3043,14 @@ async function getConversationHydrationStateForRecord(args: {
     }),
     listChannelMembersByChannelId([conversationRecord.id]),
     listPendingInviteeProfilesByUserIds(conversationRecord.pendingInviteeUserIds),
+    // A public share snapshot has no local cache to correct.
+    args.upperBoundCreatedAt ? Promise.resolve([]) : prisma.appMessage.findMany({
+      where: { sessionKey: conversationRecord.sessionKey, ...buildRecalledMessageWhere() },
+      orderBy: { updatedAt: "desc" },
+      take: RECALLED_MESSAGE_ID_LIMIT,
+      select: { id: true, clientMessageId: true },
+      // Best-effort: a failed recall listing must never fail the room's history.
+    }).catch(() => []),
   ]);
 
   const hasMoreUtterances = messagesWithLookahead.length > CONVERSATION_HYDRATION_MESSAGE_LIMIT;
@@ -3050,6 +3124,9 @@ async function getConversationHydrationStateForRecord(args: {
     ...(rawMembers ?? []).flatMap((member) => member.selectedLanguages ?? []),
   ];
 
+  const recalledReplyTargetIds = new Set(
+    recalledMessages.map((message) => (message.clientMessageId || "").trim() || `db-${message.id}`),
+  );
   const utterances: ConversationHydrationUtterance[] = orderedMessages.map((message) => {
     const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
     const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
@@ -3067,7 +3144,10 @@ async function getConversationHydrationStateForRecord(args: {
 
     const metadata = readJsonObject(message.metadata);
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
-    const originalText = sourceContent?.text?.trim() || "";
+    const recalled = readMessageRecalledAtMs(metadata) !== null;
+    // A quote of a message its sender later unsent must not keep its text.
+    const replyTo = recalled ? null : normalizeMessageReplyReference(metadata?.replyTo);
+    const originalText = recalled ? "" : sourceContent?.text?.trim() || "";
     const storedTargetLanguages = readStringArray(metadata?.translationTargetLanguages);
     // Repairs legacy rows stored as a collapsed `zh` and keeps every Chinese
     // value in its variant's script. The stored source text is never changed.
@@ -3085,7 +3165,7 @@ async function getConversationHydrationStateForRecord(args: {
     );
     const targetLanguages = normalizedContent.targetLanguages;
     const storedImage = readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null);
-    const image = normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
+    const image = recalled ? null : normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
     // Point-in-time, not the room's current membership — see
     // countActiveRealMembersAt's doc comment. Also intentionally excludes
     // pending invitees (real members only): inviting someone shouldn't, by
@@ -3101,6 +3181,8 @@ async function getConversationHydrationStateForRecord(args: {
 
     return {
       id: (message.clientMessageId || "").trim() || `db-${message.id}`,
+      ...(recalled ? { recalled: true as const } : {}),
+      ...(message.userId && message.userId === args.viewerUserId ? { sentByViewer: true as const } : {}),
       ...(image ? { image } : {}),
       originalText,
       ...(normalizedContent.sourceDisplayText ? { originalDisplayText: normalizedContent.sourceDisplayText } : {}),
@@ -3115,6 +3197,7 @@ async function getConversationHydrationStateForRecord(args: {
           && Number.isSafeInteger(metadata.orderStartedAtMs) && metadata.orderStartedAtMs > 0
           ? metadata.orderStartedAtMs : message.createdAt.getTime(),
         serverMessageId: message.id,
+        serverPersistedAtMs: message.createdAt.getTime(),
       } : {}),
       speaker: readStringValue(clientMetadata?.speaker) ?? readStringValue(metadata?.speaker),
       speakerAvatarSeed:
@@ -3140,8 +3223,11 @@ async function getConversationHydrationStateForRecord(args: {
         ? (imageByUserId.get(message.userId) ?? null)
         : null,
       ...(speakerBadge ? { speakerBadge } : {}),
+      ...(replyTo ? {
+        replyTo: recalledReplyTargetIds.has(replyTo.id) ? toRecalledMessageReplyReference(replyTo) : replyTo,
+      } : {}),
     };
-  }).filter((utterance) => utterance.originalText.length > 0);
+  }).filter((utterance) => utterance.originalText.length > 0 || utterance.recalled === true);
 
   // Every inviter is (or was) a real member — only active members can invite
   // (see inviteMembersToConversationChannel) — so their name/handle always
@@ -3180,7 +3266,7 @@ async function getConversationHydrationStateForRecord(args: {
   // preview was already on screen, so a viewer whose list refresh hits this
   // endpoint (the realtime single-conversation refetch, or opening the room)
   // would keep seeing a stale/earlier message here instead of this one.
-  const latestUtterance = utterances.at(-1) ?? null;
+  const latestUtterance = utterances.findLast((utterance) => !utterance.recalled) ?? null;
   const viewerFacingDisplayLanguage = resolveViewerFacingDisplayLanguage(
     conversationRecord.defaultDisplayLanguage,
     members,
@@ -3196,7 +3282,9 @@ async function getConversationHydrationStateForRecord(args: {
         },
         viewerFacingDisplayLanguage,
       )
-    : undefined;
+    // An absent preview means "unchanged" to the list (see above), which would
+    // leave an unsent message's text there once nothing else is left to show.
+    : utterances.some((utterance) => utterance.recalled) ? "" : undefined;
 
   return {
     conversation: serializeConversationChannel(
@@ -3279,6 +3367,7 @@ async function getConversationHydrationStateForRecord(args: {
       })),
     inviteNotices,
     operatorDisclosure,
+    recalledMessageIds: recalledMessages.map((message) => (message.clientMessageId || "").trim() || `db-${message.id}`),
   };
 }
 
@@ -3342,6 +3431,47 @@ export async function deleteConversationChannel(args: {
   }
 
   throw new Error("conversation_channel_delete_conflict");
+}
+
+// The title frozen into a share snapshot: what the SHARER sees for this room
+// in their own list (resolveViewerFacingTitle), not the bare stored title —
+// an un-renamed multi-member room's stored title ("대화 7", or an
+// auto-generated one) is a label no member ever sees, so a link showing it
+// reads as some other room.
+const sharedTitleSourceSelect = {
+  title: true,
+  pendingInviteeUserIds: true,
+  userEditedTitleAt: true,
+} as const;
+
+async function resolveSharerFacingTitle(
+  channel: {
+    id: string;
+    title: string;
+    pendingInviteeUserIds: string[];
+    userEditedTitleAt: Date | null;
+  },
+  sharerUserId: string,
+  // Always the caller's transaction client: these reads run while the share
+  // transaction holds the room's row lock, so they must not take further
+  // connections from the pool.
+  tx: Prisma.TransactionClient,
+): Promise<string> {
+  const membersByChannelId = await listChannelMembersByChannelId([channel.id], tx);
+  const pendingInviteeProfileById = await listPendingInviteeProfilesByUserIds(
+    channel.pendingInviteeUserIds,
+    tx,
+  );
+  const pendingInviteeProfiles = channel.pendingInviteeUserIds
+    .map((userId) => pendingInviteeProfileById.get(userId))
+    .filter((profile): profile is PendingInviteeProfile => Boolean(profile));
+  return resolveViewerFacingTitle(
+    channel.title,
+    membersByChannelId.get(channel.id),
+    sharerUserId,
+    pendingInviteeProfiles,
+    channel.userEditedTitleAt,
+  );
 }
 
 // Any member can turn the room's share link on or off — unlike
@@ -3425,7 +3555,7 @@ export async function setConversationShareEnabled(args: {
         if (locked.shareEnabled && locked.shareToken) {
           const stored = await tx.appConversationChannel.findUniqueOrThrow({
             where: { id: args.conversationId },
-            select: { title: true },
+            select: sharedTitleSourceSelect,
           });
           return tx.appConversationChannel.update({
             where: { id: args.conversationId },
@@ -3433,7 +3563,11 @@ export async function setConversationShareEnabled(args: {
               shareEnabled: true,
               sharedByUserId: args.userId,
               sharedAt: new Date(),
-              sharedTitle: stored.title,
+              sharedTitle: await resolveSharerFacingTitle(
+                { id: args.conversationId, ...stored },
+                args.userId,
+                tx,
+              ),
             },
             select: conversationChannelSelect,
           });
@@ -3444,7 +3578,7 @@ export async function setConversationShareEnabled(args: {
         // whole transaction covers the (astronomically unlikely) collision.
         const stored = await tx.appConversationChannel.findUniqueOrThrow({
           where: { id: args.conversationId },
-          select: { title: true },
+          select: sharedTitleSourceSelect,
         });
         return tx.appConversationChannel.update({
           where: { id: args.conversationId },
@@ -3453,7 +3587,11 @@ export async function setConversationShareEnabled(args: {
             shareEnabled: true,
             sharedByUserId: args.userId,
             sharedAt: new Date(),
-            sharedTitle: stored.title,
+            sharedTitle: await resolveSharerFacingTitle(
+              { id: args.conversationId, ...stored },
+              args.userId,
+              tx,
+            ),
           },
           select: conversationChannelSelect,
         });
@@ -3513,7 +3651,7 @@ export async function refreshConversationShareSnapshot(args: {
         ...buildVisibleMembershipWhere(args.userId),
         ...buildVisibleConversationWhere(),
       },
-      select: { id: true, title: true, shareToken: true, shareEnabled: true },
+      select: { id: true, shareToken: true, shareEnabled: true, ...sharedTitleSourceSelect },
     });
 
     if (!locked || !locked.shareToken || !locked.shareEnabled) {
@@ -3525,7 +3663,7 @@ export async function refreshConversationShareSnapshot(args: {
       data: {
         sharedByUserId: args.userId,
         sharedAt: new Date(),
-        sharedTitle: locked.title,
+        sharedTitle: await resolveSharerFacingTitle(locked, args.userId, tx),
       },
       select: conversationChannelSelect,
     });

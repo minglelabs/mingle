@@ -4,6 +4,7 @@ import type { FeedPostImageDto } from "@/lib/feed-post-dto";
 import { generatePreviewText } from "@/lib/post-preview-text";
 import { resolveViewColors } from "@/components/feed/feed-post-view";
 import FeedPostView from "@/components/feed/feed-post-view";
+import { imageAspectRatio } from "@/components/feed/feed-card-format";
 import { useMemo } from "react";
 
 /**
@@ -18,12 +19,14 @@ export type FeedPostPreviewProps = {
   text: string;
   backgroundKey: string;
   image: FeedPostImageDto | null;
+  /** Every photo in order when there are several; the first is `image`. */
+  images?: FeedPostImageDto[];
   author: { name: string | null; handle: string; imageUrl: string | null };
 };
 
 const PREVIEW_CARD_HEIGHT = "100dvh";
 
-export default function FeedPostPreview({ text, backgroundKey, image, author }: FeedPostPreviewProps) {
+export default function FeedPostPreview({ text, backgroundKey, image, images, author }: FeedPostPreviewProps) {
   const preview = useMemo(() => generatePreviewText(text), [text]);
   const colors = useMemo(() => resolveViewColors(backgroundKey, Boolean(image)), [backgroundKey, image]);
   const displayName = author.name?.trim() || `@${author.handle}`;
@@ -34,6 +37,8 @@ export default function FeedPostPreview({ text, backgroundKey, image, author }: 
       cardHeight={PREVIEW_CARD_HEIGHT}
       backgroundKey={backgroundKey}
       imageUrl={image?.url ?? null}
+      imageAspect={imageAspectRatio(image)}
+      images={images && images.length > 1 ? images.map((photo) => ({ url: photo.url, aspect: imageAspectRatio(photo) })) : undefined}
       displayText={text}
       previewText={preview.text}
       expanded={false}

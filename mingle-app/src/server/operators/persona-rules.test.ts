@@ -47,7 +47,9 @@ describe('validatePersonaDraft', () => {
   it.each([
     [{ name: '   ' }, 'name', 'name_required'],
     [{ name: 'a'.repeat(41) }, 'name', 'name_too_long'],
+    [{ name: 'HashChat Team' }, 'name', 'reserved_name'],
     [{ name: 'Mingle Team' }, 'name', 'reserved_name'],
+    [{ name: '해시챗 지수' }, 'name', 'reserved_name'],
     [{ name: '운영자 민준' }, 'name', 'reserved_name'],
     [{ name: 'yuki@insta' }, 'name', 'invalid_name'],
     [{ name: '12345' }, 'name', 'invalid_name'],
@@ -61,6 +63,7 @@ describe('validatePersonaDraft', () => {
     [{ handle: 'anon_yuki' }, 'handle', 'reserved_handle'],
     [{ handle: 'admin' }, 'handle', 'reserved_handle'],
     [{ handle: 'mingle_yuki' }, 'handle', 'reserved_handle'],
+    [{ handle: 'hashchat_yuki' }, 'handle', 'reserved_handle'],
     [{ handle: 'support.kim' }, 'handle', 'reserved_handle'],
     [{ birthYear: 2007 }, 'birthYear', 'too_young'],
     [{ birthYear: 1940 }, 'birthYear', 'invalid_birth_year'],
@@ -72,7 +75,9 @@ describe('validatePersonaDraft', () => {
     [{ bio: 'mail me yuki@example.com' }, 'bio', 'bio_contact_details'],
     [{ bio: 'call 010-1234-5678' }, 'bio', 'bio_contact_details'],
     [{ bio: 'insta @yuki_tnk' }, 'bio', 'bio_contact_details'],
+    [{ bio: 'HashChatで友達募集中' }, 'bio', 'bio_mentions_mingle'],
     [{ bio: 'Mingleで友達募集中' }, 'bio', 'bio_mentions_mingle'],
+    [{ bio: 'ハッシュチャットで友達募集中' }, 'bio', 'bio_mentions_mingle'],
     [{ primaryLanguage: 'xx' }, 'primaryLanguage', 'invalid_language'],
     [{ gender: 'robot' }, 'gender', 'invalid_gender'],
   ])('rejects %o', (patch, field, error) => {

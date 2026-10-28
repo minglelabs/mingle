@@ -138,8 +138,8 @@ export async function generateMetadata({ params }: ConversationSpectatePageProps
   const { shareToken } = await params;
   return {
     title: isValidConversationShareToken(decodePathSegment(shareToken))
-      ? "Open shared conversation in Mingle"
-      : "Invalid Mingle conversation link",
-    description: "View a shared Mingle conversation in the Mingle app.",
+      ? "Open shared conversation in HashChat"
+      : "Invalid HashChat conversation link",
+    description: "View a shared HashChat conversation in the HashChat app.",
   };
 }

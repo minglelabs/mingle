@@ -72,7 +72,7 @@ describe('GET /api/feed', () => {
     const res = await GET(new NextRequest('http://localhost/api/feed'))
     expect(res.status).toBe(200)
     const json = await res.json()
-    expect(mockGetFeed).toHaveBeenCalledWith(null, null, null)
+    expect(mockGetFeed).toHaveBeenCalledWith(null, null, null, { language: null })
     expect(json.posts[0].id).toBe('p1')
     expect(json.posts[0].author).toEqual({ id: 'a1', handle: 'a', name: 'A', imageUrl: null })
     expect(json.posts[0].followingAuthor).toBeNull()

@@ -15,7 +15,7 @@ export type ConversationSpectateState = {
   // holding the link (see lib/conversation-share-public-payload).
   inviter: PublicSpectateInviter | null
   utterances: Utterance[]
-  // A Mingle-run account was in the room at the snapshot: show the same
+  // A HashChat-run account was in the room at the snapshot: show the same
   // pinned disclosure the room itself shows.
   operatorDisclosure?: boolean
 }

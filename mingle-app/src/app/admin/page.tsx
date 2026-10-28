@@ -31,7 +31,7 @@ import {
   adminLabelClassName,
   adminTextareaClassName,
 } from "./_components/ui";
-import { sendPushNotificationForFeedbackReply } from "@/server/push-notifications";
+import { notifyUserFromTeam } from "@/server/team-notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -93,35 +93,29 @@ async function createFeedbackReplyAction(formData: FormData) {
 
   const feedback = await prisma.appFeedback.findUnique({
     where: { id: feedbackId },
-    select: { id: true, userId: true, locale: true },
+    select: { id: true, userId: true },
   });
   if (!feedback) {
     redirect(adminFeedbackPathWithStatus(returnTo, { error: "feedback_not_found" }));
   }
 
-  const reply = await prisma.appFeedbackReply.create({
+  await prisma.appFeedbackReply.create({
     data: {
       feedbackId,
       authorType: "team",
       message,
     },
-    select: { id: true },
   });
 
-  const recipientUserId = feedback.userId;
-  if (recipientUserId) {
-    after(async () => {
-      try {
-        await sendPushNotificationForFeedbackReply({
-          replyId: reply.id,
-          recipientUserId,
-          replyText: message,
-          feedbackLocale: feedback.locale,
-        });
-      } catch (error) {
-        console.error("[admin-feedback] reply push failed", error instanceof Error ? error.name : "unknown");
-      }
-    });
+  // Anonymous feedback has no account to notify.
+  const recipientId = feedback.userId;
+  if (recipientId) {
+    after(() => notifyUserFromTeam({
+      recipientId,
+      type: "feedback_reply",
+      body: message,
+      targetId: feedbackId,
+    }));
   }
 
   revalidatePath("/admin");
@@ -279,7 +273,7 @@ function LoginView({ error, next }: { error: string; next: string }) {
               <ShieldCheck className="h-6 w-6" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold">Mingle Admin</h1>
+              <h1 className="text-xl font-semibold">HashChat Admin</h1>
               <p className="text-sm text-slate-500">운영 도구 로그인</p>
             </div>
           </div>

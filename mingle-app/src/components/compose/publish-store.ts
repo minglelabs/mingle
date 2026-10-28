@@ -40,8 +40,20 @@ export type PublishInput = {
   imageFile: File | null
   imageWidth: number | null
   imageHeight: number | null
+  /**
+   * The 2nd to 10th photo, in order: each already uploaded (key) or still a
+   * prepared file. Optional: absent means a post with at most one photo.
+   */
+  extraImages?: PublishExtraImage[]
   /** The draft to delete on success (only that draft). */
   draftId: string | null
+}
+
+export type PublishExtraImage = {
+  objectKey: string | null
+  file: File | null
+  width: number | null
+  height: number | null
 }
 
 export type PublishJob = {
@@ -254,6 +266,36 @@ async function runPipeline(initialInput: PublishInput) {
     if (isSameJob(current, input)) setJob({ ...current, input })
   }
 
+  // Step 1b — the other photos, in order, each uploaded once (kept on the job for a retry).
+  if (input.extraImages?.some((image) => !image.objectKey && image.file)) {
+    const uploaded: PublishExtraImage[] = []
+    for (const image of input.extraImages) {
+      if (image.objectKey || !image.file) {
+        uploaded.push(image)
+        continue
+      }
+      const form = new FormData()
+      form.append('file', image.file)
+      const res = await fetch(buildClientApiPath('/posts/images'), { method: 'POST', cache: 'no-store', body: form })
+      if (!res.ok) {
+        input = { ...input, extraImages: [...uploaded, ...input.extraImages.slice(uploaded.length)] }
+        if (isSameJob(current, input)) setJob({ ...current, input })
+        fail(await readError(res), null, 'image_upload')
+        return
+      }
+      const body = (await res.json()) as { imageObjectKey: string; width?: number; height?: number }
+      uploaded.push({
+        objectKey: body.imageObjectKey,
+        file: null,
+        width: typeof body.width === 'number' ? body.width : image.width,
+        height: typeof body.height === 'number' ? body.height : image.height,
+      })
+    }
+    input = { ...input, extraImages: uploaded }
+    if (isSameJob(current, input)) setJob({ ...current, input })
+  }
+  const extraKeys = (input.extraImages ?? []).filter((image) => image.objectKey)
+
   // Step 2 — create the post (idempotent via clientPostId).
   const createRes = await fetch(buildClientApiPath('/posts'), {
     method: 'POST',
@@ -264,9 +306,16 @@ async function runPipeline(initialInput: PublishInput) {
       sourceText: input.sourceText,
       sourceLanguage: input.sourceLanguage,
       ...(input.backgroundKey ? { backgroundKey: input.backgroundKey } : {}),
-      ...(input.imageObjectKey
-        ? { imageObjectKey: input.imageObjectKey, imageWidth: input.imageWidth, imageHeight: input.imageHeight }
-        : {}),
+      ...(input.imageObjectKey && extraKeys.length
+        ? {
+            images: [
+              { imageObjectKey: input.imageObjectKey, imageWidth: input.imageWidth, imageHeight: input.imageHeight },
+              ...extraKeys.map((image) => ({ imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height })),
+            ],
+          }
+        : input.imageObjectKey
+          ? { imageObjectKey: input.imageObjectKey, imageWidth: input.imageWidth, imageHeight: input.imageHeight }
+          : {}),
     }),
   })
 

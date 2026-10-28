@@ -9,7 +9,7 @@ import type { RealtimeTokenPayload } from '../realtime-token';
 
 // The writer token's `liveWriter.badge` (signed by mingle-app from the
 // sender's own account flags) labels live previews as `speakerBadge`, so a
-// Mingle-run account's in-progress speech is never shown unlabeled.
+// HashChat-run account's in-progress speech is never shown unlabeled.
 
 const secret = 'speaker-badge-test';
 const base = { sessionKey: 'room', userId: 'mina', exp: Date.now() + 60_000 };
@@ -28,7 +28,7 @@ test('a preview carries the badge signed into the writer token, and only that on
     assert.equal(labeled.utterance.speakerName, 'Mina');
 
     const official = live.accept({ id: 'team-1', originalText: 'hello', sequence: 1 },
-        { ...base, userId: 'team', liveWriter: { name: 'Mingle', badge: 'official' } })!;
+        { ...base, userId: 'team', liveWriter: { name: 'HashChat', badge: 'official' } })!;
     assert.equal(official.utterance.speakerBadge, 'official');
 
     const plain = live.accept({ id: 'bob-1', originalText: 'hello', sequence: 1 }, plainWriter)!;

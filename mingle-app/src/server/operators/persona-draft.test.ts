@@ -119,7 +119,7 @@ describe('generatePersonaDrafts', () => {
 
   it('asks once more for slots whose items failed validation, then reports what is still missing', async () => {
     const generate = fakeModel((persona, call) => {
-      if (persona.slot === 1) return { slot: 1, name: 'Mingle Fan', handle: 'fan.one', bio: 'hi', primaryLanguage: 'ja', gender: 'female' }
+      if (persona.slot === 1) return { slot: 1, name: 'HashChat Fan', handle: 'fan.one', bio: 'hi', primaryLanguage: 'ja', gender: 'female' }
       if (persona.slot === 2 && call === 1) return { slot: 2, name: 'Rin', handle: 'rin', bio: 'see https://x.com', primaryLanguage: 'ja', gender: 'female' }
       return null
     })

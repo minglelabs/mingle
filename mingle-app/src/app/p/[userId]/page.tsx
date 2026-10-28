@@ -62,7 +62,7 @@ export default async function ProfileLinkPage({ params }: ProfileLinkPageProps) 
 
 export function generateMetadata({ params }: ProfileLinkPageProps) {
   return params.then(({ userId }) => ({
-    title: isValidProfileLinkUserId(decodePathSegment(userId)) ? "Open profile in Mingle" : "Invalid Mingle profile link",
-    description: "Open a shared Mingle profile in the Mingle app.",
+    title: isValidProfileLinkUserId(decodePathSegment(userId)) ? "Open profile in HashChat" : "Invalid HashChat profile link",
+    description: "Open a shared HashChat profile in the HashChat app.",
   }));
 }

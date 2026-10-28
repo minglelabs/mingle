@@ -14,14 +14,14 @@ describe('resolveAccountBadge', () => {
 
 describe('withAccountBadgeLabel', () => {
   it('appends the official label in Korean and English', () => {
-    expect(withAccountBadgeLabel('Mingle', 'official', 'ko')).toBe('Mingle (공식)')
-    expect(withAccountBadgeLabel('Mingle', 'official', 'en')).toBe('Mingle (Official)')
+    expect(withAccountBadgeLabel('HashChat', 'official', 'ko')).toBe('HashChat (공식)')
+    expect(withAccountBadgeLabel('HashChat', 'official', 'en')).toBe('HashChat (Official)')
   })
 
   it('resolves region tags and falls back to English for an unknown language', () => {
-    expect(withAccountBadgeLabel('Mingle', 'official', 'ko-KR')).toBe('Mingle (공식)')
-    expect(withAccountBadgeLabel('Mingle', 'official', 'xx')).toBe('Mingle (Official)')
-    expect(withAccountBadgeLabel('Mingle', 'official', '')).toBe('Mingle (Official)')
+    expect(withAccountBadgeLabel('HashChat', 'official', 'ko-KR')).toBe('HashChat (공식)')
+    expect(withAccountBadgeLabel('HashChat', 'official', 'xx')).toBe('HashChat (Official)')
+    expect(withAccountBadgeLabel('HashChat', 'official', '')).toBe('HashChat (Official)')
   })
 
   it('leaves the name of an account without a badge unchanged', () => {

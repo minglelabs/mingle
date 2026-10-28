@@ -108,7 +108,7 @@ describe("/api/users/search route", () => {
       { id: "member", tier: 1, updatedAt: new Date("2026-09-08T00:00:00.000Z") },
     ]);
     mockUserFindMany.mockResolvedValue([
-      { id: "official", handle: "mingle", name: "Mingle", image: null, isOfficial: true, isOperator: false, followerRelations: [] },
+      { id: "official", handle: "mingle", name: "HashChat", image: null, isOfficial: true, isOperator: false, followerRelations: [] },
       { id: "operator", handle: "mingle.mina", name: "Mina", image: null, isOfficial: false, isOperator: true, followerRelations: [] },
       { id: "member", handle: "mingle.fan", name: "Fan", image: null, isOfficial: false, isOperator: false, followerRelations: [] },
     ]);

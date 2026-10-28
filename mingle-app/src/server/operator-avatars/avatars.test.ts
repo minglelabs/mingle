@@ -29,8 +29,9 @@ vi.mock('@/server/operators/create-operator', () => ({ createOperatorAccount: mo
 import { normalizeAutomationSettings, parseAutomationSettings } from '@/server/operator-automation/settings'
 import { __resetAvatarFailuresForTests, runOperatorAutomation } from '@/server/operator-automation/worker'
 import { DEFAULT_SEED_PLAN, mostUnderrepresentedCountry } from '@/server/operators/seed-plan'
-import { generateOperatorAvatar, requestAvatarImage, resolveAvatarImageModel } from './generate'
+import { generateOperatorAvatar, isProxyImageModel, requestAvatarImage, resolveAvatarImageModel, resolveImageProxyUrl } from './generate'
 import { AVATAR_CATEGORIES, AVATAR_SUBTYPES, pickAvatarSpec, seededRandom, type AvatarPersona } from './taxonomy'
+import { describeFace, type FaceGrade } from './face-anatomy'
 
 const NOW = new Date('2026-10-03T03:00:00.000Z')
 const korean: AvatarPersona = { gender: 'female', name: '민아', age: 26, country: 'KR', countryName: 'South Korea', city: 'Seoul', bio: '커피랑 산책' }
@@ -99,7 +100,7 @@ describe('avatar taxonomy', () => {
   it('describes the person from the account and never shows the face in a back or body photo', () => {
     for (let index = 0; index < 400; index += 1) {
       const spec = pickAvatarSpec(korean, seededRandom(`rules:${index}`))
-      expect(spec.prompt).toContain('No text, captions, watermarks')
+      expect(spec.prompt).toMatch(/No (other )?text, captions, watermarks/)
       expect(spec.prompt).toContain('adult')
       expect(spec.labelKo).toContain(' · ')
       if (['face', 'partial', 'back', 'body'].includes(spec.category)) {
@@ -110,7 +111,70 @@ describe('avatar taxonomy', () => {
         expect(spec.prompt).toContain('The face is not visible')
         expect(spec.attributes.build).toBeTruthy()
       }
-      if (spec.category === 'face') expect(spec.attributes.faceShape).toBeTruthy()
+      if (spec.category === 'face') {
+        expect(spec.prompt).toContain('unmistakably Korean features')
+        // A striking face is asked for in the abstract with an impression word; others name a few traits.
+        if (spec.attributes.attractiveness === 'striking') {
+          expect(spec.prompt).toContain('not the typical AI beauty')
+          expect(spec.prompt).toContain('the overall impression of the face: ')
+          expect(spec.prompt).toContain('the slight natural asymmetry of a real face')
+          // Three or four subtle real-face details, each from a different area.
+          const subtle = Object.keys(spec.attributes).filter((key) => key.startsWith('subtle_'))
+          expect(subtle.length).toBeGreaterThanOrEqual(3)
+          expect(subtle.length).toBeLessThanOrEqual(4)
+          expect(spec.prompt).toContain('very subtle details of a real face')
+          expect(spec.prompt).toContain('a distinctive look of their own')
+          expect(spec.prompt).not.toContain('unlike a typical pretty face')
+          expect(spec.prompt).not.toContain('what people notice about the face')
+        } else {
+          expect(spec.prompt).toContain('what people notice about the face')
+          if (spec.attributes.attractiveness === 'pleasant') expect(spec.prompt).toContain('face, subtly unlike a typical pretty face: ')
+        }
+        if (['high_round', 'broad'].includes(spec.attributes.forehead) || spec.attributes.faceShape === 'high_forehead') {
+          expect(spec.attributes.fringe).not.toBe('none')
+          expect(spec.prompt).toContain('the head in natural proportion to the face')
+        }
+        if (spec.attributes.attractiveness !== 'striking') expect(spec.prompt).not.toMatch(/beautiful|good-looking/i)
+      }
+    }
+  })
+
+  it('varies expression, head angle and hands, and keeps two-hand poses out of selfies', () => {
+    const expressions = new Set<string>()
+    for (let index = 0; index < 400; index += 1) {
+      const spec = pickAvatarSpec(korean, seededRandom(`pose:${index}`))
+      if (spec.category !== 'face' && spec.category !== 'partial') continue
+      expressions.add(spec.attributes.expression)
+      if (!['profile', 'high_angle', 'low_angle', 'head_down', 'look_back', 'lying_down'].includes(spec.subtype)) expect(spec.attributes.headPose).toBeTruthy()
+      if (spec.attributes.shooter === 'selfie') expect(['arms_crossed', 'pocket', 'cheeks_cupped', 'frame_face', 'hood_strings']).not.toContain(spec.attributes.handPose)
+      if (spec.attributes.bodyPose) expect(['waist', 'full']).toContain(spec.attributes.distance)
+    }
+    expect(expressions.size).toBeGreaterThan(25)
+  })
+
+  it('draws Japanese women with Japanese makeup, hair and dress', () => {
+    const japanese: AvatarPersona = { gender: 'female', name: 'ゆき', age: 24, country: 'JP', countryName: 'Japan', city: 'Tokyo', bio: null }
+    let faces = 0
+    for (let index = 0; index < 300; index += 1) {
+      const spec = pickAvatarSpec(japanese, seededRandom(`jp:${index}`))
+      if (spec.category !== 'face') continue
+      faces += 1
+      expect(spec.prompt).toContain('unmistakably Japanese features')
+      if (!['none', 'minimal'].includes(spec.attributes.makeup)) expect(spec.prompt).toContain('Japanese-style makeup')
+    }
+    expect(faces).toBeGreaterThan(20)
+    const us = pickAvatarSpec(american, seededRandom('us-face'))
+    expect(us.prompt).not.toContain('unmistakably')
+  })
+
+  it('keeps selfies coherent: no full-body framing, eyes on the screen, no flash, filter or finger', () => {
+    for (let index = 0; index < 1500; index += 1) {
+      const spec = pickAvatarSpec(korean, seededRandom(`selfie:${index}`))
+      expect(spec.prompt).not.toMatch(/flash|beauty filter|fingertip|photo-booth/i)
+      if (['face', 'partial'].includes(spec.category)) expect(spec.prompt).not.toMatch(/film camera/i)
+      if (spec.attributes.shooter !== 'selfie') continue
+      expect(spec.attributes.distance).not.toBe('full')
+      if (spec.subtype === 'front') expect(spec.prompt).toContain('looking at their own face on the phone screen')
     }
   })
 })
@@ -124,6 +188,20 @@ describe('seed plan', () => {
       counts.set(country, (counts.get(country) ?? 0) + 1)
     }
     expect(Object.fromEntries(counts)).toEqual(DEFAULT_SEED_PLAN)
+  })
+})
+
+describe('ancestry and the persona name', () => {
+  it('leans toward the ancestry the family name suggests in a mixed country', () => {
+    const count = (name: string) => {
+      let eastAsian = 0
+      for (let index = 0; index < 200; index += 1) {
+        const spec = pickAvatarSpec({ gender: 'female', name, age: 30, country: 'US', countryName: 'United States', city: 'Houston', bio: null }, seededRandom(`${name}:${index}`))
+        if (/East Asian American/.test(spec.prompt)) eastAsian += 1
+      }
+      return eastAsian
+    }
+    expect(count('Jessica Lee')).toBeGreaterThan(count('Jessica Miller') * 3)
   })
 })
 
@@ -174,12 +252,90 @@ describe('avatar generation', () => {
     vi.stubEnv('OPENAI_API_KEY', 'openai-key')
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: [{ b64_json: Buffer.from('png-bytes').toString('base64') }] }), { status: 200 }))
     const result = await requestAvatarImage('a prompt', { model: 'gpt-image-2', fetchImpl: fetchImpl as unknown as typeof fetch })
-    expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes') })
+    expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes'), model: 'gpt-image-2' })
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://api.openai.com/v1/images/generations')
     expect(JSON.parse(String(init.body))).toEqual({ model: 'gpt-image-2', prompt: 'a prompt', size: '1024x1024', quality: 'low', n: 1 })
     const refused = vi.fn(async () => new Response('{}', { status: 400 }))
     expect(await requestAvatarImage('p', { model: 'gpt-image-2', fetchImpl: refused as unknown as typeof fetch })).toEqual({ ok: false, error: 'image_refused', detail: 'http_400' })
+  })
+
+  describe('through the local subscription proxy', () => {
+    const PROXY_MODEL = 'google-antigravity/gemini-3.1-flash-image'
+    const chatReply = (content: unknown) => new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 })
+
+    it('treats a provider-prefixed model as a proxy model and reads the proxy address', () => {
+      expect(isProxyImageModel(PROXY_MODEL)).toBe(true)
+      expect(isProxyImageModel('gpt-image-2')).toBe(false)
+      expect(resolveImageProxyUrl({} as NodeJS.ProcessEnv)).toBe('http://127.0.0.1:10100')
+      expect(resolveImageProxyUrl({ OPERATOR_IMAGE_PROXY_URL: 'http://localhost:9000/' } as unknown as NodeJS.ProcessEnv)).toBe('http://localhost:9000')
+    })
+
+    it('asks the proxy for the image and downloads the stored picture from the proxy', async () => {
+      const fetchImpl = vi.fn(async (url: string) => (url.endsWith('/v1/chat/completions')
+        ? chatReply('Here it is.\n![image](/v1/opencodex/artifacts/img-1.jpg)')
+        : new Response(Buffer.from('jpg-bytes'), { status: 200 })))
+      const result = await requestAvatarImage('a prompt', { model: PROXY_MODEL, fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: true, bytes: Buffer.from('jpg-bytes'), model: PROXY_MODEL })
+      expect(fetchImpl.mock.calls.map((call) => call[0])).toEqual([
+        'http://127.0.0.1:10100/v1/chat/completions',
+        'http://127.0.0.1:10100/v1/opencodex/artifacts/img-1.jpg',
+      ])
+      const body = JSON.parse(String((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+      expect(body.model).toBe(PROXY_MODEL)
+      expect(body.messages[0].content).toContain('a prompt')
+    })
+
+    it('accepts an inlined data URL', async () => {
+      const data = Buffer.from('png-bytes').toString('base64')
+      const fetchImpl = vi.fn(async () => chatReply([{ type: 'image_url', image_url: { url: `data:image/png;base64,${data}` } }]))
+      const result = await requestAvatarImage('p', { model: PROXY_MODEL, fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes'), model: PROXY_MODEL })
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    })
+
+    it('never fetches a link that points away from the proxy', async () => {
+      const fetchImpl = vi.fn(async () => chatReply('![image](https://elsewhere.example/a.jpg)'))
+      const result = await requestAvatarImage('p', { model: PROXY_MODEL, fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: false, error: 'image_refused', detail: 'no_image' })
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    })
+
+    it('reports a proxy error such as an exhausted quota without paying for the API model', async () => {
+      const fetchImpl = vi.fn(async () => new Response('', { status: 429 }))
+      const result = await requestAvatarImage('p', { model: PROXY_MODEL, fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: false, error: 'image_request_failed', detail: 'http_429' })
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    })
+
+    it('falls back to the API model where the proxy cannot be reached', async () => {
+      vi.stubEnv('OPENAI_API_KEY', 'openai-key')
+      const fetchImpl = vi.fn(async (url: string) => {
+        if (url.startsWith('http://127.0.0.1:10100')) throw new TypeError('fetch failed')
+        return new Response(JSON.stringify({ data: [{ b64_json: Buffer.from('png-bytes').toString('base64') }] }), { status: 200 })
+      })
+      const result = await requestAvatarImage('p', { model: PROXY_MODEL, fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes'), model: 'gpt-image-2' })
+      expect(fetchImpl.mock.calls[1][0]).toBe('https://api.openai.com/v1/images/generations')
+    })
+
+    it('sends chatgpt-app models to the ChatGPT app bridge with its own key', async () => {
+      vi.stubEnv('OPERATOR_CHATGPT_IMAGE_KEY', 'bridge-key')
+      const data = Buffer.from('png-bytes').toString('base64')
+      const fetchImpl = vi.fn(async () => chatReply(`![image](data:image/png;base64,${data})`))
+      const result = await requestAvatarImage('p', { model: 'chatgpt-app/image', fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes'), model: 'chatgpt-app/image' })
+      const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
+      expect(url).toBe('http://127.0.0.1:10310/v1/chat/completions')
+      expect((init.headers as Record<string, string>).authorization).toBe('Bearer bridge-key')
+      expect(resolveImageProxyUrl({ OPERATOR_CHATGPT_IMAGE_URL: 'https://bridge.example/' } as unknown as NodeJS.ProcessEnv, 'chatgpt-app/image')).toBe('https://bridge.example')
+    })
+
+    it('keeps the reason the bridge gives for a failure', async () => {
+      const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: { code: 'image_limit' } }), { status: 429 }))
+      const result = await requestAvatarImage('p', { model: 'chatgpt-app/image', fetchImpl: fetchImpl as unknown as typeof fetch })
+      expect(result).toEqual({ ok: false, error: 'image_request_failed', detail: 'http_429_image_limit' })
+    })
   })
 
   it('is not_operator for an unknown account', async () => {
@@ -237,5 +393,35 @@ describe('automation rules', () => {
     mocks.accountGroupBy.mockResolvedValue([{ personaCountry: 'KR', _count: { _all: 3 } }])
     expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'off', account: 'target_reached' })
     expect(mocks.drafts).not.toHaveBeenCalled()
+  })
+})
+
+describe('describeFace', () => {
+  const kinds = (grade: FaceGrade, seed: string) => {
+    const attributes: Record<string, string> = {}
+    const random = seededRandom(seed)
+    const take = (axis: string, options: ReadonlyArray<readonly [string, number, string]>) => {
+      const total = options.reduce((sum, option) => sum + option[1], 0)
+      let roll = random() * total
+      const option = options.find((candidate) => (roll -= candidate[1]) < 0) ?? options[options.length - 1]
+      attributes[axis] = option[0]
+      return option[2]
+    }
+    return { prompt: describeFace(take, random, grade), attributes }
+  }
+
+  it('names exactly one mild distinctive trait on a striking face and nothing plain', () => {
+    for (let index = 0; index < 200; index += 1) {
+      const { prompt } = kinds('striking', `striking:${index}`)
+      const traits = prompt.split('unlike a typical pretty face: ')[1]?.split('; ').filter((trait) => !trait.startsWith('the head in')) ?? []
+      expect(traits.length).toBe(1)
+      expect(prompt).not.toMatch(/puffy|bulbous|heavy chin|a long face|broad, round face|dark under-eye|sparse/)
+      expect(prompt).not.toMatch(/slightly long midface|wide mouth for the face|short face whose|bone structure shows/)
+    }
+  })
+
+  it('lets ordinary faces carry plain traits', () => {
+    const plain = Array.from({ length: 100 }, (_, index) => kinds('ordinary', `ordinary:${index}`).prompt).filter((prompt) => /puffy|bulbous|heavy chin|a long face|broad, round face|round cheeks|flat|thin lips|small, narrow eyes|low, narrow forehead|long midface|long philtrum|large nose|sparse|dark under-eye|wide, square jaw/.test(prompt))
+    expect(plain.length).toBeGreaterThan(80)
   })
 })

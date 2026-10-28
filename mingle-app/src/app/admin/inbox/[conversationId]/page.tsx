@@ -7,7 +7,7 @@ import { InboxRoomView } from '../_components/inbox-room-view'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '대화 · Mingle Admin',
+  title: '대화 · HashChat Admin',
   robots: { index: false, follow: false },
 }
 

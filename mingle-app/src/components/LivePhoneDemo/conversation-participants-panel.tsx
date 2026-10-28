@@ -48,7 +48,7 @@ type ParticipantProfile = {
   nationality: string | null;
   primaryLanguages: string[];
   blocked: boolean;
-  // Another member's account badge ('operator' = run by Mingle staff), from
+  // Another member's account badge ('operator' = run by HashChat staff), from
   // the members API flags. Always null for the signed-in user's own row.
   accountBadge: AccountBadgeKind | null;
 };
@@ -323,7 +323,7 @@ export default function ConversationParticipantsPanel({
   }, [active, loadMembers]);
 
   const fallbackLocale = resolveSupportedLocaleTag(uiLocale) ?? DEFAULT_LOCALE;
-  const fallbackName = getPrimaryUiCopy(fallbackLocale).connect.userFallbackLabel ?? "Mingle user";
+  const fallbackName = getPrimaryUiCopy(fallbackLocale).connect.userFallbackLabel ?? "HashChat user";
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-white">
