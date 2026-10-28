@@ -274,6 +274,8 @@ import {
 } from '@/lib/native-remount-restore'
 
 const VOLUME_THRESHOLD = 0.05
+// How long a "loaded" older-history page may go without changing the list before its loading state is released.
+const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const FEEDBACK_INSTAGRAM_CONTACT_URL = 'https://www.instagram.com/mingle.labs/'
@@ -5886,7 +5888,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     prevScrollHeightRef.current = node.scrollHeight
     prevScrollTopRef.current = node.scrollTop
     void loadOlderUtterances().then((didLoad) => {
-      if (didLoad) return
+      if (didLoad) {
+        // The prepend layout effect releases the loading state; if the load left the list
+        // unchanged it never runs, so release it here instead of leaving the spinner up.
+        window.setTimeout(() => {
+          if (!isPaginatingRef.current || prevScrollHeightRef.current === null) return
+          prevScrollHeightRef.current = null
+          prevScrollTopRef.current = null
+          isPaginatingRef.current = false
+          isLoadingOlderRef.current = false
+        }, OLDER_LOAD_RELEASE_FALLBACK_MS)
+        return
+      }
       prevScrollHeightRef.current = null
       prevScrollTopRef.current = null
       isPaginatingRef.current = false
