@@ -48,6 +48,8 @@ const ALLOWED_EVENT_TYPES = new Set([
   'stt_turn_started',
   'stt_turn_finalized',
   'conversation_hydration_order_preserved',
+  // Temporary field diagnostics, see src/lib/ui-diagnostics.ts.
+  'ui_diagnostic',
 ])
 
 // This is a defensive ceiling for a client-reported single-turn duration, not a
