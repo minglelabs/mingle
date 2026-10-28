@@ -177,6 +177,7 @@ import {
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { requestNativeBannerZone } from '@/lib/native-banner-zone'
 import { reportUiDiagnostic } from '@/lib/ui-diagnostics'
+import { unreadDividerLabel } from '@/i18n/unread-divider-copy'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   INITIAL_SCROLL_METRICS,
@@ -1770,6 +1771,23 @@ function LivePhoneDemoDateDividerRow({
 }
 
 const MemoizedLivePhoneDemoDateDividerRow = memo(LivePhoneDemoDateDividerRow)
+
+function LivePhoneDemoUnreadDividerRow({ uiLocale }: { uiLocale: string }) {
+  return (
+    <div
+      data-unread-divider
+      role="separator"
+      style={CHAT_MESSAGE_ROW_STYLE}
+      className="flex items-center gap-3 px-1 py-2"
+    >
+      <span className="h-px flex-1 bg-amber-400/70" aria-hidden />
+      <span className="shrink-0 text-[0.75rem] font-semibold text-amber-600">
+        {unreadDividerLabel(uiLocale)}
+      </span>
+      <span className="h-px flex-1 bg-amber-400/70" aria-hidden />
+    </div>
+  )
+}
 
 type LivePhoneDemoTimelineItem =
   | { kind: 'message'; timestampMs: number; utterance: Utterance }
@@ -5828,6 +5846,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const prevScrollHeightRef = useRef<number | null>(null)
   const prevScrollTopRef = useRef<number | null>(null)
   const isLoadingOlderRef = useRef(false)
+  const [unreadDividerUtteranceId, setUnreadDividerUtteranceId] = useState<string | null>(null)
   const autoScrollSchedulerRef = useRef(createAutoScrollScheduler())
   const scrollUiHideTimerRef = useRef<number | null>(null)
   const scrollStateFrameRef = useRef<{
@@ -6319,10 +6338,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       bottomAnchorConversationRef.current = conversationId
       hasInitialBottomAnchorRef.current = false
       allowAutoTopPaginationRef.current = false
+      setUnreadDividerUtteranceId(null)
     }
     if (!isVisible) {
       hasInitialBottomAnchorRef.current = false
       allowAutoTopPaginationRef.current = false
+      setUnreadDividerUtteranceId(null)
       return
     }
     const node = chatRef.current
@@ -6338,6 +6359,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const firstUnreadRow = firstUnreadId
       ? node.querySelector<HTMLElement>(`[data-utterance-id="${CSS.escape(firstUnreadId)}"]`)
       : null
+    // The line stays where the unread messages began for this visit only; the next entry
+    // draws it again only if something is unread then.
+    setUnreadDividerUtteranceId(firstUnreadRow ? firstUnreadId : null)
     if (firstUnreadRow) {
       // Instant jump (no smooth scroll): first unread row at the top of the
       // viewport. updateScrollDerivedState below decides auto-follow from the
@@ -8767,6 +8791,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     }
                     className={spacingClass}
                   >
+                    {item.kind === 'message' && item.utterance.id === unreadDividerUtteranceId ? (
+                      <LivePhoneDemoUnreadDividerRow uiLocale={uiLocale} />
+                    ) : null}
                     {item.kind === 'leave-notice' ? (
                       <MemoizedLivePhoneDemoLeaveNoticeRow
                         notice={item.notice}
