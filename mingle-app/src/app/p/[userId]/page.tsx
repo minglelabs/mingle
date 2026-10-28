@@ -4,6 +4,7 @@ import type { ProfileLinkInstallProfile } from "@/components/profile-link-instal
 import { resolveProfileLinkInstallLocale } from "@/components/profile-link-install-copy";
 import { isValidProfileLinkUserId } from "@/lib/profile-link";
 import { getUserProfile } from "@/server/user-profile";
+import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 
 const DEFAULT_IOS_APP_STORE_URL = "https://apps.apple.com/app/id6759795134";
 const DEFAULT_ANDROID_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn";
@@ -38,6 +39,9 @@ export default async function ProfileLinkPage({ params }: ProfileLinkPageProps) 
           imageCropScale: userProfile.imageCropScale,
           imageCropX: userProfile.imageCropX,
           imageCropY: userProfile.imageCropY,
+          age: userProfile.age,
+          // The preview shows the name to anyone with the link: keep the badge.
+          ...identityBadgeFlags(userProfile),
         };
       }
     } catch {
@@ -58,7 +62,7 @@ export default async function ProfileLinkPage({ params }: ProfileLinkPageProps) 
 
 export function generateMetadata({ params }: ProfileLinkPageProps) {
   return params.then(({ userId }) => ({
-    title: isValidProfileLinkUserId(decodePathSegment(userId)) ? "Open profile in Mingle" : "Invalid Mingle profile link",
-    description: "Open a shared Mingle profile in the Mingle app.",
+    title: isValidProfileLinkUserId(decodePathSegment(userId)) ? "Open profile in HashChat" : "Invalid HashChat profile link",
+    description: "Open a shared HashChat profile in the HashChat app.",
   }));
 }

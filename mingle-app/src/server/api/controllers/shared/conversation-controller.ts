@@ -14,6 +14,7 @@ import {
   listChannelMemberUserIdsBySessionKey,
   listConversationMembersForUser,
   markConversationChannelRead,
+  listConversationReadReceipts,
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
   updateConversationChannelSelectedLanguages,
@@ -30,6 +31,7 @@ import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { mintConversationRealtimeToken, mintConversationLiveWriterToken, notifyConversationMessage } from "@/server/conversation-realtime";
+import { resolveAccountBadge } from "@/lib/account-badge";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -257,6 +259,14 @@ export async function patchConversationResponse(
     if (!markedRead) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
+    // Other members' open rooms refresh their per-message unread badges.
+    const sessionKey = await getConversationSessionKeyForMember({
+      conversationId,
+      userId: resolvedUser.userId,
+    });
+    if (sessionKey) {
+      await notifyConversationMessage(sessionKey, [], undefined, { timeoutMs: 1500, readReceipt: true });
+    }
   }
 
   if (!conversation) {
@@ -361,8 +371,16 @@ export async function getConversationRealtimeTokenResponse(
   let writerToken: string | null = null;
   if (request.nextUrl.searchParams.get('live') === '1'
     && !(await isMessageSenderBlockedInConversation({ sessionKey, userId: resolvedUser.userId }))) {
-    const sender = await prisma.user.findUnique({ where: { id: resolvedUser.userId }, select: { name: true } });
-    writerToken = mintConversationLiveWriterToken(sessionKey, resolvedUser.userId, sender?.name ?? null);
+    const sender = await prisma.user.findUnique({
+      where: { id: resolvedUser.userId },
+      select: { name: true, isOfficial: true, isOperator: true },
+    });
+    writerToken = mintConversationLiveWriterToken(
+      sessionKey,
+      resolvedUser.userId,
+      sender?.name ?? null,
+      resolveAccountBadge(sender),
+    );
   }
   // Realtime push is unconfigured in this environment — not an error the
   // caller needs to see, since the client falls back to polling.
@@ -393,6 +411,35 @@ export async function getConversationMembersResponse(
   }
 
   return NextResponse.json({ members });
+}
+
+export async function getConversationReadReceiptsResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const receipts = await listConversationReadReceipts({
+    conversationId,
+    userId: resolvedUser.userId,
+  });
+
+  if (!receipts) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  return NextResponse.json(
+    { members: receipts.members },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 }
 
 export async function postConversationMembersResponse(

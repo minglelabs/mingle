@@ -36,7 +36,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
             if !self.connectToApp() {
                 self.finish(
                     code: 1,
-                    message: "Open Mingle, choose the sound playing on this device, and press Start first."
+                    message: "Open HashChat, choose the sound playing on this device, and press Start first."
                 )
             }
         }
@@ -97,9 +97,9 @@ final class SampleHandler: RPBroadcastSampleHandler {
         var byte: UInt8 = 0
         let received = recv(socketFD, &byte, 1, MSG_PEEK | MSG_DONTWAIT)
         if received == 0 {
-            finish(code: 2, message: "Translation ended in Mingle.")
+            finish(code: 2, message: "Translation ended in HashChat.")
         } else if received < 0, errno != EAGAIN, errno != EWOULDBLOCK, errno != EINTR {
-            finish(code: 2, message: "Translation ended in Mingle.")
+            finish(code: 2, message: "Translation ended in HashChat.")
         }
     }
 
@@ -138,7 +138,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
             // The app is not keeping up. Dropping whole new chunks (never part
             // of what is already queued) keeps the 16-bit samples aligned.
             if Date().timeIntervalSince(lastDeliveredAt) > Self.deliveryStallLimit {
-                finish(code: 2, message: "Mingle stopped translating.")
+                finish(code: 2, message: "HashChat stopped translating.")
             }
             return
         }
@@ -159,7 +159,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
             if written < 0, errno == EINTR { continue }
             if written < 0, errno == EAGAIN || errno == EWOULDBLOCK { return }
             // The app closed the channel: its session ended, so end the broadcast.
-            finish(code: 2, message: "Translation ended in Mingle.")
+            finish(code: 2, message: "Translation ended in HashChat.")
             return
         }
     }

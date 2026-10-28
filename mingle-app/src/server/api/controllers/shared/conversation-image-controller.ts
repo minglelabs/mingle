@@ -8,6 +8,7 @@ import { putConversationImage, getConversationImage, deleteConversationImage } f
 import { isConversationImageTextEnabled, runConversationImageTextJob } from '@/server/conversation-image-text'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
+import { notifyOperatorInboxActivity } from '@/server/operator-inbox/notify'
 import { authorizeConversationImageScope as authorize, readStoredConversationImage as storedImage } from './conversation-image-access'
 
 export async function postConversationImage(request: NextRequest, conversationId: string) {
@@ -68,14 +69,25 @@ export async function postConversationImage(request: NextRequest, conversationId
   if (created) {
     const messageId = message.id
     after(async () => {
+      let memberUserIds: string[] = []
       try {
-        const memberUserIds = await listChannelMemberUserIdsBySessionKey(scope.sessionKey)
+        memberUserIds = await listChannelMemberUserIdsBySessionKey(scope.sessionKey)
         await sendPushNotificationForConversationMessage({
           messageId, sessionKey: scope.sessionKey, senderUserId: scope.userId,
           sourceText: '📷 Photo', memberUserIds,
         })
       } catch (error) {
         console.error('[conversation-image] push failed', error instanceof Error ? error.name : 'unknown')
+      }
+      // Staff alerts for rooms with an operator account; a failure must never
+      // affect the committed photo.
+      try {
+        await notifyOperatorInboxActivity({
+          sessionKey: scope.sessionKey, conversationId, senderUserId: scope.userId,
+          memberUserIds, messageId, preview: null, kind: 'photo',
+        })
+      } catch (error) {
+        console.error('[conversation-image] operator inbox notify failed', error instanceof Error ? error.name : 'unknown')
       }
     })
     // Photo text translation (OCR + room-language translations). Its own

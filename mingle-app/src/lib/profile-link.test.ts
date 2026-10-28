@@ -17,7 +17,7 @@ describe("profile links", () => {
     expect(buildProfileAppUrl("cmg123abc", "launch-2", "mingleprofile")).toBe("mingleprofile://profile/cmg123abc?linkNonce=launch-2");
   });
 
-  it("accepts only Mingle profile links for the configured origin", () => {
+  it("accepts only HashChat profile links for the configured origin", () => {
     expect(parseMingleProfileLink(`${origin}/p/cmg123abc`, [origin])).toEqual({
       source: "https",
       userId: "cmg123abc",

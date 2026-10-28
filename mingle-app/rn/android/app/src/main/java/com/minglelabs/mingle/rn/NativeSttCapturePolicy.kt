@@ -72,9 +72,9 @@ object NativeSttCapturePolicy {
         // while STT is active. MODE_IN_COMMUNICATION triggers system-level VoIP routing which silences
         // media playback from other apps.
         audioMode = AudioManager.MODE_NORMAL,
-        // privacySensitive=true gives Mingle highest mic priority on Android 11+, ensuring STT always
+        // privacySensitive=true gives HashChat highest mic priority on Android 11+, ensuring STT always
         // receives audio even if another app (e.g. Discord) is also trying to capture.
-        // Trade-off: the other app's mic will be silenced while Mingle is recording.
+        // Trade-off: the other app's mic will be silenced while HashChat is recording.
         privacySensitive = true,
         foregroundServiceEnabled = true,
         aecEnabled = aecEnabled && AcousticEchoCanceler.isAvailable(),

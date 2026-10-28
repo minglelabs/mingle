@@ -10,7 +10,7 @@ import { notifyConversationMessage } from "@/server/conversation-realtime";
 import { sendPushNotificationForConversationMessage, sendPushNotificationForUserNotification } from "@/server/push-notifications";
 
 export const ROYCE_USER_ID = "cmsrqesom0000mx1hn62ce6r9";
-export const ROYCE_WELCOME_MESSAGE = "Welcome! My name is Royce. I'm developer of Mingle. If you have any feedback or questions, feel free to message me anytime on Mingle. The cat in the photo is Somi, my cat.";
+export const ROYCE_WELCOME_MESSAGE = "Welcome! My name is Royce. I'm developer of HashChat. If you have any feedback or questions, feel free to message me anytime on HashChat. The cat in the photo is Somi, my cat.";
 
 const ROYCE_WELCOME_CLIENT_MESSAGE_ID = "mingle-welcome-royce-v1";
 const ROYCE_WELCOME_RETRY_DELAYS_MS = [0, 250, 1_000] as const;

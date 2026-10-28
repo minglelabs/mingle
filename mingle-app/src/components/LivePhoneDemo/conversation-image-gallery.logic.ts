@@ -32,8 +32,13 @@ export function conversationImagePath(image: Pick<ConversationMessageImage, 'con
   return buildClientApiPath(`/conversations/${encodeURIComponent(image.conversationId)}/images/${encodeURIComponent(image.messageId)}`)
 }
 
+/** `path` with the retry marker that busts a failed load. */
+export function withConversationImageRetry(path: string, retry = 0): string {
+  if (!retry) return path
+  return `${path}${path.includes('?') ? '&' : '?'}retry=${retry}`
+}
+
 /** The endpoint with the retry marker that busts a failed load. */
 export function conversationImageSrc(image: Pick<ConversationMessageImage, 'conversationId' | 'messageId'>, retry = 0): string {
-  const path = conversationImagePath(image)
-  return retry ? `${path}?retry=${retry}` : path
+  return withConversationImageRetry(conversationImagePath(image), retry)
 }

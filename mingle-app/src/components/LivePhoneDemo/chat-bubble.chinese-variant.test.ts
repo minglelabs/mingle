@@ -263,6 +263,17 @@ describe('ChatBubble Chinese variants', () => {
     expect(buildLatestUtterancePayload(utterance, 'zh-TW', ['zh-TW'], null, ['ko', 'zh-TW'])?.preview).toBe('你好')
   })
 
+  it('drops languages only another member picked from the bubble rows', () => {
+    const utterance = buildUtterance({
+      originalText: 'hello',
+      originalLang: 'en',
+      targetLanguages: ['ko', 'ja', 'zh-TW'],
+      translations: { ko: '안녕', ja: 'こんにちは', zh: '你好' },
+    })
+    expect(buildTargetLanguagesForUtterance(utterance, ['ko'], undefined, ['ja', 'zh-TW'])).toEqual(['ko'])
+    expect(buildLatestUtterancePayload(utterance, 'ja', ['ja'], 'ja', ['ko'], ['ja', 'zh-TW'])?.preview).toBe('안녕')
+  })
+
   it('keeps the same-language bubble of mixed-language speech for explicit originals', () => {
     const korean = buildUtterance({
       originalText: 'そんな답답해서',

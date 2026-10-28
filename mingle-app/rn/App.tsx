@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Appearance,
   AppState,
   BackHandler,
   Image,
@@ -99,15 +101,10 @@ import {
   readPreferredRuntimeValue,
 } from './src/runtimeConfig';
 import {
-  canUseWebHostFallbackForLoadFailure,
+  isOfflineWebViewLoadError,
   isWebViewPageLoadFailureHttpStatus,
-  normalizeHttpBaseUrl,
-  normalizeWsUrl,
-  resolveDistinctFallbackTarget,
-  shouldFallbackHttpStatus,
-  shouldTryFallbackVersionPolicy,
-} from './src/fallbackTargets';
-import { isOfflineWebViewLoadError, resolveWebViewRetryUrl } from './src/webViewLoadErrors';
+  resolveWebViewRetryUrl,
+} from './src/webViewLoadErrors';
 import {
   WEBVIEW_RETRY_STALL_TIMEOUT_MS,
   createWebViewLoadAttemptTracker,
@@ -118,11 +115,14 @@ import {
   shouldOpenNativeExternalUrl,
 } from './src/externalNavigation';
 import {
-  buildConversationRestoreWebUrl,
+  buildWebRestoreWebUrl,
   classifyConversationWebUrl,
-  readNativeConversationRestorePayload,
+  readNativeLastScreenSnapshot,
+  readNativeWebRestorePayload,
   resolveConversationRestorePayloadFromUrl,
-  type NativeConversationRestorePayload,
+  resolveWebRestorePayloadFromUrl,
+  type NativeLastScreenSnapshot,
+  type NativeWebRestorePayload,
 } from './src/webViewRestore';
 import {
   resolveNativeBannerNavigationState,
@@ -137,6 +137,16 @@ import {
   parseNativeProfileLink,
 } from './src/profileLink';
 import {
+  buildNativePushTapEventScript,
+  resolvePushTapPath,
+  type PushTapPayload,
+} from './src/pushNavigation';
+import {
+  addNativePushOpenedListener,
+  createSerialTaskRunner,
+} from './src/pushNavigationEvents';
+import { resolveInitialWebRoute } from './src/initialWebRoute';
+import {
   buildNativeConversationShareEventScript,
   parseNativeConversationShareLink,
 } from './src/conversationShareLink';
@@ -147,8 +157,6 @@ type WebViewHttpStatusEvent = { nativeEvent: { statusCode: number } };
 type NativeRuntimeConfig = {
   webAppBaseUrl?: string;
   defaultWsUrl?: string;
-  legacyWebAppBaseUrl?: string;
-  legacyDefaultWsUrl?: string;
   apiNamespace?: string;
   clientVersion?: string;
   clientBuild?: string;
@@ -164,6 +172,13 @@ type NativeRuntimeConfig = {
   conversationRestoreUrl?: string;
   conversationRestoreConversationId?: string;
   conversationRestoreCreatedAtMs?: string | number;
+  lastScreenSnapshotPath?: string;
+  lastScreenSnapshotCreatedAtMs?: string | number;
+  lastScreenSnapshotWidth?: string | number;
+  lastScreenSnapshotHeight?: string | number;
+  lastScreenSnapshotColorScheme?: string;
+  // iOS: the process was launched by a URL, universal link or notification tap.
+  launchedFromExternalIntent?: string | boolean;
 };
 type NativeConversationRestoreStorageModule = {
   rememberConversationRestoreUrl?: (
@@ -172,6 +187,10 @@ type NativeConversationRestoreStorageModule = {
     createdAtMs: number,
   ) => Promise<unknown> | void;
   clearConversationRestoreUrl?: () => Promise<unknown> | void;
+  // iOS only. While enabled, the native side captures the window when the app
+  // resigns active so the next cold start can show it instead of the splash.
+  setLastScreenSnapshotEnabled?: (enabled: boolean) => void;
+  clearLastScreenSnapshot?: () => Promise<unknown> | void;
   getPendingProfileLink?: () => Promise<NativePendingProfileLink | null>;
   clearPendingProfileLink?: (sequence: number) => Promise<unknown> | void;
   recordHistoryDebug?: (payload: string) => Promise<unknown> | void;
@@ -182,6 +201,7 @@ type NativePendingProfileLink = {
 };
 type NativeQrImageModule = {
   savePng?: (dataUrl: string, fileName: string) => Promise<unknown>;
+  saveImage?: (dataUrl: string, fileName: string) => Promise<unknown>;
 };
 type NativePushRegistrationInfo = {
   token?: unknown;
@@ -195,6 +215,14 @@ type NativePushRegistrationInfo = {
 type NativePushNotificationModule = {
   registerForPushNotifications?: () => Promise<NativePushRegistrationInfo>;
   getRegistrationInfo?: () => Promise<NativePushRegistrationInfo>;
+  getPendingPushTap?: () => Promise<NativePendingPushTap | null>;
+  clearPendingPushTap?: (sequence: number) => Promise<unknown>;
+};
+type NativePendingPushTap = {
+  type?: unknown;
+  url?: unknown;
+  conversationId?: unknown;
+  sequence?: unknown;
 };
 type NativeLocationModule = {
   checkLocationPermission?: () => Promise<{ permission?: unknown; platform?: unknown }>;
@@ -448,7 +476,7 @@ function openNativeExternalUrl(rawUrl: string): void {
     if (!fallbackUrl || fallbackUrl === rawUrl) return;
 
     void Linking.openURL(fallbackUrl).catch(() => {
-      // Ignore external app/browser failures so the Mingle WebView remains intact.
+      // Ignore external app/browser failures so the HashChat WebView remains intact.
     });
   });
 }
@@ -456,6 +484,14 @@ function openNativeExternalUrl(rawUrl: string): void {
 const RN_RUNTIME_OS = Platform.OS;
 const NATIVE_RUNTIME_CONFIG = readNativeRuntimeConfig();
 const NATIVE_CONVERSATION_RESTORE_STORAGE = (NativeModules.NativeRuntimeConfigModule || {}) as NativeConversationRestoreStorageModule;
+// A cold start that carries its own destination must not reopen (or flash a
+// capture of) the previous screen first.
+const LAUNCHED_FROM_EXTERNAL_INTENT = NATIVE_RUNTIME_CONFIG.launchedFromExternalIntent === true
+  || NATIVE_RUNTIME_CONFIG.launchedFromExternalIntent === '1';
+const LAST_SCREEN_SNAPSHOT_FADE_MS = 180;
+// Fallbacks for a web build that never sends native_web_restore_ready.
+const LAST_SCREEN_SNAPSHOT_AFTER_LOAD_MAX_MS = 3000;
+const LAST_SCREEN_SNAPSHOT_MAX_MS = 10000;
 const RUNTIME_WEB_APP_BASE_URL = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.webAppBaseUrl,
   readRuntimeEnvValue(['NEXT_PUBLIC_SITE_URL', 'RN_WEB_APP_BASE_URL']),
@@ -463,14 +499,6 @@ const RUNTIME_WEB_APP_BASE_URL = readPreferredRuntimeValue(
 const RUNTIME_DEFAULT_WS_URL = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.defaultWsUrl,
   readRuntimeEnvValue(['NEXT_PUBLIC_WS_URL', 'RN_DEFAULT_WS_URL']),
-);
-const RUNTIME_FALLBACK_WEB_APP_BASE_URL = readPreferredRuntimeValue(
-  NATIVE_RUNTIME_CONFIG.legacyWebAppBaseUrl,
-  readRuntimeEnvValue(['MINGLE_API_FALLBACK_SITE_URL', 'RN_WEB_APP_FALLBACK_BASE_URL', 'MINGLE_LEGACY_SITE_URL']),
-);
-const RUNTIME_FALLBACK_WS_URL = readPreferredRuntimeValue(
-  NATIVE_RUNTIME_CONFIG.legacyDefaultWsUrl,
-  readRuntimeEnvValue(['MINGLE_STT_FALLBACK_WS_URL', 'RN_DEFAULT_WS_FALLBACK_URL', 'MINGLE_LEGACY_WS_URL']),
 );
 const RUNTIME_API_NAMESPACE = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.apiNamespace,
@@ -484,19 +512,11 @@ const WEB_APP_BASE_URL = normalizeConfiguredUrl(
   RUNTIME_WEB_APP_BASE_URL,
   ['http:', 'https:'],
   { trimTrailingSlash: true },
-) || 'https://mingle-1-1-4-production.up.railway.app';
+) || 'https://mingle-2-0-0-production.up.railway.app';
 const DEFAULT_WS_URL = normalizeConfiguredUrl(
   RUNTIME_DEFAULT_WS_URL,
   ['ws:', 'wss:'],
 ) || 'wss://mingle-2-0-0-production.up.railway.app/stt';
-const FALLBACK_WEB_APP_BASE_URL = resolveDistinctFallbackTarget(
-  WEB_APP_BASE_URL,
-  normalizeHttpBaseUrl(RUNTIME_FALLBACK_WEB_APP_BASE_URL),
-);
-const DEFAULT_WS_FALLBACK_URL = resolveDistinctFallbackTarget(
-  DEFAULT_WS_URL,
-  normalizeWsUrl(RUNTIME_FALLBACK_WS_URL),
-);
 const PROFILE_LINK_DUPLICATE_WINDOW_MS = 1_500;
 const PROFILE_LINK_REDISPATCH_DELAYS_MS = [300, 1_000, 2_500, 5_000];
 const CONVERSATION_SHARE_LINK_DUPLICATE_WINDOW_MS = 1_500;
@@ -528,7 +548,7 @@ function parseOptionalSonioxManualFinalizeSilenceMs(value: unknown): number | un
   return Math.floor(parsed);
 }
 
-const STARTUP_SPLASH_BACKGROUND = '#F3C35A';
+const STARTUP_SPLASH_BACKGROUND = '#FCC12F';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const STARTUP_SPLASH_LOGO = require('./ios/mingle/Images.xcassets/LaunchLogo.imageset/launch-logo.png');
 const {
@@ -566,6 +586,9 @@ const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
 const NATIVE_QR_SCANNER_EVENT = 'mingle:native-qr-scanner';
 const NATIVE_QR_SAVE_EVENT = 'mingle:native-qr-save';
+const NATIVE_IMAGE_SAVE_EVENT = 'mingle:native-image-save';
+// Chat photos are at most 2048px JPEG/PNG/WebP; the data URL stays well under this.
+const NATIVE_IMAGE_SAVE_MAX_CHARS = 30_000_000;
 const NATIVE_LOCATION_EVENT = 'mingle:native-location';
 const NATIVE_LOCATION_QUEUE_LIMIT = 8;
 const NATIVE_QR_SCANNER_QUEUE_LIMIT = 8;
@@ -617,6 +640,14 @@ const AUTH_LOGIN_SAFE_AREA_PALETTE: SafeAreaPalette = {
 };
 
 const CONVERSATIONS_SAFE_AREA_PALETTE: SafeAreaPalette = {
+  ...DEFAULT_SAFE_AREA_PALETTE,
+  bottomEdgeMode: 'transparent',
+};
+
+// The post feed and the full-screen post viewer are full-bleed: the card (and
+// the feed's translucent tab bar) runs to the bottom edge, so the white
+// bottom fill would show as a strip under it.
+const POST_FEED_SAFE_AREA_PALETTE: SafeAreaPalette = {
   ...DEFAULT_SAFE_AREA_PALETTE,
   bottomEdgeMode: 'transparent',
 };
@@ -808,6 +839,17 @@ type NativeQrSaveCommand = {
   };
 };
 
+type NativeImageSaveCommand = {
+  type: 'native_image_save';
+  payload?: {
+    requestId?: string;
+    /** Asks only whether this build can save photos; answered with "ready". */
+    probe?: boolean;
+    dataUrl?: string;
+    fileName?: string;
+  };
+};
+
 type NativePushRegisterCommand = {
   type: 'native_push_register';
 };
@@ -859,6 +901,17 @@ type NativeRemountWebViewCommand = {
   };
 };
 
+// The web finished re-applying its saved screen state (scroll positions) after
+// a cold start, so the last-screen capture covering it can fade out.
+type NativeWebRestoreReadyCommand = {
+  type: 'native_web_restore_ready';
+};
+
+// Signed out or switched accounts: forget the last screen and its capture.
+type NativeWebRestoreResetCommand = {
+  type: 'native_web_restore_reset';
+};
+
 type NativeQaSetSttStatusCommand = {
   type: 'native_qa_set_stt_status';
   payload?: {
@@ -883,6 +936,7 @@ type WebViewCommand =
   | NativeAuthResetCommand
   | NativeQrScannerOpenCommand
   | NativeQrSaveCommand
+  | NativeImageSaveCommand
   | NativePushRegisterCommand
   | NativeNavigationStateCommand
   | NativeHistoryDebugCommand
@@ -892,6 +946,8 @@ type WebViewCommand =
   | NativeSetBannerZoneCommand
   | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand
+  | NativeWebRestoreReadyCommand
+  | NativeWebRestoreResetCommand
   | NativeQaSetSttStatusCommand
   | NativePictureInPictureCommand;
 
@@ -1045,6 +1101,11 @@ type NativeUiEvent = {
   position: NativeBannerPosition;
   topInsetPx: number;
   bottomInsetPx: number;
+} | {
+  // Sent as the app leaves / regains the foreground, so the page can save its
+  // screen state even if WKWebView's own visibilitychange arrives too late.
+  type: 'app_lifecycle';
+  state: 'background' | 'active';
 };
 
 type NativeAuthEvent =
@@ -1072,6 +1133,9 @@ type NativeQrScannerEvent =
 type NativeQrSaveEvent =
   | { type: 'success' }
   | { type: 'error'; message: string };
+type NativeImageSaveEvent =
+  | { type: 'ready' | 'success'; requestId: string }
+  | { type: 'error'; requestId: string; message: string };
 type RecommendUpdatePrompt = {
   title: string;
   message: string;
@@ -1291,6 +1355,19 @@ function isConversationSpectatePathname(pathname: string): boolean {
   return false;
 }
 
+function isPostFeedPathname(pathname: string): boolean {
+  const segments = pathname
+    .split('/')
+    .map(segment => segment.trim())
+    .filter(Boolean);
+  if (segments.length < 2) return false;
+
+  const locale = segments[0]?.toLowerCase() || '';
+  if (!WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale)) return false;
+
+  return segments[1] === 'feed' || (segments[1] === 'posts' && segments[2] === 'viewer');
+}
+
 function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
   const candidate = rawUrl.trim();
   if (!candidate) return DEFAULT_SAFE_AREA_PALETTE;
@@ -1313,6 +1390,9 @@ function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
     }
     if (isConversationsLikePathname(parsed.pathname)) {
       return CONVERSATIONS_SAFE_AREA_PALETTE;
+    }
+    if (isPostFeedPathname(parsed.pathname)) {
+      return POST_FEED_SAFE_AREA_PALETTE;
     }
   } catch {
     return DEFAULT_SAFE_AREA_PALETTE;
@@ -1498,15 +1578,14 @@ function AppInner(): React.JSX.Element {
   // Becomes true once the startup load has either shown a page or surfaced an
   // error, after which the startup splash never comes back.
   const initialLoadSettledRef = useRef(false);
-  // Tracks the in-flight load attempt: whether it already hit an error, and
-  // whether ANY attempt so far really succeeded (which ends host-fallback
-  // eligibility). A finished load is only committed as a success once no
+  // Tracks the in-flight load attempt: whether it already hit an error. A
+  // finished load is only committed as a success once no
   // error can follow it anymore, because Android emits onLoadEnd BEFORE
   // onError for a failed load — see src/webViewLoadAttempt.ts. Created below,
   // once the overlay state setters it clears on success exist.
   const loadAttemptTrackerRef = useRef<WebViewLoadAttemptTracker | null>(null);
   const latestNativePipEventRef = useRef<NativePipEvent | null>(null);
-  const { width: windowWidthPx } = useWindowDimensions();
+  const { width: windowWidthPx, height: windowHeightPx } = useWindowDimensions();
   const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
     createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion, RUNTIME_INSTALL_SOURCE),
   );
@@ -1520,8 +1599,8 @@ function AppInner(): React.JSX.Element {
   // friendly overlay; `isOfflineLoadError` only swaps which copy is shown.
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isOfflineLoadError, setIsOfflineLoadError] = useState(false);
-  // True from the moment "다시 시도" is pressed (or the app switches to the
-  // fallback host) until that attempt either succeeds or hits a fresh error.
+  // True from the moment "다시 시도" is pressed until that attempt either
+  // succeeds or hits a fresh error.
   // Keeps the overlay up (showing a neutral loading state instead of the error
   // copy) so the newly-remounted, still-blank WebView is never exposed
   // underneath.
@@ -1542,7 +1621,6 @@ function AppInner(): React.JSX.Element {
       ? { status: 'checking' }
       : { status: 'ready' }
   ));
-  const [activeWebAppBaseUrl, setActiveWebAppBaseUrl] = useState(WEB_APP_BASE_URL);
   const recommendPromptShownRef = useRef(false);
   const pendingRecommendPromptRef = useRef<RecommendUpdatePrompt | null>(null);
   const nativeStatusRef = useRef('idle');
@@ -1569,12 +1647,20 @@ function AppInner(): React.JSX.Element {
   const pendingProfileRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pendingProfileLinkFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profileLinkNavigationSequenceRef = useRef(0);
+  const pendingPushTapPathRef = useRef<string | null>(null);
+  const pendingPushTapRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pendingPushTapRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pushTapNavigationSequenceRef = useRef(0);
   const lastHandledConversationShareLinkRef = useRef('');
   const lastHandledConversationShareLinkAtRef = useRef(0);
   const pendingConversationShareTokenRef = useRef<string | null>(null);
   const pendingConversationShareRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pendingConversationShareFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const conversationShareNavigationSequenceRef = useRef(0);
+  // Pending-slot reads are triggered from several places at once (mount,
+  // retries, AppState, the iOS `opened` event). Run them one at a time so a
+  // read never races the clear of the previous one and routes the tap twice.
+  const pushTapConsumptionRunnerRef = useRef(createSerialTaskRunner());
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   // Earphone mode (contract A.1/A.2): whether this shell can report earphones,
   // and the relay that forwards NativeAudioRouteModule readings to the page.
@@ -1647,7 +1733,7 @@ function AppInner(): React.JSX.Element {
   );
   const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
   const [webViewMountToken, setWebViewMountToken] = useState(0);
-  // Every remount (retry, fallback switch, debug remount) is a brand-new load
+  // Every remount (retry, debug remount) is a brand-new load
   // attempt, and it is the only thing that clears a previous failure: until
   // then the error overlay covers the WebView anyway. A layout effect runs
   // after the old WebView's trailing onLoadEnd and before the new native
@@ -1655,10 +1741,9 @@ function AppInner(): React.JSX.Element {
   useLayoutEffect(() => {
     if (webViewMountToken > 0) loadAttemptTracker.beginAttempt();
   }, [loadAttemptTracker, webViewMountToken]);
-  // Never leave the "reconnecting" spinner up forever when a retried or
-  // fallback load reports neither success nor failure: fall back to the error
-  // overlay so the retry button is reachable again. Restarts on every remount,
-  // so a fallback switch during a retry gets its own full window.
+  // Never leave the "reconnecting" spinner up forever when a retried load
+  // reports neither success nor failure: fall back to the error overlay so
+  // the retry button is reachable again. Restarts on every remount.
   useEffect(() => {
     if (!isRetryingLoad) return;
     const stallTimer = setTimeout(() => {
@@ -1668,48 +1753,22 @@ function AppInner(): React.JSX.Element {
     return () => clearTimeout(stallTimer);
   }, [isRetryingLoad, webViewMountToken]);
   const [debugRemountWebUrl, setDebugRemountWebUrl] = useState('');
-  const webFallbackActivatedRef = useRef(false);
-  const activateWebFallback = useCallback((): boolean => {
-    if (
-      !FALLBACK_WEB_APP_BASE_URL
-      || webFallbackActivatedRef.current
-      || isLoopbackUrl(WEB_APP_BASE_URL)
-      || isDevelopmentTunnelUrl(WEB_APP_BASE_URL)
-    ) {
-      return false;
-    }
-
-    webFallbackActivatedRef.current = true;
-    isPageReadyRef.current = false;
-    setLoadError(null);
-    setIsOfflineLoadError(false);
-    // Until the startup load has settled, the fallback's onLoadStart brings
-    // the startup splash back over the remounting WebView. After that (on a
-    // retry, or on Android where the premature onLoadEnd of the failed load
-    // already settled it) the splash is gone for good, so keep the neutral
-    // loading overlay up instead until the fallback page really loads (the
-    // load-attempt tracker clears it) or fails.
-    setIsRetryingLoad(initialLoadSettledRef.current);
-    // A retry may have pinned the remount URL to the primary host; drop it in
-    // the same render so the new WebView starts on the fallback host instead
-    // of briefly loading the dead primary again.
-    setDebugRemountWebUrl('');
-    setActiveWebAppBaseUrl(FALLBACK_WEB_APP_BASE_URL);
-    setWebViewMountToken((current) => current + 1);
-    return true;
-  }, []);
   const baseWebUrl = useMemo(() => {
-    if (!activeWebAppBaseUrl || REQUIRED_CONFIG_ERROR) return '';
+    if (!WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) return '';
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
     const debugParams = (__DEV__ || RUNTIME_QA_BRIDGE_ENABLED) ? '&sttDebug=1&ttsDebug=1' : '';
     const qaParams = RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    // Start directly at the conversation-list route. Loading the locale root
-    // first creates a redirect history entry, which would let a tab-root
-    // screen swipe back into an older room after a tab switch.
-    const rawWebUrl = `${activeWebAppBaseUrl}/${webLocale}/conversations?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
+    // Plain launch lands on the feed when this build's namespace supports the
+    // posting feed (v2.2.0+); otherwise on the conversation list. A live
+    // conversation/STT restore target or a pending push tap override this base
+    // route (see webUrl memo and the push-tap handlers). The same query params
+    // are kept regardless of route. Loading the locale root first would create
+    // a redirect history entry, so target the concrete route directly.
+    const initialRoute = resolveInitialWebRoute(VALIDATED_API_NAMESPACE);
+    const rawWebUrl = `${WEB_APP_BASE_URL}/${webLocale}/${initialRoute}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
     return appendNativeRuntimeWebViewParams(rawWebUrl, {
       nativeListTopInsetPx: nativeInitialBannerInsetPx,
       nativeConversationBannerPosition: defaultNativeBannerPosition,
@@ -1717,63 +1776,62 @@ function AppInner(): React.JSX.Element {
       clientVersion: RUNTIME_CLIENT_INFO.clientVersion,
       clientBuild: RUNTIME_CLIENT_INFO.clientBuild,
     });
-  }, [activeWebAppBaseUrl, defaultNativeBannerPosition, nativeAvailable, nativeInitialBannerInsetPx, webLocale]);
-  const initialConversationRestorePayloadRef = useRef<NativeConversationRestorePayload | null>(
-    readNativeConversationRestorePayload(NATIVE_RUNTIME_CONFIG),
+  }, [defaultNativeBannerPosition, nativeAvailable, nativeInitialBannerInsetPx, webLocale]);
+  const initialWebRestorePayloadRef = useRef<NativeWebRestorePayload | null>(
+    LAUNCHED_FROM_EXTERNAL_INTENT ? null : readNativeWebRestorePayload(NATIVE_RUNTIME_CONFIG),
   );
-  const [conversationRestoreUrlHint, setConversationRestoreUrlHint] = useState(
-    () => initialConversationRestorePayloadRef.current?.url || '',
-  );
-  const lastConversationRestoreUrlRef = useRef(conversationRestoreUrlHint);
-  const persistConversationRestoreUrl = useCallback((payload: NativeConversationRestorePayload) => {
-    lastConversationRestoreUrlRef.current = payload.url;
-    setConversationRestoreUrlHint((current) => (current === payload.url ? current : payload.url));
+  const lastWebRestoreUrlRef = useRef(initialWebRestorePayloadRef.current?.url || '');
+  const currentWebRestorableRef = useRef(Boolean(initialWebRestorePayloadRef.current));
+  const persistWebRestoreUrl = useCallback((payload: NativeWebRestorePayload, force: boolean) => {
+    // Every web command re-reports the current URL; only write when the
+    // screen changed, or when leaving the foreground to refresh the TTL.
+    if (!force && lastWebRestoreUrlRef.current === payload.url) return;
+    lastWebRestoreUrlRef.current = payload.url;
     try {
       void NATIVE_CONVERSATION_RESTORE_STORAGE.rememberConversationRestoreUrl?.(
         payload.url,
-        payload.conversationId,
+        payload.restoreKey,
         payload.createdAtMs,
       );
     } catch {
       // Ignore native persistence failures; the current RN process still keeps the restore hint.
     }
   }, []);
-  const clearConversationRestoreUrl = useCallback(() => {
-    if (!lastConversationRestoreUrlRef.current && !conversationRestoreUrlHint) return;
-    lastConversationRestoreUrlRef.current = '';
-    setConversationRestoreUrlHint('');
+  const clearWebRestoreUrl = useCallback(() => {
     // Also clear the initial-restore latch so that subsequent fallback/remount
-    // does not reload the old ?conversation=... source URL.  This is a ref-only
+    // does not reload the old restored source URL.  This is a ref-only
     // write: no state change, no re-render, no WebView reload.
     initialRestoreUrlRef.current = '';
+    if (!lastWebRestoreUrlRef.current) return;
+    lastWebRestoreUrlRef.current = '';
     try {
       void NATIVE_CONVERSATION_RESTORE_STORAGE.clearConversationRestoreUrl?.();
     } catch {
       // Ignore native persistence failures.
     }
-  }, [conversationRestoreUrlHint]);
-  const syncConversationRestoreFromUrl = useCallback((nextUrl?: string) => {
+  }, []);
+  const syncWebRestoreFromUrl = useCallback((nextUrl?: string, force = false) => {
     const normalizedUrl = typeof nextUrl === 'string' ? nextUrl.trim() : '';
     if (!normalizedUrl || normalizedUrl.startsWith('about:') || normalizedUrl.startsWith('data:')) return null;
-    const webUrlKind = classifyConversationWebUrl(normalizedUrl);
-    if (webUrlKind === 'room') {
-      const payload = resolveConversationRestorePayloadFromUrl(normalizedUrl);
-      if (payload) {
-        persistConversationRestoreUrl(payload);
-      }
-      return payload;
+    const payload = resolveWebRestorePayloadFromUrl(normalizedUrl);
+    currentWebRestorableRef.current = Boolean(payload);
+    if (!payload) {
+      clearWebRestoreUrl();
+      return null;
     }
-    if (webUrlKind === 'list' || webUrlKind === null) {
-      clearConversationRestoreUrl();
+    if (payload.restoreKey !== initialWebRestorePayloadRef.current?.restoreKey) {
+      // The user left the restored screen; a later remount must not jump back.
+      initialRestoreUrlRef.current = '';
     }
-    return null;
-  }, [clearConversationRestoreUrl, persistConversationRestoreUrl]);
+    persistWebRestoreUrl(payload, force);
+    return payload;
+  }, [clearWebRestoreUrl, persistWebRestoreUrl]);
   const rememberCurrentWebUrl = useCallback((nextUrl?: string) => {
     const normalizedUrl = typeof nextUrl === 'string' ? nextUrl.trim() : '';
     if (!normalizedUrl || normalizedUrl.startsWith('about:') || normalizedUrl.startsWith('data:')) return;
     lastWebViewUrlRef.current = normalizedUrl;
-    syncConversationRestoreFromUrl(normalizedUrl);
-  }, [syncConversationRestoreFromUrl]);
+    syncWebRestoreFromUrl(normalizedUrl);
+  }, [syncWebRestoreFromUrl]);
   const clearPendingProfileRouteRetries = useCallback(() => {
     pendingProfileRouteRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
     pendingProfileRouteRetryTimersRef.current = [];
@@ -1825,6 +1883,87 @@ function AppInner(): React.JSX.Element {
       pendingProfileRouteRetryTimersRef.current.push(timer);
     });
   }, [clearPendingProfileRouteRetries, dispatchProfileLinkToWebView]);
+  const dispatchPushTapToWebView = useCallback((path: string, allowWhenPageNotReady = false) => {
+    const webView = webViewRef.current;
+    if (!path || !webView || (!isPageReadyRef.current && !allowWhenPageNotReady)) {
+      return false;
+    }
+    pushTapNavigationSequenceRef.current += 1;
+    const eventScript = buildNativePushTapEventScript({
+      path,
+      sequence: pushTapNavigationSequenceRef.current,
+    });
+    if (eventScript === 'true;') return false;
+    webView.injectJavaScript(eventScript);
+    return true;
+  }, []);
+  const schedulePendingPushTapFlush = useCallback((allowWhenPageNotReady = false) => {
+    pendingPushTapRouteRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    pendingPushTapRouteRetryTimersRef.current = [];
+    [0, 150, 500, 1_200, 3_000].forEach((delayMs) => {
+      const timer = setTimeout(() => {
+        const pendingPath = pendingPushTapPathRef.current;
+        if (!pendingPath) return;
+        if (dispatchPushTapToWebView(pendingPath, allowWhenPageNotReady)) {
+          pendingPushTapPathRef.current = null;
+          pendingPushTapRouteRetryTimersRef.current.forEach((t) => clearTimeout(t));
+          pendingPushTapRouteRetryTimersRef.current = [];
+        }
+      }, delayMs);
+      pendingPushTapRouteRetryTimersRef.current.push(timer);
+    });
+  }, [dispatchPushTapToWebView]);
+  const navigateWebViewToPushTap = useCallback((path: string) => {
+    const normalizedPath = path.trim();
+    if (!normalizedPath) return;
+    if (dispatchPushTapToWebView(normalizedPath)) {
+      pendingPushTapPathRef.current = null;
+      return;
+    }
+    pendingPushTapPathRef.current = normalizedPath;
+    schedulePendingPushTapFlush();
+  }, [dispatchPushTapToWebView, schedulePendingPushTapFlush]);
+  const consumePendingPushTap = useCallback(() => pushTapConsumptionRunnerRef.current(async () => {
+    const nativePushModule = (NativeModules as {
+      NativePushNotificationModule?: NativePushNotificationModule;
+    }).NativePushNotificationModule;
+    const getPendingPushTap = nativePushModule?.getPendingPushTap;
+    if (!getPendingPushTap) return;
+    try {
+      const pending = await getPendingPushTap();
+      if (!pending || typeof pending !== 'object') return;
+      const payload: PushTapPayload = {
+        type: pending.type,
+        url: pending.url,
+        conversationId: pending.conversationId,
+      };
+      const resolvedPath = resolvePushTapPath(payload, webLocale);
+      const sequence = typeof pending.sequence === 'number' && Number.isFinite(pending.sequence)
+        ? pending.sequence
+        : 0;
+      if (!resolvedPath) {
+        // Unsafe or empty target: still clear so a bad payload cannot pin the
+        // pending slot forever.
+        await nativePushModule?.clearPendingPushTap?.(sequence);
+        return;
+      }
+      navigateWebViewToPushTap(resolvedPath);
+      await nativePushModule?.clearPendingPushTap?.(sequence);
+    } catch {
+      // The pending tap remains for the next foreground/poll attempt.
+    }
+  }), [navigateWebViewToPushTap, webLocale]);
+  const schedulePendingPushTapConsumption = useCallback(() => {
+    pendingPushTapRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    pendingPushTapRetryTimersRef.current = [];
+    void consumePendingPushTap();
+    [150, 500, 1_200].forEach((delayMs) => {
+      const timer = setTimeout(() => {
+        void consumePendingPushTap();
+      }, delayMs);
+      pendingPushTapRetryTimersRef.current.push(timer);
+    });
+  }, [consumePendingPushTap]);
   const navigateWebViewToProfile = useCallback((userId: string) => {
     const normalizedUserId = userId.trim();
     if (!normalizedUserId) return;
@@ -1844,14 +1983,7 @@ function AppInner(): React.JSX.Element {
     schedulePendingProfileRouteFlush();
   }, [clearPendingProfileRouteRetries, dispatchProfileLinkToWebView, schedulePendingProfileRouteFlush]);
   const handleIncomingProfileLink = useCallback((rawUrl: string) => {
-    const candidateOrigins = [
-      activeWebAppBaseUrl,
-      WEB_APP_BASE_URL,
-      FALLBACK_WEB_APP_BASE_URL,
-    ].filter(Boolean);
-    const parsed = candidateOrigins
-      .map((origin) => parseNativeProfileLink(rawUrl, origin))
-      .find((value) => value !== null);
+    const parsed = parseNativeProfileLink(rawUrl, WEB_APP_BASE_URL);
     if (!parsed) {
       recordProfileLinkTrace('native_profile_link_rejected');
       return false;
@@ -1863,7 +1995,7 @@ function AppInner(): React.JSX.Element {
     });
     navigateWebViewToProfile(parsed.userId);
     return true;
-  }, [activeWebAppBaseUrl, navigateWebViewToProfile]);
+  }, [navigateWebViewToProfile]);
   const handleIncomingProfileLinkOnce = useCallback((rawUrl: string) => {
     const normalizedUrl = rawUrl.trim();
     if (!normalizedUrl) return false;
@@ -1980,14 +2112,7 @@ function AppInner(): React.JSX.Element {
     }, 500);
   }, [cancelPendingConversationShareFlush, flushPendingConversationShareToWebImmediate]);
   const handleIncomingConversationShareLink = useCallback((rawUrl: string) => {
-    const candidateOrigins = [
-      activeWebAppBaseUrl,
-      WEB_APP_BASE_URL,
-      FALLBACK_WEB_APP_BASE_URL,
-    ].filter(Boolean);
-    const parsed = candidateOrigins
-      .map((origin) => parseNativeConversationShareLink(rawUrl, origin))
-      .find((value) => value !== null);
+    const parsed = parseNativeConversationShareLink(rawUrl, WEB_APP_BASE_URL);
     if (!parsed) return false;
 
     // Opens directly, no confirm step — same as profile links. The overlay
@@ -1995,7 +2120,7 @@ function AppInner(): React.JSX.Element {
     // user only actually joins the room via its own explicit "join" button.
     navigateWebViewToConversationShare(parsed.shareToken);
     return true;
-  }, [activeWebAppBaseUrl, navigateWebViewToConversationShare]);
+  }, [navigateWebViewToConversationShare]);
   const handleIncomingConversationShareLinkOnce = useCallback((rawUrl: string) => {
     const normalizedUrl = rawUrl.trim();
     if (!normalizedUrl) return false;
@@ -2121,7 +2246,7 @@ function AppInner(): React.JSX.Element {
   useEffect(() => {
     if (
       NATIVE_RUNTIME_CONFIG.conversationRestoreUrl
-      && !initialConversationRestorePayloadRef.current
+      && !initialWebRestorePayloadRef.current
     ) {
       try {
         void NATIVE_CONVERSATION_RESTORE_STORAGE.clearConversationRestoreUrl?.();
@@ -2143,6 +2268,7 @@ function AppInner(): React.JSX.Element {
       // Ignore malformed or unavailable initial URLs.
     });
     schedulePendingProfileLinkConsumption();
+    schedulePendingPushTapConsumption();
     const subscription = Linking.addEventListener('url', ({ url }) => {
       handleUrl(url);
       schedulePendingProfileLinkConsumption();
@@ -2154,9 +2280,13 @@ function AppInner(): React.JSX.Element {
       pendingProfileLinkRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
       pendingProfileLinkRetryTimersRef.current = [];
       clearPendingProfileRouteRetries();
+      pendingPushTapRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+      pendingPushTapRetryTimersRef.current = [];
+      pendingPushTapRouteRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+      pendingPushTapRouteRetryTimersRef.current = [];
       clearPendingConversationShareRouteRetries();
     };
-  }, [clearPendingConversationShareRouteRetries, clearPendingProfileRouteRetries, handleIncomingConversationShareLinkOnce, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption]);
+  }, [clearPendingConversationShareRouteRetries, clearPendingProfileRouteRetries, handleIncomingConversationShareLinkOnce, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption, schedulePendingPushTapConsumption]);
   useEffect(() => {
     let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -2166,32 +2296,44 @@ function AppInner(): React.JSX.Element {
         recordProfileLinkTrace('app_state_active_for_profile_link');
         schedulePendingProfileLinkConsumption();
         schedulePendingProfileRouteFlush(true);
+        schedulePendingPushTapConsumption();
+        schedulePendingPushTapFlush(true);
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [schedulePendingProfileLinkConsumption, schedulePendingProfileRouteFlush]);
+  }, [schedulePendingProfileLinkConsumption, schedulePendingProfileRouteFlush, schedulePendingPushTapConsumption, schedulePendingPushTapFlush]);
+  useEffect(() => {
+    // A tap on a banner shown while the app is already active never changes
+    // AppState, so consume the pending slot when native reports the open.
+    const subscription = addNativePushOpenedListener(() => {
+      schedulePendingPushTapConsumption();
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [schedulePendingPushTapConsumption]);
   const trustedNativeAuthOrigin = useMemo(
-    () => resolveTrustedOrigin(activeWebAppBaseUrl),
-    [activeWebAppBaseUrl],
+    () => resolveTrustedOrigin(WEB_APP_BASE_URL),
+    [],
   );
   const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
   const devWebViewRequestScopeRef = useRef(`wv-${Date.now().toString(36)}`);
   // Latch the initial restore URL once at mount time.
-  // This ref is only cleared after the WebView reaches the conversation list.
+  // This ref is cleared once the WebView leaves the restored screen.
   // It is the only restore input allowed to affect
-  // webViewSource.uri for restore purposes.  Post-mount room/list navigation
+  // webViewSource.uri for restore purposes.  Post-mount navigation
   // updates native storage/ref only and must NOT reach webViewSource to avoid
   // triggering full WebView reloads.
   const initialRestoreUrlRef = useRef(
-    initialConversationRestorePayloadRef.current?.url || '',
+    initialWebRestorePayloadRef.current?.url || '',
   );
   const webUrl = useMemo(() => {
-    // Combine the fixed restore conversationId with the current baseWebUrl so that
+    // Combine the fixed restore screen with the current baseWebUrl so that
     // locale/host changes are still reflected while the restore target stays latched.
-    const initialRestoreWebUrl = buildConversationRestoreWebUrl(
+    const initialRestoreWebUrl = buildWebRestoreWebUrl(
       baseWebUrl,
       initialRestoreUrlRef.current,
     );
@@ -2230,6 +2372,81 @@ function AppInner(): React.JSX.Element {
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // On a cold start that restores the previous screen, cover the loading
+  // WebView with a capture of that screen instead of the splash, until the
+  // page reports that its saved state is back.
+  const [lastScreenSnapshot, setLastScreenSnapshot] = useState<NativeLastScreenSnapshot | null>(() => {
+    if (Platform.OS !== 'ios' || !webUrl || !initialRestoreUrlRef.current) return null;
+    return readNativeLastScreenSnapshot(NATIVE_RUNTIME_CONFIG, {
+      width: windowWidthPx,
+      height: windowHeightPx,
+      colorScheme: Appearance.getColorScheme(),
+    });
+  });
+  const lastScreenSnapshotOpacity = useRef(new Animated.Value(1)).current;
+  const lastScreenSnapshotHidingRef = useRef(false);
+  const hideLastScreenSnapshot = useCallback((animated = true) => {
+    if (lastScreenSnapshotHidingRef.current) return;
+    lastScreenSnapshotHidingRef.current = true;
+    if (!animated) {
+      setLastScreenSnapshot(null);
+      return;
+    }
+    Animated.timing(lastScreenSnapshotOpacity, {
+      toValue: 0,
+      duration: LAST_SCREEN_SNAPSHOT_FADE_MS,
+      useNativeDriver: true,
+    }).start(() => setLastScreenSnapshot(null));
+  }, [lastScreenSnapshotOpacity]);
+  const lastScreenSnapshotVisible = lastScreenSnapshot !== null;
+  useEffect(() => {
+    if (!lastScreenSnapshotVisible) return;
+    const timer = setTimeout(() => hideLastScreenSnapshot(), LAST_SCREEN_SNAPSHOT_MAX_MS);
+    return () => clearTimeout(timer);
+  }, [hideLastScreenSnapshot, lastScreenSnapshotVisible]);
+  useEffect(() => {
+    // An error overlay or a different first screen must never sit under a
+    // picture of the old one.
+    if (lastScreenSnapshotVisible && loadError) hideLastScreenSnapshot(false);
+  }, [hideLastScreenSnapshot, lastScreenSnapshotVisible, loadError]);
+  useEffect(() => {
+    if (!lastScreenSnapshotVisible || startupSplashVisible) return;
+    // The page loaded; an older web build never sends native_web_restore_ready.
+    const timer = setTimeout(() => hideLastScreenSnapshot(), LAST_SCREEN_SNAPSHOT_AFTER_LOAD_MAX_MS);
+    return () => clearTimeout(timer);
+  }, [hideLastScreenSnapshot, lastScreenSnapshotVisible, startupSplashVisible]);
+  // Let the native side capture the window on resign-active only while it
+  // shows a settled, restorable screen of this account.
+  const lastScreenSnapshotCaptureEnabledRef = useRef<boolean | null>(null);
+  const syncLastScreenSnapshotCapture = useCallback(() => {
+    if (Platform.OS !== 'ios') return;
+    const enabled = currentWebRestorableRef.current
+      && initialLoadSettledRef.current
+      && !startupSplashVisible
+      && !lastScreenSnapshotVisible
+      && !loadError;
+    if (lastScreenSnapshotCaptureEnabledRef.current === enabled) return;
+    lastScreenSnapshotCaptureEnabledRef.current = enabled;
+    try {
+      NATIVE_CONVERSATION_RESTORE_STORAGE.setLastScreenSnapshotEnabled?.(enabled);
+    } catch {
+      // Older native builds have no capture support.
+    }
+  }, [lastScreenSnapshotVisible, loadError, startupSplashVisible]);
+  useEffect(() => {
+    syncLastScreenSnapshotCapture();
+  }, [syncLastScreenSnapshotCapture]);
+  const resetWebRestoreState = useCallback(() => {
+    clearWebRestoreUrl();
+    currentWebRestorableRef.current = false;
+    syncLastScreenSnapshotCapture();
+    hideLastScreenSnapshot(false);
+    try {
+      void NATIVE_CONVERSATION_RESTORE_STORAGE.clearLastScreenSnapshot?.();
+    } catch {
+      // Ignore native persistence failures.
+    }
+  }, [clearWebRestoreUrl, hideLastScreenSnapshot, syncLastScreenSnapshotCapture]);
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null);
   const [currentWebPathname, setCurrentWebPathname] = useState(() => parseWebPathname(webUrl));
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
@@ -2414,19 +2631,20 @@ function AppInner(): React.JSX.Element {
     };
   }, [nativeBannerPosition, nativeBannerUnitId]);
 
+  // Ads are re-requested on every return to the foreground anyway
+  // (nativeBannerReloadToken), so drop the banner views while backgrounded to
+  // lower the memory footprint iOS weighs when picking apps to terminate.
+  const [isAppBackgrounded, setIsAppBackgrounded] = useState(() => AppState.currentState === 'background');
   useEffect(() => {
-    let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
-      const leavingActive = previousState === 'active' && nextState !== 'active';
-      previousState = nextState;
-      if (!leavingActive) return;
-      syncConversationRestoreFromUrl(lastWebViewUrlRef.current);
+      if (nextState === 'background') setIsAppBackgrounded(true);
+      else if (nextState === 'active') setIsAppBackgrounded(false);
     });
 
     return () => {
       subscription.remove();
     };
-  }, [syncConversationRestoreFromUrl]);
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -2559,32 +2777,9 @@ function AppInner(): React.JSX.Element {
       return response.json() as Promise<VersionPolicyResponse>;
     };
 
-    const shouldTryFallbackPolicy = (error: unknown): boolean => {
-      const status = (error as { status?: unknown })?.status;
-      return shouldTryFallbackVersionPolicy(
-        !!FALLBACK_WEB_APP_BASE_URL,
-        typeof status === 'number' ? status : undefined,
-      );
-    };
-
     void (async () => {
       try {
-        let policy: VersionPolicyResponse;
-        try {
-          policy = await fetchPolicy(WEB_APP_BASE_URL);
-        } catch (error: unknown) {
-          if (!shouldTryFallbackPolicy(error)) {
-            throw error;
-          }
-          if (__DEV__) {
-            const message = error instanceof Error ? error.message : String(error);
-            console.log(`[VersionPolicy] retrying fallback host: ${message}`);
-          }
-          policy = await fetchPolicy(FALLBACK_WEB_APP_BASE_URL);
-          if (active && !settled) {
-            activateWebFallback();
-          }
-        }
+        const policy = await fetchPolicy(WEB_APP_BASE_URL);
 
         if (!active || settled) return;
         setServerBannerUnitIdOverride(normalizeServerBannerUnitId(policy.adMob?.bannerUnitId));
@@ -2656,7 +2851,7 @@ function AppInner(): React.JSX.Element {
       abortController?.abort();
       pendingRecommendPromptRef.current = null;
     };
-  }, [activateWebFallback, presentRecommendPrompt, setNativeAppUpdateSnapshot, versionPolicyFallback, versionPolicyLocale]);
+  }, [presentRecommendPrompt, setNativeAppUpdateSnapshot, versionPolicyFallback, versionPolicyLocale]);
 
   const handleForceUpdatePress = useCallback(() => {
     if (versionGate.status !== 'force_update') return;
@@ -2856,6 +3051,58 @@ function AppInner(): React.JSX.Element {
       emitQrSaveToWeb({ type: 'error', message: message || 'native_qr_save_failed' });
     }
   }, [emitQrSaveToWeb]);
+
+  const emitImageSaveToWeb = useCallback((payload: NativeImageSaveEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) return;
+
+    const serialized = JSON.stringify(payload);
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_IMAGE_SAVE_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  // A chat photo saved to the photo library (Photos / gallery), as sent: JPEG, PNG or WebP.
+  const handleNativeImageSave = useCallback(async (payload?: NativeImageSaveCommand['payload']) => {
+    const requestId = typeof payload?.requestId === 'string' ? payload.requestId.trim().slice(0, 64) : '';
+    const dataUrl = typeof payload?.dataUrl === 'string' ? payload.dataUrl.trim() : '';
+    const fileName = typeof payload?.fileName === 'string' ? payload.fileName.trim() : '';
+    if (!requestId) return;
+    if (payload?.probe === true) {
+      emitImageSaveToWeb({ type: 'ready', requestId });
+      return;
+    }
+
+    const nativeImageModule = (NativeModules as {
+      NativeQrImageModule?: NativeQrImageModule;
+    }).NativeQrImageModule;
+    if (!/^data:image\/(jpeg|png|webp);base64,/i.test(dataUrl) || dataUrl.length > NATIVE_IMAGE_SAVE_MAX_CHARS) {
+      emitImageSaveToWeb({ type: 'error', requestId, message: 'native_image_invalid' });
+      return;
+    }
+    if (!nativeImageModule || typeof nativeImageModule.saveImage !== 'function') {
+      emitImageSaveToWeb({ type: 'error', requestId, message: 'native_image_save_unavailable' });
+      return;
+    }
+
+    try {
+      if (Platform.OS === 'android' && Number(Platform.Version) < 29) {
+        const permission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        );
+        if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+          throw new Error('native_image_photo_permission_denied');
+        }
+      }
+
+      await nativeImageModule.saveImage(dataUrl, fileName || 'hashchat-photo.jpg');
+      emitImageSaveToWeb({ type: 'success', requestId });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (__DEV__) {
+        console.warn(`[NativeImageSave] save failed: ${message}`);
+      }
+      emitImageSaveToWeb({ type: 'error', requestId, message: message || 'native_image_save_failed' });
+    }
+  }, [emitImageSaveToWeb]);
 
   const emitPushRegistrationToWeb = useCallback((payload: NativePushRegistrationInfo) => {
     const normalizedPayload: NativePushRegistrationInfo = {
@@ -3305,6 +3552,28 @@ function AppInner(): React.JSX.Element {
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
+  useEffect(() => {
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const leavingActive = previousState === 'active' && nextState !== 'active';
+      const becameActive = previousState !== 'active' && nextState === 'active';
+      previousState = nextState;
+      if (becameActive) {
+        emitUiToWeb({ type: 'app_lifecycle', state: 'active' });
+        return;
+      }
+      if (!leavingActive) return;
+      // Refresh the stored screen and its TTL: this may be the last chance
+      // before iOS kills the backgrounded process.
+      syncWebRestoreFromUrl(lastWebViewUrlRef.current, true);
+      emitUiToWeb({ type: 'app_lifecycle', state: 'background' });
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [emitUiToWeb, syncWebRestoreFromUrl]);
+
   const emitBannerLayoutToWeb = useCallback(() => {
     if (!nativeBannerUnitId) return;
     const shouldReserveListTopInset = !shouldHideNativeBanners
@@ -3482,7 +3751,6 @@ function AppInner(): React.JSX.Element {
     const wsUrl = payloadWsUrl
       ? payloadWsUrl
       : DEFAULT_WS_URL;
-    const fallbackWsUrl = resolveDistinctFallbackTarget(wsUrl, DEFAULT_WS_FALLBACK_URL);
     const sttModel = typeof payload?.sttModel === 'string' && payload.sttModel.trim()
       ? payload.sttModel.trim()
       : 'soniox';
@@ -3652,61 +3920,6 @@ function AppInner(): React.JSX.Element {
               : String(recoveryError);
             console.warn(`[NativeSTT] stale-session recovery failed: ${recoveryMessage}`);
           }
-        }
-      }
-      const shouldRetryFallback = Boolean(
-        fallbackWsUrl
-        && !isNativeSttUserDeclinedCode(code)
-        && !__DEV__
-        && !isLoopbackUrl(wsUrl)
-        && !isDevelopmentTunnelUrl(wsUrl),
-      );
-      if (shouldRetryFallback) {
-        try {
-          await startNativeStt({
-            wsUrl: fallbackWsUrl,
-            ...startPayload,
-          });
-          if (!nativeSttConversationIdRef.current) {
-            nativeSttConversationIdRef.current = conversationId || null;
-          }
-          if (!nativeSttSessionIdRef.current && sessionId) {
-            nativeSttSessionIdRef.current = sessionId;
-          }
-          if (sessionId) {
-            retiredNativeSttSessionIdsRef.current.delete(sessionId);
-          }
-          nativeStatusRef.current = resolveNativeSttStatusAfterStart(nativeStatusRef.current);
-          void syncNativeSttStatusAfterStart(conversationId, sessionId, statusSyncSequence);
-          return;
-        } catch (fallbackError: unknown) {
-          const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-          const fallbackCode = typeof (fallbackError as { code?: unknown })?.code === 'string'
-            ? (fallbackError as { code: string }).code.trim()
-            : resolveNativeSttErrorCode(fallbackMessage);
-          const failedConversationId = nativeSttConversationIdRef.current || conversationId || undefined;
-          const failedSessionId = nativeSttSessionIdRef.current || sessionId || undefined;
-          nativeStatusRef.current = isNativeSttUserDeclinedCode(fallbackCode) ? 'idle' : 'failed';
-          emitToWeb({
-            type: 'status',
-            status: nativeStatusRef.current,
-            ...(failedConversationId ? { conversationId: failedConversationId } : {}),
-            ...(failedSessionId ? { sessionId: failedSessionId } : {}),
-          });
-          nativeSttConversationIdRef.current = null;
-          nativeSttSessionIdRef.current = null;
-          emitToWeb({
-            type: 'error',
-            message: fallbackMessage,
-            ...(fallbackCode ? { code: fallbackCode } : {}),
-            platform: Platform.OS,
-            ...(failedConversationId ? { conversationId: failedConversationId } : {}),
-            ...(failedSessionId ? { sessionId: failedSessionId } : {}),
-          });
-          nativeSttRequestedConversationIdRef.current = null;
-          nativeSttRequestedSessionIdRef.current = null;
-          rememberRetiredNativeSttSession(retiredNativeSttSessionIdsRef.current, failedSessionId);
-          return;
         }
       }
       const failedConversationId = nativeSttConversationIdRef.current || conversationId || undefined;
@@ -3958,6 +4171,7 @@ function AppInner(): React.JSX.Element {
       ? ((event.nativeEvent as { url: string }).url)
       : '';
     rememberCurrentWebUrl(sourceUrl);
+    syncLastScreenSnapshotCapture();
 
     let parsed: WebViewCommand | null = null;
     try {
@@ -3985,6 +4199,11 @@ function AppInner(): React.JSX.Element {
 
     if (parsed.type === 'native_qr_save') {
       void handleNativeQrSave(parsed.payload);
+      return;
+    }
+
+    if (parsed.type === 'native_image_save') {
+      void handleNativeImageSave(parsed.payload);
       return;
     }
 
@@ -4044,6 +4263,7 @@ function AppInner(): React.JSX.Element {
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
       rememberCurrentWebUrl(url);
+      syncLastScreenSnapshotCapture();
       if (typeof parsed.payload?.canGoBack === 'boolean') {
         setCanWebViewGoBack(parsed.payload.canGoBack);
       }
@@ -4083,6 +4303,16 @@ function AppInner(): React.JSX.Element {
       const updateUrl = requestedUrl || nativeAppUpdateRef.current.updateUrl.trim();
       if (!updateUrl) return;
       void Linking.openURL(updateUrl);
+      return;
+    }
+
+    if (parsed.type === 'native_web_restore_ready') {
+      hideLastScreenSnapshot();
+      return;
+    }
+
+    if (parsed.type === 'native_web_restore_reset') {
+      resetWebRestoreState();
       return;
     }
 
@@ -4288,16 +4518,20 @@ function AppInner(): React.JSX.Element {
     clearAuthDispatchRetryTimer,
     emitTtsToWeb,
     handleDebugWebViewRemount,
+    hideLastScreenSnapshot,
+    resetWebRestoreState,
     handleNativeAuthStart,
     handleNativeLocationCheck,
     handleNativeLocationRequest,
     handleNativeQrSave,
+    handleNativeImageSave,
     handleNativeStart,
     handleNativeStop,
     handleNativeStatusRequest,
     enqueueNativeSttCommand,
     flushPendingNativeSttMessagesToWeb,
     rememberCurrentWebUrl,
+    syncLastScreenSnapshotCapture,
     updateSafeAreaPalette,
   ]);
 
@@ -4684,8 +4918,7 @@ function AppInner(): React.JSX.Element {
     // right after onError/onHttpError; on Android once more right after
     // onError, and after an HTTP error page has committed. Once this attempt
     // has failed, treating it as a loaded page would mark the error page
-    // ready, flush queued native events into it, and hide the startup splash
-    // while the fallback host is still loading.
+    // ready, flush queued native events into it, and hide the startup splash.
     if (loadAttemptTracker.hasFailed()) return;
     isPageReadyRef.current = true;
     if (!initialLoadSettledRef.current) {
@@ -4694,8 +4927,8 @@ function AppInner(): React.JSX.Element {
     }
     // onLoadEnd is NOT proof of success: on Android it fires BEFORE onError
     // for a failed load. The tracker only commits success (clearing the
-    // overlay and ending host-fallback eligibility) once a short settle window
-    // passes, or the next load event arrives, with no error for this attempt.
+    // overlay) once a short settle window passes, or the next load event
+    // arrives, with no error for this attempt.
     loadAttemptTracker.loadFinished();
     const nextUrl = event?.nativeEvent?.url || webUrl;
     rememberCurrentWebUrl(nextUrl);
@@ -4708,6 +4941,9 @@ function AppInner(): React.JSX.Element {
     flushPendingNativeLocationEventsToWeb();
     flushPendingNativePushRegistrationsToWeb();
     flushPendingProfileLinkToWeb();
+    if (pendingPushTapPathRef.current) {
+      schedulePendingPushTapFlush(true);
+    }
     flushPendingConversationShareToWeb();
     emitToWeb(buildNativeShellCapabilities({
       audioRoute: nativeAudioRouteAvailable,
@@ -4777,30 +5013,17 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
-    // Record the failure before anything else, including the fallback switch
-    // below: react-native-webview calls onLoadEnd right after this handler,
+    // Record the failure before anything else: react-native-webview calls
+    // onLoadEnd right after this handler,
     // and that call must not be mistaken for a successful load. On Android
     // the premature onLoadEnd that preceded this error also marked the page
     // ready; nothing usable is loaded, so take that back.
     loadAttemptTracker.loadFailed();
     isPageReadyRef.current = false;
     const isOffline = isOfflineWebViewLoadError(event.nativeEvent);
-    // A device that is itself offline can never be fixed by switching which
-    // backend host we point at, so don't burn the one-shot fallback on it —
-    // doing so used to permanently pin the WebView to the legacy fallback
-    // host for the rest of the app's life the moment a cold launch raced a
-    // dead network, breaking every retry after reconnecting. Timeouts / DNS
-    // failures are NOT classified as offline (they can mean only the primary
-    // host is down), so they still fall back.
-    const mayUseHostFallback = canUseWebHostFallbackForLoadFailure({
-      initialLoadSettled: initialLoadSettledRef.current,
-      hasLoadedPage: loadAttemptTracker.hasLoadedPage(),
-    });
-    if (!isOffline && mayUseHostFallback && activateWebFallback()) return;
-
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
       setStartupSplashVisible(false);
@@ -4809,7 +5032,7 @@ function AppInner(): React.JSX.Element {
     setIsRetryingLoad(false);
     setIsOfflineLoadError(isOffline);
     setLoadError(formatWebViewLoadError(description, webUrl));
-  }, [activateWebFallback, loadAttemptTracker, webUrl]);
+  }, [loadAttemptTracker, webUrl]);
 
   const handleHttpError = useCallback((event: WebViewHttpStatusEvent) => {
     const statusCode = event.nativeEvent.statusCode;
@@ -4819,19 +5042,10 @@ function AppInner(): React.JSX.Element {
     // navigation on Android, whose onLoadStart only arrives after this.
     if (!isWebViewPageLoadFailureHttpStatus(statusCode)) return;
     // The bad response still "finishes loading" afterwards (onLoadEnd), so
-    // record the failure first — also before a fallback switch — so that
-    // onLoadEnd is not mistaken for a successful load.
+    // record the failure first so that onLoadEnd is not mistaken for a
+    // successful load.
     loadAttemptTracker.loadFailed();
     isPageReadyRef.current = false;
-
-    // Switching hosting domains only ever makes sense for a genuine 5xx
-    // (shouldFallbackHttpStatus) — a stray 404 doesn't mean the primary host
-    // itself is broken.
-    const mayUseHostFallback = canUseWebHostFallbackForLoadFailure({
-      initialLoadSettled: initialLoadSettledRef.current,
-      hasLoadedPage: loadAttemptTracker.hasLoadedPage(),
-    });
-    if (mayUseHostFallback && shouldFallbackHttpStatus(statusCode) && activateWebFallback()) return;
 
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
@@ -4846,7 +5060,7 @@ function AppInner(): React.JSX.Element {
     setIsRetryingLoad(false);
     setIsOfflineLoadError(false);
     setLoadError(`http_${statusCode}`);
-  }, [activateWebFallback, loadAttemptTracker]);
+  }, [loadAttemptTracker]);
 
   // The WebView's underlying render process can be killed by the OS (mostly
   // under memory pressure) without going through onError/onHttpError at all
@@ -4879,10 +5093,11 @@ function AppInner(): React.JSX.Element {
 
   const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
     rememberCurrentWebUrl(navigationState.url);
+    syncLastScreenSnapshotCapture();
     setCurrentWebPathname(parseWebPathname(navigationState.url));
     prepareBannerZoneTransition(navigationState.url);
     updateSafeAreaPalette(navigationState.url);
-  }, [prepareBannerZoneTransition, rememberCurrentWebUrl, updateSafeAreaPalette]);
+  }, [prepareBannerZoneTransition, rememberCurrentWebUrl, syncLastScreenSnapshotCapture, updateSafeAreaPalette]);
 
   useEffect(() => {
     if (versionGate.status === 'force_update' && !initialLoadSettledRef.current) {
@@ -5062,7 +5277,21 @@ function AppInner(): React.JSX.Element {
           />
         </View>
       ) : null}
-      {canRenderNativeBanner ? (
+      {lastScreenSnapshot ? (
+        <Animated.View
+          style={[styles.lastScreenSnapshotOverlay, { opacity: lastScreenSnapshotOpacity }]}
+        >
+          <Image
+            alt=""
+            source={{ uri: lastScreenSnapshot.uri, cache: 'reload' }}
+            resizeMode="cover"
+            fadeDuration={0}
+            style={styles.lastScreenSnapshotImage}
+            onError={() => hideLastScreenSnapshot(false)}
+          />
+        </Animated.View>
+      ) : null}
+      {canRenderNativeBanner && !isAppBackgrounded ? (
         <>
           <NativeAdBanner
             adModule={nativeAdModule}
@@ -5152,6 +5381,15 @@ const styles = StyleSheet.create({
   startupSplashLogo: {
     width: 180,
     height: 180,
+  },
+  lastScreenSnapshotOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#ffffff',
+    zIndex: 31,
+  },
+  lastScreenSnapshotImage: {
+    width: '100%',
+    height: '100%',
   },
   errorOverlay: {
     position: 'absolute',

@@ -44,6 +44,16 @@ export class ConversationEventBus {
         return this.subscribers.get(sessionKey)?.size ?? 0;
     }
 
+    /** Read cursors moved: open rooms refresh only their unread badges. */
+    publishReadReceipt(sessionKey: string): void {
+        const sockets = this.subscribers.get(sessionKey);
+        if (!sockets || sockets.size === 0) return;
+        const payload = JSON.stringify({ type: 'read_receipt', sessionKey });
+        for (const socket of sockets) {
+            if (socket.readyState === socket.OPEN) socket.send(payload);
+        }
+    }
+
     publish(sessionKey: string, utterance?: Record<string, unknown>): void {
         if (utterance && typeof utterance.id === 'string' && typeof utterance.speakerUserId === 'string') {
             this.liveUtterances.commit(sessionKey, utterance.speakerUserId, utterance.id);
@@ -187,6 +197,13 @@ export async function handleConversationEventsPublish(
     if (keys.length === 0) {
         response.writeHead(400, { 'content-type': 'application/json' });
         response.end(JSON.stringify({ error: 'invalid_payload' }));
+        return;
+    }
+
+    if (record.readReceipt === true && sessionKey && !sessionKey.startsWith('list:')) {
+        bus.publishReadReceipt(sessionKey);
+        response.writeHead(204);
+        response.end();
         return;
     }
 

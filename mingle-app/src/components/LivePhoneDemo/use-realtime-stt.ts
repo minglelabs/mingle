@@ -2,6 +2,9 @@
 
 import { normalizeConversationMessageImage } from '@/lib/conversation-image'
 import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
+import { MESSAGE_READ_RECEIPTS_REFRESH_EVENT } from '@/lib/message-read-receipts'
+import { normalizeMessageReplyReference, type MessageReplyReference } from '@/lib/message-reply'
+import { MESSAGE_RECALLED_EVENT, normalizeRecalledMessageIds, type MessageRecalledEventDetail } from '@/lib/message-recall'
 import { parseSttServerError } from '@/lib/stt-server-error'
 
 import { compareUtteranceOrder } from './utterance-order'
@@ -14,6 +17,8 @@ import {
   type LanguageCandidates,
   type PreviewEvent,
 } from './conversation-live'
+import { readAccountBadgeFlags, readAccountBadgeKind } from './chat-account-badge.logic'
+import type { AccountBadgeKind } from '@/lib/account-badge'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
@@ -895,6 +900,8 @@ type ConversationHydrationLeaveNoticePayload = {
   name?: string | null
   handle?: string | null
   leftAtMs?: number
+  isOfficial?: boolean
+  isOperator?: boolean
 }
 
 type ConversationHydrationInviteNoticePayload = {
@@ -905,6 +912,8 @@ type ConversationHydrationInviteNoticePayload = {
   invitedByName?: string | null
   invitedByHandle?: string | null
   invitedAtMs?: number
+  inviteeBadge?: string
+  invitedByBadge?: string
 }
 
 type ConversationHydrationPayload = {
@@ -917,7 +926,9 @@ type ConversationHydrationPayload = {
     isMultiMember?: boolean
   }
   leaveNotices?: ConversationHydrationLeaveNoticePayload[]
+  recalledMessageIds?: string[]
   inviteNotices?: ConversationHydrationInviteNoticePayload[]
+  operatorDisclosure?: boolean
 }
 
 // One member's departure (see leaveConversationChannel on the server), for
@@ -931,9 +942,13 @@ export type ConversationLeaveNotice = {
   name: string | null
   handle: string | null
   leftAtMs: number
+  // Badge flags of the member who left, only when true — the notice names
+  // them, so an operator's name is rendered with its label.
+  isOfficial?: true
+  isOperator?: true
 }
 
-function normalizeConversationHydrationLeaveNotices(rawNotices: unknown): ConversationLeaveNotice[] {
+export function normalizeConversationHydrationLeaveNotices(rawNotices: unknown): ConversationLeaveNotice[] {
   if (!Array.isArray(rawNotices)) return []
 
   const result: ConversationLeaveNotice[] = []
@@ -948,6 +963,7 @@ function normalizeConversationHydrationLeaveNotices(rawNotices: unknown): Conver
       name: typeof record.name === 'string' ? record.name : null,
       handle: typeof record.handle === 'string' ? record.handle : null,
       leftAtMs: Math.floor(leftAtMs),
+      ...readAccountBadgeFlags(record as Record<string, unknown>),
     })
   }
   return result
@@ -965,6 +981,8 @@ function areConversationLeaveNoticesEqual(
         && notice.name === candidate.name
         && notice.handle === candidate.handle
         && notice.leftAtMs === candidate.leftAtMs
+        && notice.isOfficial === candidate.isOfficial
+        && notice.isOperator === candidate.isOperator
     })
   )
 }
@@ -982,9 +1000,12 @@ export type ConversationInviteNotice = {
   invitedByName: string | null
   invitedByHandle: string | null
   invitedAtMs: number
+  // Account badge of each named side, present only when that account has one.
+  inviteeBadge?: AccountBadgeKind
+  invitedByBadge?: AccountBadgeKind
 }
 
-function normalizeConversationHydrationInviteNotices(rawNotices: unknown): ConversationInviteNotice[] {
+export function normalizeConversationHydrationInviteNotices(rawNotices: unknown): ConversationInviteNotice[] {
   if (!Array.isArray(rawNotices)) return []
 
   const result: ConversationInviteNotice[] = []
@@ -995,6 +1016,8 @@ function normalizeConversationHydrationInviteNotices(rawNotices: unknown): Conve
     const invitedByUserId = typeof record.invitedByUserId === 'string' ? record.invitedByUserId.trim() : ''
     const invitedAtMs = typeof record.invitedAtMs === 'number' ? record.invitedAtMs : Number(record.invitedAtMs)
     if (!inviteeUserId || !invitedByUserId || !Number.isFinite(invitedAtMs) || invitedAtMs <= 0) continue
+    const inviteeBadge = readAccountBadgeKind(record.inviteeBadge)
+    const invitedByBadge = readAccountBadgeKind(record.invitedByBadge)
     result.push({
       inviteeUserId,
       inviteeName: typeof record.inviteeName === 'string' ? record.inviteeName : null,
@@ -1003,6 +1026,8 @@ function normalizeConversationHydrationInviteNotices(rawNotices: unknown): Conve
       invitedByName: typeof record.invitedByName === 'string' ? record.invitedByName : null,
       invitedByHandle: typeof record.invitedByHandle === 'string' ? record.invitedByHandle : null,
       invitedAtMs: Math.floor(invitedAtMs),
+      ...(inviteeBadge ? { inviteeBadge } : {}),
+      ...(invitedByBadge ? { invitedByBadge } : {}),
     })
   }
   return result
@@ -1023,6 +1048,8 @@ function areConversationInviteNoticesEqual(
         && notice.invitedByName === candidate.invitedByName
         && notice.invitedByHandle === candidate.invitedByHandle
         && notice.invitedAtMs === candidate.invitedAtMs
+        && notice.inviteeBadge === candidate.inviteeBadge
+        && notice.invitedByBadge === candidate.invitedByBadge
     })
   )
 }
@@ -1049,8 +1076,14 @@ export function normalizeConversationHydrationUtterances(
     .filter((utterance) => utterance && typeof utterance === 'object')
     .map((utterance) => {
       const record = utterance as ConversationHydrationUtterance
+      // Hydration and committed live utterances share this parser, so both
+      // carry the sender's badge the same way.
+      const speakerBadge = readAccountBadgeKind(record.speakerBadge)
+      const replyTo = normalizeMessageReplyReference(record.replyTo)
       return normalizeStoredUtterance({
         id: typeof record.id === 'string' ? record.id : '',
+        ...(record.recalled === true ? { recalled: true } : {}),
+        ...(record.sentByViewer === true ? { sentByViewer: true } : {}),
         ...(normalizeConversationMessageImage(record.image) ? { image: normalizeConversationMessageImage(record.image) } : {}),
         originalText: typeof record.originalText === 'string' ? record.originalText : '',
         ...(typeof record.originalDisplayText === 'string' && record.originalDisplayText.trim()
@@ -1081,6 +1114,8 @@ export function normalizeConversationHydrationUtterances(
           && record.serverCreatedAtMs > 0 ? {
             serverCreatedAtMs: record.serverCreatedAtMs,
             ...(typeof record.serverMessageId === 'string' ? { serverMessageId: record.serverMessageId } : {}),
+            ...(typeof record.serverPersistedAtMs === 'number' && Number.isFinite(record.serverPersistedAtMs)
+              ? { serverPersistedAtMs: record.serverPersistedAtMs } : {}),
           } : {}),
         ...(typeof record.speaker === 'string' && record.speaker.trim() ? { speaker: record.speaker.trim() } : {}),
         ...(typeof record.speakerAvatarSeed === 'string' && record.speakerAvatarSeed.trim()
@@ -1098,9 +1133,12 @@ export function normalizeConversationHydrationUtterances(
         ...(typeof record.speakerImage === 'string' && record.speakerImage.trim()
           ? { speakerImage: record.speakerImage.trim() }
           : {}),
+        ...(speakerBadge ? { speakerBadge } : {}),
+        ...(replyTo ? { replyTo } : {}),
       }, roomLanguages)
     })
-    .filter((utterance) => utterance.id && utterance.originalText.trim())
+    .map((utterance) => (utterance.recalled ? toRecalledUtterance(utterance) : utterance))
+    .filter((utterance) => utterance.id && (utterance.recalled || utterance.originalText.trim()))
 }
 
 function buildConversationHydrationApiPath(
@@ -1538,6 +1576,7 @@ interface SubmitExternalUtteranceInput {
   text: string
   sourceLanguage?: string
   speaker?: string
+  replyTo?: MessageReplyReference | null
 }
 
 interface LocalFinalizeResult {
@@ -2265,12 +2304,15 @@ function areOptionalRecordsEqual<T extends string | boolean>(
 function areUtterancesEqual(left: Utterance, right: Utterance): boolean {
   return (
     left.id === right.id
+    && left.recalled === right.recalled
+    && left.sentByViewer === right.sentByViewer
     && left.speaker === right.speaker
     && left.speakerAvatarSeed === right.speakerAvatarSeed
     && left.speakerAvatarIndex === right.speakerAvatarIndex
     && left.speakerName === right.speakerName
     && left.speakerUserId === right.speakerUserId
     && left.speakerImage === right.speakerImage
+    && left.speakerBadge === right.speakerBadge
     && left.image?.conversationId === right.image?.conversationId
     && left.image?.messageId === right.image?.messageId
     && left.image?.width === right.image?.width
@@ -2492,6 +2534,58 @@ export function findConversationHydrationOrderConflicts(input: {
   return conflicts
 }
 
+/** The "deleted message" placeholder: keeps the bubble's place and sender, drops its content. */
+export function toRecalledUtterance(utterance: Utterance): Utterance {
+  return {
+    id: utterance.id,
+    recalled: true,
+    originalText: '',
+    originalLang: utterance.originalLang,
+    translations: {},
+    ...(utterance.speaker !== undefined ? { speaker: utterance.speaker } : {}),
+    ...(utterance.speakerAvatarSeed !== undefined ? { speakerAvatarSeed: utterance.speakerAvatarSeed } : {}),
+    ...(utterance.speakerAvatarIndex !== undefined ? { speakerAvatarIndex: utterance.speakerAvatarIndex } : {}),
+    ...(utterance.speakerName !== undefined ? { speakerName: utterance.speakerName } : {}),
+    ...(utterance.speakerUserId !== undefined ? { speakerUserId: utterance.speakerUserId } : {}),
+    ...(utterance.speakerImage !== undefined ? { speakerImage: utterance.speakerImage } : {}),
+    ...(utterance.createdAtMs !== undefined ? { createdAtMs: utterance.createdAtMs } : {}),
+    ...(utterance.serverCreatedAtMs !== undefined ? { serverCreatedAtMs: utterance.serverCreatedAtMs } : {}),
+    ...(utterance.serverMessageId !== undefined ? { serverMessageId: utterance.serverMessageId } : {}),
+  }
+}
+
+/** Blanks unsent messages in place and forgets translation work still queued for them. */
+export function recallUtterancesInStoreState(
+  store: UtteranceStoreState,
+  utteranceIds: ReadonlySet<string>,
+): UtteranceStoreState {
+  let changed = false
+  const utterances = store.utterances.map((utterance) => {
+    if (utterance.recalled || !utteranceIds.has(utterance.id)) return utterance
+    changed = true
+    return toRecalledUtterance(utterance)
+  })
+  let translationPriorities = store.translationPriorities
+  let pendingTranslationUpdates = store.pendingTranslationUpdates
+  for (const utteranceId of utteranceIds) {
+    translationPriorities = removeTranslationPrioritiesForUtterance(translationPriorities, utteranceId)
+    if (pendingTranslationUpdates.has(utteranceId)) {
+      if (pendingTranslationUpdates === store.pendingTranslationUpdates) {
+        pendingTranslationUpdates = new Map(pendingTranslationUpdates)
+      }
+      pendingTranslationUpdates.delete(utteranceId)
+    }
+  }
+  if (
+    !changed
+    && translationPriorities === store.translationPriorities
+    && pendingTranslationUpdates === store.pendingTranslationUpdates
+  ) {
+    return store
+  }
+  return { utterances: changed ? utterances : store.utterances, translationPriorities, pendingTranslationUpdates }
+}
+
 export function mergeServerHydrationUtteranceIntoStoreState(
   store: UtteranceStoreState,
   utterance: Utterance,
@@ -2506,6 +2600,12 @@ export function mergeServerHydrationUtteranceWithRoomLanguages(
   roomLanguages: LanguageCandidates | null,
 ): UtteranceStoreState {
   const existingRaw = store.utterances.find((item) => item.id === utterance.id)
+  if (utterance.recalled) {
+    // Keep a local bubble where it already sits; a placeholder never merges content.
+    return recallUtterancesInStoreState(existingRaw ? store : {
+      ...store, utterances: appendOrReplaceUtterance(store.utterances, toRecalledUtterance(utterance)),
+    }, new Set([utterance.id]))
+  }
   const normalizedServerUtterance = normalizeStoredUtterance(utterance, [
     ...(existingRaw?.targetLanguages || []),
     ...(existingRaw && existingRaw.originalText === utterance.originalText ? [existingRaw.originalLang] : []),
@@ -2531,6 +2631,12 @@ export function mergeServerHydrationUtteranceWithRoomLanguages(
           ? { serverCreatedAtMs: existingUtterance.serverCreatedAtMs } : {}),
         ...(normalizedServerUtterance.serverMessageId === undefined && existingUtterance?.serverMessageId !== undefined
           ? { serverMessageId: existingUtterance.serverMessageId } : {}),
+        // A server copy from before the reply's metadata was persisted must
+        // not drop the quote the sender's own bubble already shows.
+        ...(normalizedServerUtterance.serverPersistedAtMs === undefined && existingUtterance?.serverPersistedAtMs !== undefined
+          ? { serverPersistedAtMs: existingUtterance.serverPersistedAtMs } : {}),
+        ...(normalizedServerUtterance.replyTo === undefined && existingUtterance?.replyTo
+          ? { replyTo: existingUtterance.replyTo } : {}),
         // Source delivery is now independent of translation. A raw server
         // snapshot must not erase the final translation already rendered here.
         // Both sides are canonical here, so the merge is by canonical key and
@@ -2621,6 +2727,8 @@ export function applyTranslationToUtteranceStoreState(input: {
 }): UtteranceStoreState {
   const existingIndex = input.store.utterances.findIndex((utterance) => utterance.id === input.utteranceId)
   const existingTarget = existingIndex >= 0 ? input.store.utterances[existingIndex] : undefined
+  // A translation that lands after the sender unsent the message has nowhere to go.
+  if (existingTarget?.recalled) return input.store
   const languageCandidates = [
     ...(input.selectedLanguages || []),
     ...(existingTarget?.targetLanguages || []),
@@ -3045,6 +3153,10 @@ export default function useRealtimeSTT({
   const [isSharedRoom, setIsSharedRoom] = useState(false)
   const [leaveNotices, setLeaveNotices] = useState<ConversationLeaveNotice[]>([])
   const [inviteNotices, setInviteNotices] = useState<ConversationInviteNotice[]>([])
+  // Server-owned like the notices: whether the room has an active member run
+  // by HashChat staff (hydration's operatorDisclosure). Drives the pinned
+  // disclosure notice; false until the first hydration response.
+  const [operatorDisclosure, setOperatorDisclosure] = useState(false)
   // Membership/invites are deliberately server-authoritative, never optimistic
   // (see docs/local-first-conversation-plan.md on the client-SoT branch) — a
   // fresh mount starts with empty notices and fills them after hydration.
@@ -3559,6 +3671,35 @@ export default function useRealtimeSTT({
     || hasOlderServerUtterancesRef.current
   ), [])
 
+  // The visible list and the warm cache must both blank an unsent message:
+  // buildMergedUtterances re-adds whatever the cache still holds.
+  const applyRecalledMessageIds = useCallback((rawIds: unknown) => {
+    const recalledIds = new Set(normalizeRecalledMessageIds(rawIds))
+    if (recalledIds.size === 0) return
+    const stored = storedUtterancesRef.current
+    const newlyRecalledIds = new Set<string>()
+    for (const utterance of [...stored, ...utterancesRef.current]) {
+      if (recalledIds.has(utterance.id) && !utterance.recalled) newlyRecalledIds.add(utterance.id)
+    }
+    if (newlyRecalledIds.size === 0) return
+    storedUtterancesRef.current = stored.map((utterance) => (
+      newlyRecalledIds.has(utterance.id) ? toRecalledUtterance(utterance) : utterance
+    ))
+    setUtteranceStore((current) => recallUtterancesInStoreState(current, newlyRecalledIds))
+    setMessageCount((current) => Math.max(0, normalizePersistedMessageCount(current) - newlyRecalledIds.size))
+  }, [])
+
+  // The sender's own screen blanks the bubble as soon as the recall succeeds.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !conversationId) return
+    const onRecalled = (event: Event) => {
+      const detail = (event as CustomEvent<MessageRecalledEventDetail>).detail
+      if (detail?.conversationId === conversationId) applyRecalledMessageIds([detail.messageId])
+    }
+    window.addEventListener(MESSAGE_RECALLED_EVENT, onRecalled)
+    return () => window.removeEventListener(MESSAGE_RECALLED_EVENT, onRecalled)
+  }, [applyRecalledMessageIds, conversationId])
+
   const applyPendingHasOlderUtterances = useCallback(() => {
     const pendingHasOlderUtterances = pendingHasOlderUtterancesRef.current
     if (pendingHasOlderUtterances === null) return
@@ -3734,6 +3875,8 @@ export default function useRealtimeSTT({
       setInviteNotices((current) => (
         areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
       ))
+      setOperatorDisclosure(payload.operatorDisclosure === true)
+      applyRecalledMessageIds(payload.recalledMessageIds)
       const nextMessageCount = normalizePersistedMessageCount(
         typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
       )
@@ -3766,6 +3909,7 @@ export default function useRealtimeSTT({
       isLoadingOlderServerUtterancesRef.current = false
     }
   }, [
+    applyRecalledMessageIds,
     buildConversationHydrationHeaders,
     getCurrentTargetLanguages,
     buildLocalUtteranceCache,
@@ -3855,6 +3999,8 @@ export default function useRealtimeSTT({
         setInviteNotices((current) => (
           areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
         ))
+        setOperatorDisclosure(payload.operatorDisclosure === true)
+        applyRecalledMessageIds(payload.recalledMessageIds)
 
         const nextUsageSec = (
           typeof payload.usageSec === 'number'
@@ -3900,6 +4046,7 @@ export default function useRealtimeSTT({
         // Keep local state when server hydration fails.
       })
   }, [
+    applyRecalledMessageIds,
     buildConversationHydrationHeaders,
     getCurrentTargetLanguages,
     buildLocalUtteranceCache,
@@ -4028,6 +4175,10 @@ export default function useRealtimeSTT({
           try {
             const frame = JSON.parse(event.data)
             if (socketSessionKey && frame.sessionKey !== socketSessionKey) return
+            if (frame.type === 'read_receipt') {
+              window.dispatchEvent(new CustomEvent(MESSAGE_READ_RECEIPTS_REFRESH_EVENT, { detail: conversationId }))
+              return
+            }
             if (frame.type === 'utterance_preview') {
               if (frame.utterance?.speakerUserId === viewerUserId && typeof frame.orderReceipt === 'string') {
                 rememberLiveVoiceOrder({ ownerIdentity: clientMessageOutboxOwnerIdentity, apiNamespace: finalizationApiNamespace,
@@ -4061,6 +4212,7 @@ export default function useRealtimeSTT({
             }
           } catch { return }
           window.dispatchEvent(new CustomEvent(MESSAGE_REACTIONS_REFRESH_EVENT, { detail: conversationId }))
+          window.dispatchEvent(new CustomEvent(MESSAGE_READ_RECEIPTS_REFRESH_EVENT, { detail: conversationId }))
           void refreshFromServerHydration('push')
         }
         socket.onclose = () => {
@@ -4781,6 +4933,7 @@ export default function useRealtimeSTT({
       previousStateSourceLanguage?: string
       previousStateSourceText?: string
       fallbackCurrentTurnPreviousState?: CurrentTurnPreviousStatePayload | null
+      replyTo?: MessageReplyReference | null
     },
   ): LocalFinalizeResult | null => {
     const text = normalizeSttTurnText(rawText)
@@ -4818,6 +4971,7 @@ export default function useRealtimeSTT({
       previousStateSourceText: options?.previousStateSourceText,
     })
     if (!localPayload) return null
+    if (options?.replyTo) localPayload.utterance = { ...localPayload.utterance, replyTo: options.replyTo }
     localPayload.utterance = remotePreviews.applyOrder(localPayload.utterance)
     if (isDuplicateTimedSignature({
       previousSig: stopFinalizeDedupRef.current.utteranceId,
@@ -4960,6 +5114,7 @@ export default function useRealtimeSTT({
           speaker: options?.speaker ?? localFinalizeResult.speaker ?? null,
           speakerAvatarSeed: options?.speakerAvatarSeed ?? localFinalizeResult.speakerAvatarSeed ?? null,
           speakerAvatarIndex: options?.speakerAvatarIndex ?? localFinalizeResult.speakerAvatarIndex ?? null,
+          ...(utterance.replyTo ? { replyTo: utterance.replyTo } : {}),
         },
       },
     })
@@ -5006,6 +5161,7 @@ export default function useRealtimeSTT({
       previousStateSourceLanguage: sourceLanguage,
       previousStateSourceText: text,
       fallbackCurrentTurnPreviousState: null,
+      replyTo: input.replyTo ?? null,
     })
 
     if (!localFinalizeResult) return null
@@ -7131,6 +7287,7 @@ export default function useRealtimeSTT({
     persistedUtteranceCount,
     leaveNotices,
     inviteNotices,
+    operatorDisclosure,
     isInitialServerHydrationPending,
     replaceConversationHistoryForQa,
     ensureSessionKey,

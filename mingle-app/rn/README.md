@@ -13,11 +13,7 @@ The RN app requires the following environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `MINGLE_API_FALLBACK_SITE_URL` (optional fallback web target, default: current Railway deployment)
-- `MINGLE_STT_FALLBACK_WS_URL` (optional fallback STT target, default: current Railway deployment)
-- `MINGLE_LEGACY_SITE_URL` (optional compatibility fallback override; device builds default to the current Railway web deployment)
-- `MINGLE_LEGACY_WS_URL` (optional compatibility fallback override; device builds default to the current Railway STT deployment)
-- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v2.1.1`, Android: `android/v2.1.1`)
+- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v2.2.0`, Android: `android/v2.2.0`)
 - `RN_CLIENT_VERSION` (optional, fallback: iOS `CFBundleShortVersionString`, Android `BuildConfig.MINGLE_CLIENT_VERSION`)
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
 - `RN_AD_BANNER_POSITION` (optional: `top` | `bottom`, default: `bottom`)
@@ -33,8 +29,7 @@ If the value is missing or does not match the platform baseline, the app shows a
 `pnpm rn:android` validates `NEXT_PUBLIC_API_NAMESPACE=android/v2.1.1` before launch.
 For release-safe 2.1.1 builds, `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_WS_URL` must not point to the legacy 1.0.11 production hosts.
 If they still match `MINGLE_LEGACY_SITE_URL` / `MINGLE_LEGACY_WS_URL`, the app now fails closed at startup instead of silently using the old servers.
-When the primary Railway WebView has a transport/startup failure, RN retries `MINGLE_API_FALLBACK_SITE_URL` once.
-When native STT startup fails outside dev/loopback targets, RN retries `MINGLE_STT_FALLBACK_WS_URL` once.
+There is no fallback host: if the Railway WebView fails to load, the app shows the retry overlay for the same host.
 
 On startup, the RN app calls the version-policy API and applies `force_update | recommend_update | none`.
 

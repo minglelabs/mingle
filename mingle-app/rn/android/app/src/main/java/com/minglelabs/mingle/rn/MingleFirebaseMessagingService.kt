@@ -1,6 +1,7 @@
 package com.minglelabs.mingle.rn
 
 import android.Manifest
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -24,9 +25,13 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
     ) {
       return
     }
+    // Same as iOS (AppDelegate willPresent): no notification while the app is
+    // on screen. Background delivery never reaches this method because every
+    // push carries a notification payload, which the system tray shows itself.
+    if (isAppInForeground()) return
 
     val notification = message.notification
-    val title = notification?.title?.takeIf { it.isNotBlank() } ?: message.data["title"] ?: "Mingle"
+    val title = notification?.title?.takeIf { it.isNotBlank() } ?: message.data["title"] ?: "HashChat"
     val body = notification?.body?.takeIf { it.isNotBlank() }
       ?: message.data["body"]
       ?: "You have a new notification."
@@ -39,6 +44,8 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
       putExtra("notificationId", notificationId)
       putExtra("type", message.data["type"] ?: "")
       putExtra("actorId", message.data["actorId"] ?: "")
+      putExtra("url", message.data["url"] ?: "")
+      putExtra("conversationId", message.data["conversationId"] ?: "")
     }
     val pendingIntent = PendingIntent.getActivity(
       this,
@@ -62,6 +69,14 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
     getSystemService(NotificationManager::class.java).notify(notificationId.hashCode(), builder.build())
   }
 
+  // IMPORTANCE_FOREGROUND means a visible activity; the STT foreground service
+  // alone reports IMPORTANCE_FOREGROUND_SERVICE.
+  private fun isAppInForeground(): Boolean {
+    val state = ActivityManager.RunningAppProcessInfo()
+    ActivityManager.getMyMemoryState(state)
+    return state.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+  }
+
   companion object {
     const val CHANNEL_ID = "mingle_notifications"
 
@@ -72,10 +87,10 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
       manager.createNotificationChannel(
         NotificationChannel(
           CHANNEL_ID,
-          "Mingle notifications",
+          "HashChat notifications",
           NotificationManager.IMPORTANCE_HIGH,
         ).apply {
-          description = "Notifications from Mingle"
+          description = "Notifications from HashChat"
         },
       )
     }

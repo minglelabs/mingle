@@ -390,6 +390,8 @@ describe("app-conversations", () => {
         defaultDisplayLanguage: true,
         nationality: true,
         primaryLanguages: true,
+        isOfficial: true,
+        isOperator: true,
       },
     });
     expect(state?.conversation.title).toBe("Bob");
@@ -1584,6 +1586,7 @@ describe("app-conversations", () => {
         OR: [
           { isDeleted: false },
           { isDeleted: null },
+          { isDeleted: true, metadata: { path: ['recalledAtMs'], gt: 0 } },
         ],
       },
       orderBy: [
@@ -4468,7 +4471,11 @@ describe("app-conversations", () => {
       mockChannelMemberFindMany.mockResolvedValue([]);
       // The locked share transaction reads the room's current title via
       // findUniqueOrThrow to stamp the frozen sharedTitle snapshot.
-      mockFindConversationUniqueOrThrow.mockResolvedValue({ title: "Shared Room" });
+      mockFindConversationUniqueOrThrow.mockResolvedValue({
+        title: "Shared Room",
+        pendingInviteeUserIds: [],
+        userEditedTitleAt: null,
+      });
     });
 
     it("mints a brand-new token when sharing is re-enabled after being turned off", async () => {
@@ -4546,6 +4553,43 @@ describe("app-conversations", () => {
       expect(mockQueryRaw).toHaveBeenCalled();
     });
 
+    it("freezes the sharer's own list title for an un-renamed multi-member room", async () => {
+      // Stored title "대화 7" is never shown to members — each of them sees
+      // the other members' names — so the link must carry what the sharer sees.
+      mockFindConversationFirst.mockResolvedValue({ id: "conv-a", shareToken: null, shareEnabled: false });
+      mockFindConversationUniqueOrThrow.mockResolvedValue({
+        title: "대화 7",
+        pendingInviteeUserIds: [],
+        userEditedTitleAt: null,
+      });
+      mockChannelMemberFindMany.mockResolvedValue([
+        { channelId: "conv-a", userId: "user-1", selectedLanguages: [], user: { name: "Aww", handle: "aww" } },
+        { channelId: "conv-a", userId: "user-2", selectedLanguages: [], user: { name: "Q", handle: "q" } },
+        { channelId: "conv-a", userId: "user-3", selectedLanguages: [], user: { name: "W", handle: "w" } },
+      ]);
+
+      await setConversationShareEnabled({ conversationId: "conv-a", userId: "user-1", enabled: true });
+
+      expect(lastUpdateData().sharedTitle).toBe("Q, W");
+    });
+
+    it("keeps a manually renamed title for a multi-member room", async () => {
+      mockFindConversationFirst.mockResolvedValue({ id: "conv-a", shareToken: null, shareEnabled: false });
+      mockFindConversationUniqueOrThrow.mockResolvedValue({
+        title: "Trip planning",
+        pendingInviteeUserIds: [],
+        userEditedTitleAt: new Date("2026-04-12T09:00:00.000Z"),
+      });
+      mockChannelMemberFindMany.mockResolvedValue([
+        { channelId: "conv-a", userId: "user-1", selectedLanguages: [], user: { name: "Aww", handle: "aww" } },
+        { channelId: "conv-a", userId: "user-2", selectedLanguages: [], user: { name: "Q", handle: "q" } },
+      ]);
+
+      await setConversationShareEnabled({ conversationId: "conv-a", userId: "user-1", enabled: true });
+
+      expect(lastUpdateData().sharedTitle).toBe("Trip planning");
+    });
+
     it("revokes the token (nulls it) when sharing is turned off", async () => {
       mockFindConversationFirst.mockResolvedValue({
         id: "conv-a",
@@ -4564,6 +4608,8 @@ describe("app-conversations", () => {
       mockFindConversationFirst.mockResolvedValue({
         id: "conv-a",
         title: "Shared Room",
+        pendingInviteeUserIds: [],
+        userEditedTitleAt: null,
         shareToken: "live-token",
         shareEnabled: true,
       });
