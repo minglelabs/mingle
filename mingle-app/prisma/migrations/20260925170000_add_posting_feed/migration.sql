@@ -13,11 +13,11 @@
 --      so diff re-emits them unpartitioned; re-creating them would collide.
 
 -- AlterTable
-ALTER TABLE "app_user_notifications" ADD COLUMN     "comment_id" TEXT,
+ALTER TABLE "app"."app_user_notifications" ADD COLUMN     "comment_id" TEXT,
 ADD COLUMN     "post_id" TEXT;
 
 -- AlterTable
-ALTER TABLE "app_user_reports" ADD COLUMN     "target_comment_id" TEXT,
+ALTER TABLE "app"."app_user_reports" ADD COLUMN     "target_comment_id" TEXT,
 ADD COLUMN     "target_key" TEXT NOT NULL DEFAULT '',
 ADD COLUMN     "target_post_id" TEXT,
 ADD COLUMN     "target_type" TEXT NOT NULL DEFAULT 'user';
@@ -44,10 +44,10 @@ WITH ranked AS (
       PARTITION BY "reporter_id", "reported_user_id"
       ORDER BY "created_at" ASC, "id" ASC
     ) AS rn
-  FROM "app_user_reports"
+  FROM "app"."app_user_reports"
   WHERE "target_key" = ''
 )
-UPDATE "app_user_reports" AS r
+UPDATE "app"."app_user_reports" AS r
 SET "target_key" = CASE
   WHEN ranked.rn = 1 THEN 'user:' || r."reported_user_id"
   ELSE 'user:' || r."reported_user_id" || '#legacy-dup:' || r."id"
@@ -56,7 +56,7 @@ FROM ranked
 WHERE r."id" = ranked."id";
 
 -- CreateTable
-CREATE TABLE "app_posts" (
+CREATE TABLE "app"."app_posts" (
     "id" TEXT NOT NULL,
     "author_id" TEXT NOT NULL,
     "body_version" INTEGER NOT NULL DEFAULT 1,
@@ -79,7 +79,7 @@ CREATE TABLE "app_posts" (
 );
 
 -- CreateTable
-CREATE TABLE "app_post_translations" (
+CREATE TABLE "app"."app_post_translations" (
     "post_id" TEXT NOT NULL,
     "body_version" INTEGER NOT NULL,
     "language" TEXT NOT NULL,
@@ -92,7 +92,7 @@ CREATE TABLE "app_post_translations" (
 );
 
 -- CreateTable
-CREATE TABLE "app_post_comments" (
+CREATE TABLE "app"."app_post_comments" (
     "id" TEXT NOT NULL,
     "post_id" TEXT NOT NULL,
     "author_id" TEXT NOT NULL,
@@ -111,7 +111,7 @@ CREATE TABLE "app_post_comments" (
 );
 
 -- CreateTable
-CREATE TABLE "app_post_comment_translations" (
+CREATE TABLE "app"."app_post_comment_translations" (
     "comment_id" TEXT NOT NULL,
     "body_version" INTEGER NOT NULL,
     "language" TEXT NOT NULL,
@@ -124,7 +124,7 @@ CREATE TABLE "app_post_comment_translations" (
 );
 
 -- CreateTable
-CREATE TABLE "app_post_likes" (
+CREATE TABLE "app"."app_post_likes" (
     "id" TEXT NOT NULL,
     "post_id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
@@ -134,7 +134,7 @@ CREATE TABLE "app_post_likes" (
 );
 
 -- CreateTable
-CREATE TABLE "app_post_comment_likes" (
+CREATE TABLE "app"."app_post_comment_likes" (
     "id" TEXT NOT NULL,
     "comment_id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
@@ -144,7 +144,7 @@ CREATE TABLE "app_post_comment_likes" (
 );
 
 -- CreateTable
-CREATE TABLE "app_post_views" (
+CREATE TABLE "app"."app_post_views" (
     "id" TEXT NOT NULL,
     "post_id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
@@ -154,7 +154,7 @@ CREATE TABLE "app_post_views" (
 );
 
 -- CreateTable
-CREATE TABLE "app_post_hides" (
+CREATE TABLE "app"."app_post_hides" (
     "id" TEXT NOT NULL,
     "post_id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
@@ -164,7 +164,7 @@ CREATE TABLE "app_post_hides" (
 );
 
 -- CreateTable
-CREATE TABLE "app_post_drafts" (
+CREATE TABLE "app"."app_post_drafts" (
     "id" TEXT NOT NULL,
     "author_id" TEXT NOT NULL,
     "source_text" TEXT,
@@ -177,7 +177,7 @@ CREATE TABLE "app_post_drafts" (
 );
 
 -- CreateTable
-CREATE TABLE "app_recent_searches" (
+CREATE TABLE "app"."app_recent_searches" (
     "id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
     "query" TEXT NOT NULL,
@@ -187,136 +187,136 @@ CREATE TABLE "app_recent_searches" (
 );
 
 -- CreateIndex
-CREATE INDEX "app_posts_published_at_idx" ON "app_posts"("published_at");
+CREATE INDEX "app_posts_published_at_idx" ON "app"."app_posts"("published_at");
 
 -- CreateIndex
-CREATE INDEX "app_posts_author_published_at_idx" ON "app_posts"("author_id", "published_at");
+CREATE INDEX "app_posts_author_published_at_idx" ON "app"."app_posts"("author_id", "published_at");
 
 -- CreateIndex
-CREATE INDEX "app_posts_author_created_at_idx" ON "app_posts"("author_id", "created_at");
+CREATE INDEX "app_posts_author_created_at_idx" ON "app"."app_posts"("author_id", "created_at");
 
 -- CreateIndex
-CREATE INDEX "app_posts_feed_filter_idx" ON "app_posts"("visibility", "is_deleted", "moderation_hidden_at", "published_at");
+CREATE INDEX "app_posts_feed_filter_idx" ON "app"."app_posts"("visibility", "is_deleted", "moderation_hidden_at", "published_at");
 
 -- CreateIndex
-CREATE INDEX "app_post_comments_post_created_at_idx" ON "app_post_comments"("post_id", "created_at");
+CREATE INDEX "app_post_comments_post_created_at_idx" ON "app"."app_post_comments"("post_id", "created_at");
 
 -- CreateIndex
-CREATE INDEX "app_post_comments_author_created_at_idx" ON "app_post_comments"("author_id", "created_at");
+CREATE INDEX "app_post_comments_author_created_at_idx" ON "app"."app_post_comments"("author_id", "created_at");
 
 -- CreateIndex
-CREATE INDEX "app_post_comments_parent_id_idx" ON "app_post_comments"("parent_id");
+CREATE INDEX "app_post_comments_parent_id_idx" ON "app"."app_post_comments"("parent_id");
 
 -- CreateIndex
-CREATE INDEX "app_post_likes_post_id_idx" ON "app_post_likes"("post_id");
+CREATE INDEX "app_post_likes_post_id_idx" ON "app"."app_post_likes"("post_id");
 
 -- CreateIndex
-CREATE INDEX "app_post_likes_user_created_at_idx" ON "app_post_likes"("user_id", "created_at");
+CREATE INDEX "app_post_likes_user_created_at_idx" ON "app"."app_post_likes"("user_id", "created_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "app_post_likes_post_user_uidx" ON "app_post_likes"("post_id", "user_id");
+CREATE UNIQUE INDEX "app_post_likes_post_user_uidx" ON "app"."app_post_likes"("post_id", "user_id");
 
 -- CreateIndex
-CREATE INDEX "app_post_comment_likes_comment_id_idx" ON "app_post_comment_likes"("comment_id");
+CREATE INDEX "app_post_comment_likes_comment_id_idx" ON "app"."app_post_comment_likes"("comment_id");
 
 -- CreateIndex
-CREATE INDEX "app_post_comment_likes_user_created_at_idx" ON "app_post_comment_likes"("user_id", "created_at");
+CREATE INDEX "app_post_comment_likes_user_created_at_idx" ON "app"."app_post_comment_likes"("user_id", "created_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "app_post_comment_likes_comment_user_uidx" ON "app_post_comment_likes"("comment_id", "user_id");
+CREATE UNIQUE INDEX "app_post_comment_likes_comment_user_uidx" ON "app"."app_post_comment_likes"("comment_id", "user_id");
 
 -- CreateIndex
-CREATE INDEX "app_post_views_user_post_idx" ON "app_post_views"("user_id", "post_id");
+CREATE INDEX "app_post_views_user_post_idx" ON "app"."app_post_views"("user_id", "post_id");
 
 -- CreateIndex
-CREATE INDEX "app_post_views_user_viewed_at_idx" ON "app_post_views"("user_id", "viewed_at");
+CREATE INDEX "app_post_views_user_viewed_at_idx" ON "app"."app_post_views"("user_id", "viewed_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "app_post_views_post_user_uidx" ON "app_post_views"("post_id", "user_id");
+CREATE UNIQUE INDEX "app_post_views_post_user_uidx" ON "app"."app_post_views"("post_id", "user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "app_post_hides_post_user_uidx" ON "app_post_hides"("post_id", "user_id");
+CREATE UNIQUE INDEX "app_post_hides_post_user_uidx" ON "app"."app_post_hides"("post_id", "user_id");
 
 -- CreateIndex
-CREATE INDEX "app_post_drafts_author_updated_at_idx" ON "app_post_drafts"("author_id", "updated_at");
+CREATE INDEX "app_post_drafts_author_updated_at_idx" ON "app"."app_post_drafts"("author_id", "updated_at");
 
 -- CreateIndex
-CREATE INDEX "app_recent_searches_user_searched_at_idx" ON "app_recent_searches"("user_id", "searched_at");
+CREATE INDEX "app_recent_searches_user_searched_at_idx" ON "app"."app_recent_searches"("user_id", "searched_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "app_recent_searches_user_query_uidx" ON "app_recent_searches"("user_id", "query");
+CREATE UNIQUE INDEX "app_recent_searches_user_query_uidx" ON "app"."app_recent_searches"("user_id", "query");
 
 -- CreateIndex
-CREATE INDEX "app_user_notifications_post_id_idx" ON "app_user_notifications"("post_id");
+CREATE INDEX "app_user_notifications_post_id_idx" ON "app"."app_user_notifications"("post_id");
 
 -- CreateIndex
-CREATE INDEX "app_user_notifications_comment_id_idx" ON "app_user_notifications"("comment_id");
+CREATE INDEX "app_user_notifications_comment_id_idx" ON "app"."app_user_notifications"("comment_id");
 
 -- CreateIndex
-CREATE INDEX "app_user_reports_target_type_status_created_at_idx" ON "app_user_reports"("target_type", "status", "created_at");
+CREATE INDEX "app_user_reports_target_type_status_created_at_idx" ON "app"."app_user_reports"("target_type", "status", "created_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "app_user_reports_reporter_target_key_uidx" ON "app_user_reports"("reporter_id", "target_key");
+CREATE UNIQUE INDEX "app_user_reports_reporter_target_key_uidx" ON "app"."app_user_reports"("reporter_id", "target_key");
 
 -- AddForeignKey
-ALTER TABLE "app_user_notifications" ADD CONSTRAINT "app_user_notifications_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app_posts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "app"."app_user_notifications" ADD CONSTRAINT "app_user_notifications_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app"."app_posts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_user_notifications" ADD CONSTRAINT "app_user_notifications_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "app_post_comments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "app"."app_user_notifications" ADD CONSTRAINT "app_user_notifications_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "app"."app_post_comments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_user_reports" ADD CONSTRAINT "app_user_reports_target_post_id_fkey" FOREIGN KEY ("target_post_id") REFERENCES "app_posts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "app"."app_user_reports" ADD CONSTRAINT "app_user_reports_target_post_id_fkey" FOREIGN KEY ("target_post_id") REFERENCES "app"."app_posts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_user_reports" ADD CONSTRAINT "app_user_reports_target_comment_id_fkey" FOREIGN KEY ("target_comment_id") REFERENCES "app_post_comments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "app"."app_user_reports" ADD CONSTRAINT "app_user_reports_target_comment_id_fkey" FOREIGN KEY ("target_comment_id") REFERENCES "app"."app_post_comments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_posts" ADD CONSTRAINT "app_posts_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_posts" ADD CONSTRAINT "app_posts_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "app"."app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_translations" ADD CONSTRAINT "app_post_translations_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app_posts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_translations" ADD CONSTRAINT "app_post_translations_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app"."app_posts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_comments" ADD CONSTRAINT "app_post_comments_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app_posts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_comments" ADD CONSTRAINT "app_post_comments_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app"."app_posts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_comments" ADD CONSTRAINT "app_post_comments_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_comments" ADD CONSTRAINT "app_post_comments_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "app"."app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_comments" ADD CONSTRAINT "app_post_comments_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "app_post_comments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_comments" ADD CONSTRAINT "app_post_comments_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "app"."app_post_comments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_comments" ADD CONSTRAINT "app_post_comments_reply_to_user_id_fkey" FOREIGN KEY ("reply_to_user_id") REFERENCES "app_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_comments" ADD CONSTRAINT "app_post_comments_reply_to_user_id_fkey" FOREIGN KEY ("reply_to_user_id") REFERENCES "app"."app_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_comment_translations" ADD CONSTRAINT "app_post_comment_translations_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "app_post_comments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_comment_translations" ADD CONSTRAINT "app_post_comment_translations_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "app"."app_post_comments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_likes" ADD CONSTRAINT "app_post_likes_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app_posts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_likes" ADD CONSTRAINT "app_post_likes_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app"."app_posts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_likes" ADD CONSTRAINT "app_post_likes_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_likes" ADD CONSTRAINT "app_post_likes_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app"."app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_comment_likes" ADD CONSTRAINT "app_post_comment_likes_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "app_post_comments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_comment_likes" ADD CONSTRAINT "app_post_comment_likes_comment_id_fkey" FOREIGN KEY ("comment_id") REFERENCES "app"."app_post_comments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_comment_likes" ADD CONSTRAINT "app_post_comment_likes_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_comment_likes" ADD CONSTRAINT "app_post_comment_likes_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app"."app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_views" ADD CONSTRAINT "app_post_views_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app_posts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_views" ADD CONSTRAINT "app_post_views_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app"."app_posts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_views" ADD CONSTRAINT "app_post_views_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_views" ADD CONSTRAINT "app_post_views_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app"."app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_hides" ADD CONSTRAINT "app_post_hides_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app_posts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_hides" ADD CONSTRAINT "app_post_hides_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "app"."app_posts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_hides" ADD CONSTRAINT "app_post_hides_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_hides" ADD CONSTRAINT "app_post_hides_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app"."app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_post_drafts" ADD CONSTRAINT "app_post_drafts_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_post_drafts" ADD CONSTRAINT "app_post_drafts_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "app"."app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_recent_searches" ADD CONSTRAINT "app_recent_searches_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_recent_searches" ADD CONSTRAINT "app_recent_searches_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app"."app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

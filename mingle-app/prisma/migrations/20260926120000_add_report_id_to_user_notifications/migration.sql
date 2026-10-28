@@ -10,10 +10,10 @@
 -- columns and the partial app_event_logs indexes).
 
 -- AlterTable
-ALTER TABLE "app_user_notifications" ADD COLUMN     "report_id" TEXT;
+ALTER TABLE "app"."app_user_notifications" ADD COLUMN     "report_id" TEXT;
 
 -- CreateIndex
-CREATE INDEX "app_user_notifications_report_id_idx" ON "app_user_notifications"("report_id");
+CREATE INDEX "app_user_notifications_report_id_idx" ON "app"."app_user_notifications"("report_id");
 
 -- AddForeignKey
-ALTER TABLE "app_user_notifications" ADD CONSTRAINT "app_user_notifications_report_id_fkey" FOREIGN KEY ("report_id") REFERENCES "app_user_reports"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "app"."app_user_notifications" ADD CONSTRAINT "app_user_notifications_report_id_fkey" FOREIGN KEY ("report_id") REFERENCES "app"."app_user_reports"("id") ON DELETE SET NULL ON UPDATE CASCADE;

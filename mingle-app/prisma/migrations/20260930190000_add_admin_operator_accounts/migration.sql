@@ -8,10 +8,10 @@
 -- drift is included; the CHECK constraint at the end is added by hand.
 
 -- AlterTable
-ALTER TABLE "app_users" ADD COLUMN     "is_operator" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "app"."app_users" ADD COLUMN     "is_operator" BOOLEAN NOT NULL DEFAULT false;
 
 -- CreateTable
-CREATE TABLE "app_operator_accounts" (
+CREATE TABLE "app"."app_operator_accounts" (
     "user_id" TEXT NOT NULL,
     "persona_country" TEXT,
     "notes" TEXT,
@@ -23,7 +23,7 @@ CREATE TABLE "app_operator_accounts" (
 );
 
 -- CreateTable
-CREATE TABLE "app_admin_sessions" (
+CREATE TABLE "app"."app_admin_sessions" (
     "id" TEXT NOT NULL,
     "token_hash" TEXT NOT NULL,
     "label" TEXT,
@@ -38,7 +38,7 @@ CREATE TABLE "app_admin_sessions" (
 );
 
 -- CreateTable
-CREATE TABLE "app_admin_audit_logs" (
+CREATE TABLE "app"."app_admin_audit_logs" (
     "id" TEXT NOT NULL,
     "session_id" TEXT,
     "action" TEXT NOT NULL,
@@ -53,7 +53,7 @@ CREATE TABLE "app_admin_audit_logs" (
 );
 
 -- CreateTable
-CREATE TABLE "app_operator_post_jobs" (
+CREATE TABLE "app"."app_operator_post_jobs" (
     "id" TEXT NOT NULL,
     "batch_id" TEXT NOT NULL,
     "operator_user_id" TEXT NOT NULL,
@@ -76,7 +76,7 @@ CREATE TABLE "app_operator_post_jobs" (
 );
 
 -- CreateTable
-CREATE TABLE "app_admin_notify_targets" (
+CREATE TABLE "app"."app_admin_notify_targets" (
     "user_id" TEXT NOT NULL,
     "created_by_session_id" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -85,40 +85,40 @@ CREATE TABLE "app_admin_notify_targets" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "app_admin_sessions_token_hash_key" ON "app_admin_sessions"("token_hash");
+CREATE UNIQUE INDEX "app_admin_sessions_token_hash_key" ON "app"."app_admin_sessions"("token_hash");
 
 -- CreateIndex
-CREATE INDEX "app_admin_sessions_expires_at_idx" ON "app_admin_sessions"("expires_at");
+CREATE INDEX "app_admin_sessions_expires_at_idx" ON "app"."app_admin_sessions"("expires_at");
 
 -- CreateIndex
-CREATE INDEX "app_admin_audit_logs_created_at_idx" ON "app_admin_audit_logs"("created_at");
+CREATE INDEX "app_admin_audit_logs_created_at_idx" ON "app"."app_admin_audit_logs"("created_at");
 
 -- CreateIndex
-CREATE INDEX "app_admin_audit_logs_operator_user_id_created_at_idx" ON "app_admin_audit_logs"("operator_user_id", "created_at");
+CREATE INDEX "app_admin_audit_logs_operator_user_id_created_at_idx" ON "app"."app_admin_audit_logs"("operator_user_id", "created_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "app_operator_post_jobs_client_post_id_key" ON "app_operator_post_jobs"("client_post_id");
+CREATE UNIQUE INDEX "app_operator_post_jobs_client_post_id_key" ON "app"."app_operator_post_jobs"("client_post_id");
 
 -- CreateIndex
-CREATE INDEX "app_operator_post_jobs_state_publish_at_idx" ON "app_operator_post_jobs"("state", "publish_at");
+CREATE INDEX "app_operator_post_jobs_state_publish_at_idx" ON "app"."app_operator_post_jobs"("state", "publish_at");
 
 -- CreateIndex
-CREATE INDEX "app_operator_post_jobs_batch_id_idx" ON "app_operator_post_jobs"("batch_id");
+CREATE INDEX "app_operator_post_jobs_batch_id_idx" ON "app"."app_operator_post_jobs"("batch_id");
 
 -- CreateIndex
-CREATE INDEX "app_users_is_operator_idx" ON "app_users"("is_operator");
+CREATE INDEX "app_users_is_operator_idx" ON "app"."app_users"("is_operator");
 
 -- AddForeignKey
-ALTER TABLE "app_operator_accounts" ADD CONSTRAINT "app_operator_accounts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_operator_accounts" ADD CONSTRAINT "app_operator_accounts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app"."app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_operator_post_jobs" ADD CONSTRAINT "app_operator_post_jobs_operator_user_id_fkey" FOREIGN KEY ("operator_user_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_operator_post_jobs" ADD CONSTRAINT "app_operator_post_jobs_operator_user_id_fkey" FOREIGN KEY ("operator_user_id") REFERENCES "app"."app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "app_admin_notify_targets" ADD CONSTRAINT "app_admin_notify_targets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "app"."app_admin_notify_targets" ADD CONSTRAINT "app_admin_notify_targets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "app"."app_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddCheckConstraint
 -- One badge per account: an operator account (run by HashChat staff) is never
 -- also the official HashChat team account. Prisma does not model CHECK
 -- constraints, so this line is maintained by hand.
-ALTER TABLE "app_users" ADD CONSTRAINT "app_users_operator_not_official_chk" CHECK (NOT ("is_operator" AND "is_official"));
+ALTER TABLE "app"."app_users" ADD CONSTRAINT "app_users_operator_not_official_chk" CHECK (NOT ("is_operator" AND "is_official"));

@@ -8,14 +8,14 @@
 -- drops timezone data from live rows or collides with the existing indexes.
 
 -- AlterTable
-ALTER TABLE "app_post_comments" ADD COLUMN     "moderation_hidden_at" TIMESTAMP(3);
+ALTER TABLE "app"."app_post_comments" ADD COLUMN     "moderation_hidden_at" TIMESTAMP(3);
 
 -- AlterTable
-ALTER TABLE "app_user_reports" ADD COLUMN     "admin_note" TEXT,
+ALTER TABLE "app"."app_user_reports" ADD COLUMN     "admin_note" TEXT,
 ADD COLUMN     "moderation_action" TEXT,
 ADD COLUMN     "resolved_at" TIMESTAMP(3);
 
 -- AlterTable
-ALTER TABLE "app_users" ADD COLUMN     "in_app_notifications_enabled" BOOLEAN NOT NULL DEFAULT true,
+ALTER TABLE "app"."app_users" ADD COLUMN     "in_app_notifications_enabled" BOOLEAN NOT NULL DEFAULT true,
 ADD COLUMN     "moderation_hidden_at" TIMESTAMP(3),
 ADD COLUMN     "moderation_restricted_at" TIMESTAMP(3);
