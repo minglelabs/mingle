@@ -53,7 +53,7 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface from '@/components/slide-surface'
@@ -225,11 +225,15 @@ import {
   NATIVE_APP_UPDATE_EVENT,
   parseNativeAppUpdateDetail,
   readRequestedApiNamespaceFromSearch,
-  resolveNativeAppInstallSourceText,
   resolveNativeAppTrackingContext,
   resolveNativeAppUpdateCopy,
   type NativeAppUpdateDetail,
 } from './live-phone-demo.app-update.logic'
+import {
+  NativeAppUpdateCard,
+  openNativeAppUpdateStore,
+  resolveNativeAppUpdateCardContent,
+} from '@/components/native-app-update-card'
 import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
@@ -1530,13 +1534,6 @@ type SpeakingTtsItem = BubbleTtsTarget & {
 }
 
 type NativeTtsStopReason = 'mute_or_sound_disabled' | 'component_unmount' | 'force_reset' | 'earphone_mode_stopped'
-
-type NativeOpenUpdateStoreCommand = {
-  type: 'native_open_update_store'
-  payload?: {
-    updateUrl?: string
-  }
-}
 
 type NativeUiOverlayStateCommand = {
   type: 'native_ui_overlay_state'
@@ -6192,26 +6189,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [clearPendingAutoScrollTimer, markUserScrollIntent, updateScrollDerivedState])
 
   const handleNativeAppUpdatePress = useCallback(() => {
-    const updateUrl = nativeAppUpdate?.updateUrl?.trim() || ''
-    if (!updateUrl) return
+    if (!nativeAppUpdate?.updateUrl?.trim()) return
 
     closeMenuPanel()
-
-    const command: NativeOpenUpdateStoreCommand = {
-      type: 'native_open_update_store',
-      payload: { updateUrl },
-    }
-
-    if (isNativeApp()) {
-      try {
-        window.ReactNativeWebView?.postMessage(JSON.stringify(command))
-        return
-      } catch {
-        // Fall back to browser navigation if the bridge errors.
-      }
-    }
-
-    window.location.href = updateUrl
+    openNativeAppUpdateStore(nativeAppUpdate.updateUrl)
   }, [closeMenuPanel, nativeAppUpdate?.updateUrl])
 
   useEffect(() => {
@@ -6235,18 +6216,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [])
 
-  const nativeAppUpdateStatus = nativeAppUpdate || DEFAULT_NATIVE_APP_UPDATE_DETAIL
-  const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel
-  const nativeAppInstallSource = resolveNativeAppInstallSourceText(nativeAppUpdateCopy, nativeAppUpdateStatus.installSource)
-  const nativeAppLatestVersion = nativeAppUpdateStatus.latestVersion || ''
-  const nativeAppUpdateStatusMessage = nativeAppUpdateStatus.status === 'checking'
-    ? nativeAppUpdateCopy.checkingMessage
-    : nativeAppUpdateStatus.status === 'available'
-      ? nativeAppUpdateCopy.availableMessage
-      : nativeAppUpdateStatus.status === 'current'
-        ? nativeAppUpdateCopy.currentMessage
-        : nativeAppUpdateCopy.unknownMessage
-  const showNativeAppUpdateAction = nativeAppUpdateStatus.updateAvailable && Boolean(nativeAppUpdateStatus.updateUrl)
+  const nativeAppUpdateCardContent = useMemo(
+    () => resolveNativeAppUpdateCardContent(nativeAppUpdate, nativeAppUpdateCopy),
+    [nativeAppUpdate, nativeAppUpdateCopy],
+  )
 
   useLayoutEffect(() => {
     const nextCounts: ChatScrollMessageCountSnapshot = {
@@ -7012,6 +6985,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     overscrollBehaviorY: 'contain',
     touchAction: 'pan-y',
     willChange: 'scroll-position',
+    // A long press opens the bubble's own menu; without this, iOS WebKit
+    // selects the nearest selectable text instead (language dividers, read
+    // receipts, times, the expand toggle), as if dragged with a mouse.
+    WebkitUserSelect: 'none',
+    userSelect: 'none',
+    WebkitTouchCallout: 'none',
     paddingTop: chatPaddingTop,
     paddingBottom: chatPaddingBottom,
     paddingLeft: 'max(calc(env(safe-area-inset-left) + 6px), 10px)',
@@ -8154,41 +8133,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                         {isNativeAppRuntime && (
                           <div className="px-4 py-4">
-                            <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
-                                    {nativeAppUpdateCopy.sectionLabel}
-                                  </div>
-                                  <div className="mt-2 text-sm font-semibold text-gray-900">
-                                    {nativeAppUpdateCopy.installedLabel} {nativeAppInstalledVersion}
-                                  </div>
-                                  {nativeAppInstallSource ? (
-                                    <div className="mt-1 text-xs font-medium text-gray-600">
-                                      {nativeAppUpdateCopy.installSourceLabel} {nativeAppInstallSource}
-                                    </div>
-                                  ) : null}
-                                  {nativeAppLatestVersion ? (
-                                    <div className="mt-1 text-xs font-medium text-gray-600">
-                                      {nativeAppUpdateCopy.latestLabel} {nativeAppLatestVersion}
-                                    </div>
-                                  ) : null}
-                                  <div className="mt-2 text-xs leading-5 text-gray-600">
-                                    {nativeAppUpdateStatusMessage}
-                                  </div>
-                                </div>
-                                {showNativeAppUpdateAction ? (
-                                  <button
-                                    type="button"
-                                    onClick={handleNativeAppUpdatePress}
-                                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                                  >
-                                    <Download size={13} strokeWidth={2.2} />
-                                    <span>{nativeAppUpdateCopy.updateButtonLabel}</span>
-                                  </button>
-                                ) : null}
-                              </div>
-                            </div>
+                            <NativeAppUpdateCard
+                              {...nativeAppUpdateCardContent}
+                              onUpdate={handleNativeAppUpdatePress}
+                            />
                           </div>
                         )}
 
