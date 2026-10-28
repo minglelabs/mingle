@@ -1784,6 +1784,41 @@ describe('/api/translate/finalize route', () => {
     }
   })
 
+  it('keeps translations when the redetected source language is outside the selectable list', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"uz","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ru":"Ладно, потом.","en":"Okay, later."}',
+        usageMetadata: {},
+      },
+    })
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    const { POST } = await import('@/app/api/ios/v1.0.4/translate/finalize/route')
+
+    try {
+      const res = await POST(makeJsonRequest({
+        text: "Sopib qo'yib, keyin.",
+        sourceLanguage: 'unknown',
+        targetLanguages: ['ru', 'en'],
+        isFinal: true,
+      }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.sourceLanguage).toBe('uz')
+      expect(json.translations).toEqual({
+        ru: 'Ладно, потом.',
+        en: 'Okay, later.',
+      })
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('builds compact prompt with previous state first and no recent-turns section', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
