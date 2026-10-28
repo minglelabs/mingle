@@ -103,9 +103,11 @@ describe('GET /api/search/posts', () => {
     expect(where.visibility).toBe('public')
     expect(where.moderationHiddenAt).toBeNull()
     expect(where.hides).toEqual({ none: { userId: 'viewer' } })
-    // No per-request scan of every match's comments/translations.
+    // No per-request scan of every match's comments; translations are read for the page only.
     expect(mockPostCommentFindMany).not.toHaveBeenCalled()
-    expect(mockPostTranslationFindMany).not.toHaveBeenCalled()
+    for (const [args] of mockPostTranslationFindMany.mock.calls) {
+      expect(args.where.postId).toEqual({ in: ['p3', 'p1', 'p2'] })
+    }
   })
 
   it('pages with a stable offset cursor: next page starts where the last one ended', async () => {
