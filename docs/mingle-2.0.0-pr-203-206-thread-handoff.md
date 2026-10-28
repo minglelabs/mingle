@@ -701,12 +701,12 @@ branch가 codex/messenger-tabs-device-test가 아니거나 PR #206 merge commit�
 6. messaging WebSocket/proxy
 7. external app/browser fallback
 
-수정은 실패 경계에 가장 가까운 최소 파일부터 진행하고, UI/UX 변경이면 docs/ui-ux-codex-thread-history.md에도 이슈·원인·영향·검증 조건을 기록합니다.
+수정은 실패 경계에 가장 가까운 최소 파일부터 진행하고, UI/UX 변경이면 mingle-app/docs/ui-ux-codex-thread-history.md에도 이슈·원인·영향·검증 조건을 기록합니다.
 
 ## 13. 관련 문서와 기준 자료
 
 - docs/feat-multi-member-rooms-context.md: PR #206 및 현재 통합 브랜치의 기존 상세 컨텍스트
-- docs/ui-ux-codex-thread-history.md: 이 쓰레드에서 발생한 UI/UX 이슈의 누적 이력
+- mingle-app/docs/ui-ux-codex-thread-history.md: 이 쓰레드에서 발생한 UI/UX 이슈의 누적 이력
 - 첨부 파일: PR #206 feat/multi-member-rooms 인수인계 문서
 - PR #203: codex/messenger-tabs-device-test의 2.0.0 릴리스 목적과 체크
 - PR #206: Add channel membership for multi-member conversation rooms (Phase 0+1)
