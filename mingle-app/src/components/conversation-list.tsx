@@ -217,6 +217,9 @@ const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_INSET_QUERY_MAX_PX = 240;
 const ROW_ACTION_LONG_PRESS_DELAY_MS = 450;
+// The transparent guard over the list while the session loads must not outlive a stalled
+// session request: past this, the list takes taps again.
+const BOOTSTRAP_INTERACTION_GUARD_MAX_MS = 3_000;
 const ROW_ACTION_CANCEL_DISTANCE_PX = 10;
 const LIST_PULL_REFRESH_TRIGGER_PX = 72;
 const LIST_PULL_REFRESH_MAX_PX = 108;
@@ -1904,6 +1907,14 @@ export default function ConversationList({
   googleOAuthEnabled,
 }: ConversationListProps) {
   const { data: session, status: sessionStatus } = useSession();
+  // A session request that never settles (a stalled WebView fetch) would otherwise leave the
+  // transparent bootstrap guard over the whole list, so nothing could be tapped until a restart.
+  const [hasBootstrapInteractionGuardExpired, setHasBootstrapInteractionGuardExpired] = useState(false);
+  useEffect(() => {
+    if (sessionStatus !== "loading") return;
+    const timerId = window.setTimeout(() => setHasBootstrapInteractionGuardExpired(true), BOOTSTRAP_INTERACTION_GUARD_MAX_MS);
+    return () => window.clearTimeout(timerId);
+  }, [sessionStatus]);
   const router = useRouter();
   const authenticatedUserId = typeof session?.user?.id === "string"
     ? session.user.id.trim()
@@ -5490,7 +5501,8 @@ export default function ConversationList({
   // Only an actual client-side session check blocks actions; the pre-hydration
   // language marker is resolved in a layout effect and must not capture touches.
   const shouldBlockBootstrapInteraction = languageOnboardingPhase === "ready"
-    && sessionStatus === "loading";
+    && sessionStatus === "loading"
+    && !hasBootstrapInteractionGuardExpired;
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
