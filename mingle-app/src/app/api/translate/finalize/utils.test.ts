@@ -77,6 +77,16 @@ describe('translate/finalize utils', () => {
       .toBe('')
   })
 
+  it('keeps a well-formed detected source language outside the selectable list', () => {
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"uz","ru":"Ладно, потом.","en":"Okay, later."}'))
+      .toBe('uz')
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"is","en":"Hello"}')).toBe('is')
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"uz-Latn"}')).toBe('uz')
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"unknown"}')).toBe('')
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"und"}')).toBe('')
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"Uzbek"}')).toBe('')
+  })
+
   it('treats Chinese names and aliases in the detected source language as Chinese', () => {
     expect(parseDetectedSourceLanguage('{"sourceLanguage":"Chinese"}')).toBe('zh')
     expect(parseDetectedSourceLanguage('{"sourceLanguage":"Mandarin"}')).toBe('zh')
