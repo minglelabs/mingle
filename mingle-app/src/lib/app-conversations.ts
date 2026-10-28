@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { normalizeMessageReplyReference, toRecalledMessageReplyReference, type MessageReplyReference } from "@/lib/message-reply";
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image';
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
@@ -102,6 +103,10 @@ export type ConversationHydrationUtterance = {
   image?: ConversationMessageImage;
   serverCreatedAtMs?: number;
   serverMessageId?: string;
+  // When the server stored the row (server clock). Read receipts compare
+  // against members' server-side read cursors, so they need this, not the
+  // sender's device-clock createdAtMs.
+  serverPersistedAtMs?: number;
   id: string;
   originalText: string;
   // Display-only rendering of originalText in its Chinese variant's script
@@ -135,6 +140,7 @@ export type ConversationHydrationUtterance = {
   // speakerName and present only when the sender carries a badge. The live
   // committed utterance published over realtime uses the same field name.
   speakerBadge?: AccountBadgeKind;
+  replyTo?: MessageReplyReference;
 };
 
 export type ConversationHydrationCursor = {
@@ -2416,6 +2422,44 @@ export async function markConversationChannelRead(args: {
   return result.count > 0;
 }
 
+export type ConversationReadReceiptMember = {
+  userId: string;
+  joinedAtMs: number;
+  lastReadAtMs: number | null;
+};
+
+// Per-member read cursors for the room's per-message "N unread" badge. Only
+// active members count: someone who left no longer owes the room a read.
+// Membership-gated like the other per-conversation reads (null → 404).
+export async function listConversationReadReceipts(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<{ sessionKey: string; members: ConversationReadReceiptMember[] } | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: {
+      sessionKey: true,
+      members: {
+        where: { leftAt: null },
+        select: { userId: true, joinedAt: true, lastReadAt: true },
+      },
+    },
+  });
+  if (!record) return null;
+  return {
+    sessionKey: record.sessionKey,
+    members: record.members.map((member) => ({
+      userId: member.userId,
+      joinedAtMs: member.joinedAt.getTime(),
+      lastReadAtMs: member.lastReadAt ? member.lastReadAt.getTime() : null,
+    })),
+  };
+}
+
 export type ConversationMemberSummary = {
   userId: string;
   name: string | null;
@@ -3081,6 +3125,9 @@ async function getConversationHydrationStateForRecord(args: {
     ...(rawMembers ?? []).flatMap((member) => member.selectedLanguages ?? []),
   ];
 
+  const recalledReplyTargetIds = new Set(
+    recalledMessages.map((message) => (message.clientMessageId || "").trim() || `db-${message.id}`),
+  );
   const utterances: ConversationHydrationUtterance[] = orderedMessages.map((message) => {
     const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
     const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
@@ -3099,6 +3146,8 @@ async function getConversationHydrationStateForRecord(args: {
     const metadata = readJsonObject(message.metadata);
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
     const recalled = readMessageRecalledAtMs(metadata) !== null;
+    // A quote of a message its sender later unsent must not keep its text.
+    const replyTo = recalled ? null : normalizeMessageReplyReference(metadata?.replyTo);
     const originalText = recalled ? "" : sourceContent?.text?.trim() || "";
     const storedTargetLanguages = readStringArray(metadata?.translationTargetLanguages);
     // Repairs legacy rows stored as a collapsed `zh` and keeps every Chinese
@@ -3149,6 +3198,7 @@ async function getConversationHydrationStateForRecord(args: {
           && Number.isSafeInteger(metadata.orderStartedAtMs) && metadata.orderStartedAtMs > 0
           ? metadata.orderStartedAtMs : message.createdAt.getTime(),
         serverMessageId: message.id,
+        serverPersistedAtMs: message.createdAt.getTime(),
       } : {}),
       speaker: readStringValue(clientMetadata?.speaker) ?? readStringValue(metadata?.speaker),
       speakerAvatarSeed:
@@ -3174,6 +3224,9 @@ async function getConversationHydrationStateForRecord(args: {
         ? (imageByUserId.get(message.userId) ?? null)
         : null,
       ...(speakerBadge ? { speakerBadge } : {}),
+      ...(replyTo ? {
+        replyTo: recalledReplyTargetIds.has(replyTo.id) ? toRecalledMessageReplyReference(replyTo) : replyTo,
+      } : {}),
     };
   }).filter((utterance) => utterance.originalText.length > 0 || utterance.recalled === true);
 

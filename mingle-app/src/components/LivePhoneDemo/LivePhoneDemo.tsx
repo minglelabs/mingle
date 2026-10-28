@@ -6,7 +6,10 @@ import EarphoneModeNoticeContent from './EarphoneModeNotice'
 import LanguageRadioOption from './LanguageRadioOption'
 
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
-import { shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
+import { resolveFirstUnreadUtteranceId, shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
+import { resolveAccessibilityCopy } from '@/i18n/accessibility-copy'
+import { MessageReplyComposerBar, MessageReplyProvider } from './MessageReply'
+import type { MessageReplyReference } from '@/lib/message-reply'
 import {
   arePlaybackKeyListsEqual,
   buildOriginalBubblePlaybackKey,
@@ -241,6 +244,7 @@ import {
   resolveLiveDemoMenuTriggerClassName,
 } from './live-phone-demo.chrome-contract'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
+import { CONVERSATION_TOAST_EVENT } from './conversation-image-save'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
 import { formatLivePhoneDemoLeaveNoticeText, resolveLivePhoneDemoConversationLeaveCopy } from './live-phone-demo.leave-copy'
@@ -1431,6 +1435,10 @@ interface LivePhoneDemoProps {
   // a generic placeholder, the composer/mic are replaced with a "blocked"
   // message, and tapping the counterpart's avatar opens nothing.
   isBlockedCounterpart?: boolean
+  // Unread count captured when the room was opened (before mark-read zeroes
+  // it). When > 0, entry anchors on the first unread message instead of the
+  // bottom so the viewer resumes where they left off.
+  initialUnreadMessageCount?: number
   // See ConversationChannelSummary.isMultiMember — decides whether the
   // room-management menu's row-removal action is "delete" (solo room,
   // deletes for the owner) or "leave" (shared room, removes just the
@@ -1882,6 +1890,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onDefaultDisplayLanguageChange,
   onOpenProfile,
   isBlockedCounterpart = false,
+  initialUnreadMessageCount = 0,
   isMultiMember = false,
 }, ref) {
   // Only used to tell "my" bubbles from "theirs" in a room shared by more
@@ -2099,6 +2108,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
+  // The message the next typed send replies to (set from a bubble's menu).
+  const [replyTarget, setReplyTarget] = useState<MessageReplyReference | null>(null)
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false)
   const [composerHasDraft, setComposerHasDraft] = useState(false)
   const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
@@ -5694,8 +5705,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       text: nextText,
       sourceLanguage: 'unknown',
       speaker: composerCopy.manualSpeakerLabel,
+      replyTo: replyTarget,
     })
     if (!submittedUtteranceId) return
+    setReplyTarget(null)
     composerDraftRef.current = ''
     if (textarea) {
       textarea.value = ''
@@ -5712,7 +5725,44 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } else {
       syncComposerTextareaHeight(composerTextareaRef.current)
     }
-  }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, focusComposerTextarea, submitExternalUtterance, syncComposerTextareaHeight])
+  }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, focusComposerTextarea, replyTarget, submitExternalUtterance, syncComposerTextareaHeight])
+
+  useEffect(() => {
+    setReplyTarget(null)
+  }, [conversationId])
+
+  const handleReplyToMessage = useCallback((reference: MessageReplyReference) => {
+    setReplyTarget(reference)
+    if (isComposerOpen) focusComposerTextarea()
+    else handleToggleComposer()
+  }, [focusComposerTextarea, handleToggleComposer, isComposerOpen])
+
+  const handleCancelReply = useCallback(() => setReplyTarget(null), [])
+
+  // Only messages already in the loaded history can be jumped to.
+  const handleJumpToMessage = useCallback((id: string) => {
+    const row = chatRef.current?.querySelector<HTMLElement>(`[data-utterance-id="${CSS.escape(id)}"]`)
+    if (!row) return
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    row.animate?.(
+      [{ backgroundColor: 'rgba(251, 191, 36, 0.28)' }, { backgroundColor: 'rgba(251, 191, 36, 0)' }],
+      { duration: 1400, easing: 'ease-out' },
+    )
+  }, [])
+
+  const recalledUtteranceIds = useMemo(
+    () => new Set(utterances.filter((utterance) => utterance.recalled).map((utterance) => utterance.id)),
+    [utterances],
+  )
+  const replyRoomContext = useMemo(() => ({
+    locale: uiLocale,
+    viewerUserId,
+    displayLanguages: [...normalizedPreferredDisplayLanguages, preferredDisplayLanguage, resolvedDefaultDisplayLanguage],
+    recalledIds: recalledUtteranceIds,
+    onReply: handleReplyToMessage,
+    onJumpTo: handleJumpToMessage,
+  }), [handleJumpToMessage, handleReplyToMessage, normalizedPreferredDisplayLanguages, preferredDisplayLanguage,
+    recalledUtteranceIds, resolvedDefaultDisplayLanguage, uiLocale, viewerUserId])
 
   useImperativeHandle(ref, () => ({
     startRecording: async () => {
@@ -6240,19 +6290,38 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
     const node = chatRef.current
+    const hasUnread = initialUnreadMessageCount > 0 && Boolean(viewerUserId)
     if (!node || !shouldAnchorConversationEntry({
       isVisible, isStorageHydrated, hasAnchored: hasInitialBottomAnchorRef.current,
       messageCount: utterances.length, isServerPending: isInitialServerHydrationPending,
+      hasUnread,
     })) return
-    node.scrollTop = node.scrollHeight
-    lastDistanceToBottomRef.current = 0
-    shouldAutoScroll.current = true
-    suppressAutoScrollRef.current = false
-    autoScrollSchedulerRef.current.markPerformed()
+    const firstUnreadId = hasUnread
+      ? resolveFirstUnreadUtteranceId({ utterances, unreadCount: initialUnreadMessageCount, viewerUserId })
+      : null
+    const firstUnreadRow = firstUnreadId
+      ? node.querySelector<HTMLElement>(`[data-utterance-id="${CSS.escape(firstUnreadId)}"]`)
+      : null
+    if (firstUnreadRow) {
+      // Instant jump (no smooth scroll): first unread row at the top of the
+      // viewport. updateScrollDerivedState below decides auto-follow from the
+      // resulting distance, so new messages don't yank the viewer down.
+      node.scrollTop += firstUnreadRow.getBoundingClientRect().top - node.getBoundingClientRect().top - 8
+      autoScrollSchedulerRef.current.markPerformed()
+    } else {
+      node.scrollTop = node.scrollHeight
+      lastDistanceToBottomRef.current = 0
+      shouldAutoScroll.current = true
+      suppressAutoScrollRef.current = false
+      autoScrollSchedulerRef.current.markPerformed()
+    }
     hasInitialBottomAnchorRef.current = true
     allowAutoTopPaginationRef.current = true
     updateScrollDerivedState()
-  }, [conversationId, isVisible, isStorageHydrated, isInitialServerHydrationPending, utterances.length, updateScrollDerivedState])
+    // utterances is read only for the one-shot unread lookup; length still
+    // drives re-evaluation like before.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, isVisible, isStorageHydrated, isInitialServerHydrationPending, utterances.length, updateScrollDerivedState, initialUnreadMessageCount, viewerUserId])
 
   // Preserve scroll position after prepending older utterances
   useLayoutEffect(() => {
@@ -6326,9 +6395,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const handleCopySuccess = () => {
       showFloatingToast(copyActionCopy.copiedToastLabel)
     }
+    const handleToast = (event: Event) => {
+      const label = (event as CustomEvent<{ label?: unknown }>).detail?.label
+      if (typeof label === 'string' && label) showFloatingToast(label)
+    }
     window.addEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
+    window.addEventListener(CONVERSATION_TOAST_EVENT, handleToast)
     return () => {
       window.removeEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
+      window.removeEventListener(CONVERSATION_TOAST_EVENT, handleToast)
       if (floatingToastTimerRef.current) clearTimeout(floatingToastTimerRef.current)
     }
   }, [copyActionCopy.copiedToastLabel, showFloatingToast])
@@ -7139,6 +7214,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   return (
     <PhoneFrame>
+      <MessageReplyProvider value={replyRoomContext}>
       <div
         data-qa="live-demo-root"
         className="relative flex h-full min-h-0 flex-col overflow-hidden"
@@ -8817,7 +8893,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       minWidth: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
                       height: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
                     }}
-                    aria-label="Scroll to latest"
+                    aria-label={resolveAccessibilityCopy(uiLocale).scrollToLatest}
                   >
                     <ChevronDown size={28} strokeWidth={1.85} />
                   </button>
@@ -9053,6 +9129,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
           >
+            {replyTarget && !isBlockedCounterpart ? (
+              <MessageReplyComposerBar reference={replyTarget} onCancel={handleCancelReply} />
+            ) : null}
             {isBlockedCounterpart ? (
               <div
                 data-qa="live-demo-blocked-bottom-bar"
@@ -9396,6 +9475,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           )}
         </div>
       </div>
+      </MessageReplyProvider>
     </PhoneFrame>
   )
 })

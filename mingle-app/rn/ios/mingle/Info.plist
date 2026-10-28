@@ -57,7 +57,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>HashChat lets you choose photos to send in conversations.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>HashChat saves QR codes to your Photos.</string>
+	<string>HashChat saves QR codes and chat photos to your Photos.</string>
 	<key>MingleWebAppBaseURL</key>
 	<string>$(NEXT_PUBLIC_SITE_URL)</string>
 	<key>MingleWebAppScheme</key>

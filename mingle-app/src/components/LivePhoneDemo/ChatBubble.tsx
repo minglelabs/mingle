@@ -23,7 +23,11 @@ import ConversationImageBubble from './ConversationImageBubble'
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
 import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
 import { MessageRecallScope } from './MessageRecall'
+import { MessageReadReceipt } from './MessageReadReceipts'
+import { MessageReplyQuote, MessageReplyScope } from './MessageReply'
+import { buildMessageReplyReference } from '@/lib/message-reply'
 import { messageRecallCopy } from '@/lib/message-recall'
+import type { MessageReplyReference } from '@/lib/message-reply'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
@@ -173,6 +177,10 @@ export interface Utterance {
   createdAtMs?: number
   serverCreatedAtMs?: number
   serverMessageId?: string
+  // Server-clock storage time; see ConversationHydrationUtterance.
+  serverPersistedAtMs?: number
+  // Snapshot of the message this one replies to (see message-reply.ts).
+  replyTo?: MessageReplyReference
 }
 
 interface ChatBubbleProps {
@@ -1318,6 +1326,16 @@ function ChatBubble({
       data-chat-bubble-other-meta={isOwnMessage ? undefined : true}
       className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
+      {!isDraft && !isRecalled && (
+        <MessageReadReceipt
+          senderUserId={utterance.speakerUserId}
+          // Not yet stored → nobody can have read it; createdAtMs (device
+          // clock) is only a stand-in until the server time arrives.
+          createdAtMs={utterance.serverPersistedAtMs ?? utterance.createdAtMs}
+          locale={uiLocale}
+          align={isOwnMessage ? 'right' : 'left'}
+        />
+      )}
       {bubbleTimestamp}
       {!messageImage && !isRecalled && bubbleControls}
     </div>
@@ -1334,6 +1352,9 @@ function ChatBubble({
         : 'flex min-w-0 flex-1 flex-col items-start gap-px'}
     >
       {speakerHeader}
+      {utterance.replyTo && !isRecalled && (
+        <MessageReplyQuote reference={utterance.replyTo} align={isOwnMessage ? 'right' : 'left'} />
+      )}
       <div
         data-chat-bubble-line
         className="flex min-w-0 max-w-full items-end gap-1"
@@ -1359,8 +1380,11 @@ function ChatBubble({
     : <>{avatarColumn}{messageColumn}</>
   // A solo-era turn carries no speakerUserId (see isOwnMessage), whoever sent it, so the server's own flag decides there.
   const canRecall = !isDraft && !isRecalled && (utterance.sentByViewer === true || isOwnMessage)
+  const replyReference = isDraft || isRecalled ? null : buildMessageReplyReference(utterance)
   const reactiveContent = <MessageReactionScope id={isDraft || isRecalled ? undefined : utterance.id} locale={uiLocale}>
-    <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>{bubbleContent}</MessageRecallScope>
+    <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>
+      <MessageReplyScope reference={replyReference}>{bubbleContent}</MessageReplyScope>
+    </MessageRecallScope>
   </MessageReactionScope>
 
   if (!shouldAnimateEntrance) {
@@ -1415,11 +1439,13 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.speakerImage !== nu.speakerImage) return false
     if (pu.speakerBadge !== nu.speakerBadge) return false
     if (pu.createdAtMs !== nu.createdAtMs) return false
+    if (pu.serverPersistedAtMs !== nu.serverPersistedAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false
     if (pu.sourceLanguagesMixed !== nu.sourceLanguagesMixed) return false
     if (pu.sourceTextHasForeignScript !== nu.sourceTextHasForeignScript) return false
     if (pu.translationStatus !== nu.translationStatus) return false
+    if (pu.replyTo?.id !== nu.replyTo?.id || pu.replyTo?.recalled !== nu.replyTo?.recalled) return false
     if (pu.targetLanguages !== nu.targetLanguages) {
       const pt = pu.targetLanguages || []
       const nt = nu.targetLanguages || []

@@ -119,6 +119,7 @@ function clearTranslationEnv() {
   delete process.env.OPENAI_API_KEY
   delete process.env.OPENAI_BASE_URL
   delete process.env.GEMINI_API_KEY
+  delete process.env.ANTHROPIC_API_KEY
 }
 
 function setGeminiTranslateEnv() {
@@ -735,6 +736,8 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithEnv()
     process.env.OPENAI_API_KEY = 'test-openai-key'
+    // No fallback provider configured, so only the selected one is tried.
+    delete process.env.GEMINI_API_KEY
 
     const res = await POST(makeJsonRequest({
       text: 'hello',
@@ -1226,6 +1229,7 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithEnv()
     process.env.OPENAI_API_KEY = 'test-openai-key'
+    delete process.env.GEMINI_API_KEY
 
     const res = await POST(makeJsonRequest({
       text: '응',
@@ -1250,6 +1254,112 @@ describe('/api/translate/finalize route', () => {
       ja: 'うん。',
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back from GPT-6 Luna to Gemini when OpenAI rejects the request', async () => {
+    setAuthenticatedTranslationModel('gpt-6-luna')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      ))
+    mockGenerateContent.mockResolvedValueOnce({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('gemini')
+    expect(json.model).toBe('gemini-2.5-flash-lite')
+    expect(json.translations).toEqual({ ko: '안녕하세요' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to Claude Haiku when both GPT-6 Luna and Gemini fail', async () => {
+    setAuthenticatedTranslationModel('gpt-6-luna')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      ))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-haiku-5-5',
+          content: [{ type: 'text', text: '{"ko":"안녕하세요"}' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+    mockGenerateContent.mockRejectedValue(new Error(
+      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com: [400 Bad Request] API key not valid.',
+    ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('claude')
+    expect(json.translations).toEqual({ ko: '안녕하세요' })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('api.anthropic.com')
+  })
+
+  it('returns 502 after every fallback provider fails', async () => {
+    setAuthenticatedTranslationModel('gemini-2.5-flash-lite')
+    const fetchMock = vi.fn()
+      .mockResolvedValue(new Response(
+        JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      ))
+    mockGenerateContent.mockRejectedValue(new Error(
+      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com: [400 Bad Request] API key not valid.',
+    ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+
+    expect(res.status).toBe(502)
+    expect(await res.json()).toEqual({ error: 'empty_translation_response' })
+    // Gemini first (selected), then GPT-6 Luna; Haiku has no key here.
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('api.openai.com')
   })
 
   it('falls back to the default model when the user has no stored translation model', async () => {
