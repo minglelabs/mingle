@@ -1290,6 +1290,42 @@ describe('/api/translate/finalize route', () => {
     expect(mockGenerateContent).toHaveBeenCalledTimes(1)
   })
 
+  it('falls back from a timed-out final GPT-6 Luna request to Gemini without retrying OpenAI', async () => {
+    setAuthenticatedTranslationModel('gpt-6-luna')
+    const fetchMock = vi.fn()
+      .mockRejectedValue(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
+    mockGenerateContent.mockResolvedValueOnce({
+      response: {
+        text: () => '{"ko":"오."}',
+        usageMetadata: {},
+      },
+    })
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
+
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const POST = await importRouteWithEnv()
+      process.env.OPENAI_API_KEY = 'test-openai-key'
+
+      const res = await POST(makeJsonRequest({
+        text: 'Oh.',
+        sourceLanguage: 'en',
+        targetLanguages: ['ko'],
+        isFinal: true,
+      }) as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.provider).toBe('gemini')
+      expect(json.translations).toEqual({ ko: '오.' })
+      expect(timeoutSpy).toHaveBeenCalledWith(8_000)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    } finally {
+      timeoutSpy.mockRestore()
+    }
+  })
+
   it('falls back to Claude Haiku when both GPT-6 Luna and Gemini fail', async () => {
     setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
@@ -1779,6 +1815,41 @@ describe('/api/translate/finalize route', () => {
       })
       expect(mockGenerateContent).toHaveBeenCalledTimes(1)
       expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('keeps translations when the redetected source language is outside the selectable list', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"uz","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ru":"Ладно, потом.","en":"Okay, later."}',
+        usageMetadata: {},
+      },
+    })
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    const { POST } = await import('@/app/api/ios/v1.0.4/translate/finalize/route')
+
+    try {
+      const res = await POST(makeJsonRequest({
+        text: "Sopib qo'yib, keyin.",
+        sourceLanguage: 'unknown',
+        targetLanguages: ['ru', 'en'],
+        isFinal: true,
+      }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.sourceLanguage).toBe('uz')
+      expect(json.translations).toEqual({
+        ru: 'Ладно, потом.',
+        en: 'Okay, later.',
+      })
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
     } finally {
       vi.unstubAllGlobals()
     }

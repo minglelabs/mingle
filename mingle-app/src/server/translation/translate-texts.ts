@@ -42,7 +42,7 @@ const DEFAULT_DASHSCOPE_QWEN_MODEL = 'Qwen3.5-9B'
 const TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS = 250
 const MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS = 2_000
 const OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS = 4_000
-const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 5_000
+const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 8_000
 const ANTHROPIC_TRANSLATION_MAX_TOKENS = 16_000
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
@@ -603,6 +603,11 @@ function isRetryableGeminiError(error: unknown): boolean {
   )
 }
 
+function isProviderTimeoutError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  return error.name === 'TimeoutError' || error.message.toLowerCase().includes('aborted due to timeout')
+}
+
 function isRetryableOpenAICompatibleError(error: unknown): boolean {
   if (!(error instanceof Error)) return false
   const msg = error.message.toLowerCase()
@@ -1103,7 +1108,9 @@ async function createOpenAICompatibleCompletion(
   try {
     return await executeRequest()
   } catch (error) {
-    if (!ctx.isFinal || !isRetryableOpenAICompatibleError(error)) throw error
+    // A slow provider stays slow on an immediate retry, so a timeout goes straight
+    // to the fallback provider instead of making the user wait a second timeout.
+    if (!ctx.isFinal || isProviderTimeoutError(error) || !isRetryableOpenAICompatibleError(error)) throw error
     const retryInMs = resolveProviderRetryDelayMs(error)
     if (!shouldRetryProviderError(error)) {
       logWarning('provider_retry_skipped', {
