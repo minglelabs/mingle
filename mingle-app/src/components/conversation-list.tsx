@@ -133,6 +133,11 @@ import {
 } from "@/components/conversation-list.diagnostics";
 import NativePushRegistration from "@/components/native-push-registration";
 import {
+  NativeAppUpdateCard,
+  openNativeAppUpdateStore,
+  useNativeAppUpdateCardContent,
+} from "@/components/native-app-update-card";
+import {
   readConversationListCache,
   readConversationListMemoryCache,
   resolveConversationListInitialState,
@@ -1974,6 +1979,7 @@ export default function ConversationList({
   );
   const notificationCopy = useMemo(() => resolveNotificationCopy(locale), [locale]);
   const sortCopy = useMemo(() => conversationSortCopy(locale), [locale]);
+  const { detail: nativeAppUpdate, content: nativeAppUpdateCardContent } = useNativeAppUpdateCardContent(locale);
   const [conversationSortMode, setConversationSortMode] = useState<ConversationListSortMode>("recent");
   const [showSortMenu, setShowSortMenu] = useState(false);
   const roomManagementCopy = useMemo(
@@ -5625,12 +5631,18 @@ export default function ConversationList({
             <button
               type="button"
               onClick={() => setShowSortMenu((open) => !open)}
-              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
+              className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
               aria-label={sortCopy.menuLabel}
               aria-haspopup="menu"
               aria-expanded={showSortMenu}
             >
               <Settings size={22} strokeWidth={2} />
+              {isNativeRuntime && nativeAppUpdateCardContent.showUpdateAction ? (
+                <span
+                  className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white"
+                  aria-hidden
+                />
+              ) : null}
             </button>
             {showSortMenu ? (
               <>
@@ -5642,7 +5654,7 @@ export default function ConversationList({
                 <div
                   role="menu"
                   aria-label={sortCopy.title}
-                  className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-2xl border border-gray-100 bg-white py-1 shadow-lg"
+                  className={`absolute right-0 top-full z-50 mt-1 ${isNativeRuntime ? "w-72" : "w-56"} overflow-hidden rounded-2xl border border-gray-100 bg-white py-1 shadow-lg`}
                 >
                   <p className="px-4 pb-1 pt-2 text-[12px] font-semibold text-gray-400">
                     {sortCopy.title}
@@ -5662,6 +5674,17 @@ export default function ConversationList({
                       ) : null}
                     </button>
                   ))}
+                  {isNativeRuntime ? (
+                    <div className="border-t border-gray-100 px-2 pb-1 pt-2">
+                      <NativeAppUpdateCard
+                        {...nativeAppUpdateCardContent}
+                        onUpdate={() => {
+                          setShowSortMenu(false);
+                          openNativeAppUpdateStore(nativeAppUpdate?.updateUrl);
+                        }}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </>
             ) : null}

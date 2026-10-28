@@ -2,6 +2,14 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-10-29 — Long press in a room no longer selects text; app update card in the conversation-list settings menu
+
+- Surface: Chat message list (`chatViewportStyle` in `LivePhoneDemo.tsx`) and the gear menu at the top right of the conversation list (`conversation-list.tsx`).
+- Issue (selection): Long-pressing a bubble to open its menu often selected nearby text instead, as if dragged with a mouse: language dividers, read receipts, times and the expand/collapse toggle. The bubble itself is `user-select: none`, but its surroundings were selectable, and iOS WebKit's long press picks the nearest selectable text.
+- Resolution (selection): The whole chat scroll container is `user-select: none` with `-webkit-touch-callout: none`. Copying still goes through the bubble menu. The list has no inputs, so nothing typed there is affected.
+- Feature (update): The gear menu shows the same app update card as the room menu and My page (installed version, latest version, status and an Update button that opens the store), in the native app only. An amber dot on the gear shows when an update is available. The card, its content and the store-opening command now live in `native-app-update-card.tsx` and are shared by all three screens.
+- Verification: Unit tests for the card content; type check, lint and the component suites passed. Not yet tried on a device.
+
 ## 2026-10-01 — Photo viewer: label fit, progress, drag-away backdrop and paging through the room's photos
 
 - Surface: Full-screen photo viewer (`ConversationImageViewer.tsx`, `ZoomableConversationImage.tsx`, `PhotoTranslationOverlay.tsx`, `photo-translation-geometry.logic.ts`, `photo-viewer-pager.logic.ts`). The viewer moved out of `ConversationImageBubble.tsx`; the bubble only opens it.

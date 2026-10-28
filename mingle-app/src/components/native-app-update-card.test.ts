@@ -6,7 +6,7 @@ import {
   resolveNativeAppInstallSourceText,
   resolveNativeAppUpdateCopy,
 } from "@/components/LivePhoneDemo/live-phone-demo.app-update.logic";
-import { NativeAppUpdateCard } from "./my-page";
+import { NativeAppUpdateCard, resolveNativeAppUpdateCardContent } from "./native-app-update-card";
 
 function renderCard(installSource: string, locale = "en") {
   return renderToStaticMarkup(
@@ -54,5 +54,42 @@ describe("NativeAppUpdateCard install source", () => {
     expect(html.match(/<div class="mt-1 text-xs font-medium text-gray-600">/g)).toHaveLength(1);
     expect(html).toContain("Installed 2.2.0");
     expect(html).toContain("Latest 2.2.0");
+  });
+});
+
+describe("resolveNativeAppUpdateCardContent", () => {
+  const copy = resolveNativeAppUpdateCopy("en");
+
+  it("offers the store button only when an update and its store URL are both known", () => {
+    const available = parseNativeAppUpdateDetail({
+      status: "available",
+      clientVersion: "2.1.1",
+      latestVersion: "2.2.0",
+      updateUrl: "https://apps.apple.com/app/id1",
+      updateAvailable: true,
+    });
+    const withoutUrl = parseNativeAppUpdateDetail({
+      status: "available",
+      clientVersion: "2.1.1",
+      latestVersion: "2.2.0",
+      updateUrl: "",
+      updateAvailable: true,
+    });
+
+    expect(resolveNativeAppUpdateCardContent(available, copy)).toMatchObject({
+      installedVersion: "2.1.1",
+      latestVersion: "2.2.0",
+      statusMessage: copy.availableMessage,
+      showUpdateAction: true,
+    });
+    expect(resolveNativeAppUpdateCardContent(withoutUrl, copy).showUpdateAction).toBe(false);
+  });
+
+  it("shows the checking state before the native shell reports", () => {
+    expect(resolveNativeAppUpdateCardContent(null, copy)).toMatchObject({
+      installedVersion: copy.unknownVersionLabel,
+      statusMessage: copy.checkingMessage,
+      showUpdateAction: false,
+    });
   });
 });
