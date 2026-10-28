@@ -1,5 +1,6 @@
 "use client";
 
+import { reportUiDiagnostic } from "@/lib/ui-diagnostics";
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
@@ -1912,7 +1913,10 @@ export default function ConversationList({
   const [hasBootstrapInteractionGuardExpired, setHasBootstrapInteractionGuardExpired] = useState(false);
   useEffect(() => {
     if (sessionStatus !== "loading") return;
-    const timerId = window.setTimeout(() => setHasBootstrapInteractionGuardExpired(true), BOOTSTRAP_INTERACTION_GUARD_MAX_MS);
+    const timerId = window.setTimeout(() => {
+      setHasBootstrapInteractionGuardExpired(true);
+      reportUiDiagnostic("bootstrap_guard_expired", { guardMaxMs: BOOTSTRAP_INTERACTION_GUARD_MAX_MS });
+    }, BOOTSTRAP_INTERACTION_GUARD_MAX_MS);
     return () => window.clearTimeout(timerId);
   }, [sessionStatus]);
   const router = useRouter();

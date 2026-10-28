@@ -176,6 +176,7 @@ import {
 } from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { requestNativeBannerZone } from '@/lib/native-banner-zone'
+import { reportUiDiagnostic } from '@/lib/ui-diagnostics'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   INITIAL_SCROLL_METRICS,
@@ -3749,7 +3750,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, latestAccountPreferences, syncAccountPreferences])
 
   useEffect(() => {
+    // Temporary (see src/lib/ui-diagnostics.ts): what the room menu looked like to JS around a
+    // back navigation, and whether its panel is still on screen 600 ms later.
+    const reportMenuPopStateDiagnostic = (depthBefore: number, requestedDepth: number | null) => {
+      if (depthBefore <= 0 && requestedDepth === null) return
+      const stateBefore = window.history.state as Record<string, unknown> | null
+      window.setTimeout(() => {
+        const panel = document.querySelector('[data-qa="live-demo-menu-panel"]')
+        const rect = panel?.getBoundingClientRect()
+        reportUiDiagnostic('room_menu_popstate', {
+          depthBefore,
+          requestedDepth,
+          stateDepth: stateBefore && typeof stateBefore === 'object' ? stateBefore[MENU_HISTORY_STATE_KEY] ?? null : null,
+          depthAfter: menuHistoryDepthRef.current,
+          isNativeIosApp: isNativeIosAppRuntime(),
+          settleState: menuIosHistorySettleRef.current,
+          panelInDom: Boolean(panel),
+          panelRect: rect ? [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)] : null,
+        })
+      }, 600)
+    }
+
     const handlePopState = (event: PopStateEvent) => {
+      reportMenuPopStateDiagnostic(menuHistoryDepthRef.current, menuHistoryTargetDepthRef.current)
       const requestedDepth = menuHistoryTargetDepthRef.current
       menuHistoryTargetDepthRef.current = null
       const currentHistoryState = typeof window === 'undefined' ? null : window.history.state
