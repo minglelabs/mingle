@@ -80,7 +80,7 @@ Last reviewed: 2026-10-28
       <td><code>nova-3</code></td>
       <td>2025-02-12</td>
       <td align="center">O</td>
-      <td>$0.462/h mono<br>$0.552/h multi</td>
+      <td>$0.288/h mono RT, $0.348/h multi RT (프로모션가)<br>정가 $0.462/h mono, $0.552/h multi<br>$0.258/h mono, $0.312/h multi async</td>
       <td>O (55개 언어, 한국어 포함)</td>
       <td align="center">◎</td>
       <td align="center">X</td>
