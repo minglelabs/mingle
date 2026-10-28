@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Mingle</string>
+	<string>HashChat</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Mingle</string>
+	<string>HashChat</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -49,15 +49,15 @@
 		<true/>
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Mingle uses your microphone for real-time speech translation.</string>
+	<string>HashChat uses your microphone for real-time speech translation.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Mingle uses your camera to scan profile QR codes.</string>
+	<string>HashChat uses your camera to scan profile QR codes.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Mingle uses your location only when you choose to add or update your profile location.</string>
+	<string>HashChat uses your location only when you choose to add or update your profile location.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Mingle lets you choose photos to send in conversations.</string>
+	<string>HashChat lets you choose photos to send in conversations.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Saves QR codes and chat photos to your Photos.</string>
+	<string>HashChat saves QR codes and chat photos to your Photos.</string>
 	<key>MingleWebAppBaseURL</key>
 	<string>$(NEXT_PUBLIC_SITE_URL)</string>
 	<key>MingleWebAppScheme</key>
@@ -68,10 +68,6 @@
 	<string>$(NEXT_PUBLIC_WS_URL)</string>
 	<key>MinglePushEnvironment</key>
 	<string>$(MINGLE_PUSH_ENVIRONMENT)</string>
-	<key>MingleLegacyWebAppBaseURL</key>
-	<string>$(MINGLE_LEGACY_SITE_URL)</string>
-	<key>MingleLegacyDefaultWsURL</key>
-	<string>$(MINGLE_LEGACY_WS_URL)</string>
 	<key>MingleDefaultWsScheme</key>
 	<string>$(NEXT_PUBLIC_WS_SCHEME)</string>
 	<key>MingleDefaultWsHost</key>

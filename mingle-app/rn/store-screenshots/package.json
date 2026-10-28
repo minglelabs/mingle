@@ -1,0 +1,9 @@
+{
+  "name": "hashchat-store-screenshots",
+  "private": true,
+  "type": "module",
+  "description": "Captures and renders the App Store / Google Play screenshots (see README.md)",
+  "dependencies": {
+    "puppeteer-core": "23.11.1"
+  }
+}

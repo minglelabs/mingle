@@ -3395,7 +3395,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             />
           )}
           <span className="relative z-20 text-[2.05rem] font-extrabold leading-[1.08] bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
-            Mingle
+            HashChat
           </span>
           <div className="relative z-20 flex items-center gap-1">
             <div className="relative mr-1.5">

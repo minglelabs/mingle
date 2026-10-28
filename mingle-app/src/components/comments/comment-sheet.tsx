@@ -1,0 +1,481 @@
+"use client";
+
+/**
+ * CommentSheet (C3) — bottom sheet listing a post's comments and one-level
+ * replies. The feed card (C1) opens it with these frozen props. While it is
+ * open the feed behind must not swipe; C1 also freezes feed scroll on `open`.
+ *
+ * The props type below is the frozen contract — do not change its shape.
+ */
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useSession } from "next-auth/react";
+import { motion, useDragControls, type PanInfo } from "framer-motion";
+import { X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { commentsCopy, formatCommentsCopy, formatViewReplies } from "@/i18n/comments-copy";
+import { moderationCopy } from "@/i18n/moderation-copy";
+import { registerNativeBackHandler } from "@/lib/native-back-handler";
+import ReportSheet, { type ReportTarget } from "@/components/reports/report-sheet";
+import type { CommentNode } from "./comment-types";
+import { useCommentSheet, type ReplyTarget } from "./use-comment-sheet";
+import CommentItem, { type CommentItemHandlers } from "./comment-item";
+import CommentComposer from "./comment-composer";
+
+export type CommentSheetProps = {
+  open: boolean;
+  postId: string;
+  postAuthorId: string;
+  locale: string;
+  /** null when signed out: the list is readable, writing and liking call onRequireLogin. */
+  viewerId: string | null;
+  /** Scroll to this comment or reply; a reply's collapsed thread is expanded first. */
+  initialCommentId?: string | null;
+  onClose: () => void;
+  /** The post's comment count as the API reports it after a create or delete. */
+  onCommentCountChange?: (commentCount: number) => void;
+  onRequireLogin: () => void;
+};
+
+/**
+ * The signed-in viewer's identity for optimistic rows (name, avatar, handle)
+ * comes from next-auth `useSession` — the same source the feed and compose
+ * screens use — not a bespoke global. `viewerId` still arrives as a frozen
+ * prop (the caller already resolved it); the session only supplies the display
+ * fields. The viewer's DISPLAY language is the route `locale`, matching
+ * FeedShell (`viewerLanguage = locale`); it drives translation only, never the
+ * body's source language.
+ */
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "textarea:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+function focusableWithin(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true",
+  );
+}
+
+export default function CommentSheet(props: CommentSheetProps) {
+  const { open, postId, postAuthorId, locale, viewerId, initialCommentId, onClose, onCommentCountChange, onRequireLogin } = props;
+  const copy = commentsCopy(locale);
+
+  const { data: session } = useSession();
+  const viewer = useMemo(() => {
+    if (!viewerId) return null;
+    const user = session?.user as
+      | { id?: string; name?: string | null; image?: string | null; handle?: string }
+      | undefined;
+    return {
+      id: viewerId,
+      handle: user?.handle ?? "",
+      name: user?.name ?? null,
+      image: user?.image ?? null,
+    };
+  }, [viewerId, session]);
+
+  // Display language = route locale (same as FeedShell). Drives translation
+  // requests and the translate affordance; it is NOT the comment body language.
+  const viewerLanguage = locale;
+
+  const [mounted, setMounted] = useState(false);
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const dragControls = useDragControls();
+  const [dismissing, setDismissing] = useState(false);
+
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => setMounted(true));
+    return () => window.cancelAnimationFrame(id);
+  }, []);
+
+  const sheet = useCommentSheet({
+    open,
+    postId,
+    postAuthorId,
+    viewerId,
+    viewer: viewer ? { id: viewer.id, handle: viewer.handle, name: viewer.name, image: viewer.image } : null,
+    viewerLanguage,
+    initialCommentId,
+    onCommentCountChange,
+    onRequireLogin,
+  });
+
+  // ── Back / Escape closes the sheet ──────────────────────────────────────
+  useEffect(() => {
+    if (!open) return;
+    const unregister = registerNativeBackHandler(() => {
+      onClose();
+      return true;
+    }, 10);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      unregister();
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  // ── Lock the background from scrolling / swiping while open ──────────────
+  useEffect(() => {
+    if (!open) return;
+    const { body } = document;
+    const prevOverflow = body.style.overflow;
+    const prevOverscroll = body.style.overscrollBehavior;
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "contain";
+    return () => {
+      body.style.overflow = prevOverflow;
+      body.style.overscrollBehavior = prevOverscroll;
+    };
+  }, [open]);
+
+  // ── Keep the composer above the keyboard using visualViewport ────────────
+  // Only the composer rises with the keyboard. The composer focuses with
+  // preventScroll so the iOS WebView does not pan the page; any pan that still
+  // happens is undone by holding the page at scroll 0.
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  useEffect(() => {
+    if (!open || typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const pinPage = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0);
+      if (document.documentElement.scrollTop !== 0) document.documentElement.scrollTop = 0;
+      if (document.body.scrollTop !== 0) document.body.scrollTop = 0;
+    };
+    const onResize = () => {
+      pinPage();
+      // How much of the layout viewport the keyboard covers at the bottom.
+      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      setKeyboardInset((current) => (Math.abs(current - inset) < 2 ? current : inset));
+    };
+    const onFocusIn = () => {
+      pinPage();
+      // iOS pans after focus; re-pin once the keyboard animation settles.
+      window.setTimeout(onResize, 60);
+      window.setTimeout(onResize, 300);
+    };
+    const initial = window.requestAnimationFrame(onResize);
+    vv.addEventListener("resize", onResize);
+    vv.addEventListener("scroll", onResize);
+    window.addEventListener("scroll", pinPage, { passive: true });
+    document.addEventListener("focusin", onFocusIn);
+    return () => {
+      window.cancelAnimationFrame(initial);
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onResize);
+      window.removeEventListener("scroll", pinPage);
+      document.removeEventListener("focusin", onFocusIn);
+    };
+  }, [open]);
+
+  // ── Scroll to initialCommentId ONCE, after its thread is expanded ────────
+  // The effect re-runs as the list/expansion changes only until the target
+  // row exists; after the first scroll, likes, replies and expansions never
+  // yank the list back to it. Reset when the sheet closes.
+  const scrolledToRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) scrolledToRef.current = null;
+  }, [open]);
+  useEffect(() => {
+    if (sheet.phase !== "ready" || !initialCommentId) return;
+    if (scrolledToRef.current === initialCommentId) return;
+    const container = scrollRef.current;
+    if (!container) return;
+    const id = window.requestAnimationFrame(() => {
+      if (scrolledToRef.current === initialCommentId) return;
+      const target = container.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(initialCommentId)}"]`);
+      if (!target) return;
+      scrolledToRef.current = initialCommentId;
+      target.scrollIntoView({ block: "center" });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [sheet.phase, initialCommentId, sheet.expanded, sheet.nodes]);
+
+  // ── Focus: move into the sheet, trap Tab, restore on close ────────────────
+  const reportOpenRef = useRef(false);
+  useEffect(() => {
+    reportOpenRef.current = reportTarget !== null;
+  }, [reportTarget]);
+  useEffect(() => {
+    if (!open || !mounted) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const raf = window.requestAnimationFrame(() => {
+      if (!panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
+    });
+    const onKeyDown = (event: KeyboardEvent) => {
+      // The nested report sheet manages its own focus.
+      if (event.key !== "Tab" || reportOpenRef.current) return;
+      const focusables = focusableWithin(panel);
+      if (focusables.length === 0) {
+        event.preventDefault();
+        panel.focus({ preventScroll: true });
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      const inside = active instanceof Node && panel.contains(active);
+      if (event.shiftKey) {
+        if (!inside || active === first || active === panel) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (!inside || active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      document.removeEventListener("keydown", onKeyDown);
+      if (previouslyFocused && previouslyFocused.isConnected) previouslyFocused.focus({ preventScroll: true });
+    };
+  }, [open, mounted]);
+
+  const handlers: CommentItemHandlers = {
+    onToggleLike: sheet.toggleLike,
+    onStartReply: (comment: CommentNode) => {
+      const target: NonNullable<ReplyTarget> = {
+        parentId: comment.parentId ?? comment.id,
+        replyToUserId: comment.authorId,
+        replyToUser: {
+          id: comment.author.id,
+          handle: comment.author.handle,
+          name: comment.author.name,
+          // Keep the badge on the optimistic reply's "@name" and the composer banner.
+          ...(comment.author.isOfficial === true ? { isOfficial: true } : {}),
+          ...(comment.author.isOperator === true ? { isOperator: true } : {}),
+        },
+        label: comment.author.name ?? comment.author.handle,
+      };
+      sheet.startReply(target);
+    },
+    onEdit: sheet.edit,
+    onDelete: sheet.remove,
+    onReport: (comment: CommentNode) => {
+      setReportTarget({ type: "comment", commentId: comment.id, authorId: comment.authorId });
+    },
+    onToggleTranslation: sheet.toggleTranslation,
+    onRetryFailed: sheet.retryFailed,
+    onDiscardFailed: sheet.discardFailed,
+  };
+
+  const noticeText = useMemo(() => {
+    const n = sheet.notice;
+    if (!n) return null;
+    if (n.kind === "rate_limited") return formatCommentsCopy(copy.rateLimited, { n: n.retryAfterSeconds });
+    if (n.kind === "account_restricted") return moderationCopy(locale).accountRestricted;
+    return copy.actionFailed;
+  }, [sheet.notice, copy, locale]);
+
+  // Swipe-down dismiss: the drag starts only from the handle / header so the
+  // comment list keeps its own vertical scroll.
+  const handleDragEnd = (_e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (info.offset.y > 110 || info.velocity.y > 600) {
+      setDismissing(true);
+      window.setTimeout(() => {
+        setDismissing(false);
+        onClose();
+      }, 180);
+    }
+  };
+
+  if (!open || !mounted) return null;
+
+  const body = (
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-end"
+      role="dialog"
+      aria-modal="true"
+      aria-label={copy.title}
+    >
+      {/* Backdrop — tap to close, swallows background touches. */}
+      <button
+        type="button"
+        aria-label={copy.close}
+        onClick={onClose}
+        className={cn("absolute inset-0 bg-black/40 transition-opacity duration-200", dismissing && "opacity-0")}
+        tabIndex={-1}
+      />
+
+      <motion.div
+        ref={panelRef}
+        tabIndex={-1}
+        // Fixed height (layout-viewport vh does not shrink with the keyboard):
+        // the sheet never moves when the keyboard opens; only the composer
+        // rides up on the keyboard and the list above it gets shorter.
+        className="relative flex h-[78vh] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl outline-none"
+        style={{ paddingBottom: keyboardInset || undefined }}
+        initial={{ y: "100%" }}
+        animate={{ y: dismissing ? "100%" : 0 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        drag="y"
+        dragControls={dragControls}
+        dragListener={false}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.6 }}
+        dragMomentum={false}
+        onDragEnd={handleDragEnd}
+        // Keep touches inside the sheet from reaching the feed behind it.
+        onTouchMove={(e) => e.stopPropagation()}
+      >
+        {/* Handle + header: the swipe-down grab area */}
+        <div
+          className="shrink-0 cursor-grab touch-none select-none"
+          onPointerDown={(e) => dragControls.start(e)}
+        >
+          <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-muted-foreground/30" aria-hidden />
+          <div className="flex items-center justify-between px-5 pb-3 pt-3">
+            <h2 className="text-[16px] font-bold">
+              {copy.title}
+              {sheet.commentCount > 0 && (
+                <span className="ml-1.5 font-semibold text-muted-foreground">{sheet.commentCount}</span>
+              )}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label={copy.close}
+              className="rounded-full bg-gray-100 p-1.5 text-muted-foreground transition active:scale-95"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          </div>
+        </div>
+        <div className="h-px shrink-0 bg-gray-100" />
+
+        {/* List */}
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto overscroll-contain px-3 py-2"
+        >
+          {sheet.phase === "loading" && (
+            <p className="py-8 text-center text-[14px] text-muted-foreground">{copy.loading}</p>
+          )}
+          {sheet.phase === "error" && (
+            <div className="py-8 text-center">
+              <p className="text-[14px] text-muted-foreground">{copy.loadError}</p>
+              <button
+                type="button"
+                onClick={() => void sheet.reload()}
+                className="mt-2 rounded-md bg-gray-100 px-3 py-1.5 text-[13px] font-medium"
+              >
+                {copy.retry}
+              </button>
+            </div>
+          )}
+          {sheet.phase === "ready" && sheet.nodes.length === 0 && (
+            <p className="py-8 text-center text-[14px] text-muted-foreground">{copy.empty}</p>
+          )}
+
+          {sheet.phase === "ready" &&
+            sheet.nodes.map((comment) => {
+              const replies = comment.replies ?? [];
+              const isExpanded = sheet.expanded.has(comment.id);
+              return (
+                <div key={comment.id} className="py-0.5">
+                  <CommentItem
+                    comment={comment}
+                    isReply={false}
+                    locale={locale}
+                    viewerId={viewerId}
+                    postAuthorId={postAuthorId}
+                    viewerLanguage={viewerLanguage}
+                    handlers={handlers}
+                  />
+
+                  {replies.length > 0 && (
+                    <div className="ml-11 border-l-2 border-gray-100 pl-1">
+                      <button
+                        type="button"
+                        onClick={() => sheet.toggleReplies(comment.id)}
+                        aria-expanded={isExpanded}
+                        className="px-2 py-1 text-[13px] font-medium text-muted-foreground"
+                      >
+                        {isExpanded
+                          ? copy.hideReplies
+                          : formatViewReplies(locale, replies.length)}
+                      </button>
+
+                      {isExpanded &&
+                        replies.map((reply) => (
+                          <CommentItem
+                            key={reply.id}
+                            comment={reply}
+                            isReply
+                            locale={locale}
+                            viewerId={viewerId}
+                            postAuthorId={postAuthorId}
+                            viewerLanguage={viewerLanguage}
+                            handlers={handlers}
+                          />
+                        ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+
+        {/* Notice (rate limit / error) */}
+        {noticeText && (
+          <div
+            role="status"
+            className="flex items-center justify-between gap-2 bg-gray-100 px-4 py-2 text-[13px] text-foreground"
+          >
+            <span>{noticeText}</span>
+            <button type="button" onClick={sheet.dismissNotice} aria-label={copy.close}>
+              <X className="size-4" aria-hidden />
+            </button>
+          </div>
+        )}
+
+        {/* Composer or signed-out hint */}
+        {viewerId === null ? (
+          <div className="border-t border-gray-100 px-4 py-3 text-center text-[14px] text-muted-foreground">
+            <button type="button" onClick={onRequireLogin} className="font-medium text-primary">
+              {copy.signedOutHint}
+            </button>
+          </div>
+        ) : (
+          <CommentComposer
+            locale={locale}
+            sending={sheet.sending}
+            disabled={false}
+            replyTarget={sheet.replyTarget}
+            onCancelReply={sheet.cancelReply}
+            onSubmit={sheet.submit}
+            keyboardOpen={keyboardInset > 0}
+          />
+        )}
+      </motion.div>
+
+      {/* Report flow for others' comments (R team owns the sheet body). */}
+      {reportTarget && (
+        <ReportSheet
+          open={reportTarget !== null}
+          target={reportTarget}
+          locale={locale}
+          onClose={() => setReportTarget(null)}
+        />
+      )}
+    </div>
+  );
+
+  return createPortal(body, document.body);
+}

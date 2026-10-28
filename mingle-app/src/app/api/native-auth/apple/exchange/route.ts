@@ -61,9 +61,9 @@ function normalizeEmail(rawValue: unknown): string {
 
 function deriveNameFromEmail(email: string): string {
   const localPart = email.split("@")[0]?.trim();
-  if (!localPart) return "Mingle User";
+  if (!localPart) return "HashChat User";
   const label = localPart.replace(/[._-]+/g, " ").trim();
-  if (!label) return "Mingle User";
+  if (!label) return "HashChat User";
   return label.slice(0, 128);
 }
 
@@ -273,7 +273,7 @@ export async function upsertNativeAppleUser(args: {
 }> {
   const now = new Date();
   const externalUserId = `apple:${args.appleSubject}`.slice(0, 128);
-  const name = args.name || "Mingle User";
+  const name = args.name || "HashChat User";
   const accountKey = {
     provider: "apple",
     providerAccountId: args.appleSubject,
@@ -504,7 +504,7 @@ export async function POST(request: NextRequest) {
   try {
     bridgeToken = createNativeAuthBridgeToken({
       sub: user.id,
-      name: normalizeText(user.name, 128) || "Mingle User",
+      name: normalizeText(user.name, 128) || "HashChat User",
       email: normalizeEmail(user.email) || email,
       provider: "apple",
       callbackUrl,

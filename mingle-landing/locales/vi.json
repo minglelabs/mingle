@@ -5,29 +5,29 @@
   "hero": {
     "title1": "Dịch từng câu một,",
     "title2": "đủ rồi.",
-    "subtitle": "Không còn phải dừng lại sau mỗi câu để dịch. Mingle dịch các cuộc trò chuyện dài liên tục, hiển thị theo thời gian thực trên màn hình những gì bạn nói. Tất cả cuộc trò chuyện được lưu trong phòng chat, và bạn có thể mời người khác tiếp tục nói chuyện trực tuyến bất cứ lúc nào.",
+    "subtitle": "Không còn phải dừng lại sau mỗi câu để dịch. HashChat dịch các cuộc trò chuyện dài liên tục, hiển thị theo thời gian thực trên màn hình những gì bạn nói. Tất cả cuộc trò chuyện được lưu trong phòng chat, và bạn có thể mời người khác tiếp tục nói chuyện trực tuyến bất cứ lúc nào.",
     "cta": "Tải xuống",
     "tryDemo": "Dùng thử",
     "flirting": {
       "title1": "Tán tỉnh người nước ngoài,",
       "title2": "giờ đã dễ dàng hơn.",
-      "subtitle": "Đừng để ngôn ngữ cản trở bạn. Mingle dịch theo thời gian thực để duy trì không khí tự nhiên. Cuộc trò chuyện của bạn được lưu làm phòng chat, kết nối lại bất cứ khi nào bạn muốn."
+      "subtitle": "Đừng để ngôn ngữ cản trở bạn. HashChat dịch theo thời gian thực để duy trì không khí tự nhiên. Cuộc trò chuyện của bạn được lưu làm phòng chat, kết nối lại bất cứ khi nào bạn muốn."
     },
     "working": {
       "title1": "Làm việc với đội ngũ toàn cầu,",
       "title2": "không rào cản ngôn ngữ.",
-      "subtitle": "Giao tiếp với đội ngũ toàn cầu theo thời gian thực. Mingle dịch liền mạch trong suốt cuộc họp. Tất cả cuộc trò chuyện được ghi lại để xem lại sau, và bạn có thể tiếp tục chat với đồng nghiệp bất cứ lúc nào."
+      "subtitle": "Giao tiếp với đội ngũ toàn cầu theo thời gian thực. HashChat dịch liền mạch trong suốt cuộc họp. Tất cả cuộc trò chuyện được ghi lại để xem lại sau, và bạn có thể tiếp tục chat với đồng nghiệp bất cứ lúc nào."
     }
   },
   "valueProposition": {
-    "label": "Why Mingle",
+    "label": "Why HashChat",
     "title": "Nói chuyện với Người nước ngoài? Sự tự tin là Tất cả",
-    "description": "Không nói được ngôn ngữ của họ? Không sao. Chỉ cần bật Mingle. Chúng tôi sẽ mang lại cho bạn sự tự tin.",
+    "description": "Không nói được ngôn ngữ của họ? Không sao. Chỉ cần bật HashChat. Chúng tôi sẽ mang lại cho bạn sự tự tin.",
     "social": {
       "label": "Offline",
       "title": "Tự tin tham gia gặp mặt offline.",
       "description": "Biến thành trình dịch giọng nói thời gian thực. Tự động dịch nhiều ngôn ngữ theo cả hai hướng.",
-      "titleHighlight": "Cùng Mingle."
+      "titleHighlight": "Cùng HashChat."
     },
     "titleHighlight": ""
   },
@@ -39,7 +39,7 @@
   },
   "beforeAfter": {
     "beforeLabel": "Trước",
-    "afterLabel": "Với Mingle",
+    "afterLabel": "Với HashChat",
     "beforeDesc": "Dịch từng câu một...",
     "afterDesc": "Cuộc trò chuyện trôi chảy tự nhiên!",
     "problemLabel": "Vấn đề",
@@ -60,7 +60,7 @@
   "features": {
     "label": "Tính Năng",
     "title": "Để bạn tập trung vào cuộc trò chuyện",
-    "subtitle": "Mingle không chỉ là ứng dụng dịch thuật. Nó là ứng dụng nhắn tin thoải mái nhất thế giới giúp bạn tập trung chỉ vào cuộc trò chuyện.",
+    "subtitle": "HashChat không chỉ là ứng dụng dịch thuật. Nó là ứng dụng nhắn tin thoải mái nhất thế giới giúp bạn tập trung chỉ vào cuộc trò chuyện.",
     "realtime": {
       "title": "Dịch Thời Gian Thực",
       "desc": "Bản dịch bắt đầu khi bạn nói. Trò chuyện tự nhiên không gián đoạn."
@@ -89,7 +89,7 @@
   "coreValue": {
     "label": "Giá Trị Cốt Lõi",
     "title": "Tiếp tục cuộc trò chuyện offline trong phòng chat trực tuyến",
-    "desc1": "Đây là giá trị thực sự của Mingle.",
+    "desc1": "Đây là giá trị thực sự của HashChat.",
     "desc2": "Mời người bạn gặp ngoài đời vào ứng dụng. Cuộc trò chuyện đã dịch trở thành phòng chat vĩnh viễn. Tiếp tục nói chuyện ngày hôm sau, tuần sau, hoặc bất cứ khi nào.",
     "desc3": "Khoảnh khắc cuộc gặp gỡ tình cờ tại bữa tiệc trở thành tình bạn thực sự, đó là",
     "chatDate": "Cuộc trò chuyện ngày 4 tháng 2 năm 2024",
@@ -104,20 +104,20 @@
   "cta": {
     "title1": "Cách dễ nhất để",
     "title2": "kết bạn —",
-    "title2Highlight": "Mingle",
-    "subtitle": "Với Mingle, bạn có thể có những cuộc trò chuyện sâu sắc với bất kỳ ai, dù họ nói ngôn ngữ gì.",
+    "title2Highlight": "HashChat",
+    "subtitle": "Với HashChat, bạn có thể có những cuộc trò chuyện sâu sắc với bất kỳ ai, dù họ nói ngôn ngữ gì.",
     "button": "Tải Xuống Ngay"
   },
   "footer": {
-    "copyright": "© 2026 Mingle. Bảo lưu mọi quyền."
+    "copyright": "© 2026 HashChat. Bảo lưu mọi quyền."
   },
   "modal": {
     "title": "Đăng ký nhận thông báo ra mắt tại Việt Nam",
-    "subtitle": "Mingle đã được yêu thích bởi hàng triệu người trên toàn thế giới. Đăng ký email để là người đầu tiên biết khi ra mắt tại Việt Nam.",
+    "subtitle": "HashChat đã được yêu thích bởi hàng triệu người trên toàn thế giới. Đăng ký email để là người đầu tiên biết khi ra mắt tại Việt Nam.",
     "placeholder": "your@email.com",
     "submit": "Thông báo cho tôi",
     "success": "Bạn đã trong danh sách!",
-    "successDesc": "Chúng tôi sẽ thông báo cho bạn khi Mingle ra mắt tại Việt Nam!",
+    "successDesc": "Chúng tôi sẽ thông báo cho bạn khi HashChat ra mắt tại Việt Nam!",
     "error": "Đã xảy ra lỗi. Vui lòng thử lại.",
     "close": "Đóng",
     "feedbackPlaceholder": "Nếu bạn có yêu cầu hoặc mong đợi, hãy cho chúng tôi biết"
@@ -128,7 +128,7 @@
   },
   "partyScenario": {
     "step1Title": "1. Gặp nhau tại bữa tiệc",
-    "step1Desc": "Dịch theo thời gian thực với Mingle",
+    "step1Desc": "Dịch theo thời gian thực với HashChat",
     "step2Title": "2. Mời vào ứng dụng!",
     "step2Desc": "Khi mời người khác",
     "step2Highlight": "Cuộc trò chuyện trở thành chat!",
@@ -162,7 +162,7 @@
     "label": "Connect",
     "title1": "Kết nối và trò chuyện",
     "title2": "với bạn bè yêu thích",
-    "description": "Kết nối với hơn 10 triệu người trên toàn thế giới. Rào cản ngôn ngữ đã được công nghệ AI của Mingle vượt qua."
+    "description": "Kết nối với hơn 10 triệu người trên toàn thế giới. Rào cản ngôn ngữ đã được công nghệ AI của HashChat vượt qua."
   },
   "communication": {
     "title": "Bất kỳ hình thức giao tiếp nào, dễ dàng",
@@ -181,7 +181,7 @@
   },
   "worldMap": {
     "title": "Tìm bất kỳ ai trên thế giới",
-    "description": "Trước khi đi du lịch, kết bạn với người bản địa trên Mingle trước.",
+    "description": "Trước khi đi du lịch, kết bạn với người bản địa trên HashChat trước.",
     "label": "Explore"
   }
 }
