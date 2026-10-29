@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-10-29 — Export chat from the room menu as a .txt file
+
+- Surface: Room hamburger menu "Export chat" item (`LivePhoneDemo.tsx`, `conversation-export.client.ts`), `GET /api/{ns}/conversations/[id]/export` (unversioned, ios/android v2.0.0, v2.1.0, v2.2.0; 2.1.1 reaches it through the v2.1.0 rewrite).
+- Feature: The server writes every visible message of the room, oldest first, as `[YYYY-MM-DD HH:mm] Name`, the original text, and an indented `(lang) translation` line in the reader's display language only (skipped when the message is already in that language). Header: room title, active participants, export time with the time zone. Photos are `[Photo]`; unsent messages are left out. Labels in 15 locales (`conversation-export-copy.ts`); times in the device's time zone; capped at 50,000 messages.
+- Delivery (web only, no app release needed): the share sheet with the file where Web Share accepts files (iOS); if the tap expired during the fetch, a toast offers a Share button; a file download in desktop browsers; the clipboard inside the app when neither works (Android WebView has no Web Share). A native share bridge for Android is planned for the next app version.
+- Verification: Unit tests for the text format, translation pick, time zone fallback, file name and copy; type check, lint and the full suite; exported a real room from the local database. Not tried on a device yet.
+
 ## 2026-10-29 — Long press in a room no longer selects text; app update card in the conversation-list settings menu
 
 - Surface: Chat message list (`chatViewportStyle` in `LivePhoneDemo.tsx`) and the gear menu at the top right of the conversation list (`conversation-list.tsx`).
