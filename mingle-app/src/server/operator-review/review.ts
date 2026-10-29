@@ -107,44 +107,46 @@ function toReviewPost(row: {
 
 const REVIEW_POST_STATES = ['review', 'regenerating']
 
-type TimelineRow = { kind: 'profile' | 'post'; id: string; at: Date }
+/** `late`: a post without a photo, shown after every account and photo post. */
+type TimelineRow = { late: boolean; kind: 'profile' | 'post'; id: string; at: Date }
 
 const TIMELINE_SQL = `
-  SELECT kind, id, at FROM (
-    SELECT 'profile' AS kind, u.id, u.created_at AS at
+  SELECT late, kind, id, at FROM (
+    SELECT false AS late, 'profile' AS kind, u.id, u.created_at AS at
     FROM app.app_users u JOIN app.app_operator_accounts o ON o.user_id = u.id
     WHERE u.is_operator AND NOT u.is_deleted AND o.review_state <> 'approved'
     UNION ALL
-    SELECT 'post' AS kind, r.id, r.created_at AS at
+    SELECT r.image_object_key IS NULL AS late, 'post' AS kind, r.id, r.created_at AS at
     FROM app.app_operator_post_reserve r JOIN app.app_users u ON u.id = r.operator_user_id
     WHERE r.state IN ('review', 'regenerating') AND NOT u.is_deleted
   ) t`
 
-/** Cursor = `<iso time>|<kind>|<id>` of the last item shown. Profiles sort before posts at the same instant. */
+/** Cursor = `<0|1 late>|<iso time>|<kind>|<id>` of the last item shown. Profiles sort before posts at the same instant. */
 export function encodeReviewCursor(row: TimelineRow): string {
-  return `${row.at.toISOString()}|${row.kind}|${row.id}`
+  return `${row.late ? 1 : 0}|${row.at.toISOString()}|${row.kind}|${row.id}`
 }
 
 export function decodeReviewCursor(value: string | undefined): TimelineRow | null {
-  const [iso, kind, id] = (value ?? '').split('|')
+  const [late, iso, kind, id] = (value ?? '').split('|')
   const at = new Date(iso ?? '')
-  if (!id || Number.isNaN(at.getTime()) || (kind !== 'profile' && kind !== 'post')) return null
-  return { kind, id, at }
+  if (!id || (late !== '0' && late !== '1') || Number.isNaN(at.getTime()) || (kind !== 'profile' && kind !== 'post')) return null
+  return { late: late === '1', kind, id, at }
 }
 
 /**
  * Every account and post waiting for review on one timeline, oldest first:
- * accounts by sign-up time, posts by creation time. Paged by cursor, so items
+ * accounts by sign-up time, posts by creation time. Accounts and photo posts
+ * come first, then the posts without a photo. Paged by cursor, so items
  * answered on one page never push unseen ones past the next.
  */
 export async function listReviewQueue(options: { cursor?: string; now?: Date } = {}): Promise<ReviewQueue> {
   const now = options.now ?? new Date()
   const after = decodeReviewCursor(options.cursor)
-  const order = `ORDER BY at, (kind = 'post'), id`
+  const order = `ORDER BY late, at, (kind = 'post'), id`
   const rows = after
     ? await prisma.$queryRawUnsafe<TimelineRow[]>(
-      `${TIMELINE_SQL} WHERE (at, (kind = 'post'), id) > ($1::timestamp, $2::boolean, $3::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
-      after.at, after.kind === 'post', after.id,
+      `${TIMELINE_SQL} WHERE (late, at, (kind = 'post'), id) > ($1::boolean, $2::timestamp, $3::boolean, $4::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
+      after.late, after.at, after.kind === 'post', after.id,
     )
     : await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`)
   const page = rows.slice(0, REVIEW_ITEMS_PER_PAGE)
