@@ -26,6 +26,10 @@ import ProfileLocation from "@/components/profile-location";
 import ProfilePostGrid from "@/components/search/profile-post-grid";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
+import LanguageLevelPicker from "@/components/language-level-picker";
+import ProfileLanguageLevels from "@/components/profile-language-levels";
+import { MAX_INTEREST_LANGUAGES, sanitizeInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
+import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
 import LanguageFlag from "@/components/language-flag";
 import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
@@ -127,6 +131,8 @@ type ProfileDraft = {
   primaryLanguages: SttLanguageCode[];
   birthDate: BirthDateParts | null;
 };
+
+const NO_INTEREST_LANGUAGES: readonly InterestLanguage[] = [];
 
 const DEFAULT_PROFILE_EDIT_BIRTH_DATE: BirthDateParts = {
   year: 2000,
@@ -248,13 +254,14 @@ type ReportRecord = {
 
 type SessionStatus = "loading" | "authenticated" | "unauthenticated";
 type ManagementLoadState = "idle" | "loading" | "ready" | "unauthorized" | "error";
-type ProfileManagementPage = "blocked" | "reports" | "language" | "primaryLanguages" | "defaultLanguages" | "usage" | "feedback";
+type ProfileManagementPage = "blocked" | "reports" | "language" | "primaryLanguages" | "interestLanguages" | "defaultLanguages" | "usage" | "feedback";
 
 function isProfileManagementPage(value: string | undefined): value is ProfileManagementPage {
   return value === "blocked"
     || value === "reports"
     || value === "language"
     || value === "primaryLanguages"
+    || value === "interestLanguages"
     || value === "defaultLanguages"
     || value === "usage"
     || value === "feedback";
@@ -350,6 +357,8 @@ function ProfileSettingsPanel({
   onChangeAppLanguage,
   initialPrimaryLanguages,
   onSavePrimaryLanguages,
+  initialInterestLanguages,
+  onSaveInterestLanguages,
   initialDefaultConversationLanguages,
   onSaveDefaultConversationLanguages,
   onSignOut,
@@ -364,6 +373,8 @@ function ProfileSettingsPanel({
   onChangeAppLanguage: (locale: PrimaryUiLocale) => void;
   initialPrimaryLanguages: readonly string[];
   onSavePrimaryLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
+  initialInterestLanguages: readonly InterestLanguage[];
+  onSaveInterestLanguages: (languages: InterestLanguage[]) => Promise<boolean>;
   initialDefaultConversationLanguages: readonly string[];
   onSaveDefaultConversationLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
   onSignOut: () => void;
@@ -395,6 +406,9 @@ function ProfileSettingsPanel({
     sanitizeSttLanguageSelection(initialPrimaryLanguages)
   ));
   const [isSavingPrimaryLanguages, setIsSavingPrimaryLanguages] = useState(false);
+  const [interestLanguages, setInterestLanguages] = useState<InterestLanguage[]>(() => [...initialInterestLanguages]);
+  const [isSavingInterestLanguages, setIsSavingInterestLanguages] = useState(false);
+  const interestCopy = useMemo(() => resolveInterestLanguageCopy(locale), [locale]);
   const [defaultConversationLanguages, setDefaultConversationLanguages] = useState<SttLanguageCode[]>(() => (
     sanitizeSttLanguageSelection(initialDefaultConversationLanguages)
   ));
@@ -491,6 +505,8 @@ function ProfileSettingsPanel({
           ? copy.usage.title
           : managementPage === "primaryLanguages"
             ? copy.primaryLanguagesTitle
+            : managementPage === "interestLanguages"
+              ? interestCopy.interestLabel
             : managementPage === "defaultLanguages"
               ? copy.defaultLanguagesTitle
               : copy.appLanguageTitle;
@@ -537,6 +553,11 @@ function ProfileSettingsPanel({
     if (!open) return;
     setPrimaryLanguages(sanitizeSttLanguageSelection(initialPrimaryLanguages));
   }, [initialPrimaryLanguages, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setInterestLanguages([...initialInterestLanguages]);
+  }, [initialInterestLanguages, open]);
 
   useEffect(() => {
     if (!open) {
@@ -700,6 +721,29 @@ function ProfileSettingsPanel({
       setIsSavingDefaultConversationLanguages(false);
     }
   }, [copy.defaultLanguagesSaveError, defaultConversationLanguages, isSavingDefaultConversationLanguages, onSaveDefaultConversationLanguages]);
+
+  const saveInterestLanguages = useCallback(async (nextLanguages: InterestLanguage[]) => {
+    if (isSavingInterestLanguages) return;
+    const previousLanguages = interestLanguages;
+    setInterestLanguages(nextLanguages);
+    setIsSavingInterestLanguages(true);
+    try {
+      if (!await onSaveInterestLanguages(nextLanguages)) {
+        setInterestLanguages(previousLanguages);
+        window.alert(interestCopy.saveError);
+      }
+    } finally {
+      setIsSavingInterestLanguages(false);
+    }
+  }, [interestCopy.saveError, interestLanguages, isSavingInterestLanguages, onSaveInterestLanguages]);
+
+  const handleToggleInterestLanguage = useCallback((code: SttLanguageCode) => {
+    const selected = interestLanguages.some((entry) => entry.code === code);
+    if (!selected && (interestLanguages.length >= MAX_INTEREST_LANGUAGES || primaryLanguages.includes(code))) return;
+    void saveInterestLanguages(selected
+      ? interestLanguages.filter((entry) => entry.code !== code)
+      : [...interestLanguages, { code, level: 1 }]);
+  }, [interestLanguages, primaryLanguages, saveInterestLanguages]);
 
   const handleTogglePrimaryLanguage = useCallback(async (code: SttLanguageCode) => {
     if (isSavingPrimaryLanguages) return;
@@ -943,6 +987,15 @@ function ProfileSettingsPanel({
               >
                 <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
                 <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.primaryLanguages}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openManagementPage("interestLanguages")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{interestCopy.interestLabel}</span>
                 <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
               </button>
               <button
@@ -1230,6 +1283,42 @@ function ProfileSettingsPanel({
                   maxLanguages={MAX_STT_LANGUAGE_SELECTION}
                   minLanguages={1}
                   disabled={isSavingPrimaryLanguages}
+                />
+              </div>
+            ) : managementPage === "interestLanguages" ? (
+              <div>
+                <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{interestCopy.settingsDescription}</p>
+                {interestLanguages.length ? (
+                  <ul className="mb-5 space-y-2">
+                    {interestLanguages.map((entry) => (
+                      <li key={entry.code} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                        <p className="flex items-center gap-2 text-[14px] font-semibold text-slate-900">
+                          <LanguageFlag language={entry.code} className="text-[18px] leading-none" />
+                          {getSttLanguageDisplayName(entry.code, locale) ?? entry.code}
+                        </p>
+                        <LanguageLevelPicker
+                          level={entry.level}
+                          locale={locale}
+                          disabled={isSavingInterestLanguages}
+                          onChange={(level) => void saveInterestLanguages(
+                            interestLanguages.map((item) => (item.code === entry.code ? { ...item, level } : item)),
+                          )}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <LanguagePreferencePicker
+                  selectedLanguages={interestLanguages.map((entry) => entry.code)}
+                  onToggleLanguage={handleToggleInterestLanguage}
+                  uiLocale={locale}
+                  searchPlaceholder={roomManagementCopy.languageSelectorSearchPlaceholder}
+                  sortLocaleLabel={roomManagementCopy.languageSelectorSortLocaleLabel}
+                  sortAlphabeticalLabel={roomManagementCopy.languageSelectorSortAlphabeticalLabel}
+                  noResultsLabel={roomManagementCopy.languageSelectorNoResultsLabel}
+                  maxLanguages={MAX_INTEREST_LANGUAGES}
+                  minLanguages={0}
+                  disabled={isSavingInterestLanguages}
                 />
               </div>
             ) : managementPage === "defaultLanguages" ? (
@@ -1968,6 +2057,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             data.primaryLanguages,
             typeof data.nationality === "string" && data.nationality ? [data.nationality] : [],
           ),
+          interestLanguages: sanitizeInterestLanguages(data.interestLanguages),
           defaultConversationLanguages: sanitizeSttLanguageSelection(data.defaultConversationLanguages),
           location: locationPermissionRef.current !== "granted"
             ? null
@@ -2178,6 +2268,22 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     }
   }, []);
 
+  const handleSaveInterestLanguages = useCallback(async (languages: InterestLanguage[]) => {
+    try {
+      const response = await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interestLanguages: languages }),
+      });
+      if (!response.ok) return false;
+      const saved = await response.json() as Partial<ProfileRecord>;
+      setProfile((current) => ({ ...current, interestLanguages: sanitizeInterestLanguages(saved.interestLanguages) }));
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const defaultConversationLanguages = useMemo(() => {
     const storedLanguages = sanitizeSttLanguageSelection(profile.defaultConversationLanguages);
     return storedLanguages.length > 0
@@ -2262,6 +2368,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         onChangeAppLanguage={handleChangeAppLanguage}
         initialPrimaryLanguages={primaryLanguages}
         onSavePrimaryLanguages={handleSavePrimaryLanguages}
+        initialInterestLanguages={profile.interestLanguages ?? NO_INTEREST_LANGUAGES}
+        onSaveInterestLanguages={handleSaveInterestLanguages}
         initialDefaultConversationLanguages={defaultConversationLanguages}
         onSaveDefaultConversationLanguages={handleSaveDefaultConversationLanguages}
         onSignOut={handleSignOut}
@@ -2399,11 +2507,17 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           </div>
 
           <div className="mt-4 pl-2">
-            <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold text-slate-950">
-              <span className="truncate">{name}</span>
+            <p className="flex min-w-0 items-baseline gap-1.5">
+              <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
               <AccountBadge kind={resolveAccountBadge(profile)} locale={locale} tone="dark" />
+              {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
             </p>
-            {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
+            <ProfileLanguageLevels
+              primaryLanguages={primaryLanguages}
+              interestLanguages={profile.interestLanguages ?? NO_INTEREST_LANGUAGES}
+              locale={locale}
+              className="mt-2.5"
+            />
             <ProfileLocation
               profileLocation={locationPermission === "granted" ? profile.location : null}
               locale={locale}

@@ -2,6 +2,7 @@
 
 import type { BirthDateParts } from "@/lib/birth-date";
 import type { ProfileLocationRecord } from "@/lib/profile-location";
+import { sanitizeInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
 
 const MY_PAGE_PROFILE_CACHE_KEY_PREFIX = "mingle:my-page-profile-cache:v1";
 const MY_PAGE_PROFILE_CACHE_MAX_STALE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -17,6 +18,7 @@ export type MyPageProfileRecord = {
   bio: string | null;
   nationality: string | null;
   primaryLanguages: string[];
+  interestLanguages?: InterestLanguage[];
   defaultConversationLanguages: string[];
   location: ProfileLocationRecord | null;
   birthDate?: BirthDateParts | null;
@@ -51,6 +53,7 @@ export function createEmptyMyPageProfile(): MyPageProfileRecord {
     bio: null,
     nationality: null,
     primaryLanguages: [],
+    interestLanguages: [],
     defaultConversationLanguages: [],
     location: null,
     birthDate: null,
@@ -125,6 +128,7 @@ function normalizePersistedRecord(value: unknown, now = Date.now()): MyPageProfi
     bio: profile.bio,
     nationality: profile.nationality,
     primaryLanguages: profile.primaryLanguages,
+    interestLanguages: sanitizeInterestLanguages(profile.interestLanguages),
     defaultConversationLanguages: profile.defaultConversationLanguages,
     followersCount: profile.followersCount,
     followingCount: profile.followingCount,
@@ -178,6 +182,7 @@ export function writeMyPageProfileCache(userId: string, profile: MyPageProfileRe
       bio: profile.bio,
       nationality: profile.nationality,
       primaryLanguages: profile.primaryLanguages,
+      interestLanguages: profile.interestLanguages ?? [],
       defaultConversationLanguages: profile.defaultConversationLanguages,
       followersCount: profile.followersCount,
       followingCount: profile.followingCount,

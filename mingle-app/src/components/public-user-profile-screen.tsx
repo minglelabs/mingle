@@ -14,6 +14,8 @@ import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import ExistingConversationChoiceDialog from "@/components/existing-conversation-choice-dialog";
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileLanguageLevels from "@/components/profile-language-levels";
+import { sanitizeInterestLanguages } from "@/lib/interest-languages";
 import ProfileShareScreen from "@/components/profile-share-screen";
 import SlideSurface from "@/components/slide-surface";
 import ProfileLocation from "@/components/profile-location";
@@ -77,6 +79,8 @@ type PublicUserProfile = {
   age?: number;
   nationality: string | null;
   primaryLanguages: string[];
+  /** Absent from older servers. */
+  interestLanguages?: unknown;
   location: ProfileLocationRecord | null;
   followersCount: number;
   followingCount: number;
@@ -603,11 +607,17 @@ export default function PublicUserProfileScreen({
               </div>
 
               <div className="mt-4 pl-2">
-                <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold text-slate-950">
-                  <span className="truncate">{name}</span>
+                <p className="flex min-w-0 items-baseline gap-1.5">
+                  <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
                   <AccountBadge kind={badge} locale={locale} tone="dark" />
+                  {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
                 </p>
-                {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
+                <ProfileLanguageLevels
+                  primaryLanguages={primaryLanguages}
+                  interestLanguages={sanitizeInterestLanguages(profile.interestLanguages, primaryLanguages)}
+                  locale={locale}
+                  className="mt-2.5"
+                />
                 <ProfileAge age={profile.age} locale={locale} className="mt-0.5 text-[13px] text-gray-500" />
                 {!isOwnProfile ? (
                   <ProfileLocation
