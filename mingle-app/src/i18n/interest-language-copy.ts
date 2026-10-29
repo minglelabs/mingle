@@ -1,0 +1,210 @@
+import {
+  DEFAULT_LOCALE,
+  resolveLegalDocumentLocale,
+  resolveSupportedLocaleTag,
+  type LegalDocumentLocale,
+} from '@/i18n/config'
+
+/** Copy for 관심 언어 (the language of the people a user wants to talk with) and its 1-5 level. */
+export type InterestLanguageCopy = {
+  onboardingStep: string
+  onboardingTitle: string
+  onboardingDescription: string
+  levelQuestion: string
+  /** Five labels, level 1 to 5. */
+  levelLabels: readonly [string, string, string, string, string]
+  primaryLabel: string
+  interestLabel: string
+  settingsDescription: string
+  /** `{level}` is replaced with 1-5. */
+  levelAriaLabel: string
+  saveError: string
+}
+
+const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
+  ko: {
+    onboardingStep: '관심 언어',
+    onboardingTitle: '어떤 언어를 쓰는 친구를 만나고 싶어요?',
+    onboardingDescription: '주로 대화하고 싶은 상대의 언어를 골라 주세요. 나중에 프로필에서 바꿀 수 있어요.',
+    levelQuestion: '이 언어는 얼마나 할 수 있어요?',
+    levelLabels: ['처음이에요', '조금 알아요', '일상 대화', '능숙해요', '원어민 수준'],
+    primaryLabel: '편한 언어',
+    interestLabel: '관심 언어',
+    settingsDescription: '주로 대화하고 싶은 상대의 언어를 최대 3개까지 고르고, 내 실력을 점으로 표시해요.',
+    levelAriaLabel: '실력 {level}/5',
+    saveError: '관심 언어를 저장하지 못했어요.',
+  },
+  en: {
+    onboardingStep: 'Interested in',
+    onboardingTitle: 'Who would you like to meet?',
+    onboardingDescription: 'Pick the language of the people you most want to talk with. You can change it later in your profile.',
+    levelQuestion: 'How well do you know it?',
+    levelLabels: ['Brand new', 'A little', 'Everyday talk', 'Fluent', 'Native-like'],
+    primaryLabel: 'Speaks',
+    interestLabel: 'Interested in',
+    settingsDescription: 'Choose up to 3 languages of the people you want to talk with, and show your level with dots.',
+    levelAriaLabel: 'Level {level} of 5',
+    saveError: 'Could not save your languages.',
+  },
+  ja: {
+    onboardingStep: '興味のある言語',
+    onboardingTitle: 'どの言語を話す友達と出会いたいですか?',
+    onboardingDescription: 'よく話したい相手の言語を選んでください。あとでプロフィールから変更できます。',
+    levelQuestion: 'この言語はどのくらいできますか?',
+    levelLabels: ['はじめて', '少しだけ', '日常会話', '流暢', 'ネイティブ並み'],
+    primaryLabel: '話せる言語',
+    interestLabel: '興味のある言語',
+    settingsDescription: '話したい相手の言語を3つまで選び、自分のレベルを点で表示します。',
+    levelAriaLabel: 'レベル {level}/5',
+    saveError: '興味のある言語を保存できませんでした。',
+  },
+  'zh-CN': {
+    onboardingStep: '感兴趣的语言',
+    onboardingTitle: '你想认识说哪种语言的朋友?',
+    onboardingDescription: '选择你最想交流的对象所说的语言。之后可以在个人资料中更改。',
+    levelQuestion: '你对这门语言掌握得怎么样?',
+    levelLabels: ['完全不会', '会一点', '日常对话', '流利', '接近母语'],
+    primaryLabel: '常用语言',
+    interestLabel: '感兴趣的语言',
+    settingsDescription: '最多选择 3 种你想交流的对象所说的语言,并用圆点显示你的水平。',
+    levelAriaLabel: '水平 {level}/5',
+    saveError: '无法保存感兴趣的语言。',
+  },
+  'zh-TW': {
+    onboardingStep: '感興趣的語言',
+    onboardingTitle: '你想認識說哪種語言的朋友?',
+    onboardingDescription: '選擇你最想交流的對象所說的語言。之後可以在個人檔案中更改。',
+    levelQuestion: '你對這門語言掌握得怎麼樣?',
+    levelLabels: ['完全不會', '會一點', '日常對話', '流利', '接近母語'],
+    primaryLabel: '常用語言',
+    interestLabel: '感興趣的語言',
+    settingsDescription: '最多選擇 3 種你想交流的對象所說的語言,並用圓點顯示你的程度。',
+    levelAriaLabel: '程度 {level}/5',
+    saveError: '無法儲存感興趣的語言。',
+  },
+  fr: {
+    onboardingStep: 'Intéressé par',
+    onboardingTitle: 'Qui aimeriez-vous rencontrer ?',
+    onboardingDescription: 'Choisissez la langue des personnes avec qui vous voulez surtout parler. Vous pourrez la changer plus tard dans votre profil.',
+    levelQuestion: 'Quel est votre niveau ?',
+    levelLabels: ['Débutant total', 'Quelques bases', 'Conversation courante', 'Courant', 'Quasi natif'],
+    primaryLabel: 'Parle',
+    interestLabel: 'Intéressé par',
+    settingsDescription: 'Choisissez jusqu’à 3 langues des personnes avec qui vous voulez parler, et indiquez votre niveau avec des points.',
+    levelAriaLabel: 'Niveau {level} sur 5',
+    saveError: 'Impossible d’enregistrer vos langues.',
+  },
+  de: {
+    onboardingStep: 'Interessiert an',
+    onboardingTitle: 'Wen möchtest du kennenlernen?',
+    onboardingDescription: 'Wähle die Sprache der Menschen, mit denen du am liebsten sprechen möchtest. Du kannst sie später im Profil ändern.',
+    levelQuestion: 'Wie gut kannst du sie?',
+    levelLabels: ['Ganz neu', 'Ein bisschen', 'Alltagsgespräche', 'Fließend', 'Fast muttersprachlich'],
+    primaryLabel: 'Spricht',
+    interestLabel: 'Interessiert an',
+    settingsDescription: 'Wähle bis zu 3 Sprachen der Menschen, mit denen du sprechen möchtest, und zeige dein Niveau mit Punkten.',
+    levelAriaLabel: 'Niveau {level} von 5',
+    saveError: 'Deine Sprachen konnten nicht gespeichert werden.',
+  },
+  es: {
+    onboardingStep: 'Me interesa',
+    onboardingTitle: '¿A quién te gustaría conocer?',
+    onboardingDescription: 'Elige el idioma de las personas con las que más quieres hablar. Puedes cambiarlo luego en tu perfil.',
+    levelQuestion: '¿Qué tal lo hablas?',
+    levelLabels: ['Desde cero', 'Un poco', 'Conversación diaria', 'Con fluidez', 'Casi nativo'],
+    primaryLabel: 'Habla',
+    interestLabel: 'Me interesa',
+    settingsDescription: 'Elige hasta 3 idiomas de las personas con las que quieres hablar y muestra tu nivel con puntos.',
+    levelAriaLabel: 'Nivel {level} de 5',
+    saveError: 'No se pudieron guardar tus idiomas.',
+  },
+  pt: {
+    onboardingStep: 'Tenho interesse',
+    onboardingTitle: 'Quem você gostaria de conhecer?',
+    onboardingDescription: 'Escolha o idioma das pessoas com quem você mais quer conversar. Você pode mudar depois no seu perfil.',
+    levelQuestion: 'Quanto você sabe desse idioma?',
+    levelLabels: ['Do zero', 'Um pouco', 'Conversa do dia a dia', 'Fluente', 'Quase nativo'],
+    primaryLabel: 'Fala',
+    interestLabel: 'Tenho interesse',
+    settingsDescription: 'Escolha até 3 idiomas das pessoas com quem você quer conversar e mostre seu nível com pontos.',
+    levelAriaLabel: 'Nível {level} de 5',
+    saveError: 'Não foi possível salvar seus idiomas.',
+  },
+  it: {
+    onboardingStep: 'Mi interessa',
+    onboardingTitle: 'Chi ti piacerebbe conoscere?',
+    onboardingDescription: 'Scegli la lingua delle persone con cui vuoi parlare di più. Potrai cambiarla dopo nel profilo.',
+    levelQuestion: 'Quanto la conosci?',
+    levelLabels: ['Da zero', 'Un po’', 'Conversazione quotidiana', 'Fluente', 'Quasi madrelingua'],
+    primaryLabel: 'Parla',
+    interestLabel: 'Mi interessa',
+    settingsDescription: 'Scegli fino a 3 lingue delle persone con cui vuoi parlare e mostra il tuo livello con i punti.',
+    levelAriaLabel: 'Livello {level} su 5',
+    saveError: 'Impossibile salvare le tue lingue.',
+  },
+  ru: {
+    onboardingStep: 'Интересует',
+    onboardingTitle: 'С кем вы хотите познакомиться?',
+    onboardingDescription: 'Выберите язык людей, с которыми вы больше всего хотите общаться. Его можно изменить позже в профиле.',
+    levelQuestion: 'Насколько хорошо вы его знаете?',
+    levelLabels: ['С нуля', 'Немного', 'Бытовое общение', 'Свободно', 'Почти как носитель'],
+    primaryLabel: 'Говорит',
+    interestLabel: 'Интересует',
+    settingsDescription: 'Выберите до 3 языков людей, с которыми хотите общаться, и отметьте свой уровень точками.',
+    levelAriaLabel: 'Уровень {level} из 5',
+    saveError: 'Не удалось сохранить языки.',
+  },
+  ar: {
+    onboardingStep: 'مهتم بـ',
+    onboardingTitle: 'من تودّ أن تتعرّف عليه؟',
+    onboardingDescription: 'اختر لغة الأشخاص الذين تريد التحدث معهم أكثر. يمكنك تغييرها لاحقًا من ملفك الشخصي.',
+    levelQuestion: 'ما مستواك في هذه اللغة؟',
+    levelLabels: ['مبتدئ تمامًا', 'قليلًا', 'محادثة يومية', 'بطلاقة', 'قريب من اللغة الأم'],
+    primaryLabel: 'يتحدث',
+    interestLabel: 'مهتم بـ',
+    settingsDescription: 'اختر حتى 3 لغات للأشخاص الذين تريد التحدث معهم، واعرض مستواك بالنقاط.',
+    levelAriaLabel: 'المستوى {level} من 5',
+    saveError: 'تعذّر حفظ لغاتك.',
+  },
+  hi: {
+    onboardingStep: 'रुचि की भाषा',
+    onboardingTitle: 'आप किस भाषा के दोस्तों से मिलना चाहते हैं?',
+    onboardingDescription: 'उन लोगों की भाषा चुनें जिनसे आप सबसे ज़्यादा बात करना चाहते हैं। इसे बाद में प्रोफ़ाइल में बदल सकते हैं।',
+    levelQuestion: 'आप यह भाषा कितनी जानते हैं?',
+    levelLabels: ['बिल्कुल नए', 'थोड़ी-सी', 'रोज़मर्रा की बातचीत', 'धाराप्रवाह', 'लगभग मातृभाषा जैसी'],
+    primaryLabel: 'बोलते हैं',
+    interestLabel: 'रुचि की भाषा',
+    settingsDescription: 'जिन लोगों से बात करना चाहते हैं उनकी 3 तक भाषाएँ चुनें, और बिंदुओं से अपना स्तर दिखाएँ।',
+    levelAriaLabel: 'स्तर {level}/5',
+    saveError: 'आपकी भाषाएँ सेव नहीं हो सकीं।',
+  },
+  th: {
+    onboardingStep: 'ภาษาที่สนใจ',
+    onboardingTitle: 'อยากเจอเพื่อนที่พูดภาษาอะไร?',
+    onboardingDescription: 'เลือกภาษาของคนที่คุณอยากคุยด้วยมากที่สุด เปลี่ยนได้ภายหลังในโปรไฟล์',
+    levelQuestion: 'คุณรู้ภาษานี้แค่ไหน?',
+    levelLabels: ['เริ่มต้นใหม่', 'รู้นิดหน่อย', 'สนทนาในชีวิตประจำวัน', 'คล่อง', 'ใกล้เคียงเจ้าของภาษา'],
+    primaryLabel: 'พูดได้',
+    interestLabel: 'ภาษาที่สนใจ',
+    settingsDescription: 'เลือกได้สูงสุด 3 ภาษาของคนที่คุณอยากคุยด้วย และแสดงระดับของคุณด้วยจุด',
+    levelAriaLabel: 'ระดับ {level}/5',
+    saveError: 'บันทึกภาษาไม่สำเร็จ',
+  },
+  vi: {
+    onboardingStep: 'Quan tâm',
+    onboardingTitle: 'Bạn muốn gặp gỡ ai?',
+    onboardingDescription: 'Chọn ngôn ngữ của những người bạn muốn trò chuyện nhiều nhất. Bạn có thể đổi sau trong hồ sơ.',
+    levelQuestion: 'Bạn biết ngôn ngữ này đến đâu?',
+    levelLabels: ['Mới bắt đầu', 'Biết một chút', 'Giao tiếp hằng ngày', 'Thành thạo', 'Gần như bản xứ'],
+    primaryLabel: 'Nói được',
+    interestLabel: 'Quan tâm',
+    settingsDescription: 'Chọn tối đa 3 ngôn ngữ của những người bạn muốn trò chuyện và thể hiện trình độ bằng dấu chấm.',
+    levelAriaLabel: 'Trình độ {level}/5',
+    saveError: 'Không thể lưu ngôn ngữ của bạn.',
+  },
+} satisfies Record<LegalDocumentLocale, InterestLanguageCopy>
+
+export function resolveInterestLanguageCopy(uiLocale: string): InterestLanguageCopy {
+  const supportedLocale = resolveSupportedLocaleTag(uiLocale) ?? DEFAULT_LOCALE
+  return INTEREST_LANGUAGE_COPY_BY_LOCALE[resolveLegalDocumentLocale(supportedLocale)] ?? INTEREST_LANGUAGE_COPY_BY_LOCALE.en
+}

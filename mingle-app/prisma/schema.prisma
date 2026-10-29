@@ -54,6 +54,10 @@ model User {
   bio                          String?   @db.Text
   nationality                  String?
   primaryLanguages             String[]  @default([]) @map("primary_languages")
+  /// Languages of the people this user mostly wants to talk with (관심 언어),
+  /// at most 3, with the user's own level of each (1-5) at the same index.
+  interestLanguages            String[]  @default([]) @map("interest_languages")
+  interestLanguageLevels       Int[]     @default([]) @map("interest_language_levels")
   defaultConversationLanguages String[]  @default([]) @map("default_conversation_languages")
   defaultDisplayLanguage       String?   @map("default_display_language")
   locationLatitude             Float?    @map("location_latitude")

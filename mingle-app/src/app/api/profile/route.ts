@@ -8,6 +8,7 @@ import {
   sanitizeSttLanguageSelection,
 } from "@/lib/stt-languages";
 import { normalizeHandle } from "@/lib/handles";
+import { MAX_INTEREST_LANGUAGES, sanitizeInterestLanguages, unzipInterestLanguages } from "@/lib/interest-languages";
 import {
   isOldEnoughForSignup,
   parseBirthDate,
@@ -254,6 +255,8 @@ export async function PATCH(request: NextRequest) {
     bio?: string | null;
     nationality?: string | null;
     primaryLanguages?: string[];
+    interestLanguages?: string[];
+    interestLanguageLevels?: number[];
     defaultConversationLanguages?: string[];
     defaultDisplayLanguage?: string | null;
     birthDate?: Date | null;
@@ -364,6 +367,19 @@ export async function PATCH(request: NextRequest) {
     data.primaryLanguages = primaryLanguages.value;
     data.nationality = primaryLanguages.value[0] ?? null;
     initialDisplayLanguageCandidate = primaryLanguages.value[0] ?? null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "interestLanguages")) {
+    // [{ code, level }]; an empty list clears them. Overlap with the primary
+    // languages is dropped when the profile is read.
+    if (!Array.isArray(body.interestLanguages) || body.interestLanguages.length > MAX_INTEREST_LANGUAGES) {
+      return NextResponse.json({ error: "invalid_interest_languages" }, { status: 400 });
+    }
+    const interestLanguages = sanitizeInterestLanguages(body.interestLanguages);
+    if (interestLanguages.length !== body.interestLanguages.length) {
+      return NextResponse.json({ error: "invalid_interest_languages" }, { status: 400 });
+    }
+    Object.assign(data, unzipInterestLanguages(interestLanguages));
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "defaultConversationLanguages")) {

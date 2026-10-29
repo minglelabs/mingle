@@ -24,6 +24,10 @@ import {
   type DiscoverySource,
 } from "@/lib/discovery-source";
 import { registerNativeBackHandler } from "@/lib/native-back-handler";
+import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
+import type { InterestLanguage } from "@/lib/interest-languages";
+import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
+import LanguageLevelPicker from "@/components/language-level-picker";
 
 const DEFAULT_ONBOARDING_BIRTH_DATE: BirthDateParts = {
   year: 2000,
@@ -33,6 +37,8 @@ const DEFAULT_ONBOARDING_BIRTH_DATE: BirthDateParts = {
 
 export type LanguageOnboardingConfirmPayload = {
   language: string;
+  /** 관심 언어: the language of the people the user mostly wants to talk with. */
+  interestLanguage: InterestLanguage | null;
   birthDate: BirthDateParts;
   discoverySource: DiscoverySource;
 };
@@ -46,7 +52,7 @@ interface LanguageOnboardingModalProps {
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-type OnboardingStep = "language" | "birth-date" | "discovery-source";
+type OnboardingStep = "language" | "interest-language" | "birth-date" | "discovery-source";
 
 // Rendered only while the picker is open (see LivePhoneDemo.tsx), so mount-time
 // state initializers below always pick up the latest defaults with no reset effect.
@@ -62,6 +68,9 @@ export default function LanguageOnboardingModal({
   const [step, setStep] = useState<OnboardingStep>("language");
   const [query, setQuery] = useState("");
   const [language, setLanguage] = useState(initialLanguage);
+  const [interestQuery, setInterestQuery] = useState("");
+  const [interestCode, setInterestCode] = useState<string | null>(null);
+  const [interestLevel, setInterestLevel] = useState(1);
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate);
   const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(null);
   const [discoveryOptionCodes, setDiscoveryOptionCodes] = useState(shuffleDiscoverySourceCodes);
@@ -73,6 +82,7 @@ export default function LanguageOnboardingModal({
   const copy = useMemo(() => resolveLanguageOnboardingCopy(language), [language]);
   const signupCopy = useMemo(() => resolveSignupCopy(language), [language]);
   const discoveryCopy = useMemo(() => resolveDiscoverySourceCopy(language), [language]);
+  const interestCopy = useMemo(() => resolveInterestLanguageCopy(language), [language]);
   const discoveryOptions = useMemo(() => {
     const optionsByCode = new Map(discoveryCopy.options.map((option) => [option.code, option]));
     return discoveryOptionCodes
@@ -126,10 +136,21 @@ export default function LanguageOnboardingModal({
     () => partitionLanguageSelectorItemsByPriority(filteredItems),
     [filteredItems],
   );
+  // The 관심 언어 list leaves out the language just chosen as the user's own.
+  const ownLanguageCode = canonicalizeSttLanguageCode(language);
+  const interestItems = useMemo(() => {
+    const visibleItems = filterLanguageSelectorItems(languageItems, interestQuery)
+      .filter((item) => canonicalizeSttLanguageCode(item.code) !== ownLanguageCode);
+    return partitionLanguageSelectorItemsByPriority(sortLanguageSelectorItems(visibleItems, "locale", uiLocale));
+  }, [interestQuery, languageItems, ownLanguageCode, uiLocale]);
 
   const handleStepBack = useCallback(() => {
     if (isConfirming) return;
-    setStep((currentStep) => currentStep === "discovery-source" ? "birth-date" : "language");
+    setStep((currentStep) => (
+      currentStep === "discovery-source" ? "birth-date"
+        : currentStep === "birth-date" ? "interest-language"
+          : "language"
+    ));
   }, [isConfirming]);
 
   useEffect(() => registerNativeBackHandler(() => {
@@ -142,6 +163,12 @@ export default function LanguageOnboardingModal({
   if (typeof document === "undefined") return null;
 
   const handleLanguageStepNext = () => {
+    if (interestCode && canonicalizeSttLanguageCode(interestCode) === ownLanguageCode) setInterestCode(null);
+    setStep("interest-language");
+  };
+
+  const handleInterestStepNext = () => {
+    if (!interestCode) return;
     setStep("birth-date");
   };
 
@@ -154,7 +181,12 @@ export default function LanguageOnboardingModal({
     if (isConfirming || !isEligibleAge || !discoverySource) return;
     setIsConfirming(true);
     try {
-      await onConfirm({ language, birthDate, discoverySource });
+      await onConfirm({
+        language,
+        interestLanguage: interestCode ? { code: interestCode as InterestLanguage["code"], level: interestLevel } : null,
+        birthDate,
+        discoverySource,
+      });
     } finally {
       setIsConfirming(false);
     }
@@ -162,15 +194,19 @@ export default function LanguageOnboardingModal({
 
   // Row layout matches LanguageSelector.tsx (the in-room language picker) so the
   // two pickers read as the same UI: flag, localized name, secondary label, checkmark.
-  const renderLanguageRow = (lang: LanguageSelectorItem) => {
-    const isSelected = language === lang.code;
+  const renderLanguageRow = (
+    lang: LanguageSelectorItem,
+    selectedCode: string | null = language,
+    onSelect: (code: string) => void = setLanguage,
+  ) => {
+    const isSelected = selectedCode === lang.code;
 
     return (
       <button
         key={lang.code}
         type="button"
         disabled={isConfirming}
-        onClick={() => setLanguage(lang.code)}
+        onClick={() => onSelect(lang.code)}
         aria-pressed={isSelected}
         className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition ${
           isSelected
@@ -283,6 +319,37 @@ export default function LanguageOnboardingModal({
                 />
               </div>
             </div>
+          ) : step === "interest-language" ? (
+            <div className="space-y-4 px-4 pb-4 pt-0">
+              <div className="space-y-1.5 text-center">
+                <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                  {interestCopy.onboardingStep}
+                </p>
+                <h2
+                  id={titleId}
+                  className="text-[1.3rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+                >
+                  {interestCopy.onboardingTitle}
+                </h2>
+                <p className="text-[0.82rem] leading-snug text-slate-500">{interestCopy.onboardingDescription}</p>
+              </div>
+
+              <div className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+                <Search size={18} className="shrink-0 text-slate-400" />
+                <input
+                  type="search"
+                  value={interestQuery}
+                  disabled={isConfirming}
+                  onChange={(event) => setInterestQuery(event.target.value)}
+                  placeholder={copy.searchPlaceholder}
+                  className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-slate-400"
+                  enterKeyHint="search"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              </div>
+            </div>
           ) : step === "birth-date" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
               <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
@@ -347,6 +414,42 @@ export default function LanguageOnboardingModal({
                     ) : null}
                     <div className="space-y-3">
                       {otherItems.map((lang) => renderLanguageRow(lang))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : step === "interest-language" ? (
+          <div
+            className="flex-1 overflow-y-auto px-4"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            {interestItems.priorityItems.length + interestItems.otherItems.length === 0 ? (
+              <div className="flex h-full min-h-[240px] items-center justify-center px-6 text-center text-sm text-slate-500">
+                {copy.noResultsLabel}
+              </div>
+            ) : (
+              <div className="space-y-5 py-4">
+                {interestItems.priorityItems.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="px-1 text-[0.78rem] font-semibold uppercase tracking-wide text-slate-400">
+                      {copy.priorityLanguagesLabel}
+                    </p>
+                    <div className="space-y-3">
+                      {interestItems.priorityItems.map((lang) => renderLanguageRow(lang, interestCode, setInterestCode))}
+                    </div>
+                  </div>
+                ) : null}
+                {interestItems.otherItems.length > 0 ? (
+                  <div className="space-y-3">
+                    {interestItems.priorityItems.length > 0 ? (
+                      <p className="px-1 text-[0.78rem] font-semibold uppercase tracking-wide text-slate-400">
+                        {copy.allLanguagesLabel}
+                      </p>
+                    ) : null}
+                    <div className="space-y-3">
+                      {interestItems.otherItems.map((lang) => renderLanguageRow(lang, interestCode, setInterestCode))}
                     </div>
                   </div>
                 ) : null}
@@ -430,6 +533,23 @@ export default function LanguageOnboardingModal({
                 onClick={handleLanguageStepNext}
                 disabled={isConfirming}
                 className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {signupCopy.continueAction}
+              </button>
+            </>
+          ) : step === "interest-language" ? (
+            <>
+              {interestCode ? (
+                <div className="flex flex-col items-center gap-1 pb-3">
+                  <p className="text-[0.82rem] font-semibold text-slate-600">{interestCopy.levelQuestion}</p>
+                  <LanguageLevelPicker level={interestLevel} locale={language} onChange={setInterestLevel} disabled={isConfirming} />
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleInterestStepNext}
+                disabled={isConfirming || !interestCode}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
               >
                 {signupCopy.continueAction}
               </button>
