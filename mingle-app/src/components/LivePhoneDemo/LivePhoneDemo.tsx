@@ -53,7 +53,7 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface from '@/components/slide-surface'
@@ -234,6 +234,8 @@ import {
   openNativeAppUpdateStore,
   resolveNativeAppUpdateCardContent,
 } from '@/components/native-app-update-card'
+import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
+import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
 import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
@@ -2033,6 +2035,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
   const leaveConversationCopy = useMemo(() => resolveLivePhoneDemoConversationLeaveCopy(uiLocale), [uiLocale])
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
+  const conversationExportCopy = useMemo(() => resolveConversationExportCopy(uiLocale), [uiLocale])
   const defaultDisplayLanguageCopy = useMemo(() => {
     return {
       menuItemLabel: roomManagementCopy.defaultDisplayLanguageMenuItemLabel,
@@ -2123,6 +2126,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [feedbackHistoryError, setFeedbackHistoryError] = useState<string | null>(null)
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
+  const [isExportingConversation, setIsExportingConversation] = useState(false)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
@@ -3529,6 +3533,47 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setFeedbackTab('compose')
     pushMenuHistoryEntry(2, 'feedback')
   }, [clearFeedbackSubmitState, menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleExportConversationMenuItemPress = useCallback(async () => {
+    if (!conversationId || isExportingConversation) return
+    setIsExportingConversation(true)
+    const toastId = toast.loading(conversationExportCopy.preparingToast)
+    const isNativeAppRuntimeNow = isNativeApp()
+    try {
+      const exported = await fetchConversationExport({
+        conversationId,
+        locale: uiLocale,
+        displayLanguage: resolvedDefaultDisplayLanguage,
+      })
+      const delivery = await shareConversationExport(exported, { isNativeApp: isNativeAppRuntimeNow })
+      if (delivery === 'needs_gesture') {
+        // The tap was spent on the fetch; the share sheet needs a new one.
+        toast.success(conversationExportCopy.readyToast, {
+          id: toastId,
+          duration: 15_000,
+          action: {
+            label: conversationExportCopy.shareActionLabel,
+            onClick: () => {
+              void shareConversationExport(exported, { isNativeApp: isNativeAppRuntimeNow }).then((retried) => {
+                if (retried === 'copied') toast.success(conversationExportCopy.copiedToast)
+                else if (retried === 'failed') toast.error(conversationExportCopy.errorToast)
+              })
+            },
+          },
+        })
+      } else if (delivery === 'copied') {
+        toast.success(conversationExportCopy.copiedToast, { id: toastId })
+      } else if (delivery === 'failed') {
+        toast.error(conversationExportCopy.errorToast, { id: toastId })
+      } else {
+        toast.dismiss(toastId)
+      }
+    } catch {
+      toast.error(conversationExportCopy.errorToast, { id: toastId })
+    } finally {
+      setIsExportingConversation(false)
+    }
+  }, [conversationExportCopy, conversationId, isExportingConversation, resolvedDefaultDisplayLanguage, uiLocale])
 
   const handleConversationManagementMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'conversation-management') return
@@ -8117,6 +8162,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </span>
                           </button>
                         </div>
+
+                        {conversationId ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              onClick={() => { void handleExportConversationMenuItemPress() }}
+                              disabled={isExportingConversation}
+                              aria-busy={isExportingConversation}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:opacity-60"
+                            >
+                              <span className="min-w-0 flex-1">{conversationExportCopy.menuLabel}</span>
+                              <span className="shrink-0 text-gray-500">
+                                {isExportingConversation
+                                  ? <Loader2 size={18} strokeWidth={2.4} className="animate-spin" />
+                                  : <Share size={18} strokeWidth={2.2} />}
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
 
                         <div className="px-4 pb-4">
                           <button

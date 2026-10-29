@@ -26,7 +26,14 @@ import {
   setConversationShareEnabled,
   refreshConversationShareSnapshot,
   joinConversationChannelViaShareToken,
+  getConversationExportTranscriptForUser,
 } from "@/lib/app-conversations";
+import {
+  buildConversationExportFileName,
+  formatConversationExportText,
+  resolveExportTimeZone,
+} from "@/lib/conversation-export";
+import { resolveConversationExportCopy } from "@/i18n/conversation-export-copy";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
@@ -440,6 +447,56 @@ export async function getConversationReadReceiptsResponse(
     { members: receipts.members },
     { headers: { "Cache-Control": "private, no-store" } },
   );
+}
+
+// The room as a .txt file: every visible message with its translation into the
+// reader's language. `locale` picks the file's labels, `lang` the translation
+// and `tz` the time zone of the timestamps; each falls back on its own.
+export async function getConversationExportResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const params = request.nextUrl.searchParams;
+  const locale = (params.get("locale") || "en").trim();
+  const displayLanguage = sanitizeSttLanguageSelection([params.get("lang") || ""])[0] ?? "";
+  const timeZone = resolveExportTimeZone(params.get("tz"));
+
+  const transcript = await getConversationExportTranscriptForUser({
+    conversationId,
+    userId: resolvedUser.userId,
+    locale,
+  });
+  if (!transcript) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const exportedAt = new Date();
+  const text = formatConversationExportText({
+    transcript,
+    copy: resolveConversationExportCopy(locale),
+    displayLanguage,
+    timeZone,
+    exportedAt,
+  });
+  const fileName = buildConversationExportFileName(transcript.title, exportedAt, timeZone);
+
+  return new NextResponse(text, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Content-Disposition": `attachment; filename="HashChat-chat.txt"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      "Cache-Control": "private, no-store",
+    },
+  });
 }
 
 export async function postConversationMembersResponse(
