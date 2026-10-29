@@ -5,6 +5,7 @@ import { NEW_REGISTERED_USER_TRANSLATION_MODEL } from '@/lib/translation-models'
 import type { AdminContext } from '@/server/admin/guard'
 import { writeAdminAudit } from '@/server/admin/audit'
 import { updateProfileWithBio } from '@/server/profile-bio'
+import { operatorInterestLanguageFields } from '@/server/operator-post-reserve/poster-profile'
 import { enqueueOperatorBioRun, enqueueOperatorBioWrite } from './bio-queue'
 import { requireOperatorAccount } from './operator-guard'
 import { createWithOperatorHandle, isHandleConflictError } from './operator-handles'
@@ -138,6 +139,11 @@ export async function createOperatorAccount(
     },
     select: { id: true, handle: true },
   }), random)
+  // 관심 언어 follows the language its posts learn, which is seeded by the new id.
+  await prisma.user.update({
+    where: { id: user.id },
+    data: operatorInterestLanguageFields(user.id, draft.primaryLanguage),
+  })
 
   await writeAdminAudit(ctx, {
     action: 'operator.create',

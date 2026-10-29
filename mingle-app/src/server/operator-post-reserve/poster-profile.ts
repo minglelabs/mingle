@@ -1,3 +1,4 @@
+import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
 /**
  * What kind of poster an operator account is. People differ far more in how
  * they post than in what they post about: one only ever writes three words,
@@ -236,4 +237,21 @@ export function posterProfile(seed: string, topicKeys: readonly string[] = []): 
 
   const photoShare = type.key === 'minimalist' || type.key === 'foodie' ? 0.8 : [0.35, 0.5, 0.65, 0.8][Math.floor(random() * 4)]
   return { type, length, voice, shapeFactors: type.shapes, topicFactors, photoShare, labelKo: `${type.ko} · ${length.ko}` }
+}
+
+const LEARNER_LEVEL_DOTS: Record<string, number> = { beginner: 2, intermediate: 3, advanced: 4 }
+
+/**
+ * An operator's 관심 언어 on its profile: the language its posts learn
+ * (seeded by the account id, as the post generator does) and its level in
+ * 1-5 dots, stored like a user's choice in settings.
+ */
+export function operatorInterestLanguageFields(userId: string, nativeLanguage: string): {
+  interestLanguages: string[]
+  interestLanguageLevels: number[]
+} {
+  const plan = learnerPlan(userId, nativeLanguage)
+  const code = canonicalizeSttLanguageCode(plan.language)
+  if (!code || code === canonicalizeSttLanguageCode(nativeLanguage)) return { interestLanguages: [], interestLanguageLevels: [] }
+  return { interestLanguages: [code], interestLanguageLevels: [LEARNER_LEVEL_DOTS[plan.level.key] ?? 3] }
 }
