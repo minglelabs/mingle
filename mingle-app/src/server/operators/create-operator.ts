@@ -7,6 +7,7 @@ import { writeAdminAudit } from '@/server/admin/audit'
 import { updateProfileWithBio } from '@/server/profile-bio'
 import { operatorInterestLanguageFields } from '@/server/operator-post-reserve/poster-profile'
 import { enqueueOperatorBioRun, enqueueOperatorBioWrite } from './bio-queue'
+import { unzipInterestLanguages } from '@/lib/interest-languages'
 import { requireOperatorAccount } from './operator-guard'
 import { createWithOperatorHandle, isHandleConflictError } from './operator-handles'
 import {
@@ -166,7 +167,7 @@ export async function createOperatorAccount(
   return { userId: user.id, handle: user.handle, requestedHandle: draft.handle, bioQueued: Boolean(draft.bio) }
 }
 
-export type OperatorPatchField = 'name' | 'handle' | 'bio' | 'primaryLanguage' | 'birthYear' | 'location' | 'notes'
+export type OperatorPatchField = 'name' | 'handle' | 'bio' | 'primaryLanguage' | 'birthYear' | 'location' | 'notes' | 'interestLanguages'
 
 /** Applies a validated patch (`parseOperatorPatch`) to an operator account. Refuses anything else. */
 export async function updateOperatorAccount(
@@ -209,6 +210,10 @@ export async function updateOperatorAccount(
   if (patch.notes !== undefined) {
     accountData.notes = patch.notes
     changed.push('notes')
+  }
+  if (patch.interestLanguages !== undefined) {
+    Object.assign(userData, unzipInterestLanguages(patch.interestLanguages))
+    changed.push('interestLanguages')
   }
   if (!changed.length) return { changed }
 
