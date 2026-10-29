@@ -10,6 +10,7 @@ import { resolveAccountBadge, type AccountBadgeKind } from "@/lib/account-badge"
 import { normalizeChineseContent } from "@/server/chinese-script-conversion";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
+import type { ConversationExportMessage, ConversationExportTranscript } from "@/lib/conversation-export";
 import { MESSAGE_RECALLED_AT_METADATA_KEY, RECALLED_MESSAGE_ID_LIMIT, readMessageRecalledAtMs } from "@/lib/message-recall";
 
 export { MAX_CONVERSATION_MEMBERS };
@@ -2727,6 +2728,110 @@ export async function getConversationHydrationStateForUser(args: {
     viewerUserId: args.userId,
     before: args.before,
   });
+}
+
+const CONVERSATION_EXPORT_PAGE_SIZE = 1000;
+// A room this long would take minutes to read anyway; the export stops here
+// rather than hold a request open indefinitely.
+export const CONVERSATION_EXPORT_MESSAGE_LIMIT = 50_000;
+
+// Every visible message of a room the user is an active member of, oldest
+// first, for the "Export chat" text file. Unsent messages are left out, as
+// they are for every other reader. Null when the user cannot read the room.
+export async function getConversationExportTranscriptForUser(args: {
+  conversationId: string;
+  userId: string;
+  locale?: string;
+}): Promise<ConversationExportTranscript | null> {
+  const conversationRecord = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: conversationChannelSelect,
+  });
+  if (!conversationRecord) return null;
+
+  const members = (await listChannelMembersByChannelId([conversationRecord.id])).get(conversationRecord.id) ?? [];
+  const nameByUserId = new Map(members.map((member) => [
+    member.userId,
+    member.name?.trim() || member.handle?.trim() || null,
+  ]));
+
+  const messages: ConversationExportMessage[] = [];
+  let cursorId: string | null = null;
+  while (messages.length < CONVERSATION_EXPORT_MESSAGE_LIMIT) {
+    const page: Array<{
+      id: string;
+      userId: string | null;
+      sourceLanguage: string | null;
+      createdAt: Date;
+      metadata: Prisma.JsonValue;
+      contents: Array<{ contentType: string; language: string; text: string }>;
+    }> = await prisma.appMessage.findMany({
+      where: { sessionKey: conversationRecord.sessionKey, ...buildVisibleMessageWhere() },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: Math.min(CONVERSATION_EXPORT_PAGE_SIZE, CONVERSATION_EXPORT_MESSAGE_LIMIT - messages.length),
+      ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+      select: {
+        id: true,
+        userId: true,
+        sourceLanguage: true,
+        createdAt: true,
+        metadata: true,
+        contents: {
+          where: buildVisibleMessageContentWhere(),
+          orderBy: { createdAt: "asc" },
+          select: { contentType: true, language: true, text: true },
+        },
+      },
+    });
+
+    for (const message of page) {
+      const sourceLanguage = (message.sourceLanguage || "").trim();
+      const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
+      const sourceContent = sourceContents.find((content) => content.language === sourceLanguage)
+        || sourceContents[0]
+        || null;
+      const translations: Record<string, string> = {};
+      for (const content of message.contents) {
+        if (content.contentType !== "TRANSLATION_FINAL") continue;
+        const language = content.language.trim();
+        const text = content.text.trim();
+        if (language && text) translations[language] = text;
+      }
+      const metadata = readJsonObject(message.metadata);
+
+      messages.push({
+        createdAt: message.createdAt,
+        speakerName: message.userId ? nameByUserId.get(message.userId) ?? null : null,
+        sourceLanguage,
+        sourceText: sourceContent?.text?.trim() || "",
+        translations,
+        hasImage: Boolean(readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null)),
+      });
+    }
+
+    if (page.length < CONVERSATION_EXPORT_PAGE_SIZE) break;
+    cursorId = page[page.length - 1].id;
+  }
+
+  const title = resolveViewerFacingTitle(
+    conversationRecord.title,
+    members,
+    args.userId,
+    [],
+    conversationRecord.userEditedTitleAt,
+  ).trim() || formatConversationChannelTitle(conversationRecord.sequenceNumber, args.locale);
+
+  return {
+    title,
+    participantNames: filterActiveMembers(members)
+      .map((member) => nameByUserId.get(member.userId))
+      .filter((name): name is string => Boolean(name)),
+    messages,
+  };
 }
 
 // Public "spectate" link lookup — gates on shareToken match AND

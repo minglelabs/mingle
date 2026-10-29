@@ -23,14 +23,10 @@ import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
 import {
-  DEFAULT_NATIVE_APP_UPDATE_DETAIL,
-  NATIVE_APP_UPDATE_EVENT,
-  parseNativeAppUpdateDetail,
-  resolveNativeAppInstallSourceText,
-  resolveNativeAppUpdateCopy,
-  type NativeAppUpdateDetail,
-  type NativeAppUpdateCopy,
-} from "@/components/LivePhoneDemo/live-phone-demo.app-update.logic";
+  NativeAppUpdateCard,
+  openNativeAppUpdateStore,
+  useNativeAppUpdateCardContent,
+} from "@/components/native-app-update-card";
 import { isNativeUiBridgeEnabledFromSearch } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
 import { PRIMARY_UI_LANGUAGE_OPTIONS, type AppDictionary, type AppLocale, type PrimaryUiLocale } from "@/i18n";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
@@ -89,7 +85,7 @@ import {
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
-import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Download, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
 import { feedCopy } from "@/i18n/feed-copy";
@@ -270,82 +266,17 @@ function isProfileManagementPage(value: string | undefined): value is ProfileMan
     || value === "feedback";
 }
 
-type NativeAppUpdateWindow = Window & {
-  __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown;
+type NativeBridgeWindow = Window & {
   ReactNativeWebView?: {
     postMessage?: (message: string) => void;
   };
 };
 
-type NativeOpenUpdateStoreCommand = {
-  type: "native_open_update_store";
-  payload?: {
-    updateUrl?: string;
-  };
-};
-
 function isNativeAppRuntimeSignalPresent(): boolean {
   if (typeof window === "undefined") return false;
-  const nativeWindow = window as NativeAppUpdateWindow;
+  const nativeWindow = window as NativeBridgeWindow;
   return typeof nativeWindow.ReactNativeWebView?.postMessage === "function"
     || isNativeUiBridgeEnabledFromSearch(window.location.search || "");
-}
-
-export function NativeAppUpdateCard({
-  copy,
-  installedVersion,
-  installSource,
-  latestVersion,
-  statusMessage,
-  showUpdateAction,
-  onUpdate,
-}: {
-  copy: NativeAppUpdateCopy;
-  installedVersion: string;
-  // Display text for the install source; "" (unknown) hides the line.
-  installSource: string;
-  latestVersion: string;
-  statusMessage: string;
-  showUpdateAction: boolean;
-  onUpdate: () => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
-            {copy.sectionLabel}
-          </div>
-          <div className="mt-2 text-sm font-semibold text-gray-900">
-            {copy.installedLabel} {installedVersion}
-          </div>
-          {installSource ? (
-            <div className="mt-1 text-xs font-medium text-gray-600">
-              {copy.installSourceLabel} {installSource}
-            </div>
-          ) : null}
-          {latestVersion ? (
-            <div className="mt-1 text-xs font-medium text-gray-600">
-              {copy.latestLabel} {latestVersion}
-            </div>
-          ) : null}
-          <div className="mt-2 text-xs leading-5 text-gray-600">
-            {statusMessage}
-          </div>
-        </div>
-        {showUpdateAction ? (
-          <button
-            type="button"
-            onClick={onUpdate}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-          >
-            <Download size={13} strokeWidth={2.2} />
-            <span>{copy.updateButtonLabel}</span>
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: SttLanguageCode; label: string; flag: string }> =
@@ -473,7 +404,6 @@ function ProfileSettingsPanel({
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false);
   const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState<boolean | null>(null);
   const [isSavingNotificationsPreference, setIsSavingNotificationsPreference] = useState(false);
-  const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null);
   const [isAccountActionModalOpen, setIsAccountActionModalOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
@@ -552,19 +482,7 @@ function ProfileSettingsPanel({
   };
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(locale), [locale]);
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(locale), [locale]);
-  const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(locale), [locale]);
-  const nativeAppUpdateStatus = nativeAppUpdate ?? DEFAULT_NATIVE_APP_UPDATE_DETAIL;
-  const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel;
-  const nativeAppInstallSource = resolveNativeAppInstallSourceText(nativeAppUpdateCopy, nativeAppUpdateStatus.installSource);
-  const nativeAppLatestVersion = nativeAppUpdateStatus.latestVersion || "";
-  const nativeAppUpdateStatusMessage = nativeAppUpdateStatus.status === "checking"
-    ? nativeAppUpdateCopy.checkingMessage
-    : nativeAppUpdateStatus.status === "available"
-      ? nativeAppUpdateCopy.availableMessage
-      : nativeAppUpdateStatus.status === "current"
-        ? nativeAppUpdateCopy.currentMessage
-        : nativeAppUpdateCopy.unknownMessage;
-  const showNativeAppUpdateAction = nativeAppUpdateStatus.updateAvailable && Boolean(nativeAppUpdateStatus.updateUrl);
+  const { detail: nativeAppUpdate, content: nativeAppUpdateCardContent } = useNativeAppUpdateCardContent(locale);
   const managementPageTitle = managementPage === "blocked"
     ? copy.blocked
     : managementPage === "reports"
@@ -589,24 +507,9 @@ function ProfileSettingsPanel({
     syncNativeRuntime();
     const nativeRuntimeTimerId = window.setTimeout(syncNativeRuntime, 0);
     const nativeRuntimeRetryTimerId = window.setTimeout(syncNativeRuntime, 250);
-    const windowWithUpdate = window as NativeAppUpdateWindow;
-    const cachedDetail = parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS);
-    const nativeUpdateTimerId = window.setTimeout(() => {
-      setNativeAppUpdate(cachedDetail || DEFAULT_NATIVE_APP_UPDATE_DETAIL);
-    }, 0);
-
-    const handleNativeAppUpdate = (event: Event) => {
-      const detail = parseNativeAppUpdateDetail((event as CustomEvent<unknown>).detail);
-      if (!detail) return;
-      setNativeAppUpdate(detail);
-    };
-
-    window.addEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener);
     return () => {
       window.clearTimeout(nativeRuntimeTimerId);
       window.clearTimeout(nativeRuntimeRetryTimerId);
-      window.clearTimeout(nativeUpdateTimerId);
-      window.removeEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener);
     };
   }, []);
 
@@ -825,25 +728,9 @@ function ProfileSettingsPanel({
   }, [copy.primaryLanguagesSaveError, isSavingPrimaryLanguages, onSavePrimaryLanguages, primaryLanguages]);
 
   const handleNativeAppUpdatePress = useCallback(() => {
-    const updateUrl = nativeAppUpdate?.updateUrl?.trim() || "";
-    if (!updateUrl) return;
-
+    if (!nativeAppUpdate?.updateUrl?.trim()) return;
     onClose();
-    const command: NativeOpenUpdateStoreCommand = {
-      type: "native_open_update_store",
-      payload: { updateUrl },
-    };
-    const nativeWindow = typeof window === "undefined" ? null : window as NativeAppUpdateWindow;
-    if (nativeWindow?.ReactNativeWebView?.postMessage) {
-      try {
-        nativeWindow.ReactNativeWebView.postMessage(JSON.stringify(command));
-        return;
-      } catch {
-        // Fall back to browser navigation if the bridge errors.
-      }
-    }
-
-    window.location.href = updateUrl;
+    openNativeAppUpdateStore(nativeAppUpdate.updateUrl);
   }, [nativeAppUpdate?.updateUrl, onClose]);
 
   const openManagementPage = useCallback((page: ProfileManagementPage) => {
@@ -1095,12 +982,7 @@ function ProfileSettingsPanel({
             {isNativeAppRuntime ? (
               <div className="mt-4 px-0">
                 <NativeAppUpdateCard
-                  copy={nativeAppUpdateCopy}
-                  installedVersion={nativeAppInstalledVersion}
-                  installSource={nativeAppInstallSource}
-                  latestVersion={nativeAppLatestVersion}
-                  statusMessage={nativeAppUpdateStatusMessage}
-                  showUpdateAction={showNativeAppUpdateAction}
+                  {...nativeAppUpdateCardContent}
                   onUpdate={handleNativeAppUpdatePress}
                 />
               </div>

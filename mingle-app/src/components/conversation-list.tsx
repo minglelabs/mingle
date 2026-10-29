@@ -7,7 +7,6 @@ import { getConversationDictionary } from "@/i18n/conversations";
 import { resolveNotificationCopy } from "@/i18n/notification-copy";
 import { conversationSortCopy } from "@/i18n/conversation-sort-copy";
 import NotificationPanel from "@/components/notification-panel";
-import ComposeOverlay from "@/components/compose/compose-overlay";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import SlideSurface from "@/components/slide-surface";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
@@ -131,6 +130,11 @@ import {
   logConversationMutationFailure,
 } from "@/components/conversation-list.diagnostics";
 import NativePushRegistration from "@/components/native-push-registration";
+import {
+  NativeAppUpdateCard,
+  openNativeAppUpdateStore,
+  useNativeAppUpdateCardContent,
+} from "@/components/native-app-update-card";
 import {
   readConversationListCache,
   readConversationListMemoryCache,
@@ -1904,6 +1908,27 @@ export default function ConversationList({
   googleOAuthEnabled,
 }: ConversationListProps) {
   const { data: session, status: sessionStatus } = useSession();
+  // The cached list takes taps while the session is still being checked. Queued
+  // mutations already wait for it (they flush only once authenticated); a write
+  // sent straight to the server awaits this first, so it never goes out as a
+  // guest. Resolves true once signed in, false when signed out.
+  const sessionStatusRef = useRef(sessionStatus);
+  const sessionSettledWaitersRef = useRef<Array<(authenticated: boolean) => void>>([]);
+  useEffect(() => {
+    sessionStatusRef.current = sessionStatus;
+    if (sessionStatus === "loading") return;
+    for (const resolve of sessionSettledWaitersRef.current.splice(0)) {
+      resolve(sessionStatus === "authenticated");
+    }
+  }, [sessionStatus]);
+  const waitForSessionSettled = useCallback((): Promise<boolean> => {
+    if (sessionStatusRef.current !== "loading") {
+      return Promise.resolve(sessionStatusRef.current === "authenticated");
+    }
+    return new Promise((resolve) => {
+      sessionSettledWaitersRef.current.push(resolve);
+    });
+  }, []);
   const router = useRouter();
   const authenticatedUserId = typeof session?.user?.id === "string"
     ? session.user.id.trim()
@@ -1916,7 +1941,6 @@ export default function ConversationList({
   const postingFeedSupported = useIsPostingFeedSupported();
   const showPostingHeader = postingFeedSupported === true;
   const postingHeaderCopy = useMemo(() => feedCopy(locale), [locale]);
-  const [composeOpen, setComposeOpen] = useState(false);
   const postingUnread = useUnreadNotifications(showPostingHeader ? (authenticatedUserId || null) : null);
   const conversationCacheIdentity = useMemo<ConversationListCacheIdentity>(() => ({
     apiNamespace: clientApiNamespace,
@@ -1959,6 +1983,7 @@ export default function ConversationList({
   );
   const notificationCopy = useMemo(() => resolveNotificationCopy(locale), [locale]);
   const sortCopy = useMemo(() => conversationSortCopy(locale), [locale]);
+  const { detail: nativeAppUpdate, content: nativeAppUpdateCardContent } = useNativeAppUpdateCardContent(locale);
   const [conversationSortMode, setConversationSortMode] = useState<ConversationListSortMode>("recent");
   const [showSortMenu, setShowSortMenu] = useState(false);
   const roomManagementCopy = useMemo(
@@ -4605,6 +4630,7 @@ export default function ConversationList({
     }
 
     try {
+      if (!(await waitForSessionSettled())) return;
       const response = await fetch(buildConversationApiPath(), {
         method: "POST",
         headers: {
@@ -4643,6 +4669,7 @@ export default function ConversationList({
     isImportingLegacyConversation,
     locale,
     openConversationSummary,
+    waitForSessionSettled,
   ]);
 
   const ensureConversationRoomForQa = useCallback(async (): Promise<ConversationListQaEnsureRoomResult> => {
@@ -4770,6 +4797,7 @@ export default function ConversationList({
 
     void (async () => {
       try {
+        if (!(await waitForSessionSettled())) return;
         const response = await fetch(buildConversationApiPath(conversationPath), {
           method: "POST",
           headers: { ...headers, "Content-Type": "application/json" },
@@ -4791,7 +4819,7 @@ export default function ConversationList({
         isSharingConversationRef.current = false;
       }
     })();
-  }, [roomManagementCopy.shareErrorToastLabel]);
+  }, [roomManagementCopy.shareErrorToastLabel, waitForSessionSettled]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -5486,11 +5514,73 @@ export default function ConversationList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale, languageOnboardingModalOpen]);
   const shouldShowLanguageBootstrapShell = languageOnboardingPhase === "locale-switching";
-  // The server-rendered list remains natively scrollable while React hydrates.
-  // Only an actual client-side session check blocks actions; the pre-hydration
-  // language marker is resolved in a layout effect and must not capture touches.
-  const shouldBlockBootstrapInteraction = languageOnboardingPhase === "ready"
-    && sessionStatus === "loading";
+
+  // The gear at the right of the list header: sort order and, in the app, the
+  // update card. Same menu in the posting header (2.2.0+) and the older one.
+  const settingsMenu = (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setShowSortMenu((open) => !open)}
+        className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
+        aria-label={sortCopy.menuLabel}
+        aria-haspopup="menu"
+        aria-expanded={showSortMenu}
+      >
+        <Settings size={22} strokeWidth={2} />
+        {isNativeRuntime && nativeAppUpdateCardContent.showUpdateAction ? (
+          <span
+            className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white"
+            aria-hidden
+          />
+        ) : null}
+      </button>
+      {showSortMenu ? (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            aria-hidden
+            onClick={() => setShowSortMenu(false)}
+          />
+          <div
+            role="menu"
+            aria-label={sortCopy.title}
+            className={`absolute right-0 top-full z-50 mt-1 ${isNativeRuntime ? "w-72" : "w-56"} overflow-hidden rounded-2xl border border-gray-100 bg-white py-1 shadow-lg`}
+          >
+            <p className="px-4 pb-1 pt-2 text-[12px] font-semibold text-gray-400">
+              {sortCopy.title}
+            </p>
+            {CONVERSATION_LIST_SORT_MODES.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="menuitemradio"
+                aria-checked={conversationSortMode === mode}
+                onClick={() => handleSelectSortMode(mode)}
+                className="flex w-full items-center justify-between px-4 py-3 text-left text-[15px] text-slate-800 transition active:bg-gray-100"
+              >
+                <span>{sortCopy[mode]}</span>
+                {conversationSortMode === mode ? (
+                  <Check size={18} strokeWidth={2.5} className="text-slate-900" aria-hidden />
+                ) : null}
+              </button>
+            ))}
+            {isNativeRuntime ? (
+              <div className="border-t border-gray-100 px-2 pb-1 pt-2">
+                <NativeAppUpdateCard
+                  {...nativeAppUpdateCardContent}
+                  onUpdate={() => {
+                    setShowSortMenu(false);
+                    openNativeAppUpdateStore(nativeAppUpdate?.updateUrl);
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
@@ -5509,15 +5599,6 @@ export default function ConversationList({
             <Loader2 size={22} className="animate-spin text-amber-500" aria-hidden />
           </div>
         </div>
-      ) : null}
-
-      {shouldBlockBootstrapInteraction ? (
-        <div
-          className="absolute inset-0 z-[199] bg-transparent"
-          role="status"
-          aria-live="polite"
-          aria-label={resolveAccessibilityCopy(locale).checkingAccount}
-        />
       ) : null}
 
       {sessionStatus === "unauthenticated" && languageOnboardingPhase === "ready" ? (
@@ -5561,14 +5642,13 @@ export default function ConversationList({
       {showPostingHeader ? (
         <AppTopHeader
           variant="surface"
-          composeLabel={postingHeaderCopy.compose}
           notificationsLabel={postingHeaderCopy.notifications}
           unreadNotificationsLabel={postingHeaderCopy.notificationsUnread}
           hasUnread={postingUnread.hasUnread}
-          onCompose={() => setComposeOpen(true)}
           onNotifications={openNotifications}
           onSearch={handleOpenSearch}
           searchLabel={copy.searchButtonLabel}
+          trailing={settingsMenu}
         />
       ) : (
       <header
@@ -5605,51 +5685,7 @@ export default function ConversationList({
               </span>
             ) : null}
           </button>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowSortMenu((open) => !open)}
-              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
-              aria-label={sortCopy.menuLabel}
-              aria-haspopup="menu"
-              aria-expanded={showSortMenu}
-            >
-              <Settings size={22} strokeWidth={2} />
-            </button>
-            {showSortMenu ? (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  aria-hidden
-                  onClick={() => setShowSortMenu(false)}
-                />
-                <div
-                  role="menu"
-                  aria-label={sortCopy.title}
-                  className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-2xl border border-gray-100 bg-white py-1 shadow-lg"
-                >
-                  <p className="px-4 pb-1 pt-2 text-[12px] font-semibold text-gray-400">
-                    {sortCopy.title}
-                  </p>
-                  {CONVERSATION_LIST_SORT_MODES.map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={conversationSortMode === mode}
-                      onClick={() => handleSelectSortMode(mode)}
-                      className="flex w-full items-center justify-between px-4 py-3 text-left text-[15px] text-slate-800 transition active:bg-gray-100"
-                    >
-                      <span>{sortCopy[mode]}</span>
-                      {conversationSortMode === mode ? (
-                        <Check size={18} strokeWidth={2.5} className="text-slate-900" aria-hidden />
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : null}
-          </div>
+          {settingsMenu}
         </div>
       </header>
       )}
@@ -6004,9 +6040,6 @@ export default function ConversationList({
                 );
               })}
             </AnimatePresence>
-            {showPostingHeader ? (
-              <ComposeOverlay open={composeOpen} locale={locale} onClose={() => setComposeOpen(false)} />
-            ) : null}
             <NotificationPanel
               open={notificationSurfaceOpen}
               enabled={sessionStatus === "authenticated"}

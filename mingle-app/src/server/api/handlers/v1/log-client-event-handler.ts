@@ -32,6 +32,7 @@ import { maybeGenerateConversationTitleForSession } from '@/server/conversation-
 import { notifyConversationMessage, reserveConversationVoiceOrder } from '@/server/conversation-realtime'
 import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
+import { claimConversationMessagePush, MESSAGE_PUSH_TRANSLATION_WAIT_MS, readMessageFinalTranslations } from '@/server/conversation-message-push'
 import { notifyOperatorInboxActivity } from '@/server/operator-inbox/notify'
 import {
   isMessageSenderBlockedInConversation,
@@ -47,6 +48,8 @@ const ALLOWED_EVENT_TYPES = new Set([
   'stt_turn_started',
   'stt_turn_finalized',
   'conversation_hydration_order_preserved',
+  // Temporary field diagnostics, see src/lib/ui-diagnostics.ts.
+  'ui_diagnostic',
 ])
 
 // This is a defensive ceiling for a client-reported single-turn duration, not a
@@ -529,6 +532,40 @@ export async function handleLogClientEventV1(request: NextRequest) {
         } catch (error) {
           console.error('Conversation realtime notification failed:', error)
         }
+        if (messageId) {
+          const pushArgs = {
+            messageId,
+            sessionKey: tracking.sessionKey,
+            sourceText,
+            sourceLanguage,
+            senderUserId: userId,
+            memberUserIds,
+          }
+          const sendMessagePush = async (pushTranslations: Record<string, string>) => {
+            try {
+              await sendPushNotificationForConversationMessage({ ...pushArgs, translations: pushTranslations })
+            } catch (error) {
+              console.error('Conversation message push failed:', error)
+            }
+          }
+          // The push shows each recipient the translation into their language. When the original
+          // arrives ahead of its translation, its translation update sends the push; the original
+          // only sends it (untranslated) if that update has not come within the wait.
+          if (body.translationUpdate === true) {
+            // A later re-translation of an old message is not news to the room.
+            const isFreshMessage = Date.now() - message.createdAt.getTime() <= MESSAGE_PUSH_TRANSLATION_WAIT_MS * 2
+            if (isFreshMessage && claimConversationMessagePush(messageId)) await sendMessagePush(translations)
+          } else if (body.translationPending === true && Object.keys(translations).length === 0) {
+            const pendingMessageId = messageId
+            after(async () => {
+              await new Promise((resolve) => setTimeout(resolve, MESSAGE_PUSH_TRANSLATION_WAIT_MS))
+              if (!claimConversationMessagePush(pendingMessageId)) return
+              await sendMessagePush(await readMessageFinalTranslations(pendingMessageId))
+            })
+          } else if (claimConversationMessagePush(messageId)) {
+            await sendMessagePush(translations)
+          }
+        }
         // Translation availability must be published before optional AI title
         // generation, which can stall independently of message delivery.
         if (body.translationPending !== true) {
@@ -540,19 +577,8 @@ export async function handleLogClientEventV1(request: NextRequest) {
         }
         if (messageId && body.translationUpdate !== true) {
           const committedMessageId = messageId
-          try {
-            await sendPushNotificationForConversationMessage({
-              messageId,
-              sessionKey: tracking.sessionKey,
-              sourceText,
-              senderUserId: userId,
-              memberUserIds,
-            })
-          } catch (error) {
-            console.error('Conversation message push failed:', error)
-          }
           // Staff alerts run after the response so their realtime publication
-          // cannot delay the sender. Keep the existing push and title timing.
+          // cannot delay the sender.
           after(async () => {
             try {
               await notifyOperatorInboxActivity({

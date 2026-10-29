@@ -3089,6 +3089,8 @@ function buildDebugTextPreview(rawText: string): string {
   return normalized.slice(0, 120)
 }
 
+const OLDER_SERVER_PAGES_PER_LOAD = 5
+const OLDER_SERVER_PAGE_TIMEOUT_MS = 15_000
 const LOAD_BATCH_SIZE = LOCAL_UTTERANCE_CACHE_LIMIT
 
 export default function useRealtimeSTT({
@@ -3826,6 +3828,74 @@ export default function useRealtimeSTT({
     }
   }, [conversationId])
 
+  /**
+   * One page of server history before `serverCursor`. 'nothing_new' when every message on it is
+   * already on screen: merging it changes nothing, so the screen's "loading older" state would
+   * never be released by a re-render.
+   */
+  const fetchOlderServerPage = useCallback(async (
+    serverCursor: ConversationHydrationCursor,
+  ): Promise<'loaded' | 'nothing_new' | 'failed'> => {
+    if (!conversationId) return 'failed'
+    const response = await fetch(buildConversationHydrationApiPath(conversationId, serverCursor), {
+      cache: 'no-store',
+      headers: buildConversationHydrationHeaders(),
+      // A request that never settles would leave the "loading older" spinner up for good.
+      signal: AbortSignal.timeout(OLDER_SERVER_PAGE_TIMEOUT_MS),
+    })
+    if (!response.ok) return 'failed'
+
+    const payload = await response.json() as ConversationHydrationPayload
+    if (payload.conversation) {
+      setIsSharedRoom(payload.conversation.isMultiMember === true)
+    }
+    const nextLeaveNotices = normalizeConversationHydrationLeaveNotices(payload.leaveNotices)
+    setLeaveNotices((current) => (
+      areConversationLeaveNoticesEqual(current, nextLeaveNotices) ? current : nextLeaveNotices
+    ))
+    const nextInviteNotices = normalizeConversationHydrationInviteNotices(payload.inviteNotices)
+    setInviteNotices((current) => (
+      areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
+    ))
+    setOperatorDisclosure(payload.operatorDisclosure === true)
+    applyRecalledMessageIds(payload.recalledMessageIds)
+    const nextMessageCount = normalizePersistedMessageCount(
+      typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
+    )
+    if (nextMessageCount > 0) {
+      setMessageCount((current) => Math.max(current, nextMessageCount))
+    }
+    const nextServerCursor = normalizeConversationHydrationCursor(payload.oldestMessageCursor)
+    hasOlderServerUtterancesRef.current = payload.hasMoreUtterances === true && nextServerCursor !== null
+    serverOlderCursorRef.current = nextServerCursor
+
+    const utterancesFromServer = normalizeConversationHydrationUtterances(payload.utterances, getCurrentTargetLanguages())
+    if (utterancesFromServer.length === 0) return 'nothing_new'
+    const shownIds = new Set(utterancesRef.current.map((utterance) => utterance.id))
+    const hasNewUtterance = utterancesFromServer.some((utterance) => !shownIds.has(utterance.id))
+
+    setUtteranceStore((current) => {
+      const nextStore = mergeServerHydrationUtterances(current, utterancesFromServer)
+      const nextStoredUtterances = buildLocalUtteranceCache(buildMergedUtterances(nextStore.utterances))
+      storedUtterancesRef.current = nextStoredUtterances
+      storageLoadedCountRef.current = nextStore.utterances.length
+      pendingHasOlderUtterancesRef.current = hasOlderUtterancesFromRefs()
+      return nextStore
+    })
+    queueHasOlderUtterancesRefresh()
+    return hasNewUtterance ? 'loaded' : 'nothing_new'
+  }, [
+    applyRecalledMessageIds,
+    buildConversationHydrationHeaders,
+    getCurrentTargetLanguages,
+    buildLocalUtteranceCache,
+    buildMergedUtterances,
+    conversationId,
+    hasOlderUtterancesFromRefs,
+    mergeServerHydrationUtterances,
+    queueHasOlderUtterancesRefresh,
+  ])
+
   const loadOlderUtterances = useCallback(async (): Promise<boolean> => {
     const stored = storedUtterancesRef.current
     const alreadyLoaded = storageLoadedCountRef.current
@@ -3844,10 +3914,9 @@ export default function useRealtimeSTT({
       return true
     }
 
-    const serverCursor = serverOlderCursorRef.current
     if (
       !conversationId
-      || !serverCursor
+      || !serverOlderCursorRef.current
       || !hasOlderServerUtterancesRef.current
       || isLoadingOlderServerUtterancesRef.current
     ) {
@@ -3857,67 +3926,26 @@ export default function useRealtimeSTT({
 
     isLoadingOlderServerUtterancesRef.current = true
     try {
-      const response = await fetch(buildConversationHydrationApiPath(conversationId, serverCursor), {
-        cache: 'no-store',
-        headers: buildConversationHydrationHeaders(),
-      })
-      if (!response.ok) return false
-
-      const payload = await response.json() as ConversationHydrationPayload
-      if (payload.conversation) {
-        setIsSharedRoom(payload.conversation.isMultiMember === true)
+      // The local cache can reach further back than the server cursor, so a page may hold only
+      // messages already on screen. Keep paging until one brings something new.
+      for (let page = 0; page < OLDER_SERVER_PAGES_PER_LOAD; page += 1) {
+        const cursor = serverOlderCursorRef.current
+        if (!cursor || !hasOlderServerUtterancesRef.current) break
+        const outcome = await fetchOlderServerPage(cursor)
+        if (outcome === 'loaded') return true
+        if (outcome === 'failed') return false
       }
-      const nextLeaveNotices = normalizeConversationHydrationLeaveNotices(payload.leaveNotices)
-      setLeaveNotices((current) => (
-        areConversationLeaveNoticesEqual(current, nextLeaveNotices) ? current : nextLeaveNotices
-      ))
-      const nextInviteNotices = normalizeConversationHydrationInviteNotices(payload.inviteNotices)
-      setInviteNotices((current) => (
-        areConversationInviteNoticesEqual(current, nextInviteNotices) ? current : nextInviteNotices
-      ))
-      setOperatorDisclosure(payload.operatorDisclosure === true)
-      applyRecalledMessageIds(payload.recalledMessageIds)
-      const nextMessageCount = normalizePersistedMessageCount(
-        typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
-      )
-      if (nextMessageCount > 0) {
-        setMessageCount((current) => Math.max(current, nextMessageCount))
-      }
-      const nextServerCursor = normalizeConversationHydrationCursor(payload.oldestMessageCursor)
-      hasOlderServerUtterancesRef.current = payload.hasMoreUtterances === true && nextServerCursor !== null
-      serverOlderCursorRef.current = nextServerCursor
-
-      const utterancesFromServer = normalizeConversationHydrationUtterances(payload.utterances, getCurrentTargetLanguages())
-      if (utterancesFromServer.length === 0) {
-        setHasOlderUtterances(hasOlderUtterancesFromRefs())
-        return false
-      }
-
-      setUtteranceStore((current) => {
-        const nextStore = mergeServerHydrationUtterances(current, utterancesFromServer)
-        const nextStoredUtterances = buildLocalUtteranceCache(buildMergedUtterances(nextStore.utterances))
-        storedUtterancesRef.current = nextStoredUtterances
-        storageLoadedCountRef.current = nextStore.utterances.length
-        pendingHasOlderUtterancesRef.current = hasOlderUtterancesFromRefs()
-        return nextStore
-      })
-      queueHasOlderUtterancesRefresh()
-      return true
+      setHasOlderUtterances(hasOlderUtterancesFromRefs())
+      return false
     } catch {
       return false
     } finally {
       isLoadingOlderServerUtterancesRef.current = false
     }
   }, [
-    applyRecalledMessageIds,
-    buildConversationHydrationHeaders,
-    getCurrentTargetLanguages,
-    buildLocalUtteranceCache,
-    buildMergedUtterances,
     conversationId,
+    fetchOlderServerPage,
     hasOlderUtterancesFromRefs,
-    mergeServerHydrationUtterances,
-    queueHasOlderUtterancesRefresh,
   ])
 
   // Forward AEC toggle to native module in real-time (hot-swap mid-session).

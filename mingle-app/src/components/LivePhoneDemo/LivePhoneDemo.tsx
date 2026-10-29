@@ -63,7 +63,7 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface from '@/components/slide-surface'
@@ -186,6 +186,8 @@ import {
 } from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { requestNativeBannerZone } from '@/lib/native-banner-zone'
+import { reportUiDiagnostic } from '@/lib/ui-diagnostics'
+import { unreadDividerLabel } from '@/i18n/unread-divider-copy'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   INITIAL_SCROLL_METRICS,
@@ -233,11 +235,17 @@ import {
   NATIVE_APP_UPDATE_EVENT,
   parseNativeAppUpdateDetail,
   readRequestedApiNamespaceFromSearch,
-  resolveNativeAppInstallSourceText,
   resolveNativeAppTrackingContext,
   resolveNativeAppUpdateCopy,
   type NativeAppUpdateDetail,
 } from './live-phone-demo.app-update.logic'
+import {
+  NativeAppUpdateCard,
+  openNativeAppUpdateStore,
+  resolveNativeAppUpdateCardContent,
+} from '@/components/native-app-update-card'
+import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
+import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
 import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
@@ -284,6 +292,8 @@ import {
 } from '@/lib/native-remount-restore'
 
 const VOLUME_THRESHOLD = 0.05
+// How long a "loaded" older-history page may go without changing the list before its loading state is released.
+const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const FEEDBACK_INSTAGRAM_CONTACT_URL = 'https://www.instagram.com/mingle.labs/'
@@ -1537,13 +1547,6 @@ type SpeakingTtsItem = BubbleTtsTarget & {
 
 type NativeTtsStopReason = 'mute_or_sound_disabled' | 'component_unmount' | 'force_reset' | 'earphone_mode_stopped'
 
-type NativeOpenUpdateStoreCommand = {
-  type: 'native_open_update_store'
-  payload?: {
-    updateUrl?: string
-  }
-}
-
 type NativeUiOverlayStateCommand = {
   type: 'native_ui_overlay_state'
   payload?: {
@@ -1777,6 +1780,23 @@ function LivePhoneDemoDateDividerRow({
 }
 
 const MemoizedLivePhoneDemoDateDividerRow = memo(LivePhoneDemoDateDividerRow)
+
+function LivePhoneDemoUnreadDividerRow({ uiLocale }: { uiLocale: string }) {
+  return (
+    <div
+      data-unread-divider
+      role="separator"
+      style={CHAT_MESSAGE_ROW_STYLE}
+      className="flex items-center gap-3 px-1 py-2"
+    >
+      <span className="h-px flex-1 bg-amber-400/70" aria-hidden />
+      <span className="shrink-0 text-[0.75rem] font-semibold text-amber-600">
+        {unreadDividerLabel(uiLocale)}
+      </span>
+      <span className="h-px flex-1 bg-amber-400/70" aria-hidden />
+    </div>
+  )
+}
 
 type LivePhoneDemoTimelineItem =
   | { kind: 'message'; timestampMs: number; utterance: Utterance }
@@ -2025,6 +2045,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
   const leaveConversationCopy = useMemo(() => resolveLivePhoneDemoConversationLeaveCopy(uiLocale), [uiLocale])
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
+  const conversationExportCopy = useMemo(() => resolveConversationExportCopy(uiLocale), [uiLocale])
   const defaultDisplayLanguageCopy = useMemo(() => {
     return {
       menuItemLabel: roomManagementCopy.defaultDisplayLanguageMenuItemLabel,
@@ -2115,6 +2136,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [feedbackHistoryError, setFeedbackHistoryError] = useState<string | null>(null)
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
+  const [isExportingConversation, setIsExportingConversation] = useState(false)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
@@ -3539,6 +3561,47 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     pushMenuHistoryEntry(2, 'feedback')
   }, [clearFeedbackSubmitState, menuOpen, menuScreen, pushMenuHistoryEntry])
 
+  const handleExportConversationMenuItemPress = useCallback(async () => {
+    if (!conversationId || isExportingConversation) return
+    setIsExportingConversation(true)
+    const toastId = toast.loading(conversationExportCopy.preparingToast)
+    const isNativeAppRuntimeNow = isNativeApp()
+    try {
+      const exported = await fetchConversationExport({
+        conversationId,
+        locale: uiLocale,
+        displayLanguage: resolvedDefaultDisplayLanguage,
+      })
+      const delivery = await shareConversationExport(exported, { isNativeApp: isNativeAppRuntimeNow })
+      if (delivery === 'needs_gesture') {
+        // The tap was spent on the fetch; the share sheet needs a new one.
+        toast.success(conversationExportCopy.readyToast, {
+          id: toastId,
+          duration: 15_000,
+          action: {
+            label: conversationExportCopy.shareActionLabel,
+            onClick: () => {
+              void shareConversationExport(exported, { isNativeApp: isNativeAppRuntimeNow }).then((retried) => {
+                if (retried === 'copied') toast.success(conversationExportCopy.copiedToast)
+                else if (retried === 'failed') toast.error(conversationExportCopy.errorToast)
+              })
+            },
+          },
+        })
+      } else if (delivery === 'copied') {
+        toast.success(conversationExportCopy.copiedToast, { id: toastId })
+      } else if (delivery === 'failed') {
+        toast.error(conversationExportCopy.errorToast, { id: toastId })
+      } else {
+        toast.dismiss(toastId)
+      }
+    } catch {
+      toast.error(conversationExportCopy.errorToast, { id: toastId })
+    } finally {
+      setIsExportingConversation(false)
+    }
+  }, [conversationExportCopy, conversationId, isExportingConversation, resolvedDefaultDisplayLanguage, uiLocale])
+
   const handleConversationManagementMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'conversation-management') return
     pushMenuHistoryEntry(2, 'conversation-management')
@@ -3774,7 +3837,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, latestAccountPreferences, syncAccountPreferences])
 
   useEffect(() => {
+    // Temporary (see src/lib/ui-diagnostics.ts): what the room menu looked like to JS around a
+    // back navigation, and whether its panel is still on screen 600 ms later.
+    const reportMenuPopStateDiagnostic = (depthBefore: number, requestedDepth: number | null) => {
+      if (depthBefore <= 0 && requestedDepth === null) return
+      const stateBefore = window.history.state as Record<string, unknown> | null
+      window.setTimeout(() => {
+        const panel = document.querySelector('[data-qa="live-demo-menu-panel"]')
+        const rect = panel?.getBoundingClientRect()
+        reportUiDiagnostic('room_menu_popstate', {
+          depthBefore,
+          requestedDepth,
+          stateDepth: stateBefore && typeof stateBefore === 'object' ? stateBefore[MENU_HISTORY_STATE_KEY] ?? null : null,
+          depthAfter: menuHistoryDepthRef.current,
+          isNativeIosApp: isNativeIosAppRuntime(),
+          settleState: menuIosHistorySettleRef.current,
+          panelInDom: Boolean(panel),
+          panelRect: rect ? [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)] : null,
+        })
+      }, 600)
+    }
+
     const handlePopState = (event: PopStateEvent) => {
+      reportMenuPopStateDiagnostic(menuHistoryDepthRef.current, menuHistoryTargetDepthRef.current)
       const requestedDepth = menuHistoryTargetDepthRef.current
       menuHistoryTargetDepthRef.current = null
       const currentHistoryState = typeof window === 'undefined' ? null : window.history.state
@@ -5841,6 +5926,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const prevScrollHeightRef = useRef<number | null>(null)
   const prevScrollTopRef = useRef<number | null>(null)
   const isLoadingOlderRef = useRef(false)
+  const [unreadDividerUtteranceId, setUnreadDividerUtteranceId] = useState<string | null>(null)
   const autoScrollSchedulerRef = useRef(createAutoScrollScheduler())
   const scrollUiHideTimerRef = useRef<number | null>(null)
   const scrollStateFrameRef = useRef<{
@@ -5924,7 +6010,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     prevScrollHeightRef.current = node.scrollHeight
     prevScrollTopRef.current = node.scrollTop
     void loadOlderUtterances().then((didLoad) => {
-      if (didLoad) return
+      if (didLoad) {
+        // The prepend layout effect releases the loading state; if the load left the list
+        // unchanged it never runs, so release it here instead of leaving the spinner up.
+        window.setTimeout(() => {
+          if (!isPaginatingRef.current || prevScrollHeightRef.current === null) return
+          prevScrollHeightRef.current = null
+          prevScrollTopRef.current = null
+          isPaginatingRef.current = false
+          isLoadingOlderRef.current = false
+        }, OLDER_LOAD_RELEASE_FALLBACK_MS)
+        return
+      }
       prevScrollHeightRef.current = null
       prevScrollTopRef.current = null
       isPaginatingRef.current = false
@@ -6175,26 +6272,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [clearPendingAutoScrollTimer, markUserScrollIntent, updateScrollDerivedState])
 
   const handleNativeAppUpdatePress = useCallback(() => {
-    const updateUrl = nativeAppUpdate?.updateUrl?.trim() || ''
-    if (!updateUrl) return
+    if (!nativeAppUpdate?.updateUrl?.trim()) return
 
     closeMenuPanel()
-
-    const command: NativeOpenUpdateStoreCommand = {
-      type: 'native_open_update_store',
-      payload: { updateUrl },
-    }
-
-    if (isNativeApp()) {
-      try {
-        window.ReactNativeWebView?.postMessage(JSON.stringify(command))
-        return
-      } catch {
-        // Fall back to browser navigation if the bridge errors.
-      }
-    }
-
-    window.location.href = updateUrl
+    openNativeAppUpdateStore(nativeAppUpdate.updateUrl)
   }, [closeMenuPanel, nativeAppUpdate?.updateUrl])
 
   useEffect(() => {
@@ -6218,18 +6299,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [])
 
-  const nativeAppUpdateStatus = nativeAppUpdate || DEFAULT_NATIVE_APP_UPDATE_DETAIL
-  const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel
-  const nativeAppInstallSource = resolveNativeAppInstallSourceText(nativeAppUpdateCopy, nativeAppUpdateStatus.installSource)
-  const nativeAppLatestVersion = nativeAppUpdateStatus.latestVersion || ''
-  const nativeAppUpdateStatusMessage = nativeAppUpdateStatus.status === 'checking'
-    ? nativeAppUpdateCopy.checkingMessage
-    : nativeAppUpdateStatus.status === 'available'
-      ? nativeAppUpdateCopy.availableMessage
-      : nativeAppUpdateStatus.status === 'current'
-        ? nativeAppUpdateCopy.currentMessage
-        : nativeAppUpdateCopy.unknownMessage
-  const showNativeAppUpdateAction = nativeAppUpdateStatus.updateAvailable && Boolean(nativeAppUpdateStatus.updateUrl)
+  const nativeAppUpdateCardContent = useMemo(
+    () => resolveNativeAppUpdateCardContent(nativeAppUpdate, nativeAppUpdateCopy),
+    [nativeAppUpdate, nativeAppUpdateCopy],
+  )
 
   useLayoutEffect(() => {
     const nextCounts: ChatScrollMessageCountSnapshot = {
@@ -6321,10 +6394,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       bottomAnchorConversationRef.current = conversationId
       hasInitialBottomAnchorRef.current = false
       allowAutoTopPaginationRef.current = false
+      setUnreadDividerUtteranceId(null)
     }
     if (!isVisible) {
       hasInitialBottomAnchorRef.current = false
       allowAutoTopPaginationRef.current = false
+      setUnreadDividerUtteranceId(null)
       return
     }
     const node = chatRef.current
@@ -6340,6 +6415,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const firstUnreadRow = firstUnreadId
       ? node.querySelector<HTMLElement>(`[data-utterance-id="${CSS.escape(firstUnreadId)}"]`)
       : null
+    // The line stays where the unread messages began for this visit only; the next entry
+    // draws it again only if something is unread then.
+    setUnreadDividerUtteranceId(firstUnreadRow ? firstUnreadId : null)
     if (firstUnreadRow) {
       // Instant jump (no smooth scroll): first unread row at the top of the
       // viewport. updateScrollDerivedState below decides auto-follow from the
@@ -6993,6 +7071,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     overscrollBehaviorY: 'contain',
     touchAction: 'pan-y',
     willChange: 'scroll-position',
+    // A long press opens the bubble's own menu; without this, iOS WebKit
+    // selects the nearest selectable text instead (language dividers, read
+    // receipts, times, the expand toggle), as if dragged with a mouse.
+    WebkitUserSelect: 'none',
+    userSelect: 'none',
+    WebkitTouchCallout: 'none',
     paddingTop: chatPaddingTop,
     paddingBottom: chatPaddingBottom,
     paddingLeft: 'max(calc(env(safe-area-inset-left) + 6px), 10px)',
@@ -8120,6 +8204,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </button>
                         </div>
 
+                        {conversationId ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              onClick={() => { void handleExportConversationMenuItemPress() }}
+                              disabled={isExportingConversation}
+                              aria-busy={isExportingConversation}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:opacity-60"
+                            >
+                              <span className="min-w-0 flex-1">{conversationExportCopy.menuLabel}</span>
+                              <span className="shrink-0 text-gray-500">
+                                {isExportingConversation
+                                  ? <Loader2 size={18} strokeWidth={2.4} className="animate-spin" />
+                                  : <Share size={18} strokeWidth={2.2} />}
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
+
                         <div className="px-4 pb-4">
                           <button
                             type="button"
@@ -8135,41 +8238,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                         {isNativeAppRuntime && (
                           <div className="px-4 py-4">
-                            <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
-                                    {nativeAppUpdateCopy.sectionLabel}
-                                  </div>
-                                  <div className="mt-2 text-sm font-semibold text-gray-900">
-                                    {nativeAppUpdateCopy.installedLabel} {nativeAppInstalledVersion}
-                                  </div>
-                                  {nativeAppInstallSource ? (
-                                    <div className="mt-1 text-xs font-medium text-gray-600">
-                                      {nativeAppUpdateCopy.installSourceLabel} {nativeAppInstallSource}
-                                    </div>
-                                  ) : null}
-                                  {nativeAppLatestVersion ? (
-                                    <div className="mt-1 text-xs font-medium text-gray-600">
-                                      {nativeAppUpdateCopy.latestLabel} {nativeAppLatestVersion}
-                                    </div>
-                                  ) : null}
-                                  <div className="mt-2 text-xs leading-5 text-gray-600">
-                                    {nativeAppUpdateStatusMessage}
-                                  </div>
-                                </div>
-                                {showNativeAppUpdateAction ? (
-                                  <button
-                                    type="button"
-                                    onClick={handleNativeAppUpdatePress}
-                                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                                  >
-                                    <Download size={13} strokeWidth={2.2} />
-                                    <span>{nativeAppUpdateCopy.updateButtonLabel}</span>
-                                  </button>
-                                ) : null}
-                              </div>
-                            </div>
+                            <NativeAppUpdateCard
+                              {...nativeAppUpdateCardContent}
+                              onUpdate={handleNativeAppUpdatePress}
+                            />
                           </div>
                         )}
 
@@ -8772,6 +8844,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     }
                     className={spacingClass}
                   >
+                    {item.kind === 'message' && item.utterance.id === unreadDividerUtteranceId ? (
+                      <LivePhoneDemoUnreadDividerRow uiLocale={uiLocale} />
+                    ) : null}
                     {item.kind === 'leave-notice' ? (
                       <MemoizedLivePhoneDemoLeaveNoticeRow
                         notice={item.notice}

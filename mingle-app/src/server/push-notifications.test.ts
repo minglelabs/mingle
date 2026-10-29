@@ -19,6 +19,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 
 import {
+  pickMessagePushText,
   resolvePushCopy,
   sendPushNotificationForConversationMessage,
   sendPushNotificationForUserNotification,
@@ -271,5 +272,21 @@ describe('sendPushToUsers', () => {
     expect(m.userFindMany).not.toHaveBeenCalled()
     expect(build).not.toHaveBeenCalled()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('pickMessagePushText', () => {
+  const base = { sourceText: '안녕', sourceLanguage: 'ko', translations: { en: 'Hello', 'zh-CN': '你好' } }
+
+  it('shows the translation into the recipient\'s language', () => {
+    expect(pickMessagePushText({ ...base, recipientLanguage: 'en' })).toBe('Hello')
+    expect(pickMessagePushText({ ...base, recipientLanguage: 'en-US' })).toBe('Hello')
+    expect(pickMessagePushText({ ...base, recipientLanguage: 'zh-CN' })).toBe('你好')
+  })
+
+  it('shows the original to a recipient who speaks it or has no translation yet', () => {
+    expect(pickMessagePushText({ ...base, recipientLanguage: 'ko' })).toBe('안녕')
+    expect(pickMessagePushText({ ...base, recipientLanguage: 'ja' })).toBe('안녕')
+    expect(pickMessagePushText({ sourceText: '안녕', recipientLanguage: 'en' })).toBe('안녕')
   })
 })
