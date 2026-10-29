@@ -1,0 +1,48 @@
+import { NextResponse } from 'next/server'
+import { requireAdminApi } from '@/server/admin/guard'
+import {
+  normalizeReviewFeedback,
+  parseReviewAction,
+  reviewOperatorPost,
+  reviewOperatorProfile,
+} from '@/server/operator-review/review'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 180
+
+const ERROR_STATUS: Record<string, number> = {
+  not_found: 404,
+  already_approved: 409,
+  busy: 409,
+  profile_pending: 409,
+  publish_failed: 502,
+  regenerate_failed: 502,
+}
+
+function json(payload: object, status = 200): NextResponse {
+  return NextResponse.json(payload, { status, headers: { 'Cache-Control': 'no-store' } })
+}
+
+/**
+ * POST /admin/operators/api/review — one staff answer for a profile or a post
+ * waiting for review: `{ kind: 'profile' | 'post', id, action: 'publish' |
+ * 'delete' | 'regenerate', feedback? }`. 재제작 waits for the new photo or post.
+ */
+export async function POST(request: Request) {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null
+  const kind = body?.kind
+  const id = typeof body?.id === 'string' ? body.id.trim() : ''
+  const action = parseReviewAction(body?.action)
+  if ((kind !== 'profile' && kind !== 'post') || !id || !action) return json({ error: 'invalid_request' }, 400)
+  const feedback = normalizeReviewFeedback(body?.feedback)
+
+  const result = kind === 'profile'
+    ? await reviewOperatorProfile(auth.ctx, id, action, feedback)
+    : await reviewOperatorPost(auth.ctx, id, action, feedback)
+  if (!result.ok) return json({ error: result.error }, ERROR_STATUS[result.error] ?? 500)
+  return json(result)
+}

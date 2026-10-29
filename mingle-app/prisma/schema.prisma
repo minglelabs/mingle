@@ -205,26 +205,26 @@ model UserBlock {
 }
 
 model UserReport {
-  id               String   @id @default(cuid())
-  reporterId       String   @map("reporter_id")
-  reportedUserId   String   @map("reported_user_id")
-  targetType       String   @default("user") @map("target_type")
-  targetPostId     String?  @map("target_post_id")
-  targetCommentId  String?  @map("target_comment_id")
-  targetKey        String   @default("") @map("target_key")
+  id               String    @id @default(cuid())
+  reporterId       String    @map("reporter_id")
+  reportedUserId   String    @map("reported_user_id")
+  targetType       String    @default("user") @map("target_type")
+  targetPostId     String?   @map("target_post_id")
+  targetCommentId  String?   @map("target_comment_id")
+  targetKey        String    @default("") @map("target_key")
   reason           String
-  message          String?  @db.Text
-  status           String   @default("open")
-  adminNote        String?  @map("admin_note") @db.Text
-  moderationAction String?  @map("moderation_action")
+  message          String?   @db.Text
+  status           String    @default("open")
+  adminNote        String?   @map("admin_note") @db.Text
+  moderationAction String?   @map("moderation_action")
   resolvedAt       DateTime? @map("resolved_at")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  reporter      User              @relation("UserReportsSent", fields: [reporterId], references: [id], onDelete: Cascade)
-  reportedUser  User              @relation("UserReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
-  targetPost    Post?             @relation(fields: [targetPostId], references: [id], onDelete: SetNull)
-  targetComment PostComment?      @relation(fields: [targetCommentId], references: [id], onDelete: SetNull)
+  reporter      User               @relation("UserReportsSent", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser  User               @relation("UserReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  targetPost    Post?              @relation(fields: [targetPostId], references: [id], onDelete: SetNull)
+  targetComment PostComment?       @relation(fields: [targetCommentId], references: [id], onDelete: SetNull)
   replies       UserReportReply[]
   notifications UserNotification[]
 
@@ -268,7 +268,7 @@ model AppMessage {
   createdAt                   DateTime @default(now()) @map("created_at")
   updatedAt                   DateTime @updatedAt @map("updated_at")
 
-  user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user      User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
   reactions AppMessageReaction[]
   contents  AppMessageContent[]
   eventLogs AppEventLog[]
@@ -642,14 +642,14 @@ model AdminDashboardDailyMetric {
 }
 
 model AppMessageReaction {
-  messageId String @map("message_id")
-  userId String @map("user_id")
-  kind String
+  messageId String   @map("message_id")
+  userId    String   @map("user_id")
+  kind      String
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   message AppMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([messageId, userId])
   @@index([userId])
@@ -658,38 +658,38 @@ model AppMessageReaction {
 
 // Pointers separate the author's saved draft from the atomically published bio.
 model ProfileBioState {
-  userId             String @id @map("user_id")
+  userId             String  @id @map("user_id")
   currentVersionId   String? @map("current_version_id")
   publishedVersionId String? @map("published_version_id")
-  user               User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("profile_bio_states")
 }
 
 model ProfileBioVersion {
-  id             String @id @default(cuid())
-  userId         String @map("user_id")
-  sourceText     String @map("source_text") @db.Text
-  sourceLanguage String? @map("source_language")
-  targetLanguages String[] @map("target_languages")
-  status         String @default("queued")
-  deadlineAt     DateTime @map("deadline_at")
-  createdAt      DateTime @default(now()) @map("created_at")
-  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  translations   ProfileBioTranslation[]
+  id              String                  @id @default(cuid())
+  userId          String                  @map("user_id")
+  sourceText      String                  @map("source_text") @db.Text
+  sourceLanguage  String?                 @map("source_language")
+  targetLanguages String[]                @map("target_languages")
+  status          String                  @default("queued")
+  deadlineAt      DateTime                @map("deadline_at")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  translations    ProfileBioTranslation[]
 
   @@index([userId, createdAt])
   @@map("profile_bio_versions")
 }
 
 model ProfileBioTranslation {
-  versionId      String @map("version_id")
-  language       String
-  status         String @default("running")
-  text           String? @db.Text
-  attemptId      String @map("attempt_id")
-  deadlineAt     DateTime @map("deadline_at")
-  version        ProfileBioVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  versionId  String            @map("version_id")
+  language   String
+  status     String            @default("running")
+  text       String?           @db.Text
+  attemptId  String            @map("attempt_id")
+  deadlineAt DateTime          @map("deadline_at")
+  version    ProfileBioVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
   @@id([versionId, language])
   @@map("profile_bio_translations")
@@ -700,27 +700,27 @@ model ProfileBioTranslation {
 // ---------------------------------------------------------------------------
 
 model Post {
-  id                  String    @id @default(cuid())
-  authorId            String    @map("author_id")
-  bodyVersion         Int       @default(1) @map("body_version")
-  sourceText          String?   @map("source_text") @db.Text
-  sourceLanguage      String?   @map("source_language")
-  backgroundKey       String?   @map("background_key")
-  imageObjectKey      String?   @map("image_object_key")
-  imageWidth          Int?      @map("image_width")
-  imageHeight         Int?      @map("image_height")
-  visibility          String    @default("public")
-  archivedAt          DateTime? @map("archived_at")
-  isDeleted           Boolean?  @map("is_deleted")
-  deletedAt           DateTime? @map("deleted_at")
-  moderationHiddenAt  DateTime? @map("moderation_hidden_at")
-  likeCount           Int       @default(0) @map("like_count")
-  commentCount        Int       @default(0) @map("comment_count")
-  publishedAt         DateTime  @default(now()) @map("published_at")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
+  id                 String    @id @default(cuid())
+  authorId           String    @map("author_id")
+  bodyVersion        Int       @default(1) @map("body_version")
+  sourceText         String?   @map("source_text") @db.Text
+  sourceLanguage     String?   @map("source_language")
+  backgroundKey      String?   @map("background_key")
+  imageObjectKey     String?   @map("image_object_key")
+  imageWidth         Int?      @map("image_width")
+  imageHeight        Int?      @map("image_height")
+  visibility         String    @default("public")
+  archivedAt         DateTime? @map("archived_at")
+  isDeleted          Boolean?  @map("is_deleted")
+  deletedAt          DateTime? @map("deleted_at")
+  moderationHiddenAt DateTime? @map("moderation_hidden_at")
+  likeCount          Int       @default(0) @map("like_count")
+  commentCount       Int       @default(0) @map("comment_count")
+  publishedAt        DateTime  @default(now()) @map("published_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
-  author        User                  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author        User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
   extraImages   PostImage[]
   translations  PostTranslation[]
   comments      PostComment[]
@@ -740,12 +740,12 @@ model Post {
 /// The 2nd to 10th photo of a post (position 1-9); the first stays on the
 /// post row (`imageObjectKey`), so everything that shows one photo keeps working.
 model PostImage {
-  id             String  @id @default(cuid())
-  postId         String  @map("post_id")
+  id             String @id @default(cuid())
+  postId         String @map("post_id")
   position       Int
-  imageObjectKey String  @map("image_object_key")
-  imageWidth     Int?    @map("image_width")
-  imageHeight    Int?    @map("image_height")
+  imageObjectKey String @map("image_object_key")
+  imageWidth     Int?   @map("image_width")
+  imageHeight    Int?   @map("image_height")
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
@@ -754,11 +754,11 @@ model PostImage {
 }
 
 model PostTranslation {
-  postId      String @map("post_id")
-  bodyVersion Int    @map("body_version")
+  postId      String   @map("post_id")
+  bodyVersion Int      @map("body_version")
   language    String
-  status      String @default("pending")
-  text        String? @db.Text
+  status      String   @default("pending")
+  text        String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -769,30 +769,30 @@ model PostTranslation {
 }
 
 model PostComment {
-  id              String    @id @default(cuid())
-  postId          String    @map("post_id")
-  authorId        String    @map("author_id")
-  parentId        String?   @map("parent_id")
-  replyToUserId   String?   @map("reply_to_user_id")
-  bodyVersion     Int       @default(1) @map("body_version")
-  sourceText      String    @map("source_text") @db.Text
-  sourceLanguage  String?   @map("source_language")
+  id                 String    @id @default(cuid())
+  postId             String    @map("post_id")
+  authorId           String    @map("author_id")
+  parentId           String?   @map("parent_id")
+  replyToUserId      String?   @map("reply_to_user_id")
+  bodyVersion        Int       @default(1) @map("body_version")
+  sourceText         String    @map("source_text") @db.Text
+  sourceLanguage     String?   @map("source_language")
   // Optional photo (server-issued post-image key of the comment author).
-  imageObjectKey  String?   @map("image_object_key")
-  imageWidth      Int?      @map("image_width")
-  imageHeight     Int?      @map("image_height")
-  likeCount       Int       @default(0) @map("like_count")
-  isDeleted       Boolean?  @map("is_deleted")
-  deletedAt       DateTime? @map("deleted_at")
+  imageObjectKey     String?   @map("image_object_key")
+  imageWidth         Int?      @map("image_width")
+  imageHeight        Int?      @map("image_height")
+  likeCount          Int       @default(0) @map("like_count")
+  isDeleted          Boolean?  @map("is_deleted")
+  deletedAt          DateTime? @map("deleted_at")
   moderationHiddenAt DateTime? @map("moderation_hidden_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
-  post          Post                       @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author        User                       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parent        PostComment?               @relation("PostCommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
-  replies       PostComment[]              @relation("PostCommentReplies")
-  replyToUser   User?                      @relation("PostCommentReplyToUser", fields: [replyToUserId], references: [id], onDelete: SetNull)
+  post          Post                     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author        User                     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent        PostComment?             @relation("PostCommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies       PostComment[]            @relation("PostCommentReplies")
+  replyToUser   User?                    @relation("PostCommentReplyToUser", fields: [replyToUserId], references: [id], onDelete: SetNull)
   translations  PostCommentTranslation[]
   likes         PostCommentLike[]
   notifications UserNotification[]
@@ -805,11 +805,11 @@ model PostComment {
 }
 
 model PostCommentTranslation {
-  commentId   String @map("comment_id")
-  bodyVersion Int    @map("body_version")
+  commentId   String   @map("comment_id")
+  bodyVersion Int      @map("body_version")
   language    String
-  status      String @default("pending")
-  text        String? @db.Text
+  status      String   @default("pending")
+  text        String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -850,10 +850,10 @@ model PostCommentLike {
 }
 
 model PostView {
-  id        String   @id @default(cuid())
-  postId    String   @map("post_id")
-  userId    String   @map("user_id")
-  viewedAt  DateTime @default(now()) @map("viewed_at")
+  id       String   @id @default(cuid())
+  postId   String   @map("post_id")
+  userId   String   @map("user_id")
+  viewedAt DateTime @default(now()) @map("viewed_at")
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -878,15 +878,15 @@ model PostHide {
 }
 
 model PostDraft {
-  id              String   @id @default(cuid())
-  authorId        String   @map("author_id")
-  sourceText      String?  @map("source_text") @db.Text
-  backgroundKey   String?  @map("background_key")
-  imageObjectKey  String?  @map("image_object_key")
-  imageWidth      Int?     @map("image_width")
-  imageHeight     Int?     @map("image_height")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  authorId       String   @map("author_id")
+  sourceText     String?  @map("source_text") @db.Text
+  backgroundKey  String?  @map("background_key")
+  imageObjectKey String?  @map("image_object_key")
+  imageWidth     Int?     @map("image_width")
+  imageHeight    Int?     @map("image_height")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
@@ -914,18 +914,22 @@ model RecentSearch {
 
 /// Staff-only record of an operator account (`User.isOperator` = true).
 model OperatorAccount {
-  userId             String   @id @map("user_id")
+  userId             String    @id @map("user_id")
   /// ISO 3166-1 alpha-2 country of the persona. Staff-only; never shown to users.
-  personaCountry     String?  @map("persona_country")
-  notes              String?  @db.Text
+  personaCountry     String?   @map("persona_country")
+  notes              String?   @db.Text
   /// 'female' | 'male'. Staff-only; steers generated profile photos.
-  personaGender      String?  @map("persona_gender")
+  personaGender      String?   @map("persona_gender")
   /// The picked photo spec (see operator-avatars/taxonomy.ts) of the current AI photo.
-  avatarSpec         Json?    @map("avatar_spec")
+  avatarSpec         Json?     @map("avatar_spec")
   avatarGeneratedAt  DateTime? @map("avatar_generated_at")
-  createdBySessionId String?  @map("created_by_session_id")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  /// 'approved' | 'pending' (staff have not cleared the profile; the user stays inactive) | 'regenerating'.
+  reviewState        String    @default("approved") @map("review_state")
+  /// Staff feedback from the last "재제작" of the profile.
+  reviewFeedback     String?   @map("review_feedback") @db.Text
+  createdBySessionId String?   @map("created_by_session_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1019,8 +1023,14 @@ model OperatorPostReserve {
   language       String?
   /// What the attached photo shows; drawn when the post is published. Null for a text-only post.
   imagePrompt    String?   @map("image_prompt") @db.Text
-  /// queued | publishing | published | failed | cancelled
+  /// review (waits for staff) | regenerating | queued | publishing | published | failed | cancelled
   state          String    @default("queued")
+  /// Staff feedback from the last "재제작" of the post.
+  reviewFeedback String?   @map("review_feedback") @db.Text
+  /// A photo drawn before review; used instead of drawing `imagePrompt` at release.
+  imageObjectKey String?   @map("image_object_key")
+  imageWidth     Int?      @map("image_width")
+  imageHeight    Int?      @map("image_height")
   releaseAt      DateTime? @map("release_at")
   postId         String?   @map("post_id")
   error          String?   @db.Text
