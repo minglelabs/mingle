@@ -4570,7 +4570,7 @@ export default function useRealtimeSTT({
     const apiPath = buildClientApiPath('/translate/finalize')
     const shouldRedetectSourceLanguage = (
       options?.isFinal === true
-      && shouldRedetectFinalizeSourceLanguage(apiPath)
+      && shouldRedetectFinalizeSourceLanguage(apiPath, sourceLanguage)
     )
     const langs = shouldRedetectSourceLanguage
       ? targetLanguages

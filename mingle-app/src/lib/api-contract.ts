@@ -210,8 +210,15 @@ export function namespaceSupportsPostingFeed(namespace: string): boolean {
  */
 export const clientSupportsPostingFeed = namespaceSupportsPostingFeed(clientApiNamespace)
 
-export function shouldRedetectFinalizeSourceLanguage(pathname: string): boolean {
+export function shouldRedetectFinalizeSourceLanguage(pathname: string, sourceLanguage?: string): boolean {
   const namespace = parseVersionedApiNamespaceFromFinalizePath(pathname)
-  if (!namespace) return false
+  if (!namespace) {
+    // The unversioned path is the browser web app's. Its typed text arrives
+    // without a language, and only a redetection can give the bubble one.
+    if (sourceLanguage === undefined) return false
+    const normalizedSource = sourceLanguage.trim().toLowerCase()
+    return /^\/api\/translate\/finalize\/?$/.test(pathname)
+      && (normalizedSource === '' || normalizedSource === 'unknown')
+  }
   return API_NAMESPACE_RULES_BY_NAMESPACE.get(namespace)?.enablesFinalizeSourceRedetection === true
 }
