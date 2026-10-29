@@ -48,7 +48,7 @@ describe("[locale]/mypage page", () => {
   it("passes the server-loaded handle and follow counts into the first render", async () => {
     const profile = {
       id: "user_123",
-      name: "Mingle Name",
+      name: "HashChat Name",
       image: null,
       handle: "mingle.name",
       bio: "Hello",

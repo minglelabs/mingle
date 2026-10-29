@@ -52,7 +52,7 @@ describe("request user identity", () => {
     mockUpsertTrackedUser.mockResolvedValue("user_legacy_anon");
   });
 
-  it("uses the PostHog tracing distinct ID when the Mingle header is absent", () => {
+  it("uses the PostHog tracing distinct ID when the HashChat header is absent", () => {
     const request = new Request("https://mingle.example/api/conversations", {
       headers: { "x-posthog-distinct-id": "anon_posthog" },
     });

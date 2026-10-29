@@ -22,6 +22,8 @@ export type MyPageProfileRecord = {
   birthDate?: BirthDateParts | null;
   followersCount: number;
   followingCount: number;
+  /** Operator / official account; absent means false. */
+  isOfficial?: boolean;
 };
 
 // Only what the profile header shows is written to disk. Location, birth date
@@ -107,6 +109,7 @@ function normalizePersistedRecord(value: unknown, now = Date.now()): MyPageProfi
     || !isStringArray(profile.defaultConversationLanguages)
     || !isCount(profile.followersCount)
     || !isCount(profile.followingCount)
+    || !(typeof profile.isOfficial === "undefined" || typeof profile.isOfficial === "boolean")
   ) {
     return null;
   }
@@ -125,6 +128,7 @@ function normalizePersistedRecord(value: unknown, now = Date.now()): MyPageProfi
     defaultConversationLanguages: profile.defaultConversationLanguages,
     followersCount: profile.followersCount,
     followingCount: profile.followingCount,
+    ...(profile.isOfficial ? { isOfficial: true } : {}),
   };
 }
 
@@ -177,6 +181,7 @@ export function writeMyPageProfileCache(userId: string, profile: MyPageProfileRe
       defaultConversationLanguages: profile.defaultConversationLanguages,
       followersCount: profile.followersCount,
       followingCount: profile.followingCount,
+      ...(profile.isOfficial ? { isOfficial: true } : {}),
     },
   };
   try {

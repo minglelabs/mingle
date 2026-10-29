@@ -52,6 +52,14 @@ describe('api-contract namespace guard', () => {
     expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/translate/finalize')
   })
 
+  it('keeps the web_app release target on the unversioned API', async () => {
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'web_app'
+    const contract = await loadApiContractModule()
+
+    expect(contract.clientApiNamespace).toBe('')
+    expect(contract.clientSupportsPostingFeed).toBe(true)
+  })
+
   it('accepts only allowed env namespace values', async () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.1.0'
     const contract = await loadApiContractModule()

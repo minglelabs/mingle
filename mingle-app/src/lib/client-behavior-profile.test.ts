@@ -162,6 +162,24 @@ describe('resolveDefaultMingleBehaviorProfile', () => {
   })
 })
 
+describe('web_app release target', () => {
+  const originalNamespace = process.env.NEXT_PUBLIC_API_NAMESPACE
+  const originalReleaseTarget = process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET
+
+  afterEach(() => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = originalNamespace
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = originalReleaseTarget
+  })
+
+  it('serves PC browsers the app UI', () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'web_app'
+
+    expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v1_1_3')
+    expect(resolveDefaultMingleBehaviorProfile()).toBe('v1_1_3')
+  })
+})
+
 describe('release-variant feature flags', () => {
   it('keeps legacy variants on the legacy release line', () => {
     expect(isLegacyMingleClientReleaseVariant('legacy_default_v1_0_11')).toBe(true)

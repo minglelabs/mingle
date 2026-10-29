@@ -197,6 +197,30 @@ export function compareConversationRecency(a: ConversationChannelSummary, b: Con
   return rightTimestamp - leftTimestamp;
 }
 
+export type ConversationListSortMode = "recent" | "unreadFirst";
+
+export const CONVERSATION_LIST_SORT_MODES: readonly ConversationListSortMode[] = ["recent", "unreadFirst"];
+
+export function isConversationListSortMode(value: unknown): value is ConversationListSortMode {
+  return CONVERSATION_LIST_SORT_MODES.includes(value as ConversationListSortMode);
+}
+
+// "unreadFirst" lifts rooms with unread messages above the rest; each group
+// keeps recency order.
+export function sortConversationsForDisplay(
+  conversations: ConversationChannelSummary[],
+  mode: ConversationListSortMode,
+): ConversationChannelSummary[] {
+  const hasUnread = (conversation: ConversationChannelSummary) => (conversation.unreadMessageCount ?? 0) > 0;
+  return [...conversations].sort((left, right) => {
+    if (mode === "unreadFirst") {
+      const unreadDelta = Number(hasUnread(right)) - Number(hasUnread(left));
+      if (unreadDelta !== 0) return unreadDelta;
+    }
+    return compareConversationRecency(left, right);
+  });
+}
+
 function normalizeConversationMessageCount(value: unknown): number {
   const numeric = typeof value === "number" ? value : Number(value ?? 0);
   return Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 0;

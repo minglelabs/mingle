@@ -2,7 +2,7 @@
 
 Manual smoke checklist for the conversation list status mutation fix on the
 `codex/chat-scroll-performance-plan` branch. Cross-reference:
-[`docs/ui-ux-codex-thread-history.md`](../../../docs/ui-ux-codex-thread-history.md)
+[`mingle-app/docs/ui-ux-codex-thread-history.md`](../../docs/ui-ux-codex-thread-history.md)
 entry dated `2026-05-04`.
 
 ## Why This Checklist Exists

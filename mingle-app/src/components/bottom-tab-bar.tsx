@@ -1,15 +1,18 @@
 "use client";
 
 import type { AppDictionary } from "@/i18n/types";
-import { MessageCircle, Search, UserCircle } from "lucide-react";
+import { Home, MessageCircle, Search, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { FeedGlyphToneContext } from "@/components/feed/feed-glyph-tone";
 import { buildConversationRequestIdentityHeaders } from "@/components/conversation-list.logic";
 import { readMyPageProfileCache } from "@/components/my-page-profile-cache";
 import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
+import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
+import { feedHref as buildFeedHref } from "@/lib/feed-routes";
 import {
   buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
   isNativeTabRootHref,
@@ -17,15 +20,33 @@ import {
 } from "@/lib/tab-navigation";
 
 export const BOTTOM_TAB_BAR_HEIGHT_PX = 52;
+/** Space the glass bar covers at the bottom of the screen it sits over. */
+export const GLASS_TAB_BAR_INSET = `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`;
+
 // Fallback poll for the unread badge. Push, focus and visibilitychange cover
 // the fast path; this only bounds how stale a visible badge can get.
 export const UNREAD_BADGE_POLL_INTERVAL_MS = 60_000;
 
+/**
+ * The feed tab's accessible name. `tabs.feed` is translated in every locale
+ * dictionary; `feed.tabLabel` exists only in ko/en, so a merged dictionary
+ * would otherwise inherit the base locale's word for other languages.
+ */
+function feedTabLabel(dictionary: AppDictionary): string {
+  return dictionary.tabs.feed ?? dictionary.feed?.tabLabel ?? "Feed";
+}
+
 type BottomTabBarProps = {
-  activeRoute: "conversations" | "connect" | "mypage";
+  activeRoute: "feed" | "conversations" | "connect" | "mypage";
   dictionary: AppDictionary;
   locale: string;
   unreadConversationMessageCount?: number;
+  /**
+   * `glass`: the same bar, translucent, laid over full-bleed content (the
+   * feed) instead of sitting below it. The host keeps `GLASS_TAB_BAR_INSET`
+   * clear at the bottom of what shows through. Default: the solid bar.
+   */
+  variant?: "solid" | "glass";
 };
 
 type NativeBridgeWindow = Window & {
@@ -50,10 +71,14 @@ function ProfileTabIcon({
   active,
   alt,
   imageUrl,
+  activeColor,
+  inactiveColor,
 }: {
   active: boolean;
   alt: string;
   imageUrl?: string | null;
+  activeColor: string;
+  inactiveColor: string;
 }) {
   if (imageUrl) {
     return (
@@ -65,7 +90,7 @@ function ProfileTabIcon({
         height={26}
         className="h-[26px] w-[26px] rounded-full object-cover"
         style={{
-          outline: active ? "2px solid #f59e0b" : "2px solid transparent",
+          outline: active ? `2px solid ${activeColor}` : "2px solid transparent",
           outlineOffset: "1px",
         }}
       />
@@ -76,7 +101,7 @@ function ProfileTabIcon({
     <UserCircle
       size={28}
       strokeWidth={active ? 2.3 : 1.9}
-      className={active ? "text-amber-500" : "text-gray-400"}
+      color={active ? activeColor : inactiveColor}
       aria-hidden="true"
     />
   );
@@ -87,9 +112,27 @@ export default function BottomTabBar({
   dictionary,
   locale,
   unreadConversationMessageCount,
+  variant = "solid",
 }: BottomTabBarProps) {
+  const glass = variant === "glass";
+  // Over a post, amber and gray both vanish against some backgrounds. The
+  // glass bar instead uses the one ink that reads on the post on screen (the
+  // same tone as the feed header): the current tab is filled / heavier, the
+  // others are outlines, and the tint behind them leans the opposite way.
+  const glyphTone = useContext(FeedGlyphToneContext) ?? "dark";
+  const glassInk = glyphTone === "dark" ? "#0f172a" : "#ffffff";
+  const activeColor = glass ? glassInk : "#f59e0b";
+  const inactiveColor = glass ? glassInk : "#9ca3af";
+  const activeStroke = glass ? 2.6 : 2.3;
   const { data: session } = useSession();
   const sessionUserId = session?.user?.id ?? "";
+  const postingFeedSupported = useIsPostingFeedSupported();
+  // Hide the feed tab for a client whose namespace does not serve the posting
+  // feature (a pre-2.2.0 app). `null` means "not resolved yet" — the first
+  // paint matches the server render (which renders with the build-time
+  // namespace), and the tab collapses to the original three once a client is
+  // known to be unsupported. A supported client never reaches this branch.
+  const showFeedTab = postingFeedSupported !== false;
   const [loadedUnreadConversationMessageCount, setLoadedUnreadConversationMessageCount] = useState(0);
   const pathname = usePathname() || "";
   const router = useRouter();
@@ -100,6 +143,7 @@ export default function BottomTabBar({
   const conversationsPath = `/${locale}/conversations`;
   const connectPath = `/${locale}/connect`;
   const mypagePath = `/${locale}/mypage`;
+  const feedPath = buildFeedHref(locale);
   const conversationsHref = buildNativeAwareTabPath(conversationsPath, searchParams, {
     // Returning from another top-level tab is an intentional request for the
     // list. A live STT room must not be restored as a side effect of mounting
@@ -109,6 +153,13 @@ export default function BottomTabBar({
   });
   const connectHref = buildNativeAwareTabPath(connectPath, searchParams, { tabRoot: true });
   const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams, { tabRoot: true });
+  const feedHref = buildNativeAwareTabPath(feedPath, searchParams, { tabRoot: true });
+  // A screen can highlight a tab without living under its route (the post
+  // viewer opened from My page): tapping that tab must still go to it.
+  const isOnTabRoute = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
+  const isFeedActive = activeRoute === "feed"
+    || pathname === feedPath
+    || pathname.startsWith(`${feedPath}/`);
   const isConversationsActive = activeRoute === "conversations"
     || pathname === conversationsPath
     || pathname.startsWith(`${conversationsPath}/`);
@@ -198,6 +249,7 @@ export default function BottomTabBar({
 
   useEffect(() => {
     const inactiveTabHrefs = [
+      !showFeedTab || isFeedActive ? null : feedHref,
       isConversationsActive ? null : conversationsHref,
       isConnectActive ? null : connectHref,
       isMypageActive ? null : mypageHref,
@@ -237,11 +289,14 @@ export default function BottomTabBar({
   }, [
     connectHref,
     conversationsHref,
+    feedHref,
     isConnectActive,
     isConversationsActive,
+    isFeedActive,
     isMypageActive,
     mypageHref,
     router,
+    showFeedTab,
   ]);
 
   useEffect(() => {
@@ -254,12 +309,40 @@ export default function BottomTabBar({
   return (
     <nav
       aria-label={dictionary.titles.my}
-      className="flex w-full shrink-0 items-stretch border-t border-gray-100 bg-white"
+      className={
+        glass
+          ? `absolute inset-x-0 bottom-0 z-30 flex w-full items-stretch border-t backdrop-blur-xl backdrop-saturate-150 transition-colors duration-200 ${
+              glyphTone === "dark"
+                ? "border-white/30 bg-white/40"
+                : "border-white/10 bg-black/30 [&_svg]:drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]"
+            }`
+          : "flex w-full shrink-0 items-stretch border-t border-gray-100 bg-white"
+      }
       style={{
         height: `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`,
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
+      {showFeedTab ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (isOnTabRoute(feedPath)) return;
+            router.replace(feedHref);
+          }}
+          className="flex flex-1 items-center justify-center transition active:opacity-60"
+          aria-label={feedTabLabel(dictionary)}
+          aria-current={isFeedActive ? "page" : undefined}
+        >
+          <Home
+            size={26}
+            fill={isFeedActive ? activeColor : "none"}
+            stroke={isFeedActive ? activeColor : inactiveColor}
+            strokeWidth={1.9}
+            aria-hidden="true"
+          />
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={() => {
@@ -275,8 +358,8 @@ export default function BottomTabBar({
         <span className="relative inline-flex">
           <MessageCircle
             size={26}
-            fill={isConversationsActive ? "#f59e0b" : "none"}
-            stroke={isConversationsActive ? "#f59e0b" : "#9ca3af"}
+            fill={isConversationsActive ? activeColor : "none"}
+            stroke={isConversationsActive ? activeColor : inactiveColor}
             strokeWidth={1.9}
             aria-hidden="true"
           />
@@ -293,7 +376,7 @@ export default function BottomTabBar({
       <button
         type="button"
         onClick={() => {
-          if (isConnectActive) return;
+          if (isOnTabRoute(connectPath)) return;
           router.replace(connectHref);
         }}
         className="flex flex-1 items-center justify-center transition active:opacity-60"
@@ -302,15 +385,15 @@ export default function BottomTabBar({
       >
         <Search
           size={26}
-          stroke={isConnectActive ? "#f59e0b" : "#9ca3af"}
-          strokeWidth={isConnectActive ? 2.3 : 1.9}
+          stroke={isConnectActive ? activeColor : inactiveColor}
+          strokeWidth={isConnectActive ? activeStroke : 1.9}
           aria-hidden="true"
         />
       </button>
       <button
         type="button"
         onClick={() => {
-          if (isMypageActive) return;
+          if (isOnTabRoute(mypagePath)) return;
           router.replace(mypageHref);
         }}
         className="flex flex-1 items-center justify-center transition active:opacity-60"
@@ -319,6 +402,8 @@ export default function BottomTabBar({
       >
         <ProfileTabIcon
           active={isMypageActive}
+          activeColor={activeColor}
+          inactiveColor={inactiveColor}
           alt={dictionary.profile.shareProfile}
           imageUrl={session?.user?.image}
         />

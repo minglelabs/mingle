@@ -5,6 +5,7 @@ import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { resolveNotificationCopy } from "@/i18n/notification-copy";
+import { conversationSortCopy } from "@/i18n/conversation-sort-copy";
 import NotificationPanel from "@/components/notification-panel";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import SlideSurface from "@/components/slide-surface";
@@ -30,7 +31,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bell, Loader2, LogOut, PencilLine, Search, Share2, Trash2, UserRound } from "lucide-react";
+import { ArrowRight, Bell, Check, Loader2, LogOut, PencilLine, Search, Settings, Share2, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
@@ -41,6 +42,10 @@ import {
 } from "@/components/LivePhoneDemo/live-phone-demo.usage-format";
 import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePhoneDemo/live-phone-demo.delete-copy";
 import { resolveLivePhoneDemoConversationLeaveCopy } from "@/components/LivePhoneDemo/live-phone-demo.leave-copy";
+import ChatAccountBadge from "@/components/LivePhoneDemo/ChatAccountBadge";
+import { resolveRoomAccountBadge } from "@/components/LivePhoneDemo/chat-account-badge.logic";
+import IdentityRow from "@/components/posts/identity-row";
+import { withAccountBadgeLabel, type AccountBadgeKind } from "@/lib/account-badge";
 import {
   LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
@@ -94,6 +99,10 @@ import {
   calculateConversationRowTooltipPosForRect,
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
+  CONVERSATION_LIST_SORT_MODES,
+  isConversationListSortMode,
+  sortConversationsForDisplay,
+  type ConversationListSortMode,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   findNativeSttRestoreConversation,
   isConversationListRefreshCurrent,
@@ -121,6 +130,11 @@ import {
   logConversationMutationFailure,
 } from "@/components/conversation-list.diagnostics";
 import NativePushRegistration from "@/components/native-push-registration";
+import {
+  NativeAppUpdateCard,
+  openNativeAppUpdateStore,
+  useNativeAppUpdateCardContent,
+} from "@/components/native-app-update-card";
 import {
   readConversationListCache,
   readConversationListMemoryCache,
@@ -176,13 +190,19 @@ import {
 import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
+import { resolveAccessibilityCopy } from "@/i18n/accessibility-copy";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
-import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
+import AppTopHeader from "@/components/app-top-header";
+import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
+import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
+import { feedHref } from "@/lib/feed-routes";
+import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 
+const LS_KEY_CONVERSATION_LIST_SORT_MODE = "mingle:conversation-list-sort-mode";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
@@ -282,6 +302,10 @@ interface ConversationItem {
   // rooms (no other real member yet), which keep using avatarSrc/avatarAlt
   // (the generated diarization avatar) instead.
   otherMembers: ConversationChannelOtherMember[];
+  // Account label shown next to the title (a room with a HashChat-run member
+  // reads "운영 계정"); the title itself is a renamable plain string.
+  titleAccountBadge: AccountBadgeKind | null;
+  titleAccountBadgeLocale: string;
   isBlockedCounterpart: boolean;
   // Whether the delete-vs-leave row menu action applies: a solo room keeps
   // "delete" (deletes for the owner, the only real member), a 2+-member
@@ -1037,6 +1061,8 @@ function mapConversationSummaryToItem(
     avatarSrc: avatar.src,
     avatarAlt: `${title} ${avatar.name} avatar`,
     otherMembers: conversation.otherMembers,
+    titleAccountBadge: resolveRoomAccountBadge(conversation.otherMembers),
+    titleAccountBadgeLocale: locale,
     isBlockedCounterpart: conversation.isBlockedCounterpart,
     isMultiMember: conversation.isMultiMember,
     sequenceNumber: conversation.sequenceNumber,
@@ -1247,6 +1273,12 @@ function calculateConversationRowTooltipPos(element: HTMLElement): TooltipPos {
   }, window.innerHeight);
 }
 
+function isAccountBadgeTarget(target: EventTarget | null): boolean {
+  return typeof Element !== "undefined"
+    && target instanceof Element
+    && target.closest("[data-account-badge]") !== null;
+}
+
 // Corner-anchored overlap positions for a multi-member room's collage,
 // capped at 4 visible photos — same "up to 4, overlapping" idea as
 // LanguageRowAvatarStack (LivePhoneDemo/language-row-avatar-stack.tsx), but
@@ -1386,7 +1418,7 @@ function ConversationRow({
   onOpenActions?: (item: ConversationItem, position: TooltipPos) => void;
   className?: string;
 }) {
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const rowRef = useRef<HTMLDivElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const touchOriginRef = useRef<{ x: number; y: number } | null>(null);
   const suppressNextClickRef = useRef(false);
@@ -1403,29 +1435,102 @@ function ConversationRow({
 
   const openActions = useCallback(() => {
     if (disabled) return;
-    const element = buttonRef.current;
+    const element = rowRef.current;
     if (!element) return;
     suppressNextClickRef.current = true;
     onOpenActions?.(item, calculateConversationRowTooltipPos(element));
   }, [disabled, item, onOpenActions]);
 
+  const rowActionLabel = [
+    withAccountBadgeLabel(item.title, item.titleAccountBadge, item.titleAccountBadgeLocale),
+    item.preview,
+    item.unreadMessageCount > 0 ? `${item.unreadMessageCount} ${item.unreadMessageLabel}` : null,
+    item.timeLabel,
+    item.statsLabel,
+    item.status === "active" ? item.statusLabel : null,
+  ].filter(Boolean).join(", ");
+
+  const rowContent = (hideFromAccessibility: boolean) => (
+    <>
+      <div aria-hidden={hideFromAccessibility || undefined}>
+        <ConversationRoomAvatar item={item} />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span aria-hidden={hideFromAccessibility || undefined} className="truncate text-[15px] font-semibold text-slate-900">
+              {item.title}
+            </span>
+            {item.titleAccountBadge ? (
+              <span data-conversation-row-account-badge className="-ml-1 inline-flex shrink-0 items-center">
+                <ChatAccountBadge kind={item.titleAccountBadge} locale={item.titleAccountBadgeLocale} tone="dark" />
+              </span>
+            ) : null}
+            {item.languageCodes.length > 0 ? (
+              <span className="inline-flex shrink-0 items-center gap-0.5 text-[1rem] leading-none" aria-hidden>
+                {item.languageCodes.map((language, index) => (
+                  <LanguageFlag
+                    key={`${language}-${index}`}
+                    language={language}
+                    className="text-[1rem] leading-none"
+                  />
+                ))}
+              </span>
+            ) : null}
+          </div>
+          <div aria-hidden={hideFromAccessibility || undefined} className="flex shrink-0 items-start gap-2">
+            {item.unreadMessageCount > 0 ? (
+              <span
+                className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-none text-white"
+                aria-label={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
+                title={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
+              >
+                {item.unreadMessageCount > 99 ? "99+" : item.unreadMessageCount}
+              </span>
+            ) : null}
+            <div className="flex flex-col items-end leading-none">
+              <span className={`text-[12px] ${item.isInterimPreview ? "text-gray-300" : "text-gray-400"}`}>
+                {item.timeLabel}
+              </span>
+              <span
+                className="mt-1 max-w-[118px] truncate text-[10px] tabular-nums text-gray-400"
+                title={item.statsFullLabel}
+              >
+                {item.statsLabel}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <p
+            aria-hidden={hideFromAccessibility || undefined}
+            className={`truncate text-[13px] ${item.isInterimPreview ? "italic text-gray-400" : "text-gray-500"}`}
+            title={item.previewFullText || undefined}
+          >
+            {item.preview || "\u00A0"}
+            {item.isInterimPreview && item.preview ? "…" : null}
+          </p>
+          {item.status === "active" ? (
+            <span aria-hidden={hideFromAccessibility || undefined} className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] text-emerald-700">
+              {item.statusLabel}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </>
+  );
+
   return (
-    <button
-      ref={buttonRef}
-      type="button"
-      onClick={() => {
-        if (suppressNextClickRef.current) {
-          suppressNextClickRef.current = false;
-          return;
-        }
-        onSelect?.(item);
-      }}
+    <div
+      ref={rowRef}
       onContextMenu={(event) => {
+        if (isAccountBadgeTarget(event.target)) return;
         event.preventDefault();
         openActions();
       }}
       onTouchStart={(event) => {
-        if (disabled) return;
+        if (disabled || isAccountBadgeTarget(event.target)) return;
         const touch = event.touches[0];
         if (!touch) return;
         touchOriginRef.current = { x: touch.clientX, y: touch.clientY };
@@ -1452,67 +1557,34 @@ function ConversationRow({
       onTouchCancel={() => {
         clearLongPressTimer();
       }}
-      disabled={disabled}
-      className={`flex w-full select-none items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`relative w-full ${className}`}
       style={CONVERSATION_ROW_TOUCH_SAFE_STYLE}
     >
-      <ConversationRoomAvatar item={item} />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-[15px] font-semibold text-slate-900">{item.title}</span>
-            {item.languageCodes.length > 0 ? (
-              <span className="inline-flex shrink-0 items-center gap-0.5 text-[1rem] leading-none" aria-hidden>
-                {item.languageCodes.map((language, index) => (
-                  <LanguageFlag
-                    key={`${language}-${index}`}
-                    language={language}
-                    className="text-[1rem] leading-none"
-                  />
-                ))}
-              </span>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 items-start gap-2">
-            {item.unreadMessageCount > 0 ? (
-              <span
-                className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-none text-white"
-                aria-label={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
-                title={`${item.unreadMessageCount} ${item.unreadMessageLabel}`}
-              >
-                {item.unreadMessageCount > 99 ? "99+" : item.unreadMessageCount}
-              </span>
-            ) : null}
-            <div className="flex flex-col items-end leading-none">
-              <span className={`text-[12px] ${item.isInterimPreview ? "text-gray-300" : "text-gray-400"}`}>
-                {item.timeLabel}
-              </span>
-              <span
-                className="mt-1 max-w-[118px] truncate text-[10px] tabular-nums text-gray-400"
-                title={item.statsFullLabel}
-              >
-                {item.statsLabel}
-              </span>
-            </div>
-          </div>
+      {disabled ? (
+        <div className={`flex w-full items-center gap-3 px-4 py-3 text-left ${className}`}>
+          {rowContent(false)}
         </div>
-        <div className="mt-1 flex items-center justify-between gap-3">
-          <p
-            className={`truncate text-[13px] ${item.isInterimPreview ? "italic text-gray-400" : "text-gray-500"}`}
-            title={item.previewFullText || undefined}
-          >
-            {item.preview || "\u00A0"}
-            {item.isInterimPreview && item.preview ? "…" : null}
-          </p>
-          {item.status === "active" ? (
-            <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] text-emerald-700">
-              {item.statusLabel}
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </button>
+      ) : (
+        <IdentityRow
+          action={{
+            kind: "button",
+            onClick: () => {
+              if (suppressNextClickRef.current) {
+                suppressNextClickRef.current = false;
+                return;
+              }
+              onSelect?.(item);
+            },
+          }}
+          label={rowActionLabel}
+          className="w-full"
+          actionClassName="rounded-none transition-colors hover:bg-gray-50 active:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          contentClassName={`flex w-full items-center gap-3 px-4 py-3 text-left ${className}`}
+        >
+          {rowContent(true)}
+        </IdentityRow>
+      )}
+    </div>
   );
 }
 
@@ -1836,10 +1908,40 @@ export default function ConversationList({
   googleOAuthEnabled,
 }: ConversationListProps) {
   const { data: session, status: sessionStatus } = useSession();
+  // The cached list takes taps while the session is still being checked. Queued
+  // mutations already wait for it (they flush only once authenticated); a write
+  // sent straight to the server awaits this first, so it never goes out as a
+  // guest. Resolves true once signed in, false when signed out.
+  const sessionStatusRef = useRef(sessionStatus);
+  const sessionSettledWaitersRef = useRef<Array<(authenticated: boolean) => void>>([]);
+  useEffect(() => {
+    sessionStatusRef.current = sessionStatus;
+    if (sessionStatus === "loading") return;
+    for (const resolve of sessionSettledWaitersRef.current.splice(0)) {
+      resolve(sessionStatus === "authenticated");
+    }
+  }, [sessionStatus]);
+  const waitForSessionSettled = useCallback((): Promise<boolean> => {
+    if (sessionStatusRef.current !== "loading") {
+      return Promise.resolve(sessionStatusRef.current === "authenticated");
+    }
+    return new Promise((resolve) => {
+      sessionSettledWaitersRef.current.push(resolve);
+    });
+  }, []);
   const router = useRouter();
   const authenticatedUserId = typeof session?.user?.id === "string"
     ? session.user.id.trim()
     : "";
+  // Rollout gate (W4): a supported client (v2.2.0+) shows the shared posting
+  // header (compose + bell → notification center) so the conversation list and
+  // the feed line up; a pre-2.2.0 client keeps the existing search + in-app
+  // notification-panel header unchanged. `null` before mount → existing header,
+  // matching the server render.
+  const postingFeedSupported = useIsPostingFeedSupported();
+  const showPostingHeader = postingFeedSupported === true;
+  const postingHeaderCopy = useMemo(() => feedCopy(locale), [locale]);
+  const postingUnread = useUnreadNotifications(showPostingHeader ? (authenticatedUserId || null) : null);
   const conversationCacheIdentity = useMemo<ConversationListCacheIdentity>(() => ({
     apiNamespace: clientApiNamespace,
     authenticatedUserId,
@@ -1880,6 +1982,10 @@ export default function ConversationList({
     [dictionary, locale],
   );
   const notificationCopy = useMemo(() => resolveNotificationCopy(locale), [locale]);
+  const sortCopy = useMemo(() => conversationSortCopy(locale), [locale]);
+  const { detail: nativeAppUpdate, content: nativeAppUpdateCardContent } = useNativeAppUpdateCardContent(locale);
+  const [conversationSortMode, setConversationSortMode] = useState<ConversationListSortMode>("recent");
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const roomManagementCopy = useMemo(
     () => resolveLivePhoneDemoRoomManagementCopy(locale),
     [locale],
@@ -2018,6 +2124,13 @@ export default function ConversationList({
   conversationCacheIdentityRef.current = conversationCacheIdentity;
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
+  // Unread count as it was when each room was last opened (mark-read zeroes the
+  // live one), so the room can anchor on the first unread message on entry.
+  const [entryUnreadMessageCountByConversationId, setEntryUnreadMessageCountByConversationId] = useState<Record<string, number>>(() => (
+    initialConversationToOpen
+      ? { [initialConversationToOpen.id]: Math.max(0, Math.floor(initialConversationToOpen.unreadMessageCount ?? 0)) }
+      : {}
+  ));
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const isSharingConversationRef = useRef(false);
@@ -2276,7 +2389,7 @@ export default function ConversationList({
   }, [authenticatedUserId, languageOnboardingPhase, sessionStatus]);
 
   const conversationItems = useMemo(
-    () => conversations.map((conversation) => (
+    () => sortConversationsForDisplay(conversations, conversationSortMode).map((conversation) => (
       mapConversationSummaryToItem(
         conversation,
         locale,
@@ -2289,8 +2402,35 @@ export default function ConversationList({
         conversationInterimPreviews[conversation.id],
       )
     )),
-    [conversationInterimPreviews, conversationLocalStats, conversations, copy, locale, timeLabelsReady],
+    [
+      conversationInterimPreviews,
+      conversationLocalStats,
+      conversationSortMode,
+      conversations,
+      copy,
+      locale,
+      timeLabelsReady,
+    ],
   );
+
+  useEffect(() => {
+    try {
+      const storedMode = window.localStorage.getItem(LS_KEY_CONVERSATION_LIST_SORT_MODE);
+      if (isConversationListSortMode(storedMode)) setConversationSortMode(storedMode);
+    } catch {
+      // Storage can be unavailable in private mode; keep the default order.
+    }
+  }, []);
+
+  const handleSelectSortMode = useCallback((mode: ConversationListSortMode) => {
+    setConversationSortMode(mode);
+    setShowSortMenu(false);
+    try {
+      window.localStorage.setItem(LS_KEY_CONVERSATION_LIST_SORT_MODE, mode);
+    } catch {
+      // Best effort: the choice still applies for this session.
+    }
+  }, []);
   const unreadConversationMessageCount = useMemo(
     () => conversations.reduce(
       (total, conversation) => total + Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0)),
@@ -3841,6 +3981,9 @@ export default function ConversationList({
       isListOverlayOpen: Boolean(
         isCreateChoiceModalOpen
         || rowActionMenu
+        // The native banner draws above the web view, so the gear menu's
+        // dropdown would sit under it; hide the banner while it is open.
+        || showSortMenu
         || renameDialogConversationId
         || deleteDialogConversationId
         || languageOnboardingModalOpen
@@ -3859,6 +4002,7 @@ export default function ConversationList({
     rowActionMenu,
     sessionStatus,
     showSearch,
+    showSortMenu,
   ]);
 
   useEffect(() => {
@@ -4315,6 +4459,12 @@ export default function ConversationList({
     // The create-conversation flow sets autoStart before calling openConversationSummary;
     // clearing it here would immediately cancel the auto-start.
     // autoStart is cleared by closeConversationOverlay and explicit call sites only.
+    const entryUnreadMessageCount = Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0));
+    setEntryUnreadMessageCountByConversationId((current) => (
+      current[conversation.id] === entryUnreadMessageCount
+        ? current
+        : { ...current, [conversation.id]: entryUnreadMessageCount }
+    ));
     const openedConversation = conversation.unreadMessageCount
       ? { ...conversation, unreadMessageCount: 0 }
       : conversation;
@@ -4480,6 +4630,7 @@ export default function ConversationList({
     }
 
     try {
+      if (!(await waitForSessionSettled())) return;
       const response = await fetch(buildConversationApiPath(), {
         method: "POST",
         headers: {
@@ -4518,6 +4669,7 @@ export default function ConversationList({
     isImportingLegacyConversation,
     locale,
     openConversationSummary,
+    waitForSessionSettled,
   ]);
 
   const ensureConversationRoomForQa = useCallback(async (): Promise<ConversationListQaEnsureRoomResult> => {
@@ -4645,6 +4797,7 @@ export default function ConversationList({
 
     void (async () => {
       try {
+        if (!(await waitForSessionSettled())) return;
         const response = await fetch(buildConversationApiPath(conversationPath), {
           method: "POST",
           headers: { ...headers, "Content-Type": "application/json" },
@@ -4666,7 +4819,7 @@ export default function ConversationList({
         isSharingConversationRef.current = false;
       }
     })();
-  }, [roomManagementCopy.shareErrorToastLabel]);
+  }, [roomManagementCopy.shareErrorToastLabel, waitForSessionSettled]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -5361,11 +5514,73 @@ export default function ConversationList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale, languageOnboardingModalOpen]);
   const shouldShowLanguageBootstrapShell = languageOnboardingPhase === "locale-switching";
-  // The server-rendered list remains natively scrollable while React hydrates.
-  // Only an actual client-side session check blocks actions; the pre-hydration
-  // language marker is resolved in a layout effect and must not capture touches.
-  const shouldBlockBootstrapInteraction = languageOnboardingPhase === "ready"
-    && sessionStatus === "loading";
+
+  // The gear at the right of the list header: sort order and, in the app, the
+  // update card. Same menu in the posting header (2.2.0+) and the older one.
+  const settingsMenu = (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setShowSortMenu((open) => !open)}
+        className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
+        aria-label={sortCopy.menuLabel}
+        aria-haspopup="menu"
+        aria-expanded={showSortMenu}
+      >
+        <Settings size={22} strokeWidth={2} />
+        {isNativeRuntime && nativeAppUpdateCardContent.showUpdateAction ? (
+          <span
+            className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white"
+            aria-hidden
+          />
+        ) : null}
+      </button>
+      {showSortMenu ? (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            aria-hidden
+            onClick={() => setShowSortMenu(false)}
+          />
+          <div
+            role="menu"
+            aria-label={sortCopy.title}
+            className={`absolute right-0 top-full z-50 mt-1 ${isNativeRuntime ? "w-72" : "w-56"} overflow-hidden rounded-2xl border border-gray-100 bg-white py-1 shadow-lg`}
+          >
+            <p className="px-4 pb-1 pt-2 text-[12px] font-semibold text-gray-400">
+              {sortCopy.title}
+            </p>
+            {CONVERSATION_LIST_SORT_MODES.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="menuitemradio"
+                aria-checked={conversationSortMode === mode}
+                onClick={() => handleSelectSortMode(mode)}
+                className="flex w-full items-center justify-between px-4 py-3 text-left text-[15px] text-slate-800 transition active:bg-gray-100"
+              >
+                <span>{sortCopy[mode]}</span>
+                {conversationSortMode === mode ? (
+                  <Check size={18} strokeWidth={2.5} className="text-slate-900" aria-hidden />
+                ) : null}
+              </button>
+            ))}
+            {isNativeRuntime ? (
+              <div className="border-t border-gray-100 px-2 pb-1 pt-2">
+                <NativeAppUpdateCard
+                  {...nativeAppUpdateCardContent}
+                  onUpdate={() => {
+                    setShowSortMenu(false);
+                    openNativeAppUpdateStore(nativeAppUpdate?.updateUrl);
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
@@ -5377,22 +5592,13 @@ export default function ConversationList({
           className="absolute inset-0 z-[300] flex min-h-0 w-full items-center justify-center bg-[#fcfbf8]"
           role="status"
           aria-live="polite"
-          aria-label={locale === "ko" ? "Mingle 준비 중" : "Preparing Mingle"}
+          aria-label={resolveAccessibilityCopy(locale).preparingApp}
         >
           <div className="flex flex-col items-center gap-5">
             <MingleWordmark />
             <Loader2 size={22} className="animate-spin text-amber-500" aria-hidden />
           </div>
         </div>
-      ) : null}
-
-      {shouldBlockBootstrapInteraction ? (
-        <div
-          className="absolute inset-0 z-[199] bg-transparent"
-          role="status"
-          aria-live="polite"
-          aria-label={locale === "ko" ? "계정 확인 중" : "Checking account"}
-        />
       ) : null}
 
       {sessionStatus === "unauthenticated" && languageOnboardingPhase === "ready" ? (
@@ -5433,6 +5639,18 @@ export default function ConversationList({
         />
       ) : null}
 
+      {showPostingHeader ? (
+        <AppTopHeader
+          variant="surface"
+          notificationsLabel={postingHeaderCopy.notifications}
+          unreadNotificationsLabel={postingHeaderCopy.notificationsUnread}
+          hasUnread={postingUnread.hasUnread}
+          onNotifications={openNotifications}
+          onSearch={handleOpenSearch}
+          searchLabel={copy.searchButtonLabel}
+          trailing={settingsMenu}
+        />
+      ) : (
       <header
         className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
         style={{
@@ -5467,11 +5685,14 @@ export default function ConversationList({
               </span>
             ) : null}
           </button>
+          {settingsMenu}
         </div>
       </header>
+      )}
 
       <div
         ref={conversationListScrollRef}
+        data-restore-scroll="conversation-list"
         className="min-h-0 flex-1 overflow-y-auto"
         style={{
           paddingTop: effectiveNativeTopInsetPx > 0 ? `${effectiveNativeTopInsetPx}px` : "0px",
@@ -5766,6 +5987,7 @@ export default function ConversationList({
                         }}
                         conversationTitle={conversation.title}
                         isBlockedCounterpart={conversation.isBlockedCounterpart}
+                        initialUnreadMessageCount={entryUnreadMessageCountByConversationId[conversation.id] ?? 0}
                         isMultiMember={conversation.isMultiMember}
                         conversationId={conversation.id}
                         preferredDisplayLanguage={preferredDisplayLanguage}
@@ -5825,6 +6047,10 @@ export default function ConversationList({
               dictionary={dictionary}
               onClose={() => closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID })}
               onOpenProfile={openConversationProfile}
+              onOpenPost={showPostingHeader ? (postId, commentId) => {
+                closeConversationSurface({ id: CONVERSATION_NOTIFICATIONS_SURFACE_ID });
+                router.push(feedHref(locale, { postId, commentId }));
+              } : undefined}
               onUnreadCountChange={setUnreadNotificationCount}
             />
             <PublicUserProfileScreen

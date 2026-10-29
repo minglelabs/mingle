@@ -7,6 +7,8 @@ import {
   captureMingleClientEvent,
   identifyMinglePostHogAccount,
   initializeMinglePostHog,
+  isPostHogExcludedPath,
+  syncMinglePostHogRoute,
 } from "@/lib/posthog-client";
 import { resolveMingleAnalyticsScreen } from "@/lib/posthog-client.logic";
 
@@ -27,9 +29,10 @@ export default function PostHogAnalyticsProvider({
   const initializedRef = useRef(false);
   const lastScreenKeyRef = useRef("");
 
+  // Admin screens never start PostHog; it starts on the first non-admin route instead.
   useEffect(() => {
     if (!projectToken || !host || initializedRef.current) return;
-    initializeMinglePostHog({ projectToken, host });
+    if (!initializeMinglePostHog({ projectToken, host })) return;
     initializedRef.current = true;
     captureMingleClientEvent("mingle_app_opened", {
       screen: resolveMingleAnalyticsScreen(
@@ -37,7 +40,7 @@ export default function PostHogAnalyticsProvider({
         new URLSearchParams(window.location.search),
       ),
     });
-  }, [host, projectToken]);
+  }, [host, pathname, projectToken]);
 
   useEffect(() => {
     if (!initializedRef.current || status === "loading") return;
@@ -46,6 +49,8 @@ export default function PostHogAnalyticsProvider({
 
   useEffect(() => {
     if (!initializedRef.current) return;
+    syncMinglePostHogRoute(pathname);
+    if (isPostHogExcludedPath(pathname)) return;
     const screen = resolveMingleAnalyticsScreen(pathname, searchParams);
     const screenKey = `${pathname}:${screen}:${searchParams.get("conversation") ?? ""}`;
     if (lastScreenKeyRef.current === screenKey) return;

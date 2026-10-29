@@ -6,7 +6,10 @@ import EarphoneModeNoticeContent from './EarphoneModeNotice'
 import LanguageRadioOption from './LanguageRadioOption'
 
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
-import { shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
+import { resolveFirstUnreadUtteranceId, shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
+import { resolveAccessibilityCopy } from '@/i18n/accessibility-copy'
+import { MessageReplyComposerBar, MessageReplyProvider } from './MessageReply'
+import type { MessageReplyReference } from '@/lib/message-reply'
 import {
   arePlaybackKeyListsEqual,
   buildOriginalBubblePlaybackKey,
@@ -50,7 +53,7 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface from '@/components/slide-surface'
@@ -76,6 +79,10 @@ import LanguageSelector from './LanguageSelector'
 import { useLanguageSelectorNavigation } from './use-language-selector-navigation'
 import ConversationEmptyState from './ConversationEmptyState'
 import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
+import ChatAccountBadge from './ChatAccountBadge'
+import ConversationOperatorDisclosure from './ConversationOperatorDisclosure'
+import { labelNameWithAccountBadge, resolveRoomAccountBadge } from './chat-account-badge.logic'
+import { resolveAccountBadge } from '@/lib/account-badge'
 import type { ConversationChannelOtherMember } from '@/lib/app-conversations'
 import {
   mergeConversationMemberProfiles,
@@ -83,6 +90,7 @@ import {
 } from '@/components/conversation-member-profile-cache'
 import {
   buildLanguageSelectorButtonCodes,
+  resolveLanguageSelectorOthersOnlyLanguages,
   resolveLanguageSelectorOwnSelectedLanguages,
   resolveLanguageSelectorUnionAfterOwnLanguagesChange,
 } from './language-selector.logic'
@@ -168,6 +176,8 @@ import {
 } from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { requestNativeBannerZone } from '@/lib/native-banner-zone'
+import { reportUiDiagnostic } from '@/lib/ui-diagnostics'
+import { unreadDividerLabel } from '@/i18n/unread-divider-copy'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   INITIAL_SCROLL_METRICS,
@@ -215,11 +225,17 @@ import {
   NATIVE_APP_UPDATE_EVENT,
   parseNativeAppUpdateDetail,
   readRequestedApiNamespaceFromSearch,
-  resolveNativeAppInstallSourceText,
   resolveNativeAppTrackingContext,
   resolveNativeAppUpdateCopy,
   type NativeAppUpdateDetail,
 } from './live-phone-demo.app-update.logic'
+import {
+  NativeAppUpdateCard,
+  openNativeAppUpdateStore,
+  resolveNativeAppUpdateCardContent,
+} from '@/components/native-app-update-card'
+import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
+import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
 import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
@@ -236,6 +252,7 @@ import {
   resolveLiveDemoMenuTriggerClassName,
 } from './live-phone-demo.chrome-contract'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
+import { CONVERSATION_TOAST_EVENT } from './conversation-image-save'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
 import { formatLivePhoneDemoLeaveNoticeText, resolveLivePhoneDemoConversationLeaveCopy } from './live-phone-demo.leave-copy'
@@ -258,12 +275,15 @@ import {
   type NativePipState,
 } from '@/lib/native-pip'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
+import { RESTORE_SCROLL_EVENT } from '@/lib/webview-state-restore'
 import {
   buildNativeRemountRestoreUrl,
   rememberNativeRemountRestoreConversation,
 } from '@/lib/native-remount-restore'
 
 const VOLUME_THRESHOLD = 0.05
+// How long a "loaded" older-history page may go without changing the list before its loading state is released.
+const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const FEEDBACK_INSTAGRAM_CONTACT_URL = 'https://www.instagram.com/mingle.labs/'
@@ -318,9 +338,10 @@ const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bot
 function resolveNativePipTargetLanguages(
   utterance: Utterance,
   resolver: DisplayLanguageResolver,
+  hiddenLanguages: readonly string[] = [],
 ): string[] {
   const targetLanguages: string[] = []
-  const seen = new Set<string>()
+  const seen = new Set<string>(hiddenLanguages.map((language) => resolver.keyOf(language)))
   const candidates = [
     ...(utterance.targetLanguages || []),
     ...Object.keys(utterance.translations || {}),
@@ -423,12 +444,13 @@ export function buildNativePipMessage(
     displayMode: LivePhoneDemoBubbleDisplayMode
     defaultDisplayLanguage: string | null
     roomLanguageOrder: readonly string[]
+    hiddenLanguages?: readonly string[]
     viewerUserId?: string | null
     isInterim: boolean
   },
 ): NativePipState['messages'][number] {
   const resolver = createDisplayLanguageResolver(utterance, options.roomLanguageOrder)
-  const targetLanguages = resolveNativePipTargetLanguages(utterance, resolver)
+  const targetLanguages = resolveNativePipTargetLanguages(utterance, resolver, options.hiddenLanguages)
   const displayLanguage = resolveNativePipDisplayLanguage(
     utterance,
     options.defaultDisplayLanguage,
@@ -1423,6 +1445,10 @@ interface LivePhoneDemoProps {
   // a generic placeholder, the composer/mic are replaced with a "blocked"
   // message, and tapping the counterpart's avatar opens nothing.
   isBlockedCounterpart?: boolean
+  // Unread count captured when the room was opened (before mark-read zeroes
+  // it). When > 0, entry anchors on the first unread message instead of the
+  // bottom so the viewer resumes where they left off.
+  initialUnreadMessageCount?: number
   // See ConversationChannelSummary.isMultiMember — decides whether the
   // room-management menu's row-removal action is "delete" (solo room,
   // deletes for the owner) or "leave" (shared room, removes just the
@@ -1445,10 +1471,11 @@ export function buildLatestUtterancePayload(
   preferredDisplayLanguages: readonly string[] | undefined,
   defaultDisplayLanguage: string | null | undefined,
   languageOrder: readonly string[],
+  hiddenLanguages: readonly string[] = [],
 ): LatestUtterancePayload | null {
   const resolver = createDisplayLanguageResolver(utterance, languageOrder)
   const originalDisplayLanguage = resolver.originalLanguage
-  const targetLanguages = buildTargetLanguagesForUtterance(utterance, languageOrder, resolver)
+  const targetLanguages = buildTargetLanguagesForUtterance(utterance, languageOrder, resolver, hiddenLanguages)
   const displayLanguage = resolveInitialDisplayLanguage(
     preferredDisplayLanguages?.length
       ? preferredDisplayLanguages
@@ -1510,13 +1537,6 @@ type SpeakingTtsItem = BubbleTtsTarget & {
 
 type NativeTtsStopReason = 'mute_or_sound_disabled' | 'component_unmount' | 'force_reset' | 'earphone_mode_stopped'
 
-type NativeOpenUpdateStoreCommand = {
-  type: 'native_open_update_store'
-  payload?: {
-    updateUrl?: string
-  }
-}
-
 type NativeUiOverlayStateCommand = {
   type: 'native_ui_overlay_state'
   payload?: {
@@ -1563,6 +1583,7 @@ type LivePhoneDemoChatMessageRowProps = {
   preferredDisplayLanguages?: readonly string[]
   defaultDisplayLanguage?: string | null
   languageOrder: readonly string[]
+  hiddenLanguages: readonly string[]
   isDraft: boolean
   onPlayOriginal: (utterance: Utterance) => void
   onPlayTranslation: (utterance: Utterance, language: string, text: string) => void
@@ -1589,6 +1610,7 @@ function LivePhoneDemoChatMessageRow({
   preferredDisplayLanguages,
   defaultDisplayLanguage,
   languageOrder,
+  hiddenLanguages,
   isDraft,
   onPlayOriginal,
   onPlayTranslation,
@@ -1613,6 +1635,7 @@ function LivePhoneDemoChatMessageRow({
         preferredDisplayLanguages={preferredDisplayLanguages}
         defaultDisplayLanguage={defaultDisplayLanguage}
         languageOrder={languageOrder}
+        hiddenLanguages={hiddenLanguages}
         isDraft={isDraft}
         onPlayOriginal={onPlayOriginal}
         onPlayTranslation={onPlayTranslation}
@@ -1637,6 +1660,7 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
     if (prev.preferredDisplayLanguages !== next.preferredDisplayLanguages) return false
     if (prev.defaultDisplayLanguage !== next.defaultDisplayLanguage) return false
     if (prev.languageOrder !== next.languageOrder) return false
+    if (prev.hiddenLanguages !== next.hiddenLanguages) return false
     if (prev.isDraft !== next.isDraft) return false
     if (prev.onPlayOriginal !== next.onPlayOriginal) return false
     if (prev.onPlayTranslation !== next.onPlayTranslation) return false
@@ -1665,6 +1689,8 @@ function LivePhoneDemoLeaveNoticeRow({
 }) {
   const displayName = notice.name?.trim() || (notice.handle ? `@${notice.handle.trim()}` : '')
   if (!displayName) return null
+  // Plain-text label ("Mina (운영 계정)"): the name sits inside a sentence.
+  const labeledName = labelNameWithAccountBadge(displayName, resolveAccountBadge(notice), uiLocale)
 
   return (
     <div
@@ -1673,7 +1699,7 @@ function LivePhoneDemoLeaveNoticeRow({
       className="flex justify-center py-1"
     >
       <span className="rounded-full bg-gray-100 px-3 py-1 text-[0.78rem] text-gray-500">
-        {formatLivePhoneDemoLeaveNoticeText(uiLocale, displayName)}
+        {formatLivePhoneDemoLeaveNoticeText(uiLocale, labeledName)}
       </span>
     </div>
   )
@@ -1704,7 +1730,11 @@ function LivePhoneDemoInviteNoticeRow({
       className="flex justify-center py-1"
     >
       <span className="rounded-full bg-gray-100 px-3 py-1 text-[0.78rem] text-gray-500">
-        {formatLivePhoneDemoInviteNoticeText(uiLocale, inviterName, inviteeName)}
+        {formatLivePhoneDemoInviteNoticeText(
+          uiLocale,
+          labelNameWithAccountBadge(inviterName, notice.invitedByBadge, uiLocale),
+          labelNameWithAccountBadge(inviteeName, notice.inviteeBadge, uiLocale),
+        )}
       </span>
     </div>
   )
@@ -1740,6 +1770,23 @@ function LivePhoneDemoDateDividerRow({
 }
 
 const MemoizedLivePhoneDemoDateDividerRow = memo(LivePhoneDemoDateDividerRow)
+
+function LivePhoneDemoUnreadDividerRow({ uiLocale }: { uiLocale: string }) {
+  return (
+    <div
+      data-unread-divider
+      role="separator"
+      style={CHAT_MESSAGE_ROW_STYLE}
+      className="flex items-center gap-3 px-1 py-2"
+    >
+      <span className="h-px flex-1 bg-amber-400/70" aria-hidden />
+      <span className="shrink-0 text-[0.75rem] font-semibold text-amber-600">
+        {unreadDividerLabel(uiLocale)}
+      </span>
+      <span className="h-px flex-1 bg-amber-400/70" aria-hidden />
+    </div>
+  )
+}
 
 type LivePhoneDemoTimelineItem =
   | { kind: 'message'; timestampMs: number; utterance: Utterance }
@@ -1863,6 +1910,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onDefaultDisplayLanguageChange,
   onOpenProfile,
   isBlockedCounterpart = false,
+  initialUnreadMessageCount = 0,
   isMultiMember = false,
 }, ref) {
   // Only used to tell "my" bubbles from "theirs" in a room shared by more
@@ -1892,6 +1940,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       : []
     return mergeConversationMemberProfiles(otherMemberProfiles, viewerProfile)
   }, [initialOtherMembers, session?.user?.name, viewerImage, viewerUserId])
+  // Header label for the room: its other members' strongest account badge
+  // (a room with a HashChat-run member reads "운영 계정" next to its title).
+  const conversationTitleBadge = useMemo(
+    () => resolveRoomAccountBadge(initialOtherMembers),
+    [initialOtherMembers],
+  )
   const accountPreferencesCacheIdentity = useMemo<AccountPreferencesCacheIdentity>(() => ({
     apiNamespace: clientApiNamespace,
     userId: viewerUserId,
@@ -1981,6 +2035,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
   const leaveConversationCopy = useMemo(() => resolveLivePhoneDemoConversationLeaveCopy(uiLocale), [uiLocale])
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
+  const conversationExportCopy = useMemo(() => resolveConversationExportCopy(uiLocale), [uiLocale])
   const defaultDisplayLanguageCopy = useMemo(() => {
     return {
       menuItemLabel: roomManagementCopy.defaultDisplayLanguageMenuItemLabel,
@@ -2071,9 +2126,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [feedbackHistoryError, setFeedbackHistoryError] = useState<string | null>(null)
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
+  const [isExportingConversation, setIsExportingConversation] = useState(false)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
+  // The message the next typed send replies to (set from a bubble's menu).
+  const [replyTarget, setReplyTarget] = useState<MessageReplyReference | null>(null)
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false)
   const [composerHasDraft, setComposerHasDraft] = useState(false)
   const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
@@ -2085,14 +2143,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => selectedLanguages,
     [selectedLanguages],
   )
+  // Room languages only another member picked: sky-blue in the language
+  // selector, but never in the header button, the display-language options or
+  // the message bubbles. Keyed by content so bubble rows keep their memo.
+  const othersOnlyLanguagesKey = resolveLanguageSelectorOthersOnlyLanguages(
+    [...effectiveTranslationLanguages, ...conversationSelectedLanguages],
+    ownSelectedLanguages,
+  ).join(',')
+  const othersOnlyLanguages = useMemo(
+    () => (othersOnlyLanguagesKey ? othersOnlyLanguagesKey.split(',') : []),
+    [othersOnlyLanguagesKey],
+  )
   const normalizedDisplayLanguageOptions = useMemo(
     () => sanitizeSttLanguageUnion([
       ...effectiveTranslationLanguages,
       ...conversationSelectedLanguages,
-    ]),
+    ]).filter((language) => !othersOnlyLanguages.includes(language)),
     [
       conversationSelectedLanguages,
       effectiveTranslationLanguages,
+      othersOnlyLanguages,
     ],
   )
   const resolvedDefaultDisplayLanguage = useMemo(() => {
@@ -2119,8 +2189,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     normalizedDisplayLanguageOptions.join(','),
   ].join('|')
   const languageSelectorButtonLanguages = useMemo(
-    () => buildLanguageSelectorButtonCodes(selectedLanguages, []),
-    [selectedLanguages],
+    () => buildLanguageSelectorButtonCodes(
+      selectedLanguages.filter((language) => !othersOnlyLanguages.includes(language)),
+      [],
+    ),
+    [othersOnlyLanguages, selectedLanguages],
   )
 
   const {
@@ -3461,6 +3534,47 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     pushMenuHistoryEntry(2, 'feedback')
   }, [clearFeedbackSubmitState, menuOpen, menuScreen, pushMenuHistoryEntry])
 
+  const handleExportConversationMenuItemPress = useCallback(async () => {
+    if (!conversationId || isExportingConversation) return
+    setIsExportingConversation(true)
+    const toastId = toast.loading(conversationExportCopy.preparingToast)
+    const isNativeAppRuntimeNow = isNativeApp()
+    try {
+      const exported = await fetchConversationExport({
+        conversationId,
+        locale: uiLocale,
+        displayLanguage: resolvedDefaultDisplayLanguage,
+      })
+      const delivery = await shareConversationExport(exported, { isNativeApp: isNativeAppRuntimeNow })
+      if (delivery === 'needs_gesture') {
+        // The tap was spent on the fetch; the share sheet needs a new one.
+        toast.success(conversationExportCopy.readyToast, {
+          id: toastId,
+          duration: 15_000,
+          action: {
+            label: conversationExportCopy.shareActionLabel,
+            onClick: () => {
+              void shareConversationExport(exported, { isNativeApp: isNativeAppRuntimeNow }).then((retried) => {
+                if (retried === 'copied') toast.success(conversationExportCopy.copiedToast)
+                else if (retried === 'failed') toast.error(conversationExportCopy.errorToast)
+              })
+            },
+          },
+        })
+      } else if (delivery === 'copied') {
+        toast.success(conversationExportCopy.copiedToast, { id: toastId })
+      } else if (delivery === 'failed') {
+        toast.error(conversationExportCopy.errorToast, { id: toastId })
+      } else {
+        toast.dismiss(toastId)
+      }
+    } catch {
+      toast.error(conversationExportCopy.errorToast, { id: toastId })
+    } finally {
+      setIsExportingConversation(false)
+    }
+  }, [conversationExportCopy, conversationId, isExportingConversation, resolvedDefaultDisplayLanguage, uiLocale])
+
   const handleConversationManagementMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'conversation-management') return
     pushMenuHistoryEntry(2, 'conversation-management')
@@ -3696,7 +3810,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, latestAccountPreferences, syncAccountPreferences])
 
   useEffect(() => {
+    // Temporary (see src/lib/ui-diagnostics.ts): what the room menu looked like to JS around a
+    // back navigation, and whether its panel is still on screen 600 ms later.
+    const reportMenuPopStateDiagnostic = (depthBefore: number, requestedDepth: number | null) => {
+      if (depthBefore <= 0 && requestedDepth === null) return
+      const stateBefore = window.history.state as Record<string, unknown> | null
+      window.setTimeout(() => {
+        const panel = document.querySelector('[data-qa="live-demo-menu-panel"]')
+        const rect = panel?.getBoundingClientRect()
+        reportUiDiagnostic('room_menu_popstate', {
+          depthBefore,
+          requestedDepth,
+          stateDepth: stateBefore && typeof stateBefore === 'object' ? stateBefore[MENU_HISTORY_STATE_KEY] ?? null : null,
+          depthAfter: menuHistoryDepthRef.current,
+          isNativeIosApp: isNativeIosAppRuntime(),
+          settleState: menuIosHistorySettleRef.current,
+          panelInDom: Boolean(panel),
+          panelRect: rect ? [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)] : null,
+        })
+      }, 600)
+    }
+
     const handlePopState = (event: PopStateEvent) => {
+      reportMenuPopStateDiagnostic(menuHistoryDepthRef.current, menuHistoryTargetDepthRef.current)
       const requestedDepth = menuHistoryTargetDepthRef.current
       menuHistoryTargetDepthRef.current = null
       const currentHistoryState = typeof window === 'undefined' ? null : window.history.state
@@ -4543,6 +4679,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     persistedUtteranceCount,
     leaveNotices,
     inviteNotices,
+    operatorDisclosure,
     isInitialServerHydrationPending,
     replaceConversationHistoryForQa,
     // Demo animation states
@@ -4686,6 +4823,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         preferredDisplayLanguages,
         resolvedDefaultDisplayLanguage,
         normalizedDisplayLanguageOptions,
+        othersOnlyLanguages,
       )
       : null
     if (!latestPayload || !latestUtterance) return
@@ -4715,6 +4853,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     preferredDisplayLanguages,
     resolvedDefaultDisplayLanguage,
     normalizedDisplayLanguageOptions,
+    othersOnlyLanguages,
   ])
 
   useEffect(() => {
@@ -4739,6 +4878,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         preferredDisplayLanguages,
         resolvedDefaultDisplayLanguage,
         normalizedDisplayLanguageOptions,
+        othersOnlyLanguages,
       )
       : null
 
@@ -4788,6 +4928,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     preferredDisplayLanguages,
     resolvedDefaultDisplayLanguage,
     normalizedDisplayLanguageOptions,
+    othersOnlyLanguages,
   ])
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
@@ -5649,8 +5790,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       text: nextText,
       sourceLanguage: 'unknown',
       speaker: composerCopy.manualSpeakerLabel,
+      replyTo: replyTarget,
     })
     if (!submittedUtteranceId) return
+    setReplyTarget(null)
     composerDraftRef.current = ''
     if (textarea) {
       textarea.value = ''
@@ -5667,7 +5810,44 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } else {
       syncComposerTextareaHeight(composerTextareaRef.current)
     }
-  }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, focusComposerTextarea, submitExternalUtterance, syncComposerTextareaHeight])
+  }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, focusComposerTextarea, replyTarget, submitExternalUtterance, syncComposerTextareaHeight])
+
+  useEffect(() => {
+    setReplyTarget(null)
+  }, [conversationId])
+
+  const handleReplyToMessage = useCallback((reference: MessageReplyReference) => {
+    setReplyTarget(reference)
+    if (isComposerOpen) focusComposerTextarea()
+    else handleToggleComposer()
+  }, [focusComposerTextarea, handleToggleComposer, isComposerOpen])
+
+  const handleCancelReply = useCallback(() => setReplyTarget(null), [])
+
+  // Only messages already in the loaded history can be jumped to.
+  const handleJumpToMessage = useCallback((id: string) => {
+    const row = chatRef.current?.querySelector<HTMLElement>(`[data-utterance-id="${CSS.escape(id)}"]`)
+    if (!row) return
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    row.animate?.(
+      [{ backgroundColor: 'rgba(251, 191, 36, 0.28)' }, { backgroundColor: 'rgba(251, 191, 36, 0)' }],
+      { duration: 1400, easing: 'ease-out' },
+    )
+  }, [])
+
+  const recalledUtteranceIds = useMemo(
+    () => new Set(utterances.filter((utterance) => utterance.recalled).map((utterance) => utterance.id)),
+    [utterances],
+  )
+  const replyRoomContext = useMemo(() => ({
+    locale: uiLocale,
+    viewerUserId,
+    displayLanguages: [...normalizedPreferredDisplayLanguages, preferredDisplayLanguage, resolvedDefaultDisplayLanguage],
+    recalledIds: recalledUtteranceIds,
+    onReply: handleReplyToMessage,
+    onJumpTo: handleJumpToMessage,
+  }), [handleJumpToMessage, handleReplyToMessage, normalizedPreferredDisplayLanguages, preferredDisplayLanguage,
+    recalledUtteranceIds, resolvedDefaultDisplayLanguage, uiLocale, viewerUserId])
 
   useImperativeHandle(ref, () => ({
     startRecording: async () => {
@@ -5708,6 +5888,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const prevScrollHeightRef = useRef<number | null>(null)
   const prevScrollTopRef = useRef<number | null>(null)
   const isLoadingOlderRef = useRef(false)
+  const [unreadDividerUtteranceId, setUnreadDividerUtteranceId] = useState<string | null>(null)
   const autoScrollSchedulerRef = useRef(createAutoScrollScheduler())
   const scrollUiHideTimerRef = useRef<number | null>(null)
   const scrollStateFrameRef = useRef<{
@@ -5791,7 +5972,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     prevScrollHeightRef.current = node.scrollHeight
     prevScrollTopRef.current = node.scrollTop
     void loadOlderUtterances().then((didLoad) => {
-      if (didLoad) return
+      if (didLoad) {
+        // The prepend layout effect releases the loading state; if the load left the list
+        // unchanged it never runs, so release it here instead of leaving the spinner up.
+        window.setTimeout(() => {
+          if (!isPaginatingRef.current || prevScrollHeightRef.current === null) return
+          prevScrollHeightRef.current = null
+          prevScrollTopRef.current = null
+          isPaginatingRef.current = false
+          isLoadingOlderRef.current = false
+        }, OLDER_LOAD_RELEASE_FALLBACK_MS)
+        return
+      }
       prevScrollHeightRef.current = null
       prevScrollTopRef.current = null
       isPaginatingRef.current = false
@@ -5807,6 +5999,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const markUserScrollIntent = useCallback(() => {
     userScrollIntentUntilRef.current = Date.now() + USER_SCROLL_INTENT_WINDOW_MS
   }, [])
+
+  // Re-applying the position saved before an OS kill is the user's own scroll
+  // position coming back: it must stop auto-follow just like a manual scroll.
+  useEffect(() => {
+    const node = chatRef.current
+    if (!node) return
+    node.addEventListener(RESTORE_SCROLL_EVENT, markUserScrollIntent)
+    return () => {
+      node.removeEventListener(RESTORE_SCROLL_EVENT, markUserScrollIntent)
+    }
+  }, [markUserScrollIntent])
 
   const isUserScrollIntentActive = useCallback(() => {
     return Date.now() <= userScrollIntentUntilRef.current
@@ -6031,26 +6234,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [clearPendingAutoScrollTimer, markUserScrollIntent, updateScrollDerivedState])
 
   const handleNativeAppUpdatePress = useCallback(() => {
-    const updateUrl = nativeAppUpdate?.updateUrl?.trim() || ''
-    if (!updateUrl) return
+    if (!nativeAppUpdate?.updateUrl?.trim()) return
 
     closeMenuPanel()
-
-    const command: NativeOpenUpdateStoreCommand = {
-      type: 'native_open_update_store',
-      payload: { updateUrl },
-    }
-
-    if (isNativeApp()) {
-      try {
-        window.ReactNativeWebView?.postMessage(JSON.stringify(command))
-        return
-      } catch {
-        // Fall back to browser navigation if the bridge errors.
-      }
-    }
-
-    window.location.href = updateUrl
+    openNativeAppUpdateStore(nativeAppUpdate.updateUrl)
   }, [closeMenuPanel, nativeAppUpdate?.updateUrl])
 
   useEffect(() => {
@@ -6074,18 +6261,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [])
 
-  const nativeAppUpdateStatus = nativeAppUpdate || DEFAULT_NATIVE_APP_UPDATE_DETAIL
-  const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel
-  const nativeAppInstallSource = resolveNativeAppInstallSourceText(nativeAppUpdateCopy, nativeAppUpdateStatus.installSource)
-  const nativeAppLatestVersion = nativeAppUpdateStatus.latestVersion || ''
-  const nativeAppUpdateStatusMessage = nativeAppUpdateStatus.status === 'checking'
-    ? nativeAppUpdateCopy.checkingMessage
-    : nativeAppUpdateStatus.status === 'available'
-      ? nativeAppUpdateCopy.availableMessage
-      : nativeAppUpdateStatus.status === 'current'
-        ? nativeAppUpdateCopy.currentMessage
-        : nativeAppUpdateCopy.unknownMessage
-  const showNativeAppUpdateAction = nativeAppUpdateStatus.updateAvailable && Boolean(nativeAppUpdateStatus.updateUrl)
+  const nativeAppUpdateCardContent = useMemo(
+    () => resolveNativeAppUpdateCardContent(nativeAppUpdate, nativeAppUpdateCopy),
+    [nativeAppUpdate, nativeAppUpdateCopy],
+  )
 
   useLayoutEffect(() => {
     const nextCounts: ChatScrollMessageCountSnapshot = {
@@ -6177,26 +6356,50 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       bottomAnchorConversationRef.current = conversationId
       hasInitialBottomAnchorRef.current = false
       allowAutoTopPaginationRef.current = false
+      setUnreadDividerUtteranceId(null)
     }
     if (!isVisible) {
       hasInitialBottomAnchorRef.current = false
       allowAutoTopPaginationRef.current = false
+      setUnreadDividerUtteranceId(null)
       return
     }
     const node = chatRef.current
+    const hasUnread = initialUnreadMessageCount > 0 && Boolean(viewerUserId)
     if (!node || !shouldAnchorConversationEntry({
       isVisible, isStorageHydrated, hasAnchored: hasInitialBottomAnchorRef.current,
       messageCount: utterances.length, isServerPending: isInitialServerHydrationPending,
+      hasUnread,
     })) return
-    node.scrollTop = node.scrollHeight
-    lastDistanceToBottomRef.current = 0
-    shouldAutoScroll.current = true
-    suppressAutoScrollRef.current = false
-    autoScrollSchedulerRef.current.markPerformed()
+    const firstUnreadId = hasUnread
+      ? resolveFirstUnreadUtteranceId({ utterances, unreadCount: initialUnreadMessageCount, viewerUserId })
+      : null
+    const firstUnreadRow = firstUnreadId
+      ? node.querySelector<HTMLElement>(`[data-utterance-id="${CSS.escape(firstUnreadId)}"]`)
+      : null
+    // The line stays where the unread messages began for this visit only; the next entry
+    // draws it again only if something is unread then.
+    setUnreadDividerUtteranceId(firstUnreadRow ? firstUnreadId : null)
+    if (firstUnreadRow) {
+      // Instant jump (no smooth scroll): first unread row at the top of the
+      // viewport. updateScrollDerivedState below decides auto-follow from the
+      // resulting distance, so new messages don't yank the viewer down.
+      node.scrollTop += firstUnreadRow.getBoundingClientRect().top - node.getBoundingClientRect().top - 8
+      autoScrollSchedulerRef.current.markPerformed()
+    } else {
+      node.scrollTop = node.scrollHeight
+      lastDistanceToBottomRef.current = 0
+      shouldAutoScroll.current = true
+      suppressAutoScrollRef.current = false
+      autoScrollSchedulerRef.current.markPerformed()
+    }
     hasInitialBottomAnchorRef.current = true
     allowAutoTopPaginationRef.current = true
     updateScrollDerivedState()
-  }, [conversationId, isVisible, isStorageHydrated, isInitialServerHydrationPending, utterances.length, updateScrollDerivedState])
+    // utterances is read only for the one-shot unread lookup; length still
+    // drives re-evaluation like before.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, isVisible, isStorageHydrated, isInitialServerHydrationPending, utterances.length, updateScrollDerivedState, initialUnreadMessageCount, viewerUserId])
 
   // Preserve scroll position after prepending older utterances
   useLayoutEffect(() => {
@@ -6270,9 +6473,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const handleCopySuccess = () => {
       showFloatingToast(copyActionCopy.copiedToastLabel)
     }
+    const handleToast = (event: Event) => {
+      const label = (event as CustomEvent<{ label?: unknown }>).detail?.label
+      if (typeof label === 'string' && label) showFloatingToast(label)
+    }
     window.addEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
+    window.addEventListener(CONVERSATION_TOAST_EVENT, handleToast)
     return () => {
       window.removeEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
+      window.removeEventListener(CONVERSATION_TOAST_EVENT, handleToast)
       if (floatingToastTimerRef.current) clearTimeout(floatingToastTimerRef.current)
     }
   }, [copyActionCopy.copiedToastLabel, showFloatingToast])
@@ -6513,10 +6722,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         displayMode: bubbleDisplayMode,
         defaultDisplayLanguage: resolvedDefaultDisplayLanguage,
         roomLanguageOrder: normalizedDisplayLanguageOptions,
+        hiddenLanguages: othersOnlyLanguages,
         viewerUserId,
         isInterim: draftUtteranceIds.has(utterance.id),
       })),
-    }), [bubbleDisplayMode, conversationId, displayUtterances, draftUtteranceIds, normalizedDisplayLanguageOptions, resolvedDefaultDisplayLanguage, roomManagementCopy, viewerUserId])
+    }), [bubbleDisplayMode, conversationId, displayUtterances, draftUtteranceIds, normalizedDisplayLanguageOptions, othersOnlyLanguages, resolvedDefaultDisplayLanguage, roomManagementCopy, viewerUserId])
 
   nativePipStateRef.current = nativePipState
 
@@ -6820,6 +7030,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     overscrollBehaviorY: 'contain',
     touchAction: 'pan-y',
     willChange: 'scroll-position',
+    // A long press opens the bubble's own menu; without this, iOS WebKit
+    // selects the nearest selectable text instead (language dividers, read
+    // receipts, times, the expand toggle), as if dragged with a mouse.
+    WebkitUserSelect: 'none',
+    userSelect: 'none',
+    WebkitTouchCallout: 'none',
     paddingTop: chatPaddingTop,
     paddingBottom: chatPaddingBottom,
     paddingLeft: 'max(calc(env(safe-area-inset-left) + 6px), 10px)',
@@ -7082,6 +7298,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   return (
     <PhoneFrame>
+      <MessageReplyProvider value={replyRoomContext}>
       <div
         data-qa="live-demo-root"
         className="relative flex h-full min-h-0 flex-col overflow-hidden"
@@ -7107,16 +7324,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               >
                 <ChevronLeft size={24} strokeWidth={2.4} />
               </button>
-              <div className="min-w-0 flex-1">
+              <div className={conversationTitleBadge ? 'flex min-w-0 flex-1 items-center gap-1.5' : 'min-w-0 flex-1'}>
                 <button
                   type="button"
                   onClick={openRenameConversationDialog}
                   disabled={!conversationId || isRenamingConversation}
                   aria-label={roomManagementCopy.renameButtonLabel}
-                  className="block w-full truncate text-left text-[0.98rem] font-semibold text-gray-950 outline-none transition-colors hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-default disabled:opacity-100"
+                  className={`block truncate text-left text-[0.98rem] font-semibold text-gray-950 outline-none transition-colors hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-default disabled:opacity-100 ${
+                    conversationTitleBadge ? 'min-w-0' : 'w-full'
+                  }`}
                 >
                   {displayConversationTitle || ''}
                 </button>
+                {/* The title is a renamable plain string, so the room's account
+                    label sits beside it (outside the rename button), never in it. */}
+                {conversationTitleBadge ? (
+                  <span data-live-demo-title-account-badge className="inline-flex shrink-0 items-center">
+                    <ChatAccountBadge kind={conversationTitleBadge} locale={uiLocale} tone="dark" />
+                  </span>
+                ) : null}
               </div>
             </div>
           ) : (
@@ -7937,6 +8163,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </button>
                         </div>
 
+                        {conversationId ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              onClick={() => { void handleExportConversationMenuItemPress() }}
+                              disabled={isExportingConversation}
+                              aria-busy={isExportingConversation}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:opacity-60"
+                            >
+                              <span className="min-w-0 flex-1">{conversationExportCopy.menuLabel}</span>
+                              <span className="shrink-0 text-gray-500">
+                                {isExportingConversation
+                                  ? <Loader2 size={18} strokeWidth={2.4} className="animate-spin" />
+                                  : <Share size={18} strokeWidth={2.2} />}
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
+
                         <div className="px-4 pb-4">
                           <button
                             type="button"
@@ -7952,41 +8197,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                         {isNativeAppRuntime && (
                           <div className="px-4 py-4">
-                            <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
-                                    {nativeAppUpdateCopy.sectionLabel}
-                                  </div>
-                                  <div className="mt-2 text-sm font-semibold text-gray-900">
-                                    {nativeAppUpdateCopy.installedLabel} {nativeAppInstalledVersion}
-                                  </div>
-                                  {nativeAppInstallSource ? (
-                                    <div className="mt-1 text-xs font-medium text-gray-600">
-                                      {nativeAppUpdateCopy.installSourceLabel} {nativeAppInstallSource}
-                                    </div>
-                                  ) : null}
-                                  {nativeAppLatestVersion ? (
-                                    <div className="mt-1 text-xs font-medium text-gray-600">
-                                      {nativeAppUpdateCopy.latestLabel} {nativeAppLatestVersion}
-                                    </div>
-                                  ) : null}
-                                  <div className="mt-2 text-xs leading-5 text-gray-600">
-                                    {nativeAppUpdateStatusMessage}
-                                  </div>
-                                </div>
-                                {showNativeAppUpdateAction ? (
-                                  <button
-                                    type="button"
-                                    onClick={handleNativeAppUpdatePress}
-                                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                                  >
-                                    <Download size={13} strokeWidth={2.2} />
-                                    <span>{nativeAppUpdateCopy.updateButtonLabel}</span>
-                                  </button>
-                                ) : null}
-                              </div>
-                            </div>
+                            <NativeAppUpdateCard
+                              {...nativeAppUpdateCardContent}
+                              onUpdate={handleNativeAppUpdatePress}
+                            />
                           </div>
                         )}
 
@@ -8534,6 +8748,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             <div
               ref={chatRef}
               data-qa="live-demo-chat-scroll"
+              data-restore-scroll="conversation-room"
+              data-restore-anchor="data-utterance-id"
+              data-restore-scroll-default="end"
               onScroll={handleScroll}
               onWheel={markUserScrollIntent}
               onTouchMove={markUserScrollIntent}
@@ -8548,6 +8765,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   style={{ height: `${nativeChatTopSpacerPx}px` }}
                 />
               )}
+              {operatorDisclosure ? (
+                <ConversationOperatorDisclosure
+                  locale={uiLocale}
+                  stickyTopPx={nativeChatTopSpacerPx}
+                  className="mb-2"
+                />
+              ) : null}
               {hasOlderUtterances && (
                 <button
                   onClick={handleLoadOlder}
@@ -8579,6 +8803,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     }
                     className={spacingClass}
                   >
+                    {item.kind === 'message' && item.utterance.id === unreadDividerUtteranceId ? (
+                      <LivePhoneDemoUnreadDividerRow uiLocale={uiLocale} />
+                    ) : null}
                     {item.kind === 'leave-notice' ? (
                       <MemoizedLivePhoneDemoLeaveNoticeRow
                         notice={item.notice}
@@ -8602,6 +8829,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         preferredDisplayLanguages={normalizedPreferredDisplayLanguages}
                         defaultDisplayLanguage={resolvedDefaultDisplayLanguage}
                         languageOrder={normalizedDisplayLanguageOptions}
+                        hiddenLanguages={othersOnlyLanguages}
                         isDraft={draftUtteranceIds.has(item.utterance.id)}
                         onPlayOriginal={handlePlayOriginalBubbleTts}
                         onPlayTranslation={handlePlayTranslationBubbleTts}
@@ -8740,7 +8968,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       minWidth: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
                       height: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
                     }}
-                    aria-label="Scroll to latest"
+                    aria-label={resolveAccessibilityCopy(uiLocale).scrollToLatest}
                   >
                     <ChevronDown size={28} strokeWidth={1.85} />
                   </button>
@@ -8976,6 +9204,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
           >
+            {replyTarget && !isBlockedCounterpart ? (
+              <MessageReplyComposerBar reference={replyTarget} onCancel={handleCancelReply} />
+            ) : null}
             {isBlockedCounterpart ? (
               <div
                 data-qa="live-demo-blocked-bottom-bar"
@@ -9319,6 +9550,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           )}
         </div>
       </div>
+      </MessageReplyProvider>
     </PhoneFrame>
   )
 })

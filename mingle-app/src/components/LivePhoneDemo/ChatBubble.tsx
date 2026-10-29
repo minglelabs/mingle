@@ -22,6 +22,12 @@ import CopyableBubbleSurface from './CopyableBubbleSurface'
 import ConversationImageBubble from './ConversationImageBubble'
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
 import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
+import { MessageRecallScope } from './MessageRecall'
+import { MessageReadReceipt } from './MessageReadReceipts'
+import { MessageReplyQuote, MessageReplyScope } from './MessageReply'
+import { buildMessageReplyReference } from '@/lib/message-reply'
+import { messageRecallCopy } from '@/lib/message-recall'
+import type { MessageReplyReference } from '@/lib/message-reply'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
@@ -30,6 +36,9 @@ import {
   type LivePhoneDemoBubbleDisplayMode,
 } from './live-phone-demo.bubble-display'
 import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-display-copy'
+import ChatAccountBadge from './ChatAccountBadge'
+import { readAccountBadgeKind } from './chat-account-badge.logic'
+import type { AccountBadgeKind } from '@/lib/account-badge'
 import {
   arePlaybackKeyListsEqual,
   buildOriginalBubblePlaybackKey as buildOriginalPlaybackKey,
@@ -123,6 +132,12 @@ function BubbleTtsIndicator({
 }
 
 export interface Utterance {
+  // The sender unsent this message; it renders as a "deleted message"
+  // placeholder and carries no text, translations or photo.
+  recalled?: boolean
+  // The viewer sent this message, as confirmed by the server. Unlike
+  // speakerUserId it is also set for turns sent while the room was solo.
+  sentByViewer?: boolean
   image?: ConversationMessageImage
   id: string
   speaker?: string
@@ -141,6 +156,11 @@ export interface Utterance {
   // what makes a shared room read as "a conversation with a person" rather
   // than a solo interpreter session.
   speakerImage?: string | null
+  // The sender's account badge ('operator' = run by HashChat staff, 'official'
+  // = the HashChat team's account), shown next to speakerName. Comes from
+  // hydration, committed live utterances and live previews (the latter from
+  // the sender's signed writer token).
+  speakerBadge?: AccountBadgeKind | null
   originalText: string
   // The original rendered in the script of its Chinese variant (Traditional
   // for zh-TW, Simplified for zh-CN), supplied by the server when that
@@ -157,6 +177,10 @@ export interface Utterance {
   createdAtMs?: number
   serverCreatedAtMs?: number
   serverMessageId?: string
+  // Server-clock storage time; see ConversationHydrationUtterance.
+  serverPersistedAtMs?: number
+  // Snapshot of the message this one replies to (see message-reply.ts).
+  replyTo?: MessageReplyReference
 }
 
 interface ChatBubbleProps {
@@ -166,6 +190,11 @@ interface ChatBubbleProps {
   preferredDisplayLanguages?: readonly string[]
   defaultDisplayLanguage?: string | null
   languageOrder?: readonly string[]
+  /**
+   * Room languages only another member picked. Their translations never
+   * render for this viewer (rows, language buttons, copy text).
+   */
+  hiddenLanguages?: readonly string[]
   isDraft?: boolean
   onPlayOriginal?: (utterance: Utterance) => void
   onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
@@ -352,6 +381,7 @@ export function buildTargetLanguagesForUtterance(
   utterance: Utterance,
   languageOrder: readonly string[] = [],
   resolver: DisplayLanguageResolver = createDisplayLanguageResolver(utterance, languageOrder),
+  hiddenLanguages: readonly string[] = [],
 ): string[] {
   const keepSourceLanguageBubble = (
     utterance.sourceLanguagesMixed === true
@@ -359,6 +389,7 @@ export function buildTargetLanguagesForUtterance(
   )
   const targetLanguages: string[] = []
   const seen = new Set<string>()
+  const hiddenKeys = new Set(hiddenLanguages.map((language) => resolver.keyOf(language)))
 
   const pushLanguage = (rawLanguage: string) => {
     const language = (rawLanguage || '').trim()
@@ -371,7 +402,7 @@ export function buildTargetLanguagesForUtterance(
     ) {
       return
     }
-    if (seen.has(key)) return
+    if (seen.has(key) || hiddenKeys.has(key)) return
     seen.add(key)
     targetLanguages.push(resolver.displayCodeOf(language, key))
   }
@@ -797,6 +828,7 @@ function ChatBubble({
   preferredDisplayLanguages,
   defaultDisplayLanguage,
   languageOrder,
+  hiddenLanguages,
   isDraft = false,
   onPlayOriginal,
   onPlayTranslation,
@@ -809,7 +841,8 @@ function ChatBubble({
   onOpenProfile,
   bubbleDisplayMode = DEFAULT_BUBBLE_DISPLAY_MODE,
 }: ChatBubbleProps) {
-  const messageImage = normalizeConversationMessageImage(utterance.image)
+  const isRecalled = utterance.recalled === true
+  const messageImage = isRecalled ? null : normalizeConversationMessageImage(utterance.image)
   const isOwnMessage = Boolean(
     viewerUserId && utterance.speakerUserId && utterance.speakerUserId === viewerUserId,
   )
@@ -820,6 +853,8 @@ function ChatBubble({
   const isCounterpartMessage = isSharedRoomMember && !isOwnMessage
   const canOpenSpeakerProfile = isSharedRoomMember && typeof onOpenProfile === 'function'
   const speakerName = utterance.speakerName?.trim() || ''
+  // Labels the sender's NAME, so it follows the same shared-room gate.
+  const speakerBadge = isSharedRoomMember ? readAccountBadgeKind(utterance.speakerBadge) : null
   const displayLanguageResolver = createDisplayLanguageResolver(utterance, languageOrder)
   const displayLanguageKey = displayLanguageResolver.keyOf
   const originalDisplayLanguage = displayLanguageResolver.originalLanguage
@@ -843,7 +878,12 @@ function ChatBubble({
   }, [bubbleDisplayMode])
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
-  const targetLangs = buildTargetLanguagesForUtterance(utterance, languageOrder, displayLanguageResolver)
+  const targetLangs = buildTargetLanguagesForUtterance(
+    utterance,
+    languageOrder,
+    displayLanguageResolver,
+    hiddenLanguages,
+  )
   const translationEntries = targetLangs
     .map((lang) => {
       const { text, finalized } = findDisplayTranslation(utterance, lang, displayLanguageResolver)
@@ -1065,10 +1105,10 @@ function ChatBubble({
     ))
     ? [...firstCollapsedHeaderLanguageOptions.slice(0, 4), originalHeaderLanguage]
     : firstCollapsedHeaderLanguageOptions
-  const shouldShowCollapsedHeaderLanguages = !messageImage && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
+  const shouldShowCollapsedHeaderLanguages = !messageImage && !isRecalled && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
   const shouldShowSpeakerHeader = !isOwnMessage
     && isSharedRoomMember
-    && (Boolean(speakerName) || shouldShowCollapsedHeaderLanguages)
+    && (Boolean(speakerName) || Boolean(speakerBadge) || shouldShowCollapsedHeaderLanguages)
   const speakerHeader = shouldShowSpeakerHeader ? (
     <div
       data-chat-speaker-header
@@ -1080,6 +1120,11 @@ function ChatBubble({
           className="h-5 min-w-0 max-w-[12rem] shrink-0 truncate text-sm font-medium leading-5 text-gray-500"
         >
           {speakerName}
+        </span>
+      )}
+      {speakerBadge && (
+        <span data-chat-speaker-badge className="ml-0.5 mr-0.5 inline-flex shrink-0 items-center">
+          <ChatAccountBadge kind={speakerBadge} locale={uiLocale} tone="dark" />
         </span>
       )}
       {shouldShowCollapsedHeaderLanguages && (
@@ -1162,7 +1207,11 @@ function ChatBubble({
     </div>
   )
 
-  const bubbleContentSwitch = messageImage ? <ConversationImageBubble image={messageImage} locale={uiLocale} /> : (
+  const bubbleContentSwitch = isRecalled ? (
+    <div data-chat-bubble-recalled className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[13px] italic text-slate-400">
+      {messageRecallCopy(uiLocale).placeholder}
+    </div>
+  ) : messageImage ? <ConversationImageBubble image={messageImage} locale={uiLocale} /> : (
     <AnimatePresence initial={false} mode="popLayout">
       {isBubbleExpanded ? (
         <motion.div
@@ -1277,8 +1326,18 @@ function ChatBubble({
       data-chat-bubble-other-meta={isOwnMessage ? undefined : true}
       className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
+      {!isDraft && !isRecalled && (
+        <MessageReadReceipt
+          senderUserId={utterance.speakerUserId}
+          // Not yet stored → nobody can have read it; createdAtMs (device
+          // clock) is only a stand-in until the server time arrives.
+          createdAtMs={utterance.serverPersistedAtMs ?? utterance.createdAtMs}
+          locale={uiLocale}
+          align={isOwnMessage ? 'right' : 'left'}
+        />
+      )}
       {bubbleTimestamp}
-      {!messageImage && bubbleControls}
+      {!messageImage && !isRecalled && bubbleControls}
     </div>
   )
 
@@ -1293,6 +1352,9 @@ function ChatBubble({
         : 'flex min-w-0 flex-1 flex-col items-start gap-px'}
     >
       {speakerHeader}
+      {utterance.replyTo && !isRecalled && (
+        <MessageReplyQuote reference={utterance.replyTo} align={isOwnMessage ? 'right' : 'left'} />
+      )}
       <div
         data-chat-bubble-line
         className="flex min-w-0 max-w-full items-end gap-1"
@@ -1316,7 +1378,14 @@ function ChatBubble({
   const bubbleContent = isOwnMessage
     ? <>{messageColumn}</>
     : <>{avatarColumn}{messageColumn}</>
-  const reactiveContent = <MessageReactionScope id={isDraft ? undefined : utterance.id} locale={uiLocale}>{bubbleContent}</MessageReactionScope>
+  // A solo-era turn carries no speakerUserId (see isOwnMessage), whoever sent it, so the server's own flag decides there.
+  const canRecall = !isDraft && !isRecalled && (utterance.sentByViewer === true || isOwnMessage)
+  const replyReference = isDraft || isRecalled ? null : buildMessageReplyReference(utterance)
+  const reactiveContent = <MessageReactionScope id={isDraft || isRecalled ? undefined : utterance.id} locale={uiLocale}>
+    <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>
+      <MessageReplyScope reference={replyReference}>{bubbleContent}</MessageReplyScope>
+    </MessageRecallScope>
+  </MessageReactionScope>
 
   if (!shouldAnimateEntrance) {
     return (
@@ -1344,6 +1413,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.preferredDisplayLanguages !== next.preferredDisplayLanguages) return false
   if (prev.defaultDisplayLanguage !== next.defaultDisplayLanguage) return false
   if (prev.languageOrder !== next.languageOrder) return false
+  if (prev.hiddenLanguages !== next.hiddenLanguages) return false
   if (prev.isDraft !== next.isDraft) return false
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
   if (prev.speakingPlaybackKey !== next.speakingPlaybackKey) return false
@@ -1363,14 +1433,19 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.speakerAvatarSeed !== nu.speakerAvatarSeed) return false
     if (pu.speakerAvatarIndex !== nu.speakerAvatarIndex) return false
     if (pu.speakerName !== nu.speakerName) return false
+    if (pu.recalled !== nu.recalled) return false
+    if (pu.sentByViewer !== nu.sentByViewer) return false
     if (pu.speakerUserId !== nu.speakerUserId) return false
     if (pu.speakerImage !== nu.speakerImage) return false
+    if (pu.speakerBadge !== nu.speakerBadge) return false
     if (pu.createdAtMs !== nu.createdAtMs) return false
+    if (pu.serverPersistedAtMs !== nu.serverPersistedAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false
     if (pu.sourceLanguagesMixed !== nu.sourceLanguagesMixed) return false
     if (pu.sourceTextHasForeignScript !== nu.sourceTextHasForeignScript) return false
     if (pu.translationStatus !== nu.translationStatus) return false
+    if (pu.replyTo?.id !== nu.replyTo?.id || pu.replyTo?.recalled !== nu.replyTo?.recalled) return false
     if (pu.targetLanguages !== nu.targetLanguages) {
       const pt = pu.targetLanguages || []
       const nt = nu.targetLanguages || []

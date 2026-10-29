@@ -11,6 +11,8 @@ const {
   mockUpdateConversationChannelTranslationLanguagesLinked,
   mockUpdateConversationChannelTitle,
   mockMarkConversationChannelRead,
+  mockGetConversationSessionKeyForMember,
+  mockNotifyConversationMessage,
   mockEnsureTrackingContext,
   mockResolveOrCreateUserIdForRequest,
   mockSanitizeSttLanguageSelection,
@@ -24,6 +26,8 @@ const {
   mockUpdateConversationChannelTranslationLanguagesLinked: vi.fn(),
   mockUpdateConversationChannelTitle: vi.fn(),
   mockMarkConversationChannelRead: vi.fn(),
+  mockGetConversationSessionKeyForMember: vi.fn(),
+  mockNotifyConversationMessage: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockResolveOrCreateUserIdForRequest: vi.fn(),
   mockSanitizeSttLanguageSelection: vi.fn((value: unknown) => Array.isArray(value) ? value : []),
@@ -51,6 +55,13 @@ vi.mock("@/lib/app-conversations", () => ({
   updateConversationChannelTranslationLanguagesLinked: mockUpdateConversationChannelTranslationLanguagesLinked,
   updateConversationChannelTitle: mockUpdateConversationChannelTitle,
   markConversationChannelRead: mockMarkConversationChannelRead,
+  getConversationSessionKeyForMember: mockGetConversationSessionKeyForMember,
+}));
+
+vi.mock("@/server/conversation-realtime", () => ({
+  notifyConversationMessage: mockNotifyConversationMessage,
+  mintConversationRealtimeToken: vi.fn(),
+  mintConversationLiveWriterToken: vi.fn(),
 }));
 
 vi.mock("@/lib/app-analytics", () => ({
@@ -587,6 +598,7 @@ describe("/api/conversations/[conversationId] route", () => {
 
   it("marks a conversation read without creating an in-app notification", async () => {
     mockMarkConversationChannelRead.mockResolvedValue(true);
+    mockGetConversationSessionKeyForMember.mockResolvedValue("sess_1");
 
     const response = await PATCH(
       new NextRequest("https://example.com/api/conversations/conv_1", {
@@ -604,6 +616,12 @@ describe("/api/conversations/[conversationId] route", () => {
       conversationId: "conv_1",
       userId: "tracked_user_123",
     });
+    expect(mockNotifyConversationMessage).toHaveBeenCalledWith(
+      "sess_1",
+      [],
+      undefined,
+      expect.objectContaining({ readReceipt: true }),
+    );
   });
 
   it("rejects empty conversation titles", async () => {

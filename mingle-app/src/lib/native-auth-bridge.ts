@@ -111,7 +111,7 @@ export function createNativeAuthBridgeToken(args: CreateNativeAuthBridgeTokenArg
   const secret = getAuthSecret();
   const now = Math.floor(Date.now() / 1000);
   const subject = normalizeText(args.sub, 256) || buildSafeFallbackSubject(args.provider);
-  const name = normalizeText(args.name, 128) || "Mingle User";
+  const name = normalizeText(args.name, 128) || "HashChat User";
   const email = normalizeText(args.email, 256).toLowerCase();
   const callbackUrl = resolveSafeCallbackPath(args.callbackUrl, FALLBACK_CALLBACK_PATH);
 
@@ -149,7 +149,7 @@ export function verifyNativeAuthBridgeToken(token: string): NativeAuthBridgeToke
 
     const sub = normalizeText(parsed.sub, 256);
     if (!sub) return null;
-    const name = normalizeText(parsed.name, 128) || "Mingle User";
+    const name = normalizeText(parsed.name, 128) || "HashChat User";
     const email = normalizeText(parsed.email, 256).toLowerCase();
     const callbackUrl = resolveSafeCallbackPath(parsed.callbackUrl, FALLBACK_CALLBACK_PATH);
     const issuedAt = Number(parsed.iat);

@@ -390,6 +390,8 @@ describe("app-conversations", () => {
         defaultDisplayLanguage: true,
         nationality: true,
         primaryLanguages: true,
+        isOfficial: true,
+        isOperator: true,
       },
     });
     expect(state?.conversation.title).toBe("Bob");
@@ -1584,6 +1586,7 @@ describe("app-conversations", () => {
         OR: [
           { isDeleted: false },
           { isDeleted: null },
+          { isDeleted: true, metadata: { path: ['recalledAtMs'], gt: 0 } },
         ],
       },
       orderBy: [
