@@ -1,7 +1,8 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Loader2, MessageSquarePlus, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { Loader2, MessageSquarePlus, Pin, PinOff, RefreshCw, Send, Trash2 } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
@@ -49,6 +50,36 @@ async function sendReview(kind: 'profile' | 'post', id: string, action: Action, 
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>
   if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : 'request_failed')
   return payload
+}
+
+/** Moves the card to the front of the queue, or back into the default order; the page then reloads in the new order. */
+function PinButton({ kind, id, pinned }: { kind: 'profile' | 'post'; id: string; pinned: boolean }) {
+  const router = useRouter()
+  const [saving, setSaving] = useState(false)
+  async function toggle() {
+    setSaving(true)
+    try {
+      const response = await fetch('/admin/operators/api/review/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, id, pinned: !pinned }),
+      })
+      if (response.ok) router.refresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void toggle()}
+      disabled={saving}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold transition disabled:opacity-50 ${pinned ? 'bg-sky-50 text-sky-700' : 'text-slate-500 hover:bg-slate-100'}`}
+    >
+      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : pinned ? <PinOff className="h-3.5 w-3.5" aria-hidden="true" /> : <Pin className="h-3.5 w-3.5" aria-hidden="true" />}
+      {pinned ? '고정 해제' : '맨 앞으로'}
+    </button>
+  )
 }
 
 /** 게시 · 삭제 · 재제작, with a feedback note that opens on demand. */
@@ -174,9 +205,10 @@ function StaffTranslationChips({ sourceLanguage, translation }: {
   )
 }
 
-function PostCard({ post: initial, at, author, profileApproved, onDone }: {
+function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }: {
   post: ReviewPost
   at: string
+  pinned: boolean
   author: { name: string | null; handle: string; image: string | null; languages: string[] }
   profileApproved: boolean
   onDone: () => void
@@ -211,6 +243,7 @@ function PostCard({ post: initial, at, author, profileApproved, onDone }: {
           <p className="truncate text-sm font-semibold text-slate-900">{author.name ?? '(이름 없음)'}</p>
           <p className="truncate text-xs text-slate-500">@{author.handle} · 글 {formatAt(at)}</p>
         </div>
+        <PinButton kind="post" id={post.id} pinned={pinned} />
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         {post.language ? <AdminChip tone="accent">{koreanLanguageName(post.language)}로 씀</AdminChip> : null}
@@ -245,9 +278,10 @@ function PostCard({ post: initial, at, author, profileApproved, onDone }: {
   )
 }
 
-function ProfileCard({ profile, at, image, onImage, onApproved, onDeleted }: {
+function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDeleted }: {
   profile: ReviewProfile
   at: string
+  pinned: boolean
   image: string | null
   onImage: (image: string) => void
   onApproved: () => void
@@ -281,7 +315,10 @@ function ProfileCard({ profile, at, image, onImage, onApproved, onDeleted }: {
 
   return (
     <AdminCard as="article" className={CARD_CLASS}>
-      <p className="mb-2 text-xs font-semibold text-slate-500">새 계정 · 가입 {formatAt(at)}</p>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-slate-500">새 계정 · 가입 {formatAt(at)}</p>
+        <PinButton kind="profile" id={profile.userId} pinned={pinned} />
+      </div>
       {image ? (
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -342,6 +379,7 @@ export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
               key={item.key}
               profile={item.profile}
               at={item.at}
+              pinned={item.pinned}
               image={images[userId] ?? item.profile.image}
               onImage={(image) => setImages((current) => ({ ...current, [userId]: image }))}
               onApproved={() => {
@@ -358,6 +396,7 @@ export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
             key={item.key}
             post={item.post}
             at={item.at}
+            pinned={item.pinned}
             author={{ name: item.author.name, handle: item.author.handle, image: images[userId] ?? item.author.image, languages: item.author.primaryLanguages }}
             profileApproved={approved.has(userId)}
             onDone={() => remove((other) => other.key === item.key)}

@@ -931,6 +931,8 @@ model OperatorAccount {
   reviewState        String    @default("approved") @map("review_state")
   /// Staff feedback from the last "재제작" of the profile.
   reviewFeedback     String?   @map("review_feedback") @db.Text
+  /// Place staff gave the account in the review queue (lower first); null keeps the default order.
+  reviewRank         Int?      @map("review_rank")
   createdBySessionId String?   @map("created_by_session_id")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
@@ -1037,6 +1039,8 @@ model OperatorPostReserve {
   imageHeight    Int?      @map("image_height")
   releaseAt      DateTime? @map("release_at")
   postId         String?   @map("post_id")
+  /// Place staff gave the post in the review queue (lower first); null keeps the default order.
+  reviewRank     Int?      @map("review_rank")
   /// Translations staff read during review, { [language]: { text, sourceText } }; reused when published.
   translations   Json?
   error          String?   @db.Text

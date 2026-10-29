@@ -31,14 +31,14 @@ export default async function OperatorReviewPage({ searchParams }: ReviewPagePro
     <AdminPage>
       <AdminPageHeader
         title="계정·글 검토"
-        description={`검토할 계정 ${queue.totalProfiles}개 · 글 ${queue.totalPosts}개. 오래된 것부터 계정은 가입 시각, 글은 작성 시각 순서예요.`}
+        description={`검토할 계정 ${queue.totalProfiles}개 · 글 ${queue.totalPosts}개. '맨 앞으로' 고정한 것이 먼저, 나머지는 기본 순서예요.`}
         back={cursor ? { href: '/admin/operators/review', label: '처음부터' } : undefined}
       />
       {queue.items.length === 0 ? (
         <AdminEmptyState title="검토할 항목이 없어요" description="새로 만든 계정과 글이 여기에 모여요." />
       ) : (
         <>
-          <ReviewBoard key={cursor} items={queue.items} />
+          <ReviewBoard key={`${cursor}:${queue.items.map((item) => item.key).join(',')}`} items={queue.items} />
           {queue.nextCursor ? (
             <div className="mx-auto mt-6 w-full max-w-[440px]">
               <Link
