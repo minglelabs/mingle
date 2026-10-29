@@ -55,7 +55,7 @@ export default function CoinExhaustedSheet({
         </div>
         <h2 className="mt-3 text-center text-[19px] font-bold">{copy.exhaustedTitle}</h2>
         <p className="mt-1.5 text-center text-[14px] leading-relaxed text-gray-600">{copy.exhaustedBody}</p>
-        {wallet && remainingMs > 0 ? (
+        {wallet && wallet.dailyFreeCap > 0 && remainingMs > 0 ? (
           <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2.5 text-center text-[13px] font-semibold text-amber-800">
             {fillCoinCopy(copy.dailyNext, { time: remaining })}
           </p>

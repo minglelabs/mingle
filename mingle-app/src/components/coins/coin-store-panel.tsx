@@ -126,7 +126,8 @@ export default function CoinStorePanel({
               ) : null}
             </section>
 
-            {wallet ? (
+            {/* The daily top-up card exists only while a daily cap is configured (off by default). */}
+            {wallet && wallet.dailyFreeCap > 0 ? (
               <section className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3.5">
                 <p className="text-[14px] font-semibold text-amber-900">
                   {wallet.dailyFreeFull

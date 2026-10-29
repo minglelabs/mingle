@@ -361,18 +361,6 @@ function resolveTranslationProviderFromEnv(): TranslationProvider {
 
 // ─── TTS ─────────────────────────────────────────────────────────────────────
 
-// Rough stand-in for a provider that reports no usage: about 2 characters per
-// token (CJK-heavy text is denser than English), plus the fixed prompt.
-const ESTIMATED_PROMPT_OVERHEAD_TOKENS = 300
-
-function estimateTranslationTokens(sourceText: string, translations: Record<string, string>) {
-  const outputChars = Object.values(translations).reduce((sum, value) => sum + value.length, 0)
-  return {
-    input_token: ESTIMATED_PROMPT_OVERHEAD_TOKENS + Math.ceil(sourceText.length / 2),
-    output_token: Math.ceil(outputChars / 2),
-  }
-}
-
 async function synthesizeTtsInline(args: {
   text: string
   language: string
@@ -490,6 +478,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     return response
   }
   const coinClientMessageId = typeof body.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : ''
+  // Spoken turns carry their STT duration; partials are spoken by definition.
+  const isTypedMessage = isFinal && !(typeof body.sttDurationMs === 'number' && body.sttDurationMs > 0)
   const coinRequestDigest = coinKeyDigest(sessionKeyHint, text, targetLanguages.join(','), isFinal)
 
   const immediatePreviousTurn = parseImmediatePreviousTurn(body.immediatePreviousTurn)
@@ -567,23 +557,17 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         responsePayload.translationTotalTokens = meta.usage.totalTokens
       }
 
-      // Callers pass a `usage` key exactly when the provider answered this request
-      // (the previous-state fallback after a failed call omits it). A provider that
-      // answered without token counts is still charged, on an estimate from the text.
+      // Voice is billed per minute by the STT session (a flat rate that covers
+      // its translation), so interim and spoken final translations are free
+      // here. A typed message is a flat per-message price (spec 4.2, revision 2),
+      // charged when the provider answered (callers pass a `usage` key exactly then).
       let coinsExhausted = false
-      if (coinBillingUserId && Object.prototype.hasOwnProperty.call(meta, 'usage')) {
-        const reported = meta.usage?.promptTokens !== undefined || meta.usage?.completionTokens !== undefined
+      if (coinBillingUserId && isTypedMessage && Object.prototype.hasOwnProperty.call(meta, 'usage')) {
         const charge = await chargeCoinUsageSafely({
           userId: coinBillingUserId,
           kind: 'translation',
-          units: reported
-            ? {
-                input_token: meta.usage?.promptTokens ?? 0,
-                // OpenAI-style completion counts already include reasoning tokens.
-                output_token: meta.usage?.completionTokens ?? 0,
-              }
-            : estimateTranslationTokens(text, translations),
-          // Priced at the user's chosen model even when a fallback provider answered (spec 4.6).
+          units: { message: 1 },
+          // The rate is flat; the chosen and the answering model are kept for cost review (spec 4.6).
           model: billedTranslationConfig.model,
           provider: billedTranslationConfig.infrastructureProvider,
           servedModel: meta.model,

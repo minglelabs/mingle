@@ -33,3 +33,13 @@ export function resolveSignupBonusMicro(raw: string | undefined = process.env.CO
   const coins = Number.parseInt(trimmed, 10)
   return Number.isFinite(coins) && coins > 0 ? BigInt(coins) * MICRO_PER_COIN : 0n
 }
+
+/**
+ * Daily free top-up cap (COIN_DAILY_FREE_COINS). Off by default (0): Hash comes
+ * from the sign-up bonus and purchases only. Set e.g. 1000 to bring back the
+ * "top up the free balance to N every 24 hours" rule (spec 3.3).
+ */
+export function resolveDailyFreeCapMicro(raw: string | undefined = process.env.COIN_DAILY_FREE_COINS): bigint {
+  const coins = Number.parseInt((raw ?? '').trim(), 10)
+  return Number.isFinite(coins) && coins > 0 ? BigInt(coins) * MICRO_PER_COIN : 0n
+}

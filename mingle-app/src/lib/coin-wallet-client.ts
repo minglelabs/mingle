@@ -18,7 +18,8 @@ export type CoinWallet = {
   lowBalance: boolean;
   exhausted: boolean;
   // Absent while billing is off.
-  rates?: { sttCoinsPerMinute: number; ttsCoinsPerAudioMinute: number };
+  // Per conversation minute: voice alone, and voice with spoken playback on.
+  rates?: { sttCoinsPerMinute: number; voiceWithTtsCoinsPerMinute: number };
 };
 
 export type CoinWalletState = {
@@ -170,7 +171,7 @@ export function ensureCoinsForPaidFeature(): boolean {
   const wallet = state.wallet;
   if (!isCoinBillingActive(wallet) || !wallet.exhausted) return true;
   // The daily refill may have become due since the last load.
-  if (Date.parse(wallet.nextDailyGrantAt) <= Date.now()) {
+  if (wallet.dailyFreeCap > 0 && Date.parse(wallet.nextDailyGrantAt) <= Date.now()) {
     void refreshCoinWallet({ force: true });
     return true;
   }

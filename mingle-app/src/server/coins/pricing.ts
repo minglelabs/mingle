@@ -5,9 +5,10 @@ import { prisma } from '@/lib/prisma'
 // Rates live in app_coin_pricing_rates, never in code.
 
 export type CoinUsageKind = 'stt' | 'translation' | 'tts' | 'image_text'
-export type CoinPricingUnit = 'second' | 'input_token' | 'output_token' | 'char' | 'image'
+// 'message' = one typed (non-voice) translated message, a flat price.
+export type CoinPricingUnit = 'second' | 'input_token' | 'output_token' | 'char' | 'image' | 'message'
 export const COIN_USAGE_KINDS: readonly CoinUsageKind[] = ['stt', 'translation', 'tts', 'image_text']
-export const COIN_PRICING_UNITS: readonly CoinPricingUnit[] = ['second', 'input_token', 'output_token', 'char', 'image']
+export const COIN_PRICING_UNITS: readonly CoinPricingUnit[] = ['second', 'input_token', 'output_token', 'char', 'image', 'message']
 
 export type CoinUsageUnits = Partial<Record<CoinPricingUnit, number>>
 

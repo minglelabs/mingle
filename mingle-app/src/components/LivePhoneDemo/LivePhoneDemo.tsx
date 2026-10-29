@@ -2288,7 +2288,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const coinTtsCostNotice = isCoinBillingActive(coinWallet) && coinWallet.rates
     ? fillCoinCopy(getCoinCopy(coinLocale).ttsCostNotice, {
         stt: Math.round(coinWallet.rates.sttCoinsPerMinute),
-        tts: Math.round(coinWallet.rates.ttsCoinsPerAudioMinute),
+        tts: Math.round(coinWallet.rates.voiceWithTtsCoinsPerMinute),
       })
     : null
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)

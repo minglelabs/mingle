@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client/index'
 import { prisma } from '@/lib/prisma'
-import { DAILY_FREE_CAP_MICRO, DAILY_FREE_INTERVAL_MS } from '@/lib/coin-units'
-import { resolveSignupBonusMicro } from './config'
+import { DAILY_FREE_INTERVAL_MS } from '@/lib/coin-units'
+import { resolveDailyFreeCapMicro, resolveSignupBonusMicro } from './config'
 import { computeDailyFreeGrant, planLotSpend, type LotAllocation } from './lot-plan'
 
 // Wallet, lot and ledger writes (docs/coin-iap-spec.md 5). Every write runs
@@ -205,7 +205,8 @@ async function applyDailyFreeGrant(ctx: LockedWallet) {
     lastDailyGrantAt: ctx.wallet.lastDailyGrantAt,
     freeBalanceMicro: ctx.wallet.freeBalanceMicro,
     now: ctx.now,
-    capMicro: DAILY_FREE_CAP_MICRO,
+    // 0 (the default) still stamps the cycle, which is how a wallet's first open is remembered.
+    capMicro: resolveDailyFreeCapMicro(),
     intervalMs: DAILY_FREE_INTERVAL_MS,
   })
   if (!grant.due) return

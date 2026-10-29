@@ -1,12 +1,11 @@
 import type { Prisma } from '@prisma/client/index'
 import { prisma } from '@/lib/prisma'
 import {
-  DAILY_FREE_CAP_MICRO,
   DAILY_FREE_INTERVAL_MS,
   LOW_BALANCE_MICRO,
   microToDisplayCoins,
 } from '@/lib/coin-units'
-import { resolveCoinBillingMode, type CoinBillingMode } from './config'
+import { resolveCoinBillingMode, resolveDailyFreeCapMicro, type CoinBillingMode } from './config'
 import { grantLot, takeFromLots, withLockedWallet, type LockedWallet } from './ledger'
 import {
   loadCoinPricingRates,
@@ -42,8 +41,9 @@ function snapshotFromContext(ctx: LockedWallet): CoinWalletSnapshot {
     paidBalance: microToDisplayCoins(wallet.paidBalanceMicro),
     balanceMicro: wallet.balanceMicro.toString(),
     nextDailyGrantAt: new Date(lastGrant.getTime() + DAILY_FREE_INTERVAL_MS).toISOString(),
-    dailyFreeFull: wallet.freeBalanceMicro >= DAILY_FREE_CAP_MICRO,
-    dailyFreeCap: microToDisplayCoins(DAILY_FREE_CAP_MICRO),
+    dailyFreeFull: wallet.freeBalanceMicro >= resolveDailyFreeCapMicro(),
+    // 0 = no daily top-up; the app then hides the refill card and countdown.
+    dailyFreeCap: microToDisplayCoins(resolveDailyFreeCapMicro()),
     lowBalance: wallet.balanceMicro < LOW_BALANCE_MICRO,
     exhausted: wallet.balanceMicro <= 0n,
   }
@@ -78,7 +78,7 @@ export function disabledCoinWallet(now = new Date()): CoinWalletSnapshot {
     balanceMicro: '0',
     nextDailyGrantAt: new Date(now.getTime() + DAILY_FREE_INTERVAL_MS).toISOString(),
     dailyFreeFull: false,
-    dailyFreeCap: microToDisplayCoins(DAILY_FREE_CAP_MICRO),
+    dailyFreeCap: microToDisplayCoins(resolveDailyFreeCapMicro()),
     lowBalance: false,
     exhausted: false,
   }

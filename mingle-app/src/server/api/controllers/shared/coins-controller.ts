@@ -26,12 +26,12 @@ import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingT
 import { canSpendCoins, chargeCoinUsage, disabledCoinWallet, getCoinWallet } from '@/server/coins/wallet'
 import { resolveCoinBillingMode } from '@/server/coins/config'
 import { prisma } from '@/lib/prisma'
-import { resolveTtsRuntimeSelection } from '@/lib/tts-models'
 import { parseApiNamespaceVersion } from '@/lib/api-namespace-version'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' }
-// Speaking rate of synthesized speech in our own logs: about 12 characters per second.
-const TTS_CHARS_PER_SECOND = 12
+// Spoken audio per conversation minute in production (about 22 s, measured
+// 2026-10): what one minute with voice playback on plays back on average.
+const TTS_AUDIO_SECONDS_PER_CONVERSATION_MINUTE = 22
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: NO_STORE_HEADERS })
@@ -54,26 +54,22 @@ export async function readCoinWallet() {
   if (!userId) return json({ error: 'unauthorized' }, 401)
   // Off = nothing is recorded: no wallet row, no daily refill, no STT billing identity.
   if (resolveCoinBillingMode() === 'off') return json({ ...disabledCoinWallet(), sttBillingToken: null })
-  const [wallet, rates, user] = await Promise.all([
-    getCoinWallet(userId),
-    loadCoinPricingRates(),
-    prisma.user.findUnique({ where: { id: userId }, select: { ttsModel: true } }),
-  ])
+  const [wallet, rates] = await Promise.all([getCoinWallet(userId), loadCoinPricingRates()])
   const coinsFor = (quote: { chargedMicro: bigint }) => Number(quote.chargedMicro) / 1_000_000
   const now = new Date()
+  const voicePerMinute = coinsFor(quoteCoinUsage(rates, { kind: 'stt', units: { second: 60 }, at: now }))
+  const playbackPerMinute = coinsFor(quoteCoinUsage(rates, {
+    kind: 'tts',
+    units: { second: TTS_AUDIO_SECONDS_PER_CONVERSATION_MINUTE },
+    at: now,
+  }))
   return json({
     ...wallet,
     sttBillingToken: mintSttBillingToken(userId),
-    // What the user's own settings cost right now, for the notice shown when voice interpreting is turned on.
+    // Per conversation minute, for the notice shown when voice interpreting is turned on.
     rates: {
-      sttCoinsPerMinute: coinsFor(quoteCoinUsage(rates, { kind: 'stt', model: 'soniox', units: { second: 60 }, at: now })),
-      // One minute of spoken playback: 60 s of audio plus its text.
-      ttsCoinsPerAudioMinute: coinsFor(quoteCoinUsage(rates, {
-        kind: 'tts',
-        model: resolveTtsRuntimeSelection(user?.ttsModel).runtimeModel,
-        units: { second: 60, char: 60 * TTS_CHARS_PER_SECOND },
-        at: now,
-      })),
+      sttCoinsPerMinute: voicePerMinute,
+      voiceWithTtsCoinsPerMinute: voicePerMinute + playbackPerMinute,
     },
   })
 }
@@ -85,7 +81,7 @@ export async function readCoinProducts(request: NextRequest) {
   // The unversioned API is the web app: it sells through Polar checkout, never inside the store apps.
   const platform: CoinProductPlatform = resolveRequestPlatform(request) ?? 'web'
   // What one minute of interpreting (speech recognition) costs right now, for the "about N minutes" hint.
-  const perMinute = quoteCoinUsage(await loadCoinPricingRates(), { kind: 'stt', model: 'soniox', units: { second: 60 }, at: new Date() })
+  const perMinute = quoteCoinUsage(await loadCoinPricingRates(), { kind: 'stt', units: { second: 60 }, at: new Date() })
   return json({
     platform,
     products: await listCoinProducts(platform),

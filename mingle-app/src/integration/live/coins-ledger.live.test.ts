@@ -16,12 +16,15 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
   let prisma: PrismaModule['prisma']
   const previousMode = process.env.COIN_BILLING_ENABLED
   const previousBonus = process.env.COIN_SIGNUP_BONUS_COINS
+  const previousDaily = process.env.COIN_DAILY_FREE_COINS
 
   beforeAll(async () => {
     process.env.DATABASE_URL = TEST_DATABASE_URL
     process.env.COIN_BILLING_ENABLED = '1'
     // Most cases check the daily refill alone; the sign-up bonus has its own case.
     process.env.COIN_SIGNUP_BONUS_COINS = '0'
+    // The daily top-up is off in production; these cases exercise it with the original 1,000 cap.
+    process.env.COIN_DAILY_FREE_COINS = '1000'
     prisma = (await import('@/lib/prisma')).prisma
     wallet = await import('@/server/coins/wallet')
   })
@@ -29,6 +32,7 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
   afterAll(async () => {
     process.env.COIN_BILLING_ENABLED = previousMode
     process.env.COIN_SIGNUP_BONUS_COINS = previousBonus
+    process.env.COIN_DAILY_FREE_COINS = previousDaily
     await prisma?.$disconnect()
   })
 
@@ -112,8 +116,8 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     const first = await wallet.adjustCoinsAsAdmin({ userId, amountMicro: 100n * COIN, isFree: false, reason: 'old paid', adminUsername: 'test' })
     const second = await wallet.adjustCoinsAsAdmin({ userId, amountMicro: 100n * COIN, isFree: false, reason: 'new paid', adminUsername: 'test' })
 
-    // 22,000 s = 1,100 coins: all 1,000 free coins, then 100 from the older paid lot.
-    const result = await stt(userId, 22_000, `${userId}:big`, new Date())
+    // 8,249 s at 8 coins a minute ≈ 1,099.9 coins: all 1,000 free coins, then nearly all of the older paid lot.
+    const result = await stt(userId, 8_249, `${userId}:big`, new Date())
     expect(result.chargedMicro).toBeGreaterThan(1099n * COIN)
     const lots = await prisma.appCoinLot.findMany({ where: { userId } })
     const byGrant = (id: string) => lots.find(lot => lot.adminGrantId === id)!
@@ -321,7 +325,8 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     const stt = usage.kinds.find(kind => kind.kind === 'stt')!
     expect(stt.seconds).toBe(660)
     expect(stt.count).toBe(2)
-    expect(stt.coins).toBeCloseTo(33, 0)
+    // 11 minutes of voice at the flat 8 coins a minute.
+    expect(stt.coins).toBeCloseTo(88, 0)
     expect(usage.kinds.find(kind => kind.kind === 'translation')!.count).toBe(1)
     expect(usage.days).toHaveLength(1)
     expect(usage.totalCoins).toBeCloseTo(usage.kinds.reduce((sum, kind) => sum + kind.coins, 0), 1)
