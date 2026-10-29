@@ -249,7 +249,9 @@ export default function BottomTabBar({
 
   useEffect(() => {
     const inactiveTabHrefs = [
-      !showFeedTab || isFeedActive ? null : feedHref,
+      // Only once the client is known to serve the feed; an unsupported app
+      // hides the tab after mount and would never use this prefetch.
+      postingFeedSupported !== true || isFeedActive ? null : feedHref,
       isConversationsActive ? null : conversationsHref,
       isConnectActive ? null : connectHref,
       isMypageActive ? null : mypageHref,
@@ -295,8 +297,8 @@ export default function BottomTabBar({
     isFeedActive,
     isMypageActive,
     mypageHref,
+    postingFeedSupported,
     router,
-    showFeedTab,
   ]);
 
   useEffect(() => {
