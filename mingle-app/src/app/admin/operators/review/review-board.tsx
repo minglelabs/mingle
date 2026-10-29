@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Loader2, MessageSquarePlus, Pin, PinOff, RefreshCw, Send, Trash2 } from 'lucide-react'
+import Link from 'next/link'
+import { Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Trash2 } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
@@ -51,6 +52,19 @@ async function sendReview(kind: 'profile' | 'post', id: string, action: Action, 
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>
   if (!response.ok) throw new Error(typeof payload.error === 'string' ? payload.error : 'request_failed')
   return payload
+}
+
+/** Opens the account editor (bio, 관심 언어, age, city…); its back arrow returns here. */
+function EditLink({ userId }: { userId: string }) {
+  return (
+    <Link
+      href={`/admin/operators/${encodeURIComponent(userId)}?from=review`}
+      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100"
+    >
+      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+      편집
+    </Link>
+  )
 }
 
 /** Moves the card to the front of the queue, or back into the default order; the page then reloads in the new order. */
@@ -210,7 +224,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
   post: ReviewPost
   at: string
   pinned: boolean
-  author: { name: string | null; handle: string; image: string | null; languages: string[] }
+  author: { userId: string; name: string | null; handle: string; image: string | null; languages: string[] }
   profileApproved: boolean
   onDone: () => void
 }) {
@@ -244,6 +258,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
           <p className="truncate text-sm font-semibold text-slate-900">{author.name ?? '(이름 없음)'}</p>
           <p className="truncate text-xs text-slate-500">@{author.handle} · 글 {formatAt(at)}</p>
         </div>
+        <EditLink userId={author.userId} />
         <PinButton kind="post" id={post.id} pinned={pinned} />
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -320,7 +335,10 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
     <AdminCard as="article" className={CARD_CLASS}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-xs font-semibold text-slate-500">새 계정 · 가입 {formatAt(at)}</p>
-        <PinButton kind="profile" id={profile.userId} pinned={pinned} />
+        <div className="flex items-center">
+          <EditLink userId={profile.userId} />
+          <PinButton kind="profile" id={profile.userId} pinned={pinned} />
+        </div>
       </div>
       {image ? (
         <div className="relative">
@@ -401,7 +419,7 @@ export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
             post={item.post}
             at={item.at}
             pinned={item.pinned}
-            author={{ name: item.author.name, handle: item.author.handle, image: images[userId] ?? item.author.image, languages: item.author.primaryLanguages }}
+            author={{ userId, name: item.author.name, handle: item.author.handle, image: images[userId] ?? item.author.image, languages: item.author.primaryLanguages }}
             profileApproved={approved.has(userId)}
             onDone={() => remove((other) => other.key === item.key)}
           />

@@ -1,5 +1,6 @@
 import { HANDLE_MAX_LENGTH, isSearchExcludedHandle, normalizeHandle } from '@/lib/handles'
 import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
+import { MAX_INTEREST_LANGUAGES, sanitizeInterestLanguages, type InterestLanguage } from '@/lib/interest-languages'
 import { findPersonaCity, findPersonaCountry, type PersonaCity, type PersonaCountry } from './persona-countries'
 
 /**
@@ -43,7 +44,7 @@ export type PersonaDraft = {
 }
 
 export type PersonaDraftField =
-  | 'draft' | 'name' | 'handle' | 'personaCountry' | 'city' | 'birthYear' | 'bio' | 'primaryLanguage' | 'gender' | 'notes'
+  | 'draft' | 'name' | 'handle' | 'personaCountry' | 'city' | 'birthYear' | 'bio' | 'primaryLanguage' | 'gender' | 'notes' | 'interestLanguages'
 
 export type PersonaFieldError = { field: PersonaDraftField; error: string }
 
@@ -242,6 +243,8 @@ export type OperatorPatch = {
   birthYear?: number
   location?: PersonaLocation
   notes?: string | null
+  /** 관심 언어 with their 1-5 level, at most 3; empty clears them. */
+  interestLanguages?: InterestLanguage[]
 }
 
 function has(record: Record<string, unknown>, key: string): boolean {
@@ -295,6 +298,13 @@ export function parseOperatorPatch(
     const notes = validateOperatorNotes(value.notes)
     if (notes.ok) patch.notes = notes.value
     else errors.push({ field: 'notes', error: notes.error })
+  }
+
+  if (has(value, 'interestLanguages')) {
+    const raw = value.interestLanguages
+    const languages = sanitizeInterestLanguages(raw)
+    if (Array.isArray(raw) && raw.length <= MAX_INTEREST_LANGUAGES && languages.length === raw.length) patch.interestLanguages = languages
+    else errors.push({ field: 'interestLanguages', error: 'invalid_interest_languages' })
   }
 
   if (errors.length) return { ok: false, errors }
