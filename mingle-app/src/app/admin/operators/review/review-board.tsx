@@ -5,10 +5,13 @@ import { Loader2, MessageSquarePlus, RefreshCw, Send, Trash2 } from 'lucide-reac
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
+import PostLanguageChips, { ORIGINAL_CHIP } from '@/components/feed/post-language-chips'
 import { OperatorAvatar } from '../_components/operator-ui'
 import { koreanLanguageName } from '../_lib/options'
 
 type Action = 'publish' | 'delete' | 'regenerate'
+
+const STAFF_LANGUAGE = 'ko'
 
 const ERROR_COPY: Record<string, string> = {
   not_found: '이미 처리된 항목이에요.',
@@ -115,6 +118,37 @@ function PostCard({ post: initial, at, author, profileApproved, onDone }: {
   const [post, setPost] = useState(initial)
   const [busy, setBusy] = useState<Action | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The app's flag chips: 원문 and Korean, translated on first tap.
+  const [chip, setChip] = useState(ORIGINAL_CHIP)
+  const [korean, setKorean] = useState<{ text: string; source: string } | null>(null)
+  const [translating, setTranslating] = useState(false)
+  const sourceLanguage = post.language ?? author.languages[0] ?? null
+  const koreanText = korean?.source === post.text ? korean.text : null
+  const shownText = chip === STAFF_LANGUAGE && koreanText ? koreanText : post.text
+
+  async function selectChip(language: string) {
+    if (language !== STAFF_LANGUAGE || koreanText) {
+      setChip(language)
+      return
+    }
+    setTranslating(true)
+    setError(null)
+    try {
+      const response = await fetch('/admin/operators/api/review/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: post.id }),
+      })
+      const payload = await response.json().catch(() => ({})) as { text?: unknown }
+      if (!response.ok || typeof payload.text !== 'string') throw new Error('translate_failed')
+      setKorean({ text: payload.text, source: post.text })
+      setChip(STAFF_LANGUAGE)
+    } catch {
+      setError('번역하지 못했어요. 다시 눌러 주세요.')
+    } finally {
+      setTranslating(false)
+    }
+  }
 
   async function handle(action: Action, feedback: string) {
     if (action === 'delete' && !window.confirm('이 글을 삭제할까요?')) return
@@ -146,7 +180,20 @@ function PostCard({ post: initial, at, author, profileApproved, onDone }: {
         {post.topic ? <AdminChip>{post.topic}</AdminChip> : null}
         {post.photoKind ? <AdminChip tone="warning">사진: {PHOTO_KIND[post.photoKind] ?? post.photoKind}</AdminChip> : null}
       </div>
-      <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{post.text}</p>
+      <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{shownText}</p>
+      {sourceLanguage !== STAFF_LANGUAGE ? (
+        <div className="-ml-1 mt-1">
+          <PostLanguageChips
+            sourceLanguage={sourceLanguage}
+            languages={[STAFF_LANGUAGE]}
+            selected={koreanText ? chip : ORIGINAL_CHIP}
+            loadingLanguage={translating ? STAFF_LANGUAGE : null}
+            locale="ko"
+            originalLabel="원문"
+            onSelect={(language) => void selectChip(language)}
+          />
+        </div>
+      ) : null}
       {post.imageObjectKey ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
