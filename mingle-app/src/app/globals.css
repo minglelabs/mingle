@@ -194,6 +194,16 @@
   overflow: hidden;
 }
 
+/* Full-screen overlays (rooms, panels, sheets) are portaled to <body> and pinned
+   with `fixed inset-0`, so on wide screens they would escape the 400px canvas.
+   Keep them in the same centered column as the canvas. */
+@media (min-width: 600px) {
+  html:has(.mobile-canvas-stage) .fixed.inset-0 {
+    left: calc(50% - 200px);
+    right: calc(50% - 200px);
+  }
+}
+
 /* The scaled canvas is taller in layout pixels than its visible shell.
    Unlike hidden, clip prevents focus/scrollIntoView from scrolling that shell
    and moving the search header and tabs with it. Only the results may scroll. */
