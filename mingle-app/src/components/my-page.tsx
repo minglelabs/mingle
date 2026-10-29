@@ -30,6 +30,7 @@ import LanguageLevelPicker from "@/components/language-level-picker";
 import ProfileLanguageLevels from "@/components/profile-language-levels";
 import { MAX_INTEREST_LANGUAGES, sanitizeInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
 import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
+import InterestLanguageSheet from "@/components/interest-language-sheet";
 import LanguageFlag from "@/components/language-flag";
 import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
@@ -101,7 +102,7 @@ import CoinBalanceChip, { formatCoinCount } from "@/components/coins/coin-balanc
 import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
-import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
 import { feedCopy } from "@/i18n/feed-copy";
@@ -2268,6 +2269,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     }
   }, []);
 
+  const [interestSheetOpen, setInterestSheetOpen] = useState(false);
+  const interestLanguageCopy = useMemo(() => resolveInterestLanguageCopy(locale), [locale]);
   const handleSaveInterestLanguages = useCallback(async (languages: InterestLanguage[]) => {
     try {
       const response = await fetch(buildClientApiPath("/profile"), {
@@ -2361,6 +2364,14 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         onSave={handleSaveProfile}
         open={showProfileEdit}
       />
+      {interestSheetOpen ? (
+        <InterestLanguageSheet
+          locale={locale}
+          primaryLanguages={primaryLanguages}
+          onSave={(language) => handleSaveInterestLanguages([language])}
+          onClose={() => setInterestSheetOpen(false)}
+        />
+      ) : null}
       <ProfileSettingsPanel
         dictionary={dictionary}
         locale={locale}
@@ -2518,6 +2529,16 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
               locale={locale}
               className="mt-2.5"
             />
+            {(profile.interestLanguages ?? NO_INTEREST_LANGUAGES).length === 0 ? (
+              <button
+                type="button"
+                onClick={() => setInterestSheetOpen(true)}
+                className="mt-2 inline-flex items-center gap-1 rounded-full border border-dashed border-amber-300 px-3 py-1 text-[13px] font-semibold text-amber-700 transition active:bg-amber-50"
+              >
+                <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
+                {interestLanguageCopy.addAction}
+              </button>
+            ) : null}
             <ProfileLocation
               profileLocation={locationPermission === "granted" ? profile.location : null}
               locale={locale}
