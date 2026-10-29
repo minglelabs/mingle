@@ -14,6 +14,17 @@ describe("native conversation share overlay requests", () => {
     });
   });
 
+  it("keeps the copy-link flag only when it is exactly true", () => {
+    expect(parseNativeConversationShareOverlayRequest({
+      shareToken: "token-abc123",
+      canCopyLink: true,
+    })).toEqual({ shareToken: "token-abc123", canCopyLink: true });
+    expect(parseNativeConversationShareOverlayRequest({
+      shareToken: "token-abc123",
+      canCopyLink: "true",
+    })).toEqual({ shareToken: "token-abc123" });
+  });
+
   it("rejects malformed or unsafe share tokens", () => {
     expect(parseNativeConversationShareOverlayRequest(null)).toBeNull();
     expect(parseNativeConversationShareOverlayRequest({ shareToken: "not valid" })).toBeNull();

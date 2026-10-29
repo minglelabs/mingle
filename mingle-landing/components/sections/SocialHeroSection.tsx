@@ -103,7 +103,7 @@ export default function SocialHeroSection({ version, openModal }: SocialHeroSect
             <div className="absolute inset-0 bg-gradient-to-br from-accent-primary/10 to-accent-secondary/10 rounded-3xl blur-3xl" />
             <Image
               src={isGaming ? '/gaming-hero.png' : '/social-hero.jpeg'}
-              alt={isGaming ? 'Mingle Gaming' : 'Mingle Social'}
+              alt={isGaming ? 'HashChat Gaming' : 'HashChat Social'}
               width={600}
               height={700}
               className="relative rounded-3xl object-cover w-full h-auto"

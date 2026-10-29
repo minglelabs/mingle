@@ -21,6 +21,12 @@ export type NativeQrScannerRequest = {
   instruction?: string;
   cancelLabel?: string;
   settingsLabel?: string;
+  /** Camera-permission screen, in the app's UI language (sent by the web side). */
+  permissionTitle?: string;
+  permissionBody?: string;
+  unavailableTitle?: string;
+  unavailableBody?: string;
+  retryLabel?: string;
 };
 
 type NativeQrScannerProps = {
@@ -37,17 +43,17 @@ function getPermissionCopy(status: PermissionStatus | null, requestConfig: Nativ
   const isKorean = (requestConfig.title ?? "").includes("QR") && (requestConfig.instruction ?? "").includes("프로필");
   if (status === RESULTS.BLOCKED || status === RESULTS.UNAVAILABLE) {
     return {
-      title: isKorean ? "카메라 권한이 필요합니다" : "Camera access is required",
-      description: isKorean
-        ? "설정에서 Mingle의 카메라 접근을 허용해 주세요."
-        : "Allow Mingle to use the camera in Settings.",
+      title: requestConfig.permissionTitle ?? (isKorean ? "카메라 권한이 필요합니다" : "Camera access is required"),
+      description: requestConfig.permissionBody ?? (isKorean
+        ? "설정에서 HashChat의 카메라 접근을 허용해 주세요."
+        : "Allow HashChat to use the camera in Settings."),
       action: requestConfig.settingsLabel ?? (isKorean ? "설정 열기" : "Open settings"),
     };
   }
   return {
-    title: isKorean ? "카메라를 사용할 수 없습니다" : "Camera access is unavailable",
-    description: isKorean ? "카메라 권한을 허용한 뒤 다시 시도해 주세요." : "Allow camera access and try again.",
-    action: isKorean ? "다시 시도" : "Try again",
+    title: requestConfig.unavailableTitle ?? (isKorean ? "카메라를 사용할 수 없습니다" : "Camera access is unavailable"),
+    description: requestConfig.unavailableBody ?? (isKorean ? "카메라 권한을 허용한 뒤 다시 시도해 주세요." : "Allow camera access and try again."),
+    action: requestConfig.retryLabel ?? (isKorean ? "다시 시도" : "Try again"),
   };
 }
 

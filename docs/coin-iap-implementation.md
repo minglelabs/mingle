@@ -2,6 +2,8 @@
 
 기획서: [coin-iap-spec.md](coin-iap-spec.md). 이 문서는 구현된 내용, 운영에 필요한 설정, 기획서와 다른 점을 적는다.
 
+> **2026-10-29 기준**: 여기 적힌 코드는 아직 main에 없고 PR minglelabs/mingle#257 브랜치(`codex/coin-iap-implementation-393915`)에만 있다. 그 뒤 main이 바뀐 점과 남은 작업은 기획서 0장·10장을 본다.
+
 ## 켜는 순서
 
 과금은 기본으로 꺼져 있다(`COIN_BILLING_ENABLED` 미설정). 꺼진 상태에서는 아무것도 기록하지 않고, 앱에 코인 UI도 보이지 않는다.

@@ -9,7 +9,7 @@ import {
   listConversationChannelsForUser,
   MAX_CONVERSATION_MEMBERS,
 } from "@/lib/app-conversations";
-import { mintConversationListRealtimeToken } from "@/server/conversation-realtime";
+import { isReservedRealtimeEventKey, mintConversationListRealtimeToken } from "@/server/conversation-realtime";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import {
@@ -159,8 +159,16 @@ export async function postConversationResponse(request: NextRequest) {
   const locale = typeof body?.locale === "string" && isSupportedLocale(body.locale.trim())
     ? body.locale.trim()
     : "en";
-  const legacySessionKey = typeof body?.legacySessionKey === "string"
+  // The legacy single-room migration may seed a new room with the client's
+  // old key, but never with a realtime topic that is not a room: a room keyed
+  // `list:<userId>` or `admin:<key>` would let its members subscribe to
+  // someone's conversation list or the admin inbox. The server generates the
+  // key instead.
+  const requestedLegacySessionKey = typeof body?.legacySessionKey === "string"
     ? sanitizeRequestIdentityValue(body.legacySessionKey)
+    : "";
+  const legacySessionKey = requestedLegacySessionKey && !isReservedRealtimeEventKey(requestedLegacySessionKey)
+    ? requestedLegacySessionKey
     : "";
   const selectedLanguages = sanitizeSttLanguageSelection(body?.selectedLanguages);
   const speechLanguages = sanitizeSttLanguageSelection(body?.speechLanguages);

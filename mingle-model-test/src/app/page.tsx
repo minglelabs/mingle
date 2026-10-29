@@ -380,7 +380,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center p-4 overflow-hidden">
       <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-gray-900">Mingle</h1>
+        <h1 className="text-4xl font-bold text-gray-900">HashChat</h1>
         <p className="text-gray-600 mt-2">실시간 음성 번역</p>
       </div>
 
@@ -405,7 +405,7 @@ export default function Home() {
             <option value="elevenlabs">ElevenLabs Scribe v2 Realtime (AI 번역, 자동 언어 감지)</option>
             <option value="speechmatics">Speechmatics (AI 번역, 제한적 bilingual pack)</option>
             <option value="soniox-v5">Soniox V5 (내장 S2T 번역, 60+ 언어 자동 감지)</option>
-            <option value="soniox">Soniox V4 (AI 번역, 60+ 언어 자동 감지)</option>
+            <option value="soniox">Soniox V5 (AI 번역, 60+ 언어 자동 감지)</option>
           </select>
           {sttModel === 'chirp-3' && (
             <p className="mt-1 text-xs text-amber-600">

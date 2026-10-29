@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import ChatBubble from './ChatBubble'
 import { describe, expect, it, vi } from 'vitest'
 import { canonicalizeUtteranceLanguages, LivePreviewSender, RemotePreviews, type PreviewEvent } from './conversation-live'
-import { createUtteranceStoreState, mergeServerHydrationUtteranceIntoStoreState, appendFinalizedUtteranceToStoreState, mergeDisplayUtterances, normalizeConversationHydrationUtterances } from './use-realtime-stt'
+import { createUtteranceStoreState, mergeServerHydrationUtteranceIntoStoreState, appendFinalizedUtteranceToStoreState, mergeDisplayUtterances, normalizeConversationHydrationUtterances, recallUtterancesInStoreState, applyTranslationToUtteranceStoreState } from './use-realtime-stt'
 import { LiveUtterances } from '../../../../mingle-messaging/live-utterances'
 import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 
@@ -33,7 +33,7 @@ describe('remote live message lifecycle', () => {
       sender.flush(frame => {
         const accepted = server.accept({ ...frame, writerToken: 'unused' }, writer)!
         expect(accepted.utterance.targetLanguages).toEqual(['ko', 'ja'])
-        return remote.accept(accepted)
+        return remote.accept(accepted as unknown as PreviewEvent)
       }, Date.now() + 2000)
       return remote.visible([], 'bob')[0] as typeof draft
     }
@@ -192,5 +192,25 @@ describe('canonical Chinese keys on remote previews', () => {
   it('returns the same object when every key is already canonical', () => {
     const canonical = { ...utterance, originalLang: 'zh-TW', targetLanguages: ['ko'], translations: { ko: '안녕' } }
     expect(canonicalizeUtteranceLanguages(canonical)).toBe(canonical)
+  })
+})
+
+describe('recallUtterancesInStoreState', () => {
+  const utterance = (id: string) => ({ id, originalText: id, originalLang: 'en', translations: { ko: id }, createdAtMs: 1, speakerUserId: 'u1' })
+  it('blanks only the unsent messages in place and keeps the store when nothing matches', () => {
+    const store = createUtteranceStoreState([utterance('a'), utterance('b')])
+    const next = recallUtterancesInStoreState(store, new Set(['a']))
+    expect(next.utterances).toEqual([
+      { id: 'a', recalled: true, originalText: '', originalLang: 'en', translations: {}, createdAtMs: 1, speakerUserId: 'u1' },
+      utterance('b'),
+    ])
+    expect(recallUtterancesInStoreState(next, new Set(['a', 'missing']))).toBe(next)
+  })
+  it('turns a hydrated placeholder into a blank bubble and never revives it with a late translation', () => {
+    const [placeholder] = normalizeConversationHydrationUtterances([{ id: 'a', recalled: true, originalText: '', originalLang: 'unknown', createdAtMs: 5, speakerUserId: 'u1' }])
+    expect(placeholder).toMatchObject({ id: 'a', recalled: true, originalText: '' })
+    const store = mergeServerHydrationUtteranceIntoStoreState(createUtteranceStoreState([utterance('a')]), placeholder)
+    expect(store.utterances[0]).toMatchObject({ recalled: true, originalText: '', translations: {}, createdAtMs: 1 })
+    expect(applyTranslationToUtteranceStoreState({ store, utteranceId: 'a', translations: { ko: 'x' }, priority: { kind: 'final', seq: 1 }, markFinalized: true, sourceText: 'a' })).toBe(store)
   })
 })

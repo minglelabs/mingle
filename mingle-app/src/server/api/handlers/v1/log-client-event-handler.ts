@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client/index'
-import { NextRequest, NextResponse } from 'next/server'
+import { normalizeMessageReplyReference } from '@/lib/message-reply'
+import { resolveVerifiedMessageReplyReference } from '@/server/message-reply-target'
+import { after, NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
@@ -22,12 +24,16 @@ import {
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
 import { classifyChineseLanguage } from '@/lib/chinese-variant'
+import { resolveAccountBadge } from '@/lib/account-badge'
+import { readMessageRecalledAtMs } from '@/lib/message-recall'
 import { pickSourceLanguageBubbleFlags } from '@/lib/source-language-bubble-flags'
 import { normalizeChineseContent } from '@/server/chinese-script-conversion'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 import { notifyConversationMessage, reserveConversationVoiceOrder } from '@/server/conversation-realtime'
 import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
+import { claimConversationMessagePush, MESSAGE_PUSH_TRANSLATION_WAIT_MS, readMessageFinalTranslations } from '@/server/conversation-message-push'
+import { notifyOperatorInboxActivity } from '@/server/operator-inbox/notify'
 import {
   isMessageSenderBlockedInConversation,
   listChannelMemberUserIdsBySessionKey,
@@ -42,6 +48,8 @@ const ALLOWED_EVENT_TYPES = new Set([
   'stt_turn_started',
   'stt_turn_finalized',
   'conversation_hydration_order_preserved',
+  // Temporary field diagnostics, see src/lib/ui-diagnostics.ts.
+  'ui_diagnostic',
 ])
 
 // This is a defensive ceiling for a client-reported single-turn duration, not a
@@ -286,6 +294,10 @@ export async function handleLogClientEventV1(request: NextRequest) {
       if (clientMetadata) {
         messageMetadata.clientMetadata = clientMetadata
       }
+      const verifiedReplyTo = clientMetadata?.replyTo && !isSenderBlocked
+        ? await resolveVerifiedMessageReplyReference({ sessionKey: tracking.sessionKey, raw: clientMetadata.replyTo }).catch(() => null)
+        : null
+      if (verifiedReplyTo) messageMetadata.replyTo = verifiedReplyTo
       const orderScope = { userId, sessionKey: tracking.sessionKey, clientMessageId }
       let orderStartedAtMs = verifyVoiceOrderReceipt(body.orderReceipt, orderScope)
       if (orderStartedAtMs === null && !shouldIgnoreDueToConversationClear && !isSenderBlocked) {
@@ -306,7 +318,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         })
       }
 
-      if (!shouldIgnoreDueToConversationClear && !isSenderBlocked) {
+      persist: if (!shouldIgnoreDueToConversationClear && !isSenderBlocked) {
         // SOURCE and every TRANSLATION_FINAL row must land in one commit —
         // a concurrent reader (the conversation list's own poll, not just
         // the post-write WS notify below) can otherwise observe the message
@@ -322,6 +334,10 @@ export async function handleLogClientEventV1(request: NextRequest) {
             where: { sessionKey_clientMessageId: { sessionKey: tracking.sessionKey, clientMessageId } },
             select: { metadata: true, createdAt: true },
           })
+          // A late translation update or outbox retry must not resurrect a
+          // message its sender already unsent (the upsert clears isDeleted).
+          // The recall takes this same lock, so the two never interleave.
+          if (readMessageRecalledAtMs(existing?.metadata) !== null) return null
           if (existing) {
             const metadata = sanitizeJsonObject(existing.metadata)
             const previousTargetLanguages = sanitizeTargetLanguages(metadata?.translationTargetLanguages)
@@ -331,6 +347,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
                 ...Object.keys(translations),
               ])
             }
+            // Source and translation retries re-send the same reply; never let
+            // a failed re-lookup erase the quote saved on the first write.
+            if (!messageMetadata.replyTo && metadata?.replyTo) messageMetadata.replyTo = metadata.replyTo
             const savedOrder = metadata?.orderStartedAtMs
             messageMetadata.orderStartedAtMs = typeof savedOrder === 'number' && Number.isFinite(savedOrder) && savedOrder > 0
               ? savedOrder : existing.createdAt.getTime()
@@ -379,10 +398,11 @@ export async function handleLogClientEventV1(request: NextRequest) {
               id: true,
               createdAt: true,
               metadata: true,
-              user: { select: { name: true, image: true } },
+              user: { select: { name: true, image: true, isOfficial: true, isOperator: true } },
             },
           })
         })
+        if (!message) break persist
         const persistedOrder = sanitizeJsonObject(message.metadata)?.orderStartedAtMs
         orderStartedAtMs = typeof persistedOrder === 'number' && Number.isFinite(persistedOrder) && persistedOrder > 0
           ? persistedOrder : message.createdAt.getTime()
@@ -489,7 +509,11 @@ export async function handleLogClientEventV1(request: NextRequest) {
             where: { channel: { sessionKey: tracking.sessionKey }, joinedAt: { lte: message.createdAt },
               OR: [{ leftAt: null }, { leftAt: { gt: message.createdAt } }] },
           }).then(count => count >= 2).catch(() => false)
+          const replyTo = normalizeMessageReplyReference(persistedMetadata?.replyTo)
           if (sharedAtMessage) {
+            // An operator / official sender stays labeled on the live bubble
+            // too (`speakerBadge`, only present when the sender has a badge).
+            const speakerBadge = resolveAccountBadge(message.user)
             await notifyConversationMessage(tracking.sessionKey, memberUserIds, {
               id: clientMessageId, originalText: sourceText, originalLang: sourceLanguage,
               ...(originalDisplayText ? { originalDisplayText } : {}),
@@ -497,13 +521,50 @@ export async function handleLogClientEventV1(request: NextRequest) {
               translations, translationFinalized: Object.fromEntries(Object.keys(translations).map(lang => [lang, true])),
               targetLanguages: committedTargetLanguages, createdAtMs: message.createdAt.getTime(),
               serverCreatedAtMs: orderStartedAtMs ?? message.createdAt.getTime(), serverMessageId: message.id,
+              serverPersistedAtMs: message.createdAt.getTime(),
               speakerUserId: userId, speakerName: message.user?.name ?? null, speakerImage: message.user?.image ?? null,
+              ...(speakerBadge ? { speakerBadge } : {}),
+              ...(replyTo ? { replyTo } : {}),
             })
           } else {
             await notifyConversationMessage(tracking.sessionKey, memberUserIds)
           }
         } catch (error) {
           console.error('Conversation realtime notification failed:', error)
+        }
+        if (messageId) {
+          const pushArgs = {
+            messageId,
+            sessionKey: tracking.sessionKey,
+            sourceText,
+            sourceLanguage,
+            senderUserId: userId,
+            memberUserIds,
+          }
+          const sendMessagePush = async (pushTranslations: Record<string, string>) => {
+            try {
+              await sendPushNotificationForConversationMessage({ ...pushArgs, translations: pushTranslations })
+            } catch (error) {
+              console.error('Conversation message push failed:', error)
+            }
+          }
+          // The push shows each recipient the translation into their language. When the original
+          // arrives ahead of its translation, its translation update sends the push; the original
+          // only sends it (untranslated) if that update has not come within the wait.
+          if (body.translationUpdate === true) {
+            // A later re-translation of an old message is not news to the room.
+            const isFreshMessage = Date.now() - message.createdAt.getTime() <= MESSAGE_PUSH_TRANSLATION_WAIT_MS * 2
+            if (isFreshMessage && claimConversationMessagePush(messageId)) await sendMessagePush(translations)
+          } else if (body.translationPending === true && Object.keys(translations).length === 0) {
+            const pendingMessageId = messageId
+            after(async () => {
+              await new Promise((resolve) => setTimeout(resolve, MESSAGE_PUSH_TRANSLATION_WAIT_MS))
+              if (!claimConversationMessagePush(pendingMessageId)) return
+              await sendMessagePush(await readMessageFinalTranslations(pendingMessageId))
+            })
+          } else if (claimConversationMessagePush(messageId)) {
+            await sendMessagePush(translations)
+          }
         }
         // Translation availability must be published before optional AI title
         // generation, which can stall independently of message delivery.
@@ -515,17 +576,23 @@ export async function handleLogClientEventV1(request: NextRequest) {
           }
         }
         if (messageId && body.translationUpdate !== true) {
-          try {
-            await sendPushNotificationForConversationMessage({
-              messageId,
-              sessionKey: tracking.sessionKey,
-              sourceText,
-              senderUserId: userId,
-              memberUserIds,
-            })
-          } catch (error) {
-            console.error('Conversation message push failed:', error)
-          }
+          const committedMessageId = messageId
+          // Staff alerts run after the response so their realtime publication
+          // cannot delay the sender.
+          after(async () => {
+            try {
+              await notifyOperatorInboxActivity({
+                sessionKey: tracking.sessionKey,
+                senderUserId: userId,
+                memberUserIds,
+                messageId: committedMessageId,
+                preview: sourceText,
+                kind: 'text',
+              })
+            } catch (error) {
+              console.error('Operator inbox notify failed:', error)
+            }
+          })
         }
       }
     }

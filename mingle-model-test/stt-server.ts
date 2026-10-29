@@ -27,7 +27,6 @@ const GLADIA_API_URL = 'https://api.gladia.io/v2/live';
 const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 const FIREWORKS_WS_URL = 'wss://audio-streaming.api.fireworks.ai/v1/audio/transcriptions/streaming';
 const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
-const SONIOX_RT_V4_MODEL = 'stt-rt-v4';
 const SONIOX_RT_V5_MODEL = 'stt-rt-v5';
 const ELEVENLABS_WS_URL = 'wss://api.elevenlabs.io/v1/speech-to-text/realtime';
 const OPENAI_REALTIME_WS_URL = 'wss://api.openai.com/v1/realtime';
@@ -1380,7 +1379,7 @@ wss.on('connection', (clientWs) => {
             sttWs.onopen = () => {
                 const sonioxConfig = {
                     api_key: sonioxApiKey,
-                    model: config.stt_model === 'soniox-v5' ? SONIOX_RT_V5_MODEL : SONIOX_RT_V4_MODEL,
+                    model: SONIOX_RT_V5_MODEL,
                     audio_format: 'pcm_s16le',
                     sample_rate: config.sample_rate,
                     num_channels: 1,

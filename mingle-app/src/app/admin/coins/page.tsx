@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-auth";
+import { requireAdmin } from "@/server/admin/guard";
 import {
   ADMIN_DASHBOARD_CHART_HEIGHT,
   ADMIN_DASHBOARD_CHART_WIDTH,
@@ -26,7 +24,7 @@ import { addPricingRateAction, adjustCoinsAction, createPolarProductsAction, upd
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Mingle Admin Coins",
+  title: "해씨",
 };
 
 type CoinsPageProps = {
@@ -83,11 +81,6 @@ function resultMessage(result: string): string | null {
   if (kind === "polar_created") return `Polar 상품 ${amount}개를 만들고 연결했습니다.`;
   if (kind === "revoked") return `${NUMBER_FORMATTER.format(Number(amount))} 코인을 회수했습니다. (남은 잔액까지만 회수됩니다)`;
   return RESULT_MESSAGES[result] ?? null;
-}
-
-async function isAdminAuthenticated(): Promise<boolean> {
-  const cookieStore = await cookies();
-  return verifyAdminSessionToken(cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value);
 }
 
 const CARD = "rounded-lg border border-[#e5e3dc] bg-white";
@@ -491,7 +484,7 @@ async function UserTab({ query, userId, confirm }: {
 }
 
 export default async function AdminCoinsPage({ searchParams }: CoinsPageProps) {
-  if (!(await isAdminAuthenticated())) redirect("/admin");
+  await requireAdmin("/admin/coins");
 
   const params = await searchParams;
   const userId = takeFirst(params.user).trim();

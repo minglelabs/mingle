@@ -582,7 +582,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         {/* Header */}
         <div className="flex items-center justify-between px-6 pb-2 border-b border-gray-100">
           <span className="text-base font-bold bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
-            Mingle
+            HashChat
           </span>
           <div className="relative flex items-center gap-1">
             <button

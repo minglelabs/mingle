@@ -25,6 +25,8 @@ export type MingleReleaseTarget =
   | 'v1_1_3'
   | 'v1_1_4'
   | 'v2_0_0'
+  // Plain web (PC browsers) on the same UI as the apps, on the unversioned API.
+  | 'web_app'
   | 'unknown'
 
 const FIRST_V1_1_0_VERSION: readonly [number, number, number] = [1, 1, 0]
@@ -55,6 +57,9 @@ export function resolveMingleReleaseTarget(rawReleaseTarget: string): MingleRele
   }
   if (normalizedReleaseTarget === 'v2_0_0') {
     return 'v2_0_0'
+  }
+  if (normalizedReleaseTarget === 'web_app') {
+    return 'web_app'
   }
   if (normalizedReleaseTarget === 'legacy_1_0_11') {
     return 'legacy_1_0_11'
@@ -145,7 +150,7 @@ export function resolveDefaultMingleClientReleaseVariant(): MingleClientReleaseV
   if (releaseTarget === 'v1_1_2') {
     return 'default_v1_1_2'
   }
-  if (releaseTarget === 'v1_1_3' || releaseTarget === 'v1_1_4' || releaseTarget === 'v2_0_0') {
+  if (releaseTarget === 'v1_1_3' || releaseTarget === 'v1_1_4' || releaseTarget === 'v2_0_0' || releaseTarget === 'web_app') {
     return 'default_v1_1_3'
   }
 

@@ -29,7 +29,7 @@ scripts/devbox status
 - 사용자가 명시하기 전에는 main에 merge하거나 main으로 push하지 않습니다.
 - `origin/main` 변경을 가져올 때도 먼저 차이와 충돌·삭제 목록을 검토합니다.
 - 커밋 메시지와 README는 영어로 작성합니다.
-- UI/UX 변경은 `docs/ui-ux-codex-thread-history.md`에 기록합니다.
+- UI/UX 변경은 `mingle-app/docs/ui-ux-codex-thread-history.md`에 기록합니다.
 - Prisma schema 변경은 현재 워크트리에서 migration 파일을 만들고 적용 상태를 별도로 확인합니다.
 - 새 SQL에서 테이블을 사용할 때는 `app` schema를 명시합니다.
 - migration 파일을 삭제·이름 변경·재정렬하지 않습니다.
@@ -858,10 +858,10 @@ Android에서 한 기기의 브라우저에 Google session cookie가 남아 있�
 /admin/conversations?userId=<external_user_id>
 ~~~
 
-운영 호스트가 `https://translator.minglelabs.xyz`라면 예시는 다음과 같습니다.
+운영 호스트가 `https://translator.minglelabs.app`라면 예시는 다음과 같습니다.
 
 ~~~
-https://translator.minglelabs.xyz/admin/conversations?userId=<external_user_id>
+https://translator.minglelabs.app/admin/conversations?userId=<external_user_id>
 ~~~
 
 관리자 인증이 필요합니다. 현재 기능:

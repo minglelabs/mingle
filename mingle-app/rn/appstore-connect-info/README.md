@@ -13,7 +13,7 @@
   - `ios.assets`: screenshot upload directory
   - `ios.submission.screenshots`: screenshot copy for "iOS App > Preparing Submission for 1.0.0"
   - `ios.submission.appStoreInfo`: version metadata (promo text, what's new, description, keywords, URLs)
-  - `ios.generalInfo.appInfo`: app info metadata (title, subtitle)
+  - `ios.generalInfo.appInfo`: app info metadata (title, subtitle, privacy policy URL)
 - `RUNBOOK.appstore-preview-localization.md`: appstore-preview API localization workflow
 
 ## Default behavior

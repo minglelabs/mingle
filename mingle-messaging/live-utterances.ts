@@ -21,8 +21,17 @@ export type LiveFrame = {
     final: boolean; orderReceipt?: string; utterance: {
         id: string; originalText: string; originalLang: string; translations: Record<string, string>; targetLanguages?: string[];
         speakerUserId: string; speakerName: string | null; createdAtMs: number;
+        // From the signed writer token only, never from the frame the client sent.
+        speakerBadge?: 'official' | 'operator';
     };
 };
+
+// The writer's account badge as mingle-app signed it. Anything else (older
+// tokens, unexpected values) means no badge rather than a guessed one.
+function readSpeakerBadge(writer: RealtimeTokenPayload): 'official' | 'operator' | null {
+    const badge = writer.liveWriter?.badge;
+    return badge === 'operator' || badge === 'official' ? badge : null;
+}
 
 // Ephemeral, bounded state only. Persistence/translation retries stay in the
 // app's durable outbox. A committed message fences out late partial frames.
@@ -83,8 +92,10 @@ export class LiveUtterances {
             : undefined;
         this.turns.set(key, { sequence: Number(sequence), final, createdAtMs, until: Date.now() + 30 * 60_000 });
         const orderReceipt = order?.orderReceipt;
+        const speakerBadge = readSpeakerBadge(writer);
         return { type: 'utterance_preview', sessionKey: writer.sessionKey, revision: Number(sequence), expiresAt, final, orderReceipt,
             utterance: { id, originalText: text, originalLang: typeof input.originalLang === 'string' ? input.originalLang.slice(0, 20) : 'unknown',
-                translations, ...(targetLanguages ? { targetLanguages } : {}), speakerUserId: writer.userId, speakerName: writer.liveWriter.name, createdAtMs } };
+                translations, ...(targetLanguages ? { targetLanguages } : {}), speakerUserId: writer.userId, speakerName: writer.liveWriter.name, createdAtMs,
+                ...(speakerBadge ? { speakerBadge } : {}) } };
     }
 }
