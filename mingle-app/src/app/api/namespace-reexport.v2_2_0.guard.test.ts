@@ -31,14 +31,18 @@ function reexportSpecifiers(filePath: string): string[] {
 //    reached by the OS at the domain root, never under /api/{ns}.
 //  - the bare `translate` and `messages` routes are legacy/never-namespaced;
 //    only `translate/finalize` is a namespace target.
-const EXCLUDED_TOP_LEVEL_SEGMENTS = new Set(["auth", "native-auth", "well-known", "ios", "android"]);
+//  - webhooks / internal: called by stores, Polar and the STT service at fixed
+//    URLs, never by the app.
+const EXCLUDED_TOP_LEVEL_SEGMENTS = new Set(["auth", "native-auth", "well-known", "ios", "android", "webhooks", "internal"]);
 // Individual routes that are intentionally never mirrored into a mobile
 // namespace. `account/delete` (a hard DELETE of the user record) has never been
 // re-exported by ANY namespace, including v2.0.0 — the mobile app performs
 // account removal through account/withdraw + account/deactivate instead. Keeping
 // it out of the namespace preserves the long-standing contract; see the W3/V
 // report's "contract gap" note.
-const EXCLUDED_ROUTES = new Set(["translate", "messages", "account/delete"]);
+// `coins/web-checkout` is web-only (Polar): store apps must not link out to an
+// outside payment, so the namespaces deliberately leave it out.
+const EXCLUDED_ROUTES = new Set(["translate", "messages", "account/delete", "coins/web-checkout"]);
 
 function listRouteFiles(dir: string): string[] {
   const out: string[] = [];

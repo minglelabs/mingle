@@ -7,6 +7,7 @@ import { getConversationDictionary } from "@/i18n/conversations";
 import { resolveNotificationCopy } from "@/i18n/notification-copy";
 import { conversationSortCopy } from "@/i18n/conversation-sort-copy";
 import NotificationPanel from "@/components/notification-panel";
+import CoinBalanceChip from "@/components/coins/coin-balance-chip";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import SlideSurface from "@/components/slide-surface";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
@@ -5661,6 +5662,7 @@ export default function ConversationList({
         <MingleWordmark />
 
         <div className="flex items-center gap-1">
+          <CoinBalanceChip locale={locale} />
           <button
             type="button"
             onClick={handleOpenSearch}

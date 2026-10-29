@@ -93,6 +93,10 @@ import {
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
+import CoinBalanceChip, { formatCoinCount } from "@/components/coins/coin-balance-chip";
+import HashSeedIcon from "@/components/coins/hash-seed-icon";
+import { getCoinCopy } from "@/i18n/coin-copy";
+import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
 import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
@@ -368,6 +372,10 @@ function ProfileSettingsPanel({
   open: boolean;
   sessionStatus: SessionStatus;
 }) {
+  const coinWalletState = useCoinWallet().wallet;
+  const coinBillingActive = isCoinBillingActive(coinWalletState);
+  const coinWallet = coinWalletState ?? { balance: 0 };
+  const coinCopy = getCoinCopy(locale);
   const postingFeedSupported = useIsPostingFeedSupported();
   const [blocks, setBlocks] = useState<BlockedUserRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
@@ -848,6 +856,18 @@ function ProfileSettingsPanel({
           </header>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
+            {coinBillingActive ? (
+              <button
+                type="button"
+                onClick={openCoinStore}
+                className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-left transition active:bg-amber-100"
+              >
+                <HashSeedIcon size={21} />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{coinCopy.storeTitle}</span>
+                <span className="text-[14px] font-bold tabular-nums text-amber-700">{formatCoinCount(coinWallet.balance, locale)}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-amber-500" aria-hidden="true" />
+              </button>
+            ) : null}
             {postingFeedSupported !== false ? (
             <div className="mb-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <button
@@ -1647,6 +1667,7 @@ function ProfileEditPanel({
 
 export default function MyPage({ dictionary, initialProfile, locale }: MyPageProps) {
   const { data: session, status: sessionStatus } = useSession();
+  const coinBillingActive = isCoinBillingActive(useCoinWallet().wallet);
   const router = useRouter();
   const searchParams = useSearchParams();
   // Rollout gate (W4): hide the post grid for a pre-2.2.0 client (its posts
@@ -2308,29 +2329,35 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           paddingTop: "env(safe-area-inset-top, 44px)",
         }}
       >
-        {sessionUserId && postingFeedSupported !== false ? (
-          <button
-            type="button"
-            onClick={() => setComposeOpen(true)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:bg-gray-100"
-            aria-label={feedCopy(locale).compose}
-          >
-            <SquarePen size={22} strokeWidth={2} />
-          </button>
-        ) : (
-          <div aria-hidden="true" className="h-10 w-10 shrink-0" />
-        )}
+        {/* Both sides share a width so the name stays centered next to the coin chip. */}
+        <div className={`flex shrink-0 items-center ${coinBillingActive ? "w-[124px]" : ""}`}>
+          {sessionUserId && postingFeedSupported !== false ? (
+            <button
+              type="button"
+              onClick={() => setComposeOpen(true)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:bg-gray-100"
+              aria-label={feedCopy(locale).compose}
+            >
+              <SquarePen size={22} strokeWidth={2} />
+            </button>
+          ) : (
+            <div aria-hidden="true" className="h-10 w-10 shrink-0" />
+          )}
+        </div>
         <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-bold text-slate-950">
           {name}
         </h1>
-        <button
-          type="button"
-          onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
-          className="flex h-10 w-10 items-center justify-center rounded-full transition"
-          aria-label={dictionary.profile.menuLabel}
-        >
-          <Menu size={23} strokeWidth={2.2} />
-        </button>
+        <div className={`flex shrink-0 items-center justify-end gap-1 ${coinBillingActive ? "w-[124px]" : ""}`}>
+          <CoinBalanceChip locale={locale} />
+          <button
+            type="button"
+            onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
+            className="flex h-10 w-10 items-center justify-center rounded-full transition"
+            aria-label={dictionary.profile.menuLabel}
+          >
+            <Menu size={23} strokeWidth={2.2} />
+          </button>
+        </div>
       </header>
 
       <div ref={profileScrollRef} data-restore-scroll="mypage" className="min-h-0 flex-1 overflow-y-auto">
@@ -2406,7 +2433,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           </div>
         </section>
 
-        {sessionUserId && postingFeedSupported !== false ? (
+          {sessionUserId && postingFeedSupported !== false ? (
           <section className="border-t border-gray-100 pt-0.5">
             <ProfilePostGrid locale={locale} authorId={sessionUserId} scrollContainerRef={profileScrollRef} />
           </section>

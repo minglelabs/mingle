@@ -30,6 +30,10 @@ export type AdminAuditAction =
   | 'operator_post.review'
   | 'notify_target.add'
   | 'notify_target.remove'
+  | 'coins.adjust'
+  | 'coins.product'
+  | 'coins.polar_products'
+  | 'coins.pricing_rate'
 
 export type AdminAuditEntry = {
   action: AdminAuditAction

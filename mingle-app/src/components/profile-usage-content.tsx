@@ -2,6 +2,8 @@
 
 import { buildClientApiPath } from "@/lib/api-contract";
 import LanguageFlag from "@/components/language-flag";
+import CoinUsageSection from "@/components/coins/coin-usage-section";
+import { isCoinBillingActive, useCoinWallet } from "@/lib/coin-wallet-client";
 import {
   canonicalizeSttLanguageCode,
   getSttLanguageDisplayName,
@@ -120,6 +122,7 @@ export default function ProfileUsageContent({
 }) {
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const coinBillingActive = isCoinBillingActive(useCoinWallet().wallet);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,6 +159,7 @@ export default function ProfileUsageContent({
 
   return (
     <div className="space-y-6">
+      {coinBillingActive ? <CoinUsageSection locale={uiLocale} /> : null}
       <div className="grid grid-cols-3 gap-2">
         <UsageMetric
           icon={<Clock3 size={15} strokeWidth={2.2} aria-hidden="true" />}
