@@ -8,6 +8,15 @@ const nextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   outputFileTracingRoot: appRoot,
+  experimental: {
+    staleTimes: {
+      // How long a fully prefetched route stays usable without a server
+      // round-trip. The native tab bar prefetches its tab roots (which carry no
+      // server-loaded data) and relies on this so that a tab tap still commits
+      // from memory after the app has sat in the background for hours.
+      static: 60 * 60 * 24,
+    },
+  },
   async rewrites() {
     return [
       {

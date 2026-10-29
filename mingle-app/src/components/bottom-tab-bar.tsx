@@ -3,16 +3,19 @@
 import type { AppDictionary } from "@/i18n/types";
 import { Home, MessageCircle, Search, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useContext, useEffect, useState } from "react";
 import { FeedGlyphToneContext } from "@/components/feed/feed-glyph-tone";
 import { buildConversationRequestIdentityHeaders } from "@/components/conversation-list.logic";
+import { readMyPageProfileCache } from "@/components/my-page-profile-cache";
 import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { feedHref as buildFeedHref } from "@/lib/feed-routes";
 import {
   buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
+  isNativeTabRootHref,
   NATIVE_TAB_ROOT_QUERY_KEY,
 } from "@/lib/tab-navigation";
 
@@ -122,6 +125,7 @@ export default function BottomTabBar({
   const inactiveColor = glass ? glassInk : "#9ca3af";
   const activeStroke = glass ? 2.6 : 2.3;
   const { data: session } = useSession();
+  const sessionUserId = session?.user?.id ?? "";
   const postingFeedSupported = useIsPostingFeedSupported();
   // Hide the feed tab for a client whose namespace does not serve the posting
   // feature (a pre-2.2.0 app). `null` means "not resolved yet" — the first
@@ -244,9 +248,65 @@ export default function BottomTabBar({
   }, [isNativeTabRoot, pathname, searchParamsKey]);
 
   useEffect(() => {
-    if (isMypageActive) return;
-    void router.prefetch(mypageHref);
-  }, [isMypageActive, mypageHref, router]);
+    const inactiveTabHrefs = [
+      // Only once the client is known to serve the feed; an unsupported app
+      // hides the tab after mount and would never use this prefetch.
+      postingFeedSupported !== true || isFeedActive ? null : feedHref,
+      isConversationsActive ? null : conversationsHref,
+      isConnectActive ? null : connectHref,
+      isMypageActive ? null : mypageHref,
+    ].filter((href): href is string => href !== null);
+
+    if (!inactiveTabHrefs.every(isNativeTabRootHref)) {
+      // Browser tabs render server-loaded data, so they keep fetching it on tap.
+      if (!isMypageActive) void router.prefetch(mypageHref);
+      return;
+    }
+
+    // Native tab roots carry no server-loaded data, so the whole screen can be
+    // held in the router cache and a tap commits from memory. Without this
+    // every tap waits on a server round-trip with the old tab still showing,
+    // which reads as a dead tab bar when the first request after a long
+    // background is slow or fails. The cache lifetime is
+    // experimental.staleTimes.static in next.config.mjs.
+    const prefetchInactiveTabs = () => {
+      for (const href of inactiveTabHrefs) {
+        void router.prefetch(href, { kind: PrefetchKind.FULL });
+      }
+    };
+    // A prefetch of an entry that is still fresh sends nothing, so this only
+    // reaches the network once the cached screens have expired.
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") prefetchInactiveTabs();
+    };
+
+    prefetchInactiveTabs();
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [
+    connectHref,
+    conversationsHref,
+    feedHref,
+    isConnectActive,
+    isConversationsActive,
+    isFeedActive,
+    isMypageActive,
+    mypageHref,
+    postingFeedSupported,
+    router,
+  ]);
+
+  useEffect(() => {
+    if (isMypageActive || !sessionUserId) return;
+    // Loads the persisted profile into memory ahead of the tap, so MyPage can
+    // render it on its first frame instead of after its mount effect.
+    readMyPageProfileCache(sessionUserId);
+  }, [isMypageActive, sessionUserId]);
 
   return (
     <nav
