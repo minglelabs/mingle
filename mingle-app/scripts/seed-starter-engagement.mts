@@ -1,8 +1,7 @@
 /**
  * The starter feed on prod (what a new reader sees first) plus a little
- * engagement on it: staff picked latent posts for Korean readers and for
- * everyone else (2026-10-29, photo posts with a hook). For each one that has
- * been published it
+ * engagement on it, from latent posts picked for Korean readers and for
+ * everyone else. For each one that has been published it
  *   - saves the starter feed in the picked order (unpublished picks wait),
  *   - adds likes from other operator accounts to a post with none yet,
  *   - has 1-3 other operator accounts leave an AI comment on a post with none.
@@ -15,30 +14,35 @@ import { markPostViewed } from '../src/server/feed/post-view'
 import { saveStarterFeed, type StarterFeed } from '../src/server/feed/starter-feed'
 import { commentOnPostAsOperator } from '../src/server/operator-comments/comment'
 
+// Picked by the rules staff set for the starter feed: Korean readers meet
+// foreigners learning Korean (3 Japanese with one first, 2 Chinese, 2 Korean,
+// 3 others); everyone else meets Korea (4 Koreans, only Seoyun a woman; 2
+// Japanese; 4 from the US, the UK, Brazil, France, India or China, all women
+// but one white man). All photo posts, the ones with a hook.
 const PICKS: Record<keyof StarterFeed, string[]> = {
   ko: [
-    'cmuvc86by0009shzy2781fbtp', // kenji_sapporo ジンギスカン
-    'cmuwromjz0035sh5cmgnm8aql', // huy.cantho 키보드에 오렌지 주스
-    'cmuwromjz002ssh5crzuvz0m6', // huy.cantho 오토바이 펑크
-    'cmuwrmyrd0004sh5csvylpqek', // li.wei.sh 2호선 발이 뜸
-    'cmuwrn9lq001ash9ajhqlius5', // chen.yi.chun 胡椒餅
-    'cmuwrpj9p003fsh5cbmqo71r2', // yuki.yokohama 家系ラーメン
-    'cmuwrq0aj0042sh5c9gi8r4f2', // somchai_kk 커피 쏟음
-    'cmuwromjz0031sh5cnebcomzv', // huy.cantho 버블티 100% 당도
-    'cmvdfhmy6000gsheyivm4y2wi', // dan.in.seoul 구호 활동 수준
-    'cmuvchsfm000bshx0s6szf1yj', // jessica.lee.htx 겨울 아아
+    'cmuwrpj9p003fsh5cbmqo71r2', // yuki.yokohama (JP, F) 家系ラーメンで胃が死んだ
+    'cmuvc86by0009shzy2781fbtp', // kenji_sapporo (JP) ジンギスカン、服が全部羊くさい
+    'cmuwrmyrd0001sh5ctgufk500', // li.wei.sh (CN) 제주 사진 날리고 렌터카 영수증만
+    'cmuwrnaer001ssh9a0ozbgtl8', // yuki.kr (KR) 지갑 두고 나옴 레전드
+    'cmuwroamt001tsh5cz3qt2vpf', // kenji.sato (JP) 홍대 혼밥 어디?
+    'cmuwrq0aj0042sh5c9gi8r4f2', // somchai_kk (TH) 커피 쏟아 바지 다 젖음
+    'cmuwrn9lq0019sh9afs6cpgkt', // chen.yi.chun (TW) 떡볶이 너무 매워요
+    'cmuwrpv98005ash9a76fxk6vu', // minjun.k (KR) 단어 42개 외우다 기절
+    'cmuwromjz0035sh5cmgnm8aql', // huy.cantho (VN) 키보드에 오렌지 주스
+    'cmuwrof8i002csh5cdclh80xc', // anya.lestari (ID) 똠얌꿍 시어서 눈물
   ],
   foreign: [
-    'cmvdflgnx004asheyafjb73ji', // junho.bsn 다대기
-    'cmuwrnaes001ysh9a2riv4wgk', // yuki.kr 양파 태움
-    'cmuwrnaer001ssh9a0ozbgtl8', // yuki.kr 지갑
-    'cmuwrnaer001wsh9avn1jb3m3', // yuki.kr 팀플 단톡방
-    'cmvew5mjz01xhshsylhvkwrs8', // taeyun.s 영혼 없이
-    'cmuwrpv98005bsh9a8idrfao3', // minjun.k 厉害 vs 牛逼
-    'cmuwrpv98005ash9a76fxk6vu', // minjun.k 단어 42개
-    'cmvb32e2u0083shbzrhhh4oh7', // seoyun.daily 성수 칼국수
-    'cmuwrn9lq0019sh9afs6cpgkt', // chen.yi.chun 떡볶이
-    'cmuwrmyrd0001sh5ctgufk500', // li.wei.sh 제주 사진
+    'cmvb32e2u0083shbzrhhh4oh7', // seoyun.daily (KR, F) 성수 칼국수 어디가 나음
+    'cmvdflgnx004asheyafjb73ji', // junho.bsn (KR, M) 돼지국밥 다대기
+    'cmuvchsfm000bshx0s6szf1yj', // jessica.lee.htx (US, F) 겨울에도 아아?
+    'cmuwrpv98005bsh9a8idrfao3', // minjun.k (KR, M) 厉害 vs 牛逼
+    'cmvdfmxo8006ksheyl0zkfqnz', // ayaka.sel (JP in Seoul, F) 2호선 반대 방향
+    'cmvdfhmy6000gsheyivm4y2wi', // dan.in.seoul (US, M) 발음 교정은 구호 활동 수준
+    'cmvew5mjz01xhshsylhvkwrs8', // taeyun.s (KR, M) 서울 26년 11개월째
+    'cmuwrpj9p003csh5cjhjk3u4b', // yuki.yokohama (JP, F) 편의점 푸딩
+    'cmvdfli6e004wsheypwu0ak23', // yuxuan.w (CN in Seoul, F) 괴물 드라마
+    'cmuwrp8hc003ysh9a13f014qv', // anya.k (IN, F) 한국어로 30분씩 이야기할 분
   ],
 }
 
