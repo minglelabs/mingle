@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-10-29 — Conversation list: no transparent tap guard while the session loads
+
+- Surface: `conversation-list.tsx` (the `z-[199]` layer added on 2026-08-26 and capped at 3 s by #299).
+- Issue: While next-auth checked the session, a transparent full-screen layer swallowed every tap on the cached list. The check has no timeout, so a stalled request left nothing tappable.
+- Resolution: The layer and its 3 s timer are gone; the cached list takes taps at once. Writes wait for the session instead of the UI blocking: queued room mutations (rename, delete/leave, status, languages, read) already flush only once authenticated and are adopted from the tracking owner to the user, and the two writes sent straight to the server (create a room, enable sharing) now await `waitForSessionSettled()` first and stop if signed out (the sign-in screen covers the list then). No new UI: such a tap just takes a little longer.
+- Verification: Type check, lint and the component/lib suites. Not tried on a device yet.
+
 ## 2026-10-29 — Export chat from the room menu as a .txt file
 
 - Surface: Room hamburger menu "Export chat" item (`LivePhoneDemo.tsx`, `conversation-export.client.ts`), `GET /api/{ns}/conversations/[id]/export` (unversioned, ios/android v2.0.0, v2.1.0, v2.2.0; 2.1.1 reaches it through the v2.1.0 rewrite).

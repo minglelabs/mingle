@@ -1,6 +1,5 @@
 "use client";
 
-import { reportUiDiagnostic } from "@/lib/ui-diagnostics";
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
@@ -223,9 +222,6 @@ const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_INSET_QUERY_MAX_PX = 240;
 const ROW_ACTION_LONG_PRESS_DELAY_MS = 450;
-// The transparent guard over the list while the session loads must not outlive a stalled
-// session request: past this, the list takes taps again.
-const BOOTSTRAP_INTERACTION_GUARD_MAX_MS = 3_000;
 const ROW_ACTION_CANCEL_DISTANCE_PX = 10;
 const LIST_PULL_REFRESH_TRIGGER_PX = 72;
 const LIST_PULL_REFRESH_MAX_PX = 108;
@@ -1913,17 +1909,27 @@ export default function ConversationList({
   googleOAuthEnabled,
 }: ConversationListProps) {
   const { data: session, status: sessionStatus } = useSession();
-  // A session request that never settles (a stalled WebView fetch) would otherwise leave the
-  // transparent bootstrap guard over the whole list, so nothing could be tapped until a restart.
-  const [hasBootstrapInteractionGuardExpired, setHasBootstrapInteractionGuardExpired] = useState(false);
+  // The cached list takes taps while the session is still being checked. Queued
+  // mutations already wait for it (they flush only once authenticated); a write
+  // sent straight to the server awaits this first, so it never goes out as a
+  // guest. Resolves true once signed in, false when signed out.
+  const sessionStatusRef = useRef(sessionStatus);
+  const sessionSettledWaitersRef = useRef<Array<(authenticated: boolean) => void>>([]);
   useEffect(() => {
-    if (sessionStatus !== "loading") return;
-    const timerId = window.setTimeout(() => {
-      setHasBootstrapInteractionGuardExpired(true);
-      reportUiDiagnostic("bootstrap_guard_expired", { guardMaxMs: BOOTSTRAP_INTERACTION_GUARD_MAX_MS });
-    }, BOOTSTRAP_INTERACTION_GUARD_MAX_MS);
-    return () => window.clearTimeout(timerId);
+    sessionStatusRef.current = sessionStatus;
+    if (sessionStatus === "loading") return;
+    for (const resolve of sessionSettledWaitersRef.current.splice(0)) {
+      resolve(sessionStatus === "authenticated");
+    }
   }, [sessionStatus]);
+  const waitForSessionSettled = useCallback((): Promise<boolean> => {
+    if (sessionStatusRef.current !== "loading") {
+      return Promise.resolve(sessionStatusRef.current === "authenticated");
+    }
+    return new Promise((resolve) => {
+      sessionSettledWaitersRef.current.push(resolve);
+    });
+  }, []);
   const router = useRouter();
   const authenticatedUserId = typeof session?.user?.id === "string"
     ? session.user.id.trim()
@@ -4626,6 +4632,7 @@ export default function ConversationList({
     }
 
     try {
+      if (!(await waitForSessionSettled())) return;
       const response = await fetch(buildConversationApiPath(), {
         method: "POST",
         headers: {
@@ -4664,6 +4671,7 @@ export default function ConversationList({
     isImportingLegacyConversation,
     locale,
     openConversationSummary,
+    waitForSessionSettled,
   ]);
 
   const ensureConversationRoomForQa = useCallback(async (): Promise<ConversationListQaEnsureRoomResult> => {
@@ -4791,6 +4799,7 @@ export default function ConversationList({
 
     void (async () => {
       try {
+        if (!(await waitForSessionSettled())) return;
         const response = await fetch(buildConversationApiPath(conversationPath), {
           method: "POST",
           headers: { ...headers, "Content-Type": "application/json" },
@@ -4812,7 +4821,7 @@ export default function ConversationList({
         isSharingConversationRef.current = false;
       }
     })();
-  }, [roomManagementCopy.shareErrorToastLabel]);
+  }, [roomManagementCopy.shareErrorToastLabel, waitForSessionSettled]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -5507,12 +5516,6 @@ export default function ConversationList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale, languageOnboardingModalOpen]);
   const shouldShowLanguageBootstrapShell = languageOnboardingPhase === "locale-switching";
-  // The server-rendered list remains natively scrollable while React hydrates.
-  // Only an actual client-side session check blocks actions; the pre-hydration
-  // language marker is resolved in a layout effect and must not capture touches.
-  const shouldBlockBootstrapInteraction = languageOnboardingPhase === "ready"
-    && sessionStatus === "loading"
-    && !hasBootstrapInteractionGuardExpired;
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
@@ -5531,15 +5534,6 @@ export default function ConversationList({
             <Loader2 size={22} className="animate-spin text-amber-500" aria-hidden />
           </div>
         </div>
-      ) : null}
-
-      {shouldBlockBootstrapInteraction ? (
-        <div
-          className="absolute inset-0 z-[199] bg-transparent"
-          role="status"
-          aria-live="polite"
-          aria-label={resolveAccessibilityCopy(locale).checkingAccount}
-        />
       ) : null}
 
       {sessionStatus === "unauthenticated" && languageOnboardingPhase === "ready" ? (
