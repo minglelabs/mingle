@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight, Newspaper, Bell, Bot, Images, Layers, UsersRound, Wand2, ChartLine, Flag, LogOut, MessageCircleHeart, MessagesSquare } from "lucide-react";
+import { ArrowUpRight, Newspaper, Bell, Bot, Images, Layers, UsersRound, Wand2, ChartLine, Flag, ListChecks, LogOut, MessageCircleHeart, MessagesSquare } from "lucide-react";
 import { requireAdmin } from "@/server/admin/guard";
 import { logoutAdminAction } from "../_components/session-actions";
 import { AdminButton, AdminCard, AdminListLink, AdminPage, AdminPageHeader } from "../_components/ui";
@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "더보기" };
 
 const MORE_LINKS = [
+  { href: "/admin/operators/review", icon: ListChecks, title: "계정·글 검토", description: "새로 만든 운영 계정과 글을 게시·삭제·재제작" },
   { href: "/admin/feed", icon: Newspaper, title: "피드 미리보기", description: "유저가 보는 홈 피드를 추천 순서 그대로 보기" },
   { href: "/admin", icon: MessageCircleHeart, title: "피드백", description: "앱 사용자가 보낸 의견과 답장" },
   { href: "/admin/reports", icon: Flag, title: "신고함", description: "신고 처리, 숨김과 이용 제한" },
