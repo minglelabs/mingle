@@ -1037,6 +1037,8 @@ model OperatorPostReserve {
   imageHeight    Int?      @map("image_height")
   releaseAt      DateTime? @map("release_at")
   postId         String?   @map("post_id")
+  /// Translations staff read during review, { [language]: { text, sourceText } }; reused when published.
+  translations   Json?
   error          String?   @db.Text
   attempts       Int       @default(0)
   createdAt      DateTime  @default(now()) @map("created_at")

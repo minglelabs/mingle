@@ -6,6 +6,7 @@ import { ageOn } from '@/server/operator-auto-reply/generate'
 import { checkOperatorForPosting, personaLanguageOf } from '@/server/operator-posts/operator-check'
 import { sqlUtcTimestamp } from '@/server/operator-posts/sql'
 import { publishPost } from '@/server/posts/publish-post'
+import { reviewTranslationsFor } from './review-translations'
 import { drawReservePostImage } from './post-image'
 import { generateReservePosts, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE, type ReservePersona } from './generate'
 import { nextReleaseAt } from './schedule'
@@ -47,6 +48,7 @@ type ClaimedReservePost = {
   text: string
   attempts: number
   language: string | null
+  translations: Prisma.JsonValue | null
   imagePrompt: string | null
   imageObjectKey: string | null
   imageWidth: number | null
@@ -73,7 +75,7 @@ async function claimDueReservePosts(now: Date, limit: number): Promise<ClaimedRe
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, image_prompt AS "imagePrompt",
+    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, translations, image_prompt AS "imagePrompt",
       image_object_key AS "imageObjectKey", image_width AS "imageWidth", image_height AS "imageHeight"
   `
 }
@@ -105,6 +107,7 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
       imageDimensions: image && image.width > 0 && image.height > 0 ? { imageWidth: image.width, imageHeight: image.height } : null,
       clientHint: row.language ?? personaLanguageOf(check.account),
       clientPostId: reserveClientPostId(row.id),
+      knownTranslations: reviewTranslationsFor(row.translations, row.text),
     })
     if (result.kind === 'conflict') {
       await settle({ state: 'failed', error: 'client_post_id_conflict', releaseAt: null })
@@ -353,7 +356,7 @@ export async function publishReservePostNow(reserveId: string, fromState: 'queue
     UPDATE app_operator_post_reserve
     SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
     WHERE id = ${reserveId} AND state = ${fromState}
-    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, image_prompt AS "imagePrompt",
+    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, translations, image_prompt AS "imagePrompt",
       image_object_key AS "imageObjectKey", image_width AS "imageWidth", image_height AS "imageHeight"
   `
   if (!claimed[0]) return { ok: false, error: 'reserve_empty' }
