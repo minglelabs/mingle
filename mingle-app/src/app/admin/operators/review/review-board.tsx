@@ -1,10 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Loader2, MessageSquarePlus, RefreshCw, Send, Trash2 } from 'lucide-react'
-import type { ReviewOperator, ReviewPost } from '@/server/operator-review/review'
+import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import { OperatorAvatar } from '../_components/operator-ui'
 import { koreanLanguageName } from '../_lib/options'
@@ -26,6 +24,12 @@ const PHOTO_KIND: Record<string, string> = {
   self_back: '본인 뒷모습',
   friends: '친구와 함께',
   scene: '풍경·사물',
+}
+
+const AT_FORMAT = new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' })
+
+function formatAt(iso: string): string {
+  return AT_FORMAT.format(new Date(iso))
 }
 
 async function sendReview(kind: 'profile' | 'post', id: string, action: Action, feedback: string) {
@@ -100,11 +104,10 @@ function ReviewActions({
   )
 }
 
-type PostAuthor = { name: string | null; handle: string; image: string | null }
-
-function PostCard({ post: initial, author, profileApproved, onDone }: {
+function PostCard({ post: initial, at, author, profileApproved, onDone }: {
   post: ReviewPost
-  author: PostAuthor
+  at: string
+  author: { name: string | null; handle: string; image: string | null }
   profileApproved: boolean
   onDone: () => void
 }) {
@@ -134,7 +137,7 @@ function PostCard({ post: initial, author, profileApproved, onDone }: {
         <OperatorAvatar image={author.image} name={author.name} size={36} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-900">{author.name ?? '(이름 없음)'}</p>
-          <p className="truncate text-xs text-slate-500">@{author.handle}</p>
+          <p className="truncate text-xs text-slate-500">@{author.handle} · 글 {formatAt(at)}</p>
         </div>
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -169,25 +172,26 @@ function PostCard({ post: initial, author, profileApproved, onDone }: {
   )
 }
 
-function OperatorSection({ operator, focused }: { operator: ReviewOperator; focused: boolean }) {
-  const router = useRouter()
-  const [image, setImage] = useState(operator.image)
-  const [profileState, setProfileState] = useState(operator.profileState)
-  const [posts, setPosts] = useState(operator.posts)
+function ProfileCard({ profile, at, image, onImage, onApproved, onDeleted }: {
+  profile: ReviewProfile
+  at: string
+  image: string | null
+  onImage: (image: string) => void
+  onApproved: () => void
+  onDeleted: () => void
+}) {
   const [busy, setBusy] = useState<Action | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [deleted, setDeleted] = useState(false)
-  const profileApproved = profileState === 'approved'
 
-  async function handleProfile(action: Action, feedback: string) {
-    if (action === 'delete' && !window.confirm(`${operator.name ?? operator.handle} 계정과 글 ${operator.postsInReview}개를 삭제할까요?`)) return
+  async function handle(action: Action, feedback: string) {
+    if (action === 'delete' && !window.confirm(`${profile.name ?? profile.handle} 계정과 검토 중인 글을 모두 삭제할까요?`)) return
     setBusy(action)
     setError(null)
     try {
-      const result = await sendReview('profile', operator.userId, action, feedback)
-      if (action === 'delete') setDeleted(true)
-      else if (action === 'publish') setProfileState('approved')
-      else if (typeof result.image === 'string') setImage(result.image)
+      const result = await sendReview('profile', profile.userId, action, feedback)
+      if (action === 'delete') onDeleted()
+      else if (action === 'publish') onApproved()
+      else if (typeof result.image === 'string') onImage(result.image)
     } catch (caught) {
       setError(ERROR_COPY[(caught as Error).message] ?? '요청하지 못했어요.')
     } finally {
@@ -195,67 +199,85 @@ function OperatorSection({ operator, focused }: { operator: ReviewOperator; focu
     }
   }
 
-  if (deleted) return null
   const facts = [
-    operator.age ? `${operator.age}세` : null,
-    operator.personaGender === 'female' ? '여성' : operator.personaGender === 'male' ? '남성' : null,
-    [operator.city, operator.country].filter(Boolean).join(', ') || null,
-    operator.primaryLanguages.map((code) => koreanLanguageName(code)).join('·') || null,
+    profile.age ? `${profile.age}세` : null,
+    profile.personaGender === 'female' ? '여성' : profile.personaGender === 'male' ? '남성' : null,
+    [profile.city, profile.country].filter(Boolean).join(', ') || null,
+    profile.primaryLanguages.map((code) => koreanLanguageName(code)).join('·') || null,
   ].filter(Boolean)
-  const remaining = operator.postsInReview - (operator.posts.length - posts.length)
 
   return (
-    <section className="space-y-3">
-      <AdminCard className="p-3">
-        {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={image} alt="" className="aspect-square max-h-[75svh] w-full rounded-xl bg-slate-100 object-cover" />
-        ) : (
-          <div className="flex justify-center py-6"><OperatorAvatar image={null} name={operator.name} size={160} /></div>
-        )}
-        <div className="mt-3">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <h2 className="break-words text-lg font-semibold text-slate-900">{operator.name ?? '(이름 없음)'}</h2>
-            <AdminChip tone={profileApproved ? 'success' : 'warning'}>{profileApproved ? '게시됨' : '계정 검토 중'}</AdminChip>
-          </div>
-          <p className="text-sm text-slate-500">@{operator.handle}</p>
-          {facts.length ? <p className="mt-1 text-sm text-slate-600">{facts.join(' · ')}</p> : null}
-          {operator.bio ? <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{operator.bio}</p> : null}
+    <AdminCard as="article" className="p-3">
+      <p className="mb-2 text-xs font-semibold text-slate-500">새 계정 · 가입 {formatAt(at)}</p>
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt="" className="aspect-square max-h-[75svh] w-full rounded-xl bg-slate-100 object-cover" />
+      ) : (
+        <div className="flex justify-center py-6"><OperatorAvatar image={null} name={profile.name} size={160} /></div>
+      )}
+      <div className="mt-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <h2 className="break-words text-lg font-semibold text-slate-900">{profile.name ?? '(이름 없음)'}</h2>
+          <AdminChip tone="warning">계정 검토 중</AdminChip>
         </div>
-        {operator.profileFeedback && !profileApproved ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {operator.profileFeedback}</p> : null}
-        {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
-        {profileApproved ? null : <ReviewActions busy={busy} onAction={handleProfile} />}
-      </AdminCard>
-
-      {posts.map((post) => (
-        <PostCard
-          key={post.id}
-          post={post}
-          author={{ name: operator.name, handle: operator.handle, image }}
-          profileApproved={profileApproved}
-          onDone={() => setPosts((current) => current.filter((item) => item.id !== post.id))}
-        />
-      ))}
-      {remaining > posts.length ? (
-        focused ? (
-          <AdminButton block onClick={() => router.refresh()}>남은 글 {remaining - posts.length}개 더 불러오기</AdminButton>
-        ) : (
-          <Link
-            href={`/admin/operators/review?operator=${encodeURIComponent(operator.userId)}`}
-            className="block rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold text-sky-700"
-          >
-            이 계정의 글 {remaining}개 모두 보기
-          </Link>
-        )
-      ) : null}
-    </section>
+        <p className="text-sm text-slate-500">@{profile.handle}</p>
+        {facts.length ? <p className="mt-1 text-sm text-slate-600">{facts.join(' · ')}</p> : null}
+        {profile.bio ? <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{profile.bio}</p> : null}
+      </div>
+      {profile.profileFeedback ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {profile.profileFeedback}</p> : null}
+      {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
+      <ReviewActions busy={busy} onAction={handle} />
+    </AdminCard>
   )
 }
 
-export function ReviewBoard({ operators, focused }: { operators: ReviewOperator[]; focused: boolean }) {
+/**
+ * Accounts and posts on one timeline, oldest first. Answering a profile here
+ * updates every post of that account on the page: 게시 unlocks them, 삭제
+ * removes them, and a redrawn photo shows on their author rows.
+ */
+export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
+  const [items, setItems] = useState(initial)
+  const [approved, setApproved] = useState(
+    () => new Set(initial.flatMap((item) => (item.kind === 'post' && item.author.profileState === 'approved' ? [item.author.userId] : []))),
+  )
+  const [images, setImages] = useState<Record<string, string>>({})
+
+  const remove = (predicate: (item: ReviewItem) => boolean) => setItems((current) => current.filter((item) => !predicate(item)))
+  const authorOf = (item: ReviewItem) => (item.kind === 'profile' ? item.profile.userId : item.author.userId)
+
   return (
-    <div className="mx-auto w-full max-w-[440px] space-y-10">
-      {operators.map((operator) => <OperatorSection key={operator.userId} operator={operator} focused={focused} />)}
+    <div className="mx-auto w-full max-w-[440px] space-y-6">
+      {items.map((item) => {
+        if (item.kind === 'profile') {
+          const userId = item.profile.userId
+          return (
+            <ProfileCard
+              key={item.key}
+              profile={item.profile}
+              at={item.at}
+              image={images[userId] ?? item.profile.image}
+              onImage={(image) => setImages((current) => ({ ...current, [userId]: image }))}
+              onApproved={() => {
+                setApproved((current) => new Set(current).add(userId))
+                remove((other) => other.key === item.key)
+              }}
+              onDeleted={() => remove((other) => authorOf(other) === userId)}
+            />
+          )
+        }
+        const userId = item.author.userId
+        return (
+          <PostCard
+            key={item.key}
+            post={item.post}
+            at={item.at}
+            author={{ name: item.author.name, handle: item.author.handle, image: images[userId] ?? item.author.image }}
+            profileApproved={approved.has(userId)}
+            onDone={() => remove((other) => other.key === item.key)}
+          />
+        )
+      })}
     </div>
   )
 }
