@@ -216,8 +216,8 @@ export async function createMissingPolarProducts(): Promise<number> {
   for (const pack of packs) {
     const coins = ((pack.coinMicro + pack.bonusMicro) / MICRO_PER_COIN).toLocaleString('en-US')
     const providerProductId = await createPolarProduct(config, {
-      name: `Mingle ${coins} coins`,
-      description: `${coins} Mingle coins for speech recognition, translation and voice interpreting. Coins do not expire.`,
+      name: `HashChat ${coins} Hash`,
+      description: `${coins} Hash for HashChat speech recognition, translation and voice interpreting. Hash does not expire.`,
       priceUsdCents: pack.priceUsdCents,
       coinProductId: pack.storeProductId,
     })
