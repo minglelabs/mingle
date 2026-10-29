@@ -17,9 +17,12 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 FROM app-deps AS app-build
 ARG NEXT_PUBLIC_WS_PATH=/stt
 ARG NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY
+# Plain browsers (no apiNamespace) get the app UI; set to legacy_1_0_11 for the old demo.
+ARG NEXT_PUBLIC_MINGLE_RELEASE_TARGET=web_app
 ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mingle?schema=app"
 ENV NEXT_PUBLIC_WS_PATH="$NEXT_PUBLIC_WS_PATH"
 ENV NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY="$NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY"
+ENV NEXT_PUBLIC_MINGLE_RELEASE_TARGET="$NEXT_PUBLIC_MINGLE_RELEASE_TARGET"
 COPY mingle-app/components.json mingle-app/next.config.mjs mingle-app/postcss.config.mjs mingle-app/tsconfig.json ./
 COPY mingle-app/prisma ./prisma
 COPY mingle-app/public ./public
