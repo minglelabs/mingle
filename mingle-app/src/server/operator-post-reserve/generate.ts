@@ -202,6 +202,8 @@ export async function generateReservePosts(args: {
   random?: Random
   /** Decides the account's posting personality; the account id. Defaults to the persona itself. */
   seed?: string
+  /** Rewriting a post staff sent back: the old text and what staff want changed. */
+  revision?: { previousText: string; feedback: string | null }
 }): Promise<GeneratedReservePost[]> {
   const generate = args.generate ?? generateJson
   const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
@@ -221,14 +223,18 @@ export async function generateReservePosts(args: {
   })
   const seen = new Set(args.existingTexts.map(reservePostKey))
 
+  const revisionLine = args.revision
+    ? `The input also has "revision": staff sent back a post of this person ("previousText"). Write a replacement for the slot that is clearly different from it${args.revision.feedback ? ', and follow the staff "feedback" first, also where it conflicts with the advice above' : ''}.`
+    : null
   const items = await generate({
-    instructions: buildReserveInstructions(args.persona),
+    instructions: [buildReserveInstructions(args.persona), ...(revisionLine ? [revisionLine] : [])].join('\n'),
     input: {
       persona: args.persona,
       poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
       learner: { language: learner.language, level: learner.level.brief },
       slots: slots.map((slot) => ({ ...slot, photo: slot.photo ? slot.photo.kind : false, ...(slot.photo?.setup ? { setup: slot.photo.setup } : {}) })),
       alreadyWritten: args.existingTexts.slice(-AVOID_SAMPLE_MAX).map((text) => Array.from(text).slice(0, AVOID_SAMPLE_CHARS).join('')),
+      ...(args.revision ? { revision: { previousText: args.revision.previousText, ...(args.revision.feedback ? { feedback: args.revision.feedback } : {}) } } : {}),
     },
     responseSchema: RESPONSE_SCHEMA,
     validate: (value) => {

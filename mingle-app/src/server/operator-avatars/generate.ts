@@ -254,7 +254,7 @@ export async function loadAvatarPersona(userId: string, now: Date = new Date()):
 export async function generateOperatorAvatar(
   ctx: AdminContext | null,
   userId: string,
-  options: { nonce?: string; now?: Date; fetchImpl?: typeof fetch } = {},
+  options: { nonce?: string; now?: Date; fetchImpl?: typeof fetch; feedback?: string | null } = {},
 ): Promise<AvatarGenerationResult> {
   try {
     const now = options.now ?? new Date()
@@ -262,7 +262,9 @@ export async function generateOperatorAvatar(
     if (!persona) return { ok: false, error: 'not_operator' }
 
     const spec = pickAvatarSpec(persona, seededRandom(`${userId}:${options.nonce ?? now.getTime()}`))
-    const image = await requestAvatarImage(spec.prompt, { fetchImpl: options.fetchImpl })
+    const feedback = options.feedback?.trim()
+    const prompt = feedback ? `${spec.prompt}\nStaff feedback on the previous photo of this person, to follow: ${feedback}` : spec.prompt
+    const image = await requestAvatarImage(prompt, { fetchImpl: options.fetchImpl })
     if (!image.ok) return image
 
     const stored = await setOperatorAvatarFromBytes(ctx, userId, image.bytes, {
