@@ -13,6 +13,9 @@ type Action = 'publish' | 'delete' | 'regenerate'
 
 const STAFF_LANGUAGE = 'ko'
 
+// On a phone a card spans the screen edge to edge, like a post in the app, so photos get the full width.
+const CARD_CLASS = 'p-3 max-sm:rounded-none max-sm:border-x-0 max-sm:px-4 max-sm:shadow-none'
+
 const ERROR_COPY: Record<string, string> = {
   not_found: '이미 처리된 항목이에요.',
   already_approved: '이미 게시된 계정이에요.',
@@ -166,7 +169,7 @@ function PostCard({ post: initial, at, author, profileApproved, onDone }: {
   }
 
   return (
-    <AdminCard as="article" className="p-3">
+    <AdminCard as="article" className={CARD_CLASS}>
       {/* Laid out like a post in the app's feed: author row, text, then the photo at full width. */}
       <div className="mb-2 flex items-center gap-2">
         <OperatorAvatar image={author.image} name={author.name} size={36} languages={author.languages} />
@@ -255,7 +258,7 @@ function ProfileCard({ profile, at, image, onImage, onApproved, onDeleted }: {
   ].filter(Boolean)
 
   return (
-    <AdminCard as="article" className="p-3">
+    <AdminCard as="article" className={CARD_CLASS}>
       <p className="mb-2 text-xs font-semibold text-slate-500">새 계정 · 가입 {formatAt(at)}</p>
       {image ? (
         <div className="relative">
@@ -302,7 +305,7 @@ export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
   const authorOf = (item: ReviewItem) => (item.kind === 'profile' ? item.profile.userId : item.author.userId)
 
   return (
-    <div className="mx-auto w-full max-w-[440px] space-y-6">
+    <div className="-mx-4 space-y-3 sm:mx-auto sm:w-full sm:max-w-[440px] sm:space-y-6">
       {items.map((item) => {
         if (item.kind === 'profile') {
           const userId = item.profile.userId
