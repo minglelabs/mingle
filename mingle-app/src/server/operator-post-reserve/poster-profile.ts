@@ -199,7 +199,9 @@ export function learnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
   if (native === 'ko') {
     return { language: pickOne(['en', 'en', 'ja', 'zh']), share: pickOne([0, 0, 0.1, 0.25]), level: pickOne(LEARNER_LEVELS) }
   }
-  return { language: 'ko', share: pickOne([0.3, 0.5, 0.7, 0.85]), level: pickOne(LEARNER_LEVELS) }
+  // Staff review: a foreign account mostly writing Korean reads as fake ("일본인이잖아").
+  // Their own language comes first; Korean is the occasional learner post.
+  return { language: 'ko', share: pickOne([0.1, 0.15, 0.2, 0.3]), level: pickOne(LEARNER_LEVELS) }
 }
 
 /** The fixed posting personality of one account. `topicKeys` are all topic keys the generator knows. */

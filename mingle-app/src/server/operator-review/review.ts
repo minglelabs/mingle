@@ -107,48 +107,62 @@ function toReviewPost(row: {
 
 const REVIEW_POST_STATES = ['review', 'regenerating']
 
-/** `late`: a post without a photo, shown after every account and photo post. */
-type TimelineRow = { late: boolean; kind: 'profile' | 'post'; id: string; at: Date }
+/**
+ * `late`: a post without a photo, shown after every account and photo post.
+ * `round`: 0 for an account, else the post's place among its author's posts
+ * of the same group, so the queue deals one post per account in turn.
+ * `authorAt`: the author's sign-up time, the order within a round.
+ */
+type TimelineRow = { late: boolean; round: number; authorAt: Date; kind: 'profile' | 'post'; id: string; at: Date }
 
+// A post's round counts every reserve row of its author (any state), so it
+// does not shift when staff answer other posts and paging stays stable.
 const TIMELINE_SQL = `
-  SELECT late, kind, id, at FROM (
-    SELECT false AS late, 'profile' AS kind, u.id, u.created_at AS at
+  SELECT late, round, "authorAt", kind, id, at FROM (
+    SELECT false AS late, 0::bigint AS round, u.created_at AS "authorAt", 'profile' AS kind, u.id, u.created_at AS at
     FROM app.app_users u JOIN app.app_operator_accounts o ON o.user_id = u.id
     WHERE u.is_operator AND NOT u.is_deleted AND o.review_state <> 'approved'
     UNION ALL
-    SELECT r.image_object_key IS NULL AS late, 'post' AS kind, r.id, r.created_at AS at
-    FROM app.app_operator_post_reserve r JOIN app.app_users u ON u.id = r.operator_user_id
-    WHERE r.state IN ('review', 'regenerating') AND NOT u.is_deleted
+    SELECT late, round, "authorAt", 'post' AS kind, id, at FROM (
+      SELECT r.image_object_key IS NULL AS late,
+        ROW_NUMBER() OVER (PARTITION BY r.operator_user_id, r.image_object_key IS NULL ORDER BY r.created_at, r.id) AS round,
+        u.created_at AS "authorAt", r.id, r.created_at AS at, r.state, u.is_deleted
+      FROM app.app_operator_post_reserve r JOIN app.app_users u ON u.id = r.operator_user_id
+    ) p
+    WHERE state IN ('review', 'regenerating') AND NOT is_deleted
   ) t`
 
-/** Cursor = `<0|1 late>|<iso time>|<kind>|<id>` of the last item shown. Profiles sort before posts at the same instant. */
+/** Cursor = `<0|1 late>|<round>|<author iso time>|<id>` of the last item shown. */
 export function encodeReviewCursor(row: TimelineRow): string {
-  return `${row.late ? 1 : 0}|${row.at.toISOString()}|${row.kind}|${row.id}`
+  return `${row.late ? 1 : 0}|${row.round}|${row.authorAt.toISOString()}|${row.id}`
 }
 
-export function decodeReviewCursor(value: string | undefined): TimelineRow | null {
-  const [late, iso, kind, id] = (value ?? '').split('|')
-  const at = new Date(iso ?? '')
-  if (!id || (late !== '0' && late !== '1') || Number.isNaN(at.getTime()) || (kind !== 'profile' && kind !== 'post')) return null
-  return { late: late === '1', kind, id, at }
+export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow, 'late' | 'round' | 'authorAt' | 'id'> | null {
+  const [late, round, iso, id] = (value ?? '').split('|')
+  const authorAt = new Date(iso ?? '')
+  const roundNumber = Number(round)
+  if (!id || (late !== '0' && late !== '1') || !Number.isInteger(roundNumber) || roundNumber < 0 || Number.isNaN(authorAt.getTime())) return null
+  return { late: late === '1', round: roundNumber, authorAt, id }
 }
 
 /**
- * Every account and post waiting for review on one timeline, oldest first:
- * accounts by sign-up time, posts by creation time. Accounts and photo posts
- * come first, then the posts without a photo. Paged by cursor, so items
- * answered on one page never push unseen ones past the next.
+ * Every account and post waiting for review. Accounts and photo posts come
+ * first, then the posts without a photo; within each, one item per account
+ * in turn (accounts by sign-up time), so no single account fills a page.
+ * Paged by cursor, so items answered on one page never push unseen ones
+ * past the next.
  */
 export async function listReviewQueue(options: { cursor?: string; now?: Date } = {}): Promise<ReviewQueue> {
   const now = options.now ?? new Date()
   const after = decodeReviewCursor(options.cursor)
-  const order = `ORDER BY late, at, (kind = 'post'), id`
-  const rows = after
+  const order = `ORDER BY late, round, "authorAt", id`
+  const rows = (after
     ? await prisma.$queryRawUnsafe<TimelineRow[]>(
-      `${TIMELINE_SQL} WHERE (late, at, (kind = 'post'), id) > ($1::boolean, $2::timestamp, $3::boolean, $4::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
-      after.late, after.at, after.kind === 'post', after.id,
+      `${TIMELINE_SQL} WHERE (late, round, "authorAt", id) > ($1::boolean, $2::bigint, $3::timestamp, $4::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
+      after.late, after.round, after.authorAt, after.id,
     )
-    : await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`)
+    : await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`))
+    .map((row) => ({ ...row, round: Number(row.round) }))
   const page = rows.slice(0, REVIEW_ITEMS_PER_PAGE)
 
   const profileIds = page.filter((row) => row.kind === 'profile').map((row) => row.id)
