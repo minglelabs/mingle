@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Loader2, MessageSquarePlus, RefreshCw, Send, Trash2 } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
+import LanguageFlag from '@/components/language-flag'
 import { OperatorAvatar } from '../_components/operator-ui'
 import { koreanLanguageName } from '../_lib/options'
 
@@ -107,7 +108,7 @@ function ReviewActions({
 function PostCard({ post: initial, at, author, profileApproved, onDone }: {
   post: ReviewPost
   at: string
-  author: { name: string | null; handle: string; image: string | null }
+  author: { name: string | null; handle: string; image: string | null; languages: string[] }
   profileApproved: boolean
   onDone: () => void
 }) {
@@ -134,7 +135,7 @@ function PostCard({ post: initial, at, author, profileApproved, onDone }: {
     <AdminCard as="article" className="p-3">
       {/* Laid out like a post in the app's feed: author row, text, then the photo at full width. */}
       <div className="mb-2 flex items-center gap-2">
-        <OperatorAvatar image={author.image} name={author.name} size={36} />
+        <OperatorAvatar image={author.image} name={author.name} size={36} languages={author.languages} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-900">{author.name ?? '(이름 없음)'}</p>
           <p className="truncate text-xs text-slate-500">@{author.handle} · 글 {formatAt(at)}</p>
@@ -210,8 +211,15 @@ function ProfileCard({ profile, at, image, onImage, onApproved, onDeleted }: {
     <AdminCard as="article" className="p-3">
       <p className="mb-2 text-xs font-semibold text-slate-500">새 계정 · 가입 {formatAt(at)}</p>
       {image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={image} alt="" className="aspect-square max-h-[75svh] w-full rounded-xl bg-slate-100 object-cover" />
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={image} alt="" className="aspect-square max-h-[75svh] w-full rounded-xl bg-slate-100 object-cover" />
+          {profile.primaryLanguages.length ? (
+            <div className="absolute bottom-2 left-2 flex gap-1 rounded-full bg-white/90 px-2 py-1 text-2xl leading-none shadow-sm">
+              {profile.primaryLanguages.map((code) => <LanguageFlag key={code} language={code} />)}
+            </div>
+          ) : null}
+        </div>
       ) : (
         <div className="flex justify-center py-6"><OperatorAvatar image={null} name={profile.name} size={160} /></div>
       )}
@@ -272,7 +280,7 @@ export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
             key={item.key}
             post={item.post}
             at={item.at}
-            author={{ name: item.author.name, handle: item.author.handle, image: images[userId] ?? item.author.image }}
+            author={{ name: item.author.name, handle: item.author.handle, image: images[userId] ?? item.author.image, languages: item.author.primaryLanguages }}
             profileApproved={approved.has(userId)}
             onDone={() => remove((other) => other.key === item.key)}
           />

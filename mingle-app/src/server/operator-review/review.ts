@@ -61,7 +61,9 @@ export type ReviewProfile = {
   profileFeedback: string | null
 }
 
-export type ReviewAuthor = { userId: string; name: string | null; handle: string; image: string | null; profileState: string }
+export type ReviewAuthor = {
+  userId: string; name: string | null; handle: string; image: string | null; primaryLanguages: string[]; profileState: string
+}
 
 /** One card of the review timeline: a new account (at sign-up) or a post (at creation). */
 export type ReviewItem =
@@ -164,7 +166,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date } =
       where: { id: { in: postIds } },
       select: {
         ...POST_SELECT,
-        operatorUser: { select: { id: true, name: true, handle: true, image: true, operatorAccount: { select: { reviewState: true } } } },
+        operatorUser: { select: { id: true, name: true, handle: true, image: true, primaryLanguages: true, operatorAccount: { select: { reviewState: true } } } },
       },
     }),
   ])
@@ -203,7 +205,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date } =
         kind: 'post', key, at,
         post: toReviewPost(post),
         author: {
-          userId: author.id, name: author.name, handle: author.handle, image: author.image,
+          userId: author.id, name: author.name, handle: author.handle, image: author.image, primaryLanguages: author.primaryLanguages,
           profileState: author.operatorAccount?.reviewState ?? 'approved',
         },
       })
