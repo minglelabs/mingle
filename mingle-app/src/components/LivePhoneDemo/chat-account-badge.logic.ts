@@ -39,7 +39,7 @@ export function resolveRoomAccountBadge(
 }
 
 /**
- * Plain-text name for notices rendered as a sentence ("Mingle (공식)
+ * Plain-text name for notices rendered as a sentence ("HashChat (공식)
  * invited Bob"), where a badge chip cannot sit inside the copy template.
  * Empty names stay empty so the notice's own "no name" guard still applies.
  */

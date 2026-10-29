@@ -3,6 +3,8 @@ import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
 import UserNotifications
+import CoreSpotlight
+import UniformTypeIdentifiers
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -58,7 +60,29 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       RCTLinkingManager.application(application, open: launchURL, options: [:])
     }
 
+    indexLegacyNameForSpotlight()
+
     return true
+  }
+
+  // The app was renamed Mingle -> HashChat. Spotlight only matches the
+  // display name, so index one item carrying the old name as hidden keywords:
+  // searching "mingle" / "밍글" still surfaces HashChat, while nothing in the
+  // UI shows the old name. Tapping it just opens the app.
+  private func indexLegacyNameForSpotlight() {
+    let attributes = CSSearchableItemAttributeSet(contentType: UTType.application)
+    attributes.title = "HashChat"
+    attributes.displayName = "HashChat"
+    attributes.keywords = [
+      "HashChat", "해시챗", "mingle", "밍글", "ミングル", "明格尔", "明格爾", "Мингл", "مينغل", "मिंगल", "มิงเกิล",
+    ]
+    let item = CSSearchableItem(
+      uniqueIdentifier: "hashchat.app.legacy-name",
+      domainIdentifier: "hashchat.app",
+      attributeSet: attributes
+    )
+    item.expirationDate = .distantFuture
+    CSSearchableIndex.default().indexSearchableItems([item], completionHandler: nil)
   }
 
   func application(
