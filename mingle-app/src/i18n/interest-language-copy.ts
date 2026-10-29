@@ -19,6 +19,10 @@ export type InterestLanguageCopy = {
   /** `{level}` is replaced with 1-5. */
   levelAriaLabel: string
   saveError: string
+  /** The prompt asking a user who has none yet: dismiss, the profile's add entry, save. */
+  laterAction: string
+  addAction: string
+  saveAction: string
 }
 
 const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
@@ -33,6 +37,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: '주로 대화하고 싶은 상대의 언어를 최대 3개까지 고르고, 내 실력을 점으로 표시해요.',
     levelAriaLabel: '실력 {level}/5',
     saveError: '관심 언어를 저장하지 못했어요.',
+    laterAction: '나중에',
+    addAction: '관심 언어 추가',
+    saveAction: '저장',
   },
   en: {
     onboardingStep: 'Interested in',
@@ -45,6 +52,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: 'Choose up to 3 languages of the people you want to talk with, and show your level with dots.',
     levelAriaLabel: 'Level {level} of 5',
     saveError: 'Could not save your languages.',
+    laterAction: 'Later',
+    addAction: 'Add a language',
+    saveAction: 'Save',
   },
   ja: {
     onboardingStep: '興味のある言語',
@@ -57,6 +67,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: '話したい相手の言語を3つまで選び、自分のレベルを点で表示します。',
     levelAriaLabel: 'レベル {level}/5',
     saveError: '興味のある言語を保存できませんでした。',
+    laterAction: 'あとで',
+    addAction: '言語を追加',
+    saveAction: '保存',
   },
   'zh-CN': {
     onboardingStep: '感兴趣的语言',
@@ -69,6 +82,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: '最多选择 3 种你想交流的对象所说的语言,并用圆点显示你的水平。',
     levelAriaLabel: '水平 {level}/5',
     saveError: '无法保存感兴趣的语言。',
+    laterAction: '以后再说',
+    addAction: '添加语言',
+    saveAction: '保存',
   },
   'zh-TW': {
     onboardingStep: '感興趣的語言',
@@ -81,6 +97,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: '最多選擇 3 種你想交流的對象所說的語言,並用圓點顯示你的程度。',
     levelAriaLabel: '程度 {level}/5',
     saveError: '無法儲存感興趣的語言。',
+    laterAction: '之後再說',
+    addAction: '新增語言',
+    saveAction: '儲存',
   },
   fr: {
     onboardingStep: 'Intéressé par',
@@ -93,6 +112,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: 'Choisissez jusqu’à 3 langues des personnes avec qui vous voulez parler, et indiquez votre niveau avec des points.',
     levelAriaLabel: 'Niveau {level} sur 5',
     saveError: 'Impossible d’enregistrer vos langues.',
+    laterAction: 'Plus tard',
+    addAction: 'Ajouter une langue',
+    saveAction: 'Enregistrer',
   },
   de: {
     onboardingStep: 'Interessiert an',
@@ -105,6 +127,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: 'Wähle bis zu 3 Sprachen der Menschen, mit denen du sprechen möchtest, und zeige dein Niveau mit Punkten.',
     levelAriaLabel: 'Niveau {level} von 5',
     saveError: 'Deine Sprachen konnten nicht gespeichert werden.',
+    laterAction: 'Später',
+    addAction: 'Sprache hinzufügen',
+    saveAction: 'Speichern',
   },
   es: {
     onboardingStep: 'Me interesa',
@@ -117,6 +142,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: 'Elige hasta 3 idiomas de las personas con las que quieres hablar y muestra tu nivel con puntos.',
     levelAriaLabel: 'Nivel {level} de 5',
     saveError: 'No se pudieron guardar tus idiomas.',
+    laterAction: 'Más tarde',
+    addAction: 'Añadir idioma',
+    saveAction: 'Guardar',
   },
   pt: {
     onboardingStep: 'Tenho interesse',
@@ -129,6 +157,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: 'Escolha até 3 idiomas das pessoas com quem você quer conversar e mostre seu nível com pontos.',
     levelAriaLabel: 'Nível {level} de 5',
     saveError: 'Não foi possível salvar seus idiomas.',
+    laterAction: 'Depois',
+    addAction: 'Adicionar idioma',
+    saveAction: 'Salvar',
   },
   it: {
     onboardingStep: 'Mi interessa',
@@ -141,6 +172,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: 'Scegli fino a 3 lingue delle persone con cui vuoi parlare e mostra il tuo livello con i punti.',
     levelAriaLabel: 'Livello {level} su 5',
     saveError: 'Impossibile salvare le tue lingue.',
+    laterAction: 'Più tardi',
+    addAction: 'Aggiungi lingua',
+    saveAction: 'Salva',
   },
   ru: {
     onboardingStep: 'Интересует',
@@ -153,6 +187,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: 'Выберите до 3 языков людей, с которыми хотите общаться, и отметьте свой уровень точками.',
     levelAriaLabel: 'Уровень {level} из 5',
     saveError: 'Не удалось сохранить языки.',
+    laterAction: 'Позже',
+    addAction: 'Добавить язык',
+    saveAction: 'Сохранить',
   },
   ar: {
     onboardingStep: 'مهتم بـ',
@@ -165,6 +202,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: 'اختر حتى 3 لغات للأشخاص الذين تريد التحدث معهم، واعرض مستواك بالنقاط.',
     levelAriaLabel: 'المستوى {level} من 5',
     saveError: 'تعذّر حفظ لغاتك.',
+    laterAction: 'لاحقًا',
+    addAction: 'إضافة لغة',
+    saveAction: 'حفظ',
   },
   hi: {
     onboardingStep: 'रुचि की भाषा',
@@ -177,6 +217,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: 'जिन लोगों से बात करना चाहते हैं उनकी 3 तक भाषाएँ चुनें, और बिंदुओं से अपना स्तर दिखाएँ।',
     levelAriaLabel: 'स्तर {level}/5',
     saveError: 'आपकी भाषाएँ सेव नहीं हो सकीं।',
+    laterAction: 'बाद में',
+    addAction: 'भाषा जोड़ें',
+    saveAction: 'सेव करें',
   },
   th: {
     onboardingStep: 'ภาษาที่สนใจ',
@@ -189,6 +232,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: 'เลือกได้สูงสุด 3 ภาษาของคนที่คุณอยากคุยด้วย และแสดงระดับของคุณด้วยจุด',
     levelAriaLabel: 'ระดับ {level}/5',
     saveError: 'บันทึกภาษาไม่สำเร็จ',
+    laterAction: 'ไว้ทีหลัง',
+    addAction: 'เพิ่มภาษา',
+    saveAction: 'บันทึก',
   },
   vi: {
     onboardingStep: 'Quan tâm',
@@ -201,6 +247,9 @@ const INTEREST_LANGUAGE_COPY_BY_LOCALE = {
     settingsDescription: 'Chọn tối đa 3 ngôn ngữ của những người bạn muốn trò chuyện và thể hiện trình độ bằng dấu chấm.',
     levelAriaLabel: 'Trình độ {level}/5',
     saveError: 'Không thể lưu ngôn ngữ của bạn.',
+    laterAction: 'Để sau',
+    addAction: 'Thêm ngôn ngữ',
+    saveAction: 'Lưu',
   },
 } satisfies Record<LegalDocumentLocale, InterestLanguageCopy>
 
