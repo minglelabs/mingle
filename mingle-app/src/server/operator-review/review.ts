@@ -67,10 +67,10 @@ export type ReviewAuthor = {
   userId: string; name: string | null; handle: string; image: string | null; primaryLanguages: string[]; profileState: string
 }
 
-/** One card of the review timeline: a new account (at sign-up) or a post (at creation). */
+/** One card of the review timeline: a new account (at sign-up) or a post (at creation). `pinned`: staff moved it up. */
 export type ReviewItem =
-  | { kind: 'profile'; key: string; at: string; profile: ReviewProfile }
-  | { kind: 'post'; key: string; at: string; post: ReviewPost; author: ReviewAuthor }
+  | { kind: 'profile'; key: string; at: string; pinned: boolean; profile: ReviewProfile }
+  | { kind: 'post'; key: string; at: string; pinned: boolean; post: ReviewPost; author: ReviewAuthor }
 
 export type ReviewQueue = {
   items: ReviewItem[]
@@ -110,23 +110,28 @@ function toReviewPost(row: {
 const REVIEW_POST_STATES = ['review', 'regenerating']
 
 /**
+ * `rank`: the place staff gave the item (lower first); unranked items, the
+ * default order, follow every ranked one.
  * `late`: a post without a photo, shown after every account and photo post.
  * `round`: 0 for an account, else the post's place among its author's posts
  * of the same group, so the queue deals one post per account in turn.
  * `authorAt`: the author's sign-up time, the order within a round.
  */
-type TimelineRow = { late: boolean; round: number; authorAt: Date; kindOrder: number; kind: 'profile' | 'post'; id: string; at: Date }
+type TimelineRow = { rank: number; late: boolean; round: number; authorAt: Date; kindOrder: number; kind: 'profile' | 'post'; id: string; at: Date }
+
+/** Rank of an item staff did not move: after every ranked one. */
+const UNRANKED = 2147483647
 
 // A post's round counts every reserve row of its author (any state), so it
 // does not shift when staff answer other posts and paging stays stable.
 const TIMELINE_SQL = `
-  SELECT late, round, "authorAt", "kindOrder", kind, id, at FROM (
-    SELECT false AS late, 1::bigint AS round, u.created_at AS "authorAt", 0 AS "kindOrder", 'profile' AS kind, u.id, u.created_at AS at
+  SELECT rank, late, round, "authorAt", "kindOrder", kind, id, at FROM (
+    SELECT COALESCE(o.review_rank, ${UNRANKED})::bigint AS rank, false AS late, 1::bigint AS round, u.created_at AS "authorAt", 0 AS "kindOrder", 'profile' AS kind, u.id, u.created_at AS at
     FROM app.app_users u JOIN app.app_operator_accounts o ON o.user_id = u.id
     WHERE u.is_operator AND NOT u.is_deleted AND o.review_state <> 'approved'
     UNION ALL
-    SELECT late, round, "authorAt", 1 AS "kindOrder", 'post' AS kind, id, at FROM (
-      SELECT r.image_object_key IS NULL AS late,
+    SELECT rank, late, round, "authorAt", 1 AS "kindOrder", 'post' AS kind, id, at FROM (
+      SELECT COALESCE(r.review_rank, ${UNRANKED})::bigint AS rank, r.image_object_key IS NULL AS late,
         ROW_NUMBER() OVER (PARTITION BY r.operator_user_id, r.image_object_key IS NULL ORDER BY r.created_at, r.id) AS round,
         u.created_at AS "authorAt", r.id, r.created_at AS at, r.state, u.is_deleted
       FROM app.app_operator_post_reserve r JOIN app.app_users u ON u.id = r.operator_user_id
@@ -134,21 +139,23 @@ const TIMELINE_SQL = `
     WHERE state IN ('review', 'regenerating') AND NOT is_deleted
   ) t`
 
-/** Cursor = `<0|1 late>|<round>|<author iso time>|<0 profile, 1 post>|<id>` of the last item shown. */
+/** Cursor = `<rank>|<0|1 late>|<round>|<author iso time>|<0 profile, 1 post>|<id>` of the last item shown. */
 export function encodeReviewCursor(row: TimelineRow): string {
-  return `${row.late ? 1 : 0}|${row.round}|${row.authorAt.toISOString()}|${row.kindOrder}|${row.id}`
+  return `${row.rank}|${row.late ? 1 : 0}|${row.round}|${row.authorAt.toISOString()}|${row.kindOrder}|${row.id}`
 }
 
-export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow, 'late' | 'round' | 'authorAt' | 'kindOrder' | 'id'> | null {
-  const [late, round, iso, kindOrder, id] = (value ?? '').split('|')
+export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow, 'rank' | 'late' | 'round' | 'authorAt' | 'kindOrder' | 'id'> | null {
+  const [rank, late, round, iso, kindOrder, id] = (value ?? '').split('|')
   const authorAt = new Date(iso ?? '')
+  const rankNumber = Number(rank)
   const roundNumber = Number(round)
-  if (!id || (late !== '0' && late !== '1') || (kindOrder !== '0' && kindOrder !== '1') || !Number.isInteger(roundNumber) || roundNumber < 0 || Number.isNaN(authorAt.getTime())) return null
-  return { late: late === '1', round: roundNumber, authorAt, kindOrder: Number(kindOrder), id }
+  if (!id || !Number.isInteger(rankNumber) || (late !== '0' && late !== '1') || (kindOrder !== '0' && kindOrder !== '1') || !Number.isInteger(roundNumber) || roundNumber < 0 || Number.isNaN(authorAt.getTime())) return null
+  return { rank: rankNumber, late: late === '1', round: roundNumber, authorAt, kindOrder: Number(kindOrder), id }
 }
 
 /**
- * Every account and post waiting for review. Accounts and photo posts come
+ * Every account and post waiting for review. Items staff moved up come first,
+ * in their order; then the default order: accounts and photo posts come
  * first, then the posts without a photo; within each, one item per account
  * in turn (accounts by sign-up time), so no single account fills a page. An
  * account under review sits in the first turn, right before its first post.
@@ -158,14 +165,14 @@ export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow,
 export async function listReviewQueue(options: { cursor?: string; now?: Date } = {}): Promise<ReviewQueue> {
   const now = options.now ?? new Date()
   const after = decodeReviewCursor(options.cursor)
-  const order = `ORDER BY late, round, "authorAt", "kindOrder", id`
+  const order = `ORDER BY rank, late, round, "authorAt", "kindOrder", id`
   const rows = (after
     ? await prisma.$queryRawUnsafe<TimelineRow[]>(
-      `${TIMELINE_SQL} WHERE (late, round, "authorAt", "kindOrder", id) > ($1::boolean, $2::bigint, $3::timestamp, $4::int, $5::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
-      after.late, after.round, after.authorAt, after.kindOrder, after.id,
+      `${TIMELINE_SQL} WHERE (rank, late, round, "authorAt", "kindOrder", id) > ($1::bigint, $2::boolean, $3::bigint, $4::timestamp, $5::int, $6::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
+      after.rank, after.late, after.round, after.authorAt, after.kindOrder, after.id,
     )
     : await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`))
-    .map((row) => ({ ...row, round: Number(row.round), kindOrder: Number(row.kindOrder) }))
+    .map((row) => ({ ...row, rank: Number(row.rank), round: Number(row.round), kindOrder: Number(row.kindOrder) }))
   const page = rows.slice(0, REVIEW_ITEMS_PER_PAGE)
 
   const profileIds = page.filter((row) => row.kind === 'profile').map((row) => row.id)
@@ -200,7 +207,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date } =
       const user = usersById.get(row.id)
       if (!user) continue
       items.push({
-        kind: 'profile', key, at,
+        kind: 'profile', key, at, pinned: row.rank !== UNRANKED,
         profile: {
           userId: user.id,
           name: user.name,
@@ -222,7 +229,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date } =
       if (!post) continue
       const author = post.operatorUser
       items.push({
-        kind: 'post', key, at,
+        kind: 'post', key, at, pinned: row.rank !== UNRANKED,
         post: toReviewPost(post),
         author: {
           userId: author.id, name: author.name, handle: author.handle, image: author.image, primaryLanguages: author.primaryLanguages,
@@ -372,4 +379,31 @@ export async function reviewOperatorPost(
     await audit('regenerate', { ok: false })
     return { ok: false, error: 'regenerate_failed' }
   }
+}
+
+/**
+ * Moves one account or post to the front of the review queue (`pinned`), or
+ * back into the default order. A pinned item goes ahead of every other one.
+ */
+export async function setReviewPin(ctx: AdminContext, kind: 'profile' | 'post', id: string, pinned: boolean): Promise<{ ok: true } | { ok: false; error: 'not_found' }> {
+  let rank: number | null = null
+  if (pinned) {
+    const [row] = await prisma.$queryRaw<Array<{ low: number | null }>>`
+      SELECT LEAST(
+        (SELECT MIN(review_rank) FROM app.app_operator_accounts),
+        (SELECT MIN(review_rank) FROM app.app_operator_post_reserve)
+      ) AS low`
+    rank = (row?.low ?? 1) - 1
+  }
+  const updated = kind === 'profile'
+    ? await prisma.operatorAccount.updateMany({ where: { userId: id }, data: { reviewRank: rank } })
+    : await prisma.operatorPostReserve.updateMany({ where: { id }, data: { reviewRank: rank } })
+  if (updated.count === 0) return { ok: false, error: 'not_found' }
+  await writeAdminAudit(ctx, {
+    action: kind === 'profile' ? 'operator.review_order' : 'operator_post.review_order',
+    targetType: kind === 'profile' ? 'user' : 'reserve',
+    targetId: id,
+    metadata: { pinned, rank },
+  })
+  return { ok: true }
 }
