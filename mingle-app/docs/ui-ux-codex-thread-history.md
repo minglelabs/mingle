@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-10-29 — Conversation list header (2.2.0+): search, bell, gear instead of compose
+
+- Surface: `AppTopHeader` on the conversation list (posting-feed clients, 2.2.0+) in `conversation-list.tsx` and `app-top-header.tsx`.
+- Issue: The shared posting header replaced the list's old header on 2.2.0, so the gear menu (sort order, app update card and its dot) disappeared from the list, while the list got a compose button that the feed and My page already have.
+- Resolution: The list header is now search, bell, gear. `AppTopHeader` takes an optional `onCompose` (the feed still passes it) and a `trailing` slot; the gear menu is one `settingsMenu` element shared by both list headers. The list no longer mounts its own compose overlay.
+- Verification: Header order test, type check, lint and the component/lib/API suites. Not tried on a device yet.
+
 ## 2026-10-29 — Conversation list: no transparent tap guard while the session loads
 
 - Surface: `conversation-list.tsx` (the `z-[199]` layer added on 2026-08-26 and capped at 3 s by #299).
