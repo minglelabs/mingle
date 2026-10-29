@@ -7,7 +7,7 @@ import { planOperatorAvatar } from '@/server/operator-avatars/generate'
 import { generateReservePosts, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
-import { loadExistingReserveTexts, loadReservePersona, PHOTO_PENDING, publishReservePostNow } from '@/server/operator-post-reserve/worker'
+import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
 
 /**
  * Staff review of operator profiles and their pre-written posts. A profile
@@ -20,10 +20,11 @@ import { loadExistingReserveTexts, loadReservePersona, PHOTO_PENDING, publishRes
 export const REVIEW_ITEMS_PER_PAGE = 20
 const MAX_FEEDBACK_LENGTH = 1000
 
-export type ReviewAction = 'publish' | 'delete' | 'regenerate'
+/** `draw`: have the post's photo drawn by hand (in ChatGPT) without changing the text. */
+export type ReviewAction = 'publish' | 'delete' | 'regenerate' | 'draw'
 
 export function parseReviewAction(value: unknown): ReviewAction | null {
-  return value === 'publish' || value === 'delete' || value === 'regenerate' ? value : null
+  return value === 'publish' || value === 'delete' || value === 'regenerate' || value === 'draw' ? value : null
 }
 
 export function normalizeReviewFeedback(value: unknown): string | null {
@@ -45,6 +46,8 @@ export type ReviewPost = {
   imageHeight: number | null
   reviewFeedback: string | null
   error: string | null
+  /** The photo is queued to be drawn by hand. */
+  photoRequested: boolean
 }
 
 export type ReviewProfile = {
@@ -104,6 +107,7 @@ function toReviewPost(row: {
     imageHeight: row.imageHeight,
     reviewFeedback: row.reviewFeedback,
     error: row.error,
+    photoRequested: !row.imageObjectKey && row.error === PHOTO_REQUESTED,
   }
 }
 
@@ -332,6 +336,17 @@ export async function reviewOperatorPost(
     return { ok: true, state: 'deleted' }
   }
 
+  if (action === 'draw') {
+    if (!row.imagePrompt || row.imageObjectKey) return { ok: false, error: 'not_found' }
+    const updated = await prisma.operatorPostReserve.update({
+      where: { id: reserveId },
+      data: { error: PHOTO_REQUESTED, ...(feedback ? { reviewFeedback: feedback } : {}) },
+      select: POST_SELECT,
+    })
+    await audit('draw')
+    return { ok: true, state: 'review', post: toReviewPost(updated) }
+  }
+
   const claimed = await prisma.operatorPostReserve.updateMany({
     where: { id: reserveId, state: 'review' },
     data: { state: 'regenerating', reviewFeedback: feedback },
@@ -362,7 +377,8 @@ export async function reviewOperatorPost(
         imageObjectKey: image?.objectKey ?? null,
         imageWidth: image?.width ?? null,
         imageHeight: image?.height ?? null,
-        error: generated.imagePrompt && !image ? PHOTO_PENDING : null,
+        // A photo still to draw is queued for drawing by hand right away.
+        error: generated.imagePrompt && !image ? PHOTO_REQUESTED : null,
       },
       select: POST_SELECT,
     })

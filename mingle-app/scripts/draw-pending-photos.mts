@@ -4,8 +4,8 @@
  *
  *   railway run -- npx tsx scripts/draw-pending-photos.mts list <dir>
  *     writes, for every profile whose 재제작 waits for a photo,
- *     <dir>/avatar-<userId>.prompt.txt, and for every latent post waiting for
- *     its photo, <dir>/post-<reserveId>.prompt.txt plus, for a photo of the
+ *     <dir>/avatar-<userId>.prompt.txt, and for every latent post whose photo
+ *     staff asked for (재제작 or 사진 그리기), <dir>/post-<reserveId>.prompt.txt plus, for a photo of the
  *     poster, <dir>/post-<reserveId>.ref.jpg to attach with it;
  *
  *   railway run -- npx tsx scripts/draw-pending-photos.mts store <dir>
@@ -18,6 +18,7 @@ import path from 'node:path'
 import { prisma } from '../src/lib/prisma'
 import { buildPostImagePrompt, reservePostPerson, reservePostPlace, storeReservePostImage } from '../src/server/operator-post-reserve/post-image'
 import { decodePostPhoto } from '../src/server/operator-post-reserve/post-photo'
+import { PHOTO_REQUESTED } from '../src/server/operator-post-reserve/worker'
 import { setOperatorAvatarFromBytes } from '../src/server/operators/operator-avatar'
 
 function drawnFile(dir: string, name: string): string | null {
@@ -35,7 +36,7 @@ async function main() {
     select: { userId: true, avatarSpec: true, user: { select: { handle: true } } },
   })
   const posts = await prisma.operatorPostReserve.findMany({
-    where: { state: 'review', imagePrompt: { not: null }, imageObjectKey: null, operatorUser: { isDeleted: false } },
+    where: { state: 'review', imagePrompt: { not: null }, imageObjectKey: null, error: PHOTO_REQUESTED, operatorUser: { isDeleted: false } },
     orderBy: [{ reviewRank: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
     select: { id: true, operatorUserId: true, imagePrompt: true, operatorUser: { select: { handle: true } } },
   })

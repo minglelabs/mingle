@@ -62,6 +62,8 @@ function describeError(error: unknown): string {
 /** `rs-<id>`: the post's client id, stable across retries. */
 /** A post waiting for its photo to be drawn by hand (scripts/draw-pending-photos.mts). */
 export const PHOTO_PENDING = 'photo_pending'
+/** Staff asked for the photo in review: next in line to be drawn by hand. */
+export const PHOTO_REQUESTED = 'photo_requested'
 
 export function reserveClientPostId(reserveId: string): string {
   return `rs-${reserveId}`

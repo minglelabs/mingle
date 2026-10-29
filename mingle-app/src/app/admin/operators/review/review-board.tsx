@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Link from 'next/link'
-import { Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { ImageIcon, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Trash2 } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
@@ -12,7 +12,7 @@ import PostLanguageChips, { ORIGINAL_CHIP } from '@/components/feed/post-languag
 import { OperatorAvatar } from '../_components/operator-ui'
 import { koreanLanguageName } from '../_lib/options'
 
-type Action = 'publish' | 'delete' | 'regenerate'
+type Action = 'publish' | 'delete' | 'regenerate' | 'draw'
 
 const STAFF_LANGUAGE = 'ko'
 
@@ -102,10 +102,13 @@ function ReviewActions({
   busy,
   onAction,
   publishDisabledReason,
+  drawAction,
 }: {
   busy: Action | null
   onAction: (action: Action, feedback: string) => void
   publishDisabledReason?: string
+  /** A post whose photo is not drawn yet: offer to have only the photo drawn (null once it is queued). */
+  drawAction?: { requested: boolean }
 }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [feedback, setFeedback] = useState('')
@@ -153,6 +156,12 @@ function ReviewActions({
           재제작
         </AdminButton>
       </div>
+      {drawAction ? (
+        <AdminButton block disabled={busy !== null || drawAction.requested} onClick={() => { onAction('draw', feedback); setFeedback(''); setFeedbackOpen(false) }}>
+          {busy === 'draw' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ImageIcon className="h-4 w-4" aria-hidden="true" />}
+          {drawAction.requested ? 'ChatGPT로 그리기 요청됨' : '글은 그대로, 사진만 그리기'}
+        </AdminButton>
+      ) : null}
       {publishDisabledReason ? <p className="text-xs text-slate-500">{publishDisabledReason}</p> : null}
     </div>
   )
@@ -240,7 +249,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
     setError(null)
     try {
       const result = await sendReview('post', post.id, action, feedback)
-      if (action === 'regenerate' && result.post) setPost(result.post as ReviewPost)
+      if ((action === 'regenerate' || action === 'draw') && result.post) setPost(result.post as ReviewPost)
       else onDone()
     } catch (caught) {
       setError(ERROR_COPY[(caught as Error).message] ?? '요청하지 못했어요.')
@@ -279,9 +288,11 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
           className="mt-2 h-auto max-h-[85svh] w-full rounded-xl bg-slate-100 object-contain"
         />
       ) : post.photoDescription ? (
-        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-          ChatGPT로 그릴 사진 (그린 뒤 게시할 수 있어요): {post.photoDescription}
-        </p>
+        // Where the photo will go: its description on white, so it is not read as the post text.
+        <div className="mt-2 flex aspect-square w-full flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-6 text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{post.photoRequested ? '사진 · ChatGPT로 그리는 중' : '사진 · 아직 안 그림'}</p>
+          <p className="text-sm leading-6 text-slate-700">{post.photoDescription}</p>
+        </div>
       ) : null}
       {post.reviewFeedback ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {post.reviewFeedback}</p> : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
@@ -289,6 +300,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
         busy={busy}
         onAction={handle}
         publishDisabledReason={!profileApproved ? '계정을 먼저 게시해야 글을 올릴 수 있어요.' : post.photoDescription && !post.imageObjectKey ? '사진을 그린 뒤에 게시할 수 있어요.' : undefined}
+        drawAction={post.photoDescription && !post.imageObjectKey ? { requested: post.photoRequested } : undefined}
       />
     </AdminCard>
   )
