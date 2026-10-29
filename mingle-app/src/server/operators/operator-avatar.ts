@@ -110,15 +110,8 @@ export async function setOperatorAvatarFromBytes(
     return { ok: false, status: 500, error: 'profile_update_failed' }
   }
 
-  // Only ever delete an object under this account's own prefix.
-  if (previousObjectKey && previousObjectKey !== objectKey && previousObjectKey.startsWith(`profiles/${userId}/`)) {
-    try {
-      await deleteProfileImage(previousObjectKey)
-    } catch (error) {
-      console.warn('[operator-avatar] previous_object_delete_failed', { error: error instanceof Error ? error.name : 'unknown' })
-    }
-  }
-
+  // The previous photo is kept in storage (its key is in the audit row), so a
+  // photo replaced by mistake can be put back.
   await writeAdminAudit(ctx, {
     action: 'operator.avatar',
     operatorUserId: userId,

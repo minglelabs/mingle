@@ -97,7 +97,7 @@ describe('POST /admin/operators/api/[userId]/avatar', () => {
     expect(mocks.putProfileImage).not.toHaveBeenCalled()
   })
 
-  it('re-encodes to a 1024 square JPEG, stores it under the account, resets the crop, deletes the old photo and audits', async () => {
+  it('re-encodes to a 1024 square JPEG, stores it under the account, resets the crop, keeps the old photo and audits', async () => {
     const response = await upload(jpeg())
     expect(response.status).toBe(200)
 
@@ -122,7 +122,7 @@ describe('POST /admin/operators/api/[userId]/avatar', () => {
       },
       select: { id: true },
     })
-    expect(mocks.deleteProfileImage).toHaveBeenCalledWith('profiles/op_1/old.jpg')
+    expect(mocks.deleteProfileImage).not.toHaveBeenCalled()
     expect(mocks.writeAdminAudit).toHaveBeenCalledWith(CTX, expect.objectContaining({ action: 'operator.avatar', operatorUserId: 'op_1' }))
     expect(await response.json()).toEqual({ image: `https://cdn.example.com/${put.objectKey}` })
   })
