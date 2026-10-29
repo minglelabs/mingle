@@ -240,17 +240,17 @@ export async function reviewOperatorProfile(
 
   if (action === 'publish') {
     await prisma.$transaction([
-      prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'approved' } }),
+      prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'approved', ...(feedback ? { reviewFeedback: feedback } : {}) } }),
       prisma.user.update({ where: { id: userId }, data: { isActive: true } }),
     ])
-    await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'publish' } })
+    await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'publish', feedback } })
     return { ok: true, state: 'approved' }
   }
 
   if (action === 'delete') {
     // Never public, so nothing else refers to it; its reserve rows go with it.
     await prisma.user.delete({ where: { id: userId } })
-    await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'delete' } })
+    await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'delete', feedback } })
     return { ok: true, state: 'deleted' }
   }
 
@@ -287,13 +287,15 @@ export async function reviewOperatorPost(
   })
   if (!row || !REVIEW_POST_STATES.includes(row.state)) return { ok: false, error: 'not_found' }
   if (row.state === 'regenerating') return { ok: false, error: 'busy' }
+  // Feedback on every answer is kept on the row and in the audit log, not only on 재제작.
   const audit = (decision: string, extra: Record<string, string | boolean | null> = {}) => writeAdminAudit(ctx, {
-    action: 'operator_post.review', operatorUserId: row.operatorUserId, targetType: 'reserve', targetId: reserveId, metadata: { decision, ...extra },
+    action: 'operator_post.review', operatorUserId: row.operatorUserId, targetType: 'reserve', targetId: reserveId, metadata: { decision, feedback, ...extra },
   })
 
   if (action === 'publish') {
     // The author must be public before anything goes out in their name.
     if (!row.operatorUser.isActive) return { ok: false, error: 'profile_pending' }
+    if (feedback) await prisma.operatorPostReserve.update({ where: { id: reserveId }, data: { reviewFeedback: feedback } })
     const result = await publishReservePostNow(reserveId, 'review', now)
     if (!result.ok) return { ok: false, error: result.error === 'reserve_empty' ? 'not_found' : 'publish_failed' }
     await audit('publish', { postId: result.postId })
@@ -301,7 +303,7 @@ export async function reviewOperatorPost(
   }
 
   if (action === 'delete') {
-    const cancelled = await prisma.operatorPostReserve.updateMany({ where: { id: reserveId, state: 'review' }, data: { state: 'cancelled', releaseAt: null } })
+    const cancelled = await prisma.operatorPostReserve.updateMany({ where: { id: reserveId, state: 'review' }, data: { state: 'cancelled', releaseAt: null, ...(feedback ? { reviewFeedback: feedback } : {}) } })
     if (cancelled.count === 0) return { ok: false, error: 'busy' }
     await audit('delete')
     return { ok: true, state: 'deleted' }
