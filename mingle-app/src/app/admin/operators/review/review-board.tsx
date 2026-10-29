@@ -5,6 +5,7 @@ import { Loader2, MessageSquarePlus, RefreshCw, Send, Trash2 } from 'lucide-reac
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
+import ProfileLanguageLevels from '@/components/profile-language-levels'
 import PostLanguageChips, { ORIGINAL_CHIP } from '@/components/feed/post-language-chips'
 import { OperatorAvatar } from '../_components/operator-ui'
 import { koreanLanguageName } from '../_lib/options'
@@ -111,6 +112,68 @@ function ReviewActions({
   )
 }
 
+/**
+ * The app's flag chips for staff: 원문 and Korean, translated on first tap
+ * (a post by `{ id }`, an account's bio by `{ kind: 'profile', id }`).
+ */
+function useStaffTranslation(target: { id: string; kind?: 'profile' }, text: string, onError: (message: string | null) => void) {
+  const [chip, setChip] = useState(ORIGINAL_CHIP)
+  const [korean, setKorean] = useState<{ text: string; source: string } | null>(null)
+  const [translating, setTranslating] = useState(false)
+  const koreanText = korean?.source === text ? korean.text : null
+
+  async function select(language: string) {
+    if (language !== STAFF_LANGUAGE || koreanText) {
+      setChip(language)
+      return
+    }
+    setTranslating(true)
+    onError(null)
+    try {
+      const response = await fetch('/admin/operators/api/review/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(target),
+      })
+      const payload = await response.json().catch(() => ({})) as { text?: unknown }
+      if (!response.ok || typeof payload.text !== 'string') throw new Error('translate_failed')
+      setKorean({ text: payload.text, source: text })
+      setChip(STAFF_LANGUAGE)
+    } catch {
+      onError('번역하지 못했어요. 다시 눌러 주세요.')
+    } finally {
+      setTranslating(false)
+    }
+  }
+
+  return {
+    shownText: chip === STAFF_LANGUAGE && koreanText ? koreanText : text,
+    selected: koreanText ? chip : ORIGINAL_CHIP,
+    translating,
+    select,
+  }
+}
+
+function StaffTranslationChips({ sourceLanguage, translation }: {
+  sourceLanguage: string | null
+  translation: ReturnType<typeof useStaffTranslation>
+}) {
+  if (sourceLanguage === STAFF_LANGUAGE) return null
+  return (
+    <div className="-ml-1 mt-1">
+      <PostLanguageChips
+        sourceLanguage={sourceLanguage}
+        languages={[STAFF_LANGUAGE]}
+        selected={translation.selected}
+        loadingLanguage={translation.translating ? STAFF_LANGUAGE : null}
+        locale="ko"
+        originalLabel="원문"
+        onSelect={(language) => void translation.select(language)}
+      />
+    </div>
+  )
+}
+
 function PostCard({ post: initial, at, author, profileApproved, onDone }: {
   post: ReviewPost
   at: string
@@ -121,37 +184,8 @@ function PostCard({ post: initial, at, author, profileApproved, onDone }: {
   const [post, setPost] = useState(initial)
   const [busy, setBusy] = useState<Action | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // The app's flag chips: 원문 and Korean, translated on first tap.
-  const [chip, setChip] = useState(ORIGINAL_CHIP)
-  const [korean, setKorean] = useState<{ text: string; source: string } | null>(null)
-  const [translating, setTranslating] = useState(false)
   const sourceLanguage = post.language ?? author.languages[0] ?? null
-  const koreanText = korean?.source === post.text ? korean.text : null
-  const shownText = chip === STAFF_LANGUAGE && koreanText ? koreanText : post.text
-
-  async function selectChip(language: string) {
-    if (language !== STAFF_LANGUAGE || koreanText) {
-      setChip(language)
-      return
-    }
-    setTranslating(true)
-    setError(null)
-    try {
-      const response = await fetch('/admin/operators/api/review/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: post.id }),
-      })
-      const payload = await response.json().catch(() => ({})) as { text?: unknown }
-      if (!response.ok || typeof payload.text !== 'string') throw new Error('translate_failed')
-      setKorean({ text: payload.text, source: post.text })
-      setChip(STAFF_LANGUAGE)
-    } catch {
-      setError('번역하지 못했어요. 다시 눌러 주세요.')
-    } finally {
-      setTranslating(false)
-    }
-  }
+  const translation = useStaffTranslation({ id: post.id }, post.text, setError)
 
   async function handle(action: Action, feedback: string) {
     if (action === 'delete' && !window.confirm('이 글을 삭제할까요?')) return
@@ -183,20 +217,8 @@ function PostCard({ post: initial, at, author, profileApproved, onDone }: {
         {post.topic ? <AdminChip>{post.topic}</AdminChip> : null}
         {post.photoKind ? <AdminChip tone="warning">사진: {PHOTO_KIND[post.photoKind] ?? post.photoKind}</AdminChip> : null}
       </div>
-      <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{shownText}</p>
-      {sourceLanguage !== STAFF_LANGUAGE ? (
-        <div className="-ml-1 mt-1">
-          <PostLanguageChips
-            sourceLanguage={sourceLanguage}
-            languages={[STAFF_LANGUAGE]}
-            selected={koreanText ? chip : ORIGINAL_CHIP}
-            loadingLanguage={translating ? STAFF_LANGUAGE : null}
-            locale="ko"
-            originalLabel="원문"
-            onSelect={(language) => void selectChip(language)}
-          />
-        </div>
-      ) : null}
+      <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{translation.shownText}</p>
+      <StaffTranslationChips sourceLanguage={sourceLanguage} translation={translation} />
       {post.imageObjectKey ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -233,6 +255,7 @@ function ProfileCard({ profile, at, image, onImage, onApproved, onDeleted }: {
 }) {
   const [busy, setBusy] = useState<Action | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const bio = useStaffTranslation({ kind: 'profile', id: profile.userId }, profile.bio ?? '', setError)
 
   async function handle(action: Action, feedback: string) {
     if (action === 'delete' && !window.confirm(`${profile.name ?? profile.handle} 계정과 검토 중인 글을 모두 삭제할까요?`)) return
@@ -254,7 +277,6 @@ function ProfileCard({ profile, at, image, onImage, onApproved, onDeleted }: {
     profile.age ? `${profile.age}세` : null,
     profile.personaGender === 'female' ? '여성' : profile.personaGender === 'male' ? '남성' : null,
     [profile.city, profile.country].filter(Boolean).join(', ') || null,
-    profile.primaryLanguages.map((code) => koreanLanguageName(code)).join('·') || null,
   ].filter(Boolean)
 
   return (
@@ -280,7 +302,13 @@ function ProfileCard({ profile, at, image, onImage, onApproved, onDeleted }: {
         </div>
         <p className="text-sm text-slate-500">@{profile.handle}</p>
         {facts.length ? <p className="mt-1 text-sm text-slate-600">{facts.join(' · ')}</p> : null}
-        {profile.bio ? <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{profile.bio}</p> : null}
+        <ProfileLanguageLevels primaryLanguages={profile.primaryLanguages} interestLanguages={profile.interestLanguages} locale="ko" className="mt-2" />
+        {profile.bio ? (
+          <>
+            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{bio.shownText}</p>
+            <StaffTranslationChips sourceLanguage={profile.primaryLanguages[0] ?? null} translation={bio} />
+          </>
+        ) : null}
       </div>
       {profile.profileFeedback ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {profile.profileFeedback}</p> : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}

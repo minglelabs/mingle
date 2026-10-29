@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-languages'
 import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
@@ -56,6 +57,7 @@ export type ReviewProfile = {
   city: string | null
   country: string | null
   primaryLanguages: string[]
+  interestLanguages: InterestLanguage[]
   personaGender: string | null
   profileState: string
   profileFeedback: string | null
@@ -113,17 +115,17 @@ const REVIEW_POST_STATES = ['review', 'regenerating']
  * of the same group, so the queue deals one post per account in turn.
  * `authorAt`: the author's sign-up time, the order within a round.
  */
-type TimelineRow = { late: boolean; round: number; authorAt: Date; kind: 'profile' | 'post'; id: string; at: Date }
+type TimelineRow = { late: boolean; round: number; authorAt: Date; kindOrder: number; kind: 'profile' | 'post'; id: string; at: Date }
 
 // A post's round counts every reserve row of its author (any state), so it
 // does not shift when staff answer other posts and paging stays stable.
 const TIMELINE_SQL = `
-  SELECT late, round, "authorAt", kind, id, at FROM (
-    SELECT false AS late, 0::bigint AS round, u.created_at AS "authorAt", 'profile' AS kind, u.id, u.created_at AS at
+  SELECT late, round, "authorAt", "kindOrder", kind, id, at FROM (
+    SELECT false AS late, 1::bigint AS round, u.created_at AS "authorAt", 0 AS "kindOrder", 'profile' AS kind, u.id, u.created_at AS at
     FROM app.app_users u JOIN app.app_operator_accounts o ON o.user_id = u.id
     WHERE u.is_operator AND NOT u.is_deleted AND o.review_state <> 'approved'
     UNION ALL
-    SELECT late, round, "authorAt", 'post' AS kind, id, at FROM (
+    SELECT late, round, "authorAt", 1 AS "kindOrder", 'post' AS kind, id, at FROM (
       SELECT r.image_object_key IS NULL AS late,
         ROW_NUMBER() OVER (PARTITION BY r.operator_user_id, r.image_object_key IS NULL ORDER BY r.created_at, r.id) AS round,
         u.created_at AS "authorAt", r.id, r.created_at AS at, r.state, u.is_deleted
@@ -132,37 +134,38 @@ const TIMELINE_SQL = `
     WHERE state IN ('review', 'regenerating') AND NOT is_deleted
   ) t`
 
-/** Cursor = `<0|1 late>|<round>|<author iso time>|<id>` of the last item shown. */
+/** Cursor = `<0|1 late>|<round>|<author iso time>|<0 profile, 1 post>|<id>` of the last item shown. */
 export function encodeReviewCursor(row: TimelineRow): string {
-  return `${row.late ? 1 : 0}|${row.round}|${row.authorAt.toISOString()}|${row.id}`
+  return `${row.late ? 1 : 0}|${row.round}|${row.authorAt.toISOString()}|${row.kindOrder}|${row.id}`
 }
 
-export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow, 'late' | 'round' | 'authorAt' | 'id'> | null {
-  const [late, round, iso, id] = (value ?? '').split('|')
+export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow, 'late' | 'round' | 'authorAt' | 'kindOrder' | 'id'> | null {
+  const [late, round, iso, kindOrder, id] = (value ?? '').split('|')
   const authorAt = new Date(iso ?? '')
   const roundNumber = Number(round)
-  if (!id || (late !== '0' && late !== '1') || !Number.isInteger(roundNumber) || roundNumber < 0 || Number.isNaN(authorAt.getTime())) return null
-  return { late: late === '1', round: roundNumber, authorAt, id }
+  if (!id || (late !== '0' && late !== '1') || (kindOrder !== '0' && kindOrder !== '1') || !Number.isInteger(roundNumber) || roundNumber < 0 || Number.isNaN(authorAt.getTime())) return null
+  return { late: late === '1', round: roundNumber, authorAt, kindOrder: Number(kindOrder), id }
 }
 
 /**
  * Every account and post waiting for review. Accounts and photo posts come
  * first, then the posts without a photo; within each, one item per account
- * in turn (accounts by sign-up time), so no single account fills a page.
+ * in turn (accounts by sign-up time), so no single account fills a page. An
+ * account under review sits in the first turn, right before its first post.
  * Paged by cursor, so items answered on one page never push unseen ones
  * past the next.
  */
 export async function listReviewQueue(options: { cursor?: string; now?: Date } = {}): Promise<ReviewQueue> {
   const now = options.now ?? new Date()
   const after = decodeReviewCursor(options.cursor)
-  const order = `ORDER BY late, round, "authorAt", id`
+  const order = `ORDER BY late, round, "authorAt", "kindOrder", id`
   const rows = (after
     ? await prisma.$queryRawUnsafe<TimelineRow[]>(
-      `${TIMELINE_SQL} WHERE (late, round, "authorAt", id) > ($1::boolean, $2::bigint, $3::timestamp, $4::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
-      after.late, after.round, after.authorAt, after.id,
+      `${TIMELINE_SQL} WHERE (late, round, "authorAt", "kindOrder", id) > ($1::boolean, $2::bigint, $3::timestamp, $4::int, $5::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
+      after.late, after.round, after.authorAt, after.kindOrder, after.id,
     )
     : await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`))
-    .map((row) => ({ ...row, round: Number(row.round) }))
+    .map((row) => ({ ...row, round: Number(row.round), kindOrder: Number(row.kindOrder) }))
   const page = rows.slice(0, REVIEW_ITEMS_PER_PAGE)
 
   const profileIds = page.filter((row) => row.kind === 'profile').map((row) => row.id)
@@ -174,7 +177,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date } =
       where: { id: { in: profileIds } },
       select: {
         id: true, name: true, handle: true, image: true, bio: true, birthDate: true,
-        locationCity: true, locationCountry: true, primaryLanguages: true,
+        locationCity: true, locationCountry: true, primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true,
         operatorAccount: { select: { personaGender: true, reviewState: true, reviewFeedback: true } },
       },
     }),
@@ -208,6 +211,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date } =
           city: user.locationCity,
           country: user.locationCountry,
           primaryLanguages: user.primaryLanguages,
+          interestLanguages: zipInterestLanguages(user.interestLanguages, user.interestLanguageLevels),
           personaGender: user.operatorAccount?.personaGender ?? null,
           profileState: user.operatorAccount?.reviewState ?? 'approved',
           profileFeedback: user.operatorAccount?.reviewFeedback ?? null,
