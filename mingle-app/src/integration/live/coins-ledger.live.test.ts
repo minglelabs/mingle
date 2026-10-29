@@ -15,16 +15,20 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
   let wallet: Wallet
   let prisma: PrismaModule['prisma']
   const previousMode = process.env.COIN_BILLING_ENABLED
+  const previousBonus = process.env.COIN_SIGNUP_BONUS_COINS
 
   beforeAll(async () => {
     process.env.DATABASE_URL = TEST_DATABASE_URL
     process.env.COIN_BILLING_ENABLED = '1'
+    // Most cases check the daily refill alone; the sign-up bonus has its own case.
+    process.env.COIN_SIGNUP_BONUS_COINS = '0'
     prisma = (await import('@/lib/prisma')).prisma
     wallet = await import('@/server/coins/wallet')
   })
 
   afterAll(async () => {
     process.env.COIN_BILLING_ENABLED = previousMode
+    process.env.COIN_SIGNUP_BONUS_COINS = previousBonus
     await prisma?.$disconnect()
   })
 
@@ -42,6 +46,23 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
   function stt(userId: string, seconds: number, key: string, now?: Date) {
     return wallet.chargeCoinUsage({ userId, kind: 'stt', units: { second: seconds }, idempotencyKey: key, now })
   }
+
+  it('adds a one-time 1,000-coin sign-up bonus on top of the first daily refill', async () => {
+    process.env.COIN_SIGNUP_BONUS_COINS = '1000'
+    try {
+      const userId = newUser()
+      const t0 = new Date('2026-10-03T00:00:00Z')
+      expect((await wallet.getCoinWallet(userId, t0)).balance).toBe(2000)
+      expect((await wallet.getCoinWallet(userId, new Date(t0.getTime() + 1000))).balance).toBe(2000)
+      const lots = await prisma.appCoinLot.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } })
+      expect(lots.map(lot => lot.source).sort()).toEqual(['daily_free', 'signup_bonus'])
+      // The bonus is free coins: no refill while the free balance is still at or over the cap.
+      expect((await wallet.getCoinWallet(userId, new Date(t0.getTime() + 2 * DAY))).balance).toBe(2000)
+      expect(await sums(userId)).toEqual({ ledger: 2000n * COIN, lots: 2000n * COIN, wallet: 2000n * COIN })
+    } finally {
+      process.env.COIN_SIGNUP_BONUS_COINS = '0'
+    }
+  })
 
   it('gives a new user one 1,000-coin free lot and nothing more within 24 hours', async () => {
     const userId = newUser()
@@ -248,7 +269,7 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
       expect(await purchases.handlePolarOrderEvent(orderId)).toBe('granted')
       expect(await purchases.handlePolarOrderEvent(orderId)).toBe('already_granted')
       expect(requested[0]).toBe(`https://sandbox-api.polar.sh/v1/orders/${orderId}`)
-      expect((await wallet.getCoinWallet(userId)).paidBalance).toBe(10_600)
+      expect((await wallet.getCoinWallet(userId)).paidBalance).toBe(11_200)
 
       // An order for a different Polar product than the pack is linked to is refused.
       order.product_id = 'something-else'

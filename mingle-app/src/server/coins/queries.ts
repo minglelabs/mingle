@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client/index'
 import { prisma } from '@/lib/prisma'
+import { listConversationReadReceipts } from '@/lib/app-conversations'
 import { microToSpentCoins } from '@/lib/coin-units'
 import { COIN_USAGE_KINDS, type CoinUsageKind } from './pricing'
 
@@ -230,5 +231,35 @@ export async function getCoinHistory(userId: string, cursor: string | null): Pro
       }
     }),
     nextCursor: rows.length === HISTORY_PAGE_SIZE ? rows[rows.length - 1].id.toString() : null,
+  }
+}
+
+export type ConversationCoinUsage = {
+  // Every current member, including those who have spent nothing here.
+  members: { userId: string; coins: number }[]
+  totalCoins: number
+}
+
+/**
+ * Hash spent in one room, per member (the room's usage list). Members only:
+ * null when the caller is not a visible member. Charges are tied to a room by
+ * its session key; only real (non-shadow) charges count.
+ */
+export async function getConversationCoinUsage(conversationId: string, viewerId: string): Promise<ConversationCoinUsage | null> {
+  const room = await listConversationReadReceipts({ conversationId, userId: viewerId })
+  if (!room) return null
+  const memberIds = room.members.map(member => member.userId)
+  const sums = memberIds.length
+    ? await prisma.appCoinUsageCharge.groupBy({
+        by: ['userId'],
+        where: { sessionKey: room.sessionKey, shadow: false, userId: { in: memberIds } },
+        _sum: { chargedMicro: true },
+      })
+    : []
+  const microByUser = new Map(sums.map(row => [row.userId, row._sum.chargedMicro ?? 0n]))
+  const members = memberIds.map(userId => ({ userId, coins: microToSpentCoins(microByUser.get(userId) ?? 0n) }))
+  return {
+    members,
+    totalCoins: microToSpentCoins([...microByUser.values()].reduce((sum, micro) => sum + micro, 0n)),
   }
 }

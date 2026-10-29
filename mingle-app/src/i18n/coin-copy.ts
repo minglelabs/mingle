@@ -51,6 +51,9 @@ export type CoinCopy = {
   conversationFallback: string;
   noHistory: string;
   loadMore: string;
+  // Room participants list: Hash each member has spent in this room.
+  roomUsageTitle: string;
+  roomUsed: string;
 };
 
 const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
@@ -68,6 +71,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "음성 인식", kindTranslation: "번역", kindTts: "음성 통역", kindImageText: "사진 번역",
     history: "내역", sourceDailyFree: "무료 충전", sourcePurchase: "구매", sourceAdmin: "운영자 지급", sourceBonus: "보너스",
     sourceRefund: "환불", sourceExpired: "만료", conversationFallback: "대화", noHistory: "아직 내역이 없어요", loadMore: "더 보기",
+    roomUsageTitle: "이 대화방에서 쓴 해씨", roomUsed: "{coins} 사용",
   },
   en: {
     coin: "Hash", storeTitle: "Hash Store", balanceLabel: "Your Hash", freePaid: "Free {free} · Purchased {paid}",
@@ -83,6 +87,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "Speech recognition", kindTranslation: "Translation", kindTts: "Voice interpreting", kindImageText: "Photo translation",
     history: "History", sourceDailyFree: "Free top-up", sourcePurchase: "Purchase", sourceAdmin: "From HashChat", sourceBonus: "Bonus",
     sourceRefund: "Refund", sourceExpired: "Expired", conversationFallback: "Conversation", noHistory: "No history yet", loadMore: "Show more",
+    roomUsageTitle: "Hash used in this chat", roomUsed: "{coins} used",
   },
   ja: {
     coin: "ハッシュ", storeTitle: "ハッシュストア", balanceLabel: "保有ハッシュ", freePaid: "無料 {free} · 購入 {paid}",
@@ -98,6 +103,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "音声認識", kindTranslation: "翻訳", kindTts: "音声通訳", kindImageText: "写真翻訳",
     history: "履歴", sourceDailyFree: "無料チャージ", sourcePurchase: "購入", sourceAdmin: "運営からの付与", sourceBonus: "ボーナス",
     sourceRefund: "返金", sourceExpired: "期限切れ", conversationFallback: "会話", noHistory: "履歴はまだありません", loadMore: "もっと見る",
+    roomUsageTitle: "このトークで使ったハッシュ", roomUsed: "{coins} 使用",
   },
   "zh-CN": {
     coin: "哈希", storeTitle: "哈希商店", balanceLabel: "持有哈希", freePaid: "免费 {free} · 充值 {paid}",
@@ -113,6 +119,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "语音识别", kindTranslation: "翻译", kindTts: "语音口译", kindImageText: "图片翻译",
     history: "记录", sourceDailyFree: "免费补充", sourcePurchase: "购买", sourceAdmin: "官方赠送", sourceBonus: "奖励",
     sourceRefund: "退款", sourceExpired: "已过期", conversationFallback: "对话", noHistory: "暂无记录", loadMore: "查看更多",
+    roomUsageTitle: "本聊天已用哈希", roomUsed: "已用 {coins}",
   },
   "zh-TW": {
     coin: "哈希", storeTitle: "哈希商店", balanceLabel: "持有哈希", freePaid: "免費 {free} · 儲值 {paid}",
@@ -128,6 +135,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "語音辨識", kindTranslation: "翻譯", kindTts: "語音口譯", kindImageText: "圖片翻譯",
     history: "紀錄", sourceDailyFree: "免費補充", sourcePurchase: "購買", sourceAdmin: "官方贈送", sourceBonus: "獎勵",
     sourceRefund: "退款", sourceExpired: "已過期", conversationFallback: "對話", noHistory: "尚無紀錄", loadMore: "查看更多",
+    roomUsageTitle: "本聊天已用哈希", roomUsed: "已用 {coins}",
   },
   fr: {
     coin: "Hash", storeTitle: "Boutique Hash", balanceLabel: "Vos Hash", freePaid: "Gratuits {free} · Achetés {paid}",
@@ -143,6 +151,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "Reconnaissance vocale", kindTranslation: "Traduction", kindTts: "Interprétation vocale", kindImageText: "Traduction de photos",
     history: "Historique", sourceDailyFree: "Recharge gratuite", sourcePurchase: "Achat", sourceAdmin: "Offert par HashChat", sourceBonus: "Bonus",
     sourceRefund: "Remboursement", sourceExpired: "Expiré", conversationFallback: "Conversation", noHistory: "Aucun historique", loadMore: "Voir plus",
+    roomUsageTitle: "Hash utilisés dans cette discussion", roomUsed: "{coins} utilisés",
   },
   de: {
     coin: "Hash", storeTitle: "Hash-Shop", balanceLabel: "Deine Hash", freePaid: "Gratis {free} · Gekauft {paid}",
@@ -158,6 +167,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "Spracherkennung", kindTranslation: "Übersetzung", kindTts: "Sprachdolmetschen", kindImageText: "Fotoübersetzung",
     history: "Verlauf", sourceDailyFree: "Gratis-Auffüllung", sourcePurchase: "Kauf", sourceAdmin: "Von HashChat", sourceBonus: "Bonus",
     sourceRefund: "Erstattung", sourceExpired: "Abgelaufen", conversationFallback: "Unterhaltung", noHistory: "Noch kein Verlauf", loadMore: "Mehr anzeigen",
+    roomUsageTitle: "In diesem Chat verbrauchte Hash", roomUsed: "{coins} verbraucht",
   },
   es: {
     coin: "Hash", storeTitle: "Tienda de Hash", balanceLabel: "Tus Hash", freePaid: "Gratis {free} · Comprados {paid}",
@@ -173,6 +183,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "Reconocimiento de voz", kindTranslation: "Traducción", kindTts: "Interpretación por voz", kindImageText: "Traducción de fotos",
     history: "Historial", sourceDailyFree: "Recarga gratis", sourcePurchase: "Compra", sourceAdmin: "Regalo de HashChat", sourceBonus: "Bono",
     sourceRefund: "Reembolso", sourceExpired: "Caducado", conversationFallback: "Conversación", noHistory: "Aún no hay historial", loadMore: "Ver más",
+    roomUsageTitle: "Hash usados en este chat", roomUsed: "{coins} usados",
   },
   pt: {
     coin: "Hash", storeTitle: "Loja de Hash", balanceLabel: "Seus Hash", freePaid: "Grátis {free} · Comprados {paid}",
@@ -188,6 +199,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "Reconhecimento de voz", kindTranslation: "Tradução", kindTts: "Interpretação por voz", kindImageText: "Tradução de fotos",
     history: "Histórico", sourceDailyFree: "Recarga grátis", sourcePurchase: "Compra", sourceAdmin: "Presente do HashChat", sourceBonus: "Bônus",
     sourceRefund: "Reembolso", sourceExpired: "Expirado", conversationFallback: "Conversa", noHistory: "Ainda não há histórico", loadMore: "Ver mais",
+    roomUsageTitle: "Hash usados nesta conversa", roomUsed: "{coins} usados",
   },
   it: {
     coin: "Hash", storeTitle: "Negozio Hash", balanceLabel: "I tuoi Hash", freePaid: "Gratis {free} · Acquistati {paid}",
@@ -203,6 +215,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "Riconoscimento vocale", kindTranslation: "Traduzione", kindTts: "Interpretariato vocale", kindImageText: "Traduzione foto",
     history: "Cronologia", sourceDailyFree: "Ricarica gratis", sourcePurchase: "Acquisto", sourceAdmin: "Regalo di HashChat", sourceBonus: "Bonus",
     sourceRefund: "Rimborso", sourceExpired: "Scaduto", conversationFallback: "Conversazione", noHistory: "Nessuna cronologia", loadMore: "Mostra altro",
+    roomUsageTitle: "Hash usati in questa chat", roomUsed: "{coins} usati",
   },
   ru: {
     coin: "Хэш", storeTitle: "Магазин Хэш", balanceLabel: "Ваш Хэш", freePaid: "Бесплатно {free} · Куплено {paid}",
@@ -218,6 +231,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "Распознавание речи", kindTranslation: "Перевод", kindTts: "Голосовой перевод", kindImageText: "Перевод фото",
     history: "История", sourceDailyFree: "Бесплатное пополнение", sourcePurchase: "Покупка", sourceAdmin: "Подарок от HashChat", sourceBonus: "Бонус",
     sourceRefund: "Возврат", sourceExpired: "Истекло", conversationFallback: "Разговор", noHistory: "Истории пока нет", loadMore: "Показать ещё",
+    roomUsageTitle: "Хэш, потраченный в этом чате", roomUsed: "Потрачено {coins}",
   },
   ar: {
     coin: "هاش", storeTitle: "متجر هاش", balanceLabel: "رصيدك من هاش", freePaid: "مجاني {free} · مشترى {paid}",
@@ -233,6 +247,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "التعرف على الكلام", kindTranslation: "الترجمة", kindTts: "الترجمة الصوتية", kindImageText: "ترجمة الصور",
     history: "السجل", sourceDailyFree: "تعبئة مجانية", sourcePurchase: "شراء", sourceAdmin: "هدية من HashChat", sourceBonus: "مكافأة",
     sourceRefund: "استرداد", sourceExpired: "منتهية", conversationFallback: "محادثة", noHistory: "لا يوجد سجل بعد", loadMore: "عرض المزيد",
+    roomUsageTitle: "هاش المستخدم في هذه المحادثة", roomUsed: "استخدم {coins}",
   },
   hi: {
     coin: "हैश", storeTitle: "हैश स्टोर", balanceLabel: "आपके हैश", freePaid: "मुफ़्त {free} · खरीदे गए {paid}",
@@ -248,6 +263,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "वाक् पहचान", kindTranslation: "अनुवाद", kindTts: "वॉइस इंटरप्रेटिंग", kindImageText: "फ़ोटो अनुवाद",
     history: "इतिहास", sourceDailyFree: "मुफ़्त रीफ़िल", sourcePurchase: "खरीदारी", sourceAdmin: "HashChat की ओर से", sourceBonus: "बोनस",
     sourceRefund: "रिफ़ंड", sourceExpired: "समाप्त", conversationFallback: "बातचीत", noHistory: "अभी कोई इतिहास नहीं", loadMore: "और देखें",
+    roomUsageTitle: "इस चैट में इस्तेमाल हुए हैश", roomUsed: "{coins} इस्तेमाल",
   },
   th: {
     coin: "แฮช", storeTitle: "ร้านแฮช", balanceLabel: "แฮชของคุณ", freePaid: "ฟรี {free} · ซื้อ {paid}",
@@ -263,6 +279,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "การรู้จำเสียงพูด", kindTranslation: "การแปล", kindTts: "ล่ามเสียง", kindImageText: "แปลรูปภาพ",
     history: "ประวัติ", sourceDailyFree: "เติมฟรี", sourcePurchase: "ซื้อ", sourceAdmin: "จาก HashChat", sourceBonus: "โบนัส",
     sourceRefund: "คืนเงิน", sourceExpired: "หมดอายุ", conversationFallback: "การสนทนา", noHistory: "ยังไม่มีประวัติ", loadMore: "ดูเพิ่มเติม",
+    roomUsageTitle: "แฮชที่ใช้ในแชทนี้", roomUsed: "ใช้ไป {coins}",
   },
   vi: {
     coin: "Hash", storeTitle: "Cửa hàng Hash", balanceLabel: "Hash của bạn", freePaid: "Miễn phí {free} · Đã mua {paid}",
@@ -278,6 +295,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     kindStt: "Nhận dạng giọng nói", kindTranslation: "Dịch", kindTts: "Phiên dịch giọng nói", kindImageText: "Dịch ảnh",
     history: "Lịch sử", sourceDailyFree: "Nạp miễn phí", sourcePurchase: "Mua", sourceAdmin: "HashChat tặng", sourceBonus: "Thưởng",
     sourceRefund: "Hoàn tiền", sourceExpired: "Hết hạn", conversationFallback: "Cuộc trò chuyện", noHistory: "Chưa có lịch sử", loadMore: "Xem thêm",
+    roomUsageTitle: "Hash đã dùng trong cuộc trò chuyện này", roomUsed: "Đã dùng {coins}",
   },
 };
 

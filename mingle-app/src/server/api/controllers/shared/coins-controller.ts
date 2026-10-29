@@ -21,7 +21,7 @@ import {
   type IapPlatform,
 } from '@/server/coins/purchases'
 import { verifyPolarWebhookSignature } from '@/server/coins/polar'
-import { getCoinHistory, getCoinUsageSummary, normalizeCoinUsageRange } from '@/server/coins/queries'
+import { getCoinHistory, getCoinUsageSummary, getConversationCoinUsage, normalizeCoinUsageRange } from '@/server/coins/queries'
 import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingToken } from '@/server/coins/stt-token'
 import { canSpendCoins, chargeCoinUsage, disabledCoinWallet, getCoinWallet } from '@/server/coins/wallet'
 import { resolveCoinBillingMode } from '@/server/coins/config'
@@ -156,6 +156,15 @@ export async function readCoinUsage(request: NextRequest) {
   return json(await getCoinUsageSummary(userId, normalizeCoinUsageRange(params.get('range')), {
     tzOffsetMinutes: Number(params.get('tz') ?? 0),
   }))
+}
+
+/** GET /conversations/:id/coin-usage — Hash each member has spent in this room. */
+export async function readConversationCoinUsage(conversationId: string) {
+  const userId = await readSessionUserId()
+  if (!userId) return json({ error: 'unauthorized' }, 401)
+  if (resolveCoinBillingMode() !== 'enforce') return json({ members: [], totalCoins: 0 })
+  const usage = await getConversationCoinUsage(conversationId, userId)
+  return usage ? json(usage) : json({ error: 'not_found' }, 404)
 }
 
 const MAX_STT_CHUNK_SECONDS = 120

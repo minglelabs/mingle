@@ -5,6 +5,9 @@ export const MICRO_PER_COIN = 1_000_000n
 export const COINS_PER_USD = 1_000n
 export const DAILY_FREE_COINS = 1_000n
 export const DAILY_FREE_CAP_MICRO = DAILY_FREE_COINS * MICRO_PER_COIN
+// One-time free grant when a wallet is first opened, on top of the first daily refill.
+export const SIGNUP_BONUS_COINS = 1_000n
+export const SIGNUP_BONUS_MICRO = SIGNUP_BONUS_COINS * MICRO_PER_COIN
 export const DAILY_FREE_INTERVAL_MS = 24 * 60 * 60 * 1000
 export const LOW_BALANCE_COINS = 200n
 export const LOW_BALANCE_MICRO = LOW_BALANCE_COINS * MICRO_PER_COIN

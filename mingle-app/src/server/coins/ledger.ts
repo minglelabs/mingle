@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client/index'
 import { prisma } from '@/lib/prisma'
 import { DAILY_FREE_CAP_MICRO, DAILY_FREE_INTERVAL_MS } from '@/lib/coin-units'
+import { resolveSignupBonusMicro } from './config'
 import { computeDailyFreeGrant, planLotSpend, type LotAllocation } from './lot-plan'
 
 // Wallet, lot and ledger writes (docs/coin-iap-spec.md 5). Every write runs
@@ -220,6 +221,22 @@ async function applyDailyFreeGrant(ctx: LockedWallet) {
   })
 }
 
+/**
+ * Sign-up bonus: a wallet that has never had a daily refill is brand new. The
+ * bonus is free coins, so it also counts toward the daily cap (spec 3.3) and
+ * delays later refills until the free balance drops under the cap again.
+ */
+async function applySignupBonus(ctx: LockedWallet) {
+  const amountMicro = resolveSignupBonusMicro()
+  if (amountMicro <= 0n) return
+  await grantLot(ctx, {
+    source: 'signup_bonus',
+    isFree: true,
+    amountMicro,
+    idempotencyKey: `signup:${ctx.wallet.userId}`,
+  })
+}
+
 function walletFingerprint(wallet: WalletState): string {
   return [
     wallet.balanceMicro,
@@ -277,8 +294,12 @@ export async function withLockedWallet<T>(
           },
         }
         const loaded = walletFingerprint(ctx.wallet)
+        const isNewWallet = row.dailyGrantSeq === 0 && !row.lastDailyGrantAt
         await expireLots(ctx)
-        if (!options.skipDailyGrant) await applyDailyFreeGrant(ctx)
+        if (!options.skipDailyGrant) {
+          await applyDailyFreeGrant(ctx)
+          if (isNewWallet) await applySignupBonus(ctx)
+        }
         const result = await fn(ctx)
         if (ctx.wallet.balanceMicro < 0n
           || ctx.wallet.balanceMicro !== ctx.wallet.freeBalanceMicro + ctx.wallet.paidBalanceMicro) {
