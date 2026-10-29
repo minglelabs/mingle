@@ -86,9 +86,10 @@ import {
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
 import CoinBalanceChip, { formatCoinCount } from "@/components/coins/coin-balance-chip";
+import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
-import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Coins, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
 import { feedCopy } from "@/i18n/feed-copy";
@@ -869,7 +870,7 @@ function ProfileSettingsPanel({
                 onClick={openCoinStore}
                 className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-left transition active:bg-amber-100"
               >
-                <Coins size={20} strokeWidth={2} className="text-amber-600" aria-hidden="true" />
+                <HashSeedIcon size={21} />
                 <span className="min-w-0 flex-1 text-[15px] font-semibold">{coinCopy.storeTitle}</span>
                 <span className="text-[14px] font-bold tabular-nums text-amber-700">{formatCoinCount(coinWallet.balance, locale)}</span>
                 <ChevronRight size={19} strokeWidth={2} className="text-amber-500" aria-hidden="true" />

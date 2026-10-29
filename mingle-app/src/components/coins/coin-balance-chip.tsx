@@ -1,6 +1,6 @@
 "use client";
 
-import { Coins } from "lucide-react";
+import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import { useEffect, useRef, useState } from "react";
 import type { AppLocale } from "@/i18n";
 import { resolveLegalDocumentLocale } from "@/i18n/config";
@@ -92,7 +92,7 @@ export default function CoinBalanceChip({
           compact ? "px-2 py-0.5 text-[12px]" : "px-2.5 py-1 text-[13px]"
         } ${low ? "border-orange-200 bg-orange-50 text-orange-600" : "border-amber-200 bg-amber-50 text-amber-700"}`}
       >
-        <Coins size={compact ? 13 : 15} strokeWidth={2.4} aria-hidden="true" />
+        <HashSeedIcon size={compact ? 14 : 16} />
         {formatCoinCount(balance, locale)}
       </span>
     </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Coins } from "lucide-react";
+import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import type { AppLocale } from "@/i18n";
 import { resolveLegalDocumentLocale } from "@/i18n/config";
 import { fillCoinCopy, getCoinCopy } from "@/i18n/coin-copy";
@@ -51,7 +51,7 @@ export default function CoinExhaustedSheet({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-          <Coins size={24} strokeWidth={2.2} aria-hidden="true" />
+          <HashSeedIcon size={26} />
         </div>
         <h2 className="mt-3 text-center text-[19px] font-bold">{copy.exhaustedTitle}</h2>
         <p className="mt-1.5 text-center text-[14px] leading-relaxed text-gray-600">{copy.exhaustedBody}</p>

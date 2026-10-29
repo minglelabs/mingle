@@ -463,6 +463,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     providerConfig,
     ...(testFaultMode ? [] : resolveFallbackProviderConfigs(selectedTranslationModel)),
   ]
+  const billedTranslationConfig = providerConfigs[0]
 
   const targetLanguages = shouldRedetectSourceLanguage
     ? normalizeSelectedLanguages(targetLanguagesRaw)
@@ -582,8 +583,10 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
                 output_token: meta.usage?.completionTokens ?? 0,
               }
             : estimateTranslationTokens(text, translations),
-          model: meta.model,
-          provider: meta.infrastructureProvider,
+          // Priced at the user's chosen model even when a fallback provider answered (spec 4.6).
+          model: billedTranslationConfig.model,
+          provider: billedTranslationConfig.infrastructureProvider,
+          servedModel: meta.model,
           sessionKey: sessionKeyHint,
           idempotencyKey: `translation:${coinBillingUserId}:${coinClientMessageId || '-'}:${coinRequestDigest}`,
         })

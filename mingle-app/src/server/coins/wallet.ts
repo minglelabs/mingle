@@ -88,8 +88,12 @@ export type CoinChargeInput = {
   userId: string
   kind: CoinUsageKind
   units: CoinUsageUnits
+  // The model priced and charged. For a translation that fell back to another
+  // provider this stays the user's chosen model (spec 4.6).
   model?: string | null
   provider?: string | null
+  // The model that actually answered, when it differs from `model`; kept in `units` for cost review.
+  servedModel?: string | null
   idempotencyKey: string
   conversationId?: string | null
   messageId?: string | null
@@ -116,6 +120,7 @@ function chargeRow(input: CoinChargeInput, quote: CoinPriceQuote, now: Date) {
     units: {
       ...input.units,
       rates: quote.components,
+      ...(input.servedModel && input.servedModel !== input.model ? { served_model: input.servedModel } : {}),
       ...(quote.unpricedUnits.length ? { unpriced: quote.unpricedUnits } : {}),
     } as Prisma.InputJsonValue,
     model: input.model ?? null,

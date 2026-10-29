@@ -1,6 +1,6 @@
 "use client";
 
-import { Coins } from "lucide-react";
+import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import { useState } from "react";
 import type { AppLocale } from "@/i18n";
 import { getCoinCopy } from "@/i18n/coin-copy";
@@ -31,7 +31,7 @@ export default function CoinRoomBanner({ locale }: { locale: AppLocale }) {
       }`}
       role="status"
     >
-      <Coins size={16} strokeWidth={2.3} className="shrink-0" aria-hidden="true" />
+      <HashSeedIcon size={16} />
       <span className="min-w-0 flex-1">{exhausted ? copy.exhaustedBanner : copy.lowBanner}</span>
       <span className="shrink-0 underline">{copy.charge}</span>
     </button>

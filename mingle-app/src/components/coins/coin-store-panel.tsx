@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronLeft, Coins, Loader2 } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
+import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import SlideSurface from "@/components/slide-surface";
@@ -112,7 +113,7 @@ export default function CoinStorePanel({
             <section className="text-center" aria-live="polite">
               <p className="text-[12px] font-semibold text-gray-500">{copy.balanceLabel}</p>
               <p className="mt-1 flex items-center justify-center gap-2 text-[40px] font-bold leading-none tabular-nums">
-                <Coins size={30} strokeWidth={2.2} className="text-amber-500" aria-hidden="true" />
+                <HashSeedIcon size={32} />
                 {formatCoinCount(balance, locale)}
               </p>
               {wallet ? (
@@ -184,7 +185,7 @@ export default function CoinStorePanel({
                       >
                         <div className="min-w-0 flex-1">
                           <p className="flex flex-wrap items-center gap-1.5 text-[17px] font-bold tabular-nums">
-                            <Coins size={17} strokeWidth={2.3} className="text-amber-500" aria-hidden="true" />
+                            <HashSeedIcon size={18} />
                             {formatCoinCount(product.totalCoins, locale)}
                             {bonusPercent > 0 ? (
                               <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-700">+{bonusPercent}%</span>
