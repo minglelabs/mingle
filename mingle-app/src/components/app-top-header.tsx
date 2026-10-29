@@ -2,20 +2,22 @@
 
 import MingleWordmark from "@/components/mingle-wordmark";
 import type { PostForegroundTone } from "@/lib/post-backgrounds";
+import type { ReactNode } from "react";
 import { Bell, Search, SquarePen } from "lucide-react";
 
 export type AppTopHeaderVariant = "transparent" | "surface";
 
 type AppTopHeaderProps = {
   /** Accessible name for the compose (memo + pencil) button. */
-  composeLabel: string;
+  composeLabel?: string;
   /** Accessible name for the bell (notifications) button. */
   notificationsLabel: string;
+  /** Shows the compose button before the bell; omitted on the conversation list. */
   onCompose?: () => void;
   onNotifications?: () => void;
   /**
-   * Conversation list only: shows the search (magnifier) button before the
-   * compose button. Omit on the feed, which has no search entry in its header.
+   * Conversation list only: shows the search (magnifier) button first. Omit on
+   * the feed, which has no search entry in its header.
    */
   onSearch?: () => void;
   /** Accessible name for the search button (required when `onSearch` is set). */
@@ -41,13 +43,16 @@ type AppTopHeaderProps = {
    * dark glyphs for light text-post backgrounds.
    */
   glyphTone?: PostForegroundTone;
+  /** Rendered after the bell: the conversation list's settings (gear) menu. */
+  trailing?: ReactNode;
 };
 
 /**
  * The single top header shared by the feed and the conversation list so the two
  * tabs line up exactly (height, safe-area padding, wordmark, icon size and
- * order). Left: HashChat wordmark. Right: compose (memo + pencil) then the bell
- * with its unread dot. Only the color/positioning treatment differs between the
+ * order). Left: HashChat wordmark. Right on the feed: compose (memo + pencil)
+ * then the bell with its unread dot. Right on the conversation list: search,
+ * the bell, then the settings gear (compose lives on the feed and My page). Only the color/positioning treatment differs between the
  * two screens, expressed through `variant`.
  */
 export default function AppTopHeader({
@@ -61,6 +66,7 @@ export default function AppTopHeader({
   unreadNotificationsLabel,
   variant = "transparent",
   glyphTone = "light",
+  trailing,
 }: AppTopHeaderProps) {
   const isTransparent = variant === "transparent";
   const toneAttr = isTransparent ? glyphTone : undefined;
@@ -119,14 +125,16 @@ export default function AppTopHeader({
             <Search size={22} strokeWidth={2} className={glyphClassName} />
           </button>
         ) : null}
-        <button
-          type="button"
-          onClick={onCompose}
-          className={buttonClassName}
-          aria-label={composeLabel}
-        >
-          <SquarePen size={22} strokeWidth={2} className={glyphClassName} />
-        </button>
+        {onCompose ? (
+          <button
+            type="button"
+            onClick={onCompose}
+            className={buttonClassName}
+            aria-label={composeLabel}
+          >
+            <SquarePen size={22} strokeWidth={2} className={glyphClassName} />
+          </button>
+        ) : null}
 
         <button
           type="button"
@@ -137,6 +145,7 @@ export default function AppTopHeader({
           <Bell size={22} strokeWidth={2} className={glyphClassName} />
           {hasUnread ? <span className={dotClassName} aria-hidden="true" /> : null}
         </button>
+        {trailing}
       </div>
     </header>
   );
