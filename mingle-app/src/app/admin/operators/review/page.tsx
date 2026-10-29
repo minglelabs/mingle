@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { requireAdmin } from '@/server/admin/guard'
-import { listReviewQueue } from '@/server/operator-review/review'
-import { AdminEmptyState, AdminPage, AdminPageHeader, AdminPagination } from '../../_components/ui'
+import { listReviewQueue, REVIEW_ITEMS_PER_PAGE } from '@/server/operator-review/review'
+import { AdminEmptyState, AdminPage, AdminPageHeader } from '../../_components/ui'
 import { ReviewBoard } from './review-board'
 
 export const dynamic = 'force-dynamic'
@@ -20,43 +21,32 @@ function takeFirst(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? '' : ''
 }
 
-function pageHref(page: number, operator: string): string {
-  const params = new URLSearchParams()
-  if (operator) params.set('operator', operator)
-  if (page > 1) params.set('page', String(page))
-  const search = params.toString()
-  return search ? `/admin/operators/review?${search}` : '/admin/operators/review'
-}
-
 export default async function OperatorReviewPage({ searchParams }: ReviewPageProps) {
   await requireAdmin('/admin/operators/review')
   const params = await searchParams
-  const operator = takeFirst(params.operator).trim()
-  const queue = await listReviewQueue({
-    page: Number.parseInt(takeFirst(params.page), 10) || 1,
-    operatorUserId: operator || undefined,
-  })
+  const cursor = takeFirst(params.after).trim()
+  const queue = await listReviewQueue({ cursor: cursor || undefined })
 
   return (
     <AdminPage>
       <AdminPageHeader
         title="계정·글 검토"
-        description={`검토할 계정 ${queue.totalOperators}개 · 글 ${queue.totalPosts}개. 게시하면 바로 앱에 보이고, 재제작은 피드백을 반영해 다시 만들어요.`}
-        back={operator ? { href: '/admin/operators/review', label: '전체 검토' } : undefined}
+        description={`검토할 계정 ${queue.totalProfiles}개 · 글 ${queue.totalPosts}개. 오래된 것부터 계정은 가입 시각, 글은 작성 시각 순서예요.`}
+        back={cursor ? { href: '/admin/operators/review', label: '처음부터' } : undefined}
       />
-      {queue.operators.length === 0 ? (
+      {queue.items.length === 0 ? (
         <AdminEmptyState title="검토할 항목이 없어요" description="새로 만든 계정과 글이 여기에 모여요." />
       ) : (
         <>
-          <ReviewBoard operators={queue.operators} focused={Boolean(operator)} />
-          {queue.pageCount > 1 ? (
-            <div className="mt-4">
-              <AdminPagination
-                label="검토 페이지"
-                summary={`${queue.page} / ${queue.pageCount}`}
-                previousHref={queue.page > 1 ? pageHref(queue.page - 1, operator) : undefined}
-                nextHref={queue.page < queue.pageCount ? pageHref(queue.page + 1, operator) : undefined}
-              />
+          <ReviewBoard key={cursor} items={queue.items} />
+          {queue.nextCursor ? (
+            <div className="mx-auto mt-6 w-full max-w-[440px]">
+              <Link
+                href={`/admin/operators/review?after=${encodeURIComponent(queue.nextCursor)}`}
+                className="block rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold text-sky-700"
+              >
+                다음 {REVIEW_ITEMS_PER_PAGE}개
+              </Link>
             </div>
           ) : null}
         </>

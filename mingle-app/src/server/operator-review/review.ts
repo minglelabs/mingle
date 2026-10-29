@@ -16,9 +16,7 @@ import { loadExistingReserveTexts, loadReservePersona, publishReservePostNow } f
  * 삭제 (delete) or 재제작 (redo, optionally with written feedback).
  */
 
-export const REVIEW_OPERATORS_PER_PAGE = 5
-export const REVIEW_POSTS_PER_OPERATOR = 6
-export const REVIEW_POSTS_PER_PAGE = 30
+export const REVIEW_ITEMS_PER_PAGE = 20
 const MAX_FEEDBACK_LENGTH = 1000
 
 export type ReviewAction = 'publish' | 'delete' | 'regenerate'
@@ -48,7 +46,7 @@ export type ReviewPost = {
   error: string | null
 }
 
-export type ReviewOperator = {
+export type ReviewProfile = {
   userId: string
   name: string | null
   handle: string
@@ -58,20 +56,24 @@ export type ReviewOperator = {
   city: string | null
   country: string | null
   primaryLanguages: string[]
-  personaCountry: string | null
   personaGender: string | null
   profileState: string
   profileFeedback: string | null
-  postsInReview: number
-  posts: ReviewPost[]
 }
 
+export type ReviewAuthor = { userId: string; name: string | null; handle: string; image: string | null; profileState: string }
+
+/** One card of the review timeline: a new account (at sign-up) or a post (at creation). */
+export type ReviewItem =
+  | { kind: 'profile'; key: string; at: string; profile: ReviewProfile }
+  | { kind: 'post'; key: string; at: string; post: ReviewPost; author: ReviewAuthor }
+
 export type ReviewQueue = {
-  operators: ReviewOperator[]
-  totalOperators: number
+  items: ReviewItem[]
+  totalProfiles: number
   totalPosts: number
-  page: number
-  pageCount: number
+  /** Cursor for the next page (the last item's key), or null at the end. */
+  nextCursor: string | null
 }
 
 const POST_SELECT = {
@@ -103,69 +105,116 @@ function toReviewPost(row: {
 
 const REVIEW_POST_STATES = ['review', 'regenerating']
 
-/** Operators with a profile or posts waiting for review, newest work last. */
-export async function listReviewQueue(options: { page?: number; operatorUserId?: string; now?: Date } = {}): Promise<ReviewQueue> {
+type TimelineRow = { kind: 'profile' | 'post'; id: string; at: Date }
+
+const TIMELINE_SQL = `
+  SELECT kind, id, at FROM (
+    SELECT 'profile' AS kind, u.id, u.created_at AS at
+    FROM app.app_users u JOIN app.app_operator_accounts o ON o.user_id = u.id
+    WHERE u.is_operator AND NOT u.is_deleted AND o.review_state <> 'approved'
+    UNION ALL
+    SELECT 'post' AS kind, r.id, r.created_at AS at
+    FROM app.app_operator_post_reserve r JOIN app.app_users u ON u.id = r.operator_user_id
+    WHERE r.state IN ('review', 'regenerating') AND NOT u.is_deleted
+  ) t`
+
+/** Cursor = `<iso time>|<kind>|<id>` of the last item shown. Profiles sort before posts at the same instant. */
+export function encodeReviewCursor(row: TimelineRow): string {
+  return `${row.at.toISOString()}|${row.kind}|${row.id}`
+}
+
+export function decodeReviewCursor(value: string | undefined): TimelineRow | null {
+  const [iso, kind, id] = (value ?? '').split('|')
+  const at = new Date(iso ?? '')
+  if (!id || Number.isNaN(at.getTime()) || (kind !== 'profile' && kind !== 'post')) return null
+  return { kind, id, at }
+}
+
+/**
+ * Every account and post waiting for review on one timeline, oldest first:
+ * accounts by sign-up time, posts by creation time. Paged by cursor, so items
+ * answered on one page never push unseen ones past the next.
+ */
+export async function listReviewQueue(options: { cursor?: string; now?: Date } = {}): Promise<ReviewQueue> {
   const now = options.now ?? new Date()
-  const operatorFilter = {
-    isOperator: true,
-    isDeleted: false,
-    OR: [
-      { operatorAccount: { reviewState: { not: 'approved' } } },
-      { operatorPostReserve: { some: { state: { in: REVIEW_POST_STATES } } } },
-    ],
-  }
-  const where = options.operatorUserId ? { ...operatorFilter, id: options.operatorUserId } : operatorFilter
-  const [totalOperators, totalPosts] = await Promise.all([
-    prisma.user.count({ where }),
-    prisma.operatorPostReserve.count({
-      where: { state: { in: REVIEW_POST_STATES }, ...(options.operatorUserId ? { operatorUserId: options.operatorUserId } : {}) },
+  const after = decodeReviewCursor(options.cursor)
+  const order = `ORDER BY at, (kind = 'post'), id`
+  const rows = after
+    ? await prisma.$queryRawUnsafe<TimelineRow[]>(
+      `${TIMELINE_SQL} WHERE (at, (kind = 'post'), id) > ($1::timestamp, $2::boolean, $3::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
+      after.at, after.kind === 'post', after.id,
+    )
+    : await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`)
+  const page = rows.slice(0, REVIEW_ITEMS_PER_PAGE)
+
+  const profileIds = page.filter((row) => row.kind === 'profile').map((row) => row.id)
+  const postIds = page.filter((row) => row.kind === 'post').map((row) => row.id)
+  const [totalProfiles, totalPosts, users, posts] = await Promise.all([
+    prisma.operatorAccount.count({ where: { reviewState: { not: 'approved' }, user: { isOperator: true, isDeleted: false } } }),
+    prisma.operatorPostReserve.count({ where: { state: { in: REVIEW_POST_STATES }, operatorUser: { isDeleted: false } } }),
+    prisma.user.findMany({
+      where: { id: { in: profileIds } },
+      select: {
+        id: true, name: true, handle: true, image: true, bio: true, birthDate: true,
+        locationCity: true, locationCountry: true, primaryLanguages: true,
+        operatorAccount: { select: { personaGender: true, reviewState: true, reviewFeedback: true } },
+      },
+    }),
+    prisma.operatorPostReserve.findMany({
+      where: { id: { in: postIds } },
+      select: {
+        ...POST_SELECT,
+        operatorUser: { select: { id: true, name: true, handle: true, image: true, operatorAccount: { select: { reviewState: true } } } },
+      },
     }),
   ])
-  const pageCount = Math.max(1, Math.ceil(totalOperators / REVIEW_OPERATORS_PER_PAGE))
-  const page = Math.min(Math.max(1, options.page ?? 1), pageCount)
-  const postsPerOperator = options.operatorUserId ? REVIEW_POSTS_PER_PAGE : REVIEW_POSTS_PER_OPERATOR
+  const usersById = new Map(users.map((user) => [user.id, user]))
+  const postsById = new Map(posts.map((post) => [post.id, post]))
 
-  const users = await prisma.user.findMany({
-    where,
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    skip: (page - 1) * REVIEW_OPERATORS_PER_PAGE,
-    take: REVIEW_OPERATORS_PER_PAGE,
-    select: {
-      id: true, name: true, handle: true, image: true, bio: true, birthDate: true,
-      locationCity: true, locationCountry: true, primaryLanguages: true,
-      operatorAccount: { select: { personaCountry: true, personaGender: true, reviewState: true, reviewFeedback: true } },
-      operatorPostReserve: {
-        where: { state: { in: REVIEW_POST_STATES } },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        take: postsPerOperator,
-        select: POST_SELECT,
-      },
-      _count: { select: { operatorPostReserve: { where: { state: { in: REVIEW_POST_STATES } } } } },
-    },
-  })
+  const items: ReviewItem[] = []
+  for (const row of page) {
+    const key = encodeReviewCursor(row)
+    const at = row.at.toISOString()
+    if (row.kind === 'profile') {
+      const user = usersById.get(row.id)
+      if (!user) continue
+      items.push({
+        kind: 'profile', key, at,
+        profile: {
+          userId: user.id,
+          name: user.name,
+          handle: user.handle,
+          image: user.image,
+          bio: user.bio,
+          age: ageOn(user.birthDate, now),
+          city: user.locationCity,
+          country: user.locationCountry,
+          primaryLanguages: user.primaryLanguages,
+          personaGender: user.operatorAccount?.personaGender ?? null,
+          profileState: user.operatorAccount?.reviewState ?? 'approved',
+          profileFeedback: user.operatorAccount?.reviewFeedback ?? null,
+        },
+      })
+    } else {
+      const post = postsById.get(row.id)
+      if (!post) continue
+      const author = post.operatorUser
+      items.push({
+        kind: 'post', key, at,
+        post: toReviewPost(post),
+        author: {
+          userId: author.id, name: author.name, handle: author.handle, image: author.image,
+          profileState: author.operatorAccount?.reviewState ?? 'approved',
+        },
+      })
+    }
+  }
 
   return {
-    operators: users.map((user) => ({
-      userId: user.id,
-      name: user.name,
-      handle: user.handle,
-      image: user.image,
-      bio: user.bio,
-      age: ageOn(user.birthDate, now),
-      city: user.locationCity,
-      country: user.locationCountry,
-      primaryLanguages: user.primaryLanguages,
-      personaCountry: user.operatorAccount?.personaCountry ?? null,
-      personaGender: user.operatorAccount?.personaGender ?? null,
-      profileState: user.operatorAccount?.reviewState ?? 'approved',
-      profileFeedback: user.operatorAccount?.reviewFeedback ?? null,
-      postsInReview: user._count.operatorPostReserve,
-      posts: user.operatorPostReserve.map(toReviewPost),
-    })),
-    totalOperators,
+    items,
+    totalProfiles,
     totalPosts,
-    page,
-    pageCount,
+    nextCursor: rows.length > REVIEW_ITEMS_PER_PAGE && page.length ? encodeReviewCursor(page[page.length - 1]) : null,
   }
 }
 
