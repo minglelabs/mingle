@@ -77,14 +77,15 @@ describe('off-color background objects', () => {
     expect(sceneKindOf('Setting: on a train or subway, consistent with Seoul')).toBe('transit')
   })
 
-  it('never puts a traffic cone or a bin into a park, and often adds nothing', async () => {
+  it('bans traffic cones and bins, never adds one, and often adds nothing', async () => {
     const { phonePhotoRealism } = await import('@/server/operator-avatars/photo-realism')
     let none = 0
     for (let seed = 1; seed <= 40; seed += 1) {
       let x = seed
       const random = () => ((x = (x * 9301 + 49297) % 233280) / 233280)
       const block = phonePhotoRealism(random, { people: true, environment: 'outdoor', scene: 'a riverside park under cherry blossoms' })
-      expect(block).not.toMatch(/cone|bin\b/i)
+      expect(block).toContain('No traffic cones and no trash, recycling or rubbish bins')
+      expect(block.match(/Somewhere in the background[^.]*\./)?.[0] ?? '').not.toMatch(/cone|bin\b/i)
       if (block.includes('Add no stray objects')) none += 1
     }
     expect(none).toBeGreaterThan(5)
