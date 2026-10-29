@@ -23,6 +23,7 @@ const ERROR_COPY: Record<string, string> = {
   already_approved: '이미 게시된 계정이에요.',
   busy: '다른 작업이 진행 중이에요. 잠시 후 다시 눌러 주세요.',
   profile_pending: '계정을 먼저 게시해야 글을 올릴 수 있어요.',
+  photo_pending: '사진을 아직 그리지 않았어요. 그린 뒤에 게시할 수 있어요.',
   publish_failed: '게시하지 못했어요. 다시 눌러 주세요.',
   regenerate_failed: '다시 만들지 못했어요. 다시 눌러 주세요.',
 }
@@ -264,7 +265,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
         />
       ) : post.photoDescription ? (
         <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-          게시할 때 그릴 사진: {post.photoDescription}
+          ChatGPT로 그릴 사진 (그린 뒤 게시할 수 있어요): {post.photoDescription}
         </p>
       ) : null}
       {post.reviewFeedback ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {post.reviewFeedback}</p> : null}
@@ -272,7 +273,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       <ReviewActions
         busy={busy}
         onAction={handle}
-        publishDisabledReason={profileApproved ? undefined : '계정을 먼저 게시해야 글을 올릴 수 있어요.'}
+        publishDisabledReason={!profileApproved ? '계정을 먼저 게시해야 글을 올릴 수 있어요.' : post.photoDescription && !post.imageObjectKey ? '사진을 그린 뒤에 게시할 수 있어요.' : undefined}
       />
     </AdminCard>
   )
@@ -290,6 +291,7 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
   const [busy, setBusy] = useState<Action | null>(null)
   const [error, setError] = useState<string | null>(null)
   const bio = useStaffTranslation({ kind: 'profile', id: profile.userId }, profile.bio ?? '', setError)
+  const [drawing, setDrawing] = useState(profile.profileState === 'drawing')
 
   async function handle(action: Action, feedback: string) {
     if (action === 'delete' && !window.confirm(`${profile.name ?? profile.handle} 계정과 검토 중인 글을 모두 삭제할까요?`)) return
@@ -299,6 +301,7 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
       const result = await sendReview('profile', profile.userId, action, feedback)
       if (action === 'delete') onDeleted()
       else if (action === 'publish') onApproved()
+      else if (result.state === 'drawing') setDrawing(true)
       else if (typeof result.image === 'string') onImage(result.image)
     } catch (caught) {
       setError(ERROR_COPY[(caught as Error).message] ?? '요청하지 못했어요.')
@@ -348,8 +351,9 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
         ) : null}
       </div>
       {profile.profileFeedback ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {profile.profileFeedback}</p> : null}
+      {drawing ? <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">새 프로필 사진을 ChatGPT로 그리는 중이에요. 그려서 올라오면 다시 검토할 수 있어요.</p> : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
-      <ReviewActions busy={busy} onAction={handle} />
+      <ReviewActions busy={busy} onAction={handle} publishDisabledReason={drawing ? '새 사진을 그리는 중이에요.' : undefined} />
     </AdminCard>
   )
 }

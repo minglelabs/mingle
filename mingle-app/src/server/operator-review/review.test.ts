@@ -28,7 +28,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.audit }))
-vi.mock('@/server/operator-avatars/generate', () => ({ generateOperatorAvatar: mocks.generateAvatar }))
+vi.mock('@/server/operator-avatars/generate', () => ({ planOperatorAvatar: mocks.generateAvatar }))
 vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: mocks.drawImage }))
 vi.mock('@/server/operator-post-reserve/generate', () => ({
   generateReservePosts: mocks.generatePosts,
@@ -85,12 +85,12 @@ describe('reviewOperatorProfile', () => {
     expect(mocks.userDelete).not.toHaveBeenCalled()
   })
 
-  it('redraws the photo with the feedback and returns to pending', async () => {
+  it('leaves the new photo, with the feedback, to be drawn by hand', async () => {
     mocks.accountFindUnique.mockResolvedValue(PENDING_ACCOUNT)
-    mocks.generateAvatar.mockResolvedValue({ ok: true, image: 'https://img/new.jpg' })
-    await expect(reviewOperatorProfile(null, 'op1', 'regenerate', '안경 없이')).resolves.toEqual({ ok: true, state: 'pending', image: 'https://img/new.jpg' })
-    expect(mocks.generateAvatar).toHaveBeenCalledWith(null, 'op1', { feedback: '안경 없이' })
-    expect(mocks.accountUpdateMany).toHaveBeenLastCalledWith({ where: { userId: 'op1', reviewState: 'regenerating' }, data: { reviewState: 'pending' } })
+    mocks.generateAvatar.mockResolvedValue({ prompt: 'a photo' })
+    await expect(reviewOperatorProfile(null, 'op1', 'regenerate', '안경 없이')).resolves.toEqual({ ok: true, state: 'drawing' })
+    expect(mocks.generateAvatar).toHaveBeenCalledWith('op1', { feedback: '안경 없이' })
+    expect(mocks.accountUpdate).toHaveBeenCalledWith({ where: { userId: 'op1' }, data: { reviewState: 'drawing', reviewFeedback: '안경 없이', avatarSpec: { prompt: 'a photo' } } })
   })
 })
 

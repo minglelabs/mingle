@@ -3,11 +3,11 @@ import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-lang
 import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
-import { generateOperatorAvatar } from '@/server/operator-avatars/generate'
+import { planOperatorAvatar } from '@/server/operator-avatars/generate'
 import { generateReservePosts, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
-import { loadExistingReserveTexts, loadReservePersona, publishReservePostNow } from '@/server/operator-post-reserve/worker'
+import { loadExistingReserveTexts, loadReservePersona, PHOTO_PENDING, publishReservePostNow } from '@/server/operator-post-reserve/worker'
 
 /**
  * Staff review of operator profiles and their pre-written posts. A profile
@@ -248,7 +248,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date } =
 }
 
 export type ProfileReviewResult =
-  | { ok: true; state: 'approved' | 'deleted' | 'pending'; image?: string | null }
+  | { ok: true; state: 'approved' | 'deleted' | 'pending' | 'drawing'; image?: string | null }
   | { ok: false; error: 'not_found' | 'already_approved' | 'busy' | 'regenerate_failed' }
 
 /** 게시 / 삭제 / 재제작 for a profile waiting for review. */
@@ -281,24 +281,19 @@ export async function reviewOperatorProfile(
     return { ok: true, state: 'deleted' }
   }
 
-  const claimed = await prisma.operatorAccount.updateMany({
-    where: { userId, reviewState: 'pending' },
-    data: { reviewState: 'regenerating', reviewFeedback: feedback },
-  })
-  if (claimed.count === 0) return { ok: false, error: 'busy' }
-  try {
-    const result = await generateOperatorAvatar(ctx, userId, { feedback })
-    await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', ok: result.ok } })
-    if (!result.ok) return { ok: false, error: 'regenerate_failed' }
-    return { ok: true, state: 'pending', image: result.image }
-  } finally {
-    await prisma.operatorAccount.updateMany({ where: { userId, reviewState: 'regenerating' }, data: { reviewState: 'pending' } })
-  }
+  // 재제작: a new photo spec (with the feedback) waits to be drawn by hand in
+  // ChatGPT (scripts/draw-pending-photos.mts); the current photo stays until then.
+  if (account.reviewState === 'drawing') return { ok: false, error: 'busy' }
+  const plan = await planOperatorAvatar(userId, { feedback })
+  if (!plan) return { ok: false, error: 'regenerate_failed' }
+  await prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'drawing', reviewFeedback: feedback, avatarSpec: plan } })
+  await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', feedback, drawing: true } })
+  return { ok: true, state: 'drawing' }
 }
 
 export type PostReviewResult =
   | { ok: true; state: 'published' | 'deleted' | 'review'; postId?: string | null; post?: ReviewPost }
-  | { ok: false; error: 'not_found' | 'profile_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' }
+  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' }
 
 /** 게시 / 삭제 / 재제작 for a post waiting for review. */
 export async function reviewOperatorPost(
@@ -322,6 +317,7 @@ export async function reviewOperatorPost(
   if (action === 'publish') {
     // The author must be public before anything goes out in their name.
     if (!row.operatorUser.isActive) return { ok: false, error: 'profile_pending' }
+    if (row.imagePrompt && !row.imageObjectKey) return { ok: false, error: 'photo_pending' }
     if (feedback) await prisma.operatorPostReserve.update({ where: { id: reserveId }, data: { reviewFeedback: feedback } })
     const result = await publishReservePostNow(reserveId, 'review', now)
     if (!result.ok) return { ok: false, error: result.error === 'reserve_empty' ? 'not_found' : 'publish_failed' }
@@ -352,7 +348,8 @@ export async function reviewOperatorPost(
       revision: { previousText: row.text, feedback },
     })
     if (!generated) throw new Error('nothing_generated')
-    // Drawn now, so staff judge the photo too before it can go out.
+    // Drawn before it can go out, so staff judge the photo too: here only
+    // where a hand-off route exists, else by hand later (photo_pending).
     const image = generated.imagePrompt ? await drawReservePostImage(row.operatorUserId, generated.imagePrompt) : null
     const updated = await prisma.operatorPostReserve.update({
       where: { id: reserveId },
@@ -365,7 +362,7 @@ export async function reviewOperatorPost(
         imageObjectKey: image?.objectKey ?? null,
         imageWidth: image?.width ?? null,
         imageHeight: image?.height ?? null,
-        error: generated.imagePrompt && !image ? 'photo_not_drawn' : null,
+        error: generated.imagePrompt && !image ? PHOTO_PENDING : null,
       },
       select: POST_SELECT,
     })

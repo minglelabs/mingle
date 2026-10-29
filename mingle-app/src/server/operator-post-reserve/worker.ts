@@ -60,6 +60,9 @@ function describeError(error: unknown): string {
 }
 
 /** `rs-<id>`: the post's client id, stable across retries. */
+/** A post waiting for its photo to be drawn by hand (scripts/draw-pending-photos.mts). */
+export const PHOTO_PENDING = 'photo_pending'
+
 export function reserveClientPostId(reserveId: string): string {
   return `rs-${reserveId}`
 }
@@ -95,11 +98,16 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
       await settle({ state: 'failed', error: check.reason, releaseAt: null })
       return false
     }
-    // A photo drawn before review goes out as is. One that cannot be drawn
-    // does not hold the post back: it goes out as text.
+    // A photo drawn before review goes out as is. One not drawn yet is drawn
+    // here only where a hand-off route exists (never a paid API); otherwise
+    // the post goes back to review until staff draw it by hand.
     const image = row.imageObjectKey
       ? { objectKey: row.imageObjectKey, width: row.imageWidth ?? 0, height: row.imageHeight ?? 0 }
       : row.imagePrompt ? await drawReservePostImage(row.operatorUserId, row.imagePrompt) : null
+    if (row.imagePrompt && !image) {
+      await settle({ state: 'review', error: PHOTO_PENDING, releaseAt: null })
+      return false
+    }
     const result = await publishPost({
       authorId: row.operatorUserId,
       text: row.text,
