@@ -33,7 +33,7 @@ const PICKS: Record<keyof StarterFeed, string[]> = {
     'cmuwrof8i002csh5cdclh80xc', // anya.lestari (ID) 똠얌꿍 시어서 눈물
   ],
   foreign: [
-    'cmvb32e2u0083shbzrhhh4oh7', // seoyun.daily (KR, F) 성수 칼국수 어디가 나음
+    'post:cmvb31snm0004shx1uy1mp6i7', // seoyun.daily (KR, F) 유리바닥 사진 4장, already a post
     'cmvdflgnx004asheyafjb73ji', // junho.bsn (KR, M) 돼지국밥 다대기
     'cmuvchsfm000bshx0s6szf1yj', // jessica.lee.htx (US, F) 겨울에도 아아?
     'cmuwrpv98005bsh9a8idrfao3', // minjun.k (KR, M) 厉害 vs 牛逼
@@ -64,11 +64,13 @@ function between(min: number, max: number): number {
 async function main() {
   const reserveIds = [...PICKS.ko, ...PICKS.foreign]
   const rows = await prisma.operatorPostReserve.findMany({
-    where: { id: { in: reserveIds } },
+    where: { id: { in: reserveIds.filter((id) => !id.startsWith('post:')) } },
     select: { id: true, state: true, postId: true, operatorUserId: true },
   })
   const byId = new Map(rows.map((row) => [row.id, row]))
+  // A `post:` entry is a post that never was a latent post.
   const postIdOf = (id: string) => {
+    if (id.startsWith('post:')) return id.slice('post:'.length)
     const row = byId.get(id)
     return row?.state === 'published' && row.postId ? row.postId : null
   }
