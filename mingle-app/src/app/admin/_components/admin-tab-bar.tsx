@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Bell, Ellipsis, Inbox, Newspaper, UsersRound, type LucideIcon } from "lucide-react";
+import { Bell, Ellipsis, Inbox, ListChecks, Newspaper, UsersRound, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ADMIN_TABS,
@@ -18,6 +18,7 @@ import {
 const TAB_ICONS: Record<AdminTabKey, LucideIcon> = {
   inbox: Inbox,
   activity: Bell,
+  review: ListChecks,
   operators: UsersRound,
   posts: Newspaper,
   more: Ellipsis,
@@ -32,7 +33,7 @@ async function fetchUnreadTotal(url: string, signal: AbortSignal): Promise<numbe
 }
 
 /**
- * Admin navigation: 인박스 · 알림 · 계정 · 게시물 · 더보기, each with an optional
+ * Admin navigation: 인박스 · 알림 · 검토 · 계정 · 게시물 · 더보기, each with an optional
  * count badge. A bottom tab bar on a phone; a left rail from `lg` up.
  */
 export function AdminTabBar({ badges }: { badges?: AdminTabBadges }) {
@@ -84,7 +85,7 @@ export function AdminTabBar({ badges }: { badges?: AdminTabBadges }) {
       aria-label="관리자 메뉴"
       className="shrink-0 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur lg:order-first lg:w-52 lg:overflow-y-auto lg:border-r lg:border-t-0 lg:bg-white lg:pr-0"
     >
-      <ul className="mx-auto grid w-full max-w-lg grid-cols-5 lg:mx-0 lg:flex lg:max-w-none lg:flex-col lg:gap-1 lg:p-3">
+      <ul className="mx-auto grid w-full max-w-lg grid-cols-6 lg:mx-0 lg:flex lg:max-w-none lg:flex-col lg:gap-1 lg:p-3">
         {ADMIN_TABS.map((tab) => (
           <li key={tab.key}>
             <AdminTabLink tab={tab} active={tab.key === active} badge={badges?.[tab.key] ?? (tab.key === "inbox" ? unreadTotal : tab.key === "activity" ? activityUnreadTotal : undefined)} />

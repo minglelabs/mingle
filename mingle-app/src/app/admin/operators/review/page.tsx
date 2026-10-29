@@ -42,7 +42,7 @@ export default async function OperatorReviewPage({ searchParams }: ReviewPagePro
       <AdminPageHeader
         title="계정·글 검토"
         description={`검토할 계정 ${queue.totalOperators}개 · 글 ${queue.totalPosts}개. 게시하면 바로 앱에 보이고, 재제작은 피드백을 반영해 다시 만들어요.`}
-        back={operator ? { href: '/admin/operators/review', label: '전체 검토' } : { href: '/admin/more', label: '더보기' }}
+        back={operator ? { href: '/admin/operators/review', label: '전체 검토' } : undefined}
       />
       {queue.operators.length === 0 ? (
         <AdminEmptyState title="검토할 항목이 없어요" description="새로 만든 계정과 글이 여기에 모여요." />

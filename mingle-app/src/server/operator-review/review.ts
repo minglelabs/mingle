@@ -42,6 +42,8 @@ export type ReviewPost = {
   photoKind: string | null
   photoDescription: string | null
   imageObjectKey: string | null
+  imageWidth: number | null
+  imageHeight: number | null
   reviewFeedback: string | null
   error: string | null
 }
@@ -74,12 +76,13 @@ export type ReviewQueue = {
 
 const POST_SELECT = {
   id: true, text: true, language: true, topic: true, state: true, imagePrompt: true,
-  imageObjectKey: true, reviewFeedback: true, error: true,
+  imageObjectKey: true, imageWidth: true, imageHeight: true, reviewFeedback: true, error: true,
 } as const
 
 function toReviewPost(row: {
   id: string; text: string; language: string | null; topic: string | null; state: string; imagePrompt: string | null
-  imageObjectKey: string | null; reviewFeedback: string | null; error: string | null
+  imageObjectKey: string | null; imageWidth: number | null; imageHeight: number | null
+  reviewFeedback: string | null; error: string | null
 }): ReviewPost {
   const photo = row.imagePrompt ? decodePostPhoto(row.imagePrompt) : null
   return {
@@ -91,6 +94,8 @@ function toReviewPost(row: {
     photoKind: photo?.kind ?? null,
     photoDescription: photo?.description ?? null,
     imageObjectKey: row.imageObjectKey,
+    imageWidth: row.imageWidth,
+    imageHeight: row.imageHeight,
     reviewFeedback: row.reviewFeedback,
     error: row.error,
   }

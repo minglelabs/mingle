@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Loader2, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { Loader2, MessageSquarePlus, RefreshCw, Send, Trash2 } from 'lucide-react'
 import type { ReviewOperator, ReviewPost } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import { OperatorAvatar } from '../_components/operator-ui'
@@ -39,7 +39,7 @@ async function sendReview(kind: 'profile' | 'post', id: string, action: Action, 
   return payload
 }
 
-/** 게시 · 삭제 · 재제작 plus an optional feedback note, shared by both card kinds. */
+/** 게시 · 삭제 · 재제작, with a feedback note that opens on demand. */
 function ReviewActions({
   busy,
   onAction,
@@ -49,17 +49,30 @@ function ReviewActions({
   onAction: (action: Action, feedback: string) => void
   publishDisabledReason?: string
 }) {
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [feedback, setFeedback] = useState('')
   return (
     <div className="mt-3 space-y-2">
-      <textarea
-        value={feedback}
-        onChange={(event) => setFeedback(event.target.value)}
-        rows={2}
-        placeholder="피드백 (선택) — 재제작할 때 반영돼요"
-        className={`${adminTextareaClassName} min-h-0`}
-        disabled={busy !== null}
-      />
+      {feedbackOpen ? (
+        <textarea
+          value={feedback}
+          onChange={(event) => setFeedback(event.target.value)}
+          rows={3}
+          autoFocus
+          placeholder="재제작할 때 반영할 피드백"
+          className={`${adminTextareaClassName} min-h-0`}
+          disabled={busy !== null}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setFeedbackOpen(true)}
+          className="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-800"
+        >
+          <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
+          피드백 쓰기
+        </button>
+      )}
       <div className="grid grid-cols-3 gap-2">
         <AdminButton
           variant="primary"
@@ -74,7 +87,10 @@ function ReviewActions({
           {busy === 'delete' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Trash2 className="h-4 w-4" aria-hidden="true" />}
           삭제
         </AdminButton>
-        <AdminButton disabled={busy !== null} onClick={() => { onAction('regenerate', feedback); setFeedback('') }}>
+        <AdminButton
+          disabled={busy !== null}
+          onClick={() => { onAction('regenerate', feedback); setFeedback(''); setFeedbackOpen(false) }}
+        >
           {busy === 'regenerate' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
           재제작
         </AdminButton>
@@ -84,7 +100,14 @@ function ReviewActions({
   )
 }
 
-function PostCard({ post: initial, profileApproved, onDone }: { post: ReviewPost; profileApproved: boolean; onDone: () => void }) {
+type PostAuthor = { name: string | null; handle: string; image: string | null }
+
+function PostCard({ post: initial, author, profileApproved, onDone }: {
+  post: ReviewPost
+  author: PostAuthor
+  profileApproved: boolean
+  onDone: () => void
+}) {
   const [post, setPost] = useState(initial)
   const [busy, setBusy] = useState<Action | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -106,6 +129,14 @@ function PostCard({ post: initial, profileApproved, onDone }: { post: ReviewPost
 
   return (
     <AdminCard as="article" className="p-3">
+      {/* Laid out like a post in the app's feed: author row, text, then the photo at full width. */}
+      <div className="mb-2 flex items-center gap-2">
+        <OperatorAvatar image={author.image} name={author.name} size={36} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-slate-900">{author.name ?? '(이름 없음)'}</p>
+          <p className="truncate text-xs text-slate-500">@{author.handle}</p>
+        </div>
+      </div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         {post.language ? <AdminChip tone="accent">{koreanLanguageName(post.language)}로 씀</AdminChip> : null}
         {post.topic ? <AdminChip>{post.topic}</AdminChip> : null}
@@ -117,7 +148,10 @@ function PostCard({ post: initial, profileApproved, onDone }: { post: ReviewPost
         <img
           src={`/admin/operators/api/review/image?key=${encodeURIComponent(post.imageObjectKey)}`}
           alt=""
-          className="mt-2 max-h-96 w-full rounded-lg bg-slate-100 object-contain"
+          width={post.imageWidth ?? undefined}
+          height={post.imageHeight ?? undefined}
+          loading="lazy"
+          className="mt-2 h-auto max-h-[85svh] w-full rounded-xl bg-slate-100 object-contain"
         />
       ) : post.photoDescription ? (
         <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
@@ -172,18 +206,21 @@ function OperatorSection({ operator, focused }: { operator: ReviewOperator; focu
 
   return (
     <section className="space-y-3">
-      <AdminCard>
-        <div className="flex gap-3">
-          <OperatorAvatar image={image} name={operator.name} size={88} />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <h2 className="break-words text-lg font-semibold text-slate-900">{operator.name ?? '(이름 없음)'}</h2>
-              <AdminChip tone={profileApproved ? 'success' : 'warning'}>{profileApproved ? '게시됨' : '계정 검토 중'}</AdminChip>
-            </div>
-            <p className="text-sm text-slate-500">@{operator.handle}</p>
-            {facts.length ? <p className="mt-1 text-sm text-slate-600">{facts.join(' · ')}</p> : null}
-            {operator.bio ? <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{operator.bio}</p> : null}
+      <AdminCard className="p-3">
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={image} alt="" className="aspect-square max-h-[75svh] w-full rounded-xl bg-slate-100 object-cover" />
+        ) : (
+          <div className="flex justify-center py-6"><OperatorAvatar image={null} name={operator.name} size={160} /></div>
+        )}
+        <div className="mt-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h2 className="break-words text-lg font-semibold text-slate-900">{operator.name ?? '(이름 없음)'}</h2>
+            <AdminChip tone={profileApproved ? 'success' : 'warning'}>{profileApproved ? '게시됨' : '계정 검토 중'}</AdminChip>
           </div>
+          <p className="text-sm text-slate-500">@{operator.handle}</p>
+          {facts.length ? <p className="mt-1 text-sm text-slate-600">{facts.join(' · ')}</p> : null}
+          {operator.bio ? <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{operator.bio}</p> : null}
         </div>
         {operator.profileFeedback && !profileApproved ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {operator.profileFeedback}</p> : null}
         {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
@@ -194,6 +231,7 @@ function OperatorSection({ operator, focused }: { operator: ReviewOperator; focu
         <PostCard
           key={post.id}
           post={post}
+          author={{ name: operator.name, handle: operator.handle, image }}
           profileApproved={profileApproved}
           onDone={() => setPosts((current) => current.filter((item) => item.id !== post.id))}
         />
@@ -216,7 +254,7 @@ function OperatorSection({ operator, focused }: { operator: ReviewOperator; focu
 
 export function ReviewBoard({ operators, focused }: { operators: ReviewOperator[]; focused: boolean }) {
   return (
-    <div className="space-y-8">
+    <div className="mx-auto w-full max-w-[440px] space-y-10">
       {operators.map((operator) => <OperatorSection key={operator.userId} operator={operator} focused={focused} />)}
     </div>
   )
