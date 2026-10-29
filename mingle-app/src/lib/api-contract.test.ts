@@ -182,6 +182,14 @@ describe('api-contract namespace guard', () => {
     expect(contract.shouldRedetectFinalizeSourceLanguage(pathname)).toBe(false)
   })
 
+  it('redetects the unversioned web path only when the typed source language is unknown', async () => {
+    const contract = await loadApiContractModule()
+    expect(contract.shouldRedetectFinalizeSourceLanguage('/api/translate/finalize', 'unknown')).toBe(true)
+    expect(contract.shouldRedetectFinalizeSourceLanguage('/api/translate/finalize', '')).toBe(true)
+    expect(contract.shouldRedetectFinalizeSourceLanguage('/api/translate/finalize', 'ko')).toBe(false)
+    expect(contract.shouldRedetectFinalizeSourceLanguage('/api/android/v1.0.3/translate/finalize', 'unknown')).toBe(false)
+  })
+
   it('ignores invalid env namespace values', async () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v9.0.0'
     const contract = await loadApiContractModule()

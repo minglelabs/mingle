@@ -345,9 +345,10 @@ function buildTranslateFinalizeLogContext(ctx: HandlerTranslateContext): Record<
 function shouldRedetectSourceLanguageFromRequest(args: {
   pathname: string
   isFinal: boolean
+  sourceLanguage: string
 }): boolean {
   if (!args.isFinal) return false
-  return shouldRedetectFinalizeSourceLanguage(args.pathname)
+  return shouldRedetectFinalizeSourceLanguage(args.pathname, args.sourceLanguage)
 }
 
 function resolveTranslationProviderFromEnv(): TranslationProvider {
@@ -408,12 +409,13 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     clientBundleRev,
     sessionKeyHint,
   }
+  const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
+  const sourceLanguage = sourceLanguageRaw || 'unknown'
   const shouldRedetectSourceLanguage = shouldRedetectSourceLanguageFromRequest({
     pathname: requestMeta.requestPathname,
     isFinal,
+    sourceLanguage,
   })
-  const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
-  const sourceLanguage = sourceLanguageRaw || 'unknown'
   const requestedTranslationModel = normalizeSelectableTranslationModel(body.translationModel)
   const selectedTranslationModel = requestedTranslationModel
     ?? await resolveSelectedTranslationModel(request, sessionKeyHint)
