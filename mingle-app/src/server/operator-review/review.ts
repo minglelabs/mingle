@@ -107,44 +107,46 @@ function toReviewPost(row: {
 
 const REVIEW_POST_STATES = ['review', 'regenerating']
 
-type TimelineRow = { kind: 'profile' | 'post'; id: string; at: Date }
+/** `late`: a post without a photo, shown after every account and photo post. */
+type TimelineRow = { late: boolean; kind: 'profile' | 'post'; id: string; at: Date }
 
 const TIMELINE_SQL = `
-  SELECT kind, id, at FROM (
-    SELECT 'profile' AS kind, u.id, u.created_at AS at
+  SELECT late, kind, id, at FROM (
+    SELECT false AS late, 'profile' AS kind, u.id, u.created_at AS at
     FROM app.app_users u JOIN app.app_operator_accounts o ON o.user_id = u.id
     WHERE u.is_operator AND NOT u.is_deleted AND o.review_state <> 'approved'
     UNION ALL
-    SELECT 'post' AS kind, r.id, r.created_at AS at
+    SELECT r.image_object_key IS NULL AS late, 'post' AS kind, r.id, r.created_at AS at
     FROM app.app_operator_post_reserve r JOIN app.app_users u ON u.id = r.operator_user_id
     WHERE r.state IN ('review', 'regenerating') AND NOT u.is_deleted
   ) t`
 
-/** Cursor = `<iso time>|<kind>|<id>` of the last item shown. Profiles sort before posts at the same instant. */
+/** Cursor = `<0|1 late>|<iso time>|<kind>|<id>` of the last item shown. Profiles sort before posts at the same instant. */
 export function encodeReviewCursor(row: TimelineRow): string {
-  return `${row.at.toISOString()}|${row.kind}|${row.id}`
+  return `${row.late ? 1 : 0}|${row.at.toISOString()}|${row.kind}|${row.id}`
 }
 
 export function decodeReviewCursor(value: string | undefined): TimelineRow | null {
-  const [iso, kind, id] = (value ?? '').split('|')
+  const [late, iso, kind, id] = (value ?? '').split('|')
   const at = new Date(iso ?? '')
-  if (!id || Number.isNaN(at.getTime()) || (kind !== 'profile' && kind !== 'post')) return null
-  return { kind, id, at }
+  if (!id || (late !== '0' && late !== '1') || Number.isNaN(at.getTime()) || (kind !== 'profile' && kind !== 'post')) return null
+  return { late: late === '1', kind, id, at }
 }
 
 /**
  * Every account and post waiting for review on one timeline, oldest first:
- * accounts by sign-up time, posts by creation time. Paged by cursor, so items
+ * accounts by sign-up time, posts by creation time. Accounts and photo posts
+ * come first, then the posts without a photo. Paged by cursor, so items
  * answered on one page never push unseen ones past the next.
  */
 export async function listReviewQueue(options: { cursor?: string; now?: Date } = {}): Promise<ReviewQueue> {
   const now = options.now ?? new Date()
   const after = decodeReviewCursor(options.cursor)
-  const order = `ORDER BY at, (kind = 'post'), id`
+  const order = `ORDER BY late, at, (kind = 'post'), id`
   const rows = after
     ? await prisma.$queryRawUnsafe<TimelineRow[]>(
-      `${TIMELINE_SQL} WHERE (at, (kind = 'post'), id) > ($1::timestamp, $2::boolean, $3::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
-      after.at, after.kind === 'post', after.id,
+      `${TIMELINE_SQL} WHERE (late, at, (kind = 'post'), id) > ($1::boolean, $2::timestamp, $3::boolean, $4::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
+      after.late, after.at, after.kind === 'post', after.id,
     )
     : await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`)
   const page = rows.slice(0, REVIEW_ITEMS_PER_PAGE)
@@ -240,17 +242,17 @@ export async function reviewOperatorProfile(
 
   if (action === 'publish') {
     await prisma.$transaction([
-      prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'approved' } }),
+      prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'approved', ...(feedback ? { reviewFeedback: feedback } : {}) } }),
       prisma.user.update({ where: { id: userId }, data: { isActive: true } }),
     ])
-    await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'publish' } })
+    await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'publish', feedback } })
     return { ok: true, state: 'approved' }
   }
 
   if (action === 'delete') {
     // Never public, so nothing else refers to it; its reserve rows go with it.
     await prisma.user.delete({ where: { id: userId } })
-    await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'delete' } })
+    await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'delete', feedback } })
     return { ok: true, state: 'deleted' }
   }
 
@@ -287,13 +289,15 @@ export async function reviewOperatorPost(
   })
   if (!row || !REVIEW_POST_STATES.includes(row.state)) return { ok: false, error: 'not_found' }
   if (row.state === 'regenerating') return { ok: false, error: 'busy' }
+  // Feedback on every answer is kept on the row and in the audit log, not only on 재제작.
   const audit = (decision: string, extra: Record<string, string | boolean | null> = {}) => writeAdminAudit(ctx, {
-    action: 'operator_post.review', operatorUserId: row.operatorUserId, targetType: 'reserve', targetId: reserveId, metadata: { decision, ...extra },
+    action: 'operator_post.review', operatorUserId: row.operatorUserId, targetType: 'reserve', targetId: reserveId, metadata: { decision, feedback, ...extra },
   })
 
   if (action === 'publish') {
     // The author must be public before anything goes out in their name.
     if (!row.operatorUser.isActive) return { ok: false, error: 'profile_pending' }
+    if (feedback) await prisma.operatorPostReserve.update({ where: { id: reserveId }, data: { reviewFeedback: feedback } })
     const result = await publishReservePostNow(reserveId, 'review', now)
     if (!result.ok) return { ok: false, error: result.error === 'reserve_empty' ? 'not_found' : 'publish_failed' }
     await audit('publish', { postId: result.postId })
@@ -301,7 +305,7 @@ export async function reviewOperatorPost(
   }
 
   if (action === 'delete') {
-    const cancelled = await prisma.operatorPostReserve.updateMany({ where: { id: reserveId, state: 'review' }, data: { state: 'cancelled', releaseAt: null } })
+    const cancelled = await prisma.operatorPostReserve.updateMany({ where: { id: reserveId, state: 'review' }, data: { state: 'cancelled', releaseAt: null, ...(feedback ? { reviewFeedback: feedback } : {}) } })
     if (cancelled.count === 0) return { ok: false, error: 'busy' }
     await audit('delete')
     return { ok: true, state: 'deleted' }

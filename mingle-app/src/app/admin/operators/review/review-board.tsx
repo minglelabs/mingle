@@ -64,7 +64,7 @@ function ReviewActions({
           onChange={(event) => setFeedback(event.target.value)}
           rows={3}
           autoFocus
-          placeholder="재제작할 때 반영할 피드백"
+          placeholder="피드백 — 게시·삭제·재제작 모두 함께 저장돼요"
           className={`${adminTextareaClassName} min-h-0`}
           disabled={busy !== null}
         />
