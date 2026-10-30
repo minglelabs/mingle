@@ -37,6 +37,14 @@ export type FeedPostDto = {
      * initial content). Optional on the wire: absent means false.
      */
     isOfficial?: boolean
+    /**
+     * The languages the author speaks ⇄ their 관심 언어 with a 1-5 level, shown
+     * under the name as on language-exchange apps. Absent when they set none.
+     */
+    languages?: {
+      primary: string[]
+      interest: Array<{ code: string; level: number }>
+    }
   }
   /** Body exactly as written; line breaks and blank lines preserved. */
   sourceText: string

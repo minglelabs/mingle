@@ -1,6 +1,7 @@
 import { getPublishedBioText } from "./profile-bio";
 import { prisma } from "@/lib/prisma";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
+import { zipInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 
 export type UserProfileLocation = {
@@ -24,6 +25,8 @@ export const userProfileSelect = {
   birthDate: true,
   nationality: true,
   primaryLanguages: true,
+  interestLanguages: true,
+  interestLanguageLevels: true,
   defaultConversationLanguages: true,
   locationLatitude: true,
   locationLongitude: true,
@@ -59,6 +62,9 @@ type SelectedUserProfile = {
   birthDate?: Date | null;
   nationality: string | null;
   primaryLanguages: string[];
+  /** Optional so hand-built rows (tests, older selects) still type-check. */
+  interestLanguages?: string[];
+  interestLanguageLevels?: number[];
   defaultConversationLanguages: string[];
   locationLatitude: number | null;
   locationLongitude: number | null;
@@ -88,6 +94,8 @@ export type UserProfile = {
   age?: number;
   nationality: string | null;
   primaryLanguages: string[];
+  /** 관심 언어 with the user's level of each; never one of primaryLanguages. */
+  interestLanguages: InterestLanguage[];
   defaultConversationLanguages: string[];
   location: UserProfileLocation | null;
   followersCount: number;
@@ -140,6 +148,8 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     birthDate,
     nationality,
     primaryLanguages,
+    interestLanguages,
+    interestLanguageLevels,
     defaultConversationLanguages,
     locationLatitude,
     locationLongitude,
@@ -181,6 +191,8 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     ...(age !== undefined ? { age } : {}),
     nationality: normalizedPrimaryLanguages[0] ?? normalizedNationality,
     primaryLanguages: normalizedPrimaryLanguages,
+    interestLanguages: zipInterestLanguages(interestLanguages, interestLanguageLevels)
+      .filter((entry) => !normalizedPrimaryLanguages.includes(entry.code)),
     defaultConversationLanguages: sanitizeSttLanguageSelection(defaultConversationLanguages),
     location,
     followersCount: _count.followerRelations,

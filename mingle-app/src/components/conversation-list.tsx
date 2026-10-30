@@ -7,6 +7,7 @@ import { getConversationDictionary } from "@/i18n/conversations";
 import { resolveNotificationCopy } from "@/i18n/notification-copy";
 import { conversationSortCopy } from "@/i18n/conversation-sort-copy";
 import NotificationPanel from "@/components/notification-panel";
+import CoinBalanceChip from "@/components/coins/coin-balance-chip";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import SlideSurface from "@/components/slide-surface";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
@@ -52,6 +53,7 @@ import {
   LS_KEY_PENDING_BIRTH_DATE,
   LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
   LS_KEY_PENDING_DISCOVERY_SOURCE,
+  LS_KEY_PENDING_INTEREST_LANGUAGES,
   LS_KEY_PENDING_PRIMARY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
@@ -61,6 +63,8 @@ import {
   normalizeLivePhoneDemoAdBannerPosition,
   readPendingBirthDate,
   readPendingDiscoverySource,
+  readPendingInterestLanguages,
+  clearPendingInterestLanguages,
   readPersistedBooleanPreference,
   readPersistedLivePhoneDemoPreferences,
   type LivePhoneDemoAdBannerPosition,
@@ -2310,8 +2314,14 @@ export default function ConversationList({
     const pendingPrimaryLanguages = readPendingPrimaryLanguages();
     const pendingBirthDate = readPendingBirthDate();
     const pendingDiscoverySource = readPendingDiscoverySource();
+    const pendingInterestLanguages = readPendingInterestLanguages();
 
-    if (pendingDefaultLanguages.length === 0 && !pendingBirthDate && !pendingDiscoverySource) return;
+    if (
+      pendingDefaultLanguages.length === 0
+      && !pendingBirthDate
+      && !pendingDiscoverySource
+      && pendingInterestLanguages.length === 0
+    ) return;
 
     const onboardingPrimaryLanguages = pendingPrimaryLanguages.length > 0
       ? pendingPrimaryLanguages
@@ -2344,6 +2354,9 @@ export default function ConversationList({
         if (pendingDiscoverySource) {
           patchPayload.discoverySource = pendingDiscoverySource;
         }
+        if (pendingInterestLanguages.length > 0) {
+          patchPayload.interestLanguages = pendingInterestLanguages;
+        }
 
         if (Object.keys(patchPayload).length === 0) {
           defaultConversationLanguagesSyncVersionRef.current += 1;
@@ -2352,6 +2365,7 @@ export default function ConversationList({
           clearPendingLanguagePreferences();
           clearPendingBirthDate();
           clearPendingDiscoverySource();
+          clearPendingInterestLanguages();
           return;
         }
 
@@ -2376,6 +2390,7 @@ export default function ConversationList({
         clearPendingLanguagePreferences();
         clearPendingBirthDate();
         clearPendingDiscoverySource();
+        clearPendingInterestLanguages();
       } catch {
         // Keep the pending marker so a later authenticated launch can retry the claim.
       }
@@ -5394,6 +5409,7 @@ export default function ConversationList({
     const languageCode = typeof payload === "string" ? payload : payload.language;
     const birthDateParts = typeof payload === "object" && payload ? payload.birthDate : null;
     const discoverySource = typeof payload === "object" && payload ? payload.discoverySource : null;
+    const interestLanguages = typeof payload === "object" && payload?.interestLanguage ? [payload.interestLanguage] : [];
     const formattedBirthDate = birthDateParts ? formatBirthDate(birthDateParts) : null;
 
     // Seed the room's default output languages from the chosen app language the
@@ -5421,6 +5437,9 @@ export default function ConversationList({
       }
       if (discoverySource) {
         window.localStorage.setItem(LS_KEY_PENDING_DISCOVERY_SOURCE, discoverySource);
+      }
+      if (interestLanguages.length > 0) {
+        window.localStorage.setItem(LS_KEY_PENDING_INTEREST_LANGUAGES, JSON.stringify(interestLanguages));
       }
     } catch {
       // Ignore storage failures; the onboarding modal will simply reopen next launch.
@@ -5451,6 +5470,9 @@ export default function ConversationList({
         if (discoverySource) {
           patchPayload.discoverySource = discoverySource;
         }
+        if (interestLanguages.length > 0) {
+          patchPayload.interestLanguages = interestLanguages;
+        }
 
         if (Object.keys(patchPayload).length > 0) {
           const saveResponse = await fetch(buildClientApiPath("/profile"), {
@@ -5473,6 +5495,7 @@ export default function ConversationList({
         clearPendingLanguagePreferences();
         clearPendingBirthDate();
         clearPendingDiscoverySource();
+        clearPendingInterestLanguages();
       } catch {
         return;
       }
@@ -5661,6 +5684,7 @@ export default function ConversationList({
         <MingleWordmark />
 
         <div className="flex items-center gap-1">
+          <CoinBalanceChip locale={locale} />
           <button
             type="button"
             onClick={handleOpenSearch}

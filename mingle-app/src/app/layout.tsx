@@ -5,6 +5,7 @@ import { AlertCircle, Check, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
 import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
+import CoinHost from "@/components/coins/coin-host";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
 import NativeBannerRouteGuard from "@/components/native-banner-route-guard";
@@ -104,6 +105,7 @@ export default async function RootLayout({
                 {children}
                 <NativeProfileLinkOverlay />
                 <NativeConversationShareOverlay />
+                <CoinHost />
                 <NativePushTapReceiver />
                 <NativeBannerRouteGuard />
                 <UiDiagnosticsProbe />

@@ -1,5 +1,14 @@
 'use client'
 
+import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-errors'
+import {
+  appendCoinBillingToWsUrl,
+  applyCoinBalance,
+  applyCoinBalanceFromHeaders,
+  ensureCoinBillingIdentity,
+  ensureCoinsForPaidFeature,
+  notifyCoinsExhausted,
+} from '@/lib/coin-wallet-client'
 import { normalizeConversationMessageImage } from '@/lib/conversation-image'
 import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
 import { MESSAGE_READ_RECEIPTS_REFRESH_EVENT } from '@/lib/message-read-receipts'
@@ -4561,7 +4570,7 @@ export default function useRealtimeSTT({
     const apiPath = buildClientApiPath('/translate/finalize')
     const shouldRedetectSourceLanguage = (
       options?.isFinal === true
-      && shouldRedetectFinalizeSourceLanguage(apiPath)
+      && shouldRedetectFinalizeSourceLanguage(apiPath, sourceLanguage)
     )
     const langs = shouldRedetectSourceLanguage
       ? targetLanguages
@@ -4614,9 +4623,13 @@ export default function useRealtimeSTT({
         signal: options?.signal,
       })
       if (!res.ok) {
+        // 402: the sender has no coins, so the message goes out untranslated.
+        if (res.status === 402) notifyCoinsExhausted()
         return { translations: {} }
       }
       const data = await res.json()
+      if (typeof data.coinBalance === 'number') applyCoinBalance(data.coinBalance)
+      if (data.coinExhausted === true) notifyCoinsExhausted()
       const ttsAudioBase64 = typeof data.ttsAudioBase64 === 'string' ? data.ttsAudioBase64 : undefined
       const responseSourceLanguage = typeof data.sourceLanguage === 'string'
         ? normalizeIncomingSourceLanguage(data.sourceLanguage, text, { candidates: [sourceLanguage, ...targetLanguages] })
@@ -4817,7 +4830,9 @@ export default function useRealtimeSTT({
           ...(ttsModel ? { ttsModel } : {}),
         }),
       })
+      if (res.status === 402) notifyCoinsExhausted({ userInitiated: true })
       if (!res.ok) return null
+      applyCoinBalanceFromHeaders(res.headers)
       const arrayBuffer = await res.arrayBuffer()
       if (!arrayBuffer || arrayBuffer.byteLength === 0) return null
       const mime = res.headers.get('content-type') || 'audio/mpeg'
@@ -5802,6 +5817,12 @@ export default function useRealtimeSTT({
   ])
 
   const handleSttServerMessage = useCallback((message: Record<string, unknown>) => {
+    // mingle-stt ended the session because the balance hit zero (docs/coin-iap-spec.md 3.5).
+    if (message.type === 'error' && message.error_code === COIN_INSUFFICIENT_ERROR) {
+      notifyCoinsExhausted()
+      handleSttTransportError({ native: useNativeSttRef.current, code: COIN_INSUFFICIENT_ERROR })
+      return
+    }
     const serverError = parseSttServerError(message)
     if (serverError) {
       handleSttTransportError({ native: useNativeSttRef.current, ...serverError })
@@ -6106,6 +6127,9 @@ export default function useRealtimeSTT({
   ])
 
   const startRecording = useCallback(async () => {
+    await ensureCoinBillingIdentity()
+    // No coins: the mic stays off and the "out of coins" sheet opens instead.
+    if (!ensureCoinsForPaidFeature()) return
     // A remounted visible hook shares the previous hook's stop window.
     while (nativeStopIntent.isPending(nativeStopIntentKeyRef.current)) {
       await sleep(25)
@@ -6252,7 +6276,7 @@ export default function useRealtimeSTT({
           payload: {
             conversationId: conversationId || '',
             sessionId: nativeSessionId,
-            wsUrl: getWsUrl(),
+            wsUrl: appendCoinBillingToWsUrl(getWsUrl(), ensureSessionKey()),
             sttModel: 'soniox',
             aecEnabled: enableAec,
             apiNamespace: runtimeBehaviorContext.apiNamespace,
@@ -6303,7 +6327,7 @@ export default function useRealtimeSTT({
         } catch { /* no-op */ }
       }
 
-      const socket = new WebSocket(getWsUrl())
+      const socket = new WebSocket(appendCoinBillingToWsUrl(getWsUrl(), ensureSessionKey()))
       socketRef.current = socket
 
       socket.onopen = () => {
@@ -6368,7 +6392,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
+  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, ensureSessionKey, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
 
   // Keep the native listener stable while a session is active. Usage tracking
   // changes several callbacks on each tick, and re-subscribing here would

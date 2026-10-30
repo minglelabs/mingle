@@ -38,7 +38,7 @@ const korean: AvatarPersona = { gender: 'female', name: '민아', age: 26, count
 const american: AvatarPersona = { gender: 'male', name: 'Jake', age: 31, country: 'US', countryName: 'United States', city: 'Chicago', bio: null }
 
 function imageResponse(data = Buffer.from('png-bytes').toString('base64')) {
-  return vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data } }] } }] }), { status: 200 }))
+  return vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content: `![image](data:image/png;base64,${data})` } }] }), { status: 200 }))
 }
 
 function sampleCategories(persona: AvatarPersona, count: number): Map<string, number> {
@@ -208,8 +208,7 @@ describe('ancestry and the persona name', () => {
 describe('avatar generation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubEnv('GEMINI_API_KEY', 'test-key')
-    vi.stubEnv('OPERATOR_AVATAR_IMAGE_MODEL', 'gemini-2.5-flash-image')
+    vi.stubEnv('OPERATOR_AVATAR_IMAGE_MODEL', 'chatgpt-app/image')
     mocks.userFindFirst.mockResolvedValue({
       name: '민아', bio: null, birthDate: new Date('2000-01-01'), locationCity: 'Seoul', locationCountry: 'South Korea',
       operatorAccount: { personaCountry: 'KR', personaGender: 'female' },
@@ -218,19 +217,20 @@ describe('avatar generation', () => {
     mocks.accountUpdateMany.mockResolvedValue({ count: 1 })
   })
 
-  it('uses the configured image model', () => {
-    expect(resolveAvatarImageModel({} as NodeJS.ProcessEnv)).toBe('gpt-image-2')
+  it('draws nothing by default: photos wait to be drawn by hand', () => {
+    expect(resolveAvatarImageModel({} as NodeJS.ProcessEnv)).toBe('none')
     expect(resolveAvatarImageModel({ OPERATOR_AVATAR_IMAGE_MODEL: 'x' } as unknown as NodeJS.ProcessEnv)).toBe('x')
   })
 
-  it('reports a missing key, an HTTP failure and a refusal without throwing', async () => {
-    vi.stubEnv('GEMINI_API_KEY', '')
-    expect(await requestAvatarImage('p')).toEqual({ ok: false, error: 'image_unavailable' })
-    vi.stubEnv('GEMINI_API_KEY', 'test-key')
-    expect(await requestAvatarImage('p', { fetchImpl: vi.fn(async () => new Response('', { status: 500 })) as unknown as typeof fetch }))
-      .toEqual({ ok: false, error: 'image_request_failed', detail: 'http_500' })
-    const refused = vi.fn(async () => new Response(JSON.stringify({ candidates: [{ finishReason: 'SAFETY', content: { parts: [{ text: 'no' }] } }] }), { status: 200 }))
-    expect(await requestAvatarImage('p', { fetchImpl: refused as unknown as typeof fetch })).toEqual({ ok: false, error: 'image_refused', detail: 'SAFETY' })
+  it('never calls a paid image API', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'openai-key')
+    vi.stubEnv('GEMINI_API_KEY', 'gemini-key')
+    const fetchImpl = vi.fn()
+    for (const model of ['none', 'gpt-image-2', 'gemini-2.5-flash-image', 'dall-e-3']) {
+      expect(await requestAvatarImage('p', { model, fetchImpl: fetchImpl as unknown as typeof fetch }))
+        .toEqual({ ok: false, error: 'image_unavailable', detail: 'image_api_disabled' })
+    }
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 
   it('draws the picked spec, stores it as the avatar and saves the spec', async () => {
@@ -238,26 +238,11 @@ describe('avatar generation', () => {
     const result = await generateOperatorAvatar(null, 'op_1', { nonce: 'n1', now: NOW, fetchImpl: fetchImpl as unknown as typeof fetch })
     expect(result.ok).toBe(true)
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
-    expect(url).toContain('gemini-2.5-flash-image:generateContent')
+    expect(url).toBe('http://127.0.0.1:10310/v1/chat/completions')
     const body = JSON.parse(String(init.body))
-    expect(body.generationConfig.responseModalities).toEqual(['IMAGE'])
-    expect(body.contents[0].parts[0].text).toContain('profile picture')
+    expect(body.messages[0].content).toContain('profile picture')
     expect(mocks.setAvatar).toHaveBeenCalledWith(null, 'op_1', Buffer.from('png-bytes'), expect.objectContaining({ generated: true }))
     expect(mocks.accountUpdateMany.mock.calls[0][0].data.avatarSpec.labelKo).toContain(' · ')
-  })
-
-  it('sends gpt models to OpenAI at low quality', async () => {
-    vi.stubEnv('OPENAI_API_KEY', '')
-    expect(await requestAvatarImage('p', { model: 'gpt-image-2' })).toEqual({ ok: false, error: 'image_unavailable' })
-    vi.stubEnv('OPENAI_API_KEY', 'openai-key')
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: [{ b64_json: Buffer.from('png-bytes').toString('base64') }] }), { status: 200 }))
-    const result = await requestAvatarImage('a prompt', { model: 'gpt-image-2', fetchImpl: fetchImpl as unknown as typeof fetch })
-    expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes'), model: 'gpt-image-2' })
-    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
-    expect(url).toBe('https://api.openai.com/v1/images/generations')
-    expect(JSON.parse(String(init.body))).toEqual({ model: 'gpt-image-2', prompt: 'a prompt', size: '1024x1024', quality: 'low', n: 1 })
-    const refused = vi.fn(async () => new Response('{}', { status: 400 }))
-    expect(await requestAvatarImage('p', { model: 'gpt-image-2', fetchImpl: refused as unknown as typeof fetch })).toEqual({ ok: false, error: 'image_refused', detail: 'http_400' })
   })
 
   describe('through the local subscription proxy', () => {
@@ -308,15 +293,12 @@ describe('avatar generation', () => {
       expect(fetchImpl).toHaveBeenCalledTimes(1)
     })
 
-    it('falls back to the API model where the proxy cannot be reached', async () => {
+    it('reports an unreachable proxy without falling back to any API', async () => {
       vi.stubEnv('OPENAI_API_KEY', 'openai-key')
-      const fetchImpl = vi.fn(async (url: string) => {
-        if (url.startsWith('http://127.0.0.1:10100')) throw new TypeError('fetch failed')
-        return new Response(JSON.stringify({ data: [{ b64_json: Buffer.from('png-bytes').toString('base64') }] }), { status: 200 })
-      })
+      const fetchImpl = vi.fn(async () => { throw new TypeError('fetch failed') })
       const result = await requestAvatarImage('p', { model: PROXY_MODEL, fetchImpl: fetchImpl as unknown as typeof fetch })
-      expect(result).toEqual({ ok: true, bytes: Buffer.from('png-bytes'), model: 'gpt-image-2' })
-      expect(fetchImpl.mock.calls[1][0]).toBe('https://api.openai.com/v1/images/generations')
+      expect(result).toEqual({ ok: false, error: 'image_unavailable', detail: 'proxy_unreachable' })
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
     })
 
     it('sends chatgpt-app models to the ChatGPT app bridge with its own key', async () => {

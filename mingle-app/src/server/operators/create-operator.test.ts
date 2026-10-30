@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   userCreate: vi.fn(),
+  userUpdate: vi.fn(),
   writeAdminAudit: vi.fn(),
   updateProfileWithBio: vi.fn(),
   runBioVersion: vi.fn(),
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   txOperatorAccountUpsert: vi.fn(),
 }))
 
-vi.mock('@/lib/prisma', () => ({ prisma: { user: { create: mocks.userCreate } } }))
+vi.mock('@/lib/prisma', () => ({ prisma: { user: { create: mocks.userCreate, update: mocks.userUpdate } } }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.writeAdminAudit }))
 vi.mock('@/server/profile-bio', () => ({ updateProfileWithBio: mocks.updateProfileWithBio, runBioVersion: mocks.runBioVersion }))
 vi.mock('@/lib/signup-welcome-onboarding', () => ({ ensureSignupWelcomeOnboarding: mocks.ensureSignupWelcomeOnboarding }))

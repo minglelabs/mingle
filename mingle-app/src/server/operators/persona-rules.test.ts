@@ -102,6 +102,13 @@ describe('validatePersonaDraft', () => {
 })
 
 describe('parseOperatorPatch', () => {
+  it('takes 관심 언어 with their level and refuses a broken list', () => {
+    expect(parseOperatorPatch({ interestLanguages: [{ code: 'ko', level: 2 }] }, { now: NOW })).toEqual({ ok: true, patch: { interestLanguages: [{ code: 'ko', level: 2 }] } })
+    expect(parseOperatorPatch({ interestLanguages: [] }, { now: NOW })).toEqual({ ok: true, patch: { interestLanguages: [] } })
+    expect(parseOperatorPatch({ interestLanguages: [{ code: 'xx', level: 2 }] }, { now: NOW }).ok).toBe(false)
+    expect(parseOperatorPatch({ interestLanguages: 'ko' }, { now: NOW }).ok).toBe(false)
+  })
+
   it('keeps only the fields that are present', () => {
     expect(parseOperatorPatch({ name: ' Mina ', bio: null, notes: '  ' }, { now: NOW })).toEqual({
       ok: true,

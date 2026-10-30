@@ -8,6 +8,15 @@ const nextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   outputFileTracingRoot: appRoot,
+  experimental: {
+    staleTimes: {
+      // How long a fully prefetched route stays usable without a server
+      // round-trip. The native tab bar prefetches its tab roots (which carry no
+      // server-loaded data) and relies on this so that a tab tap still commits
+      // from memory after the app has sat in the background for hours.
+      static: 60 * 60 * 24,
+    },
+  },
   async rewrites() {
     return [
       {
@@ -72,6 +81,12 @@ const nextConfig = {
         source: "/api/ios/v2.0.4/:path*",
         destination: "/api/ios/v2.0.0/:path*",
       },
+      // 2.2.1 is a patch release: it keeps the v2.2.0 server contract while
+      // using its own versioned namespace.
+      ...['ios', 'android'].flatMap(platform => [
+        { source: `/api/${platform}/v2.2.1`, destination: `/api/${platform}/v2.2.0` },
+        { source: `/api/${platform}/v2.2.1/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
+      ]),
       // 2.1.1 is a patch release: it keeps the v2.1.0 server contract while
       // using its own versioned namespace.
       ...['ios', 'android'].flatMap(platform => [

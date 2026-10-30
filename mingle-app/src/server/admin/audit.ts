@@ -10,6 +10,8 @@ export type AdminAuditAction =
   | 'operator.create'
   | 'operator.update'
   | 'operator.avatar'
+  | 'operator.review'
+  | 'operator.review_order'
   | 'operator_post.batch_create'
   | 'operator_post.cancel'
   | 'operator_post.published'
@@ -26,8 +28,15 @@ export type AdminAuditAction =
   | 'operator_post.reserve_published'
   | 'operator_post.edit_photo'
   | 'operator_post.edit_text'
+  | 'operator_post.review'
+  | 'operator_post.review_order'
+  | 'operator_post.review_photos'
   | 'notify_target.add'
   | 'notify_target.remove'
+  | 'coins.adjust'
+  | 'coins.product'
+  | 'coins.polar_products'
+  | 'coins.pricing_rate'
 
 export type AdminAuditEntry = {
   action: AdminAuditAction

@@ -4,6 +4,7 @@ import {
   resolveDisplayLanguage,
   serializeFeedPost,
   serializeFeedPosts,
+  serializeAuthorLanguages,
   serializePostImage,
   serializePostImages,
   type SerializerContext,
@@ -230,5 +231,18 @@ describe('serializePostImages', () => {
       { url: '/api/posts/p1/image?index=1', width: null, height: null },
       { url: '/api/posts/p1/image?index=2', width: 1280, height: 960 },
     ])
+  })
+})
+
+describe('serializeAuthorLanguages', () => {
+  it('sends spoken languages ⇄ 관심 언어 with levels, never one twice', () => {
+    expect(serializeAuthorLanguages({
+      id: 'a', handle: 'a', name: null, image: null,
+      nationality: 'ko', primaryLanguages: ['ko'], interestLanguages: ['ja', 'ko', 'en'], interestLanguageLevels: [3, 5, 1],
+    })).toEqual({ primary: ['ko'], interest: [{ code: 'ja', level: 3 }, { code: 'en', level: 1 }] })
+  })
+
+  it('is absent when the author set none', () => {
+    expect(serializeAuthorLanguages({ id: 'a', handle: 'a', name: null, image: null })).toBeUndefined()
   })
 })

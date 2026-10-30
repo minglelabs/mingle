@@ -4,6 +4,7 @@ import { getAuthOptions } from "@/lib/auth-options";
 import { getPublishedBioText } from "@/server/profile-bio";
 import { prisma } from "@/lib/prisma";
 import { normalizeHandle } from "@/lib/handles";
+import { zipInterestLanguages } from "@/lib/interest-languages";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { USER_IDENTITY_SELECT, identityBadgeFlags } from "@/server/identity/user-identity-select";
 import { calculateProfileAge } from "@/server/user-profile";
@@ -37,6 +38,8 @@ const userProfileSelect = {
   bio: true,
   nationality: true,
   primaryLanguages: true,
+  interestLanguages: true,
+  interestLanguageLevels: true,
   locationLatitude: true,
   locationLongitude: true,
   locationCity: true,
@@ -116,6 +119,10 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     return responseJson({ error: "user_unavailable" }, { status: 403 });
   }
 
+  const primaryLanguages = sanitizeSttLanguageSelection(
+    user.primaryLanguages,
+    user.nationality ? [user.nationality] : [],
+  );
   return responseJson({
     id: user.id,
     handle: user.handle,
@@ -127,10 +134,9 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     age: calculateProfileAge(user.birthDate),
     bio: await getPublishedBioText(user.id, user.bio),
     nationality: user.nationality,
-    primaryLanguages: sanitizeSttLanguageSelection(
-      user.primaryLanguages,
-      user.nationality ? [user.nationality] : [],
-    ),
+    primaryLanguages,
+    interestLanguages: zipInterestLanguages(user.interestLanguages, user.interestLanguageLevels)
+      .filter((entry) => !primaryLanguages.includes(entry.code)),
     location: typeof user.locationLatitude === "number"
       && Number.isFinite(user.locationLatitude)
       && typeof user.locationLongitude === "number"

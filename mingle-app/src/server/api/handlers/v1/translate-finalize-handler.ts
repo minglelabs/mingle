@@ -40,6 +40,10 @@ import {
   normalizeTranslationProvider,
 } from '@/server/translation/translate-texts'
 
+import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
+import { coinKeyDigest, estimateTtsAudioSeconds, resolveCoinBillingUserId } from '@/server/coins/request-billing'
+import { canSpendCoins, chargeCoinUsageSafely } from '@/server/coins/wallet'
+
 export const runtime = 'nodejs'
 
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
@@ -345,9 +349,10 @@ function buildTranslateFinalizeLogContext(ctx: HandlerTranslateContext): Record<
 function shouldRedetectSourceLanguageFromRequest(args: {
   pathname: string
   isFinal: boolean
+  sourceLanguage: string
 }): boolean {
   if (!args.isFinal) return false
-  return shouldRedetectFinalizeSourceLanguage(args.pathname)
+  return shouldRedetectFinalizeSourceLanguage(args.pathname, args.sourceLanguage)
 }
 
 function resolveTranslationProviderFromEnv(): TranslationProvider {
@@ -362,7 +367,7 @@ async function synthesizeTtsInline(args: {
   language: string
   requestedVoiceId?: string
   ttsModel?: unknown
-}): Promise<{ audioBase64: string, audioMime: string, voiceId: string } | null> {
+}): Promise<{ audioBase64: string, audioMime: string, voiceId: string, provider: string, modelId: string, audioSeconds: number } | null> {
   if (!args.text.trim() || !args.language.trim()) return null
   const result = await synthesizeSpeech({
     text: args.text,
@@ -376,6 +381,9 @@ async function synthesizeTtsInline(args: {
     audioBase64: result.audio.toString('base64'),
     audioMime: result.mime,
     voiceId: result.voiceId,
+    provider: result.provider,
+    modelId: result.modelId,
+    audioSeconds: estimateTtsAudioSeconds(result.audio, result.mime),
   }
 }
 
@@ -408,12 +416,13 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     clientBundleRev,
     sessionKeyHint,
   }
+  const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
+  const sourceLanguage = sourceLanguageRaw || 'unknown'
   const shouldRedetectSourceLanguage = shouldRedetectSourceLanguageFromRequest({
     pathname: requestMeta.requestPathname,
     isFinal,
+    sourceLanguage,
   })
-  const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
-  const sourceLanguage = sourceLanguageRaw || 'unknown'
   const requestedTranslationModel = normalizeSelectableTranslationModel(body.translationModel)
   const selectedTranslationModel = requestedTranslationModel
     ?? await resolveSelectedTranslationModel(request, sessionKeyHint)
@@ -444,6 +453,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     providerConfig,
     ...(testFaultMode ? [] : resolveFallbackProviderConfigs(selectedTranslationModel)),
   ]
+  const billedTranslationConfig = providerConfigs[0]
 
   const targetLanguages = shouldRedetectSourceLanguage
     ? normalizeSelectedLanguages(targetLanguagesRaw)
@@ -460,6 +470,19 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     ensureTrackingContext(request, response, { sessionKeyHint })
     return response
   }
+
+  // Coins (docs/coin-iap-spec.md 3.5, 4.3): the sender pays for translation, and
+  // a sender with no coins gets no translation (the message still goes out untranslated).
+  const coinBillingUserId = await resolveCoinBillingUserId()
+  if (coinBillingUserId && !(await canSpendCoins(coinBillingUserId))) {
+    const response = NextResponse.json({ error: COIN_INSUFFICIENT_ERROR, translations: {} }, { status: 402 })
+    ensureTrackingContext(request, response, { sessionKeyHint })
+    return response
+  }
+  const coinClientMessageId = typeof body.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : ''
+  // Spoken turns carry their STT duration; partials are spoken by definition.
+  const isTypedMessage = isFinal && !(typeof body.sttDurationMs === 'number' && body.sttDurationMs > 0)
+  const coinRequestDigest = coinKeyDigest(sessionKeyHint, text, targetLanguages.join(','), isFinal)
 
   const immediatePreviousTurn = parseImmediatePreviousTurn(body.immediatePreviousTurn)
   const ctx: HandlerTranslateContext = {
@@ -536,7 +559,28 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         responsePayload.translationTotalTokens = meta.usage.totalTokens
       }
 
-      if (enableTts && ttsLanguage && targetLanguages.includes(ttsLanguage)) {
+      // Voice is billed per minute by the STT session (a flat rate that covers
+      // its translation), so interim and spoken final translations are free
+      // here. A typed message is a flat per-message price (spec 4.2, revision 2),
+      // charged when the provider answered (callers pass a `usage` key exactly then).
+      let coinsExhausted = false
+      if (coinBillingUserId && isTypedMessage && Object.prototype.hasOwnProperty.call(meta, 'usage')) {
+        const charge = await chargeCoinUsageSafely({
+          userId: coinBillingUserId,
+          kind: 'translation',
+          units: { message: 1 },
+          // The rate is flat; the chosen and the answering model are kept for cost review (spec 4.6).
+          model: billedTranslationConfig.model,
+          provider: billedTranslationConfig.infrastructureProvider,
+          servedModel: meta.model,
+          sessionKey: sessionKeyHint,
+          idempotencyKey: `translation:${coinBillingUserId}:${coinClientMessageId || '-'}:${coinRequestDigest}`,
+        })
+        coinsExhausted = charge?.balanceExhausted === true
+        if (charge?.wallet) responsePayload.coinBalance = charge.wallet.balance
+      }
+
+      if (enableTts && ttsLanguage && targetLanguages.includes(ttsLanguage) && !coinsExhausted) {
         const ttsText = (translations[ttsLanguage] || '').trim()
         if (ttsText) {
           const ttsResult = await synthesizeTtsInline({
@@ -551,10 +595,24 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
             responsePayload.ttsAudioBase64 = ttsResult.audioBase64
             responsePayload.ttsAudioMime = ttsResult.audioMime
             responsePayload.ttsVoiceId = ttsResult.voiceId
+            if (coinBillingUserId) {
+              const charge = await chargeCoinUsageSafely({
+                userId: coinBillingUserId,
+                kind: 'tts',
+                units: { char: ttsText.length, second: ttsResult.audioSeconds },
+                model: ttsResult.modelId,
+                provider: ttsResult.provider,
+                sessionKey: sessionKeyHint,
+                idempotencyKey: `tts:${coinBillingUserId}:${coinClientMessageId || '-'}:${coinKeyDigest(sessionKeyHint, ttsLanguage, ttsText)}`,
+              })
+              coinsExhausted = charge?.balanceExhausted === true
+              if (charge?.wallet) responsePayload.coinBalance = charge.wallet.balance
+            }
           }
         }
       }
 
+      if (coinsExhausted) responsePayload.coinExhausted = true
       const response = NextResponse.json(responsePayload)
       ensureTrackingContext(request, response, { sessionKeyHint })
       return response

@@ -15,6 +15,9 @@ import { resolveAccountBadge, withAccountBadgeLabel, type AccountBadgeKind } fro
 import IdentityRow from "@/components/posts/identity-row";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ChatAccountBadge from "./ChatAccountBadge";
+import HashSeedIcon from "@/components/coins/hash-seed-icon";
+import { fillCoinCopy, getCoinCopy } from "@/i18n/coin-copy";
+import { isCoinBillingActive, useCoinWallet } from "@/lib/coin-wallet-client";
 import { readAccountBadgeFlags } from "./chat-account-badge.logic";
 
 type ConversationParticipantsPanelProps = {
@@ -54,6 +57,20 @@ type ParticipantProfile = {
 };
 
 type ProfileLoadState = "idle" | "loading" | "ready" | "error";
+
+/** Hash spent in this room per member id; null until loaded or when billing is off. */
+type RoomCoinUsage = { byUser: Map<string, number>; total: number } | null;
+
+function parseRoomCoinUsage(value: unknown): RoomCoinUsage {
+  if (!isRecord(value) || !Array.isArray(value.members)) return null;
+  const byUser = new Map<string, number>();
+  for (const member of value.members) {
+    if (isRecord(member) && typeof member.userId === "string" && typeof member.coins === "number") {
+      byUser.set(member.userId, member.coins);
+    }
+  }
+  return { byUser, total: typeof value.totalCoins === "number" ? value.totalCoins : 0 };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -147,12 +164,15 @@ function ParticipantRow({
   fallbackName,
   badgeLabel,
   locale,
+  usedLabel,
   onOpenProfile,
 }: {
   member: ParticipantProfile;
   fallbackName: string;
   badgeLabel?: string;
   locale: string;
+  // "123 used" in this room; omitted while billing is off.
+  usedLabel?: string | null;
   onOpenProfile?: (userId: string) => void;
 }) {
   // Blocking hides the photo and stops profile taps, but the name/handle
@@ -170,6 +190,7 @@ function ParticipantRow({
     withAccountBadgeLabel(displayName, member.accountBadge, locale),
     displayHandle,
     badgeLabel,
+    usedLabel,
   ].filter(Boolean).join(", ");
   const content = (
     <>
@@ -225,6 +246,12 @@ function ParticipantRow({
           </p>
         ) : null}
       </div>
+      {usedLabel ? (
+        <span aria-hidden={hasProfileAction || undefined} className="flex shrink-0 items-center gap-1 text-[0.8rem] font-semibold tabular-nums text-amber-700">
+          <HashSeedIcon size={14} />
+          {usedLabel}
+        </span>
+      ) : null}
     </>
   );
   const contentClassName = "flex items-center gap-3 rounded-2xl px-3.5 py-3.5";
@@ -246,6 +273,19 @@ function ParticipantRow({
       {content}
     </IdentityRow>
   );
+}
+
+function fallbackLocaleFor(uiLocale: string) {
+  return resolveSupportedLocaleTag(uiLocale) ?? DEFAULT_LOCALE;
+}
+
+// One decimal: a room's usage is often under 1 (a translated message costs well under one Hash).
+function formatRoomCoins(value: number, uiLocale: string): string {
+  try {
+    return new Intl.NumberFormat(uiLocale, { maximumFractionDigits: 1 }).format(Math.max(0, value));
+  } catch {
+    return String(Math.round(Math.max(0, value) * 10) / 10);
+  }
 }
 
 export default function ConversationParticipantsPanel({
@@ -273,6 +313,8 @@ export default function ConversationParticipantsPanel({
   const [otherMembers, setOtherMembers] = useState<ParticipantProfile[]>([]);
   const [membersLoadState, setMembersLoadState] = useState<ProfileLoadState>("idle");
   const normalizedConversationId = conversationId?.trim() || "";
+  const coinBillingActive = isCoinBillingActive(useCoinWallet().wallet);
+  const [roomCoinUsage, setRoomCoinUsage] = useState<RoomCoinUsage>(null);
 
   const loadProfile = useCallback(async () => {
     setLoadState("loading");
@@ -322,6 +364,26 @@ export default function ConversationParticipantsPanel({
     void loadMembers();
   }, [active, loadMembers]);
 
+  // Best effort: the list still works when the usage request fails.
+  useEffect(() => {
+    if (!active || !coinBillingActive || !normalizedConversationId) {
+      setRoomCoinUsage(null);
+      return;
+    }
+    let cancelled = false;
+    void fetch(buildClientApiPath(`/conversations/${normalizedConversationId}/coin-usage`), { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => { if (!cancelled) setRoomCoinUsage(parseRoomCoinUsage(body)); })
+      .catch(() => { if (!cancelled) setRoomCoinUsage(null); });
+    return () => { cancelled = true; };
+  }, [active, coinBillingActive, normalizedConversationId]);
+
+  const coinCopy = getCoinCopy(fallbackLocaleFor(uiLocale));
+  const usedLabelFor = (userId: string | undefined) => {
+    if (!roomCoinUsage || !userId) return null;
+    return fillCoinCopy(coinCopy.roomUsed, { coins: formatRoomCoins(roomCoinUsage.byUser.get(userId) ?? 0, uiLocale) });
+  };
+
   const fallbackLocale = resolveSupportedLocaleTag(uiLocale) ?? DEFAULT_LOCALE;
   const fallbackName = getPrimaryUiCopy(fallbackLocale).connect.userFallbackLabel ?? "HashChat user";
 
@@ -365,6 +427,16 @@ export default function ConversationParticipantsPanel({
           </div>
         ) : null}
 
+        {roomCoinUsage ? (
+          <div className="mb-3 flex items-center justify-between rounded-2xl bg-amber-50 px-3.5 py-2.5 text-[0.86rem] text-amber-800">
+            <span className="font-semibold">{coinCopy.roomUsageTitle}</span>
+            <span className="flex items-center gap-1 font-bold tabular-nums">
+              <HashSeedIcon size={15} />
+              {formatRoomCoins(roomCoinUsage.total, uiLocale)}
+            </span>
+          </div>
+        ) : null}
+
         <div className="flex flex-col gap-2.5">
           {profile ? (
             <ParticipantRow
@@ -372,6 +444,7 @@ export default function ConversationParticipantsPanel({
               fallbackName={fallbackName}
               badgeLabel={selfLabel}
               locale={uiLocale}
+              usedLabel={usedLabelFor(profile.id)}
               onOpenProfile={onOpenProfile}
             />
           ) : null}
@@ -382,6 +455,7 @@ export default function ConversationParticipantsPanel({
               member={member}
               fallbackName={fallbackName}
               locale={uiLocale}
+              usedLabel={usedLabelFor(member.id)}
               onOpenProfile={onOpenProfile}
             />
           ))}

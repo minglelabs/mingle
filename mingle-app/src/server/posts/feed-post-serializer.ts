@@ -14,6 +14,8 @@
  */
 
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
+import { zipInterestLanguages } from '@/lib/interest-languages'
+import { sanitizeSttLanguageSelection } from '@/lib/stt-languages'
 import { identityBadgeFlags } from '@/server/identity/user-identity-select'
 import type {
   FeedPostDto,
@@ -39,6 +41,28 @@ export type SerializerAuthorRow = {
    */
   isOfficial?: boolean | null
   isOperator?: boolean | null
+  /** Language row under the name (AUTHOR_LANGUAGE_SELECT); optional likewise. */
+  nationality?: string | null
+  primaryLanguages?: string[] | null
+  interestLanguages?: string[] | null
+  interestLanguageLevels?: number[] | null
+}
+
+/** The author columns for the language row under the name. */
+export const AUTHOR_LANGUAGE_SELECT = {
+  nationality: true,
+  primaryLanguages: true,
+  interestLanguages: true,
+  interestLanguageLevels: true,
+} as const
+
+/** The author's spoken languages ⇄ 관심 언어, or nothing when neither is set. */
+export function serializeAuthorLanguages(author: SerializerAuthorRow): FeedPostDto['author']['languages'] {
+  const nationality = author.nationality ? sanitizeSttLanguageSelection([author.nationality])[0] ?? null : null
+  const primary = sanitizeSttLanguageSelection(author.primaryLanguages ?? [], nationality ? [nationality] : [])
+  const interest = zipInterestLanguages(author.interestLanguages, author.interestLanguageLevels)
+    .filter((entry) => !primary.includes(entry.code))
+  return primary.length || interest.length ? { primary, interest } : undefined
 }
 
 /**
@@ -261,6 +285,7 @@ export function deriveTranslation(
 /** Serialize one post row into a FeedPostDto. */
 export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContext): FeedPostDto {
   const isMine = ctx.viewerId != null && ctx.viewerId === post.authorId
+  const authorLanguages = serializeAuthorLanguages(post.author)
   const { translationState, displayText, displayLanguage } = deriveTranslation(
     post,
     ctx.displayLanguage,
@@ -280,6 +305,7 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
       imageUrl: post.author.image,
       // Badge flags only when true; absent on the wire means false.
       ...identityBadgeFlags(post.author),
+      ...(authorLanguages ? { languages: authorLanguages } : {}),
     },
     sourceText: post.sourceText ?? '',
     sourceLanguage: post.sourceLanguage,

@@ -59,6 +59,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v2.1.0', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.1.1', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.2.0', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v2.2.1', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.2', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.3', enablesFinalizeSourceRedetection: false },
@@ -83,6 +84,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'ios/v2.1.0', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.1.1', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.2.0', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v2.2.1', enablesFinalizeSourceRedetection: true },
 ] as const
 const ALLOWED_API_NAMESPACES = new Set<string>([
   DEFAULT_API_NAMESPACE,
@@ -210,8 +212,15 @@ export function namespaceSupportsPostingFeed(namespace: string): boolean {
  */
 export const clientSupportsPostingFeed = namespaceSupportsPostingFeed(clientApiNamespace)
 
-export function shouldRedetectFinalizeSourceLanguage(pathname: string): boolean {
+export function shouldRedetectFinalizeSourceLanguage(pathname: string, sourceLanguage?: string): boolean {
   const namespace = parseVersionedApiNamespaceFromFinalizePath(pathname)
-  if (!namespace) return false
+  if (!namespace) {
+    // The unversioned path is the browser web app's. Its typed text arrives
+    // without a language, and only a redetection can give the bubble one.
+    if (sourceLanguage === undefined) return false
+    const normalizedSource = sourceLanguage.trim().toLowerCase()
+    return /^\/api\/translate\/finalize\/?$/.test(pathname)
+      && (normalizedSource === '' || normalizedSource === 'unknown')
+  }
   return API_NAMESPACE_RULES_BY_NAMESPACE.get(namespace)?.enablesFinalizeSourceRedetection === true
 }

@@ -164,7 +164,6 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('nails_ring', '네일·반지', 2, 'a hand showing a ring or simple manicure'),
     sub('watch', '시계', 1.5, 'a wrist with a watch'),
     sub('instrument_hand', '악기 치는 손', 1.5, 'hands playing a guitar or piano'),
-    sub('pen_hand', '펜 든 손', 1.5, 'a hand writing in a notebook'),
     sub('sneakers', '운동화 신은 발', 3, 'their own feet in sneakers, seen from above'),
     sub('beach_feet', '해변 맨발', 1.5, 'bare feet at the edge of the waves on a beach'),
     sub('tattoo_arm', '문신 있는 팔', 1, 'a forearm with a small simple tattoo'),
@@ -223,7 +222,6 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
   other: [
     sub('anime_icon', '애니풍 그림', 3, 'an anime-style drawing of an original character, cropped to the head and shoulders like a profile icon'),
     sub('sticker_char', '캐릭터 스티커', 2.5, 'a cute, simple cartoon animal or blob character in the style of a messenger-app sticker, on a plain white background, with two or three hand-drawn words in a speech bubble in the everyday language of {country}'),
-    sub('handwriting', '손글씨', 2, 'a word or two (a name or a short phrase) handwritten with a brush pen on plain paper in the language and script of {country}, photographed on a desk'),
     sub('lettering', '글자 이미지', 1, 'a short word or a name in loose hand-lettered script on a soft pastel background'),
     sub('doodle', '낙서풍 자화상', 2, 'a simple hand-drawn doodle self-portrait on paper, in an original style'),
     sub('watercolor', '수채화', 1, 'a small amateur watercolor painting of a landscape'),
@@ -812,7 +810,8 @@ function dressNote(persona: AvatarPersona, gender: 'female' | 'male' | null): st
 /** Pictures made in an app, not photographed: the phone-photo lines would turn them into photos. */
 const DIGITAL_SUBTYPES = new Set(['anime_icon', 'sticker_char', 'lettering', 'emoji_plain'])
 /** Pictures whose subject is a few words. */
-const LETTER_SUBTYPES = new Set(['sticker_char', 'handwriting', 'lettering'])
+// Handwriting photos were dropped: drawn writing breaks up and looks fake (staff, 2026-10).
+const LETTER_SUBTYPES = new Set(['sticker_char', 'lettering'])
 
 const DIGITAL_RULES = [
   'Square 1:1 image: a flat digital picture as saved from a drawing app, not a photo.',
