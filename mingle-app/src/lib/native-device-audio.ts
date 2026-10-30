@@ -24,6 +24,31 @@ export function parseNativeDeviceAudioCapability(detail: unknown): boolean | nul
   return record.deviceAudioCapture === true
 }
 
+// Whether the shell plays TTS clips sent as `native_tts_play` (Android shells
+// that lower other apps' volume meanwhile report `nativeTts: true`). iOS
+// shells always played natively, with or without the flag.
+export function parseNativeTtsCapability(detail: unknown): boolean {
+  if (typeof detail !== 'object' || detail === null || Array.isArray(detail)) return false
+  const record = detail as Record<string, unknown>
+  return record.type === 'capabilities' && record.nativeTts === true
+}
+
+export function shouldPlayTtsViaNativeShell(input: {
+  isNativeApp: boolean
+  isIOS: boolean
+  capabilities: unknown
+}): boolean {
+  if (!input.isNativeApp) return false
+  return input.isIOS || parseNativeTtsCapability(input.capabilities)
+}
+
+// The last capabilities message the shell cached on the window (read at play
+// time, long after the load-end message arrived).
+export function readCachedNativeShellCapabilities(): unknown {
+  if (typeof window === 'undefined') return null
+  return (window as NativeDeviceAudioWindow)[NATIVE_SHELL_CAPABILITIES_STATE_KEY] ?? null
+}
+
 // Device audio is captured only while earphone mode is on (that is where the
 // choice is made and explained) and only on a shell that can do it.
 export function resolveEffectiveSttCaptureSource(input: {

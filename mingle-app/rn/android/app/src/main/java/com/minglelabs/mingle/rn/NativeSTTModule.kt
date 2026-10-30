@@ -94,6 +94,10 @@ class NativeSTTModule(
   @Volatile private var webSocketReady = false
   @Volatile private var serverReady = false
   @Volatile private var audioRecord: AudioRecord? = null
+  // Device-audio mode also records the microphone, so the user's own voice is
+  // transcribed together with the sound other apps play. Null in mic mode, or
+  // when the microphone could not be opened next to the playback capture.
+  @Volatile private var companionMicRecord: AudioRecord? = null
   @Volatile private var audioThread: Thread? = null
   @Volatile private var webSocket: WebSocket? = null
   @Volatile private var webSocketClient: OkHttpClient? = null
@@ -935,15 +939,41 @@ class NativeSTTModule(
   ) {
     val record = capture.record
     val chunkBuffer = ByteArray(2_048 * 2)
+    val deviceAudioBuffer = ByteArray(chunkBuffer.size)
     record.startRecording()
     if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
       throw IllegalStateException("audio_record_start_failed(${record.recordingState})")
+    }
+    if (capture.profile.captureSource == NativeSttCaptureSource.DEVICE_AUDIO) {
+      ensureCompanionMicRecording(capture.sampleRate)
+    } else {
+      releaseCompanionMic()
     }
     lastAudioChunkAtMs = SystemClock.elapsedRealtime()
 
     val thread = Thread({
       while (isRunning.get() && audioRecord === record) {
-        val bytesRead = record.read(chunkBuffer, 0, chunkBuffer.size)
+        val micRecord = companionMicRecord
+        val bytesRead = if (micRecord != null) {
+          // The microphone records without pause, so it paces the stream;
+          // the playback capture is drained without blocking and added in
+          // (it can run dry while nothing plays).
+          val micRead = micRecord.read(chunkBuffer, 0, chunkBuffer.size)
+          if (micRead <= 0) {
+            Log.w(TAG, "companion mic read failed ($micRead); continuing with device audio only")
+            releaseCompanionMic()
+            continue
+          }
+          val deviceRead = record.read(deviceAudioBuffer, 0, micRead, AudioRecord.READ_NON_BLOCKING)
+          if (deviceRead > 0) {
+            NativeSttAudioMixer.mixInto(chunkBuffer, micRead, deviceAudioBuffer, deviceRead)
+          } else if (deviceRead == AudioRecord.ERROR_DEAD_OBJECT) {
+            scheduleAudioRecovery("audio_dead_object")
+          }
+          micRead
+        } else {
+          record.read(chunkBuffer, 0, chunkBuffer.size)
+        }
         if (bytesRead <= 0) {
           if (bytesRead == AudioRecord.ERROR_DEAD_OBJECT) {
             scheduleAudioRecovery("audio_dead_object")
@@ -988,6 +1018,73 @@ class NativeSTTModule(
     thread.isDaemon = true
     audioThread = thread
     thread.start()
+  }
+
+  // Opens (or keeps) the microphone next to the playback capture, at the same
+  // sample rate so the two can be added sample by sample. A microphone that
+  // cannot be opened leaves the session on device audio alone.
+  @Synchronized
+  private fun ensureCompanionMicRecording(sampleRate: Int) {
+    val existing = companionMicRecord
+    if (existing != null && existing.sampleRate == sampleRate &&
+      existing.recordingState == AudioRecord.RECORDSTATE_RECORDING
+    ) {
+      return
+    }
+    releaseCompanionMic()
+    if (!hasRecordAudioPermission()) {
+      Log.w(TAG, "companion mic skipped: RECORD_AUDIO not granted")
+      return
+    }
+    val micProfile = NativeSttCapturePolicy.resolve(false, NativeSttCaptureSource.MICROPHONE)
+    try {
+      val minBuffer = AudioRecord.getMinBufferSize(
+        sampleRate,
+        AudioFormat.CHANNEL_IN_MONO,
+        AudioFormat.ENCODING_PCM_16BIT,
+      )
+      if (minBuffer <= 0) {
+        Log.w(TAG, "companion mic skipped: invalid_min_buffer($sampleRate,$minBuffer)")
+        return
+      }
+      val builder = AudioRecord.Builder()
+        .setAudioSource(micProfile.audioSource)
+        .setAudioFormat(
+          AudioFormat.Builder()
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setSampleRate(sampleRate)
+            .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+            .build(),
+        )
+        .setBufferSizeInBytes(max(minBuffer * 2, sampleRate / 5))
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        builder.setPrivacySensitive(micProfile.privacySensitive)
+      }
+      val mic = builder.build()
+      if (mic.state != AudioRecord.STATE_INITIALIZED) {
+        Log.w(TAG, "companion mic skipped: audio_record_state_${mic.state}")
+        mic.release()
+        return
+      }
+      mic.startRecording()
+      if (mic.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+        Log.w(TAG, "companion mic skipped: start failed (${mic.recordingState})")
+        mic.release()
+        return
+      }
+      companionMicRecord = mic
+      Log.i(TAG, "companion mic recording rate=$sampleRate source=${micProfile.audioSource}")
+    } catch (error: Throwable) {
+      Log.w(TAG, "companion mic skipped: ${error.message ?: error.javaClass.simpleName}")
+    }
+  }
+
+  @Synchronized
+  private fun releaseCompanionMic() {
+    val mic = companionMicRecord ?: return
+    companionMicRecord = null
+    mic.stopSafely()
+    mic.release()
   }
 
   private fun stopAudioThread() {
@@ -1197,6 +1294,7 @@ class NativeSTTModule(
     emitStatus("stopping")
 
     stopAudioThread()
+    releaseCompanionMic()
     stopStallMonitor()
     unregisterAudioDeviceCallback()
     unregisterRecordingCallback()
@@ -1287,6 +1385,7 @@ class NativeSTTModule(
     webSocketClient = null
 
     stopAudioThread()
+    releaseCompanionMic()
     stopStallMonitor()
     unregisterAudioDeviceCallback()
     unregisterRecordingCallback()

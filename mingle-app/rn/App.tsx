@@ -42,6 +42,7 @@ import {
 import {
   addNativeTtsListener,
   buildNativeTtsStoppedEvent,
+  isNativeTtsAvailable,
   playNativeTts,
   resolveNativeTtsPlayRequest,
   resolveNativeTtsStartedEvent,
@@ -5001,6 +5002,7 @@ function AppInner(): React.JSX.Element {
     emitToWeb(buildNativeShellCapabilities({
       audioRoute: nativeAudioRouteAvailable,
       deviceAudioCapture: nativeDeviceAudioCaptureAvailable,
+      nativeTts: isNativeTtsAvailable(),
     }));
     // Earphone mode (contract A.2a): the latest route follows the capabilities
     // message on every load end.

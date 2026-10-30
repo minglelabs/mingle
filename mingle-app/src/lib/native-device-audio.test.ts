@@ -5,12 +5,47 @@ import {
   getNativeDeviceAudioCapabilitySnapshot,
   getSttCaptureSourcePickSnapshot,
   parseNativeDeviceAudioCapability,
+  readCachedNativeShellCapabilities,
   resetNativeDeviceAudioStoresForTests,
   resolveEffectiveSttCaptureSource,
   setSttCaptureSourcePick,
+  shouldPlayTtsViaNativeShell,
   subscribeNativeDeviceAudioCapability,
   subscribeSttCaptureSourcePick,
 } from './native-device-audio'
+
+describe('native TTS playback routing', () => {
+  const androidShell = { type: 'capabilities', openAppSettings: true, audioRoute: true, deviceAudioCapture: true, nativeTts: true }
+  const oldAndroidShell = { type: 'capabilities', openAppSettings: true, audioRoute: true, deviceAudioCapture: true }
+
+  it('plays natively on iOS shells, with or without the flag', () => {
+    expect(shouldPlayTtsViaNativeShell({ isNativeApp: true, isIOS: true, capabilities: null })).toBe(true)
+    expect(shouldPlayTtsViaNativeShell({ isNativeApp: true, isIOS: true, capabilities: androidShell })).toBe(true)
+  })
+
+  it('plays natively on Android only when the shell reports nativeTts', () => {
+    expect(shouldPlayTtsViaNativeShell({ isNativeApp: true, isIOS: false, capabilities: androidShell })).toBe(true)
+    expect(shouldPlayTtsViaNativeShell({ isNativeApp: true, isIOS: false, capabilities: oldAndroidShell })).toBe(false)
+    expect(shouldPlayTtsViaNativeShell({ isNativeApp: true, isIOS: false, capabilities: { ...androidShell, nativeTts: 'true' } })).toBe(false)
+    expect(shouldPlayTtsViaNativeShell({ isNativeApp: true, isIOS: false, capabilities: null })).toBe(false)
+  })
+
+  it('never posts to a shell from the mobile web', () => {
+    expect(shouldPlayTtsViaNativeShell({ isNativeApp: false, isIOS: true, capabilities: androidShell })).toBe(false)
+    expect(shouldPlayTtsViaNativeShell({ isNativeApp: false, isIOS: false, capabilities: androidShell })).toBe(false)
+  })
+
+  it('reads the capabilities the shell cached on the window', () => {
+    vi.stubGlobal('window', {})
+    try {
+      expect(readCachedNativeShellCapabilities()).toBeNull()
+      ;(window as unknown as Record<string, unknown>)[NATIVE_SHELL_CAPABILITIES_STATE_KEY] = androidShell
+      expect(readCachedNativeShellCapabilities()).toBe(androidShell)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
 
 describe('capability detection', () => {
   it('reads deviceAudioCapture from the capabilities message; old shells report none', () => {

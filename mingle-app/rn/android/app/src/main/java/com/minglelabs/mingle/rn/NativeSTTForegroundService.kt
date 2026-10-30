@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import java.util.concurrent.atomic.AtomicReference
 
 class NativeSTTForegroundService : Service() {
@@ -57,11 +58,25 @@ class NativeSTTForegroundService : Service() {
       // in the foreground with the mediaProjection type; report the outcome.
       val listener = pendingStartListener.getAndSet(null)
       try {
-        startForeground(
-          NOTIFICATION_ID,
-          notification,
-          ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
-        )
+        try {
+          // Device-audio mode records the microphone too (the user's own
+          // voice), which needs the microphone type while in the background.
+          startForeground(
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
+              ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+          )
+        } catch (micTypeError: Throwable) {
+          // Without the microphone type the capture still works; only the
+          // companion microphone may be silenced in the background.
+          Log.w(TAG, "microphone type refused for device audio: ${micTypeError.message}")
+          startForeground(
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
+          )
+        }
         listener?.invoke(null)
       } catch (error: Throwable) {
         // startForegroundService() must still be answered with startForeground()
@@ -123,6 +138,7 @@ class NativeSTTForegroundService : Service() {
     private const val ACTION_START = "com.minglelabs.mingle.rn.stt.START"
     private const val ACTION_STOP = "com.minglelabs.mingle.rn.stt.STOP"
     private const val EXTRA_DEVICE_AUDIO = "com.minglelabs.mingle.rn.stt.DEVICE_AUDIO"
+    private const val TAG = "NativeSTTForeground"
 
     // Told once, on the main thread, whether the device-audio start reached
     // the foreground (null) or why it did not.

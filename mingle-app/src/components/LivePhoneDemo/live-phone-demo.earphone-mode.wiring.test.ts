@@ -63,13 +63,13 @@ describe('earphone mode wiring', () => {
   })
 
   it('marks HTML playback as playing on the playing event', () => {
-    const htmlPlay = between(liveDemoSource, 'const playViaHtmlAudio = async () => {', '// NativeTTSModule은 iOS 전용')
+    const htmlPlay = between(liveDemoSource, 'const playViaHtmlAudio = async () => {', '// iOS shells always play natively')
     expect(htmlPlay).toContain('audio.onplaying = () => {')
     expect(htmlPlay).toContain('markPlaybackStarted()')
   })
 
   it('awaits a fresh route before Android auto audio and leaves manual audio unchanged', () => {
-    const htmlPlay = between(liveDemoSource, 'const playViaHtmlAudio = async () => {', '// NativeTTSModule은 iOS 전용')
+    const htmlPlay = between(liveDemoSource, 'const playViaHtmlAudio = async () => {', '// iOS shells always play natively')
     expect(htmlPlay).toContain("if (next.mode === 'auto' && isNativeApp())")
     expect(htmlPlay).toContain('const connected = await confirmNativeEarphonesConnected()')
     expect(htmlPlay).toContain('!connected || !earphoneAutoReadArmedRef.current || !isEarphoneAutoReadGateOpenNow()')
@@ -77,7 +77,7 @@ describe('earphone mode wiring', () => {
   })
 
   it('retries rejected autoplay through the queue instead of resuming the stale element', () => {
-    const rejectedPlay = between(liveDemoSource, 'audio.play().catch(() => {', '// NativeTTSModule은 iOS 전용')
+    const rejectedPlay = between(liveDemoSource, 'audio.play().catch(() => {', '// iOS shells always play natively')
     expect(rejectedPlay).toContain('cleanupCurrentAudio()')
     expect(rejectedPlay).toContain('ttsQueueRef.current.unshift(next)')
     const resume = between(liveDemoSource, 'const resumeTtsPlayback = useCallback', 'const clearStopClickResumeTimers')

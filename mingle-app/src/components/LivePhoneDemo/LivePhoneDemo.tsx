@@ -51,8 +51,10 @@ import {
   getNativeDeviceAudioCapabilitySnapshot,
   getSttCaptureSourcePickServerSnapshot,
   getSttCaptureSourcePickSnapshot,
+  readCachedNativeShellCapabilities,
   resolveEffectiveSttCaptureSource,
   setSttCaptureSourcePick,
+  shouldPlayTtsViaNativeShell,
   subscribeNativeDeviceAudioCapability,
   subscribeSttCaptureSourcePick,
 } from '@/lib/native-device-audio'
@@ -4545,8 +4547,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       })
     }
 
-    // NativeTTSModule은 iOS 전용 — Android에서는 HTML audio로 재생
-    if (isNativeApp() && isLikelyIOSPlatform()) {
+    // iOS shells always play natively; Android shells do once they report
+    // `nativeTts` (they lower other apps' volume while the clip plays).
+    // Older Android shells keep the HTML audio path.
+    if (shouldPlayTtsViaNativeShell({
+      isNativeApp: isNativeApp(),
+      isIOS: isLikelyIOSPlatform(),
+      capabilities: readCachedNativeShellCapabilities(),
+    })) {
       void playViaNativeBridge()
     } else {
       void playViaHtmlAudio()
