@@ -138,6 +138,10 @@ export default function LanguageOnboardingModal({
   );
   // The 관심 언어 list leaves out the language just chosen as the user's own.
   const ownLanguageCode = canonicalizeSttLanguageCode(language);
+  const ownLanguageItem = useMemo(
+    () => languageItems.find((item) => canonicalizeSttLanguageCode(item.code) === ownLanguageCode) ?? null,
+    [languageItems, ownLanguageCode],
+  );
   const interestItems = useMemo(() => {
     const visibleItems = filterLanguageSelectorItems(languageItems, interestQuery)
       .filter((item) => canonicalizeSttLanguageCode(item.code) !== ownLanguageCode);
@@ -208,37 +212,37 @@ export default function LanguageOnboardingModal({
         disabled={isConfirming}
         onClick={() => onSelect(lang.code)}
         aria-pressed={isSelected}
-        className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition ${
+        className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-4 text-left transition ${
           isSelected
             ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
             : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
         } hover:-translate-y-[1px] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]`}
       >
         <span
-          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-sm ${
+          className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border shadow-sm ${
             isSelected
               ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]"
               : "border-[#e5dfd5] bg-[#faf7f1]"
           }`}
         >
-          <LanguageFlag language={lang.code} className="translate-y-[0.12em] text-[2rem] leading-none" />
+          <LanguageFlag language={lang.code} className="translate-y-[0.12em] text-[2.4rem] leading-none" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
+          <span className="block truncate text-[1.3rem] font-bold tracking-[-0.01em] text-slate-950">
             {lang.localizedName}
           </span>
-          <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">
+          <span className="mt-0.5 block truncate text-[0.95rem] text-slate-500">
             {lang.secondaryLabel}
           </span>
         </span>
         <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
             isSelected
               ? "border-amber-500 bg-amber-500 text-white"
               : "border-slate-300 text-transparent"
           }`}
         >
-          <Check size={14} strokeWidth={3.2} />
+          <Check size={16} strokeWidth={3.2} />
         </span>
       </button>
     );
@@ -296,11 +300,11 @@ export default function LanguageOnboardingModal({
               <div className="space-y-1.5 text-center">
                 <p
                   id={titleId}
-                  className="text-[1.3rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+                  className="text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] text-slate-950"
                 >
                   {copy.title}
                 </p>
-                <p className="text-[0.82rem] leading-snug text-slate-500">{copy.descriptionLabel}</p>
+                <p className="text-[0.95rem] leading-snug text-slate-500">{copy.descriptionLabel}</p>
               </div>
 
               <div className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
@@ -321,17 +325,31 @@ export default function LanguageOnboardingModal({
             </div>
           ) : step === "interest-language" ? (
             <div className="space-y-4 px-4 pb-4 pt-0">
+              {/* Step 1 and this step are both language lists; the done chip and the
+                  large 관심 언어 headline keep users from reading this as step 1 again. */}
+              {ownLanguageItem ? (
+                <div className="flex justify-center">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.85rem] text-slate-600">
+                    <Check size={14} strokeWidth={3} className="text-emerald-500" aria-hidden />
+                    <span>{interestCopy.primaryLabel}</span>
+                    <LanguageFlag language={ownLanguageItem.code} className="text-[1rem] leading-none" />
+                    <span className="font-semibold text-slate-800">{ownLanguageItem.localizedName}</span>
+                  </span>
+                </div>
+              ) : null}
               <div className="space-y-1.5 text-center">
-                <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                  {interestCopy.onboardingStep}
-                </p>
                 <h2
                   id={titleId}
-                  className="text-[1.3rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+                  className="space-y-1"
                 >
-                  {interestCopy.onboardingTitle}
+                  <span className="block text-[2.1rem] font-extrabold leading-tight tracking-[-0.03em] text-amber-600">
+                    {interestCopy.onboardingStep}
+                  </span>
+                  <span className="block text-[1.3rem] font-bold leading-snug tracking-[-0.02em] text-slate-950">
+                    {interestCopy.onboardingTitle}
+                  </span>
                 </h2>
-                <p className="text-[0.82rem] leading-snug text-slate-500">{interestCopy.onboardingDescription}</p>
+                <p className="text-[0.95rem] leading-snug text-slate-500">{interestCopy.onboardingDescription}</p>
               </div>
 
               <div className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
