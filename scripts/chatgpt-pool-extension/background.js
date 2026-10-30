@@ -36,7 +36,20 @@ async function page(op, arg) {
   const composer = () => document.querySelector('#prompt-textarea') || document.querySelector('.ProseMirror[contenteditable]')
   const labelled = (pattern) => [...document.querySelectorAll('button')].find((b) => pattern.test(b.getAttribute('aria-label') || ''))
   const sendButton = () => document.querySelector('[data-testid="send-button"]') || labelled(/^(보내기|Send|Send prompt|프롬프트 보내기)$/i)
-  const turns = () => [...document.querySelectorAll('[data-message-author-role="assistant"]')]
+  // ChatGPT's newer renderer dropped data-message-author-role; its turns carry a search unit key ending in ":assistant".
+  const turns = () => {
+    const legacy = [...document.querySelectorAll('[data-message-author-role="assistant"]')]
+    return legacy.length ? legacy : [...document.querySelectorAll('[data-chatgpt-search-unit-key$=":assistant"]')]
+  }
+  // Source chips ("일본 관광청 +1") are popover badges inside the answer; hide them while reading.
+  const answerText = (root) => {
+    const chips = [...root.querySelectorAll('[data-d-component="popover-trigger"]:has([data-d-component="badge"]), [data-testid*="citation"]')]
+    const before = chips.map((chip) => chip.style.display)
+    chips.forEach((chip) => { chip.style.display = 'none' })
+    const text = root.innerText
+    chips.forEach((chip, i) => { chip.style.display = before[i] })
+    return text.replace(/[ \t]+\n/g, '\n').trim()
+  }
   const generated = () => [...document.images].filter((i) => /^(Generated image|생성된 이미지)/i.test(i.alt || '') && i.complete && i.naturalWidth > 400)
 
   if (op === 'state') {
@@ -46,7 +59,7 @@ async function page(op, arg) {
       composer: Boolean(composer()),
       signedOut: !composer() && [...document.querySelectorAll('button, a')].some((b) => /^(Log in|로그인)$/i.test(b.innerText.trim())),
       turns: turns().length,
-      text: last ? (last.querySelector('.markdown')?.innerText ?? last.innerText).trim() : '',
+      text: last ? answerText(last.querySelector('[data-markdown-text-style="assistant-message"], .markdown') ?? last) : '',
       streaming: Boolean(document.querySelector('[data-testid="stop-button"]') || labelled(/^(스트리밍 중지|Stop streaming|중지)/i)),
       creating: /Creating image|이미지 생성 중|이미지를 생성하는 중/i.test(document.querySelector('main')?.innerText || ''),
       images: generated().length,
@@ -155,6 +168,7 @@ async function answer(tabId, before, wantImage, timeoutMs) {
     const state = await inPage(tabId, 'state').catch(() => null)
     if (!state || state.turns <= before || state.streaming || state.creating) { stable = 0; continue }
     if (wantImage && state.images > 0) return { text: state.text, image: true }
+    if (!wantImage && !state.text) { stable = 0; continue } // the turn shows up before its words do
     stable = state.text === last ? stable + 1 : 0
     last = state.text
     if (stable >= (wantImage ? 3 : 1)) return { text: state.text, image: false }
@@ -162,10 +176,18 @@ async function answer(tabId, before, wantImage, timeoutMs) {
   throw new JobError('timeout', 'no answer in time')
 }
 
+/** Tells the pool which step a job is on, for its log; never fails the job. */
+function progress(job, step) {
+  void post('/agent/progress', { agentId: currentAgentId, jobId: job.id, step }).catch(() => {})
+}
+
 async function runJob(job) {
   const tab = await workerTab()
+  progress(job, `tab ${tab.id}`)
   await load(tab.id, job.kind === 'image' ? IMAGE_URL : TEXT_URL)
+  progress(job, 'loaded')
   const ready = await until(tab.id, (s) => s.composer || s.signedOut, 30_000, 'composer not found')
+  progress(job, ready.composer ? 'composer ready' : 'signed out')
   if (!ready.composer) throw new JobError('signed_out', 'log in to ChatGPT in this profile')
   if (job.reference) {
     if (!(await inPage(tab.id, 'attach', job.reference))) throw new JobError('ui_changed', 'no file input for the reference photo')
@@ -180,6 +202,7 @@ async function runJob(job) {
     let sent = false
     for (let i = 0; i < 40 && !sent; i += 1) { await sleep(250); sent = await inPage(tab.id, 'send') }
     if (!sent) throw new JobError('ui_changed', 'send button stayed disabled')
+    progress(job, `sent (attempt ${attempt + 1}, turns before ${before})`)
     const result = await answer(tab.id, before, job.kind === 'image', job.kind === 'image' ? 7 * 60_000 : 4 * 60_000)
     if (job.kind !== 'image') return { text: result.text }
     if (result.image) {
@@ -218,11 +241,13 @@ async function post(path, body) {
 }
 
 let looping = false
+let currentAgentId = null
 
 async function loop() {
   if (looping) return
   looping = true
   const id = await agentId()
+  currentAgentId = id
   try {
     for (;;) {
       let reply
