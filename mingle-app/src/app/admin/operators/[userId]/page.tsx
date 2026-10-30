@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/server/admin/guard'
 import { getOperatorAccountDetail } from '@/server/operators/operator-admin-query'
@@ -36,6 +37,9 @@ export default async function OperatorDetailPage({ params, searchParams }: Opera
 
   return (
     <OperatorsMain>
+      <Link href={`/admin/operators/${encodeURIComponent(account.id)}/profile`} className="mb-3 inline-block text-sm font-semibold text-sky-700">
+        프로필로 보기 (올라간 글·검토 대기) ›
+      </Link>
       <OperatorEditor
         initial={account}
         countries={buildCountryOptions()}

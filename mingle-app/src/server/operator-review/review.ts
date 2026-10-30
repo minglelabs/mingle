@@ -127,7 +127,7 @@ const REVIEW_POST_STATES = ['review', 'regenerating']
  * of the same group, so the queue deals one post per account in turn.
  * `authorAt`: the author's sign-up time, the order within a round.
  */
-type TimelineRow = { rank: number; late: boolean; round: number; authorAt: Date; kindOrder: number; kind: 'profile' | 'post'; id: string; at: Date }
+type TimelineRow = { rank: number; late: boolean; round: number; authorAt: Date; kindOrder: number; kind: 'profile' | 'post'; id: string; at: Date; userId: string }
 
 /** Rank of an item staff did not move: after every ranked one. */
 const UNRANKED = 2147483647
@@ -135,15 +135,15 @@ const UNRANKED = 2147483647
 // A post's round counts every reserve row of its author (any state), so it
 // does not shift when staff answer other posts and paging stays stable.
 const TIMELINE_SQL = `
-  SELECT rank, late, round, "authorAt", "kindOrder", kind, id, at FROM (
-    SELECT COALESCE(o.review_rank, ${UNRANKED})::bigint AS rank, false AS late, 1::bigint AS round, u.created_at AS "authorAt", 0 AS "kindOrder", 'profile' AS kind, u.id, u.created_at AS at
+  SELECT rank, late, round, "authorAt", "kindOrder", kind, id, at, "userId" FROM (
+    SELECT COALESCE(o.review_rank, ${UNRANKED})::bigint AS rank, false AS late, 1::bigint AS round, u.created_at AS "authorAt", 0 AS "kindOrder", 'profile' AS kind, u.id, u.created_at AS at, u.id AS "userId"
     FROM app.app_users u JOIN app.app_operator_accounts o ON o.user_id = u.id
     WHERE u.is_operator AND NOT u.is_deleted AND o.review_state <> 'approved'
     UNION ALL
-    SELECT rank, late, round, "authorAt", 1 AS "kindOrder", 'post' AS kind, id, at FROM (
+    SELECT rank, late, round, "authorAt", 1 AS "kindOrder", 'post' AS kind, id, at, "userId" FROM (
       SELECT COALESCE(r.review_rank, ${UNRANKED})::bigint AS rank, r.image_object_key IS NULL AS late,
         ROW_NUMBER() OVER (PARTITION BY r.operator_user_id, r.image_object_key IS NULL ORDER BY r.created_at, r.id) AS round,
-        u.created_at AS "authorAt", r.id, r.created_at AS at, r.state, u.is_deleted
+        u.created_at AS "authorAt", r.id, r.created_at AS at, r.state, u.is_deleted, r.operator_user_id AS "userId"
       FROM app.app_operator_post_reserve r JOIN app.app_users u ON u.id = r.operator_user_id
     ) p
     WHERE state IN ('review', 'regenerating') AND NOT is_deleted
@@ -172,16 +172,23 @@ export function decodeReviewCursor(value: string | undefined): Pick<TimelineRow,
  * Paged by cursor, so items answered on one page never push unseen ones
  * past the next.
  */
-export async function listReviewQueue(options: { cursor?: string; now?: Date } = {}): Promise<ReviewQueue> {
+export async function listReviewQueue(options: { cursor?: string; now?: Date; userId?: string } = {}): Promise<ReviewQueue> {
   const now = options.now ?? new Date()
   const after = decodeReviewCursor(options.cursor)
   const order = `ORDER BY rank, late, round, "authorAt", "kindOrder", id`
-  const rows = (after
-    ? await prisma.$queryRawUnsafe<TimelineRow[]>(
-      `${TIMELINE_SQL} WHERE (rank, late, round, "authorAt", "kindOrder", id) > ($1::bigint, $2::boolean, $3::bigint, $4::timestamp, $5::int, $6::text) ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`,
-      after.rank, after.late, after.round, after.authorAt, after.kindOrder, after.id,
-    )
-    : await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`))
+  // `userId`: one account's own items only (its profile page).
+  const conditions: string[] = []
+  const params: unknown[] = []
+  if (after) {
+    conditions.push(`(rank, late, round, "authorAt", "kindOrder", id) > ($1::bigint, $2::boolean, $3::bigint, $4::timestamp, $5::int, $6::text)`)
+    params.push(after.rank, after.late, after.round, after.authorAt, after.kindOrder, after.id)
+  }
+  if (options.userId) {
+    params.push(options.userId)
+    conditions.push(`"userId" = $${params.length}::text`)
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+  const rows = (await prisma.$queryRawUnsafe<TimelineRow[]>(`${TIMELINE_SQL} ${where} ${order} LIMIT ${REVIEW_ITEMS_PER_PAGE + 1}`, ...params))
     .map((row) => ({ ...row, rank: Number(row.rank), round: Number(row.round), kindOrder: Number(row.kindOrder) }))
   const page = rows.slice(0, REVIEW_ITEMS_PER_PAGE)
 
