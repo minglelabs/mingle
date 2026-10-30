@@ -11,6 +11,7 @@
 
 import { prisma } from '@/lib/prisma'
 import {
+  AUTHOR_LANGUAGE_SELECT,
   resolveDisplayLanguage,
   serializeFeedPosts,
   type SerializerContext,
@@ -42,7 +43,7 @@ export const feedPostRowSelect = {
   publishedAt: true,
   // Identity + badge flags (official / operator), so every post list labels
   // an operator author the same way.
-  author: { select: USER_IDENTITY_SELECT },
+  author: { select: { ...USER_IDENTITY_SELECT, ...AUTHOR_LANGUAGE_SELECT } },
 } as const
 
 export type LoadContextOptions = {

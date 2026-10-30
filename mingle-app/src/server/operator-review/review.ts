@@ -6,6 +6,7 @@ import { ageOn } from '@/server/operator-auto-reply/generate'
 import { planOperatorAvatar } from '@/server/operator-avatars/generate'
 import { generateReservePosts, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
+import { reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
 import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
 
@@ -44,6 +45,8 @@ export type ReviewPost = {
   imageObjectKey: string | null
   imageWidth: number | null
   imageHeight: number | null
+  /** The 2nd to 10th photo, after `imageObjectKey`. */
+  extraImages: ReserveExtraImage[]
   reviewFeedback: string | null
   error: string | null
   /** The photo is queued to be drawn by hand. */
@@ -67,7 +70,8 @@ export type ReviewProfile = {
 }
 
 export type ReviewAuthor = {
-  userId: string; name: string | null; handle: string; image: string | null; primaryLanguages: string[]; profileState: string
+  userId: string; name: string | null; handle: string; image: string | null; primaryLanguages: string[]
+  interestLanguages: InterestLanguage[]; profileState: string
 }
 
 /** One card of the review timeline: a new account (at sign-up) or a post (at creation). `pinned`: staff moved it up. */
@@ -85,12 +89,12 @@ export type ReviewQueue = {
 
 const POST_SELECT = {
   id: true, text: true, language: true, topic: true, state: true, imagePrompt: true,
-  imageObjectKey: true, imageWidth: true, imageHeight: true, reviewFeedback: true, error: true,
+  imageObjectKey: true, imageWidth: true, imageHeight: true, extraImages: true, reviewFeedback: true, error: true,
 } as const
 
 function toReviewPost(row: {
   id: string; text: string; language: string | null; topic: string | null; state: string; imagePrompt: string | null
-  imageObjectKey: string | null; imageWidth: number | null; imageHeight: number | null
+  imageObjectKey: string | null; imageWidth: number | null; imageHeight: number | null; extraImages: unknown
   reviewFeedback: string | null; error: string | null
 }): ReviewPost {
   const photo = row.imagePrompt ? decodePostPhoto(row.imagePrompt) : null
@@ -105,6 +109,7 @@ function toReviewPost(row: {
     imageObjectKey: row.imageObjectKey,
     imageWidth: row.imageWidth,
     imageHeight: row.imageHeight,
+    extraImages: row.imageObjectKey ? reserveExtraImages(row.extraImages) : [],
     reviewFeedback: row.reviewFeedback,
     error: row.error,
     photoRequested: !row.imageObjectKey && row.error === PHOTO_REQUESTED,
@@ -196,7 +201,7 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date } =
       where: { id: { in: postIds } },
       select: {
         ...POST_SELECT,
-        operatorUser: { select: { id: true, name: true, handle: true, image: true, primaryLanguages: true, operatorAccount: { select: { reviewState: true } } } },
+        operatorUser: { select: { id: true, name: true, handle: true, image: true, primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, operatorAccount: { select: { reviewState: true } } } },
       },
     }),
   ])
@@ -237,6 +242,8 @@ export async function listReviewQueue(options: { cursor?: string; now?: Date } =
         post: toReviewPost(post),
         author: {
           userId: author.id, name: author.name, handle: author.handle, image: author.image, primaryLanguages: author.primaryLanguages,
+          interestLanguages: zipInterestLanguages(author.interestLanguages, author.interestLanguageLevels)
+            .filter((entry) => !author.primaryLanguages.includes(entry.code)),
           profileState: author.operatorAccount?.reviewState ?? 'approved',
         },
       })
