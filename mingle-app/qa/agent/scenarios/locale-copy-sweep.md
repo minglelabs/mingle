@@ -19,13 +19,15 @@ history:
 
 ## Preconditions
 
-- Signed in. The app language can be changed from My Page settings.
+- Signed in. The app language can be changed from My Page ("App language").
 
 ## Steps
 
 For each of ko, en, ja, es and de (add any locale the diff touched):
 1. Switch the app language in My Page.
-2. Screenshot: the conversation list (with the bottom create action), a room (header, composer, menu), My Page and its settings, and the language selector header.
+2. Screenshot: the bottom tab bar (Feed, Chats, Explore, My in English), the conversation list with its header
+   (search, bell, gear) and the gear menu, the feed, a room (header, composer, menu), My Page and its settings, and the
+   language selector header.
 3. Note any string in another language, any clipped or ellipsised label, and any button whose text wraps onto two lines.
 
 Switch back to Korean at the end.

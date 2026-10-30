@@ -1,4 +1,4 @@
-# Mingle UX Taste
+# HashChat UX Taste
 
 These are the UX rules the product owner has enforced again and again, taken from the bug reports in
 [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md). The QA agent judges every
@@ -140,7 +140,7 @@ translations stack inside one bubble, with compact flags inline.
 ## Copy, language and consistency
 
 ### T16. Labels fit and say exactly what happens
-No clipping or ugly wrapping in any locale. Copy matches the real behaviour, names Mingle when it means the app,
+No clipping or ugly wrapping in any locale. Copy matches the real behaviour, names HashChat when it means the app,
 and has no filler or exclamation marks. Translated photo labels fit their region in at most two lines.
 - P2 2026-08-17 Shared English US/UK flag in language selectors (selector header clipped in narrower locales)
 - 2026-09-26 - Align share-toggle copy with the link's real capability and revoke old links

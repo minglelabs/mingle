@@ -1,6 +1,6 @@
 # Agent QA
 
-Claude tests the Mingle app the way the product owner would. It drives the connected iPhone by hand (or an iOS
+An AI agent (Claude Code or Kiro) tests the HashChat 2.3.0 app the way the product owner would. It drives the connected iPhone by hand (or an iOS
 Simulator when the phone is not connected or is busy), judges what
 it sees against the owner's recorded taste, and hands back a report with screenshots and a short manual checklist.
 Run it with the `/qa` skill ([`.claude/skills/qa/SKILL.md`](../../../.claude/skills/qa/SKILL.md)).
@@ -15,7 +15,7 @@ and scores translation quality.
 | --- | --- |
 | [taste.md](taste.md) | The owner's UX rules (T1–T23), each traced to entries in [the UI/UX history](../../docs/ui-ux-codex-thread-history.md). |
 | [rubric.md](rubric.md) | Verdicts, severity anchors, the translation 1–5 scale, responsiveness thresholds. |
-| [scenarios/](scenarios) | 16 scenarios with frontmatter (`id`, `priority`, `environment`, `tags`, `taste`, `paths`, `history`). `environment` is `device` (the agent runs it end to end), `assisted` (parts need a person: speaking, AirPods) or `manual-only`. |
+| [scenarios/](scenarios) | 17 scenarios with frontmatter (`id`, `priority`, `environment`, `tags`, `taste`, `paths`, `history`). `environment` is `device` (the agent runs it end to end), `assisted` (parts need a person: speaking, AirPods) or `manual-only`. |
 | [fixtures/](fixtures) | Inputs the scenarios type or send. |
 | `local/` | Gitignored: the local QA account, the device session and the Appium log. |
 | `runs/` | Gitignored: screenshots, notes, `results.json` and `report.html` per run. |
@@ -39,7 +39,7 @@ Scripts in `mingle-app/scripts/`:
 4. Open the published report. Work through the manual checklist. Tell Claude where you disagree.
 
 The phone is shared with other sessions. Claude checks that no other session is installing to it or running on
-it before installing the QA build, which replaces whatever Mingle build is on the phone.
+it before installing the QA build, which replaces whatever Mingle or HashChat build is on the phone (same bundle id).
 
 ## Calibration
 

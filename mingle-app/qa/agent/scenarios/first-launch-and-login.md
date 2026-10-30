@@ -28,17 +28,28 @@ history:
 
 ## Steps
 
+The HashChat 2.3.0 onboarding has four steps: the most comfortable language ("Choose your most comfortable
+language", button "Get started"), the interest language ("Who would you like to meet?" with a level picker),
+the age check ("When were you born?") and the discovery source ("How did you hear about HashChat?").
+
 1. Install and launch. Screenshot every ~500 ms for the first 4 s.
 2. Note every system prompt that appears, and what you did before it.
-3. On the language gate, choose English. Screenshot every ~200 ms for 1 s after confirming.
-4. Screenshot the login screen, including the top and bottom safe areas.
-5. Open the email sign-in sheet and screenshot it. Do not submit anything.
-6. Relaunch the app. The language gate must not appear again.
+3. On step 1, choose English. Screenshot every ~200 ms for 1 s after confirming.
+4. Step 2: pick Japanese and a level. Check that the done chip shows the step-1 language and that the screen does
+   not read like step 1 again. Step 3: pick a date of birth that is 12 or older. Step 4: pick any answer. Screenshot
+   each step, then try the back gesture once on step 3 and confirm it returns to step 2.
+5. Screenshot the login screen (terms sheet with "Agree and continue"), including the top and bottom safe areas.
+6. Open the email sign-in sheet and screenshot it. Do not submit anything.
+7. Relaunch the app. The onboarding must not appear again.
 
 ## Oracle (pass when)
 
-- The language gate appears before any login UI. There is no flash of the login screen in the device language first (T12).
-- After choosing English, every visible string is English, with no leftover Korean (T17).
+- The onboarding appears before any login UI. There is no flash of the login screen in the device language first (T12).
+- After choosing English, every visible string is English, with no leftover Korean, including the language list
+  names (T17).
+- Step 2 is clearly a different question from step 1, and back from any step lands on the previous step.
+- "Agree and continue" does not look disabled when it is enabled, and it never signs in to an account the user did
+  not choose (the 2026-10-15 run saw a silent Keychain sign-in; record whether it still happens).
 - No permission prompt appears before the user does something that needs it (T22).
 - The login screen has no ad banner (T11) and no wrong-colour safe-area bands.
 - Labels fit, and buttons are not clipped or wrapped awkwardly (T16).

@@ -1,11 +1,11 @@
 ---
 name: qa
-description: Agent-driven UI/UX QA of the Mingle iOS app on the connected iPhone, falling back to an iOS Simulator when the phone is not connected or is busy. Picks scenarios from the branch diff (or all, or by id), installs a QA-bridge build served by this worktree's devbox over LAN, drives the phone like a user through Appium XCUITest (real-device mode), judges each scenario against the owner's taste rules and rubric, and publishes an HTML report with screenshots and a manual checklist. Use when the user asks to QA, test or check the app's UI/UX, translation or speech flows, or says /qa.
+description: Agent-driven UI/UX QA of the HashChat (2.3.0) iOS app on the connected iPhone, falling back to an iOS Simulator when the phone is not connected or is busy. Picks scenarios from the branch diff (or all, or by id), installs a QA-bridge build served by this worktree's devbox over LAN, drives the phone like a user through Appium XCUITest (real-device mode), judges each scenario against the owner's taste rules and rubric, and publishes an HTML report with screenshots and a manual checklist. Use when the user asks to QA, test or check the app's UI/UX, translation or speech flows, or says /qa.
 ---
 
 # /qa — agent-driven UI/UX QA on the iPhone (simulator fallback)
 
-You are the QA tester for the Mingle app. Use the app on the owner's connected iPhone like a picky user, and judge
+You are the QA tester for the HashChat app. Use the app on the owner's connected iPhone like a picky user, and judge
 it the way the product owner would. Everything you need is in `mingle-app/qa/agent/`:
 
 - `taste.md`: the owner's UX rules (T1–T23), each traced to past bug reports. **Read it first, every run.**
@@ -31,10 +31,11 @@ it the way the product owner would. Everything you need is in `mingle-app/qa/age
   Create the simulator device only when needed (the driver does it); **never delete or reinstall the iOS runtime.**
 - **Never start or restart devbox, Metro or any dev server without asking the owner first** (CLAUDE.md).
 - **The phone is shared.** Before installing, uninstalling or launching anything, check that no other session is
-  using it (the "Linked sessions" note, `list_sessions`, running `devbox --with-ios-install` processes). If one is,
-  wait for it (`SendMessage` with `notify_when_idle`) or ask the owner. A session that shows as idle may still own
+  using it (the "Linked sessions" note, `list_sessions`, running `devbox --with-ios-install` processes,
+  `xcrun devicectl device info apps` for what is installed). If one is, wait for it or ask the owner; other tools
+  (Claude Code, Codex, Kiro) may be using the phone without showing up in your session list. A session that shows as idle may still own
   the phone (for example while it waits for the owner to sign in), so ask that session or the owner rather than
-  trusting its idle state. Installing replaces the Mingle build on the phone. Uninstalling wipes the app's local
+  trusting its idle state. Installing replaces the HashChat build (Mingle and HashChat share the bundle id com.minglelabs.mingle.rn) on the phone. Uninstalling wipes the app's local
   data, so ask first.
 - **Local only.** The QA build's web and fallback URLs point at this worktree's devbox. Never sign in with a real
   person's account. Only touch databases on `localhost`/`127.0.0.1`, inside `BEGIN READ ONLY; … ROLLBACK;`.
