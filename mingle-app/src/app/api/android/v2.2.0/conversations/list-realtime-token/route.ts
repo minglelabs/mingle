@@ -1,2 +1,6 @@
+import {
+  getConversationListRealtimeTokenForAndroidV1_1_4,
+} from "@/server/api/controllers/android/v1.1.4/conversations-controller";
+
 export const runtime = "nodejs";
-export { GET } from "@/app/api/android/v2.0.0/conversations/list-realtime-token/route";
+export const GET = getConversationListRealtimeTokenForAndroidV1_1_4;

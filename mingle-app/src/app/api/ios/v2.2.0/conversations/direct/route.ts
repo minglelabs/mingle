@@ -1,2 +1,6 @@
+import {
+  postDirectConversationForIosV1_1_4,
+} from "@/server/api/controllers/ios/v1.1.4/conversations-controller";
+
 export const runtime = "nodejs";
-export { POST } from "@/app/api/ios/v2.0.0/conversations/direct/route";
+export const POST = postDirectConversationForIosV1_1_4;

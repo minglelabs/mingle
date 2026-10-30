@@ -1,2 +1,4 @@
+import { postTranslateFinalizeForIosV1_1_4 } from "@/server/api/controllers/ios/v1.1.4/translate-finalize-controller";
+
 export const runtime = "nodejs";
-export { POST } from "@/app/api/ios/v2.0.0/translate/finalize/route";
+export const POST = postTranslateFinalizeForIosV1_1_4;

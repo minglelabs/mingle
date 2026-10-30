@@ -1,2 +1,4 @@
+import { postConversationShareJoinRouteForIosV2_0_0 } from "@/server/api/controllers/ios/v2.0.0/conversation-controller";
+
 export const runtime = "nodejs";
-export { POST } from "@/app/api/ios/v2.0.0/conversations/shared/[shareToken]/join/route";
+export const POST = postConversationShareJoinRouteForIosV2_0_0;
