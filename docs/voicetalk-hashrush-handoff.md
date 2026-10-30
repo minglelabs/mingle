@@ -127,14 +127,13 @@ hash-rush 레포 현재 문제(gh로 README 확인):
 3. CallKit/ConnectionService, 그룹콜, 코인 과금, 지연 단축.
 4. Hash Rush G1 → G2 → 공개 로비. G1은 1과 병렬로 진행할 수 있다.
 
-### 2.5 사용자 결정 대기 (아직 답 없음)
-- LiveKit Cloud 사용 여부(외부 의존과 비용). 계정은 사용자가 만들어야 한다.
-- MVP를 1:1로 할지 그룹콜까지 할지. 권장은 1:1이고, 구조는 처음부터 그룹 가능하게 한다.
-- CallKit을 MVP에 넣을지.
-- 보이스톡 과금 시점.
-- Hash Rush를 G1으로 먼저 낼지, 바로 G2로 갈지.
-
-**결정 없이 MVP 구현에 들어가지 말 것.**
+### 2.5 사용자 결정 (2026-10-30 확정)
+- **SFU:** LiveKit Cloud로 시작한다. Railway는 공개 UDP 인바운드를 받지 못한다(HTTP와 TCP Proxy만 가능). 사용량이 커지면 싱가포르 VM(AWS Lightsail 월 약 $5~7부터)에 self-host로 옮긴다. 계정과 키는 사용자가 만든다(대기 중).
+- **MVP 범위:** 그룹콜, 최대 8인. UI/UX는 클럽하우스나 HelloTalk 보이스룸과 비슷하게 한다. 기존 앱에 같은 종류의 UI가 없으므로 화면 시안을 먼저 만든다.
+- **CallKit:** MVP에 넣는다. 기존 STT 모드의 "번역 중" 표시는 CallKit이 아니라 Live Activity로 한다. CallKit을 실제 통화가 아닌 기능에 쓰면 App Store 심사에서 거절될 위험이 있다.
+- **과금:** 별도 통화 요금은 받지 않는다. 통역(AI)을 켠 시간만 기존 해씨 단가로 차감하고, 원음만 오가는 통화는 무료로 한다.
+- **Hash Rush:** G1을 건너뛰고 바로 G2(서버 권한 방식, mingle-game WebSocket 서버를 싱가포르에 둠)로 간다.
+- **OpenAI 키:** 실서버는 Railway의 유효한 키를 쓰므로 교체하지 않는다. POC에서 GPT와 Gemini를 비교할 때만 devbox Vault 키를 쓴다.
 
 ---
 
