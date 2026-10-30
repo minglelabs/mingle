@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-languages'
 import { writeAdminAudit } from '@/server/admin/audit'
@@ -6,7 +7,7 @@ import { ageOn } from '@/server/operator-auto-reply/generate'
 import { planOperatorAvatar } from '@/server/operator-avatars/generate'
 import { generateReservePosts, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
-import { reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
+import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
 import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishReservePostNow } from '@/server/operator-post-reserve/worker'
 
@@ -426,4 +427,36 @@ export async function setReviewPin(ctx: AdminContext, kind: 'profile' | 'post', 
     metadata: { pinned, rank },
   })
   return { ok: true }
+}
+
+/**
+ * Staff edited a post's photos in review: `photos` in order (the first is the
+ * post's photo, the rest its extra ones), each one already in the post's
+ * author's folder. No photos at all makes it a text post.
+ */
+export async function setReviewPostPhotos(
+  ctx: AdminContext,
+  id: string,
+  photos: ReserveExtraImage[],
+): Promise<{ ok: true; post: ReviewPost } | { ok: false; error: 'not_found' | 'invalid_photos' }> {
+  const row = await prisma.operatorPostReserve.findFirst({ where: { id, state: { in: REVIEW_POST_STATES } }, select: { operatorUserId: true } })
+  if (!row) return { ok: false, error: 'not_found' }
+  const kept = reserveExtraImages(photos).slice(0, MAX_RESERVE_EXTRA_IMAGES + 1)
+  const folder = `post-images/${row.operatorUserId}/`
+  if (kept.length !== photos.length || kept.some((photo) => !photo.objectKey.startsWith(folder))) return { ok: false, error: 'invalid_photos' }
+  const [first, ...rest] = kept
+  const updated = await prisma.operatorPostReserve.update({
+    where: { id },
+    data: first
+      ? { imageObjectKey: first.objectKey, imageWidth: first.width, imageHeight: first.height, extraImages: rest.length ? rest : Prisma.DbNull, error: null }
+      : { imageObjectKey: null, imageWidth: null, imageHeight: null, extraImages: Prisma.DbNull, imagePrompt: null, error: null },
+    select: POST_SELECT,
+  })
+  await writeAdminAudit(ctx, {
+    action: 'operator_post.review_photos',
+    targetType: 'reserve',
+    targetId: id,
+    metadata: { count: kept.length },
+  })
+  return { ok: true, post: toReviewPost(updated) }
 }

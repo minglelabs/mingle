@@ -28,6 +28,118 @@ const ERROR_COPY: Record<string, string> = {
   photo_pending: '사진을 아직 그리지 않았어요. 그린 뒤에 게시할 수 있어요.',
   publish_failed: '게시하지 못했어요. 다시 눌러 주세요.',
   regenerate_failed: '다시 만들지 못했어요. 다시 눌러 주세요.',
+  invalid_image: '사진을 읽지 못했어요. 다른 파일로 해 주세요.',
+  file_too_large: '사진이 너무 커요(15MB까지).',
+  invalid_photos: '사진 목록이 올바르지 않아요. 새로고침 후 다시 해 주세요.',
+}
+
+type ReviewPhoto = { objectKey: string; width: number | null; height: number | null }
+const MAX_POST_PHOTOS = 10
+
+function reviewImageUrl(objectKey: string): string {
+  return `/admin/operators/api/review/image?key=${encodeURIComponent(objectKey)}`
+}
+
+/**
+ * Edit a post's photos: add (upload), remove, reorder; the first is the one
+ * the feed shows first. Saved as a whole; removing every photo makes a text post.
+ */
+function PhotoEditor({ postId, initial, onSaved, onCancel }: {
+  postId: string
+  initial: ReviewPhoto[]
+  onSaved: (post: ReviewPost) => void
+  onCancel: () => void
+}) {
+  const [photos, setPhotos] = useState(initial)
+  const [uploading, setUploading] = useState(0)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function add(files: FileList | null) {
+    const picked = Array.from(files ?? []).slice(0, MAX_POST_PHOTOS - photos.length)
+    if (!picked.length) return
+    setError(null)
+    setUploading((count) => count + picked.length)
+    for (const file of picked) {
+      try {
+        const form = new FormData()
+        form.set('id', postId)
+        form.set('file', file)
+        const response = await fetch('/admin/operators/api/review/photos', { method: 'POST', body: form })
+        const result = await response.json().catch(() => ({})) as { photo?: ReviewPhoto; error?: string }
+        if (!response.ok || !result.photo) throw new Error(result.error ?? 'upload_failed')
+        setPhotos((current) => current.length < MAX_POST_PHOTOS ? [...current, result.photo!] : current)
+      } catch (caught) {
+        setError(ERROR_COPY[(caught as Error).message] ?? '사진을 올리지 못했어요.')
+      } finally {
+        setUploading((count) => count - 1)
+      }
+    }
+  }
+
+  function move(index: number, by: -1 | 1) {
+    setPhotos((current) => {
+      const next = [...current]
+      const target = index + by
+      if (target < 0 || target >= next.length) return current
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
+
+  async function save() {
+    if (photos.length === 0 && !window.confirm('사진을 모두 빼고 글만 남길까요?')) return
+    setSaving(true)
+    setError(null)
+    try {
+      const response = await fetch('/admin/operators/api/review/photos', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: postId, photos }),
+      })
+      const result = await response.json().catch(() => ({})) as { post?: ReviewPost; error?: string }
+      if (!response.ok || !result.post) throw new Error(result.error ?? 'save_failed')
+      onSaved(result.post)
+    } catch (caught) {
+      setError(ERROR_COPY[(caught as Error).message] ?? '저장하지 못했어요.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const buttonClass = 'flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-sm font-bold text-white disabled:opacity-30'
+  return (
+    <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50/50 p-2">
+      <div className="grid grid-cols-3 gap-2">
+        {photos.map((photo, index) => (
+          <div key={photo.objectKey} className="relative aspect-square overflow-hidden rounded-lg bg-slate-100">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={reviewImageUrl(photo.objectKey)} alt="" className="h-full w-full object-cover" />
+            <span className="absolute left-1 top-1 rounded-full bg-black/60 px-1.5 text-[11px] font-semibold text-white">{index + 1}</span>
+            <button type="button" className={`${buttonClass} absolute right-1 top-1`} onClick={() => setPhotos((current) => current.filter((_, at) => at !== index))} aria-label={`${index + 1}번 사진 빼기`}>×</button>
+            <div className="absolute bottom-1 left-1 right-1 flex justify-between">
+              <button type="button" className={buttonClass} disabled={index === 0} onClick={() => move(index, -1)} aria-label={`${index + 1}번 사진 앞으로`}>‹</button>
+              <button type="button" className={buttonClass} disabled={index === photos.length - 1} onClick={() => move(index, 1)} aria-label={`${index + 1}번 사진 뒤로`}>›</button>
+            </div>
+          </div>
+        ))}
+        {photos.length + uploading < MAX_POST_PHOTOS ? (
+          <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-xs font-semibold text-slate-500">
+            <span className="text-2xl leading-none">+</span>
+            <span className="mt-1">{uploading ? `올리는 중 ${uploading}` : '사진 추가'}</span>
+            <input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { void add(event.target.files); event.target.value = '' }} />
+          </label>
+        ) : null}
+      </div>
+      {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
+      <div className="mt-2 flex justify-end gap-2">
+        <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600">취소</button>
+        <button type="button" onClick={() => void save()} disabled={saving || uploading > 0} className="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
+          {saving ? '저장 중…' : '사진 저장'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 const PHOTO_KIND: Record<string, string> = {
@@ -246,7 +358,7 @@ function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; width: nu
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={photo.objectKey}
-            src={`/admin/operators/api/review/image?key=${encodeURIComponent(photo.objectKey)}`}
+            src={reviewImageUrl(photo.objectKey)}
             alt=""
             width={photo.width ?? undefined}
             height={photo.height ?? undefined}
@@ -277,6 +389,10 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
   const [error, setError] = useState<string | null>(null)
   const sourceLanguage = post.language ?? author.languages[0] ?? null
   const translation = useStaffTranslation({ id: post.id }, post.text, setError)
+  const [editingPhotos, setEditingPhotos] = useState(false)
+  const photos: ReviewPhoto[] = post.imageObjectKey
+    ? [{ objectKey: post.imageObjectKey, width: post.imageWidth, height: post.imageHeight }, ...post.extraImages]
+    : []
 
   async function handle(action: Action, feedback: string) {
     if (action === 'delete' && !window.confirm('이 글을 삭제할까요?')) return
@@ -313,10 +429,15 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       </div>
       <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{translation.shownText}</p>
       <StaffTranslationChips sourceLanguage={sourceLanguage} translation={translation} />
-      {post.imageObjectKey ? (
-        <ReviewPhotos
-          photos={[{ objectKey: post.imageObjectKey, width: post.imageWidth, height: post.imageHeight }, ...post.extraImages]}
+      {editingPhotos ? (
+        <PhotoEditor
+          postId={post.id}
+          initial={photos}
+          onSaved={(saved) => { setPost(saved); setEditingPhotos(false) }}
+          onCancel={() => setEditingPhotos(false)}
         />
+      ) : post.imageObjectKey ? (
+        <ReviewPhotos photos={photos} />
       ) : post.photoDescription ? (
         // Where the photo will go: its description on white, so it is not read as the post text.
         <div className="mt-2 flex aspect-square w-full flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-6 text-center">
@@ -324,6 +445,11 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
           <p className="text-sm leading-6 text-slate-700">{post.photoDescription}</p>
         </div>
       ) : null}
+      {editingPhotos ? null : (
+        <button type="button" onClick={() => setEditingPhotos(true)} className="mt-2 text-sm font-semibold text-sky-700">
+          {post.imageObjectKey ? '사진 편집 (바꾸기·추가·순서)' : '사진 직접 올리기'}
+        </button>
+      )}
       {post.reviewFeedback ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {post.reviewFeedback}</p> : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
       <ReviewActions
