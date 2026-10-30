@@ -106,10 +106,16 @@ jobs:
           fi
 
   unit-tests:
-    name: Unit Tests (Vitest)
+    name: Unit Tests (Vitest ${{ matrix.shard }}/4)
     needs: push-context
     if: ${{ github.event_name != 'push' || needs.push-context.outputs.run_tests_on_push == 'true' }}
     runs-on: ubuntu-latest
+    # Collecting 400+ test files is CPU-bound on a 4-vCPU runner, so the suite
+    # is split across runners.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     defaults:
       run:
         working-directory: mingle-app
@@ -136,16 +142,18 @@ jobs:
         run: pnpm exec prisma generate
 
       - name: Enforce RN iOS namespace contract
+        if: matrix.shard == 1
         env:
           RN_API_NAMESPACE: ios/v1.0.4
         run: pnpm run rn:ios:env-check
 
       - name: Run devbox script contract tests
+        if: matrix.shard == 1
         working-directory: .
         run: node --test scripts/devbox-ngrok-parse.test.mjs scripts/devbox-runtime-config.test.mjs
 
       - name: Run TDD suite (unit)
-        run: pnpm test:unit
+        run: pnpm test:unit --shard=${{ matrix.shard }}/4
 
   # The Railway build skips Next's TypeScript pass (MINGLE_SKIP_BUILD_TYPECHECK),
   # so this job is the type gate.
@@ -170,6 +178,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec prisma generate
       - run: pnpm exec next typegen
+      # tsconfig has `incremental`, so a restored build info skips unchanged files.
+      - uses: actions/cache@v4
+        with:
+          path: mingle-app/tsconfig.tsbuildinfo
+          key: tsbuildinfo-${{ hashFiles('mingle-app/pnpm-lock.yaml', 'mingle-app/tsconfig.json') }}-${{ github.sha }}
+          restore-keys: |
+            tsbuildinfo-${{ hashFiles('mingle-app/pnpm-lock.yaml', 'mingle-app/tsconfig.json') }}-
       - run: pnpm exec tsc --noEmit -p tsconfig.json
 
   stt-tests:
