@@ -8,6 +8,13 @@ const nextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   outputFileTracingRoot: appRoot,
+  // The Railway image ships only the traced standalone server, not the full
+  // node_modules tree, so the image copies, exports and pulls much faster.
+  output: process.env.MINGLE_NEXT_STANDALONE === "1" ? "standalone" : undefined,
+  typescript: {
+    // CI runs `tsc --noEmit` on every PR; the Railway build skips the repeat.
+    ignoreBuildErrors: process.env.MINGLE_SKIP_BUILD_TYPECHECK === "1",
+  },
   experimental: {
     staleTimes: {
       // How long a fully prefetched route stays usable without a server
