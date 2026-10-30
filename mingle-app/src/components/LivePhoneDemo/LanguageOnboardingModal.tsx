@@ -298,12 +298,14 @@ export default function LanguageOnboardingModal({
           {step === "language" ? (
             <div className="space-y-4 px-4 pb-4 pt-0">
               <div className="space-y-1.5 text-center">
-                <p
-                  id={titleId}
-                  className="text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] text-slate-950"
-                >
-                  {copy.title}
-                </p>
+                <h2 id={titleId} className="space-y-1">
+                  <span className="block text-[2.1rem] font-extrabold leading-tight tracking-[-0.03em] text-amber-600">
+                    {copy.headline}
+                  </span>
+                  <span className="block text-[1.3rem] font-bold leading-snug tracking-[-0.02em] text-slate-950">
+                    {copy.title}
+                  </span>
+                </h2>
                 <p className="text-[0.95rem] leading-snug text-slate-500">{copy.descriptionLabel}</p>
               </div>
 

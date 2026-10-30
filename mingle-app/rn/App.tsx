@@ -1253,9 +1253,9 @@ function resolveDeviceLocaleTag(): string {
   }
 
   try {
-    return Intl.DateTimeFormat().resolvedOptions().locale || 'ko';
+    return Intl.DateTimeFormat().resolvedOptions().locale || 'en';
   } catch {
-    return 'ko';
+    return 'en';
   }
 }
 
