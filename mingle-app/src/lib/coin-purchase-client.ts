@@ -1,9 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { buildClientApiPath } from "@/lib/api-contract";
+import { buildClientApiPath, detectRuntimePlatform } from "@/lib/api-contract";
 import { getCoinWalletState, refreshCoinWallet } from "@/lib/coin-wallet-client";
 import {
+  isNativeIapBridgeAvailable,
   postNativeIapFinish,
   postNativeIapGetProducts,
   postNativeIapPurchase,
@@ -87,7 +88,10 @@ export function clearCoinPurchaseResult() {
 export async function loadCoinProducts(): Promise<void> {
   setState({ status: "loading" });
   try {
-    const response = await fetch(buildClientApiPath("/coins/products"), { cache: "no-store" });
+    // Inside the app shell, name the store: the namespace query can be gone after a full page load.
+    const nativePlatform = isNativeIapBridgeAvailable() ? detectRuntimePlatform() : null;
+    const query = nativePlatform ? `?platform=${nativePlatform}` : "";
+    const response = await fetch(buildClientApiPath(`/coins/products${query}`), { cache: "no-store" });
     if (!response.ok) throw new Error("coin_products_load_failed");
     const data = await response.json() as {
       platform: string | null;
@@ -206,8 +210,8 @@ async function verifyWithServer(event: Extract<NativeIapEvent, { type: "purchase
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(event.platform === "ios"
-        ? { jws: event.purchaseToken }
-        : { productId: event.productId, purchaseToken: event.purchaseToken }),
+        ? { platform: "ios", jws: event.purchaseToken }
+        : { platform: "android", productId: event.productId, purchaseToken: event.purchaseToken }),
     });
     if (response.status === 202) {
       setState({
