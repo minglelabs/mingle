@@ -32,7 +32,11 @@ COPY mingle-app/public ./public
 COPY mingle-app/scripts ./scripts
 COPY mingle-app/src ./src
 COPY mingle-app/data ./data
-RUN pnpm build
+ENV MINGLE_TURBOPACK_BUILD_CACHE="1"
+# Railway requires cache mount ids prefixed with the service id
+# (mingle-2-0-0). Update it if the service is ever re-created.
+RUN --mount=type=cache,id=s/959e33f7-10af-4820-bb24-cd8b83d8b24c-next-cache,target=/app/mingle-app/.next/cache \
+  pnpm build
 
 FROM base AS stt-deps
 WORKDIR /app/mingle-stt
