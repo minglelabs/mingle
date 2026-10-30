@@ -107,7 +107,7 @@ describe('earphone mode wiring', () => {
     expect(toggle).toContain('if (toggle.showNotice) setEarphoneModeNoticeOpen(true)')
     expect(liveDemoSource).toContain('<MessageMediaDialog title={earphoneModeCopy.label} onClose={closeEarphoneModeNotice}>')
     expect(liveDemoSource).toContain('earphonesConnected={nativeAudioRoute.earphonesConnected}')
-    expect(noticeSource).toContain('{!earphonesConnected && (')
+    expect(noticeSource).toContain("data-earphone-status={earphonesConnected ? 'connected' : 'disconnected'}")
   })
 
   it('reads one language per session: picked in the notice, React state only, dropped on every edge', () => {

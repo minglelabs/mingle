@@ -59,12 +59,16 @@ describe('earphone mode notice language selector', () => {
     const korean = renderNotice({ readLanguage: 'ko' })
     expect(korean).toContain('한국어로 번역된 모든 문장을 한국어 음성으로 들려드려요. 한국어로 말한 문장은 읽지 않아요.')
     expect(korean).toContain(copy.noticeBody)
-    expect(korean).not.toContain(copy.noticeNotConnectedBody)
+    expect(korean).toContain('data-earphone-status="connected"')
+    expect(korean).toContain(copy.earphoneStatusConnectedLabel)
+    expect(korean).not.toContain(copy.earphoneStatusDisconnectedLabel)
 
     const japanese = renderNotice({ readLanguage: 'ja', earphonesConnected: false })
     expect(japanese).toContain(formatLivePhoneDemoEarphoneModeReadLanguageNotice('ko', 'ja'))
     expect(japanese).not.toContain('한국어로 번역된')
-    expect(japanese).toContain(copy.noticeNotConnectedBody)
+    expect(japanese).toContain('data-earphone-status="disconnected"')
+    expect(japanese).toContain(copy.earphoneStatusDisconnectedLabel)
+    expect(japanese).not.toContain(copy.earphoneStatusConnectedLabel)
     expect([...languageList(japanese).matchAll(/aria-checked="(true|false)"/g)].map((match) => match[1])).toEqual(['false', 'false', 'true'])
   })
 
@@ -154,6 +158,15 @@ describe('earphone mode notice capture-source choice', () => {
     expect(second).toContain(copy.noticeBackLabel)
     expect(second).toContain(copy.noticeConfirmLabel)
     expect(second).not.toContain('data-earphone-mode-notice-next')
+  })
+
+  it('shows the large title, the earphone rule and the connection state on both pages', () => {
+    for (const initialStep of [1, 2] as const) {
+      const html = renderNotice({ captureSource: 'device_audio', onSelectCaptureSource: () => {}, initialStep, earphonesConnected: false })
+      expect(html).toMatch(new RegExp(`<h2 class="text-xl font-bold[^"]*">${copy.label}</h2>`))
+      expect(html.indexOf(copy.label)).toBeLessThan(html.indexOf(copy.noticeBody))
+      expect(html.indexOf(copy.noticeBody)).toBeLessThan(html.indexOf('data-earphone-status="disconnected"'))
+    }
   })
 
   it('stays a single page with a confirm button without a capture-source choice', () => {

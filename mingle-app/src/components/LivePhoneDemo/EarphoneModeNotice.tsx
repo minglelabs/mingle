@@ -1,7 +1,7 @@
 'use client'
 
 import { useId, useState } from 'react'
-import { Check, Mic, MonitorSpeaker, type LucideIcon } from 'lucide-react'
+import { Check, HeadphoneOff, Headphones, Mic, MonitorSpeaker, type LucideIcon } from 'lucide-react'
 import LanguageRadioOption from './LanguageRadioOption'
 import {
   formatLivePhoneDemoEarphoneModeReadLanguageNotice,
@@ -50,6 +50,58 @@ function CaptureSourceRadioOption({
         <Check size={14} strokeWidth={2.8} />
       </span>
     </button>
+  )
+}
+
+// Notice header, the same on both pages: a large title, the one-line rule
+// (earphones or a headset only) and the live earphone connection state.
+function EarphoneModeNoticeHeader({
+  copy,
+  earphonesConnected,
+  stepLabel,
+}: {
+  copy: LivePhoneDemoEarphoneModeCopy
+  earphonesConnected: boolean
+  stepLabel: string | null
+}) {
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-xl font-bold leading-tight text-gray-900">{copy.label}</h2>
+        {stepLabel && (
+          <span data-earphone-mode-notice-step-indicator className="mt-1 shrink-0 text-xs font-semibold text-gray-500">
+            {stepLabel}
+          </span>
+        )}
+      </div>
+      <p className="mt-1.5 text-sm leading-relaxed text-gray-600">{copy.noticeBody}</p>
+      <div
+        data-earphone-status={earphonesConnected ? 'connected' : 'disconnected'}
+        role="status"
+        className={`mt-3 flex items-center gap-3 rounded-2xl border px-3.5 py-3 ${
+          earphonesConnected
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            : 'border-gray-200 bg-gray-50 text-gray-500'
+        }`}
+      >
+        <span className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+          earphonesConnected ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-400'
+        }`}>
+          {earphonesConnected
+            ? <Headphones size={20} strokeWidth={2.15} />
+            : <HeadphoneOff size={20} strokeWidth={2.15} />}
+          <span
+            aria-hidden="true"
+            className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white ${
+              earphonesConnected ? 'bg-emerald-400' : 'bg-gray-300'
+            }`}
+          />
+        </span>
+        <span className="text-[0.98rem] font-semibold">
+          {earphonesConnected ? copy.earphoneStatusConnectedLabel : copy.earphoneStatusDisconnectedLabel}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -105,10 +157,7 @@ export default function EarphoneModeNoticeContent({
   if (currentStep === 2 && captureSource && onSelectCaptureSource) {
     return (
       <div data-qa="live-demo-earphone-mode-notice" data-earphone-mode-notice-step="2">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-900">{copy.label}</p>
-          <span data-earphone-mode-notice-step-indicator className="text-xs font-semibold text-gray-500">2/{totalSteps}</span>
-        </div>
+        <EarphoneModeNoticeHeader copy={copy} earphonesConnected={earphonesConnected} stepLabel={`2/${totalSteps}`} />
         <p id={captureSourceLabelId} className="mt-4 text-sm font-semibold text-gray-900">
           {copy.captureSourceLabel}
         </p>
@@ -162,13 +211,11 @@ export default function EarphoneModeNoticeContent({
 
   return (
     <div data-qa="live-demo-earphone-mode-notice" data-earphone-mode-notice-step="1">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-gray-900">{copy.label}</p>
-        {hasCaptureSourceStep && (
-          <span data-earphone-mode-notice-step-indicator className="text-xs font-semibold text-gray-500">1/{totalSteps}</span>
-        )}
-      </div>
-      <p className="mt-2 text-sm leading-relaxed text-gray-600">{copy.noticeBody}</p>
+      <EarphoneModeNoticeHeader
+        copy={copy}
+        earphonesConnected={earphonesConnected}
+        stepLabel={hasCaptureSourceStep ? `1/${totalSteps}` : null}
+      />
       {readLanguage && (
         <p data-earphone-mode-read-language-notice className="mt-2 text-sm leading-relaxed text-gray-600">
           {formatLivePhoneDemoEarphoneModeReadLanguageNotice(uiLocale, readLanguage)}
@@ -178,9 +225,6 @@ export default function EarphoneModeNoticeContent({
         <p data-earphone-mode-coin-notice className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-900">
           {coinCostNotice}
         </p>
-      )}
-      {!earphonesConnected && (
-        <p className="mt-2 text-sm leading-relaxed text-gray-600">{copy.noticeNotConnectedBody}</p>
       )}
       {languages.length > 0 && (
         <>
