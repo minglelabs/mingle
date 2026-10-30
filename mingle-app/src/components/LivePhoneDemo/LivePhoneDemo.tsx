@@ -49,14 +49,10 @@ import {
 import {
   getNativeDeviceAudioCapabilityServerSnapshot,
   getNativeDeviceAudioCapabilitySnapshot,
-  getSttCaptureSourcePickServerSnapshot,
-  getSttCaptureSourcePickSnapshot,
   readCachedNativeShellCapabilities,
   resolveEffectiveSttCaptureSource,
-  setSttCaptureSourcePick,
   shouldPlayTtsViaNativeShell,
   subscribeNativeDeviceAudioCapability,
-  subscribeSttCaptureSourcePick,
 } from '@/lib/native-device-audio'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
 import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
@@ -2245,15 +2241,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     getNativeDeviceAudioCapabilitySnapshot,
     getNativeDeviceAudioCapabilityServerSnapshot,
   )
-  const sttCaptureSourcePick = useSyncExternalStore(
-    subscribeSttCaptureSourcePick,
-    getSttCaptureSourcePickSnapshot,
-    getSttCaptureSourcePickServerSnapshot,
-  )
+  // Earphone mode always captures the microphone mixed with the sound other
+  // apps play, wherever the shell can capture it.
   const sttCaptureSource = resolveEffectiveSttCaptureSource({
     supported: nativeDeviceAudioSupported,
     earphoneModeEnabled,
-    pick: sttCaptureSourcePick,
   })
   // The read language (L) picked in the notice. Session state only: never
   // persisted, dropped on every on/off edge (see the reset below).
@@ -6723,9 +6715,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // the room's display language again.
   useEffect(() => subscribeEarphoneModePreference(() => {
     setEarphoneModeReadLanguagePick(null)
-    // The capture source lasts one session too: every new one starts on the
-    // microphone, so Start never opens the screen-capture prompt unasked.
-    setSttCaptureSourcePick('microphone')
   }), [])
 
   const handleEarphoneModeReadLanguageSelect = useCallback((language: string) => {
@@ -9633,8 +9622,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 languages={normalizedDisplayLanguageOptions}
                 readLanguage={earphoneModeReadLanguage}
                 onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
-                captureSource={nativeDeviceAudioSupported ? sttCaptureSourcePick : undefined}
-                onSelectCaptureSource={setSttCaptureSourcePick}
+                deviceAudioCapture={nativeDeviceAudioSupported}
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}
                 coinCostNotice={coinTtsCostNotice}

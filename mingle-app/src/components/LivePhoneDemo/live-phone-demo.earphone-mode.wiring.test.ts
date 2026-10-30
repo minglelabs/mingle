@@ -133,26 +133,23 @@ describe('earphone mode wiring', () => {
     expect(logicSource.match(/setItem\(/g)).toHaveLength(1)
   })
 
-  it('captures device audio only as a per-session pick made in the notice', () => {
-    // Offered only when the shell reports the capability.
+  it('always captures device audio in earphone mode on a shell that can, with no choice to make', () => {
+    // The notice only explains it, and only when the shell reports the capability.
     const notice = between(liveDemoSource, '<EarphoneModeNoticeContent', '/>')
-    expect(notice).toContain('captureSource={nativeDeviceAudioSupported ? sttCaptureSourcePick : undefined}')
-    expect(notice).toContain('onSelectCaptureSource={setSttCaptureSourcePick}')
+    expect(notice).toContain('deviceAudioCapture={nativeDeviceAudioSupported}')
     expect(notice).toContain('deviceAudioViaBroadcast={isLikelyIOSPlatform()}')
-    // What the session captures: shell support + earphone mode on + the pick.
+    expect(notice).not.toContain('onSelectCaptureSource')
+    // What the session captures: shell support + earphone mode on.
     const effective = between(liveDemoSource, 'const sttCaptureSource = resolveEffectiveSttCaptureSource({', '})')
     expect(effective).toContain('supported: nativeDeviceAudioSupported,')
     expect(effective).toContain('earphoneModeEnabled,')
-    expect(effective).toContain('pick: sttCaptureSourcePick,')
+    expect(effective).not.toContain('pick')
     expect(liveDemoSource).toContain('captureSource: sttCaptureSource,')
-    // Every earphone-mode edge puts the next session back on the microphone.
-    const reset = between(liveDemoSource, 'useEffect(() => subscribeEarphoneModePreference(() => {', '}), [])')
-    expect(reset).toContain("setSttCaptureSourcePick('microphone')")
-    // A source change ends the running session; it never swaps under it.
+    // A source change (earphone mode on/off) ends the running session; it never swaps under it.
     const stop = between(liveDemoSource, 'const appliedSttCaptureSourceRef = useRef(sttCaptureSource)', '}, [handleStopRecording, isSttSessionRunning, sttCaptureSource])')
     expect(stop).toContain('if (appliedSttCaptureSourceRef.current === sttCaptureSource) return')
     expect(stop).toContain('if (isSttSessionRunning) void handleStopRecording()')
-    // The pick is never persisted.
+    // Nothing about it is persisted.
     const store = readFileSync(new URL('../../lib/native-device-audio.ts', import.meta.url), 'utf8')
     expect(store).not.toMatch(/localStorage|sessionStorage|setItem\(/)
   })
