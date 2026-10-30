@@ -5,6 +5,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import ChatBubble from "@/components/LivePhoneDemo/ChatBubble";
+import ConversationOperatorDisclosure from "@/components/LivePhoneDemo/ConversationOperatorDisclosure";
+import { labelNameWithAccountBadge } from "@/components/LivePhoneDemo/chat-account-badge.logic";
+import { resolveAccountBadge } from "@/lib/account-badge";
 import SlideSurface from "@/components/slide-surface";
 import {
   formatConversationSpectateInvite,
@@ -98,7 +101,7 @@ function hasNativeConversationShareHistoryEntry(): boolean {
 // may not have it installed), this renders as an overlay on top of whatever
 // screen was already open — same pattern as NativeProfileLinkOverlay — since
 // a viewer opening this deep link natively is, by definition, already using
-// the app. No "Open in Mingle App" / store buttons, a real back button, and
+// the app. No "Open in HashChat App" / store buttons, a real back button, and
 // the app's own safe-area/back-gesture conventions instead of the marketing
 // card's fixed layout.
 export default function NativeConversationShareOverlay() {
@@ -304,6 +307,8 @@ export default function NativeConversationShareOverlay() {
   const isOpen = Boolean(overlay);
   const roomTitle = state?.roomTitle || "";
   const inviterName = inviter?.name?.trim() || copy.userFallback;
+  // The invite line is one sentence, so the sharer's badge is plain text.
+  const labeledInviterName = labelNameWithAccountBadge(inviterName, resolveAccountBadge(inviter), spectateLocale);
   const isNotFound = status === "not_found";
 
   return (
@@ -365,7 +370,7 @@ export default function NativeConversationShareOverlay() {
               )}
             </div>
             <p className="min-w-0 flex-1 text-[14px] leading-5 text-slate-700">
-              {roomTitle ? formatConversationSpectateInvite(copy, inviterName, roomTitle) : inviterName}
+              {roomTitle ? formatConversationSpectateInvite(copy, labeledInviterName, roomTitle) : labeledInviterName}
             </p>
           </div>
 
@@ -374,6 +379,8 @@ export default function NativeConversationShareOverlay() {
             className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
             style={{ touchAction: "pan-y" }}
           >
+            {/* Shown before the viewer decides to join a room with a HashChat-run member. */}
+            {state?.operatorDisclosure ? <ConversationOperatorDisclosure locale={spectateLocale} /> : null}
             {status === "loading" ? (
               <div className="flex h-full items-center justify-center text-slate-400">
                 <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />

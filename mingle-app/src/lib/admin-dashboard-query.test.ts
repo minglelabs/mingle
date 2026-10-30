@@ -54,7 +54,9 @@ function setRawMetricResults(dayKey: string): void {
     .mockResolvedValueOnce([{ day: rawDay(dayKey), value: BigInt(4) }])
     .mockResolvedValueOnce([{ day: rawDay(dayKey), value: 5 }])
     .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 100, p95_ms: 180 }])
-    .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 220, p95_ms: 360 }]);
+    .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 220, p95_ms: 360 }])
+    .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 90, p95_ms: 240 }])
+    .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 30, p95_ms: 50 }]);
 }
 
 afterEach(() => {
@@ -62,11 +64,51 @@ afterEach(() => {
 });
 
 describe("loadAdminDashboardMetrics", () => {
+  it.each(["all", "android"] as const)(
+    "leaves operator accounts out of signups, DAU, messages and latency (%s)",
+    async (platform) => {
+      const today = resolveTodayKey(new Date());
+      setRawMetricResults(today);
+
+      await loadAdminDashboardMetrics(makeRange([today]), { platform });
+
+      const queries = mocks.queryRawUnsafe.mock.calls.map(([sql]) => sql as string);
+      const operatorSender = 'and not exists (select 1 from "app"."app_users" as op where op."id" = m."user_id" and op."is_operator")';
+      expect(queries[0]).toContain('"app"."app_users" as u');
+      expect(queries[0]).toContain('and u."is_operator" = false');
+      for (const index of [1, 2, 4, 5, 6, 7]) {
+        expect(queries[index]).toContain('from "app"."app_messages" as m');
+        expect(queries[index]).toContain(operatorSender);
+      }
+      // Messages without a sender stay in the count: NOT EXISTS, never NOT IN.
+      expect(queries.join("\n")).not.toMatch(/not in \(/i);
+      // Usage comes from client event logs, which operators never write.
+      expect(queries[3]).not.toContain("is_operator");
+    },
+  );
+
+  it("adds STT per character (5+ characters, weighted) and translation per output token", async () => {
+    const today = resolveTodayKey(new Date());
+    setRawMetricResults(today);
+
+    const metrics = await loadAdminDashboardMetrics(makeRange([today]), { platform: "all" });
+
+    const queries = mocks.queryRawUnsafe.mock.calls.map(([sql]) => normalizeSql(sql as string));
+    expect(queries[6]).toContain(`join "app"."app_message_contents" as c on c."message_id" = m."id" and c."content_type" = 'SOURCE'`);
+    expect(queries[6]).toContain("sum(stt_ms) / sum(chars) as avg_ms");
+    expect(queries[6]).toContain("where chars >= 5");
+    expect(queries[7]).toContain('m."translation_completion_tokens" > 0');
+    expect(metrics.slice(6).map((metric) => [metric.key, metric.points[0].value, metric.secondarySeries?.points[0].value])).toEqual([
+      ["stt_latency_ms_per_char", 90, 240],
+      ["translation_latency_ms_per_token", 30, 50],
+    ]);
+  });
+
   it.each([
     ["all", "", ""],
     ["android", ` join "app"."app_users" as u on u."id" = m."user_id"`, ` and u."latest_client_platform" = $3`],
     ["ios", ` join "app"."app_users" as u on u."id" = m."user_id"`, ` and u."latest_client_platform" = $3`],
-  ] as const)("counts messages with the unchanged message-count SQL (%s)", async (platform, join, platformFilter) => {
+  ] as const)("counts messages with the message-count SQL, operator senders excluded (%s)", async (platform, join, platformFilter) => {
     const today = resolveTodayKey(new Date());
     setRawMetricResults(today);
 
@@ -77,7 +119,8 @@ describe("loadAdminDashboardMetrics", () => {
       select date_trunc('day', m."created_at") as day, count(*) as value
       from "app"."app_messages" as m${join}
       where m."is_deleted" is distinct from true
-        and m."created_at" >= $1 and m."created_at" < $2${platformFilter}
+        and m."created_at" >= $1 and m."created_at" < $2
+        and not exists (select 1 from "app"."app_users" as op where op."id" = m."user_id" and op."is_operator")${platformFilter}
       group by day
       order by day
     `));
@@ -132,7 +175,7 @@ describe("loadAdminDashboardMetrics", () => {
         dauCount: 8,
         messageCount: 7,
         usageSeconds: 6,
-        usageMetricVersion: 2,
+        usageMetricVersion: 3,
         sttAvgMs: null,
         sttP95Ms: null,
         translationAvgMs: null,
@@ -145,7 +188,7 @@ describe("loadAdminDashboardMetrics", () => {
       expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: { day: { in: historicalDays.map(parseDayKey) }, platform },
       }));
-      expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+      expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(8);
       for (const [, start, end, selectedPlatform] of mocks.queryRawUnsafe.mock.calls) {
         expect(start).toEqual(startOfDayUtc(range.dayKeys[28]));
         expect(end).toEqual(range.rangeEnd);
@@ -165,7 +208,7 @@ describe("loadAdminDashboardMetrics", () => {
       dauCount: index + 2,
       messageCount: index + 3,
       usageSeconds: index + 4,
-      usageMetricVersion: 2,
+      usageMetricVersion: 3,
       sttAvgMs: index + 5,
       sttP95Ms: index + 6,
       translationAvgMs: index + 7,
@@ -191,7 +234,7 @@ describe("loadAdminDashboardMetrics", () => {
       .filter((day) => day !== missingDay)
       .map((day) => ({
         day: rawDay(day), signupCount: 9, dauCount: 8, messageCount: 7,
-        usageSeconds: 6, usageMetricVersion: 2, sttAvgMs: null, sttP95Ms: null,
+        usageSeconds: 6, usageMetricVersion: 3, sttAvgMs: null, sttP95Ms: null,
         translationAvgMs: null, translationP95Ms: null,
       })));
     setRawMetricResults(missingDay);
@@ -199,12 +242,12 @@ describe("loadAdminDashboardMetrics", () => {
 
     const metrics = await loadAdminDashboardMetrics(range, { platform: "android" });
 
-    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(12);
-    for (const [, start, end] of mocks.queryRawUnsafe.mock.calls.slice(0, 6)) {
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(16);
+    for (const [, start, end] of mocks.queryRawUnsafe.mock.calls.slice(0, 8)) {
       expect(start).toEqual(startOfDayUtc(missingDay));
       expect(end).toEqual(startOfDayUtc(shiftDayKey(missingDay, 1)));
     }
-    for (const [, start, end] of mocks.queryRawUnsafe.mock.calls.slice(6)) {
+    for (const [, start, end] of mocks.queryRawUnsafe.mock.calls.slice(8)) {
       expect(start).toEqual(startOfDayUtc(range.dayKeys[28]));
       expect(end).toEqual(range.rangeEnd);
     }
@@ -225,7 +268,7 @@ describe("loadAdminDashboardMetrics", () => {
 
     const metrics = await loadAdminDashboardMetrics(makeRange(dayKeys));
 
-    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(8);
     const usageQuery = mocks.queryRawUnsafe.mock.calls[3][0] as string;
     expect(usageQuery).toContain('"app"."app_event_logs"');
     expect(usageQuery).toContain('"usage_sec"');
@@ -237,7 +280,7 @@ describe("loadAdminDashboardMetrics", () => {
       dauCount: 0,
       messageCount: 0,
       usageSeconds: 0,
-      usageMetricVersion: 2,
+      usageMetricVersion: 3,
       sttAvgMs: null,
       translationAvgMs: null,
     });
@@ -266,11 +309,11 @@ describe("loadAdminDashboardMetrics", () => {
 
     const metrics = await loadAdminDashboardMetrics(makeRange([dayKey]));
 
-    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(8);
     expect(mocks.upsert).toHaveBeenCalledTimes(1);
     expect(mocks.upsert.mock.calls[0][0].update).toMatchObject({
       usageSeconds: 5,
-      usageMetricVersion: 2,
+      usageMetricVersion: 3,
     });
     expect(metrics[0].points[0].value).toBe(5);
   });
@@ -282,7 +325,7 @@ describe("loadAdminDashboardMetrics", () => {
 
     await loadAdminDashboardMetrics(makeRange([yesterday, today]));
 
-    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(8);
     expect(mocks.findMany).not.toHaveBeenCalled();
     expect(mocks.upsert).not.toHaveBeenCalled();
   });
@@ -299,7 +342,7 @@ describe("loadAdminDashboardMetrics", () => {
       dauCount: 8,
       messageCount: 7,
       usageSeconds: 6,
-      usageMetricVersion: 2,
+      usageMetricVersion: 3,
       sttAvgMs: null,
       sttP95Ms: null,
       translationAvgMs: null,
@@ -310,7 +353,7 @@ describe("loadAdminDashboardMetrics", () => {
     const metrics = await loadAdminDashboardMetrics(makeRange(dayKeys));
 
     expect(mocks.findMany).toHaveBeenCalledTimes(1);
-    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(8);
     expect(mocks.upsert).not.toHaveBeenCalled();
     expect(metrics[0].points[0].value).toBe(6);
   });
@@ -333,7 +376,7 @@ describe("loadAdminDashboardMetrics", () => {
     });
     expect(mocks.upsert.mock.calls[0][0].create.platform).toBe("android");
     expect(mocks.deleteMany).not.toHaveBeenCalled();
-    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(8);
     for (const [query, ...params] of mocks.queryRawUnsafe.mock.calls) {
       expect(query as string).toContain('"latest_client_platform" = $3');
       expect(params[2]).toBe("android");
@@ -355,7 +398,7 @@ describe("loadAdminDashboardMetrics", () => {
       dauCount: 8,
       messageCount: 7,
       usageSeconds: 6,
-      usageMetricVersion: 2,
+      usageMetricVersion: 3,
       sttAvgMs: null,
       sttP95Ms: null,
       translationAvgMs: null,
@@ -368,7 +411,7 @@ describe("loadAdminDashboardMetrics", () => {
     expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ platform: "ios" }),
     }));
-    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(8);
     expect(mocks.upsert).not.toHaveBeenCalled();
     expect(metrics[0].points.map((point) => point.value)).toEqual([6, 5, 0]);
   });
@@ -384,7 +427,7 @@ describe("loadAdminDashboardMetrics", () => {
     const metrics = await loadAdminDashboardMetrics(makeRange(dayKeys), { forceRefresh: true });
 
     expect(mocks.findMany).not.toHaveBeenCalled();
-    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(8);
     expect(mocks.deleteMany).toHaveBeenCalledTimes(1);
     const deletedDays: Date[] = mocks.deleteMany.mock.calls[0][0].where.day.in;
     expect(deletedDays).toHaveLength(2);
@@ -442,6 +485,7 @@ describe("loadTranslationModelMessageSeries", () => {
       from "app"."app_messages" as m
       where m."is_deleted" is distinct from true
         and m."created_at" >= $1 and m."created_at" < $2
+        and not exists (select 1 from "app"."app_users" as op where op."id" = m."user_id" and op."is_operator")
         and m."translation_model" is not null
       group by day, lower(btrim(m."translation_model"))
       order by day, model
@@ -477,7 +521,7 @@ describe("loadTranslationModelMessageSeries", () => {
 
       await loadTranslationModelMessageSeries(makeRange([today]), { platform });
 
-      const modelQuery = normalizeSql(mocks.queryRawUnsafe.mock.calls[6][0] as string);
+      const modelQuery = normalizeSql(mocks.queryRawUnsafe.mock.calls[8][0] as string);
       expect(sqlSource(modelQuery)).toBe(`${sqlSource(messageCountQuery)} and m."translation_model" is not null`);
     },
   );

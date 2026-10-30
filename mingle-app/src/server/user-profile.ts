@@ -1,6 +1,8 @@
 import { getPublishedBioText } from "./profile-bio";
 import { prisma } from "@/lib/prisma";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
+import { zipInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
+import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 
 export type UserProfileLocation = {
   latitude: number;
@@ -20,14 +22,21 @@ export const userProfileSelect = {
   imageCropY: true,
   handle: true,
   bio: true,
+  birthDate: true,
   nationality: true,
   primaryLanguages: true,
+  interestLanguages: true,
+  interestLanguageLevels: true,
   defaultConversationLanguages: true,
   locationLatitude: true,
   locationLongitude: true,
   locationCity: true,
   locationCountry: true,
   locationCountryCode: true,
+  // Badge flags: `/p/{userId}` (and a shared room's inviter) shows this
+  // profile to other people, so an operator account must stay labeled.
+  isOfficial: true,
+  isOperator: true,
   _count: {
     select: {
       followerRelations: {
@@ -50,14 +59,21 @@ type SelectedUserProfile = {
   imageCropY: number | null;
   handle: string | null;
   bio: string | null;
+  birthDate?: Date | null;
   nationality: string | null;
   primaryLanguages: string[];
+  /** Optional so hand-built rows (tests, older selects) still type-check. */
+  interestLanguages?: string[];
+  interestLanguageLevels?: number[];
   defaultConversationLanguages: string[];
   locationLatitude: number | null;
   locationLongitude: number | null;
   locationCity: string | null;
   locationCountry: string | null;
   locationCountryCode: string | null;
+  /** Optional so hand-built rows (tests, older selects) still type-check. */
+  isOfficial?: boolean | null;
+  isOperator?: boolean | null;
   _count: {
     followerRelations: number;
     followingRelations: number;
@@ -74,15 +90,51 @@ export type UserProfile = {
   imageCropY: number | null;
   handle: string | null;
   bio: string | null;
+  /** Current age in whole years; the original birth date is never serialized. */
+  age?: number;
   nationality: string | null;
   primaryLanguages: string[];
+  /** 관심 언어 with the user's level of each; never one of primaryLanguages. */
+  interestLanguages: InterestLanguage[];
   defaultConversationLanguages: string[];
   location: UserProfileLocation | null;
   followersCount: number;
   followingCount: number;
+  /** The HashChat team's official account; present (true) only then. */
+  isOfficial?: boolean;
 };
 
-export function serializeUserProfile(profile: SelectedUserProfile): UserProfile {
+export function calculateProfileAge(
+  birthDate: Date | null | undefined,
+  now: Date = new Date(),
+): number | undefined {
+  if (
+    !(birthDate instanceof Date)
+    || !Number.isFinite(birthDate.getTime())
+    || !(now instanceof Date)
+    || !Number.isFinite(now.getTime())
+  ) {
+    return undefined;
+  }
+
+  const birthYear = birthDate.getUTCFullYear();
+  const birthMonth = birthDate.getUTCMonth();
+  const birthDay = birthDate.getUTCDate();
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth();
+  const currentDay = now.getUTCDate();
+  const birthDateIsFuture = birthYear > currentYear
+    || (birthYear === currentYear && birthMonth > currentMonth)
+    || (birthYear === currentYear && birthMonth === currentMonth && birthDay > currentDay);
+
+  if (birthDateIsFuture) return undefined;
+
+  const birthdayHasPassed = currentMonth > birthMonth
+    || (currentMonth === birthMonth && currentDay >= birthDay);
+  return currentYear - birthYear - (birthdayHasPassed ? 0 : 1);
+}
+
+export function serializeUserProfile(profile: SelectedUserProfile, now: Date = new Date()): UserProfile {
   const {
     _count,
     id,
@@ -93,14 +145,19 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     imageCropY,
     handle,
     bio,
+    birthDate,
     nationality,
     primaryLanguages,
+    interestLanguages,
+    interestLanguageLevels,
     defaultConversationLanguages,
     locationLatitude,
     locationLongitude,
     locationCity,
     locationCountry,
     locationCountryCode,
+    isOfficial,
+    isOperator,
   } = profile;
   const location = typeof locationLatitude === "number"
     && Number.isFinite(locationLatitude)
@@ -121,6 +178,7 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     primaryLanguages,
     normalizedNationality ? [normalizedNationality] : [],
   );
+  const age = calculateProfileAge(birthDate, now);
   return {
     id,
     name,
@@ -130,12 +188,16 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     imageCropY,
     handle,
     bio,
+    ...(age !== undefined ? { age } : {}),
     nationality: normalizedPrimaryLanguages[0] ?? normalizedNationality,
     primaryLanguages: normalizedPrimaryLanguages,
+    interestLanguages: zipInterestLanguages(interestLanguages, interestLanguageLevels)
+      .filter((entry) => !normalizedPrimaryLanguages.includes(entry.code)),
     defaultConversationLanguages: sanitizeSttLanguageSelection(defaultConversationLanguages),
     location,
     followersCount: _count.followerRelations,
     followingCount: _count.followingRelations,
+    ...identityBadgeFlags({ isOfficial }),
   };
 }
 

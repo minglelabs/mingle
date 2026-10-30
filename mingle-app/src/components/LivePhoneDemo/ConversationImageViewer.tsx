@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState, type SyntheticEvent } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react'
 import { clientApiNamespace } from '@/lib/api-contract'
 import { type ConversationMessageImage } from '@/lib/conversation-image'
 import { blockNeedsTranslation, overlayBlocksFor, type ConversationImageTextBlock } from '@/lib/conversation-image-text'
@@ -11,7 +11,8 @@ import PhotoTranslateControl from './PhotoTranslateControl'
 import PhotoTranslationOverlay from './PhotoTranslationOverlay'
 import PhotoTranslationStatusChip from './PhotoTranslationStatusChip'
 import { ZoomableConversationImage, type ConversationImagePagerHandlers, type ConversationImageStage } from './ZoomableConversationImage'
-import { conversationImageSrc, findConversationImageIndex } from './conversation-image-gallery.logic'
+import { conversationImagePath, findConversationImageIndex, withConversationImageRetry } from './conversation-image-gallery.logic'
+import { conversationImageFileName, saveConversationImage } from './conversation-image-save'
 import { usePhotoTranslationRoom, type PhotoTranslationRoom } from './photo-translation-context'
 import {
   PHOTO_TRANSLATION_OFF,
@@ -99,13 +100,15 @@ type ConversationImageViewerProps = {
   initialMessageId: string
   locale: string
   onClose: () => void
+  /** Where a photo is loaded from (without the retry marker); defaults to the member image route. */
+  resolvePath?: (image: ConversationMessageImage) => string
 }
 
 export default function ConversationImageViewer(props: ConversationImageViewerProps) {
   return props.images.length ? <ConversationImageViewerContent {...props} /> : null
 }
 
-function ConversationImageViewerContent({ images, initialMessageId, locale, onClose }: ConversationImageViewerProps) {
+function ConversationImageViewerContent({ images, initialMessageId, locale, onClose, resolvePath = conversationImagePath }: ConversationImageViewerProps) {
   const copy = resolveConversationImageCopy(locale)
   const reducedMotion = useReducedMotion() ?? false
   const room = usePhotoTranslationRoom()
@@ -202,6 +205,22 @@ function ConversationImageViewerContent({ images, initialMessageId, locale, onCl
     return () => document.removeEventListener('keydown', handleKeyDown, true)
   }, [])
 
+  // Saving the photo on screen; the result shows briefly under the top bar.
+  const [saveStatus, setSaveStatus] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (saveStatusTimerRef.current != null) clearTimeout(saveStatusTimerRef.current) }, [])
+  const saveActive = useCallback(async () => {
+    if (!active || saving) return
+    setSaving(true)
+    if (saveStatusTimerRef.current != null) clearTimeout(saveStatusTimerRef.current)
+    setSaveStatus(copy.savingPhoto)
+    const result = await saveConversationImage(resolvePath(active), conversationImageFileName(active.messageId))
+    setSaving(false)
+    setSaveStatus(result === 'saved' ? copy.photoSaved : result === 'permission' ? copy.photoSavePermission : copy.photoSaveFailed)
+    saveStatusTimerRef.current = setTimeout(() => setSaveStatus(null), 2200)
+  }, [active, copy, resolvePath, saving])
+
   const chromeOpacity = Math.max(0, 1 - dragProgress * CHROME_FADE_PER_PROGRESS)
   const chromeTransition = backdropSettling ? 'opacity 200ms ease-out' : undefined
   const position = { index, count }
@@ -230,7 +249,7 @@ function ConversationImageViewerContent({ images, initialMessageId, locale, onCl
             return <div key={image.messageId} data-conversation-image-slide={slideIndex} className="absolute inset-y-0 w-full"
               style={{ left: `${slideIndex * 100}%` }}>
               <ZoomableConversationImage
-                src={conversationImageSrc(image, retries[image.messageId] ?? 0)}
+                src={withConversationImageRetry(resolvePath(image), retries[image.messageId] ?? 0)}
                 alt={count > 1 ? `${copy.image} ${slideIndex + 1}/${count}` : copy.image}
                 width={image.width} height={image.height}
                 active={isActive} pager={pager}
@@ -252,12 +271,19 @@ function ConversationImageViewerContent({ images, initialMessageId, locale, onCl
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 px-3"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 12px)', opacity: chromeOpacity, transition: chromeTransition }}>
-        <span className="h-11 w-11 shrink-0" aria-hidden="true" />
+        <button type="button" aria-label={copy.savePhoto} data-conversation-image-save onClick={() => { void saveActive() }}
+          disabled={dragProgress >= 1 || saving || failedIds.has(active.messageId)} className={`${CHROME_BUTTON_CLASS} disabled:opacity-50`}><Download size={21} /></button>
         {count > 1
           ? <div data-conversation-image-counter className="mt-2 rounded-full bg-white/15 px-3 py-1 text-[13px] font-semibold tabular-nums text-white backdrop-blur-[10px]">{index + 1} / {count}</div>
           : <span aria-hidden="true" />}
         <button type="button" aria-label={copy.close} onClick={onClose} disabled={dragProgress >= 1} className={CHROME_BUTTON_CLASS}><X size={22} /></button>
       </div>
+
+      {saveStatus && <div role="status" data-conversation-image-save-status
+        className="pointer-events-none absolute inset-x-0 z-10 flex justify-center px-6"
+        style={{ top: 'calc(max(env(safe-area-inset-top), 12px) + 56px)' }}>
+        <span className="rounded-full bg-black/60 px-3 py-1.5 text-[13px] font-medium text-white backdrop-blur-[10px]">{saveStatus}</span>
+      </div>}
 
       {count > 1 && <>
         {/* Arrow buttons are for a mouse; touch pages by swiping. */}

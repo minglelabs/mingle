@@ -28,6 +28,7 @@ export const esDictionary: BaseAppDictionarySource = {
     connect: "Descubrir",
     moments: "Momentos",
     my: "Yo",
+    feed: "Novedades",
   },
   titles: {
     chats: "Chats",

@@ -1,12 +1,16 @@
 import crypto from "crypto";
+import { normalizeMessageReplyReference, toRecalledMessageReplyReference, type MessageReplyReference } from "@/lib/message-reply";
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image';
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { formatLocalizedConversationTitle } from "@/i18n/conversations";
 import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
+import { resolveAccountBadge, type AccountBadgeKind } from "@/lib/account-badge";
 import { normalizeChineseContent } from "@/server/chinese-script-conversion";
+import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
+import type { ConversationExportMessage, ConversationExportTranscript } from "@/lib/conversation-export";
 import { MESSAGE_RECALLED_AT_METADATA_KEY, RECALLED_MESSAGE_ID_LIMIT, readMessageRecalledAtMs } from "@/lib/message-recall";
 
 export { MAX_CONVERSATION_MEMBERS };
@@ -25,6 +29,12 @@ export type ConversationChannelOtherMember = {
   imageCropScale: number | null;
   imageCropX: number | null;
   imageCropY: number | null;
+  // Account badge flags (see identityBadgeFlags), each present only when
+  // true. Clients pick the badge with resolveAccountBadge; a room with an
+  // operator member is labeled next to its title (the title itself is a
+  // renamable plain string and never carries the label).
+  isOfficial?: true;
+  isOperator?: true;
 };
 
 export type ConversationChannelSummary = {
@@ -94,6 +104,10 @@ export type ConversationHydrationUtterance = {
   image?: ConversationMessageImage;
   serverCreatedAtMs?: number;
   serverMessageId?: string;
+  // When the server stored the row (server clock). Read receipts compare
+  // against members' server-side read cursors, so they need this, not the
+  // sender's device-clock createdAtMs.
+  serverPersistedAtMs?: number;
   id: string;
   originalText: string;
   // Display-only rendering of originalText in its Chinese variant's script
@@ -122,6 +136,11 @@ export type ConversationHydrationUtterance = {
   // has 2+ real members. Null in a solo room, where bubbles keep using the
   // generated animal avatar instead.
   speakerImage: string | null;
+  // The sender's account badge as a wire value. The client validates it
+  // through readAccountBadgeKind, which filters to the currently supported
+  // badge kinds ('official'). Legacy or admin-only values pass through as-is.
+  speakerBadge?: string;
+  replyTo?: MessageReplyReference;
 };
 
 export type ConversationHydrationCursor = {
@@ -140,6 +159,10 @@ export type ConversationHydrationLeaveNotice = {
   name: string | null;
   handle: string | null;
   leftAtMs: number;
+  // Badge flags of the member who left (identityBadgeFlags, only when true):
+  // the notice names them, so an operator's name carries its label.
+  isOfficial?: true;
+  isOperator?: true;
 };
 
 // One AppConversationChannelInvite row (see its doc comment), for the client
@@ -154,6 +177,10 @@ export type ConversationHydrationInviteNotice = {
   invitedByName: string | null;
   invitedByHandle: string | null;
   invitedAtMs: number;
+  // Account badge of each named side, present only when that account has
+  // one (same kind values as ConversationHydrationUtterance.speakerBadge).
+  inviteeBadge?: AccountBadgeKind;
+  invitedByBadge?: AccountBadgeKind;
 };
 
 export type ConversationHydrationState = {
@@ -165,6 +192,12 @@ export type ConversationHydrationState = {
   oldestMessageCursor: ConversationHydrationCursor | null;
   leaveNotices: ConversationHydrationLeaveNotice[];
   inviteNotices: ConversationHydrationInviteNotice[];
+  // UI chrome like the notices above, not a message: true while the room has
+  // an ACTIVE, materialized member (a membership row with leftAt null) whose
+  // account is run by HashChat staff. Clients show the pinned "HashChat staff
+  // read and reply in this chat" disclosure from it, in 1:1 and group rooms
+  // alike. A pending invitee does not count until their row exists.
+  operatorDisclosure: boolean;
   // Client IDs of messages their sender unsent (see message-recall.ts). The
   // current page's placeholders only cover its own window, so this is what
   // lets an open room or a warm cache blank an older bubble too.
@@ -301,6 +334,10 @@ type ChannelMemberProfile = {
   // filterActiveMembers — except the ones that intentionally preserve a
   // departed member's presence: title, avatar, and isMultiMember.
   leftAt: Date | null;
+  // Account badge flags (display only, see identityBadgeFlags). isOperator
+  // also drives the hydration's operatorDisclosure.
+  isOfficial: boolean;
+  isOperator: boolean;
 };
 
 // Active-membership filter shared by every resolver that represents a
@@ -344,6 +381,8 @@ type PendingInviteeProfile = {
   defaultDisplayLanguage: string | null;
   nationality: string | null;
   primaryLanguages: string[];
+  isOfficial: boolean;
+  isOperator: boolean;
 };
 
 function resolveDefaultConversationLanguages(
@@ -424,6 +463,8 @@ async function listPendingInviteeProfilesByUserIds(
       defaultDisplayLanguage: true,
       nationality: true,
       primaryLanguages: true,
+      isOfficial: true,
+      isOperator: true,
     },
   });
   return new Map(rows.map((row) => {
@@ -446,6 +487,8 @@ async function listPendingInviteeProfilesByUserIds(
       defaultDisplayLanguage: resolvePersistedDisplayLanguage(row.defaultDisplayLanguage),
       nationality: primaryLanguages[0] ?? normalizedNationality,
       primaryLanguages,
+      isOfficial: row.isOfficial === true,
+      isOperator: row.isOperator === true,
     }];
   }));
 }
@@ -483,6 +526,8 @@ async function listChannelMembersByChannelId(
           defaultDisplayLanguage: true,
           nationality: true,
           primaryLanguages: true,
+          isOfficial: true,
+          isOperator: true,
         },
       },
     },
@@ -528,6 +573,8 @@ async function listChannelMembersByChannelId(
       lastReadAt: row.lastReadAt,
       joinedAt: row.joinedAt,
       leftAt: row.leftAt,
+      isOfficial: row.user.isOfficial === true,
+      isOperator: row.user.isOperator === true,
     });
     membersByChannelId.set(row.channelId, members);
   }
@@ -778,6 +825,9 @@ function resolveOtherMemberAvatars(
         imageCropScale: isBlockedCounterpart ? null : member.imageCropScale,
         imageCropX: isBlockedCounterpart ? null : member.imageCropX,
         imageCropY: isBlockedCounterpart ? null : member.imageCropY,
+        // Kept for a blocked counterpart too: the name stays visible, so its
+        // label must as well.
+        ...identityBadgeFlags(member),
       };
     });
 }
@@ -2372,6 +2422,44 @@ export async function markConversationChannelRead(args: {
   return result.count > 0;
 }
 
+export type ConversationReadReceiptMember = {
+  userId: string;
+  joinedAtMs: number;
+  lastReadAtMs: number | null;
+};
+
+// Per-member read cursors for the room's per-message "N unread" badge. Only
+// active members count: someone who left no longer owes the room a read.
+// Membership-gated like the other per-conversation reads (null → 404).
+export async function listConversationReadReceipts(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<{ sessionKey: string; members: ConversationReadReceiptMember[] } | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: {
+      sessionKey: true,
+      members: {
+        where: { leftAt: null },
+        select: { userId: true, joinedAt: true, lastReadAt: true },
+      },
+    },
+  });
+  if (!record) return null;
+  return {
+    sessionKey: record.sessionKey,
+    members: record.members.map((member) => ({
+      userId: member.userId,
+      joinedAtMs: member.joinedAt.getTime(),
+      lastReadAtMs: member.lastReadAt ? member.lastReadAt.getTime() : null,
+    })),
+  };
+}
+
 export type ConversationMemberSummary = {
   userId: string;
   name: string | null;
@@ -2393,6 +2481,9 @@ export type ConversationMemberSummary = {
   // the client never has real identity to accidentally render — it should
   // substitute its own generic placeholder and refuse to open the profile.
   blocked: boolean;
+  // Account badge flags (identityBadgeFlags), each present only when true.
+  isOfficial?: true;
+  isOperator?: true;
 };
 
 // Membership-gated: returns null (not an empty list) when the caller isn't a
@@ -2453,6 +2544,7 @@ export async function listConversationMembersForUser(args: {
       nationality: member.nationality,
       primaryLanguages: member.primaryLanguages,
       blocked,
+      ...identityBadgeFlags(member),
     };
   });
 
@@ -2468,6 +2560,7 @@ export async function listConversationMembersForUser(args: {
     nationality: profile.nationality,
     primaryLanguages: profile.primaryLanguages,
     blocked: false,
+    ...identityBadgeFlags(profile),
   }));
 
   return [...realMemberSummaries, ...pendingMemberSummaries];
@@ -2635,6 +2728,110 @@ export async function getConversationHydrationStateForUser(args: {
     viewerUserId: args.userId,
     before: args.before,
   });
+}
+
+const CONVERSATION_EXPORT_PAGE_SIZE = 1000;
+// A room this long would take minutes to read anyway; the export stops here
+// rather than hold a request open indefinitely.
+export const CONVERSATION_EXPORT_MESSAGE_LIMIT = 50_000;
+
+// Every visible message of a room the user is an active member of, oldest
+// first, for the "Export chat" text file. Unsent messages are left out, as
+// they are for every other reader. Null when the user cannot read the room.
+export async function getConversationExportTranscriptForUser(args: {
+  conversationId: string;
+  userId: string;
+  locale?: string;
+}): Promise<ConversationExportTranscript | null> {
+  const conversationRecord = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: conversationChannelSelect,
+  });
+  if (!conversationRecord) return null;
+
+  const members = (await listChannelMembersByChannelId([conversationRecord.id])).get(conversationRecord.id) ?? [];
+  const nameByUserId = new Map(members.map((member) => [
+    member.userId,
+    member.name?.trim() || member.handle?.trim() || null,
+  ]));
+
+  const messages: ConversationExportMessage[] = [];
+  let cursorId: string | null = null;
+  while (messages.length < CONVERSATION_EXPORT_MESSAGE_LIMIT) {
+    const page: Array<{
+      id: string;
+      userId: string | null;
+      sourceLanguage: string | null;
+      createdAt: Date;
+      metadata: Prisma.JsonValue;
+      contents: Array<{ contentType: string; language: string; text: string }>;
+    }> = await prisma.appMessage.findMany({
+      where: { sessionKey: conversationRecord.sessionKey, ...buildVisibleMessageWhere() },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: Math.min(CONVERSATION_EXPORT_PAGE_SIZE, CONVERSATION_EXPORT_MESSAGE_LIMIT - messages.length),
+      ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+      select: {
+        id: true,
+        userId: true,
+        sourceLanguage: true,
+        createdAt: true,
+        metadata: true,
+        contents: {
+          where: buildVisibleMessageContentWhere(),
+          orderBy: { createdAt: "asc" },
+          select: { contentType: true, language: true, text: true },
+        },
+      },
+    });
+
+    for (const message of page) {
+      const sourceLanguage = (message.sourceLanguage || "").trim();
+      const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
+      const sourceContent = sourceContents.find((content) => content.language === sourceLanguage)
+        || sourceContents[0]
+        || null;
+      const translations: Record<string, string> = {};
+      for (const content of message.contents) {
+        if (content.contentType !== "TRANSLATION_FINAL") continue;
+        const language = content.language.trim();
+        const text = content.text.trim();
+        if (language && text) translations[language] = text;
+      }
+      const metadata = readJsonObject(message.metadata);
+
+      messages.push({
+        createdAt: message.createdAt,
+        speakerName: message.userId ? nameByUserId.get(message.userId) ?? null : null,
+        sourceLanguage,
+        sourceText: sourceContent?.text?.trim() || "",
+        translations,
+        hasImage: Boolean(readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null)),
+      });
+    }
+
+    if (page.length < CONVERSATION_EXPORT_PAGE_SIZE) break;
+    cursorId = page[page.length - 1].id;
+  }
+
+  const title = resolveViewerFacingTitle(
+    conversationRecord.title,
+    members,
+    args.userId,
+    [],
+    conversationRecord.userEditedTitleAt,
+  ).trim() || formatConversationChannelTitle(conversationRecord.sequenceNumber, args.locale);
+
+  return {
+    title,
+    participantNames: filterActiveMembers(members)
+      .map((member) => nameByUserId.get(member.userId))
+      .filter((name): name is string => Boolean(name)),
+    messages,
+  };
 }
 
 // Public "spectate" link lookup — gates on shareToken match AND
@@ -3016,6 +3213,11 @@ async function getConversationHydrationStateForRecord(args: {
   const imageByUserId = new Map((members ?? []).map((member) => [member.userId, member.image]));
   const nameByUserId = new Map((members ?? []).map((member) => [member.userId, member.name]));
   const handleByUserId = new Map((members ?? []).map((member) => [member.userId, member.handle]));
+  const badgeByUserId = new Map((members ?? []).map((member) => [member.userId, resolveAccountBadge(member)]));
+  // See ConversationHydrationState.operatorDisclosure. Uses the same
+  // (snapshot-adjusted) member list as the rest of this state, so a share
+  // snapshot discloses exactly the operators who were in the room then.
+  const operatorDisclosure = filterActiveMembers(members).some((member) => member.isOperator);
   const blockedCounterpartByChannelId = await resolveBlockedCounterpartUserIdByChannelId(
     args.viewerUserId,
     membersByChannelId,
@@ -3027,6 +3229,9 @@ async function getConversationHydrationStateForRecord(args: {
     ...(rawMembers ?? []).flatMap((member) => member.selectedLanguages ?? []),
   ];
 
+  const recalledReplyTargetIds = new Set(
+    recalledMessages.map((message) => (message.clientMessageId || "").trim() || `db-${message.id}`),
+  );
   const utterances: ConversationHydrationUtterance[] = orderedMessages.map((message) => {
     const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
     const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
@@ -3045,6 +3250,8 @@ async function getConversationHydrationStateForRecord(args: {
     const metadata = readJsonObject(message.metadata);
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
     const recalled = readMessageRecalledAtMs(metadata) !== null;
+    // A quote of a message its sender later unsent must not keep its text.
+    const replyTo = recalled ? null : normalizeMessageReplyReference(metadata?.replyTo);
     const originalText = recalled ? "" : sourceContent?.text?.trim() || "";
     const storedTargetLanguages = readStringArray(metadata?.translationTargetLanguages);
     // Repairs legacy rows stored as a collapsed `zh` and keeps every Chinese
@@ -3072,6 +3279,10 @@ async function getConversationHydrationStateForRecord(args: {
     // distinguish detected voices — that switch happens only once the
     // invitee actually materializes into a real member.
     const isMultiMemberAtMessage = countActiveRealMembersAt(realMembers, message.createdAt.getTime()) >= 2;
+    // Same gate as speakerName below: the badge labels the sender's name.
+    const speakerBadge = (isMultiMemberAtMessage || image) && message.userId
+      ? badgeByUserId.get(message.userId) ?? null
+      : null;
 
     return {
       id: (message.clientMessageId || "").trim() || `db-${message.id}`,
@@ -3091,6 +3302,7 @@ async function getConversationHydrationStateForRecord(args: {
           && Number.isSafeInteger(metadata.orderStartedAtMs) && metadata.orderStartedAtMs > 0
           ? metadata.orderStartedAtMs : message.createdAt.getTime(),
         serverMessageId: message.id,
+        serverPersistedAtMs: message.createdAt.getTime(),
       } : {}),
       speaker: readStringValue(clientMetadata?.speaker) ?? readStringValue(metadata?.speaker),
       speakerAvatarSeed:
@@ -3115,6 +3327,10 @@ async function getConversationHydrationStateForRecord(args: {
       speakerImage: (isMultiMemberAtMessage || image) && message.userId && message.userId !== blockedCounterpartUserId
         ? (imageByUserId.get(message.userId) ?? null)
         : null,
+      ...(speakerBadge ? { speakerBadge } : {}),
+      ...(replyTo ? {
+        replyTo: recalledReplyTargetIds.has(replyTo.id) ? toRecalledMessageReplyReference(replyTo) : replyTo,
+      } : {}),
     };
   }).filter((utterance) => utterance.originalText.length > 0 || utterance.recalled === true);
 
@@ -3126,19 +3342,26 @@ async function getConversationHydrationStateForRecord(args: {
     ? []
     : inviteRecords;
 
-  const inviteNotices: ConversationHydrationInviteNotice[] = effectiveInviteRecords.map((invite) => ({
-    inviteeUserId: invite.inviteeUserId,
-    inviteeName: nameByUserId.get(invite.inviteeUserId)
-      ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.name
-      ?? null,
-    inviteeHandle: handleByUserId.get(invite.inviteeUserId)
-      ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.handle
-      ?? null,
-    invitedByUserId: invite.invitedByUserId,
-    invitedByName: nameByUserId.get(invite.invitedByUserId) ?? null,
-    invitedByHandle: handleByUserId.get(invite.invitedByUserId) ?? null,
-    invitedAtMs: invite.createdAt.getTime(),
-  }));
+  const inviteNotices: ConversationHydrationInviteNotice[] = effectiveInviteRecords.map((invite) => {
+    const inviteeBadge = badgeByUserId.get(invite.inviteeUserId)
+      ?? resolveAccountBadge(pendingInviteeProfileById.get(invite.inviteeUserId));
+    const invitedByBadge = badgeByUserId.get(invite.invitedByUserId) ?? null;
+    return {
+      inviteeUserId: invite.inviteeUserId,
+      inviteeName: nameByUserId.get(invite.inviteeUserId)
+        ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.name
+        ?? null,
+      inviteeHandle: handleByUserId.get(invite.inviteeUserId)
+        ?? pendingInviteeProfileById.get(invite.inviteeUserId)?.handle
+        ?? null,
+      invitedByUserId: invite.invitedByUserId,
+      invitedByName: nameByUserId.get(invite.invitedByUserId) ?? null,
+      invitedByHandle: handleByUserId.get(invite.invitedByUserId) ?? null,
+      invitedAtMs: invite.createdAt.getTime(),
+      ...(inviteeBadge ? { inviteeBadge } : {}),
+      ...(invitedByBadge ? { invitedByBadge } : {}),
+    };
+  });
 
   // This endpoint already loaded the room's messages (including their
   // translations) to build `utterances` below — reuse the last one for the
@@ -3245,8 +3468,10 @@ async function getConversationHydrationStateForRecord(args: {
         name: member.name,
         handle: member.handle,
         leftAtMs: (member.leftAt as Date).getTime(),
+        ...identityBadgeFlags(member),
       })),
     inviteNotices,
+    operatorDisclosure,
     recalledMessageIds: recalledMessages.map((message) => (message.clientMessageId || "").trim() || `db-${message.id}`),
   };
 }

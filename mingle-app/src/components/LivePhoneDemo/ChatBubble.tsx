@@ -23,7 +23,11 @@ import ConversationImageBubble from './ConversationImageBubble'
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
 import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
 import { MessageRecallScope } from './MessageRecall'
+import { MessageReadReceipt } from './MessageReadReceipts'
+import { MessageReplyQuote, MessageReplyScope } from './MessageReply'
+import { buildMessageReplyReference } from '@/lib/message-reply'
 import { messageRecallCopy } from '@/lib/message-recall'
+import type { MessageReplyReference } from '@/lib/message-reply'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
@@ -32,6 +36,9 @@ import {
   type LivePhoneDemoBubbleDisplayMode,
 } from './live-phone-demo.bubble-display'
 import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-display-copy'
+import ChatAccountBadge from './ChatAccountBadge'
+import { readAccountBadgeKind } from './chat-account-badge.logic'
+import type { AccountBadgeKind } from '@/lib/account-badge'
 import {
   arePlaybackKeyListsEqual,
   buildOriginalBubblePlaybackKey as buildOriginalPlaybackKey,
@@ -149,6 +156,11 @@ export interface Utterance {
   // what makes a shared room read as "a conversation with a person" rather
   // than a solo interpreter session.
   speakerImage?: string | null
+  // The sender's account badge ('operator' = run by HashChat staff, 'official'
+  // = the HashChat team's account), shown next to speakerName. Comes from
+  // hydration, committed live utterances and live previews (the latter from
+  // the sender's signed writer token).
+  speakerBadge?: AccountBadgeKind | null
   originalText: string
   // The original rendered in the script of its Chinese variant (Traditional
   // for zh-TW, Simplified for zh-CN), supplied by the server when that
@@ -165,6 +177,10 @@ export interface Utterance {
   createdAtMs?: number
   serverCreatedAtMs?: number
   serverMessageId?: string
+  // Server-clock storage time; see ConversationHydrationUtterance.
+  serverPersistedAtMs?: number
+  // Snapshot of the message this one replies to (see message-reply.ts).
+  replyTo?: MessageReplyReference
 }
 
 interface ChatBubbleProps {
@@ -837,6 +853,8 @@ function ChatBubble({
   const isCounterpartMessage = isSharedRoomMember && !isOwnMessage
   const canOpenSpeakerProfile = isSharedRoomMember && typeof onOpenProfile === 'function'
   const speakerName = utterance.speakerName?.trim() || ''
+  // Labels the sender's NAME, so it follows the same shared-room gate.
+  const speakerBadge = isSharedRoomMember ? readAccountBadgeKind(utterance.speakerBadge) : null
   const displayLanguageResolver = createDisplayLanguageResolver(utterance, languageOrder)
   const displayLanguageKey = displayLanguageResolver.keyOf
   const originalDisplayLanguage = displayLanguageResolver.originalLanguage
@@ -1090,7 +1108,7 @@ function ChatBubble({
   const shouldShowCollapsedHeaderLanguages = !messageImage && !isRecalled && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
   const shouldShowSpeakerHeader = !isOwnMessage
     && isSharedRoomMember
-    && (Boolean(speakerName) || shouldShowCollapsedHeaderLanguages)
+    && (Boolean(speakerName) || Boolean(speakerBadge) || shouldShowCollapsedHeaderLanguages)
   const speakerHeader = shouldShowSpeakerHeader ? (
     <div
       data-chat-speaker-header
@@ -1102,6 +1120,11 @@ function ChatBubble({
           className="h-5 min-w-0 max-w-[12rem] shrink-0 truncate text-sm font-medium leading-5 text-gray-500"
         >
           {speakerName}
+        </span>
+      )}
+      {speakerBadge && (
+        <span data-chat-speaker-badge className="ml-0.5 mr-0.5 inline-flex shrink-0 items-center">
+          <ChatAccountBadge kind={speakerBadge} locale={uiLocale} tone="dark" />
         </span>
       )}
       {shouldShowCollapsedHeaderLanguages && (
@@ -1303,6 +1326,16 @@ function ChatBubble({
       data-chat-bubble-other-meta={isOwnMessage ? undefined : true}
       className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
+      {!isDraft && !isRecalled && (
+        <MessageReadReceipt
+          senderUserId={utterance.speakerUserId}
+          // Not yet stored → nobody can have read it; createdAtMs (device
+          // clock) is only a stand-in until the server time arrives.
+          createdAtMs={utterance.serverPersistedAtMs ?? utterance.createdAtMs}
+          locale={uiLocale}
+          align={isOwnMessage ? 'right' : 'left'}
+        />
+      )}
       {bubbleTimestamp}
       {!messageImage && !isRecalled && bubbleControls}
     </div>
@@ -1319,6 +1352,9 @@ function ChatBubble({
         : 'flex min-w-0 flex-1 flex-col items-start gap-px'}
     >
       {speakerHeader}
+      {utterance.replyTo && !isRecalled && (
+        <MessageReplyQuote reference={utterance.replyTo} align={isOwnMessage ? 'right' : 'left'} />
+      )}
       <div
         data-chat-bubble-line
         className="flex min-w-0 max-w-full items-end gap-1"
@@ -1344,8 +1380,11 @@ function ChatBubble({
     : <>{avatarColumn}{messageColumn}</>
   // A solo-era turn carries no speakerUserId (see isOwnMessage), whoever sent it, so the server's own flag decides there.
   const canRecall = !isDraft && !isRecalled && (utterance.sentByViewer === true || isOwnMessage)
+  const replyReference = isDraft || isRecalled ? null : buildMessageReplyReference(utterance)
   const reactiveContent = <MessageReactionScope id={isDraft || isRecalled ? undefined : utterance.id} locale={uiLocale}>
-    <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>{bubbleContent}</MessageRecallScope>
+    <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>
+      <MessageReplyScope reference={replyReference}>{bubbleContent}</MessageReplyScope>
+    </MessageRecallScope>
   </MessageReactionScope>
 
   if (!shouldAnimateEntrance) {
@@ -1398,12 +1437,15 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.sentByViewer !== nu.sentByViewer) return false
     if (pu.speakerUserId !== nu.speakerUserId) return false
     if (pu.speakerImage !== nu.speakerImage) return false
+    if (pu.speakerBadge !== nu.speakerBadge) return false
     if (pu.createdAtMs !== nu.createdAtMs) return false
+    if (pu.serverPersistedAtMs !== nu.serverPersistedAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false
     if (pu.sourceLanguagesMixed !== nu.sourceLanguagesMixed) return false
     if (pu.sourceTextHasForeignScript !== nu.sourceTextHasForeignScript) return false
     if (pu.translationStatus !== nu.translationStatus) return false
+    if (pu.replyTo?.id !== nu.replyTo?.id || pu.replyTo?.recalled !== nu.replyTo?.recalled) return false
     if (pu.targetLanguages !== nu.targetLanguages) {
       const pt = pu.targetLanguages || []
       const nt = nu.targetLanguages || []

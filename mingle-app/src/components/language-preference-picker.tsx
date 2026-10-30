@@ -1,5 +1,6 @@
 "use client";
 
+import { resolveAccessibilityCopy } from "@/i18n/accessibility-copy";
 import {
   buildLanguageSelectorFeaturedItems,
   buildLanguageSelectorItems,
@@ -149,7 +150,7 @@ export default function LanguagePreferencePicker({
         className="flex min-h-14 items-center gap-2 overflow-x-auto rounded-[18px] border border-gray-200 bg-white px-3 py-2 shadow-sm"
         aria-labelledby={headingId}
       >
-        <span id={headingId} className="sr-only">Selected languages</span>
+        <span id={headingId} className="sr-only">{resolveAccessibilityCopy(uiLocale).selectedLanguages}</span>
         {normalizedSelectedLanguages.map((code) => {
           const languageName = getSttLanguageDisplayName(code, uiLocale) || code;
           const canRemove = normalizedSelectedLanguages.length > minLanguages && !disabled;

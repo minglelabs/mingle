@@ -55,6 +55,19 @@ test('ConversationEventBus only pushes to sockets subscribed to that sessionKey'
     assert.equal(b.sent.length, 0);
 });
 
+test('ConversationEventBus sends a light read_receipt frame to room subscribers', () => {
+    const bus = new ConversationEventBus();
+    const a = new FakeSocket();
+    const b = new FakeSocket();
+    bus.subscribe('sess_a', a as unknown as import('ws').WebSocket);
+    bus.subscribe('sess_b', b as unknown as import('ws').WebSocket);
+
+    bus.publishReadReceipt('sess_a');
+
+    assert.deepEqual(a.sent.map((frame) => JSON.parse(frame)), [{ type: 'read_receipt', sessionKey: 'sess_a' }]);
+    assert.equal(b.sent.length, 0);
+});
+
 test('ConversationEventBus skips closed sockets and cleans up on unsubscribe', () => {
     const bus = new ConversationEventBus();
     const socket = new FakeSocket();

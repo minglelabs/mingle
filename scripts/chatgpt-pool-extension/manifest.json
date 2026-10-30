@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Mingle ChatGPT Pool",
+  "version": "1.2.0",
+  "description": "Lends this profile's ChatGPT to the local pool server (scripts/chatgpt-pool.mjs) on 127.0.0.1:10320.",
+  "permissions": ["tabs", "scripting", "storage", "alarms"],
+  "host_permissions": ["https://chatgpt.com/*", "http://127.0.0.1:10320/*"],
+  "background": { "service_worker": "background.js" }
+}

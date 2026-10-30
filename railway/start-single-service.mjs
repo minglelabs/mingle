@@ -339,11 +339,16 @@ function shutdown(exitCode = 0) {
 process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
-spawnService('mingle-app', 'pnpm', ['--dir', '/app/mingle-app', 'start'], {
+// The image carries Next's standalone server (see Dockerfile.railway).
+spawnService('mingle-app', 'node', ['/app/mingle-app/server.js'], {
   PORT: String(appPort),
 });
 spawnService('mingle-stt', 'pnpm', ['--dir', '/app/mingle-stt', 'start'], {
   PORT: String(sttPort),
+  // Coin metering talks to the app inside this container unless overridden.
+  // It stays inactive until COIN_INTERNAL_SECRET is set.
+  COIN_CHARGE_URL: process.env.COIN_CHARGE_URL
+    || `http://${targetHost}:${appPort}/api/internal/coins/charge`,
 });
 spawnService('mingle-messaging', 'pnpm', ['--dir', '/app/mingle-messaging', 'start'], {
   PORT: String(messagingPort),

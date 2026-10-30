@@ -14,6 +14,7 @@ import {
   listChannelMemberUserIdsBySessionKey,
   listConversationMembersForUser,
   markConversationChannelRead,
+  listConversationReadReceipts,
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
   updateConversationChannelSelectedLanguages,
@@ -25,11 +26,19 @@ import {
   setConversationShareEnabled,
   refreshConversationShareSnapshot,
   joinConversationChannelViaShareToken,
+  getConversationExportTranscriptForUser,
 } from "@/lib/app-conversations";
+import {
+  buildConversationExportFileName,
+  formatConversationExportText,
+  resolveExportTimeZone,
+} from "@/lib/conversation-export";
+import { resolveConversationExportCopy } from "@/i18n/conversation-export-copy";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { mintConversationRealtimeToken, mintConversationLiveWriterToken, notifyConversationMessage } from "@/server/conversation-realtime";
+import { resolveAccountBadge } from "@/lib/account-badge";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -257,6 +266,14 @@ export async function patchConversationResponse(
     if (!markedRead) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
+    // Other members' open rooms refresh their per-message unread badges.
+    const sessionKey = await getConversationSessionKeyForMember({
+      conversationId,
+      userId: resolvedUser.userId,
+    });
+    if (sessionKey) {
+      await notifyConversationMessage(sessionKey, [], undefined, { timeoutMs: 1500, readReceipt: true });
+    }
   }
 
   if (!conversation) {
@@ -361,8 +378,16 @@ export async function getConversationRealtimeTokenResponse(
   let writerToken: string | null = null;
   if (request.nextUrl.searchParams.get('live') === '1'
     && !(await isMessageSenderBlockedInConversation({ sessionKey, userId: resolvedUser.userId }))) {
-    const sender = await prisma.user.findUnique({ where: { id: resolvedUser.userId }, select: { name: true } });
-    writerToken = mintConversationLiveWriterToken(sessionKey, resolvedUser.userId, sender?.name ?? null);
+    const sender = await prisma.user.findUnique({
+      where: { id: resolvedUser.userId },
+      select: { name: true, isOfficial: true, isOperator: true },
+    });
+    writerToken = mintConversationLiveWriterToken(
+      sessionKey,
+      resolvedUser.userId,
+      sender?.name ?? null,
+      resolveAccountBadge(sender),
+    );
   }
   // Realtime push is unconfigured in this environment — not an error the
   // caller needs to see, since the client falls back to polling.
@@ -393,6 +418,85 @@ export async function getConversationMembersResponse(
   }
 
   return NextResponse.json({ members });
+}
+
+export async function getConversationReadReceiptsResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const receipts = await listConversationReadReceipts({
+    conversationId,
+    userId: resolvedUser.userId,
+  });
+
+  if (!receipts) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  return NextResponse.json(
+    { members: receipts.members },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
+}
+
+// The room as a .txt file: every visible message with its translation into the
+// reader's language. `locale` picks the file's labels, `lang` the translation
+// and `tz` the time zone of the timestamps; each falls back on its own.
+export async function getConversationExportResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const params = request.nextUrl.searchParams;
+  const locale = (params.get("locale") || "en").trim();
+  const displayLanguage = sanitizeSttLanguageSelection([params.get("lang") || ""])[0] ?? "";
+  const timeZone = resolveExportTimeZone(params.get("tz"));
+
+  const transcript = await getConversationExportTranscriptForUser({
+    conversationId,
+    userId: resolvedUser.userId,
+    locale,
+  });
+  if (!transcript) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const exportedAt = new Date();
+  const text = formatConversationExportText({
+    transcript,
+    copy: resolveConversationExportCopy(locale),
+    displayLanguage,
+    timeZone,
+    exportedAt,
+  });
+  const fileName = buildConversationExportFileName(transcript.title, exportedAt, timeZone);
+
+  return new NextResponse(text, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Content-Disposition": `attachment; filename="HashChat-chat.txt"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      "Cache-Control": "private, no-store",
+    },
+  });
 }
 
 export async function postConversationMembersResponse(
