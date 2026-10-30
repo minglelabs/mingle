@@ -7,6 +7,22 @@
 3. 공통 로직은 handler 모듈을 공유합니다.
 4. 현재 단계는 `legacy + iOS v1.0.3 + Android v1.0.3`를 운영합니다.
 
+## Supported Namespaces (2026-10-30~)
+
+아래 "Current Phase" 이하 섹션은 v1.0.3 시절 기록입니다. 현재 기준은 이 섹션이 우선합니다.
+
+- 라우트 트리가 있는 버전 namespace는 `ios/v2.2.0`, `android/v2.2.0` 뿐입니다.
+- `v2.2.1`, `v2.3.0`은 `mingle-app/next.config.mjs` rewrite로 v2.2.0 트리를 씁니다.
+- 2.2.0 미만(`v1.x`, `v2.0.x`, `v2.1.x`) 앱은 강제 업데이트 대상입니다. 이 버전들의 라우트 트리는 삭제했고,
+  `/api/{ios|android}/{v1.x.y|v2.0.x|v2.1.x}/client/version-policy` 만 rewrite로 v2.2.0 핸들러에 연결됩니다.
+  - 판정은 URL이 아니라 요청 body의 `clientVersion`과 `*_CLIENT_MIN_SUPPORTED_VERSION`으로 하므로 응답은 `force_update`입니다.
+  - 그 외 2.2.0 미만 경로는 의도적으로 404입니다. 무버전 경로로 fallback 하지 않습니다.
+  - 전제: 운영 env `IOS_CLIENT_MIN_SUPPORTED_VERSION`, `ANDROID_CLIENT_MIN_SUPPORTED_VERSION` 이 `2.2.0` 이상이어야 합니다.
+- v2.2.0 라우트는 다른 버전 namespace 라우트를 re-export 하지 않습니다. 무버전 핸들러를 re-export 하거나,
+  예전부터 플랫폼 컨트롤러(`controllers/{ios,android}/v1.1.4/*`)에 고정된 라우트는 그 연결을 파일 안에 직접 둡니다.
+  가드: `src/app/api/namespace-reexport.v2_2_0.guard.test.ts`, `src/app/api/v2-2.namespace-routing.test.ts`,
+  rewrite 검증: `src/app/api/namespace-routing.contract.test.ts`.
+
 ## URL Contract (Current Phase)
 
 - Legacy (무버전): `/api/{existing-path}`
