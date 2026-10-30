@@ -2,7 +2,7 @@
 
 import { resolveBackgroundPreset } from "@/lib/post-backgrounds";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 export type FeedPostViewColors = {
   background: string;
@@ -80,6 +80,15 @@ export type FeedPostViewProps = {
   onImageLoad?: React.ReactEventHandler<HTMLImageElement>;
   /** Off-screen cards load lazily; the active and next card pass "eager". */
   imageLoading?: "eager" | "lazy";
+  /**
+   * Decode this card's shown photo now (it is one swipe away), so the swipe
+   * that brings it on screen does not paint it blank first.
+   */
+  decodeImage?: boolean;
+  /** Several photos: the one to open on (kept across an unmount). Read at mount only. */
+  initialPhotoIndex?: number;
+  /** Several photos: the one on screen changed. */
+  onPhotoIndexChange?: (index: number) => void;
   /** The collapsed 3-line snippet of an image post, measured for overflow. */
   previewClampRef?: React.Ref<HTMLParagraphElement>;
   /** Whether the body scroll region is interactive (real card) or static (preview). */
@@ -122,6 +131,9 @@ export default function FeedPostView({
   images,
   onImageLoad,
   imageLoading = "lazy",
+  decodeImage = false,
+  initialPhotoIndex = 0,
+  onPhotoIndexChange,
   previewClampRef,
   bodyScrollRef,
   onBodyScroll,
@@ -131,6 +143,7 @@ export default function FeedPostView({
     () => resolveViewColors(backgroundKey, Boolean(imageUrl)),
     [backgroundKey, imageUrl],
   );
+  const decodeRef = useDecodeAheadRef(decodeImage);
 
   return (
     <article
@@ -143,7 +156,13 @@ export default function FeedPostView({
 
       {/* Several photos: a sideways carousel, each photo whole as below. */}
       {imageUrl && images && images.length > 1 ? (
-        <PhotoCarousel images={images} loading={imageLoading} />
+        <PhotoCarousel
+          images={images}
+          loading={imageLoading}
+          decodeImage={decodeImage}
+          initialIndex={initialPhotoIndex}
+          onIndexChange={onPhotoIndexChange}
+        />
       ) : null}
 
       {/* Image backdrop: whole photo (object-contain, never cropped); the
@@ -171,6 +190,7 @@ export default function FeedPostView({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 key={imageAttempt}
+                ref={decodeRef}
                 src={imageUrl}
                 alt=""
                 data-feed-image
@@ -323,11 +343,58 @@ export default function FeedPostView({
   );
 }
 
+/**
+ * Stand-in for a feed card outside the mounted window (`feed-window.ts`): the
+ * card's height and snap point and the post's background, nothing else (no
+ * photo, no text, no handlers). Swiping and every index-based scroll position
+ * behave as if the card were there; it is not an overlay and takes no touch
+ * of its own, so a drag over it scrolls the feed as usual.
+ */
+export const FeedPostPlaceholder = memo(function FeedPostPlaceholder({
+  cardHeight,
+  backgroundKey,
+}: {
+  cardHeight: string;
+  backgroundKey: string;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      data-feed-placeholder
+      className="w-full shrink-0 snap-start snap-always"
+      style={{ height: cardHeight, background: resolveBackgroundPreset(backgroundKey).background }}
+    />
+  );
+});
+
+/**
+ * A ref that asks the browser to decode a photo now. The cards one swipe away
+ * are mounted with their photos loading eagerly; decoding them ahead means
+ * the swipe that brings one on screen does not paint a blank frame first.
+ */
+function useDecodeAheadRef(enabled: boolean) {
+  return useCallback(
+    (img: HTMLImageElement | null) => {
+      if (!enabled || !img || typeof img.decode !== "function") return;
+      img.decode().catch(() => {
+        // Failed or replaced photo: the normal paint path (and its error state) handles it.
+      });
+    },
+    [enabled],
+  );
+}
+
 /** CSS that shows a photo whole inside its container, keeping its ratio. */
 function photoFit(aspect: string | null): React.CSSProperties | undefined {
   return aspect
     ? { aspectRatio: aspect, width: `min(100cqw, calc(100cqh * (${aspect})))`, height: "auto", maxHeight: "100%" }
     : undefined;
+}
+
+/** A photo index kept for a post that may since have fewer photos. */
+export function clampPhotoIndex(index: number, count: number): number {
+  if (!Number.isFinite(index) || count <= 0) return 0;
+  return Math.min(count - 1, Math.max(0, Math.round(index)));
 }
 
 /**
@@ -338,32 +405,51 @@ function photoFit(aspect: string | null): React.CSSProperties | undefined {
 function PhotoCarousel({
   images,
   loading,
+  decodeImage,
+  initialIndex,
+  onIndexChange,
 }: {
   images: ReadonlyArray<{ url: string; aspect: string | null }>;
   loading: "eager" | "lazy";
+  decodeImage: boolean;
+  initialIndex: number;
+  onIndexChange?: (index: number) => void;
 }) {
-  const [index, setIndex] = useState(0);
+  // A remounted card opens on the photo it showed before.
+  const [startIndex] = useState(() => clampPhotoIndex(initialIndex, images.length));
+  const [index, setIndex] = useState(startIndex);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const decodeRef = useDecodeAheadRef(decodeImage);
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (el && startIndex > 0) el.scrollLeft = startIndex * el.clientWidth;
+  }, [startIndex]);
   return (
     <>
       <div
+        ref={scrollerRef}
         className="no-scrollbar absolute inset-0 flex snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain"
         data-feed-carousel
         onScroll={(e) => {
           const el = e.currentTarget;
-          setIndex(Math.min(images.length - 1, Math.max(0, Math.round(el.scrollLeft / Math.max(1, el.clientWidth)))));
+          const next = Math.min(images.length - 1, Math.max(0, Math.round(el.scrollLeft / Math.max(1, el.clientWidth))));
+          if (next === index) return;
+          setIndex(next);
+          onIndexChange?.(next);
         }}
       >
         {images.map((image, i) => (
           <div key={image.url} className="relative flex h-full w-full shrink-0 snap-center items-center justify-center [container-type:size]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              ref={i === index ? decodeRef : undefined}
               src={image.url}
               alt=""
               data-feed-image
               className="h-full w-full object-contain"
               style={photoFit(image.aspect)}
               draggable={false}
-              loading={i === 0 ? loading : "lazy"}
+              loading={i === startIndex ? loading : "lazy"}
               decoding="async"
             />
           </div>

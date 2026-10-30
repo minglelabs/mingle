@@ -32,6 +32,7 @@ import { readOnlyPostKind } from "@/components/feed/read-only-post";
 import { useFeedFollow, type FollowError } from "@/components/feed/use-feed-follow";
 import { useFeedLike, type LikeError, type LikeMethod, type LikeState } from "@/components/feed/use-feed-like";
 import { shouldToastTranslateFailure, useFeedTranslate } from "@/components/feed/use-feed-translate";
+import type { FeedPostMemory, FeedReadProgress, FeedTranslateChoice } from "@/components/feed/feed-card-memory";
 import {
   Check,
   ChevronDown,
@@ -64,8 +65,22 @@ export type FeedPostCardProps = {
    * the "read" dwell clock only (the seen-view rule lives in the shell).
    */
   isActive?: boolean;
+  /** Decode the photo now: this card is one swipe away from the screen. */
+  decodeImage?: boolean;
   /** Content-free analytics context of this appearance; null = no events. */
   analytics?: FeedPostContext | null;
+  /**
+   * This post's earlier choices (translate, flag chip, photo on screen), kept
+   * by the shell because cards far from the screen are unmounted. Read at
+   * mount only.
+   */
+  restoreMemory?: FeedPostMemory | null;
+  /** Keeps a changed choice for a remount (may be called after an unmount). */
+  onMemoryChange?: (patch: FeedPostMemory) => void;
+  /** This appearance's "read" analytics progress before an unmount. Read at mount only. */
+  restoreReadProgress?: FeedReadProgress | null;
+  /** Keeps the "read" progress when the card unmounts. */
+  onReadProgressChange?: (progress: FeedReadProgress) => void;
   onExpandStateChange?: (expanded: boolean, scrollTop: number) => void;
   onRequireLogin: (postId: string) => void;
   onOpenComments: (postId: string) => void;
@@ -96,8 +111,13 @@ export default function FeedPostCard({
   restoreExpanded = false,
   restoreScrollTop = 0,
   eagerImage = false,
+  decodeImage = false,
   isActive = false,
   analytics = null,
+  restoreMemory = null,
+  onMemoryChange,
+  restoreReadProgress = null,
+  onReadProgressChange,
   onExpandStateChange,
   onRequireLogin,
   onOpenComments,
@@ -134,6 +154,19 @@ export default function FeedPostCard({
   }, []);
 
   const requireLogin = useCallback(() => onRequireLogin(post.id), [onRequireLogin, post.id]);
+
+  // ── Kept across an unmount (the shell unmounts cards far from the screen) ──
+  const [mountMemory] = useState(() => restoreMemory);
+  const memoryChangeRef = useRef(onMemoryChange);
+  useEffect(() => {
+    memoryChangeRef.current = onMemoryChange;
+  });
+  const remember = useCallback((patch: FeedPostMemory) => memoryChangeRef.current?.(patch), []);
+  const rememberTranslateChoice = useCallback(
+    (choice: FeedTranslateChoice) => remember({ translation: choice }),
+    [remember],
+  );
+  const rememberPhotoIndex = useCallback((photoIndex: number) => remember({ photoIndex }), [remember]);
 
   // ── Like ──
   const handleLikeError = useCallback(
@@ -173,6 +206,8 @@ export default function FeedPostCard({
     viewerLanguage,
     isSignedIn,
     onRequireLogin: requireLogin,
+    restoredChoice: mountMemory?.translation,
+    onChoiceChange: rememberTranslateChoice,
   });
   // Toast only when a request the viewer made fails — never because the DTO
   // arrived with `failed`.
@@ -189,10 +224,19 @@ export default function FeedPostCard({
   // expanded body, so all three switch language together.
   // Any other language the post is already translated into can be picked from
   // its flag; those texts are fetched once, on the first pick.
-  const [pickedLanguage, setPickedLanguage] = useState<string | null>(null);
-  const [otherTranslations, setOtherTranslations] = useState<Record<string, string> | null>(null);
+  const [pickedLanguage, setPickedLanguage] = useState<string | null>(mountMemory?.pickedLanguage ?? null);
+  const [otherTranslations, setOtherTranslations] = useState<Record<string, string> | null>(
+    mountMemory?.otherTranslations ?? null,
+  );
   const [loadingLanguage, setLoadingLanguage] = useState<string | null>(null);
   const pickedText = pickedLanguage ? otherTranslations?.[pickedLanguage] ?? null : null;
+  const pickLanguage = useCallback(
+    (language: string | null) => {
+      setPickedLanguage(language);
+      remember({ pickedLanguage: language });
+    },
+    [remember],
+  );
 
   const { displayText, previewText, previewTruncated } = useMemo(
     () =>
@@ -305,8 +349,9 @@ export default function FeedPostCard({
   }, [onExpandStateChange, track]);
 
   // ── "Read the body" (analytics): scrolled to the end, or a short body
-  // expanded on the active foreground card for >= 3 s. Once per appearance.
-  const readReportedRef = useRef(false);
+  // expanded on the active foreground card for >= 3 s. Once per appearance,
+  // also across a remount (the progress so far is kept by the shell).
+  const readReportedRef = useRef(restoreReadProgress?.readReported ?? false);
   const reportRead = useCallback(
     (trigger: "scrolled_to_end" | "dwell") => {
       if (readReportedRef.current) return;
@@ -323,7 +368,7 @@ export default function FeedPostCard({
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
-  const readDwellRef = useRef(0);
+  const readDwellRef = useRef(restoreReadProgress?.readDwellMs ?? 0);
   const readClock = readClockRunning({ expanded, bodyNeedsScroll, active: isActive, hidden: pageHidden });
   useEffect(() => {
     if (!expanded) readDwellRef.current = 0;
@@ -339,6 +384,18 @@ export default function FeedPostCard({
       readDwellRef.current = Math.min(READ_DWELL_MS, readDwellRef.current + (Date.now() - startedAt));
     };
   }, [readClock, expanded, reportRead]);
+  // Hand the progress to the shell on unmount. Declared after the clock above,
+  // whose cleanup folds the running interval in first.
+  const readProgressChangeRef = useRef(onReadProgressChange);
+  useEffect(() => {
+    readProgressChangeRef.current = onReadProgressChange;
+  });
+  useEffect(
+    () => () => {
+      readProgressChangeRef.current?.({ readReported: readReportedRef.current, readDwellMs: readDwellRef.current });
+    },
+    [],
+  );
 
   const handleCollapse = useCallback(() => {
     setExpanded(false);
@@ -478,14 +535,14 @@ export default function FeedPostCard({
   const handleSelectLanguage = useCallback(
     (chip: string) => {
       if (chip === ORIGINAL_CHIP || chip === viewerChipLanguage) {
-        setPickedLanguage(null);
+        pickLanguage(null);
         // The viewer-language chip keeps the existing flow (it may request a
         // translation that does not exist yet); the others only read.
         if ((chip === ORIGINAL_CHIP) === translate.showingTranslation) handleTranslateToggle();
         return;
       }
       if (otherTranslations) {
-        if (otherTranslations[chip]) setPickedLanguage(chip);
+        if (otherTranslations[chip]) pickLanguage(chip);
         return;
       }
       if (loadingLanguage) return;
@@ -499,7 +556,8 @@ export default function FeedPostCard({
           const body = (await res.json()) as { translations?: Array<{ language: string; text: string }> };
           const texts = Object.fromEntries((body.translations ?? []).map((row) => [row.language, row.text]));
           setOtherTranslations(texts);
-          if (texts[chip]) setPickedLanguage(chip);
+          remember({ otherTranslations: texts });
+          if (texts[chip]) pickLanguage(chip);
           else onToast(copy.translateFailed);
         } catch {
           onToast(copy.translateFailed);
@@ -508,7 +566,7 @@ export default function FeedPostCard({
         }
       })();
     },
-    [viewerChipLanguage, translate.showingTranslation, handleTranslateToggle, otherTranslations, loadingLanguage, post.id, onToast, copy],
+    [viewerChipLanguage, translate.showingTranslation, handleTranslateToggle, otherTranslations, loadingLanguage, post.id, onToast, copy, pickLanguage, remember],
   );
   const showLanguageChips = post.sourceText.trim().length > 0 && chipLanguages.length > 0;
 
@@ -793,6 +851,9 @@ export default function FeedPostCard({
         images={carouselImages}
         onImageLoad={handleImageLoad}
         imageLoading={eagerImage ? "eager" : "lazy"}
+        decodeImage={decodeImage && !imageFailed}
+        initialPhotoIndex={mountMemory?.photoIndex ?? 0}
+        onPhotoIndexChange={rememberPhotoIndex}
         previewClampRef={previewClampRef}
         bodyScrollRef={bodyScrollRef}
         bodyTouchAction={bodyNeedsScroll ? "pan-y" : "none"}
