@@ -130,7 +130,8 @@ export function getNativeDeviceAudioCapabilityServerSnapshot(): boolean {
 
 // ── Capture-source pick (in memory, shared by every mounted room) ──────────
 
-let pickSnapshot: SttCaptureSource = 'microphone'
+// Default: the microphone plus device audio (on a shell that can capture it).
+let pickSnapshot: SttCaptureSource = 'device_audio'
 const pickListeners = new Set<() => void>()
 
 export function subscribeSttCaptureSourcePick(listener: () => void): () => void {
@@ -145,7 +146,7 @@ export function getSttCaptureSourcePickSnapshot(): SttCaptureSource {
 }
 
 export function getSttCaptureSourcePickServerSnapshot(): SttCaptureSource {
-  return 'microphone'
+  return 'device_audio'
 }
 
 export function setSttCaptureSourcePick(next: SttCaptureSource): void {
@@ -163,5 +164,5 @@ export function resetNativeDeviceAudioStoresForTests(): void {
   capabilitySnapshot = false
   cachedCapabilityRead = false
   pickListeners.clear()
-  pickSnapshot = 'microphone'
+  pickSnapshot = 'device_audio'
 }

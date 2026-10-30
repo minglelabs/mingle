@@ -112,21 +112,21 @@ describe('page-wide stores', () => {
     expect(listener).toHaveBeenCalledTimes(1)
   })
 
-  it('starts every page on the microphone and shares one pick across rooms', () => {
-    expect(getSttCaptureSourcePickSnapshot()).toBe('microphone')
+  it('starts every page on microphone + device audio and shares one pick across rooms', () => {
+    expect(getSttCaptureSourcePickSnapshot()).toBe('device_audio')
     const first = vi.fn()
     const second = vi.fn()
     const unsubscribeFirst = subscribeSttCaptureSourcePick(first)
     subscribeSttCaptureSourcePick(second)
 
-    setSttCaptureSourcePick('device_audio')
-    setSttCaptureSourcePick('device_audio')
-    expect(getSttCaptureSourcePickSnapshot()).toBe('device_audio')
+    setSttCaptureSourcePick('microphone')
+    setSttCaptureSourcePick('microphone')
+    expect(getSttCaptureSourcePickSnapshot()).toBe('microphone')
     expect(first).toHaveBeenCalledTimes(1)
     expect(second).toHaveBeenCalledTimes(1)
 
     unsubscribeFirst()
-    setSttCaptureSourcePick('microphone')
+    setSttCaptureSourcePick('device_audio')
     expect(first).toHaveBeenCalledTimes(1)
     expect(second).toHaveBeenCalledTimes(2)
   })

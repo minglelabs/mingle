@@ -145,9 +145,9 @@ describe('earphone mode wiring', () => {
     expect(effective).toContain('earphoneModeEnabled,')
     expect(effective).toContain('pick: sttCaptureSourcePick,')
     expect(liveDemoSource).toContain('captureSource: sttCaptureSource,')
-    // Every earphone-mode edge puts the next session back on the microphone.
+    // Every earphone-mode edge puts the next session back on the default: microphone + device audio.
     const reset = between(liveDemoSource, 'useEffect(() => subscribeEarphoneModePreference(() => {', '}), [])')
-    expect(reset).toContain("setSttCaptureSourcePick('microphone')")
+    expect(reset).toContain("setSttCaptureSourcePick('device_audio')")
     // A source change ends the running session; it never swaps under it.
     const stop = between(liveDemoSource, 'const appliedSttCaptureSourceRef = useRef(sttCaptureSource)', '}, [handleStopRecording, isSttSessionRunning, sttCaptureSource])')
     expect(stop).toContain('if (appliedSttCaptureSourceRef.current === sttCaptureSource) return')

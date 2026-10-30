@@ -6724,8 +6724,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => subscribeEarphoneModePreference(() => {
     setEarphoneModeReadLanguagePick(null)
     // The capture source lasts one session too: every new one starts on the
-    // microphone, so Start never opens the screen-capture prompt unasked.
-    setSttCaptureSourcePick('microphone')
+    // default, the microphone plus device audio (page 2/2 of the notice shows
+    // it, and what Start will open, before the first Start).
+    setSttCaptureSourcePick('device_audio')
   }), [])
 
   const handleEarphoneModeReadLanguageSelect = useCallback((language: string) => {
