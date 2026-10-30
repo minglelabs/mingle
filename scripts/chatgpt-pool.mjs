@@ -23,6 +23,9 @@
  *                              picture as a markdown data URL. An image_url part in the
  *                              last user message is attached as a reference photo.
  *   POST /v1/images/generations  { prompt, reference?: data URL } -> { data: [{ b64_json }] }
+ *   Add "async": true to either POST to get 202 { id } at once, then poll
+ *   GET /v1/jobs/:id -> { status: pending | done (+ result) | error (+ error) }.
+ *   Use it through a tunnel: ngrok cuts a request at 300s and images can take longer.
  *   GET  /health, GET /accounts
  *   Optional `account` field (email) pins a request to one account.
  *
@@ -247,6 +250,37 @@ function reply(response, status, payload) {
   response.end(JSON.stringify(payload))
 }
 
+/**
+ * Requests sent with "async": true, kept for an hour after they finish. A tunnel
+ * (ngrok's free plan) cuts a request at 300s and an image can take longer, so the
+ * caller gets an id at once and polls GET /v1/jobs/:id.
+ */
+const asyncJobs = new Map()
+const ASYNC_KEEP_MS = 60 * 60_000
+
+function startAsync(path, body) {
+  const id = `job_${randomUUID()}`
+  const entry = { id, status: 'pending', created: Math.floor(Date.now() / 1000), result: null, error: null, finishedAt: 0 }
+  asyncJobs.set(id, entry)
+  handleApi(path, body).then(
+    (result) => { entry.status = 'done'; entry.result = result; entry.finishedAt = Date.now() },
+    (error) => {
+      entry.status = 'error'
+      entry.error = { status: error instanceof PoolError ? error.status : 500, code: error.code ?? 'internal', message: error.message }
+      entry.finishedAt = Date.now()
+      log('error', entry.error.status, error.message)
+    },
+  )
+  for (const [key, old] of asyncJobs) if (old.finishedAt && Date.now() - old.finishedAt > ASYNC_KEEP_MS) asyncJobs.delete(key)
+  return { id, object: 'job', status: 'pending', created: entry.created }
+}
+
+function asyncStatus(id) {
+  const entry = asyncJobs.get(id)
+  if (!entry) throw new PoolError(404, 'job_not_found')
+  return { id, object: 'job', status: entry.status, created: entry.created, ...(entry.result ? { result: entry.result } : {}), ...(entry.error ? { error: entry.error } : {}) }
+}
+
 async function handleApi(path, body) {
   const image = path === '/v1/images/generations' || /image/i.test(body.model ?? '')
   const lastUser = partsText([...(body.messages ?? [])].reverse().find((m) => m.role === 'user')?.content)
@@ -289,7 +323,12 @@ function serve() {
       if (keyed && request.headers.authorization !== `Bearer ${KEY}`) return reply(response, 401, { error: { code: 'unauthorized' } })
       if (request.method === 'GET' && path === '/health') return reply(response, 200, { ok: true, accounts: accountsStatus().length, queued: queue.length, running: running.size })
       if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus() })
-      if (request.method === 'POST' && (path === '/v1/chat/completions' || path === '/v1/images/generations')) return reply(response, 200, await handleApi(path, await readBody(request)))
+      if (request.method === 'GET' && path.startsWith('/v1/jobs/')) return reply(response, 200, asyncStatus(decodeURIComponent(path.slice('/v1/jobs/'.length))))
+      if (request.method === 'POST' && (path === '/v1/chat/completions' || path === '/v1/images/generations')) {
+        const body = await readBody(request)
+        if (body.async === true) return reply(response, 202, startAsync(path, body))
+        return reply(response, 200, await handleApi(path, body))
+      }
       return reply(response, 404, { error: { code: 'not_found' } })
     } catch (error) {
       const status = error instanceof PoolError ? error.status : 500

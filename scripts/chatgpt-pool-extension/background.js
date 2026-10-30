@@ -50,19 +50,27 @@ async function page(op, arg) {
     chips.forEach((chip, i) => { chip.style.display = before[i] })
     return text.replace(/[ \t]+\n/g, '\n').trim()
   }
-  const generated = () => [...document.images].filter((i) => /^(Generated image|생성된 이미지)/i.test(i.alt || '') && i.complete && i.naturalWidth > 400)
+  // A drawn picture: alt "생성된 이미지 1" / "Generated image 1", or anything inside ChatGPT's image gallery.
+  const generated = () => [...document.images].filter((i) => (/^(Generated image|생성된 이미지)/i.test(i.alt || '') || i.closest('[data-testid="generated-image-gallery"], [data-web-image-tile]')) && i.complete && i.naturalWidth > 400)
+  // An image reply has no ":assistant" unit; its turn carries data-talvt-turn-state ("complete" once done).
+  const turnStates = () => [...document.querySelectorAll('[data-talvt-turn-state]')].map((el) => el.getAttribute('data-talvt-turn-state'))
 
   if (op === 'state') {
     const last = turns().at(-1)
     const form = composer()?.closest('form')
+    const states = turnStates()
+    const pictures = generated()
     return {
+      turnState: states.at(-1) ?? null,
+      turnStates: states.length,
+      imageSrc: pictures.at(-1)?.src?.slice(-40) ?? null,
       composer: Boolean(composer()),
       signedOut: !composer() && [...document.querySelectorAll('button, a')].some((b) => /^(Log in|로그인)$/i.test(b.innerText.trim())),
       turns: turns().length,
       text: last ? answerText(last.querySelector('[data-markdown-text-style="assistant-message"], .markdown') ?? last) : '',
       streaming: Boolean(document.querySelector('[data-testid="stop-button"]') || labelled(/^(스트리밍 중지|Stop streaming|중지)/i)),
       creating: /Creating image|이미지 생성 중|이미지를 생성하는 중/i.test(document.querySelector('main')?.innerText || ''),
-      images: generated().length,
+      images: pictures.length,
       attached: Boolean(form && [...form.querySelectorAll('img')].some((img) => img.naturalWidth > 0) && form.querySelectorAll('[role=progressbar]').length === 0),
     }
   }
@@ -97,7 +105,12 @@ async function page(op, arg) {
     return true
   }
   if (op === 'image') {
-    const img = generated().at(-1)
+    // The newest gallery's widest picture (the full-size one, not a preview); with two candidates, the first.
+    const galleries = [...document.querySelectorAll('[data-testid="generated-image-gallery"]')]
+    const inLast = galleries.length ? generated().filter((i) => galleries.at(-1).contains(i)) : []
+    const pool = inLast.length ? inLast : generated().slice(-1)
+    const img = pool.reduce((best, i) => (i.naturalWidth > best.naturalWidth ? i : best), pool[0])
+    if (!img) return null
     const blob = await (await fetch(img.src)).blob()
     const bytes = new Uint8Array(await blob.arrayBuffer())
     let text = ''
@@ -159,15 +172,30 @@ function resetDelayMs(text) {
 }
 
 /** Waits for the next assistant turn after `before` to finish (and, for an image, to show the picture). */
-async function answer(tabId, before, wantImage, timeoutMs) {
+async function answer(tabId, before, wantImage, timeoutMs, job) {
   let last = null
   let stable = 0
+  let lastPicture = null
+  let pictureStable = 0
+  let reportedAt = 0
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     await sleep(1500)
     const state = await inPage(tabId, 'state').catch(() => null)
-    if (!state || state.turns <= before || state.streaming || state.creating) { stable = 0; continue }
-    if (wantImage && state.images > 0) return { text: state.text, image: true }
+    if (state && job && Date.now() - reportedAt > 15_000) {
+      reportedAt = Date.now()
+      progress(job, `wait turns=${state.turns} images=${state.images} turnState=${state.turnState} states=${state.turnStates} streaming=${state.streaming} creating=${state.creating} text=${state.text.length}`)
+    }
+    const drawing = wantImage && state && state.turnState !== null && state.turnState !== 'complete'
+    if (!state || state.streaming || state.creating || drawing) { stable = 0; pictureStable = 0; continue }
+    // An image reply has no ":assistant" turn, so a new picture is the answer once it stops changing.
+    if (wantImage && state.images > before.images && (state.turnState === null || state.turnState === 'complete')) {
+      pictureStable = state.imageSrc === lastPicture ? pictureStable + 1 : 0
+      lastPicture = state.imageSrc
+      if (pictureStable >= 2) return { text: state.text, image: true }
+      continue
+    }
+    if (state.turns <= before.turns) { stable = 0; continue }
     if (!wantImage && !state.text) { stable = 0; continue } // the turn shows up before its words do
     stable = state.text === last ? stable + 1 : 0
     last = state.text
@@ -197,17 +225,20 @@ async function runJob(job) {
     ? `${job.reference ? '첨부한 사진 속 사람을 그대로 살려서 ' : ''}이미지 1장 생성해줘: ${job.prompt}`
     : job.prompt
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const before = (await inPage(tab.id, 'state')).turns
+    const before = await inPage(tab.id, 'state')
     if (!(await inPage(tab.id, 'type', attempt === 0 ? prompt : '다시 시도해서 위 설명대로 이미지 1장 생성해줘'))) throw new JobError('ui_changed', 'could not type')
     let sent = false
     for (let i = 0; i < 40 && !sent; i += 1) { await sleep(250); sent = await inPage(tab.id, 'send') }
     if (!sent) throw new JobError('ui_changed', 'send button stayed disabled')
-    progress(job, `sent (attempt ${attempt + 1}, turns before ${before})`)
-    const result = await answer(tab.id, before, job.kind === 'image', job.kind === 'image' ? 7 * 60_000 : 4 * 60_000)
+    progress(job, `sent (attempt ${attempt + 1}, turns before ${before.turns}, images before ${before.images})`)
+    const result = await answer(tab.id, before, job.kind === 'image', job.kind === 'image' ? 7 * 60_000 : 4 * 60_000, job)
     if (job.kind !== 'image') return { text: result.text }
     if (result.image) {
       await sleep(1500) // the full-size picture replaces the preview
-      return { image: await inPage(tab.id, 'image') }
+      const picture = await inPage(tab.id, 'image')
+      if (!picture?.base64) throw new JobError('ui_changed', 'the picture could not be read')
+      progress(job, `image ${picture.width}x${picture.height} ${picture.type} ${Math.round(picture.base64.length / 1024)}KB`)
+      return { image: picture }
     }
     if (LIMIT_PATTERN.test(result.text)) throw new JobError('image_limit', result.text.slice(0, 200), resetDelayMs(result.text))
     // The first image request of a chat often ends empty or "not finished"; asking again draws it.
