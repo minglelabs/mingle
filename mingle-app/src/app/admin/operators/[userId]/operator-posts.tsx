@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { ReviewPhotos } from '../review/review-board'
+import { PostTakedownButton } from '../../feed/_components/post-takedown-button'
 
 const PREVIEW_COUNT = 20
 /** `is_deleted` is null on most rows, which `{ not: true }` would leave out. */
@@ -27,7 +28,7 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
       orderBy: { publishedAt: 'desc' },
       take,
       select: {
-        id: true, sourceText: true, sourceLanguage: true, publishedAt: true, likeCount: true, commentCount: true, imageObjectKey: true, imageWidth: true, imageHeight: true,
+        id: true, sourceText: true, sourceLanguage: true, publishedAt: true, likeCount: true, commentCount: true, imageObjectKey: true, imageWidth: true, imageHeight: true, moderationHiddenAt: true,
         extraImages: { orderBy: { position: 'asc' }, select: { imageObjectKey: true, imageWidth: true, imageHeight: true } },
         comments: {
           where: { moderationHiddenAt: null },
@@ -67,6 +68,10 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
                     />
                   </div>
                 ) : null}
+                <div className="mt-2 flex items-center gap-2">
+                  <PostTakedownButton postId={post.id} hidden={post.moderationHiddenAt !== null} />
+                  {post.moderationHiddenAt ? <span className="text-xs font-semibold text-rose-700">앱에서 내린 글</span> : null}
+                </div>
                 <p className="mt-1 text-xs text-slate-500">
                   {DATE_FORMAT.format(post.publishedAt)} · {post.sourceLanguage ?? '?'} · 좋아요 {post.likeCount} · 댓글 {post.commentCount}
                 </p>

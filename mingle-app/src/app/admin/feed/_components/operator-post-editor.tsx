@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { PostTakedownButton } from './post-takedown-button'
 
 const ERRORS: Record<string, string> = {
   invalid_image: 'JPG·PNG·WEBP 사진만 올릴 수 있어요.',
@@ -58,7 +59,7 @@ export function OperatorPostEditor({ postId, text, hasPhoto }: { postId: string;
 
   return (
     <div className="mt-3">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           disabled={busy !== null}
@@ -75,6 +76,7 @@ export function OperatorPostEditor({ postId, text, hasPhoto }: { postId: string;
         >
           {editing ? '수정 취소' : '글 수정'}
         </button>
+        <PostTakedownButton postId={postId} hidden={false} />
         <input
           ref={fileRef}
           type="file"
