@@ -147,6 +147,31 @@ jobs:
       - name: Run TDD suite (unit)
         run: pnpm test:unit
 
+  # The Railway build skips Next's TypeScript pass (MINGLE_SKIP_BUILD_TYPECHECK),
+  # so this job is the type gate.
+  typecheck:
+    name: Typecheck (tsc)
+    needs: push-context
+    if: ${{ github.event_name != 'push' || needs.push-context.outputs.run_tests_on_push == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mingle-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.18.1
+          cache: pnpm
+          cache-dependency-path: mingle-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: pnpm exec next typegen
+      - run: pnpm exec tsc --noEmit -p tsconfig.json
+
   stt-tests:
     name: STT Transport and Segmentation Tests
     needs: push-context

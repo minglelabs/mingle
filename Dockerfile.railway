@@ -24,6 +24,8 @@ ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mingle?schema=ap
 ENV NEXT_PUBLIC_WS_PATH="$NEXT_PUBLIC_WS_PATH"
 ENV NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY="$NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY"
 ENV MINGLE_RELEASE_TARGET="$MINGLE_RELEASE_TARGET"
+ENV MINGLE_NEXT_STANDALONE="1"
+ENV MINGLE_SKIP_BUILD_TYPECHECK="1"
 COPY mingle-app/components.json mingle-app/next.config.mjs mingle-app/postcss.config.mjs mingle-app/tsconfig.json ./
 COPY mingle-app/prisma ./prisma
 COPY mingle-app/public ./public
@@ -31,7 +33,6 @@ COPY mingle-app/scripts ./scripts
 COPY mingle-app/src ./src
 COPY mingle-app/data ./data
 RUN pnpm build
-RUN pnpm prune --prod
 
 FROM base AS stt-deps
 WORKDIR /app/mingle-stt
@@ -66,7 +67,9 @@ ENV MINGLE_MESSAGING_WS_PATH="/conversation-events"
 ENV MINGLE_MESSAGING_PUBLISH_PATH="/conversation-events/publish"
 ENV MINGLE_MESSAGING_URL="http://127.0.0.1:3002"
 WORKDIR /app
-COPY --from=app-build /app/mingle-app ./mingle-app
+COPY --from=app-build /app/mingle-app/.next/standalone ./mingle-app
+COPY --from=app-build /app/mingle-app/.next/static ./mingle-app/.next/static
+COPY --from=app-build /app/mingle-app/public ./mingle-app/public
 COPY --from=stt-build /app/mingle-stt ./mingle-stt
 COPY --from=messaging-build /app/mingle-messaging ./mingle-messaging
 COPY railway ./railway

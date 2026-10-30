@@ -339,7 +339,8 @@ function shutdown(exitCode = 0) {
 process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
-spawnService('mingle-app', 'pnpm', ['--dir', '/app/mingle-app', 'start'], {
+// The image carries Next's standalone server (see Dockerfile.railway).
+spawnService('mingle-app', 'node', ['/app/mingle-app/server.js'], {
   PORT: String(appPort),
 });
 spawnService('mingle-stt', 'pnpm', ['--dir', '/app/mingle-stt', 'start'], {
