@@ -314,6 +314,9 @@ export type PostReviewResult =
   | { ok: true; state: 'published' | 'deleted' | 'review'; postId?: string | null; post?: ReviewPost }
   | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' }
 
+/** A 재제작 (text, then a photo through the hand-off route) never takes this long. */
+const STALE_REGENERATING_MS = 15 * 60 * 1000
+
 /** 게시 / 삭제 / 재제작 for a post waiting for review. */
 export async function reviewOperatorPost(
   ctx: AdminContext | null,
@@ -327,7 +330,15 @@ export async function reviewOperatorPost(
     select: { ...POST_SELECT, operatorUserId: true, operatorUser: { select: { isActive: true } } },
   })
   if (!row || !REVIEW_POST_STATES.includes(row.state)) return { ok: false, error: 'not_found' }
-  if (row.state === 'regenerating') return { ok: false, error: 'busy' }
+  if (row.state === 'regenerating') {
+    // A 재제작 whose request died (a deploy restart, a timeout) never puts the
+    // row back; past the longest a 재제작 can take, staff may answer it again.
+    const released = await prisma.operatorPostReserve.updateMany({
+      where: { id: reserveId, state: 'regenerating', updatedAt: { lt: new Date(now.getTime() - STALE_REGENERATING_MS) } },
+      data: { state: 'review' },
+    })
+    if (released.count === 0) return { ok: false, error: 'busy' }
+  }
   // Feedback on every answer is kept on the row and in the audit log, not only on 재제작.
   const audit = (decision: string, extra: Record<string, string | boolean | null> = {}) => writeAdminAudit(ctx, {
     action: 'operator_post.review', operatorUserId: row.operatorUserId, targetType: 'reserve', targetId: reserveId, metadata: { decision, feedback, ...extra },

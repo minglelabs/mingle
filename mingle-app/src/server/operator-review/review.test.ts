@@ -131,4 +131,19 @@ describe('reviewOperatorPost', () => {
       data: { state: 'review', error: 'persona_unavailable' },
     })
   })
+
+  it('stays busy while a 재제작 is running, and lets staff answer once one has hung', async () => {
+    const now = new Date('2026-10-30T06:00:00Z')
+    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, state: 'regenerating' })
+    mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 0 })
+    await expect(reviewOperatorPost(null, 'r1', 'publish', null, now)).resolves.toEqual({ ok: false, error: 'busy' })
+    expect(mocks.reserveUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: 'r1', state: 'regenerating', updatedAt: { lt: new Date('2026-10-30T05:45:00Z') } },
+      data: { state: 'review' },
+    })
+
+    mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 1 })
+    mocks.publishNow.mockResolvedValue({ ok: true, postId: 'p1' })
+    await expect(reviewOperatorPost(null, 'r1', 'publish', null, now)).resolves.toEqual({ ok: true, state: 'published', postId: 'p1' })
+  })
 })
