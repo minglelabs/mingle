@@ -36,7 +36,7 @@ const ERROR_COPY: Record<string, string> = {
 type ReviewPhoto = { objectKey: string; width: number | null; height: number | null }
 const MAX_POST_PHOTOS = 10
 
-function reviewImageUrl(objectKey: string): string {
+export function reviewImageUrl(objectKey: string): string {
   return `/admin/operators/api/review/image?key=${encodeURIComponent(objectKey)}`
 }
 
@@ -343,7 +343,7 @@ function StaffTranslationChips({ sourceLanguage, translation }: {
 }
 
 /** A post's photos, swiped sideways like the app's feed, with a "2 / 4" count. */
-function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; width: number | null; height: number | null }> }) {
+export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; width: number | null; height: number | null }> }) {
   const [index, setIndex] = useState(0)
   return (
     <div className="relative mt-2">
