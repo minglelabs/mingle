@@ -1,0 +1,73 @@
+diff --git a/mingle-stt/stt-server.ts b/mingle-stt/stt-server.ts
+index e8633ec6..cf62478f 100644
+--- a/mingle-stt/stt-server.ts
++++ b/mingle-stt/stt-server.ts
+@@ -1,5 +1,5 @@
+ import { createServer } from 'http';
+-import { existsSync } from 'fs';
++import { appendFileSync, existsSync, mkdirSync } from 'fs';
+ import { resolve } from 'path';
+ import { WebSocket, WebSocketServer } from 'ws';
+ import fetch from 'node-fetch';
+@@ -115,6 +115,18 @@ function getSonioxManualFinalizeResponseTimeoutMs(silenceMs: number): number {
+ function handleSttConnection(clientWs: WebSocket, connId: number, options: SttServerOptions) {
+     const connectedAt = Date.now();
+     console.log(`[conn:${connId}] client connected`);
++    // LOCAL DIAGNOSTICS ONLY (not for commit): STT_DIAG_DIR=<dir> records client PCM and Soniox tokens.
++    const diagDir = process.env.STT_DIAG_DIR ? resolve(process.env.STT_DIAG_DIR, `conn-${Date.now()}-${connId}`) : null;
++    if (diagDir) mkdirSync(diagDir, { recursive: true });
++    const diag = (file: string, line: unknown) => {
++        if (!diagDir) return;
++        appendFileSync(resolve(diagDir, file), `${JSON.stringify({ atMs: Date.now(), ...(line as object) })}\n`);
++    };
++    const diagAudio = (chunk: Buffer) => {
++        if (!diagDir) return;
++        appendFileSync(resolve(diagDir, 'client.pcm'), chunk);
++        diag('audio.jsonl', { bytes: chunk.length });
++    };
+ 
+     let sttWs: WebSocket | null = null;
+     let isClientConnected = true;
+@@ -979,6 +991,7 @@ function handleSttConnection(clientWs: WebSocket, connId: number, options: SttSe
+                 if (!cleanedText) return null;
+                 const finalizeSource = isFinal ? options?.finalizeSource : undefined;
+ 
++                diag('client-transcripts.jsonl', { isFinal, finalizeSource: finalizeSource || null, speaker: cleanedSpeaker, language: cleanedLang, text: cleanedText });
+                 if (clientWs.readyState === WebSocket.OPEN) {
+                     clientWs.send(JSON.stringify({
+                         type: 'transcript',
+@@ -1241,6 +1254,7 @@ function handleSttConnection(clientWs: WebSocket, connId: number, options: SttSe
+                         })}`,
+                     );
+                 }
++                diag('soniox-config.jsonl', { config: { ...sonioxConfig, api_key: '[redacted]' } });
+                 sonioxWs.send(JSON.stringify(sonioxConfig));
+                 if (!sonioxAudioRelay?.start()) return;
+ 
+@@ -1586,6 +1600,7 @@ function handleSttConnection(clientWs: WebSocket, connId: number, options: SttSe
+                     const tokens = (Array.isArray(msg.tokens) ? msg.tokens : []) as SonioxToken[];
+                     // Uncomment the next line for one-response Soniox token diagnostics.
+                     // logSonioxTokenBatch(tokens);
++                    if (tokens.length > 0) diag('soniox.jsonl', { tokens });
+                     if (!isClientConnected || sonioxTerminalFailure) return;
+ 
+                     if (msg.error_code) {
+@@ -1764,6 +1779,7 @@ function handleSttConnection(clientWs: WebSocket, connId: number, options: SttSe
+             // orphan the first connection or revive a session after Stop.
+             if (configReceived || stopRecordingLifecycleStarted) return;
+             configReceived = true;
++            diag('client-config.jsonl', { config: data });
+             const normalizedLanguages = Array.isArray(data.languages)
+                 ? data.languages
+                     .filter((language): language is string => typeof language === 'string')
+@@ -1810,7 +1826,9 @@ function handleSttConnection(clientWs: WebSocket, connId: number, options: SttSe
+         } else if (currentModel === 'soniox') {
+             if (data.type === 'audio_chunk' && typeof data.data?.chunk === 'string'
+                 && !stopRecordingLifecycleStarted && !sonioxTerminalFailure) {
+-                sonioxAudioRelay?.receive(Buffer.from(data.data.chunk, 'base64'));
++                const diagChunk = Buffer.from(data.data.chunk, 'base64');
++                diagAudio(diagChunk);
++                sonioxAudioRelay?.receive(diagChunk);
+             }
+         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
+             // 오디오 프레임 전송
