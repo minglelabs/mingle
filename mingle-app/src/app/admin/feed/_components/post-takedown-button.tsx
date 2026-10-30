@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-/** Takes an operator's published post down from the app, or puts it back up. */
+/** Takes an operator's published post down from the app back into review, or puts it back up. */
 export function PostTakedownButton({ postId, hidden }: { postId: string; hidden: boolean }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function toggle() {
-    if (!hidden && !window.confirm('이 글을 앱에서 내릴까요? 좋아요·댓글은 남아 있어 다시 올릴 수 있어요.')) return
+    if (!hidden && !window.confirm('이 글을 앱에서 내리고 검토 탭 맨 앞으로 돌려보낼까요? 검토에서 고쳐 다시 게시하면 새 글로 올라가요.')) return
     setBusy(true)
     setError(null)
     try {
@@ -36,7 +36,7 @@ export function PostTakedownButton({ postId, hidden }: { postId: string; hidden:
         onClick={() => void toggle()}
         className={`h-9 rounded-lg border px-3 text-sm font-medium disabled:opacity-50 ${hidden ? 'border-sky-200 bg-white text-sky-700' : 'border-rose-200 bg-white text-rose-700 active:bg-rose-50'}`}
       >
-        {busy ? '처리 중…' : hidden ? '다시 올리기' : '글 내리기'}
+        {busy ? '처리 중…' : hidden ? '다시 올리기' : '내리고 검토로'}
       </button>
       {error ? <span className="text-xs text-red-600">{error}</span> : null}
     </span>
