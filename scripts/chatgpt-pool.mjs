@@ -27,7 +27,12 @@
  *   Optional `account` field (email) pins a request to one account.
  *
  * Env: CHATGPT_POOL_PORT (10320), CHATGPT_POOL_HOST (127.0.0.1), CHATGPT_POOL_KEY
- * (bearer token for the /v1 API when set; the extensions only ever talk to 127.0.0.1).
+ * (bearer token for the API on the public port, or on the main port when HOST is not
+ * loopback; the extensions only ever talk to 127.0.0.1).
+ * CHATGPT_POOL_PUBLIC_PORT opens a second listener, for a tunnel (ngrok, cloudflared)
+ * to point at, so people elsewhere can use the API: it requires CHATGPT_POOL_KEY and
+ * never serves the extensions' /agent endpoints. A tunnel's requests arrive from
+ * 127.0.0.1 too, so the main port must never be the one exposed.
  */
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -42,6 +47,8 @@ const run = promisify(execFile)
 const PORT = Number(process.env.CHATGPT_POOL_PORT || 10320)
 const HOST = process.env.CHATGPT_POOL_HOST || '127.0.0.1'
 const KEY = process.env.CHATGPT_POOL_KEY?.trim() || ''
+const PUBLIC_PORT = Number(process.env.CHATGPT_POOL_PUBLIC_PORT || 0)
+const LOOPBACK_HOSTS = ['127.0.0.1', '::1', 'localhost']
 const POLL_HOLD_MS = 20_000
 const AGENT_STALE_MS = 75_000
 const TEXT_TIMEOUT_MS = 5 * 60_000
@@ -230,11 +237,12 @@ async function handleApi(path, body) {
 }
 
 function serve() {
-  const server = createServer(async (request, response) => {
+  const handler = (exposed) => async (request, response) => {
     const path = new URL(request.url ?? '/', 'http://pool').pathname
     try {
-      // The extensions, only ever from this machine.
+      // The extensions, only ever from this machine and never through the public port.
       if (path === '/agent/poll' || path === '/agent/result') {
+        if (exposed) return reply(response, 404, { error: { code: 'not_found' } })
         const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress ?? '')
         if (!local || request.method !== 'POST') return reply(response, 403, { error: { code: 'forbidden' } })
         const body = await readBody(request)
@@ -244,7 +252,9 @@ function serve() {
         finish(String(body.jobId ?? ''), body.error ? { error: body.error } : body.image ? { image: body.image } : { text: String(body.text ?? '') })
         return reply(response, 200, { ok: true })
       }
-      if (KEY && request.headers.authorization !== `Bearer ${KEY}`) return reply(response, 401, { error: { code: 'unauthorized' } })
+      // The main port stays keyless while it listens only on this machine, so the local CLI and MCP need no key.
+      const keyed = exposed || (KEY && !LOOPBACK_HOSTS.includes(HOST))
+      if (keyed && request.headers.authorization !== `Bearer ${KEY}`) return reply(response, 401, { error: { code: 'unauthorized' } })
       if (request.method === 'GET' && path === '/health') return reply(response, 200, { ok: true, accounts: accountsStatus().length, queued: queue.length, running: running.size })
       if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus() })
       if (request.method === 'POST' && (path === '/v1/chat/completions' || path === '/v1/images/generations')) return reply(response, 200, await handleApi(path, await readBody(request)))
@@ -254,8 +264,12 @@ function serve() {
       log('error', status, error.message)
       return reply(response, status, { error: { code: error.code ?? 'internal', message: error.message } })
     }
-  })
-  server.listen(PORT, HOST, () => log(`ChatGPT pool on http://${HOST}:${PORT}${KEY ? ' (key required)' : ''}; waiting for the Chrome extensions`))
+  }
+  createServer(handler(false)).listen(PORT, HOST, () => log(`ChatGPT pool on http://${HOST}:${PORT}${KEY && !LOOPBACK_HOSTS.includes(HOST) ? ' (key required)' : ''}; waiting for the Chrome extensions`))
+  if (PUBLIC_PORT) {
+    if (!KEY) log('CHATGPT_POOL_PUBLIC_PORT is ignored without CHATGPT_POOL_KEY: the API would be open to anyone')
+    else createServer(handler(true)).listen(PUBLIC_PORT, '127.0.0.1', () => log(`public API (key required) on http://127.0.0.1:${PUBLIC_PORT}, for a tunnel`))
+  }
   setInterval(() => { failUnservable(); dispatch() }, 5_000).unref()
 }
 
@@ -344,6 +358,7 @@ async function install() {
   const logFile = join(homedir(), 'Library/Logs', `${LABEL}.log`)
   const env = { CHATGPT_POOL_PORT: String(PORT), CHATGPT_POOL_HOST: HOST, PATH: process.env.PATH ?? '/usr/bin:/bin' }
   if (KEY) env.CHATGPT_POOL_KEY = KEY
+  if (PUBLIC_PORT) env.CHATGPT_POOL_PUBLIC_PORT = String(PUBLIC_PORT)
   const escape = (value) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;')
   await mkdir(join(homedir(), 'Library/LaunchAgents'), { recursive: true })
   await writeFile(plist, `<?xml version="1.0" encoding="UTF-8"?>
