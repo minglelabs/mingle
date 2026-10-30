@@ -494,8 +494,13 @@ function cmdBuild(args) {
     .replace(/^MINGLE_LEGACY_SITE_URL = .*$/m, `MINGLE_LEGACY_SITE_URL = ${value('NEXT_PUBLIC_SITE_URL')}`)
     .replace(/^MINGLE_LEGACY_WS_URL = .*$/m, `MINGLE_LEGACY_WS_URL = ${value('NEXT_PUBLIC_WS_URL')}`)
     .replace(/^NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = .*$/m, `NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = ${ADMOB_TEST_BANNER_UNIT_IOS}`);
+  // Agent shells that already run inside a macOS sandbox cannot start swift-plugin-server's own sandbox,
+  // so Swift macros (e.g. @TaskLocal in the openiap pod) fail to expand. Opt in to build without it.
+  const macroSandboxOff = process.env.MINGLE_QA_SWIFT_DISABLE_SANDBOX === '1'
+    ? '\nOTHER_SWIFT_FLAGS = $(inherited) -D COCOAPODS -disable-sandbox\n'
+    : '';
   fs.mkdirSync(path.dirname(QA_XCCONFIG), { recursive: true });
-  fs.writeFileSync(QA_XCCONFIG, qaConfig);
+  fs.writeFileSync(QA_XCCONFIG, qaConfig + macroSandboxOff);
   execFileSync('xcodebuild', [
     '-allowProvisioningUpdates',
     '-workspace', path.join(APP_ROOT, 'rn/ios/mingle.xcworkspace'),
@@ -525,7 +530,9 @@ function cmdBuild(args) {
     bannerUnit: plist('MingleAdBannerUnitIdIos'),
     admobApp: plist('GADApplicationIdentifier'),
   };
-  if (built.qaBridge !== '1' || !built.webUrl.includes(host) || !built.fallbackUrl.includes(host)) fail(`QA build is misconfigured: ${JSON.stringify(built)}`);
+  // 2.3.0 removed the legacy fallback URL; check it only on builds that still carry one.
+  const fallbackOk = !built.fallbackUrl || built.fallbackUrl.includes(host);
+  if (built.qaBridge !== '1' || !built.webUrl.includes(host) || !fallbackOk) fail(`QA build is misconfigured: ${JSON.stringify(built)}`);
   console.log(JSON.stringify(built));
 }
 
