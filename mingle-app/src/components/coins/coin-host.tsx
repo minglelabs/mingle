@@ -3,8 +3,9 @@
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { DEFAULT_LOCALE, type AppLocale } from "@/i18n";
-import { resolveSupportedLocaleTag } from "@/i18n/config";
+// The config module, not the "@/i18n" barrel: the barrel also exports
+// getDictionary, which would put every locale's dictionary in the root layout.
+import { DEFAULT_LOCALE, resolveSupportedLocaleTag, type AppLocale } from "@/i18n/config";
 import {
   restoreCoinPurchases,
   resumeWebCheckoutIfReturned,

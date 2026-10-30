@@ -285,6 +285,12 @@ import {
   buildNativeRemountRestoreUrl,
   rememberNativeRemountRestoreConversation,
 } from '@/lib/native-remount-restore'
+import {
+  resolveKeyboardViewportInsetPx,
+  resolveStableKeyboardViewportInsetPx,
+} from './keyboard-viewport-inset'
+
+export { resolveKeyboardViewportInsetPx, resolveStableKeyboardViewportInsetPx }
 
 const VOLUME_THRESHOLD = 0.05
 // How long a "loaded" older-history page may go without changing the list before its loading state is released.
@@ -318,7 +324,6 @@ const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
-const KEYBOARD_VIEWPORT_INSET_STABILITY_THRESHOLD_PX = 2
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
 const VOICE_MODE_TOP_MARGIN_PX = 8
 const VOICE_MODE_BOTTOM_MARGIN_PX = 0
@@ -775,14 +780,6 @@ function isLivePhoneDemoFeedbackCategory(value: unknown): value is LivePhoneDemo
   return value === 'feedback' || value === 'suggestion' || value === 'inquiry'
 }
 
-export function resolveKeyboardViewportInsetPx(viewport: VisualViewport | null | undefined): number {
-  if (typeof window === 'undefined' || !viewport) return 0
-
-  const inset = window.innerHeight - viewport.height - viewport.offsetTop
-  if (!Number.isFinite(inset) || inset <= 0) return 0
-  return Math.round(inset)
-}
-
 export function resolveHydratedComposerOpenState(input: {
   currentIsComposerOpen: boolean
   persistedInputMode: LivePhoneDemoInputMode | null
@@ -886,20 +883,6 @@ export function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): nu
   textarea.style.height = `${nextHeight}px`
   textarea.style.overflowY = nextHeight >= COMPOSER_TEXTAREA_MAX_HEIGHT_PX ? 'auto' : 'hidden'
   return nextHeight
-}
-
-export function resolveStableKeyboardViewportInsetPx(currentInsetPx: number, nextInsetPx: number): number {
-  const safeCurrentInsetPx = Number.isFinite(currentInsetPx) && currentInsetPx > 0
-    ? Math.round(currentInsetPx)
-    : 0
-  const safeNextInsetPx = Number.isFinite(nextInsetPx) && nextInsetPx > 0
-    ? Math.round(nextInsetPx)
-    : 0
-
-  if (safeCurrentInsetPx === 0 || safeNextInsetPx === 0) return safeNextInsetPx
-  return Math.abs(safeCurrentInsetPx - safeNextInsetPx) < KEYBOARD_VIEWPORT_INSET_STABILITY_THRESHOLD_PX
-    ? safeCurrentInsetPx
-    : safeNextInsetPx
 }
 
 export function resolveComposerDraftStorageKey(
