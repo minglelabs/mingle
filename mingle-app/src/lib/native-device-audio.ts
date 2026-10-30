@@ -1,13 +1,14 @@
 // Web side of device-audio capture: transcribing the sound other apps play on
-// this device (a video), mixed with the microphone.
+// this device (a video, a call) instead of the microphone.
 //
 // The shell reports `deviceAudioCapture: true` in its `capabilities` message on
 // the `mingle:native-stt` channel at every WebView load end, and keeps the last
 // message in `window.__MINGLE_NATIVE_SHELL_CAPABILITIES` for rooms that mount
 // later. A shell that sends neither can only capture the microphone.
 //
-// There is no choice to make: earphone mode on such a shell always captures
-// the microphone mixed with the device audio (see resolveEffectiveSttCaptureSource).
+// The choice itself is session state, like the earphone-mode read language:
+// it is never persisted, so a Start can never surprise the user with the
+// system screen-capture prompt for a choice made on another day.
 
 export const NATIVE_SHELL_CAPABILITIES_EVENT = 'mingle:native-stt'
 export const NATIVE_SHELL_CAPABILITIES_STATE_KEY = '__MINGLE_NATIVE_SHELL_CAPABILITIES'
@@ -48,13 +49,16 @@ export function readCachedNativeShellCapabilities(): unknown {
   return (window as NativeDeviceAudioWindow)[NATIVE_SHELL_CAPABILITIES_STATE_KEY] ?? null
 }
 
-// Earphone mode always captures the microphone together with the sound other
-// apps play, on every shell that can; elsewhere it is the microphone alone.
+// Device audio is captured only while earphone mode is on (that is where the
+// choice is made and explained) and only on a shell that can do it.
 export function resolveEffectiveSttCaptureSource(input: {
   supported: boolean
   earphoneModeEnabled: boolean
+  pick: SttCaptureSource
 }): SttCaptureSource {
-  return input.supported && input.earphoneModeEnabled ? 'device_audio' : 'microphone'
+  return input.supported && input.earphoneModeEnabled && input.pick === 'device_audio'
+    ? 'device_audio'
+    : 'microphone'
 }
 
 // ── Capability store (one per window, shared by every mounted room) ────────
@@ -124,10 +128,40 @@ export function getNativeDeviceAudioCapabilityServerSnapshot(): boolean {
   return false
 }
 
+// ── Capture-source pick (in memory, shared by every mounted room) ──────────
+
+let pickSnapshot: SttCaptureSource = 'microphone'
+const pickListeners = new Set<() => void>()
+
+export function subscribeSttCaptureSourcePick(listener: () => void): () => void {
+  pickListeners.add(listener)
+  return () => {
+    pickListeners.delete(listener)
+  }
+}
+
+export function getSttCaptureSourcePickSnapshot(): SttCaptureSource {
+  return pickSnapshot
+}
+
+export function getSttCaptureSourcePickServerSnapshot(): SttCaptureSource {
+  return 'microphone'
+}
+
+export function setSttCaptureSourcePick(next: SttCaptureSource): void {
+  if (pickSnapshot === next) return
+  pickSnapshot = next
+  for (const listener of [...pickListeners]) {
+    listener()
+  }
+}
+
 export function resetNativeDeviceAudioStoresForTests(): void {
   detachCapabilityListener?.()
   detachCapabilityListener = null
   capabilityListeners.clear()
   capabilitySnapshot = false
   cachedCapabilityRead = false
+  pickListeners.clear()
+  pickSnapshot = 'microphone'
 }

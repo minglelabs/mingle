@@ -3,12 +3,15 @@ import {
   NATIVE_SHELL_CAPABILITIES_EVENT,
   NATIVE_SHELL_CAPABILITIES_STATE_KEY,
   getNativeDeviceAudioCapabilitySnapshot,
+  getSttCaptureSourcePickSnapshot,
   parseNativeDeviceAudioCapability,
   readCachedNativeShellCapabilities,
   resetNativeDeviceAudioStoresForTests,
   resolveEffectiveSttCaptureSource,
+  setSttCaptureSourcePick,
   shouldPlayTtsViaNativeShell,
   subscribeNativeDeviceAudioCapability,
+  subscribeSttCaptureSourcePick,
 } from './native-device-audio'
 
 describe('native TTS playback routing', () => {
@@ -56,11 +59,11 @@ describe('capability detection', () => {
 })
 
 describe('effective capture source', () => {
-  it('captures device audio whenever the shell can and earphone mode is on', () => {
-    expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: true })).toBe('device_audio')
-    expect(resolveEffectiveSttCaptureSource({ supported: false, earphoneModeEnabled: true })).toBe('microphone')
-    expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: false })).toBe('microphone')
-    expect(resolveEffectiveSttCaptureSource({ supported: false, earphoneModeEnabled: false })).toBe('microphone')
+  it('captures device audio only when the shell can, earphone mode is on and it was picked', () => {
+    expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: true, pick: 'device_audio' })).toBe('device_audio')
+    expect(resolveEffectiveSttCaptureSource({ supported: false, earphoneModeEnabled: true, pick: 'device_audio' })).toBe('microphone')
+    expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: false, pick: 'device_audio' })).toBe('microphone')
+    expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: true, pick: 'microphone' })).toBe('microphone')
   })
 })
 
@@ -107,5 +110,24 @@ describe('page-wide stores', () => {
       detail: { type: 'capabilities', openAppSettings: true, audioRoute: true },
     }))
     expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts every page on the microphone and shares one pick across rooms', () => {
+    expect(getSttCaptureSourcePickSnapshot()).toBe('microphone')
+    const first = vi.fn()
+    const second = vi.fn()
+    const unsubscribeFirst = subscribeSttCaptureSourcePick(first)
+    subscribeSttCaptureSourcePick(second)
+
+    setSttCaptureSourcePick('device_audio')
+    setSttCaptureSourcePick('device_audio')
+    expect(getSttCaptureSourcePickSnapshot()).toBe('device_audio')
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).toHaveBeenCalledTimes(1)
+
+    unsubscribeFirst()
+    setSttCaptureSourcePick('microphone')
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).toHaveBeenCalledTimes(2)
   })
 })
