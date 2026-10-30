@@ -267,12 +267,18 @@ function serve() {
     const path = new URL(request.url ?? '/', 'http://pool').pathname
     try {
       // The extensions, only ever from this machine and never through the public port.
-      if (path === '/agent/poll' || path === '/agent/result') {
+      if (path === '/agent/poll' || path === '/agent/result' || path === '/agent/progress') {
         if (exposed) return reply(response, 404, { error: { code: 'not_found' } })
         const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress ?? '')
         if (!local || request.method !== 'POST') return reply(response, 403, { error: { code: 'forbidden' } })
         const body = await readBody(request)
         if (path === '/agent/poll') return reply(response, 200, await poll(body, response))
+        if (path === '/agent/progress') {
+          const agent = agents.get(String(body.agentId ?? ''))
+          if (agent) agent.lastSeen = Date.now()
+          log('step', agent?.email ?? '?', String(body.jobId ?? '').slice(0, 8), String(body.step ?? '').slice(0, 120))
+          return reply(response, 200, { ok: true })
+        }
         const agent = agents.get(String(body.agentId ?? ''))
         if (agent) agent.lastSeen = Date.now()
         finish(String(body.jobId ?? ''), body.error ? { error: body.error } : body.image ? { image: body.image } : { text: String(body.text ?? '') })
@@ -291,10 +297,12 @@ function serve() {
       return reply(response, status, { error: { code: error.code ?? 'internal', message: error.message } })
     }
   }
-  createServer(handler(false)).listen(PORT, HOST, () => log(`ChatGPT pool on http://${HOST}:${PORT}${KEY && !LOOPBACK_HOSTS.includes(HOST) ? ' (key required)' : ''}; waiting for the Chrome extensions`))
+  // Image jobs answer after minutes; Node's default 5-minute request timeout would cut them off.
+  const server = (exposed) => createServer({ requestTimeout: 0 }, handler(exposed))
+  server(false).listen(PORT, HOST, () => log(`ChatGPT pool on http://${HOST}:${PORT}${KEY && !LOOPBACK_HOSTS.includes(HOST) ? ' (key required)' : ''}; waiting for the Chrome extensions`))
   if (PUBLIC_PORT) {
     if (!KEY) log('CHATGPT_POOL_PUBLIC_PORT is ignored without CHATGPT_POOL_KEY: the API would be open to anyone')
-    else createServer(handler(true)).listen(PUBLIC_PORT, '127.0.0.1', () => log(`public API (key required) on http://127.0.0.1:${PUBLIC_PORT}, for a tunnel`))
+    else server(true).listen(PUBLIC_PORT, '127.0.0.1', () => log(`public API (key required) on http://127.0.0.1:${PUBLIC_PORT}, for a tunnel`))
   }
   setInterval(() => { failUnservable(); dispatch() }, 5_000).unref()
 }
