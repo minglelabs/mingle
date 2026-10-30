@@ -17,7 +17,8 @@ describe('RN i18n bridge', () => {
     expect(resolveWebLocaleSegment('pl-PL')).toBe('pl')
     expect(resolveWebLocaleSegment('he-IL')).toBe('he')
     expect(resolveWebLocaleSegment('zh-Hant-HK')).toBe('zh-TW')
-    expect(resolveWebLocaleSegment('')).toBe('ko')
+    expect(resolveWebLocaleSegment('')).toBe('en')
+    expect(resolveWebLocaleSegment('xx-YY')).toBe('en')
     expect(WEB_SUPPORTED_LOCALE_SEGMENTS.has('pl')).toBe(true)
   })
 
