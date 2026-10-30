@@ -125,7 +125,7 @@ function normalizeReleaseTarget(raw: string): string {
   return raw.trim().toLowerCase()
 }
 
-function detectRuntimePlatform(): 'android' | 'ios' | null {
+export function detectRuntimePlatform(): 'android' | 'ios' | null {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
     return null
   }

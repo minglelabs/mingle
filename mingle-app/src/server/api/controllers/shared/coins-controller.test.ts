@@ -21,7 +21,8 @@ vi.mock('@/server/coins/wallet', async () => ({
 }))
 
 import { mintSttBillingToken } from '@/server/coins/stt-token'
-import { chargeCoinsInternally, readCoinWallet } from './coins-controller'
+import { verifyAndGrantPurchase } from '@/server/coins/purchases'
+import { chargeCoinsInternally, createCoinPurchase, readCoinWallet } from './coins-controller'
 
 function chargeRequest(body: Record<string, unknown>, authorization = 'Bearer secret') {
   return new NextRequest('http://app.test/api/internal/coins/charge', {
@@ -81,6 +82,34 @@ describe('coins controller', () => {
       expect(m.chargeCoinUsage).toHaveBeenCalledWith(expect.objectContaining({
         userId: 'user-1', kind: 'stt', units: { second: 120 }, idempotencyKey: 'stt:user-1:c:0', sessionKey: 'room',
       }))
+    })
+  })
+
+  describe('POST /coins/purchases', () => {
+    const purchase = (path: string, body: Record<string, unknown>) => createCoinPurchase(new NextRequest(`http://app.test${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }))
+
+    beforeEach(() => {
+      m.session.mockResolvedValue({ user: { id: 'user-1' } })
+      vi.mocked(verifyAndGrantPurchase).mockResolvedValue({ status: 'granted' } as never)
+    })
+
+    it('takes the store from the namespaced path', async () => {
+      await purchase('/api/android/v2.2.1/coins/purchases', { platform: 'ios', productId: 'coin_1000', purchaseToken: 't' })
+      expect(verifyAndGrantPurchase).toHaveBeenCalledWith('user-1', expect.objectContaining({ platform: 'android' }))
+    })
+
+    it('falls back to the store the app shell names when the namespace was lost', async () => {
+      await purchase('/api/coins/purchases', { platform: 'ios', jws: 'signed' })
+      expect(verifyAndGrantPurchase).toHaveBeenCalledWith('user-1', expect.objectContaining({ platform: 'ios', jws: 'signed' }))
+    })
+
+    it('refuses a purchase that names no store', async () => {
+      expect((await purchase('/api/coins/purchases', { platform: 'web', jws: 'signed' })).status).toBe(400)
+      expect(verifyAndGrantPurchase).not.toHaveBeenCalled()
     })
   })
 
