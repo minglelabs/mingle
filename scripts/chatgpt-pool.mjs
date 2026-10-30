@@ -39,7 +39,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { promisify } from 'node:util'
 
@@ -158,8 +158,25 @@ function submit({ kind, prompt, reference = null, account = null }) {
   })
 }
 
-/** An extension asking for work: held open until a job comes or POLL_HOLD_MS passes. */
-function poll(body) {
+/**
+ * The extension version on disk next to this script (the installed copy keeps it in
+ * ./extension, the repo in ./chatgpt-pool-extension). Sent with every poll so an
+ * extension running older code reloads itself instead of waiting for a Chrome restart.
+ */
+async function extensionVersion() {
+  const here = dirname(resolve(process.argv[1]))
+  for (const folder of ['extension', 'chatgpt-pool-extension']) {
+    try { return JSON.parse(await readFile(join(here, folder, 'manifest.json'), 'utf8')).version } catch {}
+  }
+  return null
+}
+
+/**
+ * An extension asking for work: held open until a job comes or POLL_HOLD_MS passes.
+ * A hold whose connection has closed (Chrome stopped the extension's worker while it
+ * waited) is dropped, so a job is never handed to a request nobody will read.
+ */
+async function poll(body, response) {
   const id = String(body.agentId ?? '')
   if (!id) throw new PoolError(400, 'agent_id_required')
   const agent = agents.get(id) ?? { id, email: null, busy: false, limitedUntil: 0, limitMessage: '', signedOut: false, lastUsed: 0, hold: null }
@@ -170,11 +187,20 @@ function poll(body) {
   agent.signedOut = !email
   agent.profile = body.profile ?? agent.profile ?? null
   agent.lastSeen = Date.now()
-  // A new poll means the agent is idle: whatever it was doing has ended.
-  if (agent.busy && body.idle) agent.busy = false
+  // A new poll means the agent is idle: a job it still holds was lost (its worker
+  // restarted mid-job, or never got the job), so it goes to another account now
+  // instead of after the timeout.
+  if (agent.busy && body.idle) {
+    const lost = [...running.values()].find((job) => job.agent === agent)
+    if (lost) finish(lost.id, { error: { code: 'lost', message: 'the extension restarted before answering' } })
+    agent.busy = false
+  }
   agent.hold?.({})
-  return new Promise((answer) => {
+  const version = await extensionVersion()
+  return new Promise((resolveHold) => {
+    const answer = (payload) => resolveHold({ ...payload, extensionVersion: version })
     agent.hold = answer
+    response.on('close', () => { if (agent.hold === answer && !response.writableEnded) agent.hold = null })
     setTimeout(() => { if (agent.hold === answer) { agent.hold = null; answer({}) } }, POLL_HOLD_MS)
     failUnservable()
     dispatch()
@@ -246,7 +272,7 @@ function serve() {
         const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress ?? '')
         if (!local || request.method !== 'POST') return reply(response, 403, { error: { code: 'forbidden' } })
         const body = await readBody(request)
-        if (path === '/agent/poll') return reply(response, 200, await poll(body))
+        if (path === '/agent/poll') return reply(response, 200, await poll(body, response))
         const agent = agents.get(String(body.agentId ?? ''))
         if (agent) agent.lastSeen = Date.now()
         finish(String(body.jobId ?? ''), body.error ? { error: body.error } : body.image ? { image: body.image } : { text: String(body.text ?? '') })

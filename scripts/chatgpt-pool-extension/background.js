@@ -232,10 +232,12 @@ async function loop() {
         await sleep(10_000) // the pool is not running
         continue
       }
+      if (reply?.extensionVersion && reply.extensionVersion !== chrome.runtime.getManifest().version) {
+        chrome.runtime.reload() // the server has newer code on disk
+        return
+      }
       const job = reply?.job
       if (!job) continue
-      // Any extension call keeps this service worker alive through a long job.
-      const keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(), 20_000)
       try {
         const result = await runJob(job)
         await post('/agent/result', { agentId: id, jobId: job.id, ...result })
@@ -245,14 +247,17 @@ async function loop() {
           agentId: id, jobId: job.id,
           error: { code: error instanceof JobError ? error.code : 'internal', message: String(error?.message ?? error).slice(0, 300), retryAfterMs: error?.retryAfterMs },
         }).catch(() => {})
-      } finally {
-        clearInterval(keepAlive)
       }
     }
   } finally {
     looping = false
   }
 }
+
+// Chrome stops an idle service worker after 30s, and a pending fetch does not count
+// as activity, so a worker waiting in a poll would die and the job handed to it be
+// lost. Any extension API call resets that timer.
+setInterval(() => chrome.runtime.getPlatformInfo(), 20_000)
 
 chrome.runtime.onStartup.addListener(() => void loop())
 chrome.runtime.onInstalled.addListener(() => {
