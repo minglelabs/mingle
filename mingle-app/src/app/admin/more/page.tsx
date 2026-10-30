@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "더보기" };
 
 const MORE_LINKS = [
-  { href: "/admin/feed", icon: Newspaper, title: "피드 미리보기", description: "유저가 보는 홈 피드를 추천 순서 그대로 보기" },
+  { href: "/admin/posts", icon: Newspaper, title: "게시물 대량 작성", description: "운영 계정 여러 개로 글을 한 번에 올리기" },
   { href: "/admin", icon: MessageCircleHeart, title: "피드백", description: "앱 사용자가 보낸 의견과 답장" },
   { href: "/admin/reports", icon: Flag, title: "신고함", description: "신고 처리, 숨김과 이용 제한" },
   { href: "/admin/coins", icon: Coins, title: "해씨 (코인)", description: "유저 잔액 조회·충전·회수, 상품과 단가표, 매출·사용량" },

@@ -8,16 +8,19 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import { editPostHref } from "@/lib/feed-routes";
 import { reportCopy } from "@/i18n/report-copy";
 import ReportSheet, { type ReportTarget } from "@/components/reports/report-sheet";
+import PostAdminActions from "@/components/posts/post-admin-actions";
 
 /**
  * The post "⋯" menu.
  * - Own post: edit (editPostHref), archive, delete (confirm, then trash).
  * - Someone else's post: report post, report author, hide post, block author.
  *   Hide and block apply immediately without a confirmation step.
+ * - Staff (admin session): an operator account's post also gets the operator
+ *   tool's edits, see PostAdminActions.
  */
 export type PostActionSheetProps = {
   open: boolean;
-  post: Pick<FeedPostDto, "id" | "author" | "isMine" | "visibility">;
+  post: Pick<FeedPostDto, "id" | "author" | "isMine" | "visibility" | "sourceText">;
   locale: string;
   viewerId: string | null;
   onClose: () => void;
@@ -26,6 +29,8 @@ export type PostActionSheetProps = {
   /** The viewer blocked the author: drop every post by this author from the list. */
   onAuthorBlocked: (authorId: string) => void;
   onRequireLogin: () => void;
+  /** Staff changed the post's photo or text: reload it. */
+  onPostEdited?: (postId: string) => void;
 };
 
 type Pending = null | "archive" | "delete" | "hide" | "block";
@@ -39,6 +44,7 @@ export default function PostActionSheet({
   onPostRemoved,
   onAuthorBlocked,
   onRequireLogin,
+  onPostEdited,
 }: PostActionSheetProps) {
   const copy = useMemo(() => reportCopy(locale), [locale]);
   const router = useRouter();
@@ -154,6 +160,15 @@ export default function PostActionSheet({
               </>
             )}
           </div>
+
+          {!isMine && isSignedIn ? (
+            <PostAdminActions
+              postId={post.id}
+              text={post.sourceText}
+              onChanged={() => { onClose(); onPostEdited?.(post.id); }}
+              onTakenDown={() => { onPostRemoved(post.id, "hidden"); onClose(); }}
+            />
+          ) : null}
 
           {error ? <p className="mt-2 px-1 text-[13px] text-red-500" role="alert">{copy.actionFailed}</p> : null}
         </section>
