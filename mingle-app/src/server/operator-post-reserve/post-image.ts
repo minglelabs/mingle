@@ -30,7 +30,8 @@ export function buildPostImagePrompt(
   person: PostPhotoPerson | null = null,
 ): string {
   const { kind, description } = decodePostPhoto(stored)
-  if (isScreenshot(description)) return buildScreenshotPrompt(description, place)
+  // A photo of the poster stays one even when it mentions a screen ("looking down into the phone screen").
+  if (kind === 'scene' && isScreenshot(description)) return buildScreenshotPrompt(description, place)
   const placeLine = place ? [`Taken in ${place}: the street, shops, packaging and objects look like that place, and any writing that happens to be visible is in the local language and script, small and incidental.`] : []
   const frame = `${random() < 0.75 ? 'Vertical 3:4' : 'Horizontal 4:3'} image, like a phone photo. No captions, watermarks, logos, brand names, borders or frames.`
   if (kind === 'scene' || !person) {
