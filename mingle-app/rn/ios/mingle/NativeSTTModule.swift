@@ -31,8 +31,27 @@ final class MingleAudioSessionCoordinator {
     private var ttsOwners: Int = 0
     private var pipOwners: Int = 0
     private var pendingDeactivationWorkItem: DispatchWorkItem?
+    private var lifecycleObservers: [NSObjectProtocol] = []
 
-    private init() {}
+    private init() {
+        // `shared` is created on first use. TTS and PiP use it before they
+        // activate the session and STT takes its owner right after, so this
+        // observer exists whenever the session can be active without an owner.
+        lifecycleObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                // The session can stay active with no owner, e.g. when a TTS
+                // clip fails to start after `setActive(true)`. Release it before
+                // iOS suspends the app. Live STT, TTS and PiP hold an owner, so
+                // the owner check keeps them running, and each of them activates
+                // the session again on its next start.
+                self?.scheduleDeactivateAudioSessionIfIdle(trigger: "app_background")
+            }
+        )
+    }
 
     private func withLock<T>(_ block: () -> T) -> T {
         lock.lock()
