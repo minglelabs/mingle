@@ -51,6 +51,7 @@ final class BroadcastAudioConverter {
             }
             converter = next
             converterInputFormat = inputFormat
+            MingleBroadcastChannel.recordCaptureChannelCount(Int(inputFormat.channelCount))
         }
         guard let converter else { return nil }
 

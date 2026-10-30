@@ -940,6 +940,12 @@ class NativeSTTModule(
     val record = capture.record
     val chunkBuffer = ByteArray(2_048 * 2)
     val deviceAudioBuffer = ByteArray(chunkBuffer.size)
+    // Other-app audio waits up to 1 s here; mixing starts after 200 ms of it.
+    val bytesPerSecond = capture.sampleRate * 2
+    val deviceAudioJitter = DeviceAudioJitterBuffer(
+      capacityBytes = bytesPerSecond,
+      prebufferBytes = bytesPerSecond / 5,
+    )
     record.startRecording()
     if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
       throw IllegalStateException("audio_record_start_failed(${record.recordingState})")
@@ -964,23 +970,26 @@ class NativeSTTModule(
             releaseCompanionMic()
             continue
           }
-          val deviceRead = record.read(deviceAudioBuffer, 0, micRead, AudioRecord.READ_NON_BLOCKING)
-          // Drained either way, but not added while our translation is audible.
-          if (deviceRead > 0 && !NativeTTSModule.isTranslationAudible()) {
-            NativeSttAudioMixer.mixInto(chunkBuffer, micRead, deviceAudioBuffer, deviceRead)
-          } else if (deviceRead == AudioRecord.ERROR_DEAD_OBJECT) {
-            scheduleAudioRecovery("audio_dead_object")
+          // Drain everything the capture has into the jitter buffer, then add
+          // one whole, continuous chunk of it (or nothing while it refills).
+          while (true) {
+            val deviceRead = record.read(deviceAudioBuffer, 0, deviceAudioBuffer.size, AudioRecord.READ_NON_BLOCKING)
+            if (deviceRead > 0) {
+              deviceAudioJitter.write(deviceAudioBuffer, deviceRead)
+              if (deviceRead < deviceAudioBuffer.size) break
+            } else {
+              if (deviceRead == AudioRecord.ERROR_DEAD_OBJECT) {
+                scheduleAudioRecovery("audio_dead_object")
+              }
+              break
+            }
+          }
+          if (deviceAudioJitter.readChunk(deviceAudioBuffer, micRead) == micRead) {
+            NativeSttAudioMixer.mixInto(chunkBuffer, micRead, deviceAudioBuffer, micRead)
           }
           micRead
         } else {
-          val read = record.read(chunkBuffer, 0, chunkBuffer.size)
-          if (read > 0 && capture.profile.captureSource == NativeSttCaptureSource.DEVICE_AUDIO &&
-            NativeTTSModule.isTranslationAudible()
-          ) {
-            // Device audio alone: silence while our translation is audible.
-            chunkBuffer.fill(0, 0, read)
-          }
-          read
+          record.read(chunkBuffer, 0, chunkBuffer.size)
         }
         if (bytesRead <= 0) {
           if (bytesRead == AudioRecord.ERROR_DEAD_OBJECT) {

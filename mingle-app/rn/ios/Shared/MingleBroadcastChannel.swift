@@ -42,6 +42,22 @@ enum MingleBroadcastChannel {
         return container.appendingPathComponent(socketFileName).path
     }
 
+    // The channel count of the app audio ReplayKit delivers, written by the
+    // extension. A stereo capture keeps the app's own translation out by
+    // channel (it plays in the left ear only); a mono one cannot.
+    private static let captureChannelCountKey = "deviceAudioCaptureChannelCount"
+
+    static func recordCaptureChannelCount(_ count: Int) {
+        guard let group = appGroupIdentifier else { return }
+        UserDefaults(suiteName: group)?.set(count, forKey: captureChannelCountKey)
+    }
+
+    /// 0 when unknown (no capture yet in this session).
+    static func lastCaptureChannelCount() -> Int {
+        guard let group = appGroupIdentifier else { return 0 }
+        return UserDefaults(suiteName: group)?.integer(forKey: captureChannelCountKey) ?? 0
+    }
+
     /// Calls `body` with a `sockaddr_un` for `path`; nil when the path does not fit.
     static func withSocketAddress<T>(
         path: String,

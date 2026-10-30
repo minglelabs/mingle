@@ -319,6 +319,11 @@ class NativeSTTModule: RCTEventEmitter {
     // not yet sent PCM (16-bit mono at MingleBroadcastChannel.sampleRate).
     private var deviceAudioMicActive = false
     private var deviceAudioMicBuffer = Data()
+    /// Other-app audio is added only in whole chunks once this much is
+    /// buffered; after an underrun it refills first instead of splicing short
+    /// silences into the other app's speech (which garbles recognition).
+    private var deviceAudioPrimed = false
+    private static let deviceAudioPrebufferBytes = MingleBroadcastChannel.sampleRate / 5 * MemoryLayout<Int16>.size
     /// The most other-app audio kept while the microphone paces the stream
     /// (1 s); older audio is dropped so the two never drift apart.
     private static let deviceAudioMaxBufferedBytes = MingleBroadcastChannel.sampleRate * MemoryLayout<Int16>.size
@@ -1430,11 +1435,18 @@ class NativeSTTModule: RCTEventEmitter {
     /// chunk of buffered other-app audio added in.
     private func sendMixedDeviceAudioChunk(base: Data) {
         var chunk = base
-        let available = min(deviceAudioBuffer.count, chunk.count) & ~1
-        if available > 0 {
-            let other = Data(deviceAudioBuffer.prefix(available))
-            deviceAudioBuffer.removeFirst(available)
-            Self.mixPcm16(into: &chunk, adding: other)
+        let wanted = chunk.count & ~1
+        if !deviceAudioPrimed, deviceAudioBuffer.count >= max(Self.deviceAudioPrebufferBytes, wanted) {
+            deviceAudioPrimed = true
+        }
+        if deviceAudioPrimed {
+            if deviceAudioBuffer.count >= wanted {
+                let other = Data(deviceAudioBuffer.prefix(wanted))
+                deviceAudioBuffer.removeFirst(wanted)
+                Self.mixPcm16(into: &chunk, adding: other)
+            } else {
+                deviceAudioPrimed = false
+            }
         }
         sendDeviceAudioChunk(chunk)
     }
@@ -1493,7 +1505,9 @@ class NativeSTTModule: RCTEventEmitter {
             self?.deviceAudioLastAudioAt = Date.distantPast
             self?.deviceAudioMicActive = false
             self?.deviceAudioMicBuffer.removeAll(keepingCapacity: false)
+            self?.deviceAudioPrimed = false
         }
+        MingleBroadcastChannel.recordCaptureChannelCount(0)
         deviceAudioActive = true
         MingleDeviceAudioState.shared.isActive = true
         startDeviceAudioMicrophone()
@@ -1528,10 +1542,14 @@ class NativeSTTModule: RCTEventEmitter {
     private func handleDeviceAudio(_ pcm: Data) {
         wsQueue.async { [weak self] in
             guard let self, self.isRunning, self.deviceAudioActive, !self.gracefulStopPending else { return }
-            // While this app's translation is audible the broadcast carries
-            // it too: send silence for that stretch instead (the microphone,
-            // behind the earphones, still goes through).
+            // A stereo capture keeps this app's translation out by channel
+            // (it plays in the left ear, the right one is transcribed), so
+            // the other app's speech keeps flowing while it reads. Only a
+            // mono (or not yet known) capture carries the translation: then
+            // that stretch is replaced by silence (the microphone, behind the
+            // earphones, still goes through).
             let translationAudible = MingleDeviceAudioState.shared.isTranslationAudible
+                && MingleBroadcastChannel.lastCaptureChannelCount() < 2
             if self.deviceAudioMicActive {
                 if translationAudible { return }
                 self.deviceAudioBuffer.append(pcm)

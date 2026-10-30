@@ -204,7 +204,10 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             }
 
             do {
-                let player = try AVAudioPlayer(data: audioData)
+                // iOS cannot lower the other app while a clip plays without
+                // pausing it, so the translation itself is played louder.
+                let playableData = Self.amplified(audioData, gain: Self.translationGain) ?? audioData
+                let player = try AVAudioPlayer(data: playableData)
                 player.delegate = self
                 if deviceAudioActive {
                     // The broadcast extension transcribes the right channel
@@ -255,6 +258,84 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             }
             resolve(["ok": true])
         }
+    }
+
+    // MARK: - Louder translation
+
+    /// Linear gain applied to every clip (1.5x amplitude, about +3.5 dB).
+    static let translationGain: Float = 1.5
+
+    /// The clip decoded, multiplied by `gain` with a soft limit near full
+    /// scale (so peaks round off instead of clipping), and re-encoded as
+    /// 16-bit WAV. nil when the clip cannot be decoded; the caller then plays
+    /// the original.
+    static func amplified(_ data: Data, gain: Float) -> Data? {
+        let fileExtension: String
+        if data.starts(with: Array("RIFF".utf8)) {
+            fileExtension = "wav"
+        } else if data.starts(with: Array("OggS".utf8)) {
+            fileExtension = "ogg"
+        } else if data.count > 8, data[data.startIndex + 4 ..< data.startIndex + 8] == Data("ftyp".utf8) {
+            fileExtension = "m4a"
+        } else {
+            fileExtension = "mp3"
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("native-tts-\(UUID().uuidString).\(fileExtension)")
+        defer { try? FileManager.default.removeItem(at: url) }
+        do {
+            try data.write(to: url)
+            let file = try AVAudioFile(forReading: url)
+            let format = file.processingFormat
+            let frameCount = AVAudioFrameCount(file.length)
+            guard frameCount > 0,
+                  let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount)
+            else { return nil }
+            try file.read(into: buffer)
+            guard let channels = buffer.floatChannelData else { return nil }
+            let channelCount = Int(format.channelCount)
+            let frames = Int(buffer.frameLength)
+            let knee: Float = 0.85
+            var pcm = Data(capacity: frames * channelCount * MemoryLayout<Int16>.size)
+            for frame in 0 ..< frames {
+                for channel in 0 ..< channelCount {
+                    var sample = channels[channel][frame] * gain
+                    let magnitude = abs(sample)
+                    if magnitude > knee {
+                        let limited = knee + (1 - knee) * tanh((magnitude - knee) / (1 - knee))
+                        sample = sample < 0 ? -limited : limited
+                    }
+                    var value = Int16(max(-1, min(1, sample)) * 32767).littleEndian
+                    withUnsafeBytes(of: &value) { pcm.append(contentsOf: $0) }
+                }
+            }
+            return wavData(pcm: pcm, sampleRate: Int(format.sampleRate), channels: channelCount)
+        } catch {
+            NSLog("[NativeTTSModule] amplify skipped: %@", error.localizedDescription)
+            return nil
+        }
+    }
+
+    private static func wavData(pcm: Data, sampleRate: Int, channels: Int) -> Data {
+        var wav = Data(capacity: 44 + pcm.count)
+        func append<T: FixedWidthInteger>(_ value: T) {
+            withUnsafeBytes(of: value.littleEndian) { wav.append(contentsOf: $0) }
+        }
+        let blockAlign = channels * MemoryLayout<Int16>.size
+        wav.append(contentsOf: Array("RIFF".utf8))
+        append(UInt32(36 + pcm.count))
+        wav.append(contentsOf: Array("WAVEfmt ".utf8))
+        append(UInt32(16))
+        append(UInt16(1))
+        append(UInt16(channels))
+        append(UInt32(sampleRate))
+        append(UInt32(sampleRate * blockAlign))
+        append(UInt16(blockAlign))
+        append(UInt16(16))
+        wav.append(contentsOf: Array("data".utf8))
+        append(UInt32(pcm.count))
+        wav.append(pcm)
+        return wav
     }
 
     // MARK: - Earphone guard (contract A.5)
