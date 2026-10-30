@@ -1521,7 +1521,16 @@ class NativeSTTModule: RCTEventEmitter {
     private func handleDeviceAudio(_ pcm: Data) {
         wsQueue.async { [weak self] in
             guard let self, self.isRunning, self.deviceAudioActive, !self.gracefulStopPending else { return }
-            self.deviceAudioBuffer.append(pcm)
+            // While this app's translation is audible the broadcast carries
+            // it too: send silence for that stretch instead (the microphone,
+            // behind the earphones, still goes through).
+            let translationAudible = MingleDeviceAudioState.shared.isTranslationAudible
+            if self.deviceAudioMicActive {
+                if translationAudible { return }
+                self.deviceAudioBuffer.append(pcm)
+            } else {
+                self.deviceAudioBuffer.append(translationAudible ? Data(count: pcm.count) : pcm)
+            }
             if self.deviceAudioMicActive {
                 // The microphone paces the stream and adds this audio in;
                 // keep at most a second of it.

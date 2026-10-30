@@ -27,10 +27,36 @@ final class MingleDeviceAudioState {
     /// goes hard left.
     static let translationPan: Float = -1
 
+    /// How long after a translation clip ends its sound may still arrive
+    /// through the broadcast (ReplayKit delivers with some delay).
+    static let translationTail: TimeInterval = 0.4
+
     private let lock = NSLock()
     private var active = false
+    private var translationPlaying = false
+    private var translationEndedAt = Date.distantPast
 
     private init() {}
+
+    /// The TTS module reports its clips. The broadcast captures every app's
+    /// sound, this app's too, and panning alone does not keep the translation
+    /// out (a mono capture carries both ears), so while a clip is audible the
+    /// device audio is not transcribed.
+    func setTranslationPlaying(_ playing: Bool) {
+        lock.lock()
+        if translationPlaying && !playing {
+            translationEndedAt = Date()
+        }
+        translationPlaying = playing
+        lock.unlock()
+    }
+
+    var isTranslationAudible: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return translationPlaying
+            || Date().timeIntervalSince(translationEndedAt) < Self.translationTail
+    }
 
     var isActive: Bool {
         get {

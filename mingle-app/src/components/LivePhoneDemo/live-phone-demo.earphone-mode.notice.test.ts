@@ -102,20 +102,20 @@ describe('earphone mode notice capture-source choice', () => {
   })
 
   it('offers microphone and device audio, microphone first, with the pick checked', () => {
-    const list = captureSourceList(renderNotice({ captureSource: 'microphone', onSelectCaptureSource: () => {} }))
+    const list = captureSourceList(renderNotice({ captureSource: 'microphone', onSelectCaptureSource: () => {}, initialStep: 2 }))
     expect([...list.matchAll(/role="radio" aria-checked="(true|false)" data-capture-source="([a-z_]+)"/g)]
       .map((match) => [match[2], match[1]])).toEqual([['microphone', 'true'], ['device_audio', 'false']])
     expect(list.indexOf(copy.captureSourceMicrophoneLabel)).toBeLessThan(list.indexOf(copy.captureSourceDeviceAudioLabel))
 
-    const picked = captureSourceList(renderNotice({ captureSource: 'device_audio', onSelectCaptureSource: () => {} }))
+    const picked = captureSourceList(renderNotice({ captureSource: 'device_audio', onSelectCaptureSource: () => {}, initialStep: 2 }))
     expect([...picked.matchAll(/role="radio" aria-checked="(true|false)" data-capture-source="([a-z_]+)"/g)]
       .map((match) => [match[2], match[1]])).toEqual([['microphone', 'false'], ['device_audio', 'true']])
   })
 
   it('explains the screen-capture prompt only while device audio is picked', () => {
-    expect(renderNotice({ captureSource: 'microphone', onSelectCaptureSource: () => {} }))
+    expect(renderNotice({ captureSource: 'microphone', onSelectCaptureSource: () => {}, initialStep: 2 }))
       .not.toContain(copy.captureSourceDeviceAudioHint)
-    const picked = renderNotice({ captureSource: 'device_audio', onSelectCaptureSource: () => {} })
+    const picked = renderNotice({ captureSource: 'device_audio', onSelectCaptureSource: () => {}, initialStep: 2 })
     expect(picked).toContain(copy.captureSourceDeviceAudioHint)
     // The button the hint names is the room's literal Start button.
     expect(copy.captureSourceDeviceAudioHint).toContain('Start')
@@ -126,20 +126,43 @@ describe('earphone mode notice capture-source choice', () => {
       captureSource: 'device_audio',
       onSelectCaptureSource: () => {},
       deviceAudioViaBroadcast: true,
+      initialStep: 2,
     })
     expect(picked).toContain(copy.captureSourceDeviceAudioHintIos)
     expect(picked).not.toContain(copy.captureSourceDeviceAudioHint)
     expect(copy.captureSourceDeviceAudioHintIos).toContain('Start')
     expect(copy.captureSourceDeviceAudioHintIos).toContain('왼쪽 이어폰')
     // Still nothing while the microphone is picked.
-    expect(renderNotice({ captureSource: 'microphone', onSelectCaptureSource: () => {}, deviceAudioViaBroadcast: true }))
+    expect(renderNotice({ captureSource: 'microphone', onSelectCaptureSource: () => {}, deviceAudioViaBroadcast: true, initialStep: 2 }))
       .not.toContain(copy.captureSourceDeviceAudioHintIos)
   })
 
-  it('leaves the language list as it was', () => {
-    const html = renderNotice({ captureSource: 'device_audio', onSelectCaptureSource: () => {} })
-    const languages = html.slice(html.indexOf('role="radiogroup"'), html.indexOf('data-qa="live-demo-capture-source"'))
-    expect([...languages.matchAll(/role="radio" aria-checked="(true|false)"/g)].map((match) => match[1]))
+  it('asks the read language on page 1/2 and the capture source on page 2/2', () => {
+    const first = renderNotice({ captureSource: 'device_audio', onSelectCaptureSource: () => {} })
+    expect(first).toContain('data-earphone-mode-notice-step="1"')
+    expect(first).toContain('>1/2<')
+    expect(first).not.toContain('data-qa="live-demo-capture-source"')
+    expect(first).toContain('data-earphone-mode-notice-next')
+    expect(first).toContain(copy.noticeNextLabel)
+    expect([...first.matchAll(/role="radio" aria-checked="(true|false)"/g)].map((match) => match[1]))
       .toEqual(['true', 'false', 'false'])
+
+    const second = renderNotice({ captureSource: 'device_audio', onSelectCaptureSource: () => {}, initialStep: 2 })
+    expect(second).toContain('data-earphone-mode-notice-step="2"')
+    expect(second).toContain('>2/2<')
+    expect(second).toContain('data-earphone-mode-notice-back')
+    expect(second).toContain(copy.noticeBackLabel)
+    expect(second).toContain(copy.noticeConfirmLabel)
+    expect(second).not.toContain('data-earphone-mode-notice-next')
+  })
+
+  it('stays a single page with a confirm button without a capture-source choice', () => {
+    const html = renderNotice()
+    expect(html).toContain('data-earphone-mode-notice-step="1"')
+    expect(html).not.toContain('data-earphone-mode-notice-step-indicator')
+    expect(html).not.toContain('data-earphone-mode-notice-next')
+    expect(html).toContain(copy.noticeConfirmLabel)
+    // Page 2 cannot be forced open without the choice.
+    expect(renderNotice({ initialStep: 2 })).toContain('data-earphone-mode-notice-step="1"')
   })
 })

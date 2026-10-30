@@ -965,14 +965,22 @@ class NativeSTTModule(
             continue
           }
           val deviceRead = record.read(deviceAudioBuffer, 0, micRead, AudioRecord.READ_NON_BLOCKING)
-          if (deviceRead > 0) {
+          // Drained either way, but not added while our translation is audible.
+          if (deviceRead > 0 && !NativeTTSModule.isTranslationAudible()) {
             NativeSttAudioMixer.mixInto(chunkBuffer, micRead, deviceAudioBuffer, deviceRead)
           } else if (deviceRead == AudioRecord.ERROR_DEAD_OBJECT) {
             scheduleAudioRecovery("audio_dead_object")
           }
           micRead
         } else {
-          record.read(chunkBuffer, 0, chunkBuffer.size)
+          val read = record.read(chunkBuffer, 0, chunkBuffer.size)
+          if (read > 0 && capture.profile.captureSource == NativeSttCaptureSource.DEVICE_AUDIO &&
+            NativeTTSModule.isTranslationAudible()
+          ) {
+            // Device audio alone: silence while our translation is audible.
+            chunkBuffer.fill(0, 0, read)
+          }
+          read
         }
         if (bytesRead <= 0) {
           if (bytesRead == AudioRecord.ERROR_DEAD_OBJECT) {

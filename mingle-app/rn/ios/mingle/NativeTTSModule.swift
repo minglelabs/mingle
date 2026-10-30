@@ -59,6 +59,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
         if ttsSessionTokenAcquired { return }
         MingleAudioSessionCoordinator.shared.acquireTTS()
         ttsSessionTokenAcquired = true
+        MingleDeviceAudioState.shared.setTranslationPlaying(true)
     }
 
     private func clearCurrentPlaybackIdentity() {
@@ -100,6 +101,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
 
     private func releaseTtsSessionTokenIfNeeded() {
         if !ttsSessionTokenAcquired { return }
+        MingleDeviceAudioState.shared.setTranslationPlaying(false)
         setDuckingOthers(false)
         MingleAudioSessionCoordinator.shared.releaseTTS()
         ttsSessionTokenAcquired = false

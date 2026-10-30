@@ -1,6 +1,6 @@
 'use client'
 
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { Check, Mic, MonitorSpeaker, type LucideIcon } from 'lucide-react'
 import LanguageRadioOption from './LanguageRadioOption'
 import {
@@ -70,6 +70,7 @@ export default function EarphoneModeNoticeContent({
   deviceAudioViaBroadcast = false,
   onConfirm,
   coinCostNotice,
+  initialStep = 1,
 }: {
   uiLocale: string
   copy: LivePhoneDemoEarphoneModeCopy
@@ -89,13 +90,84 @@ export default function EarphoneModeNoticeContent({
   onConfirm: () => void
   // Coins: reading translations aloud costs more than recognition alone. Null while billing is off.
   coinCostNotice?: string | null
+  // Which page opens first (tests render page 2 directly).
+  initialStep?: 1 | 2
 }) {
   const languageListLabelId = useId()
   const captureSourceLabelId = useId()
+  // With a capture-source choice the notice has two pages: the read language
+  // first, then what to translate. Picks survive going back and forth.
+  const hasCaptureSourceStep = Boolean(captureSource && onSelectCaptureSource)
+  const totalSteps = hasCaptureSourceStep ? 2 : 1
+  const [step, setStep] = useState<1 | 2>(hasCaptureSourceStep ? initialStep : 1)
+  const currentStep = hasCaptureSourceStep ? step : 1
+
+  if (currentStep === 2 && captureSource && onSelectCaptureSource) {
+    return (
+      <div data-qa="live-demo-earphone-mode-notice" data-earphone-mode-notice-step="2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-gray-900">{copy.label}</p>
+          <span data-earphone-mode-notice-step-indicator className="text-xs font-semibold text-gray-500">2/{totalSteps}</span>
+        </div>
+        <p id={captureSourceLabelId} className="mt-4 text-sm font-semibold text-gray-900">
+          {copy.captureSourceLabel}
+        </p>
+        <div
+          role="radiogroup"
+          aria-labelledby={captureSourceLabelId}
+          data-qa="live-demo-capture-source"
+          className="mt-2 space-y-2"
+        >
+          <CaptureSourceRadioOption
+            source="microphone"
+            icon={Mic}
+            label={copy.captureSourceMicrophoneLabel}
+            selected={captureSource === 'microphone'}
+            onSelect={onSelectCaptureSource}
+          />
+          <CaptureSourceRadioOption
+            source="device_audio"
+            icon={MonitorSpeaker}
+            label={copy.captureSourceDeviceAudioLabel}
+            selected={captureSource === 'device_audio'}
+            onSelect={onSelectCaptureSource}
+          />
+        </div>
+        {captureSource === 'device_audio' && (
+          <p data-capture-source-hint className="mt-2 text-sm leading-relaxed text-gray-600">
+            {deviceAudioViaBroadcast ? copy.captureSourceDeviceAudioHintIos : copy.captureSourceDeviceAudioHint}
+          </p>
+        )}
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            data-earphone-mode-notice-back
+            onClick={() => setStep(1)}
+            className="inline-flex h-10 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            {copy.noticeBackLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="inline-flex h-10 flex-1 items-center justify-center rounded-lg text-sm font-semibold text-white transition-colors"
+            style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)' }}
+          >
+            {copy.noticeConfirmLabel}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div data-qa="live-demo-earphone-mode-notice">
-      <p className="text-sm font-semibold text-gray-900">{copy.label}</p>
+    <div data-qa="live-demo-earphone-mode-notice" data-earphone-mode-notice-step="1">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-gray-900">{copy.label}</p>
+        {hasCaptureSourceStep && (
+          <span data-earphone-mode-notice-step-indicator className="text-xs font-semibold text-gray-500">1/{totalSteps}</span>
+        )}
+      </div>
       <p className="mt-2 text-sm leading-relaxed text-gray-600">{copy.noticeBody}</p>
       {readLanguage && (
         <p data-earphone-mode-read-language-notice className="mt-2 text-sm leading-relaxed text-gray-600">
@@ -128,46 +200,14 @@ export default function EarphoneModeNoticeContent({
           </div>
         </>
       )}
-      {captureSource && onSelectCaptureSource && (
-        <>
-          <p id={captureSourceLabelId} className="mt-4 text-sm font-semibold text-gray-900">
-            {copy.captureSourceLabel}
-          </p>
-          <div
-            role="radiogroup"
-            aria-labelledby={captureSourceLabelId}
-            data-qa="live-demo-capture-source"
-            className="mt-2 space-y-2"
-          >
-            <CaptureSourceRadioOption
-              source="microphone"
-              icon={Mic}
-              label={copy.captureSourceMicrophoneLabel}
-              selected={captureSource === 'microphone'}
-              onSelect={onSelectCaptureSource}
-            />
-            <CaptureSourceRadioOption
-              source="device_audio"
-              icon={MonitorSpeaker}
-              label={copy.captureSourceDeviceAudioLabel}
-              selected={captureSource === 'device_audio'}
-              onSelect={onSelectCaptureSource}
-            />
-          </div>
-          {captureSource === 'device_audio' && (
-            <p data-capture-source-hint className="mt-2 text-sm leading-relaxed text-gray-600">
-              {deviceAudioViaBroadcast ? copy.captureSourceDeviceAudioHintIos : copy.captureSourceDeviceAudioHint}
-            </p>
-          )}
-        </>
-      )}
       <button
         type="button"
-        onClick={onConfirm}
+        data-earphone-mode-notice-next={hasCaptureSourceStep ? '' : undefined}
+        onClick={hasCaptureSourceStep ? () => setStep(2) : onConfirm}
         className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-lg text-sm font-semibold text-white transition-colors"
         style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)' }}
       >
-        {copy.noticeConfirmLabel}
+        {hasCaptureSourceStep ? copy.noticeNextLabel : copy.noticeConfirmLabel}
       </button>
     </div>
   )

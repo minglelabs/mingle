@@ -10,6 +10,7 @@ import android.media.MediaPlayer
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
 import com.facebook.react.bridge.Arguments
@@ -130,6 +131,7 @@ class NativeTTSModule(
         }
         player = nextPlayer
         requestDuckingFocus()
+        setTranslationPlaying(true)
         nextPlayer.start()
         Log.i(TAG, "playing playbackId=$playbackId bytes=${audioBytes.size} durationMs=${nextPlayer.duration}")
         promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
@@ -257,6 +259,9 @@ class NativeTTSModule(
     clipFile?.delete()
     clipFile = null
     abandonDuckingFocus()
+    if (current != null) {
+      setTranslationPlaying(false)
+    }
   }
 
   private fun clearIdentity() {
@@ -281,6 +286,27 @@ class NativeTTSModule(
     if (options.hasKey(key)) options.getString(key)?.trim()?.takeIf { it.isNotEmpty() } else null
 
   companion object {
+    /**
+     * True while a translation clip plays and for [TRANSLATION_TAIL_MS] after.
+     * The device-audio capture adds no other-app sound in that stretch, so the
+     * translation can never come back as speech even if a device routes this
+     * app's playback into the capture despite the uid exclusion.
+     */
+    @JvmStatic
+    fun isTranslationAudible(): Boolean =
+      translationPlaying || SystemClock.elapsedRealtime() - translationEndedAtMs < TRANSLATION_TAIL_MS
+
+    @Volatile private var translationPlaying = false
+    @Volatile private var translationEndedAtMs = 0L
+    private const val TRANSLATION_TAIL_MS = 400L
+
+    private fun setTranslationPlaying(playing: Boolean) {
+      if (translationPlaying && !playing) {
+        translationEndedAtMs = SystemClock.elapsedRealtime()
+      }
+      translationPlaying = playing
+    }
+
     const val NAME = "NativeTTSModule"
     private const val TAG = "NativeTTS"
     private const val EARPHONES_DISCONNECTED_REASON = "earphones_disconnected"
