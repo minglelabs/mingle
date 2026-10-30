@@ -311,6 +311,17 @@ class NativeSTTModule: RCTEventEmitter {
     private var deviceAudioBuffer = Data()
     private var deviceAudioLastAudioAt = Date.distantPast
     private var deviceAudioSilenceTimer: DispatchSourceTimer?
+    // Device audio also records the microphone (the user's own voice) and
+    // sends the two mixed. Main queue: the engine and its observer.
+    private var deviceAudioMicEngine: AVAudioEngine?
+    private var deviceAudioMicConfigObserver: NSObjectProtocol?
+    // wsQueue only: whether the microphone paces the mixed stream, and its
+    // not yet sent PCM (16-bit mono at MingleBroadcastChannel.sampleRate).
+    private var deviceAudioMicActive = false
+    private var deviceAudioMicBuffer = Data()
+    /// The most other-app audio kept while the microphone paces the stream
+    /// (1 s); older audio is dropped so the two never drift apart.
+    private static let deviceAudioMaxBufferedBytes = MingleBroadcastChannel.sampleRate * MemoryLayout<Int16>.size
 
     override static func requiresMainQueueSetup() -> Bool {
         false
@@ -1268,13 +1279,177 @@ class NativeSTTModule: RCTEventEmitter {
     }
 
     /// Other apps keep playing, and this app keeps running behind them: a
-    /// mixable playback session with no input.
+    /// mixable session. With microphone permission it also records (the
+    /// user's own voice is mixed in), in `.default` mode: `.voiceChat` would
+    /// duck the other apps for the whole session.
     private func configureDeviceAudioSession() throws {
         let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        if audioSession.recordPermission == .granted {
+            try audioSession.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]
+            )
+        } else {
+            try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        }
         try audioSession.setActive(true, options: [])
+        let inputs = audioSession.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
         let outputs = audioSession.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
-        NSLog("[NativeSTTModule] device audio session active outputs=[%@]", outputs)
+        NSLog("[NativeSTTModule] device audio session active category=%@ inputs=[%@] outputs=[%@]",
+              audioSession.category.rawValue, inputs, outputs)
+    }
+
+    // MARK: - Device audio: companion microphone
+
+    /// Starts recording the microphone next to the broadcast. Without
+    /// permission, or if the input cannot start, the session stays on device
+    /// audio alone.
+    private func startDeviceAudioMicrophone() {
+        stopDeviceAudioMicrophone()
+        guard AVAudioSession.sharedInstance().recordPermission == .granted else {
+            NSLog("[NativeSTTModule] device audio mic skipped: no microphone permission")
+            return
+        }
+        let engine = AVAudioEngine()
+        let input = engine.inputNode
+        let inputFormat = input.outputFormat(forBus: 0)
+        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0,
+              let outputFormat = AVAudioFormat(
+                  commonFormat: .pcmFormatInt16,
+                  sampleRate: Double(MingleBroadcastChannel.sampleRate),
+                  channels: 1,
+                  interleaved: true
+              ),
+              let converter = AVAudioConverter(from: inputFormat, to: outputFormat)
+        else {
+            NSLog("[NativeSTTModule] device audio mic skipped: unusable input format %@", inputFormat.description)
+            return
+        }
+        input.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { [weak self] buffer, _ in
+            guard let self,
+                  let pcm = Self.convertMicrophoneBuffer(buffer, converter: converter, outputFormat: outputFormat)
+            else { return }
+            self.handleDeviceAudioMicrophone(pcm)
+        }
+        do {
+            engine.prepare()
+            try engine.start()
+        } catch {
+            input.removeTap(onBus: 0)
+            NSLog("[NativeSTTModule] device audio mic skipped: %@", error.localizedDescription)
+            return
+        }
+        deviceAudioMicEngine = engine
+        // A route change (earphones in or out) stops the engine; start again.
+        deviceAudioMicConfigObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.deviceAudioActive, self.isRunning else { return }
+            NSLog("[NativeSTTModule] device audio mic configuration change; restarting")
+            self.startDeviceAudioMicrophone()
+        }
+        wsQueue.async { [weak self] in
+            self?.deviceAudioMicBuffer.removeAll(keepingCapacity: true)
+            self?.deviceAudioMicActive = true
+        }
+        NSLog("[NativeSTTModule] device audio mic recording inputRate=%.0f channels=%d",
+              inputFormat.sampleRate, inputFormat.channelCount)
+    }
+
+    /// Stops the companion microphone. Runs from `deinit` too (through
+    /// `tearDownDeviceAudioCapture`), so it must not capture `self`; the
+    /// wsQueue flags are reset when the next session begins.
+    private func stopDeviceAudioMicrophone() {
+        if let observer = deviceAudioMicConfigObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        deviceAudioMicConfigObserver = nil
+        guard let engine = deviceAudioMicEngine else { return }
+        deviceAudioMicEngine = nil
+        engine.inputNode.removeTap(onBus: 0)
+        if engine.isRunning {
+            engine.stop()
+        }
+    }
+
+    private static func convertMicrophoneBuffer(
+        _ buffer: AVAudioPCMBuffer,
+        converter: AVAudioConverter,
+        outputFormat: AVAudioFormat
+    ) -> Data? {
+        guard buffer.frameLength > 0 else { return nil }
+        let ratio = outputFormat.sampleRate / buffer.format.sampleRate
+        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
+        guard let output = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else { return nil }
+        var supplied = false
+        var conversionError: NSError?
+        let status = converter.convert(to: output, error: &conversionError) { _, inputStatus in
+            if supplied {
+                inputStatus.pointee = .noDataNow
+                return nil
+            }
+            supplied = true
+            inputStatus.pointee = .haveData
+            return buffer
+        }
+        guard status != .error, output.frameLength > 0, let samples = output.int16ChannelData?[0] else {
+            return nil
+        }
+        return Data(bytes: samples, count: Int(output.frameLength) * MemoryLayout<Int16>.size)
+    }
+
+    /// Microphone PCM, from the tap thread. The microphone paces the stream:
+    /// each full chunk is sent with the other apps' audio added in.
+    private func handleDeviceAudioMicrophone(_ pcm: Data) {
+        wsQueue.async { [weak self] in
+            guard let self, self.isRunning, self.deviceAudioActive, self.deviceAudioMicActive,
+                  !self.gracefulStopPending
+            else { return }
+            self.deviceAudioLastAudioAt = Date()
+            self.deviceAudioMicBuffer.append(pcm)
+            let chunkBytes = Self.deviceAudioChunkBytes
+            while self.deviceAudioMicBuffer.count >= chunkBytes {
+                let micChunk = Data(self.deviceAudioMicBuffer.prefix(chunkBytes))
+                self.deviceAudioMicBuffer.removeFirst(chunkBytes)
+                self.sendMixedDeviceAudioChunk(base: micChunk)
+            }
+        }
+    }
+
+    /// wsQueue: sends `base` (the microphone, or silence) with up to one
+    /// chunk of buffered other-app audio added in.
+    private func sendMixedDeviceAudioChunk(base: Data) {
+        var chunk = base
+        let available = min(deviceAudioBuffer.count, chunk.count) & ~1
+        if available > 0 {
+            let other = Data(deviceAudioBuffer.prefix(available))
+            deviceAudioBuffer.removeFirst(available)
+            Self.mixPcm16(into: &chunk, adding: other)
+        }
+        sendDeviceAudioChunk(chunk)
+    }
+
+    /// Adds 16-bit little-endian samples of `addend` into `target`, clamping.
+    static func mixPcm16(into target: inout Data, adding addend: Data) {
+        let sampleCount = min(target.count, addend.count) / MemoryLayout<Int16>.size
+        guard sampleCount > 0 else { return }
+        let stride = MemoryLayout<Int16>.size
+        let source: [Int16] = addend.withUnsafeBytes { raw in
+            (0 ..< sampleCount).map { raw.loadUnaligned(fromByteOffset: $0 * stride, as: Int16.self) }
+        }
+        var mixed: [Int16] = target.withUnsafeBytes { raw in
+            (0 ..< sampleCount).map { raw.loadUnaligned(fromByteOffset: $0 * stride, as: Int16.self) }
+        }
+        for index in 0 ..< sampleCount {
+            let sum = Int32(Int16(littleEndian: mixed[index])) + Int32(Int16(littleEndian: source[index]))
+            mixed[index] = Int16(clamping: sum).littleEndian
+        }
+        mixed.withUnsafeBytes { bytes in
+            target.replaceSubrange(0 ..< sampleCount * MemoryLayout<Int16>.size, with: bytes)
+        }
     }
 
     private func beginDeviceAudioSession(_ request: DeviceAudioStartRequest) {
@@ -1309,9 +1484,12 @@ class NativeSTTModule: RCTEventEmitter {
         wsQueue.async { [weak self] in
             self?.deviceAudioBuffer.removeAll(keepingCapacity: false)
             self?.deviceAudioLastAudioAt = Date.distantPast
+            self?.deviceAudioMicActive = false
+            self?.deviceAudioMicBuffer.removeAll(keepingCapacity: false)
         }
         deviceAudioActive = true
         MingleDeviceAudioState.shared.isActive = true
+        startDeviceAudioMicrophone()
         startDeviceAudioKeepAlive()
         observeDeviceAudioInterruptions()
 
@@ -1343,8 +1521,17 @@ class NativeSTTModule: RCTEventEmitter {
     private func handleDeviceAudio(_ pcm: Data) {
         wsQueue.async { [weak self] in
             guard let self, self.isRunning, self.deviceAudioActive, !self.gracefulStopPending else { return }
-            self.deviceAudioLastAudioAt = Date()
             self.deviceAudioBuffer.append(pcm)
+            if self.deviceAudioMicActive {
+                // The microphone paces the stream and adds this audio in;
+                // keep at most a second of it.
+                let excess = self.deviceAudioBuffer.count - Self.deviceAudioMaxBufferedBytes
+                if excess > 0 {
+                    self.deviceAudioBuffer.removeFirst((excess + 1) & ~1)
+                }
+                return
+            }
+            self.deviceAudioLastAudioAt = Date()
             let chunkBytes = Self.deviceAudioChunkBytes
             while self.deviceAudioBuffer.count >= chunkBytes {
                 let chunk = Data(self.deviceAudioBuffer.prefix(chunkBytes))
@@ -1378,7 +1565,9 @@ class NativeSTTModule: RCTEventEmitter {
         timer.setEventHandler { [weak self] in
             guard let self, self.isRunning, self.deviceAudioActive, !self.gracefulStopPending else { return }
             guard Date().timeIntervalSince(self.deviceAudioLastAudioAt) > 0.3 else { return }
-            self.sendDeviceAudioChunk(Data(count: Self.deviceAudioChunkBytes))
+            // A stalled microphone (an interruption) must not hold back the
+            // other apps' audio: send it over silence in real time.
+            self.sendMixedDeviceAudioChunk(base: Data(count: Self.deviceAudioChunkBytes))
         }
         timer.resume()
         deviceAudioSilenceTimer = timer
@@ -1450,6 +1639,7 @@ class NativeSTTModule: RCTEventEmitter {
             }
             do {
                 try self.configureDeviceAudioSession()
+                self.startDeviceAudioMicrophone()
                 self.startDeviceAudioKeepAlive()
             } catch {
                 self.emitError("device_audio_resume_failed: \(error.localizedDescription)")
@@ -1480,6 +1670,7 @@ class NativeSTTModule: RCTEventEmitter {
         deviceAudioActive = false
         MingleDeviceAudioState.shared.isActive = false
         stopDeviceAudioSilenceFill()
+        stopDeviceAudioMicrophone()
         stopDeviceAudioKeepAlive()
         removeDeviceAudioInterruptionObserver()
         let receiver = deviceAudioReceiver
