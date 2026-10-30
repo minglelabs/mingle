@@ -1082,6 +1082,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
             author: actionPost.author,
             isMine: actionPost.isMine,
             visibility: actionPost.visibility,
+            sourceText: actionPost.sourceText,
           }}
           locale={locale}
           viewerId={viewerId}
@@ -1097,6 +1098,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
             setActionPostId(null);
           }}
           onRequireLogin={() => goToLogin(actionPostId)}
+          onPostEdited={(postId) => window.location.assign(feedHref(locale, { postId }))}
         />
       ) : null}
 
