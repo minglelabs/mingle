@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-10-30 — iOS restored-screen capture never takes a touch
+
+- Surface: The last-screen capture overlay in `rn/App.tsx`, shown on an iOS cold start that restores the previous screen (the app was killed in the background).
+- Issue: Until the WebView finished loading (up to the 4 s splash fallback, or 10 s for the capture), the capture swallowed every tap. #354 only let taps through after load, so on a slow cold start users still saw a real-looking screen where nothing could be pressed.
+- Resolution: The capture is `pointerEvents="none"` from the start and the first touch anywhere drops it at once. After load the touch reaches the real screen; before load, dropping it reveals the splash, so the wait is visible instead of a frozen-looking screen.
+- Verification: RN type check (no `App.tsx` errors) and `webViewRestore` tests. Not tried on a device yet.
+
 ## 2026-10-29 — Conversation list header (2.2.0+): search, bell, gear instead of compose
 
 - Surface: `AppTopHeader` on the conversation list (posting-feed clients, 2.2.0+) in `conversation-list.tsx` and `app-top-header.tsx`.
