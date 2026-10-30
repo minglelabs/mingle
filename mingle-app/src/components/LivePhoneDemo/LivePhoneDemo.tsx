@@ -57,6 +57,10 @@ import {
   subscribeSttCaptureSourcePick,
 } from '@/lib/native-device-audio'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
+import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, useCoinWallet } from '@/lib/coin-wallet-client'
+import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
+import CoinBalanceChip from '@/components/coins/coin-balance-chip'
+import CoinRoomBanner from '@/components/coins/coin-room-banner'
 import { resolveLivePhoneDemoEarphoneModeCopy } from '@/i18n/live-phone-demo-earphone-mode-copy'
 
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
@@ -2306,6 +2310,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const speechLanguagesRef = useRef<string[]>(speechLanguages)
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
+  const coinLocale = resolveAppSupportedLocaleTag(uiLocale) ?? DEFAULT_LOCALE
+  const coinWallet = useCoinWallet().wallet
+  const coinTtsCostNotice = isCoinBillingActive(coinWallet) && coinWallet.rates
+    ? fillCoinCopy(getCoinCopy(coinLocale).ttsCostNotice, {
+        stt: Math.round(coinWallet.rates.sttCoinsPerMinute),
+        tts: Math.round(coinWallet.rates.voiceWithTtsCoinsPerMinute),
+      })
+    : null
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const textSizeDropdownRef = useRef<HTMLDivElement | null>(null)
   const textSizeButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -4670,7 +4682,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           ...(requestTtsModel ? { ttsModel: requestTtsModel } : {}),
         }),
       })
+      if (response.status === 402) notifyCoinsExhausted({ userInitiated: true })
       if (!response.ok) return null
+      applyCoinBalanceFromHeaders(response.headers)
       const arrayBuffer = await response.arrayBuffer()
       if (!arrayBuffer || arrayBuffer.byteLength === 0) return null
       return new Blob([arrayBuffer], {
@@ -7345,6 +7359,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         className="relative flex h-full min-h-0 flex-col overflow-hidden"
       >
 
+        {/* Coins: overlays the top of the message area so the room layout does not shift. */}
+        {headerMode === 'conversation' ? (
+          <div
+            className="absolute inset-x-0 z-30"
+            style={{ top: "calc(54px + env(safe-area-inset-top, 0px))" }}
+          >
+            <CoinRoomBanner locale={coinLocale} />
+          </div>
+        ) : null}
+
         {/* Header */}
         <div
           ref={headerRef}
@@ -7390,6 +7414,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             <MingleWordmark className="relative z-20" />
           )}
           <div className="relative z-20 flex items-center gap-1">
+            <CoinBalanceChip locale={coinLocale} size="compact" />
             <div className="relative mr-1.5">
               <button
                 ref={langSelectorButtonRef}
@@ -9589,6 +9614,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 onSelectCaptureSource={setSttCaptureSourcePick}
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}
+                coinCostNotice={coinTtsCostNotice}
               />
             </MessageMediaDialog>
           )}

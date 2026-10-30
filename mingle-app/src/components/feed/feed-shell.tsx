@@ -18,6 +18,7 @@ import { useReducedMotion } from "@/components/feed/use-reduced-motion";
 import { useFeedSource } from "@/components/feed/use-feed-source";
 import type { LikeState } from "@/components/feed/use-feed-like";
 import FeedLoginSheet from "@/components/feed/feed-login-sheet";
+import InterestLanguagePrompt from "@/components/feed/interest-language-prompt";
 import { composeLoginReturnHref, loginReturnHref } from "@/components/feed/login-redirect";
 import {
   createDeepLinkCommentLatch,
@@ -1056,6 +1057,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       ) : null}
 
       <FeedToast message={toast} onDismiss={() => setToast(null)} reducedMotion={reducedMotion} />
+      {!isViewer ? <InterestLanguagePrompt viewerId={viewerId} locale={locale} /> : null}
 
       {/* Stubs — bodies belong to other teams; we wire props + swipe blocking. */}
       <CommentSheet

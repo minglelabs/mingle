@@ -6,6 +6,14 @@ import ProfileImageCropper, {
   type ProfileImageCropperChange,
 } from "@/components/profile-image-cropper";
 import ProfileImagePreview from "@/components/profile-image-preview";
+import {
+  clearMyPageProfileCache,
+  createEmptyMyPageProfile,
+  readMyPageProfileCache,
+  readMyPageProfileMemoryCache,
+  writeMyPageProfileCache,
+  type MyPageProfileRecord,
+} from "@/components/my-page-profile-cache";
 import ProfileShareScreen from "@/components/profile-share-screen";
 import FollowListScreen from "@/components/follow-list-screen";
 import ProfileBio from "@/components/profile-bio";
@@ -18,6 +26,11 @@ import ProfileLocation from "@/components/profile-location";
 import ProfilePostGrid from "@/components/search/profile-post-grid";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
+import LanguageLevelPicker from "@/components/language-level-picker";
+import ProfileLanguageLevels from "@/components/profile-language-levels";
+import { MAX_INTEREST_LANGUAGES, sanitizeInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
+import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
+import InterestLanguageSheet from "@/components/interest-language-sheet";
 import LanguageFlag from "@/components/language-flag";
 import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
@@ -85,7 +98,11 @@ import {
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
-import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import CoinBalanceChip, { formatCoinCount } from "@/components/coins/coin-balance-chip";
+import HashSeedIcon from "@/components/coins/hash-seed-icon";
+import { getCoinCopy } from "@/i18n/coin-copy";
+import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
 import { feedCopy } from "@/i18n/feed-copy";
@@ -103,25 +120,7 @@ type MyPageProps = {
   locale: AppLocale;
 };
 
-type ProfileRecord = {
-  bioDraft?: string | null;
-  image: string | null;
-  imageCropScale: number | null;
-  imageCropX: number | null;
-  imageCropY: number | null;
-  handle: string | null;
-  name: string | null;
-  bio: string | null;
-  nationality: string | null;
-  primaryLanguages: string[];
-  defaultConversationLanguages: string[];
-  location: ProfileLocationRecord | null;
-  birthDate?: BirthDateParts | null;
-  followersCount: number;
-  followingCount: number;
-  /** Operator / official account; absent means false. */
-  isOfficial?: boolean;
-};
+type ProfileRecord = MyPageProfileRecord;
 
 type ProfileDraft = {
   imageFile: File | null;
@@ -133,6 +132,8 @@ type ProfileDraft = {
   primaryLanguages: SttLanguageCode[];
   birthDate: BirthDateParts | null;
 };
+
+const NO_INTEREST_LANGUAGES: readonly InterestLanguage[] = [];
 
 const DEFAULT_PROFILE_EDIT_BIRTH_DATE: BirthDateParts = {
   year: 2000,
@@ -254,13 +255,14 @@ type ReportRecord = {
 
 type SessionStatus = "loading" | "authenticated" | "unauthenticated";
 type ManagementLoadState = "idle" | "loading" | "ready" | "unauthorized" | "error";
-type ProfileManagementPage = "blocked" | "reports" | "language" | "primaryLanguages" | "defaultLanguages" | "usage" | "feedback";
+type ProfileManagementPage = "blocked" | "reports" | "language" | "primaryLanguages" | "interestLanguages" | "defaultLanguages" | "usage" | "feedback";
 
 function isProfileManagementPage(value: string | undefined): value is ProfileManagementPage {
   return value === "blocked"
     || value === "reports"
     || value === "language"
     || value === "primaryLanguages"
+    || value === "interestLanguages"
     || value === "defaultLanguages"
     || value === "usage"
     || value === "feedback";
@@ -356,6 +358,8 @@ function ProfileSettingsPanel({
   onChangeAppLanguage,
   initialPrimaryLanguages,
   onSavePrimaryLanguages,
+  initialInterestLanguages,
+  onSaveInterestLanguages,
   initialDefaultConversationLanguages,
   onSaveDefaultConversationLanguages,
   onSignOut,
@@ -370,6 +374,8 @@ function ProfileSettingsPanel({
   onChangeAppLanguage: (locale: PrimaryUiLocale) => void;
   initialPrimaryLanguages: readonly string[];
   onSavePrimaryLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
+  initialInterestLanguages: readonly InterestLanguage[];
+  onSaveInterestLanguages: (languages: InterestLanguage[]) => Promise<boolean>;
   initialDefaultConversationLanguages: readonly string[];
   onSaveDefaultConversationLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
   onSignOut: () => void;
@@ -378,6 +384,10 @@ function ProfileSettingsPanel({
   open: boolean;
   sessionStatus: SessionStatus;
 }) {
+  const coinWalletState = useCoinWallet().wallet;
+  const coinBillingActive = isCoinBillingActive(coinWalletState);
+  const coinWallet = coinWalletState ?? { balance: 0 };
+  const coinCopy = getCoinCopy(locale);
   const postingFeedSupported = useIsPostingFeedSupported();
   const [blocks, setBlocks] = useState<BlockedUserRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
@@ -397,6 +407,9 @@ function ProfileSettingsPanel({
     sanitizeSttLanguageSelection(initialPrimaryLanguages)
   ));
   const [isSavingPrimaryLanguages, setIsSavingPrimaryLanguages] = useState(false);
+  const [interestLanguages, setInterestLanguages] = useState<InterestLanguage[]>(() => [...initialInterestLanguages]);
+  const [isSavingInterestLanguages, setIsSavingInterestLanguages] = useState(false);
+  const interestCopy = useMemo(() => resolveInterestLanguageCopy(locale), [locale]);
   const [defaultConversationLanguages, setDefaultConversationLanguages] = useState<SttLanguageCode[]>(() => (
     sanitizeSttLanguageSelection(initialDefaultConversationLanguages)
   ));
@@ -493,6 +506,8 @@ function ProfileSettingsPanel({
           ? copy.usage.title
           : managementPage === "primaryLanguages"
             ? copy.primaryLanguagesTitle
+            : managementPage === "interestLanguages"
+              ? interestCopy.interestLabel
             : managementPage === "defaultLanguages"
               ? copy.defaultLanguagesTitle
               : copy.appLanguageTitle;
@@ -539,6 +554,11 @@ function ProfileSettingsPanel({
     if (!open) return;
     setPrimaryLanguages(sanitizeSttLanguageSelection(initialPrimaryLanguages));
   }, [initialPrimaryLanguages, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setInterestLanguages([...initialInterestLanguages]);
+  }, [initialInterestLanguages, open]);
 
   useEffect(() => {
     if (!open) {
@@ -703,6 +723,29 @@ function ProfileSettingsPanel({
     }
   }, [copy.defaultLanguagesSaveError, defaultConversationLanguages, isSavingDefaultConversationLanguages, onSaveDefaultConversationLanguages]);
 
+  const saveInterestLanguages = useCallback(async (nextLanguages: InterestLanguage[]) => {
+    if (isSavingInterestLanguages) return;
+    const previousLanguages = interestLanguages;
+    setInterestLanguages(nextLanguages);
+    setIsSavingInterestLanguages(true);
+    try {
+      if (!await onSaveInterestLanguages(nextLanguages)) {
+        setInterestLanguages(previousLanguages);
+        window.alert(interestCopy.saveError);
+      }
+    } finally {
+      setIsSavingInterestLanguages(false);
+    }
+  }, [interestCopy.saveError, interestLanguages, isSavingInterestLanguages, onSaveInterestLanguages]);
+
+  const handleToggleInterestLanguage = useCallback((code: SttLanguageCode) => {
+    const selected = interestLanguages.some((entry) => entry.code === code);
+    if (!selected && (interestLanguages.length >= MAX_INTEREST_LANGUAGES || primaryLanguages.includes(code))) return;
+    void saveInterestLanguages(selected
+      ? interestLanguages.filter((entry) => entry.code !== code)
+      : [...interestLanguages, { code, level: 1 }]);
+  }, [interestLanguages, primaryLanguages, saveInterestLanguages]);
+
   const handleTogglePrimaryLanguage = useCallback(async (code: SttLanguageCode) => {
     if (isSavingPrimaryLanguages) return;
 
@@ -794,6 +837,7 @@ function ProfileSettingsPanel({
       }
       await unregisterNativePushToken();
       resetMinglePostHogIdentity();
+      clearMyPageProfileCache();
       await signOut({ callbackUrl: signOutCallbackUrl });
       if (typeof window !== "undefined") {
         window.location.replace(signOutCallbackUrl);
@@ -817,6 +861,7 @@ function ProfileSettingsPanel({
       }
       await unregisterNativePushToken();
       resetMinglePostHogIdentity();
+      clearMyPageProfileCache();
       await signOut({ callbackUrl: signOutCallbackUrl });
       if (typeof window !== "undefined") {
         window.location.replace(signOutCallbackUrl);
@@ -856,6 +901,18 @@ function ProfileSettingsPanel({
           </header>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
+            {coinBillingActive ? (
+              <button
+                type="button"
+                onClick={openCoinStore}
+                className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-left transition active:bg-amber-100"
+              >
+                <HashSeedIcon size={21} />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{coinCopy.storeTitle}</span>
+                <span className="text-[14px] font-bold tabular-nums text-amber-700">{formatCoinCount(coinWallet.balance, locale)}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-amber-500" aria-hidden="true" />
+              </button>
+            ) : null}
             {postingFeedSupported !== false ? (
             <div className="mb-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <button
@@ -931,6 +988,15 @@ function ProfileSettingsPanel({
               >
                 <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
                 <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.primaryLanguages}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => openManagementPage("interestLanguages")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{interestCopy.interestLabel}</span>
                 <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
               </button>
               <button
@@ -1218,6 +1284,42 @@ function ProfileSettingsPanel({
                   maxLanguages={MAX_STT_LANGUAGE_SELECTION}
                   minLanguages={1}
                   disabled={isSavingPrimaryLanguages}
+                />
+              </div>
+            ) : managementPage === "interestLanguages" ? (
+              <div>
+                <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{interestCopy.settingsDescription}</p>
+                {interestLanguages.length ? (
+                  <ul className="mb-5 space-y-2">
+                    {interestLanguages.map((entry) => (
+                      <li key={entry.code} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                        <p className="flex items-center gap-2 text-[14px] font-semibold text-slate-900">
+                          <LanguageFlag language={entry.code} className="text-[18px] leading-none" />
+                          {getSttLanguageDisplayName(entry.code, locale) ?? entry.code}
+                        </p>
+                        <LanguageLevelPicker
+                          level={entry.level}
+                          locale={locale}
+                          disabled={isSavingInterestLanguages}
+                          onChange={(level) => void saveInterestLanguages(
+                            interestLanguages.map((item) => (item.code === entry.code ? { ...item, level } : item)),
+                          )}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <LanguagePreferencePicker
+                  selectedLanguages={interestLanguages.map((entry) => entry.code)}
+                  onToggleLanguage={handleToggleInterestLanguage}
+                  uiLocale={locale}
+                  searchPlaceholder={roomManagementCopy.languageSelectorSearchPlaceholder}
+                  sortLocaleLabel={roomManagementCopy.languageSelectorSortLocaleLabel}
+                  sortAlphabeticalLabel={roomManagementCopy.languageSelectorSortAlphabeticalLabel}
+                  noResultsLabel={roomManagementCopy.languageSelectorNoResultsLabel}
+                  maxLanguages={MAX_INTEREST_LANGUAGES}
+                  minLanguages={0}
+                  disabled={isSavingInterestLanguages}
                 />
               </div>
             ) : managementPage === "defaultLanguages" ? (
@@ -1655,6 +1757,7 @@ function ProfileEditPanel({
 
 export default function MyPage({ dictionary, initialProfile, locale }: MyPageProps) {
   const { data: session, status: sessionStatus } = useSession();
+  const coinBillingActive = isCoinBillingActive(useCoinWallet().wallet);
   const router = useRouter();
   const searchParams = useSearchParams();
   // Rollout gate (W4): hide the post grid for a pre-2.2.0 client (its posts
@@ -1663,22 +1766,22 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const postingFeedSupported = useIsPostingFeedSupported();
   // Compose slides in over My page (like the notification panel), no route change.
   const [composeOpen, setComposeOpen] = useState(false);
-  const [profile, setProfile] = useState<ProfileRecord>(() => initialProfile ?? ({
-    image: null,
-    imageCropScale: null,
-    imageCropX: null,
-    imageCropY: null,
-    handle: null,
-    name: null,
-    bio: null,
-    nationality: null,
-    primaryLanguages: [],
-    defaultConversationLanguages: [],
-    location: null,
-    birthDate: null,
-    followersCount: 0,
-    followingCount: 0,
-  }));
+  // A native tab switch reuses a prefetched route payload that carries no
+  // profile, so the first frame comes from the last profile this session saw.
+  // Only the memory cache is read here: it is empty on a fresh page load, which
+  // keeps hydration identical to the server render.
+  const [initialProfileSeed] = useState(() => {
+    const seedUserId = session?.user?.id ?? "";
+    const seededProfile = initialProfile ?? readMyPageProfileMemoryCache(seedUserId);
+    return {
+      profile: seededProfile ?? createEmptyMyPageProfile(),
+      ownerUserId: seededProfile ? seedUserId : "",
+    };
+  });
+  const [profile, setProfile] = useState<ProfileRecord>(initialProfileSeed.profile);
+  // The account whose data `profile` currently holds. Empty until a snapshot or
+  // an API response arrives, so a placeholder is never cached as a real profile.
+  const profileOwnerUserIdRef = useRef(initialProfileSeed.ownerUserId);
   const [myPageSurfaceHistory, setMyPageSurfaceHistory] = useState(() => (
     typeof window === "undefined" ? [] : readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE)
   ));
@@ -1928,10 +2031,19 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     if (!sessionUserId) return;
 
     let cancelled = false;
+    if (profileOwnerUserIdRef.current !== sessionUserId) {
+      // Cold start: show the persisted header until the request below lands.
+      const cachedProfile = readMyPageProfileCache(sessionUserId);
+      if (cachedProfile) {
+        profileOwnerUserIdRef.current = sessionUserId;
+        setProfile(cachedProfile);
+      }
+    }
     void fetch(buildClientApiPath("/profile"), { cache: "no-store" })
       .then(async (response) => (response.ok ? response.json() as Promise<Partial<ProfileRecord>> : null))
       .then((data) => {
         if (cancelled || !data) return;
+        profileOwnerUserIdRef.current = sessionUserId;
         setProfile({
           image: typeof data.image === "string" ? data.image : null,
           imageCropScale: typeof data.imageCropScale === "number" ? data.imageCropScale : null,
@@ -1946,6 +2058,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             data.primaryLanguages,
             typeof data.nationality === "string" && data.nationality ? [data.nationality] : [],
           ),
+          interestLanguages: sanitizeInterestLanguages(data.interestLanguages),
           defaultConversationLanguages: sanitizeSttLanguageSelection(data.defaultConversationLanguages),
           location: locationPermissionRef.current !== "granted"
             ? null
@@ -1964,6 +2077,11 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       cancelled = true;
     };
   }, [sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId || profileOwnerUserIdRef.current !== sessionUserId) return;
+    writeMyPageProfileCache(sessionUserId, profile);
+  }, [profile, sessionUserId]);
 
   const syncLocationPermission = useCallback(async () => {
     if (!sessionUserId) return;
@@ -2151,6 +2269,24 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     }
   }, []);
 
+  const [interestSheetOpen, setInterestSheetOpen] = useState(false);
+  const interestLanguageCopy = useMemo(() => resolveInterestLanguageCopy(locale), [locale]);
+  const handleSaveInterestLanguages = useCallback(async (languages: InterestLanguage[]) => {
+    try {
+      const response = await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interestLanguages: languages }),
+      });
+      if (!response.ok) return false;
+      const saved = await response.json() as Partial<ProfileRecord>;
+      setProfile((current) => ({ ...current, interestLanguages: sanitizeInterestLanguages(saved.interestLanguages) }));
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const defaultConversationLanguages = useMemo(() => {
     const storedLanguages = sanitizeSttLanguageSelection(profile.defaultConversationLanguages);
     return storedLanguages.length > 0
@@ -2189,6 +2325,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const handleSignOut = useCallback(() => {
     void unregisterNativePushToken().finally(() => {
       resetMinglePostHogIdentity();
+      clearMyPageProfileCache();
       void signOut({ callbackUrl: signOutCallbackUrl }).then(() => {
         if (typeof window !== "undefined") {
           window.location.replace(signOutCallbackUrl);
@@ -2227,6 +2364,14 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         onSave={handleSaveProfile}
         open={showProfileEdit}
       />
+      {interestSheetOpen ? (
+        <InterestLanguageSheet
+          locale={locale}
+          primaryLanguages={primaryLanguages}
+          onSave={(language) => handleSaveInterestLanguages([language])}
+          onClose={() => setInterestSheetOpen(false)}
+        />
+      ) : null}
       <ProfileSettingsPanel
         dictionary={dictionary}
         locale={locale}
@@ -2234,6 +2379,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         onChangeAppLanguage={handleChangeAppLanguage}
         initialPrimaryLanguages={primaryLanguages}
         onSavePrimaryLanguages={handleSavePrimaryLanguages}
+        initialInterestLanguages={profile.interestLanguages ?? NO_INTEREST_LANGUAGES}
+        onSaveInterestLanguages={handleSaveInterestLanguages}
         initialDefaultConversationLanguages={defaultConversationLanguages}
         onSaveDefaultConversationLanguages={handleSaveDefaultConversationLanguages}
         onSignOut={handleSignOut}
@@ -2301,29 +2448,35 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           paddingTop: "env(safe-area-inset-top, 44px)",
         }}
       >
-        {sessionUserId && postingFeedSupported !== false ? (
-          <button
-            type="button"
-            onClick={() => setComposeOpen(true)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:bg-gray-100"
-            aria-label={feedCopy(locale).compose}
-          >
-            <SquarePen size={22} strokeWidth={2} />
-          </button>
-        ) : (
-          <div aria-hidden="true" className="h-10 w-10 shrink-0" />
-        )}
+        {/* Both sides share a width so the name stays centered next to the coin chip. */}
+        <div className={`flex shrink-0 items-center ${coinBillingActive ? "w-[124px]" : ""}`}>
+          {sessionUserId && postingFeedSupported !== false ? (
+            <button
+              type="button"
+              onClick={() => setComposeOpen(true)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:bg-gray-100"
+              aria-label={feedCopy(locale).compose}
+            >
+              <SquarePen size={22} strokeWidth={2} />
+            </button>
+          ) : (
+            <div aria-hidden="true" className="h-10 w-10 shrink-0" />
+          )}
+        </div>
         <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-bold text-slate-950">
           {name}
         </h1>
-        <button
-          type="button"
-          onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
-          className="flex h-10 w-10 items-center justify-center rounded-full transition"
-          aria-label={dictionary.profile.menuLabel}
-        >
-          <Menu size={23} strokeWidth={2.2} />
-        </button>
+        <div className={`flex shrink-0 items-center justify-end gap-1 ${coinBillingActive ? "w-[124px]" : ""}`}>
+          <CoinBalanceChip locale={locale} />
+          <button
+            type="button"
+            onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
+            className="flex h-10 w-10 items-center justify-center rounded-full transition"
+            aria-label={dictionary.profile.menuLabel}
+          >
+            <Menu size={23} strokeWidth={2.2} />
+          </button>
+        </div>
       </header>
 
       <div ref={profileScrollRef} data-restore-scroll="mypage" className="min-h-0 flex-1 overflow-y-auto">
@@ -2365,11 +2518,27 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           </div>
 
           <div className="mt-4 pl-2">
-            <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-semibold text-slate-950">
-              <span className="truncate">{name}</span>
+            <p className="flex min-w-0 items-baseline gap-1.5">
+              <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
               <AccountBadge kind={resolveAccountBadge(profile)} locale={locale} tone="dark" />
+              {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
             </p>
-            {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
+            <ProfileLanguageLevels
+              primaryLanguages={primaryLanguages}
+              interestLanguages={profile.interestLanguages ?? NO_INTEREST_LANGUAGES}
+              locale={locale}
+              className="mt-2.5"
+            />
+            {(profile.interestLanguages ?? NO_INTEREST_LANGUAGES).length === 0 ? (
+              <button
+                type="button"
+                onClick={() => setInterestSheetOpen(true)}
+                className="mt-2 inline-flex items-center gap-1 rounded-full border border-dashed border-amber-300 px-3 py-1 text-[13px] font-semibold text-amber-700 transition active:bg-amber-50"
+              >
+                <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
+                {interestLanguageCopy.addAction}
+              </button>
+            ) : null}
             <ProfileLocation
               profileLocation={locationPermission === "granted" ? profile.location : null}
               locale={locale}
@@ -2399,7 +2568,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           </div>
         </section>
 
-        {sessionUserId && postingFeedSupported !== false ? (
+          {sessionUserId && postingFeedSupported !== false ? (
           <section className="border-t border-gray-100 pt-0.5">
             <ProfilePostGrid locale={locale} authorId={sessionUserId} scrollContainerRef={profileScrollRef} />
           </section>

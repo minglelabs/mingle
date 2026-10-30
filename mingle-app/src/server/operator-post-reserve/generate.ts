@@ -138,6 +138,7 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
     'Photo kinds: "self" shows the poster with their face; "self_faceless" shows the poster but not their face; "self_back" shows the poster from behind; "friends" shows the poster with friends; "scene" shows no recognizable person (food, a drink, a desk, a street, a view, a shop front, a pet, an object, a hand holding something). A slot with the poster in it also has a "setup" (who took it, framing, pose): follow it, and pick a concrete place in the persona\'s city and an outfit that fit the post and the person. Refer to the poster as "the poster" and never describe their face, hair or body: that is added later. Everyone is an adult; no school uniforms.',
     'Get the real world right in the photo: the sun sets only in the west (an east-facing beach like Haeundae or Gwangalli has sunrises, not sunsets), a landmark is only where it really stands as seen from that spot, and anything the description says about the body is anatomically possible.',
     'What is on their own screen (notes, a chat, a map, a playlist, a score) is a screenshot, not a "scene": start the description with "Screenshot of", and never describe a photo of a phone or computer screen.',
+    'Never a photo of handwriting or study material (a notebook, handwritten notes, flashcards, a textbook or worksheet page): drawn, they look fake. For a study or language post, show something else around it (the café or desk, a drink, the view) or make the post about something else.',
     'People post in wildly different ways, and "poster" is how this one does. It comes first: where it conflicts with the general advice below, "poster" wins. Let the type, length and voice show clearly across the set, so that this person could not be mistaken for another account. Register and punctuation hold in every post; each quirk shows in only about one post in three, never in all of them, and never in the same position twice in a row.',
     'Follow each slot\'s "shape" literally. The shapes differ on purpose: the posts must not share one length, one rhythm or one sentence ending.',
     'What makes a post sound human: it is about one specific thing (the actual dish, the actual title, the number of hours, the exact annoying thing), it starts in the middle without setting the scene, and it does not explain how the writer feels about it.',
@@ -202,6 +203,8 @@ export async function generateReservePosts(args: {
   random?: Random
   /** Decides the account's posting personality; the account id. Defaults to the persona itself. */
   seed?: string
+  /** Rewriting a post staff sent back: the old text and what staff want changed. */
+  revision?: { previousText: string; feedback: string | null }
 }): Promise<GeneratedReservePost[]> {
   const generate = args.generate ?? generateJson
   const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
@@ -221,14 +224,18 @@ export async function generateReservePosts(args: {
   })
   const seen = new Set(args.existingTexts.map(reservePostKey))
 
+  const revisionLine = args.revision
+    ? `The input also has "revision": staff sent back a post of this person ("previousText"). Write a replacement for the slot that is clearly different from it${args.revision.feedback ? ', and follow the staff "feedback" first, also where it conflicts with the advice above' : ''}.`
+    : null
   const items = await generate({
-    instructions: buildReserveInstructions(args.persona),
+    instructions: [buildReserveInstructions(args.persona), ...(revisionLine ? [revisionLine] : [])].join('\n'),
     input: {
       persona: args.persona,
       poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
       learner: { language: learner.language, level: learner.level.brief },
       slots: slots.map((slot) => ({ ...slot, photo: slot.photo ? slot.photo.kind : false, ...(slot.photo?.setup ? { setup: slot.photo.setup } : {}) })),
       alreadyWritten: args.existingTexts.slice(-AVOID_SAMPLE_MAX).map((text) => Array.from(text).slice(0, AVOID_SAMPLE_CHARS).join('')),
+      ...(args.revision ? { revision: { previousText: args.revision.previousText, ...(args.revision.feedback ? { feedback: args.revision.feedback } : {}) } } : {}),
     },
     responseSchema: RESPONSE_SCHEMA,
     validate: (value) => {

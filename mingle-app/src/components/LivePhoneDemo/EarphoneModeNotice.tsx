@@ -69,6 +69,7 @@ export default function EarphoneModeNoticeContent({
   onSelectCaptureSource,
   deviceAudioViaBroadcast = false,
   onConfirm,
+  coinCostNotice,
 }: {
   uiLocale: string
   copy: LivePhoneDemoEarphoneModeCopy
@@ -86,6 +87,8 @@ export default function EarphoneModeNoticeContent({
   // left earphone only; the hint under the choice says so.
   deviceAudioViaBroadcast?: boolean
   onConfirm: () => void
+  // Coins: reading translations aloud costs more than recognition alone. Null while billing is off.
+  coinCostNotice?: string | null
 }) {
   const languageListLabelId = useId()
   const captureSourceLabelId = useId()
@@ -97,6 +100,11 @@ export default function EarphoneModeNoticeContent({
       {readLanguage && (
         <p data-earphone-mode-read-language-notice className="mt-2 text-sm leading-relaxed text-gray-600">
           {formatLivePhoneDemoEarphoneModeReadLanguageNotice(uiLocale, readLanguage)}
+        </p>
+      )}
+      {coinCostNotice && (
+        <p data-earphone-mode-coin-notice className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-900">
+          {coinCostNotice}
         </p>
       )}
       {!earphonesConnected && (

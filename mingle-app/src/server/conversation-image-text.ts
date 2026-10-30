@@ -13,6 +13,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { chargeCoinUsageSafely } from '@/server/coins/wallet'
 import { listConversationTranslationLanguagesBySessionKey } from '@/lib/app-conversations'
 import { getSiblingChineseVariant, toChineseVariant } from '@/lib/chinese-variant'
 import {
@@ -161,6 +162,36 @@ export type ConversationImageTextJobInput = {
   objectKey: string
   /** The stored JPEG when the caller still has it (the upload request). */
   jpeg?: Uint8Array | null
+  /** Who pays coins for this work: the uploader, or the viewer who asked for the text. */
+  billedUserId?: string | null
+}
+
+/** One charge per photo (OCR) and per photo+language (translation), whoever triggered it first. */
+async function chargeImageTextUsage(input: {
+  billedUserId?: string | null
+  messageId: string
+  sessionKey?: string | null
+  step: string
+  provider: string
+  model: string | null
+  usage: ConversationImageTextUsage | null
+  image?: boolean
+}) {
+  if (!input.billedUserId || !input.usage) return
+  await chargeCoinUsageSafely({
+    userId: input.billedUserId,
+    kind: 'image_text',
+    units: {
+      input_token: input.usage.inputTokens,
+      output_token: billedOutputTokens(input.usage),
+      ...(input.image ? { image: 1 } : {}),
+    },
+    model: input.model,
+    provider: input.provider,
+    messageId: input.messageId,
+    sessionKey: input.sessionKey ?? null,
+    idempotencyKey: `image_text:${input.step}:${input.messageId}`,
+  })
 }
 
 async function ensureImageTextRow(messageId: string, imageSha256: string) {
@@ -215,6 +246,18 @@ async function performImageTextAttempt(job: ConversationImageTextJobInput, attem
         errorCode: null,
       },
     })
+    if (written.count) {
+      await chargeImageTextUsage({
+        billedUserId: job.billedUserId,
+        messageId: job.messageId,
+        sessionKey: job.sessionKey,
+        step: 'ocr',
+        provider: conversationImageTextProviderForModel(result.model),
+        model: result.model,
+        usage: result.usage,
+        image: true,
+      })
+    }
     return written.count ? blocks : null
   } catch (error) {
     const code = describeError(error)
@@ -254,7 +297,14 @@ export async function runConversationImageTextJob(job: ConversationImageTextJobI
   try {
     const room = await listConversationTranslationLanguagesBySessionKey(job.sessionKey)
     const languages = normalizeImageTextLanguageList(room.languages).filter(language => languageHasTextToTranslate(ready, language))
-    if (languages.length) await runConversationImageTextTranslations({ messageId: job.messageId, languages })
+    if (languages.length) {
+      await runConversationImageTextTranslations({
+        messageId: job.messageId,
+        languages,
+        billedUserId: job.billedUserId,
+        sessionKey: job.sessionKey,
+      })
+    }
   } catch (error) {
     console.error('[conversation-image-text] eager translation failed', describeError(error))
   }
@@ -330,11 +380,17 @@ async function translateBlocksInto(messageId: string, language: string, blocks: 
   return { texts: { ...texts, ...result.texts }, derivedFrom: null, provider: 'gemini', model: result.model, usage: result.usage }
 }
 
-async function performTranslationAttempt(messageId: string, language: string, blocks: ConversationImageTextBlock[], attemptId: string) {
+async function performTranslationAttempt(
+  messageId: string,
+  language: string,
+  blocks: ConversationImageTextBlock[],
+  attemptId: string,
+  billing: ImageTextBilling,
+) {
   const where = { messageId, language, attemptId, status: 'running' satisfies TranslationDbStatus }
   try {
     const outcome = await translateBlocksInto(messageId, language, blocks, AbortSignal.timeout(PROVIDER_BUDGET_MS))
-    await prisma.appMessageImageTextTranslation.updateMany({
+    const written = await prisma.appMessageImageTextTranslation.updateMany({
       where,
       data: {
         status: 'ready' satisfies TranslationDbStatus,
@@ -347,6 +403,16 @@ async function performTranslationAttempt(messageId: string, language: string, bl
         errorCode: null,
       },
     })
+    if (written.count) {
+      await chargeImageTextUsage({
+        ...billing,
+        messageId,
+        step: `translation:${language}`,
+        provider: outcome.provider,
+        model: outcome.model,
+        usage: outcome.usage,
+      })
+    }
   } catch (error) {
     const code = describeError(error)
     console.warn('[conversation-image-text] translation attempt failed', { code, language })
@@ -357,14 +423,16 @@ async function performTranslationAttempt(messageId: string, language: string, bl
   }
 }
 
-async function runTranslationTask(messageId: string, language: string) {
+type ImageTextBilling = { billedUserId?: string | null; sessionKey?: string | null }
+
+async function runTranslationTask(messageId: string, language: string, billing: ImageTextBilling) {
   const image = await prisma.appMessageImageText.findUnique({ where: { messageId }, select: { status: true, blocks: true } })
   if (image?.status !== 'ready') return
   // Only blocks not already in the target language are sent (same-language skip).
   const blocks = readStoredBlocks(image.blocks).filter(block => blockNeedsTranslation(block, language))
   if (!blocks.length) return
   const attemptId = await claimTranslation(messageId, language)
-  if (attemptId) await performTranslationAttempt(messageId, language, blocks, attemptId)
+  if (attemptId) await performTranslationAttempt(messageId, language, blocks, attemptId, billing)
 }
 
 /** Both Chinese variants share one lane, so the second waits for the first and is converted from it. */
@@ -388,7 +456,9 @@ function buildTranslationLanes(languages: readonly string[]): string[][] {
  * Translates a ready photo's text into each language that has text to
  * translate and no finished (or running) translation yet. Never throws.
  */
-export async function runConversationImageTextTranslations(input: { messageId: string; languages: readonly string[] }): Promise<void> {
+export async function runConversationImageTextTranslations(
+  input: { messageId: string; languages: readonly string[] } & ImageTextBilling,
+): Promise<void> {
   if (!isConversationImageTextEnabled()) return
   const languages = normalizeImageTextLanguageList(input.languages)
     .filter(language => !inFlight.has(translationJobKey(input.messageId, language)))
@@ -396,7 +466,10 @@ export async function runConversationImageTextTranslations(input: { messageId: s
   await Promise.all(buildTranslationLanes(languages).map(async lane => {
     for (const language of lane) {
       try {
-        await runLimited(() => runTranslationTask(input.messageId, language))
+        await runLimited(() => runTranslationTask(input.messageId, language, {
+          billedUserId: input.billedUserId,
+          sessionKey: input.sessionKey,
+        }))
       } catch (error) {
         console.error('[conversation-image-text] translation job failed', describeError(error))
       } finally {

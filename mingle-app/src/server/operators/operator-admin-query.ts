@@ -4,6 +4,7 @@ import { sameBioLanguage } from '@/lib/profile-bio'
 import { buildProfileLinkPath } from '@/lib/profile-link'
 import { isOperatorBioPending } from './bio-queue'
 import { findOperatorAccount } from './operator-guard'
+import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-languages'
 
 /** Staff-only reads for the admin operator pages. Never serialized to app users. */
 
@@ -96,6 +97,7 @@ export type OperatorAccountDetail = {
   bioStatus: OperatorBioStatus
   bioLanguages: string[]
   primaryLanguage: string | null
+  interestLanguages: InterestLanguage[]
   birthYear: number | null
   personaCountry: string | null
   city: string | null
@@ -140,6 +142,8 @@ export async function getOperatorAccountDetail(userId: string): Promise<Operator
       image: true,
       bio: true,
       primaryLanguages: true,
+      interestLanguages: true,
+      interestLanguageLevels: true,
       birthDate: true,
       locationCity: true,
       locationCountry: true,
@@ -159,6 +163,7 @@ export async function getOperatorAccountDetail(userId: string): Promise<Operator
     bioStatus: bio.status,
     bioLanguages: bio.languages,
     primaryLanguage: row.primaryLanguages[0] ?? null,
+    interestLanguages: zipInterestLanguages(row.interestLanguages, row.interestLanguageLevels),
     birthYear: row.birthDate ? row.birthDate.getUTCFullYear() : null,
     personaCountry: row.operatorAccount?.personaCountry ?? null,
     city: row.locationCity,

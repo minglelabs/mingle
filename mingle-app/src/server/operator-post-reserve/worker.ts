@@ -6,8 +6,10 @@ import { ageOn } from '@/server/operator-auto-reply/generate'
 import { checkOperatorForPosting, personaLanguageOf } from '@/server/operator-posts/operator-check'
 import { sqlUtcTimestamp } from '@/server/operator-posts/sql'
 import { publishPost } from '@/server/posts/publish-post'
+import { reviewTranslationsFor } from './review-translations'
 import { drawReservePostImage } from './post-image'
-import { generateReservePosts, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE } from './generate'
+import { reserveExtraImages } from './extra-images'
+import { generateReservePosts, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE, type ReservePersona } from './generate'
 import { nextReleaseAt } from './schedule'
 import { getPostReserveSettings, postsPerDay, type PostReserveSettings } from './settings'
 
@@ -41,13 +43,30 @@ export type ReserveRunSummary = {
   generated: number
 }
 
-type ClaimedReservePost = { id: string; operatorUserId: string; text: string; attempts: number; language: string | null; imagePrompt: string | null }
+type ClaimedReservePost = {
+  id: string
+  operatorUserId: string
+  text: string
+  attempts: number
+  language: string | null
+  translations: Prisma.JsonValue | null
+  imagePrompt: string | null
+  imageObjectKey: string | null
+  imageWidth: number | null
+  imageHeight: number | null
+  extraImages: Prisma.JsonValue | null
+}
 
 function describeError(error: unknown): string {
   return (error instanceof Error ? `${error.name}: ${error.message}` : 'unknown_error').slice(0, MAX_ERROR_LENGTH)
 }
 
 /** `rs-<id>`: the post's client id, stable across retries. */
+/** A post waiting for its photo to be drawn by hand (scripts/draw-pending-photos.mts). */
+export const PHOTO_PENDING = 'photo_pending'
+/** Staff asked for the photo in review: next in line to be drawn by hand. */
+export const PHOTO_REQUESTED = 'photo_requested'
+
 export function reserveClientPostId(reserveId: string): string {
   return `rs-${reserveId}`
 }
@@ -63,12 +82,18 @@ async function claimDueReservePosts(now: Date, limit: number): Promise<ClaimedRe
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, image_prompt AS "imagePrompt"
+    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, translations, image_prompt AS "imagePrompt",
+      image_object_key AS "imageObjectKey", image_width AS "imageWidth", image_height AS "imageHeight",
+      extra_images AS "extraImages"
   `
 }
 
-/** Publish one claimed reserve post and record the result. Never throws. */
-async function releaseOne(row: ClaimedReservePost, now: Date): Promise<boolean> {
+/**
+ * Publish one claimed reserve post and record the result. Never throws. A post
+ * taken from staff review goes back to review when publishing fails, never
+ * into the automatic queue.
+ */
+async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' | 'review' = 'queued'): Promise<boolean> {
   const settle = (data: Prisma.OperatorPostReserveUpdateManyMutationInput) =>
     prisma.operatorPostReserve.updateMany({ where: { id: row.id, state: 'publishing', attempts: row.attempts }, data })
   try {
@@ -78,15 +103,31 @@ async function releaseOne(row: ClaimedReservePost, now: Date): Promise<boolean> 
       await settle({ state: 'failed', error: check.reason, releaseAt: null })
       return false
     }
-    // A photo that cannot be drawn does not hold the post back: it goes out as text.
-    const image = row.imagePrompt ? await drawReservePostImage(row.operatorUserId, row.imagePrompt) : null
+    // A photo drawn before review goes out as is. One not drawn yet is drawn
+    // here only where a hand-off route exists (never a paid API); otherwise
+    // the post goes back to review until staff draw it by hand.
+    const image = row.imageObjectKey
+      ? { objectKey: row.imageObjectKey, width: row.imageWidth ?? 0, height: row.imageHeight ?? 0 }
+      : row.imagePrompt ? await drawReservePostImage(row.operatorUserId, row.imagePrompt) : null
+    if (row.imagePrompt && !image) {
+      await settle({ state: 'review', error: PHOTO_PENDING, releaseAt: null })
+      return false
+    }
     const result = await publishPost({
       authorId: row.operatorUserId,
       text: row.text,
       imageObjectKey: image?.objectKey ?? null,
-      imageDimensions: image ? { imageWidth: image.width, imageHeight: image.height } : null,
+      imageDimensions: image && image.width > 0 && image.height > 0 ? { imageWidth: image.width, imageHeight: image.height } : null,
+      // Only alongside the reviewed first photo they were picked with.
+      extraImages: row.imageObjectKey
+        ? reserveExtraImages(row.extraImages).map((extra) => ({
+            objectKey: extra.objectKey,
+            dimensions: extra.width && extra.height ? { imageWidth: extra.width, imageHeight: extra.height } : null,
+          }))
+        : undefined,
       clientHint: row.language ?? personaLanguageOf(check.account),
       clientPostId: reserveClientPostId(row.id),
+      knownTranslations: reviewTranslationsFor(row.translations, row.text),
     })
     if (result.kind === 'conflict') {
       await settle({ state: 'failed', error: 'client_post_id_conflict', releaseAt: null })
@@ -98,12 +139,14 @@ async function releaseOne(row: ClaimedReservePost, now: Date): Promise<boolean> 
       operatorUserId: row.operatorUserId,
       targetType: 'post',
       targetId: result.post.id,
-      metadata: { reserveId: row.id, result: result.kind, language: row.language, photo: row.imagePrompt ? (image ? 'drawn' : 'failed') : 'none' },
+      metadata: { reserveId: row.id, result: result.kind, language: row.language, photo: row.imageObjectKey ? 'reviewed' : row.imagePrompt ? (image ? 'drawn' : 'failed') : 'none' },
     })
     return true
   } catch (error) {
     try {
-      await settle(row.attempts >= RESERVE_MAX_ATTEMPTS
+      await settle(origin === 'review'
+        ? { state: 'review', error: describeError(error), releaseAt: null }
+        : row.attempts >= RESERVE_MAX_ATTEMPTS
         ? { state: 'failed', error: describeError(error), releaseAt: null }
         // Back in line; retried a few minutes later.
         : { state: 'queued', error: describeError(error), releaseAt: new Date(now.getTime() + row.attempts * 5 * 60_000) })
@@ -185,7 +228,7 @@ async function findOperatorsToRefill(target: number, limit: number): Promise<Ref
     SELECT operator_user.id AS "operatorUserId", COUNT(reserve.id)::int AS waiting
     FROM app_users AS operator_user
     LEFT JOIN app_operator_post_reserve AS reserve
-      ON reserve.operator_user_id = operator_user.id AND reserve.state IN ('queued', 'publishing')
+      ON reserve.operator_user_id = operator_user.id AND reserve.state IN ('review', 'regenerating', 'queued', 'publishing')
     WHERE operator_user.is_operator = true
       AND operator_user.is_deleted = false
       AND operator_user.is_active = true
@@ -198,44 +241,56 @@ async function findOperatorsToRefill(target: number, limit: number): Promise<Ref
   `
 }
 
+/** Who the model writes as, or null for an account that cannot have reserve posts. */
+export async function loadReservePersona(operatorUserId: string, now: Date, options: { includeInactive?: boolean } = {}): Promise<ReservePersona | null> {
+  const operator = await prisma.user.findFirst({
+    where: { id: operatorUserId, isOperator: true, isDeleted: false, ...(options.includeInactive ? {} : { isActive: true }) },
+    select: { name: true, bio: true, birthDate: true, locationCity: true, locationCountry: true, primaryLanguages: true },
+  })
+  const language = operator ? sanitizeSttLanguageSelection(operator.primaryLanguages)[0] : null
+  if (!operator || !language) return null
+  return {
+    name: operator.name?.trim() || null,
+    bio: operator.bio?.trim() || null,
+    age: ageOn(operator.birthDate, now),
+    city: operator.locationCity ?? null,
+    country: operator.locationCountry ?? null,
+    language,
+  }
+}
+
+/** The account's posts and reserve texts, oldest first, so the model steers away from repeats. */
+export async function loadExistingReserveTexts(operatorUserId: string): Promise<string[]> {
+  const [reserve, posts] = await Promise.all([
+    prisma.operatorPostReserve.findMany({
+      where: { operatorUserId, state: { in: ['review', 'regenerating', 'queued', 'publishing', 'published'] } },
+      orderBy: { createdAt: 'desc' },
+      take: EXISTING_TEXT_SAMPLE,
+      select: { text: true },
+    }),
+    prisma.post.findMany({
+      where: { authorId: operatorUserId, OR: [{ isDeleted: null }, { isDeleted: false }] },
+      orderBy: { publishedAt: 'desc' },
+      take: 20,
+      select: { sourceText: true },
+    }),
+  ])
+  return [
+    ...posts.map((post) => post.sourceText ?? '').filter(Boolean),
+    ...reserve.map((row) => row.text),
+  ].reverse()
+}
+
 /** Write one chunk of latent posts for an account. Returns how many were stored. Never throws. */
 export async function refillOperatorReserve(operatorUserId: string, now: Date, random: () => number = Math.random): Promise<number> {
   try {
-    const operator = await prisma.user.findFirst({
-      where: { id: operatorUserId, isOperator: true, isDeleted: false, isActive: true },
-      select: { name: true, bio: true, birthDate: true, locationCity: true, locationCountry: true, primaryLanguages: true },
-    })
-    const language = operator ? sanitizeSttLanguageSelection(operator.primaryLanguages)[0] : null
-    if (!operator || !language) return 0
-
-    const [reserve, posts] = await Promise.all([
-      prisma.operatorPostReserve.findMany({
-        where: { operatorUserId, state: { in: ['queued', 'publishing', 'published'] } },
-        orderBy: { createdAt: 'desc' },
-        take: EXISTING_TEXT_SAMPLE,
-        select: { text: true },
-      }),
-      prisma.post.findMany({
-        where: { authorId: operatorUserId, OR: [{ isDeleted: null }, { isDeleted: false }] },
-        orderBy: { publishedAt: 'desc' },
-        take: 20,
-        select: { sourceText: true },
-      }),
-    ])
-    const existingTexts = [
-      ...posts.map((post) => post.sourceText ?? '').filter(Boolean),
-      ...reserve.map((row) => row.text),
-    ].reverse()
+    const persona = await loadReservePersona(operatorUserId, now)
+    if (!persona) return 0
+    const language = persona.language
+    const existingTexts = await loadExistingReserveTexts(operatorUserId)
 
     const generated = await generateReservePosts({
-      persona: {
-        name: operator.name?.trim() || null,
-        bio: operator.bio?.trim() || null,
-        age: ageOn(operator.birthDate, now),
-        city: operator.locationCity ?? null,
-        country: operator.locationCountry ?? null,
-        language,
-      },
+      persona,
       topics: pickReserveTopics(RESERVE_CHUNK_SIZE, random, reservePosterProfile(operatorUserId).topicFactors),
       existingTexts,
       random,
@@ -308,16 +363,26 @@ export async function publishNextReservePost(operatorUserId: string, now: Date =
     select: { id: true },
   })
   if (!head) return { ok: false, error: 'reserve_empty' }
+  return publishReservePostNow(head.id, 'queued', now)
+}
+
+/**
+ * Publishes one reserve post in `fromState` right away (staff review's "게시"
+ * takes it from `review`). `reserve_empty` when it is no longer in that state.
+ */
+export async function publishReservePostNow(reserveId: string, fromState: 'queued' | 'review', now: Date = new Date()): Promise<PublishNowResult> {
   // Same atomic claim as the worker, so a tick racing this click cannot publish it twice.
   const claimed = await prisma.$queryRaw<ClaimedReservePost[]>`
     UPDATE app_operator_post_reserve
     SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
-    WHERE id = ${head.id} AND state = 'queued'
-    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, image_prompt AS "imagePrompt"
+    WHERE id = ${reserveId} AND state = ${fromState}
+    RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, translations, image_prompt AS "imagePrompt",
+      image_object_key AS "imageObjectKey", image_width AS "imageWidth", image_height AS "imageHeight",
+      extra_images AS "extraImages"
   `
-  if (!claimed[0]) return { ok: false, error: 'publish_failed' }
-  if (!(await releaseOne(claimed[0], now))) return { ok: false, error: 'publish_failed' }
-  const row = await prisma.operatorPostReserve.findUnique({ where: { id: head.id }, select: { postId: true } })
+  if (!claimed[0]) return { ok: false, error: 'reserve_empty' }
+  if (!(await releaseOne(claimed[0], now, fromState))) return { ok: false, error: 'publish_failed' }
+  const row = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: { postId: true } })
   return { ok: true, postId: row?.postId ?? null }
 }
 

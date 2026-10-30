@@ -12,6 +12,7 @@
  * parsing/validation and the HTTP response stay in the caller.
  */
 import { prisma } from '@/lib/prisma'
+import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { isKnownBackgroundKey, randomBackgroundKey } from '@/lib/post-backgrounds'
 import { detectSourceLanguage } from '@/server/translation/detect-source-language'
 import {
@@ -55,6 +56,8 @@ export type PublishPostInput = {
   imageDimensions?: ImageDimensions | null
   /** The 2nd to 10th photo, in order (already authorized keys). Ignored without `imageObjectKey`. */
   extraImages?: ReadonlyArray<{ objectKey: string; dimensions: ImageDimensions | null }>
+  /** Translations already made from `text` (staff review): used as is, only the other languages are translated. */
+  knownTranslations?: ReadonlyArray<{ language: string; text: string }>
   /** Client language hint; the server detection is authoritative. */
   clientHint?: string | null
   /** Raw idempotency key; a malformed value is ignored (server id, no dedupe). */
@@ -162,14 +165,22 @@ export async function publishPost(input: PublishPostInput): Promise<PublishPostR
   const detected = await detectSourceLanguage({ text, clientHint: input.clientHint ?? null })
 
   const targetLanguages = detected ? resolveDefaultPostTranslationLanguages(detected) : []
-  const settledRows =
-    detected && targetLanguages.length > 0
+  const known = new Map((input.knownTranslations ?? []).map((row) => [canonicalizeTranslationLanguageCode(row.language), row.text]))
+  const knownRows = targetLanguages.flatMap((language) => {
+    const translated = known.get(canonicalizeTranslationLanguageCode(language))
+    return translated ? [{ language, status: 'ready' as const, text: translated }] : []
+  })
+  const remaining = targetLanguages.filter((language) => !known.has(canonicalizeTranslationLanguageCode(language)))
+  const settledRows = [
+    ...knownRows,
+    ...(detected && remaining.length > 0
       ? await translatePostBodySettled({
           sourceText: text,
           sourceLanguage: detected,
-          targetLanguages,
+          targetLanguages: remaining,
         })
-      : []
+      : []),
+  ]
 
   // Atomic publish: the post row and its settled translations become visible
   // together — the post does not exist (and so is invisible) until now.

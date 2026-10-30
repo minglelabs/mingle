@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { useMemo, useState, type ChangeEvent } from 'react'
-import { ArrowLeft, Camera, Check, Copy, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Camera, Check, Copy, ExternalLink, Loader2, Plus, RefreshCw, X } from 'lucide-react'
+import LanguageLevelPicker from '@/components/language-level-picker'
+import { MAX_INTEREST_LANGUAGES, type InterestLanguage } from '@/lib/interest-languages'
 import type { OperatorAccountDetail } from '@/server/operators/operator-admin-query'
 import { OPERATOR_NOTES_MAX_LENGTH, type PersonaDraftField, type PersonaFieldError } from '@/server/operators/persona-rules'
 import { InactiveChip, Notice, OperatorChip } from '../_components/operator-ui'
@@ -30,8 +32,16 @@ function detailToValues(detail: OperatorAccountDetail): PersonaFieldValues {
 }
 
 /** Only the fields that changed; country and city always travel together. */
-function buildPatch(base: PersonaFieldValues, next: PersonaFieldValues, baseNotes: string, nextNotes: string): Record<string, unknown> {
+function sameInterestLanguages(a: readonly InterestLanguage[], b: readonly InterestLanguage[]): boolean {
+  return a.length === b.length && a.every((entry, index) => entry.code === b[index].code && entry.level === b[index].level)
+}
+
+function buildPatch(
+  base: PersonaFieldValues, next: PersonaFieldValues, baseNotes: string, nextNotes: string,
+  baseInterest: readonly InterestLanguage[], nextInterest: readonly InterestLanguage[],
+): Record<string, unknown> {
   const patch: Record<string, unknown> = {}
+  if (!sameInterestLanguages(baseInterest, nextInterest)) patch.interestLanguages = nextInterest.filter(entry => entry.code)
   if (next.name.trim() !== base.name.trim()) patch.name = next.name
   if (next.handle.trim() !== base.handle) patch.handle = next.handle
   if (next.bio.trim() !== base.bio.trim()) patch.bio = next.bio
@@ -50,15 +60,19 @@ export function OperatorEditor({
   countries,
   languages,
   currentYear,
+  backHref = '/admin/operators',
 }: {
   initial: OperatorAccountDetail
   countries: CountryOption[]
   languages: LanguageOption[]
   currentYear: number
+  /** Where the back arrow goes: the list, or the review queue the editor was opened from. */
+  backHref?: string
 }) {
   const [account, setAccount] = useState(initial)
   const [values, setValues] = useState(() => detailToValues(initial))
   const [notes, setNotes] = useState(initial.notes ?? '')
+  const [interest, setInterest] = useState<InterestLanguage[]>(initial.interestLanguages)
   const [errors, setErrors] = useState<PersonaFieldError[]>([])
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -67,7 +81,10 @@ export function OperatorEditor({
   const [copied, setCopied] = useState(false)
 
   const baseline = useMemo(() => detailToValues(account), [account])
-  const patch = useMemo(() => buildPatch(baseline, values, account.notes ?? '', notes), [baseline, values, account.notes, notes])
+  const patch = useMemo(
+    () => buildPatch(baseline, values, account.notes ?? '', notes, account.interestLanguages, interest),
+    [baseline, values, account.notes, notes, account.interestLanguages, interest],
+  )
   const dirty = Object.keys(patch).length > 0
   const endpoint = `/admin/operators/api/${encodeURIComponent(account.id)}`
   const notesError = errors.find(error => error.field === 'notes')?.error
@@ -76,6 +93,13 @@ export function OperatorEditor({
     setAccount(next)
     setValues(detailToValues(next))
     setNotes(next.notes ?? '')
+    setInterest(next.interestLanguages)
+  }
+
+  const editInterest = (next: InterestLanguage[]) => {
+    setInterest(next)
+    setErrors(current => current.filter(error => error.field !== 'interestLanguages'))
+    setMessage(null)
   }
 
   const onFieldsChange = (next: Partial<PersonaFieldValues>, fields: PersonaDraftField[]) => {
@@ -141,7 +165,7 @@ export function OperatorEditor({
   return (
     <div>
       <div className="flex items-center gap-2">
-        <Link href="/admin/operators" className="-ml-2 inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 active:bg-slate-200" aria-label="운영 계정 목록으로">
+        <Link href={backHref} className="-ml-2 inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 active:bg-slate-200" aria-label="운영 계정 목록으로">
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Link>
         <h1 className="min-w-0 flex-1 truncate text-xl font-bold text-slate-900">운영 계정</h1>
@@ -207,6 +231,38 @@ export function OperatorEditor({
           currentYear={currentYear}
           disabled={saving}
         />
+        <div className="mt-3">
+          <p className="mb-1 text-sm font-medium text-slate-700">관심 언어 <span className="font-normal text-slate-400">(최대 {MAX_INTEREST_LANGUAGES}개, 실력은 점 1~5개)</span></p>
+          <ul className="space-y-2">
+            {interest.map((entry, index) => (
+              <li key={index} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 p-2">
+                <select
+                  value={entry.code}
+                  onChange={event => editInterest(interest.map((item, at) => (at === index ? { ...item, code: event.target.value as InterestLanguage['code'] } : item)))}
+                  disabled={saving}
+                  aria-label="관심 언어"
+                  className="h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 text-base"
+                >
+                  <option value="">언어 고르기</option>
+                  {languages
+                    .filter(option => option.code === entry.code || (option.code !== values.primaryLanguage && !interest.some(item => item.code === option.code)))
+                    .map(option => <option key={option.code} value={option.code}>{option.label}</option>)}
+                </select>
+                <LanguageLevelPicker level={entry.level} locale="ko" disabled={saving} onChange={level => editInterest(interest.map((item, at) => (at === index ? { ...item, level } : item)))} />
+                <button type="button" onClick={() => editInterest(interest.filter((_, at) => at !== index))} disabled={saving} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 active:bg-slate-100" aria-label="관심 언어 빼기">
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+          {interest.length < MAX_INTEREST_LANGUAGES ? (
+            <button type="button" onClick={() => editInterest([...interest, { code: '' as InterestLanguage['code'], level: 3 }])} disabled={saving} className={`${SECONDARY_BUTTON} mt-2`}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              관심 언어 추가
+            </button>
+          ) : null}
+          {errors.some(error => error.field === 'interestLanguages') ? <p className="mt-1 text-xs text-rose-600">관심 언어를 확인해 주세요.</p> : null}
+        </div>
         <div className="mt-3">
           <div className="mb-1 flex items-baseline justify-between gap-2">
             <label htmlFor="operator-notes" className="text-sm font-medium text-slate-700">메모 <span className="font-normal text-slate-400">(스태프만 봄)</span></label>

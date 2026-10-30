@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { reservePosterProfile } from '@/server/operator-post-reserve/generate'
+import { ReviewPhotos } from '../review/review-board'
 
 const PREVIEW_COUNT = 20
 /** `is_deleted` is null on most rows, which `{ not: true }` would leave out. */
@@ -27,6 +28,7 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
       take,
       select: {
         id: true, sourceText: true, sourceLanguage: true, publishedAt: true, likeCount: true, commentCount: true, imageObjectKey: true, imageWidth: true, imageHeight: true,
+        extraImages: { orderBy: { position: 'asc' }, select: { imageObjectKey: true, imageWidth: true, imageHeight: true } },
         comments: {
           where: { moderationHiddenAt: null },
           orderBy: { createdAt: 'asc' },
@@ -56,15 +58,14 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
               <li key={post.id} className="py-3">
                 <p className="whitespace-pre-wrap break-words text-sm text-slate-800">{post.sourceText || '(내용 없음)'}</p>
                 {post.imageObjectKey ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={`/admin/api/posts/${post.id}/image`}
-                    alt="글 사진"
-                    width={post.imageWidth ?? undefined}
-                    height={post.imageHeight ?? undefined}
-                    loading="lazy"
-                    className="mt-2 max-h-80 w-auto max-w-full rounded-xl border border-slate-200"
-                  />
+                  <div className="max-w-sm">
+                    <ReviewPhotos
+                      photos={[
+                        { objectKey: post.imageObjectKey, width: post.imageWidth, height: post.imageHeight },
+                        ...post.extraImages.map((image) => ({ objectKey: image.imageObjectKey, width: image.imageWidth, height: image.imageHeight })),
+                      ]}
+                    />
+                  </div>
                 ) : null}
                 <p className="mt-1 text-xs text-slate-500">
                   {DATE_FORMAT.format(post.publishedAt)} · {post.sourceLanguage ?? '?'} · 좋아요 {post.likeCount} · 댓글 {post.commentCount}

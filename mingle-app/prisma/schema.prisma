@@ -54,6 +54,10 @@ model User {
   bio                          String?   @db.Text
   nationality                  String?
   primaryLanguages             String[]  @default([]) @map("primary_languages")
+  /// Languages of the people this user mostly wants to talk with (관심 언어),
+  /// at most 3, with the user's own level of each (1-5) at the same index.
+  interestLanguages            String[]  @default([]) @map("interest_languages")
+  interestLanguageLevels       Int[]     @default([]) @map("interest_language_levels")
   defaultConversationLanguages String[]  @default([]) @map("default_conversation_languages")
   defaultDisplayLanguage       String?   @map("default_display_language")
   locationLatitude             Float?    @map("location_latitude")
@@ -205,26 +209,26 @@ model UserBlock {
 }
 
 model UserReport {
-  id               String   @id @default(cuid())
-  reporterId       String   @map("reporter_id")
-  reportedUserId   String   @map("reported_user_id")
-  targetType       String   @default("user") @map("target_type")
-  targetPostId     String?  @map("target_post_id")
-  targetCommentId  String?  @map("target_comment_id")
-  targetKey        String   @default("") @map("target_key")
+  id               String    @id @default(cuid())
+  reporterId       String    @map("reporter_id")
+  reportedUserId   String    @map("reported_user_id")
+  targetType       String    @default("user") @map("target_type")
+  targetPostId     String?   @map("target_post_id")
+  targetCommentId  String?   @map("target_comment_id")
+  targetKey        String    @default("") @map("target_key")
   reason           String
-  message          String?  @db.Text
-  status           String   @default("open")
-  adminNote        String?  @map("admin_note") @db.Text
-  moderationAction String?  @map("moderation_action")
+  message          String?   @db.Text
+  status           String    @default("open")
+  adminNote        String?   @map("admin_note") @db.Text
+  moderationAction String?   @map("moderation_action")
   resolvedAt       DateTime? @map("resolved_at")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  reporter      User              @relation("UserReportsSent", fields: [reporterId], references: [id], onDelete: Cascade)
-  reportedUser  User              @relation("UserReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
-  targetPost    Post?             @relation(fields: [targetPostId], references: [id], onDelete: SetNull)
-  targetComment PostComment?      @relation(fields: [targetCommentId], references: [id], onDelete: SetNull)
+  reporter      User               @relation("UserReportsSent", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser  User               @relation("UserReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  targetPost    Post?              @relation(fields: [targetPostId], references: [id], onDelete: SetNull)
+  targetComment PostComment?       @relation(fields: [targetCommentId], references: [id], onDelete: SetNull)
   replies       UserReportReply[]
   notifications UserNotification[]
 
@@ -268,7 +272,7 @@ model AppMessage {
   createdAt                   DateTime @default(now()) @map("created_at")
   updatedAt                   DateTime @updatedAt @map("updated_at")
 
-  user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user      User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
   reactions AppMessageReaction[]
   contents  AppMessageContent[]
   eventLogs AppEventLog[]
@@ -642,14 +646,14 @@ model AdminDashboardDailyMetric {
 }
 
 model AppMessageReaction {
-  messageId String @map("message_id")
-  userId String @map("user_id")
-  kind String
+  messageId String   @map("message_id")
+  userId    String   @map("user_id")
+  kind      String
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   message AppMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([messageId, userId])
   @@index([userId])
@@ -658,38 +662,38 @@ model AppMessageReaction {
 
 // Pointers separate the author's saved draft from the atomically published bio.
 model ProfileBioState {
-  userId             String @id @map("user_id")
+  userId             String  @id @map("user_id")
   currentVersionId   String? @map("current_version_id")
   publishedVersionId String? @map("published_version_id")
-  user               User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("profile_bio_states")
 }
 
 model ProfileBioVersion {
-  id             String @id @default(cuid())
-  userId         String @map("user_id")
-  sourceText     String @map("source_text") @db.Text
-  sourceLanguage String? @map("source_language")
-  targetLanguages String[] @map("target_languages")
-  status         String @default("queued")
-  deadlineAt     DateTime @map("deadline_at")
-  createdAt      DateTime @default(now()) @map("created_at")
-  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  translations   ProfileBioTranslation[]
+  id              String                  @id @default(cuid())
+  userId          String                  @map("user_id")
+  sourceText      String                  @map("source_text") @db.Text
+  sourceLanguage  String?                 @map("source_language")
+  targetLanguages String[]                @map("target_languages")
+  status          String                  @default("queued")
+  deadlineAt      DateTime                @map("deadline_at")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  translations    ProfileBioTranslation[]
 
   @@index([userId, createdAt])
   @@map("profile_bio_versions")
 }
 
 model ProfileBioTranslation {
-  versionId      String @map("version_id")
-  language       String
-  status         String @default("running")
-  text           String? @db.Text
-  attemptId      String @map("attempt_id")
-  deadlineAt     DateTime @map("deadline_at")
-  version        ProfileBioVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  versionId  String            @map("version_id")
+  language   String
+  status     String            @default("running")
+  text       String?           @db.Text
+  attemptId  String            @map("attempt_id")
+  deadlineAt DateTime          @map("deadline_at")
+  version    ProfileBioVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
   @@id([versionId, language])
   @@map("profile_bio_translations")
@@ -700,27 +704,27 @@ model ProfileBioTranslation {
 // ---------------------------------------------------------------------------
 
 model Post {
-  id                  String    @id @default(cuid())
-  authorId            String    @map("author_id")
-  bodyVersion         Int       @default(1) @map("body_version")
-  sourceText          String?   @map("source_text") @db.Text
-  sourceLanguage      String?   @map("source_language")
-  backgroundKey       String?   @map("background_key")
-  imageObjectKey      String?   @map("image_object_key")
-  imageWidth          Int?      @map("image_width")
-  imageHeight         Int?      @map("image_height")
-  visibility          String    @default("public")
-  archivedAt          DateTime? @map("archived_at")
-  isDeleted           Boolean?  @map("is_deleted")
-  deletedAt           DateTime? @map("deleted_at")
-  moderationHiddenAt  DateTime? @map("moderation_hidden_at")
-  likeCount           Int       @default(0) @map("like_count")
-  commentCount        Int       @default(0) @map("comment_count")
-  publishedAt         DateTime  @default(now()) @map("published_at")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
+  id                 String    @id @default(cuid())
+  authorId           String    @map("author_id")
+  bodyVersion        Int       @default(1) @map("body_version")
+  sourceText         String?   @map("source_text") @db.Text
+  sourceLanguage     String?   @map("source_language")
+  backgroundKey      String?   @map("background_key")
+  imageObjectKey     String?   @map("image_object_key")
+  imageWidth         Int?      @map("image_width")
+  imageHeight        Int?      @map("image_height")
+  visibility         String    @default("public")
+  archivedAt         DateTime? @map("archived_at")
+  isDeleted          Boolean?  @map("is_deleted")
+  deletedAt          DateTime? @map("deleted_at")
+  moderationHiddenAt DateTime? @map("moderation_hidden_at")
+  likeCount          Int       @default(0) @map("like_count")
+  commentCount       Int       @default(0) @map("comment_count")
+  publishedAt        DateTime  @default(now()) @map("published_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
-  author        User                  @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author        User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
   extraImages   PostImage[]
   translations  PostTranslation[]
   comments      PostComment[]
@@ -740,12 +744,12 @@ model Post {
 /// The 2nd to 10th photo of a post (position 1-9); the first stays on the
 /// post row (`imageObjectKey`), so everything that shows one photo keeps working.
 model PostImage {
-  id             String  @id @default(cuid())
-  postId         String  @map("post_id")
+  id             String @id @default(cuid())
+  postId         String @map("post_id")
   position       Int
-  imageObjectKey String  @map("image_object_key")
-  imageWidth     Int?    @map("image_width")
-  imageHeight    Int?    @map("image_height")
+  imageObjectKey String @map("image_object_key")
+  imageWidth     Int?   @map("image_width")
+  imageHeight    Int?   @map("image_height")
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
@@ -754,11 +758,11 @@ model PostImage {
 }
 
 model PostTranslation {
-  postId      String @map("post_id")
-  bodyVersion Int    @map("body_version")
+  postId      String   @map("post_id")
+  bodyVersion Int      @map("body_version")
   language    String
-  status      String @default("pending")
-  text        String? @db.Text
+  status      String   @default("pending")
+  text        String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -769,30 +773,30 @@ model PostTranslation {
 }
 
 model PostComment {
-  id              String    @id @default(cuid())
-  postId          String    @map("post_id")
-  authorId        String    @map("author_id")
-  parentId        String?   @map("parent_id")
-  replyToUserId   String?   @map("reply_to_user_id")
-  bodyVersion     Int       @default(1) @map("body_version")
-  sourceText      String    @map("source_text") @db.Text
-  sourceLanguage  String?   @map("source_language")
+  id                 String    @id @default(cuid())
+  postId             String    @map("post_id")
+  authorId           String    @map("author_id")
+  parentId           String?   @map("parent_id")
+  replyToUserId      String?   @map("reply_to_user_id")
+  bodyVersion        Int       @default(1) @map("body_version")
+  sourceText         String    @map("source_text") @db.Text
+  sourceLanguage     String?   @map("source_language")
   // Optional photo (server-issued post-image key of the comment author).
-  imageObjectKey  String?   @map("image_object_key")
-  imageWidth      Int?      @map("image_width")
-  imageHeight     Int?      @map("image_height")
-  likeCount       Int       @default(0) @map("like_count")
-  isDeleted       Boolean?  @map("is_deleted")
-  deletedAt       DateTime? @map("deleted_at")
+  imageObjectKey     String?   @map("image_object_key")
+  imageWidth         Int?      @map("image_width")
+  imageHeight        Int?      @map("image_height")
+  likeCount          Int       @default(0) @map("like_count")
+  isDeleted          Boolean?  @map("is_deleted")
+  deletedAt          DateTime? @map("deleted_at")
   moderationHiddenAt DateTime? @map("moderation_hidden_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
-  post          Post                       @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author        User                       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parent        PostComment?               @relation("PostCommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
-  replies       PostComment[]              @relation("PostCommentReplies")
-  replyToUser   User?                      @relation("PostCommentReplyToUser", fields: [replyToUserId], references: [id], onDelete: SetNull)
+  post          Post                     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author        User                     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent        PostComment?             @relation("PostCommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies       PostComment[]            @relation("PostCommentReplies")
+  replyToUser   User?                    @relation("PostCommentReplyToUser", fields: [replyToUserId], references: [id], onDelete: SetNull)
   translations  PostCommentTranslation[]
   likes         PostCommentLike[]
   notifications UserNotification[]
@@ -805,11 +809,11 @@ model PostComment {
 }
 
 model PostCommentTranslation {
-  commentId   String @map("comment_id")
-  bodyVersion Int    @map("body_version")
+  commentId   String   @map("comment_id")
+  bodyVersion Int      @map("body_version")
   language    String
-  status      String @default("pending")
-  text        String? @db.Text
+  status      String   @default("pending")
+  text        String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -850,10 +854,10 @@ model PostCommentLike {
 }
 
 model PostView {
-  id        String   @id @default(cuid())
-  postId    String   @map("post_id")
-  userId    String   @map("user_id")
-  viewedAt  DateTime @default(now()) @map("viewed_at")
+  id       String   @id @default(cuid())
+  postId   String   @map("post_id")
+  userId   String   @map("user_id")
+  viewedAt DateTime @default(now()) @map("viewed_at")
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -878,15 +882,15 @@ model PostHide {
 }
 
 model PostDraft {
-  id              String   @id @default(cuid())
-  authorId        String   @map("author_id")
-  sourceText      String?  @map("source_text") @db.Text
-  backgroundKey   String?  @map("background_key")
-  imageObjectKey  String?  @map("image_object_key")
-  imageWidth      Int?     @map("image_width")
-  imageHeight     Int?     @map("image_height")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  authorId       String   @map("author_id")
+  sourceText     String?  @map("source_text") @db.Text
+  backgroundKey  String?  @map("background_key")
+  imageObjectKey String?  @map("image_object_key")
+  imageWidth     Int?     @map("image_width")
+  imageHeight    Int?     @map("image_height")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
@@ -914,18 +918,24 @@ model RecentSearch {
 
 /// Staff-only record of an operator account (`User.isOperator` = true).
 model OperatorAccount {
-  userId             String   @id @map("user_id")
+  userId             String    @id @map("user_id")
   /// ISO 3166-1 alpha-2 country of the persona. Staff-only; never shown to users.
-  personaCountry     String?  @map("persona_country")
-  notes              String?  @db.Text
+  personaCountry     String?   @map("persona_country")
+  notes              String?   @db.Text
   /// 'female' | 'male'. Staff-only; steers generated profile photos.
-  personaGender      String?  @map("persona_gender")
+  personaGender      String?   @map("persona_gender")
   /// The picked photo spec (see operator-avatars/taxonomy.ts) of the current AI photo.
-  avatarSpec         Json?    @map("avatar_spec")
+  avatarSpec         Json?     @map("avatar_spec")
   avatarGeneratedAt  DateTime? @map("avatar_generated_at")
-  createdBySessionId String?  @map("created_by_session_id")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  /// 'approved' | 'pending' (staff have not cleared the profile; the user stays inactive) | 'regenerating'.
+  reviewState        String    @default("approved") @map("review_state")
+  /// Staff feedback from the last "재제작" of the profile.
+  reviewFeedback     String?   @map("review_feedback") @db.Text
+  /// Place staff gave the account in the review queue (lower first); null keeps the default order.
+  reviewRank         Int?      @map("review_rank")
+  createdBySessionId String?   @map("created_by_session_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1019,10 +1029,22 @@ model OperatorPostReserve {
   language       String?
   /// What the attached photo shows; drawn when the post is published. Null for a text-only post.
   imagePrompt    String?   @map("image_prompt") @db.Text
-  /// queued | publishing | published | failed | cancelled
+  /// review (waits for staff) | regenerating | queued | publishing | published | failed | cancelled
   state          String    @default("queued")
+  /// Staff feedback from the last "재제작" of the post.
+  reviewFeedback String?   @map("review_feedback") @db.Text
+  /// A photo drawn before review; used instead of drawing `imagePrompt` at release.
+  imageObjectKey String?   @map("image_object_key")
+  imageWidth     Int?      @map("image_width")
+  imageHeight    Int?      @map("image_height")
+  /// The 2nd to 10th photo ({objectKey, width, height}[]), released as the post's extra photos.
+  extraImages    Json?     @map("extra_images")
   releaseAt      DateTime? @map("release_at")
   postId         String?   @map("post_id")
+  /// Place staff gave the post in the review queue (lower first); null keeps the default order.
+  reviewRank     Int?      @map("review_rank")
+  /// Translations staff read during review, { [language]: { text, sourceText } }; reused when published.
+  translations   Json?
   error          String?   @db.Text
   attempts       Int       @default(0)
   createdAt      DateTime  @default(now()) @map("created_at")
@@ -1102,4 +1124,224 @@ model AppMessageImageTextTranslation {
 
   @@id([messageId, language])
   @@map("app_message_image_text_translations")
+}
+
+// ---------------------------------------------------------------------------
+// Coins (docs/coin-iap-spec.md). All amounts are BigInt micro-coins
+// (1 coin = 1,000,000 micro = $0.001). Coin tables keep a plain user_id with no
+// FK to app_users so financial records survive account deletion.
+// ---------------------------------------------------------------------------
+
+// One row per user. A fast snapshot, not the source of truth (the ledger is).
+model AppCoinWallet {
+  userId                 String    @id @map("user_id")
+  balanceMicro           BigInt    @default(0) @map("balance_micro")
+  freeBalanceMicro       BigInt    @default(0) @map("free_balance_micro")
+  paidBalanceMicro       BigInt    @default(0) @map("paid_balance_micro")
+  lastDailyGrantAt       DateTime? @map("last_daily_grant_at")
+  dailyGrantSeq          Int       @default(0) @map("daily_grant_seq")
+  lifetimePurchasedMicro BigInt    @default(0) @map("lifetime_purchased_micro")
+  lifetimeSpentMicro     BigInt    @default(0) @map("lifetime_spent_micro")
+  version                Int       @default(0)
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  @@map("app_coin_wallets")
+}
+
+// One record per top-up (daily free refill, purchase, admin grant, ...).
+model AppCoinLot {
+  id             String    @id @default(cuid())
+  userId         String    @map("user_id")
+  // daily_free | purchase | admin_grant | signup_bonus | refund_reversal
+  source         String
+  isFree         Boolean   @map("is_free")
+  grantedMicro   BigInt    @map("granted_micro")
+  remainingMicro BigInt    @map("remaining_micro")
+  expiresAt      DateTime? @map("expires_at")
+  purchaseId     String?   @map("purchase_id")
+  adminGrantId   String?   @map("admin_grant_id")
+  note           String?
+  meta           Json?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, isFree(sort: Desc), createdAt], map: "app_coin_lots_user_spend_order_idx")
+  @@index([purchaseId], map: "app_coin_lots_purchase_id_idx")
+  @@map("app_coin_lots")
+}
+
+// Append-only ledger: rows are never updated or deleted.
+model AppCoinLedger {
+  id                BigInt   @id @default(autoincrement())
+  userId            String   @map("user_id")
+  // grant | spend | expire | refund_clawback | admin_revoke | adjust
+  type              String
+  // Signed: grants positive, everything that removes coins negative.
+  amountMicro       BigInt   @map("amount_micro")
+  balanceAfterMicro BigInt   @map("balance_after_micro")
+  lotId             String?  @map("lot_id")
+  usageChargeId     String?  @map("usage_charge_id")
+  purchaseId        String?  @map("purchase_id")
+  adminGrantId      String?  @map("admin_grant_id")
+  idempotencyKey    String   @unique(map: "app_coin_ledger_idempotency_key_uidx") @map("idempotency_key")
+  meta              Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  allocations AppCoinSpendAllocation[]
+
+  @@index([userId, id(sort: Desc)], map: "app_coin_ledger_user_id_desc_idx")
+  @@index([createdAt], map: "app_coin_ledger_created_at_idx")
+  @@map("app_coin_ledger")
+}
+
+// Which lots one ledger row took coins from, and how much from each.
+model AppCoinSpendAllocation {
+  id          BigInt @id @default(autoincrement())
+  ledgerId    BigInt @map("ledger_id")
+  lotId       String @map("lot_id")
+  amountMicro BigInt @map("amount_micro")
+
+  ledger AppCoinLedger @relation(fields: [ledgerId], references: [id], onDelete: Restrict)
+
+  @@index([ledgerId], map: "app_coin_spend_allocations_ledger_id_idx")
+  @@index([lotId], map: "app_coin_spend_allocations_lot_id_idx")
+  @@map("app_coin_spend_allocations")
+}
+
+// Calculation basis for one usage charge.
+model AppCoinUsageCharge {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  // stt | translation | tts | image_text
+  kind             String
+  // { second?, input_token?, output_token?, char?, image?, rates: [...] }
+  units            Json
+  model            String?
+  provider         String?
+  pricingRateId    String?  @map("pricing_rate_id")
+  costUsdMicro     BigInt   @map("cost_usd_micro")
+  marginBps        Int      @map("margin_bps")
+  // Amount actually deducted (in shadow mode: the amount that would have been).
+  chargedMicro     BigInt   @map("charged_micro")
+  uncollectedMicro BigInt   @default(0) @map("uncollected_micro")
+  // true = computed and recorded only; the wallet was not touched.
+  shadow           Boolean  @default(false)
+  conversationId   String?  @map("conversation_id")
+  messageId        String?  @map("message_id")
+  sessionKey       String?  @map("session_key")
+  idempotencyKey   String   @unique(map: "app_coin_usage_charges_idempotency_key_uidx") @map("idempotency_key")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)], map: "app_coin_usage_charges_user_created_at_idx")
+  @@index([createdAt], map: "app_coin_usage_charges_created_at_idx")
+  @@map("app_coin_usage_charges")
+}
+
+// Versioned price list. Rows are never edited; a change closes effective_to
+// and inserts a new row. model "*" is the fallback for a kind.
+model AppCoinPricingRate {
+  id                      String    @id @default(cuid())
+  kind                    String
+  provider                String
+  model                   String
+  // second | input_token | output_token | char | image
+  unit                    String
+  // Micro-USD per 1,000,000 units (token prices are fractions of a micro-USD per unit).
+  usdMicroPerMillionUnits BigInt    @map("usd_micro_per_million_units")
+  marginBps               Int       @default(15000) @map("margin_bps")
+  effectiveFrom           DateTime  @default(now()) @map("effective_from")
+  effectiveTo             DateTime? @map("effective_to")
+  createdByAdmin          String?   @map("created_by_admin")
+  note                    String?
+  createdAt               DateTime  @default(now()) @map("created_at")
+
+  @@index([kind, model, unit, effectiveFrom], map: "app_coin_pricing_rates_lookup_idx")
+  @@map("app_coin_pricing_rates")
+}
+
+model AppIapProduct {
+  id             String   @id @default(cuid())
+  // ios | android | web
+  platform       String
+  storeProductId String   @map("store_product_id")
+  // web only: the product's id at the payment provider (Polar product UUID).
+  providerProductId String? @map("provider_product_id")
+  coinMicro      BigInt   @map("coin_micro")
+  bonusMicro     BigInt   @default(0) @map("bonus_micro")
+  priceUsdCents  Int      @map("price_usd_cents")
+  sortOrder      Int      @default(0) @map("sort_order")
+  isActive       Boolean  @default(true) @map("is_active")
+  badge          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([platform, storeProductId], map: "app_iap_products_platform_store_product_uidx")
+  @@map("app_iap_products")
+}
+
+model AppIapPurchase {
+  id                         String    @id @default(cuid())
+  userId                     String    @map("user_id")
+  platform                   String
+  productId                  String    @map("product_id")
+  // iOS transactionId, Android purchaseToken.
+  storeTransactionId         String    @unique(map: "app_iap_purchases_store_transaction_uidx") @map("store_transaction_id")
+  storeOriginalTransactionId String?   @map("store_original_transaction_id")
+  // pending | verified | granted | refunded | revoked | failed
+  status                     String    @default("pending")
+  priceAmountMicros          BigInt?   @map("price_amount_micros")
+  priceCurrency              String?   @map("price_currency")
+  storefrontCountry          String?   @map("storefront_country")
+  rawPayload                 Json?     @map("raw_payload")
+  // sandbox | production
+  environment                String?
+  lotId                      String?   @map("lot_id")
+  meta                       Json?
+  verifiedAt                 DateTime? @map("verified_at")
+  grantedAt                  DateTime? @map("granted_at")
+  refundedAt                 DateTime? @map("refunded_at")
+  createdAt                  DateTime  @default(now()) @map("created_at")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt(sort: Desc)], map: "app_iap_purchases_user_created_at_idx")
+  @@index([createdAt], map: "app_iap_purchases_created_at_idx")
+  @@map("app_iap_purchases")
+}
+
+// Raw store server notifications (webhooks).
+model AppIapStoreEvent {
+  id                 String    @id @default(cuid())
+  platform           String
+  notificationType   String?   @map("notification_type")
+  // Store-side unique id of the notification, for duplicate deliveries.
+  notificationId     String?   @unique(map: "app_iap_store_events_notification_uidx") @map("notification_id")
+  storeTransactionId String?   @map("store_transaction_id")
+  rawPayload         Json      @map("raw_payload")
+  processedAt        DateTime? @map("processed_at")
+  processResult      String?   @map("process_result")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  @@index([storeTransactionId], map: "app_iap_store_events_store_transaction_idx")
+  @@index([createdAt], map: "app_iap_store_events_created_at_idx")
+  @@map("app_iap_store_events")
+}
+
+// Admin grants and revocations (amount_micro < 0 = revoke). main has no admin
+// session table, so the login id and request info identify the actor.
+model AppCoinAdminGrant {
+  id            String    @id @default(cuid())
+  adminUsername String    @map("admin_username")
+  requestIp     String?   @map("request_ip")
+  userAgent     String?   @map("user_agent")
+  userId        String    @map("user_id")
+  amountMicro   BigInt    @map("amount_micro")
+  // Amount actually applied (a revoke stops at the remaining balance).
+  appliedMicro  BigInt    @default(0) @map("applied_micro")
+  isFree        Boolean   @map("is_free")
+  reason        String
+  expiresAt     DateTime? @map("expires_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)], map: "app_coin_admin_grants_user_created_at_idx")
+  @@map("app_coin_admin_grants")
 }

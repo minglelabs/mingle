@@ -1,3 +1,4 @@
+import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
 /**
  * What kind of poster an operator account is. People differ far more in how
  * they post than in what they post about: one only ever writes three words,
@@ -199,7 +200,9 @@ export function learnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
   if (native === 'ko') {
     return { language: pickOne(['en', 'en', 'ja', 'zh']), share: pickOne([0, 0, 0.1, 0.25]), level: pickOne(LEARNER_LEVELS) }
   }
-  return { language: 'ko', share: pickOne([0.3, 0.5, 0.7, 0.85]), level: pickOne(LEARNER_LEVELS) }
+  // Staff review: a foreign account mostly writing Korean reads as fake ("일본인이잖아").
+  // Their own language comes first; Korean is the occasional learner post.
+  return { language: 'ko', share: pickOne([0.1, 0.15, 0.2, 0.3]), level: pickOne(LEARNER_LEVELS) }
 }
 
 /** The fixed posting personality of one account. `topicKeys` are all topic keys the generator knows. */
@@ -234,4 +237,21 @@ export function posterProfile(seed: string, topicKeys: readonly string[] = []): 
 
   const photoShare = type.key === 'minimalist' || type.key === 'foodie' ? 0.8 : [0.35, 0.5, 0.65, 0.8][Math.floor(random() * 4)]
   return { type, length, voice, shapeFactors: type.shapes, topicFactors, photoShare, labelKo: `${type.ko} · ${length.ko}` }
+}
+
+const LEARNER_LEVEL_DOTS: Record<string, number> = { beginner: 2, intermediate: 3, advanced: 4 }
+
+/**
+ * An operator's 관심 언어 on its profile: the language its posts learn
+ * (seeded by the account id, as the post generator does) and its level in
+ * 1-5 dots, stored like a user's choice in settings.
+ */
+export function operatorInterestLanguageFields(userId: string, nativeLanguage: string): {
+  interestLanguages: string[]
+  interestLanguageLevels: number[]
+} {
+  const plan = learnerPlan(userId, nativeLanguage)
+  const code = canonicalizeSttLanguageCode(plan.language)
+  if (!code || code === canonicalizeSttLanguageCode(nativeLanguage)) return { interestLanguages: [], interestLanguageLevels: [] }
+  return { interestLanguages: [code], interestLanguageLevels: [LEARNER_LEVEL_DOTS[plan.level.key] ?? 3] }
 }

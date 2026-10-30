@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 
 type OperatorDetailPageProps = {
   params: Promise<{ userId: string }>
-  searchParams: Promise<{ posts?: string }>
+  searchParams: Promise<{ posts?: string; from?: string }>
 }
 
 function decodeSegment(value: string): string {
@@ -30,7 +30,7 @@ function decodeSegment(value: string): string {
 export default async function OperatorDetailPage({ params, searchParams }: OperatorDetailPageProps) {
   const { userId } = await params
   await requireAdmin(`/admin/operators/${userId}`)
-  const { posts } = await searchParams
+  const { posts, from } = await searchParams
   const account = await getOperatorAccountDetail(decodeSegment(userId).trim())
   if (!account) notFound()
 
@@ -41,6 +41,7 @@ export default async function OperatorDetailPage({ params, searchParams }: Opera
         countries={buildCountryOptions()}
         languages={buildLanguageOptions()}
         currentYear={new Date().getUTCFullYear()}
+        backHref={from === 'review' ? '/admin/operators/review' : '/admin/operators'}
       />
       <OperatorPosts userId={account.id} showAll={posts === 'all'} />
     </OperatorsMain>

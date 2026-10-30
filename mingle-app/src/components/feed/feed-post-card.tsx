@@ -3,6 +3,8 @@
 import type { FeedPostDto } from "@/lib/feed-post-dto";
 import type { FeedCopy } from "@/i18n/feed-copy";
 import AccountBadge from "@/components/posts/account-badge";
+import { CompactLanguageLevels } from "@/components/profile-language-levels";
+import { sanitizeInterestLanguages } from "@/lib/interest-languages";
 import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { feedEvents, trackFeedEvent, type FeedPostContext } from "@/lib/feed-analytics";
 import { moderationCopy } from "@/i18n/moderation-copy";
@@ -541,14 +543,27 @@ export default function FeedPostCard({
             {displayName.charAt(0).toUpperCase()}
           </span>
         )}
-        <span className={`max-w-[10rem] truncate text-[17px] font-bold ${fg.textClass}`}>
-          {displayName}
+        <span className="flex min-w-0 flex-col items-start gap-1">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className={`max-w-[10rem] truncate text-[17px] font-bold ${fg.textClass}`}>
+              {displayName}
+            </span>
+            {/* The official chip is plain content of the profile button (a tap on
+                it opens the profile, as before). */}
+            {authorBadge === "official" ? (
+              <AccountBadge kind={authorBadge} locale={locale} tone={tone} className={feedBadgeClass} />
+            ) : null}
+          </span>
+          {post.author.languages ? (
+            <CompactLanguageLevels
+              primaryLanguages={post.author.languages.primary}
+              interestLanguages={sanitizeInterestLanguages(post.author.languages.interest)}
+              locale={locale}
+              textClass={fg.textClass}
+              mutedClass={fg.mutedTextClass}
+            />
+          ) : null}
         </span>
-        {/* The official chip is plain content of the profile button (a tap on
-            it opens the profile, as before). */}
-        {authorBadge === "official" ? (
-          <AccountBadge kind={authorBadge} locale={locale} tone={tone} className={feedBadgeClass} />
-        ) : null}
       </button>
 
       <time className={`shrink-0 text-sm font-medium ${fg.mutedTextClass}`} dateTime={post.publishedAt}>
