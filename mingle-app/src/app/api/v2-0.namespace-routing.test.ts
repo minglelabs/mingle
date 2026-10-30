@@ -28,6 +28,15 @@ describe('installed 2.x client compatibility', () => {
     ]))
   })
 
+  // 2.3.0 has no route tree of its own either.
+  it.each(['ios', 'android'])('aliases %s/v2.3.0 onto the v2.2.0 tree', async platform => {
+    const rewrites = await nextConfig.rewrites!()
+    expect(rewrites).toEqual(expect.arrayContaining([
+      { source: `/api/${platform}/v2.3.0`, destination: `/api/${platform}/v2.2.0` },
+      { source: `/api/${platform}/v2.3.0/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
+    ]))
+  })
+
   // 2.2.1 is a patch release with no route tree of its own.
   it.each(['ios', 'android'])('aliases %s/v2.2.1 onto the v2.2.0 tree', async platform => {
     const rewrites = await nextConfig.rewrites!()
