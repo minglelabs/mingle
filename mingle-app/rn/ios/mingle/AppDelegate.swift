@@ -19,6 +19,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   ) -> Bool {
     UNUserNotificationCenter.current().delegate = self
     MingleLastScreenSnapshotStore.shared.install()
+    // Keeps the audio session alive while the app is in the background, so
+    // iOS does not suspend it between live translation sessions.
+    MingleAudioSessionCoordinator.shared.installBackgroundKeepAlive()
     // Read by JS at startup (runtimeConfig): such a launch opens its own
     // destination instead of restoring the previous screen.
     NativeRuntimeConfigModule.launchedFromExternalIntent = launchOptions?[.url] != nil
