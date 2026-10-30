@@ -47,9 +47,10 @@ import {
   subscribeNativeAudioRoute,
 } from '@/lib/native-audio-route'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
-import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, useCoinWallet } from '@/lib/coin-wallet-client'
+import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
-import CoinBalanceChip from '@/components/coins/coin-balance-chip'
+import CoinBalanceChip, { formatCoinCount } from '@/components/coins/coin-balance-chip'
+import HashSeedIcon from '@/components/coins/hash-seed-icon'
 import CoinRoomBanner from '@/components/coins/coin-room-banner'
 import { resolveLivePhoneDemoEarphoneModeCopy } from '@/i18n/live-phone-demo-earphone-mode-copy'
 
@@ -7494,6 +7495,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       >
                         <div className="px-4 py-4">
                           <div className="space-y-4">
+                            {isCoinBillingActive(coinWallet) && (
+                              <button
+                                type="button"
+                                onClick={openCoinStore}
+                                className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-1 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                              >
+                                <span className="min-w-0 flex-1">{getCoinCopy(coinLocale).storeTitle}</span>
+                                <span className="flex shrink-0 items-center gap-1.5 text-gray-500">
+                                  <HashSeedIcon size={16} />
+                                  <span className="tabular-nums">{formatCoinCount(coinWallet.balance, coinLocale)}</span>
+                                  <ChevronRight size={18} strokeWidth={2.4} />
+                                </span>
+                              </button>
+                            )}
                             {conversationId && (
                               <button
                                 type="button"
