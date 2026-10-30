@@ -32,10 +32,10 @@ jobs:
         include:
           - name: legacy-empty
             api_namespace: ""
-          - name: ios-v1.0.0
-            api_namespace: ios/v1.0.0
-          - name: ios-v1.0.2
-            api_namespace: ios/v1.0.2
+          - name: ios-v2.2.0
+            api_namespace: ios/v2.2.0
+          - name: android-v2.2.0
+            api_namespace: android/v2.2.0
     steps:
       - name: Checkout
         uses: actions/checkout@v4

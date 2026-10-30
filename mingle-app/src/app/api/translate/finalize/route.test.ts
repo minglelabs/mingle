@@ -1141,7 +1141,7 @@ describe('/api/translate/finalize route', () => {
     process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
     process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
 
-    const { POST } = await import('@/app/api/ios/v1.0.6/translate/finalize/route')
+    const { POST } = await import('@/server/api/controllers/ios/v1.0.6/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_6 }))
 
     const res = await POST(makeJsonRequest({
       text: '그래도 느리네.',
@@ -1575,7 +1575,7 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
     setGeminiTranslateEnv()
-    const { POST } = await import('@/app/api/ios/v1.0.2/translate/finalize/route')
+    const { POST } = await import('@/server/api/controllers/ios/v1.0.2/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_2 }))
 
     try {
       const res = await POST(makeJsonRequest({
@@ -1631,62 +1631,62 @@ describe('/api/translate/finalize route', () => {
   it.each([
     {
       label: 'iOS v1.0.4',
-      loadRoute: () => import('@/app/api/ios/v1.0.4/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/ios/v1.0.4/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_4 })),
       url: 'http://localhost:3000/api/ios/v1.0.4/translate/finalize',
     },
     {
       label: 'Android v1.0.5',
-      loadRoute: () => import('@/app/api/android/v1.0.5/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/android/v1.0.5/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForAndroidV1_0_5 })),
       url: 'http://localhost:3000/api/android/v1.0.5/translate/finalize',
     },
     {
       label: 'Android v1.0.6',
-      loadRoute: () => import('@/app/api/android/v1.0.6/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/android/v1.0.6/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForAndroidV1_0_6 })),
       url: 'http://localhost:3000/api/android/v1.0.6/translate/finalize',
     },
     {
       label: 'Android v1.0.7',
-      loadRoute: () => import('@/app/api/android/v1.0.7/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/android/v1.0.7/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForAndroidV1_0_7 })),
       url: 'http://localhost:3000/api/android/v1.0.7/translate/finalize',
     },
     {
       label: 'Android v1.0.8',
-      loadRoute: () => import('@/app/api/android/v1.0.8/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/android/v1.0.8/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForAndroidV1_0_8 })),
       url: 'http://localhost:3000/api/android/v1.0.8/translate/finalize',
     },
     {
       label: 'Android v1.0.9',
-      loadRoute: () => import('@/app/api/android/v1.0.9/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/android/v1.0.9/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForAndroidV1_0_9 })),
       url: 'http://localhost:3000/api/android/v1.0.9/translate/finalize',
     },
     {
       label: 'Android v1.0.11',
-      loadRoute: () => import('@/app/api/android/v1.0.11/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/android/v1.0.11/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForAndroidV1_0_11 })),
       url: 'http://localhost:3000/api/android/v1.0.11/translate/finalize',
     },
     {
       label: 'iOS v1.0.6',
-      loadRoute: () => import('@/app/api/ios/v1.0.6/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/ios/v1.0.6/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_6 })),
       url: 'http://localhost:3000/api/ios/v1.0.6/translate/finalize',
     },
     {
       label: 'iOS v1.0.7',
-      loadRoute: () => import('@/app/api/ios/v1.0.7/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/ios/v1.0.7/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_7 })),
       url: 'http://localhost:3000/api/ios/v1.0.7/translate/finalize',
     },
     {
       label: 'iOS v1.0.8',
-      loadRoute: () => import('@/app/api/ios/v1.0.8/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/ios/v1.0.8/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_8 })),
       url: 'http://localhost:3000/api/ios/v1.0.8/translate/finalize',
     },
     {
       label: 'iOS v1.0.9',
-      loadRoute: () => import('@/app/api/ios/v1.0.9/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/ios/v1.0.9/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_9 })),
       url: 'http://localhost:3000/api/ios/v1.0.9/translate/finalize',
     },
     {
       label: 'iOS v1.0.11',
-      loadRoute: () => import('@/app/api/ios/v1.0.11/translate/finalize/route'),
+      loadRoute: () => import('@/server/api/controllers/ios/v1.0.11/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_11 })),
       url: 'http://localhost:3000/api/ios/v1.0.11/translate/finalize',
     },
   ])('redetects final source language on $label routes and returns all selected languages', async ({ loadRoute, url }) => {
@@ -1796,7 +1796,7 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
     setGeminiTranslateEnv()
-    const { POST } = await import('@/app/api/ios/v1.0.4/translate/finalize/route')
+    const { POST } = await import('@/server/api/controllers/ios/v1.0.4/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_4 }))
 
     try {
       const res = await POST(makeJsonRequest({
@@ -1832,7 +1832,7 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
     setGeminiTranslateEnv()
-    const { POST } = await import('@/app/api/ios/v1.0.4/translate/finalize/route')
+    const { POST } = await import('@/server/api/controllers/ios/v1.0.4/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_4 }))
 
     try {
       const res = await POST(makeJsonRequest({
@@ -1991,7 +1991,7 @@ describe('/api/translate/finalize route', () => {
     async function loadRedetectRoute() {
       vi.resetModules()
       setGeminiTranslateEnv()
-      const { POST } = await import('@/app/api/ios/v1.0.6/translate/finalize/route')
+      const { POST } = await import('@/server/api/controllers/ios/v1.0.6/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_6 }))
       return POST
     }
 
