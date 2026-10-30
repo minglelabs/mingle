@@ -23,6 +23,9 @@ const nextConfig = {
       // from memory after the app has sat in the background for hours.
       static: 60 * 60 * 24,
     },
+    // Railway keeps .next/cache in a build cache mount (Dockerfile.railway), so
+    // Turbopack recompiles only modules that changed since the last deploy.
+    turbopackFileSystemCacheForBuild: process.env.MINGLE_TURBOPACK_BUILD_CACHE === "1",
   },
   async rewrites() {
     return [
