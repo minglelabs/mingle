@@ -8,7 +8,10 @@ replace or modify the current Vercel and Fly deployments.
 
 - Railway builds from the repository root with `railway.json`.
 - `Dockerfile.railway` installs, builds, and packages `mingle-app`,
-  `mingle-stt`, and `mingle-messaging`.
+  `mingle-stt`, and `mingle-messaging`. `mingle-app` ships as Next's
+  standalone server (`MINGLE_NEXT_STANDALONE=1`), and its build skips the
+  TypeScript pass (`MINGLE_SKIP_BUILD_TYPECHECK=1`) because the
+  `Typecheck (tsc)` CI job covers it.
 - `railway/start-single-service.mjs` starts all three servers on internal ports:
   - `mingle-app`: `3000`
   - `mingle-stt`: `3001`

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { resolveCoinBillingMode } from './config'
+import { resolveCoinBillingMode, resolveUserCoinBillingMode } from './config'
 import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingToken } from './stt-token'
 
 describe('STT billing token', () => {
@@ -48,5 +48,28 @@ describe('resolveCoinBillingMode', () => {
     expect(resolveCoinBillingMode('shadow')).toBe('shadow')
     expect(resolveCoinBillingMode('1')).toBe('enforce')
     expect(resolveCoinBillingMode('TRUE')).toBe('enforce')
+  })
+})
+
+describe('resolveUserCoinBillingMode', () => {
+  const previous = { mode: process.env.COIN_BILLING_ENABLED, ids: process.env.COIN_ENFORCE_USER_IDS }
+  afterEach(() => {
+    process.env.COIN_BILLING_ENABLED = previous.mode
+    process.env.COIN_ENFORCE_USER_IDS = previous.ids
+  })
+
+  it('enforces only the listed accounts while the service is in shadow mode', () => {
+    process.env.COIN_BILLING_ENABLED = 'shadow'
+    process.env.COIN_ENFORCE_USER_IDS = ' review-user , qa-user'
+    expect(resolveUserCoinBillingMode('review-user')).toBe('enforce')
+    expect(resolveUserCoinBillingMode('qa-user')).toBe('enforce')
+    expect(resolveUserCoinBillingMode('someone-else')).toBe('shadow')
+    expect(resolveUserCoinBillingMode(null)).toBe('shadow')
+  })
+
+  it('never turns billing on when it is off', () => {
+    process.env.COIN_BILLING_ENABLED = ''
+    process.env.COIN_ENFORCE_USER_IDS = 'review-user'
+    expect(resolveUserCoinBillingMode('review-user')).toBe('off')
   })
 })

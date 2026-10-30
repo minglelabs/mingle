@@ -75,12 +75,13 @@ const FALLBACK_VIEWER_CARD_HEIGHT = `100dvh`;
 
 /**
  * Pull-to-refresh (home feed, first card). The feed slides down with the
- * finger and opens a gap above it that holds the spinner; once the gap is
- * fully open it stops and the refresh starts, without waiting for release.
+ * finger to just under the header, which stays put, and the spinner turns in
+ * the middle of the header row; once the feed is fully down it stops and the
+ * refresh starts, without waiting for release.
  */
 const PULL_REFRESH_TRIGGER_PX = 150;
-/** Height of the spinner row the pull opens, below the status bar. */
-const PULL_REFRESH_ROW_PX = 60;
+/** The header row (below the status bar) the pull uncovers; the spinner sits in it. */
+const PULL_REFRESH_ROW_PX = 56;
 
 /** Bottom edge of the transparent `AppTopHeader` (its own height + top safe area). */
 const HEADER_BOTTOM = "calc(56px + env(safe-area-inset-top, 44px))";
@@ -515,9 +516,8 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   }, [scrollEl, startPullRefresh]);
 
   const pullShown = pullRefreshing ? 1 : pullProgress;
-  // The feed slides down past the status bar plus one spinner row. The header
-  // already keeps the status-bar height as padding, so it moves by the row
-  // only and lands on the feed's top edge instead of floating far below it.
+  // The feed slides down past the status bar plus the header row, so the
+  // header (logo and buttons) stays where it is, now over the white gap.
   const pullTransition = pullDragging ? "none" : "transform 220ms ease, border-radius 220ms ease";
   const pullFeedStyle: CSSProperties | undefined = isViewer
     ? undefined
@@ -530,10 +530,6 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
         borderTopRightRadius: pullShown * 22,
         transition: pullTransition,
       };
-  const pullHeaderStyle: CSSProperties = {
-    transform: pullShown > 0 ? `translateY(${pullShown * PULL_REFRESH_ROW_PX}px)` : undefined,
-    transition: pullTransition,
-  };
 
   const scrollToIndex = useCallback(
     (idx: number) => {
@@ -716,7 +712,8 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       hasUnread={notifications.hasUnread}
       onCompose={openCompose}
       onNotifications={openNotifications}
-      glyphTone={glyphTone}
+      // Over the white gap a pull opens, the glyphs turn dark like the page.
+      glyphTone={pullShown > 0 ? "dark" : glyphTone}
     />
   ) : null;
 
@@ -951,7 +948,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
               }
             />
           </div>
-          <div className="absolute inset-x-0 top-0 z-20" style={pullHeaderStyle}>
+          <div className="absolute inset-x-0 top-0 z-20">
             {header}
           </div>
         </>
@@ -1085,6 +1082,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
             author: actionPost.author,
             isMine: actionPost.isMine,
             visibility: actionPost.visibility,
+            sourceText: actionPost.sourceText,
           }}
           locale={locale}
           viewerId={viewerId}
@@ -1100,6 +1098,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
             setActionPostId(null);
           }}
           onRequireLogin={() => goToLogin(actionPostId)}
+          onPostEdited={(postId) => window.location.assign(feedHref(locale, { postId }))}
         />
       ) : null}
 

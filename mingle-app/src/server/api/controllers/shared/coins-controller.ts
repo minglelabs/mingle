@@ -24,7 +24,7 @@ import { verifyPolarWebhookSignature } from '@/server/coins/polar'
 import { getCoinHistory, getCoinUsageSummary, getConversationCoinUsage, normalizeCoinUsageRange } from '@/server/coins/queries'
 import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingToken } from '@/server/coins/stt-token'
 import { canSpendCoins, chargeCoinUsage, disabledCoinWallet, getCoinWallet } from '@/server/coins/wallet'
-import { resolveCoinBillingMode } from '@/server/coins/config'
+import { resolveCoinBillingMode, resolveUserCoinBillingMode } from '@/server/coins/config'
 import { prisma } from '@/lib/prisma'
 import { parseApiNamespaceVersion } from '@/lib/api-namespace-version'
 
@@ -42,10 +42,17 @@ async function readSessionUserId(): Promise<string> {
   return typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
 }
 
-/** ios / android from a namespaced path (/api/ios/v2.1.0/...); null on the web (unversioned) API. */
-function resolveRequestPlatform(request: NextRequest): IapPlatform | null {
+/**
+ * ios / android from a namespaced path (/api/ios/v2.1.0/...), else from the
+ * platform the app shell names: the WebView drops the namespace query after a
+ * full page load, so store-app requests can also arrive on the unversioned API.
+ * null means the web app. Claiming a platform buys nothing: grants still need
+ * a store-verified transaction.
+ */
+function resolveRequestPlatform(request: NextRequest, claimed?: unknown): IapPlatform | null {
   const match = /^\/api\/(ios|android)\/v\d+\.\d+\.\d+\//.exec(request.nextUrl.pathname)
-  return match ? match[1] as IapPlatform : null
+  if (match) return match[1] as IapPlatform
+  return claimed === 'ios' || claimed === 'android' ? claimed : null
 }
 
 /** GET /coins/wallet — pays the daily free refill when due. */
@@ -79,7 +86,7 @@ export async function readCoinProducts(request: NextRequest) {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
   // The unversioned API is the web app: it sells through Polar checkout, never inside the store apps.
-  const platform: CoinProductPlatform = resolveRequestPlatform(request) ?? 'web'
+  const platform: CoinProductPlatform = resolveRequestPlatform(request, request.nextUrl.searchParams.get('platform')) ?? 'web'
   // What one minute of interpreting (speech recognition) costs right now, for the "about N minutes" hint.
   const perMinute = quoteCoinUsage(await loadCoinPricingRates(), { kind: 'stt', units: { second: 60 }, at: new Date() })
   return json({
@@ -110,9 +117,9 @@ const CLIENT_ERROR_CODES = new Set([
 export async function createCoinPurchase(request: NextRequest) {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
-  const platform = resolveRequestPlatform(request)
-  if (!platform) return json({ error: 'platform_required' }, 400)
   const body = await request.json().catch((): Record<string, unknown> => ({}))
+  const platform = resolveRequestPlatform(request, body.platform)
+  if (!platform) return json({ error: 'platform_required' }, 400)
   const read = (value: unknown) => (typeof value === 'string' ? value.trim().slice(0, 16_384) : '')
 
   try {
@@ -158,7 +165,7 @@ export async function readCoinUsage(request: NextRequest) {
 export async function readConversationCoinUsage(conversationId: string) {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
-  if (resolveCoinBillingMode() !== 'enforce') return json({ members: [], totalCoins: 0 })
+  if (resolveUserCoinBillingMode(userId) !== 'enforce') return json({ members: [], totalCoins: 0 })
   const usage = await getConversationCoinUsage(conversationId, userId)
   return usage ? json(usage) : json({ error: 'not_found' }, 404)
 }
@@ -202,7 +209,7 @@ export async function chargeCoinsInternally(request: NextRequest) {
   if (kind !== 'stt' || !idempotencyKey) return json({ error: 'invalid_charge' }, 400)
   const rawSeconds = typeof body.seconds === 'number' && Number.isFinite(body.seconds) ? body.seconds : 0
   const seconds = Math.max(0, Math.min(MAX_STT_CHUNK_SECONDS, rawSeconds))
-  const enforced = resolveCoinBillingMode() === 'enforce'
+  const enforced = resolveUserCoinBillingMode(identity.userId) === 'enforce'
 
   if (seconds === 0) {
     const exhausted = enforced && !(await canSpendCoins(identity.userId))

@@ -18,6 +18,12 @@ describe('post photo prompt', () => {
     expect(buildPostImagePrompt('a street corner', 'Sapporo, Japan')).toContain('Taken in Sapporo, Japan')
   })
 
+  it('keeps a photo of people a photo when it mentions the phone screen', () => {
+    const prompt = buildPostImagePrompt('[friends] A front-camera group selfie of the poster and two friends looking down into the phone screen taking the shot', 'Yokohama, Japan')
+    expect(prompt).not.toContain('A screenshot saved on a phone')
+    expect(prompt).toContain('group selfie')
+  })
+
   it('shares what is on a screen as a screenshot, not a photo of the phone', () => {
     const prompt = buildPostImagePrompt('Screenshot of Korean grammar notes highlighted in yellow', 'Tokyo, Japan')
     expect(prompt).toContain('A screenshot saved on a phone')

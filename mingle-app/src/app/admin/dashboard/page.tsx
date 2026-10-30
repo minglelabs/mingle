@@ -20,6 +20,7 @@ import { AdminPage, AdminPageHeader } from "../_components/ui";
 import { LineChartCard } from "./line-chart-card";
 import { MetricsTable } from "./metrics-table";
 import { RangeNav } from "./range-nav";
+import { RetentionSection, RetentionSectionFallback, startSignupRetentionLoad } from "./retention-section";
 import { SnsSection, SnsSectionFallback, startSnsDashboardLoad } from "./sns-section";
 import {
   TranslationModelSection,
@@ -118,6 +119,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
   // take down the rest of the page.
   const translationModelSeries = startTranslationModelSeriesLoad(range, platform);
   const snsDashboard = startSnsDashboardLoad(range);
+  const signupRetention = startSignupRetentionLoad(range);
   const metrics = await loadAdminDashboardMetrics(range, { forceRefresh, platform });
   const cumulativeMetrics = metrics.filter((metric) => metric.kind !== "milliseconds");
 
@@ -136,6 +138,16 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
       />
 
       <section className="mt-6">
+        <h2 className="mb-1 text-sm font-semibold text-slate-600">가입자 · 리텐션</h2>
+        <p className="mb-2 break-words text-xs text-slate-500">
+          Dn 리텐션은 가입한 날로부터 n일째 되는 날 메시지·글 조회·좋아요·댓글·글쓰기·팔로우 중 하나라도 한 사람의 비율입니다. 그날이 다 지난 가입자만 셉니다. 플랫폼 필터는 적용되지 않습니다.
+        </p>
+        <Suspense key={`retention:${days}`} fallback={<RetentionSectionFallback />}>
+          <RetentionSection dashboardPromise={signupRetention} />
+        </Suspense>
+      </section>
+
+      <section className="mt-8">
         <h2 className="mb-2 text-sm font-semibold text-slate-600">일자별 추이</h2>
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {metrics.map((metric) => (

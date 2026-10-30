@@ -9,6 +9,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Worker threads start about twice as fast as the default child processes.
+    pool: 'threads',
     include: ['src/**/*.test.ts'],
     coverage: {
       reporter: ['text', 'lcov'],

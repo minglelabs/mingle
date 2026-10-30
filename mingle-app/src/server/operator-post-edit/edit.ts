@@ -67,3 +67,74 @@ export async function editOperatorPostText(ctx: AdminContext, postId: string, ra
   await writeAdminAudit(ctx, { action: 'operator_post.edit_text', operatorUserId: post.authorId, targetType: 'post', targetId: post.id })
   return { ok: true }
 }
+
+/**
+ * Takes an operator's published post down: hidden by staff, it leaves every
+ * feed, profile and search (the starter feed too), and its text and photos go
+ * back to the front of the review queue as a latent post (`postId` points at
+ * the post it came from) to be fixed and published again as a new post.
+ * Putting it back up restores the post and drops that latent copy if it is
+ * still in review.
+ */
+export async function setOperatorPostHidden(ctx: AdminContext, postId: string, hidden: boolean): Promise<OperatorPostEditResult & { reserveId?: string }> {
+  const post = await operatorPost(postId)
+  if (!post) return { ok: false, error: 'not_found', status: 404 }
+  let reserveId: string | undefined
+  if (hidden) {
+    const [full, origin, low] = await Promise.all([
+      prisma.post.findUnique({
+        where: { id: post.id },
+        select: {
+          sourceText: true, sourceLanguage: true, imageObjectKey: true, imageWidth: true, imageHeight: true, moderationHiddenAt: true,
+          extraImages: { orderBy: { position: 'asc' }, select: { imageObjectKey: true, imageWidth: true, imageHeight: true } },
+        },
+      }),
+      prisma.operatorPostReserve.findFirst({ where: { postId: post.id, state: 'published' }, select: { topic: true, imagePrompt: true } }),
+      prisma.$queryRaw<Array<{ low: number | null }>>`
+        SELECT LEAST(
+          (SELECT MIN(review_rank) FROM app.app_operator_accounts),
+          (SELECT MIN(review_rank) FROM app.app_operator_post_reserve)
+        ) AS low`,
+    ])
+    if (!full) return { ok: false, error: 'not_found', status: 404 }
+    if (full.moderationHiddenAt) return { ok: true }
+    const extraImages = full.imageObjectKey
+      ? full.extraImages.map((image) => ({ objectKey: image.imageObjectKey, width: image.imageWidth, height: image.imageHeight }))
+      : []
+    const [, reserve] = await prisma.$transaction([
+      prisma.post.update({ where: { id: post.id }, data: { moderationHiddenAt: new Date() } }),
+      prisma.operatorPostReserve.create({
+        data: {
+          operatorUserId: post.authorId,
+          text: full.sourceText ?? '',
+          language: full.sourceLanguage,
+          topic: origin?.topic ?? null,
+          imagePrompt: origin?.imagePrompt ?? null,
+          imageObjectKey: full.imageObjectKey,
+          imageWidth: full.imageWidth,
+          imageHeight: full.imageHeight,
+          extraImages: extraImages.length ? extraImages : undefined,
+          state: 'review',
+          postId: post.id,
+          reviewRank: (low[0]?.low ?? 1) - 1,
+          reviewFeedback: '앱에서 내린 글',
+        },
+        select: { id: true },
+      }),
+    ])
+    reserveId = reserve.id
+  } else {
+    await prisma.$transaction([
+      prisma.post.update({ where: { id: post.id }, data: { moderationHiddenAt: null } }),
+      prisma.operatorPostReserve.updateMany({ where: { postId: post.id, state: 'review' }, data: { state: 'cancelled', releaseAt: null } }),
+    ])
+  }
+  await writeAdminAudit(ctx, {
+    action: hidden ? 'operator_post.takedown' : 'operator_post.restore',
+    operatorUserId: post.authorId,
+    targetType: 'post',
+    targetId: post.id,
+    ...(reserveId ? { metadata: { reserveId } } : {}),
+  })
+  return { ok: true, ...(reserveId ? { reserveId } : {}) }
+}

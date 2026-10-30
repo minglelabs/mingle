@@ -95,7 +95,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
       <h1 className="text-xl font-bold text-slate-900">피드 미리보기</h1>
       <p className="mt-1 text-sm text-slate-500">앱 홈 피드와 같은 추천 순서입니다. 보기만 하며 조회 기록은 남지 않습니다. 신규 한국인·외국인은 막 가입한 유저가 보는 순서이고, 번호는 정해 둔 첫 피드 순서입니다.</p>
 
-      <nav className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1" aria-label="누구의 피드로 볼지">
+      <nav className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pb-1" aria-label="누구의 피드로 볼지">
         <Link
           href={query({})}
           className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${viewer || starterView ? 'border-slate-200 bg-white text-slate-600' : 'border-sky-600 bg-sky-600 text-white'}`}
@@ -155,7 +155,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                   />
                 ) : null}
                 {post.imageObjectKey ? (
-                  <div className={`mt-3 flex gap-2 ${post.extraImages.length ? 'no-scrollbar snap-x snap-mandatory overflow-x-auto' : ''}`}>
+                  <div className={`mt-3 flex gap-2 ${post.extraImages.length ? 'no-scrollbar snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain' : ''}`}>
                     {[
                       { src: `/api/posts/${post.id}/image?k=${encodeURIComponent(post.imageObjectKey.slice(-16))}`, width: post.imageWidth, height: post.imageHeight },
                       ...post.extraImages.map((image) => ({ src: `/api/posts/${post.id}/image?index=${image.position}`, width: image.imageWidth, height: image.imageHeight })),
@@ -167,7 +167,8 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                           width={photo.width ?? undefined}
                           height={photo.height ?? undefined}
                           loading="lazy"
-                          className="h-auto max-h-[80vh] w-full rounded-xl border border-slate-200 bg-slate-900 object-contain"
+                          decoding="async"
+                          className="h-auto max-h-[80svh] w-full rounded-xl border border-slate-200 bg-slate-900 object-contain"
                         />
                         {all.length > 1 ? <p className="mt-1 text-center text-xs text-slate-500">{index + 1}/{all.length}</p> : null}
                       </div>

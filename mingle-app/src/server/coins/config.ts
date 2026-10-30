@@ -14,6 +14,19 @@ export function resolveCoinBillingMode(raw: string | undefined = process.env.COI
   return 'off'
 }
 
+/**
+ * Accounts billed for real while the rest of the service is still in shadow
+ * mode (COIN_ENFORCE_USER_IDS, comma-separated user ids): the App Review
+ * account and our own QA accounts, so the store can be reviewed and tested
+ * before billing is enforced for everyone.
+ */
+export function resolveUserCoinBillingMode(userId: string | null | undefined): CoinBillingMode {
+  const mode = resolveCoinBillingMode()
+  if (mode !== 'shadow' || !userId) return mode
+  const enforced = (process.env.COIN_ENFORCE_USER_IDS || '').split(',').map(id => id.trim())
+  return enforced.includes(userId) ? 'enforce' : mode
+}
+
 export function isCoinBillingEnforced(): boolean {
   return resolveCoinBillingMode() === 'enforce'
 }

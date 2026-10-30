@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Bell, Ellipsis, Inbox, ListChecks, Newspaper, UsersRound, type LucideIcon } from "lucide-react";
+import { Bell, Ellipsis, Inbox, ListChecks, Rows3, UsersRound, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ADMIN_TABS,
@@ -19,8 +19,8 @@ const TAB_ICONS: Record<AdminTabKey, LucideIcon> = {
   inbox: Inbox,
   activity: Bell,
   review: ListChecks,
+  feed: Rows3,
   operators: UsersRound,
-  posts: Newspaper,
   more: Ellipsis,
 };
 
@@ -33,7 +33,7 @@ async function fetchUnreadTotal(url: string, signal: AbortSignal): Promise<numbe
 }
 
 /**
- * Admin navigation: 인박스 · 알림 · 검토 · 계정 · 게시물 · 더보기, each with an optional
+ * Admin navigation: 인박스 · 알림 · 검토 · 피드 · 계정 · 더보기, each with an optional
  * count badge. A bottom tab bar on a phone; a left rail from `lg` up.
  */
 export function AdminTabBar({ badges }: { badges?: AdminTabBadges }) {

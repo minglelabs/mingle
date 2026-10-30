@@ -60,6 +60,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v2.1.1', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.2.0', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.2.1', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v2.3.0', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.2', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.3', enablesFinalizeSourceRedetection: false },
@@ -85,6 +86,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'ios/v2.1.1', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.2.0', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.2.1', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v2.3.0', enablesFinalizeSourceRedetection: true },
 ] as const
 const ALLOWED_API_NAMESPACES = new Set<string>([
   DEFAULT_API_NAMESPACE,
@@ -123,7 +125,7 @@ function normalizeReleaseTarget(raw: string): string {
   return raw.trim().toLowerCase()
 }
 
-function detectRuntimePlatform(): 'android' | 'ios' | null {
+export function detectRuntimePlatform(): 'android' | 'ios' | null {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
     return null
   }
