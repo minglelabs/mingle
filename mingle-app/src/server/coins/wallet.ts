@@ -5,7 +5,7 @@ import {
   LOW_BALANCE_MICRO,
   microToDisplayCoins,
 } from '@/lib/coin-units'
-import { resolveCoinBillingMode, resolveDailyFreeCapMicro, type CoinBillingMode } from './config'
+import { resolveDailyFreeCapMicro, resolveUserCoinBillingMode, type CoinBillingMode } from './config'
 import { grantLot, takeFromLots, withLockedWallet, type LockedWallet } from './ledger'
 import {
   loadCoinPricingRates,
@@ -35,7 +35,7 @@ function snapshotFromContext(ctx: LockedWallet): CoinWalletSnapshot {
   const { wallet } = ctx
   const lastGrant = wallet.lastDailyGrantAt ?? ctx.now
   return {
-    billingMode: resolveCoinBillingMode(),
+    billingMode: resolveUserCoinBillingMode(wallet.userId),
     balance: microToDisplayCoins(wallet.balanceMicro),
     freeBalance: microToDisplayCoins(wallet.freeBalanceMicro),
     paidBalance: microToDisplayCoins(wallet.paidBalanceMicro),
@@ -59,7 +59,7 @@ export async function getCoinWallet(userId: string, now?: Date): Promise<CoinWal
  * Always true unless billing is enforced.
  */
 export async function canSpendCoins(userId: string | null | undefined): Promise<boolean> {
-  if (resolveCoinBillingMode() !== 'enforce' || !userId) return true
+  if (resolveUserCoinBillingMode(userId) !== 'enforce' || !userId) return true
   // Hot path (every translation request): a positive snapshot needs no lock.
   // Only a missing or empty wallet takes the locked path, which may pay the daily refill.
   const snapshot = await prisma.appCoinWallet.findUnique({ where: { userId }, select: { balanceMicro: true } })
@@ -146,7 +146,7 @@ function isUniqueViolation(error: unknown): boolean {
  * charge the balance becomes exactly zero and the rest is recorded as uncollected.
  */
 export async function chargeCoinUsage(input: CoinChargeInput): Promise<CoinChargeResult> {
-  const mode = resolveCoinBillingMode()
+  const mode = resolveUserCoinBillingMode(input.userId)
   const skipped: CoinChargeResult = {
     mode,
     applied: false,

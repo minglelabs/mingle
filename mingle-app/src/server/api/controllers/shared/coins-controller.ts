@@ -24,7 +24,7 @@ import { verifyPolarWebhookSignature } from '@/server/coins/polar'
 import { getCoinHistory, getCoinUsageSummary, getConversationCoinUsage, normalizeCoinUsageRange } from '@/server/coins/queries'
 import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingToken } from '@/server/coins/stt-token'
 import { canSpendCoins, chargeCoinUsage, disabledCoinWallet, getCoinWallet } from '@/server/coins/wallet'
-import { resolveCoinBillingMode } from '@/server/coins/config'
+import { resolveCoinBillingMode, resolveUserCoinBillingMode } from '@/server/coins/config'
 import { prisma } from '@/lib/prisma'
 import { parseApiNamespaceVersion } from '@/lib/api-namespace-version'
 
@@ -158,7 +158,7 @@ export async function readCoinUsage(request: NextRequest) {
 export async function readConversationCoinUsage(conversationId: string) {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
-  if (resolveCoinBillingMode() !== 'enforce') return json({ members: [], totalCoins: 0 })
+  if (resolveUserCoinBillingMode(userId) !== 'enforce') return json({ members: [], totalCoins: 0 })
   const usage = await getConversationCoinUsage(conversationId, userId)
   return usage ? json(usage) : json({ error: 'not_found' }, 404)
 }
@@ -202,7 +202,7 @@ export async function chargeCoinsInternally(request: NextRequest) {
   if (kind !== 'stt' || !idempotencyKey) return json({ error: 'invalid_charge' }, 400)
   const rawSeconds = typeof body.seconds === 'number' && Number.isFinite(body.seconds) ? body.seconds : 0
   const seconds = Math.max(0, Math.min(MAX_STT_CHUNK_SECONDS, rawSeconds))
-  const enforced = resolveCoinBillingMode() === 'enforce'
+  const enforced = resolveUserCoinBillingMode(identity.userId) === 'enforce'
 
   if (seconds === 0) {
     const exhausted = enforced && !(await canSpendCoins(identity.userId))
