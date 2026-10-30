@@ -262,8 +262,8 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
 
     // MARK: - Louder translation
 
-    /// Linear gain applied to every clip (1.5x amplitude, about +3.5 dB).
-    static let translationGain: Float = 1.5
+    /// Linear gain applied to every clip (2x amplitude, about +6 dB).
+    static let translationGain: Float = 2.0
 
     /// The clip decoded, multiplied by `gain` with a soft limit near full
     /// scale (so peaks round off instead of clipping), and re-encoded as
