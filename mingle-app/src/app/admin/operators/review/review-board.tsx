@@ -353,7 +353,7 @@ export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; wi
   return (
     <div className="relative mt-2">
       <div
-        className="flex snap-x snap-mandatory overflow-x-auto rounded-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onScroll={(event) => {
           const el = event.currentTarget
           setIndex(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)))
@@ -368,6 +368,7 @@ export function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; wi
             width={photo.width ?? undefined}
             height={photo.height ?? undefined}
             loading="lazy"
+            decoding="async"
             className="h-auto max-h-[85svh] w-full shrink-0 snap-center bg-slate-100 object-contain"
           />
         ))}
