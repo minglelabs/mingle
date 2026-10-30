@@ -1282,13 +1282,20 @@ class NativeSTTModule: RCTEventEmitter {
     /// mixable session. With microphone permission it also records (the
     /// user's own voice is mixed in), in `.default` mode: `.voiceChat` would
     /// duck the other apps for the whole session.
+    ///
+    /// No `.allowBluetooth` (hands-free profile) here: recording through
+    /// Bluetooth earphones switches them to HFP, which drops the whole device
+    /// to a 16 kHz route, and flipping between HFP and A2DP makes other apps'
+    /// playback (a video) run at the wrong rate, fast and high-pitched. Output
+    /// stays on A2DP and the microphone comes from the phone (wired earphones
+    /// keep their own microphone).
     private func configureDeviceAudioSession() throws {
         let audioSession = AVAudioSession.sharedInstance()
         if audioSession.recordPermission == .granted {
             try audioSession.setCategory(
                 .playAndRecord,
                 mode: .default,
-                options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]
+                options: [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers]
             )
         } else {
             try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
