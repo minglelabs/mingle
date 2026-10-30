@@ -67,3 +67,16 @@ export async function editOperatorPostText(ctx: AdminContext, postId: string, ra
   await writeAdminAudit(ctx, { action: 'operator_post.edit_text', operatorUserId: post.authorId, targetType: 'post', targetId: post.id })
   return { ok: true }
 }
+
+/**
+ * Takes an operator's published post down (or back up): hidden by staff, it
+ * leaves every feed, profile and search, the starter feed too, and keeps its
+ * likes and comments for when it comes back.
+ */
+export async function setOperatorPostHidden(ctx: AdminContext, postId: string, hidden: boolean): Promise<OperatorPostEditResult> {
+  const post = await operatorPost(postId)
+  if (!post) return { ok: false, error: 'not_found', status: 404 }
+  await prisma.post.update({ where: { id: post.id }, data: { moderationHiddenAt: hidden ? new Date() : null } })
+  await writeAdminAudit(ctx, { action: hidden ? 'operator_post.takedown' : 'operator_post.restore', operatorUserId: post.authorId, targetType: 'post', targetId: post.id })
+  return { ok: true }
+}
