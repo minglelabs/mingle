@@ -36,6 +36,11 @@ const ERROR_COPY: Record<string, string> = {
 type ReviewPhoto = { objectKey: string; width: number | null; height: number | null }
 const MAX_POST_PHOTOS = 10
 
+/** The account's profile in the admin: its posts in review and published, as on the app's My Page. */
+export function profileHref(userId: string): string {
+  return `/admin/operators/${encodeURIComponent(userId)}/profile`
+}
+
 export function reviewImageUrl(objectKey: string): string {
   return `/admin/operators/api/review/image?key=${encodeURIComponent(objectKey)}`
 }
@@ -410,12 +415,14 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
   }
 
   return (
-    <AdminCard as="article" className={CARD_CLASS}>
+    <AdminCard as="article" id={`post-${post.id}`} className={`${CARD_CLASS} scroll-mt-4`}>
       {/* Laid out like a post in the app's feed: author row, text, then the photo at full width. */}
       <div className="mb-2 flex items-center gap-2">
-        <OperatorAvatar image={author.image} name={author.name} size={36} languages={author.languages} />
+        <Link href={profileHref(author.userId)} aria-label={`${author.name ?? author.handle} 프로필`}>
+          <OperatorAvatar image={author.image} name={author.name} size={36} languages={author.languages} />
+        </Link>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-900">{author.name ?? '(이름 없음)'}</p>
+          <Link href={profileHref(author.userId)} className="block truncate text-sm font-semibold text-slate-900">{author.name ?? '(이름 없음)'}</Link>
           <p className="truncate text-xs text-slate-500">@{author.handle} · 글 {formatAt(at)}</p>
           <CompactLanguageLevels primaryLanguages={author.languages} interestLanguages={author.interestLanguages} locale="ko" className="mt-1" />
         </div>
@@ -500,9 +507,9 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
   ].filter(Boolean)
 
   return (
-    <AdminCard as="article" className={CARD_CLASS}>
+    <AdminCard as="article" id={`profile-${profile.userId}`} className={`${CARD_CLASS} scroll-mt-4`}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-slate-500">새 계정 · 가입 {formatAt(at)}</p>
+        <Link href={profileHref(profile.userId)} className="text-xs font-semibold text-slate-500">새 계정 · 가입 {formatAt(at)} · 프로필 보기 ›</Link>
         <div className="flex items-center">
           <EditLink userId={profile.userId} />
           <PinButton kind="profile" id={profile.userId} pinned={pinned} />
