@@ -1,70 +1,85 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as adminAuth from "@/lib/admin-auth";
 import {
+  ADMIN_LOGIN_FAILURE_WINDOW_MS,
+  ADMIN_LOGIN_MAX_FAILURES,
   ADMIN_SESSION_COOKIE_NAME,
-  ADMIN_SESSION_MAX_AGE_SECONDS,
-  createAdminSessionToken,
+  createAdminLoginThrottle,
   isAdminAuthConfigured,
   verifyAdminLogin,
-  verifyAdminSessionToken,
 } from "@/lib/admin-auth";
 
-const ORIGINAL_ENV = {
-  AUTH_SECRET: process.env.AUTH_SECRET,
-  MINGLE_ADMIN_USERNAME: process.env.MINGLE_ADMIN_USERNAME,
-  MINGLE_ADMIN_PASSWORD: process.env.MINGLE_ADMIN_PASSWORD,
-};
-
-function restoreEnvValue(name: keyof typeof ORIGINAL_ENV) {
-  const value = ORIGINAL_ENV[name];
-  if (value === undefined) {
-    delete process.env[name];
-    return;
-  }
-  process.env[name] = value;
-}
-
-describe("admin-auth", () => {
+describe("admin-auth credentials", () => {
   afterEach(() => {
-    restoreEnvValue("AUTH_SECRET");
-    restoreEnvValue("MINGLE_ADMIN_USERNAME");
-    restoreEnvValue("MINGLE_ADMIN_PASSWORD");
+    vi.unstubAllEnvs();
   });
 
   it("reports admin auth as disabled when credentials are missing", () => {
-    delete process.env.MINGLE_ADMIN_USERNAME;
-    delete process.env.MINGLE_ADMIN_PASSWORD;
+    vi.stubEnv("MINGLE_ADMIN_USERNAME", "");
+    vi.stubEnv("MINGLE_ADMIN_PASSWORD", "");
 
     expect(isAdminAuthConfigured()).toBe(false);
-    expect(createAdminSessionToken()).toBeNull();
     expect(verifyAdminLogin("admin", "password")).toBe(false);
-    expect(verifyAdminSessionToken("v1.anything")).toBe(false);
   });
 
-  it("verifies login credentials and session tokens from environment variables", () => {
-    process.env.AUTH_SECRET = "server-secret";
-    process.env.MINGLE_ADMIN_USERNAME = "admin";
-    process.env.MINGLE_ADMIN_PASSWORD = "strong-password";
-
-    const token = createAdminSessionToken();
+  it("verifies login credentials from environment variables", () => {
+    vi.stubEnv("MINGLE_ADMIN_USERNAME", "admin");
+    vi.stubEnv("MINGLE_ADMIN_PASSWORD", "strong-password");
 
     expect(ADMIN_SESSION_COOKIE_NAME).toBe("mingle_admin_session");
-    expect(ADMIN_SESSION_MAX_AGE_SECONDS).toBeGreaterThan(60 * 60 * 24 * 365);
+    expect(isAdminAuthConfigured()).toBe(true);
     expect(verifyAdminLogin(" admin ", "strong-password")).toBe(true);
     expect(verifyAdminLogin("admin", "wrong-password")).toBe(false);
-    expect(token).toMatch(/^v1\./);
-    expect(verifyAdminSessionToken(token)).toBe(true);
-    expect(verifyAdminSessionToken(`${token}x`)).toBe(false);
+    expect(verifyAdminLogin("someone", "strong-password")).toBe(false);
+    expect(verifyAdminLogin(undefined, "strong-password")).toBe(false);
+    expect(verifyAdminLogin("admin", null)).toBe(false);
   });
 
-  it("invalidates existing tokens when the configured password changes", () => {
-    process.env.AUTH_SECRET = "server-secret";
-    process.env.MINGLE_ADMIN_USERNAME = "admin";
-    process.env.MINGLE_ADMIN_PASSWORD = "first-password";
+  it("no longer derives a session token from the credential (old cookies stop working)", () => {
+    expect(Object.keys(adminAuth)).not.toContain("createAdminSessionToken");
+    expect(Object.keys(adminAuth)).not.toContain("verifyAdminSessionToken");
+    expect(Object.keys(adminAuth)).not.toContain("ADMIN_SESSION_MAX_AGE_SECONDS");
+  });
+});
 
-    const token = createAdminSessionToken();
+describe("admin login throttle", () => {
+  const T0 = 1_800_000_000_000;
 
-    process.env.MINGLE_ADMIN_PASSWORD = "second-password";
+  it("throttles an ip after 5 failures inside 15 minutes", () => {
+    const throttle = createAdminLoginThrottle();
+    expect(ADMIN_LOGIN_MAX_FAILURES).toBe(5);
+    expect(ADMIN_LOGIN_FAILURE_WINDOW_MS).toBe(15 * 60 * 1000);
 
-    expect(verifyAdminSessionToken(token)).toBe(false);
+    for (let attempt = 1; attempt < 5; attempt += 1) {
+      expect(throttle.recordFailure("203.0.113.7", T0 + attempt * 1000)).toBe(false);
+      expect(throttle.isThrottled("203.0.113.7", T0 + attempt * 1000)).toBe(false);
+    }
+    expect(throttle.recordFailure("203.0.113.7", T0 + 5000)).toBe(true);
+    expect(throttle.isThrottled("203.0.113.7", T0 + 5000)).toBe(true);
+  });
+
+  it("keeps each ip separate", () => {
+    const throttle = createAdminLoginThrottle();
+    for (let attempt = 0; attempt < 5; attempt += 1) throttle.recordFailure("203.0.113.7", T0);
+    expect(throttle.isThrottled("203.0.113.7", T0)).toBe(true);
+    expect(throttle.isThrottled("198.51.100.4", T0)).toBe(false);
+  });
+
+  it("lifts the lock 15 minutes after the oldest counted failure (sliding window)", () => {
+    const throttle = createAdminLoginThrottle();
+    for (let attempt = 0; attempt < 5; attempt += 1) throttle.recordFailure("ip", T0 + attempt * 60_000);
+
+    expect(throttle.isThrottled("ip", T0 + ADMIN_LOGIN_FAILURE_WINDOW_MS - 1)).toBe(true);
+    expect(throttle.isThrottled("ip", T0 + ADMIN_LOGIN_FAILURE_WINDOW_MS)).toBe(false);
+    // One more failure inside the window of the other four locks it again.
+    expect(throttle.recordFailure("ip", T0 + ADMIN_LOGIN_FAILURE_WINDOW_MS + 1)).toBe(true);
+  });
+
+  it("forgets an ip's failures after a successful login", () => {
+    const throttle = createAdminLoginThrottle();
+    for (let attempt = 0; attempt < 4; attempt += 1) throttle.recordFailure("ip", T0);
+    throttle.clear("ip");
+    for (let attempt = 0; attempt < 4; attempt += 1) expect(throttle.recordFailure("ip", T0)).toBe(false);
+    expect(throttle.isThrottled("ip", T0)).toBe(false);
   });
 });

@@ -6,6 +6,14 @@ import ProfileImageCropper, {
   type ProfileImageCropperChange,
 } from "@/components/profile-image-cropper";
 import ProfileImagePreview from "@/components/profile-image-preview";
+import {
+  clearMyPageProfileCache,
+  createEmptyMyPageProfile,
+  readMyPageProfileCache,
+  readMyPageProfileMemoryCache,
+  writeMyPageProfileCache,
+  type MyPageProfileRecord,
+} from "@/components/my-page-profile-cache";
 import ProfileShareScreen from "@/components/profile-share-screen";
 import FollowListScreen from "@/components/follow-list-screen";
 import ProfileBio from "@/components/profile-bio";
@@ -15,20 +23,23 @@ import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import ProfileUsageContent from "@/components/profile-usage-content";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import ProfileLocation from "@/components/profile-location";
+import ProfilePostGrid from "@/components/search/profile-post-grid";
+import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
+import LanguageLevelPicker from "@/components/language-level-picker";
+import ProfileLanguageLevels from "@/components/profile-language-levels";
+import { MAX_INTEREST_LANGUAGES, sanitizeInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
+import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
+import InterestLanguageSheet from "@/components/interest-language-sheet";
 import LanguageFlag from "@/components/language-flag";
 import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
 import {
-  DEFAULT_NATIVE_APP_UPDATE_DETAIL,
-  NATIVE_APP_UPDATE_EVENT,
-  parseNativeAppUpdateDetail,
-  resolveNativeAppInstallSourceText,
-  resolveNativeAppUpdateCopy,
-  type NativeAppUpdateDetail,
-  type NativeAppUpdateCopy,
-} from "@/components/LivePhoneDemo/live-phone-demo.app-update.logic";
+  NativeAppUpdateCard,
+  openNativeAppUpdateStore,
+  useNativeAppUpdateCardContent,
+} from "@/components/native-app-update-card";
 import { isNativeUiBridgeEnabledFromSearch } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
 import { PRIMARY_UI_LANGUAGE_OPTIONS, type AppDictionary, type AppLocale, type PrimaryUiLocale } from "@/i18n";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
@@ -74,6 +85,7 @@ import {
 } from "@/lib/birth-date";
 import { resolveSignupCopy } from "@/i18n/signup-copy";
 import { resolveProfileManagementCopy } from "@/i18n/profile-management-copy";
+import { resolveNotificationCopy } from "@/i18n/notification-copy";
 import { checkProfileLocationPermission } from "@/components/profile-location";
 import {
   normalizeProfileLocation,
@@ -86,7 +98,18 @@ import {
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
-import { BarChart3, Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
+import CoinBalanceChip, { formatCoinCount } from "@/components/coins/coin-balance-chip";
+import HashSeedIcon from "@/components/coins/hash-seed-icon";
+import { getCoinCopy } from "@/i18n/coin-copy";
+import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { myPostsHref } from "@/lib/feed-routes";
+import ComposeOverlay from "@/components/compose/compose-overlay";
+import { feedCopy } from "@/i18n/feed-copy";
+import { composeCopy } from "@/i18n/compose-copy";
+import AccountBadge from "@/components/posts/account-badge";
+import IdentityRow from "@/components/posts/identity-row";
+import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -97,23 +120,7 @@ type MyPageProps = {
   locale: AppLocale;
 };
 
-type ProfileRecord = {
-  bioDraft?: string | null;
-  image: string | null;
-  imageCropScale: number | null;
-  imageCropX: number | null;
-  imageCropY: number | null;
-  handle: string | null;
-  name: string | null;
-  bio: string | null;
-  nationality: string | null;
-  primaryLanguages: string[];
-  defaultConversationLanguages: string[];
-  location: ProfileLocationRecord | null;
-  birthDate?: BirthDateParts | null;
-  followersCount: number;
-  followingCount: number;
-};
+type ProfileRecord = MyPageProfileRecord;
 
 type ProfileDraft = {
   imageFile: File | null;
@@ -125,6 +132,8 @@ type ProfileDraft = {
   primaryLanguages: SttLanguageCode[];
   birthDate: BirthDateParts | null;
 };
+
+const NO_INTEREST_LANGUAGES: readonly InterestLanguage[] = [];
 
 const DEFAULT_PROFILE_EDIT_BIRTH_DATE: BirthDateParts = {
   year: 2000,
@@ -214,6 +223,9 @@ type BlockedUserRecord = {
     handle: string | null;
     name: string | null;
     image: string | null;
+    /** Badge flags; absent means false. */
+    isOfficial?: boolean;
+    isOperator?: boolean;
   };
 };
 
@@ -229,6 +241,9 @@ type ReportRecord = {
     handle: string | null;
     name: string | null;
     image: string | null;
+    /** Badge flags; absent means false. */
+    isOfficial?: boolean;
+    isOperator?: boolean;
   };
   replies: Array<{
     id: string;
@@ -240,94 +255,30 @@ type ReportRecord = {
 
 type SessionStatus = "loading" | "authenticated" | "unauthenticated";
 type ManagementLoadState = "idle" | "loading" | "ready" | "unauthorized" | "error";
-type ProfileManagementPage = "blocked" | "reports" | "language" | "primaryLanguages" | "defaultLanguages" | "usage" | "feedback";
+type ProfileManagementPage = "blocked" | "reports" | "language" | "primaryLanguages" | "interestLanguages" | "defaultLanguages" | "usage" | "feedback";
 
 function isProfileManagementPage(value: string | undefined): value is ProfileManagementPage {
   return value === "blocked"
     || value === "reports"
     || value === "language"
     || value === "primaryLanguages"
+    || value === "interestLanguages"
     || value === "defaultLanguages"
     || value === "usage"
     || value === "feedback";
 }
 
-type NativeAppUpdateWindow = Window & {
-  __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown;
+type NativeBridgeWindow = Window & {
   ReactNativeWebView?: {
     postMessage?: (message: string) => void;
   };
 };
 
-type NativeOpenUpdateStoreCommand = {
-  type: "native_open_update_store";
-  payload?: {
-    updateUrl?: string;
-  };
-};
-
 function isNativeAppRuntimeSignalPresent(): boolean {
   if (typeof window === "undefined") return false;
-  const nativeWindow = window as NativeAppUpdateWindow;
+  const nativeWindow = window as NativeBridgeWindow;
   return typeof nativeWindow.ReactNativeWebView?.postMessage === "function"
     || isNativeUiBridgeEnabledFromSearch(window.location.search || "");
-}
-
-export function NativeAppUpdateCard({
-  copy,
-  installedVersion,
-  installSource,
-  latestVersion,
-  statusMessage,
-  showUpdateAction,
-  onUpdate,
-}: {
-  copy: NativeAppUpdateCopy;
-  installedVersion: string;
-  // Display text for the install source; "" (unknown) hides the line.
-  installSource: string;
-  latestVersion: string;
-  statusMessage: string;
-  showUpdateAction: boolean;
-  onUpdate: () => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
-            {copy.sectionLabel}
-          </div>
-          <div className="mt-2 text-sm font-semibold text-gray-900">
-            {copy.installedLabel} {installedVersion}
-          </div>
-          {installSource ? (
-            <div className="mt-1 text-xs font-medium text-gray-600">
-              {copy.installSourceLabel} {installSource}
-            </div>
-          ) : null}
-          {latestVersion ? (
-            <div className="mt-1 text-xs font-medium text-gray-600">
-              {copy.latestLabel} {latestVersion}
-            </div>
-          ) : null}
-          <div className="mt-2 text-xs leading-5 text-gray-600">
-            {statusMessage}
-          </div>
-        </div>
-        {showUpdateAction ? (
-          <button
-            type="button"
-            onClick={onUpdate}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-          >
-            <Download size={13} strokeWidth={2.2} />
-            <span>{copy.updateButtonLabel}</span>
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: SttLanguageCode; label: string; flag: string }> =
@@ -407,6 +358,8 @@ function ProfileSettingsPanel({
   onChangeAppLanguage,
   initialPrimaryLanguages,
   onSavePrimaryLanguages,
+  initialInterestLanguages,
+  onSaveInterestLanguages,
   initialDefaultConversationLanguages,
   onSaveDefaultConversationLanguages,
   onSignOut,
@@ -421,6 +374,8 @@ function ProfileSettingsPanel({
   onChangeAppLanguage: (locale: PrimaryUiLocale) => void;
   initialPrimaryLanguages: readonly string[];
   onSavePrimaryLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
+  initialInterestLanguages: readonly InterestLanguage[];
+  onSaveInterestLanguages: (languages: InterestLanguage[]) => Promise<boolean>;
   initialDefaultConversationLanguages: readonly string[];
   onSaveDefaultConversationLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
   onSignOut: () => void;
@@ -429,6 +384,11 @@ function ProfileSettingsPanel({
   open: boolean;
   sessionStatus: SessionStatus;
 }) {
+  const coinWalletState = useCoinWallet().wallet;
+  const coinBillingActive = isCoinBillingActive(coinWalletState);
+  const coinWallet = coinWalletState ?? { balance: 0 };
+  const coinCopy = getCoinCopy(locale);
+  const postingFeedSupported = useIsPostingFeedSupported();
   const [blocks, setBlocks] = useState<BlockedUserRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -447,18 +407,31 @@ function ProfileSettingsPanel({
     sanitizeSttLanguageSelection(initialPrimaryLanguages)
   ));
   const [isSavingPrimaryLanguages, setIsSavingPrimaryLanguages] = useState(false);
+  const [interestLanguages, setInterestLanguages] = useState<InterestLanguage[]>(() => [...initialInterestLanguages]);
+  const [isSavingInterestLanguages, setIsSavingInterestLanguages] = useState(false);
+  const interestCopy = useMemo(() => resolveInterestLanguageCopy(locale), [locale]);
   const [defaultConversationLanguages, setDefaultConversationLanguages] = useState<SttLanguageCode[]>(() => (
     sanitizeSttLanguageSelection(initialDefaultConversationLanguages)
   ));
   const [isSavingDefaultConversationLanguages, setIsSavingDefaultConversationLanguages] = useState(false);
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false);
-  const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null);
+  const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState<boolean | null>(null);
+  const [isSavingNotificationsPreference, setIsSavingNotificationsPreference] = useState(false);
   const [isAccountActionModalOpen, setIsAccountActionModalOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const managementCopy = useMemo(() => resolveProfileManagementCopy(locale), [locale]);
+  const postsRouter = useRouter();
+  const postsMenu = useMemo(() => composeCopy(locale), [locale]);
+  const goToMyPosts = useCallback(
+    (section: "archived" | "trash" | "hidden") => {
+      onClose();
+      postsRouter.push(myPostsHref(locale, section));
+    },
+    [locale, onClose, postsRouter],
+  );
   const copy = {
     title: dictionary.profile.menuSettingsTitle ?? (locale === "ko" ? "메뉴 및 설정" : "Menu and settings"),
     blocked: dictionary.profile.blockedUsersLabel ?? (locale === "ko" ? "차단한 사용자" : "Blocked users"),
@@ -466,7 +439,7 @@ function ProfileSettingsPanel({
     appLanguage: dictionary.profile.appLanguageLabel ?? (locale === "ko" ? "앱 이용 언어" : "App language"),
     appLanguageTitle: dictionary.profile.appLanguageTitle ?? (locale === "ko" ? "앱 이용 언어" : "App language"),
     appLanguageDescription: dictionary.profile.appLanguageDescription
-      ?? (locale === "ko" ? "Mingle UI와 UX에 사용할 언어를 선택하세요." : "Choose the language used for the Mingle interface."),
+      ?? (locale === "ko" ? "HashChat UI와 UX에 사용할 언어를 선택하세요." : "Choose the language used for the HashChat interface."),
     defaultLanguages: managementCopy.defaultLanguages,
     defaultLanguagesTitle: managementCopy.defaultLanguages,
     defaultLanguagesDescription: managementCopy.defaultLanguagesDescription,
@@ -495,6 +468,8 @@ function ProfileSettingsPanel({
     loadError: dictionary.profile.settingsLoadError ?? (locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity."),
     authRequired: dictionary.profile.settingsAuthRequired ?? (locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history."),
     logout: dictionary.profile.logout,
+    notifications: resolveNotificationCopy(locale).inAppToggleTitle,
+    notificationsDescription: resolveNotificationCopy(locale).inAppToggleDescription,
     deactivateAccount: dictionary.profile.deactivateAccount ?? (locale === "ko" ? "계정 비활성화/탈퇴" : "Deactivate / Delete Account"),
     deactivateConfirmTitle: dictionary.profile.deactivateAccountConfirmTitle ?? (locale === "ko" ? "비활성화하시겠습니까?" : "Do you want to deactivate your account?"),
     deactivateAction: dictionary.profile.deactivateAccountAction ?? (locale === "ko" ? "비활성화" : "Deactivate"),
@@ -507,7 +482,7 @@ function ProfileSettingsPanel({
     withdrawAccountAction: dictionary.profile.withdrawAccountAction ?? (locale === "ko" ? "탈퇴하기" : "Delete Account"),
     withdrawAccountFailed: dictionary.profile.withdrawAccountFailed ?? (locale === "ko" ? "탈퇴 처리에 실패했습니다." : "Failed to delete account."),
     reportedUser: dictionary.profile.settingsReportedUserLabel ?? (locale === "ko" ? "신고한 사용자" : "Reported user"),
-    userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user"),
+    userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "HashChat 사용자" : "HashChat user"),
     myMessage: dictionary.profile.settingsMyMessageLabel ?? (locale === "ko" ? "신고 내용" : "Your report"),
     teamReply: dictionary.profile.settingsTeamReplyLabel ?? (locale === "ko" ? "운영진 답변" : "Team reply"),
     reasonLabels: {
@@ -520,19 +495,7 @@ function ProfileSettingsPanel({
   };
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(locale), [locale]);
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(locale), [locale]);
-  const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(locale), [locale]);
-  const nativeAppUpdateStatus = nativeAppUpdate ?? DEFAULT_NATIVE_APP_UPDATE_DETAIL;
-  const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel;
-  const nativeAppInstallSource = resolveNativeAppInstallSourceText(nativeAppUpdateCopy, nativeAppUpdateStatus.installSource);
-  const nativeAppLatestVersion = nativeAppUpdateStatus.latestVersion || "";
-  const nativeAppUpdateStatusMessage = nativeAppUpdateStatus.status === "checking"
-    ? nativeAppUpdateCopy.checkingMessage
-    : nativeAppUpdateStatus.status === "available"
-      ? nativeAppUpdateCopy.availableMessage
-      : nativeAppUpdateStatus.status === "current"
-        ? nativeAppUpdateCopy.currentMessage
-        : nativeAppUpdateCopy.unknownMessage;
-  const showNativeAppUpdateAction = nativeAppUpdateStatus.updateAvailable && Boolean(nativeAppUpdateStatus.updateUrl);
+  const { detail: nativeAppUpdate, content: nativeAppUpdateCardContent } = useNativeAppUpdateCardContent(locale);
   const managementPageTitle = managementPage === "blocked"
     ? copy.blocked
     : managementPage === "reports"
@@ -543,6 +506,8 @@ function ProfileSettingsPanel({
           ? copy.usage.title
           : managementPage === "primaryLanguages"
             ? copy.primaryLanguagesTitle
+            : managementPage === "interestLanguages"
+              ? interestCopy.interestLabel
             : managementPage === "defaultLanguages"
               ? copy.defaultLanguagesTitle
               : copy.appLanguageTitle;
@@ -557,24 +522,9 @@ function ProfileSettingsPanel({
     syncNativeRuntime();
     const nativeRuntimeTimerId = window.setTimeout(syncNativeRuntime, 0);
     const nativeRuntimeRetryTimerId = window.setTimeout(syncNativeRuntime, 250);
-    const windowWithUpdate = window as NativeAppUpdateWindow;
-    const cachedDetail = parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS);
-    const nativeUpdateTimerId = window.setTimeout(() => {
-      setNativeAppUpdate(cachedDetail || DEFAULT_NATIVE_APP_UPDATE_DETAIL);
-    }, 0);
-
-    const handleNativeAppUpdate = (event: Event) => {
-      const detail = parseNativeAppUpdateDetail((event as CustomEvent<unknown>).detail);
-      if (!detail) return;
-      setNativeAppUpdate(detail);
-    };
-
-    window.addEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener);
     return () => {
       window.clearTimeout(nativeRuntimeTimerId);
       window.clearTimeout(nativeRuntimeRetryTimerId);
-      window.clearTimeout(nativeUpdateTimerId);
-      window.removeEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener);
     };
   }, []);
 
@@ -604,6 +554,11 @@ function ProfileSettingsPanel({
     if (!open) return;
     setPrimaryLanguages(sanitizeSttLanguageSelection(initialPrimaryLanguages));
   }, [initialPrimaryLanguages, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setInterestLanguages([...initialInterestLanguages]);
+  }, [initialInterestLanguages, open]);
 
   useEffect(() => {
     if (!open) {
@@ -700,6 +655,44 @@ function ProfileSettingsPanel({
     }
   }, [copy.unblockError, unblockingId]);
 
+  useEffect(() => {
+    if (!open || sessionStatus !== "authenticated") return;
+    let cancelled = false;
+    void fetch(buildClientApiPath("/account/preferences"), { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { inAppNotificationsEnabled?: unknown } | null) => {
+        if (cancelled || !payload) return;
+        setInAppNotificationsEnabled(payload.inAppNotificationsEnabled !== false);
+      })
+      .catch(() => {
+        // Leave the toggle in its unknown state; it stays interactive.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sessionStatus]);
+
+  const handleToggleInAppNotifications = useCallback(async () => {
+    if (isSavingNotificationsPreference) return;
+    const current = inAppNotificationsEnabled ?? true;
+    const next = !current;
+    setInAppNotificationsEnabled(next);
+    setIsSavingNotificationsPreference(true);
+    try {
+      const response = await fetch(buildClientApiPath("/account/preferences"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inAppNotificationsEnabled: next }),
+      });
+      if (!response.ok) throw new Error("preference_save_failed");
+    } catch {
+      // Roll the optimistic toggle back on failure.
+      setInAppNotificationsEnabled(current);
+    } finally {
+      setIsSavingNotificationsPreference(false);
+    }
+  }, [inAppNotificationsEnabled, isSavingNotificationsPreference]);
+
   const handleSelectAppLanguage = useCallback((nextLocale: PrimaryUiLocale) => {
     if (nextLocale === locale) return;
     storeAppLocale(nextLocale);
@@ -730,6 +723,29 @@ function ProfileSettingsPanel({
     }
   }, [copy.defaultLanguagesSaveError, defaultConversationLanguages, isSavingDefaultConversationLanguages, onSaveDefaultConversationLanguages]);
 
+  const saveInterestLanguages = useCallback(async (nextLanguages: InterestLanguage[]) => {
+    if (isSavingInterestLanguages) return;
+    const previousLanguages = interestLanguages;
+    setInterestLanguages(nextLanguages);
+    setIsSavingInterestLanguages(true);
+    try {
+      if (!await onSaveInterestLanguages(nextLanguages)) {
+        setInterestLanguages(previousLanguages);
+        window.alert(interestCopy.saveError);
+      }
+    } finally {
+      setIsSavingInterestLanguages(false);
+    }
+  }, [interestCopy.saveError, interestLanguages, isSavingInterestLanguages, onSaveInterestLanguages]);
+
+  const handleToggleInterestLanguage = useCallback((code: SttLanguageCode) => {
+    const selected = interestLanguages.some((entry) => entry.code === code);
+    if (!selected && (interestLanguages.length >= MAX_INTEREST_LANGUAGES || primaryLanguages.includes(code))) return;
+    void saveInterestLanguages(selected
+      ? interestLanguages.filter((entry) => entry.code !== code)
+      : [...interestLanguages, { code, level: 1 }]);
+  }, [interestLanguages, primaryLanguages, saveInterestLanguages]);
+
   const handleTogglePrimaryLanguage = useCallback(async (code: SttLanguageCode) => {
     if (isSavingPrimaryLanguages) return;
 
@@ -755,25 +771,9 @@ function ProfileSettingsPanel({
   }, [copy.primaryLanguagesSaveError, isSavingPrimaryLanguages, onSavePrimaryLanguages, primaryLanguages]);
 
   const handleNativeAppUpdatePress = useCallback(() => {
-    const updateUrl = nativeAppUpdate?.updateUrl?.trim() || "";
-    if (!updateUrl) return;
-
+    if (!nativeAppUpdate?.updateUrl?.trim()) return;
     onClose();
-    const command: NativeOpenUpdateStoreCommand = {
-      type: "native_open_update_store",
-      payload: { updateUrl },
-    };
-    const nativeWindow = typeof window === "undefined" ? null : window as NativeAppUpdateWindow;
-    if (nativeWindow?.ReactNativeWebView?.postMessage) {
-      try {
-        nativeWindow.ReactNativeWebView.postMessage(JSON.stringify(command));
-        return;
-      } catch {
-        // Fall back to browser navigation if the bridge errors.
-      }
-    }
-
-    window.location.href = updateUrl;
+    openNativeAppUpdateStore(nativeAppUpdate.updateUrl);
   }, [nativeAppUpdate?.updateUrl, onClose]);
 
   const openManagementPage = useCallback((page: ProfileManagementPage) => {
@@ -837,6 +837,7 @@ function ProfileSettingsPanel({
       }
       await unregisterNativePushToken();
       resetMinglePostHogIdentity();
+      clearMyPageProfileCache();
       await signOut({ callbackUrl: signOutCallbackUrl });
       if (typeof window !== "undefined") {
         window.location.replace(signOutCallbackUrl);
@@ -860,6 +861,7 @@ function ProfileSettingsPanel({
       }
       await unregisterNativePushToken();
       resetMinglePostHogIdentity();
+      clearMyPageProfileCache();
       await signOut({ callbackUrl: signOutCallbackUrl });
       if (typeof window !== "undefined") {
         window.location.replace(signOutCallbackUrl);
@@ -899,6 +901,49 @@ function ProfileSettingsPanel({
           </header>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
+            {coinBillingActive ? (
+              <button
+                type="button"
+                onClick={openCoinStore}
+                className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-left transition active:bg-amber-100"
+              >
+                <HashSeedIcon size={21} />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{coinCopy.storeTitle}</span>
+                <span className="text-[14px] font-bold tabular-nums text-amber-700">{formatCoinCount(coinWallet.balance, locale)}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-amber-500" aria-hidden="true" />
+              </button>
+            ) : null}
+            {postingFeedSupported !== false ? (
+            <div className="mb-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+              <button
+                type="button"
+                onClick={() => goToMyPosts("archived")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Archive size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{postsMenu.archiveTitle}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => goToMyPosts("trash")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Trash2 size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{postsMenu.trashTitle}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => goToMyPosts("hidden")}
+                className="flex w-full items-center gap-3 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <EyeOff size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{postsMenu.hiddenTitle}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+            </div>
+            ) : null}
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <button
                 type="button"
@@ -947,6 +992,15 @@ function ProfileSettingsPanel({
               </button>
               <button
                 type="button"
+                onClick={() => openManagementPage("interestLanguages")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{interestCopy.interestLabel}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
                 onClick={() => openManagementPage("defaultLanguages")}
                 className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
               >
@@ -964,15 +1018,37 @@ function ProfileSettingsPanel({
                 <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
               </button>
             </div>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+              <div className="flex items-center gap-3 px-4 py-4">
+                <Bell size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-semibold">{copy.notifications}</p>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-gray-500">{copy.notificationsDescription}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={inAppNotificationsEnabled ?? true}
+                  aria-label={copy.notifications}
+                  disabled={isSavingNotificationsPreference || sessionStatus !== "authenticated"}
+                  onClick={() => void handleToggleInAppNotifications()}
+                  className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${
+                    (inAppNotificationsEnabled ?? true) ? "bg-amber-500" : "bg-gray-300"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                      (inAppNotificationsEnabled ?? true) ? "translate-x-6" : "translate-x-1"
+                    }`}
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
+            </div>
             {isNativeAppRuntime ? (
               <div className="mt-4 px-0">
                 <NativeAppUpdateCard
-                  copy={nativeAppUpdateCopy}
-                  installedVersion={nativeAppInstalledVersion}
-                  installSource={nativeAppInstallSource}
-                  latestVersion={nativeAppLatestVersion}
-                  statusMessage={nativeAppUpdateStatusMessage}
-                  showUpdateAction={showNativeAppUpdateAction}
+                  {...nativeAppUpdateCardContent}
                   onUpdate={handleNativeAppUpdatePress}
                 />
               </div>
@@ -1210,6 +1286,42 @@ function ProfileSettingsPanel({
                   disabled={isSavingPrimaryLanguages}
                 />
               </div>
+            ) : managementPage === "interestLanguages" ? (
+              <div>
+                <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{interestCopy.settingsDescription}</p>
+                {interestLanguages.length ? (
+                  <ul className="mb-5 space-y-2">
+                    {interestLanguages.map((entry) => (
+                      <li key={entry.code} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                        <p className="flex items-center gap-2 text-[14px] font-semibold text-slate-900">
+                          <LanguageFlag language={entry.code} className="text-[18px] leading-none" />
+                          {getSttLanguageDisplayName(entry.code, locale) ?? entry.code}
+                        </p>
+                        <LanguageLevelPicker
+                          level={entry.level}
+                          locale={locale}
+                          disabled={isSavingInterestLanguages}
+                          onChange={(level) => void saveInterestLanguages(
+                            interestLanguages.map((item) => (item.code === entry.code ? { ...item, level } : item)),
+                          )}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <LanguagePreferencePicker
+                  selectedLanguages={interestLanguages.map((entry) => entry.code)}
+                  onToggleLanguage={handleToggleInterestLanguage}
+                  uiLocale={locale}
+                  searchPlaceholder={roomManagementCopy.languageSelectorSearchPlaceholder}
+                  sortLocaleLabel={roomManagementCopy.languageSelectorSortLocaleLabel}
+                  sortAlphabeticalLabel={roomManagementCopy.languageSelectorSortAlphabeticalLabel}
+                  noResultsLabel={roomManagementCopy.languageSelectorNoResultsLabel}
+                  maxLanguages={MAX_INTEREST_LANGUAGES}
+                  minLanguages={0}
+                  disabled={isSavingInterestLanguages}
+                />
+              </div>
             ) : managementPage === "defaultLanguages" ? (
               <div>
                 <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.defaultLanguagesDescription}</p>
@@ -1273,7 +1385,10 @@ function ProfileSettingsPanel({
                       <li key={block.id} className="flex items-center gap-3 px-3 py-3">
                         <UserMiniAvatar image={block.user.image} label={name} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[14px] font-semibold">{name}</p>
+                          <p className="flex min-w-0 items-center gap-1">
+                            <span className="truncate text-[14px] font-semibold">{name}</span>
+                            <AccountBadge kind={resolveAccountBadge(block.user)} locale={locale} tone="dark" />
+                          </p>
                           {handle ? <p className="truncate text-[12px] text-gray-500">{handle}</p> : null}
                         </div>
                         <button
@@ -1308,18 +1423,31 @@ function ProfileSettingsPanel({
                         ? (dictionary.profile.reportStatusInReview ?? "In review")
                         : copy.pending;
                   const expanded = expandedReportId === report.id;
+                  const badge = resolveAccountBadge(report.reportedUser);
+                  const reasonLabel = copy.reasonLabels[report.reason] ?? report.reason;
                   return (
                     <article key={report.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                      <button type="button" onClick={() => setExpandedReportId(expanded ? null : report.id)} className="w-full text-left">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-[14px] font-semibold">{name}</p>
-                            {handle ? <p className="mt-0.5 truncate text-[12px] text-gray-500">{handle}</p> : null}
-                            <p className="mt-1 text-[12px] text-gray-500">{copy.reasonLabels[report.reason] ?? report.reason}</p>
-                          </div>
-                          <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-gray-600">{statusLabel}</span>
+                      {/* The header expands the report; the badge next to the
+                          name stays its own button (IdentityRow). */}
+                      <IdentityRow
+                        action={{
+                          kind: "button",
+                          onClick: () => setExpandedReportId(expanded ? null : report.id),
+                          expanded,
+                        }}
+                        label={[withAccountBadgeLabel(name, badge, locale), handle, reasonLabel, statusLabel].filter(Boolean).join(", ")}
+                        contentClassName="flex items-start justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="flex min-w-0 items-center gap-1">
+                            <span className="truncate text-[14px] font-semibold" aria-hidden="true">{name}</span>
+                            <AccountBadge kind={badge} locale={locale} tone="dark" />
+                          </p>
+                          {handle ? <p className="mt-0.5 truncate text-[12px] text-gray-500" aria-hidden="true">{handle}</p> : null}
+                          <p className="mt-1 text-[12px] text-gray-500" aria-hidden="true">{reasonLabel}</p>
                         </div>
-                      </button>
+                        <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-gray-600" aria-hidden="true">{statusLabel}</span>
+                      </IdentityRow>
                       {expanded ? (
                         <div className="mt-3 space-y-3 border-t border-gray-200 pt-3 text-[13px] leading-relaxed">
                           {report.message ? <p><span className="font-semibold text-gray-600">{copy.myMessage}: </span>{report.message}</p> : null}
@@ -1629,24 +1757,31 @@ function ProfileEditPanel({
 
 export default function MyPage({ dictionary, initialProfile, locale }: MyPageProps) {
   const { data: session, status: sessionStatus } = useSession();
+  const coinBillingActive = isCoinBillingActive(useCoinWallet().wallet);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [profile, setProfile] = useState<ProfileRecord>(() => initialProfile ?? ({
-    image: null,
-    imageCropScale: null,
-    imageCropX: null,
-    imageCropY: null,
-    handle: null,
-    name: null,
-    bio: null,
-    nationality: null,
-    primaryLanguages: [],
-    defaultConversationLanguages: [],
-    location: null,
-    birthDate: null,
-    followersCount: 0,
-    followingCount: 0,
-  }));
+  // Rollout gate (W4): hide the post grid for a pre-2.2.0 client (its posts
+  // endpoints 404). `null` before mount → shown, matching the server render;
+  // hidden once a client is known to be unsupported.
+  const postingFeedSupported = useIsPostingFeedSupported();
+  // Compose slides in over My page (like the notification panel), no route change.
+  const [composeOpen, setComposeOpen] = useState(false);
+  // A native tab switch reuses a prefetched route payload that carries no
+  // profile, so the first frame comes from the last profile this session saw.
+  // Only the memory cache is read here: it is empty on a fresh page load, which
+  // keeps hydration identical to the server render.
+  const [initialProfileSeed] = useState(() => {
+    const seedUserId = session?.user?.id ?? "";
+    const seededProfile = initialProfile ?? readMyPageProfileMemoryCache(seedUserId);
+    return {
+      profile: seededProfile ?? createEmptyMyPageProfile(),
+      ownerUserId: seededProfile ? seedUserId : "",
+    };
+  });
+  const [profile, setProfile] = useState<ProfileRecord>(initialProfileSeed.profile);
+  // The account whose data `profile` currently holds. Empty until a snapshot or
+  // an API response arrives, so a placeholder is never cached as a real profile.
+  const profileOwnerUserIdRef = useRef(initialProfileSeed.ownerUserId);
   const [myPageSurfaceHistory, setMyPageSurfaceHistory] = useState(() => (
     typeof window === "undefined" ? [] : readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE)
   ));
@@ -1687,6 +1822,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const sessionUserId = session?.user?.id ?? "";
   const currentAccountRef = useRef(sessionUserId);
   currentAccountRef.current = sessionUserId;
+  // The profile's real scroller; the post grid restores its offset on return.
+  const profileScrollRef = useRef<HTMLDivElement | null>(null);
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
   const profileImageUrl = profile.image || session?.user?.image || null;
   const name = profile.name?.trim() || fallbackName;
@@ -1739,6 +1876,16 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     });
     setMyPageSurfaceHistory(readSlideSurfaceHistoryForScope(MY_PAGE_SURFACE_SCOPE));
   }, []);
+
+  // `?menu=1` (the menu button on the post viewer's My page bar) opens the
+  // menu on arrival; the flag is dropped so back / reload do not reopen it.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("menu") !== "1") return;
+    url.searchParams.delete("menu");
+    window.history.replaceState(window.history.state, "", url.toString());
+    openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID });
+  }, [openMyPageSurface]);
 
   const closeMyPageSurface = useCallback((entry: {
     id: string;
@@ -1884,10 +2031,19 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     if (!sessionUserId) return;
 
     let cancelled = false;
+    if (profileOwnerUserIdRef.current !== sessionUserId) {
+      // Cold start: show the persisted header until the request below lands.
+      const cachedProfile = readMyPageProfileCache(sessionUserId);
+      if (cachedProfile) {
+        profileOwnerUserIdRef.current = sessionUserId;
+        setProfile(cachedProfile);
+      }
+    }
     void fetch(buildClientApiPath("/profile"), { cache: "no-store" })
       .then(async (response) => (response.ok ? response.json() as Promise<Partial<ProfileRecord>> : null))
       .then((data) => {
         if (cancelled || !data) return;
+        profileOwnerUserIdRef.current = sessionUserId;
         setProfile({
           image: typeof data.image === "string" ? data.image : null,
           imageCropScale: typeof data.imageCropScale === "number" ? data.imageCropScale : null,
@@ -1902,6 +2058,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             data.primaryLanguages,
             typeof data.nationality === "string" && data.nationality ? [data.nationality] : [],
           ),
+          interestLanguages: sanitizeInterestLanguages(data.interestLanguages),
           defaultConversationLanguages: sanitizeSttLanguageSelection(data.defaultConversationLanguages),
           location: locationPermissionRef.current !== "granted"
             ? null
@@ -1909,6 +2066,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           birthDate: parseProfileBirthDate(data.birthDate),
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
+          isOfficial: data.isOfficial === true,
         });
       })
       .catch(() => {
@@ -1919,6 +2077,11 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       cancelled = true;
     };
   }, [sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId || profileOwnerUserIdRef.current !== sessionUserId) return;
+    writeMyPageProfileCache(sessionUserId, profile);
+  }, [profile, sessionUserId]);
 
   const syncLocationPermission = useCallback(async () => {
     if (!sessionUserId) return;
@@ -2106,6 +2269,24 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     }
   }, []);
 
+  const [interestSheetOpen, setInterestSheetOpen] = useState(false);
+  const interestLanguageCopy = useMemo(() => resolveInterestLanguageCopy(locale), [locale]);
+  const handleSaveInterestLanguages = useCallback(async (languages: InterestLanguage[]) => {
+    try {
+      const response = await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interestLanguages: languages }),
+      });
+      if (!response.ok) return false;
+      const saved = await response.json() as Partial<ProfileRecord>;
+      setProfile((current) => ({ ...current, interestLanguages: sanitizeInterestLanguages(saved.interestLanguages) }));
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const defaultConversationLanguages = useMemo(() => {
     const storedLanguages = sanitizeSttLanguageSelection(profile.defaultConversationLanguages);
     return storedLanguages.length > 0
@@ -2144,6 +2325,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const handleSignOut = useCallback(() => {
     void unregisterNativePushToken().finally(() => {
       resetMinglePostHogIdentity();
+      clearMyPageProfileCache();
       void signOut({ callbackUrl: signOutCallbackUrl }).then(() => {
         if (typeof window !== "undefined") {
           window.location.replace(signOutCallbackUrl);
@@ -2182,6 +2364,14 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         onSave={handleSaveProfile}
         open={showProfileEdit}
       />
+      {interestSheetOpen ? (
+        <InterestLanguageSheet
+          locale={locale}
+          primaryLanguages={primaryLanguages}
+          onSave={(language) => handleSaveInterestLanguages([language])}
+          onClose={() => setInterestSheetOpen(false)}
+        />
+      ) : null}
       <ProfileSettingsPanel
         dictionary={dictionary}
         locale={locale}
@@ -2189,6 +2379,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         onChangeAppLanguage={handleChangeAppLanguage}
         initialPrimaryLanguages={primaryLanguages}
         onSavePrimaryLanguages={handleSavePrimaryLanguages}
+        initialInterestLanguages={profile.interestLanguages ?? NO_INTEREST_LANGUAGES}
+        onSaveInterestLanguages={handleSaveInterestLanguages}
         initialDefaultConversationLanguages={defaultConversationLanguages}
         onSaveDefaultConversationLanguages={handleSaveDefaultConversationLanguages}
         onSignOut={handleSignOut}
@@ -2256,21 +2448,38 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           paddingTop: "env(safe-area-inset-top, 44px)",
         }}
       >
-        <div aria-hidden="true" className="h-10 w-10 shrink-0" />
+        {/* Both sides share a width so the name stays centered next to the coin chip. */}
+        <div className={`flex shrink-0 items-center ${coinBillingActive ? "w-[124px]" : ""}`}>
+          {sessionUserId && postingFeedSupported !== false ? (
+            <button
+              type="button"
+              onClick={() => setComposeOpen(true)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:bg-gray-100"
+              aria-label={feedCopy(locale).compose}
+            >
+              <SquarePen size={22} strokeWidth={2} />
+            </button>
+          ) : (
+            <div aria-hidden="true" className="h-10 w-10 shrink-0" />
+          )}
+        </div>
         <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-bold text-slate-950">
           {name}
         </h1>
-        <button
-          type="button"
-          onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
-          className="flex h-10 w-10 items-center justify-center rounded-full transition"
-          aria-label={dictionary.profile.menuLabel}
-        >
-          <Menu size={23} strokeWidth={2.2} />
-        </button>
+        <div className={`flex shrink-0 items-center justify-end gap-1 ${coinBillingActive ? "w-[124px]" : ""}`}>
+          <CoinBalanceChip locale={locale} />
+          <button
+            type="button"
+            onClick={() => openMyPageSurface({ id: MY_PAGE_PROFILE_SETTINGS_SURFACE_ID })}
+            className="flex h-10 w-10 items-center justify-center rounded-full transition"
+            aria-label={dictionary.profile.menuLabel}
+          >
+            <Menu size={23} strokeWidth={2.2} />
+          </button>
+        </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={profileScrollRef} data-restore-scroll="mypage" className="min-h-0 flex-1 overflow-y-auto">
         <section className="px-4 pb-4 pt-5">
           <div className="flex items-center gap-6 pl-2">
             <div className="flex shrink-0 flex-col items-center">
@@ -2309,8 +2518,27 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           </div>
 
           <div className="mt-4 pl-2">
-            <p className="text-[15px] font-semibold text-slate-950">{name}</p>
-            {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
+            <p className="flex min-w-0 items-baseline gap-1.5">
+              <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
+              <AccountBadge kind={resolveAccountBadge(profile)} locale={locale} tone="dark" />
+              {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
+            </p>
+            <ProfileLanguageLevels
+              primaryLanguages={primaryLanguages}
+              interestLanguages={profile.interestLanguages ?? NO_INTEREST_LANGUAGES}
+              locale={locale}
+              className="mt-2.5"
+            />
+            {(profile.interestLanguages ?? NO_INTEREST_LANGUAGES).length === 0 ? (
+              <button
+                type="button"
+                onClick={() => setInterestSheetOpen(true)}
+                className="mt-2 inline-flex items-center gap-1 rounded-full border border-dashed border-amber-300 px-3 py-1 text-[13px] font-semibold text-amber-700 transition active:bg-amber-50"
+              >
+                <Plus size={14} strokeWidth={2.6} aria-hidden="true" />
+                {interestLanguageCopy.addAction}
+              </button>
+            ) : null}
             <ProfileLocation
               profileLocation={locationPermission === "granted" ? profile.location : null}
               locale={locale}
@@ -2340,6 +2568,12 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           </div>
         </section>
 
+          {sessionUserId && postingFeedSupported !== false ? (
+          <section className="border-t border-gray-100 pt-0.5">
+            <ProfilePostGrid locale={locale} authorId={sessionUserId} scrollContainerRef={profileScrollRef} />
+          </section>
+        ) : null}
+
       </div>
 
       <BottomTabBar
@@ -2347,6 +2581,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         dictionary={dictionary}
         locale={locale}
       />
+      <ComposeOverlay open={composeOpen} locale={locale} onClose={() => setComposeOpen(false)} />
     </main>
   );
 }

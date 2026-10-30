@@ -1,6 +1,6 @@
 # Mobile UI Regression Coverage
 
-This document maps the documented UI/UX issue atoms in [docs/ui-ux-codex-thread-history.md (Part 2)](../../../docs/ui-ux-codex-thread-history.md#part-2--mingle-app-thread-by-thread-uiux-audit) onto the current mobile QA suite.
+This document maps the documented UI/UX issue atoms in [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md) onto the current mobile QA suite.
 
 Use these documents together:
 

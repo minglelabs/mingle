@@ -1,0 +1,104 @@
+{
+  "_comment": "Group-chat slide: four lines between two people, shown in the viewer's language plus two partner languages. Rendered by capture.mjs as the app's conversation screen.",
+  "partners": {
+    "ko": ["ja", "en"],
+    "en": ["ko", "es"],
+    "ja": ["ko", "en"],
+    "zh-cn": ["ko", "en"],
+    "zh-tw": ["ja", "en"],
+    "ar": ["en", "fr"],
+    "de": ["en", "es"],
+    "es": ["en", "ko"],
+    "fr": ["en", "es"],
+    "hi": ["en", "ko"],
+    "it": ["en", "ko"],
+    "pt": ["en", "es"],
+    "ru": ["en", "ko"],
+    "th": ["en", "ko"],
+    "vi": ["ko", "en"]
+  },
+  "flags": {
+    "ko": "🇰🇷", "en": "🇺🇸", "ja": "🇯🇵", "zh-cn": "🇨🇳", "zh-tw": "🇹🇼", "ar": "🇸🇦", "de": "🇩🇪", "es": "🇪🇸",
+    "fr": "🇫🇷", "hi": "🇮🇳", "it": "🇮🇹", "pt": "🇧🇷", "ru": "🇷🇺", "th": "🇹🇭", "vi": "🇻🇳"
+  },
+  "title": {
+    "ko": "도쿄 맛집 탐방", "en": "Tokyo food trip", "ja": "東京グルメ散歩", "zh-cn": "东京美食之旅", "zh-tw": "東京美食之旅",
+    "ar": "رحلة طعام في طوكيو", "de": "Tokio-Foodtour", "es": "Ruta gastronómica", "fr": "Balade gourmande",
+    "hi": "टोक्यो फ़ूड ट्रिप", "it": "Tour gastronomico", "pt": "Rolê gastronômico", "ru": "Гастротур по Токио",
+    "th": "ตะลุยกินโตเกียว", "vi": "Ăn khắp Tokyo"
+  },
+  "collapse": {
+    "ko": "접기", "en": "Collapse", "ja": "閉じる", "zh-cn": "收起", "zh-tw": "收起", "ar": "طي", "de": "Zuklappen",
+    "es": "Contraer", "fr": "Réduire", "hi": "बंद करें", "it": "Comprimi", "pt": "Recolher", "ru": "Свернуть", "th": "ย่อ", "vi": "Thu gọn"
+  },
+  "lines": [
+    {
+      "ko": "이 근처에 맛있는 현지 식당 있어요?",
+      "en": "Is there a good local restaurant around here?",
+      "ja": "この近くにおいしい地元のお店はありますか？",
+      "zh-cn": "这附近有好吃的本地餐厅吗？",
+      "zh-tw": "這附近有好吃的在地餐廳嗎？",
+      "ar": "هل يوجد مطعم محلي جيد بالقرب من هنا؟",
+      "de": "Gibt es hier in der Nähe ein gutes einheimisches Restaurant?",
+      "es": "¿Hay algún buen restaurante local por aquí?",
+      "fr": "Il y a un bon restaurant local dans le coin ?",
+      "hi": "क्या यहाँ आस-पास कोई अच्छा लोकल रेस्टोरेंट है?",
+      "it": "C'è un buon ristorante tipico qui vicino?",
+      "pt": "Tem algum restaurante local bom aqui perto?",
+      "ru": "Здесь рядом есть хороший местный ресторан?",
+      "th": "แถวนี้มีร้านอาหารท้องถิ่นอร่อย ๆ ไหม",
+      "vi": "Gần đây có quán ăn địa phương nào ngon không?"
+    },
+    {
+      "ko": "5분 거리에 정말 맛있는 라멘집이 있어요. 같이 갈래요?",
+      "en": "There's a great ramen place five minutes away. Want to go together?",
+      "ja": "5分のところにすごくおいしいラーメン屋がありますよ。一緒に行きませんか？",
+      "zh-cn": "走五分钟有一家很棒的拉面店，要一起去吗？",
+      "zh-tw": "走五分鐘有一家很棒的拉麵店，要一起去嗎？",
+      "ar": "هناك مطعم رامن رائع على بعد خمس دقائق. هل نذهب معاً؟",
+      "de": "Fünf Minuten von hier gibt es einen tollen Ramen-Laden. Wollen wir zusammen hin?",
+      "es": "Hay un ramen buenísimo a cinco minutos. ¿Vamos juntos?",
+      "fr": "Il y a un super resto de ramen à cinq minutes. On y va ensemble ?",
+      "hi": "पाँच मिनट की दूरी पर एक बहुत अच्छी रामेन की जगह है। साथ चलें?",
+      "it": "A cinque minuti c'è un ristorante di ramen fantastico. Andiamo insieme?",
+      "pt": "Tem um lámen ótimo a cinco minutos daqui. Vamos juntos?",
+      "ru": "В пяти минутах отсюда есть отличная раменная. Пойдём вместе?",
+      "th": "เดินไปห้านาทีมีร้านราเมนอร่อยมาก ไปด้วยกันไหม",
+      "vi": "Cách đây năm phút có một quán ramen rất ngon. Mình đi cùng nhé?"
+    },
+    {
+      "ko": "좋아요! 몇 시가 괜찮아요?",
+      "en": "Sure! What time works for you?",
+      "ja": "いいですね！何時がいいですか？",
+      "zh-cn": "好啊！你几点方便？",
+      "zh-tw": "好啊！你幾點方便？",
+      "ar": "بالتأكيد! ما الوقت المناسب لك؟",
+      "de": "Gern! Wann passt es dir?",
+      "es": "¡Claro! ¿A qué hora te viene bien?",
+      "fr": "Avec plaisir ! Quelle heure te va ?",
+      "hi": "ज़रूर! तुम्हें कितने बजे ठीक रहेगा?",
+      "it": "Volentieri! A che ora ti va bene?",
+      "pt": "Claro! Que horas fica bom pra você?",
+      "ru": "С удовольствием! Во сколько тебе удобно?",
+      "th": "ได้เลย! สะดวกกี่โมง",
+      "vi": "Được chứ! Bạn rảnh mấy giờ?"
+    },
+    {
+      "ko": "오늘 저녁 7시 어때요? 역에서 만나요.",
+      "en": "How about 7 tonight? Let's meet at the station.",
+      "ja": "今夜7時はどうですか？駅で会いましょう。",
+      "zh-cn": "今晚七点怎么样？我们在车站见。",
+      "zh-tw": "今晚七點怎麼樣？我們在車站見。",
+      "ar": "ما رأيك في السابعة الليلة؟ لنلتقِ في المحطة.",
+      "de": "Wie wäre es mit heute Abend um 7? Treffen wir uns am Bahnhof.",
+      "es": "¿Qué tal esta noche a las 7? Nos vemos en la estación.",
+      "fr": "Ce soir à 19 h ? On se retrouve à la gare.",
+      "hi": "आज शाम 7 बजे कैसा रहेगा? स्टेशन पर मिलते हैं।",
+      "it": "Che ne dici di stasera alle 7? Ci vediamo alla stazione.",
+      "pt": "Que tal hoje às 7 da noite? A gente se encontra na estação.",
+      "ru": "Как насчёт сегодня в 7 вечера? Встретимся на станции.",
+      "th": "คืนนี้หนึ่งทุ่มดีไหม เจอกันที่สถานีนะ",
+      "vi": "Tối nay 7 giờ thì sao? Gặp nhau ở ga nhé."
+    }
+  ]
+}

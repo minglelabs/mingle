@@ -41,7 +41,7 @@ describe("resend-email", () => {
 
   it("reports configured when api key and from email are set", () => {
     process.env.RESEND_API_KEY = "test_key";
-    process.env.RESEND_FROM_EMAIL = "Mingle <noreply@example.com>";
+    process.env.RESEND_FROM_EMAIL = "HashChat <noreply@example.com>";
 
     expect(isResendConfigured()).toBe(true);
   });
@@ -55,7 +55,7 @@ describe("resend-email", () => {
 
   it("calls Resend API with expected payload", async () => {
     process.env.RESEND_API_KEY = "test_key";
-    process.env.RESEND_FROM_EMAIL = "Mingle <noreply@example.com>";
+    process.env.RESEND_FROM_EMAIL = "HashChat <noreply@example.com>";
 
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -82,16 +82,16 @@ describe("resend-email", () => {
       text: string;
       html: string;
     };
-    expect(payload.from).toBe("Mingle <noreply@example.com>");
+    expect(payload.from).toBe("HashChat <noreply@example.com>");
     expect(payload.to).toEqual(["member@example.com"]);
-    expect(payload.subject).toBe("Reset your Mingle password");
+    expect(payload.subject).toBe("Reset your HashChat password");
     expect(payload.text).toContain("https://example.com/reset?token=abc");
     expect(payload.html).toContain("Reset password");
   });
 
   it("throws detailed error when Resend returns non-2xx response", async () => {
     process.env.RESEND_API_KEY = "test_key";
-    process.env.RESEND_FROM_EMAIL = "Mingle <noreply@example.com>";
+    process.env.RESEND_FROM_EMAIL = "HashChat <noreply@example.com>";
 
     const fetchMock = vi.fn().mockResolvedValue(new Response("bad_request", { status: 400 }));
     vi.stubGlobal("fetch", fetchMock);

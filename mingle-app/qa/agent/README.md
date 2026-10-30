@@ -13,7 +13,7 @@ and scores translation quality.
 
 | File | Purpose |
 | --- | --- |
-| [taste.md](taste.md) | The owner's UX rules (T1–T23), each traced to entries in [the UI/UX history](../../../docs/ui-ux-codex-thread-history.md). |
+| [taste.md](taste.md) | The owner's UX rules (T1–T23), each traced to entries in [the UI/UX history](../../docs/ui-ux-codex-thread-history.md). |
 | [rubric.md](rubric.md) | Verdicts, severity anchors, the translation 1–5 scale, responsiveness thresholds. |
 | [scenarios/](scenarios) | 16 scenarios with frontmatter (`id`, `priority`, `environment`, `tags`, `taste`, `paths`, `history`). `environment` is `device` (the agent runs it end to end), `assisted` (parts need a person: speaking, AirPods) or `manual-only`. |
 | [fixtures/](fixtures) | Inputs the scenarios type or send. |

@@ -366,8 +366,6 @@ class NativeSTTModule: RCTEventEmitter {
                     hostKey: "MingleDefaultWsHost",
                     legacyKey: "MingleDefaultWsURL"
                 ),
-                "legacyWebAppBaseUrl": Self.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
-                "legacyDefaultWsUrl": Self.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
                 "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
                 "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
                 "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
@@ -397,8 +395,6 @@ class NativeSTTModule: RCTEventEmitter {
                 hostKey: "MingleDefaultWsHost",
                 legacyKey: "MingleDefaultWsURL"
             ),
-            "legacyWebAppBaseUrl": Self.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
-            "legacyDefaultWsUrl": Self.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
             "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
             "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
             "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
@@ -1226,6 +1222,148 @@ class NativeSTTModule: RCTEventEmitter {
     }
 }
 
+/// Captures the window as the app resigns active, so that a cold start after
+/// iOS terminated the backgrounded process can show the last screen instead of
+/// the splash while the WebView reloads (RN decides whether the capture still
+/// matches). JS enables capture only on settled, restorable screens. The file
+/// stays inside the app sandbox, is excluded from backups, and is removed on
+/// sign-out.
+final class MingleLastScreenSnapshotStore {
+    static let shared = MingleLastScreenSnapshotStore()
+
+    private static let createdAtMsKey = "mingle.lastScreenSnapshot.createdAtMs"
+    private static let widthKey = "mingle.lastScreenSnapshot.width"
+    private static let heightKey = "mingle.lastScreenSnapshot.height"
+    private static let colorSchemeKey = "mingle.lastScreenSnapshot.colorScheme"
+    private static let jpegQuality: CGFloat = 0.72
+
+    private let ioQueue = DispatchQueue(label: "com.minglelabs.mingle.last-screen-snapshot", qos: .utility)
+    // Main thread only.
+    private var enabled = false
+    private var resignActiveObserver: NSObjectProtocol?
+
+    private static var fileURL: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("MingleLastScreen", isDirectory: true)
+            .appendingPathComponent("last-screen.jpg")
+    }
+
+    func install() {
+        guard resignActiveObserver == nil else { return }
+        resignActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleWillResignActive()
+        }
+    }
+
+    func setEnabled(_ value: Bool) {
+        DispatchQueue.main.async {
+            self.enabled = value
+        }
+    }
+
+    func clear() {
+        ioQueue.async {
+            Self.removeStoredSnapshot()
+        }
+    }
+
+    static func runtimeConfigPayload() -> [String: Any] {
+        let defaults = UserDefaults.standard
+        let createdAtMs = defaults.double(forKey: createdAtMsKey)
+        guard
+            createdAtMs > 0,
+            createdAtMs.isFinite,
+            let url = fileURL,
+            FileManager.default.fileExists(atPath: url.path)
+        else {
+            return ["lastScreenSnapshotPath": ""]
+        }
+        return [
+            "lastScreenSnapshotPath": url.path,
+            "lastScreenSnapshotCreatedAtMs": NSNumber(value: createdAtMs),
+            "lastScreenSnapshotWidth": NSNumber(value: defaults.double(forKey: widthKey)),
+            "lastScreenSnapshotHeight": NSNumber(value: defaults.double(forKey: heightKey)),
+            "lastScreenSnapshotColorScheme": defaults.string(forKey: colorSchemeKey) ?? "",
+        ]
+    }
+
+    private static func removeStoredSnapshot() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: createdAtMsKey)
+        defaults.removeObject(forKey: widthKey)
+        defaults.removeObject(forKey: heightKey)
+        defaults.removeObject(forKey: colorSchemeKey)
+        if let url = fileURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func handleWillResignActive() {
+        guard enabled else {
+            // A capture from an earlier screen must not outlive the screen
+            // that will actually be restored.
+            clear()
+            return
+        }
+        guard let window = UIApplication.shared.delegate?.window ?? nil else { return }
+        let bounds = window.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return }
+
+        // Rendering must happen on the main thread while the screen is still
+        // up; encoding and writing go to the background queue.
+        let image = UIGraphicsImageRenderer(bounds: bounds).image { _ in
+            _ = window.drawHierarchy(in: bounds, afterScreenUpdates: false)
+        }
+        let colorScheme = window.traitCollection.userInterfaceStyle == .dark ? "dark" : "light"
+        let createdAtMs = Date().timeIntervalSince1970 * 1000
+        let application = UIApplication.shared
+        var backgroundTask = UIBackgroundTaskIdentifier.invalid
+        backgroundTask = application.beginBackgroundTask(withName: "MingleLastScreenSnapshot") {
+            application.endBackgroundTask(backgroundTask)
+            backgroundTask = .invalid
+        }
+
+        ioQueue.async {
+            defer {
+                DispatchQueue.main.async {
+                    guard backgroundTask != .invalid else { return }
+                    application.endBackgroundTask(backgroundTask)
+                    backgroundTask = .invalid
+                }
+            }
+            guard let data = image.jpegData(compressionQuality: Self.jpegQuality), let url = Self.fileURL else {
+                Self.removeStoredSnapshot()
+                return
+            }
+            do {
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                // Readable at the next launch even if the device is locked
+                // again, but never before the first unlock after a reboot.
+                try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                var resourceValues = URLResourceValues()
+                resourceValues.isExcludedFromBackup = true
+                var mutableUrl = url
+                try? mutableUrl.setResourceValues(resourceValues)
+
+                let defaults = UserDefaults.standard
+                defaults.set(bounds.width, forKey: Self.widthKey)
+                defaults.set(bounds.height, forKey: Self.heightKey)
+                defaults.set(colorScheme, forKey: Self.colorSchemeKey)
+                defaults.set(createdAtMs, forKey: Self.createdAtMsKey)
+            } catch {
+                Self.removeStoredSnapshot()
+            }
+        }
+    }
+}
+
 @objc(NativeRuntimeConfigModule)
 class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
     private static let conversationRestoreUrlKey = "mingle.nativeConversationRestore.url"
@@ -1233,6 +1371,10 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
     private static let conversationRestoreCreatedAtMsKey = "mingle.nativeConversationRestore.createdAtMs"
     private static let pendingProfileLinkUrlKey = "mingle.nativeProfileLink.url"
     private static let pendingProfileLinkSequenceKey = "mingle.nativeProfileLink.sequence"
+
+    /// Set by AppDelegate before React Native starts: this launch carries its
+    /// own destination (URL, universal link or notification tap).
+    static var launchedFromExternalIntent = false
 
     private var locationManager: CLLocationManager?
     private var pendingLocationPermissionResolve: RCTPromiseResolveBlock?
@@ -1316,7 +1458,7 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
     }
 
     private static func runtimeConfigPayload() -> [String: Any] {
-        [
+        let payload: [String: Any] = [
             "webAppBaseUrl": NativeSTTModule.readRuntimeConfigURL(
                 schemeKey: "MingleWebAppScheme",
                 hostKey: "MingleWebAppHost",
@@ -1327,8 +1469,6 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
                 hostKey: "MingleDefaultWsHost",
                 legacyKey: "MingleDefaultWsURL"
             ),
-            "legacyWebAppBaseUrl": NativeSTTModule.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
-            "legacyDefaultWsUrl": NativeSTTModule.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
             "apiNamespace": NativeSTTModule.readRuntimeConfigValue("MingleApiNamespace"),
             "clientVersion": NativeSTTModule.readRuntimeConfigValue("CFBundleShortVersionString"),
             "clientBuild": NativeSTTModule.readRuntimeConfigValue("CFBundleVersion"),
@@ -1342,7 +1482,9 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
             "conversationRestoreUrl": UserDefaults.standard.string(forKey: conversationRestoreUrlKey) ?? "",
             "conversationRestoreConversationId": UserDefaults.standard.string(forKey: conversationRestoreConversationIdKey) ?? "",
             "conversationRestoreCreatedAtMs": readConversationRestoreCreatedAtMs(),
+            "launchedFromExternalIntent": launchedFromExternalIntent ? "1" : "0",
         ]
+        return payload.merging(MingleLastScreenSnapshotStore.runtimeConfigPayload()) { current, _ in current }
     }
 
     @objc
@@ -1560,6 +1702,20 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
         resolve(true)
     }
 
+    @objc(setLastScreenSnapshotEnabled:)
+    func setLastScreenSnapshotEnabled(_ enabled: Bool) {
+        MingleLastScreenSnapshotStore.shared.setEnabled(enabled)
+    }
+
+    @objc(clearLastScreenSnapshot:rejecter:)
+    func clearLastScreenSnapshot(
+        _ resolve: RCTPromiseResolveBlock,
+        rejecter reject: RCTPromiseRejectBlock
+    ) {
+        MingleLastScreenSnapshotStore.shared.clear()
+        resolve(true)
+    }
+
     @objc(recordHistoryDebug:)
     func recordHistoryDebug(_ payload: String) {
         guard NativeSTTModule.readRuntimeConfigValue("MingleQaBridgeEnabled") == "1" else {
@@ -1574,6 +1730,10 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
 class NativePushNotificationModule: RCTEventEmitter {
     private static let tokenKey = "mingle.nativePush.token"
     private static let installationIdKey = "mingle.nativePush.installationId"
+    private static let pendingTapTypeKey = "mingle.nativePush.pendingTap.type"
+    private static let pendingTapUrlKey = "mingle.nativePush.pendingTap.url"
+    private static let pendingTapConversationIdKey = "mingle.nativePush.pendingTap.conversationId"
+    private static let pendingTapSequenceKey = "mingle.nativePush.pendingTap.sequence"
     private static weak var sharedModule: NativePushNotificationModule?
 
     private var pendingResolve: RCTPromiseResolveBlock?
@@ -1711,6 +1871,70 @@ class NativePushNotificationModule: RCTEventEmitter {
         }
     }
 
+    @objc(getPendingPushTap:rejecter:)
+    func getPendingPushTap(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        let defaults = UserDefaults.standard
+        let type = defaults.string(forKey: Self.pendingTapTypeKey) ?? ""
+        let url = defaults.string(forKey: Self.pendingTapUrlKey) ?? ""
+        let conversationId = defaults.string(forKey: Self.pendingTapConversationIdKey) ?? ""
+        let sequence = defaults.integer(forKey: Self.pendingTapSequenceKey)
+        if sequence <= 0 || (url.isEmpty && conversationId.isEmpty) {
+            resolve(nil)
+            return
+        }
+        resolve([
+            "type": type,
+            "url": url,
+            "conversationId": conversationId,
+            "sequence": sequence,
+        ])
+    }
+
+    @objc(clearPendingPushTap:resolver:rejecter:)
+    func clearPendingPushTap(
+        _ sequence: NSNumber,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        let defaults = UserDefaults.standard
+        let expected = sequence.intValue
+        let current = defaults.integer(forKey: Self.pendingTapSequenceKey)
+        if expected <= 0 || expected == current {
+            defaults.removeObject(forKey: Self.pendingTapTypeKey)
+            defaults.removeObject(forKey: Self.pendingTapUrlKey)
+            defaults.removeObject(forKey: Self.pendingTapConversationIdKey)
+            defaults.removeObject(forKey: Self.pendingTapSequenceKey)
+        }
+        resolve(true)
+    }
+
+    /// Persist the routing fields of a tapped notification so JS can consume
+    /// them on cold start and on foreground. Mirrors the Android pending-tap
+    /// slot and the pending-profile-link flow.
+    private static func recordPendingTap(_ userInfo: [AnyHashable: Any]) {
+        func stringValue(_ value: Any?) -> String {
+            guard let value = value else { return "" }
+            if let str = value as? String {
+                return str.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return "\(value)".trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let type = stringValue(userInfo["type"])
+        let url = stringValue(userInfo["url"])
+        let conversationId = stringValue(userInfo["conversationId"])
+        if url.isEmpty && conversationId.isEmpty { return }
+
+        let defaults = UserDefaults.standard
+        let nextSequence = defaults.integer(forKey: pendingTapSequenceKey) + 1
+        defaults.set(type, forKey: pendingTapTypeKey)
+        defaults.set(url, forKey: pendingTapUrlKey)
+        defaults.set(conversationId, forKey: pendingTapConversationIdKey)
+        defaults.set(nextSequence, forKey: pendingTapSequenceKey)
+    }
+
     static func didRegisterForRemoteNotifications(_ deviceToken: Data) {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
         guard !token.isEmpty else { return }
@@ -1728,6 +1952,9 @@ class NativePushNotificationModule: RCTEventEmitter {
     }
 
     static func didReceiveNotification(_ userInfo: [AnyHashable: Any]) {
+        // Persist the tap target for JS to consume on cold start / foreground,
+        // then keep emitting the existing `opened` event for live listeners.
+        recordPendingTap(userInfo)
         let payload = userInfo.reduce(into: [String: Any]()) { result, entry in
             guard let key = entry.key as? String else { return }
             result[key] = entry.value

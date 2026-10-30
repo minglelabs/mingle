@@ -22,7 +22,9 @@ import {
  * is already stored in, no timezone conversion needed.
  */
 const DAY_BUCKET_EXPR = (alias: string) => `date_trunc('day', ${alias}."created_at")`;
-const USAGE_METRIC_VERSION = 2;
+/** Bumped whenever a cached column is added or its source query changes, so old rows rebuild.
+ * 3: per-character STT and per-token translation latency. */
+const USAGE_METRIC_VERSION = 3;
 
 type RawDayCount = { day: Date; value: bigint | number };
 type RawDayModelCount = { day: Date; model: string; value: bigint | number };
@@ -37,6 +39,10 @@ type DailyMetricSnapshot = {
   sttP95Ms: number | null;
   translationAvgMs: number | null;
   translationP95Ms: number | null;
+  sttMsPerCharAvg: number | null;
+  sttMsPerCharP95: number | null;
+  translationMsPerTokenAvg: number | null;
+  translationMsPerTokenP95: number | null;
 };
 
 type CachedDailyMetric = DailyMetricSnapshot & { day: Date; usageMetricVersion: number };
@@ -50,6 +56,10 @@ const EMPTY_DAILY_METRIC: DailyMetricSnapshot = {
   sttP95Ms: null,
   translationAvgMs: null,
   translationP95Ms: null,
+  sttMsPerCharAvg: null,
+  sttMsPerCharP95: null,
+  translationMsPerTokenAvg: null,
+  translationMsPerTokenP95: null,
 };
 
 function toDailyRows(rows: readonly RawDayCount[]): DailyRow[] {
@@ -112,13 +122,26 @@ function buildMessageUserJoin(platform: AdminDashboardPlatform, messageAlias = "
 }
 
 /**
+ * Operator accounts (`is_operator`) are staff-run personas, so what they send
+ * is not product usage: every app_messages metric drops their rows. NOT EXISTS
+ * (not NOT IN) keeps messages whose user_id is null, which the message count
+ * includes. Usage seconds need no filter: operators have no client sessions,
+ * so they never write app_event_logs.
+ */
+function excludeOperatorSenders(messageAlias = "m"): string {
+  return `\n       and not exists (select 1 from "app"."app_users" as op where op."id" = ${messageAlias}."user_id" and op."is_operator")`;
+}
+
+/**
  * upsertTrackedUser (src/lib/app-analytics.ts) creates an app_users row keyed only by
  * externalUserId for anyone who fires a tracked client event, before they ever sign up
  * -- counting every row here would report anonymous demo visitors as 가입자/signups.
  * A real account always has either a password (email/password signup) or a linked
  * auth_accounts row (Google/Apple OAuth, including the native bridge flow, which both
  * go through the same NextAuth PrismaAdapter user-creation path); anonymous tracking
- * rows have neither.
+ * rows have neither. Operator accounts are excluded explicitly as well (they are
+ * created without a password or auth account today, so this only guards a future
+ * path that gives them one).
  */
 async function querySignups(
   range: AdminDashboardDateRange,
@@ -128,6 +151,7 @@ async function querySignups(
     `select ${DAY_BUCKET_EXPR("u")} as day, count(*) as value
      from "app"."app_users" as u
      where u."created_at" >= $1 and u."created_at" < $2
+       and u."is_operator" = false
        and (
          u."password_hash" is not null
          or exists (select 1 from "app"."auth_accounts" as a where a."user_id" = u."id")
@@ -157,7 +181,7 @@ async function queryDau(
      from "app"."app_messages" as m${buildMessageUserJoin(platform)}
      where m."is_deleted" is distinct from true
        and m."user_id" is not null
-       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
+       and m."created_at" >= $1 and m."created_at" < $2${excludeOperatorSenders()}${buildPlatformFilter(platform)}
      group by day
      order by day`,
     ...buildQueryParams(range, platform),
@@ -175,7 +199,7 @@ function buildMessageCountSource(platform: AdminDashboardPlatform, extraConditio
   const extra = extraConditions.map((condition) => `\n       and ${condition}`).join("");
   return `from "app"."app_messages" as m${buildMessageUserJoin(platform)}
      where m."is_deleted" is distinct from true
-       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}${extra}`;
+       and m."created_at" >= $1 and m."created_at" < $2${excludeOperatorSenders()}${buildPlatformFilter(platform)}${extra}`;
 }
 
 async function queryMessageCount(
@@ -363,7 +387,7 @@ async function querySttLatency(
      from "app"."app_messages" as m${buildMessageUserJoin(platform)}
      where m."is_deleted" is distinct from true
        and m."stt_duration_ms" is not null
-       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
+       and m."created_at" >= $1 and m."created_at" < $2${excludeOperatorSenders()}${buildPlatformFilter(platform)}
      group by day
      order by day`,
     ...buildQueryParams(range, platform),
@@ -391,7 +415,75 @@ async function queryTranslationLatency(
        and m."stt_duration_ms" is not null
        and m."total_duration_ms" >= m."stt_duration_ms"
        and m."translation_provider" is not null
-       and m."created_at" >= $1 and m."created_at" < $2${buildPlatformFilter(platform)}
+       and m."created_at" >= $1 and m."created_at" < $2${excludeOperatorSenders()}${buildPlatformFilter(platform)}
+     group by day
+     order by day`,
+    ...buildQueryParams(range, platform),
+  );
+  return splitLatencyRows(rows);
+}
+
+/**
+ * Short utterances are mostly fixed overhead ("네" can take 2s), so a per-character
+ * figure below this many characters says nothing about speed and is left out.
+ */
+const MIN_CHARS_FOR_PER_CHAR_LATENCY = 5;
+
+/**
+ * STT time per character of the recognized source text. The average is weighted
+ * (total ms / total characters) so a few slow short turns cannot swing it; p95 is
+ * over each message's own ratio. Joins the SOURCE content row, which makes this the
+ * slowest dashboard query (~50s for 30 days in production) -- fine because past
+ * days are cached.
+ */
+async function querySttLatencyPerChar(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<{ avg: DailyRow[]; p95: DailyRow[] }> {
+  const rows = await prisma.$queryRawUnsafe<RawDayLatency[]>(
+    `select
+       day,
+       sum(stt_ms) / sum(chars) as avg_ms,
+       percentile_cont(0.95) within group (order by stt_ms / chars) as p95_ms
+     from (
+       select ${DAY_BUCKET_EXPR("m")} as day, m."stt_duration_ms"::float8 as stt_ms, char_length(btrim(c."text"))::float8 as chars
+       from "app"."app_messages" as m${buildMessageUserJoin(platform)}
+       join "app"."app_message_contents" as c on c."message_id" = m."id" and c."content_type" = 'SOURCE'
+       where m."is_deleted" is distinct from true
+         and m."stt_duration_ms" > 0
+         and m."created_at" >= $1 and m."created_at" < $2${excludeOperatorSenders()}${buildPlatformFilter(platform)}
+     ) as turns
+     where chars >= ${MIN_CHARS_FOR_PER_CHAR_LATENCY}
+     group by day
+     order by day`,
+    ...buildQueryParams(range, platform),
+  );
+  return splitLatencyRows(rows);
+}
+
+/**
+ * Translation time (total minus STT) per output token the model reported, on the same
+ * rows as queryTranslationLatency. Weighted average plus per-message p95, as above.
+ */
+async function queryTranslationLatencyPerToken(
+  range: AdminDashboardDateRange,
+  platform: AdminDashboardPlatform,
+): Promise<{ avg: DailyRow[]; p95: DailyRow[] }> {
+  const rows = await prisma.$queryRawUnsafe<RawDayLatency[]>(
+    `select
+       ${DAY_BUCKET_EXPR("m")} as day,
+       sum(m."total_duration_ms" - m."stt_duration_ms")::float8 / sum(m."translation_completion_tokens") as avg_ms,
+       percentile_cont(0.95) within group (
+         order by (m."total_duration_ms" - m."stt_duration_ms")::float8 / m."translation_completion_tokens"
+       ) as p95_ms
+     from "app"."app_messages" as m${buildMessageUserJoin(platform)}
+     where m."is_deleted" is distinct from true
+       and m."total_duration_ms" is not null
+       and m."stt_duration_ms" is not null
+       and m."total_duration_ms" >= m."stt_duration_ms"
+       and m."translation_provider" is not null
+       and m."translation_completion_tokens" > 0
+       and m."created_at" >= $1 and m."created_at" < $2${excludeOperatorSenders()}${buildPlatformFilter(platform)}
      group by day
      order by day`,
     ...buildQueryParams(range, platform),
@@ -403,13 +495,15 @@ async function queryDailyMetricSnapshots(
   range: AdminDashboardDateRange,
   platform: AdminDashboardPlatform,
 ): Promise<Map<string, DailyMetricSnapshot>> {
-  const [signups, dau, messages, usageSeconds, sttLatency, translationLatency] = await Promise.all([
+  const [signups, dau, messages, usageSeconds, sttLatency, translationLatency, sttPerChar, translationPerToken] = await Promise.all([
     querySignups(range, platform),
     queryDau(range, platform),
     queryMessageCount(range, platform),
     queryUsageSeconds(range, platform),
     querySttLatency(range, platform),
     queryTranslationLatency(range, platform),
+    querySttLatencyPerChar(range, platform),
+    queryTranslationLatencyPerToken(range, platform),
   ]);
 
   const snapshots = new Map<string, DailyMetricSnapshot>();
@@ -436,6 +530,10 @@ async function queryDailyMetricSnapshots(
   applyRows(sttLatency.p95, "sttP95Ms", (value) => value);
   applyRows(translationLatency.avg, "translationAvgMs", (value) => value);
   applyRows(translationLatency.p95, "translationP95Ms", (value) => value);
+  applyRows(sttPerChar.avg, "sttMsPerCharAvg", (value) => value);
+  applyRows(sttPerChar.p95, "sttMsPerCharP95", (value) => value);
+  applyRows(translationPerToken.avg, "translationMsPerTokenAvg", (value) => value);
+  applyRows(translationPerToken.p95, "translationMsPerTokenP95", (value) => value);
 
   return snapshots;
 }
@@ -493,6 +591,10 @@ async function loadCachedDailyMetrics(
       sttP95Ms: true,
       translationAvgMs: true,
       translationP95Ms: true,
+      sttMsPerCharAvg: true,
+      sttMsPerCharP95: true,
+      translationMsPerTokenAvg: true,
+      translationMsPerTokenP95: true,
       usageMetricVersion: true,
     },
   });
@@ -557,6 +659,10 @@ function snapshotFromCachedRow(row: CachedDailyMetric): DailyMetricSnapshot {
     sttP95Ms: row.sttP95Ms,
     translationAvgMs: row.translationAvgMs,
     translationP95Ms: row.translationP95Ms,
+    sttMsPerCharAvg: row.sttMsPerCharAvg,
+    sttMsPerCharP95: row.sttMsPerCharP95,
+    translationMsPerTokenAvg: row.translationMsPerTokenAvg,
+    translationMsPerTokenP95: row.translationMsPerTokenP95,
   };
 }
 
@@ -759,6 +865,26 @@ export async function loadAdminDashboardMetrics(
       range,
       rows: translationAvg,
       secondary: { label: "p95", rows: translationP95 },
+      fillValue: null,
+    }),
+    buildMetric({
+      key: "stt_latency_ms_per_char",
+      label: "STT 글자당 지연시간 (5자 이상)",
+      unit: "ms",
+      kind: "milliseconds",
+      range,
+      rows: dailyRows("sttMsPerCharAvg"),
+      secondary: { label: "p95", rows: dailyRows("sttMsPerCharP95") },
+      fillValue: null,
+    }),
+    buildMetric({
+      key: "translation_latency_ms_per_token",
+      label: "번역 출력 토큰당 지연시간",
+      unit: "ms",
+      kind: "milliseconds",
+      range,
+      rows: dailyRows("translationMsPerTokenAvg"),
+      secondary: { label: "p95", rows: dailyRows("translationMsPerTokenP95") },
       fillValue: null,
     }),
   ];

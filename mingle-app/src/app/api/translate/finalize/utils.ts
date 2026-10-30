@@ -158,7 +158,19 @@ export function parseDetectedSourceLanguage(raw: string): string {
         : ''
   )
 
-  return normalizeModelLanguage(directCandidate)
+  // A language outside the selectable list (e.g. Uzbek, which Soniox leaves
+  // unlabeled) is still a real detection: keep the model's ISO code so the
+  // translations are not thrown away as a missing source language.
+  return normalizeModelLanguage(directCandidate) || normalizeUnlistedLanguageCode(directCandidate)
+}
+
+const UNDETERMINED_LANGUAGE_CODES = new Set(['und', 'unk', 'xx', 'zz', 'mul', 'zxx'])
+
+function normalizeUnlistedLanguageCode(input: string): string {
+  const match = /^([a-z]{2,3})(?:[-_][a-z0-9]{2,8})*$/i.exec(input.trim())
+  if (!match) return ''
+  const primary = match[1].toLowerCase()
+  return UNDETERMINED_LANGUAGE_CODES.has(primary) ? '' : primary
 }
 
 export function parseSourceLanguagesMixed(raw: string): boolean {

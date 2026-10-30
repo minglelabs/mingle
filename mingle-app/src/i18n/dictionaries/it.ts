@@ -28,6 +28,7 @@ export const itDictionary: BaseAppDictionarySource = {
     connect: "Scopri",
     moments: "Momenti",
     my: "Io",
+    feed: "Feed",
   },
   titles: {
     chats: "Chat",

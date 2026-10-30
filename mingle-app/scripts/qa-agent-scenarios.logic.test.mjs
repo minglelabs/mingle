@@ -58,7 +58,7 @@ test('selectScenarios returns matched scenarios by priority and reports uncovere
     'mingle-app/src/components/LivePhoneDemo/ChatBubble.tsx',
     'mingle-app/src/components/my-page.tsx',
     'mingle-app/src/components/my-page.native-app-update-card.test.ts',
-    'docs/ui-ux-codex-thread-history.md',
+    'mingle-app/docs/ui-ux-codex-thread-history.md',
   ]);
 
   assert.deepEqual(selected.map((scenario) => scenario.id), ['a-p0', 'b-p1']);

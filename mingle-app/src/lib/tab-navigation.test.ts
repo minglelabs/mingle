@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildNativeAwareTabPath,
+  isNativeTabRootHref,
+  isNativeTabRootSearch,
   NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY,
   NATIVE_TAB_ROOT_QUERY_KEY,
 } from "@/lib/tab-navigation";
@@ -44,5 +46,31 @@ describe("tab navigation", () => {
     expect(nextUrl.searchParams.get("conversation")).toBe("conv-1");
     expect(nextUrl.searchParams.get("nativeUi")).toBe("1");
     expect(nextUrl.searchParams.get("nativeStt")).toBe("1");
+  });
+
+  it("treats native tab-bar URLs as tab roots", () => {
+    const searchParams = new URLSearchParams("nativeUi=1&nativeStt=1");
+
+    expect(isNativeTabRootHref(
+      buildNativeAwareTabPath("/ko/mypage", searchParams, { tabRoot: true }),
+    )).toBe(true);
+    expect(isNativeTabRootHref(
+      buildNativeAwareTabPath("/ko/conversations", searchParams, {
+        skipConversationRestore: true,
+        tabRoot: true,
+      }),
+    )).toBe(true);
+  });
+
+  it("does not treat web or in-room URLs as native tab roots", () => {
+    // A browser tab bar builds the same tab-root marker without the native UI flag.
+    expect(isNativeTabRootHref(
+      buildNativeAwareTabPath("/ko/mypage", new URLSearchParams(""), { tabRoot: true }),
+    )).toBe(false);
+    expect(isNativeTabRootHref("/ko/mypage")).toBe(false);
+    expect(isNativeTabRootHref("/ko/conversations?nativeUi=1")).toBe(false);
+
+    const inRoom = new URLSearchParams("nativeUi=1&nativeTabRoot=1&conversation=conv-1");
+    expect(isNativeTabRootSearch((key) => inRoom.get(key))).toBe(false);
   });
 });

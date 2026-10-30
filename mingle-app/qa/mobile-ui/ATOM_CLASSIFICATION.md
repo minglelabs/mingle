@@ -1,6 +1,6 @@
 # Mobile UI/UX Atom Classification
 
-This document is the source of truth for how the documented UI/UX issue atoms in [docs/ui-ux-codex-thread-history.md (Part 2)](../../../docs/ui-ux-codex-thread-history.md#part-2--mingle-app-thread-by-thread-uiux-audit) are currently classified for mobile QA work.
+This document is the source of truth for how the documented UI/UX issue atoms in [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md) are currently classified for mobile QA work.
 
 ## Source Count
 

@@ -52,6 +52,14 @@ describe('api-contract namespace guard', () => {
     expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/translate/finalize')
   })
 
+  it('keeps the web_app release target on the unversioned API', async () => {
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'web_app'
+    const contract = await loadApiContractModule()
+
+    expect(contract.clientApiNamespace).toBe('')
+    expect(contract.clientSupportsPostingFeed).toBe(true)
+  })
+
   it('accepts only allowed env namespace values', async () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.1.0'
     const contract = await loadApiContractModule()
@@ -172,6 +180,14 @@ describe('api-contract namespace guard', () => {
   ])('disables final source-language redetection for %s', async (pathname) => {
     const contract = await loadApiContractModule()
     expect(contract.shouldRedetectFinalizeSourceLanguage(pathname)).toBe(false)
+  })
+
+  it('redetects the unversioned web path only when the typed source language is unknown', async () => {
+    const contract = await loadApiContractModule()
+    expect(contract.shouldRedetectFinalizeSourceLanguage('/api/translate/finalize', 'unknown')).toBe(true)
+    expect(contract.shouldRedetectFinalizeSourceLanguage('/api/translate/finalize', '')).toBe(true)
+    expect(contract.shouldRedetectFinalizeSourceLanguage('/api/translate/finalize', 'ko')).toBe(false)
+    expect(contract.shouldRedetectFinalizeSourceLanguage('/api/android/v1.0.3/translate/finalize', 'unknown')).toBe(false)
   })
 
   it('ignores invalid env namespace values', async () => {

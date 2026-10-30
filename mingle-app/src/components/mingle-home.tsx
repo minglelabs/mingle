@@ -13,6 +13,7 @@ import {
 } from "react";
 import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { MessageRecallProvider } from "./LivePhoneDemo/MessageRecall";
+import { MessageReadReceiptsProvider } from "./LivePhoneDemo/MessageReadReceipts";
 import { signIn, signOut, useSession } from "next-auth/react";
 import {
   clearNativeAuthAttempt,
@@ -82,6 +83,13 @@ type MingleHomeProps = {
   isVisible?: boolean;
   /** Render only the existing authentication surface without mounting a room. */
   authOnly?: boolean;
+  /** Auth-only: a line under the logo, e.g. why sign-in is needed. */
+  authNotice?: string | null;
+  /**
+   * Auth gate only: where a completed sign-in lands. Defaults to the
+   * conversation list; the feed passes the post (or compose) the viewer was on.
+   */
+  authCallbackUrl?: string;
   enableNativeBannerBridge?: boolean;
   onStartRecordingRequested?: () => Promise<{
     switchedFromLiveConversation: boolean;
@@ -101,6 +109,7 @@ type MingleHomeProps = {
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
   onOpenProfile?: (userId: string) => void;
   isBlockedCounterpart?: boolean;
+  initialUnreadMessageCount?: number;
   isMultiMember?: boolean;
 };
 
@@ -461,7 +470,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const nativeAuthTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const callbackUrl = buildPathWithCurrentSearchParams(`/${props.locale}/conversations`);
+  const callbackUrl = props.authCallbackUrl
+    ?? buildPathWithCurrentSearchParams(`/${props.locale}/conversations`);
   const signedOutCallbackUrl = buildPathWithCurrentSearchParams(`/${props.locale}`);
   const localeSegment = useMemo(
     () => resolveLegalDocumentPathSegment(props.locale),
@@ -1385,11 +1395,14 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
             : ""}
         </div>
 
-        {/* Top Mingle text logo area */}
-        <div className="flex flex-1 items-center justify-center">
+        {/* Top HashChat text logo area */}
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
           <span className="text-[2.8rem] font-extrabold leading-[1.08] text-[#2D2A1E]">
-            Mingle
+            HashChat
           </span>
+          {props.authNotice ? (
+            <p className="text-lg font-bold leading-snug text-[#2D2A1E]">{props.authNotice}</p>
+          ) : null}
         </div>
 
         {/* Bottom panel stays mounted; only its inner content swaps conditionally */}
@@ -1963,6 +1976,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       {isLiveDemoMounted ? (
         <MessageReactionsProvider conversationId={props.conversationId} active={props.isVisible !== false} enabled={status === "authenticated" && !props.isBlockedCounterpart}>
         <MessageRecallProvider conversationId={props.conversationId} enabled={status === "authenticated"}>
+        <MessageReadReceiptsProvider
+          conversationId={props.conversationId}
+          active={props.isVisible !== false}
+          enabled={status === "authenticated" && props.isMultiMember === true}
+          viewerUserId={typeof session?.user?.id === "string" ? session.user.id : null}
+        >
         <LivePhoneDemo
           ref={livePhoneDemoRef}
           enableAutoTTS
@@ -2037,8 +2056,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
           onOpenProfile={props.onOpenProfile}
           isBlockedCounterpart={props.isBlockedCounterpart}
+          initialUnreadMessageCount={props.initialUnreadMessageCount}
           isMultiMember={props.isMultiMember}
         />
+        </MessageReadReceiptsProvider>
         </MessageRecallProvider>
         </MessageReactionsProvider>
       ) : (

@@ -39,7 +39,7 @@ class NativeSTTForegroundService : Service() {
 
     val notification = Notification.Builder(this, CHANNEL_ID)
       .setSmallIcon(R.mipmap.ic_launcher)
-      .setContentTitle("Mingle microphone active")
+      .setContentTitle("HashChat microphone active")
       .setContentText("Speech translation capture is running")
       .setOngoing(true)
       .setOnlyAlertOnce(true)
@@ -73,7 +73,7 @@ class NativeSTTForegroundService : Service() {
     }
     val channel = NotificationChannel(
       CHANNEL_ID,
-      "Mingle microphone",
+      "HashChat microphone",
       NotificationManager.IMPORTANCE_LOW,
     ).apply {
       description = "Keeps speech translation capture active in the background"

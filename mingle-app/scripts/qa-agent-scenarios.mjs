@@ -25,7 +25,7 @@ const APP_ROOT = path.resolve(import.meta.dirname, '..');
 const REPO_ROOT = path.resolve(APP_ROOT, '..');
 const AGENT_QA_ROOT = path.join(APP_ROOT, 'qa/agent');
 const SCENARIO_DIR = path.join(AGENT_QA_ROOT, 'scenarios');
-const HISTORY_PATH = path.join(REPO_ROOT, 'docs/ui-ux-codex-thread-history.md');
+const HISTORY_PATH = path.join(REPO_ROOT, 'mingle-app/docs/ui-ux-codex-thread-history.md');
 
 function git(args) {
   return execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' })

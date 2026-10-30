@@ -1,11 +1,11 @@
 # Mingle UX Taste
 
 These are the UX rules the product owner has enforced again and again, taken from the bug reports in
-[docs/ui-ux-codex-thread-history.md](../../../docs/ui-ux-codex-thread-history.md). The QA agent judges every
+[mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md). The QA agent judges every
 scenario against them. A violation counts as a finding even when nothing is technically broken.
 
-Each source names an entry heading in the history file, so `grep -n "<heading>"` finds it. "P2" means the entry is
-in Part 2 (the merged app audit).
+Each source names an entry heading in the history file, so `grep -n "<heading>"` finds it. "P2" marks an entry
+that came from the former app-only audit, which is now part of the same file.
 
 When the owner overrules a verdict in a QA report, update the matching rule here (or add one), together with the
 date and the run it came from. See "Calibration" in [README.md](README.md).

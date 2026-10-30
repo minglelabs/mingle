@@ -7,7 +7,7 @@ describe('native conversation share links', () => {
   const origin = 'https://mingle-2-0-0-production.up.railway.app';
   const token = 'cmg123abc';
 
-  it('accepts a Mingle HTTPS share link', () => {
+  it('accepts a HashChat HTTPS share link', () => {
     expect(parseNativeConversationShareLink(`${origin}/s/${token}`, origin)).toEqual({
       source: 'https',
       shareToken: token,
@@ -25,7 +25,7 @@ describe('native conversation share links', () => {
     });
   });
 
-  it('rejects non-Mingle hosts and malformed share references', () => {
+  it('rejects non-HashChat hosts and malformed share references', () => {
     expect(parseNativeConversationShareLink(`https://example.com/s/${token}`, origin)).toBeNull();
     expect(parseNativeConversationShareLink(`${origin}/conversations/${token}`, origin)).toBeNull();
     expect(parseNativeConversationShareLink(`${origin}/s/not valid`, origin)).toBeNull();

@@ -120,7 +120,7 @@ describe('GET conversation image text', () => {
     expect(m.after).toHaveBeenCalledTimes(1)
     expect(m.runJob).not.toHaveBeenCalled()
     await m.after.mock.calls[0][0]()
-    expect(m.runJob).toHaveBeenCalledWith({ messageId: 'db-image', sessionKey: 'session', imageSha256: 'hash', objectKey: 'conversation-images/key.jpg' })
+    expect(m.runJob).toHaveBeenCalledWith({ messageId: 'db-image', sessionKey: 'session', imageSha256: 'hash', objectKey: 'conversation-images/key.jpg', billedUserId: null })
   })
 
   it('does not schedule anything while OCR is running', async () => {
@@ -149,7 +149,7 @@ describe('GET conversation image text', () => {
     expect(parseConversationImageTextResponse(body)).toEqual(body)
     expect(m.after).toHaveBeenCalledTimes(1)
     await m.after.mock.calls[0][0]()
-    expect(m.runTranslations).toHaveBeenCalledWith({ messageId: 'db-image', languages: ['en'] })
+    expect(m.runTranslations).toHaveBeenCalledWith({ messageId: 'db-image', languages: ['en'], billedUserId: null, sessionKey: 'session' })
     expect(m.runJob).not.toHaveBeenCalled()
   })
 

@@ -80,7 +80,7 @@ describe("/api/profile route", () => {
   it("returns the authenticated user's profile", async () => {
     mockUserFindUnique.mockResolvedValue({
       id: "user_123",
-      name: "Mingle Name",
+      name: "HashChat Name",
       image: null,
       handle: "original.name",
       bio: "Hello",
@@ -95,13 +95,14 @@ describe("/api/profile route", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       id: "user_123",
-      name: "Mingle Name",
+      name: "HashChat Name",
       image: null,
       handle: "original.name",
       bio: "Hello",
       bioDraft: "Hello",
       nationality: "ko",
       primaryLanguages: ["ko"],
+      interestLanguages: [],
       defaultConversationLanguages: [],
       location: null,
       birthDate: null,
@@ -121,14 +122,19 @@ describe("/api/profile route", () => {
         handle: true,
         name: true,
         bio: true,
+        birthDate: true,
         nationality: true,
         primaryLanguages: true,
+        interestLanguages: true,
+        interestLanguageLevels: true,
         defaultConversationLanguages: true,
         locationLatitude: true,
         locationLongitude: true,
         locationCity: true,
         locationCountry: true,
         locationCountryCode: true,
+        isOfficial: true,
+        isOperator: true,
         _count: {
           select: {
             followerRelations: {
@@ -194,14 +200,19 @@ describe("/api/profile route", () => {
         handle: true,
         name: true,
         bio: true,
+        birthDate: true,
         nationality: true,
         primaryLanguages: true,
+        interestLanguages: true,
+        interestLanguageLevels: true,
         defaultConversationLanguages: true,
         locationLatitude: true,
         locationLongitude: true,
         locationCity: true,
         locationCountry: true,
         locationCountryCode: true,
+        isOfficial: true,
+        isOperator: true,
         _count: {
           select: {
             followerRelations: {
@@ -273,6 +284,51 @@ describe("/api/profile route", () => {
     expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: { nationality: "cy", primaryLanguages: ["cy"], defaultDisplayLanguage: "cy" },
     }));
+  });
+
+  it("saves interest languages with their levels and hides overlap with the primary languages", async () => {
+    mockUserUpdate.mockResolvedValue({
+      id: "user_123",
+      name: null,
+      image: null,
+      handle: null,
+      bio: null,
+      nationality: "ko",
+      primaryLanguages: ["ko"],
+      interestLanguages: ["ja", "ko"],
+      interestLanguageLevels: [2, 5],
+      defaultConversationLanguages: [],
+      _count: { followerRelations: 0, followingRelations: 0 },
+    });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ interestLanguages: [{ code: "ja", level: 2 }, { code: "ko", level: 9 }] }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: { interestLanguages: ["ja", "ko"], interestLanguageLevels: [2, 5] },
+    }));
+    expect(await response.json()).toEqual(expect.objectContaining({
+      interestLanguages: [{ code: "ja", level: 2 }],
+    }));
+  });
+
+  it("rejects more than three or unknown interest languages", async () => {
+    for (const interestLanguages of [
+      [{ code: "ja" }, { code: "en" }, { code: "es" }, { code: "fr" }],
+      [{ code: "xx", level: 1 }],
+      "ja",
+    ]) {
+      const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interestLanguages }),
+      }));
+      expect(response.status).toBe(400);
+    }
   });
 
   it("preserves the selected order for primary and default conversation languages", async () => {

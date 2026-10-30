@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 
 const APP_ROOT = path.resolve(import.meta.dirname, '..');
 const REPORT_ROOT = path.resolve(APP_ROOT, 'qa/mobile-ui/reports');
-const UI_UX_HISTORY_PATH = path.resolve(APP_ROOT, '../docs/ui-ux-codex-thread-history.md');
+const UI_UX_HISTORY_PATH = path.resolve(APP_ROOT, 'docs/ui-ux-codex-thread-history.md');
 
 const VITEST_TARGETS = [
   {
