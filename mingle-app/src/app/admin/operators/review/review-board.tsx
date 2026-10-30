@@ -7,7 +7,8 @@ import { ImageIcon, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, 
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
-import ProfileLanguageLevels from '@/components/profile-language-levels'
+import ProfileLanguageLevels, { CompactLanguageLevels } from '@/components/profile-language-levels'
+import type { InterestLanguage } from '@/lib/interest-languages'
 import PostLanguageChips, { ORIGINAL_CHIP } from '@/components/feed/post-language-chips'
 import { OperatorAvatar } from '../_components/operator-ui'
 import { koreanLanguageName } from '../_lib/options'
@@ -229,11 +230,45 @@ function StaffTranslationChips({ sourceLanguage, translation }: {
   )
 }
 
+/** A post's photos, swiped sideways like the app's feed, with a "2 / 4" count. */
+function ReviewPhotos({ photos }: { photos: Array<{ objectKey: string; width: number | null; height: number | null }> }) {
+  const [index, setIndex] = useState(0)
+  return (
+    <div className="relative mt-2">
+      <div
+        className="flex snap-x snap-mandatory overflow-x-auto rounded-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        onScroll={(event) => {
+          const el = event.currentTarget
+          setIndex(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)))
+        }}
+      >
+        {photos.map((photo) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={photo.objectKey}
+            src={`/admin/operators/api/review/image?key=${encodeURIComponent(photo.objectKey)}`}
+            alt=""
+            width={photo.width ?? undefined}
+            height={photo.height ?? undefined}
+            loading="lazy"
+            className="h-auto max-h-[85svh] w-full shrink-0 snap-center bg-slate-100 object-contain"
+          />
+        ))}
+      </div>
+      {photos.length > 1 ? (
+        <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-xs font-semibold text-white tabular-nums">
+          {Math.min(index, photos.length - 1) + 1} / {photos.length}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }: {
   post: ReviewPost
   at: string
   pinned: boolean
-  author: { userId: string; name: string | null; handle: string; image: string | null; languages: string[] }
+  author: { userId: string; name: string | null; handle: string; image: string | null; languages: string[]; interestLanguages: InterestLanguage[] }
   profileApproved: boolean
   onDone: () => void
 }) {
@@ -266,6 +301,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-slate-900">{author.name ?? '(이름 없음)'}</p>
           <p className="truncate text-xs text-slate-500">@{author.handle} · 글 {formatAt(at)}</p>
+          <CompactLanguageLevels primaryLanguages={author.languages} interestLanguages={author.interestLanguages} locale="ko" className="mt-1" />
         </div>
         <EditLink userId={author.userId} />
         <PinButton kind="post" id={post.id} pinned={pinned} />
@@ -278,14 +314,8 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{translation.shownText}</p>
       <StaffTranslationChips sourceLanguage={sourceLanguage} translation={translation} />
       {post.imageObjectKey ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`/admin/operators/api/review/image?key=${encodeURIComponent(post.imageObjectKey)}`}
-          alt=""
-          width={post.imageWidth ?? undefined}
-          height={post.imageHeight ?? undefined}
-          loading="lazy"
-          className="mt-2 h-auto max-h-[85svh] w-full rounded-xl bg-slate-100 object-contain"
+        <ReviewPhotos
+          photos={[{ objectKey: post.imageObjectKey, width: post.imageWidth, height: post.imageHeight }, ...post.extraImages]}
         />
       ) : post.photoDescription ? (
         // Where the photo will go: its description on white, so it is not read as the post text.
@@ -431,7 +461,7 @@ export function ReviewBoard({ items: initial }: { items: ReviewItem[] }) {
             post={item.post}
             at={item.at}
             pinned={item.pinned}
-            author={{ userId, name: item.author.name, handle: item.author.handle, image: images[userId] ?? item.author.image, languages: item.author.primaryLanguages }}
+            author={{ userId, name: item.author.name, handle: item.author.handle, image: images[userId] ?? item.author.image, languages: item.author.primaryLanguages, interestLanguages: item.author.interestLanguages }}
             profileApproved={approved.has(userId)}
             onDone={() => remove((other) => other.key === item.key)}
           />

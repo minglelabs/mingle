@@ -8,6 +8,7 @@ import { sqlUtcTimestamp } from '@/server/operator-posts/sql'
 import { publishPost } from '@/server/posts/publish-post'
 import { reviewTranslationsFor } from './review-translations'
 import { drawReservePostImage } from './post-image'
+import { reserveExtraImages } from './extra-images'
 import { generateReservePosts, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE, type ReservePersona } from './generate'
 import { nextReleaseAt } from './schedule'
 import { getPostReserveSettings, postsPerDay, type PostReserveSettings } from './settings'
@@ -53,6 +54,7 @@ type ClaimedReservePost = {
   imageObjectKey: string | null
   imageWidth: number | null
   imageHeight: number | null
+  extraImages: Prisma.JsonValue | null
 }
 
 function describeError(error: unknown): string {
@@ -81,7 +83,8 @@ async function claimDueReservePosts(now: Date, limit: number): Promise<ClaimedRe
       FOR UPDATE SKIP LOCKED
     )
     RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, translations, image_prompt AS "imagePrompt",
-      image_object_key AS "imageObjectKey", image_width AS "imageWidth", image_height AS "imageHeight"
+      image_object_key AS "imageObjectKey", image_width AS "imageWidth", image_height AS "imageHeight",
+      extra_images AS "extraImages"
   `
 }
 
@@ -115,6 +118,13 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
       text: row.text,
       imageObjectKey: image?.objectKey ?? null,
       imageDimensions: image && image.width > 0 && image.height > 0 ? { imageWidth: image.width, imageHeight: image.height } : null,
+      // Only alongside the reviewed first photo they were picked with.
+      extraImages: row.imageObjectKey
+        ? reserveExtraImages(row.extraImages).map((extra) => ({
+            objectKey: extra.objectKey,
+            dimensions: extra.width && extra.height ? { imageWidth: extra.width, imageHeight: extra.height } : null,
+          }))
+        : undefined,
       clientHint: row.language ?? personaLanguageOf(check.account),
       clientPostId: reserveClientPostId(row.id),
       knownTranslations: reviewTranslationsFor(row.translations, row.text),
@@ -367,7 +377,8 @@ export async function publishReservePostNow(reserveId: string, fromState: 'queue
     SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
     WHERE id = ${reserveId} AND state = ${fromState}
     RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, translations, image_prompt AS "imagePrompt",
-      image_object_key AS "imageObjectKey", image_width AS "imageWidth", image_height AS "imageHeight"
+      image_object_key AS "imageObjectKey", image_width AS "imageWidth", image_height AS "imageHeight",
+      extra_images AS "extraImages"
   `
   if (!claimed[0]) return { ok: false, error: 'reserve_empty' }
   if (!(await releaseOne(claimed[0], now, fromState))) return { ok: false, error: 'publish_failed' }

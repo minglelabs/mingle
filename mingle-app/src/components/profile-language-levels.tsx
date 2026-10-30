@@ -75,3 +75,65 @@ export default function ProfileLanguageLevels({
     </div>
   );
 }
+
+/**
+ * The same row in one line for a post's author, as on HelloTalk's moments:
+ * codes only, the spoken ones over a full bar ⇄ the 관심 언어 over 1-5 dots.
+ * `textClass` / `mutedClass` follow the card's tone (light text on photos).
+ */
+export function CompactLanguageLevels({
+  primaryLanguages,
+  interestLanguages,
+  locale,
+  textClass = "text-slate-900",
+  mutedClass = "text-gray-300",
+  className = "",
+}: {
+  primaryLanguages: readonly string[];
+  interestLanguages: readonly InterestLanguage[];
+  locale: string;
+  textClass?: string;
+  mutedClass?: string;
+  className?: string;
+}) {
+  if (primaryLanguages.length === 0 && interestLanguages.length === 0) return null;
+  const copy = resolveInterestLanguageCopy(locale);
+  const summary = [
+    `${copy.primaryLabel}: ${primaryLanguages.map((code) => getSttLanguageDisplayName(code, locale) ?? code).join(", ")}`,
+    interestLanguages.length
+      ? `${copy.interestLabel}: ${interestLanguages.map((entry) => `${getSttLanguageDisplayName(entry.code, locale) ?? entry.code} (${copy.levelLabels[entry.level - 1] ?? ""})`).join(", ")}`
+      : "",
+  ].filter(Boolean).join(". ");
+  const code = (value: string) => (
+    <span className={`text-[12px] font-bold leading-none ${textClass}`}>{shortCode(value)}</span>
+  );
+
+  return (
+    <span className={`flex items-center gap-2 ${className}`} role="img" aria-label={summary}>
+      {primaryLanguages.map((value) => (
+        <span key={value} className="flex flex-col items-start gap-[3px]">
+          {code(value)}
+          <span className="h-[3px] w-full min-w-[18px] rounded-full bg-emerald-500" aria-hidden="true" />
+        </span>
+      ))}
+      {interestLanguages.length ? (
+        <>
+          <ArrowLeftRight size={12} strokeWidth={2.5} className={`shrink-0 ${mutedClass}`} aria-hidden="true" />
+          {interestLanguages.map((entry) => (
+            <span key={entry.code} className="flex flex-col items-start gap-[3px]">
+              {code(entry.code)}
+              <span className="flex gap-[2px]" aria-hidden="true">
+                {Array.from({ length: LANGUAGE_LEVEL_COUNT }, (_, index) => (
+                  <span
+                    key={index}
+                    className={`h-[3px] w-[3px] rounded-full ${index < entry.level ? "bg-amber-500" : "bg-gray-300/70"}`}
+                  />
+                ))}
+              </span>
+            </span>
+          ))}
+        </>
+      ) : null}
+    </span>
+  );
+}

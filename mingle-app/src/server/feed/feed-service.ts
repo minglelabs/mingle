@@ -32,6 +32,7 @@
 import { prisma } from '@/lib/prisma'
 import { visiblePostWhere } from '@/server/posts/post-visibility'
 import { USER_IDENTITY_SELECT } from '@/server/identity/user-identity-select'
+import { AUTHOR_LANGUAGE_SELECT } from '@/server/posts/feed-post-serializer'
 import { applyStarterOrder, loadStarterFeed, starterSegmentFor, starterSegmentOfUser, type StarterSegment } from './starter-feed'
 import {
   type FeedCandidate,
@@ -76,6 +77,10 @@ export interface FeedResultPost {
     /** Badge flags (official / operator); the serializer sends them only when true. */
     isOfficial?: boolean
     isOperator?: boolean
+    nationality?: string | null
+    primaryLanguages?: string[]
+    interestLanguages?: string[]
+    interestLanguageLevels?: number[]
   }
 }
 
@@ -236,6 +241,7 @@ export const FEED_PAGE_SELECT = {
   author: {
     select: {
       ...USER_IDENTITY_SELECT,
+      ...AUTHOR_LANGUAGE_SELECT,
       imageObjectKey: true,
     },
   },

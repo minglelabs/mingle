@@ -1037,6 +1037,8 @@ model OperatorPostReserve {
   imageObjectKey String?   @map("image_object_key")
   imageWidth     Int?      @map("image_width")
   imageHeight    Int?      @map("image_height")
+  /// The 2nd to 10th photo ({objectKey, width, height}[]), released as the post's extra photos.
+  extraImages    Json?     @map("extra_images")
   releaseAt      DateTime? @map("release_at")
   postId         String?   @map("post_id")
   /// Place staff gave the post in the review queue (lower first); null keeps the default order.
