@@ -30,6 +30,7 @@ export type AdminAuditAction =
   | 'operator_post.edit_text'
   | 'operator_post.review'
   | 'operator_post.review_order'
+  | 'operator_post.review_photos'
   | 'notify_target.add'
   | 'notify_target.remove'
   | 'coins.adjust'

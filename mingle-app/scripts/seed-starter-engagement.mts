@@ -6,8 +6,10 @@
  *   - adds likes from other operator accounts to a post with none yet,
  *   - has 1-3 other operator accounts leave an AI comment on a post with none.
  * Safe to run again after more of them are published. --dry-run prints only.
+ * --all does the same for every published operator post still without likes
+ * or comments (run it after posts are published from review).
  *
- *   railway run -- npx tsx scripts/seed-starter-engagement.mts [--dry-run]
+ *   railway run -- npx tsx scripts/seed-starter-engagement.mts [--all] [--dry-run]
  */
 import { prisma } from '../src/lib/prisma'
 import { markPostViewed } from '../src/server/feed/post-view'
@@ -47,6 +49,7 @@ const PICKS: Record<keyof StarterFeed, string[]> = {
 }
 
 const dryRun = process.argv.includes('--dry-run')
+const allPublished = process.argv.includes('--all')
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items]
@@ -87,7 +90,24 @@ async function main() {
     select: { id: true },
   })).map((user) => user.id)
 
-  for (const postId of [...feed.ko, ...feed.foreign]) {
+  const targets = [...feed.ko, ...feed.foreign]
+  if (allPublished) {
+    const bare = await prisma.post.findMany({
+      where: {
+        author: { isOperator: true },
+        deletedAt: null,
+        AND: [
+          { OR: [{ isDeleted: false }, { isDeleted: null }] },
+          { OR: [{ likeCount: 0 }, { commentCount: 0 }] },
+        ],
+      },
+      orderBy: { publishedAt: 'asc' },
+      select: { id: true },
+    })
+    for (const { id } of bare) if (!targets.includes(id)) targets.push(id)
+  }
+
+  for (const postId of targets) {
     const post = await prisma.post.findUnique({
       where: { id: postId },
       select: { authorId: true, publishedAt: true, likeCount: true, commentCount: true },
