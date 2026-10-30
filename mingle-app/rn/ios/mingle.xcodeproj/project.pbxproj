@@ -703,7 +703,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = MingleBroadcast/MingleBroadcast.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MingleBroadcast/Info.plist;
@@ -713,7 +713,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.1.1;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.minglelabs.mingle.rn.broadcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -731,7 +731,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = MingleBroadcast/MingleBroadcast.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MingleBroadcast/Info.plist;
@@ -741,7 +741,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.1.1;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.minglelabs.mingle.rn.broadcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;

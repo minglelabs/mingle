@@ -40,6 +40,23 @@ describe('runtime contract', () => {
     expect(fullUrlReadIndex).toBeLessThan(schemeHostReadIndex);
   });
 
+  it('ships every iOS target (app and broadcast extension) at the API namespace version', () => {
+    const projectFile = readWorkspaceFile('ios/mingle.xcodeproj/project.pbxproj');
+    const valuesOf = (key: string) =>
+      Array.from(projectFile.matchAll(new RegExp(`\\b${key} = ([^;]+);`, 'g')), (m) => m[1].trim());
+
+    const marketingVersions = valuesOf('MARKETING_VERSION');
+    const buildNumbers = valuesOf('CURRENT_PROJECT_VERSION');
+    const namespaces = valuesOf('NEXT_PUBLIC_API_NAMESPACE');
+
+    // App Debug/Release + MingleBroadcast Debug/Release.
+    expect(marketingVersions.length).toBeGreaterThanOrEqual(4);
+    expect(buildNumbers.length).toBe(marketingVersions.length);
+    expect(new Set(marketingVersions).size).toBe(1);
+    expect(new Set(buildNumbers).size).toBe(1);
+    expect(new Set(namespaces)).toEqual(new Set([`ios/v${marketingVersions[0]}`]));
+  });
+
   it('never switches the WebView to another host', () => {
     const appSource = readWorkspaceFile('App.tsx');
 
