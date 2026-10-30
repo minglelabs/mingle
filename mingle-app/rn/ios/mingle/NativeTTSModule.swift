@@ -78,31 +78,16 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
         return payload
     }
 
-    /// While a clip plays, other apps (a video, music) get quieter instead of
-    /// pausing, and come back when it ends. The category and mode stay what
-    /// the running STT session set; only `.duckOthers` is added or removed.
-    private func setDuckingOthers(_ enabled: Bool) {
-        let session = AVAudioSession.sharedInstance()
-        var options = session.categoryOptions
-        guard options.contains(.duckOthers) != enabled else { return }
-        if enabled {
-            options.insert(.duckOthers)
-        } else {
-            options.remove(.duckOthers)
-        }
-        do {
-            try session.setCategory(session.category, mode: session.mode, options: options)
-            try session.setActive(true, options: [])
-            NSLog("[NativeTTSModule] duckOthers=%d category=%@", enabled ? 1 : 0, session.category.rawValue)
-        } catch {
-            NSLog("[NativeTTSModule] duckOthers=%d failed: %@", enabled ? 1 : 0, error.localizedDescription)
-        }
-    }
+    // No ducking of other apps on iOS: changing the category options of the
+    // active session (adding or removing `.duckOthers`) makes iOS interrupt a
+    // non-mixable player such as a YouTube video, which pauses on every clip
+    // (observed on device: `cmsInterruptSession ... INTERRUPTING WebKit
+    // MediaPlayback` right after each option change). The translation plays
+    // mixed over the other app instead.
 
     private func releaseTtsSessionTokenIfNeeded() {
         if !ttsSessionTokenAcquired { return }
         MingleDeviceAudioState.shared.setTranslationPlaying(false)
-        setDuckingOthers(false)
         MingleAudioSessionCoordinator.shared.releaseTTS()
         ttsSessionTokenAcquired = false
         MingleAudioSessionCoordinator.shared.scheduleDeactivateAudioSessionIfIdle(
@@ -227,9 +212,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
                     player.pan = MingleDeviceAudioState.translationPan
                 }
                 player.prepareToPlay()
-                self.setDuckingOthers(true)
                 if !player.play() {
-                    self.setDuckingOthers(false)
                     throw NSError(
                         domain: "NativeTTSModule",
                         code: -1,
