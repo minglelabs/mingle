@@ -682,7 +682,15 @@ function resolveDevboxHost() {
 async function cmdServers() {
   const env = devboxEnv();
   const host = resolveDevboxHost();
-  const webUrl = `http://${host}:${env.DEVBOX_WEB_PORT}`;
+  // A tunnel slot (device profile) publishes an https URL; the LAN profile serves http://<host>:<port>.
+  let webUrl = `http://${host}:${env.DEVBOX_WEB_PORT}`;
+  try {
+    const xcconfig = fs.readFileSync(path.join(APP_ROOT, 'rn/ios/devbox.runtime.xcconfig'), 'utf8');
+    const siteUrl = /^NEXT_PUBLIC_SITE_URL = (.*)$/m.exec(xcconfig)?.[1]?.replaceAll('/$()/', '//').trim();
+    if (siteUrl?.startsWith('https://')) webUrl = siteUrl;
+  } catch {
+    // No xcconfig yet.
+  }
   let webStatus = 0;
   try {
     webStatus = (await fetch(`${webUrl}/`, { redirect: 'manual', signal: AbortSignal.timeout(10_000) })).status;
@@ -691,7 +699,8 @@ async function cmdServers() {
   }
   let sttListening = false;
   try {
-    execFileSync('nc', ['-z', '-G', '3', host, env.DEVBOX_STT_PORT], { stdio: 'ignore', timeout: 5000 });
+    // The STT server always listens on this Mac; through a tunnel the phone reaches it via the slot hostname.
+    execFileSync('nc', ['-z', '-G', '3', webUrl.startsWith('https://') ? '127.0.0.1' : host, env.DEVBOX_STT_PORT], { stdio: 'ignore', timeout: 5000 });
     sttListening = true;
   } catch {
     sttListening = false;
