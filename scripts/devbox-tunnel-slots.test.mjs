@@ -42,6 +42,26 @@ tunnel_slot_hostname mingle-app-devbox.photo-for-passport.com ""; echo
   ]);
 });
 
+test("slot tunnel hostnames and ingress cover every slot", () => {
+  const result = runWithClaims(`
+DEVBOX_CLOUDFLARE_SLOT_DOMAIN=minglelabs.app
+slot_tunnel_hostnames 3
+cfg="$(mktemp)"
+write_slot_tunnel_config "$cfg" ce882cab-049d-43f0-85e0-95eb5e974745 /creds.json
+grep -c 'hostname:' "$cfg"
+grep -A1 'mingle-messaging-devbox-4.minglelabs.app' "$cfg" | tail -1
+rm -f "$cfg"
+`);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.stdout.trim().split("\n").map((line) => line.trim()), [
+    "mingle-app-devbox-3.minglelabs.app",
+    "mingle-stt-devbox-3.minglelabs.app",
+    "mingle-messaging-devbox-3.minglelabs.app",
+    "12",
+    "service: http://127.0.0.1:19304",
+  ]);
+});
+
 test("a session skips slots held by another live session", () => {
   const result = runWithClaims(`
 mkdir -p "$(dirname "$(tunnel_slot_claim_file 1)")"

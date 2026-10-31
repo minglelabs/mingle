@@ -385,9 +385,9 @@ function isLoopbackUrl(raw: string): boolean {
 }
 
 // Devbox web host, with an optional per-session tunnel slot suffix
-// (e.g. mingle-app-devbox-2.photo-for-passport.com).
-const DEVBOX_WEB_HOST_PATTERN = /^mingle-app-devbox(-\d+)?\.photo-for-passport\.com$/i;
-const DEVBOX_WEB_HOST_IN_TEXT_PATTERN = /mingle-app-devbox(-\d+)?\.photo-for-passport\.com/i;
+// (e.g. mingle-app-devbox-2.minglelabs.app).
+const DEVBOX_WEB_HOST_PATTERN = /^mingle-app-devbox(-\d+)?\.(photo-for-passport\.com|minglelabs\.app)$/i;
+const DEVBOX_WEB_HOST_IN_TEXT_PATTERN = /mingle-app-devbox(-\d+)?\.(photo-for-passport\.com|minglelabs\.app)/i;
 
 function isDebugWebViewRemountAllowedUrl(raw: string): boolean {
   if (!raw) return false;

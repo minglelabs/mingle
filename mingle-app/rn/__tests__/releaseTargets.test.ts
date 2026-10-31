@@ -125,8 +125,8 @@ describe('releaseTargets', () => {
   it('accepts per-session devbox tunnel slot endpoints', () => {
     expect(validateDedicatedReleaseTargetConfig({
       apiNamespace: 'ios/v1.1.0',
-      webAppBaseUrl: 'https://mingle-app-devbox-2.photo-for-passport.com',
-      wsUrl: 'wss://mingle-stt-devbox-2.photo-for-passport.com',
+      webAppBaseUrl: 'https://mingle-app-devbox-2.minglelabs.app',
+      wsUrl: 'wss://mingle-stt-devbox-2.minglelabs.app',
     })).toEqual({ ok: true });
   });
 

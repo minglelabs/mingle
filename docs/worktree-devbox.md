@@ -19,10 +19,11 @@
 
 - 세션마다 자기 터널을 씁니다. 다른 세션의 서버, 터널, 브리지, 포트를 끄거나 재시작하거나
   가져다 쓰지 않습니다. `scripts/devbox down`은 자기 워크트리에서만 실행합니다.
-- `scripts/devbox up --profile device --tunnel-provider cloudflare`는 Cloudflare named tunnel
-  모드에서 빈 **터널 슬롯**(1~4)을 하나 잡습니다. 슬롯마다 호스트명이 다릅니다.
-  - 슬롯 N 호스트명: 기본 호스트명의 첫 라벨 뒤에 `-N`을 붙입니다.
-    예: `mingle-app-devbox-2.photo-for-passport.com`
+- `scripts/devbox up --profile device --tunnel-provider cloudflare`는 공유 슬롯 터널
+  (`DEVBOX_CLOUDFLARE_SLOT_TUNNEL_ID`가 설정된 경우)에서 빈 **터널 슬롯**(1~4)을 하나 잡습니다.
+  슬롯마다 호스트명이 다릅니다.
+  - 슬롯 N 호스트명: `mingle-app-devbox-N.minglelabs.app`, `mingle-stt-devbox-N.minglelabs.app`,
+    `mingle-messaging-devbox-N.minglelabs.app`
   - 같은 워크트리는 지난번 슬롯을 다시 씁니다. 특정 슬롯이 필요하면 `--tunnel-slot N`을 줍니다.
   - 다른 세션이 쓰는 슬롯을 지정하면 실패합니다. 4개가 다 차면 실패하고 사용 중인 워크트리를 보여 줍니다.
     이때는 어느 세션을 끌지 사용자에게 묻습니다.
@@ -44,18 +45,32 @@
   `scripts/devbox down`이 이 워크트리의 슬롯과 폰 점유를 해제합니다.
 - Appium QA도 같은 규칙입니다. 다른 세션이 쓰는 폰을 Appium 세션으로 잡지 않습니다.
 
-### Cloudflare 설정 (슬롯 추가 시 1회)
+### Cloudflare 슬롯 터널 설정
 
-devbox named tunnel(token 방식, 원격 관리)의 Public Hostname에 슬롯별로 3개씩 추가합니다.
-devbox는 connector 로그에서 원격 포트를 읽고, 그 포트에서 이 워크트리 포트로 브리지를 띄웁니다.
+모든 세션이 로컬 관리형 터널 `mingle-devbox-slots`(id `ce882cab-049d-43f0-85e0-95eb5e974745`) 하나를 같이 씁니다.
+메인 루트 `.env.local`에 아래 값이 있으면 슬롯 모드로 동작합니다.
 
-| 슬롯 | web → | stt → | messaging → |
-| --- | --- | --- | --- |
-| N | `mingle-app-devbox-N` → `http://localhost:1910N` | `mingle-stt-devbox-N` → `http://localhost:1920N` | `mingle-messaging-devbox-N` → `http://localhost:1930N` |
+```dotenv
+DEVBOX_CLOUDFLARE_SLOT_TUNNEL_ID=ce882cab-049d-43f0-85e0-95eb5e974745
+DEVBOX_CLOUDFLARE_SLOT_DOMAIN=minglelabs.app
+```
 
-슬롯 수를 늘리면 `DEVBOX_TUNNEL_SLOT_COUNT`도 같이 늘립니다. 기존 슬롯 없는 호스트명
-(`mingle-app-devbox.photo-for-passport.com` 등)은 더 이상 쓰지 않습니다. 새 호스트명은 Google OAuth
-redirect URI에도 있어야 합니다(`DEVBOX_GOOGLE_REDIRECT_SYNC_ENABLED`가 켜져 있으면 devbox가 동기화).
+- 터널 credentials는 `~/.cloudflared/ce882cab-049d-43f0-85e0-95eb5e974745.json`에 있습니다(`cloudflared tunnel create`가 만든 파일).
+- ingress는 devbox가 모든 슬롯을 담아 생성합니다(`/Users/nam/mingle/.git/devbox-shared/cloudflared-slots.yml`).
+  세션마다 connector를 띄우지만 설정이 같아서 서로 영향이 없습니다.
+- 슬롯 N 고정 포트: web `127.0.0.1:1910N`, stt `1920N`, messaging `1930N`. 각 세션이 자기 슬롯 포트에서
+  워크트리 포트로 브리지를 띄웁니다.
+- 슬롯을 늘릴 때는 DNS를 추가하고 `DEVBOX_TUNNEL_SLOT_COUNT`를 늘립니다.
+
+```bash
+for s in app stt messaging; do
+  cloudflared tunnel route dns ce882cab-049d-43f0-85e0-95eb5e974745 "mingle-$s-devbox-5.minglelabs.app"
+done
+```
+
+- 슬롯 호스트명도 Google OAuth redirect URI에 있어야 합니다(`DEVBOX_GOOGLE_REDIRECT_SYNC_ENABLED`가 켜져 있으면 devbox가 동기화).
+- 슬롯 터널 설정이 없으면 예전 token 방식 named tunnel(`mingle-*-devbox.photo-for-passport.com`)을 씁니다.
+  이 방식은 호스트명이 하나뿐이라 한 번에 한 세션만 쓸 수 있습니다.
 
 ## 메인 루트 `.env.local`에 둘 값
 
