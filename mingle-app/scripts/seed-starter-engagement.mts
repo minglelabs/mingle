@@ -34,7 +34,7 @@ const PICKS: Record<keyof StarterFeed, string[]> = {
     'cmvtocww8001ish3e6gk77j9a', // yuxuan.w (CN, F) 첫 찜질방 양머리, published
     'cmuwrn9lq0019sh9afs6cpgkt', // chen.yi.chun (TW, F) 涼麵, published
     'cmvfrs00y00tcshwui4ri9nnu', // sara.ueno (JP, F) 교환학생 자기소개서 4번째 수정
-    'cmvwkci8l0001shz0ckoq1le9', // kenji.sato (JP, M) 서울 출장 고깃집에서 "한 병 더 주세요" 통했다 (written for this list)
+    'post:cmvb31snm0004shx1uy1mp6i7', // seoyun.daily (KR, F) 유리바닥 사진 4장, already a post (also first for foreign readers)
     'cmuwrof8i002csh5cdclh80xc', // anya.lestari (ID, F) 똠얌꿍, published
   ],
   foreign: [
