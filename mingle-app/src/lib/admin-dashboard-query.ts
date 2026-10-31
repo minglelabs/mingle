@@ -25,6 +25,15 @@ const DAY_BUCKET_EXPR = (alias: string) => `date_trunc('day', ${alias}."created_
 /** Bumped whenever a cached column is added or its source query changes, so old rows rebuild.
  * 3: per-character STT and per-token translation latency. */
 const USAGE_METRIC_VERSION = 3;
+/**
+ * Missing cacheable days are computed this many at a time, one chunk after another, and
+ * each chunk is stored as soon as it is computed. After a USAGE_METRIC_VERSION bump every
+ * row is stale, and computing 30 days as one batch ran past the launcher's 120s proxy
+ * timeout in production while storing nothing, so every retry started over. Storing per
+ * chunk keeps the finished days when a request is cut off, and the next load computes
+ * only the days still missing.
+ */
+export const DAILY_METRIC_CACHE_CHUNK_DAYS = 4;
 
 type RawDayCount = { day: Date; value: bigint | number };
 type RawDayModelCount = { day: Date; model: string; value: bigint | number };
@@ -555,6 +564,17 @@ function groupContiguousDayKeys(dayKeys: readonly string[]): string[][] {
   return groups;
 }
 
+/** Each contiguous run of dayKeys, split into chunks of at most `chunkDays` days. */
+function chunkContiguousDayKeys(dayKeys: readonly string[], chunkDays: number): string[][] {
+  return groupContiguousDayKeys(dayKeys).flatMap((group) => {
+    const chunks: string[][] = [];
+    for (let start = 0; start < group.length; start += chunkDays) {
+      chunks.push(group.slice(start, start + chunkDays));
+    }
+    return chunks;
+  });
+}
+
 async function queryDailyMetricSnapshotsForDays(
   dayKeys: readonly string[],
   platform: AdminDashboardPlatform,
@@ -649,6 +669,25 @@ async function persistDailyMetricSnapshots(
   }));
 }
 
+/**
+ * Computes cacheable days in order, DAILY_METRIC_CACHE_CHUNK_DAYS at a time, and stores
+ * each chunk before the next one starts.
+ */
+async function calculateAndPersistDailyMetricSnapshots(
+  dayKeys: readonly string[],
+  platform: AdminDashboardPlatform,
+): Promise<Map<string, DailyMetricSnapshot>> {
+  const calculated = new Map<string, DailyMetricSnapshot>();
+  for (const chunk of chunkContiguousDayKeys(dayKeys, DAILY_METRIC_CACHE_CHUNK_DAYS)) {
+    const snapshots = await queryDailyMetricSnapshots(createCalculationRange(chunk), platform);
+    await persistDailyMetricSnapshots(snapshots, chunk, platform);
+    for (const [dayKey, snapshot] of snapshots) {
+      calculated.set(dayKey, snapshot);
+    }
+  }
+  return calculated;
+}
+
 function snapshotFromCachedRow(row: CachedDailyMetric): DailyMetricSnapshot {
   return {
     signupCount: row.signupCount,
@@ -694,32 +733,16 @@ async function resolveDailyMetricSnapshots(
   const uncacheableKeys = resolveUncacheableDayKeys(new Date(), ADMIN_DASHBOARD_TIME_ZONE);
   const isForceRefresh = Boolean(options?.forceRefresh);
 
-  if (isForceRefresh) {
-    const calculated = await queryDailyMetricSnapshots(range, platform);
-    const historicalDayKeys = range.dayKeys.filter((dayKey) => !uncacheableKeys.has(dayKey));
-
-    await prisma.adminDashboardDailyMetric.deleteMany({
-      where: {
-        day: { in: historicalDayKeys.map(parseDayKey) },
-        platform,
-      },
-    });
-
-    if (historicalDayKeys.length > 0) {
-      await persistDailyMetricSnapshots(calculated, historicalDayKeys, platform);
-    }
-
-    return new Map(
-      range.dayKeys.map((dayKey) => [
-        dayKey,
-        calculated.get(dayKey) ?? { ...EMPTY_DAILY_METRIC },
-      ]),
-    );
-  }
-
   // 캐시 조회/저장은 uncacheable 날짜(오늘+어제)를 제외한 날짜에만 수행한다.
   const cacheableDayKeysInRange = range.dayKeys.filter((dayKey) => !uncacheableKeys.has(dayKey));
-  const cachedByDay = cacheableDayKeysInRange.length > 0
+  const uncacheableDaysInRange = range.dayKeys.filter((dayKey) => uncacheableKeys.has(dayKey));
+
+  if (isForceRefresh) {
+    // Cleared before recomputing: a refresh cut off part-way leaves the days it did not
+    // reach missing, so the next load recomputes them instead of serving the old rows.
+    await clearAdminDashboardCache(cacheableDayKeysInRange, platform);
+  }
+  const cachedByDay = !isForceRefresh && cacheableDayKeysInRange.length > 0
     ? await loadCachedDailyMetrics({
         ...range,
         dayKeys: cacheableDayKeysInRange,
@@ -727,44 +750,15 @@ async function resolveDailyMetricSnapshots(
     : new Map<string, CachedDailyMetric>();
 
   const missingCacheableDays = cacheableDayKeysInRange.filter((dayKey) => !cachedByDay.has(dayKey));
-  const uncacheableDaysInRange = range.dayKeys.filter((dayKey) => uncacheableKeys.has(dayKey));
-  const daysToCalculate = [...missingCacheableDays, ...uncacheableDaysInRange];
-
-  if (daysToCalculate.length > 0) {
-    const calculated = await queryDailyMetricSnapshotsForDays(daysToCalculate, platform);
-    const daysToPersist = daysToCalculate.filter((dayKey) => !uncacheableKeys.has(dayKey));
-
-    if (daysToPersist.length > 0) {
-      await persistDailyMetricSnapshots(calculated, daysToPersist, platform);
-    }
-
-    for (const dayKey of missingCacheableDays) {
-      const snapshot = calculated.get(dayKey);
-      if (snapshot) {
-        cachedByDay.set(dayKey, {
-          day: parseDayKey(dayKey),
-          ...snapshot,
-          usageMetricVersion: USAGE_METRIC_VERSION,
-        });
-      }
-    }
-
-    return new Map(
-      range.dayKeys.map((dayKey) => {
-        if (uncacheableKeys.has(dayKey)) {
-          return [dayKey, calculated.get(dayKey) ?? { ...EMPTY_DAILY_METRIC }];
-        }
-        const cached = cachedByDay.get(dayKey);
-        return [dayKey, cached ? snapshotFromCachedRow(cached) : { ...EMPTY_DAILY_METRIC }];
-      }),
-    );
-  }
+  const calculated = await calculateAndPersistDailyMetricSnapshots(missingCacheableDays, platform);
+  const live = await queryDailyMetricSnapshotsForDays(uncacheableDaysInRange, platform);
 
   return new Map(
-    range.dayKeys.map((dayKey) => [
-      dayKey,
-      cachedByDay.get(dayKey) ? snapshotFromCachedRow(cachedByDay.get(dayKey)!) : { ...EMPTY_DAILY_METRIC },
-    ]),
+    range.dayKeys.map((dayKey) => {
+      const cached = cachedByDay.get(dayKey);
+      const snapshot = cached ? snapshotFromCachedRow(cached) : (calculated.get(dayKey) ?? live.get(dayKey));
+      return [dayKey, snapshot ?? { ...EMPTY_DAILY_METRIC }];
+    }),
   );
 }
 
