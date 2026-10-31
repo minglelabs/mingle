@@ -1,0 +1,27 @@
+{
+  "name": "mingle-voice-agent",
+  "private": true,
+  "version": "0.0.0",
+  "license": "GPL-3.0-only",
+  "description": "Voice talk POC: LiveKit room + server-side interpreter agent (Soniox -> GPT -> Gemini TTS)",
+  "scripts": {
+    "livekit": "livekit-server --dev --bind 0.0.0.0",
+    "server": "node ./node_modules/ts-node/dist/bin.js --transpile-only poc-server.ts",
+    "agent": "node ./node_modules/ts-node/dist/bin.js --transpile-only agent.ts",
+    "bench": "node ./node_modules/ts-node/dist/bin.js --transpile-only scripts/bench.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@livekit/rtc-node": "1.2.1",
+    "dotenv": "^17.2.3",
+    "livekit-client": "2.23.0",
+    "livekit-server-sdk": "2.19.2",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/ws": "^8.18.1",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.9.3"
+  }
+}

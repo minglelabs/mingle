@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>보이스톡 통역 POC</title>
+<style>
+  :root { --bg: #f6f6f8; --card: #fff; --text: #17171c; --muted: #6b6b76; --line: #e3e3ea; --accent: #5b4cf0; --warn: #d9480f; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111114; --card: #1c1c21; --text: #f1f1f4; --muted: #9a9aa6; --line: #2c2c33; --accent: #8b7fff; --warn: #ff8a5c; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 18px; margin: 4px 0 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 8px 0 4px; }
+  input, select { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 15px; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  button { padding: 12px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; }
+  button.secondary { background: var(--line); color: var(--text); }
+  button.on { background: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; }
+  .check input { width: auto; }
+  .hidden { display: none !important; }
+  .status { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .people { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 4px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); font-size: 13px; }
+  .chip.speaking { border-color: var(--accent); color: var(--accent); }
+  .slider { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .slider input { flex: 1; padding: 0; }
+  .slider span { width: 38px; text-align: right; }
+  #log { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+  .line { padding: 8px 10px; border-radius: 10px; background: var(--bg); }
+  .line .who { font-size: 12px; color: var(--muted); }
+  .line .orig.partial { color: var(--muted); }
+  .line .tr { margin-top: 4px; font-weight: 600; }
+  .line .metrics { margin-top: 4px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .line.echo { opacity: .6; }
+  .line.echo .who, .line .err { color: var(--warn); }
+  .summary { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main>
+  <h1>보이스톡 통역 POC</h1>
+
+  <section class="card" id="joinCard">
+    <label for="name">이름</label>
+    <input id="name" maxlength="32" placeholder="이름">
+    <div class="row">
+      <div>
+        <label for="lang">내 언어 (이 언어로 통역을 들어요)</label>
+        <select id="lang">
+          <option value="ko">한국어</option><option value="ja">日本語</option><option value="en">English</option>
+          <option value="zh">中文</option><option value="es">Español</option><option value="vi">Tiếng Việt</option><option value="th">ไทย</option>
+        </select>
+      </div>
+      <div>
+        <label for="room">방</label>
+        <input id="room" value="poc" maxlength="64">
+      </div>
+    </div>
+    <label class="check"><input type="checkbox" id="webAudioMix" checked> WebAudio로 믹스 (iOS Safari에서 트랙별 볼륨이 먹으려면 필요)</label>
+    <div style="margin-top:12px"><button id="joinBtn" style="width:100%">참가</button></div>
+    <div class="status" id="joinStatus"></div>
+  </section>
+
+  <section class="card hidden" id="callCard">
+    <div class="people" id="people"></div>
+    <div class="row" style="margin-top:12px">
+      <button id="interpretBtn" class="on">통역 ON</button>
+      <button id="muteBtn" class="secondary">마이크 켜짐</button>
+      <button id="leaveBtn" class="secondary">나가기</button>
+    </div>
+    <button id="audioBtn" class="hidden" style="width:100%;margin-top:8px">소리 켜기 (탭)</button>
+    <label for="duckMode">덕킹 방식 (통역 ON일 때 상대 원음)</label>
+    <select id="duckMode">
+      <option value="static">고정: 원음을 항상 작게</option>
+      <option value="dynamic">동적: 통역이 나올 때만 작게</option>
+    </select>
+    <div class="slider">원음 <input type="range" id="origVol" min="0" max="100" value="25"><span id="origVolLabel">25%</span></div>
+    <div class="slider">통역 <input type="range" id="trVol" min="0" max="100" value="100"><span id="trVolLabel">100%</span></div>
+    <div class="status" id="callStatus"></div>
+  </section>
+
+  <section class="card hidden" id="logCard">
+    <div class="summary" id="summary">아직 통역 없음</div>
+    <div id="log" style="margin-top:8px"></div>
+  </section>
+  <div id="audioBox" class="hidden"></div>
+</main>
+<script src="/livekit-client.umd.js"></script>
+<script>
+const LK = window.LivekitClient;
+const $ = (id) => document.getElementById(id);
+const TOPIC = 'interpreter';
+const LANE_PREFIX = 'tr:';
+const state = { room: null, lang: 'ko', interpretOn: true, duckMode: 'static', origVol: 0.25, trVol: 1, duckLow: 0.15, lanePlaying: false, micOn: true, lines: new Map(), partialToId: new Map(), latencies: [], echoes: 0 };
+
+function store(key, value) { try { localStorage.setItem(key, value); } catch {} }
+function load(key) { try { return localStorage.getItem(key); } catch { return null; } }
+$('name').value = load('voicePoc.name') || '';
+$('lang').value = load('voicePoc.lang') || 'ko';
+
+const isAgent = (p) => p && p.attributes && p.attributes.role === 'interpreter';
+const langOf = (p) => (p && p.attributes && p.attributes.lang) || '';
+
+function wantSubscribed(pub, participant) {
+  if (pub.kind !== 'audio') return false;
+  if (isAgent(participant)) return state.interpretOn && pub.trackName === LANE_PREFIX + state.lang;
+  return true;
+}
+
+function syncSubscriptions() {
+  if (!state.room) return;
+  for (const p of state.room.remoteParticipants.values()) {
+    for (const pub of p.trackPublications.values()) {
+      const want = wantSubscribed(pub, p);
+      if (pub.isSubscribed !== want) pub.setSubscribed(want);
+    }
+  }
+}
+
+function originalVolume(participant) {
+  if (!state.interpretOn || langOf(participant) === state.lang) return 1;
+  if (state.duckMode === 'dynamic') return state.lanePlaying ? state.duckLow : 1;
+  return state.origVol;
+}
+
+function applyVolumes() {
+  if (!state.room) return;
+  for (const p of state.room.remoteParticipants.values()) {
+    for (const pub of p.trackPublications.values()) {
+      if (pub.kind !== 'audio' || !pub.track) continue;
+      pub.track.setVolume(isAgent(p) ? state.trVol : originalVolume(p));
+    }
+  }
+}
+
+function renderPeople() {
+  const room = state.room;
+  if (!room) return;
+  const speaking = new Set(room.activeSpeakers.map((p) => p.identity));
+  const chips = [room.localParticipant, ...room.remoteParticipants.values()].map((p) => {
+    const me = p === room.localParticipant;
+    const label = isAgent(p) ? '🎧 통역' : `${p.name || p.identity}${me ? ' (나)' : ''} · ${langOf(p) || '?'}${p.attributes && p.attributes.interpret === 'off' ? ' · 통역끔' : ''}`;
+    return `<span class="chip${speaking.has(p.identity) ? ' speaking' : ''}">${escapeHtml(label)}</span>`;
+  });
+  $('people').innerHTML = chips.join('');
+}
+
+function escapeHtml(text) { return String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function lineFor(id, speakerName) {
+  let entry = state.lines.get(id);
+  if (!entry) {
+    const el = document.createElement('div');
+    el.className = 'line';
+    el.innerHTML = '<div class="who"></div><div class="orig"></div><div class="tr"></div><div class="metrics"></div>';
+    $('log').prepend(el);
+    entry = { el, translations: {} };
+    state.lines.set(id, entry);
+  }
+  if (speakerName) entry.el.querySelector('.who').textContent = speakerName;
+  return entry;
+}
+
+function renderTranslations(entry, mine) {
+  const parts = Object.entries(entry.translations)
+    .filter(([lang]) => mine || lang === state.lang)
+    .map(([lang, text]) => (mine ? `[${lang}] ` : '') + text);
+  entry.el.querySelector('.tr').textContent = parts.join('\n');
+}
+
+function updateSummary() {
+  const values = state.latencies.slice(-20).sort((a, b) => a - b);
+  if (!values.length) return;
+  const median = values[Math.floor(values.length / 2)];
+  $('summary').textContent = `말 끝 → 통역 음성 시작: 최근 ${values.length}건 중앙값 ${median}ms (최소 ${values[0]} / 최대 ${values[values.length - 1]}) · 에코 차단 ${state.echoes}건`;
+}
+
+function onCaption(msg) {
+  const myId = state.room.localParticipant.identity;
+  const mine = msg.speaker === myId;
+  if (msg.type === 'partial') {
+    if (state.partialToId.has(msg.id)) return;
+    const entry = lineFor(msg.id, `${msg.speakerName} · ${msg.lang}`);
+    const orig = entry.el.querySelector('.orig');
+    orig.textContent = msg.text + ' …';
+    orig.classList.add('partial');
+  } else if (msg.type === 'final' || msg.type === 'echo') {
+    const partial = state.lines.get(msg.partialId);
+    if (partial) { state.lines.delete(msg.partialId); state.lines.set(msg.id, partial); }
+    state.partialToId.set(msg.partialId, msg.id);
+    const entry = lineFor(msg.id, `${msg.speakerName} · ${msg.lang}${msg.type === 'echo' ? ' · 에코로 판단해 통역 안 함' : ''}`);
+    entry.mine = mine;
+    const orig = entry.el.querySelector('.orig');
+    orig.textContent = msg.text;
+    orig.classList.remove('partial');
+    if (msg.type === 'echo') { entry.el.classList.add('echo'); state.echoes++; updateSummary(); }
+  } else if (msg.type === 'translation') {
+    const entry = state.lines.get(msg.id);
+    if (!entry) return;
+    entry.translations[msg.lang] = msg.text;
+    renderTranslations(entry, entry.mine);
+  } else if (msg.type === 'play') {
+    const entry = state.lines.get(msg.id);
+    if (!entry || msg.lang !== state.lang) return;
+    const m = msg.metrics;
+    entry.el.querySelector('.metrics').textContent = `말 끝→통역 시작 ${m.speechEndToPlayMs}ms = 끝점 ${m.endpointMs} + 번역 ${m.translateMs}(${m.translator}) + TTS 첫소리 ${m.ttsFirstAudioMs} + 대기 ${m.queueMs}`;
+    state.latencies.push(m.speechEndToPlayMs);
+    updateSummary();
+  } else if (msg.type === 'lane') {
+    if (msg.lang !== state.lang) return;
+    state.lanePlaying = msg.playing;
+    applyVolumes();
+  } else if (msg.type === 'error') {
+    const entry = state.lines.get(msg.id);
+    if (entry) entry.el.querySelector('.metrics').innerHTML = `<span class="err">통역 실패 (${escapeHtml(msg.lang)}): ${escapeHtml(msg.message)}</span>`;
+  }
+}
+
+async function join() {
+  const name = $('name').value.trim() || '게스트';
+  state.lang = $('lang').value;
+  store('voicePoc.name', name);
+  store('voicePoc.lang', state.lang);
+  $('joinBtn').disabled = true;
+  $('joinStatus').textContent = '연결 중…';
+  try {
+    const query = new URLSearchParams({ name, lang: state.lang, room: $('room').value.trim() || 'poc' });
+    const res = await fetch('/api/token?' + query);
+    if (!res.ok) throw new Error('토큰 발급 실패 ' + res.status);
+    const { token, url } = await res.json();
+    const room = new LK.Room({
+      adaptiveStream: false,
+      dynacast: false,
+      webAudioMix: $('webAudioMix').checked,
+      audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    state.room = room;
+    room
+      .on(LK.RoomEvent.TrackPublished, () => syncSubscriptions())
+      .on(LK.RoomEvent.ParticipantConnected, () => { syncSubscriptions(); renderPeople(); })
+      .on(LK.RoomEvent.ParticipantDisconnected, renderPeople)
+      .on(LK.RoomEvent.ParticipantAttributesChanged, () => { renderPeople(); applyVolumes(); })
+      .on(LK.RoomEvent.ActiveSpeakersChanged, renderPeople)
+      .on(LK.RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind !== 'audio') return;
+        $('audioBox').appendChild(track.attach());
+        applyVolumes();
+      })
+      .on(LK.RoomEvent.TrackUnsubscribed, (track) => track.detach().forEach((el) => el.remove()))
+      .on(LK.RoomEvent.DataReceived, (payload, participant, kind, topic) => {
+        if (topic !== TOPIC) return;
+        try { onCaption(JSON.parse(new TextDecoder().decode(payload))); } catch (e) { console.warn(e); }
+      })
+      .on(LK.RoomEvent.AudioPlaybackStatusChanged, () => $('audioBtn').classList.toggle('hidden', room.canPlaybackAudio))
+      .on(LK.RoomEvent.Disconnected, () => { $('callStatus').textContent = '연결이 끊겼어요'; });
+    await room.connect(url || location.origin.replace(/^http/, 'ws'), token, { autoSubscribe: false });
+    let micNote = '';
+    try {
+      await room.localParticipant.setMicrophoneEnabled(true);
+    } catch (micError) {
+      // No mic permission: stay in the call as a listener.
+      state.micOn = false;
+      micNote = ' · 마이크 권한 없음(듣기 전용)';
+      $('muteBtn').disabled = true;
+      $('muteBtn').textContent = '마이크 없음';
+    }
+    await room.startAudio().catch(() => undefined);
+    $('audioBtn').classList.toggle('hidden', room.canPlaybackAudio);
+    $('joinCard').classList.add('hidden');
+    $('callCard').classList.remove('hidden');
+    $('logCard').classList.remove('hidden');
+    $('callStatus').textContent = `방 ${room.name} · 내 언어 ${state.lang} · WebAudio 믹스 ${$('webAudioMix').checked ? '켬' : '끔'}${micNote}`;
+    syncSubscriptions();
+    renderPeople();
+  } catch (error) {
+    console.error(error);
+    $('joinStatus').textContent = '실패: ' + (error && error.message ? error.message : error);
+    $('joinBtn').disabled = false;
+  }
+}
+
+$('joinBtn').onclick = join;
+$('audioBtn').onclick = () => state.room && state.room.startAudio().then(() => $('audioBtn').classList.add('hidden'));
+$('interpretBtn').onclick = async () => {
+  state.interpretOn = !state.interpretOn;
+  $('interpretBtn').textContent = state.interpretOn ? '통역 ON' : '통역 OFF';
+  $('interpretBtn').className = state.interpretOn ? 'on' : 'secondary';
+  state.lanePlaying = false;
+  syncSubscriptions();
+  applyVolumes();
+  await state.room.localParticipant.setAttributes({ interpret: state.interpretOn ? 'on' : 'off' }).catch(console.warn);
+};
+$('muteBtn').onclick = async () => {
+  state.micOn = !state.micOn;
+  await state.room.localParticipant.setMicrophoneEnabled(state.micOn);
+  $('muteBtn').textContent = state.micOn ? '마이크 켜짐' : '마이크 꺼짐';
+};
+$('leaveBtn').onclick = async () => { await state.room.disconnect(); location.reload(); };
+$('duckMode').onchange = () => { state.duckMode = $('duckMode').value; applyVolumes(); };
+$('origVol').oninput = () => { state.origVol = $('origVol').value / 100; $('origVolLabel').textContent = $('origVol').value + '%'; applyVolumes(); };
+$('trVol').oninput = () => { state.trVol = $('trVol').value / 100; $('trVolLabel').textContent = $('trVol').value + '%'; applyVolumes(); };
+</script>
+</body>
+</html>
