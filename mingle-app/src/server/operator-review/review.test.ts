@@ -120,10 +120,26 @@ describe('reviewOperatorPost', () => {
     mocks.drawImage.mockResolvedValue({ objectKey: 'post-images/op1/a.jpg', width: 900, height: 1200 })
     mocks.reserveUpdate.mockImplementation(async ({ data }) => ({ ...REVIEW_POST, ...data }))
 
+    mocks.canDraw.mockReturnValue(true)
+
     const result = await reviewOperatorPost(null, 'r1', 'regenerate', '더 짧게')
-    expect(result).toMatchObject({ ok: true, state: 'review', post: { text: 'new text', imageObjectKey: 'post-images/op1/a.jpg' } })
+    // The new text shows at once; the photo follows in the background.
+    expect(result).toMatchObject({ ok: true, state: 'review', post: { text: 'new text', photoDrawing: true } })
     expect(mocks.generatePosts).toHaveBeenCalledWith(expect.objectContaining({ revision: { previousText: 'old text', feedback: '더 짧게' } }))
-    expect(mocks.reserveUpdate.mock.calls[0][0].data).toMatchObject({ state: 'review', language: null, imageWidth: 900 })
+    expect(mocks.reserveUpdate.mock.calls[0][0].data).toMatchObject({ state: 'regenerating', language: null, error: 'photo_drawing' })
+    await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
+    expect(mocks.reserveUpdateMany.mock.calls[1][0].data).toMatchObject({ state: 'review', imageObjectKey: 'post-images/op1/a.jpg', imageWidth: 900 })
+  })
+
+  it('leaves the photo of a rewritten post to be drawn by hand where no pool is set up', async () => {
+    mocks.reserveFindUnique.mockResolvedValue(REVIEW_POST)
+    mocks.loadPersona.mockResolvedValue({ language: 'ja' })
+    mocks.loadTexts.mockResolvedValue([])
+    mocks.generatePosts.mockResolvedValue([{ topic: 'daily', text: 'new text', language: 'ja', imagePrompt: '[scene] ramen' }])
+    mocks.reserveUpdate.mockImplementation(async ({ data }) => ({ ...REVIEW_POST, ...data }))
+    await expect(reviewOperatorPost(null, 'r1', 'regenerate', null)).resolves.toMatchObject({ ok: true, post: { photoRequested: true } })
+    expect(mocks.drawImage).not.toHaveBeenCalled()
+    expect(mocks.reserveUpdate.mock.calls[0][0].data).toMatchObject({ state: 'review', error: 'photo_requested' })
   })
 
   it('puts a failed rewrite back in review', async () => {
@@ -155,32 +171,38 @@ describe('reviewOperatorPost', () => {
 describe('where this server can draw (the ChatGPT pool)', () => {
   beforeEach(() => mocks.canDraw.mockReturnValue(true))
 
-  it('draws only the photo of a post right away and keeps the text', async () => {
-    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie' })
+  it('answers at once and draws only the photo of a post in the background', async () => {
+    mocks.reserveFindUnique
+      .mockResolvedValueOnce({ ...REVIEW_POST, imagePrompt: '[self] a selfie' })
+      .mockResolvedValueOnce({ ...REVIEW_POST, imagePrompt: '[self] a selfie', state: 'regenerating', error: 'photo_drawing' })
     mocks.drawImage.mockResolvedValue({ objectKey: 'posts/op1/a.jpg', width: 1280, height: 960 })
-    mocks.reserveUpdate.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie', imageObjectKey: 'posts/op1/a.jpg' })
     const result = await reviewOperatorPost(null, 'r1', 'draw', '웃는 얼굴로')
-    expect(result).toMatchObject({ ok: true, state: 'review' })
+    expect(result).toMatchObject({ ok: true, state: 'review', post: { photoDrawing: true } })
+    expect(mocks.reserveUpdateMany.mock.calls[0][0]).toMatchObject({ where: { id: 'r1', state: 'review' }, data: { state: 'regenerating', error: 'photo_drawing' } })
+    await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
     expect(mocks.drawImage).toHaveBeenCalledWith('op1', '[self] a selfie\nStaff feedback on this photo, to follow: 웃는 얼굴로')
     expect(mocks.generatePosts).not.toHaveBeenCalled()
-    const data = mocks.reserveUpdate.mock.calls[0][0].data
-    expect(data).toMatchObject({ state: 'review', imageObjectKey: 'posts/op1/a.jpg', error: null })
-    expect(data.text).toBeUndefined()
+    const done = mocks.reserveUpdateMany.mock.calls[1][0]
+    expect(done.data).toMatchObject({ state: 'review', imageObjectKey: 'posts/op1/a.jpg', error: null })
+    expect(done.data.text).toBeUndefined()
   })
 
-  it('reports a failed drawing and keeps the draw button for another try', async () => {
+  it('marks a failed background drawing so the draw button comes back', async () => {
     mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie' })
     mocks.drawImage.mockResolvedValue(null)
-    mocks.reserveUpdate.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie', error: 'photo_draw_failed' })
-    await expect(reviewOperatorPost(null, 'r1', 'draw', null)).resolves.toEqual({ ok: false, error: 'draw_failed' })
-    expect(mocks.reserveUpdate.mock.calls[0][0].data).toMatchObject({ state: 'review', error: 'photo_draw_failed' })
+    await expect(reviewOperatorPost(null, 'r1', 'draw', null)).resolves.toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
+    expect(mocks.reserveUpdateMany.mock.calls[1][0].data).toEqual({ state: 'review', error: 'photo_draw_failed' })
   })
 
-  it('draws a new profile photo right away on 재제작', async () => {
+  it('draws a new profile photo in the background on 재제작', async () => {
     mocks.accountFindUnique.mockResolvedValue(PENDING_ACCOUNT)
     mocks.drawAvatar.mockResolvedValue({ ok: true, image: 'https://img.example/b.jpg', spec: {} })
-    await expect(reviewOperatorProfile(null, 'op1', 'regenerate', '안경 없이')).resolves.toEqual({ ok: true, state: 'pending', image: 'https://img.example/b.jpg' })
+    await expect(reviewOperatorProfile(null, 'op1', 'regenerate', '안경 없이')).resolves.toEqual({ ok: true, state: 'drawing' })
+    expect(mocks.accountUpdate.mock.calls[0][0].data).toMatchObject({ reviewState: 'drawing' })
+    await vi.waitFor(() => expect(mocks.accountUpdateMany).toHaveBeenCalled())
     expect(mocks.drawAvatar).toHaveBeenCalledWith(null, 'op1', { feedback: '안경 없이' })
+    expect(mocks.accountUpdateMany.mock.calls[0][0]).toMatchObject({ where: { userId: 'op1', reviewState: 'drawing' }, data: { reviewState: 'pending' } })
     expect(mocks.generateAvatar).not.toHaveBeenCalled()
   })
 
@@ -189,5 +211,7 @@ describe('where this server can draw (the ChatGPT pool)', () => {
     mocks.drawAvatar.mockResolvedValue({ ok: false, error: 'image_unavailable' })
     mocks.generateAvatar.mockResolvedValue({ prompt: 'p' })
     await expect(reviewOperatorProfile(null, 'op1', 'regenerate', null)).resolves.toEqual({ ok: true, state: 'drawing' })
+    await vi.waitFor(() => expect(mocks.accountUpdateMany).toHaveBeenCalled())
+    expect(mocks.accountUpdateMany.mock.calls[0][0].data).toEqual({ avatarSpec: { prompt: 'p' } })
   })
 })
