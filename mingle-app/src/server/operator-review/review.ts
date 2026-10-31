@@ -4,7 +4,7 @@ import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-lang
 import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
-import { planOperatorAvatar } from '@/server/operator-avatars/generate'
+import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar } from '@/server/operator-avatars/generate'
 import { generateReservePosts, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
@@ -20,6 +20,8 @@ import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishR
  */
 
 export const REVIEW_ITEMS_PER_PAGE = 20
+/** The pool could not draw the photo just now; the draw button stays, to try again. */
+const PHOTO_DRAW_FAILED = 'photo_draw_failed'
 const MAX_FEEDBACK_LENGTH = 1000
 
 /** `draw`: have the post's photo drawn by hand (in ChatGPT) without changing the text. */
@@ -300,9 +302,20 @@ export async function reviewOperatorProfile(
     return { ok: true, state: 'deleted' }
   }
 
+  if (account.reviewState === 'drawing') return { ok: false, error: 'busy' }
+  // 재제작 where this server can draw (the ChatGPT pool): a new photo right
+  // away, the account still waiting for review. A failed drawing falls back
+  // to drawing by hand below.
+  if (canDrawImagesHere()) {
+    const drawn = await generateOperatorAvatar(ctx, userId, { feedback })
+    if (drawn.ok) {
+      if (feedback) await prisma.operatorAccount.update({ where: { userId }, data: { reviewFeedback: feedback } })
+      await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', feedback, drawing: false } })
+      return { ok: true, state: 'pending', image: drawn.image }
+    }
+  }
   // 재제작: a new photo spec (with the feedback) waits to be drawn by hand in
   // ChatGPT (scripts/draw-pending-photos.mts); the current photo stays until then.
-  if (account.reviewState === 'drawing') return { ok: false, error: 'busy' }
   const plan = await planOperatorAvatar(userId, { feedback })
   if (!plan) return { ok: false, error: 'regenerate_failed' }
   await prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'drawing', reviewFeedback: feedback, avatarSpec: plan } })
@@ -312,7 +325,7 @@ export async function reviewOperatorProfile(
 
 export type PostReviewResult =
   | { ok: true; state: 'published' | 'deleted' | 'review'; postId?: string | null; post?: ReviewPost }
-  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' }
+  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' | 'draw_failed' }
 
 /** A 재제작 (text, then a photo through the hand-off route) never takes this long. */
 const STALE_REGENERATING_MS = 15 * 60 * 1000
@@ -364,6 +377,28 @@ export async function reviewOperatorPost(
 
   if (action === 'draw') {
     if (!row.imagePrompt || row.imageObjectKey) return { ok: false, error: 'not_found' }
+    if (canDrawImagesHere()) {
+      // Drawn right here (the ChatGPT pool), the text untouched. A failed
+      // drawing leaves the button as it was, so staff can simply try again.
+      const claimedDraw = await prisma.operatorPostReserve.updateMany({ where: { id: reserveId, state: 'review' }, data: { state: 'regenerating' } })
+      if (claimedDraw.count === 0) return { ok: false, error: 'busy' }
+      const description = feedback ? `${row.imagePrompt}\nStaff feedback on this photo, to follow: ${feedback}` : row.imagePrompt
+      const image = await drawReservePostImage(row.operatorUserId, description)
+      const drawnRow = await prisma.operatorPostReserve.update({
+        where: { id: reserveId },
+        data: {
+          state: 'review',
+          ...(image
+            ? { imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height, error: null }
+            : { error: PHOTO_DRAW_FAILED }),
+          ...(feedback ? { reviewFeedback: feedback } : {}),
+        },
+        select: POST_SELECT,
+      })
+      await audit('draw', { photo: Boolean(image) })
+      if (!image) return { ok: false, error: 'draw_failed' }
+      return { ok: true, state: 'review', post: toReviewPost(drawnRow) }
+    }
     const updated = await prisma.operatorPostReserve.update({
       where: { id: reserveId },
       data: { error: PHOTO_REQUESTED, ...(feedback ? { reviewFeedback: feedback } : {}) },
@@ -404,7 +439,8 @@ export async function reviewOperatorPost(
         imageWidth: image?.width ?? null,
         imageHeight: image?.height ?? null,
         // A photo still to draw is queued for drawing by hand right away.
-        error: generated.imagePrompt && !image ? PHOTO_REQUESTED : null,
+        // Where the pool draws, a failed photo keeps the draw button for another try.
+        error: generated.imagePrompt && !image ? (canDrawImagesHere() ? PHOTO_DRAW_FAILED : PHOTO_REQUESTED) : null,
       },
       select: POST_SELECT,
     })

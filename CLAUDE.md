@@ -20,6 +20,7 @@ Full rules: `docs/worktree-devbox.md` (section "동시 세션").
 - Each session runs its OWN tunnel. `scripts/devbox up --profile device --tunnel-provider cloudflare`
   claims a free tunnel slot with its own hostnames. Never stop, restart, or reuse another
   session's servers, tunnel, bridges, or ports (`scripts/devbox down` only in your own worktree).
+- Tunnel provider: always Cloudflare (the default). Do not use ngrok unless the user asks for it.
 - Phones: the user assigns phones per session ("use this phone"). Install only on the assigned
   phone with `--ios-udid` / `--android-serial`.
 - If the user did not assign a phone, install on every connected phone. If devbox reports

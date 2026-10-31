@@ -28,6 +28,7 @@ const ERROR_COPY: Record<string, string> = {
   photo_pending: '사진을 아직 그리지 않았어요. 그린 뒤에 게시할 수 있어요.',
   publish_failed: '게시하지 못했어요. 다시 눌러 주세요.',
   regenerate_failed: '다시 만들지 못했어요. 다시 눌러 주세요.',
+  draw_failed: '사진을 그리지 못했어요. 다시 눌러 주세요.',
   invalid_image: '사진을 읽지 못했어요. 다른 파일로 해 주세요.',
   file_too_large: '사진이 너무 커요(15MB까지).',
   invalid_photos: '사진 목록이 올바르지 않아요. 새로고침 후 다시 해 주세요.',

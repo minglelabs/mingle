@@ -18,6 +18,7 @@ const ERROR_STATUS: Record<string, number> = {
   profile_pending: 409,
   publish_failed: 502,
   regenerate_failed: 502,
+  draw_failed: 502,
 }
 
 function json(payload: object, status = 200): NextResponse {

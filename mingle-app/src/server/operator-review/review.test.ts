@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   loadPersona: vi.fn(),
   loadTexts: vi.fn(),
   publishNow: vi.fn(),
+  canDraw: vi.fn(() => false),
+  drawAvatar: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -28,7 +30,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.audit }))
-vi.mock('@/server/operator-avatars/generate', () => ({ planOperatorAvatar: mocks.generateAvatar }))
+vi.mock('@/server/operator-avatars/generate', () => ({ planOperatorAvatar: mocks.generateAvatar, canDrawImagesHere: mocks.canDraw, generateOperatorAvatar: mocks.drawAvatar }))
 vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: mocks.drawImage }))
 vi.mock('@/server/operator-post-reserve/generate', () => ({
   generateReservePosts: mocks.generatePosts,
@@ -39,6 +41,7 @@ vi.mock('@/server/operator-post-reserve/worker', () => ({
   loadReservePersona: mocks.loadPersona,
   loadExistingReserveTexts: mocks.loadTexts,
   publishReservePostNow: mocks.publishNow,
+  PHOTO_REQUESTED: 'photo_requested',
 }))
 
 import { normalizeReviewFeedback, parseReviewAction, reviewOperatorPost, reviewOperatorProfile } from './review'
@@ -54,6 +57,7 @@ beforeEach(() => {
   mocks.transaction.mockResolvedValue([])
   mocks.accountUpdateMany.mockResolvedValue({ count: 1 })
   mocks.reserveUpdateMany.mockResolvedValue({ count: 1 })
+  mocks.canDraw.mockReturnValue(false)
 })
 
 describe('review input', () => {
@@ -145,5 +149,45 @@ describe('reviewOperatorPost', () => {
     mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 1 })
     mocks.publishNow.mockResolvedValue({ ok: true, postId: 'p1' })
     await expect(reviewOperatorPost(null, 'r1', 'publish', null, now)).resolves.toEqual({ ok: true, state: 'published', postId: 'p1' })
+  })
+})
+
+describe('where this server can draw (the ChatGPT pool)', () => {
+  beforeEach(() => mocks.canDraw.mockReturnValue(true))
+
+  it('draws only the photo of a post right away and keeps the text', async () => {
+    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie' })
+    mocks.drawImage.mockResolvedValue({ objectKey: 'posts/op1/a.jpg', width: 1280, height: 960 })
+    mocks.reserveUpdate.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie', imageObjectKey: 'posts/op1/a.jpg' })
+    const result = await reviewOperatorPost(null, 'r1', 'draw', '웃는 얼굴로')
+    expect(result).toMatchObject({ ok: true, state: 'review' })
+    expect(mocks.drawImage).toHaveBeenCalledWith('op1', '[self] a selfie\nStaff feedback on this photo, to follow: 웃는 얼굴로')
+    expect(mocks.generatePosts).not.toHaveBeenCalled()
+    const data = mocks.reserveUpdate.mock.calls[0][0].data
+    expect(data).toMatchObject({ state: 'review', imageObjectKey: 'posts/op1/a.jpg', error: null })
+    expect(data.text).toBeUndefined()
+  })
+
+  it('reports a failed drawing and keeps the draw button for another try', async () => {
+    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie' })
+    mocks.drawImage.mockResolvedValue(null)
+    mocks.reserveUpdate.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie', error: 'photo_draw_failed' })
+    await expect(reviewOperatorPost(null, 'r1', 'draw', null)).resolves.toEqual({ ok: false, error: 'draw_failed' })
+    expect(mocks.reserveUpdate.mock.calls[0][0].data).toMatchObject({ state: 'review', error: 'photo_draw_failed' })
+  })
+
+  it('draws a new profile photo right away on 재제작', async () => {
+    mocks.accountFindUnique.mockResolvedValue(PENDING_ACCOUNT)
+    mocks.drawAvatar.mockResolvedValue({ ok: true, image: 'https://img.example/b.jpg', spec: {} })
+    await expect(reviewOperatorProfile(null, 'op1', 'regenerate', '안경 없이')).resolves.toEqual({ ok: true, state: 'pending', image: 'https://img.example/b.jpg' })
+    expect(mocks.drawAvatar).toHaveBeenCalledWith(null, 'op1', { feedback: '안경 없이' })
+    expect(mocks.generateAvatar).not.toHaveBeenCalled()
+  })
+
+  it('leaves the profile photo to be drawn by hand when the pool fails', async () => {
+    mocks.accountFindUnique.mockResolvedValue(PENDING_ACCOUNT)
+    mocks.drawAvatar.mockResolvedValue({ ok: false, error: 'image_unavailable' })
+    mocks.generateAvatar.mockResolvedValue({ prompt: 'p' })
+    await expect(reviewOperatorProfile(null, 'op1', 'regenerate', null)).resolves.toEqual({ ok: true, state: 'drawing' })
   })
 })

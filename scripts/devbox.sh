@@ -361,7 +361,7 @@ Environment:
   DEVBOX_NGROK_WEB_DOMAIN  Optional fixed ngrok domain for devbox_web tunnel.
                            Example: abcdef.ngrok-free.app
   DEVBOX_TUNNEL_PROVIDER   Device profile tunnel provider (ngrok|cloudflare).
-                           Default: ngrok
+                           Default: cloudflare (use ngrok only when explicitly requested)
   DEVBOX_VAULT_PATH        Shared development Vault KV path for all services.
                            Default: secret/mingle/dev
   DEVBOX_VAULT_PROD_PATH   Optional production Vault KV path for --device-app-env prod.
@@ -2386,7 +2386,9 @@ resolve_tunnel_provider() {
     raw="$(trim_whitespace "$(read_app_setting_value DEVBOX_TUNNEL_PROVIDER || true)")"
   fi
   if [[ -z "$raw" ]]; then
-    raw="ngrok"
+    # Cloudflare is the default. Use ngrok only when explicitly requested
+    # (--tunnel-provider ngrok); it shares one free endpoint quota.
+    raw="cloudflare"
   fi
 
   normalize_tunnel_provider "$raw"
@@ -2636,6 +2638,76 @@ tunnel_slot_hostname() {
   printf '%s-%s.%s' "${base%%.*}" "$slot" "${base#*.}"
 }
 
+# Slot tunnel: one locally-managed Cloudflare tunnel shared by all sessions.
+# Its ingress lists every slot, so each session's connector carries the same
+# config; slot N maps to fixed local bridge ports, and each session bridges
+# its own slot ports to its worktree ports.
+#   mingle-app-devbox-N.<domain>       -> 127.0.0.1:(19100 + N)
+#   mingle-stt-devbox-N.<domain>       -> 127.0.0.1:(19200 + N)
+#   mingle-messaging-devbox-N.<domain> -> 127.0.0.1:(19300 + N)
+# Add a slot with: cloudflared tunnel route dns <tunnel-id> mingle-<svc>-devbox-N.<domain>
+DEVBOX_CLOUDFLARE_SLOT_TUNNEL_ID="${DEVBOX_CLOUDFLARE_SLOT_TUNNEL_ID:-}"
+DEVBOX_CLOUDFLARE_SLOT_DOMAIN="${DEVBOX_CLOUDFLARE_SLOT_DOMAIN:-}"
+DEVBOX_SLOT_WEB_PORT_BASE=19100
+DEVBOX_SLOT_STT_PORT_BASE=19200
+DEVBOX_SLOT_MESSAGING_PORT_BASE=19300
+
+resolve_slot_tunnel_id() {
+  local value
+  value="$(trim_whitespace "${DEVBOX_CLOUDFLARE_SLOT_TUNNEL_ID:-}")"
+  if [[ -z "$value" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_CLOUDFLARE_SLOT_TUNNEL_ID || true)")"
+  fi
+  [[ -n "$value" ]] || return 1
+  [[ "$value" =~ ^[0-9a-fA-F-]{36}$ ]] || die "invalid DEVBOX_CLOUDFLARE_SLOT_TUNNEL_ID: $value"
+  printf '%s' "$value"
+}
+
+resolve_slot_domain() {
+  local value
+  value="$(trim_whitespace "${DEVBOX_CLOUDFLARE_SLOT_DOMAIN:-}")"
+  if [[ -z "$value" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_CLOUDFLARE_SLOT_DOMAIN || true)")"
+  fi
+  printf '%s' "${value:-minglelabs.app}"
+}
+
+slot_tunnel_enabled() {
+  resolve_slot_tunnel_id >/dev/null 2>&1
+}
+
+# Prints web, stt and messaging hostnames for a slot, one per line.
+slot_tunnel_hostnames() {
+  local slot="$1"
+  local domain
+  domain="$(resolve_slot_domain)"
+  printf 'mingle-app-devbox-%s.%s\nmingle-stt-devbox-%s.%s\nmingle-messaging-devbox-%s.%s\n' \
+    "$slot" "$domain" "$slot" "$domain" "$slot" "$domain"
+}
+
+write_slot_tunnel_config() {
+  local config_file="$1"
+  local tunnel_id="$2"
+  local credentials_file="$3"
+  local slot hosts
+
+  mkdir -p "$(dirname "$config_file")"
+  {
+    printf 'tunnel: %s\ncredentials-file: %s\n' "$tunnel_id" "$credentials_file"
+    printf 'originRequest:\n  noTLSVerify: true\n  http2Origin: false\ningress:\n'
+    for (( slot = 1; slot <= DEVBOX_TUNNEL_SLOT_COUNT; slot++ )); do
+      hosts="$(slot_tunnel_hostnames "$slot")"
+      printf '  - hostname: %s\n    service: http://127.0.0.1:%s\n' \
+        "$(printf '%s\n' "$hosts" | sed -n '1p')" "$((DEVBOX_SLOT_WEB_PORT_BASE + slot))"
+      printf '  - hostname: %s\n    service: http://127.0.0.1:%s\n' \
+        "$(printf '%s\n' "$hosts" | sed -n '2p')" "$((DEVBOX_SLOT_STT_PORT_BASE + slot))"
+      printf '  - hostname: %s\n    service: http://127.0.0.1:%s\n' \
+        "$(printf '%s\n' "$hosts" | sed -n '3p')" "$((DEVBOX_SLOT_MESSAGING_PORT_BASE + slot))"
+    done
+    printf '  - service: http_status:404\n'
+  } > "$config_file"
+}
+
 device_claim_file() {
   local platform="$1"
   local device_id="$2"
@@ -2781,9 +2853,6 @@ resolve_cloudflare_named_tunnel_settings() {
   web_host="$(normalize_domain_input "$web_host")"
   stt_host="$(normalize_domain_input "$stt_host")"
   messaging_host="$(normalize_domain_input "$messaging_host")"
-  web_host="$(tunnel_slot_hostname "$web_host" "$DEVBOX_TUNNEL_SLOT")"
-  stt_host="$(tunnel_slot_hostname "$stt_host" "$DEVBOX_TUNNEL_SLOT")"
-  messaging_host="$(tunnel_slot_hostname "$messaging_host" "$DEVBOX_TUNNEL_SLOT")"
   validate_host "$web_host"
   validate_host "$stt_host"
   validate_host "$messaging_host"
@@ -2794,6 +2863,11 @@ resolve_cloudflare_named_tunnel_settings() {
 
 resolve_cloudflare_named_hostnames() {
   local web_host stt_host messaging_host
+  if slot_tunnel_enabled; then
+    [[ -n "$DEVBOX_TUNNEL_SLOT" ]] || return 1
+    slot_tunnel_hostnames "$DEVBOX_TUNNEL_SLOT"
+    return 0
+  fi
   web_host="$(trim_whitespace "${DEVBOX_CLOUDFLARE_WEB_HOSTNAME:-}")"
   stt_host="$(trim_whitespace "${DEVBOX_CLOUDFLARE_STT_HOSTNAME:-}")"
   messaging_host="$(trim_whitespace "${DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME:-}")"
@@ -2819,9 +2893,6 @@ resolve_cloudflare_named_hostnames() {
   web_host="$(normalize_domain_input "$web_host")"
   stt_host="$(normalize_domain_input "$stt_host")"
   messaging_host="$(normalize_domain_input "$messaging_host")"
-  web_host="$(tunnel_slot_hostname "$web_host" "$DEVBOX_TUNNEL_SLOT")"
-  stt_host="$(tunnel_slot_hostname "$stt_host" "$DEVBOX_TUNNEL_SLOT")"
-  messaging_host="$(tunnel_slot_hostname "$messaging_host" "$DEVBOX_TUNNEL_SLOT")"
   validate_host "$web_host"
   validate_host "$stt_host"
   validate_host "$messaging_host"
@@ -5260,15 +5331,15 @@ cmd_mobile() {
             profile_already_saved=1
             ;;
           cloudflare)
-            if [[ -z "$DEVBOX_TUNNEL_SLOT" ]]; then
+            if slot_tunnel_enabled && [[ -z "$DEVBOX_TUNNEL_SLOT" ]]; then
               DEVBOX_TUNNEL_SLOT="$(find_live_own_tunnel_slot || true)"
             fi
-            if [[ -z "$DEVBOX_TUNNEL_SLOT" ]]; then
+            if slot_tunnel_enabled && [[ -z "$DEVBOX_TUNNEL_SLOT" ]]; then
               die "no running devbox tunnel slot for this worktree. Start this session's servers first:
   scripts/devbox up --profile device --tunnel-provider cloudflare
 (app builds must point at this session's own slot hostnames)"
             fi
-            log "using this session's tunnel slot: $DEVBOX_TUNNEL_SLOT"
+            [[ -z "$DEVBOX_TUNNEL_SLOT" ]] || log "using this session's tunnel slot: $DEVBOX_TUNNEL_SLOT"
             local cloudflare_named_hosts=""
             cloudflare_named_hosts="$(resolve_cloudflare_named_hostnames || true)"
             if [[ -z "$cloudflare_named_hosts" ]]; then
@@ -5518,14 +5589,52 @@ $(ngrok_plan_capacity_hint)"
           ;;
         cloudflare)
           require_cmd cloudflared
-          if resolve_cloudflare_named_hostnames >/dev/null 2>&1; then
-            # Each concurrent session gets its own hostnames and bridge ports.
-            claim_tunnel_slot "$tunnel_slot_override"
-          fi
           local cloudflare_named_payload=""
-          cloudflare_named_payload="$(resolve_cloudflare_named_tunnel_settings || true)"
+          if ! slot_tunnel_enabled; then
+            cloudflare_named_payload="$(resolve_cloudflare_named_tunnel_settings || true)"
+          fi
 
-          if [[ -n "$cloudflare_named_payload" ]]; then
+          if slot_tunnel_enabled; then
+            # Each concurrent session claims its own slot: own hostnames and
+            # bridge ports on the shared slot tunnel.
+            claim_tunnel_slot "$tunnel_slot_override"
+            local slot_tunnel_id="" slot_state_dir="" slot_credentials_file="" slot_hosts=""
+            slot_tunnel_id="$(resolve_slot_tunnel_id)"
+            slot_credentials_file="$HOME/.cloudflared/$slot_tunnel_id.json"
+            [[ -f "$slot_credentials_file" ]] || die "missing slot tunnel credentials: $slot_credentials_file (created by: cloudflared tunnel create)"
+            slot_state_dir="$(devbox_shared_state_dir)"
+            cloudflared_named_pid_file="$(cloudflared_named_pid_file_path)"
+            cloudflared_named_log="$(cloudflared_named_log_file_path)"
+            cloudflared_named_config_file="$slot_state_dir/cloudflared-slots.yml"
+            mkdir -p "$(dirname "$cloudflared_named_pid_file")"
+
+            stop_cloudflared_named_tunnel_from_pidfile
+            rm -f "$cloudflared_named_log"
+            write_slot_tunnel_config "$cloudflared_named_config_file" "$slot_tunnel_id" "$slot_credentials_file"
+
+            log "starting cloudflared slot tunnel connector (slot $DEVBOX_TUNNEL_SLOT)"
+            cloudflared tunnel --no-autoupdate --config "$cloudflared_named_config_file" run "$slot_tunnel_id" >"$cloudflared_named_log" 2>&1 &
+            local cloudflared_slot_pid="$!"
+            printf '%s\n' "$cloudflared_slot_pid" > "$cloudflared_named_pid_file"
+            pids+=("$cloudflared_slot_pid")
+
+            if ! wait_for_cloudflared_named_tunnel "$cloudflared_named_log" "$cloudflared_slot_pid" 25; then
+              cleanup_processes "${pids[@]}"
+              rm -f "$cloudflared_named_pid_file"
+              die "cloudflared slot tunnel startup failed (log: $cloudflared_named_log)"
+            fi
+
+            ensure_cloudflared_named_bridge "web" "$((DEVBOX_SLOT_WEB_PORT_BASE + DEVBOX_TUNNEL_SLOT))" "$DEVBOX_WEB_PORT" pids
+            ensure_cloudflared_named_bridge "stt" "$((DEVBOX_SLOT_STT_PORT_BASE + DEVBOX_TUNNEL_SLOT))" "$DEVBOX_STT_PORT" pids
+            ensure_cloudflared_named_bridge "messaging" "$((DEVBOX_SLOT_MESSAGING_PORT_BASE + DEVBOX_TUNNEL_SLOT))" "$DEVBOX_MESSAGING_PORT" pids
+
+            slot_hosts="$(slot_tunnel_hostnames "$DEVBOX_TUNNEL_SLOT")"
+            cloudflared_web_url="https://$(printf '%s\n' "$slot_hosts" | sed -n '1p')"
+            cloudflared_stt_url="https://$(printf '%s\n' "$slot_hosts" | sed -n '2p')"
+            cloudflared_messaging_url="https://$(printf '%s\n' "$slot_hosts" | sed -n '3p')"
+            started_tunnel_mode="cloudflare-named"
+            log "cloudflared slot tunnel ready (slot $DEVBOX_TUNNEL_SLOT): web=$cloudflared_web_url stt=$cloudflared_stt_url messaging=$cloudflared_messaging_url"
+          elif [[ -n "$cloudflare_named_payload" ]]; then
             cloudflared_named_token="$(printf '%s\n' "$cloudflare_named_payload" | sed -n '1p')"
             cloudflared_named_web_host="$(printf '%s\n' "$cloudflare_named_payload" | sed -n '2p')"
             cloudflared_named_stt_host="$(printf '%s\n' "$cloudflare_named_payload" | sed -n '3p')"
@@ -5562,8 +5671,7 @@ $(ngrok_plan_capacity_hint)"
             if ! cloudflared_named_remote_web_port="$(wait_for_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_pid" "$cloudflared_named_web_host" 15)"; then
               cleanup_processes "${pids[@]}"
               rm -f "$cloudflared_named_pid_file"
-              die "cloudflared named tunnel did not publish web bridge port for $cloudflared_named_web_host (log: $cloudflared_named_log)
-Tunnel slot ${DEVBOX_TUNNEL_SLOT:-?} hostnames must exist as public hostnames on the Cloudflare tunnel (see docs/worktree-devbox.md, 동시 세션)."
+              die "cloudflared named tunnel did not publish web bridge port for $cloudflared_named_web_host (log: $cloudflared_named_log)"
             fi
             if ! cloudflared_named_remote_stt_port="$(wait_for_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_pid" "$cloudflared_named_stt_host" 15)"; then
               cleanup_processes "${pids[@]}"
@@ -6130,7 +6238,9 @@ cmd_status() {
   detected_ngrok_web_domain="$(resolve_ngrok_web_domain || true)"
   tunnel_provider="$(resolve_tunnel_provider "")"
   if [[ "$tunnel_provider" == "cloudflare" ]]; then
-    if resolve_cloudflare_named_tunnel_settings >/dev/null 2>&1; then
+    if slot_tunnel_enabled; then
+      cloudflare_mode="named"
+    elif resolve_cloudflare_named_tunnel_settings >/dev/null 2>&1; then
       cloudflare_mode="named"
     fi
   fi
