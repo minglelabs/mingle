@@ -48,6 +48,11 @@ const nextConfig = {
       },
       // 2.3.0 adds no server contract of its own (it ships the in-app purchase
       // store against the v2.2.0 routes), so it aliases the v2.2.0 tree too.
+      // 2.3.1 (device-audio capture in earphone mode) adds none either.
+      ...['ios', 'android'].flatMap(platform => [
+        { source: `/api/${platform}/v2.3.1`, destination: `/api/${platform}/v2.2.0` },
+        { source: `/api/${platform}/v2.3.1/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
+      ]),
       ...['ios', 'android'].flatMap(platform => [
         { source: `/api/${platform}/v2.3.0`, destination: `/api/${platform}/v2.2.0` },
         { source: `/api/${platform}/v2.3.0/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },

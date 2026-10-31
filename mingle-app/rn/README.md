@@ -13,7 +13,7 @@ The RN app requires the following environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v2.3.0`, Android: `android/v2.3.0`)
+- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v2.3.1`, Android: `android/v2.3.1`)
 - `RN_CLIENT_VERSION` (optional, fallback: iOS `CFBundleShortVersionString`, Android `BuildConfig.MINGLE_CLIENT_VERSION`)
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
 - `RN_AD_BANNER_POSITION` (optional: `top` | `bottom`, default: `bottom`)

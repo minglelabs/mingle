@@ -469,7 +469,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mingle/mingle.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 112;
+				CURRENT_PROJECT_VERSION = 113;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = mingle/Info.plist;
@@ -478,9 +478,9 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3.0;
+				MARKETING_VERSION = 2.3.1;
 				MINGLE_PUSH_ENVIRONMENT = sandbox;
-				NEXT_PUBLIC_API_NAMESPACE = ios/v2.3.0;
+				NEXT_PUBLIC_API_NAMESPACE = ios/v2.3.1;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
 				NEXT_PUBLIC_RN_AD_BANNER_POSITION = bottom;
@@ -515,7 +515,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mingle/mingle.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 112;
+				CURRENT_PROJECT_VERSION = 113;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				INFOPLIST_FILE = mingle/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -523,9 +523,9 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3.0;
+				MARKETING_VERSION = 2.3.1;
 				MINGLE_PUSH_ENVIRONMENT = production;
-				NEXT_PUBLIC_API_NAMESPACE = ios/v2.3.0;
+				NEXT_PUBLIC_API_NAMESPACE = ios/v2.3.1;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
 				NEXT_PUBLIC_RN_AD_BANNER_POSITION = bottom;
@@ -713,7 +713,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = MingleBroadcast/MingleBroadcast.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 112;
+				CURRENT_PROJECT_VERSION = 113;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MingleBroadcast/Info.plist;
@@ -723,7 +723,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.3.0;
+				MARKETING_VERSION = 2.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.minglelabs.mingle.rn.broadcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -741,7 +741,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = MingleBroadcast/MingleBroadcast.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 112;
+				CURRENT_PROJECT_VERSION = 113;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MingleBroadcast/Info.plist;
@@ -751,7 +751,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.3.0;
+				MARKETING_VERSION = 2.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.minglelabs.mingle.rn.broadcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;

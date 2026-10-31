@@ -371,8 +371,8 @@ RN app URLs are never hardcoded and are read only from environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v2.3.0`; Android uses `android/v2.3.0`)
-- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v2.3.0`, the app shows an error instead of loading the WebView.
+- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v2.3.1`; Android uses `android/v2.3.1`)
+- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v2.3.1`, the app shows an error instead of loading the WebView.
 - `RN_CLIENT_VERSION` (optional, fallback: `CFBundleShortVersionString`)
 - `RN_CLIENT_BUILD` (optional, fallback: `CFBundleVersion`)
 
@@ -411,7 +411,7 @@ IOS_APPSTORE_URL=https://apps.apple.com/app/id6759795134
 
 ANDROID_CLIENT_MIN_SUPPORTED_VERSION=2.0.0
 ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION=2.1.0
-ANDROID_CLIENT_LATEST_VERSION=2.3.0
+ANDROID_CLIENT_LATEST_VERSION=2.3.1
 ANDROID_PLAYSTORE_URL=https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn
 ```
 
