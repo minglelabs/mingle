@@ -4,7 +4,7 @@ import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-lang
 import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
-import { planOperatorAvatar } from '@/server/operator-avatars/generate'
+import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar } from '@/server/operator-avatars/generate'
 import { generateReservePosts, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
@@ -300,9 +300,20 @@ export async function reviewOperatorProfile(
     return { ok: true, state: 'deleted' }
   }
 
+  if (account.reviewState === 'drawing') return { ok: false, error: 'busy' }
+  // 재제작 where this server can draw (the ChatGPT pool): a new photo right
+  // away, the account still waiting for review. A failed drawing falls back
+  // to drawing by hand below.
+  if (canDrawImagesHere()) {
+    const drawn = await generateOperatorAvatar(ctx, userId, { feedback })
+    if (drawn.ok) {
+      if (feedback) await prisma.operatorAccount.update({ where: { userId }, data: { reviewFeedback: feedback } })
+      await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', feedback, drawing: false } })
+      return { ok: true, state: 'pending', image: drawn.image }
+    }
+  }
   // 재제작: a new photo spec (with the feedback) waits to be drawn by hand in
   // ChatGPT (scripts/draw-pending-photos.mts); the current photo stays until then.
-  if (account.reviewState === 'drawing') return { ok: false, error: 'busy' }
   const plan = await planOperatorAvatar(userId, { feedback })
   if (!plan) return { ok: false, error: 'regenerate_failed' }
   await prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'drawing', reviewFeedback: feedback, avatarSpec: plan } })
@@ -364,6 +375,27 @@ export async function reviewOperatorPost(
 
   if (action === 'draw') {
     if (!row.imagePrompt || row.imageObjectKey) return { ok: false, error: 'not_found' }
+    if (canDrawImagesHere()) {
+      // Drawn right here (the ChatGPT pool), the text untouched; a failed
+      // drawing falls back to being drawn by hand below.
+      const claimedDraw = await prisma.operatorPostReserve.updateMany({ where: { id: reserveId, state: 'review' }, data: { state: 'regenerating' } })
+      if (claimedDraw.count === 0) return { ok: false, error: 'busy' }
+      const description = feedback ? `${row.imagePrompt}\nStaff feedback on this photo, to follow: ${feedback}` : row.imagePrompt
+      const image = await drawReservePostImage(row.operatorUserId, description)
+      const drawnRow = await prisma.operatorPostReserve.update({
+        where: { id: reserveId },
+        data: {
+          state: 'review',
+          ...(image
+            ? { imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height, error: null }
+            : { error: PHOTO_REQUESTED }),
+          ...(feedback ? { reviewFeedback: feedback } : {}),
+        },
+        select: POST_SELECT,
+      })
+      await audit('draw', { photo: Boolean(image) })
+      return { ok: true, state: 'review', post: toReviewPost(drawnRow) }
+    }
     const updated = await prisma.operatorPostReserve.update({
       where: { id: reserveId },
       data: { error: PHOTO_REQUESTED, ...(feedback ? { reviewFeedback: feedback } : {}) },

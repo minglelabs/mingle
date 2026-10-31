@@ -53,6 +53,12 @@ export function isChatgptAppImageModel(model: string): boolean {
   return model.startsWith('chatgpt-app/')
 }
 
+/** Whether this server can draw a photo itself (the ChatGPT pool or a hand-off route), instead of leaving it to be drawn by hand. */
+export function canDrawImagesHere(env: NodeJS.ProcessEnv = process.env): boolean {
+  const model = resolveAvatarImageModel(env)
+  return model === CHATGPT_POOL_IMAGE_MODEL || isProxyImageModel(model)
+}
+
 export function resolveImageProxyUrl(env: NodeJS.ProcessEnv = process.env, model = ''): string {
   const url = isChatgptAppImageModel(model)
     ? env.OPERATOR_CHATGPT_IMAGE_URL?.trim() || DEFAULT_CHATGPT_APP_URL
