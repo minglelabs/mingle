@@ -58,7 +58,7 @@ Run the whole ChatGPT pool on Nam's Windows PC instead of the MacBook:
 | Pool server | `node ~/.mingle/chatgpt-pool/chatgpt-pool.mjs serve`, launchd `app.mingle.chatgpt-pool` | same script under `%USERPROFILE%\.mingle\chatgpt-pool\`, started at log-on |
 | Ports | 10320 loopback, keyless (extensions + local CLI); 10321 loopback, key required (public) | same; both bound to `127.0.0.1` only |
 | Env | `CHATGPT_POOL_KEY` (from `~/.mingle/chatgpt-pool/api-key`), `CHATGPT_POOL_PUBLIC_PORT=10321` | same |
-| Extension | MV3 unpacked, loaded from `~/.mingle/chatgpt-pool/extension/` in 11 profiles, version **1.2.0** | loaded from `%USERPROFILE%\.mingle\chatgpt-pool\extension\` in every Windows profile |
+| Extension | MV3 unpacked, loaded from `~/.mingle/chatgpt-pool/extension/` in 11 profiles, version **1.2.1** | loaded from `%USERPROFILE%\.mingle\chatgpt-pool\extension\` in every Windows profile |
 | Public route | Cloudflare named tunnel `chatgpt-pool` (id `a5309179-…`), config `~/.mingle/chatgpt-pool/cloudflared.yml`, launchd `app.mingle.chatgpt-pool-cf` | no tunnel: DNS-only A record → home IP → router 443 → Caddy → `127.0.0.1:10321` (step 7) |
 | Old tunnel | ngrok, launchd `app.mingle.chatgpt-pool-tunnel` | not moved; turned off at cutover |
 | Log | `~/Library/Logs/app.mingle.chatgpt-pool.log` | `%USERPROFILE%\.mingle\chatgpt-pool\pool.log` |

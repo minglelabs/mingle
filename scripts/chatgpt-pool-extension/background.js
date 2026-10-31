@@ -57,7 +57,9 @@ async function page(op, arg) {
 
   if (op === 'state') {
     const last = turns().at(-1)
-    const form = composer()?.closest('form')
+    // The composer's box: its form, or (newer layouts without one) a few levels up from the editor.
+    const box = composer()
+    const form = box?.closest('form') ?? box?.parentElement?.parentElement?.parentElement?.parentElement ?? null
     const states = turnStates()
     const pictures = generated()
     return {
@@ -95,14 +97,33 @@ async function page(op, arg) {
   if (op === 'attach') {
     const blob = await (await fetch(arg)).blob()
     const file = new File([blob], `reference.${(blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`, { type: blob.type })
+    const files = () => {
+      const data = new DataTransfer()
+      data.items.add(file)
+      return data
+    }
+    // 1) A file input already in the page (older ChatGPT keeps one hidden in the composer).
     const inputs = [...document.querySelectorAll('input[type=file]')]
     const input = inputs.find((i) => /image/.test(i.accept || '') && !i.hasAttribute('capture')) ?? inputs[0]
-    if (!input) return false
-    const data = new DataTransfer()
-    data.items.add(file)
-    input.files = data.files
-    input.dispatchEvent(new Event('change', { bubbles: true }))
-    return true
+    if (input) {
+      input.files = files().files
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+      return 'input'
+    }
+    // 2) Newer ChatGPT creates the input only from its "+" menu, which would open a
+    // file dialog. Paste the picture into the composer instead, as a user would.
+    const box = composer()
+    if (!box) return false
+    box.focus()
+    const pasted = new ClipboardEvent('paste', { clipboardData: files(), bubbles: true, cancelable: true })
+    box.dispatchEvent(pasted)
+    if (pasted.defaultPrevented) return 'paste'
+    // 3) Dropping it on the composer.
+    const target = box.closest('form') ?? box
+    for (const type of ['dragenter', 'dragover', 'drop']) {
+      target.dispatchEvent(new DragEvent(type, { dataTransfer: files(), bubbles: true, cancelable: true }))
+    }
+    return 'drop'
   }
   if (op === 'image') {
     // The newest gallery's widest picture (the full-size one, not a preview); with two candidates, the first.
@@ -218,8 +239,10 @@ async function runJob(job) {
   progress(job, ready.composer ? 'composer ready' : 'signed out')
   if (!ready.composer) throw new JobError('signed_out', 'log in to ChatGPT in this profile')
   if (job.reference) {
-    if (!(await inPage(tab.id, 'attach', job.reference))) throw new JobError('ui_changed', 'no file input for the reference photo')
-    await until(tab.id, (s) => s.attached, 40_000, 'the reference photo did not finish uploading')
+    const how = await inPage(tab.id, 'attach', job.reference)
+    if (!how) throw new JobError('ui_changed', 'no composer to attach the reference photo to')
+    progress(job, `reference attached by ${how}`)
+    await until(tab.id, (s) => s.attached, 40_000, `the reference photo did not finish uploading (attached by ${how})`)
   }
   const prompt = job.kind === 'image'
     ? `${job.reference ? '첨부한 사진 속 사람을 그대로 살려서 ' : ''}이미지 1장 생성해줘: ${job.prompt}`
