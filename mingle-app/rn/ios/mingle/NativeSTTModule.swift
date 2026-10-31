@@ -829,6 +829,14 @@ class NativeSTTModule: RCTEventEmitter {
     // sends the two mixed. Main queue: the engine and its observer.
     private var deviceAudioMicEngine: AVAudioEngine?
     private var deviceAudioMicConfigObserver: NSObjectProtocol?
+    /// The microphone cannot start while the broadcast sheet still covers the
+    /// app (AVAudioEngine fails with 'what'): it is tried again shortly and
+    /// as soon as the app is active.
+    private var deviceAudioMicRetryWorkItem: DispatchWorkItem?
+    private var deviceAudioMicActiveObserver: NSObjectProtocol?
+    private var deviceAudioMicStartAttempts = 0
+    private static let deviceAudioMicRetryDelay: TimeInterval = 0.5
+    private static let deviceAudioMicMaxAttempts = 20
     // wsQueue only: whether the microphone paces the mixed stream, and its
     // not yet sent PCM (16-bit mono at MingleBroadcastChannel.sampleRate).
     private var deviceAudioMicActive = false
@@ -2033,15 +2041,20 @@ class NativeSTTModule: RCTEventEmitter {
             else { return }
             self.handleDeviceAudioMicrophone(pcm)
         }
+        deviceAudioMicStartAttempts += 1
         do {
             engine.prepare()
             try engine.start()
         } catch {
             input.removeTap(onBus: 0)
-            audioDiagnostics.notice("device audio mic skipped: \(error.localizedDescription, privacy: .public)")
+            let session = AVAudioSession.sharedInstance()
+            let inputs = session.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
+            audioDiagnostics.notice("device audio mic start failed attempt=\(self.deviceAudioMicStartAttempts) appState=\(UIApplication.shared.applicationState.rawValue) category=\(session.category.rawValue, privacy: .public) inputs=\(inputs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+            scheduleDeviceAudioMicrophoneRetry()
             return
         }
         deviceAudioMicEngine = engine
+        deviceAudioMicStartAttempts = 0
         // A route change (earphones in or out) stops the engine; start again.
         deviceAudioMicConfigObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
@@ -2067,12 +2080,39 @@ class NativeSTTModule: RCTEventEmitter {
             NotificationCenter.default.removeObserver(observer)
         }
         deviceAudioMicConfigObserver = nil
+        deviceAudioMicRetryWorkItem?.cancel()
+        deviceAudioMicRetryWorkItem = nil
+        if let observer = deviceAudioMicActiveObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        deviceAudioMicActiveObserver = nil
         guard let engine = deviceAudioMicEngine else { return }
         deviceAudioMicEngine = nil
         engine.inputNode.removeTap(onBus: 0)
         if engine.isRunning {
             engine.stop()
         }
+    }
+
+    /// Main queue. Tries the microphone again after a short delay, or at
+    /// once when the app becomes active, while the session still runs.
+    private func scheduleDeviceAudioMicrophoneRetry() {
+        guard deviceAudioMicStartAttempts < Self.deviceAudioMicMaxAttempts else {
+            audioDiagnostics.notice("device audio mic gave up after \(self.deviceAudioMicStartAttempts) attempts")
+            return
+        }
+        let retry = { [weak self] in
+            guard let self, self.deviceAudioActive, self.isRunning, self.deviceAudioMicEngine == nil else { return }
+            self.startDeviceAudioMicrophone()
+        }
+        let workItem = DispatchWorkItem(block: retry)
+        deviceAudioMicRetryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.deviceAudioMicRetryDelay, execute: workItem)
+        deviceAudioMicActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { _ in retry() }
     }
 
     private static func convertMicrophoneBuffer(
@@ -2199,6 +2239,7 @@ class NativeSTTModule: RCTEventEmitter {
         MingleTranslationEchoCanceller.shared.reset()
         deviceAudioActive = true
         MingleDeviceAudioState.shared.isActive = true
+        deviceAudioMicStartAttempts = 0
         startDeviceAudioMicrophone()
         startDeviceAudioKeepAlive()
         observeDeviceAudioInterruptions()
