@@ -9,9 +9,16 @@
  * translation engine) reaches an edge bundle.
  */
 
+/**
+ * Each check takes the runtime from `process.env.NEXT_RUNTIME` written out in
+ * full: Next's bundler replaces that exact expression with its value at build
+ * time and does not put NEXT_RUNTIME in the server's live environment, so
+ * reading it from an `env` object always saw it unset and no worker ever
+ * started in production.
+ */
 /** Whether this process may run the operator-post worker. */
-export function operatorPostWorkerEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.NEXT_RUNTIME !== 'nodejs') return false
+export function operatorPostWorkerEnabled(env: NodeJS.ProcessEnv = process.env, runtime: string | undefined = process.env.NEXT_RUNTIME): boolean {
+  if (runtime !== 'nodejs') return false
   if (env.VITEST || env.NODE_ENV === 'test') return false
   return env.MINGLE_OPERATOR_POST_WORKER !== 'off'
 }
@@ -23,8 +30,8 @@ export function operatorPostWorkerEnabled(env: NodeJS.ProcessEnv = process.env):
  * setting is off; `MINGLE_OPERATOR_AUTO_REPLY_WORKER=off` keeps it from
  * starting at all.
  */
-export function operatorAutoReplyWorkerEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.NEXT_RUNTIME !== 'nodejs') return false
+export function operatorAutoReplyWorkerEnabled(env: NodeJS.ProcessEnv = process.env, runtime: string | undefined = process.env.NEXT_RUNTIME): boolean {
+  if (runtime !== 'nodejs') return false
   if (env.VITEST || env.NODE_ENV === 'test') return false
   return env.MINGLE_OPERATOR_AUTO_REPLY_WORKER !== 'off'
 }
@@ -35,8 +42,8 @@ export function operatorAutoReplyWorkerEnabled(env: NodeJS.ProcessEnv = process.
  * nothing while the setting in `/admin/settings/post-reserve` is off;
  * `MINGLE_OPERATOR_POST_RESERVE_WORKER=off` keeps it from starting at all.
  */
-export function operatorPostReserveWorkerEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.NEXT_RUNTIME !== 'nodejs') return false
+export function operatorPostReserveWorkerEnabled(env: NodeJS.ProcessEnv = process.env, runtime: string | undefined = process.env.NEXT_RUNTIME): boolean {
+  if (runtime !== 'nodejs') return false
   if (env.VITEST || env.NODE_ENV === 'test') return false
   return env.MINGLE_OPERATOR_POST_RESERVE_WORKER !== 'off'
 }
@@ -47,8 +54,8 @@ export function operatorPostReserveWorkerEnabled(env: NodeJS.ProcessEnv = proces
  * nothing while both rules are off; `MINGLE_OPERATOR_AUTOMATION_WORKER=off`
  * keeps it from starting at all.
  */
-export function operatorAutomationWorkerEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.NEXT_RUNTIME !== 'nodejs') return false
+export function operatorAutomationWorkerEnabled(env: NodeJS.ProcessEnv = process.env, runtime: string | undefined = process.env.NEXT_RUNTIME): boolean {
+  if (runtime !== 'nodejs') return false
   if (env.VITEST || env.NODE_ENV === 'test') return false
   return env.MINGLE_OPERATOR_AUTOMATION_WORKER !== 'off'
 }
