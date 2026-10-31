@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   settingFindUnique: vi.fn(),
   settingUpsert: vi.fn(),
+  queryRaw: vi.fn(async () => [{ low: null }]),
   userFindFirst: vi.fn(),
   userCount: vi.fn(),
   auditFindFirst: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('@/lib/prisma', () => ({
     user: { findFirst: mocks.userFindFirst, count: mocks.userCount },
     adminAuditLog: { findFirst: mocks.auditFindFirst },
     operatorAccount: { updateMany: mocks.accountUpdateMany, groupBy: mocks.accountGroupBy },
+    $queryRaw: mocks.queryRaw,
   },
 }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: vi.fn() }))
@@ -350,14 +352,14 @@ describe('automation rules', () => {
   })
 
   it('is off by default and validates staff input', () => {
-    expect(normalizeAutomationSettings(null)).toEqual({ avatars: { enabled: false, intervalMinutes: 10 }, accounts: { enabled: false, perDay: 5, totalTarget: 100 } })
-    expect(parseAutomationSettings({ avatars: { enabled: true, intervalMinutes: 0 }, accounts: { enabled: false, perDay: 5, totalTarget: 100 } })).toEqual({ ok: false, error: 'invalid_interval' })
-    expect(parseAutomationSettings({ avatars: { enabled: true, intervalMinutes: 10 }, accounts: { enabled: true, perDay: 3, totalTarget: 150 } }).ok).toBe(true)
+    expect(normalizeAutomationSettings(null)).toEqual({ avatars: { enabled: false, intervalMinutes: 10 }, accounts: { enabled: false, perDay: 5, totalTarget: 100 }, posts: { enabled: false, chancePercent: 20 } })
+    expect(parseAutomationSettings({ avatars: { enabled: true, intervalMinutes: 0 }, accounts: { enabled: false, perDay: 5, totalTarget: 100 }, posts: { enabled: false, chancePercent: 20 } })).toEqual({ ok: false, error: 'invalid_interval' })
+    expect(parseAutomationSettings({ avatars: { enabled: true, intervalMinutes: 10 }, accounts: { enabled: true, perDay: 3, totalTarget: 150 }, posts: { enabled: true, chancePercent: 20 } }).ok).toBe(true)
   })
 
   it('does nothing while both rules are off', async () => {
     mocks.settingFindUnique.mockResolvedValue(null)
-    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'off', account: 'off' })
+    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'off', account: 'off', posts: 'off' })
     expect(mocks.userFindFirst).not.toHaveBeenCalled()
   })
 
@@ -370,14 +372,14 @@ describe('automation rules', () => {
     }
     const recent = new Date(NOW.getTime() - 60_000).toISOString()
     state(recent, recent)
-    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'waiting', account: 'waiting' })
+    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'waiting', account: 'waiting', posts: 'off' })
 
     state(new Date(NOW.getTime() - 11 * 60_000).toISOString(), new Date(NOW.getTime() - 7 * 60 * 60_000).toISOString())
     mocks.accountGroupBy.mockResolvedValue([{ personaCountry: 'KR', _count: { _all: 1 } }])
     mocks.drafts.mockResolvedValue({ drafts: [{ name: 'Yui', handle: 'yui' }], missing: 0 })
     mocks.createAccount.mockResolvedValue({ userId: 'op_new', handle: 'yui', requestedHandle: 'yui', bioQueued: false })
     mocks.userFindFirst.mockResolvedValue(null) // no account without a photo
-    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'none', account: 'created' })
+    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'none', account: 'created', posts: 'off' })
     expect(mocks.drafts.mock.calls[0][0]).toMatchObject({ count: 1, countries: ['JP'] })
     expect(mocks.createAccount).toHaveBeenCalledWith(expect.objectContaining({ sessionId: null }), { name: 'Yui', handle: 'yui' }, expect.anything())
   })
@@ -389,7 +391,7 @@ describe('automation rules', () => {
         : null
     ))
     mocks.accountGroupBy.mockResolvedValue([{ personaCountry: 'KR', _count: { _all: 3 } }])
-    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'off', account: 'target_reached' })
+    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'off', account: 'target_reached', posts: 'off' })
     expect(mocks.drafts).not.toHaveBeenCalled()
   })
 })

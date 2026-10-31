@@ -102,7 +102,17 @@ export type CreatedOperatorAccount = {
 export async function createOperatorAccount(
   ctx: AdminContext,
   input: PersonaDraft,
-  options: { notes?: string | null; now?: Date; random?: Random } = {},
+  options: {
+    notes?: string | null
+    now?: Date
+    random?: Random
+    /**
+     * Waits for staff review: hidden (inactive) until staff publish it in the
+     * review queue, at the front of it (`reviewRank`). Without it the account is
+     * live at once.
+     */
+    inReview?: { reviewRank: number }
+  } = {},
 ): Promise<CreatedOperatorAccount> {
   const now = options.now ?? new Date()
   const random = options.random ?? Math.random
@@ -125,6 +135,7 @@ export async function createOperatorAccount(
       bio: draft.bio || null,
       isOperator: true,
       isOfficial: false,
+      ...(options.inReview ? { isActive: false } : {}),
       translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
       ...operatorLanguageFields(draft.primaryLanguage),
       birthDate: birthDateFromYear(draft.birthYear, now, random),
@@ -135,6 +146,7 @@ export async function createOperatorAccount(
           personaGender: draft.gender ?? null,
           notes: notes.value,
           createdBySessionId: ctx.sessionId,
+          ...(options.inReview ? { reviewState: 'pending', reviewRank: options.inReview.reviewRank } : {}),
         },
       },
     },

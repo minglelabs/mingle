@@ -31,7 +31,7 @@ export function runOperatorAutomationWorker(): Promise<void> {
   state.running = (async () => {
     try {
       const summary = await runOperatorAutomation()
-      if (['generated', 'failed'].includes(summary.avatar) || ['created', 'failed'].includes(summary.account)) console.info('[operator-automation] run', summary)
+      if (['generated', 'failed'].includes(summary.avatar) || ['created', 'failed'].includes(summary.account) || typeof summary.posts === 'object') console.info('[operator-automation] run', summary)
     } catch (error) {
       console.error('[operator-automation] run_failed', { error: error instanceof Error ? error.name : 'unknown' })
     } finally {

@@ -217,6 +217,8 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
   const [accountsEnabled, setAccountsEnabled] = useState(initial.settings.accounts.enabled)
   const [perDay, setPerDay] = useState(String(initial.settings.accounts.perDay))
   const [totalTarget, setTotalTarget] = useState(String(initial.settings.accounts.totalTarget))
+  const [postsEnabled, setPostsEnabled] = useState(initial.settings.posts.enabled)
+  const [chance, setChance] = useState(String(initial.settings.posts.chancePercent))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -227,9 +229,11 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
   const intervalValid = within(intervalValue, 1, 1440)
   const perDayValid = within(perDayValue, 1, 100)
   const totalValid = within(totalValue, 1, 2000)
-  const valid = intervalValid && perDayValid && totalValid
-  const dirty = avatarsEnabled !== saved.avatars.enabled || accountsEnabled !== saved.accounts.enabled
-    || (valid && (intervalValue !== saved.avatars.intervalMinutes || perDayValue !== saved.accounts.perDay || totalValue !== saved.accounts.totalTarget))
+  const chanceValue = toInt(chance)
+  const chanceValid = within(chanceValue, 1, 100)
+  const valid = intervalValid && perDayValid && totalValid && chanceValid
+  const dirty = avatarsEnabled !== saved.avatars.enabled || accountsEnabled !== saved.accounts.enabled || postsEnabled !== saved.posts.enabled
+    || (valid && (intervalValue !== saved.avatars.intervalMinutes || perDayValue !== saved.accounts.perDay || totalValue !== saved.accounts.totalTarget || chanceValue !== saved.posts.chancePercent))
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -245,6 +249,7 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
         body: JSON.stringify({
           avatars: { enabled: avatarsEnabled, intervalMinutes: intervalValue },
           accounts: { enabled: accountsEnabled, perDay: perDayValue, totalTarget: totalValue },
+          posts: { enabled: postsEnabled, chancePercent: chanceValue },
         }),
       })
       if (response.status === 401) {
@@ -296,7 +301,7 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
           checked={accountsEnabled}
           onChange={setAccountsEnabled}
           title="자동 생성"
-          on="켜짐: 목표 수까지 매일 조금씩 새 계정을 만듭니다."
+          on="켜짐: 목표 수까지 매일 조금씩 새 계정을 만들어 검수 대기열 맨 앞에 올립니다(프로필 사진도 바로 그림)."
           off="꺼짐: 수동으로만 만듭니다."
         />
         <NumberField id="auto-account-per-day" label="하루 생성 수" hint="하루에 이만큼, 같은 간격으로 만듭니다. 1~100개." value={perDay} onChange={setPerDay} unit="개 / 일" invalid={!perDayValid} />
@@ -309,6 +314,17 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
           국가별 인원을 정해 한 번에 만들기
           <ChevronRight size={18} aria-hidden="true" />
         </Link>
+      </Card>
+
+      <Card title="매일 새 글">
+        <Switch
+          checked={postsEnabled}
+          onChange={setPostsEnabled}
+          title="자동 생성"
+          on="켜짐: 하루 한 번(한국 시간), 승인된 계정마다 아래 확률로 글 1개를 써서 검수 대기열 맨 앞에 올립니다. 사진도 바로 그립니다."
+          off="꺼짐: 매일 새 글을 쓰지 않습니다."
+        />
+        <NumberField id="auto-post-chance" label="계정별 확률" hint="계정마다 하루에 글을 쓸 확률. 1~100%." value={chance} onChange={setChance} unit="% / 일" invalid={!chanceValid} />
       </Card>
 
       <Card title="잠재 글">
@@ -337,7 +353,7 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
       <ul className="list-disc space-y-1 break-words pl-5 text-sm leading-6 text-slate-500">
         <li>사진은 계정의 성별·나이·나라·도시·소개에 맞춰 유형(얼굴, 가린 얼굴, 뒷모습, 몸 위주, 사물, 동물, 풍경 등)을 뽑아 만듭니다. 이미지 모델: {imageModel}</li>
         <li>수동 실행은 이 탭이 열려 있는 동안 하나씩 진행하고, 자동 규칙이 꺼져 있어도 동작합니다.</li>
-        <li>자동으로 만든 계정은 검토 없이 생성됩니다. 사진과 글은 위 규칙이 켜져 있으면 이어서 채워집니다.</li>
+        <li>자동으로 만든 계정과 매일 새 글은 바로 공개되지 않고 검수 대기열 맨 앞에 올라갑니다. 검수에서 게시해야 앱에 보입니다.</li>
       </ul>
     </form>
   )
