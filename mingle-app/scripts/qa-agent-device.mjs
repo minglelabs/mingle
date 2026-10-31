@@ -338,6 +338,9 @@ async function startAppium(port, driver) {
 // Commands take coordinates in the WebView's CSS pixels on every platform (iOS points already are).
 // Android gestures and window sizes are in device pixels, so they are scaled by `state.scale`.
 const toDevice = (state, value) => Math.round(value * (state.scale || 1));
+// Points: CSS px inside the WebView (what getBoundingClientRect returns) -> screen px.
+const toDeviceX = (state, x) => Math.round((state.offsetX || 0) + x * (state.scale || 1));
+const toDeviceY = (state, y) => Math.round((state.offsetY || 0) + y * (state.scale || 1));
 
 async function windowSize(state) {
   const rect = await appium(state, 'GET', '/session/:session/window/rect');
@@ -392,6 +395,15 @@ async function cmdStartAndroid(args) {
   } catch {
     const density = Number(/(\d+)\s*$/.exec(adb(serial, 'shell', 'wm', 'density'))?.[1]);
     if (density > 0) state.scale = density / 160;
+  }
+  // The WebView sits below the status bar, so CSS y=0 is not screen y=0 (Galaxy S9: 72 px).
+  try {
+    const found = await appium(state, 'POST', '/session/:session/element', { using: 'class name', value: 'android.webkit.WebView' });
+    const id = found?.['element-6066-11e4-a52e-4f735466cecf'] || found?.ELEMENT;
+    const rect = id ? await appium(state, 'GET', `/session/:session/element/${id}/rect`) : null;
+    if (rect && Number.isFinite(rect.y)) { state.offsetX = rect.x; state.offsetY = rect.y; }
+  } catch {
+    // Keep 0: taps land a status-bar height too high, so check positions on screenshots.
   }
   writeState(state);
   console.log(JSON.stringify({ udid: serial, target: 'android', sessionId: state.sessionId, scale: state.scale, points: await windowSize(state) }));
@@ -483,12 +495,12 @@ async function cmdTap(args, holdMs = 60) {
   // (~0.6 s), so a toggle (the mic Start button) starts and stops at once. `adb input tap` is one
   // real tap. Long presses keep the pointer path, which input tap cannot hold.
   if (state.platform === 'android' && holdMs <= 100) {
-    adb(state.udid, 'shell', 'input', 'tap', String(toDevice(state, x)), String(toDevice(state, y)));
+    adb(state.udid, 'shell', 'input', 'tap', String(toDeviceX(state, x)), String(toDeviceY(state, y)));
     console.log(JSON.stringify({ tapped: [x, y], via: 'adb' }));
     return;
   }
   await performPointer([
-    { type: 'pointerMove', duration: 0, x: toDevice(state, x), y: toDevice(state, y) },
+    { type: 'pointerMove', duration: 0, x: toDeviceX(state, x), y: toDeviceY(state, y) },
     { type: 'pointerDown', button: 0 },
     { type: 'pause', duration: holdMs },
     { type: 'pointerUp', button: 0 },
@@ -501,10 +513,10 @@ async function cmdSwipe(args) {
   if (![x1, y1, x2, y2].every(Number.isFinite)) fail('swipe needs x1 y1 x2 y2 [ms]');
   const state = requireSession();
   await performPointer([
-    { type: 'pointerMove', duration: 0, x: toDevice(state, x1), y: toDevice(state, y1) },
+    { type: 'pointerMove', duration: 0, x: toDeviceX(state, x1), y: toDeviceY(state, y1) },
     { type: 'pointerDown', button: 0 },
     { type: 'pause', duration: 50 },
-    { type: 'pointerMove', duration: Math.round(ms), x: toDevice(state, x2), y: toDevice(state, y2) },
+    { type: 'pointerMove', duration: Math.round(ms), x: toDeviceX(state, x2), y: toDeviceY(state, y2) },
     { type: 'pointerUp', button: 0 },
   ]);
   console.log(JSON.stringify({ swiped: [x1, y1, x2, y2], ms }));
