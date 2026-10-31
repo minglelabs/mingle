@@ -53,12 +53,13 @@ git worktree add ../hash-rush-g2 feat/g2-server-rooms
 
 - LiveKit 서버: `wss://voice.minglelabs.app` (Caddy TLS, 자동 시작). 443, 7881/TCP, 50000-60000/UDP 열림. 외부 접속 200 확인됨.
 - API key/secret은 Windows PC의 `C:\livekit\livekit.yaml` `keys:`에 있다. Mac에서는 못 읽는다.
-  **사용자에게 key와 secret을 직접 받아 `.env.local`에 넣는다.** 채팅에 secret을 붙이라고 하지 말고, 사용자가 파일에 직접 넣게 안내한다.
+  **사용자가 key와 secret을 루트 `~/mingle/.env.local`에 직접 넣게 한다.** 채팅에 secret을 붙이라고 하지 말고, 사용자가 파일에 직접 넣게 안내한다.
 - LiveKit 웹훅은 아직 꺼져 있다. 없어도 마지막 사람이 나가면 통화는 끝난다.
 
 ## 4. 환경 변수
 
-`mingle-app/.env.local` (gitignore 확인):
+메인 체크아웃 루트의 `~/mingle/.env.local` 하나에 넣는다. 앱 서버(`scripts/run-with-env-local.mjs`)는 이 파일을 우선으로 읽는다.
+`NEXT_PUBLIC_*` 값을 바꾸면 앱 서버를 다시 켠다.
 
 ```
 LIVEKIT_URL=wss://voice.minglelabs.app
@@ -71,8 +72,11 @@ NEXT_PUBLIC_HASH_RUSH_SERVER=<게임 서버 wss 주소>
 HASH_RUSH_TICKET_SECRET=<아무 긴 랜덤 문자열, 게임 서버와 같게>
 ```
 
-`mingle-voice-agent/.env.local`: `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `SONIOX_API_KEY`, `GEMINI_API_KEY`, (선택) `OPENAI_API_KEY`.
-SONIOX/GEMINI/OPENAI 키는 `~/mingle/.env.local`에 있을 수 있다. 값을 출력하지 말고 있는지만 확인한다.
+통역 에이전트도 같은 루트 파일을 쓴다. 워크트리에서 돌리면 `VOICE_POC_ENV_FILE=~/mingle/.env.local pnpm start`처럼 붙인다.
+필요한 값: `LIVEKIT_*` 3개, `SONIOX_API_KEY`, `GEMINI_API_KEY`, (선택) `OPENAI_API_KEY`. 값을 출력하지 말고 있는지만 확인한다.
+
+Hash Rush 게임 서버는 파일을 읽지 않는다. 실행할 때 넘긴다:
+`HASH_RUSH_TICKET_SECRET=<루트 파일과 같은 값> npm start`
 
 ## 5. 할 일 (순서대로)
 
@@ -88,7 +92,7 @@ SONIOX/GEMINI/OPENAI 키는 `~/mingle/.env.local`에 있을 수 있다. 값을 �
    - devbox로 로컬 DB를 띄우고 `prisma migrate deploy`로 `20261031082517_add_voice_calls`까지 적용한다 (로컬만).
 4. **서버 띄우기**
    - mingle 앱 서버: devbox로. 폰이 접속할 수 있게 ngrok/LAN 주소를 쓴다 (devbox 문서대로).
-   - 통역 에이전트: `cd mingle-voice-agent && pnpm install && pnpm start` → `curl localhost:8080/health`가 200인지.
+   - 통역 에이전트: `cd mingle-voice-agent && pnpm install && VOICE_POC_ENV_FILE=~/mingle/.env.local pnpm start` → `curl localhost:8080/health`가 200인지.
    - Hash Rush (선택): `cd hash-rush-g2/server && npm install && HASH_RUSH_TICKET_SECRET=... npm start` (8080이 겹치면 `PORT=8090`).
      게임 페이지는 `cd hash-rush-g2 && npm run dev` (5173). 폰에서 열려야 하니 둘 다 ngrok https/wss 주소로 열고 그 주소를 `NEXT_PUBLIC_HASH_RUSH_URL` / `NEXT_PUBLIC_HASH_RUSH_SERVER`에 넣는다.
 5. **실기기 빌드**
