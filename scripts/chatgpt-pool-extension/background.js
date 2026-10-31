@@ -95,35 +95,53 @@ async function page(op, arg) {
     return true
   }
   if (op === 'attach') {
-    const blob = await (await fetch(arg)).blob()
-    const file = new File([blob], `reference.${(blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`, { type: blob.type })
-    const files = () => {
-      const data = new DataTransfer()
-      data.items.add(file)
-      return data
+    // Returns { how, detail }. Never throws: an exception here used to come back
+    // as an empty result and was reported as "no file input" / "no composer".
+    const detail = []
+    try {
+      // Decode the data URL by hand. fetch(data:…) runs under chatgpt.com's CSP
+      // (connect-src), which can refuse it.
+      const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(String(arg ?? ''))
+      if (!match) return { how: null, detail: 'reference is not a data URL' }
+      const type = match[1] || 'image/jpeg'
+      const raw = match[2] ? atob(match[3]) : decodeURIComponent(match[3])
+      const bytes = new Uint8Array(raw.length)
+      for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i)
+      const file = new File([bytes], `reference.${(type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`, { type })
+      detail.push(`file ${type} ${Math.round(file.size / 1024)}KB`)
+      const files = () => {
+        const data = new DataTransfer()
+        data.items.add(file)
+        return data
+      }
+      // 1) A file input already in the page (older ChatGPT keeps one hidden in the composer).
+      const inputs = [...document.querySelectorAll('input[type=file]')]
+      detail.push(`inputs=${inputs.length}`)
+      const input = inputs.find((i) => /image/.test(i.accept || '') && !i.hasAttribute('capture')) ?? inputs[0]
+      if (input) {
+        input.files = files().files
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+        return { how: 'input', detail: detail.join(' ') }
+      }
+      // 2) Newer ChatGPT creates the input only from its "+" menu, which would open a
+      // file dialog. Paste the picture into the composer instead, as a user would.
+      const box = composer()
+      if (!box) return { how: null, detail: [...detail, 'no composer'].join(' ') }
+      detail.push(`composer=${box.tagName.toLowerCase()}${box.id ? '#' + box.id : ''}`)
+      box.focus()
+      const pasted = new ClipboardEvent('paste', { clipboardData: files(), bubbles: true, cancelable: true })
+      box.dispatchEvent(pasted)
+      if (pasted.defaultPrevented) return { how: 'paste', detail: detail.join(' ') }
+      detail.push('paste ignored')
+      // 3) Dropping it on the composer.
+      const target = box.closest('form') ?? box
+      for (const type of ['dragenter', 'dragover', 'drop']) {
+        target.dispatchEvent(new DragEvent(type, { dataTransfer: files(), bubbles: true, cancelable: true }))
+      }
+      return { how: 'drop', detail: detail.join(' ') }
+    } catch (error) {
+      return { how: null, detail: [...detail, `error ${error?.name ?? ''}: ${error?.message ?? error}`].join(' ') }
     }
-    // 1) A file input already in the page (older ChatGPT keeps one hidden in the composer).
-    const inputs = [...document.querySelectorAll('input[type=file]')]
-    const input = inputs.find((i) => /image/.test(i.accept || '') && !i.hasAttribute('capture')) ?? inputs[0]
-    if (input) {
-      input.files = files().files
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-      return 'input'
-    }
-    // 2) Newer ChatGPT creates the input only from its "+" menu, which would open a
-    // file dialog. Paste the picture into the composer instead, as a user would.
-    const box = composer()
-    if (!box) return false
-    box.focus()
-    const pasted = new ClipboardEvent('paste', { clipboardData: files(), bubbles: true, cancelable: true })
-    box.dispatchEvent(pasted)
-    if (pasted.defaultPrevented) return 'paste'
-    // 3) Dropping it on the composer.
-    const target = box.closest('form') ?? box
-    for (const type of ['dragenter', 'dragover', 'drop']) {
-      target.dispatchEvent(new DragEvent(type, { dataTransfer: files(), bubbles: true, cancelable: true }))
-    }
-    return 'drop'
   }
   if (op === 'image') {
     // The newest gallery's widest picture (the full-size one, not a preview); with two candidates, the first.
@@ -239,8 +257,10 @@ async function runJob(job) {
   progress(job, ready.composer ? 'composer ready' : 'signed out')
   if (!ready.composer) throw new JobError('signed_out', 'log in to ChatGPT in this profile')
   if (job.reference) {
-    const how = await inPage(tab.id, 'attach', job.reference)
-    if (!how) throw new JobError('ui_changed', 'no composer to attach the reference photo to')
+    const attached = await inPage(tab.id, 'attach', job.reference).catch((error) => ({ how: null, detail: `inject failed: ${error?.message ?? error}` }))
+    const how = attached?.how
+    progress(job, `attach: ${attached?.detail ?? 'no result from the page'}`)
+    if (!how) throw new JobError('ui_changed', `could not attach the reference photo (${attached?.detail ?? 'no result from the page'})`)
     progress(job, `reference attached by ${how}`)
     await until(tab.id, (s) => s.attached, 40_000, `the reference photo did not finish uploading (attached by ${how})`)
   }
