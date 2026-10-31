@@ -439,9 +439,18 @@ async function cmdType(args) {
   const text = args.join(' ');
   if (!text) fail('type needs text');
   const state = requireSession();
-  const active = await appium(state, 'GET', '/session/:session/element/active');
-  const elementId = active?.['element-6066-11e4-a52e-4f735466cecf'] || active?.ELEMENT || fail('No focused field to type into.');
-  await appium(state, 'POST', `/session/:session/element/${elementId}/value`, { text });
+  const send = async () => {
+    const active = await appium(state, 'GET', '/session/:session/element/active');
+    const elementId = active?.['element-6066-11e4-a52e-4f735466cecf'] || active?.ELEMENT || fail('No focused field to type into.');
+    await appium(state, 'POST', `/session/:session/element/${elementId}/value`, { text });
+  };
+  // Android: the native active element is the WebView itself, so type through chromedriver into the
+  // focused DOM field. Errors can echo the text (passwords), so they are redacted.
+  try {
+    await (state.platform === 'android' ? inWebView(state, send) : send());
+  } catch (error) {
+    fail(String(error?.message || error).split(text).join('<redacted>'));
+  }
   console.log(JSON.stringify({ typedLength: text.length }));
 }
 
