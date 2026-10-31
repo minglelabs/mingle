@@ -15,9 +15,65 @@ function between(source: string, startMarker: string, endMarker: string): string
 }
 
 describe('hash rush sheet wiring', () => {
-  it('covers the room from the status bar down, above every room layer', () => {
-    expect(sheetSource).toContain("style={{ top: 'env(safe-area-inset-top, 0px)' }}")
-    expect(sheetSource).toContain('absolute inset-x-0 bottom-0 z-[90]')
+  it('takes the room slot under the top bar, above the room talk but under its strip, composer and menus', () => {
+    expect(sheetSource).toContain('? { top: frame.topPx, height: frame.heightPx }')
+    expect(sheetSource).toContain("top: 'calc(54px + env(safe-area-inset-top, 0px))'")
+    expect(sheetSource).toContain('absolute inset-x-0 z-[45]')
+    expect(sheetSource).not.toContain('aria-modal')
+    const room = between(liveDemoSource, '<div className="relative flex min-h-0 flex-1 flex-col">', '{earphoneModeNoticeOpen && (')
+    expect(room).toContain('ref={hashRushSlotRef}')
+    expect(room).toContain("? 'relative z-[46] shrink-0 bg-[#fcfdfd]'")
+    expect(room).toContain('style={hashRushOpen ? HASH_RUSH_CHAT_STRIP_SURFACE_STYLE : CHAT_SCROLL_SURFACE_STYLE}')
+    expect(room).toContain("${hashRushOpen ? 'z-[46] ' : ''}")
+    expect(room).toContain('{hashRushQuickChatVisible ? (')
+    expect(liveDemoSource).toContain('const hashRushQuickChatVisible = hashRushOpen && Boolean(conversationId) && !isBlockedCounterpart')
+    // The slot comes first, then the strip, quick chat and the composer.
+    const slotAt = room.indexOf('ref={hashRushSlotRef}')
+    const stripAt = room.indexOf('{/* Chat Area */}')
+    const quickChatAt = room.indexOf('<HashRushQuickChatBar')
+    const composerAt = room.indexOf('data-qa="live-demo-bottom-bar"')
+    expect(slotAt).toBeGreaterThan(-1)
+    expect(stripAt).toBeGreaterThan(slotAt)
+    expect(quickChatAt).toBeGreaterThan(stripAt)
+    expect(composerAt).toBeGreaterThan(quickChatAt)
+    expect(liveDemoSource).toContain('frame={hashRushSheetFrame}')
+    expect(liveDemoSource).toContain('ref={liveDemoRootRef}')
+  })
+
+  it('keeps the sheet still while a keyboard is up', () => {
+    expect(liveDemoSource).toContain('held: keyboardViewportInsetPx > 0 || (isComposerOpen && isComposerTextareaFocused),')
+    expect(sheetSource).toContain('if (!held) scheduleRef.current()')
+    expect(sheetSource).toContain('setFrame((current) => resolveHashRushSheetFrame(current, {')
+  })
+
+  it('shows the room in one bubble per message while up, without saving it', () => {
+    expect(liveDemoSource).toContain('const roomBubbleDisplayMode = resolveHashRushBubbleDisplayMode(bubbleDisplayMode, hashRushOpen)')
+    expect(liveDemoSource).toContain('bubbleDisplayMode={roomBubbleDisplayMode}')
+    expect(liveDemoSource).not.toMatch(/setBubbleDisplayMode\([^)]*roomBubbleDisplayMode/)
+    expect(liveDemoSource).not.toMatch(/bubbleDisplayMode:\s*roomBubbleDisplayMode/)
+  })
+
+  it('sends quick chat through the room send path', () => {
+    const quickChat = between(liveDemoSource, 'const handleHashRushQuickChat = useCallback(', '}, [composerCopy.manualSpeakerLabel, submitExternalUtterance])')
+    expect(quickChat).toContain('submitExternalUtterance({')
+    expect(liveDemoSource).toContain('<HashRushQuickChatBar uiLocale={uiLocale} onSend={handleHashRushQuickChat} />')
+    expect(sheetSource).toContain('onPointerDown={(event) => event.preventDefault()}')
+  })
+
+  it('tells the game the room talk on ready and as it comes', () => {
+    expect(liveDemoSource).toContain('chatEntries={hashRushChatEntries}')
+    expect(liveDemoSource).toContain('? buildHashRushChatEntries({')
+    const ready = between(sheetSource, "if (message.type === 'ready') {", "} else if (message.type === 'keyboard') {")
+    expect(ready).toContain('startChatFeed()')
+    expect(sheetSource).toContain('advanceHashRushChatFeed(feed, chatEntries)')
+    expect(sheetSource).toContain('for (const entry of posts) postToGame(hashRushChatMessage(entry))')
+  })
+
+  it('holds the room talk strip at its newest line', () => {
+    const follow = between(liveDemoSource, 'const followNewMessage = autoScrollState.shouldAutoScroll || (', 'if (!followNewMessage')
+    expect(follow).toContain('hashRushOpen')
+    expect(follow).toContain('autoScrollState.hasNewMessage')
+    expect(liveDemoSource).toContain('{showScrollToBottom && !hashRushOpen && (')
   })
 
   it('drags only from its top row and keeps the room swipe off the sheet', () => {
@@ -58,8 +114,10 @@ describe('hash rush sheet wiring', () => {
     expect(menuItem).toContain('setHashRushActive(true)')
   })
 
-  it('keeps the chat composer out of the game keyboard and folds the voice talk panel', () => {
-    expect(liveDemoSource).toContain('const activeKeyboardInsetPx = isComposerOpen && !hashRushOpen ? keyboardViewportInsetPx : 0')
+  it('lifts the chat composer only for its own keyboard and folds the voice talk panel', () => {
+    expect(liveDemoSource).toContain('const activeKeyboardInsetPx = isComposerOpen && (!hashRushOpen || isComposerTextareaFocused) ? keyboardViewportInsetPx : 0')
+    expect(liveDemoSource).toContain('onFocus={handleComposerTextareaFocus}')
+    expect(liveDemoSource).toContain('onBlur={handleComposerTextareaBlur}')
     expect(liveDemoSource).toContain('forceFolded={hashRushOpen}')
     expect(voicePanelSource).toContain('if (forceFolded) setFolded(true)')
     expect(voicePanelSource).toContain("const connected = phase === 'connected'")

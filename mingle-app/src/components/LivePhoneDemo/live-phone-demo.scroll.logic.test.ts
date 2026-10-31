@@ -234,16 +234,24 @@ describe('live-phone-demo scroll/platform logic', () => {
         '<AnimatePresence>\n              {scrollUiVisible',
       )
 
-      const surfaceStyleIndex = chatSurfaceSource.indexOf('style={CHAT_SCROLL_SURFACE_STYLE}')
+      // Under the Hash Rush sheet the same surface is a fixed-height strip with the same isolation.
+      const stripStyleSource = readSourceBetween(
+        'const HASH_RUSH_CHAT_STRIP_SURFACE_STYLE: CSSProperties = {',
+        '}',
+      )
+      const surfaceStyleIndex = chatSurfaceSource.indexOf('style={hashRushOpen ? HASH_RUSH_CHAT_STRIP_SURFACE_STYLE : CHAT_SCROLL_SURFACE_STYLE}')
       const scrollContainerIndex = chatSurfaceSource.indexOf('data-qa="live-demo-chat-scroll"')
 
       expect(surfaceStyleSource).toContain("contain: 'layout paint style'")
       expect(surfaceStyleSource).toContain("isolation: 'isolate'")
       expect(surfaceStyleSource).not.toContain('overflow')
       expect(surfaceStyleSource).not.toContain('transform')
+      expect(stripStyleSource).toContain('...CHAT_SCROLL_SURFACE_STYLE,')
+      expect(stripStyleSource).not.toContain('overflow')
+      expect(stripStyleSource).not.toContain('transform')
       expect(surfaceStyleIndex).toBeGreaterThanOrEqual(0)
       expect(scrollContainerIndex).toBeGreaterThan(surfaceStyleIndex)
-      expect(chatSurfaceSource).toContain('className="relative min-h-0 flex-1 bg-gray-50/50"')
+      expect(chatSurfaceSource).toContain(": 'relative min-h-0 flex-1 bg-gray-50/50'}")
     })
 
     it('keeps the native scroll handler synchronous work limited to anchor snapshots and rAF scheduling', () => {
@@ -370,15 +378,20 @@ describe('live-phone-demo scroll/platform logic', () => {
         '  useLayoutEffect(() => {\n    refreshScrollDateLabelAnchors()',
       )
 
+      // Eligibility: the near-bottom rule, or the Hash Rush strip (it always follows new talk).
+      const eligibilityIndex = newMessageAutoScrollEffectSource.indexOf(
+        'const followNewMessage = autoScrollState.shouldAutoScroll || (',
+      )
       const earlyReturnIndex = newMessageAutoScrollEffectSource.indexOf(
-        'if (!autoScrollState.shouldAutoScroll || !hasInitialBottomAnchorRef.current || !chatRef.current) return',
+        'if (!followNewMessage || !hasInitialBottomAnchorRef.current || !chatRef.current) return',
       )
       const clearSuppressIndex = newMessageAutoScrollEffectSource.indexOf('suppressAutoScrollRef.current = false')
       const forceFollowIndex = newMessageAutoScrollEffectSource.indexOf('shouldAutoScroll.current = true')
 
       expect(newMessageAutoScrollEffectSource).toContain('previousDistanceToBottom: lastDistanceToBottomRef.current')
       expect(newMessageAutoScrollEffectSource).toContain('resolveNewMessageAutoScrollTargetTop')
-      expect(earlyReturnIndex).toBeGreaterThanOrEqual(0)
+      expect(eligibilityIndex).toBeGreaterThanOrEqual(0)
+      expect(earlyReturnIndex).toBeGreaterThan(eligibilityIndex)
       expect(clearSuppressIndex).toBeGreaterThan(earlyReturnIndex)
       expect(forceFollowIndex).toBeGreaterThan(earlyReturnIndex)
     })

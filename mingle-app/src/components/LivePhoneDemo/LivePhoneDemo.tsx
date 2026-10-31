@@ -242,7 +242,13 @@ import {
 import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
 import VoiceTalkPanel, { VoiceTalkHeaderButton, isVoiceTalkAvailable } from './VoiceTalkPanel'
-import HashRushSheet, { isHashRushConfigured, hashRushMenuLabel } from './HashRushSheet'
+import HashRushSheet, { HashRushQuickChatBar, isHashRushConfigured, hashRushMenuLabel, useHashRushSheetFrame } from './HashRushSheet'
+import {
+  HASH_RUSH_CHAT_STRIP_HEIGHT_PX,
+  resolveHashRushBubbleDisplayMode,
+  type HashRushChatEntry,
+} from './HashRushSheet.logic'
+import { buildHashRushChatEntries } from './HashRushSheet.chat'
 import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
@@ -588,6 +594,17 @@ const CHAT_MESSAGE_ROW_STYLE: CSSProperties = {
   contain: 'layout style',
   isolation: 'isolate',
 }
+
+// While the Hash Rush sheet is up the chat area is a fixed strip of the room's
+// latest messages under the game.
+const HASH_RUSH_CHAT_STRIP_SURFACE_STYLE: CSSProperties = {
+  ...CHAT_SCROLL_SURFACE_STYLE,
+  height: HASH_RUSH_CHAT_STRIP_HEIGHT_PX,
+}
+// How long the room's talk is held at its newest line while the bubbles switch
+// between one and several bubbles (their own switch animation included).
+const HASH_RUSH_CHAT_BOTTOM_HOLD_MS = 600
+const NO_HASH_RUSH_CHAT_ENTRIES: readonly HashRushChatEntry[] = []
 
 function buildQaSeededUtterances(count: number): Utterance[] {
   const safeCount = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 48
@@ -1953,6 +1970,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [hashRushActive, setHashRushActive] = useState(false)
   const [hashRushOpen, setHashRushOpen] = useState(false)
   const closeHashRushSheet = useCallback(() => setHashRushOpen(false), [])
+  // While the sheet is up the room keeps an empty slot for it between the top
+  // bar and the room's talk strip; the sheet is placed over that slot inside
+  // the room's root.
+  const liveDemoRootRef = useRef<HTMLDivElement | null>(null)
+  const hashRushSlotRef = useRef<HTMLDivElement | null>(null)
   const viewerImage = typeof session?.user?.image === 'string' ? session.user.image : null
   const accountPreferencesTrackingUserId = useMemo(() => getOrCreateTrackingUserId(), [])
   const initialLanguageSelectorMembers = useMemo<ConversationMemberProfile[]>(() => {
@@ -2133,6 +2155,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(
     initialCachedAccountPreferences?.bubbleDisplayMode ?? DEFAULT_BUBBLE_DISPLAY_MODE,
   )
+  // What the room's bubbles show: one bubble each while Hash Rush is up, else
+  // the saved setting. The saved setting itself is never changed for it.
+  const roomBubbleDisplayMode = resolveHashRushBubbleDisplayMode(bubbleDisplayMode, hashRushOpen)
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(
     initialCachedAccountPreferences?.adBannerPosition ?? null,
   )
@@ -2166,6 +2191,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
+  // The composer's text box has focus (its keyboard, not the game's, is up).
+  const [isComposerTextareaFocused, setIsComposerTextareaFocused] = useState(false)
   // The message the next typed send replies to (set from a bubble's menu).
   const [replyTarget, setReplyTarget] = useState<MessageReplyReference | null>(null)
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false)
@@ -5866,6 +5893,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, focusComposerTextarea, replyTarget, submitExternalUtterance, syncComposerTextareaHeight])
 
+  // A quick chat line under Hash Rush goes the same way as typed text: a
+  // normal room message (history, translation, push and coins as always). The
+  // draft and a reply being written stay as they are.
+  const handleHashRushQuickChat = useCallback((text: string) => {
+    submitExternalUtterance({
+      text,
+      sourceLanguage: 'unknown',
+      speaker: composerCopy.manualSpeakerLabel,
+    })
+  }, [composerCopy.manualSpeakerLabel, submitExternalUtterance])
+
+  // Quick chat sits right above the composer while Hash Rush is up, in rooms
+  // the viewer can still write to.
+  const hashRushQuickChatVisible = hashRushOpen && Boolean(conversationId) && !isBlockedCounterpart
+
+  const handleComposerTextareaFocus = useCallback(() => setIsComposerTextareaFocused(true), [])
+  const handleComposerTextareaBlur = useCallback(() => setIsComposerTextareaFocused(false), [])
+
   useEffect(() => {
     setReplyTarget(null)
   }, [conversationId])
@@ -6336,14 +6381,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     renderedMessageCountsRef.current = nextCounts
 
-    if (!autoScrollState.shouldAutoScroll || !hasInitialBottomAnchorRef.current || !chatRef.current) return
+    // Under the Hash Rush sheet the room's talk is a short strip of its latest
+    // lines: a new message always brings the strip down to it.
+    const followNewMessage = autoScrollState.shouldAutoScroll || (
+      hashRushOpen
+      && autoScrollState.hasNewMessage
+      && !isPaginatingRef.current
+      && !isLoadingOlderRef.current
+    )
+    if (!followNewMessage || !hasInitialBottomAnchorRef.current || !chatRef.current) return
 
     const node = chatRef.current
     suppressAutoScrollRef.current = false
     shouldAutoScroll.current = true
 
     const autoScrollTargetTop = resolveNewMessageAutoScrollTargetTop({
-      shouldAutoScroll: autoScrollState.shouldAutoScroll,
+      shouldAutoScroll: followNewMessage,
       currentScrollTop: node.scrollTop,
       currentScrollHeight: node.scrollHeight,
       currentClientHeight: node.clientHeight,
@@ -6356,10 +6409,46 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     updateScrollDerivedState()
   }, [
+    hashRushOpen,
     liveUtterances.length,
     updateScrollDerivedState,
     utterances.length,
   ])
+
+  // The sheet going up turns the room's talk into the strip and its bubbles
+  // into one each; going down gives the room its full talk back. Either way
+  // the talk is held at its newest line while the bubbles switch (it is always
+  // there going up; going down only if the strip was), unless someone scrolls.
+  const hashRushOpenSeenRef = useRef(hashRushOpen)
+  useLayoutEffect(() => {
+    if (hashRushOpenSeenRef.current === hashRushOpen) return
+    hashRushOpenSeenRef.current = hashRushOpen
+    const node = chatRef.current
+    if (!node) return
+    if (!hashRushOpen && lastDistanceToBottomRef.current > AUTO_SCROLL_BOTTOM_THRESHOLD_PX) return
+    const holdUntilMs = Date.now() + HASH_RUSH_CHAT_BOTTOM_HOLD_MS
+    let frameId = 0
+    const holdAtNewest = (first: boolean) => {
+      frameId = 0
+      if (!first && isUserScrollIntentActive()) return
+      node.scrollTop = node.scrollHeight
+      lastDistanceToBottomRef.current = 0
+      suppressAutoScrollRef.current = false
+      shouldAutoScroll.current = true
+      autoScrollSchedulerRef.current.markPerformed()
+      if (Date.now() < holdUntilMs) {
+        frameId = window.requestAnimationFrame(() => holdAtNewest(false))
+        return
+      }
+      updateScrollDerivedState()
+    }
+    holdAtNewest(true)
+    return () => {
+      if (frameId) window.cancelAnimationFrame(frameId)
+    }
+    // Only the sheet going up or down starts a hold; the helpers are stable refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hashRushOpen])
 
   useLayoutEffect(() => {
     refreshScrollDateLabelAnchors()
@@ -6584,6 +6673,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     preferredDisplayLanguage,
     resolvedDefaultDisplayLanguage,
   ])
+  // The room's talk as the Hash Rush game hears it, in the language the
+  // room's one-bubble view shows this viewer. Only while the game is here.
+  const hashRushChatEntries = useMemo(() => (
+    hashRushActive
+      ? buildHashRushChatEntries({
+          utterances: displayUtterances,
+          draftIds: draftUtteranceIds,
+          display: earphoneModeDisplay,
+          viewerUserId,
+          isSharedRoom: isMultiMember,
+        })
+      : NO_HASH_RUSH_CHAT_ENTRIES
+  ), [displayUtterances, draftUtteranceIds, earphoneModeDisplay, hashRushActive, isMultiMember, viewerUserId])
   // L: the notice pick for this room while it is still a room language,
   // otherwise the room's display language.
   const earphoneModeReadLanguage = resolveEarphoneModeReadLanguage({
@@ -7067,8 +7169,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     bottomBarClearancePx: nativeBottomBarClearancePx,
     estimatedBottomBannerInsetPx: estimatedNativeBannerInsetPx,
   })
-  // The game's keyboard is the sheet's business, not the chat composer's.
-  const activeKeyboardInsetPx = isComposerOpen && !hashRushOpen ? keyboardViewportInsetPx : 0
+  // While Hash Rush is up, only the composer's own keyboard lifts the composer
+  // (and the talk strip on top of it); a keyboard the game opens is the sheet's.
+  const activeKeyboardInsetPx = isComposerOpen && (!hashRushOpen || isComposerTextareaFocused) ? keyboardViewportInsetPx : 0
+  // The sheet takes the slot the room keeps for it, but a keyboard never moves
+  // or resizes it: the composer and the strip rise over the game instead.
+  const hashRushSheetFrame = useHashRushSheetFrame({
+    active: hashRushOpen,
+    slotRef: hashRushSlotRef,
+    rootRef: liveDemoRootRef,
+    held: keyboardViewportInsetPx > 0 || (isComposerOpen && isComposerTextareaFocused),
+  })
   const scrollToBottomButtonBottomPx = resolveScrollToBottomButtonBottomPx({
     baseBottomPx: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX,
     isNativeAppRuntime,
@@ -7388,6 +7499,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     <PhoneFrame>
       <MessageReplyProvider value={replyRoomContext}>
       <div
+        ref={liveDemoRootRef}
         data-qa="live-demo-root"
         className="relative flex h-full min-h-0 flex-col overflow-hidden"
       >
@@ -7416,7 +7528,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           />
         ) : null}
 
-        {/* Hash Rush, played inside this room: a sheet over the chat. */}
+        {/* Hash Rush, played inside this room: a sheet over the room's slot for
+            it, above the room's own talk strip, quick chat and composer. */}
         {hashRushActive && conversationId ? (
           <HashRushSheet
             open={hashRushOpen}
@@ -7425,6 +7538,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             playerName={(session?.user?.name || '').trim()}
             uiLocale={uiLocale}
             voiceActive={voiceTalkState.connected}
+            frame={hashRushSheetFrame}
+            chatEntries={hashRushChatEntries}
             onClose={closeHashRushSheet}
           />
         ) : null}
@@ -8901,10 +9016,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         </SlideSurface>
 
         <div className="relative flex min-h-0 flex-1 flex-col">
+          {/* Hash Rush up: the sheet covers this empty slot; below it the room
+              keeps a strip of its latest talk, quick chat and its composer. */}
+          {hashRushOpen ? (
+            <div
+              ref={hashRushSlotRef}
+              aria-hidden="true"
+              className="min-h-0 flex-1"
+              data-qa="live-demo-hash-rush-slot"
+            />
+          ) : null}
           {/* Chat Area */}
           <div
-            className="relative min-h-0 flex-1 bg-gray-50/50"
-            style={CHAT_SCROLL_SURFACE_STYLE}
+            className={hashRushOpen
+              // Opaque and above the sheet: a keyboard lifts it over the game.
+              ? 'relative z-[46] shrink-0 bg-[#fcfdfd]'
+              : 'relative min-h-0 flex-1 bg-gray-50/50'}
+            style={hashRushOpen ? HASH_RUSH_CHAT_STRIP_SURFACE_STYLE : CHAT_SCROLL_SURFACE_STYLE}
           >
             {/* Photo viewers in this list translate the photo's text; it renders no DOM. */}
             <PhotoTranslationProvider
@@ -8928,7 +9056,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               className="relative min-h-0 h-full overflow-y-auto no-scrollbar py-2.5"
               style={chatViewportStyle}
             >
-              {nativeChatTopSpacerPx > 0 && (
+              {/* The ad banner is hidden while Hash Rush is up, so the strip keeps no room for it. */}
+              {nativeChatTopSpacerPx > 0 && !hashRushOpen && (
                 <div
                   aria-hidden="true"
                   className="pointer-events-none shrink-0"
@@ -9009,7 +9138,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         shouldAnimateEntrance={animatedDisplayUtteranceIds.has(item.utterance.id)}
                         viewerUserId={viewerUserId}
                         onOpenProfile={handleOpenProfileForBubble}
-                        bubbleDisplayMode={bubbleDisplayMode}
+                        bubbleDisplayMode={roomBubbleDisplayMode}
                       />
                     )}
                   </div>
@@ -9080,7 +9209,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <p className="text-sm">{connectionFailedLabel}</p>
                 </div>
               )}
-              {nativeChatBottomSpacerPx > 0 && (
+              {nativeChatBottomSpacerPx > 0 && !hashRushOpen && (
                 <div
                   aria-hidden="true"
                   className="pointer-events-none shrink-0"
@@ -9120,7 +9249,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             </AnimatePresence>
 
             <AnimatePresence>
-              {showScrollToBottom && (
+              {/* The strip under Hash Rush is too short for it; a new message brings the strip down anyway. */}
+              {showScrollToBottom && !hashRushOpen && (
                 <motion.div
                   initial={{ opacity: 0, y: 8, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -9168,7 +9298,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </motion.div>
               )}
             </AnimatePresence>
-            {showEmptyState && (
+            {showEmptyState && !hashRushOpen && (
               <ConversationEmptyState uiLocale={uiLocale} />
             )}
             <AnimatePresence>
@@ -9358,6 +9488,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             )}
           </AnimatePresence>
 
+          {/* Hash Rush up: the game's ready-made lines right above the composer,
+              sent as normal room messages. */}
+          {hashRushQuickChatVisible ? (
+            <div className="relative z-[46] shrink-0 border-t border-gray-100 bg-white">
+              <HashRushQuickChatBar uiLocale={uiLocale} onSend={handleHashRushQuickChat} />
+            </div>
+          ) : null}
+
           {/* Bottom Bar with STT / Text Composer Toggle */}
           <motion.div
             layout={!isComposerOpen}
@@ -9365,7 +9503,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             onLayoutAnimationComplete={syncNativeBottomBarClearance}
             ref={bottomBarRef}
             data-qa="live-demo-bottom-bar"
-            className="relative shrink-0 border-t border-gray-100 bg-white"
+            // Above the Hash Rush sheet while it is up: a keyboard lifts the
+            // composer over the game. Quick chat above it carries the line.
+            className={`relative shrink-0 border-t bg-white ${hashRushOpen ? 'z-[46] ' : ''}${
+              hashRushQuickChatVisible ? 'border-white' : 'border-gray-100'
+            }`}
             transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
             style={{
               paddingTop: `${bottomBarTopPaddingPx}px`,
@@ -9465,6 +9607,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           data-qa="live-demo-composer-textarea"
                           defaultValue={composerDraftRef.current}
                           onChange={handleComposerDraftChange}
+                          onFocus={handleComposerTextareaFocus}
+                          onBlur={handleComposerTextareaBlur}
                           rows={1}
                           placeholder={composerCopy.composerPlaceholder}
                           className="block box-border h-full min-h-0 flex-1 resize-none self-end bg-transparent px-0.5 py-[7px] text-[16px] leading-[22px] text-gray-900 outline-none placeholder:text-gray-400"

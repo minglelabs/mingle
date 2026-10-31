@@ -1,22 +1,28 @@
 'use client'
 
 // Hash Rush inside the chat room. The game runs on the Hash Rush game server
-// (one game room per chat room); this sheet slides up over the chat with the
+// (one game room per chat room); this sheet slides up in the room with the
 // game page in an iframe. The app gives an entry ticket, so only room members
 // get in, under their chat name. A voice talk that is on keeps going while the
-// game is open. The plain rules (messages, tickets, words) are in
-// HashRushSheet.logic.ts; the requirements are docs/hash-rush-in-app-uiux.md.
+// game is open. The plain rules (messages, tickets, the sheet's place, words)
+// are in HashRushSheet.logic.ts; the requirements are
+// docs/hash-rush-in-app-uiux.md (v2: talk is the room's own chat).
 //
-// - The sheet covers everything below the status bar. Only its top row drags
-//   it down; swipes on the game belong to the game, so the room's edge swipe,
-//   the iOS swipe-back and Android back (which closes the sheet first) never
-//   take them.
+// - The sheet covers the room from under its top bar down to a strip of the
+//   room's latest messages, quick chat and the room's composer, which stay
+//   usable below it. The room keeps an empty slot for it (useHashRushSheetFrame
+//   measures it). A keyboard never moves or resizes the sheet.
+// - Only its top row drags it down; swipes on the game belong to the game, so
+//   the room's edge swipe, the iOS swipe-back and Android back (which closes
+//   the sheet first) never take them.
+// - Every room message goes to the game as `chat` (shown over the sender's
+//   hamster), in this viewer's language once the translation lands.
 // - Lowered, the sheet keeps the game running out of sight (the game hears
 //   `visibility: false` and goes quiet). It is dropped when the room is left;
 //   the room's owner unmounts it then.
 // - While it is up, the ad banner and the app's toasts stay hidden.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { motion, useDragControls, type PanInfo } from 'framer-motion'
 import { Loader2, X } from 'lucide-react'
 import { registerNativeEdgeSwipeSuppression } from '@/components/slide-surface'
@@ -24,16 +30,26 @@ import { buildClientApiPath } from '@/lib/api-contract'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import {
+  HASH_RUSH_SHEET_FRAME_SETTLE_MS,
+  advanceHashRushChatFeed,
   buildHashRushUrl,
+  hashRushChatMessage,
   hashRushCopy,
   hashRushGameOrigin,
+  hashRushQuickChat,
   hashRushVisibilityMessage,
   hashRushVoiceMessage,
   isHashRushTicketReusable,
   parseHashRushTicketResponse,
   readHashRushGameMessage,
   resolveHashRushKeyboardInsetPx,
+  resolveHashRushSheetFrame,
+  resolveHashRushSheetHiddenOffsetPx,
+  startHashRushChatFeed,
   type HashRushAppMessage,
+  type HashRushChatEntry,
+  type HashRushChatFeed,
+  type HashRushSheetFrame,
   type HashRushTicketGrant,
 } from './HashRushSheet.logic'
 
@@ -94,8 +110,110 @@ function launchFor(grant: HashRushTicketGrant, attempt: number, who: { playerNam
   }
 }
 
+// Sums offsetTop up to `ancestor`; NaN when `ancestor` is not on the way up.
+function offsetTopWithin(node: HTMLElement, ancestor: HTMLElement): number {
+  let top = 0
+  let current: HTMLElement | null = node
+  while (current && current !== ancestor) {
+    top += current.offsetTop
+    current = current.offsetParent instanceof HTMLElement ? current.offsetParent : null
+  }
+  return current === ancestor ? top : Number.NaN
+}
+
+/**
+ * Where the sheet goes: the room's empty slot for it, measured in the room's
+ * own CSS pixels (offsets do not change under the app canvas's scale). While
+ * `held` (a keyboard is up) the last place stays, so the game keeps its size;
+ * a changed slot counts once it has settled. Lowered, the last place stays too.
+ */
+export function useHashRushSheetFrame(input: {
+  active: boolean
+  slotRef: RefObject<HTMLElement | null>
+  rootRef: RefObject<HTMLElement | null>
+  held: boolean
+}): HashRushSheetFrame | null {
+  const { active, slotRef, rootRef, held } = input
+  const [frame, setFrame] = useState<HashRushSheetFrame | null>(null)
+  const heldRef = useRef(held)
+  const scheduleRef = useRef<() => void>(() => {})
+
+  useLayoutEffect(() => {
+    if (!active) return
+    const slot = slotRef.current
+    const root = rootRef.current
+    if (!slot || !root) return
+    const measure = () => {
+      setFrame((current) => resolveHashRushSheetFrame(current, {
+        topPx: offsetTopWithin(slot, root),
+        heightPx: slot.offsetHeight,
+        rootHeightPx: root.offsetHeight,
+      }, heldRef.current))
+    }
+    let timer = 0
+    const schedule = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(measure, HASH_RUSH_SHEET_FRAME_SETTLE_MS)
+    }
+    measure()
+    scheduleRef.current = schedule
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
+    observer?.observe(slot)
+    observer?.observe(root)
+    window.addEventListener('resize', schedule)
+    return () => {
+      window.clearTimeout(timer)
+      observer?.disconnect()
+      window.removeEventListener('resize', schedule)
+      scheduleRef.current = () => {}
+    }
+  }, [active, rootRef, slotRef])
+
+  // A keyboard going away frees the frame: measure again once things settle.
+  useEffect(() => {
+    heldRef.current = held
+    if (!held) scheduleRef.current()
+  }, [held])
+
+  return frame
+}
+
+/** The game's ready-made lines in one scrolling row; a tap sends one as a room message. */
+export function HashRushQuickChatBar({ uiLocale, onSend }: { uiLocale: string, onSend: (text: string) => void }) {
+  const copy = hashRushCopy(uiLocale)
+  return (
+    <div
+      role="toolbar"
+      aria-label={copy.quickChat}
+      // Sideways swipes scroll the row; the room's edge swipe must not start here.
+      onPointerDown={(event) => event.stopPropagation()}
+      onTouchStart={(event) => event.stopPropagation()}
+      className="no-scrollbar flex gap-1.5 overflow-x-auto overscroll-x-contain py-1.5"
+      style={{
+        touchAction: 'pan-x',
+        paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
+        paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
+      }}
+      data-qa="hash-rush-quick-chat"
+    >
+      {hashRushQuickChat(uiLocale).map((text) => (
+        <button
+          key={text}
+          type="button"
+          // Keep the composer's focus (and its keyboard) while tapping a line.
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => onSend(text)}
+          className="shrink-0 whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 py-1 text-[0.88rem] font-medium leading-5 text-gray-800 transition-colors active:bg-gray-100"
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 type Props = {
-  /** Up over the chat. Lowered, the game keeps running out of sight. */
+  /** Up in the room. Lowered, the game keeps running out of sight. */
   open: boolean
   conversationId: string
   /** Who is playing; tickets are kept per viewer and room. */
@@ -104,10 +222,14 @@ type Props = {
   uiLocale: string
   /** This room's voice talk is connected; the game then holds its music. */
   voiceActive: boolean
+  /** The room's slot for the sheet (useHashRushSheetFrame); null until measured. */
+  frame: HashRushSheetFrame | null
+  /** The room's messages as the game hears them (HashRushSheet.chat.ts). */
+  chatEntries: readonly HashRushChatEntry[]
   onClose: () => void
 }
 
-export default function HashRushSheet({ open, conversationId, viewerKey, playerName, uiLocale, voiceActive, onClose }: Props) {
+export default function HashRushSheet({ open, conversationId, viewerKey, playerName, uiLocale, voiceActive, frame, chatEntries, onClose }: Props) {
   const copy = hashRushCopy(uiLocale)
   const cacheKey = `${viewerKey}|${conversationId}`
   const sheetRef = useRef<HTMLDivElement | null>(null)
@@ -115,6 +237,9 @@ export default function HashRushSheet({ open, conversationId, viewerKey, playerN
   const dragControls = useDragControls()
   const whoRef = useRef({ playerName, uiLocale })
   const stateRef = useRef({ open, voiceActive })
+  const chatEntriesRef = useRef(chatEntries)
+  // What the game page has heard of the room's talk; null until it says `ready`.
+  const chatFeedRef = useRef<HashRushChatFeed | null>(null)
   const [launch, setLaunch] = useState<Launch | null>(() => {
     const cached = ticketCache.get(cacheKey)
     return isHashRushTicketReusable(cached, Date.now()) ? launchFor(cached, 0, { playerName, uiLocale }) : null
@@ -162,6 +287,8 @@ export default function HashRushSheet({ open, conversationId, viewerKey, playerN
   // ---- Game page: wait for `ready`, then keep it told how things stand ----
   useEffect(() => {
     if (!launch) return
+    // A new page has heard nothing yet; its `ready` starts the talk again.
+    chatFeedRef.current = null
     const timer = window.setTimeout(() => setFrameTimedOut(true), READY_TIMEOUT_MS)
     return () => window.clearTimeout(timer)
   }, [launch])
@@ -190,6 +317,23 @@ export default function HashRushSheet({ open, conversationId, viewerKey, playerN
     postToGame(hashRushVoiceMessage(voiceActive))
   }, [voiceActive, postToGame])
 
+  // The room's talk: on `ready` the last few messages, then each new one (and
+  // each new translation) as it lands, while the page is up or lowered.
+  const startChatFeed = useCallback(() => {
+    const { feed, posts } = startHashRushChatFeed(chatEntriesRef.current, Date.now())
+    chatFeedRef.current = feed
+    for (const entry of posts) postToGame(hashRushChatMessage(entry))
+  }, [postToGame])
+
+  useEffect(() => {
+    chatEntriesRef.current = chatEntries
+    const feed = chatFeedRef.current
+    if (!feed) return
+    const { feed: next, posts } = advanceHashRushChatFeed(feed, chatEntries)
+    chatFeedRef.current = next
+    for (const entry of posts) postToGame(hashRushChatMessage(entry))
+  }, [chatEntries, postToGame])
+
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const message = readHashRushGameMessage(event, { frame: frameRef.current?.contentWindow ?? null, origin: GAME_ORIGIN })
@@ -197,6 +341,7 @@ export default function HashRushSheet({ open, conversationId, viewerKey, playerN
       if (message.type === 'ready') {
         setFrameReady(true)
         syncGame()
+        startChatFeed()
       } else if (message.type === 'keyboard') {
         setGameKeyboardOpen(message.open)
         if (!message.open) setKeyboardInsetPx(0)
@@ -205,7 +350,7 @@ export default function HashRushSheet({ open, conversationId, viewerKey, playerN
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [syncGame])
+  }, [startChatFeed, syncGame])
 
   const retry = useCallback(() => {
     setFrameReady(false)
@@ -292,8 +437,8 @@ export default function HashRushSheet({ open, conversationId, viewerKey, playerN
   // Lowering the sheet puts the game's keyboard away with it.
   useEffect(() => {
     if (open) return
-    const frame = frameRef.current
-    if (frame && document.activeElement === frame) frame.blur()
+    const iframe = frameRef.current
+    if (iframe && document.activeElement === iframe) iframe.blur()
   }, [open])
 
   const onDragEnd = useCallback((_: unknown, info: PanInfo) => {
@@ -304,12 +449,14 @@ export default function HashRushSheet({ open, conversationId, viewerKey, playerN
     ? copy.ticketFailed
     : launch && frameTimedOut && !frameReady ? copy.connectFailed : null
   const loading = !failure && !frameReady
+  // Lowered, the sheet sits below the room's composer, out of sight.
+  const hiddenOffsetPx = resolveHashRushSheetHiddenOffsetPx(frame)
 
   return (
     <motion.div
       ref={sheetRef}
-      initial={{ y: '100%' }}
-      animate={{ y: open ? 0 : '100%' }}
+      initial={{ y: hiddenOffsetPx }}
+      animate={{ y: open ? 0 : hiddenOffsetPx }}
       transition={{ type: 'spring', stiffness: 360, damping: 38 }}
       drag="y"
       dragControls={dragControls}
@@ -322,12 +469,17 @@ export default function HashRushSheet({ open, conversationId, viewerKey, playerN
       // ancestor) must not start from here.
       onPointerDown={(event) => event.stopPropagation()}
       onTouchStart={(event) => event.stopPropagation()}
-      className={`absolute inset-x-0 bottom-0 z-[90] flex flex-col overflow-hidden rounded-t-2xl bg-white ${
+      // Above the room's talk and floating bits, under the room's own strip and
+      // composer (z-[46] while the sheet is up) and its menus and dialogs (50+).
+      className={`absolute inset-x-0 z-[45] flex flex-col overflow-hidden rounded-t-2xl bg-white ${
         open ? 'shadow-[0_-12px_32px_rgba(15,23,42,0.18)]' : ''
       }`}
-      style={{ top: 'env(safe-area-inset-top, 0px)' }}
+      // The room's slot once measured; before that, everything under the top bar.
+      style={frame
+        ? { top: frame.topPx, height: frame.heightPx }
+        : { top: 'calc(54px + env(safe-area-inset-top, 0px))', bottom: 0 }}
+      // Not modal: the room's composer and talk below stay in use.
       role="dialog"
-      aria-modal={open ? true : undefined}
       aria-label={copy.title}
       aria-hidden={!open}
       inert={!open}
