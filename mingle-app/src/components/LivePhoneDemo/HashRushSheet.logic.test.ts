@@ -259,13 +259,13 @@ describe('hash rush bubbles while up', () => {
 })
 
 describe('hash rush quick chat', () => {
-  it('uses the game own 14 lines', () => {
+  it('uses the game own lines without its swear word', () => {
     expect(hashRushQuickChat('ko')).toEqual([
-      'ㄱㄱ', '잠만', 'ㅋㅋㅋ', 'ㅇㅋ', 'ㄴㄴ', 'ㅎㅇ', '굳굳 👍', 'ㄲㅂ', 'ㅈㅅ', 'ㄷㄷ', 'ㅅㅂ', '한 판 더?', '팀 바꾸자', 'ㅂㅂ',
+      'ㄱㄱ', '잠만', 'ㅋㅋㅋ', 'ㅇㅋ', 'ㄴㄴ', 'ㅎㅇ', '굳굳 👍', 'ㄲㅂ', 'ㅈㅅ', 'ㄷㄷ', '한 판 더?', '팀 바꾸자', 'ㅂㅂ',
     ])
     for (const [language, lines] of Object.entries(HASH_RUSH_QUICK_CHAT)) {
-      expect(lines, language).toHaveLength(14)
-      expect(new Set(lines).size, language).toBe(14)
+      expect(lines, language).toHaveLength(13)
+      expect(new Set(lines).size, language).toBe(13)
       for (const line of lines) expect(line.trim(), language).toBe(line)
     }
   })
