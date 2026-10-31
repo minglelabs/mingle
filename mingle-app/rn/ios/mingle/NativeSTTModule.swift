@@ -809,6 +809,9 @@ class NativeSTTModule: RCTEventEmitter {
     /// Guards `pendingDeviceAudioStart`, which `stop` reads off the main queue.
     private let deviceAudioLock = NSLock()
     private var pendingDeviceAudioStart: DeviceAudioStartRequest?
+    /// Set in `deinit`: the main-queue state below is then torn down inline,
+    /// on whatever queue releases the module.
+    private var isDeallocating = false
     private var deviceAudioReceiver: MingleDeviceAudioReceiver?
     private var deviceAudioActive = false
     private var deviceAudioSheetTimeoutWorkItem: DispatchWorkItem?
@@ -817,10 +820,11 @@ class NativeSTTModule: RCTEventEmitter {
     private var deviceAudioAppObservers: [NSObjectProtocol] = []
     private var deviceAudioInterruptionObserver: NSObjectProtocol?
     private var deviceAudioKeepAlivePlayer: AVAudioPlayer?
+    /// Fires on wsQueue; created and cancelled on the main queue.
+    private var deviceAudioSilenceTimer: DispatchSourceTimer?
     // wsQueue only.
     private var deviceAudioBuffer = Data()
     private var deviceAudioLastAudioAt = Date.distantPast
-    private var deviceAudioSilenceTimer: DispatchSourceTimer?
     // Device audio also records the microphone (the user's own voice) and
     // sends the two mixed. Main queue: the engine and its observer.
     private var deviceAudioMicEngine: AVAudioEngine?
@@ -995,6 +999,7 @@ class NativeSTTModule: RCTEventEmitter {
     }
 
     deinit {
+        isDeallocating = true
         stopAndCleanup(reason: nil)
     }
 
@@ -1350,7 +1355,7 @@ class NativeSTTModule: RCTEventEmitter {
         stopHealthCheck()
         removeAudioObserversIfNeeded()
         removeTapIfNeeded()
-        tearDownDeviceAudioCapture()
+        performOnMainQueue { $0.tearDownDeviceAudioCapture() }
         emitQaAudioInjection(qaAudioInjector.sessionEnded())
 
         if audioEngine.isRunning {
@@ -1388,7 +1393,7 @@ class NativeSTTModule: RCTEventEmitter {
         stopHealthCheck()
         removeAudioObserversIfNeeded()
         removeTapIfNeeded()
-        tearDownDeviceAudioCapture()
+        performOnMainQueue { $0.tearDownDeviceAudioCapture() }
         emitQaAudioInjection(qaAudioInjector.sessionEnded())
 
         if audioEngine.isRunning {
@@ -1765,6 +1770,21 @@ class NativeSTTModule: RCTEventEmitter {
 
     // MARK: - Device audio (ReplayKit broadcast extension)
 
+    /// Runs `work` on the main queue, which owns the device-audio state:
+    /// inline when already there, otherwise queued (never `sync`, so it
+    /// cannot deadlock). From `deinit` it runs inline on any queue: nothing
+    /// else can reach the module then, and a queued closure must not capture it.
+    private func performOnMainQueue(_ work: @escaping (NativeSTTModule) -> Void) {
+        if isDeallocating || Thread.isMainThread {
+            work(self)
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            work(self)
+        }
+    }
+
     private func takePendingDeviceAudioStart() -> DeviceAudioStartRequest? {
         deviceAudioLock.lock()
         defer { deviceAudioLock.unlock() }
@@ -1833,17 +1853,23 @@ class NativeSTTModule: RCTEventEmitter {
 
     /// Ends a start that is still waiting on the broadcast sheet. The user
     /// closing the sheet is a cancel, not a failure: the promise is rejected
-    /// with the code the shell maps back to idle. Safe from any queue, and
-    /// (it captures no `self`) while the module is being deallocated.
+    /// with the code the shell maps back to idle. Callable from any queue: the
+    /// request is taken under `deviceAudioLock` and rejected at once; its
+    /// sheet and channel are main-queue state and are cleared on that queue.
     private func cancelPendingDeviceAudioStart(reason: String) {
         guard let request = takePendingDeviceAudioStart() else { return }
         NSLog("[NativeSTTModule] device audio request dropped reason=%@", reason)
         request.reject("device_audio_permission", "device_audio_permission_denied", nil)
-        clearDeviceAudioRequestUI()
-        if !deviceAudioActive {
-            let receiver = deviceAudioReceiver
-            deviceAudioReceiver = nil
-            receiver?.stop()
+        performOnMainQueue { module in
+            // When queued, this may run after a newer start began waiting on
+            // the sheet, which then owns the sheet and the channel.
+            guard module.pendingDeviceAudioConversationId() == nil else { return }
+            module.clearDeviceAudioRequestUI()
+            if !module.deviceAudioActive {
+                let receiver = module.deviceAudioReceiver
+                module.deviceAudioReceiver = nil
+                receiver?.stop()
+            }
         }
     }
 
@@ -1919,8 +1945,8 @@ class NativeSTTModule: RCTEventEmitter {
         }
         deviceAudioAppObservers = []
         deviceAudioSheetWasShown = false
-        // Only the view itself needs the main queue. It is handed over on its
-        // own, so nothing here refers back to the module.
+        // Main queue, except from `deinit`: the view is then handed to the
+        // main queue on its own, so nothing here refers back to the module.
         guard let picker = deviceAudioPickerView else { return }
         deviceAudioPickerView = nil
         if Thread.isMainThread {
@@ -2361,8 +2387,9 @@ class NativeSTTModule: RCTEventEmitter {
 
     /// Stops capturing device audio. Closing the channel makes the
     /// extension's writes fail, which ends the broadcast. Does nothing for a
-    /// microphone session. Runs from `deinit` too, so it must not capture
-    /// `self` in a closure.
+    /// microphone session. Main queue (callers go through
+    /// `performOnMainQueue`); it runs from `deinit` too, so it must not
+    /// capture `self` in a closure.
     private func tearDownDeviceAudioCapture() {
         deviceAudioActive = false
         MingleDeviceAudioState.shared.isActive = false
@@ -2370,6 +2397,9 @@ class NativeSTTModule: RCTEventEmitter {
         stopDeviceAudioMicrophone()
         stopDeviceAudioKeepAlive()
         removeDeviceAudioInterruptionObserver()
+        // When queued, a teardown may run after a newer start began waiting
+        // on the sheet, which then owns the channel.
+        guard pendingDeviceAudioConversationId() == nil else { return }
         let receiver = deviceAudioReceiver
         deviceAudioReceiver = nil
         receiver?.stop()
