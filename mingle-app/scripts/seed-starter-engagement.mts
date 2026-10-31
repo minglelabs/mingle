@@ -23,27 +23,29 @@ import { commentOnPostAsOperator } from '../src/server/operator-comments/comment
 // in or loving Korea. Candidates written for this list are in
 // scripts/starter-feed-candidates.mts.
 const PICKS: Record<keyof StarterFeed, string[]> = {
+  // Existing posts first: a published post or a latent one with a photo plan
+  // is used before anything new is written for the same account and topic.
   ko: [
-    'cmvwdqcpf0001sh9987n9umbm', // rina.sel (JP, F) 한국 와서 처음 자른 앞머리
-    'cmvwdqd9j0003sh99czmdffsm', // linxiao.sh (CN, F) 상하이 고깃집 알바, 한국어 주문
-    'cmvwdqdtj0005sh991jp9d20z', // em.ldn (GB, F) 런던 카페에서 한국어 주문
-    'cmvwdqedh0007sh99pi75c2ff', // misaki.tkm (JP, F) 신오쿠보 포장마차
-    'cmvwdqeyb0009sh99bgtkbvv1', // lucas.frr (BR, M) 찜질방 계란 이마 깨기
-    'cmvwdqg48000bsh99hxrxgf4f', // yuxuan.w (CN, F) 마파두부에 괜찮아요 세 번
+    'cmvtocu1e0018sh3e3cnkkjki', // rina.sel (JP, F) 韓国の美容室で初めて髪切った, published
+    'cmvwdqd9j0003sh99czmdffsm', // linxiao.sh (CN, F) 상하이 고깃집 알바, 한국어 주문 (written for this list)
+    'cmvwdqdtj0005sh991jp9d20z', // em.ldn (GB, F) 런던 카페에서 한국어 주문 (written for this list)
+    'cmvdgqqp20160shsydydf48ga', // misaki.tkm (JP, F) 鐘路3街のポチャ通り
+    'cmvtocn45000ksh3eferewy36', // dan.in.seoul (US, M) 3년째 아메리카노 원 플리즈, published
+    'cmvtocww8001ish3e6gk77j9a', // yuxuan.w (CN, F) 첫 찜질방 양머리, published
     'cmuwrn9lq0019sh9afs6cpgkt', // chen.yi.chun (TW, F) 涼麵, published
-    'cmvwdqgo9000dsh99fjtnmijt', // sara.ueno (JP, F) 교환학생 패딩 몇 개?
-    'cmvwdqheb000fsh99x2cb9s03', // kaito.mz (JP, M) 한국 아이돌처럼 해 주세요
+    'cmvfrs00y00tcshwui4ri9nnu', // sara.ueno (JP, F) 교환학생 자기소개서 4번째 수정
+    'cmvwdqheb000fsh99x2cb9s03', // kaito.mz (JP, M) 한국 아이돌처럼 해 주세요 (written for this list)
     'cmuwrof8i002csh5cdclh80xc', // anya.lestari (ID, F) 똠얌꿍, published
   ],
   foreign: [
     'post:cmvb31snm0004shx1uy1mp6i7', // seoyun.daily (KR, F) 유리바닥 사진 4장, already a post
-    'cmvwdqhye000hsh997lkuusrp', // dohyun.k (KR, M) 경복궁 앞 사진사, 남자 한복?
-    'cmvwdqiia000jsh99fvw03kbr', // haeun.log (KR, F) 연트럴파크 산책, 맛집 교환
+    'cmvtocz6r001qsh3e20ny2s1l', // dohyun.k (KR, M) 북한산 외국인 등산객, 같이 갈 사람? published
+    'cmvfr1mhy001bshwu5p4jdik5', // haeun.log (KR, F) 연남동 시오라멘, 차슈 몇 장?
     'cmvdflgnx004asheyafjb73ji', // junho.bsn (KR, M) 돼지국밥 다대기, published
-    'cmvwdqj2b000lsh99uiz4uwqr', // siwoo.j (KR, M) 성수 옥상 점심 10분
+    'cmvfrfg9700f2shwu3oi34fmp', // siwoo.j (KR, M) 성수 옥상 사진, 바람에 앞머리
     'cmuwrpj9p003csh5cjhjk3u4b', // yuki.yokohama (JP, F) 편의점 푸딩, published
-    'cmvwdqjm8000nsh99w5d262ad', // minji.k (KR, F) 광주 양림동, 코스 짜 드림
-    'cmvew5mjz01xhshsylhvkwrs8', // taeyun.s (KR, M) 서울 토박이 길치
+    'cmvtoczrc001ssh3e03pyibcv', // minji.k (KR, F) 망원시장 떡볶이, published
+    'cmvtocym4001osh3es60uvbxl', // taeyun.s (KR, M) 한강 따릉이, published
     'cmvdfmxo8006ksheyl0zkfqnz', // ayaka.sel (JP in Seoul, F) 2호선 반대 방향
     'cmvdfli6e004wsheypwu0ak23', // yuxuan.w (CN in Seoul, F) 괴물 드라마, published
   ],
