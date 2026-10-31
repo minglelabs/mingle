@@ -7,11 +7,13 @@ import { registerNativeEdgeSwipeSuppression } from "@/components/slide-surface";
 import { isLeftEdgeSwipeBack, isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import {
   buildLanguageSelectorItems,
+  buildLanguageSelectorItemsForDisplayLocale,
   filterLanguageSelectorItems,
   partitionLanguageSelectorItemsByPriority,
   sortLanguageSelectorItems,
   type LanguageSelectorItem,
 } from "@/components/LivePhoneDemo/language-selector.logic";
+import { resolveUiLocaleForLanguage } from "@/components/LivePhoneDemo/language-onboarding.logic";
 import { resolveLanguageOnboardingCopy } from "@/components/LivePhoneDemo/language-onboarding-copy";
 import { resolveSignupCopy } from "@/i18n/signup-copy";
 import LanguageFlag from "@/components/language-flag";
@@ -122,18 +124,30 @@ export default function LanguageOnboardingModal({
     setDiscoveryOptionCodes(shuffleDiscoverySourceCodes());
   }, []);
 
-  // The list stays in the app's current ui locale regardless of which output
-  // language is tentatively selected -- unlike the old "my language" step, this
-  // selection doesn't represent a language the user necessarily reads, so
-  // re-localizing the list to match it would strand them mid-browse.
+  // Language names follow the modal copy (the tentatively selected language),
+  // so one screen never mixes languages ("Speaks English", not "Speaks 영어").
+  // The order stays sorted by the app's ui-locale names and search still
+  // matches those names, so tapping a language does not reshuffle the list
+  // under the user's finger or strand them mid-browse.
+  const nameLocale = resolveUiLocaleForLanguage(language);
   const languageItems = useMemo(
-    () => buildLanguageSelectorItems(uiLocale),
-    [uiLocale],
+    () => buildLanguageSelectorItemsForDisplayLocale(nameLocale, uiLocale),
+    [nameLocale, uiLocale],
   );
-  const filteredItems = useMemo(() => {
-    const visibleItems = filterLanguageSelectorItems(languageItems, query);
-    return sortLanguageSelectorItems(visibleItems, "locale", uiLocale);
-  }, [languageItems, uiLocale, query]);
+  const browseOrder = useMemo(() => new Map(
+    sortLanguageSelectorItems(buildLanguageSelectorItems(uiLocale), "locale", uiLocale)
+      .map((item, index) => [item.code, index]),
+  ), [uiLocale]);
+  const sortByBrowseOrder = useCallback(
+    (items: LanguageSelectorItem[]) => [...items].sort(
+      (left, right) => (browseOrder.get(left.code) ?? 0) - (browseOrder.get(right.code) ?? 0),
+    ),
+    [browseOrder],
+  );
+  const filteredItems = useMemo(
+    () => sortByBrowseOrder(filterLanguageSelectorItems(languageItems, query)),
+    [languageItems, query, sortByBrowseOrder],
+  );
   const { priorityItems, otherItems } = useMemo(
     () => partitionLanguageSelectorItemsByPriority(filteredItems),
     [filteredItems],
@@ -147,8 +161,8 @@ export default function LanguageOnboardingModal({
   const interestItems = useMemo(() => {
     const visibleItems = filterLanguageSelectorItems(languageItems, interestQuery)
       .filter((item) => canonicalizeSttLanguageCode(item.code) !== ownLanguageCode);
-    return partitionLanguageSelectorItemsByPriority(sortLanguageSelectorItems(visibleItems, "locale", uiLocale));
-  }, [interestQuery, languageItems, ownLanguageCode, uiLocale]);
+    return partitionLanguageSelectorItemsByPriority(sortByBrowseOrder(visibleItems));
+  }, [interestQuery, languageItems, ownLanguageCode, sortByBrowseOrder]);
 
   const handleStepBack = useCallback(() => {
     if (isConfirming) return;

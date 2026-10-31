@@ -291,3 +291,42 @@ describe('same-language row of a single-language utterance', () => {
     expect(visibleRows(renderedUtterance(reloaded))).toEqual(['ja', 'en'])
   })
 })
+
+describe('same-language row of a mixed-language utterance that comes back unchanged', () => {
+  // Typed "이거 deadline이 언제까지였지?" (QA trial 2026-10-31): finalize flags it
+  // mixed, but the ko rendering keeps "deadline" and equals the original, so a
+  // ko row would only repeat the source line.
+  const base = {
+    id: UTTERANCE_ID,
+    originalText: '이거 deadline이 언제까지였지?',
+    originalLang: 'ko',
+    targetLanguages: ['ko', 'ja', 'en'],
+    translationFinalized: { ko: true, ja: true, en: true },
+    createdAtMs: CREATED_AT_MS,
+    sourceLanguagesMixed: true,
+  }
+
+  it('hides the ko row when it equals the original', () => {
+    const reloaded = mergeServerCopy(createUtteranceStoreState([]), {
+      ...base,
+      translations: { ko: '이거 deadline이 언제까지였지?', ja: 'これの締め切りはいつでしたっけ？', en: 'When was the deadline for this?' },
+    })
+    expect(visibleRows(renderedUtterance(reloaded))).toEqual(['ja', 'en'])
+  })
+
+  it('ignores whitespace-only differences', () => {
+    const reloaded = mergeServerCopy(createUtteranceStoreState([]), {
+      ...base,
+      translations: { ko: ' 이거  deadline이 언제까지였지? ', ja: 'これの締め切りはいつでしたっけ？', en: 'When was the deadline for this?' },
+    })
+    expect(visibleRows(renderedUtterance(reloaded))).toEqual(['ja', 'en'])
+  })
+
+  it('keeps the ko row when the rendering differs from the original', () => {
+    const reloaded = mergeServerCopy(createUtteranceStoreState([]), {
+      ...base,
+      translations: { ko: '이거 마감이 언제까지였지?', ja: 'これの締め切りはいつでしたっけ？', en: 'When was the deadline for this?' },
+    })
+    expect(visibleRows(renderedUtterance(reloaded))).toEqual(['ko', 'ja', 'en'])
+  })
+})
