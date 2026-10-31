@@ -1,0 +1,70 @@
+# UI/UX 이슈 및 설계 결정 기록 (Codex 쓰레드 히스토리)
+
+프로젝트 규칙: mingle 서비스의 UI/UX 관련 이슈·설계 결정은 이 문서에
+날짜별 섹션으로 상세히(한국어 위주) 기록한다.
+
+---
+
+## 2026-10-31 — 그룹 보이스룸 RN UI (Phase 3)
+
+### 배경
+대화방 안에서 돌아가는 실시간 그룹 음성 대화(최대 8명) + 숨은 서버 통역
+에이전트. 아키텍처는 self-host LiveKit SFU(`wss://voice.minglelabs.app`) +
+통역 참가자. 앱의 나머지 화면은 WebView 호스트지만, 보이스룸은 WebRTC의
+백그라운드/잠금화면 오디오·오디오 라우팅·AEC가 필요해서 **앱 최초의 네이티브
+RN 화면**으로 만든다(계획서 §0 확정 사항).
+
+### 화면 구성 (Clubhouse / HelloTalk 스타일)
+- **VoiceRoomScreen**: 상단 헤더(뒤로/최소화, 제목, N/8 카운트), 스피커 그리드,
+  라이브 캡션 리스트, 하단 컨트롤 바.
+  - **스피커 그리드**: 최대 8타일 + 빈 자리 "초대" 타일. 아바타는 채팅과 동일
+    소스(`User.image`). 말하는 사람은 `ActiveSpeakersChanged` 기반으로 아바타
+    둘레에 **애니메이션 발광 링**(`Animated`, scale 1→1.12 / opacity 0→0.9 루프).
+  - **라이브 캡션**: 원문 → 내 언어 번역. 최신순. partial은 흐리게(…) 표시,
+    echo(자기 발화 되돌림)는 반투명.
+  - **컨트롤 바**: 마이크, 스피커 라우트, 통역 ON/OFF, 원음/통역 볼륨 믹스,
+    나가기(붉은색).
+- **VoiceRoomBanner**: 대화방 메시지 리스트 상단 고정 배너. 방이 살아있으면
+  "🎙 보이스톡 · N/8" + 아바타 3개 + [참여]. 없으면 "보이스톡 시작" 진입점.
+- **VoiceMiniBar**: 방에 있으면서 채팅을 둘러볼 때 떠 있는 플로팅 알약(PiP 느낌).
+  탭 = 방 다시 열기, ⎋ = 나가기.
+
+### 설계 결정 (POC 재현)
+- **구독 정책(`shouldSubscribe`)**: 사람 오디오는 항상 구독. 통역 참가자는
+  `interpret ON`일 때만 **내 언어 레인 `tr:<myLang>`** 하나만 구독, 나머지
+  레인은 미구독. OFF면 통역 레인 전부 해제. `autoSubscribe:false`로 연결.
+- **볼륨 믹스(`originalVolume`)**:
+  - 통역 OFF 또는 내 언어와 같은 화자 → 원음 100%.
+  - 고정(static) 모드 → 원음 25%(`origVol` 슬라이더).
+  - 동적(dynamic) 모드 → 레인 재생 중일 때만 15%, 아니면 100%.
+  - 통역 트랙은 항상 `trVol`(기본 100%).
+  - `lane` 데이터 메시지의 playing 값으로 동적 더킹 토글.
+- **통역 토글**: `setAttributes({interpret:'on'|'off'})` + 재구독 + 재믹스,
+  토글 시 `lanePlaying` 리셋.
+- **캡션 프로토콜**: 토픽 `interpreter`, 타입 partial/final/echo/translation/
+  play/lane/error. partial→final 전환 시 partialId→id 리맵으로 늦게 도착한
+  translation도 올바른 줄에 붙도록 보관(`partialToId`). play 메트릭은 **내
+  언어일 때만** 해당 줄에 부착.
+- **마이크 거부 폴백**: 마이크 권한 없으면 리스너로 입장(컨트롤 비활성 + "마이크
+  없음" 표기), 방에서 쫓아내지 않음.
+
+### i18n
+- 한국어 우선. 첫 네이티브 화면이라 웹 i18n 카탈로그를 끌어오지 않고 보이스룸
+  전용 ko+en 문자열 테이블(`voiceStrings.ts`)을 둠. primary locale이 ko*면 한국어,
+  그 외 en 폴백. 추후 언어 확장은 이 테이블에 추가.
+
+### 브리지 / 통합
+- RN↔WebView 브리지 규약: 웹이 `native_voice_open|close|status_request`
+  커맨드로 네이티브 오버레이를 제어, 네이티브는 `mingle:native-voice`
+  CustomEvent로 방 상태(state)와 배너용 status(GET /voice 폴링)를 웹에 전달.
+- 오버레이는 기존 WebView 위에 절대배치. 통역 배너/엔트리는 채팅 UI가 웹이므로
+  웹이 띄우고, "참여/시작" 탭 시 open 커맨드로 현재 conversationId의 네이티브
+  방을 연다.
+- 배너 상태는 채팅 열려 있는 동안 GET /voice를 약 10초 간격 폴링.
+
+### 미해결/후속
+- 실기기 2대 통화·발화 링·배경 오디오는 Mac 빌드에서만 검증 가능(이 호스트는
+  Windows). pod install / 네이티브 빌드 명령은 최종 보고 참조.
+- iOS Live Activity("번역 중")는 MVP에서 CallKit 대신 사용 예정(후속 네이티브 작업).
+- 스피커 라우트 토글은 기존 `nativeAudioRoute` 개념과 연동 예정(현재는 콜백 훅만
+  노출).
