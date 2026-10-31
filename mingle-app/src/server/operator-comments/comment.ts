@@ -11,6 +11,7 @@ import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { detectSourceLanguage } from '@/server/translation/detect-source-language'
 import { resolveDefaultPostTranslationLanguages, translateCommentBodySettled } from '@/server/translation/post-translation-service'
 import { generateOperatorComment } from './generate'
+import { operatorTextProvider } from '@/server/translation/translate-texts'
 
 export type GeneratedCommentResult =
   | { ok: true; commentId: string; text: string; language: string; kind: string }
@@ -73,13 +74,14 @@ export async function commentOnPostAsOperator(
     })
     if (!generated) return { ok: false, error: 'generation_failed' }
 
-    const detected = await detectSourceLanguage({ text: generated.text, clientHint: generated.language })
+    const detected = await detectSourceLanguage({ text: generated.text, clientHint: generated.language, provider: operatorTextProvider() })
     const translationRows = detected && detected.trim()
       ? (
           await translateCommentBodySettled({
             sourceText: generated.text,
             sourceLanguage: detected,
             targetLanguages: resolveDefaultPostTranslationLanguages(detected),
+            provider: operatorTextProvider(),
           })
         ).map((row) => ({ language: row.language, status: row.status, text: row.text }))
       : []

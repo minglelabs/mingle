@@ -18,7 +18,7 @@ const {
   },
 }))
 
-vi.mock('@/server/translation/translate-texts', () => ({ translateTexts: mockTranslateTexts }))
+vi.mock('@/server/translation/translate-texts', () => ({ operatorTextProvider: () => undefined, translateTexts: mockTranslateTexts }))
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     appMessage: { findMany: mockMessageFindMany, update: writeSpies.messageUpdate },

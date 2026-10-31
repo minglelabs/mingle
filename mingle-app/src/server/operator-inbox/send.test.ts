@@ -39,7 +39,7 @@ vi.mock('@/lib/app-conversations', () => ({
   materializePendingConversationInvitees: m.materialize,
   listChannelMemberUserIdsBySessionKey: m.listMemberIds,
 }))
-vi.mock('@/server/translation/translate-texts', () => ({ translateTexts: m.translateTexts }))
+vi.mock('@/server/translation/translate-texts', () => ({ operatorTextProvider: () => undefined, translateTexts: m.translateTexts }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: m.writeAdminAudit }))
 vi.mock('@/server/conversation-realtime', () => ({ notifyConversationMessage: m.notifyConversationMessage }))
 vi.mock('@/server/push-notifications', () => ({ sendPushNotificationForConversationMessage: m.sendPush }))

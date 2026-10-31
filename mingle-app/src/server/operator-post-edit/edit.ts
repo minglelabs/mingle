@@ -5,6 +5,7 @@ import { storeReservePostImage } from '@/server/operator-post-reserve/post-image
 import { hidePostByModerator, unhidePostByModerator } from '@/server/reports/moderation-service'
 import { detectSourceLanguage } from '@/server/translation/detect-source-language'
 import { resolveEditTargetLanguages, translatePostBodySettled } from '@/server/translation/post-translation-service'
+import { operatorTextProvider } from '@/server/translation/translate-texts'
 
 export const OPERATOR_POST_PHOTO_MAX_BYTES = 15 * 1024 * 1024
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
@@ -51,10 +52,10 @@ export async function editOperatorPostText(ctx: AdminContext, postId: string, ra
   if (!text || text.length > MAX_BODY_LENGTH) return { ok: false, error: 'invalid_text', status: 400 }
   if (text === post.sourceText) return { ok: true }
 
-  const language = await detectSourceLanguage({ text, clientHint: post.sourceLanguage })
+  const language = await detectSourceLanguage({ text, clientHint: post.sourceLanguage, provider: operatorTextProvider() })
   const prior = (await prisma.postTranslation.findMany({ where: { postId }, select: { language: true } })).map((row) => row.language)
   const targets = language ? resolveEditTargetLanguages(language, prior) : []
-  const rows = language && targets.length ? await translatePostBodySettled({ sourceText: text, sourceLanguage: language, targetLanguages: targets }) : []
+  const rows = language && targets.length ? await translatePostBodySettled({ sourceText: text, sourceLanguage: language, targetLanguages: targets, provider: operatorTextProvider() }) : []
   const bodyVersion = post.bodyVersion + 1
 
   const swapped = await prisma.$transaction(async (tx) => {

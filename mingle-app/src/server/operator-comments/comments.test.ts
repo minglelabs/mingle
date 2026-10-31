@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/server/llm/generate-json', () => ({ generateJson: vi.fn() }))
+vi.mock('@/server/llm/generate-json', () => ({ resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: vi.fn() }))
 
 import { cleanGeneratedComment, commentLanguageFor, generateOperatorComment, pickCommentKind, COMMENT_KINDS } from './generate'
 
