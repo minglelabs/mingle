@@ -166,6 +166,43 @@ export async function leaveVoiceCall(
   });
 }
 
+// Seats held by apps that crashed or lost signal never call leave, and without
+// the webhook nothing frees them, so 8 of them would lock the room. Before a
+// join, drop anyone LiveKit no longer has (after a grace for people mid-join),
+// and end the call if nobody is left.
+export const RECONCILE_GRACE_MS = 45_000;
+
+export async function reconcileLiveCall(
+  store: VoiceStore,
+  input: {
+    channelId: string;
+    listIdentities: (room: string) => Promise<string[] | null>;
+    now?: Date;
+  },
+): Promise<{ dropped: string[]; ended: boolean }> {
+  const now = input.now ?? new Date();
+  const live = await store.withChannelLock(input.channelId, (tx) => tx.findLiveCall(input.channelId));
+  if (!live) return { dropped: [], ended: false };
+  const present = await input.listIdentities(live.livekitRoom);
+  if (present === null) return { dropped: [], ended: false };
+  const here = new Set(present);
+  return store.withChannelLock(input.channelId, async (tx) => {
+    const call = await tx.findLiveCall(input.channelId);
+    if (!call || call.id !== live.id) return { dropped: [], ended: false };
+    const dropped: string[] = [];
+    for (const participant of await tx.listActiveParticipants(call.id)) {
+      if (here.has(participant.userId)) continue;
+      if (now.getTime() - participant.joinedAt.getTime() < RECONCILE_GRACE_MS) continue;
+      await tx.markParticipantLeft({ callId: call.id, userId: participant.userId, at: now });
+      dropped.push(participant.userId);
+    }
+    if (dropped.length && (await tx.listActiveParticipants(call.id)).length === 0) {
+      return { dropped, ended: await endCallInTx(tx, call, now) };
+    }
+    return { dropped, ended: false };
+  });
+}
+
 export type LiveKitWebhookEvent = {
   event?: string;
   room?: { name?: string };

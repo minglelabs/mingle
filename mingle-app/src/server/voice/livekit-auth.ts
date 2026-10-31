@@ -94,6 +94,36 @@ export function mintVoiceJoinToken(input: VoiceJoinTokenInput): string {
   );
 }
 
+// Who LiveKit says is in a room right now (RoomService.ListParticipants over
+// Twirp). null = could not ask; [] = the room is not there or is empty.
+export async function listRoomIdentities(
+  config: LiveKitConfig,
+  room: string,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = 2500,
+): Promise<string[] | null> {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const token = signHs256(
+    { iss: config.apiKey, sub: "mingle-app", nbf: nowSec, exp: nowSec + 60, video: { room, roomAdmin: true } },
+    config.apiSecret,
+  );
+  const base = config.url.replace(/^ws(s?):\/\//i, "http$1://").replace(/\/+$/, "");
+  try {
+    const response = await fetchImpl(`${base}/twirp/livekit.RoomService/ListParticipants`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ room }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (response.status === 404) return [];
+    if (!response.ok) return null;
+    const body = (await response.json()) as { participants?: Array<{ identity?: string }> };
+    return (body.participants ?? []).map((p) => p.identity || "").filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
 // LiveKit signs each webhook with a JWT in the Authorization header whose
 // `sha256` claim is the base64 SHA-256 of the raw request body.
 export function verifyLiveKitWebhook(args: {

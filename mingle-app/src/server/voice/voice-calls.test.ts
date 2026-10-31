@@ -5,6 +5,8 @@ import {
   getLiveCallView,
   joinVoiceCall,
   leaveVoiceCall,
+  reconcileLiveCall,
+  RECONCILE_GRACE_MS,
   VoiceRoomFullError,
 } from "@/server/voice/voice-calls";
 
@@ -72,6 +74,41 @@ describe("voice calls", () => {
     await leaveVoiceCall(store, { channelId: CHANNEL, userId: "user-1" });
     const second = await joinVoiceCall(store, { channelId: CHANNEL, userId: "user-1", lang: "ko", interpretOn: true });
     expect(second.id).not.toBe(first.id);
+  });
+});
+
+describe("reconcileLiveCall", () => {
+  const later = () => new Date(Date.now() + RECONCILE_GRACE_MS + 1000);
+
+  it("frees seats of people LiveKit no longer has, so a full room opens up", async () => {
+    const store = createMemoryVoiceStore();
+    await joinMany(store, 8);
+    const result = await reconcileLiveCall(store, {
+      channelId: CHANNEL,
+      listIdentities: async () => ["user-1", "user-2"],
+      now: later(),
+    });
+    expect(result.dropped).toHaveLength(6);
+    expect(result.ended).toBe(false);
+    const view = await joinVoiceCall(store, { channelId: CHANNEL, userId: "user-9", lang: "ko", interpretOn: true });
+    expect(view.participants.map((p) => p.userId)).toEqual(["user-1", "user-2", "user-9"]);
+  });
+
+  it("ends the call when LiveKit has nobody, and does nothing when LiveKit cannot be asked", async () => {
+    const store = createMemoryVoiceStore();
+    await joinMany(store, 2);
+    expect(await reconcileLiveCall(store, { channelId: CHANNEL, listIdentities: async () => null, now: later() }))
+      .toEqual({ dropped: [], ended: false });
+    const result = await reconcileLiveCall(store, { channelId: CHANNEL, listIdentities: async () => [], now: later() });
+    expect(result).toEqual({ dropped: ["user-1", "user-2"], ended: true });
+    expect(store.endedEvents).toHaveLength(1);
+  });
+
+  it("keeps people who only just joined", async () => {
+    const store = createMemoryVoiceStore();
+    await joinMany(store, 1);
+    const result = await reconcileLiveCall(store, { channelId: CHANNEL, listIdentities: async () => [] });
+    expect(result).toEqual({ dropped: [], ended: false });
   });
 });
 

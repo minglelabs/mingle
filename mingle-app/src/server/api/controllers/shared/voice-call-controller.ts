@@ -4,13 +4,14 @@ import { getAuthOptions } from "@/lib/auth-options";
 import { getConversationSessionKeyForMember } from "@/lib/app-conversations";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { prisma } from "@/lib/prisma";
-import { mintVoiceJoinToken, readLiveKitConfig, verifyLiveKitWebhook } from "@/server/voice/livekit-auth";
+import { listRoomIdentities, mintVoiceJoinToken, readLiveKitConfig, verifyLiveKitWebhook } from "@/server/voice/livekit-auth";
 import { prismaVoiceStore } from "@/server/voice/prisma-voice-store";
 import {
   applyLiveKitWebhookEvent,
   getLiveCallView,
   joinVoiceCall,
   leaveVoiceCall,
+  reconcileLiveCall,
   type LiveKitWebhookEvent,
   type VoiceStore,
   VoiceRoomFullError,
@@ -18,10 +19,12 @@ import {
 
 export const runtime = "nodejs";
 
-// Tests swap the store; production always uses Prisma.
+// Tests swap the store and the LiveKit lookup; production uses Prisma and LiveKit.
 let store: VoiceStore = prismaVoiceStore;
-export function setVoiceStoreForTests(next: VoiceStore | null) {
+let listIdentities: typeof listRoomIdentities = listRoomIdentities;
+export function setVoiceStoreForTests(next: VoiceStore | null, lookup?: typeof listRoomIdentities) {
   store = next ?? prismaVoiceStore;
+  listIdentities = lookup ?? listRoomIdentities;
 }
 
 type MemberCheck = { userId: string } | { response: NextResponse };
@@ -67,6 +70,12 @@ export async function postVoiceCallTokenResponse(request: NextRequest, conversat
 
   const config = readLiveKitConfig();
   if (!config) return NextResponse.json({ error: "voice_unavailable" }, { status: 503 });
+
+  // Free seats left by apps that dropped without saying goodbye.
+  await reconcileLiveCall(store, {
+    channelId: conversationId,
+    listIdentities: (room) => listIdentities(config, room),
+  }).catch((error) => console.warn("[voice] reconcile_failed", error));
 
   let call;
   try {
@@ -118,6 +127,13 @@ export async function postLiveKitWebhookResponse(request: NextRequest) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const result = await applyLiveKitWebhookEvent(store, event);
-  return NextResponse.json({ ok: true, ...result });
+  try {
+    const result = await applyLiveKitWebhookEvent(store, event);
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error) {
+    // e.g. an identity that is not a user. Answer 200 so LiveKit does not
+    // retry an event that will never apply; the log keeps it visible.
+    console.error("[voice] webhook_apply_failed", event.event, error);
+    return NextResponse.json({ ok: false, handled: false });
+  }
 }
