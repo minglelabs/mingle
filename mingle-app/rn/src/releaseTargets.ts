@@ -73,8 +73,8 @@ function isDevelopmentTunnelUrl(rawValue: string): boolean {
   const normalizedLowerValue = normalizedValue.toLowerCase();
 
   // Devbox named-tunnel hosts, with an optional per-session slot suffix
-  // (e.g. mingle-app-devbox-2.photo-for-passport.com).
-  const devboxHostPattern = /mingle-(app|stt)-devbox(-\d+)?\.photo-for-passport\.com/i;
+  // (e.g. mingle-app-devbox-2.minglelabs.app).
+  const devboxHostPattern = /mingle-(app|stt)-devbox(-\d+)?\.(photo-for-passport\.com|minglelabs\.app)/i;
   if (devboxHostPattern.test(normalizedLowerValue)) {
     return true;
   }
