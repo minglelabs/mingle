@@ -240,13 +240,42 @@ export function decodeCaptionPayload(
   }
 }
 
+type TextDecoderLike = { decode: (bytes: Uint8Array) => string };
+
 function defaultDecode(bytes: Uint8Array): string {
-  // TextDecoder exists in RN's Hermes runtime; fall back to a manual UTF-8
-  // decode only if it is somehow missing (keeps this file test-portable).
-  const DecoderCtor = (globalThis as { TextDecoder?: typeof TextDecoder }).TextDecoder;
+  // Use TextDecoder when the runtime has one; otherwise decode UTF-8 by hand
+  // so non-Latin captions (Korean, Japanese, ...) still come out right.
+  const DecoderCtor = (globalThis as { TextDecoder?: new () => TextDecoderLike }).TextDecoder;
   if (DecoderCtor) return new DecoderCtor().decode(bytes);
+  return decodeUtf8(bytes);
+}
+
+export function decodeUtf8(bytes: Uint8Array): string {
   let out = '';
-  for (let i = 0; i < bytes.length; i += 1) out += String.fromCharCode(bytes[i]);
+  let i = 0;
+  while (i < bytes.length) {
+    const b0 = bytes[i];
+    let cp = 0xfffd;
+    let size = 1;
+    if (b0 < 0x80) {
+      cp = b0;
+    } else if (b0 >= 0xc2 && b0 < 0xe0 && i + 1 < bytes.length) {
+      cp = ((b0 & 0x1f) << 6) | (bytes[i + 1] & 0x3f);
+      size = 2;
+    } else if (b0 >= 0xe0 && b0 < 0xf0 && i + 2 < bytes.length) {
+      cp = ((b0 & 0x0f) << 12) | ((bytes[i + 1] & 0x3f) << 6) | (bytes[i + 2] & 0x3f);
+      size = 3;
+    } else if (b0 >= 0xf0 && b0 < 0xf5 && i + 3 < bytes.length) {
+      cp =
+        ((b0 & 0x07) << 18) |
+        ((bytes[i + 1] & 0x3f) << 12) |
+        ((bytes[i + 2] & 0x3f) << 6) |
+        (bytes[i + 3] & 0x3f);
+      size = 4;
+    }
+    out += String.fromCodePoint(cp);
+    i += size;
+  }
   return out;
 }
 

@@ -5,6 +5,7 @@ import ReactAppDependencyProvider
 import UserNotifications
 import CoreSpotlight
 import UniformTypeIdentifiers
+import livekit_react_native
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -17,6 +18,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+    // LiveKit (group voice talk) must set up its WebRTC audio before any other
+    // React Native initialization.
+    LivekitReactNative.setup()
     UNUserNotificationCenter.current().delegate = self
     MingleLastScreenSnapshotStore.shared.install()
     // Keeps the audio session alive while the app is in the background, so

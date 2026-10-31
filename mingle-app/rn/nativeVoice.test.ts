@@ -7,6 +7,9 @@ import {
 } from './src/nativeVoice';
 import type { VoiceApi, VoiceTokenResponse } from './src/voice/voiceApi';
 
+// Jest runs on Node, which has TextEncoder; the RN tsconfig has no DOM lib.
+declare const TextEncoder: { new (): { encode: (s: string) => Uint8Array } };
+
 function pub(partial: Partial<LkPublication>): LkPublication {
   return {
     kind: 'audio',
