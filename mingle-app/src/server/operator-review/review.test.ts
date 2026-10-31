@@ -168,12 +168,12 @@ describe('where this server can draw (the ChatGPT pool)', () => {
     expect(data.text).toBeUndefined()
   })
 
-  it('falls back to drawing by hand when the pool fails', async () => {
+  it('reports a failed drawing and keeps the draw button for another try', async () => {
     mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie' })
     mocks.drawImage.mockResolvedValue(null)
-    mocks.reserveUpdate.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie', error: 'photo_requested' })
-    await reviewOperatorPost(null, 'r1', 'draw', null)
-    expect(mocks.reserveUpdate.mock.calls[0][0].data).toMatchObject({ state: 'review', error: 'photo_requested' })
+    mocks.reserveUpdate.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie', error: 'photo_draw_failed' })
+    await expect(reviewOperatorPost(null, 'r1', 'draw', null)).resolves.toEqual({ ok: false, error: 'draw_failed' })
+    expect(mocks.reserveUpdate.mock.calls[0][0].data).toMatchObject({ state: 'review', error: 'photo_draw_failed' })
   })
 
   it('draws a new profile photo right away on 재제작', async () => {
