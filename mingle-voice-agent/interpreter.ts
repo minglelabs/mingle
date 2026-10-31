@@ -18,6 +18,7 @@ import { SonioxStream, type SttPartial, type SttSegment } from './soniox-stream'
 import { translateUtterance, type TranslateTurn } from './translate';
 import { synthesizeStream, TTS_SAMPLE_RATE } from './tts';
 import { createJoinToken, INTERPRETER_ROLE } from './token';
+import { addUsage, type InterpreterUsage } from './service-logic';
 
 const LANE_SAMPLE_RATE = TTS_SAMPLE_RATE;
 const FRAME_MS = 20;
@@ -59,6 +60,8 @@ type Speaker = {
 
 export type InterpreterStats = { segments: number; interpreted: number; echoSuppressed: number; errors: number };
 
+
+
 export function normalizeLang(value: string | null | undefined): string | null {
     const base = (value || '').trim().toLowerCase().replace(/_/g, '-').split('-')[0];
     return base || null;
@@ -75,6 +78,8 @@ function pruneRecent(list: Recent[], now: number): void {
 export class Interpreter {
     readonly room = new Room();
     readonly stats: InterpreterStats = { segments: 0, interpreted: 0, echoSuppressed: 0, errors: 0 };
+    readonly usage: InterpreterUsage = { totalMs: 0, byLang: {}, byListener: {} };
+    readonly startedAt = Date.now();
     private lanes = new Map<string, Lane>();
     private speakers = new Map<string, Speaker>();
     private turns: TranslateTurn[] = [];
@@ -212,6 +217,12 @@ export class Interpreter {
         return [...targets];
     }
 
+    private listenersFor(lang: string): string[] {
+        return this.humans()
+            .filter((participant) => participant.attributes.interpret !== 'off' && normalizeLang(participant.attributes.lang) === lang)
+            .map((participant) => participant.identity);
+    }
+
     private findEcho(speaker: Speaker, text: string, lang: string): string | null {
         const now = Date.now();
         const lane = this.lanes.get(lang);
@@ -332,7 +343,11 @@ export class Interpreter {
                 console.warn(`[interpreter:${this.roomName}] ${id} -> ${targetLang} failed: ${message}`);
                 this.send({ type: 'error', id, lang: targetLang, message });
             } finally {
-                if (playAt) this.send({ type: 'lane', lang: targetLang, playing: false, audioMs: Math.round((played / LANE_SAMPLE_RATE) * 1000) });
+                if (playAt) {
+                    const audioMs = Math.round((played / LANE_SAMPLE_RATE) * 1000);
+                    addUsage(this.usage, targetLang, this.listenersFor(targetLang), audioMs);
+                    this.send({ type: 'lane', lang: targetLang, playing: false, audioMs });
+                }
             }
         });
     }
@@ -371,13 +386,38 @@ export class Interpreter {
 }
 
 const running = new Map<string, Promise<Interpreter>>();
+const closeListeners = new Set<(interpreter: Interpreter) => void>();
+
+// Called once per interpreter after it leaves its room (idle, kicked, or shutdown).
+export function onInterpreterClosed(listener: (interpreter: Interpreter) => void): () => void {
+    closeListeners.add(listener);
+    return () => closeListeners.delete(listener);
+}
+
+export function runningRoomNames(): string[] {
+    return [...running.keys()];
+}
+
+export async function closeAllInterpreters(): Promise<void> {
+    const all = await Promise.allSettled([...running.values()]);
+    await Promise.all(all.map((result) => (result.status === 'fulfilled' ? result.value.close() : undefined)));
+}
 
 // One interpreter per room, started on the first token request.
 export function ensureInterpreter(roomName: string): Promise<Interpreter> {
     const existing = running.get(roomName);
     if (existing) return existing;
     const interpreter = new Interpreter(roomName);
-    interpreter.onClose = () => running.delete(roomName);
+    interpreter.onClose = () => {
+        running.delete(roomName);
+        for (const listener of closeListeners) {
+            try {
+                listener(interpreter);
+            } catch (error) {
+                console.warn(`[interpreter:${roomName}] close listener failed`, error);
+            }
+        }
+    };
     const started = interpreter.start().then(() => interpreter);
     started.catch((error) => {
         console.warn(`[interpreter:${roomName}] failed to start`, error);
