@@ -50,3 +50,31 @@ Required fixture format:
 - iOS device-only tests are enabled only through env flags:
   - `MINGLE_TEST_IOS_HEALTHCHECK=1`
   - `MINGLE_TEST_IOS_TTS_EVENT_E2E=1`
+
+## Golden set for QA audio injection
+
+`golden/manifest.json` lists short ko/en/ja/zh/es utterances with ground-truth
+transcripts (plus accepted alternatives such as `3` vs `three`) and reference
+translations. Only the manifest is committed. The audio is rendered locally
+with the macOS voices named in the manifest:
+
+```bash
+pnpm qa:audio:golden            # writes test-fixtures/audio/local/golden/<id>.wav (git ignored)
+pnpm qa:audio:golden --force    # re-render after changing a transcript or voice
+```
+
+Each WAV is 16 kHz, 16-bit mono and trimmed to the speech, so the end of the
+file is the end of speech. `local/golden/index.json` records each file's
+duration and voice. The existing `local/tts-output/` clips are translation TTS
+outputs without a recorded source transcript, so they cannot serve as ground
+truth; to add a real recording, put it under `local/` and add a manifest entry
+with its transcript.
+
+These files feed the QA-only microphone substitute in the native STT modules
+(`MingleQaAudioInjector` on iOS, `NativeSttQaAudioInjector` on Android). In a
+QA-bridge build, `window.__MINGLE_QA__.qaInjectAudio({ fixtureId, url })`
+makes the running (or next) STT session send the fixture instead of
+microphone samples, at the microphone's own pace and chunk size, and then
+silence until the session stops. `pnpm test:qa:stt-audio` drives that through
+Appium and reports CER/WER and latency; see
+[qa/mobile-ui/STT_AUDIO_INJECTION.md](../../qa/mobile-ui/STT_AUDIO_INJECTION.md).

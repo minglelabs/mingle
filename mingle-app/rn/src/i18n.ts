@@ -19,7 +19,7 @@ export const WEB_SUPPORTED_LOCALE_SEGMENTS = new Set(
 );
 
 export function resolveWebLocaleSegment(rawLocaleTag: string): RnUiLocale {
-  return resolveAppSupportedLocaleTag(rawLocaleTag) ?? "ko";
+  return resolveAppSupportedLocaleTag(rawLocaleTag) ?? "en";
 }
 
 export function resolveVersionPolicyLocale(rawLocaleTag: string): VersionPolicyLocale {

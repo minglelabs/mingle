@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { Analytics } from "@vercel/analytics/next";
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { preconnect } from "react-dom";
 import { Toaster } from "sonner";
 import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import CoinHost from "@/components/coins/coin-host";
@@ -10,8 +11,10 @@ import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
 import NativeBannerRouteGuard from "@/components/native-banner-route-guard";
 import UiDiagnosticsProbe from "@/components/ui-diagnostics-probe";
-import NativeProfileLinkOverlay from "@/components/native-profile-link-overlay";
-import NativeConversationShareOverlay from "@/components/native-conversation-share-overlay";
+import {
+  DeferredNativeConversationShareOverlay,
+  DeferredNativeProfileLinkOverlay,
+} from "@/components/deferred-native-overlays";
 import NativePushTapReceiver from "@/components/native-push-tap-receiver";
 import WebViewStateRestore from "@/components/webview-state-restore";
 import RouteTransitionCurtain from "@/components/route-transition-curtain";
@@ -41,6 +44,23 @@ const metadataBase =
   toMetadataBaseUrl(process.env.VERCEL_URL);
 
 const TOAST_BOTTOM_OFFSET = "calc(env(safe-area-inset-bottom, 0px) + 108px)";
+
+// Vercel Analytics loads /_vercel/insights/script.js, which only Vercel's edge
+// serves. Elsewhere (Railway) that request renders a 404 page on the server on
+// every launch, competing with the first screen's own requests.
+const VERCEL_ANALYTICS_ENABLED = process.env.VERCEL === "1";
+
+/** Origin of the public profile-image bucket (avatars on the first screen). */
+function resolveProfileImageOrigin(): string | null {
+  const raw = process.env.CLOUDFLARE_R2_PUBLIC_URL?.trim() || process.env.R2_PUBLIC_URL?.trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
 
 export const metadata: Metadata = {
   metadataBase,
@@ -86,6 +106,10 @@ export default async function RootLayout({
 }>) {
   const session = await getServerSession(getAuthOptions());
   const postHogConfig = resolvePostHogBrowserConfig();
+  const profileImageOrigin = resolveProfileImageOrigin();
+  // The first cards' avatars come from this origin: open its connection while
+  // the page's scripts load instead of after the feed answers.
+  if (profileImageOrigin) preconnect(profileImageOrigin);
 
   return (
     <html lang={DEFAULT_LOCALE} suppressHydrationWarning>
@@ -103,8 +127,8 @@ export default async function RootLayout({
             >
               <MobileCanvasShell>
                 {children}
-                <NativeProfileLinkOverlay />
-                <NativeConversationShareOverlay />
+                <DeferredNativeProfileLinkOverlay />
+                <DeferredNativeConversationShareOverlay />
                 <CoinHost />
                 <NativePushTapReceiver />
                 <NativeBannerRouteGuard />
@@ -147,7 +171,7 @@ export default async function RootLayout({
             </PostHogAnalyticsProvider>
           </AuthSessionProvider>
         </TtsSettingsProvider>
-        <Analytics />
+        {VERCEL_ANALYTICS_ENABLED ? <Analytics /> : null}
       </body>
     </html>
   );
