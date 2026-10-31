@@ -269,6 +269,16 @@ export async function rewriteReservePostText(args: {
   existingTexts: string[]
   seed: string
   topic: string | null
+  /** Everything on the account's profile, so the text sounds like this exact person. */
+  profile?: {
+    gender: string | null
+    age: number | null
+    city: string | null
+    country: string | null
+    bio: string | null
+    speaks: string[]
+    learning: Array<{ language: string; level: number | null }>
+  }
   generate?: GenerateFn
 }): Promise<string | null> {
   const generate = args.generate ?? generateJson
@@ -280,6 +290,10 @@ export async function rewriteReservePostText(args: {
       buildReserveInstructions(args.persona),
       'This call rewrites ONE post staff sent back, so "slots" has one slot. Its photo is already decided: "fixedPhoto" describes it. Keep that photo and write a new text that fits it as its caption; copy "fixedPhoto" unchanged into "photo" (empty when there is none).',
       `The input also has "revision": the post's current text ("previousText"). The new text must be clearly different from it in wording and opening${args.feedback ? ', and follow the staff "feedback" first, also where it conflicts with the advice above' : ''}.`,
+      'Keep what the post is about (the subject of "previousText" and the photo) unless the staff "feedback" asks for something else; change how it is said.',
+      'Do not copy the register, length or sentence endings of "previousText": staff sent it back, so it may be off. Write it the way this person really posts: usually one to three short lines, not a paragraph.',
+      'Register: someone under 40 posting on a social app writes casually. In Korean that means 반말 or short 해요-style endings with ㅋㅋ/ㅠㅠ as the voice allows, never the written -습니다/-ㅂ니다 style; in other languages, the casual phone register of that age.',
+      'The input also has "profile": everything on this person\'s profile (gender, age, city and country, bio, the languages they speak and the ones they learn with a level from 1 to 5). The text must be something this exact person would post: their age group\'s everyday register in their own language (a young native speaker types casually to friends, not in polite written style, unless "poster" says otherwise), their life as the bio tells it (job or study, where they live, what they like), their gender, and, when the slot is in a language they learn, that level. Use facts from the bio; never contradict the profile or invent a different life.',
     ].join('\n'),
     input: {
       persona: args.persona,
@@ -288,13 +302,14 @@ export async function rewriteReservePostText(args: {
       slots: [{
         slot: 1,
         topic: args.topic ? briefs.get(args.topic) ?? args.topic : 'the same subject as previousText',
-        shape: 'like previousText, but in new words',
+        shape: 'whatever fits this person and the photo best; usually short, as "poster" says',
         language: args.language,
         photo: args.photo ? args.photo.kind : false,
         ...(args.photo ? { fixedPhoto: args.photo.description } : {}),
       }],
       alreadyWritten: args.existingTexts.slice(-AVOID_SAMPLE_MAX).map((text) => Array.from(text).slice(0, AVOID_SAMPLE_CHARS).join('')),
       revision: { previousText: args.previousText, ...(args.feedback ? { feedback: args.feedback } : {}) },
+      ...(args.profile ? { profile: args.profile } : {}),
     },
     responseSchema: RESPONSE_SCHEMA,
     validate: (value) => {
