@@ -30,6 +30,19 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private var streaming = false
     private var lastProbeAt = Date.distantPast
     private let audioConverter = BroadcastAudioConverter()
+    /// Fires the moment the app closes the channel (Stop in the room), so the
+    /// broadcast ends at once instead of on the next screen-frame probe.
+    private var closeSource: DispatchSourceRead?
+
+    /// What iOS shows when the broadcast ends because HashChat stopped. iOS
+    /// always shows an alert when an extension ends its broadcast.
+    private static var endedMessage: String {
+        let language = Locale.preferredLanguages.first?.lowercased() ?? ""
+        if language.hasPrefix("ko") { return "HashChat 번역을 마쳤어요." }
+        if language.hasPrefix("ja") { return "HashChatの翻訳を終了しました。" }
+        if language.hasPrefix("zh") { return "HashChat 翻译已结束。" }
+        return "Translation ended in HashChat."
+    }
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         queue.async { [weak self] in
@@ -105,9 +118,9 @@ final class SampleHandler: RPBroadcastSampleHandler {
         var byte: UInt8 = 0
         let received = recv(socketFD, &byte, 1, MSG_PEEK | MSG_DONTWAIT)
         if received == 0 {
-            finish(code: 2, message: "Translation ended in HashChat.")
+            finish(code: 2, message: Self.endedMessage)
         } else if received < 0, errno != EAGAIN, errno != EWOULDBLOCK, errno != EINTR {
-            finish(code: 2, message: "Translation ended in HashChat.")
+            finish(code: 2, message: Self.endedMessage)
         }
     }
 
@@ -131,6 +144,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
                 socketFD = fd
                 pending = Data(MingleBroadcastChannel.streamHeader)
                 lastDeliveredAt = Date()
+                watchForAppClose(fd)
                 flush()
                 setStreaming(socketFD >= 0)
                 return socketFD >= 0
@@ -167,12 +181,25 @@ final class SampleHandler: RPBroadcastSampleHandler {
             if written < 0, errno == EINTR { continue }
             if written < 0, errno == EAGAIN || errno == EWOULDBLOCK { return }
             // The app closed the channel: its session ended, so end the broadcast.
-            finish(code: 2, message: "Translation ended in HashChat.")
+            finish(code: 2, message: Self.endedMessage)
             return
         }
     }
 
+    /// The app never writes to the channel, so readability means it closed it.
+    private func watchForAppClose(_ fd: Int32) {
+        closeSource?.cancel()
+        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
+        source.setEventHandler { [weak self] in
+            self?.probeChannel()
+        }
+        source.resume()
+        closeSource = source
+    }
+
     private func closeSocket() {
+        closeSource?.cancel()
+        closeSource = nil
         setStreaming(false)
         if socketFD >= 0 {
             Darwin.close(socketFD)

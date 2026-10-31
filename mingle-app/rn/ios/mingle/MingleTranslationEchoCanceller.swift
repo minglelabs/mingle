@@ -29,8 +29,19 @@ final class MingleTranslationEchoCanceller {
     }
 
     private static let sampleRate = Double(MingleBroadcastChannel.sampleRate)
-    private static let tapCount = 9
-    private static let centerTap = 4
+    private static let tapCount = 17
+    private static let centerTap = 8
+    /// Residual echo suppression works on 10 ms frames.
+    private static let suppressionFrame = 160
+    /// Frame output / predicted echo energy below this: nothing but echo is
+    /// left in the frame (no other app speaking), so it is pressed down.
+    private static let echoOnlyRatio: Float = 0.04
+    /// Above this the other app clearly speaks over the clip: left as it is.
+    private static let doubleTalkRatio: Float = 0.15
+    /// Gain for an echo-only frame (about -30 dB on top of the subtraction).
+    private static let echoOnlyGain: Float = 0.03
+    /// Echo-only frames in a row before the gain starts to close (30 ms).
+    private static let closeAfterFrames = 3
     /// Capture past the latest candidate offset that the search wants.
     private static let searchSeconds = 0.25
     /// Longest the capture is held back while a new clip is lined up. Kept
@@ -68,6 +79,10 @@ final class MingleTranslationEchoCanceller {
         var correlation = [Float](repeating: 0, count: MingleTranslationEchoCanceller.tapCount * MingleTranslationEchoCanceller.tapCount)
         var crossCorrelation = [Float](repeating: 0, count: MingleTranslationEchoCanceller.tapCount)
         var samplesSinceSolve = 0
+        /// Residual suppression gain carried from frame to frame.
+        var suppressionGain: Float = 1
+        var suppressedFrames = 0
+        var echoOnlyFrameRun = 0
         /// Diagnostics over the samples the clip overlapped: capture energy
         /// before and after removal, and how many samples that was.
         var energyIn = 0.0
@@ -196,14 +211,15 @@ final class MingleTranslationEchoCanceller {
             : 0
         let centerWeight = reference.weights[Self.centerTap]
         let weightSum = reference.weights.reduce(0, +)
-        Self.note(String(format: "clip done lined=%d attempts=%d delayMs=%.1f overlapMs=%.0f reductionDb=%.1f centerWeight=%.2f weightSum=%.2f",
+        Self.note(String(format: "clip done lined=%d attempts=%d delayMs=%.1f overlapMs=%.0f reductionDb=%.1f centerWeight=%.2f weightSum=%.2f suppressedMs=%d",
             reference.delay != nil ? 1 : 0,
             reference.searchAttempts,
             Double(reference.delay ?? 0) / Self.sampleRate * 1000,
             Double(reference.overlapSamples) / Self.sampleRate * 1000,
             reductionDb,
             centerWeight,
-            weightSum
+            weightSum,
+            reference.suppressedFrames * 10
         ))
     }
 
@@ -330,6 +346,7 @@ final class MingleTranslationEchoCanceller {
         guard first + count + taps > 0, first - taps < reference.length else { return }
 
         var window = [Float](repeating: 0, count: taps)
+        var predictedEcho = [Float](repeating: 0, count: count)
         for offset in 0 ..< count {
             let center = first + offset
             var windowEnergy: Float = 0
@@ -346,6 +363,7 @@ final class MingleTranslationEchoCanceller {
             for tap in 0 ..< taps {
                 echo += reference.weights[tap] * window[tap]
             }
+            predictedEcho[offset] = echo
             block[offset] = captured - echo
             reference.energyIn += Double(captured * captured)
             reference.energyOut += Double(block[offset] * block[offset])
@@ -366,6 +384,63 @@ final class MingleTranslationEchoCanceller {
                 reference.samplesSinceSolve = 0
                 solveWeights(reference)
             }
+        }
+        suppressResidualEcho(&block, predictedEcho: predictedEcho, reference: reference)
+    }
+
+    /// Subtraction leaves a faint copy of the clip (about -17 to -20 dB on a
+    /// device), which a recognizer still transcribes when nothing else plays.
+    /// Per 10 ms frame: when what is left is small next to the echo just
+    /// removed, the frame holds nothing but that echo and is pressed down;
+    /// when the other app clearly speaks over the clip it is left alone.
+    private func suppressResidualEcho(_ block: inout [Float], predictedEcho: [Float], reference: Reference) {
+        let frameSize = Self.suppressionFrame
+        var start = 0
+        while start < block.count {
+            let end = min(block.count, start + frameSize)
+            var echoEnergy: Float = 0
+            var residualEnergy: Float = 0
+            for index in start ..< end {
+                echoEnergy += predictedEcho[index] * predictedEcho[index]
+                residualEnergy += block[index] * block[index]
+            }
+            let samples = Float(end - start)
+            var target: Float = 1
+            // Only where the clip is actually audible in this frame.
+            if echoEnergy / samples > 1e-7 {
+                let ratio = residualEnergy / echoEnergy
+                if ratio <= Self.echoOnlyRatio {
+                    target = Self.echoOnlyGain
+                } else if ratio < Self.doubleTalkRatio {
+                    let position = (ratio - Self.echoOnlyRatio) / (Self.doubleTalkRatio - Self.echoOnlyRatio)
+                    target = Self.echoOnlyGain + (1 - Self.echoOnlyGain) * position
+                }
+            }
+            // Opens at once, so the start of the other app's speech is never
+            // clipped; closes only after a few echo-only frames in a row, so a
+            // short pause in that speech is not pressed down. Ramped across the
+            // frame so no step is audible.
+            let previous = reference.suppressionGain
+            if target < previous {
+                reference.echoOnlyFrameRun += 1
+            } else {
+                reference.echoOnlyFrameRun = 0
+            }
+            let next: Float
+            if target >= previous {
+                next = target
+            } else if reference.echoOnlyFrameRun >= Self.closeAfterFrames {
+                next = max(target, previous * 0.5)
+            } else {
+                next = previous
+            }
+            for index in start ..< end {
+                let progress = Float(index - start + 1) / samples
+                block[index] *= previous + (next - previous) * progress
+            }
+            reference.suppressionGain = next
+            if next < 0.5 { reference.suppressedFrames += 1 }
+            start = end
         }
     }
 
