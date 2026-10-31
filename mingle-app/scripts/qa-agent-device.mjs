@@ -479,6 +479,14 @@ async function cmdTap(args, holdMs = 60) {
   const [x, y] = args.map(Number);
   if (!Number.isFinite(x) || !Number.isFinite(y)) fail('tap needs x y');
   const state = requireSession();
+  // Android: a UiAutomator2 W3C touch tap reaches the WebView as a touch AND a second, delayed click
+  // (~0.6 s), so a toggle (the mic Start button) starts and stops at once. `adb input tap` is one
+  // real tap. Long presses keep the pointer path, which input tap cannot hold.
+  if (state.platform === 'android' && holdMs <= 100) {
+    adb(state.udid, 'shell', 'input', 'tap', String(toDevice(state, x)), String(toDevice(state, y)));
+    console.log(JSON.stringify({ tapped: [x, y], via: 'adb' }));
+    return;
+  }
   await performPointer([
     { type: 'pointerMove', duration: 0, x: toDevice(state, x), y: toDevice(state, y) },
     { type: 'pointerDown', button: 0 },
