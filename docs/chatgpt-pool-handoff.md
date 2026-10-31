@@ -41,7 +41,19 @@ Chrome extension (×11 profiles) ──> 127.0.0.1:10320  (loopback, keyless; /a
     `agent`, `chat`/`image`, `step <email> <job8> <step>`, `done`, `fail`.
   - Restart: `launchctl kickstart -k gui/$(id -u)/app.mingle.chatgpt-pool`.
     This kills in-flight jobs, and the agents reconnect within about 10s.
-- **Tunnel**: ngrok, launchd label `app.mingle.chatgpt-pool-tunnel`.
+- **Fixed URL (use this)**: `https://chatgpt-pool.minglelabs.app`, a Cloudflare
+  named tunnel `chatgpt-pool` (id `a5309179-…`) on the minglelabs.app zone,
+  separate from devbox's `minglelabs` tunnel.
+  - Config: `~/.mingle/chatgpt-pool/cloudflared.yml`. It points only at the
+    keyed public port 10321 and returns 404 for anything else.
+  - launchd label `app.mingle.chatgpt-pool-cf`
+    (`~/Library/LaunchAgents/app.mingle.chatgpt-pool-cf.plist`).
+    Log: `~/Library/Logs/app.mingle.chatgpt-pool-cf.log`.
+  - The agent sandbox cannot `launchctl bootstrap` a new service (I/O error 5).
+    The user loads it once from their own terminal.
+  - Cloudflare answers 524 after about 100s, so image calls must use
+    `"async": true`.
+- **Old tunnel**: ngrok, launchd label `app.mingle.chatgpt-pool-tunnel`.
   - The URL is random and changes when ngrok restarts. Read it from
     `curl -s http://127.0.0.1:4040/api/tunnels`.
   - Last URL: `https://dae9-58-233-211-182.ngrok-free.app`.
@@ -116,69 +128,34 @@ curl -s "$U/v1/chat/completions" -H "authorization: Bearer $K" -H 'content-type:
     `answerText()` hides them while reading `innerText`.
   - A text turn appears before its words do, so the wait loop no longer
     accepts empty text for text jobs.
-- ❌ **Images don't work yet.** There are two separate problems.
+- ✅ **Images work end to end through the tunnel** (extension 1.2.0): about
+  34s, verified 11:31 UTC on likeyoureyes@snu.ac.kr, a 1086x1448 PNG.
 
-## Open problem 1: the image answer is never detected (fix this first)
+## Image fixes (2026-10-30, extension 1.2.0)
 
-Every image job ends in `fail … timeout no answer in time`.
+- An image reply has no `…:assistant` element, so the runner records the
+  picture count before sending and treats `images > imagesBefore` as the
+  answer once the picture's `src` stays the same for two checks.
+- The turn carries `data-talvt-turn-state`: `in_progress` while drawing,
+  `complete` when done. Image jobs wait while it is anything but `complete`.
+- `generated()` also accepts any `<img>` inside
+  `[data-testid=generated-image-gallery]` / `[data-web-image-tile]`.
+- The `image` op reads the widest picture in the newest gallery (the first
+  one when there are two candidates) and fails with `ui_changed` if it reads
+  nothing.
+- While waiting, the runner logs a `wait turns=… images=… turnState=…` step
+  every 15s, so a future DOM change shows up in the log.
 
-**Cause:** an image reply has **no** `data-chatgpt-search-unit-key=…:assistant`
-element. As a result:
+## Async jobs (for the 300s tunnel cut)
 
-- `state.turns` stays 0.
-- `answer()` (`background.js`, the `state.turns <= before` check) waits forever.
-
-What a finished image reply looks like (seen 2026-10-30 in chicshow.ai's
-profile), from the image outward:
-
-```
-button[data-testid=generated-image-preview][aria-label="생성된 이미지 1"]   ← the <img alt="생성된 이미지 1"> (naturalWidth 1086) is inside
- div[data-web-image-tile=true]
-  div[data-testid=generated-image-gallery]
-   div[data-chatgpt-search-message-ids=<message id>]
-    div[data-talvt-turn-state=complete]          ← probably "finished" (check its value while still drawing)
-     div[data-content-search-turn-key=fallback-turn-0]
-      div[data-turn-key=<uuid>]                  ← likely the general turn container for every turn
-```
-
-Suggested fix in the in-page `turns()` / `state`:
-
-- Count turns by `[data-turn-key]` (or the user/assistant split inside it)
-  instead of only `…:assistant`. Keep the legacy selectors as fallbacks.
-- Or, for image jobs, record `images` before sending and treat
-  `generated().length > imagesBefore` as the answer.
-- `generated()` already matches `alt` starting with `생성된 이미지`, requiring
-  `naturalWidth > 400`. Note the alt is now `생성된 이미지 1` (numbered).
-- Check `creating` while drawing. It matches `Creating image|이미지 생성 중|…`
-  in `main` text and may also have changed. `data-talvt-turn-state` may be a
-  better signal.
-- When ChatGPT shows two candidates ("1번/2번 이미지 선택"), click one first.
-  `generated().at(-1)` may otherwise pick the wrong one.
-- Reading the image: the code does `fetch(img.src)` → base64 in the page. This
-  worked before, but verify it with the new DOM.
-
-How to inspect safely:
-
-- Use the Claude in Chrome tools in a tab of their own tab group.
-- Don't use the pool's pinned tabs. They are in another group, and the
-  extension drives them.
-- One finished image conversation exists in chicshow.ai's profile:
-  `chatgpt.com/c/6ae47ca5-2464-83ee-b417-cb8f0d7f3f5b`.
-
-## Open problem 2: the tunnel cuts long requests at 300s
-
-- The image request through ngrok returned `ERR_NGROK_3004` ("invalid or
-  incomplete HTTP response") after exactly **301s**.
-- This happened even after setting `createServer({ requestTimeout: 0 })`.
-- Find out whether the cut comes from the ngrok free plan or from Node:
-  1. Run the same image call against `http://127.0.0.1:10321` with the key.
-  2. If it survives past 300s locally, ngrok is the limit.
-- Images usually take 1–4 minutes, and a retry can double that. Robust options:
-  - **Async jobs (recommended):** `POST /v1/images/generations` with
-    `"async": true` returns `{id}` at once, and `GET /v1/jobs/:id` returns
-    `pending | done (+b64) | error`. Keep the blocking form for short calls.
-  - Or stream a 200 status early and send whitespace heartbeats before the
-    JSON. The downside is that errors can no longer use HTTP status codes.
+- ngrok cut blocking image requests at 301s (`ERR_NGROK_3004`).
+- Add `"async": true` to `POST /v1/images/generations` or
+  `POST /v1/chat/completions`. The server answers `202 {id, status:"pending"}`
+  at once.
+- Poll `GET /v1/jobs/:id` (same key). It returns `status` `pending`,
+  `done` with `result` (the normal response body), or `error` with
+  `error {status, code, message}`. Finished jobs are kept for an hour.
+- The blocking form still works for short calls.
 
 ## Other notes
 
@@ -195,8 +172,6 @@ How to inspect safely:
 - A stray agent `probe-x (signed out)` in the log was a manual probe. It is
   harmless and expires on its own.
 - Later ideas (not started):
-  - A fixed tunnel URL via `cloudflared tunnel login`, which needs the user to
-    log in.
   - Moving the pool to the user's home Windows PC.
 - History: PRs #351 (pool), #356 (public port), #357 (lost jobs, keepalive,
   self-reload), and this branch (progress steps, new ChatGPT DOM, citation

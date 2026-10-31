@@ -14,6 +14,7 @@
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		A1B2C3D45E6F708192A3B4C5 /* NativeAuthModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6708192A3B4C5D6E7 /* NativeAuthModule.swift */; };
 		A8F1C3B52D4E6A7091BC23D4 /* NativeSTTModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D9E1F32A4B6C8091DE45F6 /* NativeSTTModule.swift */; };
+		B9C8D7E6F5A4B3C2D1E0F9A8 /* MingleBackgroundAudioPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B8C7D6E5F4A3B2C1D0E9F8 /* MingleBackgroundAudioPolicy.swift */; };
 		B7C8D9E0F1A2B3C4D5E6F708 /* NativeQrImageModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */; };
 		C8D9E0F1A2B3C4D5E6F70819 /* NativeQrImageModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */; };
 		B1E2C3D44F5A6B7091CD23E4 /* NativeSTTModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = D2E3F4A55B6C7D8091EF34A5 /* NativeSTTModuleBridge.m */; };
@@ -37,6 +38,7 @@
 		A5D6E7F65C7D9F0192FA56A8 /* NativeTTSModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeTTSModuleBridge.m; path = mingle/NativeTTSModuleBridge.m; sourceTree = "<group>"; };
 		C3D4E5F6708192A3B4C5D6E7 /* NativeAuthModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeAuthModule.swift; path = mingle/NativeAuthModule.swift; sourceTree = "<group>"; };
 		C7D9E1F32A4B6C8091DE45F6 /* NativeSTTModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeSTTModule.swift; path = mingle/NativeSTTModule.swift; sourceTree = "<group>"; };
+		A9B8C7D6E5F4A3B2C1D0E9F8 /* MingleBackgroundAudioPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MingleBackgroundAudioPolicy.swift; path = mingle/MingleBackgroundAudioPolicy.swift; sourceTree = "<group>"; };
 		D2E3F4A55B6C7D8091EF34A5 /* NativeSTTModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeSTTModuleBridge.m; path = mingle/NativeSTTModuleBridge.m; sourceTree = "<group>"; };
 		D4E5F6708192A3B4C5D6E7F8 /* NativeAuthModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeAuthModuleBridge.m; path = mingle/NativeAuthModuleBridge.m; sourceTree = "<group>"; };
 		E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeQrImageModule.swift; path = mingle/NativeQrImageModule.swift; sourceTree = "<group>"; };
@@ -70,6 +72,7 @@
 				F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */,
 				C7D9E1F32A4B6C8091DE45F6 /* NativeSTTModule.swift */,
 				D2E3F4A55B6C7D8091EF34A5 /* NativeSTTModuleBridge.m */,
+				A9B8C7D6E5F4A3B2C1D0E9F8 /* MingleBackgroundAudioPolicy.swift */,
 				F4B5C6D73B5D8E9192EF45F7 /* NativeTTSModule.swift */,
 				A5D6E7F65C7D9F0192FA56A8 /* NativeTTSModuleBridge.m */,
 				E6F708192A3B4C5D6E7F8091 /* NativePictureInPictureModule.swift */,
@@ -311,6 +314,7 @@
 				C8D9E0F1A2B3C4D5E6F70819 /* NativeQrImageModuleBridge.m in Sources */,
 				A8F1C3B52D4E6A7091BC23D4 /* NativeSTTModule.swift in Sources */,
 				B1E2C3D44F5A6B7091CD23E4 /* NativeSTTModuleBridge.m in Sources */,
+				B9C8D7E6F5A4B3C2D1E0F9A8 /* MingleBackgroundAudioPolicy.swift in Sources */,
 				E3A4B5C62D5F7B8192CD34E5 /* NativeTTSModule.swift in Sources */,
 				F5C6D7E84F6A7C8192DE45F8 /* NativeTTSModuleBridge.m in Sources */,
 				C4D5E6F708192A3B4C5D6E7F /* NativePictureInPictureModule.swift in Sources */,

@@ -23,6 +23,9 @@
  *                              picture as a markdown data URL. An image_url part in the
  *                              last user message is attached as a reference photo.
  *   POST /v1/images/generations  { prompt, reference?: data URL } -> { data: [{ b64_json }] }
+ *   Add "async": true to either POST to get 202 { id } at once, then poll
+ *   GET /v1/jobs/:id -> { status: pending | done (+ result) | error (+ error) }.
+ *   Use it through a tunnel: ngrok cuts a request at 300s and images can take longer.
  *   GET  /health, GET /accounts
  *   Optional `account` field (email) pins a request to one account.
  *
@@ -36,7 +39,7 @@
  */
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -128,11 +131,11 @@ function finish(jobId, outcome) {
   const agent = job.agent
   agent.busy = false
   if (!outcome.error) {
-    job.resolve({ account: agent.email, ...outcome })
+    job.resolve({ account: agent.email, profile: agent.profile ?? null, ...outcome })
     return
   }
   const { code, message, retryAfterMs } = outcome.error
-  log('fail', agent.email, code, message ?? '')
+  log('fail', who(agent), code, message ?? '')
   if (code === 'image_limit') {
     agent.limitedUntil = Date.now() + (retryAfterMs || 3_600_000)
     agent.limitMessage = message ?? ''
@@ -171,6 +174,34 @@ async function extensionVersion() {
   return null
 }
 
+const CHROME_DIR = join(homedir(), 'Library/Application Support/Google/Chrome')
+
+/**
+ * Which Chrome profile an agent runs in, e.g. "Profile 2 (Somi is so cute)". An
+ * extension cannot read its profile's name, but it keeps its agentId in
+ * chrome.storage, which lives in that profile's folder; so the folder holding
+ * the id is the profile. Null when not found (another OS, another Chrome).
+ */
+async function chromeProfileOf(agentId) {
+  try {
+    const names = JSON.parse(await readFile(join(CHROME_DIR, 'Local State'), 'utf8'))?.profile?.info_cache ?? {}
+    for (const folder of Object.keys(names)) {
+      const settings = join(CHROME_DIR, folder, 'Local Extension Settings')
+      for (const extension of await readdir(settings).catch(() => [])) {
+        for (const file of await readdir(join(settings, extension)).catch(() => [])) {
+          if (!/\.(log|ldb)$/.test(file)) continue
+          const path = join(settings, extension, file)
+          if ((await stat(path)).size > 5_000_000) continue
+          if ((await readFile(path, 'latin1')).includes(agentId)) return `${folder} (${names[folder]?.name ?? ''})`
+        }
+      }
+    }
+  } catch {}
+  return null
+}
+
+const who = (agent) => (agent?.profile ? `${agent.email} [${agent.profile}]` : agent?.email ?? '?')
+
 /**
  * An extension asking for work: held open until a job comes or POLL_HOLD_MS passes.
  * A hold whose connection has closed (Chrome stopped the extension's worker while it
@@ -182,7 +213,12 @@ async function poll(body, response) {
   const agent = agents.get(id) ?? { id, email: null, busy: false, limitedUntil: 0, limitMessage: '', signedOut: false, lastUsed: 0, hold: null }
   agents.set(id, agent)
   const email = typeof body.email === 'string' && body.email ? body.email : null
-  if (email !== agent.email || !agent.lastSeen) log('agent', id.slice(0, 8), email ?? '(signed out)', body.profile ?? '')
+  if (!agent.profileLookup) {
+    agent.profileLookup = chromeProfileOf(id).then((profile) => {
+      if (profile) { agent.profile = profile; log('profile', id.slice(0, 8), agent.email ?? '', profile) }
+    })
+  }
+  if (email !== agent.email || !agent.lastSeen) log('agent', id.slice(0, 8), email ?? '(signed out)', agent.profile ?? '')
   agent.email = email
   agent.signedOut = !email
   agent.profile = body.profile ?? agent.profile ?? null
@@ -247,6 +283,37 @@ function reply(response, status, payload) {
   response.end(JSON.stringify(payload))
 }
 
+/**
+ * Requests sent with "async": true, kept for an hour after they finish. A tunnel
+ * (ngrok's free plan) cuts a request at 300s and an image can take longer, so the
+ * caller gets an id at once and polls GET /v1/jobs/:id.
+ */
+const asyncJobs = new Map()
+const ASYNC_KEEP_MS = 60 * 60_000
+
+function startAsync(path, body) {
+  const id = `job_${randomUUID()}`
+  const entry = { id, status: 'pending', created: Math.floor(Date.now() / 1000), result: null, error: null, finishedAt: 0 }
+  asyncJobs.set(id, entry)
+  handleApi(path, body).then(
+    (result) => { entry.status = 'done'; entry.result = result; entry.finishedAt = Date.now() },
+    (error) => {
+      entry.status = 'error'
+      entry.error = { status: error instanceof PoolError ? error.status : 500, code: error.code ?? 'internal', message: error.message }
+      entry.finishedAt = Date.now()
+      log('error', entry.error.status, error.message)
+    },
+  )
+  for (const [key, old] of asyncJobs) if (old.finishedAt && Date.now() - old.finishedAt > ASYNC_KEEP_MS) asyncJobs.delete(key)
+  return { id, object: 'job', status: 'pending', created: entry.created }
+}
+
+function asyncStatus(id) {
+  const entry = asyncJobs.get(id)
+  if (!entry) throw new PoolError(404, 'job_not_found')
+  return { id, object: 'job', status: entry.status, created: entry.created, ...(entry.result ? { result: entry.result } : {}), ...(entry.error ? { error: entry.error } : {}) }
+}
+
 async function handleApi(path, body) {
   const image = path === '/v1/images/generations' || /image/i.test(body.model ?? '')
   const lastUser = partsText([...(body.messages ?? [])].reverse().find((m) => m.role === 'user')?.content)
@@ -256,10 +323,10 @@ async function handleApi(path, body) {
   const started = Date.now()
   log(image ? 'image' : 'chat', JSON.stringify(prompt.slice(0, 70)))
   const result = await submit({ kind: image ? 'image' : 'text', prompt: prompt.trim(), reference, account: body.account ?? null })
-  log('done', result.account, `${Math.round((Date.now() - started) / 1000)}s`)
-  if (path === '/v1/images/generations') return { created: Math.floor(Date.now() / 1000), account: result.account, data: [{ b64_json: result.image.base64 }] }
+  log('done', result.profile ? `${result.account} [${result.profile}]` : result.account, `${Math.round((Date.now() - started) / 1000)}s`)
+  if (path === '/v1/images/generations') return { created: Math.floor(Date.now() / 1000), account: result.account, profile: result.profile, data: [{ b64_json: result.image.base64 }] }
   const content = image ? `![image](data:${result.image.type};base64,${result.image.base64})` : result.text
-  return { object: 'chat.completion', model: body.model ?? 'chatgpt-web', account: result.account, choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }] }
+  return { object: 'chat.completion', model: body.model ?? 'chatgpt-web', account: result.account, profile: result.profile, choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }] }
 }
 
 function serve() {
@@ -276,7 +343,7 @@ function serve() {
         if (path === '/agent/progress') {
           const agent = agents.get(String(body.agentId ?? ''))
           if (agent) agent.lastSeen = Date.now()
-          log('step', agent?.email ?? '?', String(body.jobId ?? '').slice(0, 8), String(body.step ?? '').slice(0, 120))
+          log('step', who(agent), String(body.jobId ?? '').slice(0, 8), String(body.step ?? '').slice(0, 120))
           return reply(response, 200, { ok: true })
         }
         const agent = agents.get(String(body.agentId ?? ''))
@@ -289,7 +356,12 @@ function serve() {
       if (keyed && request.headers.authorization !== `Bearer ${KEY}`) return reply(response, 401, { error: { code: 'unauthorized' } })
       if (request.method === 'GET' && path === '/health') return reply(response, 200, { ok: true, accounts: accountsStatus().length, queued: queue.length, running: running.size })
       if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus() })
-      if (request.method === 'POST' && (path === '/v1/chat/completions' || path === '/v1/images/generations')) return reply(response, 200, await handleApi(path, await readBody(request)))
+      if (request.method === 'GET' && path.startsWith('/v1/jobs/')) return reply(response, 200, asyncStatus(decodeURIComponent(path.slice('/v1/jobs/'.length))))
+      if (request.method === 'POST' && (path === '/v1/chat/completions' || path === '/v1/images/generations')) {
+        const body = await readBody(request)
+        if (body.async === true) return reply(response, 202, startAsync(path, body))
+        return reply(response, 200, await handleApi(path, body))
+      }
       return reply(response, 404, { error: { code: 'not_found' } })
     } catch (error) {
       const status = error instanceof PoolError ? error.status : 500

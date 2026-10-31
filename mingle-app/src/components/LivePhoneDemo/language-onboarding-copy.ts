@@ -7,6 +7,8 @@ import {
 
 export type LanguageOnboardingCopy = {
   menuItemLabel: string
+  /** Large step-1 headline, paired with the 관심 언어 headline on step 2. */
+  headline: string
   title: string
   descriptionLabel: string
   searchPlaceholder: string
@@ -21,6 +23,7 @@ export type LanguageOnboardingCopy = {
 const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   ko: {
     menuItemLabel: '언어',
+    headline: '편한 언어',
     title: '가장 편한 언어를 선택해주세요',
     descriptionLabel: '선택된 언어는 앱의 기본 언어로 쓰여요.',
     searchPlaceholder: '언어 검색',
@@ -33,6 +36,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   en: {
     menuItemLabel: 'Language',
+    headline: 'Your language',
     title: 'Choose your most comfortable language',
     descriptionLabel: "This becomes your app's default language.",
     searchPlaceholder: 'Search languages',
@@ -45,6 +49,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   ja: {
     menuItemLabel: '言語',
+    headline: '使いやすい言語',
     title: '一番使いやすい言語を選択してください',
     descriptionLabel: '選択した言語がアプリの基本言語になります。',
     searchPlaceholder: '言語を検索',
@@ -57,6 +62,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   'zh-CN': {
     menuItemLabel: '语言',
+    headline: '常用语言',
     title: '请选择您最习惯的语言',
     descriptionLabel: '选择的语言将成为应用的默认语言。',
     searchPlaceholder: '搜索语言',
@@ -69,6 +75,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   'zh-TW': {
     menuItemLabel: '語言',
+    headline: '常用語言',
     title: '請選擇您最習慣的語言',
     descriptionLabel: '選擇的語言會成為應用程式的預設語言。',
     searchPlaceholder: '搜尋語言',
@@ -81,6 +88,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   fr: {
     menuItemLabel: 'Langue',
+    headline: 'Votre langue',
     title: 'Choisissez la langue avec laquelle vous êtes le plus à l’aise',
     descriptionLabel: 'La langue choisie devient la langue par défaut de l’appli.',
     searchPlaceholder: 'Rechercher une langue',
@@ -93,6 +101,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   de: {
     menuItemLabel: 'Sprache',
+    headline: 'Ihre Sprache',
     title: 'Wähle die Sprache, die dir am angenehmsten ist',
     descriptionLabel: 'Die gewählte Sprache wird die Standardsprache der App.',
     searchPlaceholder: 'Sprache suchen',
@@ -105,6 +114,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   es: {
     menuItemLabel: 'Idioma',
+    headline: 'Tu idioma',
     title: 'Elige el idioma con el que te sientas más cómodo',
     descriptionLabel: 'El idioma elegido será el idioma predeterminado de la app.',
     searchPlaceholder: 'Buscar idioma',
@@ -117,6 +127,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   pt: {
     menuItemLabel: 'Idioma',
+    headline: 'Seu idioma',
     title: 'Escolha o idioma com o qual você se sente mais confortável',
     descriptionLabel: 'O idioma escolhido se torna o idioma padrão do app.',
     searchPlaceholder: 'Buscar idioma',
@@ -129,6 +140,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   it: {
     menuItemLabel: 'Lingua',
+    headline: 'La tua lingua',
     title: 'Scegli la lingua con cui ti senti più a tuo agio',
     descriptionLabel: 'La lingua scelta diventa la lingua predefinita dell’app.',
     searchPlaceholder: 'Cerca lingua',
@@ -141,6 +153,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   ru: {
     menuItemLabel: 'Язык',
+    headline: 'Ваш язык',
     title: 'Выберите язык, который вам удобнее всего',
     descriptionLabel: 'Выбранный язык станет языком приложения по умолчанию.',
     searchPlaceholder: 'Поиск языка',
@@ -153,6 +166,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   ar: {
     menuItemLabel: 'اللغة',
+    headline: 'لغتك',
     title: 'اختر اللغة الأكثر راحة بالنسبة لك',
     descriptionLabel: 'ستصبح اللغة المختارة هي اللغة الافتراضية للتطبيق.',
     searchPlaceholder: 'ابحث عن لغة',
@@ -165,6 +179,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   hi: {
     menuItemLabel: 'भाषा',
+    headline: 'आपकी भाषा',
     title: 'अपनी सबसे सहज भाषा चुनें',
     descriptionLabel: 'चुनी गई भाषा ऐप की डिफ़ॉल्ट भाषा बन जाएगी।',
     searchPlaceholder: 'भाषा खोजें',
@@ -177,6 +192,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   th: {
     menuItemLabel: 'ภาษา',
+    headline: 'ภาษาของคุณ',
     title: 'เลือกภาษาที่คุณถนัดที่สุด',
     descriptionLabel: 'ภาษาที่เลือกจะกลายเป็นภาษาเริ่มต้นของแอป',
     searchPlaceholder: 'ค้นหาภาษา',
@@ -189,6 +205,7 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   vi: {
     menuItemLabel: 'Ngôn ngữ',
+    headline: 'Ngôn ngữ của bạn',
     title: 'Chọn ngôn ngữ bạn thấy thoải mái nhất',
     descriptionLabel: 'Ngôn ngữ đã chọn sẽ trở thành ngôn ngữ mặc định của ứng dụng.',
     searchPlaceholder: 'Tìm ngôn ngữ',

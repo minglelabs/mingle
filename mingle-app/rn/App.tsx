@@ -26,9 +26,13 @@ import {
   getNativeSttMicrophonePermissionStatus,
   getNativeSttStatus,
   isNativeSttAvailable,
+  qaClearNativeSttAudioInjection,
+  qaInjectNativeSttAudio,
   setNativeSttAec,
   startNativeStt,
   stopNativeStt,
+  type NativeSttQaAudioInjectionEvent,
+  type NativeSttQaAudioInjectionOptions,
 } from './src/nativeStt';
 import { addNativePipListener, type NativePipEvent } from './src/nativePip';
 import {
@@ -580,6 +584,9 @@ const REQUIRED_CONFIG_ERROR = missingRuntimeConfig.length > 0
   : null;
 
 const NATIVE_STT_EVENT = 'mingle:native-stt';
+const NATIVE_QA_AUDIO_INJECTION_EVENT = 'mingle:native-qa-audio-injection';
+const NATIVE_QA_AUDIO_INJECTION_LOG_KEY = '__MINGLE_QA_AUDIO_INJECTION_EVENTS__';
+const NATIVE_QA_AUDIO_INJECTION_LOG_LIMIT = 100;
 const NATIVE_STT_MESSAGE_QUEUE_KEY = '__MINGLE_NATIVE_STT_MESSAGE_QUEUE';
 const NATIVE_STT_MESSAGE_QUEUE_LIMIT = 200;
 const NATIVE_TTS_EVENT = 'mingle:native-tts';
@@ -927,6 +934,16 @@ type NativeQaSetSttStatusCommand = {
   };
 };
 
+type NativeQaAudioInjectionCommand =
+  | {
+      type: 'native_qa_inject_audio';
+      payload?: NativeSttQaAudioInjectionOptions;
+    }
+  | {
+      type: 'native_qa_clear_audio_injection';
+      payload?: Record<string, unknown>;
+    };
+
 type NativePictureInPictureCommand = {
   type: 'native_pip_start' | 'native_pip_update' | 'native_pip_playback_state' | 'native_pip_stop';
   payload?: Record<string, unknown>;
@@ -957,6 +974,7 @@ type WebViewCommand =
   | NativeWebRestoreReadyCommand
   | NativeWebRestoreResetCommand
   | NativeQaSetSttStatusCommand
+  | NativeQaAudioInjectionCommand
   | NativePictureInPictureCommand
   | NativeIapCommand;
 
@@ -1253,9 +1271,9 @@ function resolveDeviceLocaleTag(): string {
   }
 
   try {
-    return Intl.DateTimeFormat().resolvedOptions().locale || 'ko';
+    return Intl.DateTimeFormat().resolvedOptions().locale || 'en';
   } catch {
-    return 'ko';
+    return 'en';
   }
 }
 
@@ -4175,6 +4193,30 @@ function AppInner(): React.JSX.Element {
     setWebViewMountToken((current) => current + 1);
   }, [baseWebUrl, webUrl]);
 
+  // QA-only channel: native fixture playback milestones (armed, started,
+  // speech_ended, finished, ...) are appended to a bounded window log so QA
+  // drivers can read wall-clock timestamps for latency measurements.
+  const emitQaAudioInjectionToWeb = useCallback((event: NativeSttQaAudioInjectionEvent) => {
+    if (!RUNTIME_QA_BRIDGE_ENABLED) return;
+    const serialized = JSON.stringify(event);
+    webViewRef.current?.injectJavaScript(`(function () {
+      var key = ${JSON.stringify(NATIVE_QA_AUDIO_INJECTION_LOG_KEY)};
+      var log = Array.isArray(window[key]) ? window[key] : [];
+      log.push(${serialized});
+      if (log.length > ${NATIVE_QA_AUDIO_INJECTION_LOG_LIMIT}) {
+        log.splice(0, log.length - ${NATIVE_QA_AUDIO_INJECTION_LOG_LIMIT});
+      }
+      window[key] = log;
+      window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_QA_AUDIO_INJECTION_EVENT)}, { detail: ${serialized} }));
+    })(); true;`);
+  }, []);
+
+  useEffect(() => {
+    if (!RUNTIME_QA_BRIDGE_ENABLED) return undefined;
+    const subscription = addNativeSttListener('qaAudioInjection', emitQaAudioInjectionToWeb);
+    return () => subscription.remove();
+  }, [emitQaAudioInjectionToWeb]);
+
   const handleWebMessage = useCallback((event: WebViewMessageEvent) => {
     const sourceUrl = typeof (event.nativeEvent as { url?: unknown }).url === 'string'
       ? ((event.nativeEvent as { url: string }).url)
@@ -4328,6 +4370,32 @@ function AppInner(): React.JSX.Element {
     if (parsed.type === 'native_remount_webview') {
       if (!shouldEnableDebugWebViewRemount(WEB_APP_BASE_URL)) return;
       handleDebugWebViewRemount(parsed.payload?.url || sourceUrl);
+      return;
+    }
+
+    if (parsed.type === 'native_qa_inject_audio') {
+      if (!RUNTIME_QA_BRIDGE_ENABLED) return;
+      const payload = parsed.payload ?? {};
+      void qaInjectNativeSttAudio({
+        ...(typeof payload.fixtureId === 'string' ? { fixtureId: payload.fixtureId } : {}),
+        ...(typeof payload.url === 'string' ? { url: payload.url } : {}),
+        ...(typeof payload.base64 === 'string' ? { base64: payload.base64 } : {}),
+        ...(typeof payload.leadingSilenceMs === 'number' ? { leadingSilenceMs: payload.leadingSilenceMs } : {}),
+        ...(typeof payload.trailingSilenceMs === 'number' ? { trailingSilenceMs: payload.trailingSilenceMs } : {}),
+      }).catch((error: unknown) => {
+        emitQaAudioInjectionToWeb({
+          phase: 'error',
+          fixtureId: typeof payload.fixtureId === 'string' ? payload.fixtureId : '',
+          message: error instanceof Error ? error.message : String(error),
+          atMs: Date.now(),
+        });
+      });
+      return;
+    }
+
+    if (parsed.type === 'native_qa_clear_audio_injection') {
+      if (!RUNTIME_QA_BRIDGE_ENABLED) return;
+      void qaClearNativeSttAudioInjection().catch(() => undefined);
       return;
     }
 
@@ -4548,6 +4616,7 @@ function AppInner(): React.JSX.Element {
     }
   }, [
     clearAuthDispatchRetryTimer,
+    emitQaAudioInjectionToWeb,
     emitTtsToWeb,
     handleDebugWebViewRemount,
     hideLastScreenSnapshot,
@@ -5143,16 +5212,17 @@ function AppInner(): React.JSX.Element {
     webViewRef.current.clearCache(true);
   }, [shouldUseAggressiveWebViewCacheBypass, webViewMountToken]);
 
-  // Once the page has loaded, the last-screen capture lets touches through to
-  // it and the first one drops the capture. It used to swallow them until the
-  // page said its scroll was back -- which waits on the session check, so a
-  // slow one left a real-looking screen that ignored every tap for seconds.
-  const lastScreenSnapshotPassesTouches = lastScreenSnapshotVisible && !startupSplashVisible;
+  // The last-screen capture never takes a touch: it is a picture of buttons,
+  // so swallowing taps on it reads as a frozen app. The first touch drops it
+  // at once. Once the page has loaded the touch reaches the real screen;
+  // before that, dropping it shows the splash, so the wait is visible
+  // instead of a real-looking screen that ignores every tap.
+  const handleRootTouchStart = lastScreenSnapshotVisible ? () => hideLastScreenSnapshot(false) : undefined;
 
   return (
     <View
       style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}
-      onTouchStart={lastScreenSnapshotPassesTouches ? () => hideLastScreenSnapshot(false) : undefined}
+      onTouchStart={handleRootTouchStart}
     >
       {shouldRenderTopSafeAreaFill ? (
         <View
@@ -5317,7 +5387,7 @@ function AppInner(): React.JSX.Element {
       ) : null}
       {lastScreenSnapshot ? (
         <Animated.View
-          pointerEvents={lastScreenSnapshotPassesTouches ? 'none' : 'auto'}
+          pointerEvents="none"
           style={[styles.lastScreenSnapshotOverlay, { opacity: lastScreenSnapshotOpacity }]}
         >
           <Image
