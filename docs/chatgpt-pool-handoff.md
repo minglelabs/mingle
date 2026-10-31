@@ -78,6 +78,27 @@ Chrome extension (×11 profiles) ──> 127.0.0.1:10320  (loopback, keyless; /a
 
   Wait about 40s. `step` lines in the log confirm the profiles run the new code.
 
+## Windows host
+
+The same script runs on Windows; see `docs/chatgpt-pool-windows-handoff.md`.
+
+| Part | Windows |
+|---|---|
+| Deployed copy | `%USERPROFILE%\.mingle\chatgpt-pool\` (`chatgpt-pool.mjs`, `extension\`, `api-key`) |
+| Server | Task Scheduler `MingleChatGptPool` at log-on, via `chatgpt-pool-serve.cmd` |
+| Log | `%USERPROFILE%\.mingle\chatgpt-pool\pool.log` |
+| Chrome profiles | `%LOCALAPPDATA%\Google\Chrome\User Data` |
+| Public route | Caddy (`C:\caddy\Caddyfile`) on router 443 → `127.0.0.1:10321`, DNS-only A record |
+
+Deploy on Windows after editing the repo copies:
+
+```powershell
+Copy-Item scripts\chatgpt-pool-extension\* $env:USERPROFILE\.mingle\chatgpt-pool\extension\ -Force
+Copy-Item scripts\chatgpt-pool.mjs $env:USERPROFILE\.mingle\chatgpt-pool\chatgpt-pool.mjs -Force
+```
+
+Then restart the task (see the Windows handoff, step 5).
+
 ## API
 
 - `POST /v1/chat/completions`:
