@@ -117,6 +117,11 @@ export default function SlideSurface({
   const edgeSwipeStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const [edgeSwipeActive, setEdgeSwipeActive] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(1);
+  // True once a closed surface has finished sliding out. On PC web the app is
+  // a centered 400px column, so "off-screen to the right" is still inside the
+  // browser window; a parked surface is hidden instead of showing beside it.
+  const [parked, setParked] = useState(!open);
+  if (open && parked) setParked(false);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -137,8 +142,13 @@ export default function SlideSurface({
 
     if (!open) {
       isLeavingRef.current = false;
-      void motionControls.start({ x: "100%", transition });
-      return;
+      let cancelled = false;
+      void motionControls.start({ x: "100%", transition }).then(() => {
+        if (!cancelled && isMountedRef.current) setParked(true);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
     isLeavingRef.current = false;
@@ -293,6 +303,7 @@ export default function SlideSurface({
         // A closed surface waits just off-screen to the right; its drop
         // shadow would otherwise bleed into the visible edge of the app.
         ...(open ? {} : { boxShadow: "none" }),
+        ...(!open && parked ? { visibility: "hidden" as const } : {}),
         ...(zIndex === undefined ? {} : { zIndex }),
       }}
       role={role}
