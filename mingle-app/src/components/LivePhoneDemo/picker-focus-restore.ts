@@ -12,6 +12,7 @@ export const PICKER_FOCUS_RESTORE_DELAY_MS = 350
 type FocusableTextControl = {
   isConnected: boolean
   focus: (options?: { preventScroll?: boolean }) => void
+  blur?: () => void
 }
 
 type FocusDocument = {
@@ -56,10 +57,12 @@ function focusMovedElsewhere(doc: FocusDocument, element: FocusableTextControl):
 
 // Schedules one delayed refocus. Skips it when the element left the DOM (the
 // user switched to voice mode) or focus has since moved to another element (the
-// user tapped something else). It still calls focus() when the element is
-// already document.activeElement: cancelling the iOS chooser leaves DOM focus on
-// the textarea while the keyboard is gone, and only a fresh focus() raises it
-// again (measured on iPhone 14, iOS 26). Returns a cancel function.
+// user tapped something else). When the element is still document.activeElement
+// (cancelling the chooser leaves DOM focus on the textarea while the keyboard is
+// gone), it blurs first: iOS raises the keyboard on a fresh focus() (iPhone 14,
+// iOS 26), but the Android WebView ignores focus() on the already-focused
+// element and only shows the keyboard for a blur + focus pair (Galaxy S9,
+// Android 10, WebView 156). Returns a cancel function.
 export function scheduleFocusRestore(
   element: FocusableTextControl,
   options: { doc: FocusDocument, timers: TimerHost, delayMs?: number },
@@ -71,6 +74,7 @@ export function scheduleFocusRestore(
     if (!element.isConnected) return
     if (focusMovedElsewhere(doc, element)) return
     try {
+      if (doc.activeElement === element) element.blur?.()
       element.focus({ preventScroll: true })
     } catch {
       // A detached or disabled control cannot take focus; nothing to restore.
