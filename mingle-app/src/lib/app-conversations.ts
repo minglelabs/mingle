@@ -3214,10 +3214,9 @@ async function getConversationHydrationStateForRecord(args: {
   const nameByUserId = new Map((members ?? []).map((member) => [member.userId, member.name]));
   const handleByUserId = new Map((members ?? []).map((member) => [member.userId, member.handle]));
   const badgeByUserId = new Map((members ?? []).map((member) => [member.userId, resolveAccountBadge(member)]));
-  // See ConversationHydrationState.operatorDisclosure. Uses the same
-  // (snapshot-adjusted) member list as the rest of this state, so a share
-  // snapshot discloses exactly the operators who were in the room then.
-  const operatorDisclosure = filterActiveMembers(members).some((member) => member.isOperator);
+  // Staff decided (2026-10-31) that operator accounts look like any other
+  // user everywhere in the app, chat rooms included: no notice is shown.
+  const operatorDisclosure = false;
   const blockedCounterpartByChannelId = await resolveBlockedCounterpartUserIdByChannelId(
     args.viewerUserId,
     membersByChannelId,

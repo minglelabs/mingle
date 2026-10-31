@@ -287,10 +287,10 @@ describe("room hydration", () => {
     expect(leaves.get("gone")).not.toHaveProperty("isOfficial");
   });
 
-  it("sets operatorDisclosure for an active materialized operator member (1:1 and group)", async () => {
+  it("never sets operatorDisclosure, even with an active operator member: operators look like any other user", async () => {
     mocks.memberFindMany.mockResolvedValue([memberRow("viewer", "Viewer"), memberRow("op", "Mina", { isOperator: true })]);
     const direct = await getConversationHydrationStateForUser({ conversationId: "conv-1", userId: "viewer" });
-    expect(direct?.operatorDisclosure).toBe(true);
+    expect(direct?.operatorDisclosure).toBe(false);
 
     mocks.memberFindMany.mockResolvedValue([
       memberRow("viewer", "Viewer"),
@@ -298,11 +298,10 @@ describe("room hydration", () => {
       memberRow("op", "Mina", { isOperator: true }),
     ]);
     const group = await getConversationHydrationStateForUser({ conversationId: "conv-1", userId: "viewer" });
-    expect(group?.operatorDisclosure).toBe(true);
+    expect(group?.operatorDisclosure).toBe(false);
 
-    // The operator's own view (the admin inbox reads as the operator) discloses too.
     const asOperator = await getConversationHydrationStateForUser({ conversationId: "conv-1", userId: "op" });
-    expect(asOperator?.operatorDisclosure).toBe(true);
+    expect(asOperator?.operatorDisclosure).toBe(false);
   });
 
   it("leaves operatorDisclosure false for a pending operator invitee, a departed operator, or an official account", async () => {
@@ -327,7 +326,7 @@ describe("room hydration", () => {
     expect(official?.operatorDisclosure).toBe(false);
   });
 
-  it("discloses on a share snapshot only when the operator was a member at the snapshot", async () => {
+  it("never discloses an operator on a share snapshot", async () => {
     const shared = conversationRecord({
       shareToken: "tok",
       shareEnabled: true,
@@ -342,7 +341,7 @@ describe("room hydration", () => {
       memberRow("op", "Mina", { isOperator: true }, { joinedAt: at(10) }),
     ]);
     const before = await getConversationHydrationStateForShare({ shareToken: "tok" });
-    expect(before?.operatorDisclosure).toBe(true);
+    expect(before?.operatorDisclosure).toBe(false);
     expect(before?.utterances[0]).toMatchObject({ speakerName: "Mina" });
     expect(before?.utterances[0]).not.toHaveProperty("speakerBadge");
 

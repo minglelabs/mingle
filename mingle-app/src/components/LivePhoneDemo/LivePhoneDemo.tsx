@@ -98,7 +98,6 @@ import { useLanguageSelectorNavigation } from './use-language-selector-navigatio
 import ConversationEmptyState from './ConversationEmptyState'
 import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
 import ChatAccountBadge from './ChatAccountBadge'
-import ConversationOperatorDisclosure from './ConversationOperatorDisclosure'
 import { labelNameWithAccountBadge, resolveRoomAccountBadge } from './chat-account-badge.logic'
 import { resolveAccountBadge } from '@/lib/account-badge'
 import type { ConversationChannelOtherMember } from '@/lib/app-conversations'
@@ -8961,13 +8960,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   style={{ height: `${nativeChatTopSpacerPx}px` }}
                 />
               )}
-              {operatorDisclosure ? (
-                <ConversationOperatorDisclosure
-                  locale={uiLocale}
-                  stickyTopPx={nativeChatTopSpacerPx}
-                  className="mb-2"
-                />
-              ) : null}
+
               {hasOlderUtterances && (
                 <button
                   onClick={handleLoadOlder}
