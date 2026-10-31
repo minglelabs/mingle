@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { hashRushRoomId, signHashRushTicket, verifyHashRushTicket } from "@/server/hash-rush/ticket";
+import {
+  HASH_RUSH_TICKET_TTL_SEC,
+  hashRushRoomId,
+  issueHashRushTicket,
+  signHashRushTicket,
+  verifyHashRushTicket,
+} from "@/server/hash-rush/ticket";
 
 describe("hash rush tickets", () => {
   const payload = { room: "mingle-abc", userId: "user-1", name: "Mia", exp: 2_000_000_000 };
@@ -10,6 +16,21 @@ describe("hash rush tickets", () => {
     expect(verifyHashRushTicket(ticket, "secret-2", 1_900_000_000)).toBeNull();
     expect(verifyHashRushTicket(`x${ticket}`, "secret-1", 1_900_000_000)).toBeNull();
     expect(verifyHashRushTicket(ticket, "secret-1", 2_100_000_000)).toBeNull();
+  });
+
+  it("issues a two-hour ticket and says how long it lasts", () => {
+    const now = 1_900_000_000;
+    const issued = issueHashRushTicket({ room: "mingle-abc", userId: "user-1", name: "Mia" }, "secret-1", now);
+    expect(HASH_RUSH_TICKET_TTL_SEC).toBe(2 * 60 * 60);
+    expect(issued.exp).toBe(now + HASH_RUSH_TICKET_TTL_SEC);
+    expect(issued.expiresIn).toBe(HASH_RUSH_TICKET_TTL_SEC);
+    expect(verifyHashRushTicket(issued.ticket, "secret-1", issued.exp)).toEqual({
+      room: "mingle-abc",
+      userId: "user-1",
+      name: "Mia",
+      exp: issued.exp,
+    });
+    expect(verifyHashRushTicket(issued.ticket, "secret-1", issued.exp + 1)).toBeNull();
   });
 
   it("makes a game room id the game server accepts", () => {

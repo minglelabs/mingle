@@ -6,12 +6,27 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export type HashRushTicket = { room: string; userId: string; name: string; exp: number };
 
+// The game page reconnects with the same ticket after a dropped line, so it
+// must outlive a long session in the room, not just the first join.
+export const HASH_RUSH_TICKET_TTL_SEC = 2 * 60 * 60;
+
 const b64url = (input: Buffer | string) =>
   Buffer.from(input).toString("base64").replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
 
 export function signHashRushTicket(payload: HashRushTicket, secret: string): string {
   const body = b64url(JSON.stringify(payload));
   return `${body}.${b64url(createHmac("sha256", secret).update(body).digest())}`;
+}
+
+// A ticket plus how long it lasts. `expiresIn` lets the app reuse a ticket
+// while it is good without trusting the phone's clock.
+export function issueHashRushTicket(
+  input: { room: string; userId: string; name: string },
+  secret: string,
+  nowSec = Math.floor(Date.now() / 1000),
+): { ticket: string; exp: number; expiresIn: number } {
+  const exp = nowSec + HASH_RUSH_TICKET_TTL_SEC;
+  return { ticket: signHashRushTicket({ ...input, exp }, secret), exp, expiresIn: HASH_RUSH_TICKET_TTL_SEC };
 }
 
 export function verifyHashRushTicket(ticket: string, secret: string, nowSec = Math.floor(Date.now() / 1000)): HashRushTicket | null {

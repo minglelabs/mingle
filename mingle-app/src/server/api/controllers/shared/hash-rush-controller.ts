@@ -4,13 +4,9 @@ import { getAuthOptions } from "@/lib/auth-options";
 import { getConversationSessionKeyForMember } from "@/lib/app-conversations";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { prisma } from "@/lib/prisma";
-import { hashRushRoomId, signHashRushTicket } from "@/server/hash-rush/ticket";
+import { hashRushRoomId, issueHashRushTicket } from "@/server/hash-rush/ticket";
 
 export const runtime = "nodejs";
-
-// The game page reconnects with the same ticket after a dropped line, so it
-// must outlive a long session in the room, not just the first join.
-const TICKET_TTL_SEC = 2 * 60 * 60;
 
 // A member of the chat room gets a short-lived ticket into that room's game.
 export async function postHashRushTicketResponse(request: NextRequest, conversationId: string) {
@@ -27,9 +23,6 @@ export async function postHashRushTicketResponse(request: NextRequest, conversat
   const user = await prisma.user.findUnique({ where: { id: resolvedUser.userId }, select: { name: true } });
   const name = (user?.name || "").trim().slice(0, 8);
   const room = hashRushRoomId(conversationId);
-  const ticket = signHashRushTicket(
-    { room, userId: resolvedUser.userId, name, exp: Math.floor(Date.now() / 1000) + TICKET_TTL_SEC },
-    secret,
-  );
-  return NextResponse.json({ ticket, room, name });
+  const { ticket, exp, expiresIn } = issueHashRushTicket({ room, userId: resolvedUser.userId, name }, secret);
+  return NextResponse.json({ ticket, room, name, exp, expiresIn });
 }
