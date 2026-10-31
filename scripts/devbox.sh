@@ -313,7 +313,7 @@ Usage:
   scripts/devbox ios-rn-ipa [--ios-configuration Debug|Release] [--device-app-env dev|prod] [--site-url URL] [--ws-url URL] [--archive-path PATH] [--export-path PATH] [--export-options-plist PATH] [--export-method app-store-connect|release-testing|debugging|enterprise|app-store|ad-hoc|development] [--team-id TEAM_ID] [--allow-provisioning-updates|--no-allow-provisioning-updates] [--skip-export] [--dry-run]
   scripts/devbox ios-rn-ipa-prod [ios-rn-ipa options...]
   scripts/devbox mobile [--profile local|device] [--host HOST] [--platform ios|android|all] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--with-ios-clean-install] [--qa-bridge] [--device-app-env dev|prod] [--tunnel-provider ngrok|cloudflare] [--site-url URL] [--ws-url URL]
-  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--qa-bridge] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-path PATH]
+  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--qa-bridge] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--tunnel-slot N] [--device-app-env dev|prod] [--vault-path PATH]
   scripts/devbox down
   scripts/devbox test [--target app] [--with-live] [vitest args...]
   scripts/devbox qa [--platform ios|android|all] [--contracts] [--ios-regressions] [--android-regressions] [--ios-scroll-fps] [--ios-udid UDID] [--ios-real-udid UDID] [--ios-sim-udid UDID] [--android-serial SERIAL] [--qa-arg ARG...]
@@ -342,6 +342,17 @@ Global Options:
                         Relative paths resolve from repository root.
                         auto -> .devbox-logs/devbox-<worktree>-<timestamp>.log
 
+Concurrent sessions (several agents/worktrees at once):
+  - Every session runs its OWN tunnel. With the Cloudflare named tunnel,
+    `up` claims a free tunnel slot (1..DEVBOX_TUNNEL_SLOT_COUNT, default 4)
+    with its own hostnames (mingle-app-devbox-N...). Never stop or reuse
+    another session's servers, tunnel, or bridges. --tunnel-slot N pins a slot.
+  - Phones: install on the phone the user assigned to this session
+    (--ios-udid / --android-serial). If the user did not assign one, install
+    on every connected phone, except phones another live session is using;
+    those are skipped with "ACTION REQUIRED" and you must ask the user first.
+  - `down` releases this worktree's slot and phone claims.
+
 Default Shortcut:
   scripts/devbox up
     == scripts/devbox --log-file auto up --profile device --tunnel-provider cloudflare --with-ios-install
@@ -362,6 +373,8 @@ Environment:
   DEVBOX_CLOUDFLARE_WEB_HOSTNAME  Named tunnel web hostname (e.g. web-dev.example.com)
   DEVBOX_CLOUDFLARE_STT_HOSTNAME  Named tunnel stt hostname (e.g. stt-dev.example.com)
   DEVBOX_CLOUDFLARE_MESSAGING_HOSTNAME Named tunnel messaging hostname (e.g. msg-dev.example.com)
+  DEVBOX_TUNNEL_SLOT       Optional fixed tunnel slot for this run (same as --tunnel-slot).
+  DEVBOX_TUNNEL_SLOT_COUNT Number of tunnel slots configured on Cloudflare. Default: 4
   DEVBOX_IOS_TEAM_ID       Optional iOS Team ID used by ios-rn-ipa exportOptions.
                            Store it in the MAIN worktree root .env.local or Vault.
                            Example: 3RFBMN8TKZ
@@ -2411,6 +2424,331 @@ cloudflared_named_bridge_log_file_path() {
   printf '%s/.devbox-cache/cloudflared/%s.named-bridge-%s.log' "$ROOT_DIR" "$worktree" "$kind"
 }
 
+# ---------------------------------------------------------------------------
+# Concurrent sessions: tunnel slots and phone claims
+#
+# Every worktree shares one Cloudflare named tunnel. Each concurrent devbox
+# session claims its own tunnel slot N (1..DEVBOX_TUNNEL_SLOT_COUNT). Slot N
+# uses its own hostnames (base hostname with "-N" appended to the first label,
+# e.g. mingle-app-devbox-2.photo-for-passport.com), so sessions never take
+# each other's hostnames or bridge ports.
+#
+# Claims live in the git common dir, so every worktree of this repository
+# sees the same files. A slot claim is live while the `devbox up` process that
+# wrote it is running. A phone claim is live while its owner worktree holds a
+# live slot, or for DEVBOX_DEVICE_CLAIM_TTL_SEC after the install.
+# ---------------------------------------------------------------------------
+DEVBOX_TUNNEL_SLOT="${DEVBOX_TUNNEL_SLOT:-}"
+DEVBOX_TUNNEL_SLOT_COUNT="${DEVBOX_TUNNEL_SLOT_COUNT:-4}"
+DEVBOX_DEVICE_CLAIM_TTL_SEC="${DEVBOX_DEVICE_CLAIM_TTL_SEC:-10800}"
+
+devbox_shared_state_dir() {
+  local common_dir=""
+  common_dir="$(git -C "$ROOT_DIR" rev-parse --git-common-dir 2>/dev/null || true)"
+  [[ -n "$common_dir" ]] || return 1
+  if [[ "$common_dir" != /* ]]; then
+    common_dir="$ROOT_DIR/$common_dir"
+  fi
+  common_dir="$(cd "$common_dir" 2>/dev/null && pwd -P || true)"
+  [[ -n "$common_dir" ]] || return 1
+  printf '%s/devbox-shared' "$common_dir"
+}
+
+devbox_shared_lock_acquire() {
+  local lock_dir="$1"
+  local waited=0
+  mkdir -p "$(dirname "$lock_dir")"
+  until mkdir "$lock_dir" 2>/dev/null; do
+    sleep 0.2
+    waited=$((waited + 1))
+    if (( waited > 50 )); then
+      # A crashed run may leave the lock behind; claims are re-validated anyway.
+      rm -rf "$lock_dir"
+    fi
+  done
+}
+
+devbox_shared_lock_release() {
+  rm -rf "$1"
+}
+
+read_claim_field() {
+  local file="$1"
+  local key="$2"
+  [[ -f "$file" ]] || return 1
+  awk -F= -v k="$key" '$1 == k { sub(/^[^=]*=/, ""); print; exit }' "$file"
+}
+
+devbox_pid_is_running() {
+  local pid="${1:-}"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  # `ps` is not allowed in some agent sandboxes, so liveness is kill -0 only.
+  kill -0 "$pid" >/dev/null 2>&1
+}
+
+tunnel_slot_claim_file() {
+  local state_dir=""
+  state_dir="$(devbox_shared_state_dir)" || return 1
+  printf '%s/tunnel-slots/slot-%s' "$state_dir" "$1"
+}
+
+tunnel_slot_claim_is_live() {
+  local file="$1"
+  [[ -f "$file" ]] || return 1
+  devbox_pid_is_running "$(read_claim_field "$file" pid || true)"
+}
+
+validate_tunnel_slot() {
+  local slot="$1"
+  [[ "$slot" =~ ^[0-9]+$ ]] && (( slot >= 1 && slot <= DEVBOX_TUNNEL_SLOT_COUNT )) || \
+    die "invalid tunnel slot: $slot (allowed: 1..$DEVBOX_TUNNEL_SLOT_COUNT)"
+}
+
+# Prints the slot owned by this worktree whose devbox up is still running.
+find_live_own_tunnel_slot() {
+  local slot file
+  for (( slot = 1; slot <= DEVBOX_TUNNEL_SLOT_COUNT; slot++ )); do
+    file="$(tunnel_slot_claim_file "$slot")" || return 1
+    if tunnel_slot_claim_is_live "$file" \
+      && [[ "$(read_claim_field "$file" owner || true)" == "$ROOT_CANON" ]]; then
+      printf '%s' "$slot"
+      return 0
+    fi
+  done
+  return 1
+}
+
+worktree_has_live_tunnel_slot() {
+  local owner="$1"
+  local slot file
+  for (( slot = 1; slot <= DEVBOX_TUNNEL_SLOT_COUNT; slot++ )); do
+    file="$(tunnel_slot_claim_file "$slot")" || return 1
+    if tunnel_slot_claim_is_live "$file" \
+      && [[ "$(read_claim_field "$file" owner || true)" == "$owner" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+describe_tunnel_slots() {
+  local slot file owner
+  for (( slot = 1; slot <= DEVBOX_TUNNEL_SLOT_COUNT; slot++ )); do
+    file="$(tunnel_slot_claim_file "$slot")" || return 0
+    if tunnel_slot_claim_is_live "$file"; then
+      owner="$(read_claim_field "$file" owner || true)"
+      printf '  slot %s: in use by %s (pid %s)\n' "$slot" "$owner" "$(read_claim_field "$file" pid || true)"
+    else
+      printf '  slot %s: free\n' "$slot"
+    fi
+  done
+}
+
+# Claims a tunnel slot for this `devbox up` process and sets DEVBOX_TUNNEL_SLOT.
+# Order: explicit --tunnel-slot / DEVBOX_TUNNEL_SLOT, then the slot this
+# worktree used last, then the lowest free slot.
+claim_tunnel_slot() {
+  local requested="${1:-}"
+  local state_dir lock_dir slot file owner chosen=""
+
+  state_dir="$(devbox_shared_state_dir)" || die "cannot resolve git common dir for tunnel slot claims"
+  lock_dir="$state_dir/tunnel-slots.lock"
+  mkdir -p "$state_dir/tunnel-slots"
+  devbox_shared_lock_acquire "$lock_dir"
+
+  if [[ -n "$requested" ]]; then
+    validate_tunnel_slot "$requested"
+    file="$(tunnel_slot_claim_file "$requested")"
+    owner="$(read_claim_field "$file" owner || true)"
+    if tunnel_slot_claim_is_live "$file" && [[ "$owner" != "$ROOT_CANON" ]]; then
+      devbox_shared_lock_release "$lock_dir"
+      die "tunnel slot $requested is in use by another session: $owner
+$(describe_tunnel_slots)
+Pick a free slot with --tunnel-slot N, or omit it to auto-select."
+    fi
+    chosen="$requested"
+  fi
+
+  if [[ -z "$chosen" ]]; then
+    for (( slot = 1; slot <= DEVBOX_TUNNEL_SLOT_COUNT; slot++ )); do
+      file="$(tunnel_slot_claim_file "$slot")"
+      if [[ "$(read_claim_field "$file" owner || true)" == "$ROOT_CANON" ]] \
+        && ! { tunnel_slot_claim_is_live "$file" && [[ "$(read_claim_field "$file" pid || true)" != "$$" ]]; }; then
+        chosen="$slot"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$chosen" ]]; then
+    for (( slot = 1; slot <= DEVBOX_TUNNEL_SLOT_COUNT; slot++ )); do
+      file="$(tunnel_slot_claim_file "$slot")"
+      if ! tunnel_slot_claim_is_live "$file"; then
+        chosen="$slot"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$chosen" ]]; then
+    devbox_shared_lock_release "$lock_dir"
+    die "all $DEVBOX_TUNNEL_SLOT_COUNT tunnel slots are in use:
+$(describe_tunnel_slots)
+Ask the user which session to stop (scripts/devbox down in that worktree)."
+  fi
+
+  # Drop stale claims this worktree left on other slots.
+  for (( slot = 1; slot <= DEVBOX_TUNNEL_SLOT_COUNT; slot++ )); do
+    [[ "$slot" == "$chosen" ]] && continue
+    file="$(tunnel_slot_claim_file "$slot")"
+    if [[ "$(read_claim_field "$file" owner || true)" == "$ROOT_CANON" ]] && ! tunnel_slot_claim_is_live "$file"; then
+      rm -f "$file"
+    fi
+  done
+
+  file="$(tunnel_slot_claim_file "$chosen")"
+  printf 'owner=%s\npid=%s\nworktree=%s\nclaimed_at=%s\n' \
+    "$ROOT_CANON" "$$" "$DEVBOX_WORKTREE_NAME" "$(date +%s)" > "$file"
+  devbox_shared_lock_release "$lock_dir"
+
+  DEVBOX_TUNNEL_SLOT="$chosen"
+  log "claimed tunnel slot $chosen for this session (other sessions use other slots)"
+}
+
+release_own_tunnel_slots() {
+  local slot file
+  for (( slot = 1; slot <= DEVBOX_TUNNEL_SLOT_COUNT; slot++ )); do
+    file="$(tunnel_slot_claim_file "$slot")" || return 0
+    if [[ "$(read_claim_field "$file" owner || true)" == "$ROOT_CANON" ]]; then
+      rm -f "$file"
+      log "released tunnel slot $slot"
+    fi
+  done
+}
+
+# mingle-app-devbox.example.com + slot 2 -> mingle-app-devbox-2.example.com
+# The suffix stays in the first label so a free one-level wildcard
+# certificate (*.example.com) still covers the hostname.
+tunnel_slot_hostname() {
+  local base="$1"
+  local slot="${2:-}"
+  [[ -n "$slot" ]] || { printf '%s' "$base"; return 0; }
+  printf '%s-%s.%s' "${base%%.*}" "$slot" "${base#*.}"
+}
+
+device_claim_file() {
+  local platform="$1"
+  local device_id="$2"
+  local state_dir=""
+  state_dir="$(devbox_shared_state_dir)" || return 1
+  printf '%s/devices/%s-%s' "$state_dir" "$platform" "$(printf '%s' "$device_id" | tr -c 'A-Za-z0-9._-' '_')"
+}
+
+# Prints the owner worktree when another live session holds this phone.
+device_claimed_by_other_session() {
+  local platform="$1"
+  local device_id="$2"
+  local file owner claimed_at now
+  file="$(device_claim_file "$platform" "$device_id")" || return 1
+  [[ -f "$file" ]] || return 1
+  owner="$(read_claim_field "$file" owner || true)"
+  [[ -n "$owner" && "$owner" != "$ROOT_CANON" ]] || return 1
+  [[ -d "$owner" ]] || return 1
+  if ! worktree_has_live_tunnel_slot "$owner"; then
+    claimed_at="$(read_claim_field "$file" claimed_at || true)"
+    now="$(date +%s)"
+    [[ "$claimed_at" =~ ^[0-9]+$ ]] || return 1
+    (( now - claimed_at < DEVBOX_DEVICE_CLAIM_TTL_SEC )) || return 1
+  fi
+  printf '%s' "$owner"
+}
+
+claim_device() {
+  local platform="$1"
+  local device_id="$2"
+  local file
+  file="$(device_claim_file "$platform" "$device_id")" || return 0
+  mkdir -p "$(dirname "$file")"
+  printf 'owner=%s\nworktree=%s\nclaimed_at=%s\n' "$ROOT_CANON" "$DEVBOX_WORKTREE_NAME" "$(date +%s)" > "$file"
+}
+
+release_own_device_claims() {
+  local state_dir file
+  state_dir="$(devbox_shared_state_dir)" || return 0
+  [[ -d "$state_dir/devices" ]] || return 0
+  for file in "$state_dir"/devices/*; do
+    [[ -f "$file" ]] || continue
+    if [[ "$(read_claim_field "$file" owner || true)" == "$ROOT_CANON" ]]; then
+      rm -f "$file"
+      log "released phone claim: $(basename "$file")"
+    fi
+  done
+}
+
+list_connected_ios_device_udids() {
+  command -v xcrun >/dev/null 2>&1 || return 0
+  xcrun xctrace list devices 2>/dev/null | awk '
+    /^== Devices ==/ { in_devices = 1; next }
+    /^== / { in_devices = 0 }
+    !in_devices { next }
+    {
+      line = $0
+      if (line ~ /MacBook|^Mac |Mac mini|iMac|Mac Studio|Mac Pro/) next
+      if (match(line, /\([0-9A-Fa-f-]{20,40}\)[[:space:]]*$/)) {
+        print substr(line, RSTART + 1, RLENGTH - 2)
+      }
+    }
+  '
+}
+
+list_connected_android_serials() {
+  command -v adb >/dev/null 2>&1 || return 0
+  adb devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'
+}
+
+# Prints the phones this session should install on, one per line.
+# Explicit id: that phone only (the user chose it; warn if another session
+# holds it). No id: every connected phone except those another live session
+# holds; skipped phones are reported so the agent can ask the user.
+select_install_devices() {
+  local platform="$1"
+  local requested="${2:-}"
+  local owner device_id
+  local -a candidates=()
+
+  if [[ -n "$requested" ]]; then
+    if owner="$(device_claimed_by_other_session "$platform" "$requested")"; then
+      warn "$platform phone $requested was in use by another session ($owner); taking it because it was requested explicitly"
+    fi
+    printf '%s\n' "$requested"
+    return 0
+  fi
+
+  if [[ "$platform" == "ios" ]]; then
+    while IFS= read -r device_id; do
+      [[ -n "$device_id" ]] && candidates+=("$device_id")
+    done < <(list_connected_ios_device_udids)
+    if [[ ${#candidates[@]} -eq 0 ]]; then
+      device_id="$(detect_ios_xcode_destination_udid || true)"
+      [[ -n "$device_id" ]] && candidates+=("$device_id")
+    fi
+  else
+    while IFS= read -r device_id; do
+      [[ -n "$device_id" ]] && candidates+=("$device_id")
+    done < <(list_connected_android_serials)
+  fi
+
+  for device_id in "${candidates[@]:-}"; do
+    [[ -n "$device_id" ]] || continue
+    if owner="$(device_claimed_by_other_session "$platform" "$device_id")"; then
+      warn "ACTION REQUIRED: skipped $platform phone $device_id because another session is using it ($owner)."
+      warn "Ask the user before using it. To take it anyway, pass the id explicitly (--ios-udid / --android-serial)."
+      continue
+    fi
+    printf '%s\n' "$device_id"
+  done
+}
+
 resolve_cloudflare_named_tunnel_settings() {
   local token web_host stt_host messaging_host
   token="$(trim_whitespace "${DEVBOX_CLOUDFLARE_TUNNEL_TOKEN:-}")"
@@ -2443,6 +2781,9 @@ resolve_cloudflare_named_tunnel_settings() {
   web_host="$(normalize_domain_input "$web_host")"
   stt_host="$(normalize_domain_input "$stt_host")"
   messaging_host="$(normalize_domain_input "$messaging_host")"
+  web_host="$(tunnel_slot_hostname "$web_host" "$DEVBOX_TUNNEL_SLOT")"
+  stt_host="$(tunnel_slot_hostname "$stt_host" "$DEVBOX_TUNNEL_SLOT")"
+  messaging_host="$(tunnel_slot_hostname "$messaging_host" "$DEVBOX_TUNNEL_SLOT")"
   validate_host "$web_host"
   validate_host "$stt_host"
   validate_host "$messaging_host"
@@ -2478,6 +2819,9 @@ resolve_cloudflare_named_hostnames() {
   web_host="$(normalize_domain_input "$web_host")"
   stt_host="$(normalize_domain_input "$stt_host")"
   messaging_host="$(normalize_domain_input "$messaging_host")"
+  web_host="$(tunnel_slot_hostname "$web_host" "$DEVBOX_TUNNEL_SLOT")"
+  stt_host="$(tunnel_slot_hostname "$stt_host" "$DEVBOX_TUNNEL_SLOT")"
+  messaging_host="$(tunnel_slot_hostname "$messaging_host" "$DEVBOX_TUNNEL_SLOT")"
   validate_host "$web_host"
   validate_host "$stt_host"
   validate_host "$messaging_host"
@@ -3002,7 +3346,7 @@ run_ios_mobile_install() {
       log "iOS uninstall skipped (app may not be installed)"
   fi
 
-  if [[ "$with_clean_install" -eq 1 ]]; then
+  if [[ "$with_clean_install" -eq 1 && "${DEVBOX_SKIP_IOS_DERIVED_CLEAN:-0}" == "0" ]]; then
     log "cleaning iOS build artifacts for consistent runtime injection: $derived_data_path"
     rm -rf "$derived_data_path"
   fi
@@ -3164,11 +3508,39 @@ run_mobile_install_targets() {
       DEVBOX_RN_WS_URL="$app_ws_override"
     fi
 
+    local device_id=""
+    local installed_count=0
     if [[ "$do_rn_ios" -eq 1 ]]; then
-      run_ios_mobile_install "$ios_udid" "$ios_configuration" "$with_ios_clean_install"
+      installed_count=0
+      # Collect first: build/install tools read stdin and would eat the list.
+      local -a ios_targets=()
+      while IFS= read -r device_id; do
+        [[ -n "$device_id" ]] && ios_targets+=("$device_id")
+      done < <(select_install_devices ios "$ios_udid")
+      for device_id in "${ios_targets[@]:-}"; do
+        [[ -n "$device_id" ]] || continue
+        claim_device ios "$device_id"
+        # The first install already rebuilt from a clean tree; later phones
+        # reuse that build output instead of wiping it again.
+        DEVBOX_SKIP_IOS_DERIVED_CLEAN="$installed_count" \
+          run_ios_mobile_install "$device_id" "$ios_configuration" "$with_ios_clean_install"
+        installed_count=$((installed_count + 1))
+      done
+      [[ "$installed_count" -gt 0 ]] || log "no available iOS phone for this session; skipping iOS build/install"
     fi
     if [[ "$do_android" -eq 1 ]]; then
-      run_android_mobile_install "$android_serial" "$android_variant"
+      installed_count=0
+      local -a android_targets=()
+      while IFS= read -r device_id; do
+        [[ -n "$device_id" ]] && android_targets+=("$device_id")
+      done < <(select_install_devices android "$android_serial")
+      for device_id in "${android_targets[@]:-}"; do
+        [[ -n "$device_id" ]] || continue
+        claim_device android "$device_id"
+        run_android_mobile_install "$device_id" "$android_variant"
+        installed_count=$((installed_count + 1))
+      done
+      [[ "$installed_count" -gt 0 ]] || log "no available Android phone for this session; skipping Android build/install"
     fi
   )
 }
@@ -4888,6 +5260,15 @@ cmd_mobile() {
             profile_already_saved=1
             ;;
           cloudflare)
+            if [[ -z "$DEVBOX_TUNNEL_SLOT" ]]; then
+              DEVBOX_TUNNEL_SLOT="$(find_live_own_tunnel_slot || true)"
+            fi
+            if [[ -z "$DEVBOX_TUNNEL_SLOT" ]]; then
+              die "no running devbox tunnel slot for this worktree. Start this session's servers first:
+  scripts/devbox up --profile device --tunnel-provider cloudflare
+(app builds must point at this session's own slot hostnames)"
+            fi
+            log "using this session's tunnel slot: $DEVBOX_TUNNEL_SLOT"
             local cloudflare_named_hosts=""
             cloudflare_named_hosts="$(resolve_cloudflare_named_hostnames || true)"
             if [[ -z "$cloudflare_named_hosts" ]]; then
@@ -5006,6 +5387,7 @@ cmd_up() {
   local mobile_site_override=""
   local mobile_ws_override=""
   local tunnel_provider_override=""
+  local tunnel_slot_override="${DEVBOX_TUNNEL_SLOT:-}"
   local previous_active_device_app_env="${DEVBOX_ACTIVE_DEVICE_APP_ENV:-}"
 
   while [[ $# -gt 0 ]]; do
@@ -5024,6 +5406,7 @@ cmd_up() {
       --ios-configuration) ios_configuration="${2:-}"; shift 2 ;;
       --android-variant) android_variant="${2:-}"; shift 2 ;;
       --tunnel-provider) tunnel_provider_override="${2:-}"; shift 2 ;;
+      --tunnel-slot) tunnel_slot_override="${2:-}"; shift 2 ;;
       --device-app-env) device_app_env="${2:-}"; shift 2 ;;
       --vault-path) vault_override="${2:-}"; shift 2 ;;
       *) die "unknown option for up: $1" ;;
@@ -5135,6 +5518,10 @@ $(ngrok_plan_capacity_hint)"
           ;;
         cloudflare)
           require_cmd cloudflared
+          if resolve_cloudflare_named_hostnames >/dev/null 2>&1; then
+            # Each concurrent session gets its own hostnames and bridge ports.
+            claim_tunnel_slot "$tunnel_slot_override"
+          fi
           local cloudflare_named_payload=""
           cloudflare_named_payload="$(resolve_cloudflare_named_tunnel_settings || true)"
 
@@ -5175,7 +5562,8 @@ $(ngrok_plan_capacity_hint)"
             if ! cloudflared_named_remote_web_port="$(wait_for_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_pid" "$cloudflared_named_web_host" 15)"; then
               cleanup_processes "${pids[@]}"
               rm -f "$cloudflared_named_pid_file"
-              die "cloudflared named tunnel did not publish web bridge port for $cloudflared_named_web_host (log: $cloudflared_named_log)"
+              die "cloudflared named tunnel did not publish web bridge port for $cloudflared_named_web_host (log: $cloudflared_named_log)
+Tunnel slot ${DEVBOX_TUNNEL_SLOT:-?} hostnames must exist as public hostnames on the Cloudflare tunnel (see docs/worktree-devbox.md, 동시 세션)."
             fi
             if ! cloudflared_named_remote_stt_port="$(wait_for_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_pid" "$cloudflared_named_stt_host" 15)"; then
               cleanup_processes "${pids[@]}"
@@ -5478,6 +5866,8 @@ cmd_down() {
   stop_cloudflared_named_bridge "stt"
   stop_cloudflared_named_bridge "messaging"
   rm -f "$(cloudflared_named_config_file_path)"
+  release_own_tunnel_slots
+  release_own_device_claims
 
   local next_lock_file="$ROOT_DIR/mingle-app/.next/dev/lock"
   if [[ -f "$next_lock_file" ]]; then
@@ -5758,7 +6148,7 @@ cmd_status() {
 [devbox] worktree: $DEVBOX_WORKTREE_NAME
 [devbox] profile:  $DEVBOX_PROFILE
 [devbox] ports:    web=$DEVBOX_WEB_PORT stt=$DEVBOX_STT_PORT messaging=$DEVBOX_MESSAGING_PORT metro=$DEVBOX_METRO_PORT
-[devbox] tunnel:   provider=$tunnel_provider$( [[ "$tunnel_provider" == "cloudflare" ]] && printf ' mode=%s' "$cloudflare_mode" )
+[devbox] tunnel:   provider=$tunnel_provider$( [[ "$tunnel_provider" == "cloudflare" ]] && printf ' mode=%s' "$cloudflare_mode" )$( [[ "$tunnel_provider" == "cloudflare" && "$cloudflare_mode" == "named" ]] && printf ' slot=%s' "$(find_live_own_tunnel_slot || printf 'none')" )
 $ngrok_line
 $ngrok_domain_line
 

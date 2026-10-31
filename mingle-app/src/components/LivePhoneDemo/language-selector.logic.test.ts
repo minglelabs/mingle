@@ -9,6 +9,7 @@ import {
   buildLanguageSelectorFeaturedItems,
   buildRecentLanguageChipCodes,
   buildLanguageSelectorItems,
+  buildLanguageSelectorItemsForDisplayLocale,
   clearLanguageSelectorHistoryState,
   filterLanguageSelectorItems,
   isLanguageSelectorHistoryOpen,
@@ -369,5 +370,25 @@ describe("language-selector.logic", () => {
       expect(priorityItems).toEqual([]);
       expect(otherItems.map((item) => item.code)).toEqual(["gl"]);
     });
+  });
+});
+
+describe("buildLanguageSelectorItemsForDisplayLocale", () => {
+  // Onboarding on a Korean device after tapping English (QA trial 2026-10-31):
+  // the copy is English, so the names must be English too.
+  it("names languages in the display locale", () => {
+    const items = buildLanguageSelectorItemsForDisplayLocale("en", "ko");
+    expect(items.find((item) => item.code === "en")?.localizedName).toBe("English");
+    expect(items.find((item) => item.code === "ko")?.localizedName).toBe("Korean");
+  });
+
+  it("still matches searches typed in the browse locale", () => {
+    const items = buildLanguageSelectorItemsForDisplayLocale("en", "ko");
+    expect(filterLanguageSelectorItems(items, "영어").map((item) => item.code)).toEqual(["en"]);
+    expect(filterLanguageSelectorItems(items, "English").map((item) => item.code)).toEqual(["en"]);
+  });
+
+  it("equals the plain build when both locales match", () => {
+    expect(buildLanguageSelectorItemsForDisplayLocale("ko", "ko")).toEqual(buildLanguageSelectorItems("ko"));
   });
 });
