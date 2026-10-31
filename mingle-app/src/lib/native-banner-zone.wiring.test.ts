@@ -61,4 +61,12 @@ describe("native banner policy wiring", () => {
     expect(readSource("components/slide-surface.tsx"))
       .toContain('useNativeBannerSuppression(open && role !== "main")');
   });
+
+  it('keeps the banner hidden through every onboarding phase', () => {
+    const list = readSource('components/conversation-list.tsx')
+    expect(list).toContain('|| languageOnboardingPhase !== "ready"')
+    expect(list).not.toMatch(/isListOverlayOpen:[\s\S]{0,600}\|\| languageOnboardingModalOpen/)
+    const modal = readSource('components/LivePhoneDemo/LanguageOnboardingModal.tsx')
+    expect(modal).toContain('useNativeBannerSuppression();')
+  })
 });

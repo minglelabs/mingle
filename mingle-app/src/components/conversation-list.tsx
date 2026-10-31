@@ -4001,7 +4001,9 @@ export default function ConversationList({
         || showSortMenu
         || renameDialogConversationId
         || deleteDialogConversationId
-        || languageOnboardingModalOpen
+        // No banner anywhere in onboarding: not while it resolves, not
+        // during the steps, not while the app switches to the picked locale.
+        || languageOnboardingPhase !== "ready"
         || notificationSurfaceOpen
         || conversationProfileId
       ),
@@ -4011,7 +4013,7 @@ export default function ConversationList({
     conversationProfileId,
     deleteDialogConversationId,
     isCreateChoiceModalOpen,
-    languageOnboardingModalOpen,
+    languageOnboardingPhase,
     notificationSurfaceOpen,
     renameDialogConversationId,
     rowActionMenu,
