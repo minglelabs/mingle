@@ -28,6 +28,7 @@ import {
   type DiscoverySource,
 } from "@/lib/discovery-source";
 import { registerNativeBackHandler } from "@/lib/native-back-handler";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 import type { InterestLanguage } from "@/lib/interest-languages";
 import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
@@ -68,6 +69,9 @@ export default function LanguageOnboardingModal({
   uiLocale,
   onConfirm,
 }: LanguageOnboardingModalProps) {
+  // Mounted only while onboarding is on screen: no native ad banner at any
+  // step, whatever zone the screen underneath asked for.
+  useNativeBannerSuppression();
   const titleId = useId();
   const [step, setStep] = useState<OnboardingStep>("language");
   const [query, setQuery] = useState("");
