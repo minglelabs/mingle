@@ -12,6 +12,7 @@
 //   { type: 'native_voice_open', payload: { conversationId, title?, lang?, interpret? } }  // join
 //   { type: 'native_voice_close' }                                                        // leave
 //   { type: 'native_voice_status_request', payload: { conversationId } }                 // poll GET /voice
+//   { type: 'native_voice_status_stop' }                                                  // stop polling
 //   { type: 'native_voice_set', payload: { mic?, interpret?, mode?, origVol? } }
 //
 // native -> web events (dispatched on window as CustomEvent detail):
@@ -49,13 +50,22 @@ export type VoiceSetCommand = {
   };
 };
 
-export type VoiceBridgeCommand = VoiceOpenCommand | VoiceCloseCommand | VoiceStatusRequestCommand | VoiceSetCommand;
+// The chat screen closed: stop polling who is in its call.
+export type VoiceStatusStopCommand = { type: 'native_voice_status_stop' };
+
+export type VoiceBridgeCommand =
+  | VoiceOpenCommand
+  | VoiceCloseCommand
+  | VoiceStatusRequestCommand
+  | VoiceStatusStopCommand
+  | VoiceSetCommand;
 
 export function isVoiceBridgeCommandType(type: unknown): boolean {
   return (
     type === 'native_voice_open' ||
     type === 'native_voice_close' ||
     type === 'native_voice_status_request' ||
+    type === 'native_voice_status_stop' ||
     type === 'native_voice_set'
   );
 }
@@ -67,6 +77,7 @@ export function parseVoiceBridgeCommand(parsed: unknown): VoiceBridgeCommand | n
   const type = msg.type;
 
   if (type === 'native_voice_close') return { type: 'native_voice_close' };
+  if (type === 'native_voice_status_stop') return { type: 'native_voice_status_stop' };
 
   if (type === 'native_voice_open') {
     const payload = (msg.payload && typeof msg.payload === 'object') ? (msg.payload as Record<string, unknown>) : {};

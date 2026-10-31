@@ -42,7 +42,8 @@ describe("/api/conversations/[conversationId]/voice routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     store = createMemoryVoiceStore();
-    setVoiceStoreForTests(store);
+    // LiveKit cannot be asked in tests: null means "unknown", so nobody is dropped.
+    setVoiceStoreForTests(store, async () => null);
     process.env.LIVEKIT_URL = "wss://voice.example.test";
     process.env.LIVEKIT_API_KEY = "APItestkey";
     process.env.LIVEKIT_API_SECRET = "test-secret-value-0123456789";

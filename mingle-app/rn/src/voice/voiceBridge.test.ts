@@ -16,6 +16,9 @@ describe('parseVoiceBridgeCommand', () => {
   it('parses close', () => {
     expect(parseVoiceBridgeCommand({ type: 'native_voice_close' })).toEqual({ type: 'native_voice_close' });
   });
+  it('parses status_stop', () => {
+    expect(parseVoiceBridgeCommand({ type: 'native_voice_status_stop' })).toEqual({ type: 'native_voice_status_stop' });
+  });
   it('parses status_request', () => {
     expect(parseVoiceBridgeCommand({ type: 'native_voice_status_request', payload: { conversationId: 'c2' } })).toEqual({
       type: 'native_voice_status_request',

@@ -8,7 +8,9 @@ import { hashRushRoomId, signHashRushTicket } from "@/server/hash-rush/ticket";
 
 export const runtime = "nodejs";
 
-const TICKET_TTL_SEC = 10 * 60;
+// The game page reconnects with the same ticket after a dropped line, so it
+// must outlive a long session in the room, not just the first join.
+const TICKET_TTL_SEC = 2 * 60 * 60;
 
 // A member of the chat room gets a short-lived ticket into that room's game.
 export async function postHashRushTicketResponse(request: NextRequest, conversationId: string) {

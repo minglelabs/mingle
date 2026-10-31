@@ -1,6 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { mintVoiceJoinToken, verifyHs256, verifyLiveKitWebhook } from "@/server/voice/livekit-auth";
+import { listRoomIdentities, mintVoiceJoinToken, verifyHs256, verifyLiveKitWebhook } from "@/server/voice/livekit-auth";
 
 const config = { url: "wss://voice.example.test", apiKey: "APItestkey", apiSecret: "test-secret-value-0123456789" };
 
@@ -56,6 +56,27 @@ describe("mintVoiceJoinToken", () => {
       config, room: "voice-x", identity: "u", name: "", attributes: {}, nowSec: 1_000, ttlSec: 10,
     });
     expect(verifyHs256(token, config.apiSecret)).toBeNull();
+  });
+});
+
+describe("listRoomIdentities", () => {
+  it("asks RoomService over https with an admin token for that room", async () => {
+    let seen: { url: string; auth: string; body: string } | null = null;
+    const fakeFetch = (async (url: string, init: RequestInit) => {
+      seen = { url, auth: String((init.headers as Record<string, string>).authorization), body: String(init.body) };
+      return new Response(JSON.stringify({ participants: [{ identity: "user-1" }, { identity: "interpreter-x" }] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    expect(await listRoomIdentities(config, "voice-a", fakeFetch)).toEqual(["user-1", "interpreter-x"]);
+    expect(seen!.url).toBe("https://voice.example.test/twirp/livekit.RoomService/ListParticipants");
+    expect(JSON.parse(seen!.body)).toEqual({ room: "voice-a" });
+    expect(verifyHs256(seen!.auth.replace("Bearer ", ""), config.apiSecret)).toMatchObject({ video: { room: "voice-a", roomAdmin: true } });
+  });
+
+  it("returns [] for a missing room and null when LiveKit cannot be reached", async () => {
+    const notFound = (async () => new Response("{}", { status: 404 })) as unknown as typeof fetch;
+    const broken = (async () => { throw new Error("down"); }) as unknown as typeof fetch;
+    expect(await listRoomIdentities(config, "voice-a", notFound)).toEqual([]);
+    expect(await listRoomIdentities(config, "voice-a", broken)).toBeNull();
   });
 });
 

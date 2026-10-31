@@ -142,8 +142,19 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     }
     window.addEventListener(NATIVE_VOICE_EVENT, onEvent)
     post({ type: 'native_voice_status_request', payload: { conversationId } })
-    return () => window.removeEventListener(NATIVE_VOICE_EVENT, onEvent)
+    return () => {
+      window.removeEventListener(NATIVE_VOICE_EVENT, onEvent)
+      // Leaving the room screen stops the polling; a joined call keeps running.
+      post({ type: 'native_voice_status_stop' })
+    }
   }, [conversationId, copy.error, copy.full])
+
+  // An error line goes away by itself.
+  useEffect(() => {
+    if (!error) return
+    const timer = setTimeout(() => setError(null), 4000)
+    return () => clearTimeout(timer)
+  }, [error])
 
   const live = !!call && call.participants.length > 0
   useEffect(() => {
@@ -207,6 +218,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
             <div className="flex -space-x-2">
               {seats.slice(0, 4).map((s) => (
                 <span key={s.key} className={`inline-flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 bg-amber-100 text-[0.65rem] font-bold text-amber-800 ${s.isSpeaking ? 'border-amber-400' : 'border-white'}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   {s.image ? <img src={s.image} alt="" className="h-full w-full object-cover" /> : initial(s.name)}
                 </span>
               ))}
@@ -245,6 +257,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                         s ? 'bg-amber-100 text-amber-800' : 'border border-dashed border-gray-300 bg-gray-50 text-gray-300'
                       } ${s?.isSpeaking ? 'ring-[3px] ring-amber-400 ring-offset-2 ring-offset-white' : ''}`}
                     >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       {s ? (s.image ? <img src={s.image} alt="" className="h-full w-full object-cover" /> : initial(s.name)) : ''}
                     </span>
                     <span className="w-full truncate text-center text-[0.7rem] font-medium text-gray-600">
