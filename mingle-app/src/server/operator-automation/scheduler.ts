@@ -15,36 +15,51 @@ type SchedulerState = {
   timer: ReturnType<typeof setInterval> | null
   firstTimer: ReturnType<typeof setTimeout> | null
   running: Promise<void> | null
+  runningSince?: number | null
 }
 
 const STATE_KEY = Symbol.for('mingle.operatorAutomationScheduler.v1')
 
 function schedulerState(): SchedulerState {
   const holder = globalThis as typeof globalThis & { [STATE_KEY]?: SchedulerState }
-  holder[STATE_KEY] ??= { timer: null, firstTimer: null, running: null }
+  holder[STATE_KEY] ??= { timer: null, firstTimer: null, running: null, runningSince: null }
   return holder[STATE_KEY]
 }
 
+/** A run longer than this is treated as stuck: later ticks may start a new one. */
+const STUCK_RUN_MS = 30 * 60_000
+
 export function runOperatorAutomationWorker(): Promise<void> {
   const state = schedulerState()
-  if (state.running) return state.running
-  state.running = (async () => {
+  if (state.running) {
+    if (Date.now() - (state.runningSince ?? Date.now()) < STUCK_RUN_MS) return state.running
+    console.warn('[operator-automation] stuck_run_released', { sinceMs: Date.now() - (state.runningSince ?? Date.now()) })
+  }
+  const startedAt = Date.now()
+  state.runningSince = startedAt
+  const run: Promise<void> = (async () => {
     try {
       const summary = await runOperatorAutomation()
       if (['generated', 'failed'].includes(summary.avatar) || ['created', 'failed'].includes(summary.account) || typeof summary.posts === 'object') console.info('[operator-automation] run', summary)
     } catch (error) {
-      console.error('[operator-automation] run_failed', { error: error instanceof Error ? error.name : 'unknown' })
+      console.error('[operator-automation] run_failed', { error: error instanceof Error ? `${error.name}: ${error.message.slice(0, 120)}` : 'unknown' })
     } finally {
-      state.running = null
+      // Only the run that is still current clears the slot (a released stuck run must not clear its successor).
+      if (state.runningSince === startedAt) {
+        state.running = null
+        state.runningSince = null
+      }
     }
   })()
-  return state.running
+  state.running = run
+  return run
 }
 
 /** Start the tick once per process. Further calls are no-ops. */
 export function startOperatorAutomationWorker(): void {
   const state = schedulerState()
   if (state.timer) return
+  console.info('[operator-automation] worker_started', { firstTickMs: AUTOMATION_FIRST_TICK_MS, tickMs: AUTOMATION_TICK_MS })
   state.firstTimer = setTimeout(() => {
     state.firstTimer = null
     void runOperatorAutomationWorker()

@@ -207,6 +207,7 @@ export async function runOperatorAutomation(options: { now?: () => Date } = {}):
   if (settings.accounts.enabled) {
     if (!due(state.lastAccountAt, DAY_MS / settings.accounts.perDay, now())) summary.account = 'waiting'
     else {
+      console.info('[operator-automation] account_step_start')
       const step = await createNextSeedAccount(WORKER_CONTEXT, { totalTarget: settings.accounts.totalTarget, now: now(), inReview: true })
       summary.account = step.done ? 'created' : step.reason === 'target_reached' ? 'target_reached' : 'failed'
       // The pace holds after a failure too: a broken model must not be hammered every minute.
@@ -220,6 +221,7 @@ export async function runOperatorAutomation(options: { now?: () => Date } = {}):
     else {
       // Marked first: a restart mid-run must not write a second batch the same day.
       await saveAutomationState({ lastPostsDay: today })
+      console.info('[operator-automation] posts_step_start', { day: today, chancePercent: settings.posts.chancePercent })
       summary.posts = await writeDailyOperatorPosts(settings.posts.chancePercent, now())
     }
   }
