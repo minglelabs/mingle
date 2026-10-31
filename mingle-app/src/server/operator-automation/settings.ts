@@ -24,17 +24,28 @@ export type AutomationSettings = {
     /** Creation stops once this many active operator accounts exist. */
     totalTarget: number
   }
+  /**
+   * Once a day (Korean time), each approved operator account writes one new
+   * post with this chance; it goes to the front of the review queue, its photo
+   * drawn right away where the server can draw.
+   */
+  posts: {
+    enabled: boolean
+    chancePercent: number
+  }
 }
 
 export const AUTOMATION_DEFAULTS: AutomationSettings = {
   avatars: { enabled: false, intervalMinutes: 10 },
   accounts: { enabled: false, perDay: 5, totalTarget: 100 },
+  posts: { enabled: false, chancePercent: 20 },
 }
 
 export const AUTOMATION_LIMITS = {
   intervalMinutes: { min: 1, max: 1440 },
   perDay: { min: 1, max: 100 },
   totalTarget: { min: 1, max: 2000 },
+  chancePercent: { min: 1, max: 100 },
 } as const
 
 /** A whole number within the field's limits, or null. */
@@ -53,6 +64,7 @@ function record(value: unknown): Record<string, unknown> {
 export function normalizeAutomationSettings(value: unknown): AutomationSettings {
   const avatars = record(record(value).avatars)
   const accounts = record(record(value).accounts)
+  const posts = record(record(value).posts)
   return {
     avatars: {
       enabled: avatars.enabled === true,
@@ -62,6 +74,10 @@ export function normalizeAutomationSettings(value: unknown): AutomationSettings 
       enabled: accounts.enabled === true,
       perDay: parseAutomationInt(accounts.perDay, 'perDay') ?? AUTOMATION_DEFAULTS.accounts.perDay,
       totalTarget: parseAutomationInt(accounts.totalTarget, 'totalTarget') ?? AUTOMATION_DEFAULTS.accounts.totalTarget,
+    },
+    posts: {
+      enabled: posts.enabled === true,
+      chancePercent: parseAutomationInt(posts.chancePercent, 'chancePercent') ?? AUTOMATION_DEFAULTS.posts.chancePercent,
     },
   }
 }
@@ -77,7 +93,18 @@ export function parseAutomationSettings(value: unknown): { ok: true; settings: A
   if (perDay === null) return { ok: false, error: 'invalid_per_day' }
   const totalTarget = parseAutomationInt(accounts.totalTarget, 'totalTarget')
   if (totalTarget === null) return { ok: false, error: 'invalid_total_target' }
-  return { ok: true, settings: { avatars: { enabled: avatars.enabled, intervalMinutes }, accounts: { enabled: accounts.enabled, perDay, totalTarget } } }
+  const posts = record(record(value).posts)
+  if (typeof posts.enabled !== 'boolean') return { ok: false, error: 'invalid_enabled' }
+  const chancePercent = parseAutomationInt(posts.chancePercent, 'chancePercent')
+  if (chancePercent === null) return { ok: false, error: 'invalid_chance' }
+  return {
+    ok: true,
+    settings: {
+      avatars: { enabled: avatars.enabled, intervalMinutes },
+      accounts: { enabled: accounts.enabled, perDay, totalTarget },
+      posts: { enabled: posts.enabled, chancePercent },
+    },
+  }
 }
 
 export async function getAutomationSettings(): Promise<AutomationSettings> {
@@ -95,13 +122,18 @@ export async function updateAutomationSettings(ctx: AdminContext, next: Automati
     action: 'settings.automation',
     targetType: 'setting',
     targetId: AUTOMATION_SETTING_KEY,
-    metadata: { avatars: next.avatars, accounts: next.accounts },
+    metadata: { avatars: next.avatars, accounts: next.accounts, posts: next.posts },
   })
   return next
 }
 
 /** When each automatic rule last ran (so the pace survives a restart). */
-export type AutomationState = { lastAvatarAt: string | null; lastAccountAt: string | null }
+export type AutomationState = {
+  lastAvatarAt: string | null
+  lastAccountAt: string | null
+  /** The Korean calendar day ("2026-11-01") the daily posts last ran for. */
+  lastPostsDay: string | null
+}
 
 function isoOrNull(value: unknown): string | null {
   const ms = typeof value === 'string' ? Date.parse(value) : Number.NaN
@@ -111,7 +143,11 @@ function isoOrNull(value: unknown): string | null {
 export async function getAutomationState(): Promise<AutomationState> {
   const row = await prisma.adminSetting.findUnique({ where: { key: AUTOMATION_STATE_KEY }, select: { value: true } })
   const value = record(row?.value)
-  return { lastAvatarAt: isoOrNull(value.lastAvatarAt), lastAccountAt: isoOrNull(value.lastAccountAt) }
+  return {
+    lastAvatarAt: isoOrNull(value.lastAvatarAt),
+    lastAccountAt: isoOrNull(value.lastAccountAt),
+    lastPostsDay: typeof value.lastPostsDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.lastPostsDay) ? value.lastPostsDay : null,
+  }
 }
 
 export async function saveAutomationState(patch: Partial<AutomationState>): Promise<void> {
