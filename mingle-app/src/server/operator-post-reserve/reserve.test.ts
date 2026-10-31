@@ -29,7 +29,7 @@ vi.mock('@/server/operator-posts/operator-check', () => ({
   checkOperatorForPosting: mocks.checkOperator,
   personaLanguageOf: () => 'ko',
 }))
-vi.mock('@/server/llm/generate-json', () => ({ generateJson: mocks.generateJson }))
+vi.mock('@/server/llm/generate-json', () => ({ resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: mocks.generateJson }))
 
 import { DEFAULT_SEED_PLAN, defaultSeedRows, parseSeedCount, seedPlanTotal } from '@/app/admin/operators/seed/seed-plan'
 import { cleanReservePost, generateReservePosts, pickReserveTopics, RESERVE_TOPICS, reservePostKey } from './generate'

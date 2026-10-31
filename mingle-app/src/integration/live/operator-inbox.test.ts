@@ -17,7 +17,7 @@ vi.mock('@/lib/prisma', async () => {
   const { PrismaClient } = await import('@prisma/client')
   return { prisma: new PrismaClient({ datasources: { db: { url: context.url || 'postgresql://unused@localhost:1/unused?schema=app' } } }) }
 })
-vi.mock('@/server/translation/translate-texts', () => ({
+vi.mock('@/server/translation/translate-texts', () => ({ operatorTextProvider: () => undefined,
   translateTexts: () => Promise.reject(new Error('no model calls in this test')),
 }))
 

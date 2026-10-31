@@ -12,6 +12,7 @@ import { reserveExtraImages } from './extra-images'
 import { generateReservePosts, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE, type ReservePersona } from './generate'
 import { nextReleaseAt } from './schedule'
 import { getPostReserveSettings, postsPerDay, type PostReserveSettings } from './settings'
+import { operatorTextProvider } from '@/server/translation/translate-texts'
 
 /**
  * Keeps every active operator account posting on its own: a reserve of
@@ -128,6 +129,7 @@ async function releaseOne(row: ClaimedReservePost, now: Date, origin: 'queued' |
       clientHint: row.language ?? personaLanguageOf(check.account),
       clientPostId: reserveClientPostId(row.id),
       knownTranslations: reviewTranslationsFor(row.translations, row.text),
+      translationProvider: operatorTextProvider(),
     })
     if (result.kind === 'conflict') {
       await settle({ state: 'failed', error: 'client_post_id_conflict', releaseAt: null })

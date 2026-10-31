@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, type ResponseSchema } from '@google/generative-ai'
+import { chatgptPoolChat, chatgptPoolKey } from '@/server/chatgpt-pool/client'
 
 /**
  * One bounded Gemini call that must answer with JSON matching `responseSchema`
@@ -60,7 +61,61 @@ export function resolveGeminiJsonModel(model: string | null | undefined): string
   return model?.trim() || DEFAULT_GEMINI_JSON_MODEL
 }
 
+/**
+ * Where generateJson runs: the ChatGPT pool on the home PC when the server has
+ * CHATGPT_POOL_KEY (staff decided 2026-10-31 that every operator text is
+ * written there, not on a paid API), else Gemini. LLM_JSON_PROVIDER=gemini
+ * forces Gemini.
+ */
+export function resolveJsonProvider(env: NodeJS.ProcessEnv = process.env): 'chatgpt-pool' | 'gemini' {
+  if (env.LLM_JSON_PROVIDER?.trim() === 'gemini') return 'gemini'
+  return chatgptPoolKey(env) ? 'chatgpt-pool' : 'gemini'
+}
+
+/** The first JSON value in a chat answer: fenced in ```json, or the outermost {...} / [...]. */
+export function extractJsonText(answer: string): string {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(answer)
+  if (fenced) return fenced[1].trim()
+  const start = answer.search(/[{[]/)
+  if (start < 0) return answer.trim()
+  const open = answer[start]
+  const end = answer.lastIndexOf(open === '{' ? '}' : ']')
+  return end > start ? answer.slice(start, end + 1) : answer.slice(start)
+}
+
+async function generateJsonWithPool<T>(request: GenerateJsonRequest<T>): Promise<T> {
+  const answer = await chatgptPoolChat([
+    {
+      role: 'system',
+      content: [
+        request.instructions.trim(),
+        DATA_RULE,
+        `Answer with one JSON value only, no prose and no code fence, matching this JSON schema:\n${JSON.stringify(request.responseSchema)}`,
+      ].join('\n\n'),
+    },
+    { role: 'user', content: JSON.stringify(request.input ?? null) },
+  ])
+  if (!answer.ok) {
+    const { status, code } = answer.error
+    if (code === 'timeout') throw new LlmError('llm_timeout')
+    if (code === 'missing_key' || status === 0 || status === 503) throw new LlmError('llm_unavailable')
+    throw new LlmError('llm_request_failed')
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(extractJsonText(answer.content))
+  } catch (error) {
+    throw new LlmError('llm_invalid_response', { cause: error })
+  }
+  try {
+    return request.validate(parsed)
+  } catch (error) {
+    throw new LlmError('llm_invalid_response', { cause: error })
+  }
+}
+
 export async function generateJson<T>(request: GenerateJsonRequest<T>): Promise<T> {
+  if (resolveJsonProvider() === 'chatgpt-pool') return generateJsonWithPool(request)
   const apiKey = process.env.GEMINI_API_KEY?.trim()
   if (!apiKey) throw new LlmError('llm_unavailable')
 
