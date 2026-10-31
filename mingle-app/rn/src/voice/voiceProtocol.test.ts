@@ -5,6 +5,7 @@ import {
   captionLinesNewestFirst,
   createCaptionStore,
   decodeCaptionPayload,
+  decodeUtf8,
   isInterpreterParticipant,
   originalVolume,
   parseCaptionMessage,
@@ -13,6 +14,16 @@ import {
   type VoiceParticipantView,
   type VolumeState,
 } from './voiceProtocol';
+
+// Jest runs on Node, which has TextEncoder; the RN tsconfig has no DOM lib.
+declare const TextEncoder: { new (): { encode: (s: string) => Uint8Array } };
+
+describe('decodeUtf8', () => {
+  it('decodes multi-byte text without TextDecoder', () => {
+    const text = '안녕 こんにちは é 😀';
+    expect(decodeUtf8(new TextEncoder().encode(text))).toBe(text);
+  });
+});
 
 describe('isInterpreterParticipant', () => {
   it('detects by role attribute', () => {
