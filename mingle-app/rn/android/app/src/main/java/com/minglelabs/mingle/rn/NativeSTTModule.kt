@@ -109,6 +109,7 @@ class NativeSTTModule(
   @Volatile private var wsMessageCount: Long = 0L
   @Volatile private var gracefulStopPending = false
   private val gracefulStopHandler = Handler(Looper.getMainLooper())
+  private val qaAudioInjector = NativeSttQaAudioInjector()
   private var gracefulStopTimeoutRunnable: Runnable? = null
   private val isRecoveringAudio = AtomicBoolean(false)
 
@@ -746,6 +747,15 @@ class NativeSTTModule(
           continue
         }
 
+        // Only chunks that reach the socket advance a QA fixture's playhead.
+        val injected = qaAudioInjector.fillPcm16(
+          buffer = chunkBuffer,
+          byteCount = bytesRead,
+          sampleRate = capture.sampleRate,
+          bufferStartWallMs = System.currentTimeMillis() - (bytesRead / 2) * 1_000.0 / capture.sampleRate,
+        )
+        injected?.events?.forEach(::emitQaAudioInjection)
+
         val encoded = Base64.encodeToString(chunkBuffer, 0, bytesRead, Base64.NO_WRAP)
         val payload = JSONObject()
           .put("type", "audio_chunk")
@@ -967,6 +977,7 @@ class NativeSTTModule(
     emitStatus("stopping")
 
     stopAudioThread()
+    qaAudioInjector.sessionEnded()?.let(::emitQaAudioInjection)
     stopStallMonitor()
     unregisterAudioDeviceCallback()
     unregisterRecordingCallback()
@@ -1056,6 +1067,7 @@ class NativeSTTModule(
     webSocketClient = null
 
     stopAudioThread()
+    qaAudioInjector.sessionEnded()?.let(::emitQaAudioInjection)
     stopStallMonitor()
     unregisterAudioDeviceCallback()
     unregisterRecordingCallback()
@@ -1149,6 +1161,114 @@ class NativeSTTModule(
         activeSessionId?.let { putString("sessionId", it) }
       },
     )
+  }
+
+  private fun emitQaAudioInjection(event: Map<String, Any>) {
+    Log.i(TAG, "qaAudioInjection phase=${event["phase"]} fixture=${event["fixtureId"]}")
+    emitEvent(
+      "qaAudioInjection",
+      Arguments.createMap().apply {
+        event.forEach { (key, value) ->
+          when (value) {
+            is String -> putString(key, value)
+            is Int -> putInt(key, value)
+            is Long -> putDouble(key, value.toDouble())
+            is Double -> putDouble(key, value)
+            is Boolean -> putBoolean(key, value)
+          }
+        }
+        activeConversationId?.let { putString("conversationId", it) }
+        activeSessionId?.let { putString("sessionId", it) }
+      },
+    )
+  }
+
+  private fun loadQaAudioFixture(options: ReadableMap): ByteArray {
+    val base64 = options.getString("base64")?.trim().orEmpty()
+    if (base64.isNotEmpty()) {
+      val bytes = Base64.decode(base64, Base64.DEFAULT)
+      require(bytes.size <= NativeSttQaAudioInjector.MAX_FIXTURE_BYTES) { "audio_file_too_large" }
+      return bytes
+    }
+    val url = options.getString("url")?.trim().orEmpty()
+    require(url.isNotEmpty()) { "missing_audio_source" }
+    val uri = android.net.Uri.parse(url)
+    return when (uri.scheme?.lowercase()) {
+      "file" -> {
+        val file = java.io.File(requireNotNull(uri.path) { "invalid_audio_path" })
+        require(file.length() in 1..NativeSttQaAudioInjector.MAX_FIXTURE_BYTES.toLong()) { "audio_file_size_invalid" }
+        file.readBytes()
+      }
+      "http", "https" -> {
+        OkHttpClient.Builder()
+          .callTimeout(30, TimeUnit.SECONDS)
+          .build()
+          .newCall(Request.Builder().url(url).build())
+          .execute()
+          .use { response ->
+            require(response.isSuccessful) { "audio_download_failed(${response.code})" }
+            val body = requireNotNull(response.body) { "audio_download_empty" }
+            val contentLength = body.contentLength()
+            require(contentLength <= NativeSttQaAudioInjector.MAX_FIXTURE_BYTES) { "audio_file_too_large" }
+            val bytes = body.bytes()
+            require(bytes.size in 1..NativeSttQaAudioInjector.MAX_FIXTURE_BYTES) { "audio_download_size_invalid" }
+            bytes
+          }
+      }
+      else -> throw IllegalArgumentException("unsupported_audio_url_scheme")
+    }
+  }
+
+  @ReactMethod
+  fun qaInjectAudio(
+    options: ReadableMap,
+    promise: Promise,
+  ) {
+    if (!NativeSttQaAudioInjector.isAllowed(reactApplicationContext)) {
+      promise.reject("qa_audio_injection_disabled", "QA audio injection is not available in this build")
+      return
+    }
+    val fixtureId = options.getString("fixtureId")?.trim().orEmpty().ifEmpty { "unnamed" }
+    val leadingSilenceMs = if (options.hasKey("leadingSilenceMs") && !options.isNull("leadingSilenceMs")) {
+      options.getDouble("leadingSilenceMs").toInt()
+    } else {
+      500
+    }
+    val trailingSilenceMs = if (options.hasKey("trailingSilenceMs") && !options.isNull("trailingSilenceMs")) {
+      options.getDouble("trailingSilenceMs").toInt()
+    } else {
+      3_000
+    }
+    Thread({
+      try {
+        val audio = NativeSttQaAudioInjector.decodeWav(loadQaAudioFixture(options))
+        val armed = qaAudioInjector.arm(fixtureId, audio, leadingSilenceMs, trailingSilenceMs)
+          .plus("appliesTo" to if (isRunning.get()) "current_session" else "next_session")
+        emitQaAudioInjection(armed)
+        promise.resolve(Arguments.createMap().apply {
+          armed.forEach { (key, value) ->
+            when (value) {
+              is String -> putString(key, value)
+              is Int -> putInt(key, value)
+              is Double -> putDouble(key, value)
+            }
+          }
+        })
+      } catch (error: Throwable) {
+        promise.reject("qa_audio_injection_failed", error.message ?: "qa_audio_injection_failed", error)
+      }
+    }, "NativeSTT-QaAudio").start()
+  }
+
+  @ReactMethod
+  fun qaClearAudioInjection(promise: Promise) {
+    if (!NativeSttQaAudioInjector.isAllowed(reactApplicationContext)) {
+      promise.reject("qa_audio_injection_disabled", "QA audio injection is not available in this build")
+      return
+    }
+    val event = qaAudioInjector.clear("requested")
+    event?.let(::emitQaAudioInjection)
+    promise.resolve(Arguments.createMap().apply { putBoolean("cleared", event != null) })
   }
 
   private fun emitEvent(

@@ -17,6 +17,7 @@ import { usePostViewTracker } from "@/components/feed/use-post-view-tracker";
 import { useFeedExposureTracker } from "@/components/feed/use-feed-exposure-tracker";
 import { cycleOfEntryKey } from "@/components/feed/feed-list";
 import { feedEvents, feedPostContext, feedSurfaceForSource, trackFeedEvent } from "@/lib/feed-analytics";
+import { markStartupContentReady } from "@/lib/after-startup";
 import { useReducedMotion } from "@/components/feed/use-reduced-motion";
 import { useFeedSource } from "@/components/feed/use-feed-source";
 import type { LikeState } from "@/components/feed/use-feed-like";
@@ -193,6 +194,12 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     restorePostId: startPlan.restorePostId,
     startPostId,
   });
+
+  // The first page (or its error) is on screen: background work held back for
+  // the cold start (tab prefetches, unread badge, analytics) may start now.
+  useEffect(() => {
+    if (phase !== "loading") markStartupContentReady();
+  }, [phase]);
 
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const [swipeHintVisible, setSwipeHintVisible] = useState(true);
