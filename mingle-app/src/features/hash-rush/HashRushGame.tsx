@@ -9,13 +9,15 @@
 // out its DOM and shows what the client reports between rounds.
 //
 // The rules it keeps are hash-rush's docs/UIUX-ISSUES.md and this repo's
-// docs/hash-rush-in-app-uiux.md: the map fills the width, the controls lie over
-// its foot, a hamster under a button dims it by half, a swipe of 32px or more
-// steers one of 16 ways, a tap stops, and the pad stays held while the thumb
-// stays down.
+// docs/hash-rush-in-app-uiux.md: the game takes the whole screen; on a phone
+// the map is as wide as it can be above the strip of touch controls, so they
+// never lie over the burrow; the way back to the chat is a pill over the map's
+// top left corner; a hamster under a button dims it by half; a swipe of 32px or
+// more steers one of 16 ways, a tap stops, and the pad stays held while the
+// thumb stays down.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
-import { Loader2 } from 'lucide-react'
+import { ChevronLeft, Loader2 } from 'lucide-react'
 import styles from './hash-rush-game.module.css'
 import { HASH_RUSH_SERVER } from './config'
 import { hashRushGameCopy } from './copy'
@@ -64,13 +66,22 @@ type Props = {
   uiLocale: string
   /** On screen. Out of sight the round goes on, silent, and this hamster stands still. */
   visible: boolean
-  /** This room's voice talk is connected: the game holds its music. */
+  /** This room's voice talk is connected: the game holds its music, the back pill shows a green dot. */
   voiceActive: boolean
+  /** Back to the chat: lowers the game. */
+  onBack: () => void
 }
 
-export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive }: Props) {
+/** Where the map is, kept only when it moved. */
+function sameField(a: HashRushFieldLayout | null, b: HashRushFieldLayout | null) {
+  return !!a && !!b && a.tall === b.tall && a.widthPx === b.widthPx && a.heightPx === b.heightPx && a.topPx === b.topPx
+}
+
+export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive, onBack }: Props) {
   const copy = hashRushGameCopy(uiLocale)
   const stageRef = useRef<HTMLDivElement | null>(null)
+  const arenaRef = useRef<HTMLDivElement | null>(null)
+  const backRef = useRef<HTMLButtonElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const padRef = useRef<HTMLDivElement | null>(null)
   const bonkRef = useRef<HTMLButtonElement | null>(null)
@@ -89,7 +100,12 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
   const toolsMoreRef = useRef<HTMLButtonElement | null>(null)
   const clientRef = useRef<HashRushGameClient | null>(null)
   const latestRef = useRef({ viewerKey, playerName, uiLocale, visible, voiceActive })
+  // The screen's own shape: a tall one shows the map turned, with the touch
+  // controls in a strip of their own under it.
+  const [tall, setTall] = useState<boolean | null>(null)
   const [field, setField] = useState<HashRushFieldLayout | null>(null)
+  // The arena's box in the stage, for what is placed by the map from outside it.
+  const [arenaAt, setArenaAt] = useState({ left: 0, top: 0, width: 0 })
   const [view, setView] = useState<HashRushGameView>({ kind: 'connecting', again: false })
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [soundOff, setSoundOff] = useState(false)
@@ -100,17 +116,21 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
     latestRef.current = { viewerKey, playerName, uiLocale, visible, voiceActive }
   }, [viewerKey, playerName, uiLocale, visible, voiceActive])
 
-  // ---- Where the map goes: the whole width it can, at the top of a tall area ----
+  // ---- Where the map goes: the whole width it can, at the top of the arena ----
+  // The stage is the whole screen; the arena is what the stylesheet leaves of
+  // it for the map (under the status bar, over a phone's controls).
   useLayoutEffect(() => {
     const stage = stageRef.current
-    if (!stage) return
+    const arena = arenaRef.current
+    if (!stage || !arena) return
     const measure = () => {
-      const next = resolveHashRushField(stage.clientWidth, stage.clientHeight)
-      setField((current) => (
-        current && next && current.tall === next.tall && current.widthPx === next.widthPx
-          && current.heightPx === next.heightPx && current.topPx === next.topPx
-          ? current
-          : next
+      const shapeTall = stage.clientHeight > stage.clientWidth
+      setTall(shapeTall)
+      const next = resolveHashRushField(arena.clientWidth, arena.clientHeight, shapeTall)
+      setField((current) => (sameField(current, next) ? current : next))
+      const box = { left: arena.offsetLeft, top: arena.offsetTop, width: arena.clientWidth }
+      setArenaAt((current) => (
+        current.left === box.left && current.top === box.top && current.width === box.width ? current : box
       ))
     }
     measure()
@@ -120,6 +140,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
     }
     const observer = new ResizeObserver(measure)
     observer.observe(stage)
+    observer.observe(arena)
     return () => observer.disconnect()
   }, [])
 
@@ -147,9 +168,10 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
       hintTouch: hintTouchRef.current,
     }
     const toolsMore = toolsMoreRef.current
-    if (Object.values(parts).some((node) => !node) || !toolsMore) return
+    const back = backRef.current
+    if (Object.values(parts).some((node) => !node) || !toolsMore || !back) return
     const elements = { ...parts, overMap: [] } as unknown as HashRushGameElements
-    elements.overMap = [elements.pad, elements.bonk, elements.throwButton, toolsMore]
+    elements.overMap = [elements.pad, elements.bonk, elements.throwButton, toolsMore, back]
     let cancelled = false
     let client: HashRushGameClient | null = null
     import('./client')
@@ -237,56 +259,83 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
   const fieldStyle = field
     ? { width: field.widthPx, height: field.heightPx, top: field.topPx }
     : { width: 0, height: 0, top: 0, visibility: 'hidden' as const }
-  // Where the map is, for what the stylesheet places by it (the touch hint).
+  // Where the map is, for what the stylesheet places by it: in the arena (the
+  // touch hint) and in the stage (the buttons by the map's top right corner).
   const stageStyle = field
-    ? ({ '--hr-field-top': `${field.topPx}px`, '--hr-field-height': `${field.heightPx}px` } as CSSProperties)
+    ? ({
+        '--hr-field-top': `${field.topPx}px`,
+        '--hr-field-height': `${field.heightPx}px`,
+        '--hr-field-y': `${arenaAt.top + field.topPx}px`,
+        '--hr-field-x': `${arenaAt.left + Math.max(0, Math.round((arenaAt.width - field.widthPx) / 2))}px`,
+        '--hr-field-width': `${field.widthPx}px`,
+      } as CSSProperties)
     : undefined
 
   return (
     <div
       ref={stageRef}
-      className={cx(styles.stage, field?.tall && styles.tall, bonkLeft && styles.bonkLeft, view.kind === 'result' && styles.resultUp)}
+      className={cx(styles.stage, tall && styles.tall, bonkLeft && styles.bonkLeft, view.kind === 'result' && styles.resultUp)}
       style={stageStyle}
       data-qa="hash-rush-game"
     >
-      <div className={styles.field} style={fieldStyle}>
-        <canvas ref={canvasRef} className={styles.canvas} aria-label={copy.title} />
-        <div className={styles.hud}>
-          <div ref={scoresRef} className={styles.scores} />
-          <div className={styles.side}>
-            <div ref={clockRef} className={styles.clock}>0:00</div>
-            <div ref={pingRef} className={styles.ping} />
-            <div ref={feedRef} className={styles.feed} />
-          </div>
-          <div ref={bannerRef} className={styles.banner} />
-          <div ref={bigRef} className={styles.big} />
-          <div ref={calloutRef} className={styles.callout} />
-          <div ref={watchingRef} className={styles.watching} />
-          <div ref={hintRef} className={styles.hint} />
-          <div ref={toolsRef} className={cx(styles.tools, toolsOpen && styles.toolsOpen)}>
+      <div ref={arenaRef} className={styles.arena}>
+        <div className={styles.field} style={fieldStyle} data-qa="hash-rush-field">
+          <canvas ref={canvasRef} className={styles.canvas} aria-label={copy.title} />
+          <div className={styles.hud}>
             <button
-              ref={toolsMoreRef}
+              ref={backRef}
               type="button"
-              className={cx(styles.toolButton, styles.toolsMore)}
-              aria-label={copy.settings}
-              aria-expanded={toolsOpen}
-              onClick={() => setToolsOpen((open) => !open)}
+              onClick={onBack}
+              className={styles.back}
+              aria-label={copy.backToChat}
+              title={copy.backToChat}
+              data-qa="hash-rush-game-back"
             >
-              ⚙️
+              <ChevronLeft size={20} strokeWidth={2.6} aria-hidden="true" />
+              <span>{copy.backShort}</span>
+              {voiceActive ? (
+                <i role="img" aria-label={copy.voiceOn} title={copy.voiceOn} className={styles.voiceDot} data-qa="hash-rush-voice-dot" />
+              ) : null}
             </button>
-            <div className={styles.toolsMenu} onClick={() => setToolsOpen(false)}>
-              <button type="button" className={styles.toolButton} aria-label={copy.sound} title={copy.sound} onClick={toggleSound}>
-                {soundOff ? '🔇' : '🔊'}
-              </button>
-              <button type="button" className={cx(styles.toolButton, styles.touchOnly)} aria-label={copy.swapSides} title={copy.swapSides} onClick={swapSides}>
-                ⇄
-              </button>
+            <div ref={scoresRef} className={styles.scores} />
+            <div className={styles.side}>
+              <div ref={clockRef} className={styles.clock}>0:00</div>
+              <div ref={pingRef} className={styles.ping} />
+              <div ref={feedRef} className={styles.feed} />
             </div>
+            <div ref={bannerRef} className={styles.banner} data-qa="hash-rush-banner" />
+            <div ref={bigRef} className={styles.big} />
+            <div ref={calloutRef} className={styles.callout} />
+            <div ref={watchingRef} className={styles.watching} />
+            <div ref={hintRef} className={styles.hint} />
           </div>
+        </div>
+        <div ref={hintTouchRef} className={styles.hintTouch} />
+      </div>
+
+      {/* The round's own buttons: on a phone in the gap between the pad and the
+          bonk button, with a mouse by the map's top right corner. */}
+      <div ref={toolsRef} className={cx(styles.dock, toolsOpen && styles.toolsOpen)} data-qa="hash-rush-dock">
+        <button
+          ref={toolsMoreRef}
+          type="button"
+          className={cx(styles.toolButton, styles.toolsMore)}
+          aria-label={copy.settings}
+          aria-expanded={toolsOpen}
+          onClick={() => setToolsOpen((open) => !open)}
+        >
+          ⚙️
+        </button>
+        <div className={styles.toolsMenu} onClick={() => setToolsOpen(false)}>
+          <button type="button" className={styles.toolButton} aria-label={copy.sound} title={copy.sound} onClick={toggleSound}>
+            {soundOff ? '🔇' : '🔊'}
+          </button>
+          <button type="button" className={cx(styles.toolButton, styles.touchOnly)} aria-label={copy.swapSides} title={copy.swapSides} onClick={swapSides}>
+            ⇄
+          </button>
         </div>
       </div>
 
-      <div ref={hintTouchRef} className={styles.hintTouch} />
       <div ref={padRef} className={styles.pad} data-qa="hash-rush-pad">
         <svg viewBox="-1 -1 102 102" aria-hidden="true">
           {PAD_KEYS.map((key) => (

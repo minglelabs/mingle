@@ -47,23 +47,52 @@ describe('hash rush native game wiring', () => {
     const leave = between(liveDemoSource, '// Leaving the room (back to the list', '}, [isVisible])')
     expect(leave).toContain('setHashRushGameOpen(false)')
     expect(leave).toContain('setHashRushGameActive(false)')
-    expect(layerSource).toContain('absolute inset-0 z-[47] flex flex-col')
+    expect(layerSource).toContain('absolute inset-0 z-[47] overflow-hidden')
     expect(layerSource).toContain("transitionEnd: { visibility: 'hidden' }")
     expect(layerSource).toContain('inert={!open}')
     expect(layerSource).toContain('visible={open}')
   })
 
-  it('has a thin top bar: back to the chat, the title and a green dot during a voice talk', () => {
-    const bar = between(layerSource, 'className="shrink-0 border-b border-gray-100 bg-white"', '<HashRushGame')
-    expect(bar).toContain("paddingTop: 'env(safe-area-inset-top, 0px)'")
-    expect(bar).toContain('className="flex h-11 items-center')
-    expect(bar).toContain('onClick={onClose}')
-    expect(bar).toContain('aria-label={copy.backToChat}')
-    expect(bar).toContain('{copy.title}')
-    expect(bar).toContain('{voiceActive ? (')
-    expect(bar).toContain('bg-emerald-500')
-    // The game takes all the height left.
-    expect(layerSource).toContain('<div className="relative min-h-0 flex-1">')
+  it('has no app bar: the game takes the whole screen, with a back pill over the map (device check 3)', () => {
+    expect(layerSource).not.toContain('data-qa="hash-rush-game-bar"')
+    expect(layerSource).not.toContain('h-11')
+    expect(layerSource).toContain('onBack={onClose}')
+    const pill = between(gameSource, 'ref={backRef}', '</button>')
+    expect(pill).toContain('onClick={onBack}')
+    expect(pill).toContain('aria-label={copy.backToChat}')
+    expect(pill).toContain('<ChevronLeft')
+    expect(pill).toContain('{copy.backShort}')
+    expect(pill).toContain('{voiceActive ? (')
+    expect(pill).toContain('className={styles.voiceDot}')
+    // Over the map's top left corner, under the status bar: the arena starts below the safe area.
+    expect(rule('.back')).toContain('top: 1.2cqw;')
+    expect(rule('.back')).toContain('left: 1.4cqw;')
+    expect(rule('.tall .arena')).toContain('top: env(safe-area-inset-top, 0px);')
+    // Behind the status bar a pale strip, so its dark text still reads.
+    expect(rule('.tall::before')).toContain('height: env(safe-area-inset-top, 0px);')
+  })
+
+  it('lays the map out above the strip of touch controls, never under them (device check 1)', () => {
+    const touch = between(css, '@media (pointer: coarse) {', '.pad {\n    display: grid;')
+    expect(touch).toContain('bottom: calc(148px + var(--hr-foot) + 4px);')
+    expect(rule('.stage')).toContain('--hr-foot: max(6px, env(safe-area-inset-bottom, 0px));')
+    expect(rule('.pad')).toContain('bottom: var(--hr-foot);')
+    expect(rule('.tall .bonk')).toContain('bottom: var(--hr-foot);')
+    expect(rule('.tall .throw')).toContain('bottom: calc(var(--hr-foot) + 108px);')
+    // The map is measured in the arena; its shape (turned or not) is the screen's.
+    expect(gameSource).toContain('resolveHashRushField(arena.clientWidth, arena.clientHeight, shapeTall)')
+    // The round's own buttons sit in the gap between the pad's and the bonk button's hit areas.
+    expect(touch).toContain('left: calc(50% + 15px);')
+    expect(touch).toContain('left: calc(50% - 15px);')
+  })
+
+  it('shows the round news as a small strip on the map top edge, off the sunflower (device check 2)', () => {
+    const banner = rule('.tall .banner')
+    expect(banner).toContain('top: 1.2cqw;')
+    expect(banner).toContain('font-size: 12.5px;')
+    expect(banner).toContain('max-width: calc(100% - 200px);')
+    expect(banner).toContain('background: rgba(58, 42, 26, 0.3);')
+    expect(banner).toContain('white-space: normal;')
   })
 
   it('holds the swipe-back, Android back, the ad banner and toasts while up', () => {
@@ -108,14 +137,14 @@ describe('hash rush native game wiring', () => {
   it('keeps the UIUX-ISSUES control and layout rules', () => {
     // The doughnut pad in its corner, the bonk button in the other, the throw button over it.
     expect(rule('.pad')).toContain('width: 148px;')
-    expect(rule('.pad')).toContain('bottom: max(2px, env(safe-area-inset-bottom));')
     expect(rule('.tall .bonk')).toContain('width: 100px;')
     expect(rule('.throw')).toContain('bottom: calc(max(22px, env(safe-area-inset-bottom)) + clamp(84px, 20vmin, 128px) + 12px);')
     // Plain to see over any map; half faded only while a hamster is under it on a phone (#216, #223).
     expect(rule('.pad path')).toContain('fill: rgba(255, 255, 255, 0.32);')
-    expect(between(css, '@media (pointer: coarse) {', '/* The round')).toContain('filter: opacity(0.5);')
+    expect(between(css, '.pad {\n    display: grid;', '/* Once the round')).toContain('filter: opacity(0.5);')
     expect(clientSource).toContain('node.classList.toggle(classes.under, under)')
-    expect(gameSource).toContain('elements.overMap = [elements.pad, elements.bonk, elements.throwButton, toolsMore]')
+    // The back pill lies over the map too, and fades the same way.
+    expect(gameSource).toContain('elements.overMap = [elements.pad, elements.bonk, elements.throwButton, toolsMore, back]')
     // Every touch is the game's.
     expect(rule('.stage')).toContain('touch-action: none;')
     expect(rule('.stage')).toContain('-webkit-touch-callout: none;')

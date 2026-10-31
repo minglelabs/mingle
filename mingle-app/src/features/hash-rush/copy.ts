@@ -6,6 +6,8 @@ export type HashRushGameCopy = {
   menuLabel: string
   title: string
   backToChat: string
+  /** On the back pill over the map, after the chevron. */
+  backShort: string
   voiceOn: string
   opening: string
   reconnecting: string
@@ -26,6 +28,7 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     menuLabel: '🌻 Hash Rush 같이 하기',
     title: '🌻 Hash Rush',
     backToChat: '채팅으로',
+    backShort: '채팅',
     voiceOn: '보이스톡 중',
     opening: '게임에 들어가는 중',
     reconnecting: '다시 연결하는 중',
@@ -44,6 +47,7 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     menuLabel: '🌻 Play Hash Rush together',
     title: '🌻 Hash Rush',
     backToChat: 'Back to chat',
+    backShort: 'Chat',
     voiceOn: 'In a voice talk',
     opening: 'Joining the game',
     reconnecting: 'Reconnecting',
@@ -62,6 +66,7 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     menuLabel: '🌻 Hash Rushを一緒に遊ぶ',
     title: '🌻 Hash Rush',
     backToChat: 'チャットに戻る',
+    backShort: 'チャット',
     voiceOn: 'ボイストーク中',
     opening: 'ゲームに入っています',
     reconnecting: '再接続しています',

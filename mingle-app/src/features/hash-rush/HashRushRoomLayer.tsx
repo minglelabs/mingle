@@ -1,10 +1,11 @@
 'use client'
 
-// Hash Rush over the chat room: a layer that covers the whole room under a
-// thin top bar (back to the chat, 🌻 Hash Rush, a green dot while the room's
-// voice talk is connected), with the game in all the height left.
+// Hash Rush over the chat room: a layer that covers the whole room, all of it
+// the game's. There is no app bar: the way back to the chat is the game's own
+// pill over the map's top left corner (with a green dot while the room's voice
+// talk is connected), under the status bar.
 //
-// - Back (the bar's button, Android back) lowers the layer. Lowered, the game
+// - Back (the pill, Android back) lowers the layer. Lowered, the game
 //   keeps running out of sight, silent, and this hamster stands still; opening
 //   it again in the same room shows the same round. The room's owner drops the
 //   layer when the room is left.
@@ -14,7 +15,6 @@
 
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronLeft } from 'lucide-react'
 import { registerNativeEdgeSwipeSuppression } from '@/components/slide-surface'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
@@ -88,7 +88,7 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
       onTouchStart={(event) => event.stopPropagation()}
       // Over the whole room: its top bar (40), talk and composer; under the
       // room's menus and dialogs (50+) and screens opened over the room.
-      className={`absolute inset-0 z-[47] flex flex-col overflow-hidden bg-[#24572f] ${open ? '' : 'pointer-events-none'}`}
+      className={`absolute inset-0 z-[47] overflow-hidden bg-[#24572f] ${open ? '' : 'pointer-events-none'}`}
       role="dialog"
       aria-modal={open}
       aria-label={copy.title}
@@ -96,44 +96,15 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
       inert={!open}
       data-qa="hash-rush-game-layer"
     >
-      <div
-        className="shrink-0 border-b border-gray-100 bg-white"
-        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
-        data-qa="hash-rush-game-bar"
-      >
-        <div className="flex h-11 items-center gap-1 pl-1.5 pr-4">
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={copy.backToChat}
-            title={copy.backToChat}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-700 active:bg-gray-100"
-            data-qa="hash-rush-game-back"
-          >
-            <ChevronLeft size={24} strokeWidth={2.4} />
-          </button>
-          <span className="min-w-0 truncate text-[0.95rem] font-semibold text-gray-900">{copy.title}</span>
-          {voiceActive ? (
-            <span
-              role="img"
-              aria-label={copy.voiceOn}
-              title={copy.voiceOn}
-              className="ml-1 h-2 w-2 shrink-0 rounded-full bg-emerald-500"
-              data-qa="hash-rush-voice-dot"
-            />
-          ) : null}
-        </div>
-      </div>
-      <div className="relative min-h-0 flex-1">
-        <HashRushGame
-          conversationId={conversationId}
-          viewerKey={viewerKey}
-          playerName={playerName}
-          uiLocale={uiLocale}
-          visible={open}
-          voiceActive={voiceActive}
-        />
-      </div>
+      <HashRushGame
+        conversationId={conversationId}
+        viewerKey={viewerKey}
+        playerName={playerName}
+        uiLocale={uiLocale}
+        visible={open}
+        voiceActive={voiceActive}
+        onBack={onClose}
+      />
     </motion.div>
   )
 }
