@@ -71,7 +71,7 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface from '@/components/slide-surface'
@@ -9721,31 +9721,37 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           )}
           {screenCaptureNoticeOpen && (
             <MessageMediaDialog title={earphoneModeCopy.screenCaptureNoticeTitle} onClose={cancelScreenCaptureNotice}>
-              <div data-qa="live-demo-screen-capture-notice">
-                <h2 className="text-xl font-bold leading-tight text-gray-900">
+              <div data-qa="live-demo-screen-capture-notice" className="flex flex-col items-center px-2 pb-1 pt-4 text-center">
+                <span aria-hidden="true" className="flex rounded-full bg-amber-100/80 p-2">
+                  <span
+                    className="flex h-16 w-16 items-center justify-center rounded-full text-white shadow-[0_10px_24px_-8px_rgba(249,115,22,0.55)]"
+                    style={{ backgroundImage: 'linear-gradient(135deg, #fbbf24 0%, #f97316 100%)' }}
+                  >
+                    <ScreenShare size={30} strokeWidth={2.1} />
+                  </span>
+                </span>
+                <h2 className="mt-5 text-xl font-bold leading-tight text-gray-900">
                   {earphoneModeCopy.screenCaptureNoticeTitle}
                 </h2>
-                <p className="mt-2 text-lg font-semibold leading-snug text-gray-800">
+                <p className="mt-1.5 text-lg font-semibold leading-snug text-orange-500">
                   {earphoneModeCopy.screenCaptureNoticeBody}
                 </p>
-                <div className="mt-4 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={cancelScreenCaptureNotice}
-                    className="inline-flex h-10 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-                  >
-                    {earphoneModeCopy.screenCaptureNoticeCancelLabel}
-                  </button>
-                  <button
-                    type="button"
-                    data-screen-capture-notice-continue
-                    onClick={confirmScreenCaptureNotice}
-                    className="inline-flex h-10 flex-1 items-center justify-center rounded-lg text-sm font-semibold text-white transition-colors"
-                    style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)' }}
-                  >
-                    {earphoneModeCopy.screenCaptureNoticeContinueLabel}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  data-screen-capture-notice-continue
+                  onClick={confirmScreenCaptureNotice}
+                  className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-2xl text-base font-semibold text-white shadow-[0_8px_20px_-10px_rgba(249,115,22,0.7)] transition-transform active:scale-[0.98]"
+                  style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)' }}
+                >
+                  {earphoneModeCopy.screenCaptureNoticeContinueLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelScreenCaptureNotice}
+                  className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-2xl text-sm font-semibold text-gray-500 transition-colors hover:bg-gray-50"
+                >
+                  {earphoneModeCopy.screenCaptureNoticeCancelLabel}
+                </button>
               </div>
             </MessageMediaDialog>
           )}
