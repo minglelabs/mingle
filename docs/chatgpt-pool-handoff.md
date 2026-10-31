@@ -23,15 +23,29 @@ for both text and images.
    merge it without asking. No attribution lines in commits/PRs.
 8. Don't start the app dev servers automatically.
 
+## Where it runs now
+
+Since 2026-10-31 the pool runs on Nam's **Windows PC**, not the Mac:
+`https://chatgpt-pool.minglelabs.app` is a DNS-only A record to the home IP,
+and Caddy on the PC proxies it to `127.0.0.1:10321`. See the "Windows host"
+section below and `docs/chatgpt-pool-windows-handoff.md`. The Mac setup below
+(launchd, the `chatgpt-pool` Cloudflare tunnel, ngrok) is kept for rollback
+and for history.
+
 ## How it works
 
 ```
-external client ──HTTPS──> ngrok ──> 127.0.0.1:10321  (public port, key required, /v1/* only)
+external client ──HTTPS──> Caddy on the Windows PC ──> 127.0.0.1:10321  (public port, key required, /v1/* only)
                                          │ same process
 Chrome extension (×11 profiles) ──> 127.0.0.1:10320  (loopback, keyless; /agent/* + /v1/*)
    long-polls /agent/poll, runs the job in a pinned chatgpt.com tab,
    posts /agent/progress steps and /agent/result
 ```
+
+On the Mac the front was a Cloudflare tunnel (before that, ngrok) instead of
+Caddy; everything behind it is the same.
+
+## The Mac setup (rollback only)
 
 - **Server**: `scripts/chatgpt-pool.mjs` (repo) → deployed copy
   `~/.mingle/chatgpt-pool/chatgpt-pool.mjs`.
@@ -41,7 +55,7 @@ Chrome extension (×11 profiles) ──> 127.0.0.1:10320  (loopback, keyless; /a
     `agent`, `chat`/`image`, `step <email> <job8> <step>`, `done`, `fail`.
   - Restart: `launchctl kickstart -k gui/$(id -u)/app.mingle.chatgpt-pool`.
     This kills in-flight jobs, and the agents reconnect within about 10s.
-- **Fixed URL (use this)**: `https://chatgpt-pool.minglelabs.app`, a Cloudflare
+- **Mac tunnel** (no longer serving the URL since 2026-10-31): Cloudflare
   named tunnel `chatgpt-pool` (id `a5309179-…`) on the minglelabs.app zone,
   separate from devbox's `minglelabs` tunnel.
   - Config: `~/.mingle/chatgpt-pool/cloudflared.yml`. It points only at the
@@ -101,6 +115,8 @@ Then restart the task (see the Windows handoff, step 5).
 
 ## API
 
+Callers (Railway, colleagues, local machines): see `docs/chatgpt-pool-api.md`.
+
 - `POST /v1/chat/completions`:
   - Body: `{"model":"chatgpt-web","messages":[...],"account"?}`.
   - Returns an OpenAI-shaped `choices[0].message.content` plus `account`.
@@ -108,24 +124,30 @@ Then restart the task (see the Windows handoff, step 5).
   - Body: `{"prompt":"…","reference"?: dataURL,"account"?}`.
   - Returns `data[0].b64_json` plus `account`.
 - Auth on the public port: `Authorization: Bearer <key>`.
-- CLI on this Mac (loopback port):
+- CLI on the pool host (loopback port; on Windows the path is
+  `%USERPROFILE%\.mingle\chatgpt-pool\chatgpt-pool.mjs`):
 
   ```bash
   node ~/.mingle/chatgpt-pool/chatgpt-pool.mjs chat "..."
   node ~/.mingle/chatgpt-pool/chatgpt-pool.mjs image "..."
   ```
 
-Test through the tunnel without echoing the key:
+Test the public URL without echoing the key (Mac/Linux shell, key file
+present on that machine):
 
 ```bash
-U=$(curl -s http://127.0.0.1:4040/api/tunnels | python3 -c "import sys,json;print(json.load(sys.stdin)['tunnels'][0]['public_url'])")
 K="$(cat ~/.mingle/chatgpt-pool/api-key)"
-curl -s "$U/v1/chat/completions" -H "authorization: Bearer $K" -H 'content-type: application/json' \
-  -H 'ngrok-skip-browser-warning: 1' -d '{"model":"chatgpt-web","messages":[{"role":"user","content":"한 문장으로: 가마쿠라 산책 코스"}]}'
+curl -s https://chatgpt-pool.minglelabs.app/v1/chat/completions -H "authorization: Bearer $K" \
+  -H 'content-type: application/json' \
+  -d '{"model":"chatgpt-web","messages":[{"role":"user","content":"한 문장으로: 가마쿠라 산책 코스"}]}'
+unset K
 ```
 
 ## Current state
 
+- 2026-10-31: moved to the Windows PC. Text and async images verified through
+  `https://chatgpt-pool.minglelabs.app` (Caddy), from the PC and from the Mac.
+- The notes below are from the Mac (2026-10-30).
 - All 11 profiles have the extension and connect. Expected `agent` lines in
   the log:
   - namhk5741
@@ -167,9 +189,11 @@ curl -s "$U/v1/chat/completions" -H "authorization: Bearer $K" -H 'content-type:
 - While waiting, the runner logs a `wait turns=… images=… turnState=…` step
   every 15s, so a future DOM change shows up in the log.
 
-## Async jobs (for the 300s tunnel cut)
+## Async jobs
 
-- ngrok cut blocking image requests at 301s (`ERR_NGROK_3004`).
+- Added for the tunnels: ngrok cut blocking image requests at 301s
+  (`ERR_NGROK_3004`), Cloudflare at about 100s. Caddy has no such cut, but
+  callers should still use async for images.
 - Add `"async": true` to `POST /v1/images/generations` or
   `POST /v1/chat/completions`. The server answers `202 {id, status:"pending"}`
   at once.
@@ -193,15 +217,15 @@ curl -s "$U/v1/chat/completions" -H "authorization: Bearer $K" -H 'content-type:
 - A stray agent `probe-x (signed out)` in the log was a manual probe. It is
   harmless and expires on its own.
 - Later ideas (not started):
-  - Moving the pool to the user's home Windows PC.
+  - Keep the async job index on disk, so a restart does not lose jobs.
 - History: PRs #351 (pool), #356 (public port), #357 (lost jobs, keepalive,
-  self-reload), and this branch (progress steps, new ChatGPT DOM, citation
-  chips).
+  self-reload), the progress-steps / new ChatGPT DOM / citation-chips branch,
+  #371 (Windows support), #375 (Caddy route), #379 (caller guide).
 
-## Done when
+## Done when (for a change to the pool)
 
-1. An image call through the tunnel returns a real PNG (`data[0].b64_json`),
-   and you have opened the picture to check it.
+1. An async image call through `https://chatgpt-pool.minglelabs.app` returns a
+   real PNG (`data[0].b64_json`), and you have opened the picture to check it.
 2. The text call still works.
-3. The PR is merged, `~/.mingle/chatgpt-pool/` is deployed, and the user gets
-   a Korean summary plus the current tunnel URL. Never include the key.
+3. The PR is merged, the deployed copy on the Windows PC is updated, and the
+   user gets a short Korean summary. Never include the key.

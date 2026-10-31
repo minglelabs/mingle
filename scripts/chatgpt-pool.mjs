@@ -32,13 +32,13 @@
  * Env: CHATGPT_POOL_PORT (10320), CHATGPT_POOL_HOST (127.0.0.1), CHATGPT_POOL_KEY
  * (bearer token for the API on the public port, or on the main port when HOST is not
  * loopback; the extensions only ever talk to 127.0.0.1).
- * CHATGPT_POOL_PUBLIC_PORT opens a second listener, for a tunnel (ngrok, cloudflared)
+ * CHATGPT_POOL_PUBLIC_PORT opens a second listener, for a reverse proxy or tunnel (Caddy, cloudflared)
  * to point at, so people elsewhere can use the API: it requires CHATGPT_POOL_KEY and
  * never serves the extensions' /agent endpoints. A tunnel's requests arrive from
  * 127.0.0.1 too, so the main port must never be the one exposed.
  */
 import { execFile } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
@@ -291,6 +291,14 @@ function referenceIn(messages) {
   return typeof url === 'string' && url.startsWith('data:image/') ? url : null
 }
 
+/** Compares the Authorization header with the key in constant time. */
+function keyMatches(header) {
+  if (!KEY || typeof header !== 'string') return false
+  const given = createHash('sha256').update(header).digest()
+  const wanted = createHash('sha256').update(`Bearer ${KEY}`).digest()
+  return timingSafeEqual(given, wanted)
+}
+
 function reply(response, status, payload) {
   response.writeHead(status, { 'content-type': 'application/json' })
   response.end(JSON.stringify(payload))
@@ -339,7 +347,15 @@ async function handleApi(path, body) {
   log('done', result.profile ? `${result.account} [${result.profile}]` : result.account, `${Math.round((Date.now() - started) / 1000)}s`)
   if (path === '/v1/images/generations') return { created: Math.floor(Date.now() / 1000), account: result.account, profile: result.profile, data: [{ b64_json: result.image.base64 }] }
   const content = image ? `![image](data:${result.image.type};base64,${result.image.base64})` : result.text
-  return { object: 'chat.completion', model: body.model ?? 'chatgpt-web', account: result.account, profile: result.profile, choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }] }
+  return {
+    id: `chatcmpl-${randomUUID()}`,
+    object: 'chat.completion',
+    created: Math.floor(Date.now() / 1000),
+    model: body.model ?? 'chatgpt-web',
+    account: result.account,
+    profile: result.profile,
+    choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }],
+  }
 }
 
 function serve() {
@@ -366,7 +382,7 @@ function serve() {
       }
       // The main port stays keyless while it listens only on this machine, so the local CLI and MCP need no key.
       const keyed = exposed || (KEY && !LOOPBACK_HOSTS.includes(HOST))
-      if (keyed && request.headers.authorization !== `Bearer ${KEY}`) return reply(response, 401, { error: { code: 'unauthorized' } })
+      if (keyed && !keyMatches(request.headers.authorization)) return reply(response, 401, { error: { code: 'unauthorized' } })
       if (request.method === 'GET' && path === '/health') return reply(response, 200, { ok: true, accounts: accountsStatus().length, queued: queue.length, running: running.size })
       if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus() })
       if (request.method === 'GET' && path.startsWith('/v1/jobs/')) return reply(response, 200, asyncStatus(decodeURIComponent(path.slice('/v1/jobs/'.length))))
@@ -503,6 +519,13 @@ async function installWindows() {
   const logFile = join(deployDir, 'pool.log')
   const keyFile = join(deployDir, 'api-key')
   const wrapper = join(deployDir, 'chatgpt-pool-serve.cmd')
+  // Without a key, serve skips the public port, and the reverse proxy in front
+  // of it would answer 502 with nothing in the way of a hint. Fail here instead.
+  const keyText = await readFile(keyFile, 'utf8').catch(() => '')
+  if (!keyText.trim()) {
+    console.error(`no API key at ${keyFile}: put the key there (one line), then run install again`)
+    process.exit(1)
+  }
   // `set /p` reads the first line of the key file. Env vars set here are local
   // to this cmd process and its node child. `ping` waits without needing a
   // console for input, unlike `timeout`.
@@ -514,6 +537,8 @@ async function installWindows() {
     `set "CHATGPT_POOL_PUBLIC_PORT=${PUBLIC_PORT || 10321}"`,
     `if exist "${keyFile}" (set /p CHATGPT_POOL_KEY=<"${keyFile}")`,
     ':loop',
+    // Keep one old log: past 20 MB, pool.log becomes pool.log.1.
+    `for %%F in ("${logFile}") do if %%~zF GTR 20000000 move /y "${logFile}" "${logFile}.1" >nul`,
     `"${process.execPath}" "${scriptPath}" serve >> "${logFile}" 2>&1`,
     `echo %date% %time% serve exited with %errorlevel%, restarting in 5s >> "${logFile}"`,
     'ping -n 6 127.0.0.1 >nul',
@@ -556,10 +581,35 @@ async function installWindows() {
   console.log(`installed Task Scheduler task ${WIN_TASK}\nwrapper: ${wrapper}\nlog: ${logFile}`)
 }
 
+/**
+ * The wrapper cmd and the node `serve` it started, found by their exact command
+ * lines (this script's path / this wrapper's path), never by process name alone.
+ */
+async function windowsServeProcesses(scriptPath, wrapper) {
+  const ps = "Get-CimInstance Win32_Process -Filter \"Name='node.exe' OR Name='cmd.exe'\" | Select-Object ProcessId,Name,CommandLine | ConvertTo-Json -Compress"
+  const { stdout } = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { maxBuffer: 64 * 1024 * 1024 }).catch(() => ({ stdout: '' }))
+  const all = stdout.trim() ? [].concat(JSON.parse(stdout)) : []
+  const has = (line, part) => (line ?? '').toLowerCase().includes(part.toLowerCase())
+  return {
+    wrappers: all.filter((p) => p.Name === 'cmd.exe' && has(p.CommandLine, wrapper)),
+    servers: all.filter((p) => p.Name === 'node.exe' && has(p.CommandLine, scriptPath) && /\sserve\b/.test(p.CommandLine ?? '')),
+  }
+}
+
 async function uninstallWindows() {
+  const scriptPath = resolve(process.argv[1])
+  const wrapper = join(dirname(scriptPath), 'chatgpt-pool-serve.cmd')
   await run('schtasks', ['/End', '/TN', WIN_TASK]).catch(() => {})
   await run('schtasks', ['/Delete', '/TN', WIN_TASK, '/F']).catch(() => {})
-  console.log(`uninstalled ${WIN_TASK}. If a node "serve" process is still running, stop it by its PID.`)
+  // Stop the wrapper first so its loop cannot start serve again, then serve.
+  // `/End` stops only the task's own process and leaves these children running.
+  const { wrappers, servers } = await windowsServeProcesses(scriptPath, wrapper)
+  for (const p of [...wrappers, ...servers]) {
+    if (p.ProcessId === process.pid) continue
+    try { process.kill(p.ProcessId); console.log(`stopped ${p.Name} ${p.ProcessId}`) } catch {}
+  }
+  await rm(wrapper, { force: true })
+  console.log(`uninstalled ${WIN_TASK}`)
 }
 
 // ---- macOS: launchd ----------------------------------------------------

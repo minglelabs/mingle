@@ -11,6 +11,52 @@
 - live 테스트(`pnpm test:live`) 포트 자동 주입 (`devbox test`는 기본 비활성)
 > `mingle-ios` 프로젝트는 제거되었습니다. 현재 iOS 자동화는 RN 앱 기준으로만 동작합니다.
 
+## 동시 세션 (여러 에이전트·워크트리를 같이 쓸 때)
+
+여러 세션이 각자 워크트리에서 devbox를 동시에 띄울 수 있습니다. 아래 규칙을 지킵니다.
+
+### 터널은 세션마다 따로
+
+- 세션마다 자기 터널을 씁니다. 다른 세션의 서버, 터널, 브리지, 포트를 끄거나 재시작하거나
+  가져다 쓰지 않습니다. `scripts/devbox down`은 자기 워크트리에서만 실행합니다.
+- `scripts/devbox up --profile device --tunnel-provider cloudflare`는 Cloudflare named tunnel
+  모드에서 빈 **터널 슬롯**(1~4)을 하나 잡습니다. 슬롯마다 호스트명이 다릅니다.
+  - 슬롯 N 호스트명: 기본 호스트명의 첫 라벨 뒤에 `-N`을 붙입니다.
+    예: `mingle-app-devbox-2.photo-for-passport.com`
+  - 같은 워크트리는 지난번 슬롯을 다시 씁니다. 특정 슬롯이 필요하면 `--tunnel-slot N`을 줍니다.
+  - 다른 세션이 쓰는 슬롯을 지정하면 실패합니다. 4개가 다 차면 실패하고 사용 중인 워크트리를 보여 줍니다.
+    이때는 어느 세션을 끌지 사용자에게 묻습니다.
+- `scripts/devbox mobile`은 이 워크트리의 `up`이 잡은 슬롯 호스트명으로 앱을 빌드합니다.
+  `up`이 떠 있지 않으면 실패합니다.
+- `scripts/devbox status`의 `tunnel:` 줄에 현재 슬롯이 나옵니다.
+- 슬롯 점유 기록은 git common dir(`/Users/nam/mingle/.git/devbox-shared/`)에 있어 모든 워크트리가 같이 봅니다.
+  슬롯은 그 슬롯을 잡은 `devbox up` 프로세스가 살아 있는 동안만 점유됩니다.
+
+### 폰은 사용자가 지정
+
+- 사용자가 세션마다 폰을 지정합니다("너는 이 폰에서 해"). 지정된 폰에만
+  `--ios-udid <UDID>` / `--android-serial <SERIAL>`로 설치합니다.
+- 지정이 없으면 연결된 폰 전부에 설치합니다.
+- 다른 세션이 쓰고 있는 폰은 자동 설치에서 빠지고
+  `ACTION REQUIRED: skipped <platform> phone <id>` 경고가 나옵니다. 이 경우 그 폰을 쓰기 전에
+  사용자에게 먼저 묻습니다. 사용자가 허락하면 id를 명시해 설치합니다.
+- 폰 점유는 설치한 세션의 `up`이 살아 있는 동안, 또는 설치 후 3시간(`DEVBOX_DEVICE_CLAIM_TTL_SEC`) 동안 유지됩니다.
+  `scripts/devbox down`이 이 워크트리의 슬롯과 폰 점유를 해제합니다.
+- Appium QA도 같은 규칙입니다. 다른 세션이 쓰는 폰을 Appium 세션으로 잡지 않습니다.
+
+### Cloudflare 설정 (슬롯 추가 시 1회)
+
+devbox named tunnel(token 방식, 원격 관리)의 Public Hostname에 슬롯별로 3개씩 추가합니다.
+devbox는 connector 로그에서 원격 포트를 읽고, 그 포트에서 이 워크트리 포트로 브리지를 띄웁니다.
+
+| 슬롯 | web → | stt → | messaging → |
+| --- | --- | --- | --- |
+| N | `mingle-app-devbox-N` → `http://localhost:1910N` | `mingle-stt-devbox-N` → `http://localhost:1920N` | `mingle-messaging-devbox-N` → `http://localhost:1930N` |
+
+슬롯 수를 늘리면 `DEVBOX_TUNNEL_SLOT_COUNT`도 같이 늘립니다. 기존 슬롯 없는 호스트명
+(`mingle-app-devbox.photo-for-passport.com` 등)은 더 이상 쓰지 않습니다. 새 호스트명은 Google OAuth
+redirect URI에도 있어야 합니다(`DEVBOX_GOOGLE_REDIRECT_SYNC_ENABLED`가 켜져 있으면 devbox가 동기화).
+
 ## 메인 루트 `.env.local`에 둘 값
 
 아래 값은 워크트리마다 달라지지 않는 공통값입니다. `/Users/nam/mingle/.env.local`에 한 번만 두고,
