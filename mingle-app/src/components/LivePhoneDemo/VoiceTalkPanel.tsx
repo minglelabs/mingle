@@ -111,20 +111,22 @@ export type VoiceTalkPanelProps = {
   myLang: string
   /** Pixels from the top of the room screen to the bottom of the top bar. */
   topOffset: string
-  /** Lets the room header show a start button. */
-  onAvailabilityChange?: (state: { live: boolean; joined: boolean }) => void
+  /** Lets the room header show a start button; `connected` is a call this phone is in. */
+  onAvailabilityChange?: (state: { live: boolean; joined: boolean; connected: boolean }) => void
   /** Bumped by the header button to start/join. */
   startSignal?: number
+  /** Fold into the slim bar (and stay folded) while something covers the room, e.g. the Hash Rush sheet. */
+  forceFolded?: boolean
 }
 
 export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
-  const { conversationId, conversationTitle, myLang, startSignal, onAvailabilityChange } = props
+  const { conversationId, conversationTitle, myLang, startSignal, onAvailabilityChange, forceFolded } = props
   const copy = (props.uiLocale || '').toLowerCase().startsWith('ko') ? COPY.ko : COPY.en
   const [call, setCall] = useState<StatusCall>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
   const [room, setRoom] = useState<RoomSnapshot | null>(null)
-  const [folded, setFolded] = useState(false)
+  const [folded, setFolded] = useState(() => !!forceFolded)
 
   const joined = phase === 'connecting' || phase === 'connected'
 
@@ -159,9 +161,18 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   }, [error])
 
   const live = !!call && call.participants.length > 0
+  const connected = phase === 'connected'
   useEffect(() => {
-    onAvailabilityChange?.({ live, joined })
-  }, [live, joined, onAvailabilityChange])
+    onAvailabilityChange?.({ live, joined, connected })
+  }, [live, joined, connected, onAvailabilityChange])
+
+  // Something covers the room (the Hash Rush sheet): fold into the slim bar and
+  // stay folded after it goes; a tap opens the panel again.
+  const [wasForceFolded, setWasForceFolded] = useState(!!forceFolded)
+  if (!!forceFolded !== wasForceFolded) {
+    setWasForceFolded(!!forceFolded)
+    if (forceFolded) setFolded(true)
+  }
 
   const join = useCallback(() => {
     setFolded(false)

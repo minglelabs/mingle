@@ -217,6 +217,12 @@
   display: none;
 }
 
+/* While the Hash Rush sheet is up (HashRushSheet.tsx), nothing of the app may
+   float over the game; toasts are portaled above every layer, so hide them. */
+html[data-hash-rush-open="true"] [data-sonner-toaster] {
+  visibility: hidden !important;
+}
+
 /* Bubble TTS "playing" bars. A compositor-only scaleY loop; the static
    "pending" dots are the same bars resting at 30%. */
 @keyframes mingle-tts-playing-bar {

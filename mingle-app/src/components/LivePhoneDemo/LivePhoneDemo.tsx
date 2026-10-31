@@ -1942,11 +1942,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [voiceTalkAvailable, setVoiceTalkAvailable] = useState(false)
   useEffect(() => setVoiceTalkAvailable(isVoiceTalkAvailable()), [])
   const [voiceTalkStartSignal, setVoiceTalkStartSignal] = useState(0)
-  const [voiceTalkState, setVoiceTalkState] = useState({ live: false, joined: false })
-  const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean }) => {
-    setVoiceTalkState((prev) => (prev.live === next.live && prev.joined === next.joined ? prev : next))
+  const [voiceTalkState, setVoiceTalkState] = useState({ live: false, joined: false, connected: false })
+  const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean, connected: boolean }) => {
+    setVoiceTalkState((prev) => (
+      prev.live === next.live && prev.joined === next.joined && prev.connected === next.connected ? prev : next
+    ))
   }, [])
+  // Hash Rush: `hashRushActive` keeps the game page alive in this room (also
+  // while the sheet is lowered); `hashRushOpen` is the sheet being up.
+  const [hashRushActive, setHashRushActive] = useState(false)
   const [hashRushOpen, setHashRushOpen] = useState(false)
+  const closeHashRushSheet = useCallback(() => setHashRushOpen(false), [])
   const viewerImage = typeof session?.user?.image === 'string' ? session.user.image : null
   const accountPreferencesTrackingUserId = useMemo(() => getOrCreateTrackingUserId(), [])
   const initialLanguageSelectorMembers = useMemo<ConversationMemberProfile[]>(() => {
@@ -3743,6 +3749,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.clearTimeout(timerId)
     }
   }, [closeLanguageSelector, closeMenuPanel, isVisible])
+
+  // Leaving the room (back to the list, or another room on top) ends the game
+  // here; lowering the sheet inside the room does not.
+  useEffect(() => {
+    if (isVisible) return
+    setHashRushOpen(false)
+    setHashRushActive(false)
+  }, [isVisible])
 
   useEffect(() => {
     if (!enableNativeBannerBridge || !isVisible) return
@@ -7053,7 +7067,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     bottomBarClearancePx: nativeBottomBarClearancePx,
     estimatedBottomBannerInsetPx: estimatedNativeBannerInsetPx,
   })
-  const activeKeyboardInsetPx = isComposerOpen ? keyboardViewportInsetPx : 0
+  // The game's keyboard is the sheet's business, not the chat composer's.
+  const activeKeyboardInsetPx = isComposerOpen && !hashRushOpen ? keyboardViewportInsetPx : 0
   const scrollToBottomButtonBottomPx = resolveScrollToBottomButtonBottomPx({
     baseBottomPx: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX,
     isNativeAppRuntime,
@@ -7397,17 +7412,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             topOffset="calc(54px + env(safe-area-inset-top, 0px))"
             onAvailabilityChange={handleVoiceTalkAvailability}
             startSignal={voiceTalkStartSignal}
+            forceFolded={hashRushOpen}
           />
         ) : null}
 
         {/* Hash Rush, played inside this room: a sheet over the chat. */}
-        <HashRushSheet
-          open={hashRushOpen && !!conversationId}
-          conversationId={conversationId}
-          playerName={(session?.user?.name || '').trim()}
-          uiLocale={uiLocale}
-          onClose={() => setHashRushOpen(false)}
-        />
+        {hashRushActive && conversationId ? (
+          <HashRushSheet
+            open={hashRushOpen}
+            conversationId={conversationId}
+            viewerKey={viewerUserId || 'guest'}
+            playerName={(session?.user?.name || '').trim()}
+            uiLocale={uiLocale}
+            voiceActive={voiceTalkState.connected}
+            onClose={closeHashRushSheet}
+          />
+        ) : null}
 
         {/* Header */}
         <div
@@ -8316,7 +8336,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               type="button"
                               data-qa="live-demo-hash-rush-menu-item"
                               onClick={() => {
-                                setMenuOpen(false)
+                                // Close the menu through its history entries, so no stale
+                                // entry is left for a later back step to land on.
+                                requestCloseMenuPanel()
+                                setHashRushActive(true)
                                 setHashRushOpen(true)
                               }}
                               className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
