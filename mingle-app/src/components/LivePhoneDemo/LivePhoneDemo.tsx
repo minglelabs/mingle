@@ -7684,7 +7684,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-2 text-[0.98rem] font-medium text-gray-900">{textSizeLabel}</span>
+                                <span className="min-w-0 flex-1 pl-1 pt-2 text-[0.98rem] font-medium text-gray-900">{textSizeLabel}</span>
                                 <div ref={textSizeDropdownRef} className="relative flex h-12 max-w-[68%] shrink-0 items-center">
                                   <button
                                     ref={textSizeButtonRef}
@@ -7801,8 +7801,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{sttSegmentationModeLabel}</span>
-                                <span className="shrink-0 whitespace-nowrap text-gray-500">
+                                <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{sttSegmentationModeLabel}</span>
+                                <span className="shrink-0 whitespace-nowrap pr-1 text-gray-500">
                                   {selectedSttSegmentationMode === 'end'
                                     ? sttSegmentationModeEndLabel
                                     : sttSegmentationModeFinLabel}
@@ -7845,7 +7845,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                   isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
                                 }`}
                               >
-                                <span className={`min-w-0 flex-1 whitespace-normal break-words text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
+                                <span className={`min-w-0 flex-1 whitespace-normal break-words pl-1 text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
                                   {silenceFinalizeLabel}
                                 </span>
                                 <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
@@ -7924,10 +7924,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                   isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
                                 }`}
                               >
-                                <span className={`min-w-0 flex-1 whitespace-normal break-words text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
+                                <span className={`min-w-0 flex-1 whitespace-normal break-words pl-1 text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
                                   {endpointTuningLabel}
                                 </span>
-                                <span className="shrink-0 whitespace-nowrap">{sonioxEndpointTuningStep + 1}/5</span>
+                                <span className="shrink-0 whitespace-nowrap pr-1">{sonioxEndpointTuningStep + 1}/5</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <span
@@ -7982,7 +7982,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{translationModelLabel}</span>
+                                <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{translationModelLabel}</span>
                                 <div ref={translationModelDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
                                   <button
                                     ref={translationModelButtonRef}
@@ -8089,7 +8089,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{ttsModelLabel}</span>
+                                <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{ttsModelLabel}</span>
                                 <div ref={ttsModelDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
                                   <button
                                     ref={ttsModelButtonRef}
@@ -8193,7 +8193,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{bubbleDisplayCopy.displayModeLabel}</span>
+                                <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{bubbleDisplayCopy.displayModeLabel}</span>
                                 <div ref={bubbleDisplayModeDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
                                   <button
                                     ref={bubbleDisplayModeButtonRef}
@@ -8300,7 +8300,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             {isNativeAppRuntime && (
                               <div className="block">
                                 <div className="mb-2 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
-                                  <span className="shrink-0 whitespace-nowrap text-[0.98rem] font-medium text-gray-900">{adBannerPositionLabel}</span>
+                                  <span className="shrink-0 whitespace-nowrap pl-1 text-[0.98rem] font-medium text-gray-900">{adBannerPositionLabel}</span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                   {([
