@@ -1,2 +1,8 @@
+import {
+  getConversationMembersRouteForIosV1_1_4,
+  postConversationMembersRouteForIosV1_1_4,
+} from "@/server/api/controllers/ios/v1.1.4/conversation-controller";
+
 export const runtime = "nodejs";
-export { GET, POST } from "@/app/api/ios/v2.0.0/conversations/[conversationId]/members/route";
+export const GET = getConversationMembersRouteForIosV1_1_4;
+export const POST = postConversationMembersRouteForIosV1_1_4;

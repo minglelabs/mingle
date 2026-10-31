@@ -1,2 +1,6 @@
+import {
+  getConversationListRealtimeTokenForIosV1_1_4,
+} from "@/server/api/controllers/ios/v1.1.4/conversations-controller";
+
 export const runtime = "nodejs";
-export { GET } from "@/app/api/ios/v2.0.0/conversations/list-realtime-token/route";
+export const GET = getConversationListRealtimeTokenForIosV1_1_4;

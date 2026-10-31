@@ -11,7 +11,7 @@
  * the one doing it: no second Chrome, no API key, no paid API.
  *
  *   node scripts/chatgpt-pool.mjs serve             HTTP API on 127.0.0.1:10320 (also where the extensions connect)
- *   node scripts/chatgpt-pool.mjs install|uninstall keep `serve` running with launchd
+ *   node scripts/chatgpt-pool.mjs install|uninstall keep `serve` running (launchd on macOS, Task Scheduler on Windows)
  *   node scripts/chatgpt-pool.mjs accounts          the connected profiles
  *   node scripts/chatgpt-pool.mjs chat "question"   one answer, printed (needs `serve`)
  *   node scripts/chatgpt-pool.mjs image [--ref photo.jpg] [--out file.png] "prompt"
@@ -174,7 +174,15 @@ async function extensionVersion() {
   return null
 }
 
-const CHROME_DIR = join(homedir(), 'Library/Application Support/Google/Chrome')
+const IS_WINDOWS = process.platform === 'win32'
+
+/**
+ * Where Chrome keeps its profiles. Mac and Windows put "User Data" in different
+ * places; on Windows it lives under %LOCALAPPDATA%\Google\Chrome\User Data.
+ */
+const CHROME_DIR = IS_WINDOWS
+  ? join(process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'), 'Google', 'Chrome', 'User Data')
+  : join(homedir(), 'Library/Application Support/Google/Chrome')
 
 /**
  * Which Chrome profile an agent runs in, e.g. "Profile 2 (Somi is so cute)". An
@@ -191,8 +199,13 @@ async function chromeProfileOf(agentId) {
         for (const file of await readdir(join(settings, extension)).catch(() => [])) {
           if (!/\.(log|ldb)$/.test(file)) continue
           const path = join(settings, extension, file)
-          if ((await stat(path)).size > 5_000_000) continue
-          if ((await readFile(path, 'latin1')).includes(agentId)) return `${folder} (${names[folder]?.name ?? ''})`
+          // Chrome holds these files open (especially on Windows), so a read can
+          // fail with EBUSY/EPERM. Skip the locked file and keep going; never let
+          // one busy file crash the lookup.
+          try {
+            if ((await stat(path)).size > 5_000_000) continue
+            if ((await readFile(path, 'latin1')).includes(agentId)) return `${folder} (${names[folder]?.name ?? ''})`
+          } catch {}
         }
       }
     }
@@ -457,9 +470,101 @@ function mcp() {
   })
 }
 
-// ---- launchd -----------------------------------------------------------
+// ---- service install (launchd on macOS, Task Scheduler on Windows) -----
 
-async function install() {
+function install() {
+  return IS_WINDOWS ? installWindows() : installMac()
+}
+
+function uninstall() {
+  return IS_WINDOWS ? uninstallWindows() : uninstallMac()
+}
+
+// ---- Windows: Task Scheduler at log-on ---------------------------------
+
+const WIN_TASK = 'MingleChatGptPool'
+
+/**
+ * Register a Task Scheduler task that runs `serve` at the user's log-on.
+ *
+ * - Task Scheduler cannot set env vars, and a key on a command line is visible
+ *   to other processes and in the Task Scheduler UI. So a small .cmd wrapper
+ *   next to the deployed script reads the key file into CHATGPT_POOL_KEY and
+ *   starts node. The key never appears on any command line.
+ * - The wrapper loops: if node exits, it starts again after 5s.
+ * - The task runs the wrapper through `conhost --headless`, so no console
+ *   window stays open on the desktop.
+ * - The task is created from XML because schtasks flags cannot express a
+ *   log-on trigger with no time limit and no battery conditions.
+ */
+async function installWindows() {
+  const scriptPath = resolve(process.argv[1])
+  const deployDir = dirname(scriptPath)
+  const logFile = join(deployDir, 'pool.log')
+  const keyFile = join(deployDir, 'api-key')
+  const wrapper = join(deployDir, 'chatgpt-pool-serve.cmd')
+  // `set /p` reads the first line of the key file. Env vars set here are local
+  // to this cmd process and its node child. `ping` waits without needing a
+  // console for input, unlike `timeout`.
+  const cmd = [
+    '@echo off',
+    'setlocal',
+    `set "CHATGPT_POOL_PORT=${PORT}"`,
+    `set "CHATGPT_POOL_HOST=${HOST}"`,
+    `set "CHATGPT_POOL_PUBLIC_PORT=${PUBLIC_PORT || 10321}"`,
+    `if exist "${keyFile}" (set /p CHATGPT_POOL_KEY=<"${keyFile}")`,
+    ':loop',
+    `"${process.execPath}" "${scriptPath}" serve >> "${logFile}" 2>&1`,
+    `echo %date% %time% serve exited with %errorlevel%, restarting in 5s >> "${logFile}"`,
+    'ping -n 6 127.0.0.1 >nul',
+    'goto loop',
+    '',
+  ].join('\r\n')
+  await writeFile(wrapper, cmd)
+
+  const user = `${process.env.USERDOMAIN ?? ''}\\${process.env.USERNAME ?? ''}`
+  const escape = (value) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const xml = `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo><Description>Mingle ChatGPT pool server (chatgpt-pool.mjs serve)</Description></RegistrationInfo>
+  <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>${escape(user)}</UserId></LogonTrigger></Triggers>
+  <Principals><Principal id="Author"><UserId>${escape(user)}</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions Context="Author"><Exec>
+    <Command>conhost.exe</Command>
+    <Arguments>${escape(`--headless cmd.exe /c "${wrapper}"`)}</Arguments>
+    <WorkingDirectory>${escape(deployDir)}</WorkingDirectory>
+  </Exec></Actions>
+</Task>
+`
+  const xmlFile = join(tmpdir(), `${WIN_TASK}.xml`)
+  await writeFile(xmlFile, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(xml, 'utf16le')]))
+  try {
+    await run('schtasks', ['/Create', '/TN', WIN_TASK, '/XML', xmlFile, '/F'])
+  } finally {
+    await rm(xmlFile, { force: true })
+  }
+  if (!rest.includes('--no-start')) await run('schtasks', ['/Run', '/TN', WIN_TASK])
+  console.log(`installed Task Scheduler task ${WIN_TASK}\nwrapper: ${wrapper}\nlog: ${logFile}`)
+}
+
+async function uninstallWindows() {
+  await run('schtasks', ['/End', '/TN', WIN_TASK]).catch(() => {})
+  await run('schtasks', ['/Delete', '/TN', WIN_TASK, '/F']).catch(() => {})
+  console.log(`uninstalled ${WIN_TASK}. If a node "serve" process is still running, stop it by its PID.`)
+}
+
+// ---- macOS: launchd ----------------------------------------------------
+
+async function installMac() {
   const plist = join(homedir(), 'Library/LaunchAgents', `${LABEL}.plist`)
   const logFile = join(homedir(), 'Library/Logs', `${LABEL}.log`)
   const env = { CHATGPT_POOL_PORT: String(PORT), CHATGPT_POOL_HOST: HOST, PATH: process.env.PATH ?? '/usr/bin:/bin' }
@@ -484,7 +589,7 @@ async function install() {
   console.log(`installed ${plist}\nlog: ${logFile}`)
 }
 
-async function uninstall() {
+async function uninstallMac() {
   const plist = join(homedir(), 'Library/LaunchAgents', `${LABEL}.plist`)
   await run('launchctl', ['bootout', `gui/${process.getuid()}/${LABEL}`]).catch(() => {})
   await rm(plist, { force: true })

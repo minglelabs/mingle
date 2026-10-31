@@ -1,2 +1,7 @@
-export const runtime = "nodejs";
-export { GET } from "@/app/api/ios/v2.0.0/conversations/[conversationId]/images/[messageId]/text/route";
+import { NextRequest } from 'next/server'
+import { readConversationImageText } from '@/server/api/controllers/shared/conversation-image-text-controller'
+export const runtime = 'nodejs'
+export async function GET(request: NextRequest, { params }: { params: Promise<{ conversationId: string; messageId: string }> }) {
+  const { conversationId, messageId } = await params
+  return readConversationImageText(request, conversationId, messageId)
+}

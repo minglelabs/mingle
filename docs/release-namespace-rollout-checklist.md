@@ -1,5 +1,14 @@
 # Release Namespace Rollout Checklist
 
+## 0) 현재 지원 범위 (2026-10-30~)
+
+- 라우트 트리: `ios/v2.2.0`, `android/v2.2.0` 만 존재. `v2.2.1`, `v2.3.0`은 rewrite alias.
+- 2.2.0 미만 앱: `client/version-policy` 만 v2.2.0으로 rewrite(강제 업데이트 응답), 나머지는 404.
+- 새 패치 버전 출시: `next.config.mjs`에 v2.2.0 alias 추가.
+- 새 계약 버전 출시: 새 트리를 만들 때 이전 트리를 re-export 하지 말고 무버전 핸들러/컨트롤러를 직접 연결.
+- 어떤 버전을 지원 종료할 때: 먼저 운영 `*_CLIENT_MIN_SUPPORTED_VERSION`을 올리고 force_update 응답을 확인한 뒤
+  라우트를 지웁니다. env만 되돌리고 코드를 그대로 두면 구버전 앱이 404를 받습니다.
+
 ## 1) Environment Matrix
 
 | Target | API prefix | Required Env |

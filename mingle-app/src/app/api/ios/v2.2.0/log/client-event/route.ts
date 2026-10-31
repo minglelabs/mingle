@@ -1,2 +1,4 @@
+import { postLogClientEventForIosV1_1_4 } from "@/server/api/controllers/ios/v1.1.4/log-client-event-controller";
+
 export const runtime = "nodejs";
-export { POST } from "@/app/api/ios/v2.0.0/log/client-event/route";
+export const POST = postLogClientEventForIosV1_1_4;
