@@ -48,9 +48,7 @@
 }
 
 :root {
-  /* "Twemoji Country Flags" only exists once CountryFlagEmojiPolyfill registers
-     it (browsers without flag glyphs, e.g. Windows); it covers flags only. */
-  --font-geist-sans: "Twemoji Country Flags", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR",
+  --font-geist-sans: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR",
     system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-geist-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;

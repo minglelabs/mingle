@@ -7,7 +7,6 @@ import { preconnect } from "react-dom";
 import { Toaster } from "sonner";
 import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import CoinHost from "@/components/coins/coin-host";
-import CountryFlagEmojiPolyfill from "@/components/country-flag-emoji-polyfill";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
 import NativeBannerRouteGuard from "@/components/native-banner-route-guard";
@@ -125,7 +124,6 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: MOBILE_CANVAS_BOOTSTRAP_SCRIPT }}
         />
         <AppLocalePreferenceSync />
-        <CountryFlagEmojiPolyfill />
         <TtsSettingsProvider>
           <AuthSessionProvider session={session}>
             <PostHogAnalyticsProvider
