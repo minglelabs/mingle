@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { PhotoRedrawPanel } from './photo-redraw-panel'
 import { PostTakedownButton } from './post-takedown-button'
 
 const ERRORS: Record<string, string> = {
@@ -13,10 +14,11 @@ const ERRORS: Record<string, string> = {
 }
 
 /** Staff edits on an operator's post, straight from the feed preview: swap the photo, rewrite the text. */
-export function OperatorPostEditor({ postId, text, hasPhoto }: { postId: string; text: string | null; hasPhoto: boolean }) {
+export function OperatorPostEditor({ postId, text, hasPhoto, language = null }: { postId: string; text: string | null; hasPhoto: boolean; language?: string | null }) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
   const [editing, setEditing] = useState(false)
+  const [redrawing, setRedrawing] = useState(false)
   const [draft, setDraft] = useState(text ?? '')
   const [busy, setBusy] = useState<'photo' | 'text' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -71,6 +73,14 @@ export function OperatorPostEditor({ postId, text, hasPhoto }: { postId: string;
         <button
           type="button"
           disabled={busy !== null}
+          onClick={() => setRedrawing((open) => !open)}
+          className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 active:bg-slate-100 disabled:opacity-50"
+        >
+          {redrawing ? '다시 만들기 닫기' : '사진 다시 만들기'}
+        </button>
+        <button
+          type="button"
+          disabled={busy !== null}
           onClick={() => { setDraft(text ?? ''); setEditing((open) => !open); setError(null) }}
           className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 active:bg-slate-100 disabled:opacity-50"
         >
@@ -85,6 +95,7 @@ export function OperatorPostEditor({ postId, text, hasPhoto }: { postId: string;
           onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPhoto(file) }}
         />
       </div>
+      {redrawing ? <PhotoRedrawPanel postId={postId} language={language} onClose={() => setRedrawing(false)} /> : null}
       {editing ? (
         <div className="mt-2">
           <textarea

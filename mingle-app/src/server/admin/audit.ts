@@ -27,6 +27,7 @@ export type AdminAuditAction =
   | 'settings.automation'
   | 'operator_post.reserve_published'
   | 'operator_post.edit_photo'
+  | 'operator_post.redraw_photo'
   | 'operator_post.takedown'
   | 'operator_post.restore'
   | 'post.takedown'

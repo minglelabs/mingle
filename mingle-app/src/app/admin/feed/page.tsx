@@ -180,7 +180,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                 ) : null}
 
                 {post.author.isOperator ? (
-                  <OperatorPostEditor key={`${post.id}:${post.bodyVersion}`} postId={post.id} text={post.sourceText} hasPhoto={Boolean(post.imageObjectKey)} />
+                  <OperatorPostEditor key={`${post.id}:${post.bodyVersion}`} postId={post.id} text={post.sourceText} hasPhoto={Boolean(post.imageObjectKey)} language={post.sourceLanguage} />
                 ) : null}
 
                 <div className="mt-3 flex items-center gap-4 text-sm text-slate-600">
