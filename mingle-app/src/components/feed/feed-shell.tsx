@@ -35,7 +35,7 @@ import PostActionSheet from "@/components/posts/post-action-sheet";
 import { FeedGlyphToneContext } from "@/components/feed/feed-glyph-tone";
 import { feedCopy } from "@/i18n/feed-copy";
 import type { FeedSource } from "@/lib/feed-routes";
-import { feedHref } from "@/lib/feed-routes";
+import { feedHref, userProfileHref } from "@/lib/feed-routes";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { postForegroundTone } from "@/lib/post-backgrounds";
@@ -1034,7 +1034,8 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
                 }
                 const ctx = analyticsFor(key);
                 if (ctx) trackFeedEvent(feedEvents.profileOpened(ctx));
-                router.push(`/${locale}/users/${encodeURIComponent(authorId)}`);
+                // The visit is recorded with this post as its source (staff-only post stats).
+                router.push(userProfileHref(locale, authorId, { fromPostId: post.id }));
               }}
               onOpenImage={(src) => setZoomSrc(src)}
               onLikeChange={handleLikeChange}

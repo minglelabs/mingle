@@ -20,6 +20,11 @@ import { AdminPage, AdminPageHeader } from "../_components/ui";
 import { LineChartCard } from "./line-chart-card";
 import { MetricsTable } from "./metrics-table";
 import { RangeNav } from "./range-nav";
+import {
+  OperatorPostStatsSection,
+  OperatorPostStatsSectionFallback,
+  startOperatorPostStatsLoad,
+} from "./operator-post-stats-section";
 import { RetentionSection, RetentionSectionFallback, startSignupRetentionLoad } from "./retention-section";
 import { SnsSection, SnsSectionFallback, startSnsDashboardLoad } from "./sns-section";
 import {
@@ -119,6 +124,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
   // take down the rest of the page.
   const translationModelSeries = startTranslationModelSeriesLoad(range, platform);
   const snsDashboard = startSnsDashboardLoad(range);
+  const operatorPostStats = startOperatorPostStatsLoad(range);
   const signupRetention = startSignupRetentionLoad(range);
   const metrics = await loadAdminDashboardMetrics(range, { forceRefresh, platform });
   const cumulativeMetrics = metrics.filter((metric) => metric.kind !== "milliseconds");
@@ -163,6 +169,16 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         </p>
         <Suspense key={`sns:${days}`} fallback={<SnsSectionFallback />}>
           <SnsSection dashboardPromise={snsDashboard} />
+        </Suspense>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-1 text-sm font-semibold text-slate-600">운영 계정 글 성과</h2>
+        <p className="mb-2 break-words text-xs text-slate-500">
+          기간 안에 올라간 운영 계정 글입니다. 실사용자만 세고(운영·공식·직원 계정과 글쓴이 제외), %는 조회 대비입니다. 팔로우·첫 메시지는 그 글에서 했거나, 하기 전 24시간 안에 마지막으로 본 그 계정 글로 셉니다. 플랫폼 필터는 적용되지 않습니다.
+        </p>
+        <Suspense key={`operator-posts:${days}`} fallback={<OperatorPostStatsSectionFallback />}>
+          <OperatorPostStatsSection dashboardPromise={operatorPostStats} />
         </Suspense>
       </section>
 

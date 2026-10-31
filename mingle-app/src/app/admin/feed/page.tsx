@@ -5,7 +5,9 @@ import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/admin/guard'
 import { getFeed } from '@/server/feed/feed-service'
 import { loadStarterFeed, type StarterSegment } from '@/server/feed/starter-feed'
+import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
+import { OperatorPostStatsRow } from '../_components/operator-post-stats-row'
 import { OperatorsMain } from '../operators/_components/operator-ui'
 import { ZoomableAvatar } from '../operators/_components/zoomable-avatar'
 import { OperatorPostEditor } from './_components/operator-post-editor'
@@ -81,6 +83,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
     : []
   const commentsByPost = new Map<string, typeof comments>()
   for (const comment of comments) commentsByPost.set(comment.postId, [...(commentsByPost.get(comment.postId) ?? []), comment])
+  const statsByPost = await loadOperatorPostStats({ postIds: feed.posts.filter((post) => post.author.isOperator).map((post) => post.id) })
 
   const now = new Date()
   const query = (params: Record<string, string | null>) => {
@@ -93,7 +96,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
   return (
     <OperatorsMain>
       <h1 className="text-xl font-bold text-slate-900">피드 미리보기</h1>
-      <p className="mt-1 text-sm text-slate-500">앱 홈 피드와 같은 추천 순서입니다. 보기만 하며 조회 기록은 남지 않습니다. 신규 한국인·외국인은 막 가입한 유저가 보는 순서이고, 번호는 정해 둔 첫 피드 순서입니다.</p>
+      <p className="mt-1 text-sm text-slate-500">앱 홈 피드와 같은 추천 순서입니다. 보기만 하며 조회 기록은 남지 않습니다. 신규 한국인·외국인은 막 가입한 유저가 보는 순서이고, 번호는 정해 둔 첫 피드 순서입니다. 운영 계정 글의 반응 숫자는 실사용자만 센 것이고, %는 조회 대비입니다.</p>
 
       <nav className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pb-1" aria-label="누구의 피드로 볼지">
         <Link
@@ -186,6 +189,7 @@ export default async function FeedPreviewPage({ searchParams }: FeedPreviewPageP
                     <MessageCircle className="h-4 w-4" aria-hidden="true" />{post.commentCount}
                   </Link>
                 </div>
+                <OperatorPostStatsRow stats={statsByPost.get(post.id)} className="mt-2" />
 
                 {postComments.length ? (
                   <ul className="mt-3 space-y-2 border-t border-slate-100 pt-3">

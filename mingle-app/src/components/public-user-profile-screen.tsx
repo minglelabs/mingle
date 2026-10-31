@@ -6,6 +6,7 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { PROFILE_FROM_POST_QUERY_KEY } from "@/lib/feed-routes";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import { formatHandle } from "@/lib/handles";
@@ -235,6 +236,9 @@ export default function PublicUserProfileScreen({
   const profileShareHistoryId = normalizedUserId || profile?.id?.trim() || "";
   const sessionUserId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
   const isOwnProfile = Boolean(sessionUserId && sessionUserId === normalizedUserId);
+  // The profile owner's post this screen was opened from (feed card, post
+  // viewer), sent with the visit and a follow for the staff-only post stats.
+  const sourcePostId = searchParams.get(PROFILE_FROM_POST_QUERY_KEY)?.trim() || null;
   useEffect(() => {
     if (!open || sessionStatus === "loading") return;
 
@@ -293,6 +297,27 @@ export default function PublicUserProfileScreen({
     setMessageError(false);
   }, [normalizedUserId]);
 
+  // One profile-visit record per opening of another user's profile, once it
+  // loaded. Fire-and-forget: a failed record never disturbs the screen.
+  const recordedVisitRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) {
+      recordedVisitRef.current = null;
+      return;
+    }
+    if (!profile || isOwnProfile) return;
+    const visitKey = `${profile.id}\u0000${sourcePostId ?? ""}`;
+    if (recordedVisitRef.current === visitKey) return;
+    recordedVisitRef.current = visitKey;
+    void fetch(buildClientApiPath(`/users/${encodeURIComponent(profile.id)}/view`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sourcePostId ? { sourcePostId } : {}),
+      cache: "no-store",
+      keepalive: true,
+    }).catch(() => {});
+  }, [isOwnProfile, open, profile, sourcePostId]);
+
   const closeProfileShare = useCallback(() => {
     if (hasProfileShareHistoryEntry(profileShareHistoryId)) {
       window.history.back();
@@ -342,7 +367,9 @@ export default function PublicUserProfileScreen({
     try {
       const response = await fetch(
         buildClientApiPath(`/users/${encodeURIComponent(profile.id)}/follow`),
-        { method: nextIsFollowing ? "POST" : "DELETE" },
+        nextIsFollowing && sourcePostId
+          ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourcePostId }) }
+          : { method: nextIsFollowing ? "POST" : "DELETE" },
       );
       if (!response.ok) throw new Error("follow_failed");
       setProfile((current) => current ? { ...current, isFollowing: nextIsFollowing } : current);
@@ -351,7 +378,7 @@ export default function PublicUserProfileScreen({
     } finally {
       setIsActionPending(false);
     }
-  }, [isActionPending, isOwnProfile, profile]);
+  }, [isActionPending, isOwnProfile, profile, sourcePostId]);
 
   const handleToggleBlock = useCallback(async () => {
     if (isOwnProfile || !profile || isActionPending) return;
