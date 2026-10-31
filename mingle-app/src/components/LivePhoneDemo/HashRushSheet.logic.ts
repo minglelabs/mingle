@@ -267,11 +267,12 @@ export function resolveHashRushBubbleDisplayMode(
 // ---------------------------------------------------------------------------
 
 export const HASH_RUSH_QUICK_CHAT = {
-  ko: ['ㄱㄱ', '잠만', 'ㅋㅋㅋ', 'ㅇㅋ', 'ㄴㄴ', 'ㅎㅇ', '굳굳 👍', 'ㄲㅂ', 'ㅈㅅ', 'ㄷㄷ', 'ㅅㅂ', '한 판 더?', '팀 바꾸자', 'ㅂㅂ'],
-  en: ['gogo', 'wait', 'lol', 'ok', 'nope', 'hey', 'gj 👍', 'unlucky', 'my bad', 'omg', 'wtf', 'Again?', 'swap teams?', 'bye'],
-  ja: ['いこいこ', 'ちょい待ち', 'www', 'おけ', 'むり', 'ちわ', 'ナイス 👍', 'おしい', 'すまん', 'やば', 'くそっ', 'もう一回?', 'チーム替えよう', 'またね'],
-  'zh-Hans': ['冲冲冲', '等下', '哈哈哈', '好', '不要', '嗨', '666 👍', '可惜', '我的锅', '卧槽', '靠', '再来?', '换队吧', '拜拜'],
-  'zh-Hant': ['衝衝衝', '等一下', '哈哈哈', '好', '不要', '嗨', '讚啦 👍', '可惜', '歹勢', '哇靠', '靠', '再來?', '換隊吧', '掰掰'],
+  // The game's own list, minus its swear words: these are app-wide default chips.
+  ko: ['ㄱㄱ', '잠만', 'ㅋㅋㅋ', 'ㅇㅋ', 'ㄴㄴ', 'ㅎㅇ', '굳굳 👍', 'ㄲㅂ', 'ㅈㅅ', 'ㄷㄷ', '한 판 더?', '팀 바꾸자', 'ㅂㅂ'],
+  en: ['gogo', 'wait', 'lol', 'ok', 'nope', 'hey', 'gj 👍', 'unlucky', 'my bad', 'omg', 'Again?', 'swap teams?', 'bye'],
+  ja: ['いこいこ', 'ちょい待ち', 'www', 'おけ', 'むり', 'ちわ', 'ナイス 👍', 'おしい', 'すまん', 'やば', 'もう一回?', 'チーム替えよう', 'またね'],
+  'zh-Hans': ['冲冲冲', '等下', '哈哈哈', '好', '不要', '嗨', '666 👍', '可惜', '我的锅', '天哪', '再来?', '换队吧', '拜拜'],
+  'zh-Hant': ['衝衝衝', '等一下', '哈哈哈', '好', '不要', '嗨', '讚啦 👍', '可惜', '歹勢', '天啊', '再來?', '換隊吧', '掰掰'],
 } as const satisfies Record<string, readonly string[]>
 
 /** The game's own pick (its pickLanguage): Korean, Japanese, Chinese by script, else English. */
