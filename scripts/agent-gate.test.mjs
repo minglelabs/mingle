@@ -127,6 +127,8 @@ test('migration and env detection', () => {
   assert.equal(flags.env_change, true);
   assert.deepEqual(flags.new_env_keys, ['NEW_KEY', 'OTHER_KEY']);
   assert.equal(detectMigrationAndEnv(['docs/a.md'], {}, known).env_change, false);
+  const fromTest = detectMigrationAndEnv(['scripts/x.test.mjs'], { 'scripts/x.test.mjs': '+process.env.NEW_KEY\n' }, known);
+  assert.equal(fromTest.env_change, false);
 });
 
 const passCi = (files) =>

@@ -198,6 +198,8 @@ export function detectMigrationAndEnv(files, patches = {}, knownEnvKeys = new Se
   const newKeys = new Set();
   for (const [file, patch] of Object.entries(patches)) {
     if (!files.includes(file)) continue;
+    // Test fixtures mention env keys as strings; only runtime code needs a deployed value.
+    if (/(^|\/)(__tests__\/|[^/]*\.test\.)/.test(file)) continue;
     for (const line of patch.split('\n')) {
       if (!line.startsWith('+') || line.startsWith('+++')) continue;
       for (const m of line.matchAll(ENV_READ)) {
