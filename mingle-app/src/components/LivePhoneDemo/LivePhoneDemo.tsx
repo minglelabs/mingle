@@ -2254,6 +2254,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   })
   const earphoneModeCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
+  // Warns, once per earphone-mode session, that Start is about to open the
+  // system screen broadcast / sharing prompt, so it does not come as a shock.
+  const [screenCaptureNoticeOpen, setScreenCaptureNoticeOpen] = useState(false)
+  const screenCaptureNoticeAcknowledgedRef = useRef(false)
   // Device audio: translate what other apps play instead of the microphone.
   // Picked in the earphone-mode notice, on shells that can capture it, unless
   // the server's kill switch (DEVICE_AUDIO_CAPTURE_ENABLED*) turned it off.
@@ -5805,8 +5809,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       void handleStopRecording({ forceNativeStop: !isSttSessionRunning, stopSource: source })
       return
     }
+    if (sttCaptureSource === 'device_audio' && !screenCaptureNoticeAcknowledgedRef.current) {
+      // Start opens the system screen prompt: say so first.
+      setScreenCaptureNoticeOpen(true)
+      return
+    }
     void handleStartRecording()
-  }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning])
+  }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning, sttCaptureSource])
+
+  const confirmScreenCaptureNotice = useCallback(() => {
+    screenCaptureNoticeAcknowledgedRef.current = true
+    setScreenCaptureNoticeOpen(false)
+    void handleStartRecording()
+  }, [handleStartRecording])
+
+  const cancelScreenCaptureNotice = useCallback(() => {
+    setScreenCaptureNoticeOpen(false)
+  }, [])
 
   const handleMicClick = useCallback(() => {
     micPointerActivationRef.current = false
@@ -6750,6 +6769,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // default, the microphone plus device audio (page 2/2 of the notice shows
     // it, and what Start will open, before the first Start).
     setSttCaptureSourcePick('device_audio')
+    // A new session warns about the screen prompt again.
+    screenCaptureNoticeAcknowledgedRef.current = false
   }), [])
 
   const handleEarphoneModeReadLanguageSelect = useCallback((language: string) => {
@@ -9696,6 +9717,38 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 onConfirm={closeEarphoneModeNotice}
                 coinCostNotice={coinTtsCostNotice}
               />
+            </MessageMediaDialog>
+          )}
+          {screenCaptureNoticeOpen && (
+            <MessageMediaDialog title={earphoneModeCopy.screenCaptureNoticeTitle} onClose={cancelScreenCaptureNotice}>
+              <div data-qa="live-demo-screen-capture-notice">
+                <h2 className="text-xl font-bold leading-tight text-gray-900">
+                  {earphoneModeCopy.screenCaptureNoticeTitle}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                  {isLikelyIOSPlatform()
+                    ? earphoneModeCopy.screenCaptureNoticeBodyIos
+                    : earphoneModeCopy.screenCaptureNoticeBody}
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelScreenCaptureNotice}
+                    className="inline-flex h-10 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                  >
+                    {earphoneModeCopy.screenCaptureNoticeCancelLabel}
+                  </button>
+                  <button
+                    type="button"
+                    data-screen-capture-notice-continue
+                    onClick={confirmScreenCaptureNotice}
+                    className="inline-flex h-10 flex-1 items-center justify-center rounded-lg text-sm font-semibold text-white transition-colors"
+                    style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)' }}
+                  >
+                    {earphoneModeCopy.screenCaptureNoticeContinueLabel}
+                  </button>
+                </div>
+              </div>
             </MessageMediaDialog>
           )}
         </div>

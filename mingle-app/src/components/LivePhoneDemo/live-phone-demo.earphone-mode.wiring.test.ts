@@ -111,6 +111,19 @@ describe('earphone mode wiring', () => {
     expect(noticeSource).toContain("data-earphone-status={earphonesConnected ? 'connected' : 'disconnected'}")
   })
 
+  it('warns before Start opens the system screen prompt, once per earphone-mode session', () => {
+    const mic = between(liveDemoSource, 'const performMicAction = useCallback((source: SttStopSource) => {', 'const confirmScreenCaptureNotice')
+    expect(mic).toContain("if (sttCaptureSource === 'device_audio' && !screenCaptureNoticeAcknowledgedRef.current) {")
+    expect(mic).toContain('setScreenCaptureNoticeOpen(true)')
+    expect(mic.indexOf('setScreenCaptureNoticeOpen(true)')).toBeLessThan(mic.lastIndexOf('void handleStartRecording()'))
+    const confirm = between(liveDemoSource, 'const confirmScreenCaptureNotice = useCallback(() => {', '}, [handleStartRecording])')
+    expect(confirm).toContain('screenCaptureNoticeAcknowledgedRef.current = true')
+    expect(confirm).toContain('void handleStartRecording()')
+    const reset = between(liveDemoSource, 'useEffect(() => subscribeEarphoneModePreference(() => {', '}), [])')
+    expect(reset).toContain('screenCaptureNoticeAcknowledgedRef.current = false')
+    expect(liveDemoSource).toContain('earphoneModeCopy.screenCaptureNoticeBodyIos')
+  })
+
   it('reads one language per session: picked in the notice, React state only, dropped on every edge', () => {
     expect(liveDemoSource).toContain(
       'const [earphoneModeReadLanguagePick, setEarphoneModeReadLanguagePick] = useState<EarphoneModeReadLanguagePick | null>(null)',
