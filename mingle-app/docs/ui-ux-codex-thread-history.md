@@ -11,6 +11,13 @@ One entry per UI/UX fix, newest first. This is the only copy; add new entries he
 - Unchanged: Sheets (comments, post actions, sign-in), photo zoom and the swipe hint render from the shell and do not depend on a card being mounted; while one is open the feed cannot scroll, so the window does not move. Likes, comment counts and follows were already written back to the list, so a remounted card shows them.
 - Verification: Unit tests for the window range and per-card decisions, the memory store, the translate restore rule, and remounted cards (translation off, requested translation, picked chip, expanded caption, photo index and its eager loading), plus a placeholder/card height and snap parity check. Type check (the only errors are the existing admin dashboard Prisma types from a stale generated client), lint and the feed suites passed. Not tried on a device: swiping feel while cards mount and unmount, decode timing and the actual memory drop on iOS are unverified.
 
+## 2026-10-30 — iOS restored-screen capture never takes a touch
+
+- Surface: The last-screen capture overlay in `rn/App.tsx`, shown on an iOS cold start that restores the previous screen (the app was killed in the background).
+- Issue: Until the WebView finished loading (up to the 4 s splash fallback, or 10 s for the capture), the capture swallowed every tap. #354 only let taps through after load, so on a slow cold start users still saw a real-looking screen where nothing could be pressed.
+- Resolution: The capture is `pointerEvents="none"` from the start and the first touch anywhere drops it at once. After load the touch reaches the real screen; before load, dropping it reveals the splash, so the wait is visible instead of a frozen-looking screen.
+- Verification: RN type check (no `App.tsx` errors) and `webViewRestore` tests. Not tried on a device yet.
+
 ## 2026-10-30 — Cold start: smaller first-load bundle, background work after the first screen
 
 - Surface: App launch after iOS killed the app (logo splash until the WebView's load event, 4 s fallback). Root layout (`src/app/layout.tsx`), feed (`feed-shell.tsx`), tab bar (`bottom-tab-bar.tsx`), PostHog (`posthog-client.ts`, `posthog-analytics-provider.tsx`), new `src/lib/after-startup.ts` and `src/components/deferred-native-overlays.tsx`.
