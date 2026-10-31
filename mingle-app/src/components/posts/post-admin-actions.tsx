@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArchiveRestore, ImageUp, Loader2, LogIn, PenLine } from "lucide-react";
+import { ArchiveRestore, ImageUp, Loader2, LogIn, PenLine, Sparkles } from "lucide-react";
+import { PhotoRedrawPanel } from "@/app/admin/feed/_components/photo-redraw-panel";
 
 type AdminViewer = { admin: boolean; staff: boolean; operatorPost: boolean };
 
@@ -16,7 +17,7 @@ const ERRORS: Record<string, string> = {
 /**
  * Staff-only rows in the post "⋯" menu, in Korean like the operator tool.
  * With an admin session (the web view shares the operator tool's cookie) an
- * operator account's post gets 사진 바꾸기 · 글 수정 · 내리고 검토로; a staff app
+ * operator account's post gets 사진 바꾸기 · 사진 다시 만들기 · 글 수정 · 내리고 검토로; a staff app
  * account without one gets a row to the admin login. Nothing for anyone else.
  */
 export default function PostAdminActions({
@@ -35,6 +36,7 @@ export default function PostAdminActions({
   const [busy, setBusy] = useState<null | "photo" | "text" | "takedown">(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [redrawing, setRedrawing] = useState(false);
   const [draft, setDraft] = useState(text);
   const [confirmTakedown, setConfirmTakedown] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -116,6 +118,12 @@ export default function PostAdminActions({
         className="hidden"
         onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPhoto(file); }}
       />
+      <AdminRow icon={<Sparkles size={19} aria-hidden="true" />} label={redrawing ? "사진 다시 만들기 닫기" : "사진 다시 만들기"} disabled={busy !== null} onClick={() => { setRedrawing((open) => !open); setError(null); }} />
+      {redrawing ? (
+        <div className="px-3 pb-2">
+          <PhotoRedrawPanel postId={postId} language={null} onClose={() => setRedrawing(false)} onApplied={onChanged} />
+        </div>
+      ) : null}
       <AdminRow icon={<PenLine size={19} aria-hidden="true" />} label={editing ? "글 수정 취소" : "글 수정"} disabled={busy !== null} onClick={() => { setDraft(text); setEditing((open) => !open); setError(null); }} />
       {editing ? (
         <div className="px-3 pb-2">

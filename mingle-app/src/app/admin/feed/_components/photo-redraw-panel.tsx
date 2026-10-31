@@ -41,7 +41,7 @@ function Choice<T extends string>({ value, current, onPick, children }: { value:
  * goes on the post. With a reference photo, that shot is redrawn with this
  * account's face; without one, the post's own photo is drawn again.
  */
-export function PhotoRedrawPanel({ postId, language, onClose }: { postId: string; language: string | null; onClose: () => void }) {
+export function PhotoRedrawPanel({ postId, language, onClose, onApplied }: { postId: string; language: string | null; onClose: () => void; onApplied?: () => void }) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
   const [reference, setReference] = useState<File | null>(null)
@@ -92,7 +92,8 @@ export function PhotoRedrawPanel({ postId, language, onClose }: { postId: string
         body: JSON.stringify({ objectKey: candidate.objectKey }),
       })
       if (!response.ok) { setError('사진을 바꾸지 못했어요.'); return }
-      router.refresh()
+      if (onApplied) onApplied()
+      else router.refresh()
       onClose()
     } catch {
       setError('사진을 바꾸지 못했어요.')
