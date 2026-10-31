@@ -20,6 +20,8 @@ export type VoiceRoomHostHandle = {
   requestStatus: (conversationId: string) => void;
   /** Mic, interpretation, volume mode and mix, from the web panel's buttons. */
   set: (payload: VoiceSetCommand['payload']) => void;
+  /** The chat screen closed: stop polling. A joined call keeps running. */
+  stopStatus: () => void;
 };
 
 export type VoiceRoomHostProps = {
@@ -147,11 +149,23 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
         });
         pollRef.current = poll;
         poll.start();
+        // Coming back to the room of a call this phone is in: the panel was
+        // remounted and knows nothing, so tell it at once.
+        if (controllerRef.current && conversationRef.current === convId) {
+          const status = controllerRef.current.getSnapshot().status;
+          emitPhase(status === 'connected' ? 'connected' : 'connecting', convId);
+          sendRoom();
+        }
       },
-      [api, emitToWeb],
+      [api, emitPhase, emitToWeb, sendRoom],
     );
 
-    useImperativeHandle(ref, () => ({ open, close, requestStatus, set }), [open, close, requestStatus, set]);
+    const stopStatus = useCallback(() => {
+      pollRef.current?.stop();
+      pollRef.current = null;
+    }, []);
+
+    useImperativeHandle(ref, () => ({ open, close, requestStatus, set, stopStatus }), [open, close, requestStatus, set, stopStatus]);
 
     useEffect(() => () => {
       pollRef.current?.stop();

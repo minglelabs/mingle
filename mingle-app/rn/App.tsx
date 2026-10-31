@@ -4347,6 +4347,8 @@ function AppInner(): React.JSX.Element {
           voiceHostRef.current?.close();
         } else if (voiceCommand.type === 'native_voice_set') {
           voiceHostRef.current?.set(voiceCommand.payload);
+        } else if (voiceCommand.type === 'native_voice_status_stop') {
+          voiceHostRef.current?.stopStatus();
         } else {
           voiceHostRef.current?.requestStatus(voiceCommand.payload.conversationId);
         }

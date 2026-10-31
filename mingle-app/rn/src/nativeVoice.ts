@@ -363,7 +363,8 @@ export function createVoiceController(deps: VoiceControllerDeps) {
       members.push({
         identity: p.identity,
         userId: p.identity,
-        name: p.name || api?.name || p.identity,
+        // The server's name first: canUpdateOwnMetadata lets a client rename itself in LiveKit.
+        name: api?.name || p.name || p.identity,
         isLocal,
         isSpeaking: state.speakingIdentities.has(p.identity),
         lang: participantLang(toView(p)) || api?.speechLanguage || '',
