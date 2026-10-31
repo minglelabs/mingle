@@ -107,6 +107,8 @@ export type VoiceGridMember = {
 
 export type VoiceSnapshot = {
   status: VoiceConnectionStatus;
+  /** The language this device joined with (token `lang`, my `tr:<lang>` lane). */
+  myLang: string;
   errorKind?: string;
   conversationId: string | null;
   roomName: string | null;
@@ -395,6 +397,7 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     const members = buildMembers();
     return {
       status: state.status,
+      myLang: deps.myLang,
       errorKind: state.errorKind,
       conversationId: state.conversationId,
       roomName: state.roomName,

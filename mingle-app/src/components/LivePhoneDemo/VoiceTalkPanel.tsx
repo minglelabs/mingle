@@ -22,6 +22,8 @@ type RoomMember = { identity: string; userId: string; name: string; isLocal: boo
 type RoomCaption = { id: string; speakerName: string; original: string; isPartial: boolean; isEcho: boolean; translations: Record<string, string> }
 type RoomSnapshot = {
   status: string
+  /** Language the app joined with; its translation lane is the one we hear. */
+  myLang?: string
   members: RoomMember[]
   micOn: boolean
   micAvailable: boolean
@@ -182,7 +184,10 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     return people.slice(0, MAX_SEATS)
   }, [call, joined, room])
 
-  const lines = useMemo(() => (room ? captionLines(room.captions, myLang) : []), [room, myLang])
+  // Show captions in the language the app actually joined with, so the text
+  // matches the interpretation voice (the room's language list can start with
+  // another language).
+  const lines = useMemo(() => (room ? captionLines(room.captions, room.myLang || myLang) : []), [room, myLang])
 
   const onDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (info.offset.y < -24 || info.velocity.y < -300) setFolded(true)
