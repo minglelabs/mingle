@@ -1,53 +1,35 @@
 import type { Metadata } from "next";
 import { Suspense, type ReactNode } from "react";
 import {
-  ADMIN_DASHBOARD_CHART_HEIGHT,
-  ADMIN_DASHBOARD_CHART_WIDTH,
   normalizeDashboardPlatform,
   ADMIN_DASHBOARD_PRESET_OPTIONS,
   type AdminDashboardDateRange,
   type AdminDashboardPlatform,
   type AdminDashboardTab,
-  type DashboardMetric,
   buildAdminDashboardHref,
-  buildChartGeometry,
-  buildCumulativeSeries,
-  buildSharedScaleChartGeometries,
-  formatMetricDisplayValue,
   normalizeDashboardDays,
   normalizeDashboardTab,
   resolveAdminDashboardRange,
 } from "@/lib/admin-dashboard-metrics";
-import { loadAdminDashboardMetrics } from "@/lib/admin-dashboard-query";
 import { requireAdmin } from "@/server/admin/guard";
 import { AdminPage, AdminPageHeader } from "../_components/ui";
 import { DashboardTabNav } from "./dashboard-tab-nav";
-import { LineChartCard } from "./line-chart-card";
-import { MetricsTable } from "./metrics-table";
 import { RangeNav } from "./range-nav";
-import {
-  OperatorPostStatsSection,
-  OperatorPostStatsSectionFallback,
-  startOperatorPostStatsLoad,
-} from "./operator-post-stats-section";
+import { OperatorPostStatsSection, startOperatorPostStatsLoad } from "./operator-post-stats-section";
 import { RetentionSection, RetentionSectionFallback, startSignupRetentionLoad } from "./retention-section";
-import { SnsSection, SnsSectionFallback, startSnsDashboardLoad } from "./sns-section";
+import { SnsSection, startSnsDashboardLoad } from "./sns-section";
 import {
   TranslationModelSection,
   TranslationModelSectionFallback,
   startTranslationModelSeriesLoad,
 } from "./translation-model-section";
+import { UsageMetricsSection, UsageMetricsSectionFallback, startUsageMetricsLoad } from "./usage-metrics-section";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "대시보드",
 };
-
-/** sky-600 for daily values, slate-500 (dashed) for p95, sky-700 for running totals. */
-const CHART_COLOR = "#0284c7";
-const SECONDARY_COLOR = "#64748b";
-const CUMULATIVE_COLOR = "#0369a1";
 
 type DashboardPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -59,57 +41,6 @@ function takeFirst(value: string | string[] | undefined): string {
   return "";
 }
 
-function DailyChart({ metric }: { metric: DashboardMetric }) {
-  // Both series share one y-scale (same unit, e.g. ms) -- computed together so
-  // p95 (always >= avg) doesn't get clipped against a scale sized only for avg.
-  const { geometries: [geometry, secondaryGeometry] } = buildSharedScaleChartGeometries(
-    metric.secondarySeries ? [metric.points, metric.secondarySeries.points] : [metric.points],
-    ADMIN_DASHBOARD_CHART_WIDTH,
-    ADMIN_DASHBOARD_CHART_HEIGHT,
-  );
-
-  return (
-    <LineChartCard
-      label={metric.label}
-      kind={metric.kind}
-      ariaLabel={`${metric.label} 일별 추이`}
-      points={geometry.points}
-      linePath={geometry.linePath}
-      areaPath={geometry.areaPath}
-      yMax={geometry.yMax}
-      color={CHART_COLOR}
-      secondary={metric.secondarySeries && secondaryGeometry ? {
-        label: metric.secondarySeries.label,
-        points: secondaryGeometry.points,
-        linePath: secondaryGeometry.linePath,
-        areaPath: secondaryGeometry.areaPath,
-        color: SECONDARY_COLOR,
-      } : undefined}
-    />
-  );
-}
-
-function CumulativeChart({ metric }: { metric: DashboardMetric }) {
-  const cumulativePoints = buildCumulativeSeries(metric.points);
-  const geometry = buildChartGeometry(cumulativePoints, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT);
-  const total = cumulativePoints[cumulativePoints.length - 1]?.value ?? null;
-  const totalDisplay = formatMetricDisplayValue(total, metric.kind);
-
-  return (
-    <LineChartCard
-      label={metric.label}
-      kind={metric.kind}
-      ariaLabel={`${metric.label} 누적 추이`}
-      points={geometry.points}
-      linePath={geometry.linePath}
-      areaPath={geometry.areaPath}
-      yMax={geometry.yMax}
-      color={CUMULATIVE_COLOR}
-      footer={`누적 합계 ${totalDisplay}`}
-    />
-  );
-}
-
 type DashboardTabInput = {
   range: AdminDashboardDateRange;
   days: number;
@@ -117,8 +48,11 @@ type DashboardTabInput = {
   forceRefresh: boolean;
 };
 
-// The live queries below start without an await and are awaited inside their own
-// Suspense boundary: the header and tab bar stream first, and a failure stays in its section.
+// No renderer awaits its data. The queries start without an await and each card awaits
+// only its own inside its own Suspense boundary: the header, tab bar and range nav stream
+// first, every card shows as soon as its data is in, and a failure stays in its card.
+// Sections are keyed by the query inputs, so a range or OS change mounts fresh
+// boundaries that show their fallbacks instead of holding the navigation.
 
 function renderGrowthTab({ range, days }: DashboardTabInput): ReactNode {
   const signupRetention = startSignupRetentionLoad(range);
@@ -135,34 +69,14 @@ function renderGrowthTab({ range, days }: DashboardTabInput): ReactNode {
   );
 }
 
-async function renderUsageTab({ range, platform, forceRefresh }: DashboardTabInput): Promise<ReactNode> {
-  const metrics = await loadAdminDashboardMetrics(range, { forceRefresh, platform });
-  const cumulativeMetrics = metrics.filter((metric) => metric.kind !== "milliseconds");
+function renderUsageTab({ range, days, platform, forceRefresh }: DashboardTabInput): ReactNode {
+  // Only the cache table read is awaited before the cards render; the days it does not
+  // have stream into the cards afterwards.
+  const usageMetrics = startUsageMetricsLoad(range, { forceRefresh, platform });
   return (
-    <>
-      <section className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold text-slate-600">일자별 추이</h2>
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {metrics.map((metric) => (
-            <DailyChart key={metric.key} metric={metric} />
-          ))}
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-2 text-sm font-semibold text-slate-600">누적 추이</h2>
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {cumulativeMetrics.map((metric) => (
-            <CumulativeChart key={metric.key} metric={metric} />
-          ))}
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-2 text-sm font-semibold text-slate-600">표로 보기</h2>
-        <MetricsTable metrics={metrics} />
-      </section>
-    </>
+    <Suspense key={`usage:${days}:${platform}`} fallback={<UsageMetricsSectionFallback dayKeys={range.dayKeys} />}>
+      <UsageMetricsSection loadPromise={usageMetrics} dayKeys={range.dayKeys} />
+    </Suspense>
   );
 }
 
@@ -171,8 +85,6 @@ function renderModelsTab({ range, days, platform }: DashboardTabInput): ReactNod
   return (
     <section className="mt-6">
       <h2 className="mb-2 text-sm font-semibold text-slate-600">번역 모델별 추이</h2>
-      {/* Keyed by the query inputs: a days/platform change then mounts a fresh boundary that
-          shows the skeleton, instead of holding the whole navigation for this data. */}
       <Suspense key={`${days}:${platform}`} fallback={<TranslationModelSectionFallback />}>
         <TranslationModelSection seriesPromise={translationModelSeries} dayKeys={range.dayKeys} />
       </Suspense>
@@ -181,16 +93,14 @@ function renderModelsTab({ range, days, platform }: DashboardTabInput): ReactNod
 }
 
 function renderSnsTab({ range, days }: DashboardTabInput): ReactNode {
-  const snsDashboard = startSnsDashboardLoad(range);
+  const snsQueries = startSnsDashboardLoad(range);
   return (
     <section className="mt-6">
       <h2 className="mb-1 text-sm font-semibold text-slate-600">SNS 지표</h2>
       <p className="mb-2 break-words text-xs text-slate-500">
         실사용자가 한 행동만 셉니다(운영 계정 글에 한 반응 포함). 플랫폼 필터는 적용되지 않고, 캐시 없이 매번 새로 집계합니다.
       </p>
-      <Suspense key={`sns:${days}`} fallback={<SnsSectionFallback />}>
-        <SnsSection dashboardPromise={snsDashboard} />
-      </Suspense>
+      <SnsSection key={`sns:${days}`} queries={snsQueries} dayKeys={range.dayKeys} />
     </section>
   );
 }
@@ -203,16 +113,14 @@ function renderOperatorsTab({ range, days }: DashboardTabInput): ReactNode {
       <p className="mb-2 break-words text-xs text-slate-500">
         기간 안에 올라간 운영 계정 글입니다. 실사용자만 세고(운영·공식·직원 계정과 글쓴이 제외), %는 조회 대비입니다. 팔로우·첫 메시지는 그 글에서 했거나, 하기 전 24시간 안에 마지막으로 본 그 계정 글로 셉니다. 플랫폼 필터는 적용되지 않습니다.
       </p>
-      <Suspense key={`operator-posts:${days}`} fallback={<OperatorPostStatsSectionFallback />}>
-        <OperatorPostStatsSection dashboardPromise={operatorPostStats} />
-      </Suspense>
+      <OperatorPostStatsSection key={`operator-posts:${days}`} load={operatorPostStats} />
     </section>
   );
 }
 
 /** Keyed by tab, so a new tab without its renderer is a type error. Only the active tab's
  * renderer runs, so a request starts only that tab's queries. */
-const DASHBOARD_TAB_RENDERERS: Record<AdminDashboardTab, (input: DashboardTabInput) => ReactNode | Promise<ReactNode>> = {
+const DASHBOARD_TAB_RENDERERS: Record<AdminDashboardTab, (input: DashboardTabInput) => ReactNode> = {
   growth: renderGrowthTab,
   usage: renderUsageTab,
   models: renderModelsTab,
@@ -229,7 +137,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
 
   const forceRefresh = takeFirst(params.refresh) === "true" || takeFirst(params.refresh) === "1";
   const range = resolveAdminDashboardRange(new Date(), days);
-  const tabContent = await DASHBOARD_TAB_RENDERERS[tab]({ range, days, platform, forceRefresh });
+  const tabContent = DASHBOARD_TAB_RENDERERS[tab]({ range, days, platform, forceRefresh });
 
   return (
     <AdminPage wide>

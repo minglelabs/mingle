@@ -1,13 +1,24 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 
-vi.mock("@/lib/prisma", () => ({ prisma: {} }));
+const { queryRaw, findMany } = vi.hoisted(() => ({ queryRaw: vi.fn(), findMany: vi.fn() }));
+vi.mock("@/lib/prisma", () => ({ prisma: { $queryRaw: queryRaw, post: { findMany } } }));
 
-import type { OperatorPostStatsListRow } from "@/server/operator-post-stats/load";
+import type { OperatorPostStatKey } from "@/lib/operator-post-stats";
+import { startOperatorPostStatsDashboardLoad, type OperatorPostStatsListRow } from "@/server/operator-post-stats/load";
 import { OperatorPostStatsRow } from "../_components/operator-post-stats-row";
-import { OperatorPostStatsSection, OperatorPostStatsTotals } from "./operator-post-stats-section";
+import {
+  OperatorPostCountTile,
+  OperatorPostStatTile,
+  OperatorPostStatsTableCard,
+  startOperatorPostStatsLoad,
+} from "./operator-post-stats-section";
 import { OperatorPostStatsTable, sortOperatorPostRows } from "./operator-post-stats-table";
+
+afterEach(() => {
+  vi.resetAllMocks();
+});
 
 function listRow(postId: string, views: number, follows: number, publishedAt: string): OperatorPostStatsListRow {
   return {
@@ -43,18 +54,49 @@ describe("operator post stats in the admin tool", () => {
     expect(renderToString(createElement(OperatorPostStatsRow, { stats: null }))).toBe("");
   });
 
-  it("totals the range with rates over the summed views", () => {
-    const html = renderToString(createElement(OperatorPostStatsTotals, {
-      dashboard: {
-        postCount: 3,
-        totals: { views: 1000, likes: 80, comments: 10, follows: 25, profileVisits: 40, messages: 5 },
-        rows: [],
-      },
-    }));
-    expect(html).toContain("운영 계정 글");
-    expect(html).toContain("1,000");
-    expect(html).toContain("조회 대비 8%");
-    expect(html).toContain("조회 대비 2.5%");
+  it("totals the range with rates over the summed views", async () => {
+    const totals = Promise.resolve({
+      postCount: 3,
+      totals: { views: 1000, likes: 80, comments: 10, follows: 25, profileVisits: 40, messages: 5 },
+    });
+    const tile = async (statKey: OperatorPostStatKey) =>
+      renderToString(await OperatorPostStatTile({ statKey, totalsPromise: totals }));
+
+    expect(renderToString(await OperatorPostCountTile({ totalsPromise: totals }))).toContain("3개");
+    expect(await tile("views")).toContain("1,000");
+    expect(await tile("views")).toContain("글별 본 사람 합");
+    expect(await tile("likes")).toContain("조회 대비 8%");
+    expect(await tile("follows")).toContain("조회 대비 2.5%");
+  });
+
+  it("shows the count tiles before the attribution query is done, follows and messages after it", async () => {
+    const counts = [
+      { postId: "p1", authorId: "op1", publishedAt: new Date("2026-10-01T00:00:00Z"), views: 10, likes: 2, comments: 1, profileVisits: 3 },
+      { postId: "p2", authorId: "op1", publishedAt: new Date("2026-10-02T00:00:00Z"), views: 30, likes: 0, comments: 0, profileVisits: 1 },
+    ];
+    let releaseCandidates: (rows: unknown[]) => void = () => {};
+    // The counts query is started first, then the attribution query.
+    queryRaw
+      .mockResolvedValueOnce(counts)
+      .mockReturnValueOnce(new Promise((resolve) => { releaseCandidates = resolve; }));
+    findMany.mockResolvedValue([]);
+
+    const load = startOperatorPostStatsDashboardLoad({ rangeStart: new Date("2026-10-01"), rangeEnd: new Date("2026-10-03") });
+    const settled = new Set<string>();
+    for (const [name, promise] of Object.entries(load)) void promise.then(() => settled.add(name));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect([...settled]).toEqual(["countTotals"]);
+    await expect(load.countTotals).resolves.toEqual({ postCount: 2, totals: { views: 40, likes: 2, comments: 1, profileVisits: 4 } });
+    const likes = renderToString(await OperatorPostStatTile({ statKey: "likes", totalsPromise: load.countTotals }));
+    expect(likes).toContain("조회 대비 5%");
+
+    releaseCandidates([]);
+    await expect(load.totals).resolves.toEqual({
+      postCount: 2,
+      totals: { views: 40, likes: 2, comments: 1, follows: 0, profileVisits: 4, messages: 0 },
+    });
+    await expect(load.dashboard).resolves.toMatchObject({ postCount: 2 });
   });
 
   it("sorts by any count, newer post first on a tie", () => {
@@ -77,12 +119,27 @@ describe("operator post stats in the admin tool", () => {
     expect(renderToString(createElement(OperatorPostStatsTable, { rows: [] }))).toContain("운영 계정 글이 없습니다");
   });
 
-  it("contains a failed load in the section", async () => {
+  it("contains a failed load in each card", async () => {
     const failed = Promise.reject(new Error("db down"));
     failed.catch(() => undefined);
-    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const element = await OperatorPostStatsSection({ dashboardPromise: failed });
-    expect(renderToString(element)).toContain("불러오지 못했습니다");
-    spy.mockRestore();
+
+    expect(renderToString(await OperatorPostStatsTableCard({ dashboardPromise: failed }))).toContain("불러오지 못했습니다");
+    const tile = renderToString(await OperatorPostStatTile({ statKey: "follows", totalsPromise: failed }));
+    expect(tile).toContain("팔로우");
+    expect(tile).toContain('role="alert"');
+    expect(renderToString(await OperatorPostCountTile({ totalsPromise: failed }))).toContain("불러오지 못했습니다");
+  });
+
+  it("logs a failure once, from the table's promise", async () => {
+    queryRaw.mockRejectedValue(new Error("db down"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const load = startOperatorPostStatsLoad({ dayKeys: [], rangeStart: new Date("2026-10-01"), rangeEnd: new Date("2026-10-03") });
+    await Promise.allSettled([load.countTotals, load.totals, load.dashboard]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleError.mock.calls[0][0]).toBe("[admin-dashboard] operator_post_stats_failed");
+    consoleError.mockRestore();
   });
 });

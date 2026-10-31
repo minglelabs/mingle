@@ -22,6 +22,7 @@ import {
   resolveTooltipShiftPercent,
   resolveXAxisTicks,
 } from "@/lib/admin-dashboard-metrics";
+import { DashboardSpinner } from "./dashboard-spinner";
 
 const CHART_WIDTH = ADMIN_DASHBOARD_CHART_WIDTH;
 const CHART_HEIGHT = ADMIN_DASHBOARD_CHART_HEIGHT;
@@ -252,12 +253,32 @@ function edgeAlignedTransform(x: number): string {
   return "translateX(-50%)";
 }
 
+/** Days of a chart that are still being computed or failed to load, while the rest is drawn. */
+export type ChartLoadState = { pendingDays: number; failedDays: number };
+
+function ChartLoadStatus({ pendingDays, failedDays }: ChartLoadState) {
+  return (
+    <>
+      {pendingDays > 0 ? (
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500" role="status">
+          <DashboardSpinner />
+          {`${pendingDays}일 계산 중`}
+        </span>
+      ) : null}
+      {failedDays > 0 ? (
+        <span className="text-xs font-medium text-rose-600" role="alert">{`${failedDays}일 불러오지 못했습니다`}</span>
+      ) : null}
+    </>
+  );
+}
+
 /**
  * One metric's line chart. The plot is an SVG stretched to the card
  * (non-scaling strokes); every label is HTML at a fixed 11 px, so text stays
  * readable at 375 px instead of shrinking with the SVG. Values open on tap
  * (touch pins the tooltip until a tap elsewhere), on mouse hover, or with the
- * arrow keys when the chart has focus.
+ * arrow keys when the chart has focus. With `loadState`, the days that are not
+ * in yet are gaps and a small status follows the label.
  */
 export function LineChartCard(props: {
   label: string;
@@ -270,10 +291,16 @@ export function LineChartCard(props: {
   color: string;
   secondary?: SeriesProps;
   footer?: string;
+  loadState?: ChartLoadState;
 }) {
   const {
-    label, kind, ariaLabel, points, linePath, areaPath, yMax, color, secondary, footer,
+    label, kind, ariaLabel, points, linePath, areaPath, yMax, color, secondary, footer, loadState,
   } = props;
+  const isLoading = Boolean(loadState && (loadState.pendingDays > 0 || loadState.failedDays > 0));
+  // Before any day is in, the y-scale is a placeholder: no tick labels until there is a value.
+  const showsYLabels = !isLoading
+    || points.some((point) => point.value !== null)
+    || Boolean(secondary?.points.some((point) => point.value !== null));
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [pinned, setPinned] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -353,7 +380,14 @@ export function LineChartCard(props: {
   return (
     <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" ref={cardRef}>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <p className="text-sm font-semibold text-slate-900">{label}</p>
+        {isLoading && loadState ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="text-sm font-semibold text-slate-900">{label}</p>
+            <ChartLoadStatus {...loadState} />
+          </div>
+        ) : (
+          <p className="text-sm font-semibold text-slate-900">{label}</p>
+        )}
         {secondary ? (
           <div className="flex items-center gap-3 text-xs text-slate-500">
             <span className="inline-flex items-center gap-1">
@@ -473,7 +507,7 @@ export function LineChartCard(props: {
         </div>
 
         <div aria-hidden="true" className="relative h-36 w-12 shrink-0">
-          {yTicks.map((tickValue) => (
+          {showsYLabels ? yTicks.map((tickValue) => (
             <span
               className="absolute left-0 -translate-y-1/2 whitespace-nowrap text-[11px] leading-4 tabular-nums text-slate-500"
               key={tickValue}
@@ -481,8 +515,47 @@ export function LineChartCard(props: {
             >
               {formatCompactNumber(Math.round(tickValue))}
             </span>
-          ))}
+          )) : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Stands in for a LineChartCard while its data loads, or after loading failed: the same
+ * card, header and plot frame, so nothing shifts when the chart replaces it.
+ */
+export function LineChartCardPlaceholder({
+  label,
+  status,
+  message,
+}: {
+  label: string;
+  status: "loading" | "error";
+  message: string;
+}) {
+  const isLoading = status === "loading";
+  return (
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <p className="text-sm font-semibold text-slate-900">{label}</p>
+      </div>
+      <div className="mt-4 flex gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="relative h-36">
+            {isLoading ? <div aria-hidden="true" className="absolute inset-0 animate-pulse rounded-md bg-slate-100" /> : null}
+            <div
+              className={`absolute inset-0 flex items-center justify-center gap-1.5 text-xs font-medium ${isLoading ? "text-slate-500" : "text-rose-600"}`}
+              role={isLoading ? "status" : "alert"}
+            >
+              {isLoading ? <DashboardSpinner /> : null}
+              {message}
+            </div>
+          </div>
+          <div aria-hidden="true" className="mt-1.5 h-4" />
+        </div>
+        <div aria-hidden="true" className="h-36 w-12 shrink-0" />
       </div>
     </div>
   );

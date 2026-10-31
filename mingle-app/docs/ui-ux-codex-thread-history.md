@@ -2,6 +2,16 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-01 — 관리자 대시보드: 있는 값부터 바로 보이고, 남은 칸만 로딩
+
+- 화면: `/admin/dashboard` 모든 탭 (`page.tsx`, 새 `usage-metrics-section.tsx`·`usage-metrics-view.tsx`·`part-results-store.ts`·`stat-tile.tsx`, `line-chart-card.tsx`, `metrics-table.tsx`, `sns-section.tsx`, `operator-post-stats-section.tsx`, `retention-section.tsx`). 데이터는 `src/lib/admin-dashboard-query.ts`, 새 `src/lib/admin-dashboard-usage.ts`, `admin-dashboard-sns.ts`, `src/server/operator-post-stats/load.ts`.
+- 문제: 사용량·성능 탭은 페이지 맨 위에서 지표 전체를 기다려서, 캐시에 없는 날이 많으면 헤더와 탭까지 안 보인 채 120초 프록시 제한에 걸렸다. 다른 탭도 섹션마다 가장 느린 쿼리를 기다렸다.
+- 변경(사용량·성능): 캐시 테이블에 있는 날로 그래프 8개, 누적 그래프 4개, 표를 바로 그린다. 계산 중인 날(캐시에 없는 날, 오늘·어제)은 그래프에서 빈 구간이고 카드 제목 옆에 기존 스피너와 "N일 계산 중", 표에서는 그 칸에만 스피너가 돈다. 지표마다 따로 계산해 도착하는 대로 채우므로 가입자수 같은 빠른 지표가 STT 글자당 지연시간을 기다리지 않는다. 누적 합계는 모든 날이 들어온 뒤에 보인다. 실패한 지표는 그 카드에만 "N일 불러오지 못했습니다", 표 칸에는 "오류"가 뜬다.
+- 캐시 저장: 4일 묶음은 8개 지표가 모두 계산된 뒤에만 저장한다. 지표별 쿼리는 한 번에 하나씩이라 동시 쿼리는 전과 같이 최대 8개다.
+- 변경(다른 탭): SNS 타일 8개와 그래프 11개는 각자 필요한 쿼리만 기다린다. 운영 계정 글은 글 수·조회·좋아요·댓글·프로필 방문 타일이 집계 쿼리만, 팔로우·메시지 타일과 표는 귀속 쿼리까지 기다린다. 가입·리텐션은 쿼리가 하나라 경계는 그대로 두고, 대기 화면을 실제 타일·그래프·표 틀로 바꿨다. 실패는 그 카드 안에만 표시된다.
+- 그대로: 쿼리 SQL, 캐시 테이블 구조(마이그레이션 없음), 오늘·어제 실시간 집계, 번역 모델 탭.
+- 확인: 단위 테스트(캐시 값만으로 먼저 그리기, 느린 지표가 다른 지표를 막지 않기, 묶음 단위 저장, 실패 격리, 페이지가 데이터를 기다리지 않기), 타입 체크, lint. 브라우저와 운영 DB에서는 아직 확인하지 않았다.
+
 ## 2026-10-31 — 관리자 대시보드: 탭으로 나눠 탭마다 자기 쿼리만 실행
 
 - 화면: `/admin/dashboard` (`page.tsx`, `range-nav.tsx`, `actions.ts`, 새 `dashboard-tab-nav.tsx`, `link-pending-spinner.tsx`). 탭 값과 URL은 `src/lib/admin-dashboard-metrics.ts`.

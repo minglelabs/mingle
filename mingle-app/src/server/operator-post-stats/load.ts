@@ -151,26 +151,44 @@ export type OperatorPostStatsRecord = {
   stats: OperatorPostStats
 }
 
-async function queryOperatorPostStats(target: OperatorPostStatsTarget): Promise<OperatorPostStatsRecord[]> {
-  if ('postIds' in target && target.postIds.length === 0) return []
-  const [counts, candidates] = await Promise.all([queryCounts(target), queryConversionCandidates(target)])
+/** The stats that come from the counts query alone; follows and messages also need the attribution query. */
+export const OPERATOR_POST_COUNT_STAT_KEYS = ['views', 'likes', 'comments', 'profileVisits'] as const
+export type OperatorPostCountStatKey = (typeof OPERATOR_POST_COUNT_STAT_KEYS)[number]
+
+function countStatsOf(row: CountRow): Pick<OperatorPostStats, OperatorPostCountStatKey> {
+  return {
+    views: Number(row.views) || 0,
+    likes: Number(row.likes) || 0,
+    comments: Number(row.comments) || 0,
+    profileVisits: Number(row.profileVisits) || 0,
+  }
+}
+
+function combineOperatorPostStats(counts: readonly CountRow[], candidates: readonly ConversionCandidateRow[]): OperatorPostStatsRecord[] {
   const conversions = countConversions(candidates, counts.map((row) => row.postId))
   return counts.map((row) => {
+    const counted = countStatsOf(row)
     const credited = conversions.get(row.postId)
     return {
       postId: row.postId,
       authorId: row.authorId,
       publishedAt: row.publishedAt,
       stats: {
-        views: Number(row.views) || 0,
-        likes: Number(row.likes) || 0,
-        comments: Number(row.comments) || 0,
+        views: counted.views,
+        likes: counted.likes,
+        comments: counted.comments,
         follows: credited?.follows ?? 0,
-        profileVisits: Number(row.profileVisits) || 0,
+        profileVisits: counted.profileVisits,
         messages: credited?.messages ?? 0,
       },
     }
   })
+}
+
+async function queryOperatorPostStats(target: OperatorPostStatsTarget): Promise<OperatorPostStatsRecord[]> {
+  if ('postIds' in target && target.postIds.length === 0) return []
+  const [counts, candidates] = await Promise.all([queryCounts(target), queryConversionCandidates(target)])
+  return combineOperatorPostStats(counts, candidates)
 }
 
 /** Stats by post id, for the operator posts among `target` (other ids are absent). */
@@ -218,12 +236,64 @@ function toSnippet(text: string | null): string {
   return flat.length > SNIPPET_LENGTH ? `${flat.slice(0, SNIPPET_LENGTH)}…` : flat
 }
 
+/** The range's post count, and the stats `K` summed over its posts. */
+export type OperatorPostStatsTotals<K extends keyof OperatorPostStats = keyof OperatorPostStats> = {
+  postCount: number
+  totals: Pick<OperatorPostStats, K>
+}
+
+/**
+ * The dashboard's operator-post stats in the order they can be shown: the counts query and
+ * the attribution query run side by side, and each promise settles as soon as what it
+ * needs is in. Each already has a no-op rejection handler, so one a caller leaves unused
+ * never surfaces as an unhandled rejection; a caller that awaits it still sees the error.
+ */
+export type OperatorPostStatsDashboardLoad = {
+  /** The post count, views, likes, comments and profile visits: the counts query alone. */
+  countTotals: Promise<OperatorPostStatsTotals<OperatorPostCountStatKey>>
+  /** Every stat summed, follows and messages included: both queries. */
+  totals: Promise<OperatorPostStatsTotals>
+  /** Totals and the most viewed posts with their details, for the table. */
+  dashboard: Promise<OperatorPostStatsDashboard>
+}
+
+export function startOperatorPostStatsDashboardLoad(
+  range: { rangeStart: Date; rangeEnd: Date },
+  limit: number = OPERATOR_POST_DASHBOARD_ROW_LIMIT,
+): OperatorPostStatsDashboardLoad {
+  const target = { publishedFrom: range.rangeStart, publishedTo: range.rangeEnd }
+  const counts = queryCounts(target)
+  const records = Promise.all([counts, queryConversionCandidates(target)])
+    .then(([countRows, candidates]) => combineOperatorPostStats(countRows, candidates))
+  const load: OperatorPostStatsDashboardLoad = {
+    countTotals: counts.then((rows) => {
+      const totals = { views: 0, likes: 0, comments: 0, profileVisits: 0 }
+      for (const row of rows) {
+        const counted = countStatsOf(row)
+        for (const key of OPERATOR_POST_COUNT_STAT_KEYS) totals[key] += counted[key]
+      }
+      return { postCount: rows.length, totals }
+    }),
+    totals: records.then((recs) => ({ postCount: recs.length, totals: sumOperatorPostStats(recs.map((record) => record.stats)) })),
+    dashboard: records.then((recs) => buildOperatorPostStatsDashboard(recs, limit)),
+  }
+  for (const promise of [load.countTotals, load.totals, load.dashboard]) promise.catch(() => undefined)
+  return load
+}
+
 /** Operator posts published in the dashboard range: totals, and the most viewed with their stats. */
 export async function loadOperatorPostStatsDashboard(
   range: { rangeStart: Date; rangeEnd: Date },
   limit: number = OPERATOR_POST_DASHBOARD_ROW_LIMIT,
 ): Promise<OperatorPostStatsDashboard> {
   const records = await queryOperatorPostStats({ publishedFrom: range.rangeStart, publishedTo: range.rangeEnd })
+  return buildOperatorPostStatsDashboard(records, limit)
+}
+
+async function buildOperatorPostStatsDashboard(
+  records: readonly OperatorPostStatsRecord[],
+  limit: number,
+): Promise<OperatorPostStatsDashboard> {
   const top = [...records].sort(compareByViews).slice(0, Math.max(0, limit))
   const posts = top.length
     ? await prisma.post.findMany({
