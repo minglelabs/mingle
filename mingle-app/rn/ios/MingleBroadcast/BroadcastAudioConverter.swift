@@ -1,4 +1,5 @@
 import AVFoundation
+import OSLog
 import CoreMedia
 
 /// Turns ReplayKit's app-audio buffers into the PCM the app expects:
@@ -8,6 +9,7 @@ import CoreMedia
 /// translation; the app removes it with an echo canceller that knows what it
 /// played (see MingleTranslationEchoCanceller).
 final class BroadcastAudioConverter {
+    private static let log = Logger(subsystem: "com.minglelabs.mingle.rn.broadcast", category: "Capture")
     private var converter: AVAudioConverter?
     private var converterInputFormat: AVAudioFormat?
     private let outputFormat = AVAudioFormat(
@@ -50,8 +52,7 @@ final class BroadcastAudioConverter {
             converter = next
             converterInputFormat = inputFormat
             // Device tuning: whether ReplayKit hands over stereo or mono.
-            NSLog("[MingleBroadcast] app audio format channels=%d sampleRate=%.0f interleaved=%d",
-                  Int(inputFormat.channelCount), inputFormat.sampleRate, inputFormat.isInterleaved ? 1 : 0)
+            Self.log.notice("app audio format channels=\(Int(inputFormat.channelCount), privacy: .public) sampleRate=\(inputFormat.sampleRate, privacy: .public) interleaved=\(inputFormat.isInterleaved, privacy: .public)")
         }
         guard let converter else { return nil }
 

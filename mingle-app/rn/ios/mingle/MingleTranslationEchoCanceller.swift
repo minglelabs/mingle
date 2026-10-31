@@ -1,5 +1,6 @@
 import Accelerate
 import Foundation
+import OSLog
 import QuartzCore
 
 /// Removes this app's own translation from the device-audio capture.
@@ -21,6 +22,11 @@ import QuartzCore
 /// run on the main queue. Everything is guarded by `lock`.
 final class MingleTranslationEchoCanceller {
     static let shared = MingleTranslationEchoCanceller()
+    /// Persisted device log (NSLog lines do not reach `log collect`).
+    private static let log = Logger(subsystem: "com.minglelabs.mingle.rn", category: "EchoCanceller")
+    private static func note(_ message: String) {
+        log.notice("\(message, privacy: .public)")
+    }
 
     private static let sampleRate = Double(MingleBroadcastChannel.sampleRate)
     private static let tapCount = 9
@@ -88,6 +94,7 @@ final class MingleTranslationEchoCanceller {
     /// Offset found for the last clip: the next one is searched around it.
     private var learnedDelay: Int?
     private var pending: [(samples: [Float], hostTime: Double)] = []
+    private var lastCaptureEndHostTime: Double?
 
     private init() {}
 
@@ -97,6 +104,7 @@ final class MingleTranslationEchoCanceller {
         references.removeAll()
         learnedDelay = nil
         pending.removeAll()
+        lastCaptureEndHostTime = nil
         lock.unlock()
     }
 
@@ -107,7 +115,7 @@ final class MingleTranslationEchoCanceller {
         lock.lock()
         references.append(Reference(samples: samples, startHostTime: startHostTime))
         lock.unlock()
-        NSLog("[EchoCanceller] clip registered samples=%d", samples.count)
+        Self.note(String(format: "clip registered samples=%d", samples.count))
     }
 
     /// The clip playing at `hostTime` stopped there (stop, or a newer clip).
@@ -133,6 +141,15 @@ final class MingleTranslationEchoCanceller {
 
         lock.lock()
         defer { lock.unlock() }
+        // Device tuning: ReplayKit pauses while nothing plays; log the jumps.
+        if let lastEnd = lastCaptureEndHostTime {
+            let jump = hostTime - lastEnd
+            if abs(jump) > 0.1 {
+                Self.note(String(format: "capture time jump=%.0fms frameSamples=%d stamped=%d refs=%d",
+                                 jump * 1000, count, rawHostTime == hostTime ? 1 : 0, references.count))
+            }
+        }
+        lastCaptureEndHostTime = hostTime + Double(count) / Self.sampleRate
         for reference in references where reference.endHostTime + Self.retainSeconds < hostTime {
             logSummary(reference)
         }
@@ -179,8 +196,7 @@ final class MingleTranslationEchoCanceller {
             : 0
         let centerWeight = reference.weights[Self.centerTap]
         let weightSum = reference.weights.reduce(0, +)
-        NSLog(
-            "[EchoCanceller] clip done lined=%d attempts=%d delayMs=%.1f overlapMs=%.0f reductionDb=%.1f centerWeight=%.2f weightSum=%.2f",
+        Self.note(String(format: "clip done lined=%d attempts=%d delayMs=%.1f overlapMs=%.0f reductionDb=%.1f centerWeight=%.2f weightSum=%.2f",
             reference.delay != nil ? 1 : 0,
             reference.searchAttempts,
             Double(reference.delay ?? 0) / Self.sampleRate * 1000,
@@ -188,7 +204,7 @@ final class MingleTranslationEchoCanceller {
             reductionDb,
             centerWeight,
             weightSum
-        )
+        ))
     }
 
     // MARK: - Lining a clip up with the capture
@@ -291,8 +307,8 @@ final class MingleTranslationEchoCanceller {
               bestScore >= Self.minCorrelation,
               bestScore >= runnerUp * Self.minPeakProminence
         else {
-            NSLog("[EchoCanceller] clip not found attempt=%d bestCorrelation=%.2f runnerUp=%.2f",
-                  reference.searchAttempts, bestScore, runnerUp)
+            Self.note(String(format: "clip not found attempt=%d bestCorrelation=%.2f runnerUp=%.2f",
+                  reference.searchAttempts, bestScore, runnerUp))
             return
         }
         let delay = maxDelay - bestLag
@@ -300,8 +316,8 @@ final class MingleTranslationEchoCanceller {
         reference.delay = delay
         reference.weights[Self.centerTap] = gain
         learnedDelay = delay
-        NSLog("[EchoCanceller] clip lined up delayMs=%.1f correlation=%.2f gain=%.2f",
-              Double(delay) / Self.sampleRate * 1000, bestScore, gain)
+        Self.note(String(format: "clip lined up delayMs=%.1f correlation=%.2f gain=%.2f",
+              Double(delay) / Self.sampleRate * 1000, bestScore, gain))
     }
 
     // MARK: - Removing a lined-up clip
