@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ImageIcon, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Trash2 } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
@@ -162,6 +162,35 @@ function formatAt(iso: string): string {
   return AT_FORMAT.format(new Date(iso))
 }
 
+/** How often and how long a card asks whether the pool has drawn its photo yet. */
+const DRAW_POLL_MS = 10_000
+const DRAW_POLL_LIMIT_MS = 15 * 60_000
+
+async function readReview(kind: 'profile' | 'post', id: string) {
+  const response = await fetch(`/admin/operators/api/review?kind=${kind}&id=${encodeURIComponent(id)}`, { cache: 'no-store' })
+  if (!response.ok) return null
+  return await response.json().catch(() => null) as Record<string, unknown> | null
+}
+
+/** Calls `check` every 10s while `active`, for up to 15 minutes; `check` returns true when done. */
+function useDrawPolling(active: boolean, check: () => Promise<boolean>) {
+  useEffect(() => {
+    if (!active) return
+    let stopped = false
+    const started = Date.now()
+    const timer = setInterval(async () => {
+      if (stopped) return
+      const done = await check().catch(() => false)
+      if (done || Date.now() - started > DRAW_POLL_LIMIT_MS) {
+        stopped = true
+        clearInterval(timer)
+      }
+    }, DRAW_POLL_MS)
+    return () => { stopped = true; clearInterval(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active])
+}
+
 async function sendReview(kind: 'profile' | 'post', id: string, action: Action, feedback: string) {
   const response = await fetch('/admin/operators/api/review', {
     method: 'POST',
@@ -227,7 +256,7 @@ function ReviewActions({
   onAction: (action: Action, feedback: string) => void
   publishDisabledReason?: string
   /** A post whose photo is not drawn yet: offer to have only the photo drawn (null once it is queued). */
-  drawAction?: { requested: boolean }
+  drawAction?: { requested: boolean; drawing?: boolean }
 }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [feedback, setFeedback] = useState('')
@@ -276,9 +305,9 @@ function ReviewActions({
         </AdminButton>
       </div>
       {drawAction ? (
-        <AdminButton block disabled={busy !== null || drawAction.requested} onClick={() => { onAction('draw', feedback); setFeedback(''); setFeedbackOpen(false) }}>
-          {busy === 'draw' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ImageIcon className="h-4 w-4" aria-hidden="true" />}
-          {drawAction.requested ? 'ChatGPT로 그리기 요청됨' : '글은 그대로, 사진만 그리기'}
+        <AdminButton block disabled={busy !== null || drawAction.requested || drawAction.drawing} onClick={() => { onAction('draw', feedback); setFeedback(''); setFeedbackOpen(false) }}>
+          {busy === 'draw' || drawAction.drawing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ImageIcon className="h-4 w-4" aria-hidden="true" />}
+          {drawAction.drawing ? '사진 그리는 중…' : drawAction.requested ? 'ChatGPT로 그리기 요청됨' : '글은 그대로, 사진만 그리기'}
         </AdminButton>
       ) : null}
       {publishDisabledReason ? <p className="text-xs text-slate-500">{publishDisabledReason}</p> : null}
@@ -401,6 +430,15 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
     ? [{ objectKey: post.imageObjectKey, width: post.imageWidth, height: post.imageHeight }, ...post.extraImages]
     : []
 
+  // The pool draws in the background; ask every 10s until the photo is in.
+  useDrawPolling(post.photoDrawing, async () => {
+    const latest = (await readReview('post', post.id))?.post as ReviewPost | undefined
+    if (!latest || latest.photoDrawing) return false
+    setPost(latest)
+    if (latest.photoDrawFailed) setError(ERROR_COPY.draw_failed)
+    return true
+  })
+
   async function handle(action: Action, feedback: string) {
     if (action === 'delete' && !window.confirm('이 글을 삭제할까요?')) return
     setBusy(action)
@@ -450,7 +488,10 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       ) : post.photoDescription ? (
         // Where the photo will go: its description on white, so it is not read as the post text.
         <div className="mt-2 flex aspect-square w-full flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-6 text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{post.photoRequested ? '사진 · ChatGPT로 그리는 중' : '사진 · 아직 안 그림'}</p>
+          <p className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            {post.photoDrawing ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null}
+            {post.photoDrawing ? '사진 · ChatGPT로 그리는 중 (1~3분)' : post.photoRequested ? '사진 · ChatGPT로 그리는 중' : '사진 · 아직 안 그림'}
+          </p>
           <p className="text-sm leading-6 text-slate-700">{post.photoDescription}</p>
         </div>
       ) : null}
@@ -465,7 +506,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
         busy={busy}
         onAction={handle}
         publishDisabledReason={!profileApproved ? '계정을 먼저 게시해야 글을 올릴 수 있어요.' : post.photoDescription && !post.imageObjectKey ? '사진을 그린 뒤에 게시할 수 있어요.' : undefined}
-        drawAction={post.photoDescription && !post.imageObjectKey ? { requested: post.photoRequested } : undefined}
+        drawAction={post.photoDescription && !post.imageObjectKey ? { requested: post.photoRequested, drawing: post.photoDrawing } : undefined}
       />
     </AdminCard>
   )
@@ -484,6 +525,15 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
   const [error, setError] = useState<string | null>(null)
   const bio = useStaffTranslation({ kind: 'profile', id: profile.userId }, profile.bio ?? '', setError)
   const [drawing, setDrawing] = useState(profile.profileState === 'drawing')
+
+  // Where the pool draws, a new profile photo arrives in the background; ask every 10s.
+  useDrawPolling(drawing, async () => {
+    const latest = await readReview('profile', profile.userId)
+    if (!latest || latest.profileState === 'drawing') return false
+    setDrawing(false)
+    if (typeof latest.image === 'string') onImage(latest.image)
+    return true
+  })
 
   async function handle(action: Action, feedback: string) {
     if (action === 'delete' && !window.confirm(`${profile.name ?? profile.handle} 계정과 검토 중인 글을 모두 삭제할까요?`)) return

@@ -22,6 +22,41 @@ import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishR
 export const REVIEW_ITEMS_PER_PAGE = 20
 /** The pool could not draw the photo just now; the draw button stays, to try again. */
 const PHOTO_DRAW_FAILED = 'photo_draw_failed'
+/** The pool is drawing the photo in the background (the row is `regenerating`). */
+const PHOTO_DRAWING = 'photo_drawing'
+
+/**
+ * Draws a post's photo through the pool after the request has answered, and
+ * puts the row back in review with the photo, or marked failed so the draw
+ * button stays. Never throws.
+ */
+async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>): Promise<void> {
+  try {
+    const image = await drawReservePostImage(operatorUserId, description)
+    await prisma.operatorPostReserve.updateMany({
+      where: { id: reserveId, state: 'regenerating' },
+      data: image
+        ? { state: 'review', imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height, error: null }
+        : { state: 'review', error: PHOTO_DRAW_FAILED },
+    })
+    await (image ? onDrawn() : onFailed())
+  } catch (error) {
+    console.warn('[operator-review] background_draw_failed', { reserveId, error: error instanceof Error ? error.name : 'unknown' })
+    await prisma.operatorPostReserve.updateMany({ where: { id: reserveId, state: 'regenerating' }, data: { state: 'review', error: PHOTO_DRAW_FAILED } }).catch(() => {})
+  }
+}
+
+/** One post of the review queue as its card shows it, for the card to poll while its photo is drawn. */
+export async function getReviewPost(reserveId: string): Promise<ReviewPost | null> {
+  const row = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
+  return row ? toReviewPost(row) : null
+}
+
+/** A profile's review state and photo, for its card to poll while a new photo is drawn. */
+export async function getReviewProfileState(userId: string): Promise<{ profileState: string; image: string | null } | null> {
+  const account = await prisma.operatorAccount.findUnique({ where: { userId }, select: { reviewState: true, user: { select: { image: true } } } })
+  return account ? { profileState: account.reviewState, image: account.user.image } : null
+}
 const MAX_FEEDBACK_LENGTH = 1000
 
 /** `draw`: have the post's photo drawn by hand (in ChatGPT) without changing the text. */
@@ -54,6 +89,10 @@ export type ReviewPost = {
   error: string | null
   /** The photo is queued to be drawn by hand. */
   photoRequested: boolean
+  /** The pool is drawing the photo right now (the card polls). */
+  photoDrawing: boolean
+  /** The pool's last try at the photo failed; drawing it again is allowed. */
+  photoDrawFailed: boolean
 }
 
 export type ReviewProfile = {
@@ -116,6 +155,8 @@ function toReviewPost(row: {
     reviewFeedback: row.reviewFeedback,
     error: row.error,
     photoRequested: !row.imageObjectKey && row.error === PHOTO_REQUESTED,
+    photoDrawing: row.state === 'regenerating' && row.error === PHOTO_DRAWING,
+    photoDrawFailed: !row.imageObjectKey && row.error === PHOTO_DRAW_FAILED,
   }
 }
 
@@ -303,16 +344,29 @@ export async function reviewOperatorProfile(
   }
 
   if (account.reviewState === 'drawing') return { ok: false, error: 'busy' }
-  // 재제작 where this server can draw (the ChatGPT pool): a new photo right
-  // away, the account still waiting for review. A failed drawing falls back
-  // to drawing by hand below.
+  // 재제작 where this server can draw (the ChatGPT pool): the new photo is
+  // drawn in the background (longer than the hosting proxy keeps a request
+  // open) while the account shows as drawing; the card polls. Once drawn the
+  // account is back in review; a failed drawing falls back to drawing by hand.
   if (canDrawImagesHere()) {
-    const drawn = await generateOperatorAvatar(ctx, userId, { feedback })
-    if (drawn.ok) {
-      if (feedback) await prisma.operatorAccount.update({ where: { userId }, data: { reviewFeedback: feedback } })
-      await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', feedback, drawing: false } })
-      return { ok: true, state: 'pending', image: drawn.image }
-    }
+    await prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'drawing', reviewFeedback: feedback } })
+    void (async () => {
+      try {
+        const drawn = await generateOperatorAvatar(ctx, userId, { feedback })
+        if (drawn.ok) {
+          await prisma.operatorAccount.updateMany({ where: { userId, reviewState: 'drawing' }, data: { reviewState: 'pending' } })
+          await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', feedback, drawing: false } })
+          return
+        }
+        const plan = await planOperatorAvatar(userId, { feedback })
+        await prisma.operatorAccount.updateMany({ where: { userId, reviewState: 'drawing' }, data: plan ? { avatarSpec: plan } : { reviewState: 'pending' } })
+        await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', feedback, drawing: Boolean(plan) } })
+      } catch (error) {
+        console.warn('[operator-review] background_avatar_failed', { userId, error: error instanceof Error ? error.name : 'unknown' })
+        await prisma.operatorAccount.updateMany({ where: { userId, reviewState: 'drawing' }, data: { reviewState: 'pending' } }).catch(() => {})
+      }
+    })()
+    return { ok: true, state: 'drawing' }
   }
   // 재제작: a new photo spec (with the feedback) waits to be drawn by hand in
   // ChatGPT (scripts/draw-pending-photos.mts); the current photo stays until then.
@@ -378,26 +432,18 @@ export async function reviewOperatorPost(
   if (action === 'draw') {
     if (!row.imagePrompt || row.imageObjectKey) return { ok: false, error: 'not_found' }
     if (canDrawImagesHere()) {
-      // Drawn right here (the ChatGPT pool), the text untouched. A failed
-      // drawing leaves the button as it was, so staff can simply try again.
-      const claimedDraw = await prisma.operatorPostReserve.updateMany({ where: { id: reserveId, state: 'review' }, data: { state: 'regenerating' } })
+      // Drawn right here (the ChatGPT pool), the text untouched, in the
+      // background: a photo of a person takes over two minutes, longer than
+      // the hosting proxy keeps a request open. The card polls until it is in.
+      const claimedDraw = await prisma.operatorPostReserve.updateMany({
+        where: { id: reserveId, state: 'review' },
+        data: { state: 'regenerating', error: PHOTO_DRAWING, ...(feedback ? { reviewFeedback: feedback } : {}) },
+      })
       if (claimedDraw.count === 0) return { ok: false, error: 'busy' }
       const description = feedback ? `${row.imagePrompt}\nStaff feedback on this photo, to follow: ${feedback}` : row.imagePrompt
-      const image = await drawReservePostImage(row.operatorUserId, description)
-      const drawnRow = await prisma.operatorPostReserve.update({
-        where: { id: reserveId },
-        data: {
-          state: 'review',
-          ...(image
-            ? { imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height, error: null }
-            : { error: PHOTO_DRAW_FAILED }),
-          ...(feedback ? { reviewFeedback: feedback } : {}),
-        },
-        select: POST_SELECT,
-      })
-      await audit('draw', { photo: Boolean(image) })
-      if (!image) return { ok: false, error: 'draw_failed' }
-      return { ok: true, state: 'review', post: toReviewPost(drawnRow) }
+      void drawPostPhotoInBackground(reserveId, row.operatorUserId, description, () => audit('draw', { photo: true }), () => audit('draw', { photo: false }))
+      const drawing = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
+      return { ok: true, state: 'review', post: toReviewPost(drawing ?? { ...row, state: 'regenerating', error: PHOTO_DRAWING }) }
     }
     const updated = await prisma.operatorPostReserve.update({
       where: { id: reserveId },
@@ -424,27 +470,30 @@ export async function reviewOperatorPost(
       revision: { previousText: row.text, feedback },
     })
     if (!generated) throw new Error('nothing_generated')
-    // Drawn before it can go out, so staff judge the photo too: here only
-    // where a hand-off route exists, else by hand later (photo_pending).
-    const image = generated.imagePrompt ? await drawReservePostImage(row.operatorUserId, generated.imagePrompt) : null
+    // Drawn before it can go out, so staff judge the photo too. Where the pool
+    // draws, the new text shows at once and the photo follows in the background
+    // (the card polls); elsewhere it waits to be drawn by hand.
+    const drawHere = Boolean(generated.imagePrompt) && canDrawImagesHere()
     const updated = await prisma.operatorPostReserve.update({
       where: { id: reserveId },
       data: {
-        state: 'review',
+        state: drawHere ? 'regenerating' : 'review',
         text: generated.text,
         topic: generated.topic,
         language: generated.language === persona.language ? null : generated.language,
         imagePrompt: generated.imagePrompt,
-        imageObjectKey: image?.objectKey ?? null,
-        imageWidth: image?.width ?? null,
-        imageHeight: image?.height ?? null,
-        // A photo still to draw is queued for drawing by hand right away.
-        // Where the pool draws, a failed photo keeps the draw button for another try.
-        error: generated.imagePrompt && !image ? (canDrawImagesHere() ? PHOTO_DRAW_FAILED : PHOTO_REQUESTED) : null,
+        imageObjectKey: null,
+        imageWidth: null,
+        imageHeight: null,
+        error: drawHere ? PHOTO_DRAWING : generated.imagePrompt ? PHOTO_REQUESTED : null,
       },
       select: POST_SELECT,
     })
-    await audit('regenerate', { photo: generated.imagePrompt ? Boolean(image) : null })
+    if (drawHere) {
+      void drawPostPhotoInBackground(reserveId, row.operatorUserId, generated.imagePrompt!, () => audit('regenerate', { photo: true }), () => audit('regenerate', { photo: false }))
+    } else {
+      await audit('regenerate', { photo: generated.imagePrompt ? false : null })
+    }
     return { ok: true, state: 'review', post: toReviewPost(updated) }
   } catch (error) {
     await prisma.operatorPostReserve.updateMany({
