@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ImageIcon, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { ImageIcon, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
@@ -430,6 +430,28 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
   const [editingText, setEditingText] = useState(false)
   const [draft, setDraft] = useState(post.text)
   const [savingText, setSavingText] = useState(false)
+  const [aiNote, setAiNote] = useState('')
+  const [drafting, setDrafting] = useState(false)
+
+  /** The AI writes a new text into the editor (same person, language and photo); saving stays with staff. */
+  async function draftWithAi() {
+    setDrafting(true)
+    setError(null)
+    try {
+      const response = await fetch('/admin/operators/api/review/text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: post.id, feedback: aiNote }),
+      })
+      const payload = await response.json().catch(() => ({})) as { text?: string; error?: string }
+      if (!response.ok || !payload.text) throw new Error(payload.error ?? 'request_failed')
+      setDraft(payload.text)
+    } catch (caught) {
+      setError(ERROR_COPY[(caught as Error).message] ?? 'AI가 글을 쓰지 못했어요. 다시 눌러 주세요.')
+    } finally {
+      setDrafting(false)
+    }
+  }
 
   async function saveText() {
     setSavingText(true)
@@ -516,8 +538,22 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
             maxLength={1000}
             autoFocus
             className={`${adminTextareaClassName} text-[15px] leading-6`}
-            disabled={savingText}
+            disabled={savingText || drafting}
           />
+          {/* Only the text is rewritten; the photo stays. The result lands in the box above, unsaved. */}
+          <div className="flex gap-2">
+            <input
+              value={aiNote}
+              onChange={(event) => setAiNote(event.target.value)}
+              placeholder="AI에게 요청 (선택) — 예: 더 짧게, 질문으로 끝내기"
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+              disabled={drafting || savingText}
+            />
+            <AdminButton disabled={drafting || savingText} onClick={() => void draftWithAi()}>
+              {drafting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
+              {drafting ? 'AI가 쓰는 중…' : 'AI로 글만 다시 쓰기'}
+            </AdminButton>
+          </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-slate-400">{draft.trim().length}/1000</span>
             <div className="flex gap-2">
