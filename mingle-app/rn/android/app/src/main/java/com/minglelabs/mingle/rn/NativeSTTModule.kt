@@ -1,23 +1,32 @@
 package com.minglelabs.mingle.rn
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionConfig
+import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
@@ -46,7 +55,7 @@ import kotlin.math.max
 
 class NativeSTTModule(
   reactContext: ReactApplicationContext,
-) : ReactContextBaseJavaModule(reactContext), LifecycleEventListener {
+) : ReactContextBaseJavaModule(reactContext), LifecycleEventListener, ActivityEventListener {
 
   private data class StartOptions(
     val conversationId: String,
@@ -61,6 +70,7 @@ class NativeSTTModule(
     val sttSegmentationMode: String?,
     val sonioxEndpointMaxDelayMs: Int?,
     val sonioxEndpointTuningStep: Int?,
+    val captureSource: NativeSttCaptureSource,
   )
 
   private data class PendingStartRequest(
@@ -84,6 +94,10 @@ class NativeSTTModule(
   @Volatile private var webSocketReady = false
   @Volatile private var serverReady = false
   @Volatile private var audioRecord: AudioRecord? = null
+  // Device-audio mode also records the microphone, so the user's own voice is
+  // transcribed together with the sound other apps play. Null in mic mode, or
+  // when the microphone could not be opened next to the playback capture.
+  @Volatile private var companionMicRecord: AudioRecord? = null
   @Volatile private var audioThread: Thread? = null
   @Volatile private var webSocket: WebSocket? = null
   @Volatile private var webSocketClient: OkHttpClient? = null
@@ -94,6 +108,12 @@ class NativeSTTModule(
   @Volatile private var activeEchoCanceler: AcousticEchoCanceler? = null
   @Volatile private var activeNoiseSuppressor: NoiseSuppressor? = null
   @Volatile private var pendingStartRequest: PendingStartRequest? = null
+  // Device-audio capture: the start waiting on the system screen-capture
+  // consent, and the projection the running session captures through.
+  @Volatile private var pendingDeviceAudioRequest: PendingStartRequest? = null
+  @Volatile private var activeMediaProjection: MediaProjection? = null
+  @Volatile private var mediaProjectionCallback: MediaProjection.Callback? = null
+  @Volatile private var activeCaptureSource = NativeSttCaptureSource.MICROPHONE
   @Volatile private var recordingCallback: AudioManager.AudioRecordingCallback? = null
   @Volatile private var audioDeviceCallback: AudioDeviceCallback? = null
   @Volatile private var stallMonitor: ScheduledExecutorService? = null
@@ -118,10 +138,13 @@ class NativeSTTModule(
   override fun initialize() {
     super.initialize()
     reactApplicationContext.addLifecycleEventListener(this)
+    reactApplicationContext.addActivityEventListener(this)
   }
 
   override fun invalidate() {
     reactApplicationContext.removeLifecycleEventListener(this)
+    reactApplicationContext.removeActivityEventListener(this)
+    rejectPendingDeviceAudioRequest("native_stt_invalidated")
     cleanup(reason = null, emitClose = false)
     super.invalidate()
   }
@@ -233,10 +256,13 @@ class NativeSTTModule(
           null
         },
       ),
+      captureSource = NativeSttCaptureSource.fromWire(options.getString("captureSource")),
     )
 
+    // Playback capture also records through AudioRecord, so it needs
+    // RECORD_AUDIO just like the microphone does.
     if (hasRecordAudioPermission()) {
-      startSession(startOptions, promise)
+      beginSession(startOptions, promise)
       return
     }
 
@@ -287,6 +313,9 @@ class NativeSTTModule(
       promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
       return
     }
+    // A stop while the consent dialog is still open cancels that start; its
+    // late result must not begin a session nobody is waiting for.
+    rejectPendingDeviceAudioRequest("stop_requested")
     val pendingText = options?.getString("pendingText")?.takeIf { it.isNotBlank() } ?: ""
     val pendingLanguage = options?.getString("pendingLanguage")?.takeIf { it.isNotBlank() } ?: "unknown"
 
@@ -347,7 +376,7 @@ class NativeSTTModule(
   ) {
     requestedAecEnabled = enabled
     val running = isRunning.get()
-    if (!running) {
+    if (!running || activeCaptureSource == NativeSttCaptureSource.DEVICE_AUDIO) {
       promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
       return
     }
@@ -383,12 +412,25 @@ class NativeSTTModule(
       }
 
       UiThreadUtil.runOnUiThread {
-        startSession(pending.options, pending.promise)
+        beginSession(pending.options, pending.promise)
       }
       true
     }
 
-  private fun startSession(
+  private fun beginSession(
+    options: StartOptions,
+    promise: Promise,
+  ) {
+    if (options.captureSource == NativeSttCaptureSource.DEVICE_AUDIO) {
+      requestDeviceAudioConsent(options, promise)
+    } else {
+      startSession(options, promise, mediaProjection = null)
+    }
+  }
+
+  // Device audio, step 1: the system screen-capture consent. Android asks
+  // again for every capture session; the answer arrives in onActivityResult.
+  private fun requestDeviceAudioConsent(
     options: StartOptions,
     promise: Promise,
   ) {
@@ -396,15 +438,142 @@ class NativeSTTModule(
       promise.reject("already_running", "native_stt_already_running")
       return
     }
+    val activity = reactApplicationContext.currentActivity
+    val manager = reactApplicationContext.getSystemService(MediaProjectionManager::class.java)
+    if (activity == null || manager == null) {
+      emitError("device_audio_unavailable")
+      promise.reject("device_audio_unavailable", "Device audio capture is unavailable")
+      return
+    }
 
-    requestedAecEnabled = options.aecEnabled
-    val profile = NativeSttCapturePolicy.resolve(options.aecEnabled)
+    rejectPendingDeviceAudioRequest("superseded")
+    pendingDeviceAudioRequest = PendingStartRequest(options, promise)
+    try {
+      // Android 14+ can offer "a single app"; ask for the whole display so
+      // the capture covers whichever app the user plays audio in.
+      val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
+      } else {
+        manager.createScreenCaptureIntent()
+      }
+      activity.startActivityForResult(intent, REQUEST_MEDIA_PROJECTION)
+    } catch (error: Throwable) {
+      pendingDeviceAudioRequest = null
+      emitError("device_audio_consent_failed: ${error.message ?: "unknown"}")
+      promise.reject("device_audio_unavailable", "Failed to request device audio capture", error)
+    }
+  }
+
+  // The user closing the consent dialog is a cancel, not a failure: only the
+  // promise is rejected, with a code the shell maps back to idle.
+  private fun rejectPendingDeviceAudioRequest(reason: String) {
+    val pending = pendingDeviceAudioRequest ?: return
+    pendingDeviceAudioRequest = null
+    Log.i(TAG, "device audio request dropped reason=$reason")
+    pending.promise.reject("device_audio_permission", "device_audio_permission_denied")
+  }
+
+  override fun onActivityResult(
+    activity: Activity,
+    requestCode: Int,
+    resultCode: Int,
+    data: Intent?,
+  ) {
+    if (requestCode != REQUEST_MEDIA_PROJECTION) {
+      return
+    }
+    val pending = pendingDeviceAudioRequest ?: return
+    if (resultCode != Activity.RESULT_OK || data == null) {
+      rejectPendingDeviceAudioRequest("consent_declined")
+      return
+    }
+    pendingDeviceAudioRequest = null
+    startDeviceAudioForegroundService(pending, resultCode, data)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    // Not used: only the consent result matters to this module.
+  }
+
+  // Device audio, step 2: the projection may be taken only while a foreground
+  // service of the mediaProjection type is running, so start it and wait.
+  private fun startDeviceAudioForegroundService(
+    pending: PendingStartRequest,
+    resultCode: Int,
+    data: Intent,
+  ) {
+    val settled = AtomicBoolean(false)
+    val handler = Handler(Looper.getMainLooper())
+    val fail = { code: String, error: Throwable? ->
+      if (settled.compareAndSet(false, true)) {
+        setForegroundServiceEnabled(false)
+        emitError("$code: ${error?.message ?: "unknown"}")
+        pending.promise.reject("device_audio_start", "Failed to start device audio capture", error)
+      }
+    }
+    val timeout = Runnable { fail("device_audio_service_timeout", null) }
 
     try {
+      foregroundServiceActive = true
+      NativeSTTForegroundService.start(reactApplicationContext, deviceAudio = true) { serviceError ->
+        handler.removeCallbacks(timeout)
+        if (serviceError != null) {
+          fail("device_audio_service_failed", serviceError)
+          return@start
+        }
+        if (!settled.compareAndSet(false, true)) {
+          return@start
+        }
+        val projection = try {
+          reactApplicationContext
+            .getSystemService(MediaProjectionManager::class.java)
+            ?.getMediaProjection(resultCode, data)
+        } catch (error: Throwable) {
+          Log.e(TAG, "getMediaProjection failed", error)
+          null
+        }
+        if (projection == null) {
+          setForegroundServiceEnabled(false)
+          emitError("device_audio_projection_unavailable")
+          pending.promise.reject("device_audio_start", "Media projection unavailable")
+          return@start
+        }
+        startSession(pending.options, pending.promise, projection)
+      }
+      handler.postDelayed(timeout, DEVICE_AUDIO_SERVICE_START_TIMEOUT_MS)
+    } catch (error: Throwable) {
+      handler.removeCallbacks(timeout)
+      fail("device_audio_service_failed", error)
+    }
+  }
+
+  private fun startSession(
+    options: StartOptions,
+    promise: Promise,
+    mediaProjection: MediaProjection?,
+  ) {
+    if (isRunning.get()) {
+      // The running session owns the foreground service; only this request's
+      // unused projection is given back.
+      runCatching { mediaProjection?.stop() }
+      promise.reject("already_running", "native_stt_already_running")
+      return
+    }
+
+    requestedAecEnabled = options.aecEnabled
+    activeCaptureSource = options.captureSource
+    val profile = NativeSttCapturePolicy.resolve(options.aecEnabled, options.captureSource)
+
+    try {
+      if (mediaProjection != null) {
+        // Registered before the capture starts, as Android 14+ requires.
+        registerMediaProjectionCallback(mediaProjection)
+      }
       prepareAudioMode(profile)
       val capture = createAudioCapture(
         profile = profile,
         preferredSampleRate = null,
+        mediaProjection = mediaProjection,
       )
       audioRecord = capture.record
       currentSampleRate = capture.sampleRate
@@ -538,7 +707,10 @@ class NativeSTTModule(
       })
 
       startAudioThread(capture)
-      registerAudioDeviceCallback()
+      if (profile.captureSource == NativeSttCaptureSource.MICROPHONE) {
+        // Playback capture does not depend on the input/output route.
+        registerAudioDeviceCallback()
+      }
       startStallMonitor()
       setForegroundServiceEnabled(profile.foregroundServiceEnabled)
       // The WebSocket callbacks run concurrently with setup. A very fast
@@ -567,14 +739,16 @@ class NativeSTTModule(
     }
     val previousRecord = audioRecord ?: throw IllegalStateException("audio_record_unavailable")
     val preferredSampleRate = currentSampleRate
-    val previousProfile = currentProfile ?: NativeSttCapturePolicy.resolve(requestedAecEnabled)
-    val nextProfile = NativeSttCapturePolicy.resolve(aecEnabled)
+    val previousProfile = currentProfile
+      ?: NativeSttCapturePolicy.resolve(requestedAecEnabled, activeCaptureSource)
+    val nextProfile = NativeSttCapturePolicy.resolve(aecEnabled, activeCaptureSource)
 
     prepareAudioMode(nextProfile)
     val nextCapture = try {
       createAudioCapture(
         profile = nextProfile,
         preferredSampleRate = preferredSampleRate,
+        mediaProjection = activeMediaProjection,
       )
     } catch (error: Throwable) {
       prepareAudioMode(previousProfile)
@@ -660,8 +834,13 @@ class NativeSTTModule(
   private fun createAudioCapture(
     profile: NativeSttCaptureProfile,
     preferredSampleRate: Int?,
+    mediaProjection: MediaProjection?,
   ): AudioCaptureHandle {
     var lastError: String? = null
+    val deviceAudio = profile.captureSource == NativeSttCaptureSource.DEVICE_AUDIO
+    if (deviceAudio && mediaProjection == null) {
+      throw IllegalStateException("media_projection_unavailable")
+    }
 
     for (sampleRate in NativeSttCapturePolicy.preferredSampleRates(preferredSampleRate)) {
       val minBuffer = AudioRecord.getMinBufferSize(
@@ -683,11 +862,17 @@ class NativeSTTModule(
 
       try {
         val builder = AudioRecord.Builder()
-          .setAudioSource(profile.audioSource)
           .setAudioFormat(format)
           .setBufferSizeInBytes(bufferSizeInBytes)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-          builder.setPrivacySensitive(profile.privacySensitive)
+        if (deviceAudio) {
+          // A playback-capture record takes a capture config instead of an
+          // audio source; the two cannot be combined.
+          builder.setAudioPlaybackCaptureConfig(buildPlaybackCaptureConfig(mediaProjection!!))
+        } else {
+          builder.setAudioSource(profile.audioSource)
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            builder.setPrivacySensitive(profile.privacySensitive)
+          }
         }
         val record = builder.build()
         if (record.state == AudioRecord.STATE_INITIALIZED) {
@@ -707,20 +892,106 @@ class NativeSTTModule(
     throw IllegalStateException("audio_record_init_failed(${lastError ?: "unknown"})")
   }
 
+  // What other apps play as media, minus everything this app plays: the
+  // translation read aloud (WebView audio runs under this app's uid) must
+  // never come back in as speech to translate.
+  private fun buildPlaybackCaptureConfig(
+    mediaProjection: MediaProjection,
+  ): AudioPlaybackCaptureConfiguration =
+    AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
+      .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+      .addMatchingUsage(AudioAttributes.USAGE_GAME)
+      .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+      .excludeUid(Process.myUid())
+      .build()
+
+  private fun registerMediaProjectionCallback(
+    mediaProjection: MediaProjection,
+  ) {
+    val callback = object : MediaProjection.Callback() {
+      // The user ended sharing from the system UI, or the system revoked it
+      // (for example when the screen locks on newer Android versions).
+      override fun onStop() {
+        if (activeMediaProjection !== mediaProjection) {
+          return
+        }
+        Log.i(TAG, "media projection stopped conversation=${activeConversationId ?: "unknown"}")
+        cleanup(reason = "device_audio_stopped", emitClose = true)
+      }
+    }
+    activeMediaProjection = mediaProjection
+    mediaProjectionCallback = callback
+    mediaProjection.registerCallback(callback, Handler(Looper.getMainLooper()))
+  }
+
+  private fun releaseMediaProjection() {
+    val mediaProjection = activeMediaProjection ?: return
+    activeMediaProjection = null
+    val callback = mediaProjectionCallback
+    mediaProjectionCallback = null
+    if (callback != null) {
+      runCatching { mediaProjection.unregisterCallback(callback) }
+    }
+    runCatching { mediaProjection.stop() }
+  }
+
   private fun startAudioThread(
     capture: AudioCaptureHandle,
   ) {
     val record = capture.record
     val chunkBuffer = ByteArray(2_048 * 2)
+    val deviceAudioBuffer = ByteArray(chunkBuffer.size)
+    // Other-app audio waits up to 1 s here; mixing starts after 200 ms of it.
+    val bytesPerSecond = capture.sampleRate * 2
+    val deviceAudioJitter = DeviceAudioJitterBuffer(
+      capacityBytes = bytesPerSecond,
+      prebufferBytes = bytesPerSecond / 5,
+    )
     record.startRecording()
     if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
       throw IllegalStateException("audio_record_start_failed(${record.recordingState})")
+    }
+    if (capture.profile.captureSource == NativeSttCaptureSource.DEVICE_AUDIO) {
+      ensureCompanionMicRecording(capture.sampleRate)
+    } else {
+      releaseCompanionMic()
     }
     lastAudioChunkAtMs = SystemClock.elapsedRealtime()
 
     val thread = Thread({
       while (isRunning.get() && audioRecord === record) {
-        val bytesRead = record.read(chunkBuffer, 0, chunkBuffer.size)
+        val micRecord = companionMicRecord
+        val bytesRead = if (micRecord != null) {
+          // The microphone records without pause, so it paces the stream;
+          // the playback capture is drained without blocking and added in
+          // (it can run dry while nothing plays).
+          val micRead = micRecord.read(chunkBuffer, 0, chunkBuffer.size)
+          if (micRead <= 0) {
+            Log.w(TAG, "companion mic read failed ($micRead); continuing with device audio only")
+            releaseCompanionMic()
+            continue
+          }
+          // Drain everything the capture has into the jitter buffer, then add
+          // one whole, continuous chunk of it (or nothing while it refills).
+          while (true) {
+            val deviceRead = record.read(deviceAudioBuffer, 0, deviceAudioBuffer.size, AudioRecord.READ_NON_BLOCKING)
+            if (deviceRead > 0) {
+              deviceAudioJitter.write(deviceAudioBuffer, deviceRead)
+              if (deviceRead < deviceAudioBuffer.size) break
+            } else {
+              if (deviceRead == AudioRecord.ERROR_DEAD_OBJECT) {
+                scheduleAudioRecovery("audio_dead_object")
+              }
+              break
+            }
+          }
+          if (deviceAudioJitter.readChunk(deviceAudioBuffer, micRead) == micRead) {
+            NativeSttAudioMixer.mixInto(chunkBuffer, micRead, deviceAudioBuffer, micRead)
+          }
+          micRead
+        } else {
+          record.read(chunkBuffer, 0, chunkBuffer.size)
+        }
         if (bytesRead <= 0) {
           if (bytesRead == AudioRecord.ERROR_DEAD_OBJECT) {
             scheduleAudioRecovery("audio_dead_object")
@@ -776,6 +1047,73 @@ class NativeSTTModule(
     thread.start()
   }
 
+  // Opens (or keeps) the microphone next to the playback capture, at the same
+  // sample rate so the two can be added sample by sample. A microphone that
+  // cannot be opened leaves the session on device audio alone.
+  @Synchronized
+  private fun ensureCompanionMicRecording(sampleRate: Int) {
+    val existing = companionMicRecord
+    if (existing != null && existing.sampleRate == sampleRate &&
+      existing.recordingState == AudioRecord.RECORDSTATE_RECORDING
+    ) {
+      return
+    }
+    releaseCompanionMic()
+    if (!hasRecordAudioPermission()) {
+      Log.w(TAG, "companion mic skipped: RECORD_AUDIO not granted")
+      return
+    }
+    val micProfile = NativeSttCapturePolicy.resolve(false, NativeSttCaptureSource.MICROPHONE)
+    try {
+      val minBuffer = AudioRecord.getMinBufferSize(
+        sampleRate,
+        AudioFormat.CHANNEL_IN_MONO,
+        AudioFormat.ENCODING_PCM_16BIT,
+      )
+      if (minBuffer <= 0) {
+        Log.w(TAG, "companion mic skipped: invalid_min_buffer($sampleRate,$minBuffer)")
+        return
+      }
+      val builder = AudioRecord.Builder()
+        .setAudioSource(micProfile.audioSource)
+        .setAudioFormat(
+          AudioFormat.Builder()
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setSampleRate(sampleRate)
+            .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+            .build(),
+        )
+        .setBufferSizeInBytes(max(minBuffer * 2, sampleRate / 5))
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        builder.setPrivacySensitive(micProfile.privacySensitive)
+      }
+      val mic = builder.build()
+      if (mic.state != AudioRecord.STATE_INITIALIZED) {
+        Log.w(TAG, "companion mic skipped: audio_record_state_${mic.state}")
+        mic.release()
+        return
+      }
+      mic.startRecording()
+      if (mic.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+        Log.w(TAG, "companion mic skipped: start failed (${mic.recordingState})")
+        mic.release()
+        return
+      }
+      companionMicRecord = mic
+      Log.i(TAG, "companion mic recording rate=$sampleRate source=${micProfile.audioSource}")
+    } catch (error: Throwable) {
+      Log.w(TAG, "companion mic skipped: ${error.message ?: error.javaClass.simpleName}")
+    }
+  }
+
+  @Synchronized
+  private fun releaseCompanionMic() {
+    val mic = companionMicRecord ?: return
+    companionMicRecord = null
+    mic.stopSafely()
+    mic.release()
+  }
+
   private fun stopAudioThread() {
     val thread = audioThread
     audioThread = null
@@ -794,6 +1132,9 @@ class NativeSTTModule(
     profile: NativeSttCaptureProfile,
   ) {
     releaseAudioEffects()
+    if (profile.captureSource == NativeSttCaptureSource.DEVICE_AUDIO) {
+      return
+    }
 
     if (AcousticEchoCanceler.isAvailable()) {
       activeEchoCanceler = AcousticEchoCanceler.create(sessionId)?.apply {
@@ -891,7 +1232,10 @@ class NativeSTTModule(
         val activeRecord = audioRecord ?: return@scheduleAtFixedRate
         val threadDead = audioThread?.isAlive == false
         val stalledForMs = SystemClock.elapsedRealtime() - lastAudioChunkAtMs
-        if (threadDead || (webSocketReady && activeRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING && stalledForMs > AUDIO_STALL_THRESHOLD_MS)) {
+        // A quiet device is not a stalled microphone: with playback capture
+        // only a dead reader thread is a reason to rebuild the record.
+        val stallCountsAsFailure = activeCaptureSource == NativeSttCaptureSource.MICROPHONE
+        if (threadDead || (stallCountsAsFailure && webSocketReady && activeRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING && stalledForMs > AUDIO_STALL_THRESHOLD_MS)) {
           scheduleAudioRecovery(
             if (threadDead) "audio_thread_dead" else "audio_stall_${stalledForMs}ms",
           )
@@ -977,6 +1321,7 @@ class NativeSTTModule(
     emitStatus("stopping")
 
     stopAudioThread()
+    releaseCompanionMic()
     qaAudioInjector.sessionEnded()?.let(::emitQaAudioInjection)
     stopStallMonitor()
     unregisterAudioDeviceCallback()
@@ -989,6 +1334,7 @@ class NativeSTTModule(
       record.stopSafely()
       record.release()
     }
+    releaseMediaProjection()
 
     restoreAudioMode()
     setForegroundServiceEnabled(false)
@@ -1067,6 +1413,7 @@ class NativeSTTModule(
     webSocketClient = null
 
     stopAudioThread()
+    releaseCompanionMic()
     qaAudioInjector.sessionEnded()?.let(::emitQaAudioInjection)
     stopStallMonitor()
     unregisterAudioDeviceCallback()
@@ -1079,6 +1426,7 @@ class NativeSTTModule(
       record.stopSafely()
       record.release()
     }
+    releaseMediaProjection()
 
     restoreAudioMode()
 
@@ -1095,6 +1443,7 @@ class NativeSTTModule(
     resolveGracefulStopPromise()
     activeConversationId = null
     activeSessionId = null
+    activeCaptureSource = NativeSttCaptureSource.MICROPHONE
   }
 
   private fun resolveGracefulStopPromise() {
@@ -1307,6 +1656,7 @@ class NativeSTTModule(
   }
 
   override fun onHostDestroy() {
+    rejectPendingDeviceAudioRequest("host_destroyed")
     cleanup(reason = "host_destroyed", emitClose = true)
   }
 
@@ -1323,6 +1673,8 @@ class NativeSTTModule(
   companion object {
     private const val TAG = "NativeSTTModule"
     private const val REQUEST_RECORD_AUDIO = 44_002
+    private const val REQUEST_MEDIA_PROJECTION = 44_003
+    private const val DEVICE_AUDIO_SERVICE_START_TIMEOUT_MS = 5_000L
     private const val AUDIO_STALL_THRESHOLD_MS = 4_000L
     private const val AUDIO_STALL_CHECK_INTERVAL_MS = 2_000L
     private const val AUDIO_RECOVERY_COOLDOWN_MS = 1_500L

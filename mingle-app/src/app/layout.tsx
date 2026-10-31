@@ -19,8 +19,10 @@ import NativePushTapReceiver from "@/components/native-push-tap-receiver";
 import WebViewStateRestore from "@/components/webview-state-restore";
 import RouteTransitionCurtain from "@/components/route-transition-curtain";
 import PostHogAnalyticsProvider from "@/components/posthog-analytics-provider";
+import { DeviceAudioCaptureSwitchProvider } from "@/context/device-audio-capture-switch";
 import { TtsSettingsProvider } from "@/context/tts-settings";
 import { getAuthOptions } from "@/lib/auth-options";
+import { resolveDeviceAudioCaptureSwitch } from "@/lib/device-audio-capture-switch";
 import { MOBILE_CANVAS_BOOTSTRAP_SCRIPT } from "@/lib/mobile-canvas-bootstrap";
 import { resolvePostHogBrowserConfig } from "@/lib/posthog-browser-config";
 import { DEFAULT_LOCALE } from "@/i18n";
@@ -106,6 +108,9 @@ export default async function RootLayout({
 }>) {
   const session = await getServerSession(getAuthOptions());
   const postHogConfig = resolvePostHogBrowserConfig();
+  // Read per request (this layout is dynamic: the session reads cookies), so a
+  // Railway env change turns device-audio capture off without a store release.
+  const deviceAudioCaptureSwitch = resolveDeviceAudioCaptureSwitch();
   const profileImageOrigin = resolveProfileImageOrigin();
   // The first cards' avatars come from this origin: open its connection while
   // the page's scripts load instead of after the feed answers.
@@ -126,7 +131,9 @@ export default async function RootLayout({
               host={postHogConfig?.host ?? null}
             >
               <MobileCanvasShell>
-                {children}
+                <DeviceAudioCaptureSwitchProvider value={deviceAudioCaptureSwitch}>
+                  {children}
+                </DeviceAudioCaptureSwitchProvider>
                 <DeferredNativeProfileLinkOverlay />
                 <DeferredNativeConversationShareOverlay />
                 <CoinHost />

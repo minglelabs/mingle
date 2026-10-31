@@ -25,7 +25,9 @@ import {
   addNativeSttListener,
   getNativeSttMicrophonePermissionStatus,
   getNativeSttStatus,
+  isNativeDeviceAudioCaptureAvailable,
   isNativeSttAvailable,
+  normalizeNativeSttCaptureSource,
   qaClearNativeSttAudioInjection,
   qaInjectNativeSttAudio,
   setNativeSttAec,
@@ -44,6 +46,7 @@ import {
 import {
   addNativeTtsListener,
   buildNativeTtsStoppedEvent,
+  isNativeTtsAvailable,
   playNativeTts,
   resolveNativeTtsPlayRequest,
   resolveNativeTtsStartedEvent,
@@ -60,6 +63,7 @@ import {
 } from './src/nativeAudioRoute';
 import {
   buildNativeShellCapabilities,
+  NATIVE_SHELL_CAPABILITIES_STATE_KEY,
   type NativeShellCapabilities,
 } from './src/nativeCapabilities';
 import {
@@ -721,6 +725,8 @@ type NativeSttStartPayload = {
   wsUrl?: string;
   sttModel?: string;
   aecEnabled?: boolean;
+  // 'device_audio' transcribes what other apps play instead of the microphone.
+  captureSource?: string;
   apiNamespace?: string;
   behaviorProfile?: string;
   sonioxManualFinalizeSilenceMs?: number;
@@ -1195,7 +1201,17 @@ function resolveNativeSttErrorCode(message: string): string | undefined {
   if (normalized === 'mic_permission_denied' || normalized === 'mic_permission_denied_after_prompt') {
     return 'mic_permission';
   }
+  if (normalized === 'device_audio_permission_denied') {
+    return 'device_audio_permission';
+  }
   return undefined;
+}
+
+// The user answered a system prompt with "no": the start is over, not broken.
+// It goes back to idle, and is never retried against the fallback server
+// (a retry would only show the same prompt again).
+function isNativeSttUserDeclinedCode(code: string | undefined): boolean {
+  return code === 'mic_permission' || code === 'device_audio_permission';
 }
 
 type RuntimeClientInfo = {
@@ -1688,6 +1704,7 @@ function AppInner(): React.JSX.Element {
   // Earphone mode (contract A.1/A.2): whether this shell can report earphones,
   // and the relay that forwards NativeAudioRouteModule readings to the page.
   const nativeAudioRouteAvailable = useMemo(() => isNativeAudioRouteAvailable(), []);
+  const nativeDeviceAudioCaptureAvailable = useMemo(() => isNativeDeviceAudioCaptureAvailable(), []);
   const nativeAudioRouteRelayRef = useRef<NativeAudioRouteRelay | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
@@ -3295,6 +3312,9 @@ function AppInner(): React.JSX.Element {
     const cachePermissionScript = nextPayload.type === 'permission'
       ? `window.__MINGLE_LAST_NATIVE_MIC_PERMISSION = ${JSON.stringify(nextPayload.permission)}; `
       : '';
+    const cacheCapabilitiesScript = nextPayload.type === 'capabilities'
+      ? `window[${JSON.stringify(NATIVE_SHELL_CAPABILITIES_STATE_KEY)}] = ${serialized}; `
+      : '';
     const cacheMessageScript = nextPayload.type === 'message'
       ? `(function () {
           var queue = Array.isArray(window[${JSON.stringify(NATIVE_STT_MESSAGE_QUEUE_KEY)}])
@@ -3307,7 +3327,7 @@ function AppInner(): React.JSX.Element {
           window[${JSON.stringify(NATIVE_STT_MESSAGE_QUEUE_KEY)}] = queue;
         })(); `
       : '';
-    const script = `${cacheStatusScript}${cachePermissionScript}${cacheMessageScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
+    const script = `${cacheStatusScript}${cachePermissionScript}${cacheCapabilitiesScript}${cacheMessageScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
@@ -3790,6 +3810,7 @@ function AppInner(): React.JSX.Element {
       ? payload.sttModel.trim()
       : 'soniox';
     const aecEnabled = payload?.aecEnabled === true;
+    const captureSource = normalizeNativeSttCaptureSource(payload?.captureSource);
     const apiNamespace = typeof payload?.apiNamespace === 'string' ? payload.apiNamespace.trim() : '';
     const behaviorProfile = typeof payload?.behaviorProfile === 'string' ? payload.behaviorProfile.trim() : '';
     const sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
@@ -3826,6 +3847,7 @@ function AppInner(): React.JSX.Element {
       ...(sessionId ? { sessionId } : {}),
       sttModel,
       aecEnabled,
+      ...(captureSource === 'device_audio' ? { captureSource } : {}),
       ...(apiNamespace ? { apiNamespace } : {}),
       ...(behaviorProfile ? { behaviorProfile } : {}),
       ...(typeof sonioxManualFinalizeSilenceMs === 'number'
@@ -3957,7 +3979,7 @@ function AppInner(): React.JSX.Element {
       }
       const failedConversationId = nativeSttConversationIdRef.current || conversationId || undefined;
       const failedSessionId = nativeSttSessionIdRef.current || sessionId || undefined;
-      nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'failed';
+      nativeStatusRef.current = isNativeSttUserDeclinedCode(code) ? 'idle' : 'failed';
       emitToWeb({
         type: 'status',
         status: nativeStatusRef.current,
@@ -5052,7 +5074,11 @@ function AppInner(): React.JSX.Element {
       schedulePendingPushTapFlush(true);
     }
     flushPendingConversationShareToWeb();
-    emitToWeb(buildNativeShellCapabilities({ audioRoute: nativeAudioRouteAvailable }));
+    emitToWeb(buildNativeShellCapabilities({
+      audioRoute: nativeAudioRouteAvailable,
+      deviceAudioCapture: nativeDeviceAudioCaptureAvailable,
+      nativeTts: isNativeTtsAvailable(),
+    }));
     // Earphone mode (contract A.2a): the latest route follows the capabilities
     // message on every load end.
     nativeAudioRouteRelayRef.current?.replayLatest();
@@ -5117,7 +5143,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     // Record the failure before anything else: react-native-webview calls

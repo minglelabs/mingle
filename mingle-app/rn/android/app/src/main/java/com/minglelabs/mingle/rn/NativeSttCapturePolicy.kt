@@ -5,6 +5,18 @@ import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
 import android.media.AudioManager
 
+enum class NativeSttCaptureSource(val wireValue: String) {
+  MICROPHONE("microphone"),
+  // Sound other apps play on this device (AudioPlaybackCapture), not the mic.
+  DEVICE_AUDIO("device_audio");
+
+  companion object {
+    // Anything but an explicit device-audio request captures the microphone.
+    fun fromWire(raw: String?): NativeSttCaptureSource =
+      if (raw?.trim()?.lowercase() == DEVICE_AUDIO.wireValue) DEVICE_AUDIO else MICROPHONE
+  }
+}
+
 data class NativeSttCaptureProfile(
   val label: String,
   val audioSource: Int,
@@ -13,6 +25,7 @@ data class NativeSttCaptureProfile(
   val foregroundServiceEnabled: Boolean,
   val aecEnabled: Boolean,
   val noiseSuppressorEnabled: Boolean,
+  val captureSource: NativeSttCaptureSource = NativeSttCaptureSource.MICROPHONE,
 )
 
 object NativeSttCapturePolicy {
@@ -22,7 +35,26 @@ object NativeSttCapturePolicy {
 
   private val preferredSampleRates = intArrayOf(48_000, 44_100, 16_000)
 
-  fun resolve(aecEnabled: Boolean): NativeSttCaptureProfile {
+  fun resolve(
+    aecEnabled: Boolean,
+    captureSource: NativeSttCaptureSource = NativeSttCaptureSource.MICROPHONE,
+  ): NativeSttCaptureProfile {
+    if (captureSource == NativeSttCaptureSource.DEVICE_AUDIO) {
+      return NativeSttCaptureProfile(
+        label = "device_audio",
+        // Unused: a playback-capture AudioRecord takes no audio source.
+        audioSource = MediaRecorder.AudioSource.DEFAULT,
+        audioMode = AudioManager.MODE_NORMAL,
+        privacySensitive = false,
+        // MediaProjection needs a running foreground service of its own type.
+        foregroundServiceEnabled = true,
+        // The capture is a digital copy of other apps' playback with this app's
+        // own sound excluded, so there is no echo or room noise to remove.
+        aecEnabled = false,
+        noiseSuppressorEnabled = false,
+        captureSource = NativeSttCaptureSource.DEVICE_AUDIO,
+      )
+    }
     return when (DEFAULT_PROFILE) {
       "standard_recognition" -> NativeSttCaptureProfile(
         label = "standard_recognition",

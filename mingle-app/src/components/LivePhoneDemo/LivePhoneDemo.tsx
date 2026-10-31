@@ -46,6 +46,19 @@ import {
   requestNativeAudioRoute,
   subscribeNativeAudioRoute,
 } from '@/lib/native-audio-route'
+import {
+  getNativeDeviceAudioCapabilityServerSnapshot,
+  getNativeDeviceAudioCapabilitySnapshot,
+  getSttCaptureSourcePickServerSnapshot,
+  getSttCaptureSourcePickSnapshot,
+  readCachedNativeShellCapabilities,
+  resolveEffectiveSttCaptureSource,
+  resolveNativeDeviceAudioSupported,
+  setSttCaptureSourcePick,
+  shouldPlayTtsViaNativeShell,
+  subscribeNativeDeviceAudioCapability,
+  subscribeSttCaptureSourcePick,
+} from '@/lib/native-device-audio'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
 import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
@@ -58,7 +71,7 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface from '@/components/slide-surface'
@@ -107,6 +120,7 @@ import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { buildConversationShareUrl } from '@/lib/conversation-share-link'
 import { useTtsSettings } from '@/context/tts-settings'
+import { useDeviceAudioCaptureSwitch } from '@/context/device-audio-capture-switch'
 import {
   DEFAULT_STT_LANGUAGES,
   MAX_STT_LANGUAGE_SELECTION,
@@ -711,6 +725,26 @@ function isNativeIosAppRuntime(): boolean {
     : readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace
 
   return apiNamespace.startsWith('ios/')
+}
+
+// The screen-capture pre-prompt is shown until the user continues past it
+// with "Don't show this again" checked; then never again on this device.
+const SCREEN_CAPTURE_NOTICE_DISMISSED_KEY = 'mingle.screenCaptureNotice.dismissed'
+
+function readScreenCaptureNoticeDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(SCREEN_CAPTURE_NOTICE_DISMISSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeScreenCaptureNoticeDismissed(): void {
+  try {
+    window.localStorage.setItem(SCREEN_CAPTURE_NOTICE_DISMISSED_KEY, '1')
+  } catch {
+    // Storage blocked: the notice shows again next session, which is harmless.
+  }
 }
 
 function isLikelyIOSPlatform(): boolean {
@@ -2241,6 +2275,36 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   })
   const earphoneModeCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
+  // Warns, once per earphone-mode session, that Start is about to open the
+  // system screen broadcast / sharing prompt, so it does not come as a shock.
+  const [screenCaptureNoticeOpen, setScreenCaptureNoticeOpen] = useState(false)
+  const screenCaptureNoticeAcknowledgedRef = useRef(false)
+  // "Don't show this again" starts checked: most users see the notice once.
+  const [screenCaptureNoticeDontShowAgain, setScreenCaptureNoticeDontShowAgain] = useState(true)
+  // Device audio: translate what other apps play instead of the microphone.
+  // Picked in the earphone-mode notice, on shells that can capture it, unless
+  // the server's kill switch (DEVICE_AUDIO_CAPTURE_ENABLED*) turned it off.
+  const nativeDeviceAudioCapable = useSyncExternalStore(
+    subscribeNativeDeviceAudioCapability,
+    getNativeDeviceAudioCapabilitySnapshot,
+    getNativeDeviceAudioCapabilityServerSnapshot,
+  )
+  const deviceAudioCaptureSwitch = useDeviceAudioCaptureSwitch()
+  const nativeDeviceAudioSupported = resolveNativeDeviceAudioSupported({
+    shellCapable: nativeDeviceAudioCapable,
+    serverSwitch: deviceAudioCaptureSwitch,
+    isIOS: isLikelyIOSPlatform(),
+  })
+  const sttCaptureSourcePick = useSyncExternalStore(
+    subscribeSttCaptureSourcePick,
+    getSttCaptureSourcePickSnapshot,
+    getSttCaptureSourcePickServerSnapshot,
+  )
+  const sttCaptureSource = resolveEffectiveSttCaptureSource({
+    supported: nativeDeviceAudioSupported,
+    earphoneModeEnabled,
+    pick: sttCaptureSourcePick,
+  })
   // The read language (L) picked in the notice. Session state only: never
   // persisted, dropped on every on/off edge (see the reset below).
   const [earphoneModeReadLanguagePick, setEarphoneModeReadLanguagePick] = useState<EarphoneModeReadLanguagePick | null>(null)
@@ -4533,8 +4597,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       })
     }
 
-    // NativeTTSModule은 iOS 전용 — Android에서는 HTML audio로 재생
-    if (isNativeApp() && isLikelyIOSPlatform()) {
+    // iOS shells always play natively; Android shells do once they report
+    // `nativeTts` (they lower other apps' volume while the clip plays).
+    // Older Android shells keep the HTML audio path.
+    if (shouldPlayTtsViaNativeShell({
+      isNativeApp: isNativeApp(),
+      isIOS: isLikelyIOSPlatform(),
+      capabilities: readCachedNativeShellCapabilities(),
+    })) {
       void playViaNativeBridge()
     } else {
       void playViaHtmlAudio()
@@ -4725,6 +4795,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTtsCanceled: handleTtsCanceled,
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
+    captureSource: sttCaptureSource,
     sonioxManualFinalizeSilenceMs,
     sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
     sonioxEndpointMaxDelayMs,
@@ -5741,6 +5812,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     scheduleTtsResumeAfterStopClick()
   }, [isSttSessionRunning, onSttSessionRunningChange, scheduleTtsResumeAfterStopClick, stopRecording])
 
+  // The capture source is fixed when a session starts. When it changes under a
+  // running session (picked in the notice, or earphone mode turned off), end
+  // that session so the next Start captures what the room now says it does.
+  const appliedSttCaptureSourceRef = useRef(sttCaptureSource)
+  useEffect(() => {
+    if (appliedSttCaptureSourceRef.current === sttCaptureSource) return
+    appliedSttCaptureSourceRef.current = sttCaptureSource
+    if (isSttSessionRunning) void handleStopRecording()
+  }, [handleStopRecording, isSttSessionRunning, sttCaptureSource])
+
   const performMicAction = useCallback((source: SttStopSource) => {
     const shouldStopConnectingSession = isConnecting
       && (!isNativeAppRuntime || isNativeSttSessionOwner)
@@ -5751,8 +5832,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       void handleStopRecording({ forceNativeStop: !isSttSessionRunning, stopSource: source })
       return
     }
+    if (
+      sttCaptureSource === 'device_audio'
+      && !screenCaptureNoticeAcknowledgedRef.current
+      && !readScreenCaptureNoticeDismissed()
+    ) {
+      setScreenCaptureNoticeDontShowAgain(true)
+      // Start opens the system screen prompt: say so first.
+      setScreenCaptureNoticeOpen(true)
+      return
+    }
     void handleStartRecording()
-  }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning])
+  }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning, sttCaptureSource])
+
+  const confirmScreenCaptureNotice = useCallback(() => {
+    screenCaptureNoticeAcknowledgedRef.current = true
+    if (screenCaptureNoticeDontShowAgain) writeScreenCaptureNoticeDismissed()
+    setScreenCaptureNoticeOpen(false)
+    void handleStartRecording()
+  }, [handleStartRecording, screenCaptureNoticeDontShowAgain])
+
+  const cancelScreenCaptureNotice = useCallback(() => {
+    setScreenCaptureNoticeOpen(false)
+  }, [])
 
   const handleMicClick = useCallback(() => {
     micPointerActivationRef.current = false
@@ -6692,6 +6794,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // the room's display language again.
   useEffect(() => subscribeEarphoneModePreference(() => {
     setEarphoneModeReadLanguagePick(null)
+    // The capture source lasts one session too: every new one starts on the
+    // default, the microphone plus device audio (page 2/2 of the notice shows
+    // it, and what Start will open, before the first Start).
+    setSttCaptureSourcePick('device_audio')
+    // A new session warns about the screen prompt again.
+    screenCaptureNoticeAcknowledgedRef.current = false
   }), [])
 
   const handleEarphoneModeReadLanguageSelect = useCallback((language: string) => {
@@ -9647,9 +9755,69 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 languages={normalizedDisplayLanguageOptions}
                 readLanguage={earphoneModeReadLanguage}
                 onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
+                captureSource={nativeDeviceAudioSupported ? sttCaptureSourcePick : undefined}
+                onSelectCaptureSource={setSttCaptureSourcePick}
+                deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}
                 coinCostNotice={coinTtsCostNotice}
               />
+            </MessageMediaDialog>
+          )}
+          {screenCaptureNoticeOpen && (
+            <MessageMediaDialog title={earphoneModeCopy.screenCaptureNoticeTitle} onClose={cancelScreenCaptureNotice}>
+              <div data-qa="live-demo-screen-capture-notice" className="flex flex-col items-center px-2 pb-1 pt-4 text-center">
+                {/* Earphone mode's own icon, with a screen-share badge: the
+                    request comes from earphone mode. */}
+                <span aria-hidden="true" className="relative flex rounded-full bg-amber-100/80 p-2">
+                  <span
+                    className="flex h-16 w-16 items-center justify-center rounded-full text-white shadow-[0_10px_24px_-8px_rgba(249,115,22,0.55)]"
+                    style={{ backgroundImage: 'linear-gradient(135deg, #fbbf24 0%, #f97316 100%)' }}
+                  >
+                    <Headphones size={30} strokeWidth={2.1} />
+                  </span>
+                  <span className="absolute -bottom-0.5 -right-0.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-gray-900 text-white">
+                    <ScreenShare size={15} strokeWidth={2.3} />
+                  </span>
+                </span>
+                <h2 className="mt-5 text-xl font-bold leading-tight text-gray-900">
+                  {earphoneModeCopy.screenCaptureNoticeTitle}
+                </h2>
+                <p className="mt-1.5 text-lg font-semibold leading-snug text-orange-500">
+                  {earphoneModeCopy.screenCaptureNoticeBody}
+                </p>
+                <p data-screen-capture-notice-reason className="mt-3 text-[0.95rem] font-medium leading-relaxed text-gray-700">
+                  {earphoneModeCopy.screenCaptureNoticeReason}
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-gray-500">
+                  {earphoneModeCopy.screenCaptureNoticeOffHint}
+                </p>
+                <button
+                  type="button"
+                  data-screen-capture-notice-continue
+                  onClick={confirmScreenCaptureNotice}
+                  className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-2xl text-base font-semibold text-white shadow-[0_8px_20px_-10px_rgba(249,115,22,0.7)] transition-transform active:scale-[0.98]"
+                  style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)' }}
+                >
+                  {earphoneModeCopy.screenCaptureNoticeContinueLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelScreenCaptureNotice}
+                  className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-2xl text-sm font-semibold text-gray-500 transition-colors hover:bg-gray-50"
+                >
+                  {earphoneModeCopy.screenCaptureNoticeCancelLabel}
+                </button>
+                <label className="mt-3 inline-flex cursor-pointer select-none items-center gap-2 text-sm text-gray-500">
+                  <input
+                    type="checkbox"
+                    data-screen-capture-notice-dont-show-again
+                    checked={screenCaptureNoticeDontShowAgain}
+                    onChange={(event) => setScreenCaptureNoticeDontShowAgain(event.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 accent-orange-500"
+                  />
+                  {earphoneModeCopy.screenCaptureNoticeDontShowAgainLabel}
+                </label>
+              </div>
             </MessageMediaDialog>
           )}
         </div>

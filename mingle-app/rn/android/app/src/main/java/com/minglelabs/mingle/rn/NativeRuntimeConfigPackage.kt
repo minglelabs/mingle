@@ -13,6 +13,7 @@ class NativeRuntimeConfigPackage : ReactPackage {
       NativeSTTModule(reactContext),
       NativePushNotificationModule(reactContext),
       NativeAudioRouteModule(reactContext),
+      NativeTTSModule(reactContext),
     )
 
   override fun createViewManagers(

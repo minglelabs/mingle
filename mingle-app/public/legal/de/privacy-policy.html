@@ -131,7 +131,7 @@
       <article>
         <nav class="lang-nav"><a href="/legal/en/privacy-policy.html">English</a><a href="/legal/ko/privacy-policy.html">Korean</a><a href="/legal/ja/privacy-policy.html">Japanese</a><a href="/legal/zh-cn/privacy-policy.html">Chinese (Simplified)</a><a href="/legal/zh-tw/privacy-policy.html">Chinese (Traditional)</a><a href="/legal/fr/privacy-policy.html">French</a><a href="/legal/de/privacy-policy.html" aria-current="page">German</a><a href="/legal/es/privacy-policy.html">Spanish</a><a href="/legal/pt/privacy-policy.html">Portuguese</a><a href="/legal/it/privacy-policy.html">Italian</a><a href="/legal/ru/privacy-policy.html">Russian</a><a href="/legal/ar/privacy-policy.html">Arabic</a><a href="/legal/hi/privacy-policy.html">Hindi</a><a href="/legal/th/privacy-policy.html">Thai</a><a href="/legal/vi/privacy-policy.html">Vietnamese</a></nav>
         <h1>HashChat-Datenschutzrichtlinie</h1>
-        <p class="meta"><strong>Letzte Aktualisierung:</strong> October 8, 2026</p>
+        <p class="meta"><strong>Letzte Aktualisierung:</strong> October 31, 2026</p>
         <p>In dieser Datenschutzrichtlinie wird erläutert, wie Mingle Labs, Inc. („HashChat“, „wir“, „unser“ oder „uns“) personenbezogene Daten erhebt, verwendet, weitergibt und schützt, wenn Sie die mobile App, Website und zugehörige Dienste von HashChat (zusammen der „Dienst“) nutzen.</p>
         <h2>1. Geltungsbereich</h2>
 <p>Diese Richtlinie gilt für Informationen, die für HashChat-Konten und deren Nutzung durch Verbraucher verarbeitet werden. Sie gilt nicht für Daten, die wir ausschließlich im Auftrag von Unternehmenskunden im Rahmen separater Verträge verarbeiten.</p>
@@ -141,7 +141,7 @@
 
 <ul>
   <li>Kontoinformationen: Name, E-Mail-Adresse, Angaben zum Anmeldeanbieter, Kontokennungen und Profileinstellungen.</li>
-  <li>Übersetzungs- und Sprachdaten: Text, den Sie zur Übersetzung einreichen, Sprach-/Audioeingabe, die für die Spracherkennung und Übersetzung erforderlich ist, übersetzte Ausgabe und Spracheinstellungen.</li>
+  <li>Übersetzungs- und Sprachdaten: Text, den Sie zur Übersetzung einreichen, Sprach-/Audioeingabe, die für die Spracherkennung und Übersetzung erforderlich ist (einschließlich des Tons, den andere Apps auf Ihrem Gerät abspielen, wenn Sie diese Option im Kopfhörermodus wählen), übersetzte Ausgabe und Spracheinstellungen.</li>
   <li>Technische Daten und Nutzungsdaten: Gerätetyp, Betriebssystem, App-Version, IP-Adresse, Anforderungszeitstempel, Absturzprotokolle, Leistungsprotokolle und Funktionsinteraktionsereignisse.</li>
   <li>Support-Kommunikation: Nachrichten und Anhänge, die Sie uns senden, wenn Sie um Hilfe bitten.</li>
 </ul>
@@ -153,6 +153,7 @@
 
 <h2>3. Audioverarbeitung und Nichtaufbewahrung</h2>
 <p>HashChat verarbeitet Mikrofon-Audio in Echtzeit, um Spracherkennung und Übersetzung bereitzustellen. Rohes Audio wird zur Verarbeitung gestreamt und nach Abschluss der Anfrage nicht von HashChat gespeichert.</p>
+<p>Im Kopfhörermodus der mobilen HashChat-Apps können Sie die Option „Mikrofon + auf diesem Gerät abgespielter Ton“ wählen. In diesem Fall erfasst HashChat den Ton, den andere Apps auf Ihrem Gerät abspielen (zum Beispiel ein Video), über die Android-Berechtigung zur Bildschirmaufnahme und Aufnahme der Audiowiedergabe (MediaProjection) oder über die iOS-Bildschirmübertragung (eine ReplayKit-Broadcast-Erweiterung). Die Erfassung erfolgt erst, nachdem Sie sie selbst gestartet und der Systemabfrage zugestimmt haben, und nur, solange diese Sitzung läuft. Der erfasste Ton wird mit Ihrem Mikrofon-Audio gemischt und genauso wie Mikrofon-Audio in Echtzeit an die Server von HashChat und an unseren Sprach-zu-Text-Anbieter (Soniox) gestreamt; rohes Audio wird nach der Verarbeitung nicht von HashChat gespeichert. Die daraus entstehenden Transkripte und Übersetzungen werden wie gesprochene Nachrichten als Nachrichten der Unterhaltung gespeichert und können für andere Teilnehmer dieser Unterhaltung sichtbar sein. HashChat erfasst bei der Bildschirmaufnahme oder -übertragung keine Bilder oder Videos des Bildschirms, sondern nur den Ton. Ton von Apps, die die Audioaufnahme sperren, sowie Telefonanrufe werden nicht erfasst. Sie können die Erfassung jederzeit in der App oder über die Systembenachrichtigung bzw. die Statusleiste beenden.</p>
 <p>HashChat führt kein Archiv mit rohen Sprachaufzeichnungen für das Modelltraining. Aus Sicherheitsgründen, zur Verhinderung von Missbrauch und zur Zuverlässigkeit der Dienste führen wir möglicherweise begrenzte nicht-audiotechnische Diagnosedaten (z. B. Fehlercodes und Timing-Metriken) durch.</p>
 
 
@@ -175,7 +176,7 @@
 <p>Wir verkaufen keine personenbezogenen Daten. Wir können Daten weitergeben mit:</p>
 <ul>
   <li>Dienstanbieter: Hosting, Speicherung, Authentifizierung, Kundensupport, Analysen, Absturzberichte und andere Infrastrukturanbieter, die Daten im Rahmen eines Vertrags verarbeiten.</li>
-  <li>Soniox: Audiostream und zugehöriger Kontext, der für die Sprach-zu-Text-Verarbeitung benötigt wird.</li>
+  <li>Soniox: Audiostream (Mikrofon-Audio und, wenn Sie diese Option im Kopfhörermodus wählen, der Ton, den andere Apps auf Ihrem Gerät abspielen) und zugehöriger Kontext, der für die Sprach-zu-Text-Verarbeitung benötigt wird.</li>
   <li>Inworld: Text- und Sprachkontext, der für Sprachgenerierungsfunktionen und synthetisierte Audiobereitstellung benötigt wird.</li>
   <li>Google: Kontoauthentifizierung und textbasierte Dienstvorgänge, sofern verwendet. HashChat sendet kein rohes Sprachaudio zur Sprachverarbeitung an Google.</li>
   <li>Anthropic: Text, den Sie zur Übersetzung einreichen, und der Sprachkontext, der zur Erstellung von Übersetzungen mit Claude-Modellen erforderlich ist.</li>

@@ -7,6 +7,7 @@ const logicSource = readFileSync(new URL('./live-phone-demo.earphone-mode.logic.
 const composerSource = readFileSync(new URL('./ConversationImageComposer.tsx', import.meta.url), 'utf8')
 const legacySource = readFileSync(new URL('./LivePhoneDemoLegacy.tsx', import.meta.url), 'utf8')
 const ttsSettingsSource = readFileSync(new URL('../../context/tts-settings.tsx', import.meta.url), 'utf8')
+const layoutSource = readFileSync(new URL('../../app/layout.tsx', import.meta.url), 'utf8')
 
 function between(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker)
@@ -63,13 +64,13 @@ describe('earphone mode wiring', () => {
   })
 
   it('marks HTML playback as playing on the playing event', () => {
-    const htmlPlay = between(liveDemoSource, 'const playViaHtmlAudio = async () => {', '// NativeTTSModule은 iOS 전용')
+    const htmlPlay = between(liveDemoSource, 'const playViaHtmlAudio = async () => {', '// iOS shells always play natively')
     expect(htmlPlay).toContain('audio.onplaying = () => {')
     expect(htmlPlay).toContain('markPlaybackStarted()')
   })
 
   it('awaits a fresh route before Android auto audio and leaves manual audio unchanged', () => {
-    const htmlPlay = between(liveDemoSource, 'const playViaHtmlAudio = async () => {', '// NativeTTSModule은 iOS 전용')
+    const htmlPlay = between(liveDemoSource, 'const playViaHtmlAudio = async () => {', '// iOS shells always play natively')
     expect(htmlPlay).toContain("if (next.mode === 'auto' && isNativeApp())")
     expect(htmlPlay).toContain('const connected = await confirmNativeEarphonesConnected()')
     expect(htmlPlay).toContain('!connected || !earphoneAutoReadArmedRef.current || !isEarphoneAutoReadGateOpenNow()')
@@ -77,7 +78,7 @@ describe('earphone mode wiring', () => {
   })
 
   it('retries rejected autoplay through the queue instead of resuming the stale element', () => {
-    const rejectedPlay = between(liveDemoSource, 'audio.play().catch(() => {', '// NativeTTSModule은 iOS 전용')
+    const rejectedPlay = between(liveDemoSource, 'audio.play().catch(() => {', '// iOS shells always play natively')
     expect(rejectedPlay).toContain('cleanupCurrentAudio()')
     expect(rejectedPlay).toContain('ttsQueueRef.current.unshift(next)')
     const resume = between(liveDemoSource, 'const resumeTtsPlayback = useCallback', 'const clearStopClickResumeTimers')
@@ -107,7 +108,26 @@ describe('earphone mode wiring', () => {
     expect(toggle).toContain('if (toggle.showNotice) setEarphoneModeNoticeOpen(true)')
     expect(liveDemoSource).toContain('<MessageMediaDialog title={earphoneModeCopy.label} onClose={closeEarphoneModeNotice}>')
     expect(liveDemoSource).toContain('earphonesConnected={nativeAudioRoute.earphonesConnected}')
-    expect(noticeSource).toContain('{!earphonesConnected && (')
+    expect(noticeSource).toContain("data-earphone-status={earphonesConnected ? 'connected' : 'disconnected'}")
+  })
+
+  it('warns before Start opens the system screen prompt, once per earphone-mode session', () => {
+    const mic = between(liveDemoSource, 'const performMicAction = useCallback((source: SttStopSource) => {', 'const confirmScreenCaptureNotice')
+    expect(mic).toContain("sttCaptureSource === 'device_audio'")
+    expect(mic).toContain('&& !screenCaptureNoticeAcknowledgedRef.current')
+    expect(mic).toContain('&& !readScreenCaptureNoticeDismissed()')
+    expect(mic).toContain('setScreenCaptureNoticeOpen(true)')
+    expect(mic.indexOf('setScreenCaptureNoticeOpen(true)')).toBeLessThan(mic.lastIndexOf('void handleStartRecording()'))
+    const confirm = between(liveDemoSource, 'const confirmScreenCaptureNotice = useCallback(() => {', '}, [handleStartRecording, screenCaptureNoticeDontShowAgain])')
+    // "Don't show this again" starts checked.
+    expect(liveDemoSource).toContain('useState(true)')
+    expect(liveDemoSource).toContain('data-screen-capture-notice-dont-show-again')
+    expect(confirm).toContain('screenCaptureNoticeAcknowledgedRef.current = true')
+    expect(confirm).toContain('if (screenCaptureNoticeDontShowAgain) writeScreenCaptureNoticeDismissed()')
+    expect(confirm).toContain('void handleStartRecording()')
+    const reset = between(liveDemoSource, 'useEffect(() => subscribeEarphoneModePreference(() => {', '}), [])')
+    expect(reset).toContain('screenCaptureNoticeAcknowledgedRef.current = false')
+    expect(liveDemoSource).toContain('{earphoneModeCopy.screenCaptureNoticeBody}')
   })
 
   it('reads one language per session: picked in the notice, React state only, dropped on every edge', () => {
@@ -131,6 +151,45 @@ describe('earphone mode wiring', () => {
     expect(display).toContain('languageOrder: normalizedDisplayLanguageOptions,')
     // The only thing earphone mode ever stores is the on/off toggle.
     expect(logicSource.match(/setItem\(/g)).toHaveLength(1)
+  })
+
+  it('captures device audio only as a per-session pick made in the notice', () => {
+    // Offered only where supported: shell capability + the server switch.
+    const notice = between(liveDemoSource, '<EarphoneModeNoticeContent', '/>')
+    expect(notice).toContain('captureSource={nativeDeviceAudioSupported ? sttCaptureSourcePick : undefined}')
+    expect(notice).toContain('onSelectCaptureSource={setSttCaptureSourcePick}')
+    expect(notice).toContain('deviceAudioViaBroadcast={isLikelyIOSPlatform()}')
+    // What the session captures: shell support + earphone mode on + the pick.
+    const effective = between(liveDemoSource, 'const sttCaptureSource = resolveEffectiveSttCaptureSource({', '})')
+    expect(effective).toContain('supported: nativeDeviceAudioSupported,')
+    expect(effective).toContain('earphoneModeEnabled,')
+    expect(effective).toContain('pick: sttCaptureSourcePick,')
+    expect(liveDemoSource).toContain('captureSource: sttCaptureSource,')
+    // Every earphone-mode edge puts the next session back on the default: microphone + device audio.
+    const reset = between(liveDemoSource, 'useEffect(() => subscribeEarphoneModePreference(() => {', '}), [])')
+    expect(reset).toContain("setSttCaptureSourcePick('device_audio')")
+    // A source change ends the running session; it never swaps under it.
+    const stop = between(liveDemoSource, 'const appliedSttCaptureSourceRef = useRef(sttCaptureSource)', '}, [handleStopRecording, isSttSessionRunning, sttCaptureSource])')
+    expect(stop).toContain('if (appliedSttCaptureSourceRef.current === sttCaptureSource) return')
+    expect(stop).toContain('if (isSttSessionRunning) void handleStopRecording()')
+    // The pick is never persisted.
+    const store = readFileSync(new URL('../../lib/native-device-audio.ts', import.meta.url), 'utf8')
+    expect(store).not.toMatch(/localStorage|sessionStorage|setItem\(/)
+  })
+
+  it('withdraws device audio when the server switch turns it off for this platform', () => {
+    // The shell capability alone does not decide: the server switch must agree.
+    expect(liveDemoSource).toContain('const deviceAudioCaptureSwitch = useDeviceAudioCaptureSwitch()')
+    const supported = between(liveDemoSource, 'const nativeDeviceAudioSupported = resolveNativeDeviceAudioSupported({', '})')
+    expect(supported).toContain('shellCapable: nativeDeviceAudioCapable,')
+    expect(supported).toContain('serverSwitch: deviceAudioCaptureSwitch,')
+    expect(supported).toContain('isIOS: isLikelyIOSPlatform(),')
+    // The root layout reads the env on each request (never a NEXT_PUBLIC_
+    // build-time inline) and hands it to every page.
+    const rootLayout = between(layoutSource, 'export default async function RootLayout', '\n}\n')
+    expect(rootLayout).toContain('const deviceAudioCaptureSwitch = resolveDeviceAudioCaptureSwitch();')
+    expect(rootLayout).toContain('<DeviceAudioCaptureSwitchProvider value={deviceAudioCaptureSwitch}>')
+    expect(layoutSource).not.toContain('NEXT_PUBLIC_DEVICE_AUDIO')
   })
 
   it('offers the display-language page list, with the same rows, in the notice', () => {
