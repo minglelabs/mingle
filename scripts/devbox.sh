@@ -513,6 +513,21 @@ is_truthy() {
   esac
 }
 
+# Swift macro plugins (e.g. @TaskLocal in the openiap pod) run in their own
+# seatbelt sandbox. Inside an already-sandboxed shell (agent harnesses) a
+# nested sandbox fails with EPERM and the build dies with "swift-plugin-server
+# produced malformed response". Detect that and build without the plugin
+# sandbox. DEVBOX_IOS_DISABLE_SWIFT_PLUGIN_SANDBOX=1/0 forces it on/off.
+ios_swift_plugin_sandbox_must_be_disabled() {
+  local forced="${DEVBOX_IOS_DISABLE_SWIFT_PLUGIN_SANDBOX:-}"
+  if [[ -n "$forced" ]]; then
+    is_truthy "$forced"
+    return
+  fi
+  command -v sandbox-exec >/dev/null 2>&1 || return 1
+  ! sandbox-exec -p '(version 1)(allow default)' /usr/bin/true >/dev/null 2>&1
+}
+
 resolve_devbox_qa_bridge_enabled() {
   if is_truthy "${DEVBOX_QA_BRIDGE_ENABLED:-0}"; then
     printf '1'
@@ -3449,6 +3464,11 @@ run_ios_mobile_install() {
     fi
     trap 'restore_rn_mobile_ads_app_json "$rn_app_json_backup" "$had_original_rn_app_json"' EXIT
     write_rn_mobile_ads_app_json "$runtime_admob_app_id_android" "$runtime_admob_app_id_ios"
+    local -a swift_sandbox_args=()
+    if ios_swift_plugin_sandbox_must_be_disabled; then
+      log "already inside a macOS sandbox; building with Swift macro plugin sandbox off (-disable-sandbox)"
+      swift_sandbox_args=('OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox')
+    fi
     NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE" \
     xcodebuild \
       -allowProvisioningUpdates \
@@ -3458,6 +3478,7 @@ run_ios_mobile_install() {
       -destination "$xcode_destination" \
       -derivedDataPath "$derived_data_path" \
       -xcconfig "$RN_IOS_RUNTIME_XCCONFIG" \
+      ${swift_sandbox_args[@]+"${swift_sandbox_args[@]}"} \
       build
   )
 
