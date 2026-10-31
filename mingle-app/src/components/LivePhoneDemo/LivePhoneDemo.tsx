@@ -242,7 +242,11 @@ import {
 import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
 import VoiceTalkPanel, { VoiceTalkHeaderButton, isVoiceTalkAvailable } from './VoiceTalkPanel'
-import HashRushSheet, { HashRushQuickChatBar, isHashRushConfigured, hashRushMenuLabel, useHashRushSheetFrame } from './HashRushSheet'
+// The iframe sheet (HashRushSheet) stays here unused until the native game replaces it for good.
+import HashRushSheet, { HashRushQuickChatBar, useHashRushSheetFrame } from './HashRushSheet'
+import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
+import { isHashRushGameConfigured } from '@/features/hash-rush/config'
+import { hashRushGameMenuLabel } from '@/features/hash-rush/copy'
 import {
   HASH_RUSH_CHAT_STRIP_HEIGHT_PX,
   resolveHashRushBubbleDisplayMode,
@@ -1970,6 +1974,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [hashRushActive, setHashRushActive] = useState(false)
   const [hashRushOpen, setHashRushOpen] = useState(false)
   const closeHashRushSheet = useCallback(() => setHashRushOpen(false), [])
+  // The native game (src/features/hash-rush): `hashRushGameActive` keeps it
+  // alive in this room, also while lowered; `hashRushGameOpen` is it being up.
+  const [hashRushGameActive, setHashRushGameActive] = useState(false)
+  const [hashRushGameOpen, setHashRushGameOpen] = useState(false)
+  const closeHashRushGame = useCallback(() => setHashRushGameOpen(false), [])
   // While the sheet is up the room keeps an empty slot for it between the top
   // bar and the room's talk strip; the sheet is placed over that slot inside
   // the room's root.
@@ -3783,6 +3792,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (isVisible) return
     setHashRushOpen(false)
     setHashRushActive(false)
+    setHashRushGameOpen(false)
+    setHashRushGameActive(false)
   }, [isVisible])
 
   useEffect(() => {
@@ -7544,6 +7555,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           />
         ) : null}
 
+        {/* Hash Rush, played natively in this room: a layer over the whole room
+            under its own thin top bar, kept while lowered, dropped on leaving. */}
+        {hashRushGameActive && conversationId ? (
+          <HashRushRoomLayer
+            key={conversationId}
+            open={hashRushGameOpen}
+            conversationId={conversationId}
+            viewerKey={viewerUserId || 'guest'}
+            playerName={(session?.user?.name || '').trim()}
+            uiLocale={uiLocale}
+            voiceActive={voiceTalkState.connected}
+            onClose={closeHashRushGame}
+          />
+        ) : null}
+
         {/* Header */}
         <div
           ref={headerRef}
@@ -8445,7 +8471,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </div>
                         ) : null}
 
-                        {conversationId && isHashRushConfigured() ? (
+                        {conversationId && isHashRushGameConfigured() ? (
                           <div className="px-4 pb-4">
                             <button
                               type="button"
@@ -8454,12 +8480,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 // Close the menu through its history entries, so no stale
                                 // entry is left for a later back step to land on.
                                 requestCloseMenuPanel()
-                                setHashRushActive(true)
-                                setHashRushOpen(true)
+                                setHashRushGameActive(true)
+                                setHashRushGameOpen(true)
                               }}
                               className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
                             >
-                              <span className="min-w-0 flex-1">{hashRushMenuLabel(uiLocale)}</span>
+                              <span className="min-w-0 flex-1">{hashRushGameMenuLabel(uiLocale)}</span>
                               <span className="shrink-0 text-gray-500">
                                 <ChevronRight size={18} strokeWidth={2.4} />
                               </span>

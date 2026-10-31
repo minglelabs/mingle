@@ -107,12 +107,8 @@ describe('hash rush sheet wiring', () => {
     expect(leave).toContain('setHashRushActive(false)')
   })
 
-  it('opens from the menu after closing the menu through its history', () => {
-    const menuItem = between(liveDemoSource, 'data-qa="live-demo-hash-rush-menu-item"', '</button>')
-    expect(menuItem).toContain('requestCloseMenuPanel()')
-    expect(menuItem).not.toContain('setMenuOpen(false)')
-    expect(menuItem).toContain('setHashRushActive(true)')
-  })
+  // The room menu opens the native game now (src/features/hash-rush,
+  // HashRushGame.wiring.test.ts); this sheet stays unused until it is removed.
 
   it('lifts the chat composer only for its own keyboard and folds the voice talk panel', () => {
     expect(liveDemoSource).toContain('const activeKeyboardInsetPx = isComposerOpen && (!hashRushOpen || isComposerTextareaFocused) ? keyboardViewportInsetPx : 0')
