@@ -209,6 +209,77 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  # The React Native shell (mingle-app/rn) has its own package.json and
+  # lockfile, and its package.json engines require Node >= 22.11.
+  rn-tests:
+    name: RN Unit Tests (Jest)
+    needs: push-context
+    if: ${{ github.event_name != 'push' || needs.push-context.outputs.run_tests_on_push == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mingle-app/rn
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.11.0
+          cache: pnpm
+          cache-dependency-path: mingle-app/rn/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec jest --ci
+
+  # JVM unit tests of the Android shell (app/src/test). The debug variant needs
+  # no upload key or other secret and skips the JS bundle. Gradle still needs
+  # node_modules: the React Native plugin, autolinking and codegen load from it.
+  # The runner image provides the Android SDK (ANDROID_HOME).
+  android-unit-tests:
+    name: Android JVM Unit Tests
+    needs: push-context
+    if: ${{ github.event_name != 'push' || needs.push-context.outputs.run_tests_on_push == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mingle-app/rn
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.11.0
+          cache: pnpm
+          cache-dependency-path: mingle-app/rn/pnpm-lock.yaml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            mingle-app/rn/android/*.gradle
+            mingle-app/rn/android/app/build.gradle
+            mingle-app/rn/android/gradle.properties
+            mingle-app/rn/android/gradle/wrapper/gradle-wrapper.properties
+            mingle-app/rn/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Run JVM unit tests
+        working-directory: mingle-app/rn/android
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+      # Gradle's console output names a failing test but not why it failed.
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-test-report
+          path: mingle-app/rn/android/app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+
   live-tests:
     name: Live Integration (STT + Finalize, Opt-In)
     needs: unit-tests

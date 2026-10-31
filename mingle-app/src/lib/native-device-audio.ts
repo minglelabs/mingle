@@ -10,6 +10,11 @@
 // it is never persisted, so a Start can never surprise the user with the
 // system screen-capture prompt for a choice made on another day.
 
+import {
+  isDeviceAudioCaptureSwitchedOn,
+  type DeviceAudioCaptureSwitch,
+} from './device-audio-capture-switch'
+
 export const NATIVE_SHELL_CAPABILITIES_EVENT = 'mingle:native-stt'
 export const NATIVE_SHELL_CAPABILITIES_STATE_KEY = '__MINGLE_NATIVE_SHELL_CAPABILITIES'
 
@@ -49,8 +54,20 @@ export function readCachedNativeShellCapabilities(): unknown {
   return (window as NativeDeviceAudioWindow)[NATIVE_SHELL_CAPABILITIES_STATE_KEY] ?? null
 }
 
+// Device audio is offered only on a shell that can capture it, and only while
+// the server switch (device-audio-capture-switch.ts) leaves it on for this
+// platform. Off means no capture-source choice and microphone-only capture.
+export function resolveNativeDeviceAudioSupported(input: {
+  shellCapable: boolean
+  serverSwitch: DeviceAudioCaptureSwitch
+  isIOS: boolean
+}): boolean {
+  return input.shellCapable
+    && isDeviceAudioCaptureSwitchedOn(input.serverSwitch, input.isIOS ? 'ios' : 'android')
+}
+
 // Device audio is captured only while earphone mode is on (that is where the
-// choice is made and explained) and only on a shell that can do it.
+// choice is made and explained) and only where it is supported (above).
 export function resolveEffectiveSttCaptureSource(input: {
   supported: boolean
   earphoneModeEnabled: boolean

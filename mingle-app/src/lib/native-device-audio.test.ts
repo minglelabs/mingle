@@ -8,6 +8,7 @@ import {
   readCachedNativeShellCapabilities,
   resetNativeDeviceAudioStoresForTests,
   resolveEffectiveSttCaptureSource,
+  resolveNativeDeviceAudioSupported,
   setSttCaptureSourcePick,
   shouldPlayTtsViaNativeShell,
   subscribeNativeDeviceAudioCapability,
@@ -55,6 +56,34 @@ describe('capability detection', () => {
     expect(parseNativeDeviceAudioCapability({ type: 'status', status: 'ready' })).toBeNull()
     expect(parseNativeDeviceAudioCapability(null)).toBeNull()
     expect(parseNativeDeviceAudioCapability([])).toBeNull()
+  })
+})
+
+describe('server kill switch', () => {
+  const allOn = { ios: true, android: true }
+
+  it('offers device audio on a capable shell while the switch leaves its platform on', () => {
+    expect(resolveNativeDeviceAudioSupported({ shellCapable: true, serverSwitch: allOn, isIOS: true })).toBe(true)
+    expect(resolveNativeDeviceAudioSupported({ shellCapable: true, serverSwitch: allOn, isIOS: false })).toBe(true)
+    expect(resolveNativeDeviceAudioSupported({ shellCapable: false, serverSwitch: allOn, isIOS: false })).toBe(false)
+  })
+
+  it('withdraws it per platform, even when the shell reports the capability', () => {
+    const androidOff = { ios: true, android: false }
+    expect(resolveNativeDeviceAudioSupported({ shellCapable: true, serverSwitch: androidOff, isIOS: false })).toBe(false)
+    expect(resolveNativeDeviceAudioSupported({ shellCapable: true, serverSwitch: androidOff, isIOS: true })).toBe(true)
+    const allOff = { ios: false, android: false }
+    expect(resolveNativeDeviceAudioSupported({ shellCapable: true, serverSwitch: allOff, isIOS: true })).toBe(false)
+    expect(resolveNativeDeviceAudioSupported({ shellCapable: true, serverSwitch: allOff, isIOS: false })).toBe(false)
+  })
+
+  it('keeps capture on the microphone while the switch is off, whatever was picked', () => {
+    const supported = resolveNativeDeviceAudioSupported({
+      shellCapable: true,
+      serverSwitch: { ios: true, android: false },
+      isIOS: false,
+    })
+    expect(resolveEffectiveSttCaptureSource({ supported, earphoneModeEnabled: true, pick: 'device_audio' })).toBe('microphone')
   })
 })
 

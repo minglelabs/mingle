@@ -53,6 +53,7 @@ import {
   getSttCaptureSourcePickSnapshot,
   readCachedNativeShellCapabilities,
   resolveEffectiveSttCaptureSource,
+  resolveNativeDeviceAudioSupported,
   setSttCaptureSourcePick,
   shouldPlayTtsViaNativeShell,
   subscribeNativeDeviceAudioCapability,
@@ -119,6 +120,7 @@ import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { buildConversationShareUrl } from '@/lib/conversation-share-link'
 import { useTtsSettings } from '@/context/tts-settings'
+import { useDeviceAudioCaptureSwitch } from '@/context/device-audio-capture-switch'
 import {
   DEFAULT_STT_LANGUAGES,
   MAX_STT_LANGUAGE_SELECTION,
@@ -2253,12 +2255,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const earphoneModeCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
   // Device audio: translate what other apps play instead of the microphone.
-  // Picked in the earphone-mode notice, on shells that can capture it.
-  const nativeDeviceAudioSupported = useSyncExternalStore(
+  // Picked in the earphone-mode notice, on shells that can capture it, unless
+  // the server's kill switch (DEVICE_AUDIO_CAPTURE_ENABLED*) turned it off.
+  const nativeDeviceAudioCapable = useSyncExternalStore(
     subscribeNativeDeviceAudioCapability,
     getNativeDeviceAudioCapabilitySnapshot,
     getNativeDeviceAudioCapabilityServerSnapshot,
   )
+  const deviceAudioCaptureSwitch = useDeviceAudioCaptureSwitch()
+  const nativeDeviceAudioSupported = resolveNativeDeviceAudioSupported({
+    shellCapable: nativeDeviceAudioCapable,
+    serverSwitch: deviceAudioCaptureSwitch,
+    isIOS: isLikelyIOSPlatform(),
+  })
   const sttCaptureSourcePick = useSyncExternalStore(
     subscribeSttCaptureSourcePick,
     getSttCaptureSourcePickSnapshot,

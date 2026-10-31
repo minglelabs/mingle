@@ -7,6 +7,7 @@ const logicSource = readFileSync(new URL('./live-phone-demo.earphone-mode.logic.
 const composerSource = readFileSync(new URL('./ConversationImageComposer.tsx', import.meta.url), 'utf8')
 const legacySource = readFileSync(new URL('./LivePhoneDemoLegacy.tsx', import.meta.url), 'utf8')
 const ttsSettingsSource = readFileSync(new URL('../../context/tts-settings.tsx', import.meta.url), 'utf8')
+const layoutSource = readFileSync(new URL('../../app/layout.tsx', import.meta.url), 'utf8')
 
 function between(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker)
@@ -134,7 +135,7 @@ describe('earphone mode wiring', () => {
   })
 
   it('captures device audio only as a per-session pick made in the notice', () => {
-    // Offered only when the shell reports the capability.
+    // Offered only where supported: shell capability + the server switch.
     const notice = between(liveDemoSource, '<EarphoneModeNoticeContent', '/>')
     expect(notice).toContain('captureSource={nativeDeviceAudioSupported ? sttCaptureSourcePick : undefined}')
     expect(notice).toContain('onSelectCaptureSource={setSttCaptureSourcePick}')
@@ -155,6 +156,21 @@ describe('earphone mode wiring', () => {
     // The pick is never persisted.
     const store = readFileSync(new URL('../../lib/native-device-audio.ts', import.meta.url), 'utf8')
     expect(store).not.toMatch(/localStorage|sessionStorage|setItem\(/)
+  })
+
+  it('withdraws device audio when the server switch turns it off for this platform', () => {
+    // The shell capability alone does not decide: the server switch must agree.
+    expect(liveDemoSource).toContain('const deviceAudioCaptureSwitch = useDeviceAudioCaptureSwitch()')
+    const supported = between(liveDemoSource, 'const nativeDeviceAudioSupported = resolveNativeDeviceAudioSupported({', '})')
+    expect(supported).toContain('shellCapable: nativeDeviceAudioCapable,')
+    expect(supported).toContain('serverSwitch: deviceAudioCaptureSwitch,')
+    expect(supported).toContain('isIOS: isLikelyIOSPlatform(),')
+    // The root layout reads the env on each request (never a NEXT_PUBLIC_
+    // build-time inline) and hands it to every page.
+    const rootLayout = between(layoutSource, 'export default async function RootLayout', '\n}\n')
+    expect(rootLayout).toContain('const deviceAudioCaptureSwitch = resolveDeviceAudioCaptureSwitch();')
+    expect(rootLayout).toContain('<DeviceAudioCaptureSwitchProvider value={deviceAudioCaptureSwitch}>')
+    expect(layoutSource).not.toContain('NEXT_PUBLIC_DEVICE_AUDIO')
   })
 
   it('offers the display-language page list, with the same rows, in the notice', () => {
