@@ -99,6 +99,7 @@ model User {
   passwordResetTokens     PasswordResetToken[]
   conversationChannels    AppConversationChannel[]
   conversationMemberships AppConversationChannelMember[]
+  voiceCallParticipations AppVoiceCallParticipant[]
   followingRelations      UserFollow[]                   @relation("UserFollowing")
   followerRelations       UserFollow[]                   @relation("UserFollowers")
   receivedNotifications   UserNotification[]             @relation("UserNotificationsReceived")
@@ -388,9 +389,10 @@ model AppConversationChannel {
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
-  owner   User                           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  members AppConversationChannelMember[]
-  invites AppConversationChannelInvite[]
+  owner      User                           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members    AppConversationChannelMember[]
+  invites    AppConversationChannelInvite[]
+  voiceCalls AppVoiceCall[]
 
   @@unique([ownerUserId, sequenceNumber], map: "app_conversation_channels_owner_sequence_uidx")
   @@index([ownerUserId, updatedAt], map: "app_conversation_channels_owner_updated_at_idx")
@@ -1349,4 +1351,62 @@ model AppCoinAdminGrant {
 
   @@index([userId, createdAt(sort: Desc)], map: "app_coin_admin_grants_user_created_at_idx")
   @@map("app_coin_admin_grants")
+}
+
+// A group voice-talk session inside a chat room (conversation channel). At
+// most one call is "live" per channel at a time (enforced by the partial
+// unique index on channel_id WHERE status = 'live' in the migration), so
+// every member who joins while it is live lands in the same LiveKit room.
+// MVP caps participants at 8; every participant is a speaker.
+model AppVoiceCall {
+  id              String    @id @default(cuid())
+  channelId       String    @map("channel_id")
+  // LiveKit room name, "voice-<channelId>-<suffix>", fresh for each call.
+  // Unique so the webhook can resolve the call from a room_* event, and a
+  // later call in the same channel never collides with an ended one.
+  livekitRoom     String    @unique @map("livekit_room")
+  status          String    @default("live") // "live" | "ended"
+  startedByUserId String    @map("started_by_user_id")
+  maxParticipants Int       @default(8) @map("max_participants")
+  startedAt       DateTime  @default(now()) @map("started_at")
+  endedAt         DateTime? @map("ended_at")
+  // Call duration in seconds, stamped when the call ends (webhook/leave).
+  durationSec     Int?      @map("duration_sec")
+  // Billing window aggregate (coins), finalized in Phase 4.
+  interpretedMs   Int       @default(0) @map("interpreted_ms")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  channel      AppConversationChannel    @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  participants AppVoiceCallParticipant[]
+
+  @@index([channelId, status], map: "app_voice_calls_channel_status_idx")
+  @@index([status, startedAt], map: "app_voice_calls_status_started_at_idx")
+  @@map("app_voice_calls")
+}
+
+model AppVoiceCallParticipant {
+  id             String    @id @default(cuid())
+  callId         String    @map("call_id")
+  userId         String    @map("user_id")
+  role           String    @default("speaker") // "speaker" (MVP: all speakers; "listener" reserved)
+  interpretOn    Boolean   @default(true) @map("interpret_on")
+  // The language this user speaks in the room (their STT source language).
+  speechLanguage String?   @map("speech_language")
+  joinedAt       DateTime  @default(now()) @map("joined_at")
+  // Set when this participant leaves. An active participant has leftAt null;
+  // the row is kept for history and billing attribution.
+  leftAt         DateTime? @map("left_at")
+  // Billable interpreted milliseconds attributed to this participant (Phase 4).
+  interpretedMs  Int       @default(0) @map("interpreted_ms")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  call AppVoiceCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([callId, userId], map: "app_voice_call_participants_call_user_uidx")
+  @@index([userId, joinedAt], map: "app_voice_call_participants_user_joined_idx")
+  @@index([callId, leftAt], map: "app_voice_call_participants_call_left_idx")
+  @@map("app_voice_call_participants")
 }
