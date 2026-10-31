@@ -285,6 +285,7 @@ import {
 import { resolveAnimatedLiveDemoMessageIds } from './live-phone-demo.message-animation'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
+import { composerEnterAction, isTouchInput } from '@/components/comments/comment-state'
 import {
   NATIVE_PIP_WEB_EVENT,
   NATIVE_PIP_WEB_STATE_KEY,
@@ -9490,6 +9491,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           data-qa="live-demo-composer-textarea"
                           defaultValue={composerDraftRef.current}
                           onChange={handleComposerDraftChange}
+                          onKeyDown={(event) => {
+                            // PC keyboard: Enter sends, Shift+Enter is a newline.
+                            // Touch keyboard keeps Enter as a newline; IME Enter only commits.
+                            const action = composerEnterAction({
+                              key: event.key,
+                              shiftKey: event.shiftKey,
+                              isComposing: event.nativeEvent.isComposing,
+                              keyCode: event.nativeEvent.keyCode,
+                              touchInput: isTouchInput(),
+                            })
+                            if (action === 'send') {
+                              event.preventDefault()
+                              event.currentTarget.form?.requestSubmit()
+                            }
+                          }}
                           rows={1}
                           placeholder={composerCopy.composerPlaceholder}
                           className="block box-border h-full min-h-0 flex-1 resize-none self-end bg-transparent px-0.5 py-[7px] text-[16px] leading-[22px] text-gray-900 outline-none placeholder:text-gray-400"

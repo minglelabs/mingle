@@ -19,7 +19,7 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/server/conversation-realtime', () => ({ publishAdminInboxEvent: m.publishAdminInboxEvent }))
 vi.mock('@/server/push-notifications', () => ({ sendPushToUsers: m.sendPushToUsers }))
 
-import { notifyOperatorInboxActivity, OPERATOR_INBOX_PUSH_COALESCE_MS, type OperatorInboxActivity } from './notify'
+import { notifyOperatorInboxActivity, OPERATOR_INBOX_BATCH_GAP_MS, type OperatorInboxActivity } from './notify'
 
 const { resolvePushCopy } = await vi.importActual<typeof import('@/server/push-notifications')>('@/server/push-notifications')
 
@@ -158,39 +158,52 @@ describe('notifyOperatorInboxActivity', () => {
     expect(resolvePushCopy(en)).toEqual({ title: 'New message for @luca.kr, Mina and 1 more', body: 'HashChat (Official): Sent a photo' })
   })
 
-  it('does not push when no staff target is configured, and then does not hold the room window', async () => {
-    const roomId = nextRoomId()
-    roomWithOperators(roomId, [{ userId: 'op_1', name: '루카', handle: 'luca' }])
+  it('does not push when no staff target is configured', async () => {
+    roomWithOperators(nextRoomId(), [{ userId: 'op_1', name: '루카', handle: 'luca' }])
     m.targetFindMany.mockResolvedValueOnce([])
     await notifyOperatorInboxActivity(activity())
     expect(m.publishAdminInboxEvent).toHaveBeenCalledTimes(1)
     expect(m.sendPushToUsers).not.toHaveBeenCalled()
-
-    await notifyOperatorInboxActivity(activity({ messageId: 'msg_2' }))
-    expect(m.sendPushToUsers).toHaveBeenCalledTimes(1)
   })
 
-  it('pushes at most once per room per 20 s but still refreshes the inbox every time', async () => {
+  it('pushes once per batch of user messages but refreshes the inbox every time', async () => {
     const now = vi.spyOn(Date, 'now')
     const roomA = nextRoomId()
     const roomB = nextRoomId()
     roomWithOperators(roomA, [{ userId: 'op_1', name: '루카', handle: 'luca' }])
 
-    now.mockReturnValue(1_000_000)
-    await notifyOperatorInboxActivity(activity({ messageId: 'a1' }))
-    now.mockReturnValue(1_000_000 + OPERATOR_INBOX_PUSH_COALESCE_MS - 1)
-    await notifyOperatorInboxActivity(activity({ messageId: 'a2' }))
+    // A steady stream, each message less than the gap after the previous one,
+    // stays one batch even when it runs far longer than the gap.
+    const t0 = 1_000_000
+    for (let i = 0; i < 5; i += 1) {
+      now.mockReturnValue(t0 + i * (OPERATOR_INBOX_BATCH_GAP_MS - 1))
+      await notifyOperatorInboxActivity(activity({ messageId: `a${i}` }))
+    }
     expect(m.sendPushToUsers).toHaveBeenCalledTimes(1)
 
     roomWithOperators(roomB, [{ userId: 'op_1', name: '루카', handle: 'luca' }])
     await notifyOperatorInboxActivity(activity({ messageId: 'b1', sessionKey: 'sess_b' }))
     expect(m.sendPushToUsers).toHaveBeenCalledTimes(2)
 
+    // A quiet gap starts a new batch.
     roomWithOperators(roomA, [{ userId: 'op_1', name: '루카', handle: 'luca' }])
-    now.mockReturnValue(1_000_000 + OPERATOR_INBOX_PUSH_COALESCE_MS)
-    await notifyOperatorInboxActivity(activity({ messageId: 'a3' }))
+    now.mockReturnValue(t0 + 4 * (OPERATOR_INBOX_BATCH_GAP_MS - 1) + OPERATOR_INBOX_BATCH_GAP_MS)
+    await notifyOperatorInboxActivity(activity({ messageId: 'a5' }))
     expect(m.sendPushToUsers).toHaveBeenCalledTimes(3)
-    expect(m.publishAdminInboxEvent).toHaveBeenCalledTimes(4)
+    expect(m.publishAdminInboxEvent).toHaveBeenCalledTimes(7)
+  })
+
+  it('starts a new batch after an operator replies', async () => {
+    const now = vi.spyOn(Date, 'now')
+    roomWithOperators(nextRoomId(), [{ userId: 'op_1', name: '루카', handle: 'luca' }])
+    now.mockReturnValue(2_000_000)
+    await notifyOperatorInboxActivity(activity({ messageId: 'u1' }))
+    await notifyOperatorInboxActivity(activity({ messageId: 'u2' }))
+    expect(m.sendPushToUsers).toHaveBeenCalledTimes(1)
+
+    await notifyOperatorInboxActivity(activity({ messageId: 'op_reply', senderUserId: 'op_1' }))
+    await notifyOperatorInboxActivity(activity({ messageId: 'u3' }))
+    expect(m.sendPushToUsers).toHaveBeenCalledTimes(2)
   })
 
   it('pushes with an unknown-sender label when the message has no sender', async () => {

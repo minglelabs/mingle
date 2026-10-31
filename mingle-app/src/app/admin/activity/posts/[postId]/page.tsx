@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { requireAdmin } from '@/server/admin/guard'
 import { normalizeActivityId } from '@/server/operator-activity/activity'
 import { loadOperatorPostThread } from '@/server/operator-activity/thread'
+import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
 import { PostThreadView } from '../../_components/post-thread-view'
 
 export const dynamic = 'force-dynamic'
@@ -56,12 +57,16 @@ export default async function AdminActivityPostPage({ params, searchParams }: Pa
     )
   }
 
+  // Only an operator post has stats (as of this page load; the thread's live reload leaves them).
+  const stats = (await loadOperatorPostStats({ postIds: [result.thread.post.id] })).get(result.thread.post.id) ?? null
+
   // Keyed by post and operator: switching either starts a fresh thread state.
   return (
     <PostThreadView
       key={`${result.thread.post.id}:${result.thread.operator.userId}`}
       initialThread={result.thread}
       focusCommentId={normalizeActivityId(firstParam(query.comment))}
+      postStats={stats}
     />
   )
 }
