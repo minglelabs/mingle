@@ -620,9 +620,19 @@ async function cmdServers() {
   } catch {
     sttListening = false;
   }
+  // The page can render while its APIs fail (stale Prisma client, unapplied migrations), so also ask the
+  // feed API, which signed-out users hit first.
+  let feedStatus = 0;
+  if (webStatus) {
+    try {
+      feedStatus = (await fetch(`${webUrl}/api/feed`, { signal: AbortSignal.timeout(15_000) })).status;
+    } catch {
+      feedStatus = 0;
+    }
+  }
   const reachableFromPhone = host !== '127.0.0.1' && host !== 'localhost';
-  const ok = webStatus >= 200 && webStatus < 400 && sttListening && reachableFromPhone;
-  console.log(JSON.stringify({ host, webUrl, webStatus, sttPort: Number(env.DEVBOX_STT_PORT), sttListening, reachableFromPhone, ok }));
+  const ok = webStatus >= 200 && webStatus < 400 && feedStatus >= 200 && feedStatus < 300 && sttListening && reachableFromPhone;
+  console.log(JSON.stringify({ host, webUrl, webStatus, feedStatus, sttPort: Number(env.DEVBOX_STT_PORT), sttListening, reachableFromPhone, ok }));
   if (!ok) process.exitCode = 1;
 }
 
