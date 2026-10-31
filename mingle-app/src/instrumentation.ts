@@ -55,6 +55,8 @@ export function operatorAutomationWorkerEnabled(env: NodeJS.ProcessEnv = process
 
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // Review photos drawn in the background by the previous process will never finish.
+    void import('./server/operator-review/review').then(({ releaseOrphanedDrawings }) => releaseOrphanedDrawings()).catch(() => {})
     if (operatorPostWorkerEnabled()) {
       const { startOperatorPostWorker } = await import('./server/operator-posts/scheduler')
       startOperatorPostWorker()

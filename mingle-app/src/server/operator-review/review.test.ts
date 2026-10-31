@@ -44,7 +44,7 @@ vi.mock('@/server/operator-post-reserve/worker', () => ({
   PHOTO_REQUESTED: 'photo_requested',
 }))
 
-import { normalizeReviewFeedback, parseReviewAction, reviewOperatorPost, reviewOperatorProfile } from './review'
+import { normalizeReviewFeedback, parseReviewAction, releaseOrphanedDrawings, reviewOperatorPost, reviewOperatorProfile } from './review'
 
 const PENDING_ACCOUNT = { reviewState: 'pending', user: { isOperator: true, isDeleted: false } }
 const REVIEW_POST = {
@@ -213,5 +213,16 @@ describe('where this server can draw (the ChatGPT pool)', () => {
     await expect(reviewOperatorProfile(null, 'op1', 'regenerate', null)).resolves.toEqual({ ok: true, state: 'drawing' })
     await vi.waitFor(() => expect(mocks.accountUpdateMany).toHaveBeenCalled())
     expect(mocks.accountUpdateMany.mock.calls[0][0].data).toEqual({ avatarSpec: { prompt: 'p' } })
+  })
+})
+
+describe('releaseOrphanedDrawings', () => {
+  it('puts drawings a previous process left behind back in review as failed', async () => {
+    mocks.reserveUpdateMany.mockResolvedValue({ count: 3 })
+    await expect(releaseOrphanedDrawings()).resolves.toBe(3)
+    expect(mocks.reserveUpdateMany).toHaveBeenCalledWith({
+      where: { state: 'regenerating', error: 'photo_drawing' },
+      data: { state: 'review', error: 'photo_draw_failed' },
+    })
   })
 })
