@@ -726,6 +726,26 @@ function isNativeIosAppRuntime(): boolean {
   return apiNamespace.startsWith('ios/')
 }
 
+// The screen-capture pre-prompt is shown until the user continues past it
+// with "Don't show this again" checked; then never again on this device.
+const SCREEN_CAPTURE_NOTICE_DISMISSED_KEY = 'mingle.screenCaptureNotice.dismissed'
+
+function readScreenCaptureNoticeDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(SCREEN_CAPTURE_NOTICE_DISMISSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeScreenCaptureNoticeDismissed(): void {
+  try {
+    window.localStorage.setItem(SCREEN_CAPTURE_NOTICE_DISMISSED_KEY, '1')
+  } catch {
+    // Storage blocked: the notice shows again next session, which is harmless.
+  }
+}
+
 function isLikelyIOSPlatform(): boolean {
   if (typeof navigator === 'undefined') {
     return false
@@ -2258,6 +2278,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // system screen broadcast / sharing prompt, so it does not come as a shock.
   const [screenCaptureNoticeOpen, setScreenCaptureNoticeOpen] = useState(false)
   const screenCaptureNoticeAcknowledgedRef = useRef(false)
+  // "Don't show this again" starts checked: most users see the notice once.
+  const [screenCaptureNoticeDontShowAgain, setScreenCaptureNoticeDontShowAgain] = useState(true)
   // Device audio: translate what other apps play instead of the microphone.
   // Picked in the earphone-mode notice, on shells that can capture it, unless
   // the server's kill switch (DEVICE_AUDIO_CAPTURE_ENABLED*) turned it off.
@@ -5809,7 +5831,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       void handleStopRecording({ forceNativeStop: !isSttSessionRunning, stopSource: source })
       return
     }
-    if (sttCaptureSource === 'device_audio' && !screenCaptureNoticeAcknowledgedRef.current) {
+    if (
+      sttCaptureSource === 'device_audio'
+      && !screenCaptureNoticeAcknowledgedRef.current
+      && !readScreenCaptureNoticeDismissed()
+    ) {
+      setScreenCaptureNoticeDontShowAgain(true)
       // Start opens the system screen prompt: say so first.
       setScreenCaptureNoticeOpen(true)
       return
@@ -5819,9 +5846,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const confirmScreenCaptureNotice = useCallback(() => {
     screenCaptureNoticeAcknowledgedRef.current = true
+    if (screenCaptureNoticeDontShowAgain) writeScreenCaptureNoticeDismissed()
     setScreenCaptureNoticeOpen(false)
     void handleStartRecording()
-  }, [handleStartRecording])
+  }, [handleStartRecording, screenCaptureNoticeDontShowAgain])
 
   const cancelScreenCaptureNotice = useCallback(() => {
     setScreenCaptureNoticeOpen(false)
@@ -9763,6 +9791,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 >
                   {earphoneModeCopy.screenCaptureNoticeCancelLabel}
                 </button>
+                <label className="mt-3 inline-flex cursor-pointer select-none items-center gap-2 text-sm text-gray-500">
+                  <input
+                    type="checkbox"
+                    data-screen-capture-notice-dont-show-again
+                    checked={screenCaptureNoticeDontShowAgain}
+                    onChange={(event) => setScreenCaptureNoticeDontShowAgain(event.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 accent-orange-500"
+                  />
+                  {earphoneModeCopy.screenCaptureNoticeDontShowAgainLabel}
+                </label>
               </div>
             </MessageMediaDialog>
           )}

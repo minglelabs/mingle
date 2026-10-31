@@ -34,6 +34,7 @@ export type LivePhoneDemoEarphoneModeCopy = {
   screenCaptureNoticeOffHint: string;
   screenCaptureNoticeContinueLabel: string;
   screenCaptureNoticeCancelLabel: string;
+  screenCaptureNoticeDontShowAgainLabel: string;
 };
 
 const EARPHONE_MODE_COPY_BY_LOCALE = {
@@ -60,6 +61,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "이어폰 모드를 끄면 화면 기록 없이 마이크로만 입력돼요.",
     screenCaptureNoticeContinueLabel: "계속",
     screenCaptureNoticeCancelLabel: "취소",
+    screenCaptureNoticeDontShowAgainLabel: "다시 보지 않기",
   },
   en: {
     label: "Earphone mode",
@@ -84,6 +86,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "Turn earphone mode off to use only the microphone, with no screen recording.",
     screenCaptureNoticeContinueLabel: "Continue",
     screenCaptureNoticeCancelLabel: "Cancel",
+    screenCaptureNoticeDontShowAgainLabel: "Don't show this again",
   },
   ja: {
     label: "イヤホンモード",
@@ -108,6 +111,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "イヤホンモードをオフにすると、画面収録なしでマイクだけで入力します。",
     screenCaptureNoticeContinueLabel: "続ける",
     screenCaptureNoticeCancelLabel: "キャンセル",
+    screenCaptureNoticeDontShowAgainLabel: "今後表示しない",
   },
   "zh-CN": {
     label: "耳机模式",
@@ -132,6 +136,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "关闭耳机模式后，只用麦克风输入，不需要屏幕录制。",
     screenCaptureNoticeContinueLabel: "继续",
     screenCaptureNoticeCancelLabel: "取消",
+    screenCaptureNoticeDontShowAgainLabel: "不再显示",
   },
   "zh-TW": {
     label: "耳機模式",
@@ -156,6 +161,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "關閉耳機模式後，只用麥克風輸入，不需要螢幕錄製。",
     screenCaptureNoticeContinueLabel: "繼續",
     screenCaptureNoticeCancelLabel: "取消",
+    screenCaptureNoticeDontShowAgainLabel: "不再顯示",
   },
   fr: {
     label: "Mode écouteurs",
@@ -180,6 +186,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "Désactivez le mode écouteurs pour n’utiliser que le micro, sans enregistrement de l’écran.",
     screenCaptureNoticeContinueLabel: "Continuer",
     screenCaptureNoticeCancelLabel: "Annuler",
+    screenCaptureNoticeDontShowAgainLabel: "Ne plus afficher",
   },
   de: {
     label: "Kopfhörermodus",
@@ -204,6 +211,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "Schalte den Kopfhörermodus aus, um nur das Mikrofon zu nutzen – ohne Bildschirmaufnahme.",
     screenCaptureNoticeContinueLabel: "Weiter",
     screenCaptureNoticeCancelLabel: "Abbrechen",
+    screenCaptureNoticeDontShowAgainLabel: "Nicht mehr anzeigen",
   },
   es: {
     label: "Modo auriculares",
@@ -228,6 +236,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "Desactiva el modo auriculares para usar solo el micrófono, sin grabar la pantalla.",
     screenCaptureNoticeContinueLabel: "Continuar",
     screenCaptureNoticeCancelLabel: "Cancelar",
+    screenCaptureNoticeDontShowAgainLabel: "No volver a mostrar",
   },
   pt: {
     label: "Modo fones de ouvido",
@@ -252,6 +261,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "Desative o modo fones para usar só o microfone, sem gravar a tela.",
     screenCaptureNoticeContinueLabel: "Continuar",
     screenCaptureNoticeCancelLabel: "Cancelar",
+    screenCaptureNoticeDontShowAgainLabel: "Não mostrar novamente",
   },
   it: {
     label: "Modalità auricolari",
@@ -276,6 +286,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "Disattiva la modalità auricolari per usare solo il microfono, senza registrare lo schermo.",
     screenCaptureNoticeContinueLabel: "Continua",
     screenCaptureNoticeCancelLabel: "Annulla",
+    screenCaptureNoticeDontShowAgainLabel: "Non mostrare più",
   },
   ru: {
     label: "Режим наушников",
@@ -300,6 +311,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "Выключите режим наушников, чтобы использовать только микрофон без записи экрана.",
     screenCaptureNoticeContinueLabel: "Продолжить",
     screenCaptureNoticeCancelLabel: "Отмена",
+    screenCaptureNoticeDontShowAgainLabel: "Больше не показывать",
   },
   ar: {
     label: "وضع السماعات",
@@ -324,6 +336,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "أوقف وضع السماعات لاستخدام الميكروفون فقط بدون تسجيل الشاشة.",
     screenCaptureNoticeContinueLabel: "متابعة",
     screenCaptureNoticeCancelLabel: "إلغاء",
+    screenCaptureNoticeDontShowAgainLabel: "عدم الإظهار مرة أخرى",
   },
   hi: {
     label: "ईयरफ़ोन मोड",
@@ -348,6 +361,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "सिर्फ़ माइक्रोफ़ोन इस्तेमाल करने के लिए ईयरफ़ोन मोड बंद करें, स्क्रीन रिकॉर्डिंग नहीं होगी।",
     screenCaptureNoticeContinueLabel: "जारी रखें",
     screenCaptureNoticeCancelLabel: "रद्द करें",
+    screenCaptureNoticeDontShowAgainLabel: "दोबारा न दिखाएँ",
   },
   th: {
     label: "โหมดหูฟัง",
@@ -372,6 +386,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "ปิดโหมดหูฟังเพื่อใช้แค่ไมโครโฟน โดยไม่ต้องบันทึกหน้าจอ",
     screenCaptureNoticeContinueLabel: "ดำเนินการต่อ",
     screenCaptureNoticeCancelLabel: "ยกเลิก",
+    screenCaptureNoticeDontShowAgainLabel: "ไม่ต้องแสดงอีก",
   },
   vi: {
     label: "Chế độ tai nghe",
@@ -396,6 +411,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeOffHint: "Tắt chế độ tai nghe để chỉ dùng micrô, không cần ghi màn hình.",
     screenCaptureNoticeContinueLabel: "Tiếp tục",
     screenCaptureNoticeCancelLabel: "Hủy",
+    screenCaptureNoticeDontShowAgainLabel: "Không hiển thị lại",
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoEarphoneModeCopy>;
 

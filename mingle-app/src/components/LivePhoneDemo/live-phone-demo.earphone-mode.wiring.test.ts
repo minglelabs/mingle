@@ -113,11 +113,17 @@ describe('earphone mode wiring', () => {
 
   it('warns before Start opens the system screen prompt, once per earphone-mode session', () => {
     const mic = between(liveDemoSource, 'const performMicAction = useCallback((source: SttStopSource) => {', 'const confirmScreenCaptureNotice')
-    expect(mic).toContain("if (sttCaptureSource === 'device_audio' && !screenCaptureNoticeAcknowledgedRef.current) {")
+    expect(mic).toContain("sttCaptureSource === 'device_audio'")
+    expect(mic).toContain('&& !screenCaptureNoticeAcknowledgedRef.current')
+    expect(mic).toContain('&& !readScreenCaptureNoticeDismissed()')
     expect(mic).toContain('setScreenCaptureNoticeOpen(true)')
     expect(mic.indexOf('setScreenCaptureNoticeOpen(true)')).toBeLessThan(mic.lastIndexOf('void handleStartRecording()'))
-    const confirm = between(liveDemoSource, 'const confirmScreenCaptureNotice = useCallback(() => {', '}, [handleStartRecording])')
+    const confirm = between(liveDemoSource, 'const confirmScreenCaptureNotice = useCallback(() => {', '}, [handleStartRecording, screenCaptureNoticeDontShowAgain])')
+    // "Don't show this again" starts checked.
+    expect(liveDemoSource).toContain('useState(true)')
+    expect(liveDemoSource).toContain('data-screen-capture-notice-dont-show-again')
     expect(confirm).toContain('screenCaptureNoticeAcknowledgedRef.current = true')
+    expect(confirm).toContain('if (screenCaptureNoticeDontShowAgain) writeScreenCaptureNoticeDismissed()')
     expect(confirm).toContain('void handleStartRecording()')
     const reset = between(liveDemoSource, 'useEffect(() => subscribeEarphoneModePreference(() => {', '}), [])')
     expect(reset).toContain('screenCaptureNoticeAcknowledgedRef.current = false')
