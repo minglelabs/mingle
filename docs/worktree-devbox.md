@@ -33,6 +33,12 @@
 - 슬롯 점유 기록은 git common dir(`/Users/nam/mingle/.git/devbox-shared/`)에 있어 모든 워크트리가 같이 봅니다.
   슬롯은 그 슬롯을 잡은 `devbox up` 프로세스가 살아 있는 동안만 점유됩니다.
 
+### 터널 제공자는 Cloudflare
+
+- 기본 터널은 Cloudflare입니다(`--tunnel-provider`를 안 주면 cloudflare).
+- ngrok은 사용자가 명시적으로 요청할 때만 `--tunnel-provider ngrok`으로 씁니다.
+  ngrok 무료 endpoint 한도(1~3개)를 모든 세션이 같이 써서 동시 세션에서 충돌합니다.
+
 ### 폰은 사용자가 지정
 
 - 사용자가 세션마다 폰을 지정합니다("너는 이 폰에서 해"). 지정된 폰에만
