@@ -9725,7 +9725,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <h2 className="text-xl font-bold leading-tight text-gray-900">
                   {earphoneModeCopy.screenCaptureNoticeTitle}
                 </h2>
-                <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                <p className="mt-2 text-lg font-semibold leading-snug text-gray-800">
                   {earphoneModeCopy.screenCaptureNoticeBody}
                 </p>
                 <div className="mt-4 flex gap-2">
