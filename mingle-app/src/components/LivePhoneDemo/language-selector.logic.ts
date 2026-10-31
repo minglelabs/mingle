@@ -270,6 +270,29 @@ export function buildLanguageSelectorItems(
   });
 }
 
+/**
+ * Items named in `displayLocale` that can still be searched by their
+ * `browseLocale` names. Onboarding renders its copy in the tentatively selected
+ * language, so the language names must follow it ("Speaks English", not
+ * "Speaks 영어"), while a user who taps through languages can still type the
+ * name in the language they browse in.
+ */
+export function buildLanguageSelectorItemsForDisplayLocale(
+  displayLocale: string,
+  browseLocale: string,
+  options: readonly SttLanguageOption[] = STT_LANGUAGE_OPTIONS,
+): LanguageSelectorItem[] {
+  const displayItems = buildLanguageSelectorItems(displayLocale, options);
+  if (displayLocale === browseLocale) return displayItems;
+  const browseSearchText = new Map(
+    buildLanguageSelectorItems(browseLocale, options).map((item) => [item.code, item.searchText]),
+  );
+  return displayItems.map((item) => {
+    const extra = browseSearchText.get(item.code);
+    return extra ? { ...item, searchText: `${item.searchText} ${extra}` } : item;
+  });
+}
+
 export function filterLanguageSelectorItems(
   items: readonly LanguageSelectorItem[],
   query: string,

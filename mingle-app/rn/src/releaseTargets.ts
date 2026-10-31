@@ -72,10 +72,10 @@ function isDevelopmentTunnelUrl(rawValue: string): boolean {
   if (!normalizedValue) return false;
   const normalizedLowerValue = normalizedValue.toLowerCase();
 
-  if (
-    normalizedLowerValue.includes('mingle-app-devbox.photo-for-passport.com')
-    || normalizedLowerValue.includes('mingle-stt-devbox.photo-for-passport.com')
-  ) {
+  // Devbox named-tunnel hosts, with an optional per-session slot suffix
+  // (e.g. mingle-app-devbox-2.photo-for-passport.com).
+  const devboxHostPattern = /mingle-(app|stt)-devbox(-\d+)?\.photo-for-passport\.com/i;
+  if (devboxHostPattern.test(normalizedLowerValue)) {
     return true;
   }
 
@@ -83,11 +83,9 @@ function isDevelopmentTunnelUrl(rawValue: string): boolean {
     const { hostname } = new URL(normalizedValue);
     const normalizedHost = hostname.toLowerCase();
     return normalizedHost.endsWith('.ngrok-free.dev')
-      || normalizedHost.endsWith('.ngrok-free.app')
-      || normalizedHost === 'mingle-app-devbox.photo-for-passport.com'
-      || normalizedHost === 'mingle-stt-devbox.photo-for-passport.com';
+      || normalizedHost.endsWith('.ngrok-free.app');
   } catch {
-    return /(\.ngrok-free\.(dev|app)|mingle-(app|stt)-devbox\.photo-for-passport\.com)/i.test(normalizedValue);
+    return /(\.ngrok-free\.(dev|app))/i.test(normalizedValue);
   }
 }
 

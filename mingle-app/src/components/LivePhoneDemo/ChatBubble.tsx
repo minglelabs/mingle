@@ -377,6 +377,27 @@ function isGenericChineseOriginalAlias(
     || classifyChineseLanguage(utterance.originalLang) === 'zh'
 }
 
+function normalizeEchoComparisonText(text: string): string {
+  return text.normalize('NFC').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * A mixed-language original keeps its same-language row only when that row
+ * says something new. When the model returns the original unchanged (e.g.
+ * "이거 deadline이 언제까지였지?" with "deadline" kept in Latin script), the row
+ * just repeats the source line.
+ */
+function isSameLanguageEchoOfOriginal(
+  utterance: Pick<Utterance, 'originalText' | 'originalDisplayText' | 'translations'>,
+  rawLanguage: string,
+): boolean {
+  const translated = utterance.translations?.[rawLanguage]
+  if (typeof translated !== 'string' || !translated.trim()) return false
+  const rendered = normalizeEchoComparisonText(translated)
+  return [utterance.originalText, utterance.originalDisplayText]
+    .some((original) => typeof original === 'string' && normalizeEchoComparisonText(original) === rendered)
+}
+
 export function buildTargetLanguagesForUtterance(
   utterance: Utterance,
   languageOrder: readonly string[] = [],
@@ -398,7 +419,11 @@ export function buildTargetLanguagesForUtterance(
     if (!key) return
     if (
       key === resolver.originalKey
-      && (!keepSourceLanguageBubble || isGenericChineseOriginalAlias(language, utterance))
+      && (
+        !keepSourceLanguageBubble
+        || isGenericChineseOriginalAlias(language, utterance)
+        || isSameLanguageEchoOfOriginal(utterance, language)
+      )
     ) {
       return
     }

@@ -391,14 +391,19 @@ function isLoopbackUrl(raw: string): boolean {
   }
 }
 
+// Devbox web host, with an optional per-session tunnel slot suffix
+// (e.g. mingle-app-devbox-2.photo-for-passport.com).
+const DEVBOX_WEB_HOST_PATTERN = /^mingle-app-devbox(-\d+)?\.photo-for-passport\.com$/i;
+const DEVBOX_WEB_HOST_IN_TEXT_PATTERN = /mingle-app-devbox(-\d+)?\.photo-for-passport\.com/i;
+
 function isDebugWebViewRemountAllowedUrl(raw: string): boolean {
   if (!raw) return false;
 
   try {
     const { hostname } = new URL(raw);
-    return hostname.toLowerCase() === 'mingle-app-devbox.photo-for-passport.com';
+    return DEVBOX_WEB_HOST_PATTERN.test(hostname);
   } catch {
-    return /mingle-app-devbox\.photo-for-passport\.com/i.test(raw);
+    return DEVBOX_WEB_HOST_IN_TEXT_PATTERN.test(raw);
   }
 }
 
@@ -411,9 +416,10 @@ function isDevelopmentTunnelUrl(raw: string): boolean {
     return normalized.endsWith('.ngrok-free.dev')
       || normalized.endsWith('.ngrok-free.app')
       || normalized.endsWith('.trycloudflare.com')
-      || normalized === 'mingle-app-devbox.photo-for-passport.com';
+      || DEVBOX_WEB_HOST_PATTERN.test(normalized);
   } catch {
-    return /(\.ngrok-free\.(dev|app)|\.trycloudflare\.com|mingle-app-devbox\.photo-for-passport\.com)/i.test(raw);
+    return /(\.ngrok-free\.(dev|app)|\.trycloudflare\.com)/i.test(raw)
+      || DEVBOX_WEB_HOST_IN_TEXT_PATTERN.test(raw);
   }
 }
 
