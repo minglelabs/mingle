@@ -8,6 +8,8 @@ import { zipInterestLanguages } from '@/lib/interest-languages'
 import { requireAdmin } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { listReviewQueue } from '@/server/operator-review/review'
+import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
+import { OperatorPostStatsRow } from '../../../_components/operator-post-stats-row'
 import { OperatorPostEditor } from '../../../feed/_components/operator-post-editor'
 import { PostTakedownButton } from '../../../feed/_components/post-takedown-button'
 import { OperatorAvatar, OperatorsMain } from '../../_components/operator-ui'
@@ -114,6 +116,8 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
     tab === 'review' ? listReviewQueue({ userId: user.id, cursor: query.after || undefined }) : Promise.resolve(null),
   ])
 
+  // The full cards (list view) carry each post's stats row.
+  const statsByPost = await loadOperatorPostStats({ postIds: view === 'list' ? published.map((post) => post.id) : [] })
   const base = `/admin/operators/${encodeURIComponent(user.id)}/profile`
   const href = (next: { tab?: Tab; view?: View; after?: string }, anchor?: string) => {
     const params = new URLSearchParams({ tab: next.tab ?? tab, view: next.view ?? view })
@@ -202,6 +206,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
                   <p className="mt-2 text-xs text-slate-500">
                     {DATE_FORMAT.format(post.publishedAt)} · {post.sourceLanguage ?? '?'} · 좋아요 {post.likeCount} · 댓글 {post.commentCount}
                   </p>
+                  <OperatorPostStatsRow stats={statsByPost.get(post.id)} className="mt-2" />
                   {post.comments.length ? (
                     <ul className="mt-2 space-y-1 rounded-lg bg-slate-50 p-2 text-sm">
                       {post.comments.map((comment) => (

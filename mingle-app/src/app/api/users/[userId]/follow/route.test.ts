@@ -10,6 +10,7 @@ const {
   mockUserNotificationFindFirst,
   mockUserFollowDeleteMany,
   mockSendPush,
+  mockPostFindFirst,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
@@ -19,6 +20,7 @@ const {
   mockUserNotificationFindFirst: vi.fn(),
   mockUserFollowDeleteMany: vi.fn(),
   mockSendPush: vi.fn(),
+  mockPostFindFirst: vi.fn(),
 }));
 
 vi.mock("@/server/push-notifications", () => ({
@@ -48,6 +50,9 @@ vi.mock("@/lib/prisma", () => ({
     userNotification: {
       create: mockUserNotificationCreate,
       findFirst: mockUserNotificationFindFirst,
+    },
+    post: {
+      findFirst: mockPostFindFirst,
     },
   },
 }));
@@ -120,6 +125,43 @@ describe("/api/users/[userId]/follow route", () => {
         actorId: "user_123",
         type: "follow",
       },
+    });
+  });
+
+  function followFromPost(sourcePostId: unknown) {
+    return POST(
+      new NextRequest("https://example.com/api/users/user_456/follow", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sourcePostId }),
+      }),
+      { params: Promise.resolve({ userId: "user_456" }) },
+    );
+  }
+
+  it("keeps the followed user's post the follow was made from", async () => {
+    mockPostFindFirst.mockResolvedValue({ id: "post_789" });
+    const response = await followFromPost("post_789");
+    expect(response.status).toBe(200);
+    expect(mockPostFindFirst).toHaveBeenCalledWith({ where: { id: "post_789", authorId: "user_456" }, select: { id: true } });
+    expect(mockUserFollowCreate).toHaveBeenCalledWith({
+      data: { followerId: "user_123", followingId: "user_456", sourcePostId: "post_789" },
+    });
+  });
+
+  it("drops a source post that is not the followed user's", async () => {
+    mockPostFindFirst.mockResolvedValue(null);
+    await followFromPost("post_of_someone_else");
+    expect(mockUserFollowCreate).toHaveBeenCalledWith({
+      data: { followerId: "user_123", followingId: "user_456" },
+    });
+  });
+
+  it("ignores a malformed source id without looking it up", async () => {
+    await followFromPost({ not: "an id" });
+    expect(mockPostFindFirst).not.toHaveBeenCalled();
+    expect(mockUserFollowCreate).toHaveBeenCalledWith({
+      data: { followerId: "user_123", followingId: "user_456" },
     });
   });
 

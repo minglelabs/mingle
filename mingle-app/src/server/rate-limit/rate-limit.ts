@@ -31,6 +31,7 @@ export type RateLimitAction =
   | 'update_comment'
   | 'translate_post'
   | 'translate_comment'
+  | 'record_profile_view'
 
 type WindowRule = { limit: number; windowMs: number }
 
@@ -50,6 +51,8 @@ const RULES: Record<RateLimitAction, WindowRule> = {
   // "See translation" taps: generous for real reading, blocks scripted cost abuse.
   translate_post: { limit: 60, windowMs: 60_000 },
   translate_comment: { limit: 60, windowMs: 60_000 },
+  // Profile-visit beacon (one row per visit): nobody opens 60 profiles a minute.
+  record_profile_view: { limit: 60, windowMs: 60_000 },
 }
 
 export type RateLimitDecision =

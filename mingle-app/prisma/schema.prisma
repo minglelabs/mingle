@@ -113,6 +113,8 @@ model User {
   postLikes               PostLike[]
   postCommentLikes        PostCommentLike[]
   postViews               PostView[]
+  profileViewsMade        ProfileView[]                  @relation("ProfileViewViewer")
+  profileViewsReceived    ProfileView[]                  @relation("ProfileViewProfile")
   postHides               PostHide[]
   postDrafts              PostDraft[]
   recentSearches          RecentSearch[]
@@ -129,17 +131,23 @@ model User {
 }
 
 model UserFollow {
-  id          String   @id @default(cuid())
-  followerId  String   @map("follower_id")
-  followingId String   @map("following_id")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  followerId   String   @map("follower_id")
+  followingId  String   @map("following_id")
+  /// The followed user's post the follow was made from (feed card "+", or a
+  /// profile opened from that post). Null when followed from anywhere else.
+  /// Read only by the operator post stats (staff-only).
+  sourcePostId String?  @map("source_post_id")
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
-  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+  follower   User  @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following  User  @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+  sourcePost Post? @relation(fields: [sourcePostId], references: [id], onDelete: SetNull)
 
   @@unique([followerId, followingId], map: "app_user_follows_follower_following_uidx")
   @@index([followerId, createdAt], map: "app_user_follows_follower_created_at_idx")
   @@index([followingId, createdAt], map: "app_user_follows_following_created_at_idx")
+  @@index([sourcePostId], map: "app_user_follows_source_post_id_idx")
   @@map("app_user_follows")
 }
 
@@ -738,6 +746,8 @@ model Post {
   hides         PostHide[]
   notifications UserNotification[]
   reports       UserReport[]
+  profileViews  ProfileView[]
+  follows       UserFollow[]
 
   @@index([publishedAt], map: "app_posts_published_at_idx")
   @@index([authorId, publishedAt], map: "app_posts_author_published_at_idx")
@@ -871,6 +881,27 @@ model PostView {
   @@index([userId, postId], map: "app_post_views_user_post_idx")
   @@index([userId, viewedAt], map: "app_post_views_user_viewed_at_idx")
   @@map("app_post_views")
+}
+
+/// One opening of another user's profile screen. Unlike PostView every visit
+/// is a row. `sourcePostId` is the profile owner's post the profile was opened
+/// from (feed card author tap, full-screen post viewer); null otherwise. Read
+/// only by the operator post stats (staff-only).
+model ProfileView {
+  id            String   @id @default(cuid())
+  viewerId      String   @map("viewer_id")
+  profileUserId String   @map("profile_user_id")
+  sourcePostId  String?  @map("source_post_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  viewer      User  @relation("ProfileViewViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  profileUser User  @relation("ProfileViewProfile", fields: [profileUserId], references: [id], onDelete: Cascade)
+  sourcePost  Post? @relation(fields: [sourcePostId], references: [id], onDelete: SetNull)
+
+  @@index([viewerId, profileUserId, createdAt], map: "app_profile_views_viewer_profile_created_at_idx")
+  @@index([sourcePostId], map: "app_profile_views_source_post_id_idx")
+  @@index([profileUserId, createdAt], map: "app_profile_views_profile_created_at_idx")
+  @@map("app_profile_views")
 }
 
 model PostHide {

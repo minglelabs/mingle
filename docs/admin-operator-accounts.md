@@ -91,6 +91,12 @@ New accounts store the persona gender (`persona_gender`); for older accounts it 
 
 Added on 2026-10-03 with unit tests only: no image was generated, and the default image model name has not been checked against the API.
 
+## Post stats
+
+Each operator post shows a stats row in the admin feed preview, on the account page, in the profile list view and in the comment thread: views, likes, comments, follows, profile visits and messages, with every count after the views also shown as a share of the views. **Dashboard → 운영 계정 글 성과** lists the range's operator posts (the 100 most viewed, sortable by each count) with totals. In the app, the same row appears on operator posts for an admin session or a staff app account (a notification target), and on an operator account's own posts; `/admin/api/post-stats` refuses everyone else.
+
+Only real people count: operator accounts, the official account, staff app accounts and the author are left out. Views are people with a post view record (1 s on screen, a like or a comment). Comments count people, not comments. Profile visits are people who opened the author's profile from the post (feed card or post viewer); every profile opening is recorded in `app_profile_views`, with the post when it was opened from one. Follows and messages happen on the author, so each is credited to at most one post (`src/server/operator-post-stats/attribution.ts`): a follow made from a post (the feed card's "+", or a profile opened from the post) counts for that post; any other follow, and a person's first message in a room with the author, counts for the author's post the person viewed, or opened the profile from, most recently in the 24 hours before. A follow removed by unfollowing no longer counts. Needs migration `20261031131450_add_profile_views_and_follow_source`; profile visits and follow sources exist only from that release on.
+
 ## Staff alerts
 
 Open **More → Notification settings** and add the handle of your own Mingle account. Sign into that account on the phone and allow notifications. Operator accounts cannot be alert targets.
