@@ -1599,9 +1599,9 @@ export function NativeAdBanner(props: {
 function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
   const voiceHostRef = useRef<VoiceRoomHostHandle>(null);
-  // The group voice room is the first NATIVE screen in this WebView-host app.
-  // It reuses the shell's resolved base URL + validated API namespace so its
-  // REST calls hit the same host/namespace the web layer does.
+  // The group voice call runs natively (LiveKit audio) with no screen of its
+  // own: the web chat page draws the panel and drives it over the bridge. It
+  // reuses the shell's base URL + validated API namespace for its REST calls.
   const voiceConfig = useMemo(
     () =>
       resolveVoiceConfig({
@@ -4345,6 +4345,8 @@ function AppInner(): React.JSX.Element {
           });
         } else if (voiceCommand.type === 'native_voice_close') {
           voiceHostRef.current?.close();
+        } else if (voiceCommand.type === 'native_voice_set') {
+          voiceHostRef.current?.set(voiceCommand.payload);
         } else {
           voiceHostRef.current?.requestStatus(voiceCommand.payload.conversationId);
         }

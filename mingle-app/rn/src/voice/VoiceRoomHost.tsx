@@ -1,49 +1,48 @@
-import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
+import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 
-import { createVoiceController, type VoiceController, type VoiceGridMember } from '../nativeVoice';
-import { createVoiceApi, type VoiceApi, type VoiceCall, type VoiceParticipant } from './voiceApi';
+import { createVoiceController, type VoiceController } from '../nativeVoice';
+import { createVoiceApi, type VoiceApi, type VoiceCall } from './voiceApi';
 import { createLiveKitRoom } from './createLiveKitRoom';
 import { createVoiceStatusPoll, type VoiceStatusPoll } from './voiceStatusPoll';
-import { VoiceMiniBar } from './VoiceMiniBar';
-import { VoiceRoomScreen } from './VoiceRoomScreen';
 import type { VoiceRuntimeConfig } from './voiceConfig';
-import type { VoiceBridgeEventDetail, VoicePhase } from './voiceBridge';
+import type { VoiceBridgeEventDetail, VoicePhase, VoiceSetCommand } from './voiceBridge';
+
+// Runs the group voice call with no screen of its own. The web chat page draws
+// the panel under its top bar and drives this through the bridge; this sends
+// the call state back as `room` events.
 
 export type VoiceRoomHostHandle = {
-  /** Open (or re-open) the room overlay for a conversation. */
+  /** Join the call of a conversation (starting it if none is live). */
   open: (args: { conversationId: string; title?: string; interpret?: boolean }) => void;
-  /** Fully tear down and leave. */
+  /** Leave the call. */
   close: () => void;
-  /** Ask the poller for the current banner status for a conversation. */
+  /** Start polling who is in a conversation's call, for the web panel. */
   requestStatus: (conversationId: string) => void;
+  /** Mic, interpretation, volume mode and mix, from the web panel's buttons. */
+  set: (payload: VoiceSetCommand['payload']) => void;
 };
 
 export type VoiceRoomHostProps = {
   config: VoiceRuntimeConfig;
   localUserId: string;
-  /** Emits native -> web bridge events (banner status + room phase). */
+  /** Emits native -> web bridge events. */
   emitToWeb: (detail: VoiceBridgeEventDetail) => void;
-  onToggleSpeaker?: () => void;
-  onInvite?: () => void;
-  resolveAvatarUrl?: (member: VoiceGridMember) => string | null | undefined;
-  resolveParticipantAvatarUrl?: (p: VoiceParticipant) => string | null | undefined;
   /** Injected in tests. */
   createApi?: (config: VoiceRuntimeConfig) => VoiceApi;
   createController?: typeof createVoiceController;
-  topOffset?: number;
 };
 
-type OverlayState = 'closed' | 'full' | 'mini';
+// Speaking rings change often; the web gets at most this many updates a second.
+const ROOM_EVENT_MIN_GAP_MS = 120;
 
 export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHostProps>(
   function VoiceRoomHost(props, ref) {
-    const [overlay, setOverlay] = useState<OverlayState>('closed');
-    const [title, setTitle] = useState<string | undefined>(undefined);
-    const [conversationId, setConversationId] = useState<string | null>(null);
-
+    const { emitToWeb } = props;
     const controllerRef = useRef<VoiceController | null>(null);
+    const conversationRef = useRef<string | null>(null);
+    const unsubscribeRef = useRef<(() => void) | null>(null);
     const pollRef = useRef<VoiceStatusPoll | null>(null);
+    const throttleRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; lastAt: number }>({ timer: null, lastAt: 0 });
 
     const api = useMemo<VoiceApi>(
       () => (props.createApi ?? ((c) => createVoiceApi({ baseUrl: c.baseUrl, apiNamespace: c.apiNamespace })))(props.config),
@@ -52,39 +51,54 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
 
     const emitPhase = useCallback(
       (phase: VoicePhase, convId: string | null, errorKind?: string) => {
-        props.emitToWeb({ type: 'state', phase, conversationId: convId, errorKind });
+        emitToWeb({ type: 'state', phase, conversationId: convId, errorKind });
       },
-      [props],
+      [emitToWeb],
     );
 
-    const teardownPoll = useCallback(() => {
-      pollRef.current?.stop();
-      pollRef.current = null;
+    const sendRoom = useCallback(() => {
+      const controller = controllerRef.current;
+      const convId = conversationRef.current;
+      if (!controller || !convId) return;
+      throttleRef.current.lastAt = Date.now();
+      emitToWeb({ type: 'room', conversationId: convId, snapshot: controller.getSnapshot() });
+    }, [emitToWeb]);
+
+    const scheduleRoom = useCallback(() => {
+      const t = throttleRef.current;
+      if (t.timer) return;
+      const wait = Math.max(0, ROOM_EVENT_MIN_GAP_MS - (Date.now() - t.lastAt));
+      t.timer = setTimeout(() => {
+        t.timer = null;
+        sendRoom();
+      }, wait);
+    }, [sendRoom]);
+
+    const detach = useCallback(() => {
+      unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+      if (throttleRef.current.timer) clearTimeout(throttleRef.current.timer);
+      throttleRef.current.timer = null;
+      controllerRef.current = null;
     }, []);
 
     const close = useCallback(() => {
       const controller = controllerRef.current;
-      const convId = conversationId;
+      const convId = conversationRef.current;
+      detach();
+      conversationRef.current = null;
       if (controller) {
         void controller.leave().finally(() => emitPhase('left', convId));
       }
-      controllerRef.current = null;
-      teardownPoll();
-      setOverlay('closed');
-    }, [conversationId, emitPhase, teardownPoll]);
+    }, [detach, emitPhase]);
 
     const open = useCallback(
       (args: { conversationId: string; title?: string; interpret?: boolean }) => {
-        // Re-opening the same live room just restores the full screen.
-        if (controllerRef.current && conversationId === args.conversationId) {
-          setOverlay('full');
+        if (controllerRef.current && conversationRef.current === args.conversationId) {
+          sendRoom();
           return;
         }
-        // Switching conversation tears the old room down first.
-        if (controllerRef.current) {
-          void controllerRef.current.leave().catch(() => undefined);
-          controllerRef.current = null;
-        }
+        if (controllerRef.current) close();
         const make = props.createController ?? createVoiceController;
         const controller = make({
           api,
@@ -93,72 +107,59 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
           localUserId: props.localUserId,
         });
         controllerRef.current = controller;
-        setConversationId(args.conversationId);
-        setTitle(args.title);
-        setOverlay('full');
+        conversationRef.current = args.conversationId;
+        unsubscribeRef.current = controller.subscribe(scheduleRoom);
         emitPhase('connecting', args.conversationId);
+        if (args.interpret === false) void controller.setInterpret(false);
         void controller
           .connect(args.conversationId)
-          .then(() => emitPhase('connected', args.conversationId))
+          .then(() => {
+            emitPhase('connected', args.conversationId);
+            sendRoom();
+          })
           .catch((error: unknown) => {
             emitPhase('error', args.conversationId, (error as { kind?: string })?.kind);
+            if (controllerRef.current === controller) {
+              detach();
+              conversationRef.current = null;
+            }
           });
       },
-      [api, conversationId, emitPhase, props.config.myLang, props.createController, props.localUserId],
+      [api, close, detach, emitPhase, props.config.myLang, props.createController, props.localUserId, scheduleRoom, sendRoom],
     );
+
+    const set = useCallback((payload: VoiceSetCommand['payload']) => {
+      const controller = controllerRef.current;
+      if (!controller) return;
+      if (payload.mic !== undefined) void controller.setMicOn(payload.mic);
+      if (payload.interpret !== undefined) void controller.setInterpret(payload.interpret);
+      if (payload.mode !== undefined) controller.setMode(payload.mode);
+      if (payload.origVol !== undefined) controller.setOrigVol(payload.origVol);
+    }, []);
 
     const requestStatus = useCallback(
       (convId: string) => {
-        teardownPoll();
+        pollRef.current?.stop();
         const poll = createVoiceStatusPoll({
           api,
           conversationId: convId,
-          onUpdate: (call: VoiceCall | null) => {
-            props.emitToWeb({ type: 'status', conversationId: convId, call });
-          },
+          onUpdate: (call: VoiceCall | null) => emitToWeb({ type: 'status', conversationId: convId, call }),
         });
         pollRef.current = poll;
         poll.start();
       },
-      [api, props, teardownPoll],
+      [api, emitToWeb],
     );
 
-    useImperativeHandle(ref, () => ({ open, close, requestStatus }), [open, close, requestStatus]);
+    useImperativeHandle(ref, () => ({ open, close, requestStatus, set }), [open, close, requestStatus, set]);
 
     useEffect(() => () => {
-      teardownPoll();
-      controllerRef.current?.leave().catch(() => undefined);
-    }, [teardownPoll]);
+      pollRef.current?.stop();
+      const controller = controllerRef.current;
+      detach();
+      controller?.leave().catch(() => undefined);
+    }, [detach]);
 
-    const controller = controllerRef.current;
-    if (overlay === 'closed' || !controller) {
-      return null;
-    }
-
-    return (
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="box-none">
-        {overlay === 'full' ? (
-          <VoiceRoomScreen
-            controller={controller}
-            locale={props.config.primaryLocale}
-            myLang={props.config.myLang}
-            title={title}
-            onMinimize={() => setOverlay('mini')}
-            onLeft={close}
-            onToggleSpeaker={() => props.onToggleSpeaker?.()}
-            onInvite={props.onInvite}
-            resolveAvatarUrl={props.resolveAvatarUrl}
-          />
-        ) : (
-          <VoiceMiniBar
-            controller={controller}
-            locale={props.config.primaryLocale}
-            topOffset={props.topOffset ?? 70}
-            onReopen={() => setOverlay('full')}
-            onLeft={close}
-          />
-        )}
-      </View>
-    );
+    return null;
   },
 );

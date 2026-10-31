@@ -22,6 +22,12 @@ describe('parseVoiceBridgeCommand', () => {
       payload: { conversationId: 'c2' },
     });
   });
+  it('parses set with only valid fields and clamps the mix', () => {
+    expect(
+      parseVoiceBridgeCommand({ type: 'native_voice_set', payload: { mic: false, interpret: 'yes', mode: 'dynamic', origVol: 3 } }),
+    ).toEqual({ type: 'native_voice_set', payload: { mic: false, mode: 'dynamic', origVol: 1 } });
+    expect(parseVoiceBridgeCommand({ type: 'native_voice_set', payload: { mode: 'loud' } })).toBeNull();
+  });
   it('ignores unrelated commands', () => {
     expect(parseVoiceBridgeCommand({ type: 'native_tts_play' })).toBeNull();
     expect(parseVoiceBridgeCommand(null)).toBeNull();
