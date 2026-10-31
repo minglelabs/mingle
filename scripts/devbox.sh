@@ -361,7 +361,7 @@ Environment:
   DEVBOX_NGROK_WEB_DOMAIN  Optional fixed ngrok domain for devbox_web tunnel.
                            Example: abcdef.ngrok-free.app
   DEVBOX_TUNNEL_PROVIDER   Device profile tunnel provider (ngrok|cloudflare).
-                           Default: ngrok
+                           Default: cloudflare (use ngrok only when explicitly requested)
   DEVBOX_VAULT_PATH        Shared development Vault KV path for all services.
                            Default: secret/mingle/dev
   DEVBOX_VAULT_PROD_PATH   Optional production Vault KV path for --device-app-env prod.
@@ -2386,7 +2386,9 @@ resolve_tunnel_provider() {
     raw="$(trim_whitespace "$(read_app_setting_value DEVBOX_TUNNEL_PROVIDER || true)")"
   fi
   if [[ -z "$raw" ]]; then
-    raw="ngrok"
+    # Cloudflare is the default. Use ngrok only when explicitly requested
+    # (--tunnel-provider ngrok); it shares one free endpoint quota.
+    raw="cloudflare"
   fi
 
   normalize_tunnel_provider "$raw"
