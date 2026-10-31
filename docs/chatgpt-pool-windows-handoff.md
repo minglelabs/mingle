@@ -4,6 +4,14 @@ Read this whole file first, then `docs/chatgpt-pool-handoff.md` (how the pool
 works, the ChatGPT DOM it depends on, the API). This file is only about moving
 it to Windows.
 
+## Status (2026-10-31)
+
+- Done: code works on both macOS and Windows; deployed copy, key, 11 profiles
+  with the extension, log-on task, sleep off on AC, Caddy route on the test
+  hostname `chatgpt-pool-win.minglelabs.app` (tested from Windows and the Mac).
+- Left: reboot test, cutover of `chatgpt-pool.minglelabs.app` (step 8), then
+  stopping the Mac's launchd jobs.
+
 ## Goal
 
 Run the whole ChatGPT pool on Nam's Windows PC instead of the MacBook:
@@ -162,7 +170,14 @@ Chrome settings the pool needs:
 ### 5. Pool server as a log-on task
 
 - Run `node scripts/chatgpt-pool.mjs install` (the new Windows path) from the
-  deployed copy, or register the task by hand.
+  deployed copy, with `CHATGPT_POOL_PUBLIC_PORT=10321` set. It writes
+  `chatgpt-pool-serve.cmd` next to the script and registers the task
+  `MingleChatGptPool` (log-on trigger, hidden via `conhost --headless`, no
+  time limit). The wrapper reads `api-key` into the environment and restarts
+  `serve` 5s after it exits. `--no-start` registers without starting.
+- Restart: `schtasks /End /TN MingleChatGptPool` then
+  `schtasks /Run /TN MingleChatGptPool`. `/End` may leave the node child
+  running; check port 10320's owning PID and stop that exact PID.
 - Check:
   - `curl.exe -s http://127.0.0.1:10320/health` returns `{"ok":true,"accounts":N,...}`.
   - `pool.log` has both lines: `ChatGPT pool on http://127.0.0.1:10320` and
@@ -193,7 +208,40 @@ PowerShell 5.1 notes (both cost a retry last time):
   `RawContentStream` as UTF-8, then `ConvertFrom-Json`. Otherwise Korean is
   garbled. Or use `curl.exe`, which has neither problem.
 
-### 7. Cloudflare tunnel on Windows
+### 7. Public route on Windows: Caddy (what was done)
+
+The Windows PC already serves `voice.minglelabs.app` through Caddy, with the
+router forwarding TCP 80/443 to it. So the pool uses the same Caddy instead of a
+Cloudflare tunnel:
+
+```
+client -> https://<host> -> router 443 -> Caddy (C:\caddy) -> 127.0.0.1:10321 (key required)
+```
+
+- Caddy runs as the SYSTEM startup task `Caddy (voice.minglelabs.app)`
+  (`C:\caddy\run-caddy.cmd`, config `C:\caddy\Caddyfile`, log
+  `C:\caddy\logs\caddy.log`). It gets and renews Let's Encrypt certificates
+  itself.
+- Caddyfile block (only the keyed port; never 10320):
+
+  ```
+  chatgpt-pool-win.minglelabs.app {
+  	reverse_proxy 127.0.0.1:10321
+  }
+  ```
+
+- DNS: an **A** record to the home IP `183.96.5.234`, **DNS only** (grey
+  cloud). A proxied (orange) record would bring back Cloudflare's 100s cut.
+- Reload after editing: `C:\caddy\caddy.exe reload --config C:\caddy\Caddyfile`
+  (talks to Caddy's admin API on localhost, no restart needed).
+- No 100s limit on this path, but keep `"async": true` for images anyway so
+  callers work the same on every route.
+- Verified 2026-10-31 through `https://chatgpt-pool-win.minglelabs.app`, from
+  the Windows PC and from the Mac: text 12s, async image 30–60s, no key 401.
+
+The tunnel steps below are the alternative if the router path is ever lost.
+
+### 7b. Cloudflare tunnel on Windows (alternative, not in use)
 
 Don't copy the Mac's tunnel credentials JSON. Make a new tunnel on Windows and
 move the hostname to it at cutover.
@@ -231,8 +279,15 @@ Never point the tunnel at port 10320.
 
 1. Tell the user, and make sure nobody is mid-request. Check `GET /health` on the
    Mac: `running` and `queued` should both be 0.
-2. Move the hostname:
-   `cloudflared tunnel route dns --overwrite-dns chatgpt-pool-win chatgpt-pool.minglelabs.app`.
+2. Move the hostname (Caddy route):
+   - Add `chatgpt-pool.minglelabs.app` to the Caddyfile block next to
+     `chatgpt-pool-win.minglelabs.app`, then reload Caddy.
+   - In Cloudflare DNS, replace the `chatgpt-pool` Tunnel record with an
+     **A** record to `183.96.5.234`, **DNS only**. The user does this in the
+     dashboard (or the agent, with an API token that has Zone:DNS:Edit).
+   - Caddy gets the certificate once DNS points home; watch `caddy.log` for
+     `certificate obtained successfully`.
+   - (Tunnel route instead: `cloudflared tunnel route dns --overwrite-dns chatgpt-pool-win chatgpt-pool.minglelabs.app`.)
 3. Test `https://chatgpt-pool.minglelabs.app` (text + async image) and check that
    **Windows'** `pool.log` shows the requests.
 4. The Mac side is stopped by the user or the Mac's agent, not by you. Hand them
@@ -245,8 +300,9 @@ Never point the tunnel at port 10320.
    ```
 
    Keep the Mac plists and files for a week, in case a rollback is needed.
-   - Rollback: `cloudflared tunnel route dns --overwrite-dns chatgpt-pool chatgpt-pool.minglelabs.app`
-     on the Mac, then bootstrap the three plists again.
+   - Rollback: in Cloudflare DNS, delete the `chatgpt-pool` A record, then run
+     `cloudflared tunnel route dns chatgpt-pool chatgpt-pool.minglelabs.app`
+     on the Mac and bootstrap the three plists again.
 5. Optional, later: delete the test hostname `chatgpt-pool-win.minglelabs.app`
    from DNS.
 
