@@ -121,7 +121,7 @@ describe('earphone mode wiring', () => {
     expect(confirm).toContain('void handleStartRecording()')
     const reset = between(liveDemoSource, 'useEffect(() => subscribeEarphoneModePreference(() => {', '}), [])')
     expect(reset).toContain('screenCaptureNoticeAcknowledgedRef.current = false')
-    expect(liveDemoSource).toContain('earphoneModeCopy.screenCaptureNoticeBodyIos')
+    expect(liveDemoSource).toContain('{earphoneModeCopy.screenCaptureNoticeBody}')
   })
 
   it('reads one language per session: picked in the notice, React state only, dropped on every edge', () => {

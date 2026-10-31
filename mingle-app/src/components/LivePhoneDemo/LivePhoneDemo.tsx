@@ -9726,9 +9726,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   {earphoneModeCopy.screenCaptureNoticeTitle}
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                  {isLikelyIOSPlatform()
-                    ? earphoneModeCopy.screenCaptureNoticeBodyIos
-                    : earphoneModeCopy.screenCaptureNoticeBody}
+                  {earphoneModeCopy.screenCaptureNoticeBody}
                 </p>
                 <div className="mt-4 flex gap-2">
                   <button
