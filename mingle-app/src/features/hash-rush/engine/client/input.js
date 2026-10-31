@@ -108,11 +108,16 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
     showPad();
   }
 
+  // (mingle) The hint about the controls has done its job once anything at all
+  // has been pressed: the pad, a swipe, the bonk or throw button, or a key.
+  const played = () => stage.classList.add('played');
+
   window.addEventListener('keydown', (e) => {
     if (!enabled || !HANDLED.has(e.code) || e.metaKey || e.ctrlKey || e.altKey) return;
     // Typing a chat message must not steer the hamster, in the app's text boxes neither.
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target?.isContentEditable) return;
     down.add(e.code);
+    played();
     e.preventDefault();
   }, { signal });
   window.addEventListener('keyup', (e) => down.delete(e.code), { signal });
@@ -147,8 +152,7 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
       // not supported
     }
     press(e);
-    // The hint about the controls has done its job.
-    stage.classList.add('played');
+    played();
     e.preventDefault();
   }, { signal });
   // Or a swipe anywhere on the map: the hamster heads that way and keeps going, the
@@ -157,7 +161,7 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
   stage.addEventListener('pointerdown', (e) => {
     if (!enabled || e.pointerType !== 'touch' || (e.target !== canvas && e.target !== stage) || swipe) return;
     swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, swiped: false };
-    stage.classList.add('played');
+    played();
   }, { signal });
   window.addEventListener('pointermove', (e) => {
     if (touch && e.pointerId === touch.id) press(e);
@@ -202,6 +206,7 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
 
   bonkBtn.addEventListener('pointerdown', (e) => {
     button = true;
+    if (enabled) played();
     e.preventDefault();
   }, { signal });
   for (const type of ['pointerup', 'pointercancel', 'pointerleave']) bonkBtn.addEventListener(type, () => (button = false), { signal });
@@ -209,6 +214,7 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
   // a button of its own: hold it, turn, let go.
   throwBtn.addEventListener('pointerdown', (e) => {
     throwHeld = true;
+    if (enabled) played();
     e.preventDefault();
   }, { signal });
   for (const type of ['pointerup', 'pointercancel', 'pointerleave']) throwBtn.addEventListener(type, () => (throwHeld = false), { signal });

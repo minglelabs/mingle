@@ -258,3 +258,33 @@ describe('hash rush between rounds (stage 2)', () => {
     expect(result).toContain('audio.play.cheer()')
   })
 })
+
+describe('hash rush stage 2 device fixes', () => {
+  it('keeps every score table heading on one line on a phone: icons and short words, the words in a legend (device check 1)', () => {
+    const phone = between(cardsCss, "@media (max-width: 640px), (orientation: portrait) {\n  .tabs {", '/* ---------- the result')
+    expect(phone).toContain('white-space: nowrap;')
+    expect(phone).not.toContain('white-space: normal;\n    font-size: 13px;')
+    expect(between(phone, '.table th {', '}')).toContain('white-space: nowrap;')
+    expect(phone).toContain('.headShort {\n    display: inline;')
+    expect(phone).toContain('.legend,\n  .ruleShort {\n    display: block;')
+    expect(cardsCss).toContain('.headShort,\n.legend,\n.ruleShort {\n  display: none;')
+    const rows = between(cardsSource, 'function ScoreRows', '/** The table over a round')
+    expect(rows).toContain('<Head head={board.winsHead} />')
+    expect(rows).toContain('title={head.text}')
+    // The game number and the race sit over the table, out of the name column.
+    expect(rows).not.toContain('{board.gameNo}')
+    expect(between(cardsSource, 'export function HashRushScoreTable', 'function Head(')).toContain('{board.gameNo}')
+    expect(between(cardsSource, 'export function HashRushScoreTable', 'function Head(')).toContain('{board.legend}')
+  })
+
+  it('shows the touch hint as one short line, gone after the first input of any kind (device check 2)', () => {
+    const hint = rule('.tall .hintTouch')
+    expect(hint).toContain('white-space: nowrap;')
+    expect(hint).toContain('text-overflow: ellipsis;')
+    expect(css).toContain('.stage:global(.played) .hintTouch {\n  opacity: 0;')
+    const input = read('./engine/client/input.js')
+    expect(input).toContain("const played = () => stage.classList.add('played');")
+    // The pad, a swipe, the bonk and throw buttons and the keys all count.
+    expect(input.match(/played\(\);/g)?.length).toBeGreaterThanOrEqual(5)
+  })
+})

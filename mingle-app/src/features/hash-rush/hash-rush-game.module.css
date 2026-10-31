@@ -461,13 +461,19 @@
 /* On a tall screen the page puts it just over the pad and the bonk button. Here
    that spot is the burrow, where every hamster waits out the countdown, so it
    sits over the maze above the burrow instead (the burrow is the map's lowest
-   sixth; the countdown takes its middle). */
+   sixth; the countdown takes its middle). One short line, never two
+   (2026-11-01 device check: two lines covered the middle of the board). */
 .tall .hintTouch {
   top: calc(var(--hr-field-top, 0px) + var(--hr-field-height, 0px) * 0.72);
   bottom: auto;
   transform: translate(-50%, -50%);
-  max-width: 92%;
-  font-size: 15px;
+  max-width: 88%;
+  padding: 0.25em 0.9em;
+  border-radius: 999px;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* engine/client/input.js marks the stage once the controls have been touched. */

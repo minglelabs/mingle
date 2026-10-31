@@ -92,6 +92,18 @@ describe('hash rush engine: strings follow the app language', () => {
     expect(t('bonk')).toBe('Bonk')
   })
 
+  // 2026-11-01 device check: the hint covered the middle of the board in two lines.
+  it('keeps the touch hint to one short line in every language', () => {
+    for (const code of LANGUAGES) {
+      setLanguage(code)
+      const hint = String(t('hintTouch'))
+      expect(hint, code).not.toContain('<')
+      // About 24 wide letters fit one line over a 375pt phone's map.
+      const width = Array.from(hint).reduce((sum, ch) => sum + (/[\u0000-\u024f]/.test(ch) ? 0.55 : 1), 0)
+      expect(width, `${code}: ${hint}`).toBeLessThanOrEqual(22)
+    }
+  })
+
   it('has every HUD string in every language', () => {
     const keys = ['bonk', 'throwBtn', 'go', 'bonkWord', 'lostSeed', 'superPlay', 'killNames', 'gotSeedMe', 'gotSeedMate', 'gotSeedOther', 'overtime', 'rush', 'alarmMe', 'alarmMate', 'alarmOther', 'portalNoSeed', 'tally', 'overtimeClock', 'spectating', 'watchThisRound', 'hint', 'hintTouch', 'meTag', 'victory', 'defeat', 'roundOver', 'winnerIs', 'winnersShared', 'teamNames', 'names']
     for (const code of LANGUAGES) {
