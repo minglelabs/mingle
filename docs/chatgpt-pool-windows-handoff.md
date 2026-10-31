@@ -12,8 +12,12 @@ it to Windows.
 - Decided: the Windows PC is reached directly (fixed public IP + router port
   forwarding + Caddy). **No Cloudflare tunnel on Windows.** Step 7 describes
   this; don't create a tunnel there.
-- Left: reboot test, cutover of `chatgpt-pool.minglelabs.app` (step 8), then
-  stopping the Mac's launchd jobs.
+- Cutover done 2026-10-31: `chatgpt-pool.minglelabs.app` is a DNS-only A
+  record to `183.96.5.234`, served by Caddy on the PC. Text and async image
+  verified through it.
+- Left: stop the Mac's three launchd jobs (the user does this, step 8.4), a
+  reboot test, and making the 11 Chrome profiles open at log-on (Chrome does
+  not reopen them by itself, and the pool has 0 accounts until they are open).
 
 ## Goal
 
@@ -178,9 +182,15 @@ Chrome settings the pool needs:
   `MingleChatGptPool` (log-on trigger, hidden via `conhost --headless`, no
   time limit). The wrapper reads `api-key` into the environment and restarts
   `serve` 5s after it exits. `--no-start` registers without starting.
-- Restart: `schtasks /End /TN MingleChatGptPool` then
-  `schtasks /Run /TN MingleChatGptPool`. `/End` may leave the node child
-  running; check port 10320's owning PID and stop that exact PID.
+- Install refuses to run while `api-key` is missing or empty (without a key,
+  `serve` skips the public port and Caddy would answer 502).
+- Restart after a deploy: stop the node `serve` process by its exact PID (the
+  owner of port 10320: `(Get-NetTCPConnection -LocalPort 10320 -State Listen).OwningProcess`,
+  check its command line first). The wrapper starts it again within 5s with
+  the new code. `schtasks /End` alone leaves the wrapper and node running.
+- `node chatgpt-pool.mjs uninstall` deletes the task, stops the wrapper and
+  `serve` (matched by their exact command lines), and removes the wrapper.
+- `pool.log` is rotated by the wrapper: past 20 MB it becomes `pool.log.1`.
 - Check:
   - `curl.exe -s http://127.0.0.1:10320/health` returns `{"ok":true,"accounts":N,...}`.
   - `pool.log` has both lines: `ChatGPT pool on http://127.0.0.1:10320` and
