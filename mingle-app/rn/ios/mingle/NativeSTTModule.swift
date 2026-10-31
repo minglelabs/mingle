@@ -2009,7 +2009,7 @@ class NativeSTTModule: RCTEventEmitter {
     private func startDeviceAudioMicrophone() {
         stopDeviceAudioMicrophone()
         guard AVAudioSession.sharedInstance().recordPermission == .granted else {
-            NSLog("[NativeSTTModule] device audio mic skipped: no microphone permission")
+            audioDiagnostics.notice("device audio mic skipped: no microphone permission")
             return
         }
         let engine = AVAudioEngine()
@@ -2024,7 +2024,7 @@ class NativeSTTModule: RCTEventEmitter {
               ),
               let converter = AVAudioConverter(from: inputFormat, to: outputFormat)
         else {
-            NSLog("[NativeSTTModule] device audio mic skipped: unusable input format %@", inputFormat.description)
+            audioDiagnostics.notice("device audio mic skipped: unusable input format \(inputFormat.description, privacy: .public)")
             return
         }
         input.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { [weak self] buffer, _ in
@@ -2038,7 +2038,7 @@ class NativeSTTModule: RCTEventEmitter {
             try engine.start()
         } catch {
             input.removeTap(onBus: 0)
-            NSLog("[NativeSTTModule] device audio mic skipped: %@", error.localizedDescription)
+            audioDiagnostics.notice("device audio mic skipped: \(error.localizedDescription, privacy: .public)")
             return
         }
         deviceAudioMicEngine = engine
@@ -2056,8 +2056,7 @@ class NativeSTTModule: RCTEventEmitter {
             self?.deviceAudioMicBuffer.removeAll(keepingCapacity: true)
             self?.deviceAudioMicActive = true
         }
-        NSLog("[NativeSTTModule] device audio mic recording inputRate=%.0f channels=%d",
-              inputFormat.sampleRate, inputFormat.channelCount)
+        audioDiagnostics.notice("device audio mic recording inputRate=\(inputFormat.sampleRate) channels=\(inputFormat.channelCount)")
     }
 
     /// Stops the companion microphone. Runs from `deinit` too (through
