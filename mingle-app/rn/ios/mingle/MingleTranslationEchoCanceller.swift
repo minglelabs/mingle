@@ -62,6 +62,11 @@ final class MingleTranslationEchoCanceller {
         var correlation = [Float](repeating: 0, count: MingleTranslationEchoCanceller.tapCount * MingleTranslationEchoCanceller.tapCount)
         var crossCorrelation = [Float](repeating: 0, count: MingleTranslationEchoCanceller.tapCount)
         var samplesSinceSolve = 0
+        /// Diagnostics over the samples the clip overlapped: capture energy
+        /// before and after removal, and how many samples that was.
+        var energyIn = 0.0
+        var energyOut = 0.0
+        var overlapSamples = 0
 
         init(samples: [Float], startHostTime: Double) {
             self.samples = samples
@@ -128,6 +133,9 @@ final class MingleTranslationEchoCanceller {
 
         lock.lock()
         defer { lock.unlock() }
+        for reference in references where reference.endHostTime + Self.retainSeconds < hostTime {
+            logSummary(reference)
+        }
         references.removeAll { $0.endHostTime + Self.retainSeconds < hostTime }
         if references.isEmpty && pending.isEmpty {
             return pcm
@@ -161,6 +169,26 @@ final class MingleTranslationEchoCanceller {
         }
         pending.removeAll(keepingCapacity: true)
         return output
+    }
+
+    /// One line per clip once it is done, for tuning on a device: whether it
+    /// was lined up, and how much quieter the overlapped capture got.
+    private func logSummary(_ reference: Reference) {
+        let reductionDb = reference.energyOut > 0 && reference.energyIn > 0
+            ? 10 * log10(reference.energyIn / reference.energyOut)
+            : 0
+        let centerWeight = reference.weights[Self.centerTap]
+        let weightSum = reference.weights.reduce(0, +)
+        NSLog(
+            "[EchoCanceller] clip done lined=%d attempts=%d delayMs=%.1f overlapMs=%.0f reductionDb=%.1f centerWeight=%.2f weightSum=%.2f",
+            reference.delay != nil ? 1 : 0,
+            reference.searchAttempts,
+            Double(reference.delay ?? 0) / Self.sampleRate * 1000,
+            Double(reference.overlapSamples) / Self.sampleRate * 1000,
+            reductionDb,
+            centerWeight,
+            weightSum
+        )
     }
 
     // MARK: - Lining a clip up with the capture
@@ -303,6 +331,9 @@ final class MingleTranslationEchoCanceller {
                 echo += reference.weights[tap] * window[tap]
             }
             block[offset] = captured - echo
+            reference.energyIn += Double(captured * captured)
+            reference.energyOut += Double(block[offset] * block[offset])
+            reference.overlapSamples += 1
 
             // Least-squares statistics against the capture as received.
             let lambda = Self.forgetting

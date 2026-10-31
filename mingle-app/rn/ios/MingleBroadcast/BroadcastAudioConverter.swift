@@ -49,6 +49,9 @@ final class BroadcastAudioConverter {
             next.downmix = true
             converter = next
             converterInputFormat = inputFormat
+            // Device tuning: whether ReplayKit hands over stereo or mono.
+            NSLog("[MingleBroadcast] app audio format channels=%d sampleRate=%.0f interleaved=%d",
+                  Int(inputFormat.channelCount), inputFormat.sampleRate, inputFormat.isInterleaved ? 1 : 0)
         }
         guard let converter else { return nil }
 
