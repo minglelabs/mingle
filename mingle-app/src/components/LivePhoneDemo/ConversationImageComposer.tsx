@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom'
 import MessageMediaDialog from './MessageMediaDialog'
 import { chooseTooltipSide } from './CopyableBubbleSurface'
 import { captureRestorableFocus, scheduleFocusRestore } from './picker-focus-restore'
+import { createImageClientMessageId } from './image-client-message-id'
 
 // ── Diagnostic constants ──────────────────────────────────────────────
 const DIAG_LS_KEY = '__mingle_diag_v1__'
@@ -396,7 +397,7 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
         if (!file) { restorePickerFocus(); return }
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > CONVERSATION_IMAGE_MAX_BYTES || !file.size) { setError(copy.invalid); setOpen(true); errorMenuFocusRestorePendingRef.current = true; return }
         // A valid pick opens the preview; focus returns when that preview closes.
-        setOpen(true); setChosen({ file, url: URL.createObjectURL(file), id: `image-${crypto.randomUUID()}` }); setError(null)
+        setOpen(true); setChosen({ file, url: URL.createObjectURL(file), id: createImageClientMessageId() }); setError(null)
       }} />
     {open && !chosen && createPortal(
       <div

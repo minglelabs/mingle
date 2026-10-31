@@ -68,17 +68,22 @@ describe('scheduleFocusRestore', () => {
     expect(textarea.focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
-  it('skips a control that left the DOM (switched to voice mode) or already has focus', () => {
+  it('skips a control that left the DOM (switched to voice mode)', () => {
     const detached = makeControl('TEXTAREA', { isConnected: false })
     const timers = makeTimers()
     scheduleFocusRestore(detached, { doc: { activeElement: null }, timers })
     timers.flush()
     expect(detached.focus).not.toHaveBeenCalled()
+  })
 
+  // Cancelling the iOS chooser keeps DOM focus on the textarea but drops the
+  // keyboard; only another focus() call brings the keyboard back.
+  it('refocuses a control that is still document.activeElement', () => {
     const focused = makeControl('TEXTAREA')
+    const timers = makeTimers()
     scheduleFocusRestore(focused, { doc: { activeElement: focused }, timers })
     timers.flush()
-    expect(focused.focus).not.toHaveBeenCalled()
+    expect(focused.focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
   it('skips the refocus when focus already moved to another element', () => {

@@ -55,8 +55,11 @@ function focusMovedElsewhere(doc: FocusDocument, element: FocusableTextControl):
 }
 
 // Schedules one delayed refocus. Skips it when the element left the DOM (the
-// user switched to voice mode), already has focus, or focus has since moved to
-// another element (the user tapped something else). Returns a cancel function.
+// user switched to voice mode) or focus has since moved to another element (the
+// user tapped something else). It still calls focus() when the element is
+// already document.activeElement: cancelling the iOS chooser leaves DOM focus on
+// the textarea while the keyboard is gone, and only a fresh focus() raises it
+// again (measured on iPhone 14, iOS 26). Returns a cancel function.
 export function scheduleFocusRestore(
   element: FocusableTextControl,
   options: { doc: FocusDocument, timers: TimerHost, delayMs?: number },
@@ -66,7 +69,6 @@ export function scheduleFocusRestore(
   const id = timers.setTimeout(() => {
     if (cancelled) return
     if (!element.isConnected) return
-    if (doc.activeElement === element) return
     if (focusMovedElsewhere(doc, element)) return
     try {
       element.focus({ preventScroll: true })
