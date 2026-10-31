@@ -27,3 +27,13 @@ Full rules: `docs/worktree-devbox.md` (section "동시 세션").
   `ACTION REQUIRED: skipped ... phone` (another session is using it), ask the user before using
   that phone. Do not take it on your own.
 - Do not hold a phone with an Appium session that another session is using.
+
+## Agent gate (before merging an agent PR)
+Run `node scripts/agent-gate.mjs --pr <number> --markdown` and paste the output into the PR.
+Design: `docs/agent-loop-graph-design.md`.
+- `merge: auto` (L0 docs, L1 contained UI / admin / devbox with CI green): the agent may merge.
+- `merge: approve` (L2 wide, L3 closed lane: migrations, env, deploy config, `rn/**`, coins/IAP,
+  production data scripts, CI and the gate itself): ask Nam. Never merge L3 on your own.
+- `verdict: red` or `pending`: do not merge. A skipped or missing CI run is not green.
+- With `--plan .agent/plan.json --unit <id>`, files outside the unit's `allowed` globs make it red.
+- The gate does not check real devices. Say so when reporting.

@@ -70,9 +70,9 @@ L0~L2: 자동 머지 / L3: Nam 승인 1회
 | 레인 | 경로 예시 | 게이트 | 머지 |
 |---|---|---|---|
 | L0 문서 | `docs/**`, `*.md` (README 제외 규칙 없음) | 링크·경로 존재 확인 | 자동 |
-| L1 되돌리기 쉬움·좁음 | `mingle-app/src/app/admin/**`, `mingle-app/src/server/admin/**`, `mingle-app/src/components/**`, `mingle-app/src/app/[locale]/**`, `mingle-app/src/i18n/**`, `scripts/devbox*` | CI 초록 + diff ⊆ plan | 자동. "실기기 미확인" 보고 |
+| L1 되돌리기 쉬움·좁음 | `mingle-app/src/app/admin/**`, `mingle-app/src/server/admin/**`, `mingle-app/src/server/operator*/**`, `mingle-app/src/lib/admin-*`, `mingle-app/src/components/**`, `mingle-app/src/app/[locale]/**`, `mingle-app/src/i18n/**`, `scripts/devbox*` | CI 초록 + diff ⊆ plan | 자동. "실기기 미확인" 보고 |
 | L2 되돌리기 쉬움·넓음 | `mingle-app/src/lib/**`, `mingle-app/src/server/**`(admin 제외), `mingle-app/src/app/api/**`, `shared/**`, `mingle-stt/**`, `mingle-messaging/**` | CI 초록 + diff ⊆ plan + namespace contract 초록 + 실기기 QA 결과 첨부 | 처음엔 Nam 승인. 롤백 기록이 쌓이면 자동으로 전환 검토 |
-| L3 닫힌 레인 | `mingle-app/prisma/**`, env·배포 설정(`railway*`, `Dockerfile*`, `vercel.json`, `.env*.example`), `mingle-app/rn/**`(앱 릴리스 필요), 버전·namespace(`package.json` version, `build:release:*`), 결제(`coin`, `iap` 경로), 데이터 삭제 스크립트 | 위 검사 전부 | 항상 Nam 승인. 점수로 열리지 않음 |
+| L3 닫힌 레인 | `mingle-app/prisma/**`, env·배포 설정(`railway*`, `Dockerfile*`, `vercel.json`, `.env*.example`), `mingle-app/rn/**`(앱 릴리스 필요), 버전·namespace(`package.json` version, `build:release:*`), 결제(`coin`, `iap` 경로), 운영 DB에 쓰는 스크립트(`mingle-app/scripts/seed*`, `backfill*`), 스토어 업로드 스크립트, `.github/**`, 게이트 자체(`scripts/agent-gate*`) | 위 검사 전부 | 항상 Nam 승인. 점수로 열리지 않음 |
 
 L3은 "높은 문턱"이 아니라 열리지 않는 레인이다. 문턱은 조정되지만 닫힌 레인은 조정되지 않는다.
 PR 본문에는 레인과 함께 마이그레이션·env 변경 여부를 항상 적는다 (기존 규칙 유지).
@@ -164,6 +164,13 @@ LANDS IN   docs/agent-constraints.md → 분할기가 plan.json 만들 때 읽�
 | 3 반환 형식 | 서브에이전트 지시 템플릿에 plan.json·반환 JSON·3회 상한 | 실패 단위만 재작업되는 것을 1회 이상 확인 |
 | 4 학습 경로 | `docs/agent-constraints.md` + 분할기 지시에 "먼저 읽기" | 규칙 1개가 다음 작업의 plan.json에 반영된 사례 |
 | 5 L2 자동화 검토 | 레인별 롤백 횟수 집계 | Nam이 L2 자동 머지 여부 결정 |
+
+### 1단계 구현 상태
+
+- 코드: `scripts/agent-gate.logic.mjs`(판정 규칙, I/O 없음), `scripts/agent-gate.mjs`(CLI), `scripts/agent-gate.test.mjs`(CI `node --test`에 추가).
+- 레인 규칙 표는 `LANE_RULES`가 단일 소스다. 이 문서의 표와 다르면 코드가 맞다.
+- 결정한 기본값: L2와 `mingle-app/rn/**`는 항상 승인, 문서(L0)는 자동, 계획 파일 없이도 동작(`--require-plan`을 주면 계획 필수).
+- 재사용할 수 있는 기존 검사·QA 도구와 빈틈 목록: `docs/agent-graph-inventory.md`.
 
 ## 7. Nam이 정할 것
 
