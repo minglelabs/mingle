@@ -95,7 +95,7 @@ Added on 2026-10-03 with unit tests only: no image was generated, and the defaul
 
 Open **More → Notification settings** and add the handle of your own Mingle account. Sign into that account on the phone and allow notifications. Operator accounts cannot be alert targets.
 
-Incoming messages trigger an inbox update and a push to registered staff accounts. Pushes are coalesced to at most one per conversation every 20 seconds. Tapping a staff alert opens `/admin/inbox/<conversationId>` inside the app; its separate admin login may be required.
+Incoming messages trigger an inbox update and a push to registered staff accounts. Pushes are sent once per batch of messages: a user message alerts staff only when the conversation's previous user message is at least 5 minutes old, or when an operator has replied since then. Messages inside a batch only update the inbox. Tapping a staff alert opens `/admin/inbox/<conversationId>` inside the app; its separate admin login may be required.
 
 ## Bulk posts and schedules
 
