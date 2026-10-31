@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAdminApi } from '@/server/admin/guard'
 import { getPostImage } from '@/server/posts/post-image-storage'
 import { OPERATOR_POST_PHOTO_MAX_BYTES, replaceOperatorPostPhoto } from '@/server/operator-post-edit/edit'
+import { applyOperatorPostPhoto, candidateOwner } from '@/server/operator-post-edit/redraw'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -10,16 +11,20 @@ export const dynamic = 'force-dynamic'
 /**
  * GET /admin/api/posts/[postId]/image — a post's photo for staff. Unlike the
  * app route it ignores who may see the post, so staff also see photos on
- * hidden, deleted or blocked posts.
+ * hidden, deleted or blocked posts. `?candidate=<key>` reads a photo drawn
+ * for the post (redraw) that is not on it yet.
  */
-export async function GET(_request: Request, context: { params: Promise<{ postId: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ postId: string }> }) {
   const auth = await requireAdminApi()
   if (!auth.ok) return auth.response
   const { postId } = await context.params
-  const post = await prisma.post.findUnique({ where: { id: postId }, select: { imageObjectKey: true } })
-  if (!post?.imageObjectKey) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+  const candidate = new URL(request.url).searchParams.get('candidate')
+  const key = candidate
+    ? await candidateOwner(postId, candidate)
+    : (await prisma.post.findUnique({ where: { id: postId }, select: { imageObjectKey: true } }))?.imageObjectKey
+  if (!key) return NextResponse.json({ error: 'not_found' }, { status: 404 })
   try {
-    const bytes = await getPostImage(post.imageObjectKey)
+    const bytes = await getPostImage(key)
     return new NextResponse(Buffer.from(bytes), { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=300' } })
   } catch {
     return NextResponse.json({ error: 'image_unavailable' }, { status: 502 })
@@ -44,5 +49,15 @@ export async function POST(request: Request, context: { params: Promise<{ postId
     return NextResponse.json({ error: 'invalid_form_data' }, { status: 400, headers: { 'cache-control': 'no-store' } })
   }
   const result = await replaceOperatorPostPhoto(auth.ctx, postId, form.get('file'))
+  return NextResponse.json(result.ok ? { ok: true } : { error: result.error }, { status: result.ok ? 200 : result.status, headers: { 'cache-control': 'no-store' } })
+}
+
+/** PATCH /admin/api/posts/[postId]/image — `{ objectKey }` of a redrawn candidate becomes the post's photo. */
+export async function PATCH(request: Request, context: { params: Promise<{ postId: string }> }) {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+  const { postId } = await context.params
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null
+  const result = await applyOperatorPostPhoto(auth.ctx, postId, body ?? {})
   return NextResponse.json(result.ok ? { ok: true } : { error: result.error }, { status: result.ok ? 200 : result.status, headers: { 'cache-control': 'no-store' } })
 }
