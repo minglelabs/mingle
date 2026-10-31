@@ -36,4 +36,10 @@ Design: `docs/agent-loop-graph-design.md`.
   production data scripts, CI and the gate itself): ask Nam. Never merge L3 on your own.
 - `verdict: red` or `pending`: do not merge. A skipped or missing CI run is not green.
 - With `--plan .agent/plan.json --unit <id>`, files outside the unit's `allowed` globs make it red.
+  Add `--return` to write `.agent/returns/<unit>.json`; send only that unit back. Exit 4 = third
+  failed return: stop and re-plan instead of retrying.
+- Before splitting work: `node scripts/agent-plan.mjs validate|waves|brief .agent/plan.json`.
+  Put the `brief` output into each worker's instructions. It includes `docs/agent-constraints.md`.
+- After an accepted result with a confirmed cause, add a constraint to `docs/agent-constraints.md`
+  (source commit or PR required).
 - The gate does not check real devices. Say so when reporting.

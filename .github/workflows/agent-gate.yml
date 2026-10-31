@@ -1,0 +1,70 @@
+name: Agent Gate
+
+# Runs on every PR, including docs-only PRs that no other workflow covers.
+# It classifies the lane and checks structure (doc links, constraints file). It does not
+# read other CI jobs; run `node scripts/agent-gate.mjs --pr <n>` after CI to decide the merge.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: agent-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Agent Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.18.1
+
+      - name: Gate tooling tests
+        run: node --test scripts/agent-gate.test.mjs scripts/agent-plan.test.mjs
+
+      - name: Constraints file
+        run: node scripts/agent-plan.mjs constraints
+
+      - name: Classify lane
+        id: gate
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set +e
+          node scripts/agent-gate.mjs --base "origin/$BASE_REF" --head HEAD --no-ci-read --markdown > gate.md
+          code=$?
+          set -e
+          cat gate.md >> "$GITHUB_STEP_SUMMARY"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Post lane report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          { echo '<!-- agent-gate -->'; cat gate.md; } > comment.md
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '[.[] | select(.body | startswith("<!-- agent-gate -->"))][0].id // empty')
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@comment.md > /dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file comment.md > /dev/null
+          fi
+
+      - name: Fail on red
+        if: steps.gate.outputs.code == '1'
+        run: |
+          echo "Agent gate is red. See the job summary."
+          exit 1

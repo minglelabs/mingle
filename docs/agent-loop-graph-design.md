@@ -165,12 +165,35 @@ LANDS IN   docs/agent-constraints.md → 분할기가 plan.json 만들 때 읽�
 | 4 학습 경로 | `docs/agent-constraints.md` + 분할기 지시에 "먼저 읽기" | 규칙 1개가 다음 작업의 plan.json에 반영된 사례 |
 | 5 L2 자동화 검토 | 레인별 롤백 횟수 집계 | Nam이 L2 자동 머지 여부 결정 |
 
-### 1단계 구현 상태
+### 구현 상태 (1~5단계)
 
-- 코드: `scripts/agent-gate.logic.mjs`(판정 규칙, I/O 없음), `scripts/agent-gate.mjs`(CLI), `scripts/agent-gate.test.mjs`(CI `node --test`에 추가).
+| 단계 | 구현 | 확인한 것 |
+|---|---|---|
+| 1 게이트 | `scripts/agent-gate.logic.mjs`(판정 규칙, I/O 없음), `scripts/agent-gate.mjs`(CLI) | 최근 머지 PR 20개 백테스트: L1 10, L2 6, L3 4 (`--backtest 20`) |
+| 2 레인 | `.github/workflows/agent-gate.yml`: 모든 PR(문서 PR 포함)에서 레인 보고서를 PR 댓글로 갱신, 빨강이면 실패. `.github/pull_request_template.md`: 레인·마이그레이션·env·앱 릴리스·실기기 칸. 문서 PR은 상대 링크 깨짐을 검사 | PR #414에서 댓글 자동 갱신 |
+| 3 반환 형식 | `scripts/agent-plan.mjs validate / waves / brief`: 계획 검사, 병렬 웨이브, 같은 웨이브의 파일 겹침 거부, 워커 지시문 생성. `agent-gate.mjs --return`: 빨강이면 `.agent/returns/<unit>.json`, 3회째 exit 4 | 범위 밖 파일로 3회 반환 → 3회째 `escalate: true` |
+| 4 학습 경로 | `docs/agent-constraints.md`(근거 커밋/PR 필수, CI에서 형식 검사). `brief`가 해당 규칙을 워커 지시에 넣고, 게이트 보고서에도 표시 | 규칙 C1~C3, 근거 커밋이 main에 있음을 확인 |
+| 5 L2 자동화 검토 | `agent-gate.mjs --rollback-stats --days 30`: 레인별 머지·Revert 수와 추천. 자동 머지 레인은 `.github/agent-gate.json`(L3 파일이라 Nam 승인 필요, L3는 넣어도 무시) | 2026-10-31 기준 30일: L2 38건 중 Revert 1건 → 승인 유지 |
+
 - 레인 규칙 표는 `LANE_RULES`가 단일 소스다. 이 문서의 표와 다르면 코드가 맞다.
 - 결정한 기본값: L2와 `mingle-app/rn/**`는 항상 승인, 문서(L0)는 자동, 계획 파일 없이도 동작(`--require-plan`을 주면 계획 필수).
+- CI 안의 게이트는 다른 CI job을 기다리지 않는다(`--no-ci-read`). 머지 판단은 CI가 끝난 뒤 `--pr <n>`으로 다시 돌린 결과로 한다.
+- 실기기 QA는 게이트가 직접 돌리지 않는다. 워커가 `device_qa`에 맞춰 돌리고 요약 JSON을 보고에 붙인다.
 - 재사용할 수 있는 기존 검사·QA 도구와 빈틈 목록: `docs/agent-graph-inventory.md`.
+
+### 작업 한 번의 흐름
+
+```bash
+# 분할기
+node scripts/agent-plan.mjs validate .agent/plan.json
+node scripts/agent-plan.mjs waves .agent/plan.json        # 웨이브마다 워커를 병렬로
+node scripts/agent-plan.mjs brief .agent/plan.json <unit> # 워커에게 줄 지시문
+# 워커 PR이 올라오고 CI가 끝난 뒤
+node scripts/agent-gate.mjs --pr <n> --plan .agent/plan.json --unit <unit> --return
+#   exit 0 green → merge 값대로 / exit 1 red → .agent/returns/<unit>.json을 그 워커에게만
+#   exit 3 pending → 기다림 / exit 4 → 계획을 다시 짠다
+# 머지 후 확정된 원인 → docs/agent-constraints.md에 C<n> 추가
+```
 
 ## 7. Nam이 정할 것
 

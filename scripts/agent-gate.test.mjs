@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  brokenDocLinks,
+  buildReturnPacket,
   checkScope,
   classifyChange,
+  rollbackStats,
   classifyFile,
   decide,
   detectMigrationAndEnv,
@@ -166,4 +169,52 @@ test('decide: uncovered paths and env changes downgrade auto to approve', () => 
   const f1 = ['mingle-app/src/components/A.tsx'];
   const env = decide({ lane: 'L1', ci: passCi(f1), scope: noScope, flags: { ...noFlags, env_change: true } });
   assert.equal(env.merge, 'approve');
+});
+
+test('decide: CI not read keeps merge closed, auto lanes come from config, L3 never opens', () => {
+  const f1 = ['mingle-app/src/components/A.tsx'];
+  const notRead = decide({ lane: 'L1', ci: { ...evaluateCi([], f1), state: 'not_read' }, scope: noScope, flags: noFlags });
+  assert.equal(notRead.verdict, 'green');
+  assert.equal(notRead.merge, 'none');
+  const f2 = ['mingle-app/src/lib/a.ts'];
+  assert.equal(decide({ lane: 'L2', ci: passCi(f2), scope: noScope, flags: noFlags, autoLanes: ['L0', 'L1', 'L2'] }).merge, 'auto');
+  const f3 = ['mingle-app/prisma/schema.prisma'];
+  assert.equal(decide({ lane: 'L3', ci: passCi(f3), scope: noScope, flags: noFlags, autoLanes: ['L0', 'L1', 'L2', 'L3'] }).merge, 'approve');
+  const broken = decide({ lane: 'L0', ci: evaluateCi([], ['docs/a.md']), scope: noScope, flags: noFlags, docs: { broken: ['docs/a.md: x.md'] } });
+  assert.equal(broken.verdict, 'red');
+});
+
+test('return packet: only the failed unit, scoped, escalates on the third attempt', () => {
+  const f = ['mingle-app/src/components/A.tsx', 'mingle-app/src/lib/b.ts'];
+  const ci = evaluateCi([{ name: 'Typecheck (tsc)', bucket: 'fail' }], f);
+  const scope = { checked: true, ok: false, outside: ['mingle-app/src/lib/b.ts'] };
+  const result = { ...decide({ lane: 'L2', ci, scope, flags: noFlags }), ci, scope };
+  const u = { id: 'a', allowed: ['mingle-app/src/components/A.tsx'] };
+  const p1 = buildReturnPacket({ unit: u, result, attempt: 1, checkUrls: { 'Typecheck (tsc)': 'https://ci/1' } });
+  assert.equal(p1.unit, 'a');
+  assert.equal(p1.verdict, 'red');
+  assert.deepEqual(p1.scope, ['mingle-app/src/components/A.tsx']);
+  assert.ok(p1.evidence.includes('Typecheck (tsc): https://ci/1'));
+  assert.ok(p1.evidence.includes('outside plan: mingle-app/src/lib/b.ts'));
+  assert.equal(p1.escalate, false);
+  assert.equal(buildReturnPacket({ unit: u, result, attempt: 3 }).escalate, true);
+});
+
+test('rollback stats decide when L2 may go auto', () => {
+  const l2 = { files: ['mingle-app/src/lib/a.ts'] };
+  const prs = Array.from({ length: 10 }, () => l2).concat([{ files: ['docs/a.md'] }]);
+  const clean = rollbackStats(prs, []);
+  assert.equal(clean.stats.L2.merged, 10);
+  assert.equal(clean.stats.L0.merged, 1);
+  assert.match(clean.recommendation, /may switch L2 to auto/);
+  const dirty = rollbackStats(prs, [{ subject: 'Revert "x"', files: ['mingle-app/src/lib/a.ts'] }]);
+  assert.equal(dirty.stats.L2.reverted, 1);
+  assert.match(dirty.recommendation, /Keep approval/);
+  assert.match(rollbackStats(prs.slice(0, 3), []).recommendation, /Keep approval/);
+});
+
+test('broken doc links', () => {
+  const exists = (p) => ['docs/b.md', 'scripts/x.mjs'].includes(p);
+  const text = '[ok](b.md) [ok2](../scripts/x.mjs#L3) [web](https://x.y) [anchor](#top) [bad](missing.md)';
+  assert.deepEqual(brokenDocLinks('docs/a.md', text, exists), ['docs/a.md: missing.md']);
 });

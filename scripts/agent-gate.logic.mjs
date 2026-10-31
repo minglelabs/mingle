@@ -38,7 +38,7 @@ const MONEY_SEGMENT = /(^|\/)(coins?|iap|purchases?|billing|payments?|web-checko
 // Order matters: the first matching rule wins, so closed-lane rules come first.
 export const LANE_RULES = [
   // L3: closed lane. Always needs Nam's approval.
-  { lane: 'L3', glob: 'scripts/agent-gate*', reason: 'changes the gate itself' },
+  { lane: 'L3', glob: 'scripts/agent-*', reason: 'changes the gate itself' },
   { lane: 'L3', glob: '.github/**', reason: 'changes CI, the gate input' },
   { lane: 'L3', glob: '**/prisma/**', reason: 'database schema or migration' },
   { lane: 'L3', glob: '**/.env*', reason: 'environment variables' },
@@ -228,10 +228,16 @@ export function parseEnvExampleKeys(text) {
 
 // Final decision. Evidence order: deterministic results first, model opinion never.
 // merge: auto = agent may merge; approve = Nam approves; none = not mergeable yet.
-export function decide({ lane, ci, scope, flags, requirePlan = false }) {
+// ci.state 'not_read' (the gate runs inside CI and cannot wait for itself): structure is judged,
+// merge stays 'none' until a run that reads CI.
+export function decide({ lane, ci, scope, flags, docs = { broken: [] }, requirePlan = false, autoLanes = ['L0', 'L1'] }) {
   const reasons = [];
   let verdict = 'green';
 
+  if (docs.broken.length) {
+    verdict = 'red';
+    reasons.push(`broken doc links: ${docs.broken.join(', ')}`);
+  }
   if (ci.state === 'fail') {
     verdict = 'red';
     reasons.push(`CI failed: ${ci.failed.join(', ')}`);
@@ -258,14 +264,17 @@ export function decide({ lane, ci, scope, flags, requirePlan = false }) {
   }
 
   let merge = 'none';
-  if (verdict === 'green') {
+  if (verdict === 'green' && ci.state === 'not_read') {
+    reasons.push('CI not read in this run; run the gate with --pr after CI finishes to decide the merge');
+  } else if (verdict === 'green') {
     merge = 'auto';
     if (lane === 'L3') {
+      // Closed lane: autoLanes can never open it.
       merge = 'approve';
       reasons.push('L3 is a closed lane: Nam approves');
-    } else if (lane === 'L2') {
+    } else if (!autoLanes.includes(lane)) {
       merge = 'approve';
-      reasons.push('L2 needs approval until rollback history allows auto merge');
+      reasons.push(`${lane} needs approval until rollback history allows auto merge (--rollback-stats)`);
     }
     if (merge === 'auto' && ci.uncovered.length) {
       merge = 'approve';
@@ -292,8 +301,12 @@ export function renderMarkdown(result) {
     `| scope | ${result.scope.checked ? (result.scope.ok ? 'inside plan' : 'outside plan') : 'not checked (no plan)'} |`,
     `| migration | ${yesNo(result.flags.migration)} |`,
     `| env change | ${yesNo(result.flags.env_change)}${result.flags.new_env_keys.length ? ` (${result.flags.new_env_keys.join(', ')})` : ''} |`,
+    `| doc links | ${result.docs?.checked ? (result.docs.broken.length ? `${result.docs.broken.length} broken` : 'ok') : 'not checked'} |`,
     `| checked on a real device | not checked by the gate |`,
   ];
+  if (result.constraints?.length) {
+    lines.push('', 'Constraints that apply (docs/agent-constraints.md):', ...result.constraints.map((c) => `- ${c.id}: ${c.rule}`));
+  }
   if (result.reasons.length) {
     lines.push('', 'Reasons:', ...result.reasons.map((r) => `- ${r}`));
   }
@@ -301,4 +314,65 @@ export function renderMarkdown(result) {
   for (const item of result.items) lines.push(`- \`${item.path}\` → ${item.lane} (${item.reason})`);
   lines.push('', '</details>');
   return lines.join('\n');
+}
+
+// Correction edge: what goes back to the worker when the gate is red. Only the failed unit
+// goes back, with a scope line so the fix does not grow into other files.
+export const MAX_RETURN_ATTEMPTS = 3;
+
+export function buildReturnPacket({ unit, result, attempt, checkUrls = {} }) {
+  const evidence = [];
+  for (const name of result.ci.failed ?? []) evidence.push(checkUrls[name] ? `${name}: ${checkUrls[name]}` : name);
+  for (const file of result.scope.outside ?? []) evidence.push(`outside plan: ${file}`);
+  for (const job of result.ci.missing_required ?? []) evidence.push(`not passed: ${job}`);
+  const escalate = attempt >= MAX_RETURN_ATTEMPTS;
+  return {
+    unit: unit?.id ?? null,
+    verdict: result.verdict,
+    reason: result.reasons[0] ?? result.verdict,
+    evidence,
+    scope: unit?.allowed ?? [],
+    attempt,
+    escalate,
+    next: escalate
+      ? 'stop: this unit failed 3 gate returns, send it back to the splitter (plan problem)'
+      : 'fix only the files in scope, run the unit check, then run the gate again',
+  };
+}
+
+// Rollback history per lane. A lane may move to auto merge only with enough merged PRs and no reverts.
+export const AUTO_MERGE_MIN_PRS = 10;
+
+export function rollbackStats(prs, reverts) {
+  const stats = Object.fromEntries(LANES.map((l) => [l, { merged: 0, reverted: 0, reverts: [] }]));
+  for (const pr of prs) stats[classifyChange(pr.files).lane].merged += 1;
+  for (const r of reverts) {
+    const lane = classifyChange(r.files).lane;
+    stats[lane].reverted += 1;
+    stats[lane].reverts.push(r.subject);
+  }
+  const l2 = stats.L2;
+  const recommendation =
+    l2.merged >= AUTO_MERGE_MIN_PRS && l2.reverted === 0
+      ? `L2: ${l2.merged} merged, 0 reverted. Nam may switch L2 to auto merge.`
+      : `L2: ${l2.merged} merged, ${l2.reverted} reverted. Keep approval (needs >= ${AUTO_MERGE_MIN_PRS} merged and 0 reverted).`;
+  return { stats, recommendation };
+}
+
+// Markdown links in changed docs that point to repo files that do not exist (the L0 check).
+export function brokenDocLinks(docPath, text, exists) {
+  const dir = docPath.includes('/') ? docPath.slice(0, docPath.lastIndexOf('/') + 1) : '';
+  const broken = [];
+  for (const m of text.matchAll(/\]\(([^)\s]+)\)/g)) {
+    const target = m[1].split('#')[0];
+    if (!target || /^[a-z]+:/i.test(target) || target.startsWith('/')) continue;
+    const parts = [];
+    for (const seg of `${dir}${target}`.split('/')) {
+      if (seg === '..') parts.pop();
+      else if (seg !== '.' && seg !== '') parts.push(seg);
+    }
+    const resolved = parts.join('/');
+    if (!exists(resolved)) broken.push(`${docPath}: ${m[1]}`);
+  }
+  return broken;
 }

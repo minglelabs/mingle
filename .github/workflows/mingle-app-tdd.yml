@@ -150,7 +150,7 @@ jobs:
       - name: Run devbox script contract tests
         if: matrix.shard == 1
         working-directory: .
-        run: node --test scripts/devbox-ngrok-parse.test.mjs scripts/devbox-runtime-config.test.mjs scripts/agent-gate.test.mjs
+        run: node --test scripts/devbox-ngrok-parse.test.mjs scripts/devbox-runtime-config.test.mjs scripts/agent-gate.test.mjs scripts/agent-plan.test.mjs
 
       - name: Run TDD suite (unit)
         run: pnpm test:unit --shard=${{ matrix.shard }}/4
