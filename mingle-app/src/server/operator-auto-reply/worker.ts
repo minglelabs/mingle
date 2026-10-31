@@ -113,6 +113,11 @@ export async function findAutoReplyCandidates(args: {
       ON sender.id = latest.user_id
       AND sender.is_operator = false
     WHERE member.left_at IS NULL
+      -- A staff account (no persona country, e.g. @admin) never answers automatically.
+      AND EXISTS (
+        SELECT 1 FROM app.app_operator_accounts AS account
+        WHERE account.user_id = member.user_id AND account.persona_country IS NOT NULL
+      )
       AND latest.created_at <= ${sqlUtcTimestamp(cutoff)}
       AND latest.created_at > ${sqlUtcTimestamp(since)}
       AND (

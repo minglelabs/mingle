@@ -56,6 +56,8 @@ describe('daily operator posts', () => {
     const rolls = [0.1, 0.5, 0.15] // 20%: a and c win
     const result = await writeDailyOperatorPosts(20, new Date('2026-11-01T00:00:00Z'), () => rolls.shift() ?? 0.99)
     expect(result).toEqual({ accounts: 2, written: 2, failed: 0 })
+    // A staff account (no persona country, e.g. @admin) is never picked.
+    expect(m.userFindMany.mock.calls[0][0].where.operatorAccount).toEqual({ reviewState: 'approved', personaCountry: { not: null } })
     expect(m.reserveCreate).toHaveBeenCalledTimes(2)
     expect(m.reserveCreate.mock.calls[0][0].data).toMatchObject({ operatorUserId: 'a', state: 'review', reviewRank: -11, imagePrompt: '[scene] ramen', language: null })
     expect(m.draw).toHaveBeenCalledWith('a', '[scene] ramen')
