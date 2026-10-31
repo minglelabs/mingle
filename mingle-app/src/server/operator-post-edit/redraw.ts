@@ -106,23 +106,19 @@ async function readReference(file: FormDataEntryValue | null): Promise<Buffer | 
   return Buffer.from(await file.arrayBuffer())
 }
 
+type RedrawInput = { reference: FormDataEntryValue | null; face: RedrawFace; text: RedrawText; note: unknown }
+
 /**
- * Draws a new photo for an operator's post and stores it as a candidate; the
- * post keeps its photo until staff apply the candidate. With a reference
- * photo, that shot is redrawn with the account's face; without one, the
- * post's own photo brief is drawn again (or the current photo, when the post
- * has no brief).
+ * Draws a candidate photo for an operator account and stores it in the
+ * account's post-image folder. With a reference photo, that shot is redrawn
+ * with the account's face; without one, the post's own photo brief is drawn
+ * again (or the current photo, when there is no brief).
  */
-export async function redrawOperatorPostPhoto(
+async function drawCandidate(
   ctx: AdminContext,
-  postId: string,
-  input: { reference: FormDataEntryValue | null; face: RedrawFace; text: RedrawText; note: unknown },
+  target: { authorId: string; language: string | null; brief: string | null; currentKey: string | null; targetType: 'post' | 'reserve'; targetId: string },
+  input: RedrawInput,
 ): Promise<RedrawResult> {
-  const post = await prisma.post.findUnique({
-    where: { id: postId },
-    select: { id: true, authorId: true, imageObjectKey: true, sourceLanguage: true, author: { select: { isOperator: true, primaryLanguages: true } } },
-  })
-  if (!post?.author.isOperator) return { ok: false, error: 'not_found', status: 404 }
   const note = typeof input.note === 'string' ? input.note.trim().slice(0, MAX_NOTE_LENGTH) : ''
   const reference = await readReference(input.reference)
   if (reference === 'invalid') return { ok: false, error: 'invalid_image', status: 400 }
@@ -133,29 +129,25 @@ export async function redrawOperatorPostPhoto(
     if (reference) {
       const meta = await sharp(reference, { limitInputPixels: 80_000_000 }).rotate().metadata()
       const vertical = (meta.height ?? 1) >= (meta.width ?? 1)
-      const withPerson = input.face === 'poster' ? await reservePostPerson(post.authorId) : null
+      const withPerson = input.face === 'poster' ? await reservePostPerson(target.authorId) : null
       const paired = Boolean(withPerson?.reference)
       const options: RedrawOptions = { face: input.face, text: input.text, note }
-      const language = languageName(post.sourceLanguage ?? post.author.primaryLanguages[0] ?? null)
-      prompt = buildReferenceRedrawPrompt({ options, person: withPerson?.person ?? null, paired, language, vertical })
+      prompt = buildReferenceRedrawPrompt({ options, person: withPerson?.person ?? null, paired, language: languageName(target.language), vertical })
       attachment = { bytes: paired ? await pairImages(reference, withPerson!.reference!.bytes) : reference, mimeType: 'image/jpeg' }
+    } else if (target.brief) {
+      const place = await reservePostPlace(target.authorId)
+      const withPerson = decodePostPhoto(target.brief).kind === 'scene' ? null : await reservePostPerson(target.authorId)
+      prompt = [buildPostImagePrompt(target.brief, place, Math.random, withPerson?.person ?? null), ...(note ? [`Staff note: ${note}`] : [])].join('\n')
+      attachment = withPerson?.reference ?? undefined
+    } else if (target.currentKey) {
+      prompt = [
+        'Draw a new version of the attached phone photo: the same subject, place and mood, as if taken again a moment later, with a slightly different angle and pose. The same person if one is shown.',
+        ...(note ? [`Staff note: ${note}`] : []),
+        'It must look like a real, unedited snapshot from an ordinary person\'s phone. No captions, watermarks, logos, borders or frames.',
+      ].join('\n')
+      attachment = { bytes: Buffer.from(await getPostImage(target.currentKey)), mimeType: 'image/jpeg' }
     } else {
-      const origin = await prisma.operatorPostReserve.findFirst({ where: { postId: post.id, state: 'published' }, orderBy: { updatedAt: 'desc' }, select: { imagePrompt: true } })
-      if (origin?.imagePrompt) {
-        const place = await reservePostPlace(post.authorId)
-        const withPerson = decodePostPhoto(origin.imagePrompt).kind === 'scene' ? null : await reservePostPerson(post.authorId)
-        prompt = [buildPostImagePrompt(origin.imagePrompt, place, Math.random, withPerson?.person ?? null), ...(note ? [`Staff note: ${note}`] : [])].join('\n')
-        attachment = withPerson?.reference ?? undefined
-      } else if (post.imageObjectKey) {
-        prompt = [
-          'Draw a new version of the attached phone photo: the same subject, place and mood, as if taken again a moment later, with a slightly different angle and pose. The same person if one is shown.',
-          ...(note ? [`Staff note: ${note}`] : []),
-          'It must look like a real, unedited snapshot from an ordinary person\'s phone. No captions, watermarks, logos, borders or frames.',
-        ].join('\n')
-        attachment = { bytes: Buffer.from(await getPostImage(post.imageObjectKey)), mimeType: 'image/jpeg' }
-      } else {
-        return { ok: false, error: 'no_brief', status: 400 }
-      }
+      return { ok: false, error: 'no_brief', status: 400 }
     }
   } catch {
     return { ok: false, error: 'invalid_image', status: 400 }
@@ -164,18 +156,54 @@ export async function redrawOperatorPostPhoto(
   const drawn = await requestAvatarImage(prompt, { reference: attachment })
   await writeAdminAudit(ctx, {
     action: 'operator_post.redraw_photo',
-    operatorUserId: post.authorId,
-    targetType: 'post',
-    targetId: post.id,
+    operatorUserId: target.authorId,
+    targetType: target.targetType,
+    targetId: target.targetId,
     metadata: { reference: Boolean(reference), face: input.face, text: input.text, ok: drawn.ok, ...(drawn.ok ? {} : { error: drawn.error, detail: drawn.detail ?? null }) },
   })
   if (!drawn.ok) return { ok: false, error: drawn.error === 'image_refused' ? 'image_refused' : 'draw_failed', status: 502 }
   try {
-    const stored = await storeReservePostImage(post.authorId, drawn.bytes)
+    const stored = await storeReservePostImage(target.authorId, drawn.bytes)
     return { ok: true, ...stored }
   } catch {
     return { ok: false, error: 'draw_failed', status: 502 }
   }
+}
+
+/** A candidate photo for a published operator post; the post keeps its photo until staff apply it. */
+export async function redrawOperatorPostPhoto(ctx: AdminContext, postId: string, input: RedrawInput): Promise<RedrawResult> {
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    select: { id: true, authorId: true, imageObjectKey: true, sourceLanguage: true, author: { select: { isOperator: true, primaryLanguages: true } } },
+  })
+  if (!post?.author.isOperator) return { ok: false, error: 'not_found', status: 404 }
+  const origin = await prisma.operatorPostReserve.findFirst({ where: { postId: post.id, state: 'published' }, orderBy: { updatedAt: 'desc' }, select: { imagePrompt: true } })
+  return drawCandidate(ctx, {
+    authorId: post.authorId,
+    language: post.sourceLanguage ?? post.author.primaryLanguages[0] ?? null,
+    brief: origin?.imagePrompt ?? null,
+    currentKey: post.imageObjectKey,
+    targetType: 'post',
+    targetId: post.id,
+  }, input)
+}
+
+/** A candidate photo for a post in the review queue; staff add it in the photo editor and save. */
+export async function redrawReviewPostPhoto(ctx: AdminContext, reserveId: string, input: RedrawInput): Promise<RedrawResult> {
+  const row = await prisma.operatorPostReserve.findFirst({
+    where: { id: reserveId, state: { in: ['review', 'regenerating'] } },
+    select: { id: true, operatorUserId: true, language: true, imagePrompt: true, imageObjectKey: true },
+  })
+  if (!row) return { ok: false, error: 'not_found', status: 404 }
+  const author = row.language ? null : await prisma.user.findUnique({ where: { id: row.operatorUserId }, select: { primaryLanguages: true } })
+  return drawCandidate(ctx, {
+    authorId: row.operatorUserId,
+    language: row.language ?? author?.primaryLanguages[0] ?? null,
+    brief: row.imagePrompt,
+    currentKey: row.imageObjectKey,
+    targetType: 'reserve',
+    targetId: row.id,
+  }, input)
 }
 
 /** Whether `key` is a candidate photo drawn for this operator post (its author's post-image key). */
