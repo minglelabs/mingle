@@ -149,3 +149,10 @@ RN 화면**으로 만든다(계획서 §0 확정 사항).
 - 게임 쪽이 아직 `ready`를 보내지 않는 빌드면 20초 뒤 연결 실패 문구가 뜬다. 게임 G4~G7과 함께 확인.
 - 다른 채팅방에서 보이스톡 중에 이 방 게임을 열면 `voice: false`로 간다(웹 판은 자기 방 통화만 안다).
 - 보이스톡 마이크 권한이 거부됐을 때 이유와 설정 방법을 알려주는 안내.
+
+### 2026-11-01 보이스톡 로컬 네트워크 권한 창에 "(null)"이 뜸
+
+- 상황: 새로 설치한 앱에서 처음 보이스톡에 들어가면 iOS가 "'HashChat' 앱이 로컬 네트워크에 있는 기기를 찾도록 허용하겠습니까?" 창을 띄운다. 제목 아래 설명 자리에 `(null)`이 그대로 보였다. iPhone 11 Pro(iOS 18.6)에서 Appium으로 직접 찍어 확인했다.
+- 원인: LiveKit(WebRTC)이 통화 경로를 찾을 때 같은 와이파이 안의 기기도 살펴서 iOS가 로컬 네트워크 권한을 묻는데, `Info.plist`에 `NSLocalNetworkUsageDescription`이 없었다.
+- 조치: `NSLocalNetworkUsageDescription`에 "HashChat uses your local network to connect voice talk calls."를 넣었다. 다음 네이티브 빌드부터 적용된다.
+- 남은 일: 이 문구는 지금 영어 하나뿐이다. 다른 권한 문구도 아직 현지화돼 있지 않다.
