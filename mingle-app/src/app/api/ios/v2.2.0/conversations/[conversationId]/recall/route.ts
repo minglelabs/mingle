@@ -1,2 +1,7 @@
-export const runtime = "nodejs";
-export { POST } from "@/app/api/ios/v2.0.0/conversations/[conversationId]/recall/route";
+import { NextRequest } from 'next/server'
+import { recallConversationMessage } from '@/server/api/controllers/shared/message-recall-controller'
+export const runtime = 'nodejs'
+type Context = { params: Promise<{ conversationId: string }> }
+export async function POST(request: NextRequest, { params }: Context) {
+  return recallConversationMessage(request, (await params).conversationId)
+}
