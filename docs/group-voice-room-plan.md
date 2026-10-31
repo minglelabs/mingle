@@ -251,7 +251,40 @@ into the current namespace (`ios/v2.3.0`, `android/v2.3.0`) as re-exports.
   duration, posts the end-of-call system message, and (Phase 4) finalizes coin
   charges from `interpretedMs`.
 
+#### Phase 2 as built
+- No `livekit-server-sdk` dependency: tokens and webhook signatures are HS256
+  JWTs, signed and verified with `node:crypto` in
+  `mingle-app/src/server/voice/livekit-auth.ts`.
+- Non-members get **403** `{error:"forbidden"}` (the RN client maps 403).
+- The LiveKit room name is `voice-<channelId>-<base36 time>`, new for every
+  call, so a later call in the same chat never collides with an ended one.
+  A partial unique index allows only one `live` call per channel.
+- The end-of-call record is an `AppEventLog` row
+  (`eventType = "voice_call_ended"`, metadata
+  `{kind, callId, durationSec, participantCount}`), written at most once per
+  call. Rendering it as "🎙 Voice talk 12:34" in the chat timeline is web/RN work.
+- Enable the webhook on the LiveKit server (`C:\livekit\livekit.yaml`), then
+  restart the `LiveKit Server` scheduled task:
+
+  ```yaml
+  webhook:
+    api_key: <the key under `keys:`>
+    urls:
+      - https://<app host>/api/webhooks/livekit
+  ```
+
+  Without the webhook the app still works: `voice/leave` ends the call when the
+  last person leaves. The webhook covers app crashes and dropped connections.
+
 ### 4.4 Namespace + version policy impact
+- **As built:** app `v2.3.0` already shipped (release/2.3.0, PR #346), and
+  `next.config.mjs` rewrites `/api/{ios,android}/v2.3.0/*` to the `v2.2.0`
+  tree. The repo guard `namespace-reexport.v2_2_0.guard.test.ts` requires every
+  unversioned route in `v2.2.0`, so the voice routes are re-exported there and
+  the app keeps calling `ios/v2.3.0` / `android/v2.3.0`. The webhook is under
+  `webhooks/` and is never namespaced. Shipping the voice UI needs a new app
+  build; if that build bumps the app version, add the matching namespace
+  rewrite the same way 2.3.0 did.
 - Add re-export routes under `ios/v2.3.0/**` and `android/v2.3.0/**` for every
   new base route, and extend the parity guard tests. Because **app version ≡ API
   namespace version**, the voice room ships in app `v2.3.0` only; a later app
