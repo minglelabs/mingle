@@ -6,11 +6,19 @@
 //   app -> server  { t: 'hello', name, watch, pw, pid }   once the line is up
 //                  { t: 'i', n, mx, my, ax, ay, seq, th, sk }   inputs, numbered
 //                  { t: 'sit' }   a spectator takes a free seat
-//   server -> app  { t: 'lobby', slots, spect, teams, map, you, wins, ... }
-//                  { t: 'start', g, map, players, you, wins, ... }   a round
+//                  { t: 'stand' }   a player gives up the seat to watch (not mid-round)
+//   server -> app  { t: 'lobby', slots, spect, teams, map, you, wins, tot, rd, hist, nx, fill, title }
+//                  { t: 'start', g, map, players, you, wins, tot, rd, ... }   a round
 //                  { t: 's', g, k, ak, st, ph, cd, tm, hx, nb, w, ws, to, p, hz, ev }
+//                  { t: 'over', g, wins, tot, rd, champ, nx, title }   right after a round's last snapshot
 //                  { t: 'lobbyscreen' }   the round is over, back to the lobby
 // (`chat`, `rename` and pings are the line's business or not the app's.)
+//
+// Nobody is the host of a server room: it starts every round by itself. `nx`
+// says how long until the next one starts (ms, -1 when none is coming), `fill`
+// how many hamsters a round has at least (computers take the empty seats) and
+// `title` the race to the title. A server from before these (no `over`, no
+// `nx`) still plays: the app then shows no countdown and no title.
 //
 // No DOM here, so it can be tested on its own. client.ts puts it to work.
 
@@ -29,6 +37,16 @@ export type HashRushSeat = {
   userId: string
 }
 
+/** The race to the title: the first to `wins` wins, `lead` clear of every other side. */
+export type HashRushTitleRule = { wins: number, lead: number }
+
+/** A title won in this room (the page's "past championships"). */
+export type HashRushSeason = {
+  games: number
+  stopped: boolean
+  rows: { name: string, look: number, wins: number, champ: boolean }[]
+}
+
 export type HashRushLobby = {
   seats: HashRushSeat[]
   spectators: string[]
@@ -37,7 +55,15 @@ export type HashRushLobby = {
   /** This viewer's seat, -1 while watching. */
   you: number
   wins: number[]
+  /** Each seat's totals: [bonks, bonked, seeds, goals, supers, throws, stops, rounds played]. */
+  careers: number[][]
   rounds: number
+  /** How long until the next round starts, -1 when none is coming or the server does not say. */
+  nextInMs: number
+  /** A round has at least this many hamsters (computers fill the seats), 0 when the server does not say. */
+  fill: number
+  title: HashRushTitleRule | null
+  seasons: HashRushSeason[]
 }
 
 export type HashRushSwing = { phase: string, t: number, dx: number, dy: number }
@@ -202,6 +228,9 @@ export function helloMessage(input: { name: string, pid: string }) {
 
 export const SIT_MESSAGE = { t: 'sit' as const }
 
+/** Gives the seat up to watch; the server keeps the record in the seat for when they sit again. */
+export const STAND_MESSAGE = { t: 'stand' as const }
+
 const INPUT_KEYS = ['mx', 'my', 'ax', 'ay', 'seq', 'th', 'sk'] as const
 
 export function initialInputState(): HashRushInputState {
@@ -243,6 +272,37 @@ export function nextInputMessage(state: HashRushInputState, read: HashRushInputR
 // server -> app
 // ---------------------------------------------------------------------------
 
+/** The eight numbers of a seat's totals, whatever came (a server from before them sent the rounds played only). */
+export function readCareer(raw: unknown): number[] {
+  if (Array.isArray(raw)) return Array.from({ length: 8 }, (_, k) => Math.max(0, num(raw[k])))
+  return [0, 0, 0, 0, 0, 0, 0, Math.max(0, num(raw))]
+}
+
+// A server from before the totals sent each seat's rounds played only: no totals, then.
+const readCareers = (raw: unknown): number[][] => (Array.isArray(raw) && raw.length > 0 && raw.every(Array.isArray) ? raw.map(readCareer) : [])
+const readWins = (raw: unknown): number[] => (Array.isArray(raw) ? raw.map((n) => num(n)) : [])
+const readNextIn = (raw: unknown): number => (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? raw : -1)
+
+function readTitleRule(raw: unknown): HashRushTitleRule | null {
+  const rule = record(raw)
+  const wins = num(rule?.wins)
+  const lead = num(rule?.lead)
+  return wins > 0 && lead > 0 ? { wins, lead } : null
+}
+
+function readSeasons(raw: unknown): HashRushSeason[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((entry): HashRushSeason[] => {
+    const season = record(entry)
+    if (!season || !Array.isArray(season.rows)) return []
+    const rows = season.rows.flatMap((r) => {
+      const row = record(r)
+      return row ? [{ name: localHamsterName(text(row.name)), look: num(row.look), wins: num(row.wins), champ: !!row.champ }] : []
+    })
+    return [{ games: num(season.games), stopped: !!season.stopped, rows }]
+  })
+}
+
 export function readLobby(message: unknown): HashRushLobby | null {
   const m = record(message)
   if (!m || m.t !== 'lobby' || !Array.isArray(m.slots)) return null
@@ -263,14 +323,48 @@ export function readLobby(message: unknown): HashRushLobby | null {
     teams: !!m.teams,
     map: typeof m.map === 'string' && MAP_BY_ID[m.map] ? m.map : 'meadow',
     you: Number.isInteger(m.you) ? m.you as number : -1,
-    wins: Array.isArray(m.wins) ? m.wins.map((n) => num(n)) : [],
+    wins: readWins(m.wins),
+    careers: readCareers(m.tot),
     rounds: num(m.rd),
+    nextInMs: readNextIn(m.nx),
+    fill: Math.max(0, Math.floor(num(m.fill))),
+    title: readTitleRule(m.title),
+    seasons: readSeasons(m.hist),
   }
 }
 
-/** A spectator takes the first free seat: phase 1 seats everyone it can. */
-export function shouldTakeSeat(lobby: HashRushLobby | null): boolean {
-  return !!lobby && lobby.you < 0 && lobby.seats.some((seat) => seat.kind === 'open')
+export type HashRushOver = {
+  round: number
+  wins: number[]
+  careers: number[][]
+  rounds: number
+  /** The round decided the title. */
+  champ: boolean
+  nextInMs: number
+  title: HashRushTitleRule | null
+}
+
+/** The server's word on a round just finished, with it counted into the record. */
+export function readOver(message: unknown): HashRushOver | null {
+  const m = record(message)
+  if (!m || m.t !== 'over' || typeof m.g !== 'number') return null
+  return {
+    round: m.g,
+    wins: readWins(m.wins),
+    careers: readCareers(m.tot),
+    rounds: num(m.rd),
+    champ: !!m.champ,
+    nextInMs: readNextIn(m.nx),
+    title: readTitleRule(m.title),
+  }
+}
+
+/**
+ * A spectator takes the first free seat: somebody who opens the game in their
+ * room came to play. Once they choose to watch (`watching`), they are left to.
+ */
+export function shouldTakeSeat(lobby: HashRushLobby | null, watching = false): boolean {
+  return !watching && !!lobby && lobby.you < 0 && lobby.seats.some((seat) => seat.kind === 'open')
 }
 
 export type HashRushStart = {
@@ -278,6 +372,9 @@ export type HashRushStart = {
   /** This viewer's hamster this round, -1 when watching it. */
   you: number
   wins: number[]
+  /** The totals before this round. */
+  careers: number[][]
+  rounds: number
   game: HashRushRound
 }
 
@@ -329,7 +426,9 @@ export function readStart(message: unknown): HashRushStart | null {
   return {
     round: num(m.g),
     you: Number.isInteger(m.you) && (m.you as number) < players.length ? m.you as number : -1,
-    wins: Array.isArray(m.wins) ? m.wins.map((n) => num(n)) : [],
+    wins: readWins(m.wins),
+    careers: readCareers(m.tot),
+    rounds: num(m.rd),
     game: {
       map,
       hazards: [],

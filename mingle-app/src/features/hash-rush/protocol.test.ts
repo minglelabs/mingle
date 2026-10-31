@@ -5,6 +5,8 @@ import { MAPS } from './engine/sim/map.js'
 import { setLanguage } from './engine/client/i18n.js'
 import {
   IDLE_INPUT_READ,
+  SIT_MESSAGE,
+  STAND_MESSAGE,
   applySnapshot,
   createOthersSmoother,
   helloMessage,
@@ -14,7 +16,9 @@ import {
   localHamsterName,
   nextInputMessage,
   phaseOf,
+  readCareer,
   readLobby,
+  readOver,
   readPlayerRow,
   readStart,
   shouldTakeSeat,
@@ -175,9 +179,12 @@ describe('hash rush protocol: server to app', () => {
       pw: '',
       you: -1,
       wins: [2, 0],
-      tot: [],
+      tot: [[3, 1, 2, 1, 0, 0, 1, 4], [0, 0, 0, 0, 0, 0, 0, 0]],
       rd: 4,
-      hist: [],
+      hist: [{ games: 18, rows: [{ name: 'Cloud', look: 1, wins: 10, champ: true }, { name: 'Mia', look: 0, wins: 6, champ: false }] }],
+      nx: 6500,
+      fill: 4,
+      title: { wins: 10, lead: 2 },
     })
     expect(lobby).toEqual({
       seats: [
@@ -189,13 +196,63 @@ describe('hash rush protocol: server to app', () => {
       map: 'desert',
       you: -1,
       wins: [2, 0],
+      careers: [[3, 1, 2, 1, 0, 0, 1, 4], [0, 0, 0, 0, 0, 0, 0, 0]],
       rounds: 4,
+      nextInMs: 6500,
+      fill: 4,
+      title: { wins: 10, lead: 2 },
+      seasons: [{ games: 18, stopped: false, rows: [{ name: 'Cloud', look: 1, wins: 10, champ: true }, { name: 'Mia', look: 0, wins: 6, champ: false }] }],
     })
     expect(shouldTakeSeat(lobby)).toBe(true)
     expect(shouldTakeSeat({ ...lobby!, you: 0 })).toBe(false)
     expect(shouldTakeSeat({ ...lobby!, seats: [lobby!.seats[0]] })).toBe(false)
     expect(readLobby({ t: 'start' })).toBeNull()
     expect(readLobby({ t: 'lobby', slots: [], map: 'nowhere' })?.map).toBe('meadow')
+  })
+
+  it('leaves somebody who chose to watch where they are', () => {
+    const lobby = readLobby({ t: 'lobby', slots: [{ kind: 'open', name: 'Me' }], you: -1 })
+    expect(shouldTakeSeat(lobby, false)).toBe(true)
+    expect(shouldTakeSeat(lobby, true)).toBe(false)
+    expect(SIT_MESSAGE).toEqual({ t: 'sit' })
+    expect(STAND_MESSAGE).toEqual({ t: 'stand' })
+  })
+
+  it('reads a server from before the room said when and what: no countdown, no title, no totals', () => {
+    const lobby = readLobby({ t: 'lobby', slots: [{ kind: 'remote', name: 'Mia' }], you: 0, wins: [1], tot: [3, 0, 0], rd: 3, hist: [] })!
+    expect(lobby.nextInMs).toBe(-1)
+    expect(lobby.fill).toBe(0)
+    expect(lobby.title).toBeNull()
+    // The older totals were the rounds played only: no totals at all.
+    expect(lobby.careers).toEqual([])
+    expect(readLobby({ t: 'lobby', slots: [], nx: -1, title: { wins: 0, lead: 2 } })).toMatchObject({ nextInMs: -1, title: null })
+  })
+
+  it('reads a seat total whatever shape it came in', () => {
+    expect(readCareer([1, 2, 3, 4, 5, 6, 7, 8, 9])).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(readCareer([1, 'x', -3])).toEqual([1, 0, 0, 0, 0, 0, 0, 0])
+    expect(readCareer(5)).toEqual([0, 0, 0, 0, 0, 0, 0, 5])
+  })
+
+  it('reads the server word on a finished round', () => {
+    expect(readOver({ t: 'over', g: 7, wins: [3, 1], tot: [[1, 0, 0, 1, 0, 0, 0, 7], [0, 2, 0, 0, 0, 0, 0, 7]], rd: 7, champ: true, nx: 31000, title: { wins: 10, lead: 2 } })).toEqual({
+      round: 7,
+      wins: [3, 1],
+      careers: [[1, 0, 0, 1, 0, 0, 0, 7], [0, 2, 0, 0, 0, 0, 0, 7]],
+      rounds: 7,
+      champ: true,
+      nextInMs: 31000,
+      title: { wins: 10, lead: 2 },
+    })
+    expect(readOver({ t: 'over', g: 2 })).toMatchObject({ round: 2, champ: false, nextInMs: -1, careers: [], title: null })
+    expect(readOver({ t: 'over' })).toBeNull()
+    expect(readOver({ t: 'lobby', g: 1 })).toBeNull()
+  })
+
+  it('reads the totals a round starts from', () => {
+    const start = readStart({ ...serverStart(serverGame(), 4, 0), tot: Array.from({ length: 8 }, () => [1, 1, 0, 0, 0, 0, 0, 2]), rd: 3 })!
+    expect(start.careers[0]).toEqual([1, 1, 0, 0, 0, 0, 0, 2])
+    expect(start.rounds).toBe(3)
   })
 
   it('starts a round with every hamster at its nest and this viewer in their seat', () => {
