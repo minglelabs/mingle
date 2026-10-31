@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { AdminContext } from '@/server/admin/guard'
 import { writeAdminAudit } from '@/server/admin/audit'
 import { storeReservePostImage } from '@/server/operator-post-reserve/post-image'
+import { hidePostByModerator, unhidePostByModerator } from '@/server/reports/moderation-service'
 import { detectSourceLanguage } from '@/server/translation/detect-source-language'
 import { resolveEditTargetLanguages, translatePostBodySettled } from '@/server/translation/post-translation-service'
 
@@ -69,6 +70,20 @@ export async function editOperatorPostText(ctx: AdminContext, postId: string, ra
 }
 
 /**
+ * Any other post (a staff test post, or a real user's): hidden from everyone
+ * the way a report would hide it, or shown again. Nothing goes to the review
+ * queue, which holds operator posts only.
+ */
+async function setPostHiddenByStaff(ctx: AdminContext, postId: string, hidden: boolean): Promise<OperatorPostEditResult> {
+  const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true, authorId: true } })
+  if (!post) return { ok: false, error: 'not_found', status: 404 }
+  if (hidden) await hidePostByModerator(prisma, post.id)
+  else await unhidePostByModerator(prisma, post.id)
+  await writeAdminAudit(ctx, { action: hidden ? 'post.takedown' : 'post.restore', targetType: 'post', targetId: post.id, metadata: { authorId: post.authorId } })
+  return { ok: true }
+}
+
+/**
  * Takes an operator's published post down: hidden by staff, it leaves every
  * feed, profile and search (the starter feed too), and its text and photos go
  * back to the front of the review queue as a latent post (`postId` points at
@@ -78,7 +93,7 @@ export async function editOperatorPostText(ctx: AdminContext, postId: string, ra
  */
 export async function setOperatorPostHidden(ctx: AdminContext, postId: string, hidden: boolean): Promise<OperatorPostEditResult & { reserveId?: string }> {
   const post = await operatorPost(postId)
-  if (!post) return { ok: false, error: 'not_found', status: 404 }
+  if (!post) return setPostHiddenByStaff(ctx, postId, hidden)
   let reserveId: string | undefined
   if (hidden) {
     const [full, origin, low] = await Promise.all([
