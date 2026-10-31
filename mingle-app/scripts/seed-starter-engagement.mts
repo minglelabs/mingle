@@ -16,35 +16,36 @@ import { markPostViewed } from '../src/server/feed/post-view'
 import { saveStarterFeed, type StarterFeed } from '../src/server/feed/starter-feed'
 import { commentOnPostAsOperator } from '../src/server/operator-comments/comment'
 
-// Picked by the rules staff set for the starter feed: Korean readers meet
-// foreigners learning Korean (3 Japanese with one first, 2 Chinese, 2 Korean,
-// 3 others); everyone else meets Korea (4 Koreans, only Seoyun a woman; 2
-// Japanese; 4 from the US, the UK, Brazil, France, India or China, all women
-// but one white man). All photo posts, the ones with a hook.
+// Picked by the rules staff set for the starter feed (2026-10-31), mostly
+// photos with people in them: Korean readers get 3 posts by Japanese women
+// and 2 by Chinese women, the rest from other countries; everyone else gets
+// 4 posts by Korean men and 3 by Korean women, the rest by foreigners living
+// in or loving Korea. Candidates written for this list are in
+// scripts/starter-feed-candidates.mts.
 const PICKS: Record<keyof StarterFeed, string[]> = {
   ko: [
-    'cmuwrpj9p003fsh5cbmqo71r2', // yuki.yokohama (JP, F) 家系ラーメンで胃が死んだ
-    'cmuvc86by0009shzy2781fbtp', // kenji_sapporo (JP) ジンギスカン、服が全部羊くさい
-    'cmuwrmyrd0001sh5ctgufk500', // li.wei.sh (CN) 제주 사진 날리고 렌터카 영수증만
-    'cmuwrnaer001ssh9a0ozbgtl8', // yuki.kr (KR) 지갑 두고 나옴 레전드
-    'cmuwroamt001tsh5cz3qt2vpf', // kenji.sato (JP) 홍대 혼밥 어디?
-    'cmuwrq0aj0042sh5c9gi8r4f2', // somchai_kk (TH) 커피 쏟아 바지 다 젖음
-    'cmuwrn9lq0019sh9afs6cpgkt', // chen.yi.chun (TW) 떡볶이 너무 매워요
-    'cmuwrpv98005ash9a76fxk6vu', // minjun.k (KR) 단어 42개 외우다 기절
-    'cmuwromjz0035sh5cmgnm8aql', // huy.cantho (VN) 키보드에 오렌지 주스
-    'cmuwrof8i002csh5cdclh80xc', // anya.lestari (ID) 똠얌꿍 시어서 눈물
+    'cmvwdqcpf0001sh9987n9umbm', // rina.sel (JP, F) 한국 와서 처음 자른 앞머리
+    'cmvwdqd9j0003sh99czmdffsm', // linxiao.sh (CN, F) 상하이 고깃집 알바, 한국어 주문
+    'cmvwdqdtj0005sh991jp9d20z', // em.ldn (GB, F) 런던 카페에서 한국어 주문
+    'cmvwdqedh0007sh99pi75c2ff', // misaki.tkm (JP, F) 신오쿠보 포장마차
+    'cmvwdqeyb0009sh99bgtkbvv1', // lucas.frr (BR, M) 찜질방 계란 이마 깨기
+    'cmvwdqg48000bsh99hxrxgf4f', // yuxuan.w (CN, F) 마파두부에 괜찮아요 세 번
+    'cmuwrn9lq0019sh9afs6cpgkt', // chen.yi.chun (TW, F) 涼麵, published
+    'cmvwdqgo9000dsh99fjtnmijt', // sara.ueno (JP, F) 교환학생 패딩 몇 개?
+    'cmvwdqheb000fsh99x2cb9s03', // kaito.mz (JP, M) 한국 아이돌처럼 해 주세요
+    'cmuwrof8i002csh5cdclh80xc', // anya.lestari (ID, F) 똠얌꿍, published
   ],
   foreign: [
     'post:cmvb31snm0004shx1uy1mp6i7', // seoyun.daily (KR, F) 유리바닥 사진 4장, already a post
-    'cmvdflgnx004asheyafjb73ji', // junho.bsn (KR, M) 돼지국밥 다대기
-    'cmuvchsfm000bshx0s6szf1yj', // jessica.lee.htx (US, F) 겨울에도 아아?
-    'cmuwrpv98005bsh9a8idrfao3', // minjun.k (KR, M) 厉害 vs 牛逼
+    'cmvwdqhye000hsh997lkuusrp', // dohyun.k (KR, M) 경복궁 앞 사진사, 남자 한복?
+    'cmvwdqiia000jsh99fvw03kbr', // haeun.log (KR, F) 연트럴파크 산책, 맛집 교환
+    'cmvdflgnx004asheyafjb73ji', // junho.bsn (KR, M) 돼지국밥 다대기, published
+    'cmvwdqj2b000lsh99uiz4uwqr', // siwoo.j (KR, M) 성수 옥상 점심 10분
+    'cmuwrpj9p003csh5cjhjk3u4b', // yuki.yokohama (JP, F) 편의점 푸딩, published
+    'cmvwdqjm8000nsh99w5d262ad', // minji.k (KR, F) 광주 양림동, 코스 짜 드림
+    'cmvew5mjz01xhshsylhvkwrs8', // taeyun.s (KR, M) 서울 토박이 길치
     'cmvdfmxo8006ksheyl0zkfqnz', // ayaka.sel (JP in Seoul, F) 2호선 반대 방향
-    'cmvdfhmy6000gsheyivm4y2wi', // dan.in.seoul (US, M) 발음 교정은 구호 활동 수준
-    'cmvew5mjz01xhshsylhvkwrs8', // taeyun.s (KR, M) 서울 26년 11개월째
-    'cmuwrpj9p003csh5cjhjk3u4b', // yuki.yokohama (JP, F) 편의점 푸딩
-    'cmvdfli6e004wsheypwu0ak23', // yuxuan.w (CN in Seoul, F) 괴물 드라마
-    'cmuwrp8hc003ysh9a13f014qv', // anya.k (IN, F) 한국어로 30분씩 이야기할 분
+    'cmvdfli6e004wsheypwu0ak23', // yuxuan.w (CN in Seoul, F) 괴물 드라마, published
   ],
 }
 
