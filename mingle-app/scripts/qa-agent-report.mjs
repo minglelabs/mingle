@@ -9,7 +9,7 @@
 //   "environment": { "branch", "commit", "device", "ios", "server", "startedAt", "build" },
 //   "summary": "two or three sentences",
 //   "scenarios": [{
-//     "id", "title", "target": "phone|simulator", "verdict": "pass|concern|fail|blocked|manual",
+//     "id", "title", "target": "phone|simulator|android", "verdict": "pass|concern|fail|blocked|manual",
 //     "oracle": [{ "check", "status": "held|failed|unchecked", "note" }],
 //     "findings": [{ "severity": "S0|S1|S2|S3", "taste": ["T12"], "summary", "repro", "evidence": ["..."] }],
 //     "screenshots": [{ "file": "shots/x.png", "caption" }],
