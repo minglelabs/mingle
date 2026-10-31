@@ -34,19 +34,19 @@ const PICKS: Record<keyof StarterFeed, string[]> = {
     'cmvtocww8001ish3e6gk77j9a', // yuxuan.w (CN, F) 첫 찜질방 양머리, published
     'cmuwrn9lq0019sh9afs6cpgkt', // chen.yi.chun (TW, F) 涼麵, published
     'cmvfrs00y00tcshwui4ri9nnu', // sara.ueno (JP, F) 교환학생 자기소개서 4번째 수정
-    'cmvwdqheb000fsh99x2cb9s03', // kaito.mz (JP, M) 한국 아이돌처럼 해 주세요 (written for this list)
+    'cmvfr5n8w006lshwuaqdayrhl', // lucas.frr (BR, M) 민수 씨와 한강 러닝, 반포대교까지 전력 질주
     'cmuwrof8i002csh5cdclh80xc', // anya.lestari (ID, F) 똠얌꿍, published
   ],
   foreign: [
     'post:cmvb31snm0004shx1uy1mp6i7', // seoyun.daily (KR, F) 유리바닥 사진 4장, already a post
     'cmvtocz6r001qsh3e20ny2s1l', // dohyun.k (KR, M) 북한산 외국인 등산객, 같이 갈 사람? published
-    'cmvfr1mhy001bshwu5p4jdik5', // haeun.log (KR, F) 연남동 시오라멘, 차슈 몇 장?
+    'cmvfr1mhy001dshwu4yhpw7i0', // haeun.log (KR, F) 1원 단위까지 나눠 송금하는 문화, 외국은?
     'cmvdflgnx004asheyafjb73ji', // junho.bsn (KR, M) 돼지국밥 다대기, published
     'cmvfrfg9700f2shwu3oi34fmp', // siwoo.j (KR, M) 성수 옥상 사진, 바람에 앞머리
     'cmuwrpj9p003csh5cjhjk3u4b', // yuki.yokohama (JP, F) 편의점 푸딩, published
     'cmvtoczrc001ssh3e03pyibcv', // minji.k (KR, F) 망원시장 떡볶이, published
     'cmvtocym4001osh3es60uvbxl', // taeyun.s (KR, M) 한강 따릉이, published
-    'cmvdfmxo8006ksheyl0zkfqnz', // ayaka.sel (JP in Seoul, F) 2호선 반대 방향
+    'cmvfr3o59004cshwu7r25qzbm', // ava.kim.la (US, F) H-Mart 붕어빵 3개
     'cmvdfli6e004wsheypwu0ak23', // yuxuan.w (CN in Seoul, F) 괴물 드라마, published
   ],
 }
