@@ -62,7 +62,8 @@ export async function generateNextMissingAvatar(ctx: AdminContext | null = null,
   const failures = avatarFailures()
   const skip = [...failures].filter(([, count]) => count >= AVATAR_MAX_FAILURES).map(([userId]) => userId)
   const next = await prisma.user.findFirst({
-    where: { isOperator: true, isDeleted: false, isActive: true, image: null, ...(skip.length ? { id: { notIn: skip } } : {}) },
+    // A staff account (no persona country, e.g. @admin) never gets an AI photo.
+    where: { isOperator: true, isDeleted: false, isActive: true, image: null, operatorAccount: { personaCountry: { not: null } }, ...(skip.length ? { id: { notIn: skip } } : {}) },
     orderBy: { createdAt: 'asc' },
     select: { id: true },
   })
@@ -149,7 +150,8 @@ export type DailyPostsResult = { accounts: number; written: number; failed: numb
  */
 export async function writeDailyOperatorPosts(chancePercent: number, now: Date, random: () => number = Math.random): Promise<DailyPostsResult> {
   const accounts = await prisma.user.findMany({
-    where: { isOperator: true, isDeleted: false, isActive: true, operatorAccount: { reviewState: 'approved' } },
+    // A staff account (no persona country, e.g. @admin) is never written for.
+    where: { isOperator: true, isDeleted: false, isActive: true, operatorAccount: { reviewState: 'approved', personaCountry: { not: null } } },
     select: { id: true },
   })
   const picked = accounts.filter(() => random() * 100 < chancePercent)

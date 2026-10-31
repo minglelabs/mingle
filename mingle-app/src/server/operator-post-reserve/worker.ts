@@ -236,6 +236,8 @@ async function findOperatorsToRefill(target: number, limit: number): Promise<Ref
       AND operator_user.is_active = true
       AND operator_user.moderation_restricted_at IS NULL
       AND cardinality(operator_user.primary_languages) > 0
+      -- A staff account (no persona country, e.g. @admin) is never written for.
+      AND EXISTS (SELECT 1 FROM app_operator_accounts AS account WHERE account.user_id = operator_user.id AND account.persona_country IS NOT NULL)
     GROUP BY operator_user.id
     HAVING COUNT(reserve.id) <= ${Math.max(0, target - RESERVE_CHUNK_SIZE)}
     ORDER BY COUNT(reserve.id) ASC, operator_user.id ASC
