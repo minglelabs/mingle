@@ -485,11 +485,17 @@ function uninstall() {
 const WIN_TASK = 'MingleChatGptPool'
 
 /**
- * Register a Task Scheduler task that runs `serve` at log-on and restarts if
- * node exits. Task Scheduler cannot set env vars, and a key on the command line
- * is visible to other processes and in the Task Scheduler UI, so a small .cmd
- * wrapper next to the deployed script reads the key file into CHATGPT_POOL_KEY
- * and starts node. The key never appears on any command line.
+ * Register a Task Scheduler task that runs `serve` at the user's log-on.
+ *
+ * - Task Scheduler cannot set env vars, and a key on a command line is visible
+ *   to other processes and in the Task Scheduler UI. So a small .cmd wrapper
+ *   next to the deployed script reads the key file into CHATGPT_POOL_KEY and
+ *   starts node. The key never appears on any command line.
+ * - The wrapper loops: if node exits, it starts again after 5s.
+ * - The task runs the wrapper through `conhost --headless`, so no console
+ *   window stays open on the desktop.
+ * - The task is created from XML because schtasks flags cannot express a
+ *   log-on trigger with no time limit and no battery conditions.
  */
 async function installWindows() {
   const scriptPath = resolve(process.argv[1])
@@ -497,37 +503,63 @@ async function installWindows() {
   const logFile = join(deployDir, 'pool.log')
   const keyFile = join(deployDir, 'api-key')
   const wrapper = join(deployDir, 'chatgpt-pool-serve.cmd')
-  // The wrapper owns the environment. `set /p` reads the first line of the key
-  // file without the key ever reaching a command line. Env vars set here are
-  // local to this cmd process and its node child.
+  // `set /p` reads the first line of the key file. Env vars set here are local
+  // to this cmd process and its node child. `ping` waits without needing a
+  // console for input, unlike `timeout`.
   const cmd = [
     '@echo off',
     'setlocal',
-    'set "CHATGPT_POOL_PORT=' + PORT + '"',
-    'set "CHATGPT_POOL_HOST=' + HOST + '"',
-    PUBLIC_PORT ? 'set "CHATGPT_POOL_PUBLIC_PORT=' + PUBLIC_PORT + '"' : null,
-    'if exist "' + keyFile + '" (set /p CHATGPT_POOL_KEY=<"' + keyFile + '")',
-    '"' + process.execPath + '" "' + scriptPath + '" serve >> "' + logFile + '" 2>&1',
+    `set "CHATGPT_POOL_PORT=${PORT}"`,
+    `set "CHATGPT_POOL_HOST=${HOST}"`,
+    `set "CHATGPT_POOL_PUBLIC_PORT=${PUBLIC_PORT || 10321}"`,
+    `if exist "${keyFile}" (set /p CHATGPT_POOL_KEY=<"${keyFile}")`,
+    ':loop',
+    `"${process.execPath}" "${scriptPath}" serve >> "${logFile}" 2>&1`,
+    `echo %date% %time% serve exited with %errorlevel%, restarting in 5s >> "${logFile}"`,
+    'ping -n 6 127.0.0.1 >nul',
+    'goto loop',
     '',
-  ].filter((line) => line !== null).join('\r\n')
+  ].join('\r\n')
   await writeFile(wrapper, cmd)
-  // schtasks runs the wrapper. /RL LIMITED = normal user rights. The restart
-  // flags (/RI + /DU) re-run the task if node exits, so a crash recovers.
-  await run('schtasks', ['/Delete', '/TN', WIN_TASK, '/F']).catch(() => {})
-  await run('schtasks', [
-    '/Create', '/TN', WIN_TASK,
-    '/TR', '"' + wrapper + '"',
-    '/SC', 'ONLOGON',
-    '/RL', 'LIMITED',
-    '/RI', '1', '/DU', '9999:59',
-    '/F',
-  ])
+
+  const user = `${process.env.USERDOMAIN ?? ''}\\${process.env.USERNAME ?? ''}`
+  const escape = (value) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const xml = `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo><Description>Mingle ChatGPT pool server (chatgpt-pool.mjs serve)</Description></RegistrationInfo>
+  <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>${escape(user)}</UserId></LogonTrigger></Triggers>
+  <Principals><Principal id="Author"><UserId>${escape(user)}</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions Context="Author"><Exec>
+    <Command>conhost.exe</Command>
+    <Arguments>${escape(`--headless cmd.exe /c "${wrapper}"`)}</Arguments>
+    <WorkingDirectory>${escape(deployDir)}</WorkingDirectory>
+  </Exec></Actions>
+</Task>
+`
+  const xmlFile = join(tmpdir(), `${WIN_TASK}.xml`)
+  await writeFile(xmlFile, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(xml, 'utf16le')]))
+  try {
+    await run('schtasks', ['/Create', '/TN', WIN_TASK, '/XML', xmlFile, '/F'])
+  } finally {
+    await rm(xmlFile, { force: true })
+  }
+  if (!rest.includes('--no-start')) await run('schtasks', ['/Run', '/TN', WIN_TASK])
   console.log(`installed Task Scheduler task ${WIN_TASK}\nwrapper: ${wrapper}\nlog: ${logFile}`)
 }
 
 async function uninstallWindows() {
+  await run('schtasks', ['/End', '/TN', WIN_TASK]).catch(() => {})
   await run('schtasks', ['/Delete', '/TN', WIN_TASK, '/F']).catch(() => {})
-  console.log('uninstalled')
+  console.log(`uninstalled ${WIN_TASK}. If a node "serve" process is still running, stop it by its PID.`)
 }
 
 // ---- macOS: launchd ----------------------------------------------------
