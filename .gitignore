@@ -27,6 +27,8 @@ dist/
 
 # agent tooling
 .kiro/
+# agent plans, gate returns and attempt counts (per worktree, see docs/agent-loop-graph-design.md)
+.agent/
 
 # debug
 npm-debug.log*
