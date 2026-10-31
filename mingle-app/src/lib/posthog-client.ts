@@ -1,6 +1,9 @@
 "use client";
 
-import posthog, { type CaptureResult, type Properties } from "posthog-js";
+// Type-only: the SDK itself (~260 KB) is loaded after the first screen by
+// PostHogAnalyticsProvider and handed to initializeMinglePostHog, so screens
+// that only capture events do not carry it in their first-load bundle.
+import type { CaptureResult, PostHog, Properties } from "posthog-js";
 import { clientApiNamespace } from "@/lib/api-contract";
 import type { FeedEventName } from "@/lib/feed-analytics";
 import { getOrCreateTrackingUserId, resetTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
@@ -22,9 +25,34 @@ export type MingleClientEvent =
 
 type SafeEventProperty = string | number | boolean | null | undefined;
 
+let posthog: PostHog | null = null;
 let initialized = false;
 /** Session replay was running when an admin screen opened, so it resumes on leaving admin. */
 let recordingPausedForAdmin = false;
+
+/**
+ * Events captured after the provider decided to start PostHog but before the
+ * SDK finished loading. They are sent, with their original time, right after
+ * it starts; without a pending start they are dropped as before.
+ */
+type PendingEvent = { event: MingleClientEvent; properties: Properties; capturedAtMs: number };
+export const MAX_PENDING_POSTHOG_EVENTS = 100;
+let startPending = false;
+const pendingEvents: PendingEvent[] = [];
+
+/** The provider will start PostHog shortly: keep events captured until then. */
+export function markMinglePostHogStartPending(): void {
+  if (!initialized) startPending = true;
+}
+
+/** Sends the events kept while the SDK loaded. Call once PostHog has started. */
+export function flushMinglePostHogPendingEvents(): void {
+  if (!initialized || !posthog) return;
+  const events = pendingEvents.splice(0);
+  for (const pending of events) {
+    posthog.capture(pending.event, pending.properties, { timestamp: new Date(pending.capturedAtMs) });
+  }
+}
 
 /**
  * Admin screens (`/admin`, `/admin/**`) show real users' messages and staff
@@ -80,18 +108,23 @@ function resolveRuntimeProperties(): Properties {
 }
 
 /**
- * Starts PostHog once per page load. Returns whether it is running, so the
- * caller can retry on a later route: it never starts on an admin screen.
+ * Starts PostHog once per page load with the loaded SDK. Returns whether it is
+ * running, so the caller can retry on a later route: it never starts on an
+ * admin screen. Kept events wait for `flushMinglePostHogPendingEvents`.
  */
-export function initializeMinglePostHog(args: {
-  projectToken: string;
-  host: string;
-}): boolean {
+export function initializeMinglePostHog(
+  args: {
+    projectToken: string;
+    host: string;
+  },
+  sdk: PostHog,
+): boolean {
   if (initialized) return true;
   if (typeof window === "undefined" || isOnExcludedPath()) return false;
 
+  posthog = sdk;
   const distinctId = getOrCreateTrackingUserId();
-  posthog.init(args.projectToken, {
+  sdk.init(args.projectToken, {
     api_host: args.host,
     defaults: "2026-05-30",
     bootstrap: {
@@ -149,9 +182,10 @@ export function initializeMinglePostHog(args: {
     tracing_headers: [window.location.hostname],
     before_send: [dropAdminCaptureResult, sanitizePostHogCaptureResult],
   });
-  posthog.identify(distinctId, resolveRuntimeProperties());
-  posthog.register(resolveRuntimeProperties());
+  sdk.identify(distinctId, resolveRuntimeProperties());
+  sdk.register(resolveRuntimeProperties());
   initialized = true;
+  startPending = false;
   return true;
 }
 
@@ -161,7 +195,7 @@ export function initializeMinglePostHog(args: {
  * (sampling, remote config) is never started here.
  */
 export function syncMinglePostHogRoute(pathname: string): void {
-  if (!initialized) return;
+  if (!initialized || !posthog) return;
   if (isPostHogExcludedPath(pathname)) {
     if (!recordingPausedForAdmin && posthog.sessionRecordingStarted()) {
       posthog.stopSessionRecording();
@@ -176,7 +210,7 @@ export function syncMinglePostHogRoute(pathname: string): void {
 }
 
 export function identifyMinglePostHogAccount(isAuthenticated: boolean): void {
-  if (!initialized) return;
+  if (!initialized || !posthog) return;
   posthog.identify(getOrCreateTrackingUserId(), {
     account_state: isAuthenticated ? "authenticated" : "anonymous",
   });
@@ -189,14 +223,27 @@ export function captureMingleClientEvent(
   event: MingleClientEvent,
   properties?: Record<string, SafeEventProperty>,
 ): void {
-  if (!initialized || isOnExcludedPath()) return;
-  posthog.capture(event, {
-    ...resolveRuntimeProperties(),
-    ...properties,
+  if (isOnExcludedPath()) return;
+  if (initialized && posthog) {
+    posthog.capture(event, {
+      ...resolveRuntimeProperties(),
+      ...properties,
+    });
+    return;
+  }
+  if (!startPending || typeof window === "undefined") return;
+  // The screen the event happened on, not the one the SDK starts on.
+  if (pendingEvents.length >= MAX_PENDING_POSTHOG_EVENTS) pendingEvents.shift();
+  pendingEvents.push({
+    event,
+    properties: { ...resolveRuntimeProperties(), ...properties },
+    capturedAtMs: Date.now(),
   });
 }
 
 export function resetMinglePostHogIdentity(): void {
-  if (initialized) posthog.reset(true);
+  if (initialized && posthog) posthog.reset(true);
+  // Kept events belong to the account that is signing out.
+  pendingEvents.length = 0;
   resetTrackingUserId();
 }

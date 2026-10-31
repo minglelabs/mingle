@@ -1,4 +1,6 @@
-import { resolveSupportedLocaleTag } from "@/i18n";
+// The config module, not the "@/i18n" barrel: the barrel also exports
+// getDictionary, which would put every locale's dictionary in the root layout.
+import { resolveSupportedLocaleTag } from "@/i18n/config";
 import { conversationsHref } from "@/lib/posting-feed-guard";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 
