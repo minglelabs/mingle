@@ -11,6 +11,7 @@ import ProfileLanguageLevels, { CompactLanguageLevels } from '@/components/profi
 import type { InterestLanguage } from '@/lib/interest-languages'
 import PostLanguageChips, { ORIGINAL_CHIP } from '@/components/feed/post-language-chips'
 import { OperatorAvatar } from '../_components/operator-ui'
+import { PhotoRedrawPanel } from '../../feed/_components/photo-redraw-panel'
 import { koreanLanguageName } from '../_lib/options'
 
 type Action = 'publish' | 'delete' | 'regenerate' | 'draw'
@@ -51,14 +52,16 @@ export function reviewImageUrl(objectKey: string): string {
  * Edit a post's photos: add (upload), remove, reorder; the first is the one
  * the feed shows first. Saved as a whole; removing every photo makes a text post.
  */
-function PhotoEditor({ postId, initial, onSaved, onCancel }: {
+function PhotoEditor({ postId, language, initial, onSaved, onCancel }: {
   postId: string
+  language: string | null
   initial: ReviewPhoto[]
   onSaved: (post: ReviewPost) => void
   onCancel: () => void
 }) {
   const [photos, setPhotos] = useState(initial)
   const [uploading, setUploading] = useState(0)
+  const [drawing, setDrawing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -137,7 +140,26 @@ function PhotoEditor({ postId, initial, onSaved, onCancel }: {
             <input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { void add(event.target.files); event.target.value = '' }} />
           </label>
         ) : null}
+        {photos.length + uploading < MAX_POST_PHOTOS && !drawing ? (
+          <button
+            type="button"
+            onClick={() => setDrawing(true)}
+            className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed border-sky-300 bg-white text-xs font-semibold text-sky-700"
+          >
+            <Sparkles className="h-6 w-6" aria-hidden="true" />
+            <span className="mt-1 text-center leading-4">AI로 만들기<br />(레퍼런스 가능)</span>
+          </button>
+        ) : null}
       </div>
+      {drawing ? (
+        <PhotoRedrawPanel
+          postId={postId}
+          language={language}
+          review
+          onClose={() => setDrawing(false)}
+          onCandidate={(photo) => setPhotos((current) => current.length < MAX_POST_PHOTOS ? [...current, { objectKey: photo.objectKey, width: photo.width || null, height: photo.height || null }] : current)}
+        />
+      ) : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
       <div className="mt-2 flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600">취소</button>
@@ -574,6 +596,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       {editingPhotos ? (
         <PhotoEditor
           postId={post.id}
+          language={sourceLanguage}
           initial={photos}
           onSaved={(saved) => { setPost(saved); setEditingPhotos(false) }}
           onCancel={() => setEditingPhotos(false)}

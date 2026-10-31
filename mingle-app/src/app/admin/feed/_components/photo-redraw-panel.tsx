@@ -41,7 +41,15 @@ function Choice<T extends string>({ value, current, onPick, children }: { value:
  * goes on the post. With a reference photo, that shot is redrawn with this
  * account's face; without one, the post's own photo is drawn again.
  */
-export function PhotoRedrawPanel({ postId, language, onClose, onApplied }: { postId: string; language: string | null; onClose: () => void; onApplied?: () => void }) {
+export function PhotoRedrawPanel({ postId, language, onClose, onApplied, review = false, onCandidate }: {
+  postId: string
+  language: string | null
+  onClose: () => void
+  onApplied?: () => void
+  /** A post in the review queue: `postId` is the review row, and the drawn photo goes to `onCandidate` instead of onto the post. */
+  review?: boolean
+  onCandidate?: (photo: Candidate) => void
+}) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
   const [reference, setReference] = useState<File | null>(null)
@@ -65,15 +73,20 @@ export function PhotoRedrawPanel({ postId, language, onClose, onApplied }: { pos
     setBusy('draw')
     setError(null)
     const form = new FormData()
+    if (review) form.set('id', postId)
     if (reference) form.set('reference', reference)
     form.set('face', face)
     form.set('text', text)
     form.set('note', note)
     try {
-      const response = await fetch(`/admin/api/posts/${postId}/image/redraw`, { method: 'POST', body: form })
-      const body = await response.json().catch(() => ({})) as Partial<Candidate> & { error?: string }
-      if (!response.ok || !body.objectKey) { setError(ERRORS[body.error ?? ''] ?? '사진을 만들지 못했어요.'); return }
-      setCandidate({ objectKey: body.objectKey, width: body.width ?? 0, height: body.height ?? 0 })
+      const url = review ? '/admin/operators/api/review/photos/redraw' : `/admin/api/posts/${postId}/image/redraw`
+      const response = await fetch(url, { method: 'POST', body: form })
+      const raw = await response.json().catch(() => ({})) as Partial<Candidate> & { photo?: Candidate; error?: string }
+      const body = raw.photo ?? raw
+      if (!response.ok || !body.objectKey) { setError(ERRORS[raw.error ?? ''] ?? '사진을 만들지 못했어요.'); return }
+      const drawn = { objectKey: body.objectKey, width: body.width ?? 0, height: body.height ?? 0 }
+      if (onCandidate) { onCandidate(drawn); onClose(); return }
+      setCandidate(drawn)
     } catch {
       setError('사진을 만들지 못했어요.')
     } finally {
@@ -105,7 +118,7 @@ export function PhotoRedrawPanel({ postId, language, onClose, onApplied }: { pos
   return (
     <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
       <p className="text-sm font-semibold text-slate-900">사진 다시 만들기</p>
-      <p className="mt-0.5 text-xs text-slate-500">글은 그대로 두고 사진만 새로 만듭니다. 만든 사진을 보고 고른 뒤에만 글에 들어가요.</p>
+      <p className="mt-0.5 text-xs text-slate-500">{review ? '만든 사진은 위 사진 목록 끝에 붙어요. 순서를 정하고 [사진 저장]을 눌러야 글에 들어가요.' : '글은 그대로 두고 사진만 새로 만듭니다. 만든 사진을 보고 고른 뒤에만 글에 들어가요.'}</p>
 
       <div className="mt-3 flex items-start gap-3">
         {referenceUrl ? (
