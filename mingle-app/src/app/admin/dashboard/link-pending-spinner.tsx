@@ -3,8 +3,8 @@
 import { useLinkStatus } from "next/link";
 
 /**
- * Spinner inside a `<Link>` while its navigation is pending. The 사용량·성능 tab waits for its
- * metrics before the new page renders, so without it a tab click shows nothing until then.
+ * Spinner inside a `<Link>` while its navigation is pending: the admin check and the new
+ * tab's first payload. The tab's cards then stream in under their own loading states.
  */
 export function LinkPendingSpinner() {
   const { pending } = useLinkStatus();

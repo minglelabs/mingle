@@ -6,7 +6,6 @@ import {
   buildTranslationModelSeries,
   type DailyRow,
   type DashboardMetric,
-  fillDailySeries,
   formatDayKey,
   parseDayKey,
   resolveUncacheableDayKeys,
@@ -15,6 +14,17 @@ import {
   type TranslationModelDailyRow,
   type TranslationModelSeries,
 } from "@/lib/admin-dashboard-metrics";
+import {
+  buildUsageMetricSeries,
+  emptyUsageMetricValues,
+  toDashboardMetric,
+  type UsageMetricDayValue,
+  type UsageMetricDays,
+  type UsageMetricKey,
+  type UsageMetricPart,
+  type UsageMetricPartResult,
+  type UsageMetricValues,
+} from "@/lib/admin-dashboard-usage";
 
 /**
  * created_at is stored as naive TIMESTAMP(3) holding a UTC instant, so
@@ -26,12 +36,12 @@ const DAY_BUCKET_EXPR = (alias: string) => `date_trunc('day', ${alias}."created_
  * 3: per-character STT and per-token translation latency. */
 const USAGE_METRIC_VERSION = 3;
 /**
- * Missing cacheable days are computed this many at a time, one chunk after another, and
- * each chunk is stored as soon as it is computed. After a USAGE_METRIC_VERSION bump every
- * row is stale, and computing 30 days as one batch ran past the launcher's 120s proxy
- * timeout in production while storing nothing, so every retry started over. Storing per
- * chunk keeps the finished days when a request is cut off, and the next load computes
- * only the days still missing.
+ * Missing cacheable days are computed this many at a time: each metric's query runs over
+ * the chunks one after another, and a chunk is stored as soon as all of its metrics are
+ * computed. After a USAGE_METRIC_VERSION bump every row is stale, and computing 30 days as
+ * one batch ran past the launcher's 120s proxy timeout in production while storing
+ * nothing, so every retry started over. Storing per chunk keeps the finished days when a
+ * request is cut off, and the next load computes only the days still missing.
  */
 export const DAILY_METRIC_CACHE_CHUNK_DAYS = 4;
 
@@ -500,52 +510,83 @@ async function queryTranslationLatencyPerToken(
   return splitLatencyRows(rows);
 }
 
-async function queryDailyMetricSnapshots(
-  range: AdminDashboardDateRange,
-  platform: AdminDashboardPlatform,
-): Promise<Map<string, DailyMetricSnapshot>> {
-  const [signups, dau, messages, usageSeconds, sttLatency, translationLatency, sttPerChar, translationPerToken] = await Promise.all([
-    querySignups(range, platform),
-    queryDau(range, platform),
-    queryMessageCount(range, platform),
-    queryUsageSeconds(range, platform),
-    querySttLatency(range, platform),
-    queryTranslationLatency(range, platform),
-    querySttLatencyPerChar(range, platform),
-    queryTranslationLatencyPerToken(range, platform),
-  ]);
+/** The snapshot fields one metric's query filled, by day key. A day without rows is absent. */
+type SnapshotPatches = Map<string, Partial<DailyMetricSnapshot>>;
 
-  const snapshots = new Map<string, DailyMetricSnapshot>();
-  for (const day of range.dayKeys) {
-    snapshots.set(day, { ...EMPTY_DAILY_METRIC });
-  }
+type UsageMetricQuery = {
+  /** Runs the metric's query over one contiguous range of days. */
+  run: (range: AdminDashboardDateRange, platform: AdminDashboardPlatform) => Promise<SnapshotPatches>;
+  /** The metric's value on a day, as the dashboard shows it. */
+  read: (snapshot: DailyMetricSnapshot) => UsageMetricDayValue;
+};
 
-  const applyRows = <K extends keyof DailyMetricSnapshot>(
-    rows: readonly DailyRow[],
-    field: K,
-    normalize: (value: number | null) => DailyMetricSnapshot[K],
-  ) => {
-    for (const row of rows) {
-      const snapshot = snapshots.get(row.day);
-      if (snapshot) snapshot[field] = normalize(row.value);
-    }
-  };
-
-  applyRows(signups, "signupCount", (value) => value ?? 0);
-  applyRows(dau, "dauCount", (value) => value ?? 0);
-  applyRows(messages, "messageCount", (value) => value ?? 0);
-  applyRows(usageSeconds, "usageSeconds", (value) => value ?? 0);
-  applyRows(sttLatency.avg, "sttAvgMs", (value) => value);
-  applyRows(sttLatency.p95, "sttP95Ms", (value) => value);
-  applyRows(translationLatency.avg, "translationAvgMs", (value) => value);
-  applyRows(translationLatency.p95, "translationP95Ms", (value) => value);
-  applyRows(sttPerChar.avg, "sttMsPerCharAvg", (value) => value);
-  applyRows(sttPerChar.p95, "sttMsPerCharP95", (value) => value);
-  applyRows(translationPerToken.avg, "translationMsPerTokenAvg", (value) => value);
-  applyRows(translationPerToken.p95, "translationMsPerTokenP95", (value) => value);
-
-  return snapshots;
+function countPatches(rows: readonly DailyRow[], toPatch: (value: number) => Partial<DailyMetricSnapshot>): SnapshotPatches {
+  return new Map(rows.map((row) => [row.day, toPatch(row.value ?? 0)]));
 }
+
+function latencyPatches(
+  rows: { avg: readonly DailyRow[]; p95: readonly DailyRow[] },
+  toPatch: (avg: number | null, p95: number | null) => Partial<DailyMetricSnapshot>,
+): SnapshotPatches {
+  const p95ByDay = new Map(rows.p95.map((row) => [row.day, row.value]));
+  return new Map(rows.avg.map((row) => [row.day, toPatch(row.value, p95ByDay.get(row.day) ?? null)]));
+}
+
+/**
+ * Each dashboard metric's source query and its cache columns, keyed by metric so a metric
+ * without its query is a type error. Listed in the order the queries start.
+ */
+const USAGE_METRIC_QUERIES: Record<UsageMetricKey, UsageMetricQuery> = {
+  signups: {
+    run: async (range, platform) => countPatches(await querySignups(range, platform), (signupCount) => ({ signupCount })),
+    read: (snapshot) => ({ value: snapshot.signupCount ?? null, secondary: null }),
+  },
+  dau: {
+    run: async (range, platform) => countPatches(await queryDau(range, platform), (dauCount) => ({ dauCount })),
+    read: (snapshot) => ({ value: snapshot.dauCount ?? null, secondary: null }),
+  },
+  messages: {
+    run: async (range, platform) => countPatches(await queryMessageCount(range, platform), (messageCount) => ({ messageCount })),
+    read: (snapshot) => ({ value: snapshot.messageCount ?? null, secondary: null }),
+  },
+  usage_seconds: {
+    run: async (range, platform) => countPatches(await queryUsageSeconds(range, platform), (usageSeconds) => ({ usageSeconds })),
+    read: (snapshot) => ({ value: snapshot.usageSeconds ?? null, secondary: null }),
+  },
+  stt_latency_ms: {
+    run: async (range, platform) => latencyPatches(
+      await querySttLatency(range, platform),
+      (sttAvgMs, sttP95Ms) => ({ sttAvgMs, sttP95Ms }),
+    ),
+    read: (snapshot) => ({ value: snapshot.sttAvgMs ?? null, secondary: snapshot.sttP95Ms ?? null }),
+  },
+  translation_latency_ms: {
+    run: async (range, platform) => latencyPatches(
+      await queryTranslationLatency(range, platform),
+      (translationAvgMs, translationP95Ms) => ({ translationAvgMs, translationP95Ms }),
+    ),
+    read: (snapshot) => ({ value: snapshot.translationAvgMs ?? null, secondary: snapshot.translationP95Ms ?? null }),
+  },
+  stt_latency_ms_per_char: {
+    run: async (range, platform) => latencyPatches(
+      await querySttLatencyPerChar(range, platform),
+      (sttMsPerCharAvg, sttMsPerCharP95) => ({ sttMsPerCharAvg, sttMsPerCharP95 }),
+    ),
+    read: (snapshot) => ({ value: snapshot.sttMsPerCharAvg ?? null, secondary: snapshot.sttMsPerCharP95 ?? null }),
+  },
+  translation_latency_ms_per_token: {
+    run: async (range, platform) => latencyPatches(
+      await queryTranslationLatencyPerToken(range, platform),
+      (translationMsPerTokenAvg, translationMsPerTokenP95) => ({ translationMsPerTokenAvg, translationMsPerTokenP95 }),
+    ),
+    read: (snapshot) => ({
+      value: snapshot.translationMsPerTokenAvg ?? null,
+      secondary: snapshot.translationMsPerTokenP95 ?? null,
+    }),
+  },
+};
+
+const USAGE_METRIC_QUERY_ORDER = Object.keys(USAGE_METRIC_QUERIES) as UsageMetricKey[];
 
 function groupContiguousDayKeys(dayKeys: readonly string[]): string[][] {
   const sortedDayKeys = [...new Set(dayKeys)].sort();
@@ -573,23 +614,6 @@ function chunkContiguousDayKeys(dayKeys: readonly string[], chunkDays: number): 
     }
     return chunks;
   });
-}
-
-async function queryDailyMetricSnapshotsForDays(
-  dayKeys: readonly string[],
-  platform: AdminDashboardPlatform,
-): Promise<Map<string, DailyMetricSnapshot>> {
-  const groups = groupContiguousDayKeys(dayKeys);
-  const calculatedGroups = await Promise.all(
-    groups.map((group) => queryDailyMetricSnapshots(createCalculationRange(group), platform)),
-  );
-  const calculated = new Map<string, DailyMetricSnapshot>();
-  for (const groupSnapshots of calculatedGroups) {
-    for (const [dayKey, snapshot] of groupSnapshots) {
-      calculated.set(dayKey, snapshot);
-    }
-  }
-  return calculated;
 }
 
 async function loadCachedDailyMetrics(
@@ -669,23 +693,89 @@ async function persistDailyMetricSnapshots(
   }));
 }
 
+/** Days computed together: a cache chunk, which is stored, or today and yesterday, which never are. */
+type MetricBatch = { dayKeys: string[]; store: boolean };
+
 /**
- * Computes cacheable days in order, DAILY_METRIC_CACHE_CHUNK_DAYS at a time, and stores
- * each chunk before the next one starts.
+ * One metric's query over every batch, one batch after another. At most one query per
+ * metric runs at a time, so a load never has more queries in flight than there are
+ * metrics, the same as when the eight ran side by side for one chunk. After a failure the
+ * metric's later batches are not queried and fail with the same error; the other metrics
+ * go on.
  */
-async function calculateAndPersistDailyMetricSnapshots(
-  dayKeys: readonly string[],
+function runMetricPipeline(
+  metric: UsageMetricKey,
+  batches: readonly MetricBatch[],
   platform: AdminDashboardPlatform,
-): Promise<Map<string, DailyMetricSnapshot>> {
-  const calculated = new Map<string, DailyMetricSnapshot>();
-  for (const chunk of chunkContiguousDayKeys(dayKeys, DAILY_METRIC_CACHE_CHUNK_DAYS)) {
-    const snapshots = await queryDailyMetricSnapshots(createCalculationRange(chunk), platform);
-    await persistDailyMetricSnapshots(snapshots, chunk, platform);
-    for (const [dayKey, snapshot] of snapshots) {
-      calculated.set(dayKey, snapshot);
-    }
-  }
-  return calculated;
+): Promise<SnapshotPatches>[] {
+  let previous: Promise<unknown> = Promise.resolve();
+  return batches.map((batch) => {
+    const patches = previous.then(() => USAGE_METRIC_QUERIES[metric]
+      .run(createCalculationRange(batch.dayKeys), platform)
+      .catch((error: unknown) => {
+        console.error("[admin-dashboard] usage_metric_failed", { metric, dayKeys: batch.dayKeys, platform }, error);
+        throw error;
+      }));
+    previous = patches;
+    return patches;
+  });
+}
+
+/** A day's full snapshot from every metric's patches; a metric without rows that day keeps the empty value. */
+function mergeSnapshot(day: string, patchesByMetric: readonly SnapshotPatches[]): DailyMetricSnapshot {
+  const snapshot: DailyMetricSnapshot = { ...EMPTY_DAILY_METRIC };
+  for (const patches of patchesByMetric) Object.assign(snapshot, patches.get(day));
+  return snapshot;
+}
+
+function toDayValues(metric: UsageMetricKey, dayKeys: readonly string[], patches: SnapshotPatches): UsageMetricDays {
+  const { read } = USAGE_METRIC_QUERIES[metric];
+  return Object.fromEntries(dayKeys.map((day) => [day, read({ ...EMPTY_DAILY_METRIC, ...patches.get(day) })]));
+}
+
+/**
+ * Starts computing the batches. Every metric runs its own pipeline (runMetricPipeline), so
+ * a fast query such as signups never waits for the slowest one (STT per character). A
+ * cache chunk is stored as soon as all of its metrics are computed, and never with one
+ * missing, so a load that is cut off keeps every finished chunk and the next load computes
+ * only the days still missing.
+ */
+function computeDailyMetricBatches(
+  batches: readonly MetricBatch[],
+  platform: AdminDashboardPlatform,
+): { parts: UsageMetricPart[]; done: Promise<void> } {
+  const patchesByMetric = USAGE_METRIC_QUERY_ORDER.map((metric) => runMetricPipeline(metric, batches, platform));
+
+  const stores = batches.flatMap((batch, batchIndex) => {
+    if (!batch.store) return [];
+    const stored = Promise.all(patchesByMetric.map((pipeline) => pipeline[batchIndex])).then(async (patches) => {
+      const snapshots = new Map(batch.dayKeys.map((day) => [day, mergeSnapshot(day, patches)]));
+      try {
+        await persistDailyMetricSnapshots(snapshots, batch.dayKeys, platform);
+      } catch (error) {
+        console.error("[admin-dashboard] daily_metric_cache_store_failed", { dayKeys: batch.dayKeys, platform }, error);
+        throw error;
+      }
+    });
+    return [stored];
+  });
+
+  const parts = batches.flatMap((batch, batchIndex) => USAGE_METRIC_QUERY_ORDER.map((metric, metricIndex): UsageMetricPart => ({
+    metric,
+    dayKeys: [...batch.dayKeys],
+    result: patchesByMetric[metricIndex][batchIndex].then(
+      (patches): UsageMetricPartResult => ({ ok: true, days: toDayValues(metric, batch.dayKeys, patches) }),
+      (): UsageMetricPartResult => ({ ok: false }),
+    ),
+  })));
+
+  const done = Promise.allSettled([...patchesByMetric.flat(), ...stores]).then((outcomes) => {
+    const failure = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === "rejected");
+    if (failure) throw failure.reason;
+  });
+  // Callers that only stream the parts never await it.
+  done.catch(() => undefined);
+  return { parts, done };
 }
 
 function snapshotFromCachedRow(row: CachedDailyMetric): DailyMetricSnapshot {
@@ -723,10 +813,42 @@ export async function clearAdminDashboardCache(
   });
 }
 
-async function resolveDailyMetricSnapshots(
+function cachedUsageMetricValues(cachedByDay: ReadonlyMap<string, CachedDailyMetric>): UsageMetricValues {
+  const values = emptyUsageMetricValues();
+  for (const [day, row] of cachedByDay) {
+    const snapshot = snapshotFromCachedRow(row);
+    for (const metric of USAGE_METRIC_QUERY_ORDER) {
+      values[metric][day] = USAGE_METRIC_QUERIES[metric].read(snapshot);
+    }
+  }
+  return values;
+}
+
+export type AdminDashboardMetricsLoad = {
+  /** Every metric's values on the days read back from the cache table. */
+  cached: UsageMetricValues;
+  /**
+   * The days still to compute, already running: per batch of days (the missing cache
+   * chunks in day order, then today and yesterday), one part per metric.
+   */
+  parts: UsageMetricPart[];
+  /**
+   * Settles once every part has settled and every computed chunk has been stored or has
+   * failed to; rejects with the first failure. Already handled, so it can go unawaited.
+   */
+  done: Promise<void>;
+};
+
+/**
+ * The 사용량·성능 metrics in two phases. Resolves as soon as the cache table has been read
+ * (the fast phase) with those days' values, while every other day is a part that is
+ * already being computed (the slow phase): missing cacheable days in chunks that are
+ * stored as they finish, then today and yesterday, which are never stored.
+ */
+export async function startAdminDashboardMetricsLoad(
   range: AdminDashboardDateRange,
   options?: LoadAdminDashboardOptions,
-): Promise<Map<string, DailyMetricSnapshot>> {
+): Promise<AdminDashboardMetricsLoad> {
   const platform = options?.platform ?? "all";
 
   // 오늘 + 어제는 데이터가 완전히 집계되지 않을 수 있으므로 항상 실시간 집계한다.
@@ -750,136 +872,25 @@ async function resolveDailyMetricSnapshots(
     : new Map<string, CachedDailyMetric>();
 
   const missingCacheableDays = cacheableDayKeysInRange.filter((dayKey) => !cachedByDay.has(dayKey));
-  const calculated = await calculateAndPersistDailyMetricSnapshots(missingCacheableDays, platform);
-  const live = await queryDailyMetricSnapshotsForDays(uncacheableDaysInRange, platform);
+  const { parts, done } = computeDailyMetricBatches([
+    ...chunkContiguousDayKeys(missingCacheableDays, DAILY_METRIC_CACHE_CHUNK_DAYS).map((dayKeys) => ({ dayKeys, store: true })),
+    ...groupContiguousDayKeys(uncacheableDaysInRange).map((dayKeys) => ({ dayKeys, store: false })),
+  ], platform);
 
-  return new Map(
-    range.dayKeys.map((dayKey) => {
-      const cached = cachedByDay.get(dayKey);
-      const snapshot = cached ? snapshotFromCachedRow(cached) : (calculated.get(dayKey) ?? live.get(dayKey));
-      return [dayKey, snapshot ?? { ...EMPTY_DAILY_METRIC }];
-    }),
-  );
+  return { cached: cachedUsageMetricValues(cachedByDay), parts, done };
 }
 
-
-function buildMetric(args: {
-  key: string;
-  label: string;
-  unit: string;
-  kind: DashboardMetric["kind"];
-  range: AdminDashboardDateRange;
-  rows: DailyRow[];
-  secondary?: { label: string; rows: DailyRow[] };
-  fillValue: number | null;
-}): DashboardMetric {
-  const points = fillDailySeries(args.rows, args.range.dayKeys, args.fillValue);
-  const secondarySeries = args.secondary
-    ? { label: args.secondary.label, points: fillDailySeries(args.secondary.rows, args.range.dayKeys, args.fillValue) }
-    : undefined;
-
-  return {
-    key: args.key,
-    label: args.label,
-    unit: args.unit,
-    kind: args.kind,
-    points,
-    secondarySeries,
-  };
-}
-
+/**
+ * Every metric over the range once all of it is computed and every chunk is stored;
+ * rejects with the first failure. The dashboard page streams startAdminDashboardMetricsLoad
+ * instead.
+ */
 export async function loadAdminDashboardMetrics(
   range: AdminDashboardDateRange,
   options?: LoadAdminDashboardOptions,
 ): Promise<DashboardMetric[]> {
-  const snapshots = await resolveDailyMetricSnapshots(range, options);
-  const dailyRows = <K extends keyof DailyMetricSnapshot>(field: K): DailyRow[] => range.dayKeys.map((day) => ({
-    day,
-    value: snapshots.get(day)?.[field] ?? null,
-  }));
-  const sttAvg = dailyRows("sttAvgMs");
-  const sttP95 = dailyRows("sttP95Ms");
-  const translationAvg = dailyRows("translationAvgMs");
-  const translationP95 = dailyRows("translationP95Ms");
-
-  // usage_seconds and messages lead the list -- they're the metrics that matter
-  // most day-to-day, so they get the first chart slots.
-  return [
-    buildMetric({
-      key: "usage_seconds",
-      label: "사용시간",
-      unit: "초",
-      kind: "seconds",
-      range,
-      rows: dailyRows("usageSeconds"),
-      fillValue: 0,
-    }),
-    buildMetric({
-      key: "messages",
-      label: "메시지수",
-      unit: "건",
-      kind: "count",
-      range,
-      rows: dailyRows("messageCount"),
-      fillValue: 0,
-    }),
-    buildMetric({
-      key: "dau",
-      label: "DAU",
-      unit: "명",
-      kind: "count",
-      range,
-      rows: dailyRows("dauCount"),
-      fillValue: 0,
-    }),
-    buildMetric({
-      key: "signups",
-      label: "가입자수",
-      unit: "명",
-      kind: "count",
-      range,
-      rows: dailyRows("signupCount"),
-      fillValue: 0,
-    }),
-    buildMetric({
-      key: "stt_latency_ms",
-      label: "STT 지연시간",
-      unit: "ms",
-      kind: "milliseconds",
-      range,
-      rows: sttAvg,
-      secondary: { label: "p95", rows: sttP95 },
-      fillValue: null,
-    }),
-    buildMetric({
-      key: "translation_latency_ms",
-      label: "번역 지연시간",
-      unit: "ms",
-      kind: "milliseconds",
-      range,
-      rows: translationAvg,
-      secondary: { label: "p95", rows: translationP95 },
-      fillValue: null,
-    }),
-    buildMetric({
-      key: "stt_latency_ms_per_char",
-      label: "STT 글자당 지연시간 (5자 이상)",
-      unit: "ms",
-      kind: "milliseconds",
-      range,
-      rows: dailyRows("sttMsPerCharAvg"),
-      secondary: { label: "p95", rows: dailyRows("sttMsPerCharP95") },
-      fillValue: null,
-    }),
-    buildMetric({
-      key: "translation_latency_ms_per_token",
-      label: "번역 출력 토큰당 지연시간",
-      unit: "ms",
-      kind: "milliseconds",
-      range,
-      rows: dailyRows("translationMsPerTokenAvg"),
-      secondary: { label: "p95", rows: dailyRows("translationMsPerTokenP95") },
-      fillValue: null,
-    }),
-  ];
+  const load = await startAdminDashboardMetricsLoad(range, options);
+  await load.done;
+  const results = await Promise.all(load.parts.map((part) => part.result));
+  return buildUsageMetricSeries(range.dayKeys, load.cached, load.parts, results).map(toDashboardMetric);
 }

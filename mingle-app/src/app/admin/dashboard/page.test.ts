@@ -5,18 +5,18 @@ import type { AdminDashboardTab } from "@/lib/admin-dashboard-metrics";
 
 const m = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
-  loadAdminDashboardMetrics: vi.fn(),
+  startAdminDashboardMetricsLoad: vi.fn(),
   loadTranslationModelMessageSeries: vi.fn(),
   loadSignupRetention: vi.fn(),
-  loadSnsDashboard: vi.fn(),
-  loadOperatorPostStatsDashboard: vi.fn(),
+  startSnsMetricQueries: vi.fn(),
+  startOperatorPostStatsDashboardLoad: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/server/admin/guard", () => ({ requireAdmin: m.requireAdmin }));
 vi.mock("./actions", () => ({ clearDashboardCacheAction: vi.fn() }));
 vi.mock("@/lib/admin-dashboard-query", () => ({
-  loadAdminDashboardMetrics: m.loadAdminDashboardMetrics,
+  startAdminDashboardMetricsLoad: m.startAdminDashboardMetricsLoad,
   loadTranslationModelMessageSeries: m.loadTranslationModelMessageSeries,
 }));
 vi.mock("@/lib/admin-dashboard-retention", async (importOriginal) => ({
@@ -25,24 +25,34 @@ vi.mock("@/lib/admin-dashboard-retention", async (importOriginal) => ({
 }));
 vi.mock("@/lib/admin-dashboard-sns", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/admin-dashboard-sns")>()),
-  loadSnsDashboard: m.loadSnsDashboard,
+  startSnsMetricQueries: m.startSnsMetricQueries,
 }));
 vi.mock("@/server/operator-post-stats/load", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/operator-post-stats/load")>()),
-  loadOperatorPostStatsDashboard: m.loadOperatorPostStatsDashboard,
+  startOperatorPostStatsDashboardLoad: m.startOperatorPostStatsDashboardLoad,
 }));
 
+import { SNS_METRIC_KEYS } from "@/lib/admin-dashboard-sns";
 import { DashboardTabNav } from "./dashboard-tab-nav";
 import AdminDashboardPage from "./page";
 
-/** The one DB-facing load behind each tab. */
+/** The DB-facing start behind each tab. */
 const TAB_LOADS: Record<AdminDashboardTab, Mock> = {
   growth: m.loadSignupRetention,
-  usage: m.loadAdminDashboardMetrics,
+  usage: m.startAdminDashboardMetricsLoad,
   models: m.loadTranslationModelMessageSeries,
-  sns: m.loadSnsDashboard,
-  operators: m.loadOperatorPostStatsDashboard,
+  sns: m.startSnsMetricQueries,
+  operators: m.startOperatorPostStatsDashboardLoad,
 };
+
+/** What each start returns, built from one promise per query, so a test can keep every query running. */
+function stubLoads(query: () => Promise<unknown>) {
+  m.loadSignupRetention.mockImplementation(query);
+  m.startAdminDashboardMetricsLoad.mockImplementation(query);
+  m.loadTranslationModelMessageSeries.mockImplementation(query);
+  m.startSnsMetricQueries.mockImplementation(() => Object.fromEntries(SNS_METRIC_KEYS.map((key) => [key, query()])));
+  m.startOperatorPostStatsDashboardLoad.mockImplementation(() => ({ countTotals: query(), totals: query(), dashboard: query() }));
+}
 
 function renderPage(params: Record<string, string>) {
   return AdminDashboardPage({ searchParams: Promise.resolve(params) });
@@ -58,7 +68,7 @@ describe("/admin/dashboard tabs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     m.requireAdmin.mockResolvedValue({ sessionId: "session_1", ip: null, userAgent: null });
-    for (const load of Object.values(TAB_LOADS)) load.mockResolvedValue([]);
+    stubLoads(() => Promise.resolve([]));
   });
 
   it.each(Object.keys(TAB_LOADS) as AdminDashboardTab[])("runs only the %s tab's query, after the admin check", async (tab) => {
@@ -71,9 +81,22 @@ describe("/admin/dashboard tabs", () => {
     expect(load.mock.calls[0][0].dayKeys).toHaveLength(7);
   });
 
+  it.each(Object.keys(TAB_LOADS) as AdminDashboardTab[])("renders the %s page without waiting for any of its data", async (tab) => {
+    // Every query stays running for the whole test.
+    stubLoads(() => new Promise<never>(() => {}));
+
+    const page = await Promise.race([
+      renderPage({ tab, days: "30" }),
+      new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 100)),
+    ]);
+
+    expect(page).not.toBe("blocked");
+    expectOnlyLoad(tab);
+  });
+
   it("passes the OS filter and ?refresh to the tabs that take them", async () => {
     await renderPage({ tab: "usage", days: "7", platform: "ios", refresh: "1" });
-    expect(m.loadAdminDashboardMetrics.mock.calls[0][1]).toEqual({ forceRefresh: true, platform: "ios" });
+    expect(m.startAdminDashboardMetricsLoad.mock.calls[0][1]).toEqual({ forceRefresh: true, platform: "ios" });
 
     await renderPage({ tab: "models", days: "7", platform: "android" });
     expect(m.loadTranslationModelMessageSeries.mock.calls[0][1]).toEqual({ platform: "android" });

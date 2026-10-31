@@ -12,7 +12,9 @@ import {
   type RetentionRate,
   type SignupRetentionDashboard,
 } from "@/lib/admin-dashboard-retention";
-import { LineChartCard } from "./line-chart-card";
+import { DashboardSpinner } from "./dashboard-spinner";
+import { LineChartCard, LineChartCardPlaceholder } from "./line-chart-card";
+import { StatTile, StatTilePlaceholder } from "./stat-tile";
 
 /** emerald-600: sets signups apart from the sky usage and violet SNS charts. */
 const SIGNUP_CHART_COLOR = "#059669";
@@ -33,13 +35,19 @@ export function formatRetention(rate: RetentionRate): string {
   return rate.eligible > 0 ? formatSharePercent(rate.retained / rate.eligible) : "-";
 }
 
-function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
+const TOTAL_SIGNUPS_LABEL = "누적 가입자";
+const TOTAL_SIGNUPS_NOTE = "첫 가입부터 지금까지";
+const RANGE_SIGNUPS_LABEL = "기간 신규 가입";
+
+function RetentionCohortTableHead() {
   return (
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-      <dt className="break-words text-xs font-medium text-slate-500">{label}</dt>
-      <dd className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{value}</dd>
-      {note ? <p className="mt-0.5 break-words text-xs text-slate-500">{note}</p> : null}
-    </div>
+    <thead className="bg-slate-50 text-xs text-slate-500">
+      <tr>
+        <th className="px-3 py-2 text-left font-medium">가입 주 (월요일 시작)</th>
+        <th className="px-3 py-2 text-right font-medium">가입</th>
+        {RETENTION_DAYS.map((n) => <th key={n} className="px-3 py-2 text-right font-medium">D{n}</th>)}
+      </tr>
+    </thead>
   );
 }
 
@@ -47,13 +55,7 @@ export function RetentionCohortTable({ dashboard }: { dashboard: SignupRetention
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
       <table className="w-full min-w-[420px] text-sm">
-        <thead className="bg-slate-50 text-xs text-slate-500">
-          <tr>
-            <th className="px-3 py-2 text-left font-medium">가입 주 (월요일 시작)</th>
-            <th className="px-3 py-2 text-right font-medium">가입</th>
-            {RETENTION_DAYS.map((n) => <th key={n} className="px-3 py-2 text-right font-medium">D{n}</th>)}
-          </tr>
-        </thead>
+        <RetentionCohortTableHead />
         <tbody className="divide-y divide-slate-100 tabular-nums">
           {dashboard.cohorts.map((cohort) => (
             <tr key={cohort.weekStart}>
@@ -96,10 +98,10 @@ export async function RetentionSection({ dashboardPromise }: { dashboardPromise:
   return (
     <div className="space-y-3">
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Tile label="누적 가입자" value={`${formatCount(dashboard.totalSignups)}명`} note="첫 가입부터 지금까지" />
-        <Tile label="기간 신규 가입" value={`${formatCount(dashboard.rangeSignups)}명`} />
+        <StatTile label={TOTAL_SIGNUPS_LABEL} value={`${formatCount(dashboard.totalSignups)}명`} note={TOTAL_SIGNUPS_NOTE} />
+        <StatTile label={RANGE_SIGNUPS_LABEL} value={`${formatCount(dashboard.rangeSignups)}명`} />
         {RETENTION_DAYS.map((n) => (
-          <Tile
+          <StatTile
             key={n}
             label={`D${n} 리텐션`}
             value={formatRetention(dashboard.overall[n])}
@@ -109,7 +111,7 @@ export async function RetentionSection({ dashboardPromise }: { dashboardPromise:
       </dl>
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <LineChartCard
-          label="누적 가입자"
+          label={TOTAL_SIGNUPS_LABEL}
           kind="count"
           ariaLabel="누적 가입자 추이"
           points={geometry.points}
@@ -125,10 +127,30 @@ export async function RetentionSection({ dashboardPromise }: { dashboardPromise:
   );
 }
 
+/**
+ * Every card of the section comes from one query, so they share one boundary; while it
+ * runs, each card's own frame stands in for it.
+ */
 export function RetentionSectionFallback() {
   return (
-    <p role="status" className="rounded-xl border border-slate-200 bg-white px-3 py-6 text-center text-sm text-slate-500">
-      가입·리텐션 지표를 불러오는 중...
-    </p>
+    <div className="space-y-3">
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatTilePlaceholder label={TOTAL_SIGNUPS_LABEL} note={TOTAL_SIGNUPS_NOTE} />
+        <StatTilePlaceholder label={RANGE_SIGNUPS_LABEL} />
+        {RETENTION_DAYS.map((n) => <StatTilePlaceholder key={n} label={`D${n} 리텐션`} note="" />)}
+      </dl>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <LineChartCardPlaceholder label={TOTAL_SIGNUPS_LABEL} status="loading" message="가입·리텐션 지표를 불러오는 중..." />
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full min-w-[420px] text-sm">
+            <RetentionCohortTableHead />
+          </table>
+          <p role="status" className="flex items-center justify-center gap-1.5 px-3 py-4 text-sm text-slate-500">
+            <DashboardSpinner />
+            불러오는 중...
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

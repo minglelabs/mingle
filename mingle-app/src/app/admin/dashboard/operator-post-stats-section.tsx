@@ -1,60 +1,89 @@
+import { Suspense } from "react";
 import type { AdminDashboardDateRange } from "@/lib/admin-dashboard-metrics";
 import {
   OPERATOR_POST_STAT_KEYS,
   conversionRate,
   formatConversionRate,
   formatStatCount,
+  type OperatorPostStatKey,
+  type OperatorPostStats,
 } from "@/lib/operator-post-stats";
 import {
+  OPERATOR_POST_COUNT_STAT_KEYS,
   OPERATOR_POST_DASHBOARD_ROW_LIMIT,
-  loadOperatorPostStatsDashboard,
+  startOperatorPostStatsDashboardLoad,
   type OperatorPostStatsDashboard,
+  type OperatorPostStatsDashboardLoad,
 } from "@/server/operator-post-stats/load";
 import { OPERATOR_POST_STAT_LABELS } from "../_components/operator-post-stats-row";
+import { DashboardSpinner } from "./dashboard-spinner";
 import { OperatorPostStatsTable } from "./operator-post-stats-table";
+import { StatTile, StatTilePlaceholder } from "./stat-tile";
 
-/** Starts the live query without awaiting it; see startSnsDashboardLoad. */
-export function startOperatorPostStatsLoad(range: AdminDashboardDateRange): Promise<OperatorPostStatsDashboard> {
-  const dashboard = loadOperatorPostStatsDashboard(range);
-  dashboard.catch(() => undefined);
-  return dashboard;
+/**
+ * Starts the live queries without awaiting them; see startSnsDashboardLoad. Any failure
+ * reaches the table's promise, so it is logged once, there.
+ */
+export function startOperatorPostStatsLoad(range: AdminDashboardDateRange): OperatorPostStatsDashboardLoad {
+  const load = startOperatorPostStatsDashboardLoad(range);
+  load.dashboard.catch((error: unknown) => console.error("[admin-dashboard] operator_post_stats_failed", error));
+  return load;
 }
 
-function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
+const POST_COUNT_LABEL = "운영 계정 글";
+const VIEWS_NOTE = "글별 본 사람 합";
+
+/** The tiles that need only the counts query; follows and messages wait for the attribution query too. */
+function isCountStat(key: OperatorPostStatKey): boolean {
+  return (OPERATOR_POST_COUNT_STAT_KEYS as readonly OperatorPostStatKey[]).includes(key);
+}
+
+/** The post count, once the counts query is done. */
+export async function OperatorPostCountTile({ totalsPromise }: { totalsPromise: Promise<{ postCount: number }> }) {
+  let postCount: number;
+  try {
+    ({ postCount } = await totalsPromise);
+  } catch {
+    return <StatTilePlaceholder label={POST_COUNT_LABEL} status="error" />;
+  }
+  return <StatTile label={POST_COUNT_LABEL} value={`${formatStatCount(postCount)}개`} />;
+}
+
+/** One stat summed over the range's posts, with its share of the summed views. */
+export async function OperatorPostStatTile({
+  statKey,
+  totalsPromise,
+}: {
+  statKey: OperatorPostStatKey;
+  totalsPromise: Promise<{ totals: Pick<OperatorPostStats, "views"> & Partial<OperatorPostStats> }>;
+}) {
+  const label = OPERATOR_POST_STAT_LABELS[statKey];
+  let value: number | undefined;
+  let views = 0;
+  try {
+    const { totals } = await totalsPromise;
+    value = totals[statKey];
+    views = totals.views;
+  } catch {
+    // Logged by startOperatorPostStatsLoad.
+  }
+  if (value === undefined) return <StatTilePlaceholder label={label} status="error" />;
   return (
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-      <dt className="break-words text-xs font-medium text-slate-500">{label}</dt>
-      <dd className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{value}</dd>
-      {note ? <p className="mt-0.5 break-words text-xs text-slate-500">{note}</p> : null}
-    </div>
+    <StatTile
+      label={label}
+      value={formatStatCount(value)}
+      note={statKey === "views" ? VIEWS_NOTE : `조회 대비 ${formatConversionRate(conversionRate(value, views))}`}
+    />
   );
 }
 
-/** Totals over every operator post of the range; each rate is the summed count over the summed views. */
-export function OperatorPostStatsTotals({ dashboard }: { dashboard: OperatorPostStatsDashboard }) {
-  const { totals } = dashboard;
-  return (
-    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-      <Tile label="운영 계정 글" value={`${formatStatCount(dashboard.postCount)}개`} />
-      {OPERATOR_POST_STAT_KEYS.map((key) => (
-        <Tile
-          key={key}
-          label={OPERATOR_POST_STAT_LABELS[key]}
-          value={formatStatCount(totals[key])}
-          note={key === "views" ? "글별 본 사람 합" : `조회 대비 ${formatConversionRate(conversionRate(totals[key], totals.views))}`}
-        />
-      ))}
-    </dl>
-  );
-}
-
-/** Own Suspense boundary and contained failure, like SnsSection. */
-export async function OperatorPostStatsSection({ dashboardPromise }: { dashboardPromise: Promise<OperatorPostStatsDashboard> }) {
+/** The table and its note, once both queries and the posts' details are in. */
+export async function OperatorPostStatsTableCard({ dashboardPromise }: { dashboardPromise: Promise<OperatorPostStatsDashboard> }) {
   let dashboard: OperatorPostStatsDashboard | null = null;
   try {
     dashboard = await dashboardPromise;
-  } catch (error) {
-    console.error("[admin-dashboard] operator_post_stats_failed", error);
+  } catch {
+    // Logged by startOperatorPostStatsLoad.
   }
   if (!dashboard) {
     return (
@@ -64,21 +93,51 @@ export async function OperatorPostStatsSection({ dashboardPromise }: { dashboard
     );
   }
   return (
-    <div className="space-y-3">
-      <OperatorPostStatsTotals dashboard={dashboard} />
+    <>
       {dashboard.postCount > dashboard.rows.length ? (
         <p className="text-xs text-slate-500">
           {`조회가 많은 ${formatStatCount(OPERATOR_POST_DASHBOARD_ROW_LIMIT)}개만 표에 보입니다. 합계는 ${formatStatCount(dashboard.postCount)}개 전체 기준입니다.`}
         </p>
       ) : null}
       <OperatorPostStatsTable rows={dashboard.rows} />
+    </>
+  );
+}
+
+/**
+ * Totals over every operator post of the range (each rate is the summed count over the
+ * summed views), then the table. Every tile and the table have their own Suspense
+ * boundary: the count tiles show once the counts query is done, follows and messages
+ * once the attribution query is too, and a failure stays in its card.
+ */
+export function OperatorPostStatsSection({ load }: { load: OperatorPostStatsDashboardLoad }) {
+  return (
+    <div className="space-y-3">
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <Suspense fallback={<StatTilePlaceholder label={POST_COUNT_LABEL} />}>
+          <OperatorPostCountTile totalsPromise={load.countTotals} />
+        </Suspense>
+        {OPERATOR_POST_STAT_KEYS.map((key) => (
+          <Suspense
+            key={key}
+            fallback={<StatTilePlaceholder label={OPERATOR_POST_STAT_LABELS[key]} note={key === "views" ? VIEWS_NOTE : ""} />}
+          >
+            <OperatorPostStatTile statKey={key} totalsPromise={isCountStat(key) ? load.countTotals : load.totals} />
+          </Suspense>
+        ))}
+      </dl>
+      <Suspense fallback={<OperatorPostStatsSectionFallback />}>
+        <OperatorPostStatsTableCard dashboardPromise={load.dashboard} />
+      </Suspense>
     </div>
   );
 }
 
+/** The table's Suspense fallback. */
 export function OperatorPostStatsSectionFallback() {
   return (
-    <p role="status" className="rounded-xl border border-slate-200 bg-white px-3 py-6 text-center text-sm text-slate-500">
+    <p role="status" className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-6 text-center text-sm text-slate-500">
+      <DashboardSpinner />
       운영 계정 글 성과를 불러오는 중...
     </p>
   );

@@ -141,28 +141,47 @@ function ratio(numerator: number, denominator: number): number | null {
   return denominator > 0 ? numerator / denominator : null;
 }
 
-/** Fills every day of the range (a day without rows is 0) and sums the range. */
-export function buildSnsDashboard(dayKeys: readonly string[], byMetric: Record<SnsMetricKey, Map<string, number>>): SnsDashboard {
-  const totals = {} as Record<SnsMetricKey, number>;
-  const metrics: DashboardMetric[] = SNS_METRIC_LABELS.map(({ key, label, unit }) => {
-    const points: DailyPoint[] = dayKeys.map((day) => ({ day, value: byMetric[key].get(day) ?? 0 }));
-    totals[key] = points.reduce((sum, point) => sum + (point.value ?? 0), 0);
-    return { key: `sns_${key}`, label, unit, kind: "count", points };
-  });
+/** One metric's chart series: every day of the range, a day without rows is 0. */
+export function buildSnsMetric(key: SnsMetricKey, dayKeys: readonly string[], byDay: ReadonlyMap<string, number>): DashboardMetric {
+  const { label, unit } = SNS_METRIC_LABELS.find((entry) => entry.key === key) ?? { label: key, unit: "" };
+  const points: DailyPoint[] = dayKeys.map((day) => ({ day, value: byDay.get(day) ?? 0 }));
+  return { key: `sns_${key}`, label, unit, kind: "count", points };
+}
+
+/** The ratios over the range's totals. Each reads only the totals it names. */
+export function buildSnsSummary(totals: Record<SnsMetricKey, number>): SnsSummary {
   return {
-    metrics,
-    summary: {
-      totals,
-      likesPer100Views: ratio(totals.postLikes * 100, totals.postViews),
-      commentsPerPost: ratio(totals.comments, totals.posts + totals.operatorPosts),
-      operatorReactionShare: ratio(totals.operatorPostReactions, totals.postLikes + totals.comments),
-    },
+    totals,
+    likesPer100Views: ratio(totals.postLikes * 100, totals.postViews),
+    commentsPerPost: ratio(totals.comments, totals.posts + totals.operatorPosts),
+    operatorReactionShare: ratio(totals.operatorPostReactions, totals.postLikes + totals.comments),
   };
 }
 
+/** Fills every day of the range (a day without rows is 0) and sums the range. */
+export function buildSnsDashboard(dayKeys: readonly string[], byMetric: Record<SnsMetricKey, Map<string, number>>): SnsDashboard {
+  const totals = {} as Record<SnsMetricKey, number>;
+  const metrics: DashboardMetric[] = SNS_METRIC_LABELS.map(({ key }) => {
+    const metric = buildSnsMetric(key, dayKeys, byMetric[key]);
+    totals[key] = metric.points.reduce((sum, point) => sum + (point.value ?? 0), 0);
+    return metric;
+  });
+  return { metrics, summary: buildSnsSummary(totals) };
+}
+
+export const SNS_METRIC_KEYS = Object.keys(QUERIES) as SnsMetricKey[];
+
+/** One running query per metric, each resolving to its daily values. */
+export type SnsMetricQueries = Record<SnsMetricKey, Promise<Map<string, number>>>;
+
+/** Starts every query at once without awaiting them, so each chart and tile can show as soon as its own queries are done. */
+export function startSnsMetricQueries(range: AdminDashboardDateRange): SnsMetricQueries {
+  return Object.fromEntries(SNS_METRIC_KEYS.map((key) => [key, queryDaily(QUERIES[key], range)])) as SnsMetricQueries;
+}
+
 export async function loadSnsDashboard(range: AdminDashboardDateRange): Promise<SnsDashboard> {
-  const keys = Object.keys(QUERIES) as SnsMetricKey[];
-  const results = await Promise.all(keys.map((key) => queryDaily(QUERIES[key], range)));
-  const byMetric = Object.fromEntries(keys.map((key, index) => [key, results[index]])) as Record<SnsMetricKey, Map<string, number>>;
+  const queries = startSnsMetricQueries(range);
+  const results = await Promise.all(SNS_METRIC_KEYS.map((key) => queries[key]));
+  const byMetric = Object.fromEntries(SNS_METRIC_KEYS.map((key, index) => [key, results[index]])) as Record<SnsMetricKey, Map<string, number>>;
   return buildSnsDashboard(range.dayKeys, byMetric);
 }
