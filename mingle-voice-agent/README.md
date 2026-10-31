@@ -1,4 +1,78 @@
-# mingle-voice-agent (POC)
+# mingle-voice-agent
+
+## Production service (group voice rooms)
+
+`service.ts` is the production entry (`pnpm start`). It does not serve the POC
+page. Every 3 s it lists rooms on the LiveKit server. For each app voice room
+(`voice-*`) that has at least one human, it starts one hidden interpreter
+(identity `interpreter-<room>`, attribute `role=interpreter`). The interpreter
+publishes `tr:<lang>` tracks and caption data on topic `interpreter`, exactly
+as the POC below. It leaves 30 s after the last human.
+
+The mingle app issues the human tokens (identity = user id, attributes
+`{lang, interpret: "on"|"off", role: "speaker"}`). The agent only needs
+outbound connections, so it runs fine on Railway without UDP ingress.
+
+### Environment
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `LIVEKIT_URL` | yes | e.g. `wss://voice.minglelabs.app` |
+| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | yes | same pair as the LiveKit server's `keys:` |
+| `SONIOX_API_KEY` | yes | speech to text |
+| `GEMINI_API_KEY` | yes | TTS, and translation fallback |
+| `OPENAI_API_KEY` | no | translation first choice; Gemini is used when missing or rejected |
+| `PORT` | no | health server port (Railway sets it), default 8080 |
+| `VOICE_AGENT_POLL_MS` | no | room poll interval, default 3000 |
+| `APP_INTERNAL_URL` + `VOICE_INTERNAL_SECRET` | no | where to send usage; both unset = log only |
+
+### Usage report (for coin billing)
+
+When an interpreter leaves a room it POSTs to
+`${APP_INTERNAL_URL}/api/internal/voice/usage` with header
+`x-voice-internal-secret: ${VOICE_INTERNAL_SECRET}`:
+
+```json
+{
+  "room": "voice-<channelId>-<suffix>",
+  "startedAt": "2026-10-31T12:00:00.000Z",
+  "endedAt": "2026-10-31T12:12:34.000Z",
+  "interpretedMs": 183000,
+  "byLang": { "ja": 120000, "en": 63000 },
+  "byListener": { "<userId>": 120000 },
+  "stats": { "segments": 41, "interpreted": 38, "echoSuppressed": 2, "errors": 1 }
+}
+```
+
+`byListener` credits every listener who had that language lane on while it
+played. The app endpoint does not exist yet; it lands with billing.
+
+### Run locally against the self-hosted server
+
+```bash
+cd mingle-voice-agent && pnpm install
+LIVEKIT_URL=wss://voice.minglelabs.app LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... \
+SONIOX_API_KEY=... GEMINI_API_KEY=... pnpm start
+curl http://localhost:8080/health
+pnpm test && pnpm typecheck
+```
+
+Take the key pair from the LiveKit server config (`keys:`). Do not paste the
+secret into chat, logs or commits.
+
+### Deploy to Railway
+
+1. New service from this repo, **Root Directory** `mingle-voice-agent`. It uses
+   `mingle-voice-agent/railway.json` and `mingle-voice-agent/Dockerfile`, so it
+   never rebuilds the main app service.
+2. Region: Singapore (`asia-southeast1-eqsg3a`, already in `railway.json`).
+3. Set the variables above. No public domain is needed; Railway's health check
+   hits `/health`, which is 200 once the LiveKit server has answered a poll.
+4. Run one replica only. Two replicas would put two interpreters in each room.
+
+---
+
+# POC notes
 
 Voice talk with live interpretation, as a proof of concept. Everyone in a
 LiveKit room publishes their mic; a server-side **interpreter** joins the same
