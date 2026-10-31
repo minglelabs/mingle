@@ -44,7 +44,7 @@ vi.mock('@/server/operator-post-reserve/worker', () => ({
   PHOTO_REQUESTED: 'photo_requested',
 }))
 
-import { normalizeReviewFeedback, parseReviewAction, releaseOrphanedDrawings, reviewOperatorPost, reviewOperatorProfile } from './review'
+import { normalizeReviewFeedback, parseReviewAction, releaseOrphanedDrawings, reviewOperatorPost, reviewOperatorProfile, setReviewPostText } from './review'
 
 const PENDING_ACCOUNT = { reviewState: 'pending', user: { isOperator: true, isDeleted: false } }
 const REVIEW_POST = {
@@ -224,5 +224,24 @@ describe('releaseOrphanedDrawings', () => {
       where: { state: 'regenerating', error: 'photo_drawing' },
       data: { state: 'review', error: 'photo_draw_failed' },
     })
+  })
+})
+
+describe('setReviewPostText', () => {
+  it('saves staff-written text on a post in review and audits it', async () => {
+    mocks.reserveFindUnique
+      .mockResolvedValueOnce({ state: 'review', operatorUserId: 'op1' })
+      .mockResolvedValueOnce({ ...REVIEW_POST, text: '새 글' })
+    mocks.reserveUpdateMany.mockResolvedValue({ count: 1 })
+    await expect(setReviewPostText({} as never, 'r1', '  새 글  ')).resolves.toMatchObject({ ok: true, post: { text: '새 글' } })
+    expect(mocks.reserveUpdateMany).toHaveBeenCalledWith({ where: { id: 'r1', state: 'review' }, data: { text: '새 글' } })
+    expect(mocks.audit).toHaveBeenCalledWith({}, expect.objectContaining({ metadata: { decision: 'edit_text', length: 3 } }))
+  })
+
+  it('refuses empty or too long text, and a post that is not in review', async () => {
+    await expect(setReviewPostText({} as never, 'r1', '   ')).resolves.toEqual({ ok: false, error: 'invalid_text' })
+    await expect(setReviewPostText({} as never, 'r1', 'a'.repeat(1001))).resolves.toEqual({ ok: false, error: 'invalid_text' })
+    mocks.reserveFindUnique.mockResolvedValueOnce({ state: 'published', operatorUserId: 'op1' })
+    await expect(setReviewPostText({} as never, 'r1', 'ok')).resolves.toEqual({ ok: false, error: 'not_found' })
   })
 })

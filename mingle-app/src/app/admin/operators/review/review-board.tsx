@@ -32,6 +32,7 @@ const ERROR_COPY: Record<string, string> = {
   invalid_image: '사진을 읽지 못했어요. 다른 파일로 해 주세요.',
   file_too_large: '사진이 너무 커요(15MB까지).',
   invalid_photos: '사진 목록이 올바르지 않아요. 새로고침 후 다시 해 주세요.',
+  invalid_text: '글은 1~1000자로 써 주세요.',
 }
 
 type ReviewPhoto = { objectKey: string; width: number | null; height: number | null }
@@ -426,6 +427,29 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
   const sourceLanguage = post.language ?? author.languages[0] ?? null
   const translation = useStaffTranslation({ id: post.id }, post.text, setError)
   const [editingPhotos, setEditingPhotos] = useState(false)
+  const [editingText, setEditingText] = useState(false)
+  const [draft, setDraft] = useState(post.text)
+  const [savingText, setSavingText] = useState(false)
+
+  async function saveText() {
+    setSavingText(true)
+    setError(null)
+    try {
+      const response = await fetch('/admin/operators/api/review/text', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: post.id, text: draft }),
+      })
+      const payload = await response.json().catch(() => ({})) as { post?: ReviewPost; error?: string }
+      if (!response.ok || !payload.post) throw new Error(payload.error ?? 'request_failed')
+      setPost(payload.post)
+      setEditingText(false)
+    } catch (caught) {
+      setError(ERROR_COPY[(caught as Error).message] ?? '글을 저장하지 못했어요.')
+    } finally {
+      setSavingText(false)
+    }
+  }
   const photos: ReviewPhoto[] = post.imageObjectKey
     ? [{ objectKey: post.imageObjectKey, width: post.imageWidth, height: post.imageHeight }, ...post.extraImages]
     : []
@@ -466,7 +490,16 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
           <p className="truncate text-xs text-slate-500">@{author.handle} · 글 {formatAt(at)}</p>
           <CompactLanguageLevels primaryLanguages={author.languages} interestLanguages={author.interestLanguages} locale="ko" className="mt-1" />
         </div>
-        <EditLink userId={author.userId} />
+        {/* Edits this post's text; the account itself is edited from its profile page (tap the name). */}
+        <button
+          type="button"
+          onClick={() => { setDraft(post.text); setEditingText(true) }}
+          disabled={editingText || busy !== null}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+        >
+          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          글 편집
+        </button>
         <PinButton kind="post" id={post.id} pinned={pinned} />
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -474,8 +507,34 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
         {post.topic ? <AdminChip>{post.topic}</AdminChip> : null}
         {post.photoKind ? <AdminChip tone="warning">사진: {PHOTO_KIND[post.photoKind] ?? post.photoKind}</AdminChip> : null}
       </div>
-      <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{translation.shownText}</p>
-      <StaffTranslationChips sourceLanguage={sourceLanguage} translation={translation} />
+      {editingText ? (
+        <div className="space-y-2">
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            rows={6}
+            maxLength={1000}
+            autoFocus
+            className={`${adminTextareaClassName} text-[15px] leading-6`}
+            disabled={savingText}
+          />
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-slate-400">{draft.trim().length}/1000</span>
+            <div className="flex gap-2">
+              <AdminButton disabled={savingText} onClick={() => setEditingText(false)}>취소</AdminButton>
+              <AdminButton variant="primary" disabled={savingText || !draft.trim() || draft.trim() === post.text.trim()} onClick={() => void saveText()}>
+                {savingText ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+                저장
+              </AdminButton>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{translation.shownText}</p>
+          <StaffTranslationChips sourceLanguage={sourceLanguage} translation={translation} />
+        </>
+      )}
       {editingPhotos ? (
         <PhotoEditor
           postId={post.id}

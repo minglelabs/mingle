@@ -583,3 +583,34 @@ export async function setReviewPostPhotos(
   })
   return { ok: true, post: toReviewPost(updated) }
 }
+
+/** Longest post text staff may write in review (same cap as a published post). */
+const MAX_REVIEW_TEXT_LENGTH = 1000
+
+/**
+ * Staff rewrote a post's text in review by hand. The photo and its plan stay;
+ * translations made from the old text are left behind (they carry their
+ * source text and are only reused for the same text).
+ */
+export async function setReviewPostText(
+  ctx: AdminContext,
+  id: string,
+  text: unknown,
+): Promise<{ ok: true; post: ReviewPost } | { ok: false; error: 'not_found' | 'invalid_text' | 'busy' }> {
+  if (typeof text !== 'string') return { ok: false, error: 'invalid_text' }
+  const trimmed = text.trim()
+  if (!trimmed || trimmed.length > MAX_REVIEW_TEXT_LENGTH) return { ok: false, error: 'invalid_text' }
+  const row = await prisma.operatorPostReserve.findUnique({ where: { id }, select: { state: true, operatorUserId: true } })
+  if (!row || !REVIEW_POST_STATES.includes(row.state)) return { ok: false, error: 'not_found' }
+  const updated = await prisma.operatorPostReserve.updateMany({ where: { id, state: 'review' }, data: { text: trimmed } })
+  if (updated.count === 0) return { ok: false, error: 'busy' }
+  const saved = await prisma.operatorPostReserve.findUnique({ where: { id }, select: POST_SELECT })
+  await writeAdminAudit(ctx, {
+    action: 'operator_post.review',
+    operatorUserId: row.operatorUserId,
+    targetType: 'reserve',
+    targetId: id,
+    metadata: { decision: 'edit_text', length: trimmed.length },
+  })
+  return saved ? { ok: true, post: toReviewPost(saved) } : { ok: false, error: 'not_found' }
+}
