@@ -298,6 +298,32 @@
   line-height: 1.35;
 }
 
+/* Which game of the room this is, and the race to the title (#44, #61, #142). */
+.tableMeta {
+  margin: 0 0 4px;
+  padding-left: 4px;
+  color: #a07a45;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.tableMeta .deuce {
+  color: #e5484d;
+}
+
+/* The words of the headings on a wide screen; their icons and short words on a
+   phone, with the legend under the table saying what each stands for. */
+.headShort,
+.legend,
+.ruleShort {
+  display: none;
+}
+
+.legend + .ruleLong {
+  margin-top: 8px;
+}
+
 .tableWrap {
   max-width: 100%;
   overflow-x: auto;
@@ -388,24 +414,6 @@ td.wins {
   font-size: 0.85em;
   font-weight: 700;
   text-align: center;
-}
-
-.groups th:first-child {
-  text-align: left;
-  white-space: nowrap;
-}
-
-/* What all these games are for, under the game's number. */
-.groups th small {
-  display: block;
-  font-weight: 700;
-  opacity: 0.8;
-}
-
-.groups th small.deuce {
-  color: #e5484d;
-  font-weight: 800;
-  opacity: 1;
 }
 
 .prize {
@@ -505,8 +513,7 @@ td.wins {
 
   .table[data-view='round'] .total,
   .table[data-view='total'] .round,
-  .groups th.round,
-  .groups th.total {
+  .groups {
     display: none;
   }
 
@@ -514,11 +521,45 @@ td.wins {
     border-left: 0;
   }
 
-  .table th {
-    white-space: normal;
+  .table {
+    font-size: 12px;
   }
 
-  /* Narrow enough that a phone shows every column, the MVP badge included. */
+  /* Every heading on one line: an icon or a short word, never the words
+     wrapped a letter a line (2026-11-01 device check). */
+  .table th {
+    white-space: nowrap;
+    font-size: 13px;
+    line-height: 1.2;
+  }
+
+  .headLong {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .headShort {
+    display: inline;
+  }
+
+  .legend,
+  .ruleShort {
+    display: block;
+  }
+
+  .ruleLong {
+    display: none;
+  }
+
+  .legend + .ruleLong + .ruleShort {
+    margin-top: 2px;
+  }
+
+  /* Narrow enough that a 375pt phone shows every column, the MVP badge included. */
   .table th,
   .table td {
     padding: 4px 2px;
@@ -529,13 +570,23 @@ td.wins {
     padding-left: 4px;
   }
 
+  /* The bare number under the heading: the heading says it is wins. */
+  td.wins {
+    font-size: 1.35em;
+  }
+
   /* This round's goal goes under the name, so the name column stays narrow. */
   .who {
     white-space: normal;
   }
 
   .who b {
+    display: inline-block;
+    max-width: 4.6em;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
+    vertical-align: bottom;
   }
 
   .who .goalBadge {
@@ -546,12 +597,15 @@ td.wins {
   }
 
   .who .meTag {
+    margin-left: 2px;
+    padding: 0.05em 0.4em;
     font-size: 10px;
   }
 
   .mvp {
-    padding: 0.05em 0.4em;
-    font-size: 0.72em;
+    padding: 0.05em 0.35em;
+    font-size: 0.7em;
+    letter-spacing: 0.02em;
   }
 }
 
@@ -733,7 +787,8 @@ td.wins {
   background: rgba(255, 255, 255, 0.7);
 }
 
-.boardCard .ruleLine {
+.boardCard .ruleLine,
+.boardCard .tableMeta {
   color: var(--ink);
   text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff;
 }

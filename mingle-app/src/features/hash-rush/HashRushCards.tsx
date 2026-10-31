@@ -17,7 +17,7 @@ import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from
 import styles from './hash-rush-cards.module.css'
 import type { HashRushGameCopy } from './copy'
 import type { HashRushArt, HashRushLobbyView } from './client'
-import type { HashRushScoreboard, HashRushTitleWords, HashRushVerdict } from './score'
+import type { HashRushScoreboard, HashRushScoreHead, HashRushTitleWords, HashRushVerdict } from './score'
 
 export type HashRushScoreView = 'round' | 'total'
 
@@ -173,35 +173,52 @@ export function HashRushScoreTable({ board, scoreView, onScoreView }: TableProps
           </button>
         ))}
       </div>
+      {/* Which game of the room this is and the race, over the table: in the
+          name column they would make it as wide as themselves. */}
+      <p className={styles.tableMeta}>
+        {board.gameNo}
+        {board.race ? <span className={board.deuce ? styles.deuce : undefined}> · {board.race}</span> : null}
+      </p>
       <div className={styles.tableWrap}>
         <ScoreRows board={board} scoreView={scoreView} />
       </div>
-      <p className={styles.ruleLine}>{board.rule}</p>
+      <p className={cx(styles.ruleLine, styles.legend)} data-qa="hash-rush-score-legend">{board.legend}</p>
+      <p className={cx(styles.ruleLine, styles.ruleLong)}>{board.rule}</p>
+      <p className={cx(styles.ruleLine, styles.ruleShort)}>{board.ruleShort}</p>
     </div>
   )
 }
 
-// Which game of the room this is and the race over the names, then a row per
-// hamster: its name (the viewer's own tagged, this round's goal stamped under
-// it), its wins, this round's numbers, the totals, and the MVP badge last.
+/** A heading: the words on a wide screen; on a phone the icon or short word, on one line. */
+function Head({ head }: { head: HashRushScoreHead }) {
+  return (
+    <>
+      <span className={styles.headLong}>{head.text}</span>
+      <span className={styles.headShort} aria-hidden="true">{head.short}</span>
+    </>
+  )
+}
+
+// A row per hamster: its name (the viewer's own tagged, this round's goal
+// stamped under it), its wins, this round's numbers, the totals, and the MVP
+// badge last.
 function ScoreRows({ board, scoreView }: { board: HashRushScoreboard, scoreView: HashRushScoreView }) {
   return (
     <table className={styles.table} data-view={scoreView} data-qa="hash-rush-score-table">
       <thead>
         <tr className={styles.groups}>
-          <th>
-            {board.gameNo}
-            {board.race ? <small className={board.deuce ? styles.deuce : undefined}>{board.race}</small> : null}
-          </th>
+          <th />
           <th className={styles.wins} />
           <th className={styles.round} colSpan={board.roundHeads.length}>{board.tabRound}</th>
           <th className={cx(styles.total, styles.split)} colSpan={board.totalHeads.length + 1}>{board.tabTotal}</th>
         </tr>
         <tr>
           <th />
-          <th className={styles.wins}>{board.winsHead}</th>
-          {board.roundHeads.map((head, k) => <th key={`r${k}`} className={styles.round}>{head}</th>)}
-          {board.totalHeads.map((head, k) => <th key={`t${k}`} className={cx(styles.total, k === 0 && styles.split)}>{head}</th>)}
+          <th className={styles.wins} title={board.winsHead.text}><Head head={board.winsHead} /></th>
+          {board.roundHeads.map((head, k) => <th key={`r${k}`} className={styles.round} title={head.text}><Head head={head} /></th>)}
+          {board.totalHeads.map((head, k) => (
+            <th key={`t${k}`} className={cx(styles.total, k === 0 && styles.split)} title={head.text}><Head head={head} /></th>
+          ))}
           <th className={styles.total} />
         </tr>
       </thead>
@@ -213,7 +230,10 @@ function ScoreRows({ board, scoreView }: { board: HashRushScoreboard, scoreView:
               {row.me ? <i className={styles.meTag}>{board.meTag}</i> : null}
               {row.goal ? <span className={styles.goalBadge}>{board.goalBadge}</span> : null}
             </td>
-            <td className={styles.wins}>{row.winsText}</td>
+            <td className={styles.wins}>
+              <span className={styles.headLong}>{row.winsText}</span>
+              <span className={styles.headShort} aria-hidden="true">{row.wins}</span>
+            </td>
             {row.round.map((value, k) => <td key={`r${k}`} className={styles.round}>{value}</td>)}
             {row.total.map((value, k) => (
               <td key={`t${k}`} className={cx(styles.total, k === 0 && styles.split, k === row.total.length - 1 && styles.score)}>{value}</td>

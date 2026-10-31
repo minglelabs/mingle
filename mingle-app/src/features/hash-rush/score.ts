@@ -13,7 +13,7 @@
 
 import { MVP_POINTS, mvpScore, pickMvp } from './engine/client/mvp.js'
 import { colorOf } from './engine/client/looks.js'
-import { t } from './engine/client/i18n.js'
+import { lang, t } from './engine/client/i18n.js'
 import { allied, timeoutReason } from './engine/sim/game.js'
 import type { HashRushPlayer, HashRushRound, HashRushTitleRule } from './protocol'
 
@@ -22,6 +22,23 @@ export const PLAYED = 7
 // The order the table shows them in. This round leaves the goal out: its badge says it.
 export const ROUND_COLS = [0, 5, 6, 1, 2, 4] as const
 export const TOTAL_COLS = [0, 5, 6, 1, 2, 3, 4] as const
+
+// A phone has no room for the words over twelve narrow columns: each number
+// has an icon over it, one line, and the words are in a legend under the table
+// (2026-11-01 device check: "꿀밤", "던지기" wrapped one letter a line).
+// By column: [bonks, bonked, seeds, goals, supers, throws, stops].
+export const COLUMN_ICONS = ['👊', '💫', '🌻', '🏠', '⭐', '🎯', '🛡️'] as const
+// Wins, losses and the score keep a word, the shortest each language has.
+const SHORT_HEADS: Record<string, { wins: string, losses: string, score: string }> = {
+  ko: { wins: '승', losses: '패', score: '점수' },
+  en: { wins: 'W', losses: 'L', score: 'Pts' },
+  ja: { wins: '勝', losses: '敗', score: '点' },
+  'zh-Hans': { wins: '胜', losses: '负', score: '分' },
+  'zh-Hant': { wins: '勝', losses: '負', score: '分' },
+}
+
+/** A column heading: the words on a wide screen, `short` (an icon or a short word) on a phone. */
+export type HashRushScoreHead = { text: string, short: string }
 
 /** What the room has kept so far, as the server last said it. */
 export type HashRushRecord = {
@@ -43,7 +60,9 @@ export type HashRushScoreRow = {
   winner: boolean
   goal: boolean
   mvp: boolean
+  /** "3승": a wide screen's cell. A phone's shows the bare number under its heading. */
   winsText: string
+  wins: number
   /** This round, in ROUND_COLS order. */
   round: number[]
   /** The totals in TOTAL_COLS order, then the losses and the MVP score. */
@@ -57,11 +76,17 @@ export type HashRushScoreboard = {
   deuce: boolean
   tabRound: string
   tabTotal: string
-  winsHead: string
-  roundHeads: string[]
-  totalHeads: string[]
+  winsHead: HashRushScoreHead
+  roundHeads: HashRushScoreHead[]
+  /** The totals in TOTAL_COLS order, then the losses and the score. */
+  totalHeads: HashRushScoreHead[]
   rows: HashRushScoreRow[]
+  /** How the MVP's score adds up, in words (a wide screen). */
   rule: string
+  /** The same with the icons (a phone). */
+  ruleShort: string
+  /** What each icon and short word over a phone's columns stands for. */
+  legend: string
   goalBadge: string
   /** The tag on the viewer's own row, so they find themselves (#224). */
   meTag: string
@@ -127,21 +152,35 @@ export function buildScoreboard(round: HashRushRound, meId: number, record: Hash
       goal: !!goalOf(round, p),
       mvp: mvps.includes(p.id),
       winsText: String(t('tally', record.wins[p.look] || 0)),
+      wins: record.wins[p.look] || 0,
       round: ROUND_COLS.map((c) => now[c]),
       total: [...TOTAL_COLS.map((c) => total[c]), losses(p), mvpScore(total)],
     }
   })
+  const short = SHORT_HEADS[lang] ?? SHORT_HEADS.en
+  const head = (c: number): HashRushScoreHead => ({ text: cols[c], short: COLUMN_ICONS[c] })
+  const winsHead = { text: String(t('colWins')), short: short.wins }
+  const lossesHead = { text: String(t('colLosses')), short: short.losses }
+  const scoreHead = { text: String(t('colScore')), short: short.score }
+  const scored = TOTAL_COLS.filter((c) => MVP_POINTS[c])
+  // Every icon, then any short word that is not the word itself ("L" for "Losses").
+  const legend = [
+    ...TOTAL_COLS.map((c) => `${COLUMN_ICONS[c]} ${cols[c]}`),
+    ...[winsHead, lossesHead, scoreHead].filter((h) => h.short !== h.text).map((h) => `${h.short} ${h.text}`),
+  ].join(' · ')
   return {
     gameNo: String(t('gameNo', record.rounds + (record.counted ? 0 : 1))),
     race: record.rule ? String(deuce ? t('deuce', record.rule.lead) : t('firstTo', record.rule.wins)) : '',
     deuce,
     tabRound: String(t('thisRound')),
     tabTotal: String(t('totals')),
-    winsHead: String(t('colWins')),
-    roundHeads: ROUND_COLS.map((c) => cols[c]),
-    totalHeads: [...TOTAL_COLS.map((c) => cols[c]), String(t('colLosses')), String(t('colScore'))],
+    winsHead,
+    roundHeads: ROUND_COLS.map(head),
+    totalHeads: [...TOTAL_COLS.map(head), lossesHead, scoreHead],
     rows,
-    rule: `${t('mvpRule')} = ${TOTAL_COLS.filter((c) => MVP_POINTS[c]).map((c) => `${cols[c]} ×${MVP_POINTS[c]}`).join(' + ')}`,
+    rule: `${t('mvpRule')} = ${scored.map((c) => `${cols[c]} ×${MVP_POINTS[c]}`).join(' + ')}`,
+    ruleShort: `${t('mvpRule')} = ${scored.map((c) => `${COLUMN_ICONS[c]}×${MVP_POINTS[c]}`).join(' + ')}`,
+    legend,
     goalBadge: String(t('goalBadge')),
     meTag: String(t('meTag')),
   }

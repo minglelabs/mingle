@@ -4,6 +4,7 @@ import { MAPS } from './engine/sim/map.js'
 import { setLanguage } from './engine/client/i18n.js'
 import { readStart, type HashRushRound } from './protocol'
 import {
+  COLUMN_ICONS,
   PLAYED,
   ROUND_COLS,
   TOTAL_COLS,
@@ -70,9 +71,9 @@ describe('hash rush score table', () => {
     expect(board.race).toBe('10승 먼저 하면 우승!')
     expect(board.tabRound).toBe('이번 라운드')
     expect(board.tabTotal).toBe('누적')
-    expect(board.winsHead).toBe('승')
-    expect(board.roundHeads).toEqual(['꿀밤', '던지기', '저지', '맞음', '해씨', '슈퍼'])
-    expect(board.totalHeads).toEqual(['꿀밤', '던지기', '저지', '맞음', '해씨', '골인', '슈퍼', '패', '점수'])
+    expect(board.winsHead).toEqual({ text: '승', short: '승' })
+    expect(board.roundHeads.map((h) => h.text)).toEqual(['꿀밤', '던지기', '저지', '맞음', '해씨', '슈퍼'])
+    expect(board.totalHeads.map((h) => h.text)).toEqual(['꿀밤', '던지기', '저지', '맞음', '해씨', '골인', '슈퍼', '패', '점수'])
     const mia = board.rows.find((row) => row.name === 'Mia')!
     expect(mia.me).toBe(true)
     expect(mia.winsText).toBe('2승')
@@ -86,6 +87,28 @@ describe('hash rush score table', () => {
     expect(board.rows.filter((row) => row.mvp)).toHaveLength(1)
     expect(board.rule).toBe('MVP는 누적 점수 1위 · 점수 = 꿀밤 ×1 + 던지기 ×2 + 저지 ×1 + 해씨 ×2 + 골인 ×5 + 슈퍼 ×3')
     expect(board.meTag).toBe('나')
+    expect(mia.wins).toBe(2)
+  })
+
+  it('heads every phone column with an icon or one short word, and keeps the words in a legend (device check)', () => {
+    const board = buildScoreboard(round(), 0, record())
+    expect(board.roundHeads.map((h) => h.short)).toEqual(['👊', '🎯', '🛡️', '💫', '🌻', '⭐'])
+    expect(board.totalHeads.map((h) => h.short)).toEqual(['👊', '🎯', '🛡️', '💫', '🌻', '🏠', '⭐', '패', '점수'])
+    // Nothing over a column is longer than two letters.
+    for (const head of [board.winsHead, ...board.totalHeads]) expect(Array.from(head.short).length).toBeLessThanOrEqual(2)
+    expect(board.legend).toBe('👊 꿀밤 · 🎯 던지기 · 🛡️ 저지 · 💫 맞음 · 🌻 해씨 · 🏠 골인 · ⭐ 슈퍼')
+    expect(board.ruleShort).toBe('MVP는 누적 점수 1위 · 점수 = 👊×1 + 🎯×2 + 🛡️×1 + 🌻×2 + 🏠×5 + ⭐×3')
+    expect(COLUMN_ICONS).toHaveLength(7)
+    expect(new Set(COLUMN_ICONS).size).toBe(7)
+  })
+
+  it('says what a short word stands for where it is not the word itself', () => {
+    setLanguage('en')
+    const board = buildScoreboard(round(), 0, record())
+    expect([board.winsHead.short, board.totalHeads.at(-2)!.short, board.totalHeads.at(-1)!.short]).toEqual(['W', 'L', 'Pts'])
+    expect(board.legend).toBe('👊 Bonks · 🎯 Throws · 🛡️ Stops · 💫 Bonked · 🌻 Seeds · 🏠 Goals · ⭐ Super · W Wins · L Losses · Pts Score')
+    setLanguage('ja')
+    expect(buildScoreboard(round(), 0, record()).winsHead).toEqual({ text: '勝利', short: '勝' })
   })
 
   it('takes the counted totals as they are once the round is in them', () => {
