@@ -164,11 +164,11 @@ type FeedbackSubmitErrorCode =
   | 'invalid_json'
 
 const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
-  1: 'text-[13px]',
-  2: 'text-sm',
-  3: 'text-[15px]',
-  4: 'text-base',
-  5: 'text-[18px]',
+  1: 'text-sm',
+  2: 'text-[15px]',
+  3: 'text-base',
+  4: 'text-[18px]',
+  5: 'text-[20px]',
 }
 const TEXT_SIZE_LEVEL_OPTIONS = [1, 2, 3, 4, 5] as const
 

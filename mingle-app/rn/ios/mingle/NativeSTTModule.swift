@@ -30,7 +30,18 @@ final class MingleAudioSessionCoordinator {
     private var sttOwners: Int = 0
     private var ttsOwners: Int = 0
     private var pipOwners: Int = 0
+    /// 1 while the background keep-alive player holds the session.
+    private var keepAliveOwners: Int = 0
     private var pendingDeactivationWorkItem: DispatchWorkItem?
+
+    // Background keep-alive: while the app is in the background and live STT
+    // is not recording, a looping silent clip keeps the session active so iOS
+    // does not suspend the app. Written on the main thread only.
+    private var keepAliveInstalled = false
+    private var keepAliveEnabled = false
+    private var isAppInBackground = false
+    private var keepAlivePlayer: AVAudioPlayer?
+    private var keepAliveObservers: [NSObjectProtocol] = []
 
     private init() {}
 
@@ -123,6 +134,11 @@ final class MingleAudioSessionCoordinator {
             cancelPendingDeactivationLocked(reason: "acquire_stt")
             sttOwners += 1
         }
+        // Recording keeps the app alive on its own; the keep-alive never plays
+        // while STT holds the session.
+        DispatchQueue.main.async { [weak self] in
+            self?.updateBackgroundKeepAlive(trigger: "stt_acquired")
+        }
     }
 
     func releaseSTT() {
@@ -172,11 +188,12 @@ final class MingleAudioSessionCoordinator {
             cancelPendingDeactivationLocked(reason: "schedule_deactivate_\(trigger)")
             if sttOwners != 0 || ttsOwners != 0 || pipOwners != 0 {
                 NSLog(
-                    "[MingleAudioSessionCoordinator] skip deactivate trigger=%@ owners stt=%d tts=%d pip=%d routeProfile=%@ outputs=[%@]",
+                    "[MingleAudioSessionCoordinator] skip deactivate trigger=%@ owners stt=%d tts=%d pip=%d keepAlive=%d routeProfile=%@ outputs=[%@]",
                     trigger,
                     sttOwners,
                     ttsOwners,
                     pipOwners,
+                    keepAliveOwners,
                     policy.outputProfile.rawValue,
                     routeLabel
                 )
@@ -184,34 +201,7 @@ final class MingleAudioSessionCoordinator {
             }
 
             let workItem = DispatchWorkItem { [weak self] in
-                guard let self else { return }
-                let shouldDeactivate = self.withLock {
-                    self.pendingDeactivationWorkItem = nil
-                    return self.sttOwners == 0
-                        && self.ttsOwners == 0
-                        && self.pipOwners == 0
-                }
-                guard shouldDeactivate else { return }
-                do {
-                    try AVAudioSession.sharedInstance().setActive(false, options: policy.options)
-                    NSLog(
-                        "[MingleAudioSessionCoordinator] deactivated trigger=%@ delayMs=%d routeProfile=%@ options=%@ outputs=[%@]",
-                        trigger,
-                        policy.delayMs,
-                        policy.outputProfile.rawValue,
-                        policy.optionsLabel,
-                        routeLabel
-                    )
-                } catch {
-                    NSLog(
-                        "[MingleAudioSessionCoordinator] deactivate failed trigger=%@ delayMs=%d routeProfile=%@ options=%@ error=%@",
-                        trigger,
-                        policy.delayMs,
-                        policy.outputProfile.rawValue,
-                        policy.optionsLabel,
-                        error.localizedDescription
-                    )
-                }
+                self?.runIdleSessionWorkItem(trigger: trigger, policy: policy, routeLabel: routeLabel)
             }
             pendingDeactivationWorkItem = workItem
             workItemToSchedule = workItem
@@ -232,8 +222,251 @@ final class MingleAudioSessionCoordinator {
         )
     }
 
+    /// Main thread. No STT, TTS or PiP owner is left: in the background the
+    /// session moves to the keep-alive, otherwise it is released. The owner
+    /// check and the session change run under one lock, and STT takes its owner
+    /// before it configures the session, so a recording session is never
+    /// switched or deactivated underneath live STT.
+    private func runIdleSessionWorkItem(trigger: String, policy: DeactivationPolicy, routeLabel: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        pendingDeactivationWorkItem = nil
+        guard sttOwners == 0 && ttsOwners == 0 && pipOwners == 0 else { return }
+
+        if keepAliveInstalled && MingleBackgroundAudioPolicy.shouldRunKeepAlive(
+            isEnabled: keepAliveEnabled,
+            isInBackground: isAppInBackground,
+            sttOwners: sttOwners
+        ) {
+            // Releasing the session here would let iOS suspend the app.
+            startKeepAliveLocked(trigger: "idle_\(trigger)")
+            return
+        }
+
+        stopKeepAliveLocked(trigger: "idle_\(trigger)")
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: policy.options)
+            NSLog(
+                "[MingleAudioSessionCoordinator] deactivated trigger=%@ delayMs=%d routeProfile=%@ options=%@ outputs=[%@]",
+                trigger,
+                policy.delayMs,
+                policy.outputProfile.rawValue,
+                policy.optionsLabel,
+                routeLabel
+            )
+        } catch {
+            NSLog(
+                "[MingleAudioSessionCoordinator] deactivate failed trigger=%@ delayMs=%d routeProfile=%@ options=%@ error=%@",
+                trigger,
+                policy.delayMs,
+                policy.outputProfile.rawValue,
+                policy.optionsLabel,
+                error.localizedDescription
+            )
+        }
+    }
+
     func snapshot() -> (stt: Int, tts: Int) {
         return withLock { (stt: sttOwners, tts: ttsOwners) }
+    }
+
+    // MARK: - Background keep-alive
+
+    /// Called once from `AppDelegate` at launch. The Info.plist key
+    /// `MingleBackgroundAudioKeepAlive` = 0 turns the keep-alive off.
+    func installBackgroundKeepAlive() {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard !keepAliveInstalled else { return }
+        let enabled = MingleBackgroundAudioPolicy.isKeepAliveEnabled(
+            configValue: NativeSTTModule.readRuntimeConfigValue(MingleBackgroundAudioPolicy.keepAliveInfoPlistKey)
+        )
+        let inBackground = UIApplication.shared.applicationState == .background
+        withLock {
+            keepAliveInstalled = true
+            keepAliveEnabled = enabled
+            isAppInBackground = inBackground
+        }
+        NSLog("[MingleAudioSessionCoordinator] keepAlive installed enabled=%d", enabled ? 1 : 0)
+        guard enabled else { return }
+
+        let center = NotificationCenter.default
+        func observe(_ name: Notification.Name, _ handler: @escaping (Notification) -> Void) {
+            // Always continue asynchronously on main: AVAudioSession posts on
+            // arbitrary threads, and a handler must never run inside one of our
+            // own locked session calls.
+            keepAliveObservers.append(center.addObserver(forName: name, object: nil, queue: nil) { notification in
+                DispatchQueue.main.async { handler(notification) }
+            })
+        }
+        observe(UIApplication.didEnterBackgroundNotification) { [weak self] _ in
+            self?.setAppInBackground(true)
+        }
+        observe(UIApplication.willEnterForegroundNotification) { [weak self] _ in
+            self?.setAppInBackground(false)
+        }
+        observe(AVAudioSession.interruptionNotification) { [weak self] notification in
+            self?.handleKeepAliveInterruption(notification)
+        }
+        observe(AVAudioSession.mediaServicesWereResetNotification) { [weak self] _ in
+            self?.handleKeepAliveMediaServicesReset()
+        }
+        observe(AVAudioSession.routeChangeNotification) { [weak self] _ in
+            self?.resumeKeepAlivePlayerIfPaused(trigger: "route_change")
+        }
+        if inBackground {
+            updateBackgroundKeepAlive(trigger: "install_in_background")
+        }
+    }
+
+    private func setAppInBackground(_ inBackground: Bool) {
+        withLock { isAppInBackground = inBackground }
+        updateBackgroundKeepAlive(trigger: inBackground ? "app_background" : "app_foreground")
+    }
+
+    /// Main thread. Starts or stops the keep-alive to match the app state and
+    /// STT ownership.
+    private func updateBackgroundKeepAlive(trigger: String) {
+        guard keepAliveInstalled else { return }
+        lock.lock()
+        var stopped = false
+        if MingleBackgroundAudioPolicy.shouldRunKeepAlive(
+            isEnabled: keepAliveEnabled,
+            isInBackground: isAppInBackground,
+            sttOwners: sttOwners
+        ) {
+            startKeepAliveLocked(trigger: trigger)
+        } else {
+            stopped = stopKeepAliveLocked(trigger: trigger)
+        }
+        lock.unlock()
+        if stopped {
+            // The same idle rule as after TTS or PiP: the session is released
+            // only when nobody else holds it. Category and mode stay as they
+            // are, so foreground TTS volume and routing are unaffected.
+            scheduleDeactivateAudioSessionIfIdle(trigger: "keep_alive_\(trigger)")
+        }
+    }
+
+    /// Main thread, `lock` held.
+    private func startKeepAliveLocked(trigger: String) {
+        cancelPendingDeactivationLocked(reason: "keep_alive_\(trigger)")
+        let session = AVAudioSession.sharedInstance()
+        let plan = MingleBackgroundAudioPolicy.keepAliveSessionPlan(
+            isPlaybackCategory: session.category == .playback,
+            mixesWithOthers: session.categoryOptions.contains(.mixWithOthers),
+            ttsOwners: ttsOwners,
+            pipOwners: pipOwners
+        )
+        do {
+            if plan == .switchToMixablePlayback {
+                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            }
+            try session.setActive(true, options: [])
+        } catch {
+            // Retried on the next trigger: interruption end, owner release or
+            // lifecycle change.
+            keepAlivePlayer?.stop()
+            keepAliveOwners = 0
+            NSLog(
+                "[MingleAudioSessionCoordinator] keepAlive activate failed trigger=%@ plan=%@ error=%@",
+                trigger,
+                plan.rawValue,
+                error.localizedDescription
+            )
+            return
+        }
+
+        guard let player = keepAlivePlayer ?? makeKeepAlivePlayer() else {
+            keepAliveOwners = 0
+            return
+        }
+        keepAlivePlayer = player
+        let wasPlaying = player.isPlaying
+        if !wasPlaying && !player.play() {
+            keepAliveOwners = 0
+            NSLog("[MingleAudioSessionCoordinator] keepAlive play failed trigger=%@", trigger)
+            return
+        }
+        keepAliveOwners = 1
+        NSLog(
+            "[MingleAudioSessionCoordinator] keepAlive %@ trigger=%@ plan=%@ category=%@ mode=%@ owners stt=%d tts=%d pip=%d",
+            wasPlaying ? "kept" : "started",
+            trigger,
+            plan.rawValue,
+            session.category.rawValue,
+            session.mode.rawValue,
+            sttOwners,
+            ttsOwners,
+            pipOwners
+        )
+    }
+
+    /// Main thread, `lock` held. Returns whether the keep-alive was running.
+    @discardableResult
+    private func stopKeepAliveLocked(trigger: String) -> Bool {
+        let wasRunning = keepAliveOwners > 0 || keepAlivePlayer?.isPlaying == true
+        guard wasRunning else { return false }
+        keepAlivePlayer?.stop()
+        keepAliveOwners = 0
+        NSLog("[MingleAudioSessionCoordinator] keepAlive stopped trigger=%@", trigger)
+        return true
+    }
+
+    private func makeKeepAlivePlayer() -> AVAudioPlayer? {
+        let clip = MingleBackgroundAudioPolicy.silentWav(
+            sampleRate: MingleBackgroundAudioPolicy.keepAliveClipSampleRate,
+            durationMs: MingleBackgroundAudioPolicy.keepAliveClipDurationMs
+        )
+        do {
+            let player = try AVAudioPlayer(data: clip, fileTypeHint: AVFileType.wav.rawValue)
+            player.numberOfLoops = -1
+            player.prepareToPlay()
+            return player
+        } catch {
+            NSLog("[MingleAudioSessionCoordinator] keepAlive player create failed: %@", error.localizedDescription)
+            return nil
+        }
+    }
+
+    /// Main thread.
+    private func handleKeepAliveInterruption(_ notification: Notification) {
+        guard
+            let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+            let type = AVAudioSession.InterruptionType(rawValue: rawType)
+        else {
+            return
+        }
+        switch type {
+        case .began:
+            // iOS paused the player and deactivated the session (call, Siri,
+            // alarm). The keep-alive restarts when the interruption ends.
+            NSLog("[MingleAudioSessionCoordinator] keepAlive interruption began")
+        case .ended:
+            // Restart with or without `.shouldResume`: the clip is silent and
+            // mixable, so it never takes audio away from another app.
+            updateBackgroundKeepAlive(trigger: "interruption_ended")
+        @unknown default:
+            break
+        }
+    }
+
+    /// Main thread. A media server reset invalidates every player and the
+    /// session configuration.
+    private func handleKeepAliveMediaServicesReset() {
+        withLock {
+            keepAlivePlayer = nil
+            keepAliveOwners = 0
+        }
+        updateBackgroundKeepAlive(trigger: "media_services_reset")
+    }
+
+    /// Main thread. A route change (e.g. unplugged headphones) can pause the player.
+    private func resumeKeepAlivePlayerIfPaused(trigger: String) {
+        withLock {
+            guard keepAliveOwners > 0, let player = keepAlivePlayer, !player.isPlaying else { return }
+            let resumed = player.play()
+            NSLog("[MingleAudioSessionCoordinator] keepAlive resume trigger=%@ ok=%d", trigger, resumed ? 1 : 0)
+        }
     }
 }
 
@@ -529,6 +762,18 @@ class NativeSTTModule: RCTEventEmitter {
     private var gracefulStopWorkItem: DispatchWorkItem?
     private var gracefulStopPending = false
     private let gracefulStopTimeoutMs = 5_000
+    /// Live STT is running but has no capture: iOS took the microphone (call,
+    /// Siri, alarm) or a capture restart failed while the app was not active.
+    /// The STT session stays open and capture is retried. Main thread.
+    private var isCaptureSuspended = false
+    /// Chunk count when capture was last seen suspended; capture counts as
+    /// resumed only once microphone chunks arrive past it. Main thread.
+    private var captureSuspendedChunkBaseline: Int64 = 0
+    /// wsQueue only.
+    private var lastAudioChunkSentUptime: TimeInterval = 0
+    /// Set in `startSession` before the ping timer starts, then read on wsQueue.
+    private var silenceKeepaliveCount: Int64 = 0
+    private var silenceKeepaliveChunkBase64 = ""
 
     override static func requiresMainQueueSetup() -> Bool {
         false
@@ -869,24 +1114,26 @@ class NativeSTTModule: RCTEventEmitter {
             }
 
             self.wsQueue.async { [weak self] in
-                self?.sendJson([
+                guard let self else { return }
+                self.sendJson([
                     "type": "audio_chunk",
                     "data": [
                         "chunk": chunkBase64,
                     ],
                 ])
+                self.lastAudioChunkSentUptime = ProcessInfo.processInfo.systemUptime
             }
         }
         hasInputTap = true
     }
 
-    private func restartAudioCapture(reason: String) {
+    private func restartAudioCapture(reason: String, bypassThrottle: Bool = false) {
         guard isRunning else { return }
         let now = Date()
         if isRestartingAudio {
             return
         }
-        if now.timeIntervalSince(lastAudioRestartAt) < 0.5 {
+        if !bypassThrottle && now.timeIntervalSince(lastAudioRestartAt) < 0.5 {
             return
         }
 
@@ -894,15 +1141,17 @@ class NativeSTTModule: RCTEventEmitter {
         lastAudioRestartAt = now
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            guard self.isRunning else { return }
+            // Reset before the running check: a restart dropped because STT
+            // stopped must not block every restart of the next session.
             defer {
                 self.isRestartingAudio = false
             }
+            guard self.isRunning else { return }
 
             do {
                 try self.configureAudioSession(aecEnabled: self.isAecEnabled)
             } catch {
-                self.emitError("audio_reconfigure_failed(\(reason)): \(error.localizedDescription)")
+                self.handleCaptureRestartFailure("audio_reconfigure_failed(\(reason)): \(error.localizedDescription)")
                 return
             }
 
@@ -911,6 +1160,12 @@ class NativeSTTModule: RCTEventEmitter {
             let inputNode = self.audioEngine.inputNode
             if #available(iOS 17.0, *) { try? inputNode.setVoiceProcessingEnabled(self.isAecEnabled) }
             let inputFormat = inputNode.inputFormat(forBus: 0)
+            // While another app or a call holds the microphone the input can
+            // report an empty format; installing a tap with it raises an exception.
+            guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+                self.handleCaptureRestartFailure("audio_restart_failed(\(reason)): input_unavailable")
+                return
+            }
             self.installInputTap(format: inputFormat)
 
             if self.audioEngine.isRunning {
@@ -920,12 +1175,46 @@ class NativeSTTModule: RCTEventEmitter {
             do {
                 self.audioEngine.prepare()
                 try self.audioEngine.start()
-                self.emitStatus("running")
-                NSLog("[NativeSTTModule] audio restarted reason=%@", reason)
+                if self.isCaptureSuspended {
+                    // The engine can start while a call still holds the
+                    // microphone. Stay silenced until the health check sees
+                    // microphone chunks again.
+                    NSLog("[NativeSTTModule] audio restarted while suspended reason=%@", reason)
+                } else {
+                    self.emitStatus("running")
+                    NSLog("[NativeSTTModule] audio restarted reason=%@", reason)
+                }
             } catch {
-                self.emitError("audio_restart_failed(\(reason)): \(error.localizedDescription)")
+                self.handleCaptureRestartFailure("audio_restart_failed(\(reason)): \(error.localizedDescription)")
             }
         }
+    }
+
+    /// Main thread. Live STT must not end because the app is in the background
+    /// or iOS holds the microphone: such a failure keeps the session, reports
+    /// it as silenced and is retried by the health check.
+    private func handleCaptureRestartFailure(_ message: String) {
+        let action = MingleBackgroundAudioPolicy.captureRestartFailureAction(
+            isCaptureSuspended: isCaptureSuspended,
+            isAppActive: UIApplication.shared.applicationState == .active
+        )
+        switch action {
+        case .deferAndRetry:
+            NSLog("[NativeSTTModule] capture restart deferred: %@", message)
+            markCaptureSuspended()
+        case .reportError:
+            emitError(message)
+        }
+    }
+
+    /// Main thread. `silenced` is the live status the WebView and the RN shell
+    /// already use for an OS-silenced capture (Android), so the room, the
+    /// conversation list and PiP keep showing the microphone as on.
+    private func markCaptureSuspended() {
+        guard !isCaptureSuspended else { return }
+        isCaptureSuspended = true
+        captureSuspendedChunkBaseline = audioChunkCount
+        emitStatus("silenced")
     }
 
     @objc
@@ -940,11 +1229,18 @@ class NativeSTTModule: RCTEventEmitter {
         }
 
         if type == .began {
-            emitStatus("interrupted")
+            // A call, Siri or an alarm took the microphone. Keep the STT
+            // session; capture resumes when the interruption ends, or from the
+            // health check because an end notification is not guaranteed.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.isRunning else { return }
+                self.markCaptureSuspended()
+            }
             return
         }
 
-        restartAudioCapture(reason: "interruption_ended")
+        // Resume with or without `.shouldResume`: the user keeps the mic on.
+        restartAudioCapture(reason: "interruption_ended", bypassThrottle: true)
     }
 
     @objc
@@ -1157,6 +1453,9 @@ class NativeSTTModule: RCTEventEmitter {
 
     private func startWsPing() {
         stopWsPing()
+        wsQueue.async { [weak self] in
+            self?.lastAudioChunkSentUptime = ProcessInfo.processInfo.systemUptime
+        }
         let timer = DispatchSource.makeTimerSource(queue: wsQueue)
         timer.schedule(deadline: .now() + 15, repeating: 15)
         timer.setEventHandler { [weak self] in
@@ -1166,9 +1465,32 @@ class NativeSTTModule: RCTEventEmitter {
                     NSLog("[NativeSTTModule] ws_ping_failed: %@", error.localizedDescription)
                 }
             }
+            self.sendSilenceKeepaliveIfIdle()
         }
         timer.resume()
         wsPingTimer = timer
+    }
+
+    /// wsQueue only. mingle-stt ends a stream after 30 s without audio
+    /// (`audio_input_timeout`). While capture is suspended (call, Siri, pending
+    /// restart) a short silent chunk keeps the same STT session open, so
+    /// recording continues in it once the microphone is back.
+    private func sendSilenceKeepaliveIfIdle() {
+        guard !gracefulStopPending, !silenceKeepaliveChunkBase64.isEmpty else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        let idleSeconds = now - lastAudioChunkSentUptime
+        guard MingleBackgroundAudioPolicy.shouldSendSttSilenceKeepalive(secondsSinceLastAudioChunk: idleSeconds) else {
+            return
+        }
+        sendJson([
+            "type": "audio_chunk",
+            "data": [
+                "chunk": silenceKeepaliveChunkBase64,
+            ],
+        ])
+        lastAudioChunkSentUptime = now
+        silenceKeepaliveCount += 1
+        NSLog("[NativeSTTModule] silence keepalive #%lld idleSeconds=%.0f", silenceKeepaliveCount, idleSeconds)
     }
 
     private func stopWsPing() {
@@ -1188,6 +1510,23 @@ class NativeSTTModule: RCTEventEmitter {
             self.lastChunkCountSnapshot = current
 
             let engineRunning = self.audioEngine.isRunning
+            if self.isCaptureSuspended {
+                if current > self.captureSuspendedChunkBaseline {
+                    // Microphone chunks arrived after the suspension (or after
+                    // the last retry): capture is back.
+                    self.isCaptureSuspended = false
+                    NSLog("[NativeSTTModule] healthCheck: capture resumed chunks=%lld", current)
+                    self.emitStatus("running")
+                    return
+                }
+                // Quiet retry: iOS does not guarantee an interruption-ended
+                // notification, and a restart can fail while the app is not active.
+                self.captureSuspendedChunkBaseline = current
+                NSLog("[NativeSTTModule] healthCheck: capture suspended, retrying chunks=%lld engineRunning=%d",
+                      current, engineRunning ? 1 : 0)
+                self.restartAudioCapture(reason: "health_check_resume")
+                return
+            }
             if current == previous {
                 // No audio chunks in the last 5 seconds while supposedly running.
                 NSLog("[NativeSTTModule] healthCheck: STALL detected chunks=%lld engineRunning=%d hasTap=%d",
@@ -1227,9 +1566,19 @@ class NativeSTTModule: RCTEventEmitter {
         activeConversationId = conversationId.isEmpty ? nil : conversationId
         audioChunkCount = 0
         wsMessageCount = 0
+        isCaptureSuspended = false
+        captureSuspendedChunkBaseline = 0
         NSLog("[NativeSTTModule] startSession conversation=%@ ws=%@ model=%@ aec=%d",
               activeConversationId ?? "unknown", wsUrlString, sttModel, aecEnabled ? 1 : 0)
 
+        // Take the STT owner before touching the session: the background
+        // keep-alive and the idle deactivation check owners under the
+        // coordinator lock, so neither can switch or release the session while
+        // capture is being set up.
+        if !sttSessionTokenAcquired {
+            MingleAudioSessionCoordinator.shared.acquireSTT()
+            sttSessionTokenAcquired = true
+        }
         do {
             try configureAudioSession(aecEnabled: aecEnabled)
             let audioSession = AVAudioSession.sharedInstance()
@@ -1239,12 +1588,15 @@ class NativeSTTModule: RCTEventEmitter {
             NSLog("[NativeSTTModule] audioRoute inputs=[%@] outputs=[%@] sampleRate=%.0f",
                   inputs, outputs, audioSession.sampleRate)
         } catch {
+            if sttSessionTokenAcquired {
+                MingleAudioSessionCoordinator.shared.releaseSTT()
+                sttSessionTokenAcquired = false
+            }
+            MingleAudioSessionCoordinator.shared.scheduleDeactivateAudioSessionIfIdle(
+                trigger: "stt_configure_failed"
+            )
             reject("audio_session", "Failed to configure AVAudioSession", error)
             return
-        }
-        if !sttSessionTokenAcquired {
-            MingleAudioSessionCoordinator.shared.acquireSTT()
-            sttSessionTokenAcquired = true
         }
 
         installAudioObserversIfNeeded()
@@ -1270,6 +1622,11 @@ class NativeSTTModule: RCTEventEmitter {
         let inputFormat = inputNode.inputFormat(forBus: 0)
         let sampleRate = Int(inputFormat.sampleRate.rounded())
         declaredStreamSampleRate = sampleRate
+        silenceKeepaliveCount = 0
+        silenceKeepaliveChunkBase64 = MingleBackgroundAudioPolicy.silentPcm16Base64(
+            sampleRate: sampleRate,
+            durationMs: MingleBackgroundAudioPolicy.sttSilenceKeepaliveChunkMs
+        )
         audioDiagnostics.notice("config sampleRate=\(sampleRate) aec=\(aecEnabled)")
         NSLog("[NativeSTTModule] inputFormat=%@ sampleRate=%d", inputFormat.description, sampleRate)
 

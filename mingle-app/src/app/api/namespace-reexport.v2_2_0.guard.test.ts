@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -9,12 +9,9 @@ const API_ROOT = fileURLToPath(new URL(".", import.meta.url));
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
 type HttpMethod = (typeof HTTP_METHODS)[number];
 
+// v2.2.0 is the oldest namespace with its own route tree; older app versions
+// only reach client/version-policy through a next.config rewrite.
 const NAMESPACE_TARGET_VERSION = "2.2.0";
-// The previous minor namespace whose handlers 2.2.0 inherits unchanged. 2.1.0 is
-// itself a pure mirror of v2.0.0, so inheriting straight from v2.0.0 is
-// equivalent and keeps a single inheritance source; the posting routes that are
-// new in 2.2.0 come from the unversioned handlers instead.
-const INHERITED_VERSION_DIR = "v2.0.0";
 
 // Module specifiers a re-export file pulls from (`export { … } from "<spec>"`).
 function reexportSpecifiers(filePath: string): string[] {
@@ -122,23 +119,28 @@ describe(`mingle-app v${NAMESPACE_TARGET_VERSION} namespace re-export guard`, ()
           );
         }
 
-        // Source guard: a route the same platform's v2.0.0 namespace already serves
-        // is inherited from there (v2.0.0 pins several routes to platform
-        // controllers that differ from the unversioned handler); a route new in
-        // 2.2.0 (the posting feed) comes from the unversioned handler.
-        const inheritedFile = join(API_ROOT, platform, INHERITED_VERSION_DIR, routePath, "route.ts");
-        const isInherited = existsSync(inheritedFile);
-        const sourceFile = isInherited ? inheritedFile : join(API_ROOT, routePath, "route.ts");
-        const sourceSpecifier = isInherited
-          ? `@/app/api/${platform}/${INHERITED_VERSION_DIR}/${routePath}/route`
-          : `@/app/api/${routePath}/route`;
+        // Source guard: the pre-2.2.0 namespace trees are gone, so a v2.2.0 route
+        // either re-exports the unversioned handler or is a self-contained file
+        // that calls a platform controller directly (routes that older
+        // namespaces pinned to platform controllers were flattened in place).
+        // It must never import another versioned namespace route.
+        const sourceFile = join(API_ROOT, routePath, "route.ts");
+        const sourceSpecifier = `@/app/api/${routePath}/route`;
+        const routeSource = readFileSync(reexport, "utf8");
         expect(
-          reexportSpecifiers(reexport),
-          `${platform}/v${NAMESPACE_TARGET_VERSION}/${routePath} must re-export from ${sourceSpecifier}`,
-        ).toEqual([sourceSpecifier]);
+          routeSource,
+          `${platform}/v${NAMESPACE_TARGET_VERSION}/${routePath} must not import another namespace route`,
+        ).not.toMatch(/@\/app\/api\/(?:ios|android)\//);
+        const specifiers = reexportSpecifiers(reexport);
+        if (specifiers.length > 0) {
+          expect(
+            specifiers,
+            `${platform}/v${NAMESPACE_TARGET_VERSION}/${routePath} must re-export from ${sourceSpecifier}`,
+          ).toEqual([sourceSpecifier]);
+        }
 
-        // Method-match guard: the re-export must expose exactly the source's
-        // HTTP methods — no missing method, no stale extra method.
+        // Method-match guard: the namespace route must expose exactly the
+        // unversioned handler's HTTP methods — no missing method, no stale extra.
         expect(
           [...reexportMethods].sort(),
           `HTTP methods for ${platform}/v${NAMESPACE_TARGET_VERSION}/${routePath} must match ${sourceSpecifier}`,

@@ -2,9 +2,11 @@
 
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { DEFAULT_LOCALE, type AppLocale } from "@/i18n";
-import { resolveSupportedLocaleTag } from "@/i18n/config";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+// The config module, not the "@/i18n" barrel: the barrel also exports
+// getDictionary, which would put every locale's dictionary in the root layout.
+import { DEFAULT_LOCALE, resolveSupportedLocaleTag, type AppLocale } from "@/i18n/config";
 import {
   restoreCoinPurchases,
   resumeWebCheckoutIfReturned,
@@ -20,6 +22,7 @@ import CoinExhaustedSheet from "./coin-exhausted-sheet";
 import CoinStorePanel from "./coin-store-panel";
 
 const WALLET_POLL_MS = 60_000;
+const subscribeNever = () => () => {};
 
 /**
  * Mounted once in the root layout. Owns the store panel and the "out of coins"
@@ -33,6 +36,9 @@ export default function CoinHost() {
   const [storeOpen, setStoreOpen] = useState(false);
   const [exhaustedOpen, setExhaustedOpen] = useState(false);
   const signedIn = status === "authenticated";
+  // The portal target only exists in the browser; wait for mount so the
+  // server markup and the first client render agree.
+  const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -64,9 +70,12 @@ export default function CoinHost() {
     }
   }), [storeOpen]);
 
-  if (!signedIn) return null;
+  if (!signedIn || !mounted) return null;
 
-  return (
+  // Portaled to <body> like the chat rooms: inside the mobile canvas frame
+  // (a transformed stacking context) z-[120] could never rise above a room
+  // that lives directly on <body>, so the store opened behind the room.
+  return createPortal(
     <>
       <CoinExhaustedSheet
         open={exhaustedOpen}
@@ -78,6 +87,7 @@ export default function CoinHost() {
         locale={locale}
       />
       <CoinStorePanel open={storeOpen} onClose={() => setStoreOpen(false)} locale={locale} />
-    </>
+    </>,
+    document.body,
   );
 }

@@ -5,10 +5,8 @@ const m = vi.hoisted(() => ({ read: vi.fn() }))
 vi.mock('@/server/api/controllers/shared/conversation-image-text-controller', () => ({ readConversationImageText: m.read }))
 
 import * as unversioned from '@/app/api/conversations/[conversationId]/images/[messageId]/text/route'
-import * as iosV200 from '@/app/api/ios/v2.0.0/conversations/[conversationId]/images/[messageId]/text/route'
-import * as androidV200 from '@/app/api/android/v2.0.0/conversations/[conversationId]/images/[messageId]/text/route'
-import * as iosV210 from '@/app/api/ios/v2.1.0/conversations/[conversationId]/images/[messageId]/text/route'
-import * as androidV210 from '@/app/api/android/v2.1.0/conversations/[conversationId]/images/[messageId]/text/route'
+import * as iosV220 from '@/app/api/ios/v2.2.0/conversations/[conversationId]/images/[messageId]/text/route'
+import * as androidV220 from '@/app/api/android/v2.2.0/conversations/[conversationId]/images/[messageId]/text/route'
 
 describe('conversation image text routes', () => {
   beforeEach(() => {
@@ -17,10 +15,8 @@ describe('conversation image text routes', () => {
 
   it.each([
     ['unversioned', unversioned],
-    ['ios/v2.0.0', iosV200],
-    ['android/v2.0.0', androidV200],
-    ['ios/v2.1.0', iosV210],
-    ['android/v2.1.0', androidV210],
+    ['ios/v2.2.0', iosV220],
+    ['android/v2.2.0', androidV220],
   ])('%s forwards GET to the shared controller on the node runtime', async (_namespace, route) => {
     const response = NextResponse.json({ status: 'pending', blocks: [], translations: [] })
     m.read.mockResolvedValue(response)

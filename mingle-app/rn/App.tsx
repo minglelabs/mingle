@@ -5212,16 +5212,17 @@ function AppInner(): React.JSX.Element {
     webViewRef.current.clearCache(true);
   }, [shouldUseAggressiveWebViewCacheBypass, webViewMountToken]);
 
-  // Once the page has loaded, the last-screen capture lets touches through to
-  // it and the first one drops the capture. It used to swallow them until the
-  // page said its scroll was back -- which waits on the session check, so a
-  // slow one left a real-looking screen that ignored every tap for seconds.
-  const lastScreenSnapshotPassesTouches = lastScreenSnapshotVisible && !startupSplashVisible;
+  // The last-screen capture never takes a touch: it is a picture of buttons,
+  // so swallowing taps on it reads as a frozen app. The first touch drops it
+  // at once. Once the page has loaded the touch reaches the real screen;
+  // before that, dropping it shows the splash, so the wait is visible
+  // instead of a real-looking screen that ignores every tap.
+  const handleRootTouchStart = lastScreenSnapshotVisible ? () => hideLastScreenSnapshot(false) : undefined;
 
   return (
     <View
       style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}
-      onTouchStart={lastScreenSnapshotPassesTouches ? () => hideLastScreenSnapshot(false) : undefined}
+      onTouchStart={handleRootTouchStart}
     >
       {shouldRenderTopSafeAreaFill ? (
         <View
@@ -5386,7 +5387,7 @@ function AppInner(): React.JSX.Element {
       ) : null}
       {lastScreenSnapshot ? (
         <Animated.View
-          pointerEvents={lastScreenSnapshotPassesTouches ? 'none' : 'auto'}
+          pointerEvents="none"
           style={[styles.lastScreenSnapshotOverlay, { opacity: lastScreenSnapshotOpacity }]}
         >
           <Image

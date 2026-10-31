@@ -1,2 +1,4 @@
+import { postTtsInworldForIosV1_1_4 } from "@/server/api/controllers/ios/v1.1.4/tts-inworld-controller";
+
 export const runtime = "nodejs";
-export { POST } from "@/app/api/ios/v2.0.0/tts/inworld/route";
+export const POST = postTtsInworldForIosV1_1_4;

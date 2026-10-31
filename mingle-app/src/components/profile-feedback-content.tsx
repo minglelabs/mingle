@@ -7,7 +7,7 @@ import { getOrCreateSessionKey, getOrCreateTrackingUserId } from './LivePhoneDem
 import {
   resolveKeyboardViewportInsetPx,
   resolveStableKeyboardViewportInsetPx,
-} from './LivePhoneDemo/LivePhoneDemo'
+} from './LivePhoneDemo/keyboard-viewport-inset'
 import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,

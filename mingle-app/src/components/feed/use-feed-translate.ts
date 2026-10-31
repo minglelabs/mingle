@@ -2,6 +2,7 @@
 
 import { buildClientApiPath } from "@/lib/api-contract";
 import type { FeedPostDto, FeedPostTranslationState } from "@/lib/feed-post-dto";
+import type { FeedTranslateChoice } from "@/components/feed/feed-card-memory";
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 
 export type TranslateButtonMode =
@@ -19,6 +20,17 @@ type UseFeedTranslateOptions = {
   viewerLanguage: string;
   isSignedIn: boolean;
   onRequireLogin: () => void;
+  /**
+   * The reader's earlier choice for this post, read at mount only: cards far
+   * from the screen are unmounted, and swiping back must find the post as it
+   * was left.
+   */
+  restoredChoice?: FeedTranslateChoice | null;
+  /**
+   * Called whenever the reader changes the choice, including when a request
+   * made before an unmount answers afterwards.
+   */
+  onChoiceChange?: (choice: FeedTranslateChoice) => void;
 };
 
 type UseFeedTranslateReturn = {
@@ -65,6 +77,22 @@ export function seedTranslateState(
     failed: post.translationState === "failed",
     requestFailureCount: 0,
   };
+}
+
+/**
+ * The seeded state with the reader's earlier choice applied (a remounted
+ * card). The payload's own ready translation wins over a remembered text, so a
+ * refreshed post never shows a stale one; without any translation the choice
+ * has nothing to show and the seed stands.
+ */
+export function restoreTranslateState(
+  seed: TranslateState,
+  choice: FeedTranslateChoice | null | undefined,
+): TranslateState {
+  if (!choice) return seed;
+  const translatedText = seed.translatedText ?? choice.translatedText;
+  if (!translatedText) return seed;
+  return { ...seed, translatedText, showingTranslation: choice.showingTranslation, failed: false };
 }
 
 export function translateReducer(state: TranslateState, action: TranslateAction): TranslateState {
@@ -136,10 +164,17 @@ export function shouldToastTranslateFailure(previousCount: number, nextCount: nu
  * The original is always readable; a failure never hides the post.
  */
 export function useFeedTranslate(options: UseFeedTranslateOptions): UseFeedTranslateReturn {
-  const { post, viewerLanguage, isSignedIn, onRequireLogin } = options;
+  const { post, viewerLanguage, isSignedIn, onRequireLogin, restoredChoice, onChoiceChange } = options;
 
-  const [state, dispatch] = useReducer(translateReducer, post, seedTranslateState);
+  const [state, dispatch] = useReducer(translateReducer, post, (seedPost) =>
+    restoreTranslateState(seedTranslateState(seedPost), restoredChoice),
+  );
   const inFlightRef = useRef(false);
+  // Latest callback, also for a request that answers after the card unmounted.
+  const choiceChangeRef = useRef(onChoiceChange);
+  useEffect(() => {
+    choiceChangeRef.current = onChoiceChange;
+  });
 
   // Re-seed when the post identity changes (list replaced / navigated).
   const seededIdRef = useRef(post.id);
@@ -181,6 +216,7 @@ export function useFeedTranslate(options: UseFeedTranslateOptions): UseFeedTrans
         | null;
       if (body && body.status === "ready" && typeof body.text === "string" && body.text.length > 0) {
         dispatch({ type: "success", text: body.text });
+        choiceChangeRef.current?.({ translatedText: body.text, showingTranslation: true });
       } else {
         dispatch({ type: "failure" });
       }
@@ -197,10 +233,11 @@ export function useFeedTranslate(options: UseFeedTranslateOptions): UseFeedTrans
     if (state.translatedText) {
       // Already have a translation — flip between original and translated.
       dispatch({ type: "flip" });
+      choiceChangeRef.current?.({ translatedText: state.translatedText, showingTranslation: !state.showingTranslation });
       return;
     }
     void requestTranslation();
-  }, [state.loading, state.translatedText, post.sourceText, requestTranslation]);
+  }, [state.loading, state.translatedText, state.showingTranslation, post.sourceText, requestTranslation]);
 
   const mode = resolveTranslateMode(post.translationState, post.sourceText, state);
 

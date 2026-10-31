@@ -29,6 +29,15 @@ const nextConfig = {
   },
   async rewrites() {
     return [
+      // Apps below 2.2.0 are force-updated: their own route trees are gone, but
+      // they still ask their namespaced version-policy endpoint on launch. The
+      // handler decides from the request body's clientVersion, not the URL, so
+      // serving them from v2.2.0 returns the same force_update answer. Every
+      // other pre-2.2.0 path is intentionally left to 404.
+      {
+        source: "/api/:platform(ios|android)/:version(v1\\.\\d+\\.\\d+|v2\\.[01]\\.\\d+)/client/version-policy",
+        destination: "/api/:platform/v2.2.0/client/version-policy",
+      },
       {
         source: "/.well-known/apple-app-site-association",
         destination: "/api/well-known/apple-app-site-association",
@@ -36,60 +45,6 @@ const nextConfig = {
       {
         source: "/.well-known/assetlinks.json",
         destination: "/api/well-known/assetlinks",
-      },
-      // Android 2.0.1 keeps the v2.0.0 server contract while using its own
-      // versioned namespace, so existing production API behavior is preserved.
-      {
-        source: "/api/android/v2.0.1",
-        destination: "/api/android/v2.0.0",
-      },
-      {
-        source: "/api/android/v2.0.1/:path*",
-        destination: "/api/android/v2.0.0/:path*",
-      },
-      // Android patch releases retain the same shared server contract.
-      ...['2.0.2', '2.0.3', '2.0.4'].flatMap(version => [
-        { source: `/api/android/v${version}`, destination: '/api/android/v2.0.0' },
-        { source: `/api/android/v${version}/:path*`, destination: '/api/android/v2.0.0/:path*' },
-      ]),
-      // iOS 2.0.1 keeps the v2.0.0 server contract while using its own
-      // versioned namespace, so existing production API behavior is preserved.
-      {
-        source: "/api/ios/v2.0.1",
-        destination: "/api/ios/v2.0.0",
-      },
-      {
-        source: "/api/ios/v2.0.1/:path*",
-        destination: "/api/ios/v2.0.0/:path*",
-      },
-      // iOS 2.0.2 keeps the v2.0.0 server contract while using its own
-      // versioned namespace, so existing production API behavior is preserved.
-      {
-        source: "/api/ios/v2.0.2",
-        destination: "/api/ios/v2.0.0",
-      },
-      {
-        source: "/api/ios/v2.0.2/:path*",
-        destination: "/api/ios/v2.0.0/:path*",
-      },
-      // Preserve the prior beta namespace for device builds already installed.
-      {
-        source: "/api/ios/v2.0.3",
-        destination: "/api/ios/v2.0.0",
-      },
-      {
-        source: "/api/ios/v2.0.3/:path*",
-        destination: "/api/ios/v2.0.0/:path*",
-      },
-      // iOS 2.0.4 keeps the v2.0.0 server contract while using its own
-      // versioned namespace, so existing production API behavior is preserved.
-      {
-        source: "/api/ios/v2.0.4",
-        destination: "/api/ios/v2.0.0",
-      },
-      {
-        source: "/api/ios/v2.0.4/:path*",
-        destination: "/api/ios/v2.0.0/:path*",
       },
       // 2.3.0 adds no server contract of its own (it ships the in-app purchase
       // store against the v2.2.0 routes), so it aliases the v2.2.0 tree too.
@@ -102,12 +57,6 @@ const nextConfig = {
       ...['ios', 'android'].flatMap(platform => [
         { source: `/api/${platform}/v2.2.1`, destination: `/api/${platform}/v2.2.0` },
         { source: `/api/${platform}/v2.2.1/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
-      ]),
-      // 2.1.1 is a patch release: it keeps the v2.1.0 server contract while
-      // using its own versioned namespace.
-      ...['ios', 'android'].flatMap(platform => [
-        { source: `/api/${platform}/v2.1.1`, destination: `/api/${platform}/v2.1.0` },
-        { source: `/api/${platform}/v2.1.1/:path*`, destination: `/api/${platform}/v2.1.0/:path*` },
       ]),
     ];
   },

@@ -7,6 +7,9 @@ import { BOTTOM_TAB_BAR_HEIGHT_PX, GLASS_TAB_BAR_INSET } from "@/components/bott
 import CommentSheet from "@/components/comments/comment-sheet";
 import PublishStatusBanner from "@/components/compose/publish-status-banner";
 import FeedPostCard from "@/components/feed/feed-post-card";
+import { FeedPostPlaceholder } from "@/components/feed/feed-post-view";
+import { createFeedCardMemory } from "@/components/feed/feed-card-memory";
+import { feedWindow, feedWindowSlot } from "@/components/feed/feed-window";
 import FeedToast from "@/components/feed/feed-toast";
 import ImageZoomOverlay from "@/components/feed/image-zoom-overlay";
 import SwipeHintOverlay, { markSwipeHintDone } from "@/components/feed/swipe-hint-overlay";
@@ -14,6 +17,7 @@ import { usePostViewTracker } from "@/components/feed/use-post-view-tracker";
 import { useFeedExposureTracker } from "@/components/feed/use-feed-exposure-tracker";
 import { cycleOfEntryKey } from "@/components/feed/feed-list";
 import { feedEvents, feedPostContext, feedSurfaceForSource, trackFeedEvent } from "@/lib/feed-analytics";
+import { markStartupContentReady } from "@/lib/after-startup";
 import { useReducedMotion } from "@/components/feed/use-reduced-motion";
 import { useFeedSource } from "@/components/feed/use-feed-source";
 import type { LikeState } from "@/components/feed/use-feed-like";
@@ -156,6 +160,10 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     () => new Map<string, FeedPostViewState>(Object.entries(restoredPosts)),
     [restoredPosts],
   );
+  // Only the cards near the screen are mounted (`feed-window.ts`); what the
+  // others remember until they mount again (translate choice, photo on
+  // screen, "read" analytics progress) is kept here.
+  const [cardMemory] = useState(createFeedCardMemory);
   const startPlan = planFeedStart({
     deepLinkPostId,
     startPostId,
@@ -186,6 +194,12 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     restorePostId: startPlan.restorePostId,
     startPostId,
   });
+
+  // The first page (or its error) is on screen: background work held back for
+  // the cold start (tab prefetches, unread badge, analytics) may start now.
+  useEffect(() => {
+    if (phase !== "loading") markStartupContentReady();
+  }, [phase]);
 
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const [swipeHintVisible, setSwipeHintVisible] = useState(true);
@@ -912,6 +926,13 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
   // Signed out with no free views left, the feed ends before the locked post.
   const shownEntries = freeLockIndex === null ? entries : entries.slice(0, freeLockIndex);
   const showStatusCard = freeLockIndex === null && (hasMore || loadingMore || loadMoreError);
+  // Mount only the cards around the one on screen; the rest are same-height
+  // placeholders. Until the start position is applied, the window sits on the
+  // viewer's start post, so the jump there lands on a mounted card.
+  const mountWindow = feedWindow(
+    restoreReady || startPlan.kind !== "viewer" ? activeIndex : startIndex,
+    shownEntries.length,
+  );
 
   return (
     <div
@@ -973,6 +994,10 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
         }}
       >
         {shownEntries.map(({ key, post }, idx) => {
+          const slot = feedWindowSlot(mountWindow, idx);
+          if (!slot.mounted) {
+            return <FeedPostPlaceholder key={key} cardHeight={cardHeight} backgroundKey={post.backgroundKey} />;
+          }
           const saved = expandState.get(post.id) ?? restoredPosts[post.id];
           return (
             <FeedPostCard
@@ -986,9 +1011,14 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
               reducedMotion={reducedMotion}
               restoreExpanded={saved?.expanded ?? false}
               restoreScrollTop={saved?.scrollTop ?? 0}
-              eagerImage={idx <= activeIndex + 2}
+              eagerImage={slot.eagerImage}
+              decodeImage={slot.decodeImage}
               isActive={idx === activeIndex && !anyOverlayOpen}
               analytics={analyticsFor(key)}
+              restoreMemory={cardMemory.post(post.id)}
+              onMemoryChange={(patch) => cardMemory.rememberPost(post.id, patch)}
+              restoreReadProgress={cardMemory.read(key)}
+              onReadProgressChange={(progress) => cardMemory.rememberRead(key, progress)}
               onExpandStateChange={(exp, st) => handleExpandChange(post.id, exp, st)}
               onRequireLogin={goToLogin}
               onOpenComments={(id) => {
