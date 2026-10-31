@@ -38,8 +38,9 @@ final class MingleTranslationEchoCanceller {
     private static let echoOnlyRatio: Float = 0.04
     /// Above this the other app clearly speaks over the clip: left as it is.
     private static let doubleTalkRatio: Float = 0.15
-    /// Gain for an echo-only frame (about -30 dB on top of the subtraction).
-    private static let echoOnlyGain: Float = 0.03
+    /// Gain for an echo-only frame (about -50 dB on top of the subtraction):
+    /// at -30 dB a recognizer still transcribed the clip in a quiet room.
+    private static let echoOnlyGain: Float = 0.003
     /// Echo-only frames in a row before the gain starts to close (30 ms).
     private static let closeAfterFrames = 3
     /// Capture past the latest candidate offset that the search wants.
@@ -87,7 +88,13 @@ final class MingleTranslationEchoCanceller {
         /// before and after removal, and how many samples that was.
         var energyIn = 0.0
         var energyOut = 0.0
+        /// Capture energy after residual suppression (what reaches STT).
+        var energySent = 0.0
         var overlapSamples = 0
+        /// Microphone energy while the clip plays (the clip leaking from the
+        /// earphones into the microphone is not removed here).
+        var micEnergy = 0.0
+        var micSamples = 0
 
         init(samples: [Float], startHostTime: Double) {
             self.samples = samples
@@ -131,6 +138,31 @@ final class MingleTranslationEchoCanceller {
         references.append(Reference(samples: samples, startHostTime: startHostTime))
         lock.unlock()
         Self.note(String(format: "clip registered samples=%d", samples.count))
+    }
+
+    /// Microphone PCM recorded now, for the per-clip diagnostics only.
+    func noteMicrophone(_ pcm: Data) {
+        let count = pcm.count / MemoryLayout<Int16>.size
+        guard count > 0 else { return }
+        let now = CACurrentMediaTime()
+        lock.lock()
+        defer { lock.unlock() }
+        let playing = references.filter { now >= $0.startHostTime && now < $0.endHostTime }
+        guard !playing.isEmpty else { return }
+        var energy = 0.0
+        pcm.withUnsafeBytes { raw in
+            for index in 0 ..< count {
+                let value = Double(Int16(littleEndian: raw.loadUnaligned(
+                    fromByteOffset: index * MemoryLayout<Int16>.size,
+                    as: Int16.self
+                ))) / 32768
+                energy += value * value
+            }
+        }
+        for reference in playing {
+            reference.micEnergy += energy
+            reference.micSamples += count
+        }
     }
 
     /// The clip playing at `hostTime` stopped there (stop, or a newer clip).
@@ -211,6 +243,14 @@ final class MingleTranslationEchoCanceller {
             : 0
         let centerWeight = reference.weights[Self.centerTap]
         let weightSum = reference.weights.reduce(0, +)
+        func dbfs(_ energy: Double, _ samples: Int) -> Double {
+            samples > 0 && energy > 0 ? 10 * log10(energy / Double(samples)) : -120
+        }
+        Self.note(String(format: "clip levels inDbfs=%.1f sentDbfs=%.1f micDbfs=%.1f micMs=%d",
+            dbfs(reference.energyIn, reference.overlapSamples),
+            dbfs(reference.energySent, reference.overlapSamples),
+            dbfs(reference.micEnergy, reference.micSamples),
+            reference.micSamples / 16))
         Self.note(String(format: "clip done lined=%d attempts=%d delayMs=%.1f overlapMs=%.0f reductionDb=%.1f centerWeight=%.2f weightSum=%.2f suppressedMs=%d",
             reference.delay != nil ? 1 : 0,
             reference.searchAttempts,
@@ -386,6 +426,9 @@ final class MingleTranslationEchoCanceller {
             }
         }
         suppressResidualEcho(&block, predictedEcho: predictedEcho, reference: reference)
+        for offset in 0 ..< count where predictedEcho[offset] != 0 {
+            reference.energySent += Double(block[offset] * block[offset])
+        }
     }
 
     /// Subtraction leaves a faint copy of the clip (about -17 to -20 dB on a

@@ -2105,6 +2105,7 @@ class NativeSTTModule: RCTEventEmitter {
     /// Microphone PCM, from the tap thread. The microphone paces the stream:
     /// each full chunk is sent with the other apps' audio added in.
     private func handleDeviceAudioMicrophone(_ pcm: Data) {
+        MingleTranslationEchoCanceller.shared.noteMicrophone(pcm)
         wsQueue.async { [weak self] in
             guard let self, self.isRunning, self.deviceAudioActive, self.deviceAudioMicActive,
                   !self.gracefulStopPending
