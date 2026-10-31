@@ -222,6 +222,22 @@ describe('avatar generation', () => {
     expect(resolveAvatarImageModel({ OPERATOR_AVATAR_IMAGE_MODEL: 'x' } as unknown as NodeJS.ProcessEnv)).toBe('x')
   })
 
+  it('draws through the ChatGPT pool when CHATGPT_POOL_KEY is set', () => {
+    expect(resolveAvatarImageModel({ CHATGPT_POOL_KEY: 'k' } as unknown as NodeJS.ProcessEnv)).toBe('chatgpt-pool')
+    expect(resolveAvatarImageModel({ CHATGPT_POOL_KEY: 'k', OPERATOR_AVATAR_IMAGE_MODEL: 'none' } as unknown as NodeJS.ProcessEnv)).toBe('none')
+  })
+
+  it('sends chatgpt-pool images to the pool and maps its errors', async () => {
+    vi.stubEnv('CHATGPT_POOL_KEY', 'pool-key')
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: { code: 'image_limit' } }), { status: 429 }))
+    const result = await requestAvatarImage('p', { model: 'chatgpt-pool', fetchImpl: fetchImpl as unknown as typeof fetch })
+    expect(result).toEqual({ ok: false, error: 'image_request_failed', detail: 'http_429_image_limit' })
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('https://chatgpt-pool.minglelabs.app/v1/images/generations')
+    expect(JSON.parse(String(init.body))).toEqual({ prompt: 'p', async: true })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
   it('never calls a paid image API', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'openai-key')
     vi.stubEnv('GEMINI_API_KEY', 'gemini-key')

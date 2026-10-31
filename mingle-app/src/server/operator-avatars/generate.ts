@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { setOperatorAvatarFromBytes } from '@/server/operators/operator-avatar'
+import { chatgptPoolImage, chatgptPoolKey } from '@/server/chatgpt-pool/client'
 import { pickAvatarSpec, seededRandom, type AvatarPersona, type AvatarSpec } from './taxonomy'
 
 /**
@@ -27,8 +28,15 @@ const DEFAULT_CHATGPT_APP_URL = 'http://127.0.0.1:10310'
 const CHATGPT_APP_TIMEOUT_MS = 10 * 60_000
 const PROXY_UNREACHABLE = 'proxy_unreachable'
 
+/** Drawn by the ChatGPT pool on the home Windows PC (src/server/chatgpt-pool/client.ts). */
+export const CHATGPT_POOL_IMAGE_MODEL = 'chatgpt-pool'
+
+/**
+ * OPERATOR_AVATAR_IMAGE_MODEL wins; otherwise a server with CHATGPT_POOL_KEY
+ * draws through the ChatGPT pool, and one without it draws nothing.
+ */
 export function resolveAvatarImageModel(env: NodeJS.ProcessEnv = process.env): string {
-  return env.OPERATOR_AVATAR_IMAGE_MODEL?.trim() || AVATAR_DEFAULT_IMAGE_MODEL
+  return env.OPERATOR_AVATAR_IMAGE_MODEL?.trim() || (chatgptPoolKey(env) ? CHATGPT_POOL_IMAGE_MODEL : AVATAR_DEFAULT_IMAGE_MODEL)
 }
 
 /**
@@ -131,6 +139,18 @@ function proxyContent(text: string, reference?: AvatarReference) {
   return reference ? [{ type: 'text', text }, { type: 'image_url', image_url: { url: dataUrl(reference) } }] : text
 }
 
+/** One image through the ChatGPT pool, its errors mapped onto the avatar error codes. */
+async function requestPoolImage(prompt: string, fetchImpl: typeof fetch | undefined, reference?: AvatarReference): Promise<AvatarImageResult> {
+  const drawn = await chatgptPoolImage(prompt, { fetchImpl, reference: reference ? dataUrl(reference) : undefined })
+  if (drawn.ok) return { ok: true, bytes: drawn.bytes, model: CHATGPT_POOL_IMAGE_MODEL }
+  const { status, code } = drawn.error
+  const detail = status ? `http_${status}_${code}` : `pool_${code}`
+  if (code === 'timeout') return { ok: false, error: 'image_timeout', detail }
+  if (code === 'image_refused' || status === 422) return { ok: false, error: 'image_refused', detail }
+  if (status === 0 || status === 503) return { ok: false, error: 'image_unavailable', detail }
+  return { ok: false, error: 'image_request_failed', detail }
+}
+
 /**
  * One image, only ever through the hand-off routes on a staff Mac (the model
  * proxy or the ChatGPT app bridge), never a paid image API: staff decided
@@ -145,6 +165,7 @@ export async function requestAvatarImage(
 ): Promise<AvatarImageResult> {
   const reference = options.reference
   const model = options.model ?? resolveAvatarImageModel()
+  if (model === CHATGPT_POOL_IMAGE_MODEL) return requestPoolImage(prompt, options.fetchImpl, reference)
   if (!isProxyImageModel(model)) return { ok: false, error: 'image_unavailable', detail: IMAGE_API_DISABLED }
   const signal = AbortSignal.timeout(isChatgptAppImageModel(model) ? CHATGPT_APP_TIMEOUT_MS : CALL_TIMEOUT_MS)
   try {
