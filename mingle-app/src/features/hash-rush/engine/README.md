@@ -25,6 +25,8 @@ The folders keep the source layout, so the relative imports are unchanged:
 | `client/audio.js`, `music.js`, `haptics.js` | `src/client/` (sound and buzz) |
 | `client/i18n.js` | `src/client/i18n.js` (all strings: the lobby and results of phase 2 need them too) |
 | `client/net.js` | `src/client/net.js` |
+| `client/mvp.js` | `src/client/mvp.js` (phase 2: who is the MVP of the score table) |
+| `client/cards.js` | `drawAvatar` and `drawTrophy` from `src/client/main.js` (phase 2: the faces in the lobby and the cup on the title card) |
 
 Not copied: the web page (`main.js`, `index.html`, `style.css`), its other pages
 (room list, ranking, board, chat bar), the iframe bridge (`embed.js`) and the
@@ -63,3 +65,10 @@ folder.
 - `client/music.js`: `stop()` ends the scheduling timer for good.
 - `client/i18n.js`: `setLanguage(tag)` makes the strings follow the app's
   language instead of the browser's.
+- `client/render.js`: every hamster label (name, "me", the flower notes, a
+  computer's level) stays inside the map: by a side edge it slides in sideways,
+  by the top or bottom edge the stack slides in whole (2026-11-01 device check:
+  a name clipped at the right edge of the burrow).
+- `client/cards.js`: new in mingle, `drawAvatar` (with a `size`) and
+  `drawTrophy` lifted out of the page's `main.js`, unchanged otherwise.
+- `client/mvp.js`: copied as it is (hash-rush `feat/g2-server-rooms` 7004a49).

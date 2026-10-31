@@ -28,6 +28,8 @@ describe('hash rush engine: loading', () => {
       import('./engine/client/looks.js'),
       import('./engine/client/deco.js'),
       import('./engine/client/net.js'),
+      import('./engine/client/mvp.js'),
+      import('./engine/client/cards.js'),
       import('./engine/ai/bot.js'),
     ])
     expect(modules.every((m) => Object.keys(m).length > 0)).toBe(true)
@@ -95,6 +97,21 @@ describe('hash rush engine: strings follow the app language', () => {
     for (const code of LANGUAGES) {
       setLanguage(code)
       for (const key of keys) expect(t(key, 'x', 1), `${code}.${key}`).toBeDefined()
+    }
+  })
+
+  // UIUX-ISSUES #13: no "undefined" on screen. The cards between rounds use these.
+  it('has every string of the lobby, the score table, the result and the title in every language', () => {
+    const keys = ['columns', 'colWins', 'colLosses', 'colScore', 'goalBadge', 'mvpRule', 'thisRound', 'totals', 'gameNo', 'firstTo', 'deuce', 'whyBonks', 'whyBonked', 'whySeeds', 'whyTie', 'champMe', 'champOther', 'champShared', 'champNote', 'sitIn', 'standUp', 'spectators', 'mapNames', 'modeSolo', 'modeTeam']
+    for (const code of LANGUAGES) {
+      setLanguage(code)
+      for (const key of keys) {
+        const value = t(key, 'x', 1)
+        expect(value, `${code}.${key}`).toBeDefined()
+        expect(String(value), `${code}.${key}`).not.toContain('undefined')
+      }
+      expect((t('columns') as string[]).length, `${code}.columns`).toBe(7)
+      expect(Object.keys(t('mapNames') as Record<string, string>), `${code}.mapNames`).toContain('meadow')
     }
   })
 })
