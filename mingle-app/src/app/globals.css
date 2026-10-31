@@ -48,7 +48,9 @@
 }
 
 :root {
-  --font-geist-sans: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR",
+  /* "Twemoji Country Flags" only exists once CountryFlagEmojiPolyfill registers
+     it (browsers without flag glyphs, e.g. Windows); it covers flags only. */
+  --font-geist-sans: "Twemoji Country Flags", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR",
     system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-geist-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
@@ -196,11 +198,14 @@
 
 /* Full-screen overlays (rooms, panels, sheets) are portaled to <body> and pinned
    with `fixed inset-0`, so on wide screens they would escape the 400px canvas.
-   Keep them in the same centered column as the canvas. */
+   Keep them in the same centered column as the canvas. width:auto matters:
+   an overlay that also has `w-full` (width:100%) would otherwise ignore
+   `right` and run 100vw wide from the column's left edge. */
 @media (min-width: 600px) {
   html:has(.mobile-canvas-stage) .fixed.inset-0 {
     left: calc(50% - 200px);
     right: calc(50% - 200px);
+    width: auto;
   }
 }
 
