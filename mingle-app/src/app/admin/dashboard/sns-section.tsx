@@ -13,8 +13,8 @@ import { LineChartCard } from "./line-chart-card";
 const SNS_CHART_COLOR = "#7c3aed";
 
 /**
- * Starts the live queries without awaiting them, so the page runs them
- * alongside its other data. The no-op handler keeps a failure that lands
+ * Starts the live queries without awaiting them, so the page streams its
+ * header and tabs while they run. The no-op handler keeps a failure that lands
  * before the section awaits it from surfacing as an unhandled rejection.
  */
 export function startSnsDashboardLoad(range: AdminDashboardDateRange): Promise<SnsDashboard> {

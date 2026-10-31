@@ -1,22 +1,27 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import {
   ADMIN_DASHBOARD_CHART_HEIGHT,
   ADMIN_DASHBOARD_CHART_WIDTH,
   normalizeDashboardPlatform,
   ADMIN_DASHBOARD_PRESET_OPTIONS,
+  type AdminDashboardDateRange,
   type AdminDashboardPlatform,
+  type AdminDashboardTab,
   type DashboardMetric,
+  buildAdminDashboardHref,
   buildChartGeometry,
   buildCumulativeSeries,
   buildSharedScaleChartGeometries,
   formatMetricDisplayValue,
   normalizeDashboardDays,
+  normalizeDashboardTab,
   resolveAdminDashboardRange,
 } from "@/lib/admin-dashboard-metrics";
 import { loadAdminDashboardMetrics } from "@/lib/admin-dashboard-query";
 import { requireAdmin } from "@/server/admin/guard";
 import { AdminPage, AdminPageHeader } from "../_components/ui";
+import { DashboardTabNav } from "./dashboard-tab-nav";
 import { LineChartCard } from "./line-chart-card";
 import { MetricsTable } from "./metrics-table";
 import { RangeNav } from "./range-nav";
@@ -52,12 +57,6 @@ function takeFirst(value: string | string[] | undefined): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value[0] ?? "";
   return "";
-}
-
-function dashboardPath(days: number, platform: AdminDashboardPlatform): string {
-  const params = new URLSearchParams({ days: String(days) });
-  if (platform !== "all") params.set("platform", platform);
-  return `/admin/dashboard?${params.toString()}`;
 }
 
 function DailyChart({ metric }: { metric: DashboardMetric }) {
@@ -111,84 +110,43 @@ function CumulativeChart({ metric }: { metric: DashboardMetric }) {
   );
 }
 
-export default async function AdminDashboardPage({ searchParams }: DashboardPageProps) {
-  const params = await searchParams;
-  const days = normalizeDashboardDays(takeFirst(params.days));
-  const platform = normalizeDashboardPlatform(takeFirst(params.platform));
-  await requireAdmin(dashboardPath(days, platform));
+type DashboardTabInput = {
+  range: AdminDashboardDateRange;
+  days: number;
+  platform: AdminDashboardPlatform;
+  forceRefresh: boolean;
+};
 
-  const forceRefresh = takeFirst(params.refresh) === "true" || takeFirst(params.refresh) === "1";
-  const range = resolveAdminDashboardRange(new Date(), days);
-  // Started before the metrics await so both queries run at once, but awaited only inside
-  // TranslationModelSection: this live query must neither hold back nor, if it fails,
-  // take down the rest of the page.
-  const translationModelSeries = startTranslationModelSeriesLoad(range, platform);
-  const snsDashboard = startSnsDashboardLoad(range);
-  const operatorPostStats = startOperatorPostStatsLoad(range);
+// The live queries below start without an await and are awaited inside their own
+// Suspense boundary: the header and tab bar stream first, and a failure stays in its section.
+
+function renderGrowthTab({ range, days }: DashboardTabInput): ReactNode {
   const signupRetention = startSignupRetentionLoad(range);
+  return (
+    <section className="mt-6">
+      <h2 className="mb-1 text-sm font-semibold text-slate-600">가입자 · 리텐션</h2>
+      <p className="mb-2 break-words text-xs text-slate-500">
+        Dn 리텐션은 가입한 날로부터 n일째 되는 날 메시지·글 조회·좋아요·댓글·글쓰기·팔로우 중 하나라도 한 사람의 비율입니다. 그날이 다 지난 가입자만 셉니다. 플랫폼 필터는 적용되지 않습니다.
+      </p>
+      <Suspense key={`retention:${days}`} fallback={<RetentionSectionFallback />}>
+        <RetentionSection dashboardPromise={signupRetention} />
+      </Suspense>
+    </section>
+  );
+}
+
+async function renderUsageTab({ range, platform, forceRefresh }: DashboardTabInput): Promise<ReactNode> {
   const metrics = await loadAdminDashboardMetrics(range, { forceRefresh, platform });
   const cumulativeMetrics = metrics.filter((metric) => metric.kind !== "milliseconds");
-
   return (
-    <AdminPage wide>
-      <AdminPageHeader
-        back={{ href: "/admin/more", label: "더보기" }}
-        description="날짜는 UTC 기준입니다. 운영 계정의 활동은 지표에 넣지 않습니다."
-        title="대시보드"
-      />
-
-      <RangeNav
-        presetOptions={ADMIN_DASHBOARD_PRESET_OPTIONS}
-        activeDays={days}
-        activePlatform={platform}
-      />
-
+    <>
       <section className="mt-6">
-        <h2 className="mb-1 text-sm font-semibold text-slate-600">가입자 · 리텐션</h2>
-        <p className="mb-2 break-words text-xs text-slate-500">
-          Dn 리텐션은 가입한 날로부터 n일째 되는 날 메시지·글 조회·좋아요·댓글·글쓰기·팔로우 중 하나라도 한 사람의 비율입니다. 그날이 다 지난 가입자만 셉니다. 플랫폼 필터는 적용되지 않습니다.
-        </p>
-        <Suspense key={`retention:${days}`} fallback={<RetentionSectionFallback />}>
-          <RetentionSection dashboardPromise={signupRetention} />
-        </Suspense>
-      </section>
-
-      <section className="mt-8">
         <h2 className="mb-2 text-sm font-semibold text-slate-600">일자별 추이</h2>
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {metrics.map((metric) => (
             <DailyChart key={metric.key} metric={metric} />
           ))}
         </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-1 text-sm font-semibold text-slate-600">SNS 지표</h2>
-        <p className="mb-2 break-words text-xs text-slate-500">
-          실사용자가 한 행동만 셉니다(운영 계정 글에 한 반응 포함). 플랫폼 필터는 적용되지 않고, 캐시 없이 매번 새로 집계합니다.
-        </p>
-        <Suspense key={`sns:${days}`} fallback={<SnsSectionFallback />}>
-          <SnsSection dashboardPromise={snsDashboard} />
-        </Suspense>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-1 text-sm font-semibold text-slate-600">운영 계정 글 성과</h2>
-        <p className="mb-2 break-words text-xs text-slate-500">
-          기간 안에 올라간 운영 계정 글입니다. 실사용자만 세고(운영·공식·직원 계정과 글쓴이 제외), %는 조회 대비입니다. 팔로우·첫 메시지는 그 글에서 했거나, 하기 전 24시간 안에 마지막으로 본 그 계정 글로 셉니다. 플랫폼 필터는 적용되지 않습니다.
-        </p>
-        <Suspense key={`operator-posts:${days}`} fallback={<OperatorPostStatsSectionFallback />}>
-          <OperatorPostStatsSection dashboardPromise={operatorPostStats} />
-        </Suspense>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="mb-2 text-sm font-semibold text-slate-600">번역 모델별 추이</h2>
-        {/* Keyed by the query inputs: a days/platform change then mounts a fresh boundary that
-            shows the skeleton, instead of holding the whole navigation for this data. */}
-        <Suspense key={`${days}:${platform}`} fallback={<TranslationModelSectionFallback />}>
-          <TranslationModelSection seriesPromise={translationModelSeries} dayKeys={range.dayKeys} />
-        </Suspense>
       </section>
 
       <section className="mt-8">
@@ -204,6 +162,93 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         <h2 className="mb-2 text-sm font-semibold text-slate-600">표로 보기</h2>
         <MetricsTable metrics={metrics} />
       </section>
+    </>
+  );
+}
+
+function renderModelsTab({ range, days, platform }: DashboardTabInput): ReactNode {
+  const translationModelSeries = startTranslationModelSeriesLoad(range, platform);
+  return (
+    <section className="mt-6">
+      <h2 className="mb-2 text-sm font-semibold text-slate-600">번역 모델별 추이</h2>
+      {/* Keyed by the query inputs: a days/platform change then mounts a fresh boundary that
+          shows the skeleton, instead of holding the whole navigation for this data. */}
+      <Suspense key={`${days}:${platform}`} fallback={<TranslationModelSectionFallback />}>
+        <TranslationModelSection seriesPromise={translationModelSeries} dayKeys={range.dayKeys} />
+      </Suspense>
+    </section>
+  );
+}
+
+function renderSnsTab({ range, days }: DashboardTabInput): ReactNode {
+  const snsDashboard = startSnsDashboardLoad(range);
+  return (
+    <section className="mt-6">
+      <h2 className="mb-1 text-sm font-semibold text-slate-600">SNS 지표</h2>
+      <p className="mb-2 break-words text-xs text-slate-500">
+        실사용자가 한 행동만 셉니다(운영 계정 글에 한 반응 포함). 플랫폼 필터는 적용되지 않고, 캐시 없이 매번 새로 집계합니다.
+      </p>
+      <Suspense key={`sns:${days}`} fallback={<SnsSectionFallback />}>
+        <SnsSection dashboardPromise={snsDashboard} />
+      </Suspense>
+    </section>
+  );
+}
+
+function renderOperatorsTab({ range, days }: DashboardTabInput): ReactNode {
+  const operatorPostStats = startOperatorPostStatsLoad(range);
+  return (
+    <section className="mt-6">
+      <h2 className="mb-1 text-sm font-semibold text-slate-600">운영 계정 글 성과</h2>
+      <p className="mb-2 break-words text-xs text-slate-500">
+        기간 안에 올라간 운영 계정 글입니다. 실사용자만 세고(운영·공식·직원 계정과 글쓴이 제외), %는 조회 대비입니다. 팔로우·첫 메시지는 그 글에서 했거나, 하기 전 24시간 안에 마지막으로 본 그 계정 글로 셉니다. 플랫폼 필터는 적용되지 않습니다.
+      </p>
+      <Suspense key={`operator-posts:${days}`} fallback={<OperatorPostStatsSectionFallback />}>
+        <OperatorPostStatsSection dashboardPromise={operatorPostStats} />
+      </Suspense>
+    </section>
+  );
+}
+
+/** Keyed by tab, so a new tab without its renderer is a type error. Only the active tab's
+ * renderer runs, so a request starts only that tab's queries. */
+const DASHBOARD_TAB_RENDERERS: Record<AdminDashboardTab, (input: DashboardTabInput) => ReactNode | Promise<ReactNode>> = {
+  growth: renderGrowthTab,
+  usage: renderUsageTab,
+  models: renderModelsTab,
+  sns: renderSnsTab,
+  operators: renderOperatorsTab,
+};
+
+export default async function AdminDashboardPage({ searchParams }: DashboardPageProps) {
+  const params = await searchParams;
+  const tab = normalizeDashboardTab(takeFirst(params.tab));
+  const days = normalizeDashboardDays(takeFirst(params.days));
+  const platform = normalizeDashboardPlatform(takeFirst(params.platform));
+  await requireAdmin(buildAdminDashboardHref({ tab, days, platform }));
+
+  const forceRefresh = takeFirst(params.refresh) === "true" || takeFirst(params.refresh) === "1";
+  const range = resolveAdminDashboardRange(new Date(), days);
+  const tabContent = await DASHBOARD_TAB_RENDERERS[tab]({ range, days, platform, forceRefresh });
+
+  return (
+    <AdminPage wide>
+      <AdminPageHeader
+        back={{ href: "/admin/more", label: "더보기" }}
+        description="날짜는 UTC 기준입니다. 운영 계정의 활동은 지표에 넣지 않습니다."
+        title="대시보드"
+      />
+
+      <DashboardTabNav activeTab={tab} days={days} platform={platform} />
+
+      <RangeNav
+        presetOptions={ADMIN_DASHBOARD_PRESET_OPTIONS}
+        activeTab={tab}
+        activeDays={days}
+        activePlatform={platform}
+      />
+
+      {tabContent}
     </AdminPage>
   );
 }

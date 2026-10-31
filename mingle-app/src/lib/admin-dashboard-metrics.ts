@@ -25,6 +25,46 @@ export function normalizeDashboardPlatform(value: unknown): AdminDashboardPlatfo
   return value === "android" || value === "ios" ? value : "all";
 }
 
+/** Dashboard tabs, in display order. Each tab runs only its own queries: run together on
+ * the production tables they outlasted the 2-minute statement and proxy timeouts. */
+export const ADMIN_DASHBOARD_TAB_OPTIONS = [
+  { value: "growth", label: "가입·리텐션" },
+  { value: "usage", label: "사용량·성능" },
+  { value: "models", label: "번역 모델" },
+  { value: "sns", label: "SNS" },
+  { value: "operators", label: "운영 계정 글" },
+] as const;
+
+export type AdminDashboardTab = typeof ADMIN_DASHBOARD_TAB_OPTIONS[number]["value"];
+
+export const ADMIN_DASHBOARD_DEFAULT_TAB: AdminDashboardTab = "growth";
+
+/** The `?tab=` value; a missing or unknown one is the default tab. */
+export function normalizeDashboardTab(value: unknown): AdminDashboardTab {
+  return ADMIN_DASHBOARD_TAB_OPTIONS.find((option) => option.value === value)?.value ?? ADMIN_DASHBOARD_DEFAULT_TAB;
+}
+
+/** Whether the tab's queries take the OS filter. The other tabs count every platform. */
+export function dashboardTabUsesPlatform(tab: AdminDashboardTab): boolean {
+  return tab === "usage" || tab === "models";
+}
+
+/** Dashboard URL for a tab, range and OS. Tab links, range links and the login return
+ * path all build it here, so switching one keeps the other two. */
+export function buildAdminDashboardHref({
+  tab,
+  days,
+  platform,
+}: {
+  tab: AdminDashboardTab;
+  days: number;
+  platform: AdminDashboardPlatform;
+}): string {
+  const params = new URLSearchParams({ tab, days: String(days) });
+  if (platform !== "all") params.set("platform", platform);
+  return `/admin/dashboard?${params.toString()}`;
+}
+
 /** Logical chart plot area, in svg units. Shared by the server-side geometry builder
  * (buildChartGeometry) and the client hover component so their coordinate spaces
  * always agree -- letting them drift apart would silently break hover positioning. */
