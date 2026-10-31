@@ -131,7 +131,7 @@
       <article>
         <nav class="lang-nav"><a href="/legal/en/privacy-policy.html">English</a><a href="/legal/ko/privacy-policy.html">Korean</a><a href="/legal/ja/privacy-policy.html">Japanese</a><a href="/legal/zh-cn/privacy-policy.html" aria-current="page">Chinese (Simplified)</a><a href="/legal/zh-tw/privacy-policy.html">Chinese (Traditional)</a><a href="/legal/fr/privacy-policy.html">French</a><a href="/legal/de/privacy-policy.html">German</a><a href="/legal/es/privacy-policy.html">Spanish</a><a href="/legal/pt/privacy-policy.html">Portuguese</a><a href="/legal/it/privacy-policy.html">Italian</a><a href="/legal/ru/privacy-policy.html">Russian</a><a href="/legal/ar/privacy-policy.html">Arabic</a><a href="/legal/hi/privacy-policy.html">Hindi</a><a href="/legal/th/privacy-policy.html">Thai</a><a href="/legal/vi/privacy-policy.html">Vietnamese</a></nav>
         <h1>名乐隐私政策</h1>
-        <p class="meta"><strong>最后更新：</strong> October 8, 2026</p>
+        <p class="meta"><strong>最后更新：</strong> October 31, 2026</p>
         <p>本隐私政策解释了 Mingle Labs, Inc.（“HashChat”、“我们”、“我们的”）在您使用 HashChat 移动应用程序、网站和相关服务（统称为“服务”）时如何收集、使用、共享和保护个人数据。</p>
         <h2>1.范围</h2>
 <p>本政策适用于为消费者 HashChat 帐户和使用而处理的信息。它不适用于我们根据单独的合同仅代表企业客户处理的数据。</p>
@@ -141,7 +141,7 @@
 
 <ul>
   <li>帐户信息：姓名、电子邮件地址、登录提供商详细信息、帐户标识符和个人资料首选项。</li>
-  <li>翻译和语音数据：您提交进行翻译的文本、提供语音识别和翻译所需的语音/音频输入、翻译输出和语言设置。</li>
+  <li>翻译和语音数据：您提交进行翻译的文本、提供语音识别和翻译所需的语音/音频输入（包括您在耳机模式中选择开启时，设备上其他应用播放的音频）、翻译输出和语言设置。</li>
   <li>技术和使用数据：设备类型、操作系统、应用程序版本、IP 地址、请求时间戳、崩溃日志、性能日志和功能交互事件。</li>
   <li>支持通讯：您在请求帮助时发送给我们的消息和附件。</li>
 </ul>
@@ -153,6 +153,7 @@
 
 <h2>3. 音频处理和非保留</h2>
 <p>HashChat 实时处理麦克风音频以提供语音识别和翻译。原始音频通过流式传输进行处理，并且在请求完成后不会被 HashChat 存储。</p>
+<p>在 HashChat 移动应用的耳机模式中，您可以将要翻译的声音选择为“麦克风 + 此设备播放的声音”。选择此项后，HashChat 会通过 Android 的屏幕录制与播放音频采集权限（MediaProjection）或 iOS 的屏幕直播（ReplayKit 广播扩展），采集设备上其他应用正在播放的音频（例如视频的声音）。只有在您主动开始并在系统提示中同意后才会采集，且仅在该会话进行期间采集。采集的音频会与麦克风音频混合，并与仅使用麦克风时一样，实时流式传输到 HashChat 服务器和语音转文字服务提供商（Soniox）；原始音频在处理后不会被 HashChat 存储。由此生成的转写文本和译文会像口述内容一样保存为对话消息，并可能被该对话的其他参与者看到。HashChat 不会从屏幕录制或直播中获取屏幕图像或视频，只使用音频。禁止音频采集的应用的声音以及电话通话不会被采集。您可以随时在应用内，或通过系统通知或状态栏停止采集。</p>
 <p>HashChat 不会保留用于模型训练的原始录音存档。为了安全、防止滥用和服务可靠性，我们可能会保留有限的非音频技术诊断（例如，错误代码和计时指标）。</p>
 
 
@@ -175,7 +176,7 @@
 <p>我们不出售个人数据。我们可能会与以下人员共享数据：</p>
 <ul>
   <li>服务提供商：托管、存储、身份验证、客户支持、分析、崩溃报告以及根据合同处理数据的其他基础设施供应商。</li>
-  <li>Soniox：语音到文本处理所需的音频流和相关上下文。</li>
+  <li>Soniox：语音到文本处理所需的音频流（麦克风音频，以及您在耳机模式中选择开启时设备上其他应用播放的音频）和相关上下文。</li>
   <li>Inworld：语音生成功能和合成音频传输所需的文本和语言上下文。</li>
   <li>Google：使用帐户身份验证和基于文本的服务操作。 HashChat 不会将原始语音音频发送给 Google 进行语音处理。</li>
   <li>Anthropic：使用 Claude 模型生成翻译所需的、您提交翻译的文本及语言上下文。</li>
