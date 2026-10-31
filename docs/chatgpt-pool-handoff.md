@@ -101,6 +101,8 @@ Then restart the task (see the Windows handoff, step 5).
 
 ## API
 
+Callers (Railway, colleagues, local machines): see `docs/chatgpt-pool-api.md`.
+
 - `POST /v1/chat/completions`:
   - Body: `{"model":"chatgpt-web","messages":[...],"account"?}`.
   - Returns an OpenAI-shaped `choices[0].message.content` plus `account`.
