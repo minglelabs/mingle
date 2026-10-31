@@ -257,12 +257,15 @@
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4);
 }
 
-/* ---------- the way back to the chat: a pill over the map's top left corner ---------- */
+/* ---------- the way back to the chat: a pill over the map's top left corner ----------
+   It lies over every card as well (the lobby, the result, the title), so the
+   way out is always in the same place. */
 
 .back {
   position: absolute;
-  top: 1.2cqw;
-  left: 1.4cqw;
+  top: calc(var(--hr-field-y, env(safe-area-inset-top, 0px)) + 5px);
+  left: calc(var(--hr-field-x, 0px) + 6px);
+  z-index: 5;
   display: inline-flex;
   align-items: center;
   gap: 1px;
@@ -293,6 +296,18 @@
 .back:active {
   background: #fff;
   transform: scale(0.96);
+}
+
+/* The result put away: when the next round starts, under the clock. */
+.nextChip {
+  padding: 0.25em 0.8em;
+  border-radius: 999px;
+  background: rgba(255, 180, 0, 0.85);
+  color: var(--ink);
+  font-size: 0.8em;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* The room's voice talk is on. */
@@ -362,18 +377,39 @@
   font-size: clamp(14px, 3.4cqw, 36px);
 }
 
-.watching {
+/* Watching a round: what that means, and the way into the next one. On a wide
+   screen under the clock by the map's right edge; on a tall one in the strip the
+   controls leave, so nothing of it lies over the sunflower or the clock. */
+.watchStrip {
   position: absolute;
-  top: 6cqw;
-  right: 1.4cqw;
-  padding: 0.25em 0.8em;
-  border-radius: 999px;
-  background: rgba(47, 111, 237, 0.9);
-  color: #fff;
+  top: calc(var(--hr-field-y, 0px) + 64px);
+  right: calc(100% - var(--hr-field-x, 0px) - var(--hr-field-width, 100%) + 10px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 50%;
+  pointer-events: none;
 }
 
-.tall .watching {
-  top: 12cqw;
+.tall .watchStrip {
+  top: auto;
+  right: auto;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: calc(var(--hr-foot) + 14px);
+  align-items: flex-start;
+  max-width: calc(50% - 40px);
+}
+
+.watching {
+  padding: 0.3em 0.8em;
+  border-radius: 14px;
+  background: rgba(47, 111, 237, 0.9);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
+  word-break: keep-all;
 }
 
 /* With a keyboard: the keys, against the right edge, clear of the buttons on the left. */
@@ -439,6 +475,13 @@
   opacity: 0;
 }
 
+/* Nothing to steer once the round is over, nor while the score table lies over
+   the map (its numbers would be read through the hint). */
+.ended .hintTouch,
+.boardUp .hintTouch {
+  opacity: 0;
+}
+
 /* ---------- the round's own buttons (settings, the score table) ----------
    On a wide screen a row along the map's bottom left, as the page has it. On a
    tall one they stand in the strip under the map: with touch controls in the
@@ -496,6 +539,35 @@
 .toolsMore {
   display: none;
   background: rgba(255, 255, 255, 0.3);
+}
+
+/* The score table's own button (the page's 🏆 점수표): on a tall screen just the
+   cup, on a wide one with its name, and with a keyboard "(Tab)" too. */
+.scoreButton {
+  background: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+}
+
+.scoreButton[hidden] {
+  display: none !important;
+}
+
+.scoreButton[aria-pressed='true'] {
+  background: #ffd23f;
+}
+
+.tabHint {
+  display: none;
+}
+
+@media (pointer: fine) {
+  .tabHint {
+    display: inline;
+  }
+}
+
+.tall .toolLabel {
+  display: none;
 }
 
 .touchOnly {
@@ -784,6 +856,37 @@
 .resultUp .throw,
 .resultUp .hintTouch {
   display: none;
+}
+
+/* Watching a round: there is no hamster to steer, so there are no controls to
+   wonder about; the strip holds the way into the next round instead. */
+.watcher .pad,
+.watcher .bonk,
+.watcher .throw,
+.watcher .hintTouch {
+  display: none !important;
+}
+
+.sitStrip {
+  min-height: 48px;
+  padding: 0.4em 1em;
+  border: 2px solid #e69a00;
+  border-radius: 999px;
+  background: #ffb400;
+  box-shadow: 0 4px 0 #c98400;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+  word-break: keep-all;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.sitStrip:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #c98400;
 }
 
 .throw[hidden],

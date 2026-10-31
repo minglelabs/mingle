@@ -5,9 +5,11 @@
 // the round; this sends the inputs, plays this viewer's own hamster a little
 // ahead (engine/client/predict.js) and draws the snapshots.
 //
-// Phase 1 of the port: between rounds the component shows a short waiting card,
-// and a round's end a short verdict. The lobby, the score table and the result
-// card come in phase 2.
+// Between rounds it tells the component what to show (HashRushCards.tsx): the
+// lobby with who is in, the countdown to the next round and the way to watch
+// or join, then after a round its result with the score table, or the title
+// card when the round decided the title. The room is the server's, with no
+// host: every round starts by itself, and the cards say when.
 //
 // Browser-only: HashRushGame.tsx loads it with import() once it is on screen.
 
@@ -19,12 +21,14 @@ import { createInput } from './engine/client/input.js'
 import { createPredictor } from './engine/client/predict.js'
 import { createAudio } from './engine/client/audio.js'
 import { createHaptics } from './engine/client/haptics.js'
-import { colorOf } from './engine/client/looks.js'
+import { colorOf, lookOf, LOOKS, TEAMS } from './engine/client/looks.js'
+import { drawAvatar, drawTrophy } from './engine/client/cards.js'
 import { setLanguage, t } from './engine/client/i18n.js'
 import { joinServerRoom } from './engine/client/net.js'
 import {
   IDLE_INPUT_READ,
   SIT_MESSAGE,
+  STAND_MESSAGE,
   applySnapshot,
   createOthersSmoother,
   helloMessage,
@@ -33,6 +37,7 @@ import {
   laneHelpMemory,
   nextInputMessage,
   readLobby,
+  readOver,
   readPlayerRow,
   readStart,
   shouldTakeSeat,
@@ -41,7 +46,20 @@ import {
   type HashRushPlayer,
   type HashRushRound,
   type HashRushSession,
+  type HashRushTitleRule,
 } from './protocol'
+import {
+  PLAYED,
+  buildScoreboard,
+  isDeuce,
+  roundOf,
+  titleOf,
+  verdictOf,
+  type HashRushRecord,
+  type HashRushScoreboard,
+  type HashRushTitleWords,
+  type HashRushVerdict,
+} from './score'
 import type { HashRushTicketGrant } from './ticket'
 
 export type HashRushGameElements = {
@@ -83,15 +101,93 @@ export type HashRushGameClasses = {
   ended: string
 }
 
-export type HashRushWaitingPlayer = { name: string, me: boolean }
+/** A person in a seat, as the lobby card lists them. */
+export type HashRushLobbySeat = {
+  seat: number
+  name: string
+  /** -1 in a free-for-all. */
+  team: number
+  color: string
+  me: boolean
+  winsText: string
+  /** Just came in: the row glows for a moment (UIUX-ISSUES #141). */
+  fresh: boolean
+}
+
+/** Between rounds: who is in, what is next, and the way to watch or join. */
+export type HashRushLobbyView = {
+  kind: 'lobby'
+  /** "🌻 Meadow · Free-for-all" (#35: team or not, plain to see). */
+  mode: string
+  seats: HashRushLobbySeat[]
+  /** Free seats. */
+  open: number
+  /** Computers the next round brings in to fill seats. */
+  bots: number
+  /** "👀 2 watching: …", '' when nobody is. */
+  spectators: string
+  /** This viewer's seat, -1 while watching. */
+  you: number
+  /** Watching by their own choice: no seat is taken for them. */
+  chose: boolean
+  canSit: boolean
+  canStand: boolean
+  /** When the next round starts (Date.now() time), 0 when none is coming or the server does not say. */
+  nextAt: number
+  race: string
+  deuce: boolean
+  /** The last title won in the room, '' before the first. */
+  lastTitle: string
+  words: { sitIn: string, standUp: string, me: string, spectating: string }
+}
 
 /** What the component shows over the game. */
 export type HashRushGameView =
   | { kind: 'connecting', again: boolean }
   | { kind: 'failed', reason: 'ticket' | 'connect' }
-  | { kind: 'waiting', players: HashRushWaitingPlayer[], spectating: boolean }
-  | { kind: 'round' }
-  | { kind: 'result', title: string, mine: 'win' | 'lose' | '', detail: string }
+  | HashRushLobbyView
+  | {
+      kind: 'round'
+      round: number
+      /** This viewer has no hamster in this round. */
+      watcher: boolean
+      /** ...but a seat, and plays from the next one. */
+      seated: boolean
+      canSit: boolean
+      sitIn: string
+    }
+  | {
+      kind: 'result'
+      round: number
+      verdict: HashRushVerdict
+      board: HashRushScoreboard
+      nextAt: number
+      /** When the card first came up (performance.now()), for taps meant for something else. */
+      at: number
+    }
+  | {
+      kind: 'title'
+      round: number
+      words: HashRushTitleWords
+      board: HashRushScoreboard
+      nextAt: number
+      at: number
+    }
+
+/** Faces and the trophy for the cards, drawn by the engine. */
+export const hashRushArt = {
+  face(canvas: HTMLCanvasElement, seat: number, team: number, size?: number) {
+    drawAvatar(canvas, lookOf({ look: seat % LOOKS.length, team: team >= 0 && TEAMS[team] ? team : -1 }), size)
+  },
+  trophy(canvas: HTMLCanvasElement, timeSec: number, wins: number) {
+    drawTrophy(canvas, timeSec, wins)
+  },
+}
+
+export type HashRushArt = typeof hashRushArt
+
+// The page's picture for each map.
+const MAP_ICONS: Record<string, string> = { meadow: '🌻', desert: '🌵', factory: '🏭', ice: '🧊', beach: '🏖️', graveyard: '👻', sky: '☁️' }
 
 export type HashRushGameOptions = {
   /** The game server's ws(s) address. */
@@ -110,6 +206,12 @@ export type HashRushGameClient = {
   start(): void
   /** After a failure: a fresh ticket and one more try. */
   retry(): void
+  /** Takes a free seat: in the lobby for the next round, mid-round from the one after. */
+  sit(): void
+  /** Gives the seat up to watch (not mid-round). No seat is taken for them until they sit again. */
+  stand(): void
+  /** The score table of the round on screen, null between rounds. */
+  scoreboard(): HashRushScoreboard | null
   /** Out of sight the round goes on, silent, and this hamster stands still. */
   setVisible(visible: boolean): void
   /** A voice talk is on in the room: the music makes way, the effects stay. */
@@ -127,6 +229,9 @@ const RECONNECT_FOR_MS = 20_000
 const RECONNECT_EVERY_MS = 1_500
 // The verdict comes up a moment after the winning seed, over the confetti.
 const RESULT_AFTER_MS = 1_500
+// How long a newcomer's row glows in the lobby.
+const FRESH_MS = 4_000
+const blankCareer = () => [0, 0, 0, 0, 0, 0, 0, 0]
 const SIT_EVERY_MS = 2_000
 const LINE_CHECK_EVERY_MS = 2_000
 const FADE_CHECK_EVERY_MS = 100
@@ -190,7 +295,25 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
   let lobby: HashRushLobby | null = null
   let game: HashRushRound | null = null
   let meId = -1
+  // The room's record, as the server last said it (lobby, start, over).
   const wins: number[] = []
+  let careers: number[][] = []
+  let rounds = 0
+  // The careers already have the round on screen in them.
+  let counted = false
+  let rule: HashRushTitleRule | null = null
+  // The round on screen decided the title (the server's word).
+  let champ = false
+  // When the next round starts (Date.now() time), 0 when not known.
+  let nextAt = 0
+  // Chose to watch: no seat is taken for this viewer until they sit again.
+  let watchWanted = false
+  // The card up after a round, and when it first came up.
+  let card: 'none' | 'result' | 'title' = 'none'
+  let cardAt = 0
+  // Seats somebody just came into, until when they glow.
+  const freshUntil = new Map<number, number>()
+  let freshTimer = 0
   const session: HashRushSession = { round: 0, tick: -1, snap: null }
   // Where this hamster was played ahead to (main.js net.mine).
   let mine: Partial<HashRushPlayer> | null = null
@@ -269,20 +392,35 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
     void connect(Date.now() + RECONNECT_FOR_MS, false)
   }
 
+  // The record as the server says it. A server from before the totals sends
+  // none (protocol.ts), and then the ones counted here stand.
+  function takeRecord(said: { wins: number[], careers: number[][], rounds: number }) {
+    wins.length = 0
+    said.wins.forEach((n, i) => (wins[i] = n))
+    if (said.careers.length) careers = said.careers.map((c) => [...c])
+    rounds = said.rounds
+  }
+
   function hear(message: unknown) {
     if (destroyed || !message || typeof message !== 'object') return
     const type = (message as { t?: unknown }).t
     if (type === 'lobby') {
       const next = readLobby(message)
       if (!next) return
+      markFresh(lobby, next)
       lobby = next
-      next.wins.forEach((n, i) => (wins[i] = n))
-      // Phase 1 has no lobby to choose a seat in: a spectator sits in the first free one.
-      if (shouldTakeSeat(next) && performance.now() - sitAskedAt > SIT_EVERY_MS) {
+      // Mid-round the round on screen is not in these yet; after it, it is.
+      takeRecord(next)
+      if (next.title) rule = next.title
+      nextAt = next.nextInMs >= 0 ? Date.now() + next.nextInMs : 0
+      // Somebody who opens the game came to play: a spectator sits in the first
+      // free seat, unless they chose to watch.
+      if (shouldTakeSeat(next, watchWanted) && performance.now() - sitAskedAt > SIT_EVERY_MS) {
         sitAskedAt = performance.now()
         line?.send(SIT_MESSAGE)
       }
-      if (!game) showWaiting()
+      if (!game) showLobby()
+      else if (card === 'none') showRound()
       syncWatching()
     } else if (type === 'start') {
       const started = readStart(message)
@@ -293,18 +431,46 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       mine = null
       others.clear()
       predictor.reset()
-      started.wins.forEach((n, i) => (wins[i] = n))
+      takeRecord(started)
+      counted = false
+      champ = false
       game = started.game
       meId = started.you
       renderer.setMap(game.map)
       enterStage()
     } else if (type === 's') {
       if (game && isSnapshot(message)) takeSnapshot(game, message)
+    } else if (type === 'over') {
+      const over = readOver(message)
+      if (!over || !game || over.round !== session.round) return
+      takeRecord(over)
+      counted = true
+      champ = over.champ
+      if (over.title) rule = over.title
+      nextAt = over.nextInMs >= 0 ? Date.now() + over.nextInMs : 0
+      // A card already up shows the record with the round in it.
+      if (card !== 'none') showResult(game)
     } else if (type === 'lobbyscreen') {
       toLobby()
-      showWaiting()
+      showLobby()
     }
     // 'chat' and 'rename' are the game's own talk: in the app the talk is the room's.
+  }
+
+  // A seat somebody new has just come into glows for a moment, so everyone sees
+  // who arrived. The first lobby is everyone already there, not newcomers.
+  function markFresh(before: HashRushLobby | null, next: HashRushLobby) {
+    if (!before) return
+    const now = performance.now()
+    next.seats.forEach((seat, i) => {
+      const was = before.seats[i]
+      const arrived = seat.kind === 'remote' && i !== next.you && (!was || was.kind !== 'remote' || was.name !== seat.name)
+      if (arrived) freshUntil.set(i, now + FRESH_MS)
+      else if (seat.kind !== 'remote') freshUntil.delete(i)
+    })
+    window.clearTimeout(freshTimer)
+    const soonest = Math.min(...freshUntil.values())
+    if (Number.isFinite(soonest)) freshTimer = window.setTimeout(() => !game && showLobby(), Math.max(0, soonest - now) + 50)
   }
 
   function takeSnapshot(round: HashRushRound, snap: Parameters<typeof applySnapshot>[2]) {
@@ -325,14 +491,74 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
 
   // ---------- screens ----------
 
-  function showWaiting() {
+  function record(): HashRushRecord {
+    return { wins, careers, rounds, counted, rule }
+  }
+
+  function seatColor(teams: boolean, team: number, seat: number) {
+    return teams && TEAMS[team] ? TEAMS[team].color : LOOKS[seat % LOOKS.length].color
+  }
+
+  // Between rounds: who is in, the countdown, and the way to watch or to join.
+  function showLobby() {
     if (!line) return
-    const seats = lobby?.seats ?? []
-    const players = seats
+    const at = lobby
+    const seats = at?.seats ?? []
+    const you = at ? at.you : -1
+    const teams = !!at?.teams
+    const now = performance.now()
+    const people = seats
       .map((seat, index) => ({ seat, index }))
       .filter(({ seat }) => seat.kind === 'remote')
-      .map(({ seat, index }) => ({ name: seat.name, me: index === lobby?.you }))
-    show({ kind: 'waiting', players, spectating: !!lobby && lobby.you < 0 })
+      .map(({ seat, index }) => ({
+        seat: index,
+        name: seat.name,
+        team: teams ? seat.team : -1,
+        color: seatColor(teams, seat.team, index),
+        me: index === you,
+        winsText: String(t('tally', wins[index] || 0)),
+        fresh: (freshUntil.get(index) ?? 0) > now,
+      }))
+    const open = seats.filter((seat) => seat.kind === 'open').length
+    const map = at?.map ?? 'meadow'
+    // The race as the seats stand: everyone seated and any seat with wins in it.
+    const sides = seats
+      .map((seat, index) => ({ id: index, look: index, team: teams ? seat.team : -1, kind: seat.kind }))
+      .filter((p) => p.kind === 'remote' || (wins[p.look] || 0) > 0) as unknown as HashRushPlayer[]
+    const deuce = isDeuce(sides, wins, rule)
+    const race = rule ? String(deuce ? t('deuce', rule.lead) : t('firstTo', rule.wins)) : ''
+    const season = at?.seasons.at(-1)
+    const champs = season?.rows.filter((row) => row.champ) ?? []
+    const names = at?.spectators ?? []
+    show({
+      kind: 'lobby',
+      mode: `${MAP_ICONS[map] ?? '🌻'} ${(t('mapNames') as Record<string, string>)[map] ?? map} · ${t(teams ? 'modeTeam' : 'modeSolo')}`,
+      seats: people,
+      open,
+      bots: people.length && at?.fill ? Math.max(0, at.fill - people.length) : 0,
+      spectators: names.length ? `👀 ${t('spectators', names.length)}: ${names.join(', ')}` : '',
+      you,
+      chose: watchWanted,
+      canSit: you < 0 && open > 0,
+      canStand: you >= 0,
+      nextAt,
+      race,
+      deuce,
+      lastTitle: champs.length ? `🏆 ${champs.map((row) => row.name).join(', ')} · ${t('tally', champs[0].wins)}` : '',
+      words: { sitIn: String(t('sitIn')), standUp: String(t('standUp')), me: String(t('meTag')), spectating: String(t('spectating')) },
+    })
+  }
+
+  function showRound() {
+    const seated = !!lobby && lobby.you >= 0
+    show({
+      kind: 'round',
+      round: session.round,
+      watcher: meId < 0,
+      seated,
+      canSit: !seated && !!lobby && lobby.seats.some((seat) => seat.kind === 'open'),
+      sitIn: String(t('sitIn')),
+    })
   }
 
   function enterStage() {
@@ -355,7 +581,8 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
     big('3')
     audio.play.count()
     audio.setMusic('game')
-    show({ kind: 'round' })
+    card = 'none'
+    showRound()
   }
 
   function toLobby() {
@@ -365,6 +592,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
     game = null
     meId = -1
     mine = null
+    card = 'none'
     syncWatching()
     el.throwButton.hidden = true
     audio.setMusic('lobby')
@@ -380,22 +608,38 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
     el.watching.textContent = t(lobby && lobby.you >= 0 ? 'watchThisRound' : 'spectating')
   }
 
+  // The round's result, with the score table; or, when the round decided the
+  // title (the server's word), the title card with its fanfare.
   function showResult(round: HashRushRound) {
     if (game !== round) return
-    const players = round.players
-    const won = (p: HashRushPlayer) => round.winners.includes(p.id)
-    const winners = round.winners.map((id) => players[id]).filter(Boolean)
-    const winner = (round.winner != null ? players[round.winner] : undefined) ?? winners[0]
-    const mineResult = meId >= 0 && players[meId] ? (won(players[meId]) ? 'win' : 'lose') : ''
-    const title = t(mineResult === 'win' ? 'victory' : mineResult === 'lose' ? 'defeat' : 'roundOver')
-    let detail = ''
-    if (winner) {
-      // Time ran out with the top sides level: they share the round.
-      const shared = winners.some((p) => !allied(p, winner) && p !== winner)
-      const who = shared ? winners.map((p) => p.name).join(', ') : winner.team >= 0 ? t('teamNames')[winner.team] : winner.name
-      detail = `🏆 ${t(shared ? 'winnersShared' : 'winnerIs', who)}`
+    const board = buildScoreboard(round, meId, record())
+    const words = champ ? titleOf(round, meId, record()) : null
+    if (card === 'none') cardAt = performance.now()
+    if (words) {
+      if (card !== 'title') {
+        audio.setMusic(null)
+        audio.play.fanfare()
+        audio.play.cheer()
+      }
+      card = 'title'
+      show({ kind: 'title', round: session.round, words, board, nextAt, at: cardAt })
+      return
     }
-    show({ kind: 'result', title: String(title), mine: mineResult, detail })
+    card = 'result'
+    show({ kind: 'result', round: session.round, verdict: verdictOf(round, meId), board, nextAt, at: cardAt })
+  }
+
+  // A round's numbers go into the totals once, when it is won (main.js addCareer).
+  // The server's `over` says the same right after, and its word stands.
+  function countRound(round: HashRushRound) {
+    if (counted) return
+    counted = true
+    rounds += 1
+    for (const p of round.players) {
+      const c = careers[p.look] ?? (careers[p.look] = blankCareer())
+      roundOf(round, p).forEach((v, k) => (c[k] = (c[k] || 0) + v))
+      c[PLAYED] = (c[PLAYED] || 0) + 1
+    }
   }
 
   // ---------- what happens in a round ----------
@@ -512,7 +756,8 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
     } else if (ev.type === 'win') {
       const won = (p: HashRushPlayer) => round.winners.includes(p.id)
       // A team wins together: everyone on it gets the win.
-      for (const p of players) if (won(p)) wins[p.look] = (wins[p.look] || 0) + 1
+      if (!counted) for (const p of players) if (won(p)) wins[p.look] = (wins[p.look] || 0) + 1
+      countRound(round)
       if (meId < 0 || !players[meId] || won(players[meId])) audio.play.win()
       else audio.play.lose()
       inputWanted = false
@@ -733,6 +978,21 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       show({ kind: 'connecting', again: false })
       void connect(0, true)
     },
+    sit() {
+      if (destroyed || !line) return
+      watchWanted = false
+      sitAskedAt = performance.now()
+      line.send(SIT_MESSAGE)
+    },
+    stand() {
+      // The server does not let a seat go mid-round: the round needs its hamster.
+      if (destroyed || !line || (game && game.phase !== 'over')) return
+      watchWanted = true
+      line.send(STAND_MESSAGE)
+    },
+    scoreboard() {
+      return game ? buildScoreboard(game, meId, record()) : null
+    },
     setVisible(next) {
       if (visible === next) return
       visible = next
@@ -765,6 +1025,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       window.clearTimeout(retryTimer)
       window.clearTimeout(resultTimer)
       window.clearTimeout(bannerTimer)
+      window.clearTimeout(freshTimer)
       window.clearInterval(lineCheck)
       listening.abort()
       for (const type of TAP_EVENTS) window.removeEventListener(type, tryUnlock, true)

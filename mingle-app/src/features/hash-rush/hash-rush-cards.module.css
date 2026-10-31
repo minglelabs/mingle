@@ -1,0 +1,810 @@
+/* The cards between rounds (HashRushCards.tsx): the lobby, the score table, the
+   result, the title, and the see-through table over a round. Ported from
+   hash-rush's style.css (.card, #result, #board, #champ, .scoreTable, #slots)
+   with the rules of docs/UIUX-ISSUES.md kept:
+   - the wins are the biggest thing in the table (#182), the totals tab first;
+   - a narrow screen shows this round or the totals, one tab at a time (#104);
+   - a wide table scrolls inside its card, so the card and its close button
+     stay on the screen (#218, #225); the close button is big (#142);
+   - over a round the table is see-through, the words haloed (#82, board);
+   - an empty seat has no face and a dashed outline (#66), the viewer's own row
+     is marked (#224), a newcomer's row glows (#141). */
+
+.cover {
+  --ink: #3a2a1a;
+  --cream: #fff8e7;
+  --line: #ead9b5;
+  --sun: #ffb400;
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  padding: 14px 8px max(14px, env(safe-area-inset-bottom, 0px));
+  color: var(--ink);
+  animation: appear 0.3s;
+}
+
+/* Between rounds the map behind is only a hint. */
+.coverLobby {
+  background: rgba(36, 87, 47, 0.88);
+}
+
+/* After a round the map stays in view around the card. */
+.coverResult {
+  background: rgba(20, 40, 20, 0.5);
+}
+
+.coverTitle {
+  background: rgba(20, 30, 10, 0.72);
+}
+
+.card {
+  position: relative;
+  box-sizing: border-box;
+  width: min(380px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 18px 12px 14px;
+  background: var(--cream);
+  border: 3px solid var(--line);
+  border-radius: 24px;
+  box-shadow: 0 10px 0 rgba(0, 0, 0, 0.18);
+  text-align: center;
+  scrollbar-width: none;
+}
+
+.card::-webkit-scrollbar {
+  display: none;
+}
+
+.close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.button {
+  min-height: 44px;
+  padding: 0.5em 1.2em;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.button:active {
+  transform: translateY(2px);
+}
+
+.primary {
+  background: var(--sun);
+  border-color: #e69a00;
+  box-shadow: 0 4px 0 #c98400;
+}
+
+.primary:active {
+  box-shadow: 0 1px 0 #c98400;
+}
+
+/* ---------- the lobby ---------- */
+
+.lobbyCard {
+  text-align: left;
+}
+
+.lobbyChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  /* Clear of nothing: the card has no close button. */
+  margin-bottom: 10px;
+}
+
+.chip {
+  padding: 0.3em 0.8em;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.chipRace {
+  background: #fff1c2;
+  color: #b86e00;
+  border: 2px solid #ffd23f;
+}
+
+.chipDeuce {
+  background: #ffe4e4;
+  color: #c92a2a;
+  border-color: #ff9a9a;
+}
+
+.lobbyTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.countdown {
+  flex-shrink: 0;
+  padding: 0.25em 0.75em;
+  border-radius: 999px;
+  background: var(--sun);
+  border: 2px solid #e69a00;
+  font-size: 15px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.listHead {
+  margin: 0 0 6px;
+  color: #a07a45;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.seats {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.seat {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 2px 10px 2px 2px;
+  background: #fff;
+  border: 2px solid var(--line);
+  border-left: 6px solid var(--c);
+  border-radius: 14px;
+}
+
+.seatName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.seatName b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The viewer's own row, so on a crowded list they find themselves (#224). */
+.seatMe {
+  border-color: #2f6fed;
+  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.3);
+}
+
+.meTag {
+  flex-shrink: 0;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  background: #2f6fed;
+  color: #fff;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+/* Somebody new: the row glows yellow for a while (#141). */
+.seatFresh {
+  background: #fff3b0;
+  border-color: #f2b705;
+  box-shadow: 0 0 0 4px rgba(255, 210, 40, 0.55);
+}
+
+.teamDot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--t);
+}
+
+/* Nobody sits here: a dashed outline with no face and no colour (#66). */
+.seatOpen {
+  display: block;
+  min-height: 0;
+  padding: 8px 12px;
+  background: transparent;
+  border: 2px dashed var(--line);
+  color: #a07a45;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.face {
+  display: block;
+  width: 40px;
+  height: 35px;
+}
+
+.winsCell {
+  color: #b86e00;
+  font-size: 17px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  margin: 6px 0 0;
+  color: #8a6a3a;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.switchRow {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+/* ---------- the score table ---------- */
+
+/* The tabs over the table and the MVP rule under it stay inside the card's
+   width; only the table itself scrolls sideways when it is wider. */
+.scoreBox {
+  min-width: 0;
+}
+
+.ruleLine {
+  margin: 8px 0 0;
+  color: #a07a45;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.tableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tableWrap::-webkit-scrollbar {
+  display: none;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th {
+  color: #a07a45;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.table th,
+.table td {
+  padding: 5px 8px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th:first-child,
+.table td:first-child {
+  text-align: left;
+  font-weight: 700;
+}
+
+.who {
+  white-space: nowrap;
+}
+
+.who .meTag {
+  margin-left: 4px;
+}
+
+.table tr.winner td {
+  background: #ffe9a8;
+}
+
+.table tr.winner td:first-child {
+  border-radius: 10px 0 0 10px;
+}
+
+.table tr.winner td:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+/* Wins: the race to the title, the biggest thing in the table. */
+.wins {
+  text-align: center;
+  white-space: nowrap;
+}
+
+td.wins {
+  font-size: 1.4em;
+  font-weight: 900;
+  color: #b86e00;
+  background: #fff1c2;
+}
+
+/* Running totals sit apart from this round's numbers. */
+.total {
+  color: #8a6a3a;
+}
+
+.score {
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.split {
+  border-left: 2px solid var(--line);
+}
+
+.groups th {
+  padding-bottom: 0;
+  font-size: 0.85em;
+  font-weight: 700;
+  text-align: center;
+}
+
+.groups th:first-child {
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* What all these games are for, under the game's number. */
+.groups th small {
+  display: block;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+.groups th small.deuce {
+  color: #e5484d;
+  font-weight: 800;
+  opacity: 1;
+}
+
+.prize {
+  padding-left: 0.2em !important;
+  text-align: left !important;
+}
+
+/* The MVP badge is meant to be loud: gold that shimmers, wobbles and sparkles. */
+.mvp {
+  position: relative;
+  display: inline-block;
+  padding: 0.08em 0.55em;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: linear-gradient(110deg, #ff7a00, #ffd23f 25%, #fff6c2 40%, #ffd23f 55%, #ff3d81 80%, #7b5cff);
+  background-size: 250% 100%;
+  color: #5b2a00;
+  font-size: 0.82em;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 2px #ffb300, 0 0 12px 3px rgba(255, 190, 0, 0.75);
+  animation: mvpShine 1.4s linear infinite, mvpWobble 0.9s ease-in-out infinite alternate;
+}
+
+.mvp::before,
+.mvp::after {
+  content: '✦';
+  position: absolute;
+  color: #fff;
+  font-size: 0.9em;
+  text-shadow: 0 0 6px #ffd23f, 0 0 2px #ff7a00;
+  animation: mvpSpark 1.1s ease-in-out infinite;
+}
+
+.mvp::before {
+  top: -0.75em;
+  left: -0.35em;
+}
+
+.mvp::after {
+  right: -0.4em;
+  bottom: -0.7em;
+  animation-delay: 0.55s;
+}
+
+/* This round's goal scorer: a sunflower-green stamp that bounces. */
+.goalBadge {
+  display: inline-block;
+  margin-left: 0.45em;
+  padding: 0.08em 0.55em;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: #1f9d55;
+  color: #fff;
+  font-size: 0.82em;
+  font-weight: 900;
+  box-shadow: 0 0 0 2px #157a40;
+  animation: goalBounce 0.5s ease-in-out infinite alternate;
+}
+
+/* On a wide screen both halves show side by side; the tabs are for a narrow one. */
+.tabs {
+  display: none;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tabs button {
+  flex: 1;
+  min-height: 40px;
+  padding: 0.35em 0.6em;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.tabs button.on {
+  background: #ffd23f;
+  opacity: 1;
+}
+
+@media (max-width: 640px), (orientation: portrait) {
+  .tabs {
+    display: flex;
+  }
+
+  .table {
+    font-size: 13px;
+  }
+
+  .table[data-view='round'] .total,
+  .table[data-view='total'] .round,
+  .groups th.round,
+  .groups th.total {
+    display: none;
+  }
+
+  .split {
+    border-left: 0;
+  }
+
+  .table th {
+    white-space: normal;
+  }
+
+  /* Narrow enough that a phone shows every column, the MVP badge included. */
+  .table th,
+  .table td {
+    padding: 4px 2px;
+  }
+
+  .table th:first-child,
+  .table td:first-child {
+    padding-left: 4px;
+  }
+
+  /* This round's goal goes under the name, so the name column stays narrow. */
+  .who {
+    white-space: normal;
+  }
+
+  .who b {
+    white-space: nowrap;
+  }
+
+  .who .goalBadge {
+    display: block;
+    width: fit-content;
+    margin: 2px 0 0;
+    font-size: 0.72em;
+  }
+
+  .who .meTag {
+    font-size: 10px;
+  }
+
+  .mvp {
+    padding: 0.05em 0.4em;
+    font-size: 0.72em;
+  }
+}
+
+/* ---------- the result ---------- */
+
+.resultCard {
+  padding-top: 20px;
+}
+
+.verdict {
+  margin: 0 46px 8px;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+/* The verdict: a win is gold and bouncing, a loss is grey, heavy and sunk. */
+.verdictWin {
+  font-size: 38px;
+  letter-spacing: 0.04em;
+  color: #ff9f1a;
+  background: linear-gradient(180deg, #ffe066, #ff8a00);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 0 #b35a00) drop-shadow(0 0 10px rgba(255, 190, 40, 0.7));
+  animation: pulse 0.5s ease-in-out infinite alternate;
+}
+
+.verdictLose {
+  font-size: 34px;
+  letter-spacing: 0.3em;
+  /* The spacing trails the last letter too; this keeps the word centred. */
+  padding-left: 0.3em;
+  color: #6b7280;
+  text-shadow: 0 2px 0 #374151;
+  filter: grayscale(1);
+  transform: rotate(-2deg);
+  animation: sink 0.6s ease-out both;
+}
+
+.winnerLine {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.why {
+  margin: 0 0 8px;
+  color: #a07a45;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* The next round needs nobody to press anything: it says so, and when. */
+.nextLine {
+  margin: 10px 0 0;
+  padding: 0.45em 0.9em;
+  border-radius: 14px;
+  background: #fff1c2;
+  color: #8a5a08;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* ---------- the title ---------- */
+
+.titleCard {
+  padding: 12px 8px 14px;
+}
+
+.trophy {
+  display: block;
+  width: min(220px, 46vw);
+  aspect-ratio: 300 / 250;
+  margin: 0 auto;
+}
+
+.champTitle {
+  margin: 0 46px 8px;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.champNames {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  margin-bottom: 10px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.champNames > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.champNames canvas {
+  width: 52px;
+  height: 46px;
+}
+
+.titleCard .table {
+  font-size: 11px;
+}
+
+.titleCard .table th,
+.titleCard .table td {
+  padding: 4px 2px;
+}
+
+.champNote {
+  margin: 8px 0 0;
+  color: #a07a45;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ---------- the table over a round: the map stays in view behind it ---------- */
+
+.boardLayer {
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px 6px;
+  pointer-events: none;
+  color: #3a2a1a;
+  --ink: #3a2a1a;
+  --line: rgba(232, 220, 190, 0.6);
+}
+
+.boardCard {
+  position: relative;
+  box-sizing: border-box;
+  max-width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  touch-action: pan-y;
+  padding: 12px 52px 12px 12px;
+  border: 3px solid rgba(232, 220, 190, 0.5);
+  border-radius: 24px;
+  background: rgba(255, 248, 230, 0.38);
+  pointer-events: auto;
+  scrollbar-width: none;
+}
+
+.boardCard .close {
+  top: 6px;
+  right: 6px;
+  width: 44px;
+  height: 44px;
+  font-size: 22px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.boardCard .table th,
+.boardCard .table td {
+  color: var(--ink);
+  font-weight: 700;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff, 0 0 6px #fff;
+}
+
+.boardCard .table tr.winner td {
+  background: rgba(255, 233, 168, 0.4);
+}
+
+.boardCard td.wins {
+  background: rgba(255, 241, 194, 0.55);
+}
+
+.boardCard .tabs button {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.boardCard .ruleLine {
+  color: var(--ink);
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff;
+}
+
+/* On a phone the tabs leave the corner to the close button and the table has the width. */
+@media (max-width: 640px), (orientation: portrait) {
+  .boardCard {
+    padding-right: 12px;
+  }
+
+  .boardCard .tabs {
+    margin-right: 50px;
+  }
+}
+
+.boardCard .tabs button.on {
+  background: #ffd23f;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pulse {
+  to {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes sink {
+  from {
+    transform: translateY(-18px) rotate(0deg);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) rotate(-2deg);
+    opacity: 1;
+  }
+}
+
+@keyframes goalBounce {
+  to {
+    transform: translateY(-0.18em) scale(1.08);
+  }
+}
+
+@keyframes mvpShine {
+  to {
+    background-position: -250% 0;
+  }
+}
+
+@keyframes mvpWobble {
+  from {
+    transform: rotate(-5deg) scale(1);
+  }
+  to {
+    transform: rotate(4deg) scale(1.12);
+  }
+}
+
+@keyframes mvpSpark {
+  0%,
+  100% {
+    transform: scale(0.3) rotate(0deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2) rotate(90deg);
+    opacity: 1;
+  }
+}
