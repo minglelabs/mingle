@@ -87,6 +87,10 @@ import {
 } from "@/components/LivePhoneDemo/language-onboarding.logic";
 import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
 import {
+  resolveOnboardingLanguagePreferences,
+  type ProfileLanguagePreferencesPayload,
+} from "@/components/conversation-list.onboarding-languages";
+import {
   deriveDefaultConversationLanguages,
   deriveDefaultSttLanguagesForLocale,
   sanitizeSttLanguageSelection,
@@ -493,54 +497,6 @@ function readPendingPrimaryLanguages(): string[] {
   } catch {
     return [];
   }
-}
-
-type ProfileLanguagePreferencesPayload = {
-  primaryLanguages?: unknown;
-  defaultConversationLanguages?: unknown;
-};
-
-type ResolvedOnboardingLanguagePreferences = {
-  primaryLanguages: string[];
-  defaultConversationLanguages: string[];
-  patch: {
-    primaryLanguages?: string[];
-    defaultConversationLanguages?: string[];
-  };
-};
-
-function resolveOnboardingLanguagePreferences(
-  profile: ProfileLanguagePreferencesPayload,
-  pendingPrimaryLanguages: readonly string[],
-  pendingDefaultConversationLanguages: readonly string[],
-): ResolvedOnboardingLanguagePreferences {
-  const serverPrimaryLanguages = sanitizeSttLanguageSelection(profile.primaryLanguages);
-  const serverDefaultConversationLanguages = sanitizeSttLanguageSelection(
-    profile.defaultConversationLanguages,
-  );
-  const fallbackPrimaryLanguages = sanitizeSttLanguageSelection(pendingPrimaryLanguages);
-  const fallbackDefaultConversationLanguages = sanitizeSttLanguageSelection(
-    pendingDefaultConversationLanguages,
-  );
-  const primaryLanguages = serverPrimaryLanguages.length > 0
-    ? serverPrimaryLanguages
-    : fallbackPrimaryLanguages;
-  const defaultConversationLanguages = serverDefaultConversationLanguages.length > 0
-    ? serverDefaultConversationLanguages
-    : fallbackDefaultConversationLanguages;
-
-  return {
-    primaryLanguages,
-    defaultConversationLanguages,
-    patch: {
-      ...(serverPrimaryLanguages.length === 0 && primaryLanguages.length > 0
-        ? { primaryLanguages }
-        : {}),
-      ...(serverDefaultConversationLanguages.length === 0 && defaultConversationLanguages.length > 0
-        ? { defaultConversationLanguages }
-        : {}),
-    },
-  };
 }
 
 function clearPendingLanguagePreferences(): void {
@@ -2343,6 +2299,7 @@ export default function ConversationList({
           profile,
           onboardingPrimaryLanguages,
           pendingDefaultLanguages,
+          pendingInterestLanguages.map((entry) => entry.code),
         );
 
         const patchPayload: Record<string, unknown> = {
@@ -5461,6 +5418,7 @@ export default function ConversationList({
           profile,
           normalizedPrimaryLanguages,
           normalizedTargets,
+          interestLanguages.map((entry) => entry.code),
         );
 
         const patchPayload: Record<string, unknown> = {
