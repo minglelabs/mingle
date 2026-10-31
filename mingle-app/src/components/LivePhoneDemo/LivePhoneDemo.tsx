@@ -9722,12 +9722,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           {screenCaptureNoticeOpen && (
             <MessageMediaDialog title={earphoneModeCopy.screenCaptureNoticeTitle} onClose={cancelScreenCaptureNotice}>
               <div data-qa="live-demo-screen-capture-notice" className="flex flex-col items-center px-2 pb-1 pt-4 text-center">
-                <span aria-hidden="true" className="flex rounded-full bg-amber-100/80 p-2">
+                {/* Earphone mode's own icon, with a screen-share badge: the
+                    request comes from earphone mode. */}
+                <span aria-hidden="true" className="relative flex rounded-full bg-amber-100/80 p-2">
                   <span
                     className="flex h-16 w-16 items-center justify-center rounded-full text-white shadow-[0_10px_24px_-8px_rgba(249,115,22,0.55)]"
                     style={{ backgroundImage: 'linear-gradient(135deg, #fbbf24 0%, #f97316 100%)' }}
                   >
-                    <ScreenShare size={30} strokeWidth={2.1} />
+                    <Headphones size={30} strokeWidth={2.1} />
+                  </span>
+                  <span className="absolute -bottom-0.5 -right-0.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-gray-900 text-white">
+                    <ScreenShare size={15} strokeWidth={2.3} />
                   </span>
                 </span>
                 <h2 className="mt-5 text-xl font-bold leading-tight text-gray-900">
@@ -9735,6 +9740,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </h2>
                 <p className="mt-1.5 text-lg font-semibold leading-snug text-orange-500">
                   {earphoneModeCopy.screenCaptureNoticeBody}
+                </p>
+                <p data-screen-capture-notice-reason className="mt-3 text-[0.95rem] font-medium leading-relaxed text-gray-700">
+                  {earphoneModeCopy.screenCaptureNoticeReason}
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-gray-500">
+                  {earphoneModeCopy.screenCaptureNoticeOffHint}
                 </p>
                 <button
                   type="button"
