@@ -5,7 +5,7 @@ import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar } from '@/server/operator-avatars/generate'
-import { generateReservePosts, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
+import { generateReservePosts, pickReserveTopics, reservePosterProfile, rewriteReservePostText } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
@@ -613,4 +613,41 @@ export async function setReviewPostText(
     metadata: { decision: 'edit_text', length: trimmed.length },
   })
   return saved ? { ok: true, post: toReviewPost(saved) } : { ok: false, error: 'not_found' }
+}
+
+/**
+ * A new text for a post in review, written by the model (the ChatGPT pool
+ * where the server has its key) for the same person, language and photo,
+ * with optional staff feedback. Nothing is saved: staff read it in the editor
+ * and save it with setReviewPostText.
+ */
+export async function draftReviewPostText(
+  id: string,
+  feedback: unknown,
+  now: Date = new Date(),
+): Promise<{ ok: true; text: string } | { ok: false; error: 'not_found' | 'regenerate_failed' }> {
+  const row = await prisma.operatorPostReserve.findUnique({
+    where: { id },
+    select: { state: true, text: true, topic: true, language: true, imagePrompt: true, operatorUserId: true },
+  })
+  if (!row || !REVIEW_POST_STATES.includes(row.state)) return { ok: false, error: 'not_found' }
+  try {
+    const persona = await loadReservePersona(row.operatorUserId, now, { includeInactive: true })
+    if (!persona) return { ok: false, error: 'regenerate_failed' }
+    const photo = row.imagePrompt ? decodePostPhoto(row.imagePrompt) : null
+    const text = await rewriteReservePostText({
+      persona,
+      previousText: row.text,
+      language: row.language ?? persona.language,
+      photo: photo ? { kind: photo.kind, description: photo.description } : null,
+      feedback: normalizeReviewFeedback(feedback),
+      existingTexts: await loadExistingReserveTexts(row.operatorUserId),
+      seed: row.operatorUserId,
+      topic: row.topic,
+    })
+    return text ? { ok: true, text } : { ok: false, error: 'regenerate_failed' }
+  } catch (error) {
+    console.warn('[operator-review] draft_text_failed', { id, error: error instanceof Error ? error.message.slice(0, 60) : 'unknown' })
+    return { ok: false, error: 'regenerate_failed' }
+  }
 }

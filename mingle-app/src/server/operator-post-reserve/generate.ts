@@ -249,6 +249,78 @@ export async function generateReservePosts(args: {
     timeoutMs: CALL_TIMEOUT_MS,
   })
 
+  return collectGeneratedPosts(items, slots, args.topics, seen)
+}
+
+/**
+ * A new text for one post staff are reviewing, the photo kept: same person,
+ * same language, same photo (the caption must fit it), clearly different from
+ * the old text, staff feedback first. Null when nothing usable came back.
+ * Throws `LlmError` when the call itself fails.
+ */
+export async function rewriteReservePostText(args: {
+  persona: ReservePersona
+  previousText: string
+  /** The post's language (its own, or the persona's). */
+  language: string
+  /** The photo it goes out with: kind and description. Null for a text post. */
+  photo: { kind: string; description: string } | null
+  feedback: string | null
+  existingTexts: string[]
+  seed: string
+  topic: string | null
+  generate?: GenerateFn
+}): Promise<string | null> {
+  const generate = args.generate ?? generateJson
+  const profile = reservePosterProfile(args.seed)
+  const learner = reserveLearnerPlan(args.seed, args.persona.language)
+  const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
+  const items = await generate({
+    instructions: [
+      buildReserveInstructions(args.persona),
+      'This call rewrites ONE post staff sent back, so "slots" has one slot. Its photo is already decided: "fixedPhoto" describes it. Keep that photo and write a new text that fits it as its caption; copy "fixedPhoto" unchanged into "photo" (empty when there is none).',
+      `The input also has "revision": the post's current text ("previousText"). The new text must be clearly different from it in wording and opening${args.feedback ? ', and follow the staff "feedback" first, also where it conflicts with the advice above' : ''}.`,
+    ].join('\n'),
+    input: {
+      persona: args.persona,
+      poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
+      learner: { language: learner.language, level: learner.level.brief },
+      slots: [{
+        slot: 1,
+        topic: args.topic ? briefs.get(args.topic) ?? args.topic : 'the same subject as previousText',
+        shape: 'like previousText, but in new words',
+        language: args.language,
+        photo: args.photo ? args.photo.kind : false,
+        ...(args.photo ? { fixedPhoto: args.photo.description } : {}),
+      }],
+      alreadyWritten: args.existingTexts.slice(-AVOID_SAMPLE_MAX).map((text) => Array.from(text).slice(0, AVOID_SAMPLE_CHARS).join('')),
+      revision: { previousText: args.previousText, ...(args.feedback ? { feedback: args.feedback } : {}) },
+    },
+    responseSchema: RESPONSE_SCHEMA,
+    validate: (value) => {
+      const posts = (value as { posts?: unknown } | null)?.posts
+      if (!Array.isArray(posts)) throw new Error('invalid_posts')
+      return posts as Array<{ slot?: unknown; text?: unknown; photo?: unknown }>
+    },
+    model: resolveReserveModel(),
+    temperature: 1,
+    maxOutputTokens: 2048,
+    timeoutMs: CALL_TIMEOUT_MS,
+  })
+  const previousKey = reservePostKey(args.previousText)
+  for (const item of items) {
+    const text = cleanReservePost(item?.text)
+    if (text && reservePostKey(text) !== previousKey) return text
+  }
+  return null
+}
+
+function collectGeneratedPosts(
+  items: Array<{ slot?: unknown; text?: unknown; photo?: unknown }>,
+  slots: Array<{ language: string; photo: ReturnType<typeof pickPostPhoto> | null }>,
+  topics: string[],
+  seen: Set<string>,
+): GeneratedReservePost[] {
   const result: GeneratedReservePost[] = []
   const usedSlots = new Set<number>()
   for (const item of items) {
@@ -262,7 +334,7 @@ export async function generateReservePosts(args: {
     usedSlots.add(slot)
     const plan = slots[slot - 1].photo
     const photo = plan && typeof item.photo === 'string' ? item.photo.replace(/\s+/g, ' ').trim().slice(0, IMAGE_PROMPT_MAX_CHARS) : ''
-    result.push({ topic: args.topics[slot - 1], text, language: slots[slot - 1].language, imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo) : null })
+    result.push({ topic: topics[slot - 1], text, language: slots[slot - 1].language, imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo) : null })
   }
   return result
 }
