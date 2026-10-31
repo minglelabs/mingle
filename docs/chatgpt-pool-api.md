@@ -47,7 +47,9 @@ Response:
 
 ```json
 {
+  "id": "chatcmpl-…",
   "object": "chat.completion",
+  "created": 1793432261,
   "model": "chatgpt-web",
   "choices": [{ "index": 0, "message": { "role": "assistant", "content": "…" }, "finish_reason": "stop" }],
   "account": "kachitto.biz@gmail.com",
@@ -95,7 +97,9 @@ Job status:
 - A reference photo: add `"reference": "data:image/jpeg;base64,…"`.
 - Pin an account (rarely needed): add `"account": "<email>"`.
 - Finished jobs are kept for **1 hour**. Fetch the result before then.
-- Give up after about 8 minutes; the server times a job out at 8.
+- Most images finish in under 2 minutes. If an account fails or hangs, the
+  pool moves the job to another account (up to 4 accounts, up to 8 minutes
+  each). Poll for 10 minutes, then treat it as failed.
 
 `"async": true` works on `/v1/chat/completions` too, with the same polling.
 
@@ -201,12 +205,15 @@ they sit in the job's `error` with the same `status`.
 | 404 | `not_found` | wrong path |
 | 422 | `image_refused` | ChatGPT refused the prompt (policy): change the prompt |
 | 429 | `image_limit` | every account hit its daily image limit; `message` says until when |
-| 502 | other codes | ChatGPT failed on that account; retry once |
+| 502 | `bad_reference` | the reference photo could not be attached: send a smaller JPEG/PNG data URL |
+| 502 | `timeout`, `lost`, `ui_changed`, `signed_out`, other | ChatGPT failed on every account tried (up to 4); retry once |
 | 503 | `no_account` | no Chrome profile connected (PC asleep, Chrome closed): tell Nam |
-| — | `timeout` | took longer than 5 min (text) / 8 min (image): retry once |
 
-Retry rule of thumb: 502, `timeout` and `job_not_found` once, after a few
-seconds. Don't loop on 429 or 503.
+Retry rule of thumb: 502 and `job_not_found` once, after a few seconds.
+Don't loop on 429 or 503.
+
+A job pinned with `"account"` is never moved to another account, so it fails
+on the first error.
 
 ## Limits
 
@@ -217,8 +224,10 @@ seconds. Don't loop on 429 or 503.
 - Answers come from ChatGPT web, so they can vary in wording and quality.
 - No streaming. `stream: true` is ignored.
 - Every request runs on Nam's home PC. If it is off, asleep or rebooting, calls
-  fail with 503 or a connection error. Nothing is stored about you except the
-  server's in-memory job list and a log line per request.
+  fail with 503 or a connection error.
+- What is kept: async results in memory for 1 hour, and one log line per
+  request on that PC with the first 70 characters of the prompt. The full
+  prompt and answer also stay in that ChatGPT account's chat history.
 - Don't send personal or secret data you wouldn't paste into ChatGPT yourself.
 
 ## Quick check
