@@ -6,17 +6,14 @@ import { RefreshCw } from "lucide-react";
 import {
   ADMIN_DASHBOARD_PLATFORM_OPTIONS,
   ADMIN_DASHBOARD_MAX_DAYS,
+  buildAdminDashboardHref,
+  dashboardTabUsesPlatform,
   type AdminDashboardPlatform,
   type AdminDashboardRange,
+  type AdminDashboardTab,
 } from "@/lib/admin-dashboard-metrics";
 import { cn } from "@/lib/utils";
 import { clearDashboardCacheAction } from "./actions";
-
-function buildDashboardHref(days: AdminDashboardRange, platform: AdminDashboardPlatform): string {
-  const params = new URLSearchParams({ days: String(days) });
-  if (platform !== "all") params.set("platform", platform);
-  return `/admin/dashboard?${params.toString()}`;
-}
 
 function segmentClassName(active: boolean): string {
   return cn(
@@ -27,10 +24,12 @@ function segmentClassName(active: boolean): string {
 
 export function RangeNav({
   presetOptions,
+  activeTab,
   activeDays,
   activePlatform,
 }: {
   presetOptions: readonly AdminDashboardRange[];
+  activeTab: AdminDashboardTab;
   activeDays: AdminDashboardRange;
   activePlatform: AdminDashboardPlatform;
 }) {
@@ -44,12 +43,19 @@ export function RangeNav({
   const [customInput, setCustomInput] = useState(isCustomActive ? String(activeDays) : "");
   const [customError, setCustomError] = useState<string | null>(null);
 
+  // The OS row only where the tab's queries take it. The cache is the daily metric
+  // cache, which only the 사용량·성능 tab reads; every other tab is a live query.
+  const showsPlatform = dashboardTabUsesPlatform(activeTab);
+  const showsCacheRefresh = activeTab === "usage";
+  const buildHref = (days: AdminDashboardRange, platform: AdminDashboardPlatform) =>
+    buildAdminDashboardHref({ tab: activeTab, days, platform });
+
   const handleClearCacheAndRefresh = async () => {
     if (isPending || isRefreshing) return;
     setErrorMessage(null);
     setIsRefreshing(true);
     try {
-      const result = await clearDashboardCacheAction(activeDays, activePlatform);
+      const result = await clearDashboardCacheAction(activeDays, activePlatform, activeTab);
       // No result: the session ended and the action redirected to the login page.
       if (!result) return;
       if (!result.success) {
@@ -72,14 +78,14 @@ export function RangeNav({
     setCustomInput("");
     setCustomError(null);
     startTransition(() => {
-      router.push(buildDashboardHref(option, activePlatform));
+      router.push(buildHref(option, activePlatform));
     });
   };
 
   const handlePlatformClick = (platform: AdminDashboardPlatform) => {
     if (platform === activePlatform) return;
     startTransition(() => {
-      router.push(buildDashboardHref(activeDays, platform));
+      router.push(buildHref(activeDays, platform));
     });
   };
 
@@ -96,31 +102,35 @@ export function RangeNav({
     setCustomError(null);
     if (parsed === activeDays) return;
     startTransition(() => {
-      router.push(buildDashboardHref(parsed, activePlatform));
+      router.push(buildHref(parsed, activePlatform));
     });
   };
 
   const busy = isPending || isRefreshing;
+  const showsPlatformNote = showsPlatform && activePlatform !== "all";
+  const hasStatus = Boolean(customError || errorMessage || busy || showsPlatformNote);
 
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="w-10 shrink-0 text-sm font-semibold text-slate-600">OS</span>
-        <nav aria-label="OS 선택" className="flex flex-wrap gap-2">
-          {ADMIN_DASHBOARD_PLATFORM_OPTIONS.map((option) => (
-            <button
-              aria-pressed={option.value === activePlatform}
-              className={segmentClassName(option.value === activePlatform)}
-              disabled={busy}
-              key={option.value}
-              onClick={() => handlePlatformClick(option.value)}
-              type="button"
-            >
-              {option.label}
-            </button>
-          ))}
-        </nav>
-      </div>
+      {showsPlatform ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-10 shrink-0 text-sm font-semibold text-slate-600">OS</span>
+          <nav aria-label="OS 선택" className="flex flex-wrap gap-2">
+            {ADMIN_DASHBOARD_PLATFORM_OPTIONS.map((option) => (
+              <button
+                aria-pressed={option.value === activePlatform}
+                className={segmentClassName(option.value === activePlatform)}
+                disabled={busy}
+                key={option.value}
+                onClick={() => handlePlatformClick(option.value)}
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="w-10 shrink-0 text-sm font-semibold text-slate-600">기간</span>
@@ -173,34 +183,41 @@ export function RangeNav({
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0 space-y-1 text-xs">
-          {customError ? <p className="text-rose-600" role="alert">{customError}</p> : null}
-          {errorMessage ? <p className="text-rose-600" role="alert">{errorMessage}</p> : null}
-          {busy ? (
-            <p className="flex items-center gap-1.5 font-medium text-slate-500" role="status">
-              <span
-                aria-hidden="true"
-                className="h-3 w-3 animate-spin rounded-full border-2 border-slate-200 border-t-sky-600"
-              />
-              {isRefreshing ? "캐시 비우고 재계산 중..." : "불러오는 중..."}
-            </p>
+      {/* Rendered only with something in it: an empty last row would still add the card's row gap. */}
+      {showsCacheRefresh || hasStatus ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0 space-y-1 text-xs">
+            {customError ? <p className="text-rose-600" role="alert">{customError}</p> : null}
+            {errorMessage ? <p className="text-rose-600" role="alert">{errorMessage}</p> : null}
+            {busy ? (
+              <p className="flex items-center gap-1.5 font-medium text-slate-500" role="status">
+                <span
+                  aria-hidden="true"
+                  className="h-3 w-3 animate-spin rounded-full border-2 border-slate-200 border-t-sky-600"
+                />
+                {isRefreshing ? "캐시 비우고 재계산 중..." : "불러오는 중..."}
+              </p>
+            ) : null}
+            {showsPlatformNote ? <p className="text-slate-500">사용자별 최근 확인 OS 기준</p> : null}
+          </div>
+          {showsCacheRefresh ? (
+            <button
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={busy}
+              onClick={handleClearCacheAndRefresh}
+              type="button"
+            >
+              <RefreshCw className={cn("h-4 w-4 text-slate-500", isRefreshing && "animate-spin")} aria-hidden="true" />
+              캐시 비우고 다시 계산
+            </button>
           ) : null}
-          {activePlatform !== "all" ? <p className="text-slate-500">사용자별 최근 확인 OS 기준</p> : null}
         </div>
-        <button
-          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={busy}
-          onClick={handleClearCacheAndRefresh}
-          type="button"
-        >
-          <RefreshCw className={cn("h-4 w-4 text-slate-500", isRefreshing && "animate-spin")} aria-hidden="true" />
-          캐시 비우고 다시 계산
-        </button>
-      </div>
-      <p className="text-xs leading-5 text-slate-500">
-        다시 계산은 현재 {activeDays}일 {activePlatform === "all" ? "전체" : activePlatform} 캐시를 지우고 새로 집계합니다. 오늘과 어제는 항상 새로 집계하며, 시간이 걸릴 수 있습니다.
-      </p>
+      ) : null}
+      {showsCacheRefresh ? (
+        <p className="text-xs leading-5 text-slate-500">
+          다시 계산은 현재 {activeDays}일 {activePlatform === "all" ? "전체" : activePlatform} 캐시를 지우고 새로 집계합니다. 오늘과 어제는 항상 새로 집계하며, 시간이 걸릴 수 있습니다.
+        </p>
+      ) : null}
     </div>
   );
 }

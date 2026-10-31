@@ -2,6 +2,15 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-10-31 — 관리자 대시보드: 탭으로 나눠 탭마다 자기 쿼리만 실행
+
+- 화면: `/admin/dashboard` (`page.tsx`, `range-nav.tsx`, `actions.ts`, 새 `dashboard-tab-nav.tsx`, `link-pending-spinner.tsx`). 탭 값과 URL은 `src/lib/admin-dashboard-metrics.ts`.
+- 문제: 한 페이지가 가입·리텐션, 일자별 지표, SNS, 운영 계정 글, 번역 모델 쿼리를 한꺼번에 시작했다. 운영 DB(app_event_logs 240만 행, app_messages 140만 행)에서는 Postgres statement_timeout(2분)과 Railway 프록시 120초를 넘겨 페이지가 열리지 않았다.
+- 변경: 헤더 아래 탭 5개(가입·리텐션 · 사용량·성능 · 번역 모델 · SNS · 운영 계정 글). `?tab=`로 고른 탭의 쿼리만 실행하고, 값이 없거나 모르는 값이면 가입·리텐션. 탭은 기존 필터 알약(`AdminFilterLink`) 링크라 서버 이동이며, 기간·OS는 탭을 옮겨도 유지된다. 기간·OS 버튼, 캐시 비우기, 로그인 후 돌아올 주소도 `tab`을 유지한다. 사용량·성능 탭은 지표를 다 받은 뒤에야 화면이 바뀌므로, 이동 중에는 누른 탭에 기존 로딩 스피너를 띄운다.
+- 탭별 컨트롤: OS 필터는 OS가 적용되는 사용량·성능, 번역 모델 탭에만 보인다. "캐시 비우고 다시 계산"과 그 설명은 일별 지표 캐시를 쓰는 사용량·성능 탭에만 보인다(다른 탭은 캐시 없이 매번 집계).
+- 그대로: 섹션 제목·설명 문구, 쿼리, 캐시 동작.
+- 확인: 탭 값·URL 단위 테스트, 탭마다 그 탭의 쿼리만 관리자 확인 뒤에 실행되는지 보는 페이지 테스트, 탭 바와 탭별 기간·OS 영역 렌더 테스트. 타입 체크(오래된 공유 Prisma 클라이언트 때문인 기존 오류 3개 외 없음), lint, 관리자 테스트 통과. 브라우저와 운영 DB에서는 아직 확인하지 않았다.
+
 ## 2026-10-31 — Operator post stats: a stats row on operator posts (admin and staff in the app) and a dashboard section
 
 - Surface: Admin feed preview (`/admin/feed`), the operator account page and its profile list view (`/admin/operators/[userId]`, `.../profile?view=list`), the admin comment thread (`/admin/activity/posts/[postId]`), a new **운영 계정 글 성과** section on `/admin/dashboard`, and the app feed card (`feed-post-card.tsx`, home feed and full-screen post viewer).
