@@ -645,5 +645,20 @@ export function createMusic(getCtx, unheard = () => document.hidden) {
     },
     // The tune playing right now.
     now: () => trackName,
+    // For good: nothing more is scheduled and what is already on its way goes quiet.
+    stop() {
+      clearInterval(timer);
+      timer = 0;
+      want = null;
+      playing = null;
+      if (out) {
+        try {
+          out.disconnect();
+        } catch {
+          // already gone
+        }
+        out = null;
+      }
+    },
   };
 }

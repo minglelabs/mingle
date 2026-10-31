@@ -45,3 +45,21 @@ jitters.
 The files stay plain ES modules (`.js`). TypeScript reads them through
 `allowJs` without type-checking them (no `checkJs`), and ESLint skips this
 folder.
+
+## Changes made in mingle
+
+- `client/net.js`: only the server-room part (`joinServerRoom`). The entry
+  ticket is passed in (`{ ticket }`) instead of read from `location.search`,
+  and a socket that times out while connecting is closed. `gameServer(raw)`
+  checks a ws(s) address string. Peer-to-peer rooms, the TURN relay and the
+  MQTT room list are gone, and nothing runs when the module is imported.
+- `client/input.js`: `destroy()` removes every listener (the app drops the game
+  with its chat room). Keys typed into a textarea or an editable element do not
+  steer the hamster either.
+- `client/audio.js`: `createAudio({ audioSession: false })` leaves
+  `navigator.audioSession` alone, because the app owns the audio session (talk,
+  speech, voice calls). `dispose()` stops the music and closes the audio
+  context. `muted()` reads the sound switch.
+- `client/music.js`: `stop()` ends the scheduling timer for good.
+- `client/i18n.js`: `setLanguage(tag)` makes the strings follow the app's
+  language instead of the browser's.

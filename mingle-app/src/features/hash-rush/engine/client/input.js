@@ -81,6 +81,9 @@ export function holdSwing(g, me, fresh) {
 // `laneHelp` is there for trying the phone controls out: whether moves off the pad
 // ask for the lane help.
 export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir, laneHelp = true }) {
+  // Every listener goes with destroy(): the app mounts and drops the game with its chat room.
+  const listening = new AbortController();
+  const { signal } = listening;
   const down = new Set();
   let enabled = false;
   let touch = null;
@@ -107,15 +110,15 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
 
   window.addEventListener('keydown', (e) => {
     if (!enabled || !HANDLED.has(e.code) || e.metaKey || e.ctrlKey || e.altKey) return;
-    // Typing a chat message must not steer the hamster.
-    if (e.target instanceof HTMLInputElement) return;
+    // Typing a chat message must not steer the hamster, in the app's text boxes neither.
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target?.isContentEditable) return;
     down.add(e.code);
     e.preventDefault();
-  });
-  window.addEventListener('keyup', (e) => down.delete(e.code));
-  window.addEventListener('blur', () => down.clear());
+  }, { signal });
+  window.addEventListener('keyup', (e) => down.delete(e.code), { signal });
+  window.addEventListener('blur', () => down.clear(), { signal });
 
-  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault(), { signal });
 
   // Touch: a faint pad of arrow keys under the thumb. Whichever way the thumb lies
   // from the pad's middle is the key held down, so a touch moves the hamster at
@@ -147,7 +150,7 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
     // The hint about the controls has done its job.
     stage.classList.add('played');
     e.preventDefault();
-  });
+  }, { signal });
   // Or a swipe anywhere on the map: the hamster heads that way and keeps going, the
   // way it would with the key held, until another swipe turns it or a tap stops it.
   // One finger can keep steering: each further stretch of its slide is a new swipe.
@@ -155,7 +158,7 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
     if (!enabled || e.pointerType !== 'touch' || (e.target !== canvas && e.target !== stage) || swipe) return;
     swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, swiped: false };
     stage.classList.add('played');
-  });
+  }, { signal });
   window.addEventListener('pointermove', (e) => {
     if (touch && e.pointerId === touch.id) press(e);
     if (!swipe || e.pointerId !== swipe.id) return;
@@ -164,7 +167,7 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
     glide = dir;
     Object.assign(swipe, { x: e.clientX, y: e.clientY, t: e.timeStamp, swiped: true });
     showPad();
-  });
+  }, { signal });
   const release = (e) => {
     if (swipe && e.pointerId === swipe.id) {
       // Any touch that made no swipe is a tap: stop where you are.
@@ -176,39 +179,39 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
     touch = null;
     showPad();
   };
-  window.addEventListener('pointerup', release);
+  window.addEventListener('pointerup', release, { signal });
   // A phone may call off the pointer when the thumb slides onto its toolbar or
   // an edge; the thumb is still down, so the pad stays held until it lifts.
   window.addEventListener('pointercancel', (e) => {
     if (swipe && e.pointerId === swipe.id) swipe = null;
-  });
+  }, { signal });
   window.addEventListener('touchend', (e) => {
     if (touch && e.touches.length === 0) {
       touch = null;
       showPad();
     }
-  });
+  }, { signal });
   window.addEventListener('touchcancel', (e) => {
     if (touch && e.touches.length === 0) {
       touch = null;
       showPad();
     }
-  });
+  }, { signal });
   // Nor may the page scroll or the browser take the gesture while the pad is held.
-  pad.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+  pad.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false, signal });
 
   bonkBtn.addEventListener('pointerdown', (e) => {
     button = true;
     e.preventDefault();
-  });
-  for (const type of ['pointerup', 'pointercancel', 'pointerleave']) bonkBtn.addEventListener(type, () => (button = false));
+  }, { signal });
+  for (const type of ['pointerup', 'pointercancel', 'pointerleave']) bonkBtn.addEventListener(type, () => (button = false), { signal });
   // On a phone the bonk button is held to wait for a hit, so throwing a seed gets
   // a button of its own: hold it, turn, let go.
   throwBtn.addEventListener('pointerdown', (e) => {
     throwHeld = true;
     e.preventDefault();
-  });
-  for (const type of ['pointerup', 'pointercancel', 'pointerleave']) throwBtn.addEventListener(type, () => (throwHeld = false));
+  }, { signal });
+  for (const type of ['pointerup', 'pointercancel', 'pointerleave']) throwBtn.addEventListener(type, () => (throwHeld = false), { signal });
 
   function read(g, id) {
     const me = g.players[id];
@@ -246,6 +249,12 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
     enable: (on) => {
       enabled = on;
       if (!on) reset();
+    },
+    // Lets go of the keyboard, the screen and the buttons for good.
+    destroy: () => {
+      enabled = false;
+      listening.abort();
+      reset();
     },
   };
 }

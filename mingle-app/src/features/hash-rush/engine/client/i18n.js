@@ -1213,8 +1213,16 @@ function detect() {
   return pickLanguage(typeof navigator !== 'undefined' ? navigator.language : 'en');
 }
 
-export const lang = detect();
-const table = STRINGS[lang];
+export let lang = detect();
+let table = STRINGS[lang];
+
+// Inside the mingle app the strings follow the app's language, not the browser's.
+// Returns the language picked for `tag` (one of LANGUAGES).
+export function setLanguage(tag) {
+  lang = STRINGS[tag] ? tag : pickLanguage(tag);
+  table = STRINGS[lang];
+  return lang;
+}
 
 // t('start'), or t('winnerIs', name) for entries that take arguments.
 export function t(key, ...args) {

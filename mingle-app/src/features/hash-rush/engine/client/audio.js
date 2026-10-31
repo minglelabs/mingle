@@ -4,7 +4,10 @@ import { createMusic } from './music.js';
 
 const KEY = 'seed-rush-muted';
 
-export function createAudio() {
+// `audioSession: false` leaves the page's audio session type alone. Inside the
+// mingle app the app owns the audio session (talk, speech and voice calls), so
+// the game does not ask for 'playback' there.
+export function createAudio({ audioSession = true } = {}) {
   let ctx = null;
   let muted = false;
   let track = null;
@@ -27,7 +30,7 @@ export function createAudio() {
     if (!AC) return;
     // iPhones mute web audio with the silent switch unless the page asks for playback.
     try {
-      if (navigator.audioSession) navigator.audioSession.type = 'playback';
+      if (audioSession && navigator.audioSession) navigator.audioSession.type = 'playback';
     } catch {
       // not supported
     }
@@ -234,5 +237,14 @@ export function createAudio() {
     tune();
   }
 
-  return { unlock, play, toggle, setMusic, setAway, setVoice, icon: () => (muted ? '🔇' : '🔊'), ready: () => ctx?.state === 'running' };
+  // For good: the music stops and the audio context is closed. The app does this
+  // when the game is dropped with its chat room.
+  function dispose() {
+    music.stop();
+    const was = ctx;
+    ctx = null;
+    if (was) was.close().catch(() => {});
+  }
+
+  return { unlock, play, toggle, setMusic, setAway, setVoice, dispose, muted: () => muted, icon: () => (muted ? '🔇' : '🔊'), ready: () => ctx?.state === 'running' };
 }
