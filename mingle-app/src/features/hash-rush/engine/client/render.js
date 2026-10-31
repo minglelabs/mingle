@@ -420,6 +420,8 @@ export function createRenderer(canvas, firstMap) {
   // A screen-space direction (right, down) as a world direction, and back.
   const toWorldDir = (sx, sy) => (portrait ? { x: -sy, y: sx } : { x: sx, y: sy });
   const toScreenDir = (wx, wy) => (portrait ? { x: wy, y: -wx } : { x: wx, y: wy });
+  // (mingle) A world point in the map's own screen-aligned units: x across, y down.
+  const onScreen = (q) => (portrait ? { x: q.y, y: WORLD.w - q.x } : { x: q.x, y: q.y });
 
   function resize() {
     const r = canvas.getBoundingClientRect();
@@ -1133,34 +1135,22 @@ export function createRenderer(canvas, firstMap) {
     for (const p of order) {
       const look = lookOf(p);
       const me = p.id === view.meId;
+      // (mingle) Every label stays inside the map: by a side edge it slides in
+      // sideways, and by the top or the bottom edge the stack slides in whole.
+      const { x: sx, y: sy } = onScreen(p);
+      const sw = portrait ? WORLD.h : WORLD.w;
+      const sh = portrait ? WORLD.w : WORLD.h;
+      const fitX = (text) => {
+        const half = ctx.measureText(text).width / 2;
+        return Math.min(Math.max(sx, half + 3), sw - half - 3) - sx;
+      };
       upright(p.x, p.y, () => {
-        let ly = -25;
-        if (p.carrying) {
-          drawSeed(ctx, 0, ly - 6 + Math.sin(t * 6) * 2, 1, 0.3);
-          ly -= 20;
-        }
-        // A phone shows the map small, so its labels are drawn a size up.
-        ctx.font = `800 ${(me ? 15 : 13) * (portrait ? 1.55 : 1)}px ${FONT}`;
-        ctx.textAlign = 'center';
-        ctx.lineWidth = 3.5;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
-        ctx.strokeText(p.name, 0, ly);
-        ctx.fillStyle = look.color;
-        ctx.fillText(p.name, 0, ly);
+        const nameSize = (me ? 15 : 13) * (portrait ? 1.55 : 1);
+        const tagSize = 16 * (portrait ? 1.55 : 1);
+        const noteSize = 12 * (portrait ? 1.5 : 1);
         // While the blue ring is at its brightest, a word over the name says whose it is.
         const fresh = game.phase === 'countdown' ? 1 : Math.max(0, Math.min(1, ME_RING - game.time));
-        if (me && fresh > 0) {
-          const size = 16 * (portrait ? 1.55 : 1);
-          ctx.save();
-          ctx.globalAlpha = fresh;
-          ctx.font = `900 ${size}px ${FONT}`;
-          ctx.lineWidth = 4;
-          ly -= size * 1.15;
-          ctx.strokeText(tr('meTag'), 0, ly);
-          ctx.fillStyle = 'rgb(30, 120, 255)';
-          ctx.fillText(tr('meTag'), 0, ly);
-          ctx.restore();
-        }
+        const tagged = me && fresh > 0;
         // What is going on at the flower, in words: a seed takes standing still
         // for, and only one hamster nibbles at a time. Everyone's nibbling is
         // named; the reminders are for the player's own hamster.
@@ -1168,13 +1158,39 @@ export function createRenderer(canvas, firstMap) {
         // Onto a portal with a seed: it does not warp, and the hamster is told why.
         const warpless = me && p.carrying && game.map.warps.some((w) => Math.hypot(p.x - w.x, p.y - w.y) <= w.r);
         const note = p.gather > 0 ? 'nibbling' : !me || game.phase !== 'playing' ? '' : warpless ? 'portalNoSeed' : waiting ? 'waitTurn' : game.nibbler === p.id ? 'holdStill' : '';
+        const nameY = p.carrying ? -45 : -25;
+        const tagY = nameY - tagSize * 1.15;
+        const noteY = (tagged ? tagY : nameY) - noteSize * 1.35;
+        const top = Math.min(nameY - nameSize * 0.8, tagged ? tagY - tagSize * 0.8 : 0, note ? noteY - noteSize * 0.8 : 0);
+        const down = Math.max(0, 3 - (sy + top));
+        if (p.carrying) drawSeed(ctx, 0, down - 31 + Math.sin(t * 6) * 2, 1, 0.3);
+        // A phone shows the map small, so its labels are drawn a size up.
+        ctx.font = `800 ${nameSize}px ${FONT}`;
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+        let lx = fitX(p.name);
+        ctx.strokeText(p.name, lx, nameY + down);
+        ctx.fillStyle = look.color;
+        ctx.fillText(p.name, lx, nameY + down);
+        if (tagged) {
+          ctx.save();
+          ctx.globalAlpha = fresh;
+          ctx.font = `900 ${tagSize}px ${FONT}`;
+          ctx.lineWidth = 4;
+          lx = fitX(tr('meTag'));
+          ctx.strokeText(tr('meTag'), lx, tagY + down);
+          ctx.fillStyle = 'rgb(30, 120, 255)';
+          ctx.fillText(tr('meTag'), lx, tagY + down);
+          ctx.restore();
+        }
         if (note) {
-          const size = 12 * (portrait ? 1.5 : 1);
-          ctx.font = `800 ${size}px ${FONT}`;
+          ctx.font = `800 ${noteSize}px ${FONT}`;
           ctx.lineWidth = 3.5;
-          ctx.strokeText(tr(note), 0, ly - size * 1.35);
+          lx = fitX(tr(note));
+          ctx.strokeText(tr(note), lx, noteY + down);
           ctx.fillStyle = note === 'nibbling' ? '#a86a00' : note === 'holdStill' || note === 'portalNoSeed' ? '#d92d2d' : '#555';
-          ctx.fillText(tr(note), 0, ly - size * 1.35);
+          ctx.fillText(tr(note), lx, noteY + down);
           ctx.fillStyle = look.color;
         }
         // A computer's level, small, under its feet.
@@ -1182,9 +1198,12 @@ export function createRenderer(canvas, firstMap) {
         if (level) {
           ctx.font = `800 ${10 * (portrait ? 1.5 : 1)}px ${FONT}`;
           ctx.lineWidth = 3;
-          ctx.strokeText(tr('botLevels')[level.key], 0, portrait ? 36 : 31);
+          const word = tr('botLevels')[level.key];
+          const ly = Math.min(portrait ? 36 : 31, sh - 3 - sy);
+          lx = fitX(word);
+          ctx.strokeText(word, lx, ly);
           ctx.fillStyle = level.color;
-          ctx.fillText(tr('botLevels')[level.key], 0, portrait ? 36 : 31);
+          ctx.fillText(word, lx, ly);
           ctx.fillStyle = look.color;
         }
       });
