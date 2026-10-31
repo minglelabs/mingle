@@ -13,6 +13,8 @@
 //   node scripts/qa-agent-device.mjs tap <x> <y>
 //   node scripts/qa-agent-device.mjs long-press <x> <y> [ms]
 //   node scripts/qa-agent-device.mjs swipe <x1> <y1> <x2> <y2> [ms]   # iOS back: start at x=2
+//   node scripts/qa-agent-device.mjs double-tap <x> <y>
+//   node scripts/qa-agent-device.mjs pinch <cx> <cy> [scale=2] [ms=500]  # two-finger zoom in (>1) / out (<1)
 //   node scripts/qa-agent-device.mjs back                       # Android system back
 //   node scripts/qa-agent-device.mjs type <text>                # into the focused field
 //   node scripts/qa-agent-device.mjs alert <accept|dismiss|text>  # iOS alerts / Android permission dialogs
@@ -508,6 +510,42 @@ async function cmdTap(args, holdMs = 60) {
   console.log(JSON.stringify({ tapped: [x, y], holdMs }));
 }
 
+async function cmdDoubleTap(args) {
+  const [x, y] = args.map(Number);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) fail('double-tap needs x y');
+  const state = requireSession();
+  const at = { type: 'pointerMove', duration: 0, x: toDeviceX(state, x), y: toDeviceY(state, y) };
+  // One action sequence, so the two taps land ~100 ms apart (separate `tap` calls are ~1 s apart).
+  await performPointer([
+    at, { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 40 }, { type: 'pointerUp', button: 0 },
+    { type: 'pause', duration: 60 },
+    at, { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 40 }, { type: 'pointerUp', button: 0 },
+  ]);
+  console.log(JSON.stringify({ doubleTapped: [x, y] }));
+}
+
+// Two fingers move apart (scale > 1, zoom in) or together (scale < 1) along the horizontal axis.
+async function cmdPinch(args) {
+  const [cx, cy, scale = 2, ms = 500] = args.map(Number);
+  if (![cx, cy, scale].every(Number.isFinite) || scale <= 0) fail('pinch needs cx cy [scale] [ms]');
+  const state = requireSession();
+  const start = scale >= 1 ? 30 : 30 * (1 / scale);
+  const end = start * scale;
+  const finger = (id, sign) => ({
+    type: 'pointer', id, parameters: { pointerType: 'touch' },
+    actions: [
+      { type: 'pointerMove', duration: 0, x: toDeviceX(state, cx + sign * start), y: toDeviceY(state, cy) },
+      { type: 'pointerDown', button: 0 },
+      { type: 'pause', duration: 50 },
+      { type: 'pointerMove', duration: Math.round(ms), x: toDeviceX(state, cx + sign * end), y: toDeviceY(state, cy) },
+      { type: 'pointerUp', button: 0 },
+    ],
+  });
+  await appium(state, 'POST', '/session/:session/actions', { actions: [finger('finger1', -1), finger('finger2', 1)] });
+  await appium(state, 'DELETE', '/session/:session/actions').catch(() => {});
+  console.log(JSON.stringify({ pinched: [cx, cy], scale, ms }));
+}
+
 async function cmdSwipe(args) {
   const [x1, y1, x2, y2, ms = 350] = args.map(Number);
   if (![x1, y1, x2, y2].every(Number.isFinite)) fail('swipe needs x1 y1 x2 y2 [ms]');
@@ -975,6 +1013,8 @@ async function main() {
     case 'tap': await cmdTap(args); break;
     case 'long-press': await cmdTap(args.slice(0, 2), Number(args[2]) || 800); break;
     case 'swipe': await cmdSwipe(args); break;
+    case 'double-tap': await cmdDoubleTap(args); break;
+    case 'pinch': await cmdPinch(args); break;
     case 'type': await cmdType(args); break;
     case 'alert': await cmdAlert(args); break;
     case 'snapshot': await cmdEval(SNAPSHOT_EXPRESSION); break;
@@ -983,7 +1023,7 @@ async function main() {
     case 'logs': await cmdLogs(args); break;
     case 'stop': await cmdStop(); break;
     default:
-      console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 26).join('\n'));
+      console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 28).join('\n'));
       process.exitCode = command === 'help' ? 0 : 2;
   }
 }
