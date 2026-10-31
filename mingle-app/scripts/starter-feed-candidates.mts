@@ -6,6 +6,11 @@
  * only describes the photo. A post whose text the account already has is
  * skipped, so it is safe to run again. Without --apply it only prints.
  *
+ * Only linxiao.sh, em.ldn and kaito.mz are still picks. The other nine were
+ * cancelled the same day: each repeated a post its account already had
+ * (published, or waiting in review with a photo plan), and the starter
+ * picks use that existing post instead.
+ *
  *   railway run -- npx tsx scripts/starter-feed-candidates.mts [--apply]
  */
 import { prisma } from '../src/lib/prisma'
