@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
 import os from 'node:os';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 import { remote } from 'webdriverio';
 
@@ -2302,4 +2303,28 @@ async function main() {
   }
 }
 
-await main();
+// Other QA scripts (e.g. qa-stt-audio-metrics.mjs) reuse the session helpers;
+// importing this module must not start the regression run.
+export {
+  APP_PACKAGE,
+  IOS_BUNDLE_ID,
+  createAndroidSession,
+  createIosSession,
+  dismissIosAlertIfPresent,
+  ensureAppiumDriver,
+  ensureConversationRoom,
+  ensureDir,
+  isIosSimulator,
+  parseArgs as parseMobileUiQaArgs,
+  prepareIosSimulator,
+  runCommand,
+  safeDeleteSession,
+  startAppiumServer,
+  switchToNative,
+  switchToWebView,
+  waitFor,
+};
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

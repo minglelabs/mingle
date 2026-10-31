@@ -285,6 +285,12 @@ import {
   buildNativeRemountRestoreUrl,
   rememberNativeRemountRestoreConversation,
 } from '@/lib/native-remount-restore'
+import {
+  resolveKeyboardViewportInsetPx,
+  resolveStableKeyboardViewportInsetPx,
+} from './keyboard-viewport-inset'
+
+export { resolveKeyboardViewportInsetPx, resolveStableKeyboardViewportInsetPx }
 
 const VOLUME_THRESHOLD = 0.05
 // How long a "loaded" older-history page may go without changing the list before its loading state is released.
@@ -318,7 +324,6 @@ const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
-const KEYBOARD_VIEWPORT_INSET_STABILITY_THRESHOLD_PX = 2
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
 const VOICE_MODE_TOP_MARGIN_PX = 8
 const VOICE_MODE_BOTTOM_MARGIN_PX = 0
@@ -525,6 +530,26 @@ type LivePhoneDemoQaSnapshot = {
   composerTextareaHeightPx: number
   utteranceCount: number
   micVisualState: 'idle' | 'connecting' | 'running' | 'error'
+  conversationId: string | null
+  sessionKey: string
+}
+
+type LivePhoneDemoQaUtterance = {
+  id: string
+  originalText: string
+  originalLang: string
+  translations: Record<string, string>
+  translationFinalized: Record<string, boolean>
+  translationStatus: 'pending' | 'retrying' | null
+  createdAtMs: number | null
+}
+
+type LivePhoneDemoQaAudioInjectionOptions = {
+  fixtureId?: string
+  url?: string
+  base64?: string
+  leadingSilenceMs?: number
+  trailingSilenceMs?: number
 }
 
 const SCROLL_PERFORMANCE_CHAT_UTTERANCE_COUNT = 500
@@ -626,7 +651,12 @@ declare global {
       setComposerOpen: (nextOpen: boolean) => void
       remountWebView: () => boolean
       setNativeSttStatusForQa: (status: string) => boolean
+      getRecentUtterances: (limit?: number) => LivePhoneDemoQaUtterance[]
+      qaInjectAudio: (options: LivePhoneDemoQaAudioInjectionOptions) => boolean
+      qaClearAudioInjection: () => boolean
+      getQaAudioInjectionEvents: () => unknown[]
     }
+    __MINGLE_QA_AUDIO_INJECTION_EVENTS__?: unknown[]
   }
 }
 
@@ -775,14 +805,6 @@ function isLivePhoneDemoFeedbackCategory(value: unknown): value is LivePhoneDemo
   return value === 'feedback' || value === 'suggestion' || value === 'inquiry'
 }
 
-export function resolveKeyboardViewportInsetPx(viewport: VisualViewport | null | undefined): number {
-  if (typeof window === 'undefined' || !viewport) return 0
-
-  const inset = window.innerHeight - viewport.height - viewport.offsetTop
-  if (!Number.isFinite(inset) || inset <= 0) return 0
-  return Math.round(inset)
-}
-
 export function resolveHydratedComposerOpenState(input: {
   currentIsComposerOpen: boolean
   persistedInputMode: LivePhoneDemoInputMode | null
@@ -886,20 +908,6 @@ export function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): nu
   textarea.style.height = `${nextHeight}px`
   textarea.style.overflowY = nextHeight >= COMPOSER_TEXTAREA_MAX_HEIGHT_PX ? 'auto' : 'hidden'
   return nextHeight
-}
-
-export function resolveStableKeyboardViewportInsetPx(currentInsetPx: number, nextInsetPx: number): number {
-  const safeCurrentInsetPx = Number.isFinite(currentInsetPx) && currentInsetPx > 0
-    ? Math.round(currentInsetPx)
-    : 0
-  const safeNextInsetPx = Number.isFinite(nextInsetPx) && nextInsetPx > 0
-    ? Math.round(nextInsetPx)
-    : 0
-
-  if (safeCurrentInsetPx === 0 || safeNextInsetPx === 0) return safeNextInsetPx
-  return Math.abs(safeCurrentInsetPx - safeNextInsetPx) < KEYBOARD_VIEWPORT_INSET_STABILITY_THRESHOLD_PX
-    ? safeCurrentInsetPx
-    : safeNextInsetPx
 }
 
 export function resolveComposerDraftStorageKey(
@@ -1577,6 +1585,10 @@ type NativeQaSetSttStatusCommand = {
   }
 }
 
+type NativeQaAudioInjectionCommand =
+  | { type: 'native_qa_inject_audio', payload: LivePhoneDemoQaAudioInjectionOptions }
+  | { type: 'native_qa_clear_audio_injection' }
+
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
 }
@@ -1799,7 +1811,9 @@ type LivePhoneDemoTimelineItem =
   | { kind: 'invite-notice'; timestampMs: number; notice: ConversationInviteNotice }
   | { kind: 'date-divider'; timestampMs: number; dayStartMs: number }
 
-function postNativeQaCommand(command: NativeRemountWebViewCommand | NativeQaSetSttStatusCommand): boolean {
+function postNativeQaCommand(
+  command: NativeRemountWebViewCommand | NativeQaSetSttStatusCommand | NativeQaAudioInjectionCommand,
+): boolean {
   if (typeof window === 'undefined') return false
   const bridge = window.ReactNativeWebView
   if (!bridge || typeof bridge.postMessage !== 'function') return false
@@ -7150,6 +7164,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           composerTextareaHeightPx,
           utteranceCount: utterances.length,
           micVisualState,
+          conversationId: conversationId || null,
+          sessionKey: resolveConversationSessionKey(),
         }
       },
       seedPersistedHistory: (count = 48) => {
@@ -7260,6 +7276,36 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           },
         } satisfies NativeQaSetSttStatusCommand)
       },
+      getRecentUtterances: (limit = 10) => {
+        const count = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : 10
+        return utterancesRef.current.slice(-count).map(utterance => ({
+          id: utterance.id,
+          originalText: utterance.originalText,
+          originalLang: utterance.originalLang,
+          translations: { ...utterance.translations },
+          translationFinalized: { ...(utterance.translationFinalized ?? {}) },
+          translationStatus: utterance.translationStatus ?? null,
+          createdAtMs: utterance.createdAtMs ?? null,
+        }))
+      },
+      qaInjectAudio: (options: LivePhoneDemoQaAudioInjectionOptions) => {
+        if (!isNativeAppRuntime) return false
+        return postNativeQaCommand({
+          type: 'native_qa_inject_audio',
+          payload: {
+            ...(typeof options?.fixtureId === 'string' ? { fixtureId: options.fixtureId } : {}),
+            ...(typeof options?.url === 'string' ? { url: options.url } : {}),
+            ...(typeof options?.base64 === 'string' ? { base64: options.base64 } : {}),
+            ...(Number.isFinite(options?.leadingSilenceMs) ? { leadingSilenceMs: options.leadingSilenceMs } : {}),
+            ...(Number.isFinite(options?.trailingSilenceMs) ? { trailingSilenceMs: options.trailingSilenceMs } : {}),
+          },
+        } satisfies NativeQaAudioInjectionCommand)
+      },
+      qaClearAudioInjection: () => {
+        if (!isNativeAppRuntime) return false
+        return postNativeQaCommand({ type: 'native_qa_clear_audio_injection' } satisfies NativeQaAudioInjectionCommand)
+      },
+      getQaAudioInjectionEvents: () => [...(window.__MINGLE_QA_AUDIO_INJECTION_EVENTS__ ?? [])],
     }
 
     return () => {
@@ -7294,6 +7340,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setAdBannerPosition,
     setIsComposerOpen,
     replaceConversationHistoryForQa,
+    resolveConversationSessionKey,
     showScrollToBottom,
     uiLocale,
     utterances.length,

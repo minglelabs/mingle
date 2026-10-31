@@ -41,7 +41,19 @@ Chrome extension (×11 profiles) ──> 127.0.0.1:10320  (loopback, keyless; /a
     `agent`, `chat`/`image`, `step <email> <job8> <step>`, `done`, `fail`.
   - Restart: `launchctl kickstart -k gui/$(id -u)/app.mingle.chatgpt-pool`.
     This kills in-flight jobs, and the agents reconnect within about 10s.
-- **Tunnel**: ngrok, launchd label `app.mingle.chatgpt-pool-tunnel`.
+- **Fixed URL (use this)**: `https://chatgpt-pool.minglelabs.app`, a Cloudflare
+  named tunnel `chatgpt-pool` (id `a5309179-…`) on the minglelabs.app zone,
+  separate from devbox's `minglelabs` tunnel.
+  - Config: `~/.mingle/chatgpt-pool/cloudflared.yml`. It points only at the
+    keyed public port 10321 and returns 404 for anything else.
+  - launchd label `app.mingle.chatgpt-pool-cf`
+    (`~/Library/LaunchAgents/app.mingle.chatgpt-pool-cf.plist`).
+    Log: `~/Library/Logs/app.mingle.chatgpt-pool-cf.log`.
+  - The agent sandbox cannot `launchctl bootstrap` a new service (I/O error 5).
+    The user loads it once from their own terminal.
+  - Cloudflare answers 524 after about 100s, so image calls must use
+    `"async": true`.
+- **Old tunnel**: ngrok, launchd label `app.mingle.chatgpt-pool-tunnel`.
   - The URL is random and changes when ngrok restarts. Read it from
     `curl -s http://127.0.0.1:4040/api/tunnels`.
   - Last URL: `https://dae9-58-233-211-182.ngrok-free.app`.
@@ -160,8 +172,6 @@ curl -s "$U/v1/chat/completions" -H "authorization: Bearer $K" -H 'content-type:
 - A stray agent `probe-x (signed out)` in the log was a manual probe. It is
   harmless and expires on its own.
 - Later ideas (not started):
-  - A fixed tunnel URL via `cloudflared tunnel login`, which needs the user to
-    log in.
   - Moving the pool to the user's home Windows PC.
 - History: PRs #351 (pool), #356 (public port), #357 (lost jobs, keepalive,
   self-reload), and this branch (progress steps, new ChatGPT DOM, citation

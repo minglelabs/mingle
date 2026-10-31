@@ -10,6 +10,7 @@ import { FeedGlyphToneContext } from "@/components/feed/feed-glyph-tone";
 import { buildConversationRequestIdentityHeaders } from "@/components/conversation-list.logic";
 import { readMyPageProfileCache } from "@/components/my-page-profile-cache";
 import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
+import { runAfterStartup } from "@/lib/after-startup";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { feedHref as buildFeedHref } from "@/lib/feed-routes";
@@ -213,7 +214,11 @@ export default function BottomTabBar({
       }
     };
 
-    void loadUnreadConversationMessageCount();
+    // The badge reloads the whole conversation list; on a cold start that
+    // waits until the screen's own content is up (see after-startup).
+    const cancelStartupLoad = runAfterStartup(() => {
+      void loadUnreadConversationMessageCount();
+    });
     // Each badge refresh reloads the whole conversation list, so poll slowly and
     // never while hidden; focus/visibilitychange still refresh immediately.
     const pollTimer = window.setInterval(refreshWhenVisible, UNREAD_BADGE_POLL_INTERVAL_MS);
@@ -222,6 +227,7 @@ export default function BottomTabBar({
 
     return () => {
       cancelled = true;
+      cancelStartupLoad();
       window.clearInterval(pollTimer);
       window.removeEventListener("focus", refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
@@ -259,8 +265,10 @@ export default function BottomTabBar({
 
     if (!inactiveTabHrefs.every(isNativeTabRootHref)) {
       // Browser tabs render server-loaded data, so they keep fetching it on tap.
-      if (!isMypageActive) void router.prefetch(mypageHref);
-      return;
+      if (isMypageActive) return;
+      return runAfterStartup(() => {
+        void router.prefetch(mypageHref);
+      });
     }
 
     // Native tab roots carry no server-loaded data, so the whole screen can be
@@ -280,11 +288,15 @@ export default function BottomTabBar({
       if (document.visibilityState === "visible") prefetchInactiveTabs();
     };
 
-    prefetchInactiveTabs();
+    // On a cold start these server renders would share the server and the
+    // network with the screen's own first request, so they wait until it is
+    // up (see after-startup). Later mounts run them on the next tick.
+    const cancelStartupPrefetch = runAfterStartup(prefetchInactiveTabs);
     window.addEventListener("focus", refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
+      cancelStartupPrefetch();
       window.removeEventListener("focus", refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
