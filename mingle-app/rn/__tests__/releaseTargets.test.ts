@@ -122,6 +122,14 @@ describe('releaseTargets', () => {
     })).toEqual({ ok: true });
   });
 
+  it('accepts per-session devbox tunnel slot endpoints', () => {
+    expect(validateDedicatedReleaseTargetConfig({
+      apiNamespace: 'ios/v1.1.0',
+      webAppBaseUrl: 'https://mingle-app-devbox-2.photo-for-passport.com',
+      wsUrl: 'wss://mingle-stt-devbox-2.photo-for-passport.com',
+    })).toEqual({ ok: true });
+  });
+
   it('accepts legacy production targets for legacy namespaces', () => {
     expect(validateDedicatedReleaseTargetConfig({
       apiNamespace: 'ios/v1.0.11',
