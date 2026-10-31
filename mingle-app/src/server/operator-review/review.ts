@@ -46,6 +46,26 @@ async function drawPostPhotoInBackground(reserveId: string, operatorUserId: stri
   }
 }
 
+/**
+ * At server start: a background drawing lives only in the process that
+ * started it, so after a deploy or restart nothing will finish the rows it
+ * left `regenerating`. Put them back in review as failed, so the card stops
+ * waiting and the draw button returns. Never throws.
+ */
+export async function releaseOrphanedDrawings(): Promise<number> {
+  try {
+    const released = await prisma.operatorPostReserve.updateMany({
+      where: { state: 'regenerating', error: PHOTO_DRAWING },
+      data: { state: 'review', error: PHOTO_DRAW_FAILED },
+    })
+    if (released.count) console.warn('[operator-review] released_orphaned_drawings', { count: released.count })
+    return released.count
+  } catch (error) {
+    console.warn('[operator-review] release_orphaned_failed', { error: error instanceof Error ? error.name : 'unknown' })
+    return 0
+  }
+}
+
 /** One post of the review queue as its card shows it, for the card to poll while its photo is drawn. */
 export async function getReviewPost(reserveId: string): Promise<ReviewPost | null> {
   const row = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
