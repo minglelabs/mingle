@@ -134,6 +134,71 @@ function devboxEnv() {
     .map(([, key, value]) => [key, value]));
 }
 
+// Phone claims shared with scripts/devbox.sh (docs/worktree-devbox.md, "동시 세션"): one file per phone in
+// <git common dir>/devbox-shared/devices/<platform>-<id>. devbox installs skip phones another live session
+// claims, and this driver claims the phone it drives, so two sessions never test on one phone.
+const DEVICE_CLAIM_TTL_SEC = Number(process.env.DEVBOX_DEVICE_CLAIM_TTL_SEC) || 10_800;
+
+function devboxSharedDir() {
+  const common = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
+  return path.join(common, 'devbox-shared');
+}
+
+function readClaim(file) {
+  try {
+    return Object.fromEntries(fs.readFileSync(file, 'utf8').split('\n')
+      .map((line) => /^([a-z_]+)=(.*)$/.exec(line)).filter(Boolean).map(([, key, value]) => [key, value]));
+  } catch {
+    return null;
+  }
+}
+
+function pidAlive(pid) {
+  if (!/^\d+$/.test(String(pid ?? ''))) return false;
+  try {
+    process.kill(Number(pid), 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
+}
+
+function hasLiveTunnelSlot(owner) {
+  const dir = path.join(devboxSharedDir(), 'tunnel-slots');
+  if (!fs.existsSync(dir)) return false;
+  return fs.readdirSync(dir).some((name) => {
+    const claim = readClaim(path.join(dir, name));
+    return claim?.owner === owner && pidAlive(claim.pid);
+  });
+}
+
+const deviceClaimPath = (platform, id) => path.join(devboxSharedDir(), 'devices', `${platform}-${id.replace(/[^A-Za-z0-9._-]/g, '_')}`);
+
+// Same liveness rule as devbox: the owner worktree still exists and has a live tunnel slot, or claimed
+// the phone within the TTL.
+function phoneClaimedByOtherSession(platform, id) {
+  const claim = readClaim(deviceClaimPath(platform, id));
+  const owner = claim?.owner;
+  if (!owner || owner === fs.realpathSync(REPO_ROOT) || !fs.existsSync(owner)) return null;
+  if (hasLiveTunnelSlot(owner)) return owner;
+  const age = Date.now() / 1000 - Number(claim.claimed_at);
+  return Number.isFinite(age) && age < DEVICE_CLAIM_TTL_SEC ? owner : null;
+}
+
+function claimPhone(platform, id) {
+  const owner = phoneClaimedByOtherSession(platform, id);
+  if (owner) fail(`${platform} phone ${id} is in use by another session (${owner}). Ask the owner before using it.`);
+  const file = deviceClaimPath(platform, id);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const worktree = devboxEnv().DEVBOX_WORKTREE_NAME || path.basename(REPO_ROOT);
+  fs.writeFileSync(file, `owner=${fs.realpathSync(REPO_ROOT)}\nworktree=${worktree}\nclaimed_at=${Math.floor(Date.now() / 1000)}\n`);
+}
+
+function releasePhone(platform, id) {
+  const file = deviceClaimPath(platform, id);
+  if (readClaim(file)?.owner === fs.realpathSync(REPO_ROOT)) fs.rmSync(file, { force: true });
+}
+
 // Hardware UDIDs of connected iPhones, from usbmux (what WDA and Appium use).
 function listDevices() {
   const ids = execFileSync('idevice_id', ['-l'], { encoding: 'utf8' }).split('\n').map((line) => line.trim()).filter(Boolean);
@@ -282,6 +347,7 @@ async function windowSize(state) {
 
 async function cmdStartAndroid(args) {
   const serial = resolveAndroidSerial(readOption(args, '--serial'));
+  claimPhone('android', serial);
   const port = Number(readOption(args, '--port')) || DEFAULT_APPIUM_PORT;
   const previous = readState();
   if (previous?.sessionId && previous.udid === serial && await isAppiumUp(previous.port)) {
@@ -336,6 +402,7 @@ async function cmdStart(args) {
   const sim = args.includes('--sim');
   const udid = sim ? ensureSimulator() : resolveUdid(readOption(args, '--udid'));
   const simulator = sim || isSimulatorUdid(udid);
+  if (!simulator) claimPhone('ios', udid);
   const port = Number(readOption(args, '--port')) || DEFAULT_APPIUM_PORT;
   const previous = readState();
   if (previous?.sessionId && previous.udid === udid && await isAppiumUp(previous.port)) {
@@ -585,6 +652,7 @@ async function cmdStop() {
       // Already gone.
     }
   }
+  if (state?.udid && !state.simulator) releasePhone(state.platform === 'android' ? 'android' : 'ios', state.udid);
   fs.rmSync(STATE_PATH, { force: true });
   console.log(JSON.stringify({ stopped: true }));
 }
@@ -794,6 +862,7 @@ function cmdBuildAndroid() {
 function cmdInstallAndroid(args) {
   if (!fs.existsSync(QA_APK_PATH)) fail('No Android QA build yet; run `node scripts/qa-agent-device.mjs build --android` first.');
   const serial = resolveAndroidSerial(readOption(args, '--serial'));
+  claimPhone('android', serial);
   const fresh = args.includes('--fresh');
   if (fresh) {
     try {
@@ -844,6 +913,7 @@ function cmdInstall(args) {
     return;
   }
   const udid = resolveUdid(readOption(args, '--udid'));
+  claimPhone('ios', udid);
   if (fresh) {
     try {
       execFileSync('xcrun', ['devicectl', 'device', 'uninstall', 'app', '--device', udid, BUNDLE_ID], { stdio: 'ignore' });
