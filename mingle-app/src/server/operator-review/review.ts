@@ -634,6 +634,19 @@ export async function draftReviewPostText(
   try {
     const persona = await loadReservePersona(row.operatorUserId, now, { includeInactive: true })
     if (!persona) return { ok: false, error: 'regenerate_failed' }
+    const account = await prisma.user.findUnique({
+      where: { id: row.operatorUserId },
+      select: { primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, operatorAccount: { select: { personaGender: true } } },
+    })
+    const profile = {
+      gender: account?.operatorAccount?.personaGender ?? null,
+      age: persona.age,
+      city: persona.city,
+      country: persona.country,
+      bio: persona.bio,
+      speaks: account?.primaryLanguages ?? [persona.language],
+      learning: account ? zipInterestLanguages(account.interestLanguages, account.interestLanguageLevels).map((item) => ({ language: item.code, level: item.level })) : [],
+    }
     const photo = row.imagePrompt ? decodePostPhoto(row.imagePrompt) : null
     const text = await rewriteReservePostText({
       persona,
@@ -644,6 +657,7 @@ export async function draftReviewPostText(
       existingTexts: await loadExistingReserveTexts(row.operatorUserId),
       seed: row.operatorUserId,
       topic: row.topic,
+      profile,
     })
     return text ? { ok: true, text } : { ok: false, error: 'regenerate_failed' }
   } catch (error) {
