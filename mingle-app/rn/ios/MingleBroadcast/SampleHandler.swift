@@ -1,4 +1,5 @@
 import CoreMedia
+import QuartzCore
 import ReplayKit
 
 /// Broadcast Upload Extension for device-audio translation.
@@ -60,10 +61,17 @@ final class SampleHandler: RPBroadcastSampleHandler {
             }
             return
         }
+        // Host time of the buffer's first sample (CACurrentMediaTime base).
+        // ReplayKit stamps on the host clock; a buffer without a valid stamp
+        // is timed by its arrival, which the app's alignment search absorbs.
+        let presentation = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        let hostTime = presentation.isValid && presentation.seconds.isFinite
+            ? presentation.seconds
+            : CACurrentMediaTime()
         queue.sync {
             guard !finished, socketFD >= 0 else { return }
             guard let pcm = audioConverter.convert(sampleBuffer) else { return }
-            send(pcm)
+            send(MingleBroadcastChannel.encodeFrame(pcm: pcm, hostTime: hostTime))
         }
     }
 

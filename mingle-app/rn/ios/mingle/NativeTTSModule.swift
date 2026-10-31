@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import QuartzCore
 import React
 
 @objc(NativeTTSModule)
@@ -59,7 +60,6 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
         if ttsSessionTokenAcquired { return }
         MingleAudioSessionCoordinator.shared.acquireTTS()
         ttsSessionTokenAcquired = true
-        MingleDeviceAudioState.shared.setTranslationPlaying(true)
     }
 
     private func clearCurrentPlaybackIdentity() {
@@ -87,7 +87,6 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
 
     private func releaseTtsSessionTokenIfNeeded() {
         if !ttsSessionTokenAcquired { return }
-        MingleDeviceAudioState.shared.setTranslationPlaying(false)
         MingleAudioSessionCoordinator.shared.releaseTTS()
         ttsSessionTokenAcquired = false
         MingleAudioSessionCoordinator.shared.scheduleDeactivateAudioSessionIfIdle(
@@ -137,6 +136,9 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
 
+            if self.audioPlayer?.isPlaying == true {
+                self.noteClipStopped()
+            }
             self.audioPlayer?.stop()
             self.audioPlayer = nil
             self.releaseTtsSessionTokenIfNeeded()
@@ -206,14 +208,9 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             do {
                 // iOS cannot lower the other app while a clip plays without
                 // pausing it, so the translation itself is played louder.
-                let playableData = Self.amplified(audioData, gain: Self.translationGain) ?? audioData
-                let player = try AVAudioPlayer(data: playableData)
+                let prepared = Self.prepareClip(audioData, gain: Self.translationGain)
+                let player = try AVAudioPlayer(data: prepared?.playable ?? audioData)
                 player.delegate = self
-                if deviceAudioActive {
-                    // The broadcast extension transcribes the right channel
-                    // only; the translation stays out of it, in the left ear.
-                    player.pan = MingleDeviceAudioState.translationPan
-                }
                 player.prepareToPlay()
                 if !player.play() {
                     throw NSError(
@@ -221,6 +218,18 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
                         code: -1,
                         userInfo: [NSLocalizedDescriptionKey: "AVAudioPlayer failed to start playback"]
                     )
+                }
+                if deviceAudioActive {
+                    // The broadcast captures this clip too (in both ears);
+                    // the STT side removes it using exactly what was played.
+                    if let reference = prepared?.reference, !reference.isEmpty {
+                        MingleTranslationEchoCanceller.shared.registerClip(
+                            reference,
+                            startHostTime: CACurrentMediaTime() + Self.outputDelay(session)
+                        )
+                    } else {
+                        NSLog("[NativeTTSModule] no echo reference playbackId=%@", playbackId)
+                    }
                 }
                 self.audioPlayer = player
                 self.acquireTtsSessionTokenIfNeeded()
@@ -247,6 +256,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             let stoppedPayload = self.playbackPayload()
             if let player = self.audioPlayer, player.isPlaying {
                 player.stop()
+                self.noteClipStopped()
             }
             self.audioPlayer = nil
             self.clearCurrentPlaybackIdentity()
@@ -260,16 +270,36 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
         }
     }
 
+    /// From starting or stopping the player to the sound leaving the output.
+    private static func outputDelay(_ session: AVAudioSession) -> Double {
+        session.outputLatency + session.ioBufferDuration
+    }
+
+    /// The clip that was playing stops now: the echo canceller stops removing
+    /// it once its last played sound has passed through the capture.
+    private func noteClipStopped() {
+        MingleTranslationEchoCanceller.shared.stopClip(
+            atHostTime: CACurrentMediaTime() + Self.outputDelay(AVAudioSession.sharedInstance())
+        )
+    }
+
     // MARK: - Louder translation
 
     /// Linear gain applied to every clip (2x amplitude, about +6 dB).
     static let translationGain: Float = 2.0
 
+    struct PreparedClip {
+        /// 16-bit WAV to play.
+        let playable: Data
+        /// The same sound as 16 kHz mono, for MingleTranslationEchoCanceller.
+        let reference: [Float]
+    }
+
     /// The clip decoded, multiplied by `gain` with a soft limit near full
     /// scale (so peaks round off instead of clipping), and re-encoded as
-    /// 16-bit WAV. nil when the clip cannot be decoded; the caller then plays
-    /// the original.
-    static func amplified(_ data: Data, gain: Float) -> Data? {
+    /// 16-bit WAV, with its echo-canceller reference. nil when the clip cannot
+    /// be decoded; the caller then plays the original.
+    static func prepareClip(_ data: Data, gain: Float) -> PreparedClip? {
         let fileExtension: String
         if data.starts(with: Array("RIFF".utf8)) {
             fileExtension = "wav"
@@ -297,7 +327,10 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             let frames = Int(buffer.frameLength)
             let knee: Float = 0.85
             var pcm = Data(capacity: frames * channelCount * MemoryLayout<Int16>.size)
+            // What the player outputs, mixed to mono: the echo canceller's reference.
+            var mono = [Float](repeating: 0, count: frames)
             for frame in 0 ..< frames {
+                var monoSum: Float = 0
                 for channel in 0 ..< channelCount {
                     var sample = channels[channel][frame] * gain
                     let magnitude = abs(sample)
@@ -305,15 +338,59 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
                         let limited = knee + (1 - knee) * tanh((magnitude - knee) / (1 - knee))
                         sample = sample < 0 ? -limited : limited
                     }
-                    var value = Int16(max(-1, min(1, sample)) * 32767).littleEndian
+                    let clamped = max(-1, min(1, sample))
+                    monoSum += clamped
+                    var value = Int16(clamped * 32767).littleEndian
                     withUnsafeBytes(of: &value) { pcm.append(contentsOf: $0) }
                 }
+                mono[frame] = monoSum / Float(channelCount)
             }
-            return wavData(pcm: pcm, sampleRate: Int(format.sampleRate), channels: channelCount)
+            let playable = wavData(pcm: pcm, sampleRate: Int(format.sampleRate), channels: channelCount)
+            return PreparedClip(
+                playable: playable,
+                reference: resampledForEchoReference(mono, sampleRate: format.sampleRate)
+            )
         } catch {
             NSLog("[NativeTTSModule] amplify skipped: %@", error.localizedDescription)
             return nil
         }
+    }
+
+    /// `mono` at `sampleRate` as 16 kHz mono (the capture's format); empty
+    /// when it cannot be converted (the clip then plays without cancelling).
+    private static func resampledForEchoReference(_ mono: [Float], sampleRate: Double) -> [Float] {
+        guard !mono.isEmpty,
+              let inputFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
+              let outputFormat = AVAudioFormat(
+                  standardFormatWithSampleRate: Double(MingleBroadcastChannel.sampleRate),
+                  channels: 1
+              ),
+              let converter = AVAudioConverter(from: inputFormat, to: outputFormat),
+              let input = AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: AVAudioFrameCount(mono.count))
+        else { return [] }
+        input.frameLength = AVAudioFrameCount(mono.count)
+        mono.withUnsafeBufferPointer { source in
+            input.floatChannelData?[0].update(from: source.baseAddress!, count: mono.count)
+        }
+        let ratio = outputFormat.sampleRate / inputFormat.sampleRate
+        let capacity = AVAudioFrameCount((Double(mono.count) * ratio).rounded(.up)) + 1024
+        guard let output = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else { return [] }
+        var supplied = false
+        var conversionError: NSError?
+        let status = converter.convert(to: output, error: &conversionError) { _, inputStatus in
+            if supplied {
+                // The whole clip is here: flush the converter's tail too.
+                inputStatus.pointee = .endOfStream
+                return nil
+            }
+            supplied = true
+            inputStatus.pointee = .haveData
+            return input
+        }
+        guard status != .error, conversionError == nil, let samples = output.floatChannelData?[0] else {
+            return []
+        }
+        return Array(UnsafeBufferPointer(start: samples, count: Int(output.frameLength)))
     }
 
     private static func wavData(pcm: Data, sampleRate: Int, channels: Int) -> Data {
@@ -363,6 +440,7 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
             route.outputTypes.joined(separator: ",")
         )
         player.stop()
+        noteClipStopped()
         audioPlayer = nil
         clearCurrentPlaybackIdentity()
         currentStopsOnEarphoneDisconnect = false

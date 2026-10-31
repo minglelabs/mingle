@@ -125,7 +125,7 @@ describe('earphone mode notice capture-source choice', () => {
     expect(copy.captureSourceDeviceAudioHint).toContain('Start')
   })
 
-  it('explains the iOS broadcast sheet and the left earphone on iOS', () => {
+  it('explains the iOS broadcast sheet on iOS', () => {
     const picked = renderNotice({
       captureSource: 'device_audio',
       onSelectCaptureSource: () => {},
@@ -135,7 +135,8 @@ describe('earphone mode notice capture-source choice', () => {
     expect(picked).toContain(copy.captureSourceDeviceAudioHintIos)
     expect(picked).not.toContain(copy.captureSourceDeviceAudioHint)
     expect(copy.captureSourceDeviceAudioHintIos).toContain('Start')
-    expect(copy.captureSourceDeviceAudioHintIos).toContain('왼쪽 이어폰')
+    // The translation plays in both ears now (the echo canceller keeps it out of the capture).
+    expect(copy.captureSourceDeviceAudioHintIos).not.toContain('왼쪽 이어폰')
     // Still nothing while the microphone is picked.
     expect(renderNotice({ captureSource: 'microphone', onSelectCaptureSource: () => {}, deviceAudioViaBroadcast: true, initialStep: 2 }))
       .not.toContain(copy.captureSourceDeviceAudioHintIos)

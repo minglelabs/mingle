@@ -10,8 +10,24 @@ enum MingleBroadcastChannel {
     static let extensionBundleSuffix = ".broadcast"
     /// PCM the extension sends: 16-bit little-endian mono at this rate.
     static let sampleRate = 16_000
-    /// First bytes of every connection, so a stray writer is never taken for audio.
-    static let streamHeader: [UInt8] = Array("MGLPCM16".utf8)
+    /// First bytes of every connection, so a stray writer is never taken for
+    /// audio. After it the stream is a sequence of frames:
+    /// `[UInt32 LE pcm byte count][Float64 LE host time of the first sample][pcm]`.
+    /// The host time (CACurrentMediaTime base, shared by both processes) lets
+    /// the app line its own translation up with the capture to remove it.
+    static let streamHeader: [UInt8] = Array("MGLPCMT1".utf8)
+    /// Bytes before each frame's PCM.
+    static let frameHeaderSize = MemoryLayout<UInt32>.size + MemoryLayout<Float64>.size
+    /// A frame larger than this is not from the extension.
+    static let maxFramePcmBytes = 256 * 1024
+
+    static func encodeFrame(pcm: Data, hostTime: Double) -> Data {
+        var frame = Data(capacity: frameHeaderSize + pcm.count)
+        withUnsafeBytes(of: UInt32(pcm.count).littleEndian) { frame.append(contentsOf: $0) }
+        withUnsafeBytes(of: hostTime.bitPattern.littleEndian) { frame.append(contentsOf: $0) }
+        frame.append(pcm)
+        return frame
+    }
     /// Kept short: the whole path must fit in `sockaddr_un.sun_path` (104 bytes).
     private static let socketFileName = "mgl_bcast.sock"
 
@@ -40,22 +56,6 @@ enum MingleBroadcastChannel {
             return nil
         }
         return container.appendingPathComponent(socketFileName).path
-    }
-
-    // The channel count of the app audio ReplayKit delivers, written by the
-    // extension. A stereo capture keeps the app's own translation out by
-    // channel (it plays in the left ear only); a mono one cannot.
-    private static let captureChannelCountKey = "deviceAudioCaptureChannelCount"
-
-    static func recordCaptureChannelCount(_ count: Int) {
-        guard let group = appGroupIdentifier else { return }
-        UserDefaults(suiteName: group)?.set(count, forKey: captureChannelCountKey)
-    }
-
-    /// 0 when unknown (no capture yet in this session).
-    static func lastCaptureChannelCount() -> Int {
-        guard let group = appGroupIdentifier else { return 0 }
-        return UserDefaults(suiteName: group)?.integer(forKey: captureChannelCountKey) ?? 0
     }
 
     /// Calls `body` with a `sockaddr_un` for `path`; nil when the path does not fit.

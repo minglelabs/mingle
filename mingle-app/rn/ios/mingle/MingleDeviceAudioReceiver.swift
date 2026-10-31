@@ -18,45 +18,15 @@ enum MingleDeviceAudioSupport {
     }
 }
 
-/// Shared between the STT and TTS modules: while a device-audio session runs,
-/// the translation must be played where the capture will not pick it up.
+/// Shared between the STT and TTS modules: whether a device-audio session
+/// runs, so the TTS module hands its clips to MingleTranslationEchoCanceller.
 final class MingleDeviceAudioState {
     static let shared = MingleDeviceAudioState()
 
-    /// The extension transcribes the RIGHT channel, so the app's own speech
-    /// goes hard left.
-    static let translationPan: Float = -1
-
-    /// How long after a translation clip ends its sound may still arrive
-    /// through the broadcast (ReplayKit delivers with some delay).
-    static let translationTail: TimeInterval = 0.4
-
     private let lock = NSLock()
     private var active = false
-    private var translationPlaying = false
-    private var translationEndedAt = Date.distantPast
 
     private init() {}
-
-    /// The TTS module reports its clips. The broadcast captures every app's
-    /// sound, this app's too, and panning alone does not keep the translation
-    /// out (a mono capture carries both ears), so while a clip is audible the
-    /// device audio is not transcribed.
-    func setTranslationPlaying(_ playing: Bool) {
-        lock.lock()
-        if translationPlaying && !playing {
-            translationEndedAt = Date()
-        }
-        translationPlaying = playing
-        lock.unlock()
-    }
-
-    var isTranslationAudible: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return translationPlaying
-            || Date().timeIntervalSince(translationEndedAt) < Self.translationTail
-    }
 
     var isActive: Bool {
         get {
@@ -84,8 +54,9 @@ final class MingleDeviceAudioReceiver {
 
     /// The extension connected and identified itself: the broadcast is live.
     var onConnected: (() -> Void)?
-    /// 16-bit little-endian mono PCM at `MingleBroadcastChannel.sampleRate`.
-    var onAudio: ((Data) -> Void)?
+    /// 16-bit little-endian mono PCM at `MingleBroadcastChannel.sampleRate`,
+    /// with the host time (CACurrentMediaTime base) of its first sample.
+    var onAudio: ((Data, Double) -> Void)?
     /// The extension went away (the user ended the broadcast, or it crashed).
     var onDisconnected: (() -> Void)?
 
@@ -96,6 +67,8 @@ final class MingleDeviceAudioReceiver {
     private var socketPath: String?
     private var headerBytes: [UInt8] = []
     private var headerAccepted = false
+    /// Bytes of a frame not complete yet.
+    private var frameBuffer = Data()
     private var readBuffer = [UInt8](repeating: 0, count: 16 * 1024)
 
     deinit {
@@ -174,6 +147,7 @@ final class MingleDeviceAudioReceiver {
         clientFD = fd
         headerBytes = []
         headerAccepted = false
+        frameBuffer.removeAll(keepingCapacity: false)
 
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         source.setEventHandler { [weak self] in
@@ -220,8 +194,31 @@ final class MingleDeviceAudioReceiver {
             headerAccepted = true
             onConnected?()
         }
-        if !audio.isEmpty {
-            onAudio?(Data(audio))
+        guard !audio.isEmpty else { return }
+        frameBuffer.append(contentsOf: audio)
+        let headerSize = MingleBroadcastChannel.frameHeaderSize
+        while frameBuffer.count >= headerSize {
+            let base = frameBuffer.startIndex
+            let pcmBytes = frameBuffer.withUnsafeBytes { raw in
+                Int(UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: 0, as: UInt32.self)))
+            }
+            guard pcmBytes <= MingleBroadcastChannel.maxFramePcmBytes, pcmBytes % 2 == 0 else {
+                // Out of step with the extension: never guess at audio.
+                dropClient(notify: true)
+                return
+            }
+            guard frameBuffer.count >= headerSize + pcmBytes else { return }
+            let hostTime = frameBuffer.withUnsafeBytes { raw in
+                Double(bitPattern: UInt64(littleEndian: raw.loadUnaligned(
+                    fromByteOffset: MemoryLayout<UInt32>.size,
+                    as: UInt64.self
+                )))
+            }
+            let pcm = Data(frameBuffer[base + headerSize ..< base + headerSize + pcmBytes])
+            frameBuffer.removeFirst(headerSize + pcmBytes)
+            if !pcm.isEmpty {
+                onAudio?(pcm, hostTime)
+            }
         }
     }
 
@@ -233,6 +230,7 @@ final class MingleDeviceAudioReceiver {
         clientFD = -1
         headerBytes = []
         headerAccepted = false
+        frameBuffer.removeAll(keepingCapacity: false)
         if notify, wasLive {
             onDisconnected?()
         }

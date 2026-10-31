@@ -1819,8 +1819,8 @@ class NativeSTTModule: RCTEventEmitter {
         receiver.onConnected = { [weak self] in
             DispatchQueue.main.async { self?.handleDeviceAudioBroadcastStarted() }
         }
-        receiver.onAudio = { [weak self] pcm in
-            self?.handleDeviceAudio(pcm)
+        receiver.onAudio = { [weak self] pcm, hostTime in
+            self?.handleDeviceAudio(pcm, hostTime: hostTime)
         }
         receiver.onDisconnected = { [weak self] in
             DispatchQueue.main.async { self?.handleDeviceAudioBroadcastEnded() }
@@ -2196,7 +2196,7 @@ class NativeSTTModule: RCTEventEmitter {
             self?.deviceAudioMicBuffer.removeAll(keepingCapacity: false)
             self?.deviceAudioPrimed = false
         }
-        MingleBroadcastChannel.recordCaptureChannelCount(0)
+        MingleTranslationEchoCanceller.shared.reset()
         deviceAudioActive = true
         MingleDeviceAudioState.shared.isActive = true
         startDeviceAudioMicrophone()
@@ -2228,23 +2228,16 @@ class NativeSTTModule: RCTEventEmitter {
     }
 
     /// PCM from the extension, on the receiver's queue.
-    private func handleDeviceAudio(_ pcm: Data) {
+    private func handleDeviceAudio(_ capturedPcm: Data, hostTime: Double) {
         wsQueue.async { [weak self] in
             guard let self, self.isRunning, self.deviceAudioActive, !self.gracefulStopPending else { return }
-            // A stereo capture keeps this app's translation out by channel
-            // (it plays in the left ear, the right one is transcribed), so
-            // the other app's speech keeps flowing while it reads. Only a
-            // mono (or not yet known) capture carries the translation: then
-            // that stretch is replaced by silence (the microphone, behind the
-            // earphones, still goes through).
-            let translationAudible = MingleDeviceAudioState.shared.isTranslationAudible
-                && MingleBroadcastChannel.lastCaptureChannelCount() < 2
-            if self.deviceAudioMicActive {
-                if translationAudible { return }
-                self.deviceAudioBuffer.append(pcm)
-            } else {
-                self.deviceAudioBuffer.append(translationAudible ? Data(count: pcm.count) : pcm)
-            }
+            // The capture carries this app's translation too (ReplayKit mixes
+            // every app): remove it, so the other app's speech keeps flowing
+            // while a translation is read. May hold audio briefly while a new
+            // clip is lined up.
+            let pcm = MingleTranslationEchoCanceller.shared.process(pcm: capturedPcm, hostTime: hostTime)
+            guard !pcm.isEmpty else { return }
+            self.deviceAudioBuffer.append(pcm)
             if self.deviceAudioMicActive {
                 // The microphone paces the stream and adds this audio in;
                 // keep at most a second of it.

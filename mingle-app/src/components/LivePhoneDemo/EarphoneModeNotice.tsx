@@ -136,8 +136,8 @@ export default function EarphoneModeNoticeContent({
   // only capture the microphone).
   captureSource?: SttCaptureSource
   onSelectCaptureSource?: (source: SttCaptureSource) => void
-  // iOS captures through a screen broadcast and reads the translation in the
-  // left earphone only; the hint under the choice says so.
+  // iOS captures through a screen broadcast; the hint under the choice
+  // explains its sheet.
   deviceAudioViaBroadcast?: boolean
   onConfirm: () => void
   // Coins: reading translations aloud costs more than recognition alone. Null while billing is off.

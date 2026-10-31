@@ -19,6 +19,7 @@
 		A1B2C3D45E6F708192A3B4C5 /* NativeAuthModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6708192A3B4C5D6E7 /* NativeAuthModule.swift */; };
 		A8F1C3B52D4E6A7091BC23D4 /* NativeSTTModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D9E1F32A4B6C8091DE45F6 /* NativeSTTModule.swift */; };
 		A9B5F951A7F4B3989E8581A2 /* MingleDeviceAudioReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2C515897F2EDAF5FF58F1F /* MingleDeviceAudioReceiver.swift */; };
+		C3E1A7B2D4F60918A2B3C4D5 /* MingleTranslationEchoCanceller.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F2B8C3E5A71029B3C4D5E6 /* MingleTranslationEchoCanceller.swift */; };
 		B9C8D7E6F5A4B3C2D1E0F9A8 /* MingleBackgroundAudioPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B8C7D6E5F4A3B2C1D0E9F8 /* MingleBackgroundAudioPolicy.swift */; };
 		B7C8D9E0F1A2B3C4D5E6F708 /* NativeQrImageModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */; };
 		C8D9E0F1A2B3C4D5E6F70819 /* NativeQrImageModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */; };
@@ -70,6 +71,7 @@
 		807FDE7341F492843A1FB603 /* MingleBroadcast.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = MingleBroadcast.entitlements; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = mingle/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		8F2C515897F2EDAF5FF58F1F /* MingleDeviceAudioReceiver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MingleDeviceAudioReceiver.swift; path = mingle/MingleDeviceAudioReceiver.swift; sourceTree = "<group>"; };
+		D4F2B8C3E5A71029B3C4D5E6 /* MingleTranslationEchoCanceller.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MingleTranslationEchoCanceller.swift; path = mingle/MingleTranslationEchoCanceller.swift; sourceTree = "<group>"; };
 		99EBB39BCA16B7687297C2B1 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		A5D6E7F65C7D9F0192FA56A8 /* NativeTTSModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeTTSModuleBridge.m; path = mingle/NativeTTSModuleBridge.m; sourceTree = "<group>"; };
 		ABDA839FAA4C07DF2182B100 /* SampleHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
@@ -130,6 +132,7 @@
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
 				8F2C515897F2EDAF5FF58F1F /* MingleDeviceAudioReceiver.swift */,
+				D4F2B8C3E5A71029B3C4D5E6 /* MingleTranslationEchoCanceller.swift */,
 			);
 			name = mingle;
 			sourceTree = "<group>";
@@ -430,6 +433,7 @@
 				C4D5E6F708192A3B4C5D6E7F /* NativePictureInPictureModule.swift in Sources */,
 				D5E6F708192A3B4C5D6E7F80 /* NativePictureInPictureModuleBridge.m in Sources */,
 				A9B5F951A7F4B3989E8581A2 /* MingleDeviceAudioReceiver.swift in Sources */,
+				C3E1A7B2D4F60918A2B3C4D5 /* MingleTranslationEchoCanceller.swift in Sources */,
 				BF25FA2153F5D81173975EC3 /* MingleBroadcastChannel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

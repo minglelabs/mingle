@@ -4,9 +4,9 @@ import CoreMedia
 /// Turns ReplayKit's app-audio buffers into the PCM the app expects:
 /// 16-bit little-endian mono at `MingleBroadcastChannel.sampleRate`.
 ///
-/// The app plays its translation in the LEFT channel only, so the RIGHT
-/// channel of a stereo capture carries the other apps' sound without it. That
-/// is the channel kept; a mono capture is passed on as it is.
+/// Every channel is mixed down to mono. The capture includes this app's own
+/// translation; the app removes it with an echo canceller that knows what it
+/// played (see MingleTranslationEchoCanceller).
 final class BroadcastAudioConverter {
     private var converter: AVAudioConverter?
     private var converterInputFormat: AVAudioFormat?
@@ -44,14 +44,11 @@ final class BroadcastAudioConverter {
 
         if converter == nil || converterInputFormat != inputFormat {
             guard let next = AVAudioConverter(from: inputFormat, to: outputFormat) else { return nil }
-            if inputFormat.channelCount >= 2 {
-                // Output channel 0 <- input channel 1 (right): the channel the
-                // app's own translation audio is kept out of.
-                next.channelMap = [1]
-            }
+            // Mix all channels instead of keeping one, so the mono capture
+            // matches the mono reference the app subtracts.
+            next.downmix = true
             converter = next
             converterInputFormat = inputFormat
-            MingleBroadcastChannel.recordCaptureChannelCount(Int(inputFormat.channelCount))
         }
         guard let converter else { return nil }
 
