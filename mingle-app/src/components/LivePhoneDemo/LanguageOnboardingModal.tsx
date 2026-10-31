@@ -2,7 +2,9 @@
 
 import { Check, ChevronLeft, Loader2, Search, X } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
+import { registerNativeEdgeSwipeSuppression } from "@/components/slide-surface";
+import { isLeftEdgeSwipeBack, isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import {
   buildLanguageSelectorItems,
   filterLanguageSelectorItems,
@@ -164,6 +166,33 @@ export default function LanguageOnboardingModal({
     return true;
   }, 30), [handleStepBack, isConfirming, step]);
 
+  // The native WKWebView edge-swipe would navigate the page underneath, so the
+  // modal owns the gesture and maps it to the same step-back as the chevron.
+  useEffect(() => registerNativeEdgeSwipeSuppression(), []);
+
+  const edgeSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleEdgeSwipeStart = useCallback((event: ReactTouchEvent<HTMLElement>) => {
+    const touch = event.touches.length === 1 ? event.touches[0] : null;
+    edgeSwipeStartRef.current = touch && isLeftEdgeSwipeStart(touch.clientX)
+      ? { x: touch.clientX, y: touch.clientY }
+      : null;
+  }, []);
+
+  const handleEdgeSwipeEnd = useCallback((event: ReactTouchEvent<HTMLElement>) => {
+    const start = edgeSwipeStartRef.current;
+    edgeSwipeStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch || step === "language") return;
+    if (isLeftEdgeSwipeBack(start, { x: touch.clientX, y: touch.clientY }, window.innerWidth)) {
+      handleStepBack();
+    }
+  }, [handleStepBack, step]);
+
+  const handleEdgeSwipeCancel = useCallback(() => {
+    edgeSwipeStartRef.current = null;
+  }, []);
+
   if (typeof document === "undefined") return null;
 
   const handleLanguageStepNext = () => {
@@ -258,6 +287,9 @@ export default function LanguageOnboardingModal({
       // first-entry flow also withholds the authentication surface until this picker
       // is complete, so the language choice is never presented as a late cover layer.
       style={{ zIndex: 250 }}
+      onTouchStart={handleEdgeSwipeStart}
+      onTouchEnd={handleEdgeSwipeEnd}
+      onTouchCancel={handleEdgeSwipeCancel}
     >
       <div
         className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]"
