@@ -2367,7 +2367,6 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       {interestSheetOpen ? (
         <InterestLanguageSheet
           locale={locale}
-          primaryLanguages={primaryLanguages}
           onSave={(language) => handleSaveInterestLanguages([language])}
           onClose={() => setInterestSheetOpen(false)}
         />

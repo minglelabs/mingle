@@ -5,6 +5,7 @@ import InterestLanguageSheet from "@/components/interest-language-sheet";
 import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import type { InterestLanguage } from "@/lib/interest-languages";
+import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 import {
   INTEREST_PROMPT_DELAY_MS,
   interestPromptStorageKey,
@@ -26,7 +27,8 @@ function readRecord(userId: string) {
  * at the feed for a moment (see interest-language-prompt.logic.ts).
  */
 export default function InterestLanguagePrompt({ viewerId, locale }: { viewerId: string | null; locale: string }) {
-  const [primaryLanguages, setPrimaryLanguages] = useState<string[] | null>(null);
+  // undefined: closed. null/string: open, with that language pre-checked.
+  const [initialLanguage, setInitialLanguage] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
     if (!viewerId || !shouldShowInterestPrompt(readRecord(viewerId), Date.now())) return;
@@ -35,7 +37,7 @@ export default function InterestLanguagePrompt({ viewerId, locale }: { viewerId:
       try {
         const response = await fetch(buildClientApiPath("/profile"), { cache: "no-store", signal: controller.signal });
         if (!response.ok) return;
-        const profile = await response.json() as { primaryLanguages?: unknown; interestLanguages?: unknown };
+        const profile = await response.json() as { primaryLanguages?: unknown; interestLanguages?: unknown; defaultConversationLanguages?: unknown };
         const spoken = Array.isArray(profile.primaryLanguages) ? profile.primaryLanguages.filter((code): code is string => typeof code === "string") : [];
         if (Array.isArray(profile.interestLanguages) && profile.interestLanguages.length > 0) return;
         if (document.visibilityState === "hidden") return;
@@ -44,7 +46,14 @@ export default function InterestLanguagePrompt({ viewerId, locale }: { viewerId:
         } catch {
           // Not persisted: this user may be asked once more.
         }
-        setPrimaryLanguages(spoken);
+        // Older profiles kept the language they want to talk in as a second
+        // primary language or a default conversation language; start with it
+        // checked so the user only picks a level.
+        const conversation = Array.isArray(profile.defaultConversationLanguages)
+          ? profile.defaultConversationLanguages.filter((code): code is string => typeof code === "string")
+          : [];
+        const own = spoken[0] ? canonicalizeSttLanguageCode(spoken[0]) : "";
+        setInitialLanguage([...spoken.slice(1), ...conversation].find((code) => canonicalizeSttLanguageCode(code) !== own) ?? null);
       } catch {
         // Offline or aborted: ask another time.
       }
@@ -68,13 +77,13 @@ export default function InterestLanguagePrompt({ viewerId, locale }: { viewerId:
     }
   }, []);
 
-  if (!primaryLanguages) return null;
+  if (initialLanguage === undefined) return null;
   return (
     <InterestLanguageSheet
       locale={locale}
-      primaryLanguages={primaryLanguages}
+      initialLanguage={initialLanguage}
       onSave={save}
-      onClose={() => setPrimaryLanguages(null)}
+      onClose={() => setInitialLanguage(undefined)}
       closeLabel={resolveInterestLanguageCopy(locale).laterAction}
     />
   );
