@@ -1,2 +1,8 @@
+import {
+  getConversationChannelsForAndroidV1_1_4,
+  postCreateConversationForAndroidV1_1_4,
+} from "@/server/api/controllers/android/v1.1.4/conversations-controller";
+
 export const runtime = "nodejs";
-export { GET, POST } from "@/app/api/android/v2.0.0/conversations/route";
+export const GET = getConversationChannelsForAndroidV1_1_4;
+export const POST = postCreateConversationForAndroidV1_1_4;

@@ -72,7 +72,7 @@ function postNativeNavigationState(suppressEdgeSwipe: boolean): void {
   }
 }
 
-function registerNativeEdgeSwipeSuppression(): () => void {
+export function registerNativeEdgeSwipeSuppression(): () => void {
   const token = `slide-surface-${nativeSuppressionTokenSequence}`;
   nativeSuppressionTokenSequence += 1;
   nativeSuppressedSurfaceTokens.add(token);

@@ -1,132 +1,15 @@
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match'
 import { describe, expect, it } from 'vitest'
+
+import nextConfig from '../../../next.config.mjs'
 
 import { POST as postLegacyLogClientEvent } from '@/app/api/log/client-event/route'
 import { POST as postLegacyTranslateFinalize } from '@/app/api/translate/finalize/route'
 import { POST as postLegacyTtsInworld } from '@/app/api/tts/inworld/route'
 import { POST as postLegacyClientVersionPolicy } from '@/app/api/client/version-policy/route'
-import { POST as postAndroidV100ClientVersionPolicy } from '@/app/api/android/v1.0.0/client/version-policy/route'
-import { POST as postAndroidV102ClientVersionPolicy } from '@/app/api/android/v1.0.2/client/version-policy/route'
-import { POST as postAndroidV103ClientVersionPolicy } from '@/app/api/android/v1.0.3/client/version-policy/route'
-import { POST as postAndroidV104ClientVersionPolicy } from '@/app/api/android/v1.0.4/client/version-policy/route'
-import { POST as postAndroidV105ClientVersionPolicy } from '@/app/api/android/v1.0.5/client/version-policy/route'
-import { POST as postAndroidV106ClientVersionPolicy } from '@/app/api/android/v1.0.6/client/version-policy/route'
-import { POST as postAndroidV107ClientVersionPolicy } from '@/app/api/android/v1.0.7/client/version-policy/route'
-import { POST as postAndroidV108ClientVersionPolicy } from '@/app/api/android/v1.0.8/client/version-policy/route'
-import { POST as postAndroidV109ClientVersionPolicy } from '@/app/api/android/v1.0.9/client/version-policy/route'
-import { POST as postAndroidV111ClientVersionPolicy } from '@/app/api/android/v1.0.11/client/version-policy/route'
-import { POST as postAndroidV1_1_0ClientVersionPolicy } from '@/app/api/android/v1.1.0/client/version-policy/route'
-import {
-  GET as getAndroidV1_1_0AccountPreferences,
-  PATCH as patchAndroidV1_1_0AccountPreferences,
-} from '@/app/api/android/v1.1.0/account/preferences/route'
-import { POST as postAndroidV100LogClientEvent } from '@/app/api/android/v1.0.0/log/client-event/route'
-import { POST as postAndroidV102LogClientEvent } from '@/app/api/android/v1.0.2/log/client-event/route'
-import { POST as postAndroidV103LogClientEvent } from '@/app/api/android/v1.0.3/log/client-event/route'
-import { POST as postAndroidV104LogClientEvent } from '@/app/api/android/v1.0.4/log/client-event/route'
-import { POST as postAndroidV105LogClientEvent } from '@/app/api/android/v1.0.5/log/client-event/route'
-import { POST as postAndroidV106LogClientEvent } from '@/app/api/android/v1.0.6/log/client-event/route'
-import { POST as postAndroidV107LogClientEvent } from '@/app/api/android/v1.0.7/log/client-event/route'
-import { POST as postAndroidV108LogClientEvent } from '@/app/api/android/v1.0.8/log/client-event/route'
-import { POST as postAndroidV109LogClientEvent } from '@/app/api/android/v1.0.9/log/client-event/route'
-import { POST as postAndroidV111LogClientEvent } from '@/app/api/android/v1.0.11/log/client-event/route'
-import { POST as postAndroidV1_1_0LogClientEvent } from '@/app/api/android/v1.1.0/log/client-event/route'
-import { POST as postAndroidV100TranslateFinalize } from '@/app/api/android/v1.0.0/translate/finalize/route'
-import { POST as postAndroidV102TranslateFinalize } from '@/app/api/android/v1.0.2/translate/finalize/route'
-import { POST as postAndroidV103TranslateFinalize } from '@/app/api/android/v1.0.3/translate/finalize/route'
-import { POST as postAndroidV104TranslateFinalize } from '@/app/api/android/v1.0.4/translate/finalize/route'
-import { POST as postAndroidV105TranslateFinalize } from '@/app/api/android/v1.0.5/translate/finalize/route'
-import { POST as postAndroidV106TranslateFinalize } from '@/app/api/android/v1.0.6/translate/finalize/route'
-import { POST as postAndroidV107TranslateFinalize } from '@/app/api/android/v1.0.7/translate/finalize/route'
-import { POST as postAndroidV108TranslateFinalize } from '@/app/api/android/v1.0.8/translate/finalize/route'
-import { POST as postAndroidV109TranslateFinalize } from '@/app/api/android/v1.0.9/translate/finalize/route'
-import { POST as postAndroidV111TranslateFinalize } from '@/app/api/android/v1.0.11/translate/finalize/route'
-import { POST as postAndroidV1_1_0TranslateFinalize } from '@/app/api/android/v1.1.0/translate/finalize/route'
-import { POST as postAndroidV100TtsInworld } from '@/app/api/android/v1.0.0/tts/inworld/route'
-import { POST as postAndroidV102TtsInworld } from '@/app/api/android/v1.0.2/tts/inworld/route'
-import { POST as postAndroidV103TtsInworld } from '@/app/api/android/v1.0.3/tts/inworld/route'
-import { POST as postAndroidV104TtsInworld } from '@/app/api/android/v1.0.4/tts/inworld/route'
-import { POST as postAndroidV105TtsInworld } from '@/app/api/android/v1.0.5/tts/inworld/route'
-import { POST as postAndroidV106TtsInworld } from '@/app/api/android/v1.0.6/tts/inworld/route'
-import { POST as postAndroidV107TtsInworld } from '@/app/api/android/v1.0.7/tts/inworld/route'
-import { POST as postAndroidV108TtsInworld } from '@/app/api/android/v1.0.8/tts/inworld/route'
-import { POST as postAndroidV109TtsInworld } from '@/app/api/android/v1.0.9/tts/inworld/route'
-import { POST as postAndroidV111TtsInworld } from '@/app/api/android/v1.0.11/tts/inworld/route'
-import { POST as postAndroidV1_1_0TtsInworld } from '@/app/api/android/v1.1.0/tts/inworld/route'
-import {
-  GET as getAndroidV1_1_0Conversations,
-  POST as postAndroidV1_1_0Conversations,
-} from '@/app/api/android/v1.1.0/conversations/route'
-import {
-  DELETE as deleteAndroidV1_1_0Conversation,
-  PATCH as patchAndroidV1_1_0Conversation,
-} from '@/app/api/android/v1.1.0/conversations/[conversationId]/route'
-import { POST as postIosV100ClientVersionPolicy } from '@/app/api/ios/v1.0.0/client/version-policy/route'
-import { POST as postIosV102ClientVersionPolicy } from '@/app/api/ios/v1.0.2/client/version-policy/route'
-import { POST as postIosV103ClientVersionPolicy } from '@/app/api/ios/v1.0.3/client/version-policy/route'
-import { POST as postIosV104ClientVersionPolicy } from '@/app/api/ios/v1.0.4/client/version-policy/route'
-import { POST as postIosV105ClientVersionPolicy } from '@/app/api/ios/v1.0.5/client/version-policy/route'
-import { POST as postIosV106ClientVersionPolicy } from '@/app/api/ios/v1.0.6/client/version-policy/route'
-import { POST as postIosV107ClientVersionPolicy } from '@/app/api/ios/v1.0.7/client/version-policy/route'
-import { POST as postIosV108ClientVersionPolicy } from '@/app/api/ios/v1.0.8/client/version-policy/route'
-import { POST as postIosV109ClientVersionPolicy } from '@/app/api/ios/v1.0.9/client/version-policy/route'
-import { POST as postIosV111ClientVersionPolicy } from '@/app/api/ios/v1.0.11/client/version-policy/route'
-import { POST as postIosV1_1_0ClientVersionPolicy } from '@/app/api/ios/v1.1.0/client/version-policy/route'
-import {
-  GET as getIosV1_1_0AccountPreferences,
-  PATCH as patchIosV1_1_0AccountPreferences,
-} from '@/app/api/ios/v1.1.0/account/preferences/route'
-import { POST as postIosV100LogClientEvent } from '@/app/api/ios/v1.0.0/log/client-event/route'
-import { POST as postIosV102LogClientEvent } from '@/app/api/ios/v1.0.2/log/client-event/route'
-import { POST as postIosV103LogClientEvent } from '@/app/api/ios/v1.0.3/log/client-event/route'
-import { POST as postIosV104LogClientEvent } from '@/app/api/ios/v1.0.4/log/client-event/route'
-import { POST as postIosV105LogClientEvent } from '@/app/api/ios/v1.0.5/log/client-event/route'
-import { POST as postIosV106LogClientEvent } from '@/app/api/ios/v1.0.6/log/client-event/route'
-import { POST as postIosV107LogClientEvent } from '@/app/api/ios/v1.0.7/log/client-event/route'
-import { POST as postIosV108LogClientEvent } from '@/app/api/ios/v1.0.8/log/client-event/route'
-import { POST as postIosV109LogClientEvent } from '@/app/api/ios/v1.0.9/log/client-event/route'
-import { POST as postIosV111LogClientEvent } from '@/app/api/ios/v1.0.11/log/client-event/route'
-import { POST as postIosV1_1_0LogClientEvent } from '@/app/api/ios/v1.1.0/log/client-event/route'
-import { POST as postIosV100TranslateFinalize } from '@/app/api/ios/v1.0.0/translate/finalize/route'
-import { POST as postIosV102TranslateFinalize } from '@/app/api/ios/v1.0.2/translate/finalize/route'
-import { POST as postIosV103TranslateFinalize } from '@/app/api/ios/v1.0.3/translate/finalize/route'
-import { POST as postIosV104TranslateFinalize } from '@/app/api/ios/v1.0.4/translate/finalize/route'
-import { POST as postIosV105TranslateFinalize } from '@/app/api/ios/v1.0.5/translate/finalize/route'
-import { POST as postIosV106TranslateFinalize } from '@/app/api/ios/v1.0.6/translate/finalize/route'
-import { POST as postIosV107TranslateFinalize } from '@/app/api/ios/v1.0.7/translate/finalize/route'
-import { POST as postIosV108TranslateFinalize } from '@/app/api/ios/v1.0.8/translate/finalize/route'
-import { POST as postIosV109TranslateFinalize } from '@/app/api/ios/v1.0.9/translate/finalize/route'
-import { POST as postIosV111TranslateFinalize } from '@/app/api/ios/v1.0.11/translate/finalize/route'
-import { POST as postIosV1_1_0TranslateFinalize } from '@/app/api/ios/v1.1.0/translate/finalize/route'
-import { POST as postIosV100TtsInworld } from '@/app/api/ios/v1.0.0/tts/inworld/route'
-import { POST as postIosV102TtsInworld } from '@/app/api/ios/v1.0.2/tts/inworld/route'
-import { POST as postIosV103TtsInworld } from '@/app/api/ios/v1.0.3/tts/inworld/route'
-import { POST as postIosV104TtsInworld } from '@/app/api/ios/v1.0.4/tts/inworld/route'
-import { POST as postIosV105TtsInworld } from '@/app/api/ios/v1.0.5/tts/inworld/route'
-import { POST as postIosV106TtsInworld } from '@/app/api/ios/v1.0.6/tts/inworld/route'
-import { POST as postIosV107TtsInworld } from '@/app/api/ios/v1.0.7/tts/inworld/route'
-import { POST as postIosV108TtsInworld } from '@/app/api/ios/v1.0.8/tts/inworld/route'
-import { POST as postIosV109TtsInworld } from '@/app/api/ios/v1.0.9/tts/inworld/route'
-import { POST as postIosV111TtsInworld } from '@/app/api/ios/v1.0.11/tts/inworld/route'
-import { POST as postIosV1_1_0TtsInworld } from '@/app/api/ios/v1.1.0/tts/inworld/route'
-import {
-  GET as getIosV1_1_0Conversations,
-  POST as postIosV1_1_0Conversations,
-} from '@/app/api/ios/v1.1.0/conversations/route'
-import {
-  DELETE as deleteIosV1_1_0Conversation,
-  PATCH as patchIosV1_1_0Conversation,
-} from '@/app/api/ios/v1.1.0/conversations/[conversationId]/route'
-import { postAndroidClientVersionPolicyForAndroidV1_0_0 } from '@/server/api/controllers/android/v1.0.0/client-version-policy-controller'
-import { postAndroidClientVersionPolicyForAndroidV1_0_2 } from '@/server/api/controllers/android/v1.0.2/client-version-policy-controller'
-import { postAndroidClientVersionPolicyForAndroidV1_0_3 } from '@/server/api/controllers/android/v1.0.3/client-version-policy-controller'
-import { postAndroidClientVersionPolicyForAndroidV1_0_4 } from '@/server/api/controllers/android/v1.0.4/client-version-policy-controller'
-import { postAndroidClientVersionPolicyForAndroidV1_0_5 } from '@/server/api/controllers/android/v1.0.5/client-version-policy-controller'
-import { postAndroidClientVersionPolicyForAndroidV1_0_6 } from '@/server/api/controllers/android/v1.0.6/client-version-policy-controller'
-import { postAndroidClientVersionPolicyForAndroidV1_0_7 } from '@/server/api/controllers/android/v1.0.7/client-version-policy-controller'
-import { postAndroidClientVersionPolicyForAndroidV1_0_8 } from '@/server/api/controllers/android/v1.0.8/client-version-policy-controller'
-import { postAndroidClientVersionPolicyForAndroidV1_0_9 } from '@/server/api/controllers/android/v1.0.9/client-version-policy-controller'
 import { postAndroidClientVersionPolicyForAndroidV1_0_10 } from '@/server/api/controllers/android/v1.0.10/client-version-policy-controller'
-import { postAndroidClientVersionPolicyForAndroidV1_0_11 } from '@/server/api/controllers/android/v1.0.11/client-version-policy-controller'
 import { postAndroidClientVersionPolicyForAndroidV1_1_0 } from '@/server/api/controllers/android/v1.1.0/client-version-policy-controller'
 import { postLogClientEventForAndroidV1_0_0 } from '@/server/api/controllers/android/v1.0.0/log-client-event-controller'
 import { postLogClientEventForAndroidV1_0_2 } from '@/server/api/controllers/android/v1.0.2/log-client-event-controller'
@@ -164,18 +47,6 @@ import { postTtsInworldForAndroidV1_0_9 } from '@/server/api/controllers/android
 import { postTtsInworldForAndroidV1_0_10 } from '@/server/api/controllers/android/v1.0.10/tts-inworld-controller'
 import { postTtsInworldForAndroidV1_0_11 } from '@/server/api/controllers/android/v1.0.11/tts-inworld-controller'
 import { postTtsInworldForAndroidV1_1_0 } from '@/server/api/controllers/android/v1.1.0/tts-inworld-controller'
-import {
-  getAccountPreferencesForAndroidV1_1_0,
-  patchAccountPreferencesForAndroidV1_1_0,
-} from '@/server/api/controllers/android/v1.1.0/account-preferences-controller'
-import {
-  getConversationChannelsForAndroidV1_1_0,
-  postCreateConversationForAndroidV1_1_0,
-} from '@/server/api/controllers/android/v1.1.0/conversations-controller'
-import {
-  deleteConversationRouteForAndroidV1_1_0,
-  patchConversationRouteForAndroidV1_1_0,
-} from '@/server/api/controllers/android/v1.1.0/conversation-controller'
 import { postIosClientVersionPolicyForIosV1_0_0 } from '@/server/api/controllers/ios/v1.0.0/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_2 } from '@/server/api/controllers/ios/v1.0.2/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_3 } from '@/server/api/controllers/ios/v1.0.3/client-version-policy-controller'
@@ -224,18 +95,6 @@ import { postTtsInworldForIosV1_0_9 } from '@/server/api/controllers/ios/v1.0.9/
 import { postTtsInworldForIosV1_0_10 } from '@/server/api/controllers/ios/v1.0.10/tts-inworld-controller'
 import { postTtsInworldForIosV1_0_11 } from '@/server/api/controllers/ios/v1.0.11/tts-inworld-controller'
 import { postTtsInworldForIosV1_1_0 } from '@/server/api/controllers/ios/v1.1.0/tts-inworld-controller'
-import {
-  getAccountPreferencesForIosV1_1_0,
-  patchAccountPreferencesForIosV1_1_0,
-} from '@/server/api/controllers/ios/v1.1.0/account-preferences-controller'
-import {
-  getConversationChannelsForIosV1_1_0,
-  postCreateConversationForIosV1_1_0,
-} from '@/server/api/controllers/ios/v1.1.0/conversations-controller'
-import {
-  deleteConversationRouteForIosV1_1_0,
-  patchConversationRouteForIosV1_1_0,
-} from '@/server/api/controllers/ios/v1.1.0/conversation-controller'
 import { postClientVersionPolicyForLegacy } from '@/server/api/controllers/legacy/client-version-policy-controller'
 import { postIosClientVersionPolicyForLegacy } from '@/server/api/controllers/legacy/ios-client-version-policy-controller'
 import { postLogClientEventForLegacy } from '@/server/api/controllers/legacy/log-client-event-controller'
@@ -248,172 +107,6 @@ describe('mingle-app namespace route wiring', () => {
     expect(postLegacyTtsInworld).toBe(postTtsInworldForLegacy)
     expect(postLegacyLogClientEvent).toBe(postLogClientEventForLegacy)
     expect(postLegacyClientVersionPolicy).toBe(postClientVersionPolicyForLegacy)
-  })
-
-  it('maps /android/v1.0.0 routes to Android v1.0.0 controllers', () => {
-    expect(postAndroidV100TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_0_0)
-    expect(postAndroidV100TtsInworld).toBe(postTtsInworldForAndroidV1_0_0)
-    expect(postAndroidV100LogClientEvent).toBe(postLogClientEventForAndroidV1_0_0)
-    expect(postAndroidV100ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_0_0)
-  })
-
-  it('maps /android/v1.0.2 routes to Android v1.0.2 controllers', () => {
-    expect(postAndroidV102TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_0_2)
-    expect(postAndroidV102TtsInworld).toBe(postTtsInworldForAndroidV1_0_2)
-    expect(postAndroidV102LogClientEvent).toBe(postLogClientEventForAndroidV1_0_2)
-    expect(postAndroidV102ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_0_2)
-  })
-
-  it('maps /android/v1.0.3 routes to Android v1.0.3 controllers', () => {
-    expect(postAndroidV103TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_0_3)
-    expect(postAndroidV103TtsInworld).toBe(postTtsInworldForAndroidV1_0_3)
-    expect(postAndroidV103LogClientEvent).toBe(postLogClientEventForAndroidV1_0_3)
-    expect(postAndroidV103ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_0_3)
-  })
-
-  it('maps /android/v1.0.4 routes to Android v1.0.4 controllers', () => {
-    expect(postAndroidV104TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_0_4)
-    expect(postAndroidV104TtsInworld).toBe(postTtsInworldForAndroidV1_0_4)
-    expect(postAndroidV104LogClientEvent).toBe(postLogClientEventForAndroidV1_0_4)
-    expect(postAndroidV104ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_0_4)
-  })
-
-  it('maps /android/v1.0.5 routes to Android v1.0.5 controllers', () => {
-    expect(postAndroidV105TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_0_5)
-    expect(postAndroidV105TtsInworld).toBe(postTtsInworldForAndroidV1_0_5)
-    expect(postAndroidV105LogClientEvent).toBe(postLogClientEventForAndroidV1_0_5)
-    expect(postAndroidV105ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_0_5)
-  })
-
-  it('maps /android/v1.0.6 routes to Android v1.0.6 controllers', () => {
-    expect(postAndroidV106TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_0_6)
-    expect(postAndroidV106TtsInworld).toBe(postTtsInworldForAndroidV1_0_6)
-    expect(postAndroidV106LogClientEvent).toBe(postLogClientEventForAndroidV1_0_6)
-    expect(postAndroidV106ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_0_6)
-  })
-
-  it('maps /android/v1.0.7 routes to Android v1.0.7 controllers', () => {
-    expect(postAndroidV107TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_0_7)
-    expect(postAndroidV107TtsInworld).toBe(postTtsInworldForAndroidV1_0_7)
-    expect(postAndroidV107LogClientEvent).toBe(postLogClientEventForAndroidV1_0_7)
-    expect(postAndroidV107ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_0_7)
-  })
-
-  it('maps /android/v1.0.8 routes to Android v1.0.8 controllers', () => {
-    expect(postAndroidV108TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_0_8)
-    expect(postAndroidV108TtsInworld).toBe(postTtsInworldForAndroidV1_0_8)
-    expect(postAndroidV108LogClientEvent).toBe(postLogClientEventForAndroidV1_0_8)
-    expect(postAndroidV108ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_0_8)
-  })
-
-  it('maps /android/v1.0.9 routes to Android v1.0.9 controllers', () => {
-    expect(postAndroidV109TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_0_9)
-    expect(postAndroidV109TtsInworld).toBe(postTtsInworldForAndroidV1_0_9)
-    expect(postAndroidV109LogClientEvent).toBe(postLogClientEventForAndroidV1_0_9)
-    expect(postAndroidV109ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_0_9)
-  })
-
-  it('maps /android/v1.0.11 routes to Android v1.0.11 controllers', () => {
-    expect(postAndroidV111TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_0_11)
-    expect(postAndroidV111TtsInworld).toBe(postTtsInworldForAndroidV1_0_11)
-    expect(postAndroidV111LogClientEvent).toBe(postLogClientEventForAndroidV1_0_11)
-    expect(postAndroidV111ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_0_11)
-  })
-
-  it('maps /android/v1.1.0 routes to Android v1.1.0 controllers', () => {
-    expect(postAndroidV1_1_0TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_1_0)
-    expect(postAndroidV1_1_0TtsInworld).toBe(postTtsInworldForAndroidV1_1_0)
-    expect(postAndroidV1_1_0LogClientEvent).toBe(postLogClientEventForAndroidV1_1_0)
-    expect(postAndroidV1_1_0ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_1_0)
-    expect(getAndroidV1_1_0AccountPreferences).toBe(getAccountPreferencesForAndroidV1_1_0)
-    expect(patchAndroidV1_1_0AccountPreferences).toBe(patchAccountPreferencesForAndroidV1_1_0)
-    expect(getAndroidV1_1_0Conversations).toBe(getConversationChannelsForAndroidV1_1_0)
-    expect(postAndroidV1_1_0Conversations).toBe(postCreateConversationForAndroidV1_1_0)
-    expect(patchAndroidV1_1_0Conversation).toBe(patchConversationRouteForAndroidV1_1_0)
-    expect(deleteAndroidV1_1_0Conversation).toBe(deleteConversationRouteForAndroidV1_1_0)
-  })
-
-  it('maps /ios/v1.0.0 routes to iOS v1.0.0 controllers', () => {
-    expect(postIosV100TranslateFinalize).toBe(postTranslateFinalizeForIosV1_0_0)
-    expect(postIosV100TtsInworld).toBe(postTtsInworldForIosV1_0_0)
-    expect(postIosV100LogClientEvent).toBe(postLogClientEventForIosV1_0_0)
-    expect(postIosV100ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_0_0)
-  })
-
-  it('maps /ios/v1.0.2 routes to iOS v1.0.2 controllers', () => {
-    expect(postIosV102TranslateFinalize).toBe(postTranslateFinalizeForIosV1_0_2)
-    expect(postIosV102TtsInworld).toBe(postTtsInworldForIosV1_0_2)
-    expect(postIosV102LogClientEvent).toBe(postLogClientEventForIosV1_0_2)
-    expect(postIosV102ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_0_2)
-  })
-
-  it('maps /ios/v1.0.3 routes to iOS v1.0.3 controllers', () => {
-    expect(postIosV103TranslateFinalize).toBe(postTranslateFinalizeForIosV1_0_3)
-    expect(postIosV103TtsInworld).toBe(postTtsInworldForIosV1_0_3)
-    expect(postIosV103LogClientEvent).toBe(postLogClientEventForIosV1_0_3)
-    expect(postIosV103ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_0_3)
-  })
-
-  it('maps /ios/v1.0.4 routes to iOS v1.0.4 controllers', () => {
-    expect(postIosV104TranslateFinalize).toBe(postTranslateFinalizeForIosV1_0_4)
-    expect(postIosV104TtsInworld).toBe(postTtsInworldForIosV1_0_4)
-    expect(postIosV104LogClientEvent).toBe(postLogClientEventForIosV1_0_4)
-    expect(postIosV104ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_0_4)
-  })
-
-  it('maps /ios/v1.0.5 routes to iOS v1.0.5 controllers', () => {
-    expect(postIosV105TranslateFinalize).toBe(postTranslateFinalizeForIosV1_0_5)
-    expect(postIosV105TtsInworld).toBe(postTtsInworldForIosV1_0_5)
-    expect(postIosV105LogClientEvent).toBe(postLogClientEventForIosV1_0_5)
-    expect(postIosV105ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_0_5)
-  })
-
-  it('maps /ios/v1.0.6 routes to iOS v1.0.6 controllers', () => {
-    expect(postIosV106TranslateFinalize).toBe(postTranslateFinalizeForIosV1_0_6)
-    expect(postIosV106TtsInworld).toBe(postTtsInworldForIosV1_0_6)
-    expect(postIosV106LogClientEvent).toBe(postLogClientEventForIosV1_0_6)
-    expect(postIosV106ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_0_6)
-  })
-
-  it('maps /ios/v1.0.7 routes to iOS v1.0.7 controllers', () => {
-    expect(postIosV107TranslateFinalize).toBe(postTranslateFinalizeForIosV1_0_7)
-    expect(postIosV107TtsInworld).toBe(postTtsInworldForIosV1_0_7)
-    expect(postIosV107LogClientEvent).toBe(postLogClientEventForIosV1_0_7)
-    expect(postIosV107ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_0_7)
-  })
-
-  it('maps /ios/v1.0.8 routes to iOS v1.0.8 controllers', () => {
-    expect(postIosV108TranslateFinalize).toBe(postTranslateFinalizeForIosV1_0_8)
-    expect(postIosV108TtsInworld).toBe(postTtsInworldForIosV1_0_8)
-    expect(postIosV108LogClientEvent).toBe(postLogClientEventForIosV1_0_8)
-    expect(postIosV108ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_0_8)
-  })
-
-  it('maps /ios/v1.0.9 routes to iOS v1.0.9 controllers', () => {
-    expect(postIosV109TranslateFinalize).toBe(postTranslateFinalizeForIosV1_0_9)
-    expect(postIosV109TtsInworld).toBe(postTtsInworldForIosV1_0_9)
-    expect(postIosV109LogClientEvent).toBe(postLogClientEventForIosV1_0_9)
-    expect(postIosV109ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_0_9)
-  })
-
-  it('maps /ios/v1.0.11 routes to iOS v1.0.11 controllers', () => {
-    expect(postIosV111TranslateFinalize).toBe(postTranslateFinalizeForIosV1_0_11)
-    expect(postIosV111TtsInworld).toBe(postTtsInworldForIosV1_0_11)
-    expect(postIosV111LogClientEvent).toBe(postLogClientEventForIosV1_0_11)
-    expect(postIosV111ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_0_11)
-  })
-
-  it('maps /ios/v1.1.0 routes to iOS v1.1.0 controllers', () => {
-    expect(postIosV1_1_0TranslateFinalize).toBe(postTranslateFinalizeForIosV1_1_0)
-    expect(postIosV1_1_0TtsInworld).toBe(postTtsInworldForIosV1_1_0)
-    expect(postIosV1_1_0LogClientEvent).toBe(postLogClientEventForIosV1_1_0)
-    expect(postIosV1_1_0ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_1_0)
-    expect(getIosV1_1_0AccountPreferences).toBe(getAccountPreferencesForIosV1_1_0)
-    expect(patchIosV1_1_0AccountPreferences).toBe(patchAccountPreferencesForIosV1_1_0)
-    expect(getIosV1_1_0Conversations).toBe(getConversationChannelsForIosV1_1_0)
-    expect(postIosV1_1_0Conversations).toBe(postCreateConversationForIosV1_1_0)
-    expect(patchIosV1_1_0Conversation).toBe(patchConversationRouteForIosV1_1_0)
-    expect(deleteIosV1_1_0Conversation).toBe(deleteConversationRouteForIosV1_1_0)
   })
 
   it('keeps iOS v1.0.0 controller code identical to legacy controllers', () => {
@@ -558,5 +251,63 @@ describe('mingle-app namespace route wiring', () => {
     expect(postTtsInworldForAndroidV1_1_0).toBe(postTtsInworldForAndroidV1_0_10)
     expect(postLogClientEventForAndroidV1_1_0).toBe(postLogClientEventForAndroidV1_0_10)
     expect(postAndroidClientVersionPolicyForAndroidV1_1_0).toBe(postAndroidClientVersionPolicyForAndroidV1_0_10)
+  })
+})
+
+type Rewrite = { source: string, destination: string }
+
+async function loadRewrites(): Promise<Rewrite[]> {
+  const rewrites = await nextConfig.rewrites?.()
+  if (!Array.isArray(rewrites)) throw new Error('next.config rewrites() must return a flat array')
+  return rewrites as Rewrite[]
+}
+
+// Same matcher options Next applies to `rewrites()` sources.
+function matches(rule: Rewrite, pathname: string) {
+  return getPathMatch(rule.source, { removeUnnamedParams: true, strict: true })(pathname)
+}
+
+const LEGACY_VERSION_POLICY_DESTINATION = '/api/:platform/v2.2.0/client/version-policy'
+
+describe('pre-2.2.0 namespaces after their route trees were removed', () => {
+  it('rewrites every pre-2.2.0 version-policy call to the v2.2.0 handler', async () => {
+    const rewrites = await loadRewrites()
+    const rule = rewrites.find((r) => r.destination === LEGACY_VERSION_POLICY_DESTINATION)
+    expect(rule, 'legacy version-policy rewrite').toBeDefined()
+    // First rule, so no broader alias can claim these paths before it.
+    expect(rewrites[0]).toBe(rule)
+
+    for (const [platform, version] of [
+      ['ios', 'v1.0.0'], ['ios', 'v1.1.4'], ['ios', 'v2.0.4'], ['ios', 'v2.1.0'],
+      ['android', 'v1.0.1'], ['android', 'v2.0.0'], ['android', 'v2.1.1'],
+    ]) {
+      expect(matches(rule!, `/api/${platform}/${version}/client/version-policy`))
+        .toMatchObject({ platform, version })
+    }
+  })
+
+  it('leaves supported namespaces and every other pre-2.2.0 path alone', async () => {
+    const rule = (await loadRewrites()).find((r) => r.destination === LEGACY_VERSION_POLICY_DESTINATION)!
+    for (const pathname of [
+      '/api/ios/v2.2.0/client/version-policy',
+      '/api/ios/v2.2.1/client/version-policy',
+      '/api/android/v2.3.0/client/version-policy',
+      '/api/ios/v1.1.0/conversations',
+      '/api/android/v2.1.0/feed',
+      '/api/client/version-policy',
+    ]) {
+      expect(matches(rule, pathname), pathname).toBe(false)
+    }
+  })
+
+  it('only aliases namespaces onto route trees that still exist', async () => {
+    const apiRoot = fileURLToPath(new URL('.', import.meta.url))
+    for (const { source, destination } of await loadRewrites()) {
+      const match = destination.match(/^\/api\/(ios|android|:platform)\/(v[\d.]+)/)
+      if (!match) continue
+      for (const platform of match[1] === ':platform' ? ['ios', 'android'] : [match[1]]) {
+        expect(existsSync(`${apiRoot}${platform}/${match[2]}`), `${source} -> ${destination}`).toBe(true)
+      }
+    }
   })
 })

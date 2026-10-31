@@ -1,2 +1,4 @@
+import { postAndroidClientVersionPolicyForAndroidV1_1_4 } from "@/server/api/controllers/android/v1.1.4/client-version-policy-controller";
+
 export const runtime = "nodejs";
-export { POST } from "@/app/api/android/v2.0.0/client/version-policy/route";
+export const POST = postAndroidClientVersionPolicyForAndroidV1_1_4;

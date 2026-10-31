@@ -2,7 +2,9 @@
 
 import { Check, ChevronLeft, Loader2, Search, X } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
+import { registerNativeEdgeSwipeSuppression } from "@/components/slide-surface";
+import { isLeftEdgeSwipeBack, isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import {
   buildLanguageSelectorItems,
   filterLanguageSelectorItems,
@@ -164,6 +166,44 @@ export default function LanguageOnboardingModal({
     return true;
   }, 30), [handleStepBack, isConfirming, step]);
 
+  // The native WKWebView edge-swipe would navigate the page underneath, so the
+  // modal owns the gesture and maps it to the same step-back as the chevron.
+  useEffect(() => registerNativeEdgeSwipeSuppression(), []);
+
+  // Keep the opened level question visible when the tapped row sits near the
+  // bottom of the list.
+  useEffect(() => {
+    if (step !== "interest-language" || !interestCode) return;
+    const frame = window.requestAnimationFrame(() => {
+      const row = document.querySelector(`[data-onboarding-expandable-row="${CSS.escape(interestCode)}"]`);
+      row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [interestCode, step]);
+
+  const edgeSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleEdgeSwipeStart = useCallback((event: ReactTouchEvent<HTMLElement>) => {
+    const touch = event.touches.length === 1 ? event.touches[0] : null;
+    edgeSwipeStartRef.current = touch && isLeftEdgeSwipeStart(touch.clientX)
+      ? { x: touch.clientX, y: touch.clientY }
+      : null;
+  }, []);
+
+  const handleEdgeSwipeEnd = useCallback((event: ReactTouchEvent<HTMLElement>) => {
+    const start = edgeSwipeStartRef.current;
+    edgeSwipeStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch || step === "language") return;
+    if (isLeftEdgeSwipeBack(start, { x: touch.clientX, y: touch.clientY }, window.innerWidth)) {
+      handleStepBack();
+    }
+  }, [handleStepBack, step]);
+
+  const handleEdgeSwipeCancel = useCallback(() => {
+    edgeSwipeStartRef.current = null;
+  }, []);
+
   if (typeof document === "undefined") return null;
 
   const handleLanguageStepNext = () => {
@@ -202,21 +242,31 @@ export default function LanguageOnboardingModal({
     lang: LanguageSelectorItem,
     selectedCode: string | null = language,
     onSelect: (code: string) => void = setLanguage,
+    // Shown inside the selected row's card, directly under it, so a follow-up
+    // question (the interest-language level) appears where the user just tapped.
+    renderExpanded?: () => ReactNode,
   ) => {
     const isSelected = selectedCode === lang.code;
+    const cardClassName = `rounded-[1.6rem] border transition ${
+      isSelected
+        ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
+        : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
+    }`;
+    const isExpandable = Boolean(renderExpanded);
 
-    return (
+    const rowButton = (
       <button
-        key={lang.code}
+        key={isExpandable ? undefined : lang.code}
         type="button"
         disabled={isConfirming}
         onClick={() => onSelect(lang.code)}
         aria-pressed={isSelected}
-        className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-4 text-left transition ${
-          isSelected
-            ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
-            : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
-        } hover:-translate-y-[1px] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]`}
+        aria-expanded={isExpandable ? isSelected : undefined}
+        className={`flex w-full items-center gap-4 px-4 py-4 text-left ${
+          isExpandable
+            ? "rounded-[1.6rem]"
+            : `${cardClassName} hover:-translate-y-[1px] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]`
+        }`}
       >
         <span
           className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border shadow-sm ${
@@ -246,7 +296,35 @@ export default function LanguageOnboardingModal({
         </span>
       </button>
     );
+
+    if (!renderExpanded) return rowButton;
+
+    return (
+      <div key={lang.code} className={cardClassName} data-onboarding-expandable-row={lang.code}>
+        {rowButton}
+        {isSelected ? (
+          <div className="mx-4 border-t border-amber-200/80 pb-5 pt-4">
+            {renderExpanded()}
+          </div>
+        ) : null}
+      </div>
+    );
   };
+
+  const renderInterestLevel = () => (
+    <div className="flex flex-col items-center gap-3">
+      <p className="text-center text-[1.25rem] font-bold tracking-[-0.01em] text-slate-950">
+        {interestCopy.levelQuestion}
+      </p>
+      <LanguageLevelPicker
+        level={interestLevel}
+        locale={language}
+        onChange={setInterestLevel}
+        disabled={isConfirming}
+        size="large"
+      />
+    </div>
+  );
 
   const overlay = (
     <div
@@ -258,6 +336,9 @@ export default function LanguageOnboardingModal({
       // first-entry flow also withholds the authentication surface until this picker
       // is complete, so the language choice is never presented as a late cover layer.
       style={{ zIndex: 250 }}
+      onTouchStart={handleEdgeSwipeStart}
+      onTouchEnd={handleEdgeSwipeEnd}
+      onTouchCancel={handleEdgeSwipeCancel}
     >
       <div
         className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]"
@@ -457,7 +538,7 @@ export default function LanguageOnboardingModal({
                       {copy.priorityLanguagesLabel}
                     </p>
                     <div className="space-y-3">
-                      {interestItems.priorityItems.map((lang) => renderLanguageRow(lang, interestCode, setInterestCode))}
+                      {interestItems.priorityItems.map((lang) => renderLanguageRow(lang, interestCode, setInterestCode, renderInterestLevel))}
                     </div>
                   </div>
                 ) : null}
@@ -469,7 +550,7 @@ export default function LanguageOnboardingModal({
                       </p>
                     ) : null}
                     <div className="space-y-3">
-                      {interestItems.otherItems.map((lang) => renderLanguageRow(lang, interestCode, setInterestCode))}
+                      {interestItems.otherItems.map((lang) => renderLanguageRow(lang, interestCode, setInterestCode, renderInterestLevel))}
                     </div>
                   </div>
                 ) : null}
@@ -559,12 +640,6 @@ export default function LanguageOnboardingModal({
             </>
           ) : step === "interest-language" ? (
             <>
-              {interestCode ? (
-                <div className="flex flex-col items-center gap-1 pb-3">
-                  <p className="text-[0.82rem] font-semibold text-slate-600">{interestCopy.levelQuestion}</p>
-                  <LanguageLevelPicker level={interestLevel} locale={language} onChange={setInterestLevel} disabled={isConfirming} />
-                </div>
-              ) : null}
               <button
                 type="button"
                 onClick={handleInterestStepNext}

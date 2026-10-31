@@ -56,7 +56,7 @@ const VITEST_TARGETS = [
     issueAtoms: ['019d4cae#60', '019d4cae#69'],
     files: [
       'src/app/api/namespace-routing.contract.test.ts',
-      'src/app/api/feedback.namespace-routing.test.ts',
+      'src/app/api/v2-2.namespace-routing.test.ts',
     ],
   },
   {
