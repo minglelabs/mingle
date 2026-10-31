@@ -241,6 +241,8 @@ import {
 } from '@/components/native-app-update-card'
 import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
+import VoiceTalkPanel, { VoiceTalkHeaderButton, isVoiceTalkAvailable } from './VoiceTalkPanel'
+import HashRushSheet, { isHashRushConfigured, hashRushMenuLabel } from './HashRushSheet'
 import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
@@ -1936,6 +1938,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // than one real account — the solo room's own layout never depends on it.
   const { data: session } = useSession()
   const viewerUserId = typeof session?.user?.id === 'string' ? session.user.id : null
+  // Group voice talk runs in the native app; the web only draws its panel.
+  const [voiceTalkAvailable, setVoiceTalkAvailable] = useState(false)
+  useEffect(() => setVoiceTalkAvailable(isVoiceTalkAvailable()), [])
+  const [voiceTalkStartSignal, setVoiceTalkStartSignal] = useState(0)
+  const [voiceTalkState, setVoiceTalkState] = useState({ live: false, joined: false })
+  const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean }) => {
+    setVoiceTalkState((prev) => (prev.live === next.live && prev.joined === next.joined ? prev : next))
+  }, [])
+  const [hashRushOpen, setHashRushOpen] = useState(false)
   const viewerImage = typeof session?.user?.image === 'string' ? session.user.image : null
   const accountPreferencesTrackingUserId = useMemo(() => getOrCreateTrackingUserId(), [])
   const initialLanguageSelectorMembers = useMemo<ConversationMemberProfile[]>(() => {
@@ -7376,6 +7387,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           </div>
         ) : null}
 
+        {/* Group voice talk: slides down from under the top bar while a call is live. */}
+        {headerMode === 'conversation' && conversationId && voiceTalkAvailable ? (
+          <VoiceTalkPanel
+            conversationId={conversationId}
+            conversationTitle={displayConversationTitle || undefined}
+            uiLocale={uiLocale}
+            myLang={((ownSelectedLanguages[0] || uiLocale || 'en').split('-')[0] || 'en').toLowerCase()}
+            topOffset="calc(54px + env(safe-area-inset-top, 0px))"
+            onAvailabilityChange={handleVoiceTalkAvailability}
+            startSignal={voiceTalkStartSignal}
+          />
+        ) : null}
+
+        {/* Hash Rush, played inside this room: a sheet over the chat. */}
+        <HashRushSheet
+          open={hashRushOpen && !!conversationId}
+          conversationId={conversationId}
+          playerName={(session?.user?.name || '').trim()}
+          uiLocale={uiLocale}
+          onClose={() => setHashRushOpen(false)}
+        />
+
         {/* Header */}
         <div
           ref={headerRef}
@@ -7470,6 +7503,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               ) : null}
             </div>
+            {headerMode === 'conversation' && conversationId && voiceTalkAvailable ? (
+              <VoiceTalkHeaderButton
+                uiLocale={uiLocale}
+                active={voiceTalkState.live || voiceTalkState.joined}
+                onPress={() => setVoiceTalkStartSignal((n) => n + 1)}
+                className={navSurfaceClassName}
+              />
+            ) : null}
             {isNativeIosPipAvailable && headerMode === 'conversation' && conversationId ? (
               <button
                 data-qa="live-demo-picture-in-picture-button"
@@ -8264,6 +8305,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 {isExportingConversation
                                   ? <Loader2 size={18} strokeWidth={2.4} className="animate-spin" />
                                   : <Share size={18} strokeWidth={2.2} />}
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {conversationId && isHashRushConfigured() ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              data-qa="live-demo-hash-rush-menu-item"
+                              onClick={() => {
+                                setMenuOpen(false)
+                                setHashRushOpen(true)
+                              }}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                            >
+                              <span className="min-w-0 flex-1">{hashRushMenuLabel(uiLocale)}</span>
+                              <span className="shrink-0 text-gray-500">
+                                <ChevronRight size={18} strokeWidth={2.4} />
                               </span>
                             </button>
                           </div>
