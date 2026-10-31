@@ -1,0 +1,30 @@
+{
+  "name": "mingle-voice-agent",
+  "private": true,
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "description": "Group voice room interpreter agent: joins LiveKit voice rooms and interprets live (Soniox -> GPT/Gemini -> Gemini TTS)",
+  "scripts": {
+    "start": "node ./node_modules/ts-node/dist/bin.js --transpile-only service.ts",
+    "service": "node ./node_modules/ts-node/dist/bin.js --transpile-only service.ts",
+    "livekit": "livekit-server --dev --bind 0.0.0.0",
+    "server": "node ./node_modules/ts-node/dist/bin.js --transpile-only poc-server.ts",
+    "agent": "node ./node_modules/ts-node/dist/bin.js --transpile-only agent.ts",
+    "bench": "node ./node_modules/ts-node/dist/bin.js --transpile-only scripts/bench.ts",
+    "test": "node --test --require ./node_modules/ts-node/register/transpile-only service-logic.test.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@livekit/rtc-node": "1.2.1",
+    "dotenv": "^17.2.3",
+    "livekit-client": "2.23.0",
+    "livekit-server-sdk": "2.19.2",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.9.3",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/ws": "^8.18.1"
+  }
+}
