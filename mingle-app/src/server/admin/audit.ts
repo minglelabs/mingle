@@ -29,6 +29,8 @@ export type AdminAuditAction =
   | 'operator_post.edit_photo'
   | 'operator_post.takedown'
   | 'operator_post.restore'
+  | 'post.takedown'
+  | 'post.restore'
   | 'operator_post.edit_text'
   | 'operator_post.review'
   | 'operator_post.review_order'
