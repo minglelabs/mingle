@@ -157,6 +157,13 @@ import {
   buildNativeConversationShareEventScript,
   parseNativeConversationShareLink,
 } from './src/conversationShareLink';
+import { VoiceRoomHost, type VoiceRoomHostHandle } from './src/voice/VoiceRoomHost';
+import {
+  buildVoiceEventScript,
+  parseVoiceBridgeCommand,
+  type VoiceBridgeEventDetail,
+} from './src/voice/voiceBridge';
+import { resolveVoiceConfig } from './src/voice/voiceConfig';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string; code?: number; domain?: string } };
@@ -1591,6 +1598,22 @@ export function NativeAdBanner(props: {
 
 function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
+  const voiceHostRef = useRef<VoiceRoomHostHandle>(null);
+  // The group voice room is the first NATIVE screen in this WebView-host app.
+  // It reuses the shell's resolved base URL + validated API namespace so its
+  // REST calls hit the same host/namespace the web layer does.
+  const voiceConfig = useMemo(
+    () =>
+      resolveVoiceConfig({
+        webAppBaseUrl: WEB_APP_BASE_URL,
+        validatedApiNamespace: VALIDATED_API_NAMESPACE,
+        deviceLocaleTag: NATIVE_RUNTIME_CONFIG.deviceLocaleTag,
+      }),
+    [],
+  );
+  const emitVoiceEventToWeb = useCallback((detail: VoiceBridgeEventDetail) => {
+    webViewRef.current?.injectJavaScript(buildVoiceEventScript(detail));
+  }, []);
   const isPageReadyRef = useRef(false);
   // Becomes true once the startup load has either shown a page or surfaced an
   // error, after which the startup splash never comes back.
@@ -4311,6 +4334,24 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    {
+      const voiceCommand = parseVoiceBridgeCommand(parsed);
+      if (voiceCommand) {
+        if (voiceCommand.type === 'native_voice_open') {
+          voiceHostRef.current?.open({
+            conversationId: voiceCommand.payload.conversationId,
+            title: voiceCommand.payload.title,
+            interpret: voiceCommand.payload.interpret,
+          });
+        } else if (voiceCommand.type === 'native_voice_close') {
+          voiceHostRef.current?.close();
+        } else {
+          voiceHostRef.current?.requestStatus(voiceCommand.payload.conversationId);
+        }
+        return;
+      }
+    }
+
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
       rememberCurrentWebUrl(url);
@@ -5289,6 +5330,14 @@ function AppInner(): React.JSX.Element {
         ) : (
           <View style={[styles.webView, { backgroundColor: safeAreaPalette.webViewColor }]} />
         )}
+        {versionGate.status !== 'force_update' ? (
+          <VoiceRoomHost
+            ref={voiceHostRef}
+            config={voiceConfig}
+            localUserId=""
+            emitToWeb={emitVoiceEventToWeb}
+          />
+        ) : null}
         {versionGate.status === 'force_update' ? (
           <View style={styles.versionOverlay}>
             <Text style={styles.versionTitle}>{versionGate.title}</Text>
