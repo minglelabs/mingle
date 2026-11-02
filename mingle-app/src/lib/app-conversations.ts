@@ -2633,7 +2633,7 @@ export async function inviteMembersToConversationChannel(args: {
     // would otherwise let a stale [...existing.pendingInviteeUserIds] write
     // overflow MAX_CONVERSATION_MEMBERS or resurrect a member who just joined
     // via the link and was pulled out of pending.
-    await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM app.app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
 
     const freshChannel = await tx.appConversationChannel.findFirst({
       where: {
@@ -2937,7 +2937,7 @@ export async function joinConversationChannelViaShareToken(args: {
 
   const record = await prisma.$transaction(async (tx) => {
     // Acquire row-level lock on the conversation channel to serialize concurrent joins against capacity and pending invitee updates
-    await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${conversationRecord.id} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM app.app_conversation_channels WHERE id = ${conversationRecord.id} FOR UPDATE`;
 
     const freshChannel = await tx.appConversationChannel.findFirst({
       where: {
@@ -3625,7 +3625,7 @@ export async function setConversationShareEnabled(args: {
       const record = await prisma.$transaction(async (tx) => {
         // Same lock joinConversationChannelViaShareToken takes, so an enable
         // and a concurrent disable serialize on this row instead of racing.
-        await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM app.app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
 
         // Re-read the on/off state and token UNDER the lock — this, not the
         // unlocked authorize read above, is what the decision is made on.
@@ -3743,7 +3743,7 @@ export async function refreshConversationShareSnapshot(args: {
   }
 
   const record = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM app.app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
 
     // Re-read under the lock: only refresh a snapshot that is STILL live. A
     // disable that revoked the link (shareToken=null, shareEnabled=false)

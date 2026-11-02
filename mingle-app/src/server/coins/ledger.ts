@@ -275,10 +275,10 @@ export async function withLockedWallet<T>(
       return await prisma.$transaction(async (tx) => {
         const now = options.now ?? new Date()
         await tx.$executeRaw`
-          INSERT INTO app_coin_wallets (user_id, updated_at)
+          INSERT INTO app.app_coin_wallets (user_id, updated_at)
           VALUES (${userId}, CURRENT_TIMESTAMP)
           ON CONFLICT (user_id) DO NOTHING`
-        await tx.$queryRaw`SELECT user_id FROM app_coin_wallets WHERE user_id = ${userId} FOR UPDATE`
+        await tx.$queryRaw`SELECT user_id FROM app.app_coin_wallets WHERE user_id = ${userId} FOR UPDATE`
         const row = await tx.appCoinWallet.findUniqueOrThrow({ where: { userId } })
         const ctx: LockedWallet = {
           tx,
