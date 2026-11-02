@@ -75,10 +75,10 @@ export function reserveClientPostId(reserveId: string): string {
 
 async function claimDueReservePosts(now: Date, limit: number): Promise<ClaimedReservePost[]> {
   return prisma.$queryRaw<ClaimedReservePost[]>`
-    UPDATE app_operator_post_reserve
+    UPDATE app.app_operator_post_reserve
     SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
     WHERE id IN (
-      SELECT id FROM app_operator_post_reserve
+      SELECT id FROM app.app_operator_post_reserve
       WHERE state = 'queued' AND release_at IS NOT NULL AND release_at <= ${sqlUtcTimestamp(now)}
       ORDER BY release_at ASC, id ASC
       LIMIT ${limit}
@@ -179,26 +179,26 @@ async function findUnscheduledOperators(): Promise<UnscheduledOperator[]> {
     SELECT
       waiting.operator_user_id AS "operatorUserId",
       account.persona_country AS "personaCountry",
-      (SELECT MAX(post.published_at) FROM app_posts AS post WHERE post.author_id = waiting.operator_user_id) AS "lastAt",
+      (SELECT MAX(post.published_at) FROM app.app_posts AS post WHERE post.author_id = waiting.operator_user_id) AS "lastAt",
       (
-        SELECT head.id FROM app_operator_post_reserve AS head
+        SELECT head.id FROM app.app_operator_post_reserve AS head
         WHERE head.operator_user_id = waiting.operator_user_id AND head.state = 'queued'
         ORDER BY head.created_at ASC, head.id ASC
         LIMIT 1
       ) AS "headId"
     FROM (
       SELECT operator_user_id
-      FROM app_operator_post_reserve
+      FROM app.app_operator_post_reserve
       WHERE state IN ('queued', 'publishing')
       GROUP BY operator_user_id
       HAVING COUNT(*) FILTER (WHERE release_at IS NOT NULL) = 0
     ) AS waiting
-    JOIN app_users AS operator_user
+    JOIN app.app_users AS operator_user
       ON operator_user.id = waiting.operator_user_id
       AND operator_user.is_operator = true
       AND operator_user.is_deleted = false
       AND operator_user.is_active = true
-    LEFT JOIN app_operator_accounts AS account ON account.user_id = waiting.operator_user_id
+    LEFT JOIN app.app_operator_accounts AS account ON account.user_id = waiting.operator_user_id
   `
 }
 
@@ -229,8 +229,8 @@ type RefillOperator = { operatorUserId: string; waiting: number | bigint }
 async function findOperatorsToRefill(target: number, limit: number): Promise<RefillOperator[]> {
   return prisma.$queryRaw<RefillOperator[]>`
     SELECT operator_user.id AS "operatorUserId", COUNT(reserve.id)::int AS waiting
-    FROM app_users AS operator_user
-    LEFT JOIN app_operator_post_reserve AS reserve
+    FROM app.app_users AS operator_user
+    LEFT JOIN app.app_operator_post_reserve AS reserve
       ON reserve.operator_user_id = operator_user.id AND reserve.state IN ('review', 'regenerating', 'queued', 'publishing')
     WHERE operator_user.is_operator = true
       AND operator_user.is_deleted = false
@@ -238,7 +238,7 @@ async function findOperatorsToRefill(target: number, limit: number): Promise<Ref
       AND operator_user.moderation_restricted_at IS NULL
       AND cardinality(operator_user.primary_languages) > 0
       -- A staff account (no persona country, e.g. @admin) is never written for.
-      AND EXISTS (SELECT 1 FROM app_operator_accounts AS account WHERE account.user_id = operator_user.id AND account.persona_country IS NOT NULL)
+      AND EXISTS (SELECT 1 FROM app.app_operator_accounts AS account WHERE account.user_id = operator_user.id AND account.persona_country IS NOT NULL)
     GROUP BY operator_user.id
     HAVING COUNT(reserve.id) <= ${Math.max(0, target - RESERVE_CHUNK_SIZE)}
     ORDER BY COUNT(reserve.id) ASC, operator_user.id ASC
@@ -379,7 +379,7 @@ export async function publishNextReservePost(operatorUserId: string, now: Date =
 export async function publishReservePostNow(reserveId: string, fromState: 'queued' | 'review', now: Date = new Date()): Promise<PublishNowResult> {
   // Same atomic claim as the worker, so a tick racing this click cannot publish it twice.
   const claimed = await prisma.$queryRaw<ClaimedReservePost[]>`
-    UPDATE app_operator_post_reserve
+    UPDATE app.app_operator_post_reserve
     SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
     WHERE id = ${reserveId} AND state = ${fromState}
     RETURNING id, operator_user_id AS "operatorUserId", text, attempts, language, translations, image_prompt AS "imagePrompt",
@@ -411,8 +411,8 @@ export async function getPostReserveStats(target: number, now: Date = new Date()
     prisma.$queryRaw<Array<{ count: number | bigint }>>`
       SELECT COUNT(*)::int AS count FROM (
         SELECT reserve.operator_user_id
-        FROM app_operator_post_reserve AS reserve
-        JOIN app_users AS operator_user
+        FROM app.app_operator_post_reserve AS reserve
+        JOIN app.app_users AS operator_user
           ON operator_user.id = reserve.operator_user_id
           AND operator_user.is_operator = true AND operator_user.is_deleted = false AND operator_user.is_active = true
         WHERE reserve.state IN ('queued', 'publishing')

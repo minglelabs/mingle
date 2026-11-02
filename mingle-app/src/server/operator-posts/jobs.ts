@@ -339,7 +339,7 @@ export async function cancelOperatorPostJobs(
   const now = options.now ?? new Date()
 
   const cancelled = await prisma.$queryRaw<Array<{ id: string; operatorUserId: string; batchId: string }>>`
-    UPDATE app_operator_post_jobs
+    UPDATE app.app_operator_post_jobs
     SET state = 'cancelled', updated_at = ${sqlUtcTimestamp(now)}
     WHERE id IN (${Prisma.join(unique)})
       AND state = 'queued'

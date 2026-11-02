@@ -98,22 +98,22 @@ export async function loadCoinAdminDashboard(days: number, now = new Date()): Pr
   const [lots, charges, clawbacks, purchases, refunds] = await Promise.all([
     prisma.$queryRaw<Array<{ day: string; source: string; granted: bigint }>>(Prisma.sql`
       SELECT ${dayOf} AS day, source, SUM(granted_micro)::bigint AS granted
-      FROM app_coin_lots WHERE created_at >= ${since}::timestamp GROUP BY 1, 2`),
+      FROM app.app_coin_lots WHERE created_at >= ${since}::timestamp GROUP BY 1, 2`),
     prisma.$queryRaw<Array<{ day: string; kind: string; shadow: boolean; charged: bigint; cost: bigint; uncollected: bigint }>>(Prisma.sql`
       SELECT ${dayOf} AS day, kind, shadow,
         SUM(charged_micro)::bigint AS charged, SUM(cost_usd_micro)::bigint AS cost, SUM(uncollected_micro)::bigint AS uncollected
-      FROM app_coin_usage_charges WHERE created_at >= ${since}::timestamp GROUP BY 1, 2, 3`),
+      FROM app.app_coin_usage_charges WHERE created_at >= ${since}::timestamp GROUP BY 1, 2, 3`),
     prisma.$queryRaw<Array<{ day: string; amount: bigint }>>(Prisma.sql`
       SELECT ${dayOf} AS day, SUM(-amount_micro)::bigint AS amount
-      FROM app_coin_ledger WHERE type = 'refund_clawback' AND created_at >= ${since}::timestamp GROUP BY 1`),
+      FROM app.app_coin_ledger WHERE type = 'refund_clawback' AND created_at >= ${since}::timestamp GROUP BY 1`),
     prisma.$queryRaw<Array<{ day: string; count: bigint; cents: bigint | null }>>(Prisma.sql`
       SELECT to_char(date_trunc('day', p.created_at + interval '9 hours'), 'YYYY-MM-DD') AS day,
         COUNT(*)::bigint AS count, SUM(product.price_usd_cents)::bigint AS cents
-      FROM app_iap_purchases p JOIN app_iap_products product ON product.id = p.product_id
+      FROM app.app_iap_purchases p JOIN app.app_iap_products product ON product.id = p.product_id
       WHERE p.created_at >= ${since}::timestamp AND p.environment = 'production' GROUP BY 1`),
     prisma.$queryRaw<Array<{ day: string; count: bigint }>>(Prisma.sql`
       SELECT to_char(date_trunc('day', refunded_at + interval '9 hours'), 'YYYY-MM-DD') AS day, COUNT(*)::bigint AS count
-      FROM app_iap_purchases WHERE refunded_at >= ${since}::timestamp GROUP BY 1`),
+      FROM app.app_iap_purchases WHERE refunded_at >= ${since}::timestamp GROUP BY 1`),
   ])
 
   const rows = new Map<string, CoinAdminDailyRow>()
@@ -165,9 +165,9 @@ export async function findCoinIntegrityMismatches(limit = 50) {
       w.balance_micro AS wallet,
       COALESCE(l.total, 0)::bigint AS ledger,
       COALESCE(lot.total, 0)::bigint AS lots
-    FROM app_coin_wallets w
-    LEFT JOIN (SELECT user_id, SUM(amount_micro) AS total FROM app_coin_ledger GROUP BY user_id) l ON l.user_id = w.user_id
-    LEFT JOIN (SELECT user_id, SUM(remaining_micro) AS total FROM app_coin_lots GROUP BY user_id) lot ON lot.user_id = w.user_id
+    FROM app.app_coin_wallets w
+    LEFT JOIN (SELECT user_id, SUM(amount_micro) AS total FROM app.app_coin_ledger GROUP BY user_id) l ON l.user_id = w.user_id
+    LEFT JOIN (SELECT user_id, SUM(remaining_micro) AS total FROM app.app_coin_lots GROUP BY user_id) lot ON lot.user_id = w.user_id
     WHERE w.balance_micro <> COALESCE(l.total, 0)
        OR w.balance_micro <> COALESCE(lot.total, 0)
        OR w.balance_micro <> w.free_balance_micro + w.paid_balance_micro

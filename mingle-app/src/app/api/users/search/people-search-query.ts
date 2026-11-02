@@ -130,16 +130,16 @@ export function buildPeopleSearchSql({
         u.id,
         u.updated_at,
         LEAST(${fieldTier(nameField)}, ${fieldTier(handleField)})::int AS tier
-      FROM app_users u
+      FROM app.app_users u
       WHERE u.is_active = true
         AND u.id <> ${viewerId}
         AND left(lower(u.handle), ${anonPrefix.length}::int) <> ${anonPrefix}
         AND lower(u.handle) <> ${reserved}
         AND NOT EXISTS (
-          SELECT 1 FROM app_user_blocks b WHERE b.blocker_id = u.id AND b.blocked_id = ${viewerId}
+          SELECT 1 FROM app.app_user_blocks b WHERE b.blocker_id = u.id AND b.blocked_id = ${viewerId}
         )
         AND NOT EXISTS (
-          SELECT 1 FROM app_user_blocks b WHERE b.blocker_id = ${viewerId} AND b.blocked_id = u.id
+          SELECT 1 FROM app.app_user_blocks b WHERE b.blocker_id = ${viewerId} AND b.blocked_id = u.id
         )
         AND (
           u.handle ILIKE ${handlePattern} ESCAPE '\\'
