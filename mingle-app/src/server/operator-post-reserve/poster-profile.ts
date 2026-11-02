@@ -178,14 +178,35 @@ export type LearnerPlan = {
   language: string
   /** Share of posts written in it. */
   share: number
-  level: { key: string; ko: string; brief: string }
+  level: LearnerLevel
 }
 
-const LEARNER_LEVELS = [
-  { key: 'beginner', ko: '초급', brief: 'a beginner: very short textbook sentences, the polite form taught first, a wrong particle or word order here and there, sometimes a word left in their own language' },
-  { key: 'intermediate', ko: '중급', brief: 'intermediate: can say what they mean in simple sentences, but the wording is slightly unnatural, mixes stiff written endings with chat endings, and makes an occasional grammar slip' },
-  { key: 'advanced', ko: '고급', brief: 'advanced: nearly natural and uses chat expressions, with only a rare odd word choice' },
-] as const
+export type LearnerLevel = { key: string; ko: string; brief: string; /** 1-5, as on the profile's 관심 언어. */ dots: number }
+
+const LEARNER_LEVELS: readonly LearnerLevel[] = [
+  { key: 'starter', ko: '입문', dots: 1, brief: 'just started: only a few memorized phrases and greetings, two to five words, textbook polite form, basic words wrong or spelled the way they sound, often falls back to their own language mid-sentence' },
+  { key: 'beginner', ko: '초급', dots: 2, brief: 'a beginner: very short textbook sentences, the polite form taught first, a wrong particle or word order here and there, sometimes a word left in their own language' },
+  { key: 'intermediate', ko: '중급', dots: 3, brief: 'intermediate: can say what they mean in simple sentences, but the wording is slightly unnatural, mixes stiff written endings with chat endings, and makes an occasional grammar slip' },
+  { key: 'advanced', ko: '고급', dots: 4, brief: 'advanced: nearly natural and uses chat expressions, with only a rare odd word choice' },
+  { key: 'fluent', ko: '유창', dots: 5, brief: 'fluent: natural, with at most a faint foreign touch' },
+]
+
+/** How well people on the app speak the language they learn: mostly just started (60%, 25%, 10%, 4%, 1%). */
+const LEARNER_LEVEL_WEIGHTS = [60, 25, 10, 4, 1] as const
+
+function pickLearnerLevel(roll: number): LearnerLevel {
+  let left = roll * LEARNER_LEVEL_WEIGHTS.reduce((sum, weight) => sum + weight, 0)
+  for (const [index, weight] of LEARNER_LEVEL_WEIGHTS.entries()) {
+    left -= weight
+    if (left < 0) return LEARNER_LEVELS[index]
+  }
+  return LEARNER_LEVELS[0]
+}
+
+/** The level for a stored 1-5 dot count, or null when it is not one. */
+export function learnerLevelForDots(dots: number | null | undefined): LearnerLevel | null {
+  return LEARNER_LEVELS.find((level) => level.dots === dots) ?? null
+}
 
 /**
  * On a language-exchange app most posts are written in the language being
@@ -198,11 +219,11 @@ export function learnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
   const pickOne = <T,>(items: readonly T[]): T => items[Math.floor(random() * items.length)]
   const native = nativeLanguage.toLowerCase().split('-')[0]
   if (native === 'ko') {
-    return { language: pickOne(['en', 'en', 'ja', 'zh']), share: pickOne([0, 0, 0.1, 0.25]), level: pickOne(LEARNER_LEVELS) }
+    return { language: pickOne(['en', 'en', 'ja', 'zh']), share: pickOne([0, 0, 0.1, 0.25]), level: pickLearnerLevel(random()) }
   }
   // Staff review: a foreign account mostly writing Korean reads as fake ("일본인이잖아").
   // Their own language comes first; Korean is the occasional learner post.
-  return { language: 'ko', share: pickOne([0.1, 0.15, 0.2, 0.3]), level: pickOne(LEARNER_LEVELS) }
+  return { language: 'ko', share: pickOne([0.1, 0.15, 0.2, 0.3]), level: pickLearnerLevel(random()) }
 }
 
 /** The fixed posting personality of one account. `topicKeys` are all topic keys the generator knows. */
@@ -239,8 +260,6 @@ export function posterProfile(seed: string, topicKeys: readonly string[] = []): 
   return { type, length, voice, shapeFactors: type.shapes, topicFactors, photoShare, labelKo: `${type.ko} · ${length.ko}` }
 }
 
-const LEARNER_LEVEL_DOTS: Record<string, number> = { beginner: 2, intermediate: 3, advanced: 4 }
-
 /**
  * An operator's 관심 언어 on its profile: the language its posts learn
  * (seeded by the account id, as the post generator does) and its level in
@@ -253,5 +272,5 @@ export function operatorInterestLanguageFields(userId: string, nativeLanguage: s
   const plan = learnerPlan(userId, nativeLanguage)
   const code = canonicalizeSttLanguageCode(plan.language)
   if (!code || code === canonicalizeSttLanguageCode(nativeLanguage)) return { interestLanguages: [], interestLanguageLevels: [] }
-  return { interestLanguages: [code], interestLanguageLevels: [LEARNER_LEVEL_DOTS[plan.level.key] ?? 3] }
+  return { interestLanguages: [code], interestLanguageLevels: [plan.level.dots] }
 }

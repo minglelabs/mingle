@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { zipInterestLanguages } from '@/lib/interest-languages'
 import { sanitizeSttLanguageSelection } from '@/lib/stt-languages'
 import { writeAdminAudit } from '@/server/admin/audit'
 import { ageOn } from '@/server/operator-auto-reply/generate'
@@ -249,7 +250,7 @@ async function findOperatorsToRefill(target: number, limit: number): Promise<Ref
 export async function loadReservePersona(operatorUserId: string, now: Date, options: { includeInactive?: boolean } = {}): Promise<ReservePersona | null> {
   const operator = await prisma.user.findFirst({
     where: { id: operatorUserId, isOperator: true, isDeleted: false, ...(options.includeInactive ? {} : { isActive: true }) },
-    select: { name: true, bio: true, birthDate: true, locationCity: true, locationCountry: true, primaryLanguages: true },
+    select: { name: true, bio: true, birthDate: true, locationCity: true, locationCountry: true, primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true },
   })
   const language = operator ? sanitizeSttLanguageSelection(operator.primaryLanguages)[0] : null
   if (!operator || !language) return null
@@ -260,6 +261,7 @@ export async function loadReservePersona(operatorUserId: string, now: Date, opti
     city: operator.locationCity ?? null,
     country: operator.locationCountry ?? null,
     language,
+    learning: zipInterestLanguages(operator.interestLanguages, operator.interestLanguageLevels).map((item) => ({ language: item.code, level: item.level })),
   }
 }
 

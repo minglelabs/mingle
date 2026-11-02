@@ -1,7 +1,7 @@
 import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { getSttLanguageDisplayName } from '@/lib/stt-languages'
 import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
-import { reserveLearnerPlan, reservePosterProfile, resolveReserveModel } from '@/server/operator-post-reserve/generate'
+import { reserveLearnerPlan, reservePosterProfile, resolveReserveModel, type LearningLanguage } from '@/server/operator-post-reserve/generate'
 import { hasContactDetails } from '@/server/operators/persona-rules'
 
 /**
@@ -44,6 +44,8 @@ export type CommenterPersona = {
   country: string | null
   /** The commenter's own language. */
   language: string
+  /** The profile's 관심 언어 with their 1-5 level. */
+  learning?: LearningLanguage[]
 }
 
 /**
@@ -102,7 +104,7 @@ export async function generateOperatorComment(args: {
 }): Promise<{ text: string; language: string; kind: string } | null> {
   const profile = reservePosterProfile(args.commenter.id)
   const choice = commentLanguageFor(args.commenter, args.post.language)
-  const learner = reserveLearnerPlan(args.commenter.id, args.commenter.language)
+  const learner = reserveLearnerPlan(args.commenter.id, args.commenter.language, args.commenter.learning)
   const kind = pickCommentKind(args.random)
   const answer = await (args.generate ?? generateJson)({
     instructions: buildCommentInstructions(choice.language),
