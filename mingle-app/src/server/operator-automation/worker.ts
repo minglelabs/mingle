@@ -101,7 +101,8 @@ export async function createNextSeedAccount(
 ): Promise<AccountStepResult> {
   const rows = await prisma.operatorAccount.groupBy({
     by: ['personaCountry'],
-    where: { user: { isOperator: true, isDeleted: false, isActive: true } },
+    // Accounts still hidden for review count too, or the same country is picked every time.
+    where: { user: { isOperator: true, isDeleted: false } },
     _count: { _all: true },
   })
   const total = rows.reduce((sum, row) => sum + row._count._all, 0)
