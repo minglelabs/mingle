@@ -7,12 +7,12 @@
     <title>HashChat - Voice messenger without language barriers</title>
     <meta
       name="description"
-      content="HashChat is a real-time voice translation app for foreign friends, global communities, and conversations while traveling."
+      content="HashChat (formerly Mingle) is a real-time voice translation app for foreign friends, global communities, and conversations while traveling."
     />
     <meta property="og:title" content="HashChat - Voice messenger without language barriers" />
     <meta
       property="og:description"
-      content="HashChat is a real-time voice translation app for foreign friends, global communities, and conversations while traveling."
+      content="HashChat (formerly Mingle) is a real-time voice translation app for foreign friends, global communities, and conversations while traveling."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://translator.minglelabs.app/" />
@@ -24,9 +24,42 @@
     <meta name="twitter:title" content="HashChat - Voice messenger without language barriers" />
     <meta
       name="twitter:description"
-      content="HashChat is a real-time voice translation app for foreign friends, global communities, and conversations while traveling."
+      content="HashChat (formerly Mingle) is a real-time voice translation app for foreign friends, global communities, and conversations while traveling."
     />
     <meta name="twitter:image" content="https://translator.minglelabs.app/assets/og-image.png?v=20260420-1" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://minglelabs.app/#organization",
+            "name": "Mingle Labs",
+            "url": "https://minglelabs.app/"
+          },
+          {
+            "@type": "MobileApplication",
+            "@id": "https://translator.minglelabs.app/#app",
+            "name": "HashChat",
+            "alternateName": [
+              "Mingle",
+              "Mingle: Global Hangout"
+            ],
+            "description": "HashChat (formerly Mingle) is a real-time voice translation app for foreign friends, global communities, and conversations while traveling. The app was renamed from Mingle to HashChat in October 2026; it is the same app, account, and store listing.",
+            "applicationCategory": "SocialNetworkingApplication",
+            "operatingSystem": "iOS, Android",
+            "url": "https://translator.minglelabs.app/",
+            "sameAs": [
+              "https://apps.apple.com/app/id6759795134",
+              "https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"
+            ],
+            "publisher": {
+              "@id": "https://minglelabs.app/#organization"
+            }
+          }
+        ]
+      }
+    </script>
     <style>
       :root {
         color-scheme: light;
@@ -593,6 +626,16 @@
         font-size: 0.92rem;
       }
 
+      .footer-brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .footer-renamed {
+        font-size: 0.84rem;
+        color: rgba(255, 253, 248, 0.56);
+      }
+
       .footer-links {
         display: flex;
         gap: 16px;
@@ -844,6 +887,7 @@
             <a href="#product" data-i18n="nav.product">Product</a>
             <a href="#proof" data-i18n="nav.proof">Proof</a>
             <a href="#vision" data-i18n="nav.vision">Vision</a>
+            <a class="nav-legal" href="/blogs">Blog</a>
             <a class="nav-legal" href="/legal" data-i18n="nav.legal">Legal</a>
           </div>
           <label class="language-picker">
@@ -1083,8 +1127,12 @@
 
     <footer class="footer">
       <div class="footer-inner">
-        <span data-i18n="footer.copy">© Mingle Labs. Built for conversations across languages.</span>
+        <div class="footer-brand">
+          <span data-i18n="footer.copy">© Mingle Labs. Built for conversations across languages.</span>
+          <span class="footer-renamed" data-i18n="footer.renamed">HashChat was formerly called Mingle.</span>
+        </div>
         <div class="footer-links">
+          <a href="/blogs">Blog</a>
           <a href="/legal/privacy-policy.html" data-i18n="footer.privacy">Privacy</a>
           <a href="/legal/terms-of-use.html" data-i18n="footer.terms">Terms</a>
           <a href="/legal" data-i18n="footer.legal">Legal</a>
@@ -1201,11 +1249,11 @@
               body1: "처음에는 혼자 쓰는 실시간 번역기로 시작합니다. 사용자가 언어 장벽이 사라지는 경험을 먼저 느끼면, 그 다음은 상대를 초대하고, 방을 만들고, 커뮤니티로 확장하는 일입니다.",
               body2: "HashChat이 해결하려는 것은 단순히 문장을 다른 언어로 바꾸는 일이 아닙니다. 외국인과의 교류에서 마주치는 언어 장벽, 대화 소재의 부재, 만남의 어려움까지 낮추는 것입니다."
             },
-            footer: { copy: "© Mingle Labs. Built for conversations across languages.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. Built for conversations across languages.", renamed: "HashChat의 이전 이름은 Mingle입니다.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           en: {
             metaTitle: "HashChat - Voice messenger without language barriers",
-            metaDescription: "HashChat is a real-time voice translation app for foreign friends, global communities, and conversations while traveling.",
+            metaDescription: "HashChat (formerly Mingle) is a real-time voice translation app for foreign friends, global communities, and conversations while traveling.",
             nav: { problem: "Problem", product: "Product", proof: "Proof", vision: "Vision", legal: "Legal" },
             hero: {
               eyebrow: "Real-time voice translation for social moments",
@@ -1275,7 +1323,7 @@
               body1: "It starts as a real-time translator for one person. Once users feel the language barrier disappear, the next step is inviting others, making rooms, and growing into communities.",
               body2: "HashChat is not only changing sentences into another language. It is lowering the language barrier, the lack of topics, and the difficulty of meeting people across borders."
             },
-            footer: { copy: "© Mingle Labs. Built for conversations across languages.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. Built for conversations across languages.", renamed: "HashChat was formerly called Mingle.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           ja: {
             metaTitle: "HashChat - 言語の壁をなくす音声メッセンジャー",
@@ -1349,7 +1397,7 @@
               body1: "最初は一人で使えるリアルタイム翻訳機です。ユーザーが言語の壁が消える体験をすると、次は相手を招待し、部屋を作り、コミュニティへ広がっていきます。",
               body2: "HashChatが解決するのは、文を別の言語に置き換えることだけではありません。海外の人との交流で生まれる言語の壁、話題の不足、出会いの難しさまで下げることです。"
             },
-            footer: { copy: "© Mingle Labs. 言語を越える会話のために作られました。", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. 言語を越える会話のために作られました。", renamed: "HashChat の旧名は Mingle です。", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           "zh-CN": {
             metaTitle: "HashChat - 没有语言障碍的语音聊天",
@@ -1423,7 +1471,7 @@
               body1: "它先从一个人使用的实时翻译器开始。一旦用户感受到语言障碍消失，下一步就是邀请他人、创建房间，并成长为社区。",
               body2: "HashChat 解决的不只是把句子换成另一种语言。它也在降低跨国交流中的语言障碍、话题不足和相遇难度。"
             },
-            footer: { copy: "© Mingle Labs. 为跨越语言的对话而构建。", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. 为跨越语言的对话而构建。", renamed: "HashChat 原名 Mingle。", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           "zh-TW": {
             metaTitle: "HashChat - 沒有語言障礙的語音聊天",
@@ -1497,7 +1545,7 @@
               body1: "它先從一個人使用的即時翻譯器開始。一旦使用者感受到語言障礙消失，下一步就是邀請他人、建立房間，並成長為社群。",
               body2: "HashChat 解決的不只是把句子換成另一種語言。它也在降低跨國交流中的語言障礙、話題不足與相遇難度。"
             },
-            footer: { copy: "© Mingle Labs. 為跨越語言的對話而打造。", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. 為跨越語言的對話而打造。", renamed: "HashChat 原名 Mingle。", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           fr: {
             metaTitle: "HashChat - Messenger vocal sans barrière de langue",
@@ -1571,7 +1619,7 @@
               body1: "Cela commence par un traducteur en temps réel pour une personne. Quand les utilisateurs sentent la barrière de la langue disparaître, l'étape suivante consiste à inviter d'autres personnes, créer des salons et développer des communautés.",
               body2: "HashChat ne se contente pas de transformer des phrases dans une autre langue. Il abaisse la barrière linguistique, le manque de sujets et la difficulté de rencontrer des personnes au-delà des frontières."
             },
-            footer: { copy: "© Mingle Labs. Conçu pour les conversations entre langues.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. Conçu pour les conversations entre langues.", renamed: "HashChat s'appelait auparavant Mingle.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           de: {
             metaTitle: "HashChat - Voice-Messenger ohne Sprachbarrieren",
@@ -1614,7 +1662,7 @@
             proof: {
               eyebrow: "Frühes Signal",
               title: "HelloTalk-Nutzer zeigen den Bedarf bereits.",
-              description: "Mingles erste Zielgruppe sind Sprachaustausch-Nutzer, die ausländische Freunde finden möchten. Sie probieren bereits Voice-Rooms aus, und je natürlicher Übersetzung wird, desto stärker verlassen sie sich auf HashChat.",
+              description: "Die erste Zielgruppe von HashChat sind Sprachaustausch-Nutzer, die ausländische Freunde finden möchten. Sie probieren bereits Voice-Rooms aus, und je natürlicher Übersetzung wird, desto stärker verlassen sie sich auf HashChat.",
               cards: {
                 market: { title: "Ein Sprachaustausch-Markt mit über 70 Mio. Menschen", body: "Plattformen wie HelloTalk versammeln bereits Menschen, die mit anderen weltweit sprechen möchten." },
                 voiceroom: { title: "Ein Übersetzer neben dem Voice-Room", body: "Nutzer lassen einen HelloTalk-Voice-Room offen und nutzen HashChat parallel, um die andere Person zu verstehen." },
@@ -1645,7 +1693,7 @@
               body1: "Es beginnt als Echtzeit-Übersetzer für eine Person. Sobald Nutzer spüren, dass die Sprachbarriere verschwindet, folgen Einladungen, Räume und wachsende Communities.",
               body2: "HashChat übersetzt nicht nur Sätze in andere Sprachen. Es senkt Sprachbarrieren, fehlende Gesprächsthemen und die Schwierigkeit, Menschen über Grenzen hinweg zu treffen."
             },
-            footer: { copy: "© Mingle Labs. Entwickelt für Gespräche über Sprachen hinweg.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. Entwickelt für Gespräche über Sprachen hinweg.", renamed: "HashChat hieß früher Mingle.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           es: {
             metaTitle: "HashChat - Mensajero de voz sin barreras de idioma",
@@ -1719,7 +1767,7 @@
               body1: "Empieza como un traductor en tiempo real para una persona. Cuando los usuarios sienten que desaparece la barrera del idioma, el siguiente paso es invitar a otros, crear salas y hacer crecer comunidades.",
               body2: "HashChat no solo cambia frases a otro idioma. Reduce la barrera lingüística, la falta de temas y la dificultad de conocer personas más allá de las fronteras."
             },
-            footer: { copy: "© Mingle Labs. Creado para conversaciones entre idiomas.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. Creado para conversaciones entre idiomas.", renamed: "HashChat antes se llamaba Mingle.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           pt: {
             metaTitle: "HashChat - Mensageiro de voz sem barreiras de idioma",
@@ -1793,7 +1841,7 @@
               body1: "Começa como um tradutor em tempo real para uma pessoa. Quando usuários sentem a barreira do idioma desaparecer, o próximo passo é convidar outras pessoas, criar salas e fazer comunidades crescerem.",
               body2: "HashChat não apenas transforma frases em outro idioma. Ele reduz a barreira linguística, a falta de assunto e a dificuldade de conhecer pessoas além das fronteiras."
             },
-            footer: { copy: "© Mingle Labs. Criado para conversas entre idiomas.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. Criado para conversas entre idiomas.", renamed: "O HashChat se chamava Mingle anteriormente.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           it: {
             metaTitle: "HashChat - Messaggistica vocale senza barriere linguistiche",
@@ -1867,7 +1915,7 @@
               body1: "Inizia come traduttore in tempo reale per una persona. Quando gli utenti sentono sparire la barriera linguistica, il passo successivo è invitare altri, creare stanze e far crescere community.",
               body2: "HashChat non si limita a trasformare frasi in un'altra lingua. Abbassa la barriera linguistica, la mancanza di argomenti e la difficoltà di incontrare persone oltre i confini."
             },
-            footer: { copy: "© Mingle Labs. Creato per conversazioni tra lingue.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. Creato per conversazioni tra lingue.", renamed: "HashChat in precedenza si chiamava Mingle.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           ru: {
             metaTitle: "HashChat - Голосовой мессенджер без языковых барьеров",
@@ -1941,7 +1989,7 @@
               body1: "Он начинается как переводчик в реальном времени для одного человека. Когда пользователи чувствуют, что языковой барьер исчезает, следующий шаг — приглашать других, создавать комнаты и развивать сообщества.",
               body2: "HashChat не только переводит предложения на другой язык. Он снижает языковой барьер, нехватку тем и сложность знакомства с людьми за пределами границ."
             },
-            footer: { copy: "© Mingle Labs. Создано для разговоров между языками.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. Создано для разговоров между языками.", renamed: "Раньше HashChat назывался Mingle.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           ar: {
             metaTitle: "HashChat - مراسلة صوتية بلا حواجز لغة",
@@ -2015,7 +2063,7 @@
               body1: "تبدأ كمترجم فوري لشخص واحد. عندما يشعر المستخدمون بأن حاجز اللغة اختفى، تكون الخطوة التالية دعوة الآخرين، وإنشاء غرف، وتنمية المجتمعات.",
               body2: "HashChat لا يحول الجمل إلى لغة أخرى فقط. إنه يخفض حاجز اللغة، ونقص المواضيع، وصعوبة لقاء الناس عبر الحدود."
             },
-            footer: { copy: "© Mingle Labs. صمم لمحادثات تتجاوز اللغات.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. صمم لمحادثات تتجاوز اللغات.", renamed: "كان اسم HashChat سابقًا Mingle.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           hi: {
             metaTitle: "HashChat - भाषा की दीवारों के बिना वॉइस मैसेंजर",
@@ -2089,7 +2137,7 @@
               body1: "यह एक व्यक्ति के लिए real-time translator से शुरू होता है। जब उपयोगकर्ता महसूस करते हैं कि भाषा बाधा हट गई है, अगला कदम दूसरों को invite करना, rooms बनाना और communities बढ़ाना है।",
               body2: "HashChat सिर्फ वाक्यों को दूसरी भाषा में बदलता नहीं है। यह भाषा बाधा, विषयों की कमी और सीमाओं के पार लोगों से मिलने की कठिनाई को कम करता है।"
             },
-            footer: { copy: "© Mingle Labs. भाषाओं के पार बातचीत के लिए बनाया गया।", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. भाषाओं के पार बातचीत के लिए बनाया गया।", renamed: "HashChat का पुराना नाम Mingle था।", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           th: {
             metaTitle: "HashChat - วอยซ์เมสเซนเจอร์ไร้กำแพงภาษา",
@@ -2163,7 +2211,7 @@
               body1: "เริ่มจากเครื่องแปลแบบเรียลไทม์สำหรับคนเดียว เมื่อผู้ใช้รู้สึกว่ากำแพงภาษาหายไป ขั้นต่อไปคือเชิญผู้อื่น สร้างห้อง และเติบโตเป็นชุมชน",
               body2: "HashChat ไม่ได้แค่เปลี่ยนประโยคเป็นอีกภาษา แต่ช่วยลดกำแพงภาษา การขาดหัวข้อสนทนา และความยากในการพบผู้คนข้ามพรมแดน"
             },
-            footer: { copy: "© Mingle Labs. สร้างเพื่อบทสนทนาข้ามภาษา", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. สร้างเพื่อบทสนทนาข้ามภาษา", renamed: "HashChat เดิมชื่อ Mingle", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           vi: {
             metaTitle: "HashChat - Nhắn thoại không còn rào cản ngôn ngữ",
@@ -2237,7 +2285,7 @@
               body1: "Nó bắt đầu như một trình dịch thời gian thực cho một người. Khi người dùng cảm thấy rào cản ngôn ngữ biến mất, bước tiếp theo là mời người khác, tạo phòng và phát triển thành cộng đồng.",
               body2: "HashChat không chỉ chuyển câu sang ngôn ngữ khác. Nó giảm rào cản ngôn ngữ, thiếu chủ đề và khó khăn khi gặp gỡ con người xuyên biên giới."
             },
-            footer: { copy: "© Mingle Labs. Được xây dựng cho các cuộc trò chuyện xuyên ngôn ngữ.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+            footer: { copy: "© Mingle Labs. Được xây dựng cho các cuộc trò chuyện xuyên ngôn ngữ.", renamed: "HashChat trước đây có tên là Mingle.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           }
         };
 

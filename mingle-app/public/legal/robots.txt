@@ -6,3 +6,8 @@ Disallow:
 
 User-agent: Googlebot
 Disallow:
+
+User-agent: *
+Allow: /
+
+Sitemap: https://translator.minglelabs.app/sitemap.xml
