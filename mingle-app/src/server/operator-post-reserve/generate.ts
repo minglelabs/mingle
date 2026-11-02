@@ -3,7 +3,8 @@ import { getSttLanguageDisplayName } from '@/lib/stt-languages'
 import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
 import { hasContactDetails } from '@/server/operators/persona-rules'
 import { encodePostPhoto, pickPostPhoto } from './post-photo'
-import { learnerPlan, posterProfile, type LearnerPlan, type PosterProfile } from './poster-profile'
+import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
+import { learnerLevelForDots, learnerPlan, posterProfile, type LearnerPlan, type PosterProfile } from './poster-profile'
 
 /**
  * Writes latent posts for one operator account: original short posts in the
@@ -73,9 +74,19 @@ export function pickReserveTopics(count: number, random: Random = Math.random, f
   return picked
 }
 
-/** What the account is learning and how often it posts in that language. */
-export function reserveLearnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
-  return learnerPlan(seed, nativeLanguage)
+export type LearningLanguage = { language: string; level: number | null }
+
+/**
+ * What the account is learning and how often it posts in that language. The
+ * level shown on its profile (관심 언어) wins over the seeded one, so posts
+ * match the profile also after staff change it.
+ */
+export function reserveLearnerPlan(seed: string, nativeLanguage: string, learning: readonly LearningLanguage[] = []): LearnerPlan {
+  const plan = learnerPlan(seed, nativeLanguage)
+  const code = canonicalizeSttLanguageCode(plan.language)
+  const stored = learning.find((entry) => canonicalizeSttLanguageCode(entry.language) === code)
+  const level = learnerLevelForDots(stored?.level)
+  return level ? { ...plan, level } : plan
 }
 
 /** The posting personality of an account, by its id. */
@@ -116,6 +127,12 @@ export type ReservePersona = {
   country: string | null
   /** The language every post is written in (primaryLanguages[0]). */
   language: string
+  /** The profile's 관심 언어 with their 1-5 level; never sent to the model as is. */
+  learning?: LearningLanguage[]
+}
+
+function modelPersona({ learning: _learning, ...persona }: ReservePersona): Omit<ReservePersona, 'learning'> {
+  return persona
 }
 
 export type GeneratedReservePost = {
@@ -211,7 +228,7 @@ export async function generateReservePosts(args: {
   const random = args.random ?? Math.random
   const profile = reservePosterProfile(args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`)
   const seed = args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`
-  const learner = reserveLearnerPlan(seed, args.persona.language)
+  const learner = reserveLearnerPlan(seed, args.persona.language, args.persona.learning)
   const slots = args.topics.map((topic, index) => {
     const language = random() < learner.share ? learner.language : args.persona.language
     return {
@@ -230,7 +247,7 @@ export async function generateReservePosts(args: {
   const items = await generate({
     instructions: [buildReserveInstructions(args.persona), ...(revisionLine ? [revisionLine] : [])].join('\n'),
     input: {
-      persona: args.persona,
+      persona: modelPersona(args.persona),
       poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
       learner: { language: learner.language, level: learner.level.brief },
       slots: slots.map((slot) => ({ ...slot, photo: slot.photo ? slot.photo.kind : false, ...(slot.photo?.setup ? { setup: slot.photo.setup } : {}) })),
@@ -283,7 +300,7 @@ export async function rewriteReservePostText(args: {
 }): Promise<string | null> {
   const generate = args.generate ?? generateJson
   const profile = reservePosterProfile(args.seed)
-  const learner = reserveLearnerPlan(args.seed, args.persona.language)
+  const learner = reserveLearnerPlan(args.seed, args.persona.language, args.persona.learning ?? args.profile?.learning)
   const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
   const items = await generate({
     instructions: [
@@ -296,7 +313,7 @@ export async function rewriteReservePostText(args: {
       'The input also has "profile": everything on this person\'s profile (gender, age, city and country, bio, the languages they speak and the ones they learn with a level from 1 to 5). The text must be something this exact person would post: their age group\'s everyday register in their own language (a young native speaker types casually to friends, not in polite written style, unless "poster" says otherwise), their life as the bio tells it (job or study, where they live, what they like), their gender, and, when the slot is in a language they learn, that level. Use facts from the bio; never contradict the profile or invent a different life.',
     ].join('\n'),
     input: {
-      persona: args.persona,
+      persona: modelPersona(args.persona),
       poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
       learner: { language: learner.language, level: learner.level.brief },
       slots: [{

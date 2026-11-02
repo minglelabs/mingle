@@ -69,9 +69,11 @@ describe('avatar taxonomy', () => {
 
   it('shows a face (whole or partly) in roughly half of the photos', () => {
     const seen = sampleCategories(american, 2000)
+    // Among photos: drawings (category "other") are counted apart.
+    const photos = 2000 - (seen.get('other') ?? 0)
     const faces = (seen.get('face') ?? 0) + (seen.get('partial') ?? 0)
-    expect(faces / 2000).toBeGreaterThan(0.4)
-    expect(faces / 2000).toBeLessThan(0.65)
+    expect(faces / photos).toBeGreaterThan(0.4)
+    expect(faces / photos).toBeLessThan(0.65)
     for (const { key } of AVATAR_CATEGORIES) expect(seen.get(key) ?? 0).toBeGreaterThan(0)
   })
 
@@ -85,7 +87,7 @@ describe('avatar taxonomy', () => {
 
   it('follows the bio: a cat person mostly gets a cat', () => {
     const seen = sampleCategories({ ...korean, bio: '고양이 두 마리 집사' }, 1000)
-    expect(seen.get('animal') ?? 0).toBeGreaterThan(200)
+    expect((seen.get('animal') ?? 0) / (1000 - (seen.get('other') ?? 0))).toBeGreaterThan(0.2)
   })
 
   it('keeps the outfit, light and flaws consistent with the person and the place', () => {
@@ -423,5 +425,17 @@ describe('describeFace', () => {
   it('lets ordinary faces carry plain traits', () => {
     const plain = Array.from({ length: 100 }, (_, index) => kinds('ordinary', `ordinary:${index}`).prompt).filter((prompt) => /puffy|bulbous|heavy chin|a long face|broad, round face|round cheeks|flat|thin lips|small, narrow eyes|low, narrow forehead|long midface|long philtrum|large nose|sparse|dark under-eye|wide, square jaw/.test(prompt))
     expect(plain.length).toBeGreaterThan(80)
+  })
+})
+
+describe('anime-style profile pictures', () => {
+  it('are about one in five, mostly the account\'s own gender, sometimes a pet or a thing', () => {
+    const male = { ...american, gender: 'male' as const }
+    const anime = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(male, seededRandom(`anime:${index}`))).filter((spec) => spec.subtype === 'anime_icon')
+    expect(anime.length / 3000).toBeGreaterThan(0.15)
+    expect(anime.length / 3000).toBeLessThan(0.26)
+    const subjects = new Set(anime.map((spec) => spec.attributes.animeSubject))
+    expect([...subjects].sort()).toEqual(['cat', 'dog', 'object', 'person'])
+    for (const spec of anime.filter((item) => item.attributes.animeSubject === 'person')) expect(spec.prompt).toMatch(/young man/)
   })
 })
