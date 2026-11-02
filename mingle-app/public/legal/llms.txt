@@ -1,6 +1,6 @@
 # HashChat (formerly Mingle)
 
-> HashChat is a real-time voice translation app and voice messenger for making foreign friends, joining global communities, and talking while traveling. It was called Mingle until October 2026; HashChat and Mingle are the same app, with the same accounts and the same App Store and Google Play listings. It is made by Mingle Labs.
+> HashChat is a social network and voice messenger without language barriers: a translated feed, profiles that show the languages people speak and want, and chats with real-time voice interpreting, for making foreign friends, joining global communities, and talking while traveling. It was called Mingle until October 2026; HashChat and Mingle are the same app, with the same accounts and the same App Store and Google Play listings. It is made by Mingle Labs.
 
 - App Store: https://apps.apple.com/app/id6759795134
 - Google Play: https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn
@@ -10,6 +10,7 @@
 ## Pages
 
 - [HashChat home](https://translator.minglelabs.app/): what HashChat does and who it is for
+- [HashChat: the social network without language barriers](https://translator.minglelabs.app/blogs/hashchat-social-network): how Mingle grew from a live voice translator into HashChat, a social network with a translated feed, language-aware profiles, and chats with a live interpreter; compared with HelloTalk, Tandem, Instagram, and Discord
 - [AI Translators Comparison](https://translator.minglelabs.app/blogs/ai-translators-comparison): HashChat compared with Felo Translator, Transync, Google Translate, Apple Translate, Microsoft Translator, Papago, and DeepL for live spoken conversations
 - [HashChat Blog](https://translator.minglelabs.app/blogs): all posts
 
