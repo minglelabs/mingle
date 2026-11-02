@@ -626,6 +626,44 @@
         font-size: 0.92rem;
       }
 
+      .blog-links {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .blog-link {
+        display: grid;
+        gap: 10px;
+        padding: 26px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink);
+        text-decoration: none;
+      }
+
+      .blog-link:hover,
+      .blog-link:focus-visible {
+        border-color: var(--green);
+      }
+
+      .blog-link strong {
+        font-size: 1.24rem;
+        line-height: 1.3;
+      }
+
+      .blog-link span {
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      @media (max-width: 760px) {
+        .blog-links {
+          grid-template-columns: 1fr;
+        }
+      }
+
       .footer-brand {
         display: grid;
         gap: 4px;
@@ -1123,6 +1161,24 @@
           </div>
         </div>
       </section>
+      <section class="section section--paper-deep" id="blog" aria-labelledby="blog-title">
+        <div class="section-inner">
+          <div class="section-heading">
+            <p class="eyebrow" data-i18n="blog.eyebrow">Blog</p>
+            <h2 id="blog-title" data-i18n="blog.title">Read more about HashChat.</h2>
+          </div>
+          <div class="blog-links">
+            <a class="blog-link" href="/blogs/hashchat-social-network">
+              <strong>HashChat: the social network without language barriers</strong>
+              <span>How Mingle became HashChat, compared with LINE, WeChat, WhatsApp, HelloTalk, and more.</span>
+            </a>
+            <a class="blog-link" href="/blogs/ai-translators-comparison">
+              <strong>AI Translators Comparison</strong>
+              <span>HashChat's live interpreting next to Google Translate, Papago, DeepL, and other translators.</span>
+            </a>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="footer">
@@ -1249,6 +1305,7 @@
               body1: "처음에는 혼자 쓰는 실시간 번역기로 시작합니다. 사용자가 언어 장벽이 사라지는 경험을 먼저 느끼면, 그 다음은 상대를 초대하고, 방을 만들고, 커뮤니티로 확장하는 일입니다.",
               body2: "HashChat이 해결하려는 것은 단순히 문장을 다른 언어로 바꾸는 일이 아닙니다. 외국인과의 교류에서 마주치는 언어 장벽, 대화 소재의 부재, 만남의 어려움까지 낮추는 것입니다."
             },
+            blog: { eyebrow: "블로그", title: "HashChat 이야기 더 읽기" },
             footer: { copy: "© Mingle Labs. Built for conversations across languages.", renamed: "HashChat의 이전 이름은 Mingle입니다.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           en: {
@@ -1323,6 +1380,7 @@
               body1: "It starts as a real-time translator for one person. Once users feel the language barrier disappear, the next step is inviting others, making rooms, and growing into communities.",
               body2: "HashChat is not only changing sentences into another language. It is lowering the language barrier, the lack of topics, and the difficulty of meeting people across borders."
             },
+            blog: { eyebrow: "Blog", title: "Read more about HashChat." },
             footer: { copy: "© Mingle Labs. Built for conversations across languages.", renamed: "HashChat was formerly called Mingle.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
           },
           ja: {

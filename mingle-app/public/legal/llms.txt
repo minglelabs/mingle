@@ -10,7 +10,7 @@
 ## Pages
 
 - [HashChat home](https://translator.minglelabs.app/): what HashChat does and who it is for
-- [HashChat: the social network without language barriers](https://translator.minglelabs.app/blogs/hashchat-social-network): how Mingle grew from a live voice translator into HashChat, a social network with a translated feed, language-aware profiles, and chats with a live interpreter; compared with HelloTalk, Tandem, Instagram, and Discord
+- [HashChat: the social network without language barriers](https://translator.minglelabs.app/blogs/hashchat-social-network): how Mingle grew from a live voice translator into HashChat, a social network with a translated feed, language-aware profiles, and chats with a live interpreter; compared with LINE, WeChat, WhatsApp, HelloTalk, Tandem, Instagram, and Discord
 - [AI Translators Comparison](https://translator.minglelabs.app/blogs/ai-translators-comparison): HashChat compared with Felo Translator, Transync, Google Translate, Apple Translate, Microsoft Translator, Papago, and DeepL for live spoken conversations
 - [HashChat Blog](https://translator.minglelabs.app/blogs): all posts
 
