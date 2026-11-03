@@ -1,6 +1,7 @@
 "use client";
 
 import type { FeedPostDto } from "@/lib/feed-post-dto";
+import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import type { FeedCopy } from "@/i18n/feed-copy";
 import AccountBadge from "@/components/posts/account-badge";
 import { CompactLanguageLevels } from "@/components/profile-language-levels";
@@ -593,21 +594,27 @@ export default function FeedPostCard({
         className="flex min-w-0 items-center gap-3 rounded-full transition active:opacity-70"
         aria-label={authorLabel}
       >
-        {post.author.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={post.author.imageUrl}
-            alt=""
-            className="h-12 w-12 shrink-0 rounded-full object-cover"
-            draggable={false}
-            loading={eagerImage ? "eager" : "lazy"}
-            decoding="async"
-          />
-        ) : (
-          <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-bold ${fg.chipClass}`}>
-            {displayName.charAt(0).toUpperCase()}
-          </span>
-        )}
+        {/* The author's languages as flags at the bottom-left, as on profiles. */}
+        <span className="relative shrink-0">
+          {post.author.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={post.author.imageUrl}
+              alt=""
+              className="h-12 w-12 shrink-0 rounded-full object-cover"
+              draggable={false}
+              loading={eagerImage ? "eager" : "lazy"}
+              decoding="async"
+            />
+          ) : (
+            <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-bold ${fg.chipClass}`}>
+              {displayName.charAt(0).toUpperCase()}
+            </span>
+          )}
+          {post.author.languages?.primary.length ? (
+            <ProfileLanguageFlagStack languages={post.author.languages.primary.slice(0, 2)} size={48} badgeSize={20} />
+          ) : null}
+        </span>
         <span className="flex min-w-0 flex-col items-start gap-1">
           <span className="flex min-w-0 items-center gap-2">
             <span className={`max-w-[10rem] truncate text-[17px] font-bold ${fg.textClass}`}>
