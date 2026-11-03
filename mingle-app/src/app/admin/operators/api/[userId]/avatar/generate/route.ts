@@ -25,7 +25,7 @@ function json(payload: object, status = 200): NextResponse {
  * photo with a newly generated one. Every call picks a new kind of photo, so
  * staff press it again when the result looks wrong. → `{ image, label }`.
  */
-export async function POST(_request: Request, context: { params: Promise<{ userId: string }> }) {
+export async function POST(request: Request, context: { params: Promise<{ userId: string }> }) {
   const auth = await requireAdminApi()
   if (!auth.ok) return auth.response
 
@@ -37,6 +37,15 @@ export async function POST(_request: Request, context: { params: Promise<{ userI
   } catch (error) {
     if (error instanceof OperatorAccountRequiredError) return json({ error: 'operator_not_found' }, 404)
     throw error
+  }
+
+  // `?background=1`: the drawing can outlast the hosting proxy's request
+  // limit, so it runs on and the editor polls the account for the new photo.
+  if (new URL(request.url).searchParams.get('background') === '1') {
+    void generateOperatorAvatar(auth.ctx, operatorId).then((result) => {
+      if (!result.ok) console.warn('[admin/operators/avatar] background_failed', { error: result.error })
+    })
+    return json({ drawing: true }, 202)
   }
 
   const result = await generateOperatorAvatar(auth.ctx, operatorId)
