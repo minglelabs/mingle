@@ -271,6 +271,7 @@ export async function PATCH(request: NextRequest) {
     usagePurposeNote?: string | null;
     sttSegmentationMode?: string;
     demoEndpointTuningStep?: number;
+    demoSilenceFinalizeMs?: number;
     imageCropScale?: number | null;
     imageCropX?: number | null;
     imageCropY?: number | null;
@@ -439,8 +440,7 @@ export async function PATCH(request: NextRequest) {
       data.usagePurpose = body.usagePurpose;
       // Sent once, from onboarding: start the speech split where this kind of
       // user needs it. They can still change it in the room settings.
-      const segmentationDefaults = resolveUsagePurposeSegmentationDefaults(body.usagePurpose);
-      if (segmentationDefaults) Object.assign(data, segmentationDefaults);
+      Object.assign(data, resolveUsagePurposeSegmentationDefaults(body.usagePurpose));
     }
   }
 

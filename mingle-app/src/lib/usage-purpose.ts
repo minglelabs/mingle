@@ -4,8 +4,9 @@ import {
 } from "@/i18n/mingle-locales";
 
 // What the user mostly uses HashChat for, asked once during onboarding.
-// Work users (meetings, sales calls) need long utterances, so everyone but
-// casual-chat users starts on the longest automatic-detection step.
+// Work users (meetings, sales calls) need long utterances, so they start on
+// silence-based split with a 3s silence. Everyone else starts on the longest
+// automatic-detection step (step 5 of 5).
 export const USAGE_PURPOSE_CODES = ["social", "work", "other"] as const;
 
 export type UsagePurpose = (typeof USAGE_PURPOSE_CODES)[number];
@@ -23,12 +24,15 @@ export function isUsagePurpose(value: unknown): value is UsagePurpose {
     && (USAGE_PURPOSE_CODES as readonly string[]).includes(value);
 }
 
-/** Speech split defaults to store with the purpose, or null to keep the account defaults. */
-export function resolveUsagePurposeSegmentationDefaults(purpose: UsagePurpose): {
-  sttSegmentationMode: "end";
-  demoEndpointTuningStep: number;
-} | null {
-  if (purpose === "social") return null;
+export type UsagePurposeSegmentationDefaults =
+  | { sttSegmentationMode: "fin"; demoSilenceFinalizeMs: number }
+  | { sttSegmentationMode: "end"; demoEndpointTuningStep: number };
+
+/** Speech split defaults stored together with the purpose. */
+export function resolveUsagePurposeSegmentationDefaults(
+  purpose: UsagePurpose,
+): UsagePurposeSegmentationDefaults {
+  if (purpose === "work") return { sttSegmentationMode: "fin", demoSilenceFinalizeMs: 3000 };
   return { sttSegmentationMode: "end", demoEndpointTuningStep: 4 };
 }
 

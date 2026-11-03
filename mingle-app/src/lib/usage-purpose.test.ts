@@ -10,19 +10,20 @@ import {
 } from '@/lib/usage-purpose'
 
 describe('usage purpose', () => {
-  it('starts work users on the longest automatic-detection step', () => {
+  it('starts work users on silence-based split with a 3s silence', () => {
     expect(resolveUsagePurposeSegmentationDefaults('work')).toEqual({
-      sttSegmentationMode: 'end',
-      demoEndpointTuningStep: 4,
+      sttSegmentationMode: 'fin',
+      demoSilenceFinalizeMs: 3000,
     })
   })
 
-  it('starts other users on the longest step too, and keeps the account defaults for casual chats', () => {
-    expect(resolveUsagePurposeSegmentationDefaults('other')).toEqual({
-      sttSegmentationMode: 'end',
-      demoEndpointTuningStep: 4,
-    })
-    expect(resolveUsagePurposeSegmentationDefaults('social')).toBeNull()
+  it('starts casual-chat and other users on the longest automatic-detection step', () => {
+    for (const purpose of ['social', 'other'] as const) {
+      expect(resolveUsagePurposeSegmentationDefaults(purpose)).toEqual({
+        sttSegmentationMode: 'end',
+        demoEndpointTuningStep: 4,
+      })
+    }
   })
 
   it('trims the other reason and drops it when blank', () => {
