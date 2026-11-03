@@ -66,8 +66,8 @@ export const AVATAR_CATEGORIES: ReadonlyArray<{ key: AvatarCategory; ko: string;
   { key: 'object', ko: '사물', weight: 8 },
   { key: 'animal', ko: '동물', weight: 5 },
   { key: 'scenery', ko: '풍경·장소', weight: 4 },
-  // Staff like 2D profile pictures (2026-11): about one in five accounts gets an anime-style drawing.
-  { key: 'other', ko: '그림·글자', weight: 40 },
+  // Staff like 2D profile pictures (2026-11): about one in three accounts gets an anime-style drawing.
+  { key: 'other', ko: '그림·글자', weight: 76 },
 ]
 
 /** East Asian profiles hide the face more; Western and Latin American ones show it more. */
@@ -221,7 +221,7 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('landmark', '여행지', 1.5, 'a famous kind of landmark photographed like a tourist would'),
   ],
   other: [
-    sub('anime_icon', '애니풍 그림', 17, 'an anime-style drawing'),
+    sub('anime_icon', '애니풍 그림', 30, 'an anime-style drawing'),
     sub('sticker_char', '캐릭터 스티커', 2.5, 'a cute, simple cartoon animal or blob character in the style of a messenger-app sticker, on a plain white background, with two or three hand-drawn words in a speech bubble in the everyday language of {country}'),
     sub('lettering', '글자 이미지', 1, 'a short word or a name in loose hand-lettered script on a soft pastel background'),
     sub('doodle', '낙서풍 자화상', 2, 'a simple hand-drawn doodle self-portrait on paper, in an original style'),

@@ -12,10 +12,10 @@ export type PostPhotoKind = 'self' | 'self_faceless' | 'self_back' | 'friends' |
 
 // Staff want far more photos with people in them, face shown or not, and fewer food shots (2026-11).
 export const POST_PHOTO_KINDS: ReadonlyArray<{ key: PostPhotoKind; weight: number }> = [
-  { key: 'self', weight: 38 },
+  { key: 'self', weight: 51 },
   { key: 'self_faceless', weight: 18 },
-  { key: 'self_back', weight: 12 },
-  { key: 'friends', weight: 17 },
+  { key: 'self_back', weight: 6 },
+  { key: 'friends', weight: 10 },
   { key: 'scene', weight: 15 },
 ]
 
