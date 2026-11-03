@@ -1274,7 +1274,7 @@ function handleSttConnection(
                 }
                 const sonioxConfig = {
                     api_key: sonioxApiKey,
-                    model: 'stt-rt-v5',
+                    model: 'stt-rt-v6',
                     audio_format: 'pcm_s16le',
                     sample_rate: config.sample_rate,
                     num_channels: 1,
