@@ -1,13 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockConversationFindFirst,
-  mockConversationUpdate,
+  mockConversationUpdateMany,
   mockMessageCount,
   mockMessageFindMany,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
-  mockConversationUpdate: vi.fn(),
+  mockConversationUpdateMany: vi.fn(),
   mockMessageCount: vi.fn(),
   mockMessageFindMany: vi.fn(),
 }));
@@ -16,7 +16,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     appConversationChannel: {
       findFirst: mockConversationFindFirst,
-      update: mockConversationUpdate,
+      updateMany: mockConversationUpdateMany,
     },
     appMessage: {
       count: mockMessageCount,
@@ -84,7 +84,8 @@ describe("conversation auto title", () => {
     expect(sanitizeGeneratedConversationTitle("   ")).toBeNull();
   });
 
-  it("replaces a room title with a summary after its tenth finalized turn", async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
     mockConversationFindFirst.mockResolvedValue({
       id: "conversation-1",
       userEditedTitleAt: null,
@@ -96,8 +97,10 @@ describe("conversation auto title", () => {
       { contents: [{ text: "Let's plan a hiking trip." }] },
       { contents: [{ text: "Saturday morning works for me." }] },
     ]);
-    mockConversationUpdate.mockResolvedValue({});
+    mockConversationUpdateMany.mockResolvedValue({ count: 1 });
+  });
 
+  it("replaces a room title with a summary after its tenth finalized turn", async () => {
     await maybeGenerateConversationTitleForSession({
       sessionKey: "session-1",
       generateTitle: async (turns) => {
@@ -109,13 +112,36 @@ describe("conversation auto title", () => {
       },
     });
 
-    expect(mockConversationUpdate).toHaveBeenCalledWith({
-      where: { id: "conversation-1" },
-      data: expect.objectContaining({
-        title: "Saturday hiking trip plans",
+    expect(mockConversationUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: "conversation-1", autoTitleGeneratedAt: null, autoTitleLastTurnCount: null },
+      data: {
         autoTitleGeneratedAt: expect.any(Date),
         autoTitleLastTurnCount: AUTO_CONVERSATION_TITLE_TURN_COUNT,
-      }),
+      },
     });
+    expect(mockConversationUpdateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: "conversation-1", userEditedTitleAt: null },
+      data: { title: "Saturday hiking trip plans" },
+    });
+  });
+
+  it("skips the AI when a parallel write already claimed this round", async () => {
+    mockConversationUpdateMany.mockResolvedValueOnce({ count: 0 });
+    const generateTitle = vi.fn(async () => "Saturday hiking trip plans");
+
+    await maybeGenerateConversationTitleForSession({ sessionKey: "session-1", generateTitle });
+
+    expect(generateTitle).not.toHaveBeenCalled();
+    expect(mockConversationUpdateMany).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the claim when the AI fails, so the next message does not retry", async () => {
+    const generateTitle = vi.fn(async () => null);
+
+    await maybeGenerateConversationTitleForSession({ sessionKey: "session-1", generateTitle });
+
+    expect(generateTitle).toHaveBeenCalledOnce();
+    expect(mockConversationUpdateMany).toHaveBeenCalledOnce();
+    expect(mockConversationUpdateMany.mock.calls[0][0].data.autoTitleLastTurnCount).toBe(AUTO_CONVERSATION_TITLE_TURN_COUNT);
   });
 });
