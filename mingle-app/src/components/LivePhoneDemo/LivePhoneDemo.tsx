@@ -36,7 +36,7 @@ import {
   type EarphoneAutoReadDispatchItem,
   type EarphoneAutoReadSnapshot,
 } from './live-phone-demo.earphone-auto-read'
-import { applyNativeTtsEvent } from './live-phone-demo.native-tts-events'
+import { applyNativeTtsEvent, isNativeTtsEventForActiveClip, type NativeTtsEventDetail } from './live-phone-demo.native-tts-events'
 import {
   confirmNativeEarphonesConnected,
   getNativeAudioRouteServerSnapshot,
@@ -60,6 +60,7 @@ import {
   subscribeSttCaptureSourcePick,
 } from '@/lib/native-device-audio'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
+import { TtsAgentTextScheduler } from './tts-agent-text'
 import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
 import CoinBalanceChip, { formatCoinCount } from '@/components/coins/coin-balance-chip'
@@ -1564,6 +1565,16 @@ type TtsQueueItem = {
   // 'auto' items come from earphone mode (the legacy slot handlers below are
   // gated by the fixed-off TTS setting and never add any).
   mode: 'auto' | 'manual'
+  // The sentence the clip reads, reported to STT as agent text while it plays.
+  text?: string
+}
+
+// The clip whose sentence is being reported as agent text, once it starts.
+type TtsAgentTextClip = {
+  key: string
+  playbackKey: string
+  text: string
+  durationMs: number
 }
 
 type BubbleTtsTarget = {
@@ -2336,6 +2347,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
+  // Soniox v6 agent text: what the playing TTS clip says, sent to STT timed to
+  // playback so the echo of our own voice is dropped from the transcript.
+  const sendAgentTextRef = useRef<((text: string, endOfSegment: boolean) => void) | null>(null)
+  const [ttsAgentText] = useState(() => new TtsAgentTextScheduler({
+    send: (text, endOfSegment) => sendAgentTextRef.current?.(text, endOfSegment),
+  }))
+  const ttsAgentTextClipRef = useRef<TtsAgentTextClip | null>(null)
   const isTtsProcessingRef = useRef(false)
   const ttsWaitTimerRef = useRef<number | null>(null)
   const nativeTtsPlaybackSeqRef = useRef(0)
@@ -4344,6 +4362,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const cleanupCurrentAudio = useCallback(() => {
+    // Whatever was playing is cut here; a clip that ended normally was already
+    // closed, so this only reports how far an interrupted clip got.
+    ttsAgentText.interrupt()
+    ttsAgentTextClipRef.current = null
     const player = playerAudioRef.current
     if (player) {
       player.pause()
@@ -4357,7 +4379,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       URL.revokeObjectURL(currentAudioUrlRef.current)
       currentAudioUrlRef.current = null
     }
-  }, [])
+  }, [ttsAgentText])
 
   const clearTtsWaitTimer = useCallback(() => {
     if (ttsWaitTimerRef.current) {
@@ -4374,12 +4396,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const sendNativeTtsStopCommand = useCallback((reason: NativeTtsStopReason) => {
+    ttsAgentText.interrupt()
+    ttsAgentTextClipRef.current = null
     if (!isNativeApp()) return
     window.ReactNativeWebView!.postMessage(JSON.stringify({
       type: 'native_tts_stop',
       payload: { reason },
     }))
-  }, [])
+  }, [ttsAgentText])
 
   const allocateNativeTtsPlaybackId = useCallback((playbackKey: string) => {
     nativeTtsPlaybackSeqRef.current += 1
@@ -4404,13 +4428,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
       nativeTtsEventTimerRef.current = null
+      ttsAgentText.interrupt()
+      ttsAgentTextClipRef.current = null
       currentTtsClipSeqRef.current += 1
       currentTtsItemRef.current = null
       setSpeakingItem(prev => (prev?.playbackKey === playbackKey ? null : prev))
       isTtsProcessingRef.current = false
       processTtsQueueRef.current()
     }, timeoutMs)
-  }, [clearNativeTtsEventTimer])
+  }, [clearNativeTtsEventTimer, ttsAgentText])
 
   // Lets earphone mode hand over its next clip once the player is idle. Always
   // deferred so the controller is never re-entered from inside a dispatch.
@@ -4482,10 +4508,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
 
     const isCurrentClip = () => currentTtsClipSeqRef.current === clipSeq
+    const agentTextClip: TtsAgentTextClip | null = next.text
+      ? { key: `${next.playbackKey}::${clipSeq}`, playbackKey: next.playbackKey, text: next.text, durationMs: 0 }
+      : null
 
     // Pending "…" -> animated bars, only once sound really comes out.
     const markPlaybackStarted = () => {
       if (!isCurrentClip()) return
+      if (agentTextClip) ttsAgentText.start(agentTextClip.key, agentTextClip.text, agentTextClip.durationMs)
       setSpeakingItem(prev => (prev && prev.seq === clipSeq && !prev.started ? { ...prev, started: true } : prev))
     }
 
@@ -4505,10 +4535,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
         const audioBytes = new Uint8Array(await audioBlob.arrayBuffer())
         const contentType = audioBlob.type || 'audio/mpeg'
+        const estimatedDurationMs = estimateTtsAudioDurationMs(audioBytes, contentType)
         const watchdogTimeoutMs = resolveNativeTtsWatchdogTimeoutMs({
-          durationMs: estimateTtsAudioDurationMs(audioBytes, contentType),
+          durationMs: estimatedDurationMs,
           byteLength: audioBytes.byteLength,
         })
+        if (agentTextClip) {
+          agentTextClip.durationMs = estimatedDurationMs ?? 0
+          // `tts_started` from the shell starts the agent text (see the listener).
+          ttsAgentTextClipRef.current = agentTextClip
+        }
         const audioBase64 = bytesToBase64(audioBytes)
         // Stopped (falling edge, manual tap, reset) while the clip was read.
         if (!isCurrentClip()) return
@@ -4559,10 +4595,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       audio.src = objectUrl
 
       audio.onplaying = () => {
+        if (agentTextClip) agentTextClip.durationMs = Number.isFinite(audio.duration) ? audio.duration * 1000 : 0
         markPlaybackStarted()
       }
 
       audio.onended = () => {
+        if (agentTextClip) ttsAgentText.finish(agentTextClip.key)
         if (currentAudioUrlRef.current === objectUrl) {
           URL.revokeObjectURL(objectUrl)
           currentAudioUrlRef.current = null
@@ -4571,6 +4609,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
 
       audio.onerror = () => {
+        if (isCurrentClip()) ttsAgentText.interrupt()
         if (currentAudioUrlRef.current === objectUrl) {
           URL.revokeObjectURL(objectUrl)
           currentAudioUrlRef.current = null
@@ -4609,7 +4648,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } else {
       void playViaHtmlAudio()
     }
-  }, [allocateNativeTtsPlaybackId, armNativeTtsEventTimeout, cleanupCurrentAudio, clearNativeTtsEventTimer, clearTtsWaitTimer, ensureAudioPlayer, scheduleEarphoneAutoReadPump])
+  }, [allocateNativeTtsPlaybackId, armNativeTtsEventTimeout, cleanupCurrentAudio, clearNativeTtsEventTimer, clearTtsWaitTimer, ensureAudioPlayer, scheduleEarphoneAutoReadPump, ttsAgentText])
 
   useEffect(() => {
     processTtsQueueRef.current = processTtsQueue
@@ -4620,10 +4659,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!isNativeApp()) return
 
     const handleNativeTtsEvent = (event: Event) => {
-      applyNativeTtsEvent((event as CustomEvent<unknown>).detail, {
+      const detail = (event as CustomEvent<unknown>).detail
+      const activeClip = {
         playbackId: activeNativeTtsPlaybackIdRef.current,
         playbackKey: activeNativeTtsUtteranceIdRef.current,
-      }, {
+      }
+      const eventType = detail && typeof detail === 'object' ? (detail as { type?: unknown }).type : null
+      if (
+        (eventType === 'tts_ended' || eventType === 'tts_stopped' || eventType === 'tts_error')
+        && isNativeTtsEventForActiveClip(detail as NativeTtsEventDetail, activeClip)
+      ) {
+        // Played to the end: the rest of the sentence goes out. Stopped or
+        // failed: only what was heard.
+        if (eventType === 'tts_ended') ttsAgentText.finish(ttsAgentTextClipRef.current?.key)
+        else ttsAgentText.interrupt()
+        ttsAgentTextClipRef.current = null
+      }
+      applyNativeTtsEvent(detail, activeClip, {
         finishCurrentClip: () => {
           const finishedSeq = currentTtsItemRef.current?.seq ?? null
           activeNativeTtsPlaybackIdRef.current = null
@@ -4635,6 +4687,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           setSpeakingItem(prev => (finishedSeq === null || prev?.seq === finishedSeq ? null : prev))
         },
         markStarted: (playbackKey) => {
+          const agentTextClip = ttsAgentTextClipRef.current
+          if (agentTextClip && agentTextClip.playbackKey === playbackKey) {
+            ttsAgentText.start(agentTextClip.key, agentTextClip.text, agentTextClip.durationMs)
+          }
           setSpeakingItem(prev => (
             prev && !prev.started && prev.playbackKey === playbackKey ? { ...prev, started: true } : prev
           ))
@@ -4653,7 +4709,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener(NATIVE_TTS_EVENT, handleNativeTtsEvent as EventListener)
     }
-  }, [clearNativeTtsEventTimer])
+  }, [clearNativeTtsEventTimer, ttsAgentText])
 
   // Reserve a slot in the TTS queue when a TTS request is about to be made.
   // This ensures playback order matches utterance order regardless of response arrival order.
@@ -4782,6 +4838,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     operatorDisclosure,
     isInitialServerHydrationPending,
     replaceConversationHistoryForQa,
+    sendAgentText,
     // Demo animation states
     isDemoAnimating,
     demoTypingText,
@@ -4809,6 +4866,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     viewerUserId,
     viewerImage,
   })
+
+  useEffect(() => {
+    sendAgentTextRef.current = sendAgentText
+  }, [sendAgentText])
+
+  useEffect(() => () => {
+    // Leaving the room closes any open agent-text turn.
+    ttsAgentText.interrupt()
+    ttsAgentText.dispose()
+  }, [ttsAgentText])
   const isSttSessionRunning = isNativeAppRuntime
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
     : (isConnecting || isReady || isActive)
@@ -5585,6 +5652,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       language: target.language,
       kind: target.kind,
       mode: 'manual',
+      text: normalizedText,
     }]
     processTtsQueue()
   }, [
@@ -6726,6 +6794,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           language: item.language,
           kind: item.kind,
           mode: 'auto',
+          text: item.text,
         }]
         processTtsQueueRef.current()
       },

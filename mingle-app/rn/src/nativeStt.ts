@@ -59,6 +59,8 @@ type NativeSttModuleType = {
   start(options: NativeSttStartOptions): Promise<{ sampleRate: number }>;
   stop(options?: NativeSttStopOptions): Promise<void>;
   setAec(enabled: boolean): Promise<{ ok: boolean }>;
+  // Absent on builds before Soniox v6 agent text input.
+  sendAgentText?: (text: string, endOfSegment: boolean) => void;
   getMicrophonePermissionStatus(): Promise<NativeSttMicrophonePermissionStatus>;
   getStatus?: () => Promise<NativeSttStatus>;
   // iOS only: the broadcast extension and its App Group are in this build.
@@ -130,6 +132,10 @@ export async function setNativeSttAec(enabled: boolean): Promise<void> {
     return;
   }
   await nativeModule.setAec(enabled);
+}
+
+export function sendNativeSttAgentText(text: string, endOfSegment: boolean): void {
+  nativeModule?.sendAgentText?.(text, endOfSegment);
 }
 
 export async function getNativeSttMicrophonePermissionStatus(): Promise<NativeSttMicrophonePermissionStatus> {

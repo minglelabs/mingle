@@ -30,6 +30,7 @@ import {
   normalizeNativeSttCaptureSource,
   qaClearNativeSttAudioInjection,
   qaInjectNativeSttAudio,
+  sendNativeSttAgentText,
   setNativeSttAec,
   startNativeStt,
   stopNativeStt,
@@ -780,6 +781,11 @@ type NativeTtsCommand =
       };
     };
 
+type NativeSttAgentTextCommand = {
+  type: 'native_stt_agent_text';
+  payload?: { text?: unknown; endOfSegment?: unknown };
+};
+
 type NativeSttAecCommand = {
   type: 'native_stt_set_aec';
   payload: { enabled: boolean };
@@ -965,6 +971,7 @@ type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
   | NativeSttAecCommand
+  | NativeSttAgentTextCommand
   | NativeAudioRouteRequestCommand
   | NativeOpenAppSettingsCommand
   | NativeLocationCommand
@@ -4581,6 +4588,12 @@ function AppInner(): React.JSX.Element {
       const requestId = typeof rawRequestId === 'string' && rawRequestId.trim()
         ? rawRequestId.trim().slice(0, 128) : undefined;
       void nativeAudioRouteRelayRef.current?.handleRequest(requestId);
+      return;
+    }
+
+    if (parsed.type === 'native_stt_agent_text') {
+      const text = typeof parsed.payload?.text === 'string' ? parsed.payload.text : '';
+      sendNativeSttAgentText(text, parsed.payload?.endOfSegment === true);
       return;
     }
 

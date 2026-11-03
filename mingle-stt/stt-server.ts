@@ -6,6 +6,12 @@ import { WebSocket, WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
 import { config as loadDotenv } from 'dotenv';
 import { COIN_INSUFFICIENT_ERROR, createSttCoinMeter, readCoinBillingEnv, type SttCoinMeter } from './coin-billing';
+import {
+    buildSonioxAgentTextFrames,
+    SONIOX_REALTIME_MODEL,
+    SonioxAgentTextStats,
+    supportsSonioxAgentTextInput,
+} from './soniox-agent-text';
 import { SonioxAudioRelay, type SonioxRelayTiming, type SonioxStreamFailure } from './soniox-audio-relay';
 import {
     buildSonioxEndpointDetectionConfig,
@@ -152,6 +158,7 @@ function handleSttConnection(
     let lastSonioxUpstreamError: { code: string; category: string } | null = null;
     let sonioxAudioRelay: SonioxAudioRelay | null = null;
     let sonioxTerminalFailure = false;
+    const sonioxAgentTextStats = new SonioxAgentTextStats();
     let configReceived = false;
     let clientCloseTimer: ReturnType<typeof setTimeout> | null = null;
     let finalizePendingTurnFromProvider: ((
@@ -1274,13 +1281,16 @@ function handleSttConnection(
                 }
                 const sonioxConfig = {
                     api_key: sonioxApiKey,
-                    model: 'stt-rt-v6',
+                    model: SONIOX_REALTIME_MODEL,
                     audio_format: 'pcm_s16le',
                     sample_rate: config.sample_rate,
                     num_channels: 1,
                     enable_language_identification: true,
                     enable_speaker_diarization: true,
                     ...buildSonioxEndpointDetectionConfig(segmentationRuntime, { endpointTuningProfile }),
+                    // Always on: the client reports the translated TTS it plays so
+                    // Soniox can drop that echo from the transcript.
+                    ...(supportsSonioxAgentTextInput(SONIOX_REALTIME_MODEL) ? { enable_agent_text_input: true } : {}),
                 };
                 if (process.env.SONIOX_ENDPOINT_CONFIG_DEBUG === '1') {
                     console.log(
@@ -1808,6 +1818,25 @@ function handleSttConnection(
             return;
         }
 
+        if (data?.type === 'agent_text') {
+            // Only a live Soniox session that asked for it at start may get
+            // agent text; anywhere else it would end or confuse the stream.
+            const canSend = currentModel === 'soniox'
+                && supportsSonioxAgentTextInput(SONIOX_REALTIME_MODEL)
+                && sonioxAudioRelay !== null
+                && !stopRecordingLifecycleStarted
+                && !sonioxTerminalFailure;
+            if (!canSend) {
+                sonioxAgentTextStats.recordDropped();
+                return;
+            }
+            const frames = buildSonioxAgentTextFrames(data?.data?.text, data?.data?.end_of_segment === true);
+            const sent = frames.filter((frame) => sonioxAudioRelay!.sendText(JSON.stringify(frame)));
+            sonioxAgentTextStats.recordSent(sent);
+            if (sent.length < frames.length) sonioxAgentTextStats.recordDropped();
+            return;
+        }
+
         if (coinMeter && data.type === 'audio_chunk' && typeof data.data?.chunk === 'string'
             && !stopRecordingLifecycleStarted) {
             // base64 -> bytes of 16-bit PCM.
@@ -1908,7 +1937,8 @@ function handleSttConnection(
         const sonioxErrorFields = lastSonioxUpstreamError
             ? ` soniox_error_code=${lastSonioxUpstreamError.code || '-'} soniox_error_category=${lastSonioxUpstreamError.category}`
             : '';
-        console.log(`[conn:${connId}] client disconnected code=${event.code} duration=${durationSec}s model=${currentModel} namespace=${apiNamespace || '-'} langs=${selectedLanguages.join(',')}${sonioxErrorFields}`);
+        const agentTextFields = currentModel === 'soniox' ? ` ${sonioxAgentTextStats.summary()}` : '';
+        console.log(`[conn:${connId}] client disconnected code=${event.code} duration=${durationSec}s model=${currentModel} namespace=${apiNamespace || '-'} langs=${selectedLanguages.join(',')}${sonioxErrorFields}${agentTextFields}`);
         cleanup();
     };
 }
