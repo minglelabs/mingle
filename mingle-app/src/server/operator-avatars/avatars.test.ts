@@ -429,11 +429,11 @@ describe('describeFace', () => {
 })
 
 describe('anime-style profile pictures', () => {
-  it('are about one in five, mostly the account\'s own gender, sometimes a pet or a thing', () => {
+  it('are about one in three, mostly the account\'s own gender, sometimes a pet or a thing', () => {
     const male = { ...american, gender: 'male' as const }
     const anime = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(male, seededRandom(`anime:${index}`))).filter((spec) => spec.subtype === 'anime_icon')
-    expect(anime.length / 3000).toBeGreaterThan(0.15)
-    expect(anime.length / 3000).toBeLessThan(0.26)
+    expect(anime.length / 3000).toBeGreaterThan(0.28)
+    expect(anime.length / 3000).toBeLessThan(0.4)
     const subjects = new Set(anime.map((spec) => spec.attributes.animeSubject))
     expect([...subjects].sort()).toEqual(['cat', 'dog', 'object', 'person'])
     for (const spec of anime.filter((item) => item.attributes.animeSubject === 'person')) expect(spec.prompt).toMatch(/young man/)
