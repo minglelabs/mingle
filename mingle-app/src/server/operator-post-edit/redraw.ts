@@ -3,8 +3,7 @@ import { prisma } from '@/lib/prisma'
 import type { AdminContext } from '@/server/admin/guard'
 import { writeAdminAudit } from '@/server/admin/audit'
 import { requestAvatarImage, type AvatarReference } from '@/server/operator-avatars/generate'
-import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
-import { buildPostImagePrompt, reservePostPerson, reservePostPlace, storeReservePostImage, type PostPhotoPerson } from '@/server/operator-post-reserve/post-image'
+import { reservePostImageRequest, reservePostPerson, storeReservePostImage, type PostPhotoPerson } from '@/server/operator-post-reserve/post-image'
 import { isOwnedPostImageKey } from '@/server/posts/post-image-keys'
 import { getPostImage } from '@/server/posts/post-image-storage'
 import { OPERATOR_POST_PHOTO_MAX_BYTES } from './edit'
@@ -135,10 +134,9 @@ async function drawCandidate(
       prompt = buildReferenceRedrawPrompt({ options, person: withPerson?.person ?? null, paired, language: languageName(target.language), vertical })
       attachment = { bytes: paired ? await pairImages(reference, withPerson!.reference!.bytes) : reference, mimeType: 'image/jpeg' }
     } else if (target.brief) {
-      const place = await reservePostPlace(target.authorId)
-      const withPerson = decodePostPhoto(target.brief).kind === 'scene' ? null : await reservePostPerson(target.authorId)
-      prompt = [buildPostImagePrompt(target.brief, place, Math.random, withPerson?.person ?? null), ...(note ? [`Staff note: ${note}`] : [])].join('\n')
-      attachment = withPerson?.reference ?? undefined
+      const request = await reservePostImageRequest(target.authorId, target.brief)
+      prompt = [request.prompt, ...(note ? [`Staff note: ${note}`] : [])].join('\n')
+      attachment = request.reference ?? undefined
     } else if (target.currentKey) {
       prompt = [
         'Draw a new version of the attached phone photo: the same subject, place and mood, as if taken again a moment later, with a slightly different angle and pose. The same person if one is shown.',
