@@ -162,7 +162,7 @@ function seeded(seed: string): () => number {
 
 export type PosterProfile = {
   type: PosterType
-  length: (typeof LENGTHS)[number]
+  length: { key: string; ko: string; brief: string }
   /** Typing habits and quirks, told to the model. */
   voice: string[]
   shapeFactors: Record<string, number>
@@ -226,8 +226,37 @@ export function learnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
   return { language: 'ko', share: pickOne([0.1, 0.15, 0.2, 0.3]), level: pickLearnerLevel(random()) }
 }
 
+/**
+ * Men in real apps mostly post a few plain words with no emoji, or now and
+ * then something long and earnest (staff, 2026-11). Drawn from a separate
+ * seed, so topics and the rest of the profile stay as they were.
+ */
+const MALE_PLAIN_SHARE = 0.55
+const MALE_EARNEST_SHARE = 0.15
+const MALE_NO_EMOJI_SHARE = 0.75
+const EARNEST_LENGTH = { key: 'earnest', ko: '진지하게 길게', brief: 'when they post, writes long and earnest: several full sentences that explain what they think and why, no jokes, no emoji' } as const
+
+function forMen(profile: PosterProfile, seed: string): PosterProfile {
+  const random = seeded(`poster-male:${seed}`)
+  const style = random()
+  const noEmoji = random() < MALE_NO_EMOJI_SHARE
+  const emoji = (line: string) => (EMOJI.includes(line) ? (noEmoji ? EMOJI[0] : line) : line)
+  if (style < MALE_EARNEST_SHARE) {
+    return { ...profile, length: EARNEST_LENGTH, voice: profile.voice.map((line) => (EMOJI.includes(line) ? EMOJI[0] : line)), labelKo: `${profile.type.ko} · ${EARNEST_LENGTH.ko}` }
+  }
+  if (style < MALE_EARNEST_SHARE + MALE_PLAIN_SHARE) {
+    return { ...profile, length: LENGTHS[0], voice: profile.voice.map(emoji), labelKo: `${profile.type.ko} · ${LENGTHS[0].ko}` }
+  }
+  return { ...profile, voice: profile.voice.map(emoji) }
+}
+
 /** The fixed posting personality of one account. `topicKeys` are all topic keys the generator knows. */
-export function posterProfile(seed: string, topicKeys: readonly string[] = []): PosterProfile {
+export function posterProfile(seed: string, topicKeys: readonly string[] = [], gender: string | null = null): PosterProfile {
+  const profile = basePosterProfile(seed, topicKeys)
+  return gender === 'male' ? forMen(profile, seed) : profile
+}
+
+function basePosterProfile(seed: string, topicKeys: readonly string[]): PosterProfile {
   const random = seeded(`poster:${seed}`)
   const pickOne = <T,>(items: readonly T[]): T => items[Math.floor(random() * items.length)]
   const type = pickOne(POSTER_TYPES)

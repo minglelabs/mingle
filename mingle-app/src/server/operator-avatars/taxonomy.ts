@@ -128,7 +128,7 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
   ],
   back: [
     sub('sea_gaze', '바다를 바라봄', 3, 'seen from behind, standing and looking out at the sea'),
-    sub('sunset_gaze', '노을을 바라봄', 3, 'seen from behind against a sunset sky'),
+    sub('sunset_gaze', '노을을 바라봄', 1, 'seen from behind against a sunset sky'),
     sub('walking_street', '길 걷는 중', 3, 'seen from behind, walking down a street'),
     sub('stairs', '계단 오르는 중', 1.5, 'seen from behind, climbing outdoor stairs'),
     sub('window_gaze', '창밖을 봄', 2, 'seen from behind, looking out of a window'),
@@ -210,7 +210,7 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('fish_turtle', '물고기·거북이', 0.3, 'a pet fish or small turtle in a tank'),
   ],
   scenery: [
-    sub('sunset', '노을', 3, 'a sunset sky'),
+    sub('sunset', '노을', 1, 'a sunset sky'),
     sub('clouds', '구름', 1.5, 'clouds in a blue sky'),
     sub('night_sky', '밤하늘·달', 1.5, 'the moon in a night sky'),
     sub('sea', '바다 수평선', 2.5, 'the sea and horizon'),
@@ -615,12 +615,13 @@ const FILTERS: readonly Option[] = [
   ['none', 12, 'no filter'], ['bw', 0.8, 'black and white'],
 ]
 
+// Evening light is kept rare: profile pictures had turned mostly sunsets and late-afternoon sun (staff, 2026-11).
 const LIGHTING: readonly Option[] = [
-  ['daylight', 5, 'ordinary daylight'], ['window', 3, 'soft light from a window'], ['golden', 2, 'low evening sun'], ['fluorescent', 2, 'flat indoor fluorescent light'],
+  ['daylight', 5, 'ordinary daylight'], ['window', 3, 'soft light from a window'], ['golden', 0.6, 'low evening sun'], ['fluorescent', 2, 'flat indoor fluorescent light'],
   ['warm_lamp', 2, 'warm indoor lamp light'], ['night', 1.2, 'at night under street lamps and city lights'], ['neon', 0.8, 'colored neon light at night'],
   ['overcast', 1.5, 'grey overcast light'], ['screen', 0.4, 'lit only by a screen in a dark room'],
-  ['side_sun', 2.5, 'low late-afternoon sun from one side, warm on one side of the person and on the wall or street behind, the other side in soft shade'],
-  ['backlit_shade', 3, 'late afternoon in shade with the bright sky behind as the main light, so the person is slightly backlit: the face a little darker and duller than the sky and as lit as the shade around it, the sky blown out to near white'],
+  ['side_sun', 1, 'low late-afternoon sun from one side, warm on one side of the person and on the wall or street behind, the other side in soft shade'],
+  ['backlit_shade', 1.5, 'late afternoon in shade with the bright sky behind as the main light, so the person is slightly backlit: the face a little darker and duller than the sky and as lit as the shade around it, the sky blown out to near white'],
 ]
 
 const FLAWS: readonly Option[] = [

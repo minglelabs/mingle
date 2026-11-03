@@ -4,7 +4,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: {} }))
 vi.mock('@/server/operator-avatars/generate', () => ({ requestAvatarImage: vi.fn() }))
 vi.mock('@/server/posts/post-image-storage', () => ({ putPostImage: vi.fn() }))
 
-import { buildPostImagePrompt } from './post-image'
+import { buildPostImagePrompt, pickPostImageStyle } from './post-image'
 
 describe('post photo prompt', () => {
   it('describes a phone snapshot without people', () => {
@@ -46,7 +46,7 @@ describe('photos of the poster', () => {
     expect(prompt).not.toContain('No face and no recognizable person')
     expect(prompt).toContain('The focus is on the person')
     expect(prompt).toContain('Skin: smooth and soft, the way a phone renders')
-    expect(prompt).toContain('sets in the west')
+    expect(prompt).toContain('Real landmarks appear only where they really stand')
     expect(prompt).not.toContain('as sharp as the subject')
   })
 
@@ -95,5 +95,35 @@ describe('off-color background objects', () => {
       if (block.includes('Add no stray objects')) none += 1
     }
     expect(none).toBeGreaterThan(5)
+  })
+})
+
+describe('anime-style post pictures', () => {
+  const anime = { subtype: 'anime_icon', category: 'other' }
+  const photo = { subtype: 'front', category: 'face' }
+
+  it('come mostly from accounts with an anime profile picture, rarely from others and never of the poster', () => {
+    const share = (spec: unknown, kind: 'scene' | 'self') => {
+      let drawn = 0
+      for (let index = 0; index < 2000; index += 1) if (pickPostImageStyle(spec, kind, () => (index + 0.5) / 2000) === 'anime') drawn += 1
+      return drawn / 2000
+    }
+    expect(share(anime, 'self')).toBeCloseTo(0.6, 2)
+    expect(share(photo, 'scene')).toBeCloseTo(0.05, 2)
+    expect(share(photo, 'self')).toBe(0)
+  })
+
+  it('draws the poster as the character of the attached anime picture', () => {
+    const prompt = buildPostImagePrompt('[self] The poster reading on a bench in a park', 'Osaka, Japan', () => 0.1, { look: 'x', hasReference: true }, 'anime')
+    expect(prompt).toContain('anime-style illustration')
+    expect(prompt).toContain('the character in the attached drawing')
+    expect(prompt).not.toContain('real, unedited snapshot')
+  })
+})
+
+describe('sun direction rule', () => {
+  it('is only told for scenes with a low sun, so it does not pull every photo toward a sunset', () => {
+    expect(buildPostImagePrompt('a bowl of ramen on a counter')).not.toMatch(/sunset|setting sun/i)
+    expect(buildPostImagePrompt('the sea at sunset from a pier')).toContain('a setting sun only ever appears in a view facing west')
   })
 })

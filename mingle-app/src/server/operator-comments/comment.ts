@@ -45,7 +45,7 @@ export async function commentOnPostAsOperator(
     const [commenter, comments, reserve] = await Promise.all([
       prisma.user.findUnique({
         where: { id: operatorUserId },
-        select: { name: true, bio: true, birthDate: true, locationCity: true, locationCountry: true, primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true },
+        select: { name: true, bio: true, birthDate: true, locationCity: true, locationCountry: true, primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, operatorAccount: { select: { personaGender: true } } },
       }),
       prisma.postComment.findMany({
         where: visibleCommentsWhere(post.id, operatorUserId),
@@ -69,6 +69,7 @@ export async function commentOnPostAsOperator(
         country: commenter.locationCountry ?? null,
         language,
         learning: zipInterestLanguages(commenter.interestLanguages, commenter.interestLanguageLevels).map((item) => ({ language: item.code, level: item.level })),
+        gender: commenter.operatorAccount?.personaGender ?? null,
       },
       // The planned photo is only described when it was actually drawn and attached.
       post: { text: post.sourceText, language: post.sourceLanguage, photo: post.imageObjectKey ? input.photo ?? reserve?.imagePrompt ?? null : null },

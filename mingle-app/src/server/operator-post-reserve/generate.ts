@@ -90,8 +90,8 @@ export function reserveLearnerPlan(seed: string, nativeLanguage: string, learnin
 }
 
 /** The posting personality of an account, by its id. */
-export function reservePosterProfile(seed: string): PosterProfile {
-  return posterProfile(seed, RESERVE_TOPICS.map((topic) => topic.key))
+export function reservePosterProfile(seed: string, gender: string | null = null): PosterProfile {
+  return posterProfile(seed, RESERVE_TOPICS.map((topic) => topic.key), gender)
 }
 
 /**
@@ -129,6 +129,7 @@ export type ReservePersona = {
   language: string
   /** The profile's 관심 언어 with their 1-5 level; never sent to the model as is. */
   learning?: LearningLanguage[]
+  gender?: string | null
 }
 
 function modelPersona({ learning: _learning, ...persona }: ReservePersona): Omit<ReservePersona, 'learning'> {
@@ -153,7 +154,7 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
     'A slot in any other language is written by this person as a learner of it, at the level in "learner". Make the level audible: the mistakes and stiffness that a native speaker of the persona\'s own language really makes in that language, not random errors. Learner posts are simpler and more polite than the person\'s native posts, the poster quirks mostly do not carry over, and a learner may add the same line in their own language underneath.',
     'When a slot has "photo", the post goes out with one phone photo of that kind; when "photo" is false there is no photo and "photo" stays empty. Write the text as a caption or remark that fits the photo, and describe the photo in "photo" in English, in one or two sentences, as a casual phone snapshot: what is in it, where, and how it is framed.',
     'Photo kinds: "self" shows the poster with their face; "self_faceless" shows the poster but not their face; "self_back" shows the poster from behind; "friends" shows the poster with friends; "scene" shows no recognizable person (food, a drink, a desk, a street, a view, a shop front, a pet, an object, a hand holding something). A slot with the poster in it also has a "setup" (who took it, framing, pose): follow it, and pick a concrete place in the persona\'s city and an outfit that fit the post and the person. Refer to the poster as "the poster" and never describe their face, hair or body: that is added later. Everyone is an adult; no school uniforms.',
-    'Get the real world right in the photo: the sun sets only in the west (an east-facing beach like Haeundae or Gwangalli has sunrises, not sunsets), a landmark is only where it really stands as seen from that spot, and anything the description says about the body is anatomically possible.',
+    'Get the real world right in the photo: a landmark is only where it really stands as seen from that spot, and anything the description says about the body is anatomically possible. Most photos are taken in ordinary daylight, indoors or at night; a sunset, dusk or evening-sun photo is rare (at most one post in fifteen), and when there is one it faces west (an east-facing beach like Haeundae or Gwangalli has sunrises, not sunsets).',
     'What is on their own screen (notes, a chat, a map, a playlist, a score) is a screenshot, not a "scene": start the description with "Screenshot of", and never describe a photo of a phone or computer screen.',
     'Never a photo of handwriting or study material (a notebook, handwritten notes, flashcards, a textbook or worksheet page): drawn, they look fake. For a study or language post, show something else around it (the café or desk, a drink, the view) or make the post about something else.',
     'People post in wildly different ways, and "poster" is how this one does. It comes first: where it conflicts with the general advice below, "poster" wins. Let the type, length and voice show clearly across the set, so that this person could not be mistaken for another account. Register and punctuation hold in every post; each quirk shows in only about one post in three, never in all of them, and never in the same position twice in a row.',
@@ -226,7 +227,7 @@ export async function generateReservePosts(args: {
   const generate = args.generate ?? generateJson
   const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
   const random = args.random ?? Math.random
-  const profile = reservePosterProfile(args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`)
+  const profile = reservePosterProfile(args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`, args.persona.gender ?? null)
   const seed = args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`
   const learner = reserveLearnerPlan(seed, args.persona.language, args.persona.learning)
   const slots = args.topics.map((topic, index) => {
@@ -299,7 +300,7 @@ export async function rewriteReservePostText(args: {
   generate?: GenerateFn
 }): Promise<string | null> {
   const generate = args.generate ?? generateJson
-  const profile = reservePosterProfile(args.seed)
+  const profile = reservePosterProfile(args.seed, args.persona.gender ?? args.profile?.gender ?? null)
   const learner = reserveLearnerPlan(args.seed, args.persona.language, args.persona.learning ?? args.profile?.learning)
   const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
   const items = await generate({
