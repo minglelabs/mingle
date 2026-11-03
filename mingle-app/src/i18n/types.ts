@@ -223,6 +223,7 @@ export type BaseAppDictionarySource = {
     reportReasonHarassment?: string;
     reportReasonInappropriate?: string;
     reportReasonImpersonation?: string;
+    reportReasonAiGenerated?: string;
     reportReasonOther?: string;
     appLanguageLabel?: string;
     appLanguageTitle?: string;

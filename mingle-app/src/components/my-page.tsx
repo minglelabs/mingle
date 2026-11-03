@@ -490,6 +490,7 @@ function ProfileSettingsPanel({
       harassment: dictionary.profile.reportReasonHarassment ?? (locale === "ko" ? "괴롭힘·불쾌한 행동" : "Harassment"),
       inappropriate: dictionary.profile.reportReasonInappropriate ?? (locale === "ko" ? "부적절한 콘텐츠" : "Inappropriate content"),
       impersonation: dictionary.profile.reportReasonImpersonation ?? (locale === "ko" ? "사칭" : "Impersonation"),
+      ai_generated: dictionary.profile.reportReasonAiGenerated ?? (locale === "ko" ? "AI로 만든 것 같음 (글·사진·프로필)" : "Looks AI-generated (text, photo, profile)"),
       other: dictionary.profile.reportReasonOther ?? (locale === "ko" ? "기타" : "Other"),
     } as Record<string, string>,
   };

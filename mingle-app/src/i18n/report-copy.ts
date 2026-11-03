@@ -52,7 +52,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: '신고 사유', detailLabel: '상세 내용', detailPlaceholder: '상황을 자세히 적어 주세요.', detailOptional: '선택 입력 · 최대 500자',
     submit: '신고 보내기', submitting: '보내는 중…', submitted: '신고가 접수되었어요. 검토 후 처리됩니다.', alreadyReported: '이미 신고한 항목이에요.',
     reportError: '신고를 보내지 못했어요. 다시 시도해 주세요.', noAutoAction: '신고해도 숨김·차단은 자동으로 되지 않아요.',
-    reasons: { spam: '스팸·도배', harassment: '괴롭힘·불쾌한 행동', inappropriate: '부적절한 콘텐츠', impersonation: '사칭', other: '기타' },
+    reasons: { spam: '스팸·도배', harassment: '괴롭힘·불쾌한 행동', inappropriate: '부적절한 콘텐츠', impersonation: '사칭', ai_generated: 'AI로 만든 것 같음 (글·사진·프로필)', other: '기타' },
   },
   en: {
     menuTitle: 'Post options', edit: 'Edit', archive: 'Archive', delete: 'Delete',
@@ -63,7 +63,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: 'Reason', detailLabel: 'Details', detailPlaceholder: 'Tell us what happened.', detailOptional: 'Optional · up to 500 characters',
     submit: 'Submit report', submitting: 'Submitting…', submitted: 'Your report was received and will be reviewed.', alreadyReported: 'You already reported this.',
     reportError: 'Could not submit the report. Please try again.', noAutoAction: 'Reporting does not hide or block anything by itself.',
-    reasons: { spam: 'Spam', harassment: 'Harassment', inappropriate: 'Inappropriate content', impersonation: 'Impersonation', other: 'Other' },
+    reasons: { spam: 'Spam', harassment: 'Harassment', inappropriate: 'Inappropriate content', impersonation: 'Impersonation', ai_generated: 'Looks AI-generated (text, photo, profile)', other: 'Other' },
   },
   ja: {
     menuTitle: '投稿オプション', edit: '編集', archive: 'アーカイブ', delete: '削除',
@@ -74,7 +74,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: '報告理由', detailLabel: '詳細', detailPlaceholder: '状況を詳しくお書きください。', detailOptional: '任意・最大500文字',
     submit: '報告する', submitting: '送信中…', submitted: '報告を受け付けました。確認のうえ対応します。', alreadyReported: 'すでに報告済みです。',
     reportError: '報告を送信できませんでした。再試行してください。', noAutoAction: '報告しても自動で非表示・ブロックはされません。',
-    reasons: { spam: 'スパム', harassment: '嫌がらせ', inappropriate: '不適切なコンテンツ', impersonation: 'なりすまし', other: 'その他' },
+    reasons: { spam: 'スパム', harassment: '嫌がらせ', inappropriate: '不適切なコンテンツ', impersonation: 'なりすまし', ai_generated: 'AI生成の疑い（文章・写真・プロフィール）', other: 'その他' },
   },
   'zh-CN': {
     menuTitle: '帖子选项', edit: '编辑', archive: '归档', delete: '删除',
@@ -85,7 +85,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: '举报原因', detailLabel: '详细说明', detailPlaceholder: '请详细描述发生了什么。', detailOptional: '选填 · 最多500字',
     submit: '提交举报', submitting: '提交中…', submitted: '举报已收到，我们将进行审核。', alreadyReported: '你已举报过此项。',
     reportError: '举报提交失败，请重试。', noAutoAction: '举报不会自动隐藏或拉黑。',
-    reasons: { spam: '垃圾信息', harassment: '骚扰', inappropriate: '不当内容', impersonation: '冒充', other: '其他' },
+    reasons: { spam: '垃圾信息', harassment: '骚扰', inappropriate: '不当内容', impersonation: '冒充', ai_generated: '疑似AI生成（文字、照片、资料）', other: '其他' },
   },
   'zh-TW': {
     menuTitle: '貼文選項', edit: '編輯', archive: '封存', delete: '刪除',
@@ -96,7 +96,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: '檢舉原因', detailLabel: '詳細說明', detailPlaceholder: '請詳細描述發生了什麼。', detailOptional: '選填 · 最多500字',
     submit: '送出檢舉', submitting: '傳送中…', submitted: '檢舉已收到，我們將進行審核。', alreadyReported: '你已檢舉過此項。',
     reportError: '檢舉傳送失敗，請重試。', noAutoAction: '檢舉不會自動隱藏或封鎖。',
-    reasons: { spam: '垃圾訊息', harassment: '騷擾', inappropriate: '不當內容', impersonation: '冒充', other: '其他' },
+    reasons: { spam: '垃圾訊息', harassment: '騷擾', inappropriate: '不當內容', impersonation: '冒充', ai_generated: '疑似AI生成（文字、照片、個人檔案）', other: '其他' },
   },
   fr: {
     menuTitle: 'Options', edit: 'Modifier', archive: 'Archiver', delete: 'Supprimer',
@@ -107,7 +107,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: 'Motif', detailLabel: 'Détails', detailPlaceholder: 'Décrivez ce qui s’est passé.', detailOptional: 'Facultatif · 500 caractères max.',
     submit: 'Envoyer le signalement', submitting: 'Envoi…', submitted: 'Signalement reçu, il sera examiné.', alreadyReported: 'Vous l’avez déjà signalé.',
     reportError: 'Échec de l’envoi du signalement. Réessayez.', noAutoAction: 'Un signalement ne masque ni ne bloque rien automatiquement.',
-    reasons: { spam: 'Spam', harassment: 'Harcèlement', inappropriate: 'Contenu inapproprié', impersonation: 'Usurpation d’identité', other: 'Autre' },
+    reasons: { spam: 'Spam', harassment: 'Harcèlement', inappropriate: 'Contenu inapproprié', impersonation: 'Usurpation d’identité', ai_generated: 'Semble généré par IA (texte, photo, profil)', other: 'Autre' },
   },
   de: {
     menuTitle: 'Optionen', edit: 'Bearbeiten', archive: 'Archivieren', delete: 'Löschen',
@@ -118,7 +118,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: 'Grund', detailLabel: 'Details', detailPlaceholder: 'Beschreibe, was passiert ist.', detailOptional: 'Optional · max. 500 Zeichen',
     submit: 'Meldung senden', submitting: 'Wird gesendet…', submitted: 'Meldung eingegangen und wird geprüft.', alreadyReported: 'Bereits gemeldet.',
     reportError: 'Meldung fehlgeschlagen. Bitte erneut versuchen.', noAutoAction: 'Eine Meldung blendet nichts aus und blockiert niemanden automatisch.',
-    reasons: { spam: 'Spam', harassment: 'Belästigung', inappropriate: 'Unangemessener Inhalt', impersonation: 'Identitätsdiebstahl', other: 'Sonstiges' },
+    reasons: { spam: 'Spam', harassment: 'Belästigung', inappropriate: 'Unangemessener Inhalt', impersonation: 'Identitätsdiebstahl', ai_generated: 'Wirkt KI-generiert (Text, Foto, Profil)', other: 'Sonstiges' },
   },
   es: {
     menuTitle: 'Opciones', edit: 'Editar', archive: 'Archivar', delete: 'Eliminar',
@@ -129,7 +129,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: 'Motivo', detailLabel: 'Detalles', detailPlaceholder: 'Cuéntanos qué pasó.', detailOptional: 'Opcional · máx. 500 caracteres',
     submit: 'Enviar denuncia', submitting: 'Enviando…', submitted: 'Denuncia recibida, será revisada.', alreadyReported: 'Ya lo denunciaste.',
     reportError: 'No se pudo enviar la denuncia. Inténtalo de nuevo.', noAutoAction: 'Denunciar no oculta ni bloquea nada por sí solo.',
-    reasons: { spam: 'Spam', harassment: 'Acoso', inappropriate: 'Contenido inapropiado', impersonation: 'Suplantación', other: 'Otro' },
+    reasons: { spam: 'Spam', harassment: 'Acoso', inappropriate: 'Contenido inapropiado', impersonation: 'Suplantación', ai_generated: 'Parece generado por IA (texto, foto, perfil)', other: 'Otro' },
   },
   pt: {
     menuTitle: 'Opções', edit: 'Editar', archive: 'Arquivar', delete: 'Excluir',
@@ -140,7 +140,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: 'Motivo', detailLabel: 'Detalhes', detailPlaceholder: 'Conte o que aconteceu.', detailOptional: 'Opcional · até 500 caracteres',
     submit: 'Enviar denúncia', submitting: 'Enviando…', submitted: 'Denúncia recebida e será analisada.', alreadyReported: 'Você já denunciou isto.',
     reportError: 'Não foi possível enviar a denúncia. Tente novamente.', noAutoAction: 'Denunciar não oculta nem bloqueia nada automaticamente.',
-    reasons: { spam: 'Spam', harassment: 'Assédio', inappropriate: 'Conteúdo impróprio', impersonation: 'Falsidade ideológica', other: 'Outro' },
+    reasons: { spam: 'Spam', harassment: 'Assédio', inappropriate: 'Conteúdo impróprio', impersonation: 'Falsidade ideológica', ai_generated: 'Parece gerado por IA (texto, foto, perfil)', other: 'Outro' },
   },
   it: {
     menuTitle: 'Opzioni', edit: 'Modifica', archive: 'Archivia', delete: 'Elimina',
@@ -151,7 +151,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: 'Motivo', detailLabel: 'Dettagli', detailPlaceholder: 'Raccontaci cosa è successo.', detailOptional: 'Facoltativo · max 500 caratteri',
     submit: 'Invia segnalazione', submitting: 'Invio…', submitted: 'Segnalazione ricevuta, sarà esaminata.', alreadyReported: 'L’hai già segnalato.',
     reportError: 'Impossibile inviare la segnalazione. Riprova.', noAutoAction: 'La segnalazione non nasconde né blocca nulla automaticamente.',
-    reasons: { spam: 'Spam', harassment: 'Molestie', inappropriate: 'Contenuto inappropriato', impersonation: 'Furto d’identità', other: 'Altro' },
+    reasons: { spam: 'Spam', harassment: 'Molestie', inappropriate: 'Contenuto inappropriato', impersonation: 'Furto d’identità', ai_generated: 'Sembra generato dall\'IA (testo, foto, profilo)', other: 'Altro' },
   },
   ru: {
     menuTitle: 'Параметры', edit: 'Изменить', archive: 'В архив', delete: 'Удалить',
@@ -162,7 +162,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: 'Причина', detailLabel: 'Подробности', detailPlaceholder: 'Опишите, что произошло.', detailOptional: 'Необязательно · до 500 символов',
     submit: 'Отправить жалобу', submitting: 'Отправка…', submitted: 'Жалоба принята и будет рассмотрена.', alreadyReported: 'Вы уже пожаловались.',
     reportError: 'Не удалось отправить жалобу. Повторите попытку.', noAutoAction: 'Жалоба сама по себе ничего не скрывает и не блокирует.',
-    reasons: { spam: 'Спам', harassment: 'Домогательства', inappropriate: 'Неприемлемый контент', impersonation: 'Выдача себя за другого', other: 'Другое' },
+    reasons: { spam: 'Спам', harassment: 'Домогательства', inappropriate: 'Неприемлемый контент', impersonation: 'Выдача себя за другого', ai_generated: 'Похоже на ИИ (текст, фото, профиль)', other: 'Другое' },
   },
   ar: {
     menuTitle: 'خيارات', edit: 'تعديل', archive: 'أرشفة', delete: 'حذف',
@@ -173,7 +173,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: 'السبب', detailLabel: 'التفاصيل', detailPlaceholder: 'أخبرنا بما حدث.', detailOptional: 'اختياري · حتى 500 حرف',
     submit: 'إرسال البلاغ', submitting: 'جارٍ الإرسال…', submitted: 'تم استلام بلاغك وسيُراجَع.', alreadyReported: 'لقد أبلغت عن هذا بالفعل.',
     reportError: 'تعذّر إرسال البلاغ. حاول مرة أخرى.', noAutoAction: 'الإبلاغ لا يخفي ولا يحظر أي شيء تلقائيًا.',
-    reasons: { spam: 'رسائل مزعجة', harassment: 'تحرش', inappropriate: 'محتوى غير لائق', impersonation: 'انتحال هوية', other: 'أخرى' },
+    reasons: { spam: 'رسائل مزعجة', harassment: 'تحرش', inappropriate: 'محتوى غير لائق', impersonation: 'انتحال هوية', ai_generated: 'يبدو مُنشأً بالذكاء الاصطناعي (نص، صورة، ملف شخصي)', other: 'أخرى' },
   },
   hi: {
     menuTitle: 'विकल्प', edit: 'संपादित करें', archive: 'संग्रह', delete: 'हटाएँ',
@@ -184,7 +184,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: 'कारण', detailLabel: 'विवरण', detailPlaceholder: 'बताएँ कि क्या हुआ।', detailOptional: 'वैकल्पिक · अधिकतम 500 अक्षर',
     submit: 'रिपोर्ट भेजें', submitting: 'भेजा जा रहा है…', submitted: 'आपकी रिपोर्ट मिल गई और इसकी समीक्षा की जाएगी।', alreadyReported: 'आप इसकी रिपोर्ट पहले ही कर चुके हैं।',
     reportError: 'रिपोर्ट नहीं भेजी जा सकी। फिर से प्रयास करें।', noAutoAction: 'रिपोर्ट करने से कुछ भी अपने आप छिपता या ब्लॉक नहीं होता।',
-    reasons: { spam: 'स्पैम', harassment: 'उत्पीड़न', inappropriate: 'अनुचित सामग्री', impersonation: 'प्रतिरूपण', other: 'अन्य' },
+    reasons: { spam: 'स्पैम', harassment: 'उत्पीड़न', inappropriate: 'अनुचित सामग्री', impersonation: 'प्रतिरूपण', ai_generated: 'AI से बना लगता है (टेक्स्ट, फ़ोटो, प्रोफ़ाइल)', other: 'अन्य' },
   },
   th: {
     menuTitle: 'ตัวเลือก', edit: 'แก้ไข', archive: 'เก็บเข้าคลัง', delete: 'ลบ',
@@ -195,7 +195,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: 'เหตุผล', detailLabel: 'รายละเอียด', detailPlaceholder: 'บอกเราว่าเกิดอะไรขึ้น', detailOptional: 'ไม่บังคับ · สูงสุด 500 อักขระ',
     submit: 'ส่งรายงาน', submitting: 'กำลังส่ง…', submitted: 'ได้รับรายงานของคุณแล้ว และจะตรวจสอบ', alreadyReported: 'คุณรายงานรายการนี้ไปแล้ว',
     reportError: 'ส่งรายงานไม่สำเร็จ โปรดลองอีกครั้ง', noAutoAction: 'การรายงานจะไม่ซ่อนหรือบล็อกสิ่งใดโดยอัตโนมัติ',
-    reasons: { spam: 'สแปม', harassment: 'การคุกคาม', inappropriate: 'เนื้อหาไม่เหมาะสม', impersonation: 'การแอบอ้าง', other: 'อื่น ๆ' },
+    reasons: { spam: 'สแปม', harassment: 'การคุกคาม', inappropriate: 'เนื้อหาไม่เหมาะสม', impersonation: 'การแอบอ้าง', ai_generated: 'น่าจะสร้างด้วย AI (ข้อความ รูป โปรไฟล์)', other: 'อื่น ๆ' },
   },
   vi: {
     menuTitle: 'Tùy chọn', edit: 'Chỉnh sửa', archive: 'Lưu trữ', delete: 'Xóa',
@@ -206,7 +206,7 @@ const copy: Record<LegalDocumentLocale, ReportCopy> = {
     reasonLabel: 'Lý do', detailLabel: 'Chi tiết', detailPlaceholder: 'Hãy cho chúng tôi biết chuyện gì đã xảy ra.', detailOptional: 'Tùy chọn · tối đa 500 ký tự',
     submit: 'Gửi báo cáo', submitting: 'Đang gửi…', submitted: 'Đã nhận báo cáo của bạn và sẽ được xem xét.', alreadyReported: 'Bạn đã báo cáo mục này rồi.',
     reportError: 'Không thể gửi báo cáo. Vui lòng thử lại.', noAutoAction: 'Báo cáo không tự động ẩn hoặc chặn bất kỳ điều gì.',
-    reasons: { spam: 'Spam', harassment: 'Quấy rối', inappropriate: 'Nội dung không phù hợp', impersonation: 'Mạo danh', other: 'Khác' },
+    reasons: { spam: 'Spam', harassment: 'Quấy rối', inappropriate: 'Nội dung không phù hợp', impersonation: 'Mạo danh', ai_generated: 'Có vẻ do AI tạo (bài viết, ảnh, hồ sơ)', other: 'Khác' },
   },
 }
 
