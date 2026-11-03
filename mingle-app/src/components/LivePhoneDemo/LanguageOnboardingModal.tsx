@@ -28,7 +28,12 @@ import {
   type DiscoverySource,
 } from "@/lib/discovery-source";
 import { registerNativeBackHandler } from "@/lib/native-back-handler";
-import { resolveUsagePurposeCopy, type UsagePurpose } from "@/lib/usage-purpose";
+import {
+  USAGE_PURPOSE_NOTE_MAX_LENGTH,
+  normalizeUsagePurposeNote,
+  resolveUsagePurposeCopy,
+  type UsagePurpose,
+} from "@/lib/usage-purpose";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 import type { InterestLanguage } from "@/lib/interest-languages";
@@ -47,6 +52,8 @@ export type LanguageOnboardingConfirmPayload = {
   interestLanguage: InterestLanguage | null;
   birthDate: BirthDateParts;
   usagePurpose: UsagePurpose;
+  /** Optional free-text reason, only for "other". */
+  usagePurposeNote: string | null;
   discoverySource: DiscoverySource;
 };
 
@@ -83,6 +90,7 @@ export default function LanguageOnboardingModal({
   const [interestLevel, setInterestLevel] = useState(1);
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate);
   const [usagePurpose, setUsagePurpose] = useState<UsagePurpose | null>(null);
+  const [usagePurposeNote, setUsagePurposeNote] = useState("");
   const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(null);
   const [discoveryOptionCodes, setDiscoveryOptionCodes] = useState(shuffleDiscoverySourceCodes);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -175,9 +183,9 @@ export default function LanguageOnboardingModal({
   const handleStepBack = useCallback(() => {
     if (isConfirming) return;
     setStep((currentStep) => (
-      currentStep === "discovery-source" ? "usage-purpose"
-        : currentStep === "usage-purpose" ? "birth-date"
-        : currentStep === "birth-date" ? "interest-language"
+      currentStep === "birth-date" ? "discovery-source"
+        : currentStep === "discovery-source" ? "usage-purpose"
+        : currentStep === "usage-purpose" ? "interest-language"
           : "language"
     ));
   }, [isConfirming]);
@@ -236,17 +244,17 @@ export default function LanguageOnboardingModal({
 
   const handleInterestStepNext = () => {
     if (!interestCode) return;
-    setStep("birth-date");
-  };
-
-  const handleBirthDateStepNext = () => {
-    if (!isEligibleAge) return;
     setStep("usage-purpose");
   };
 
   const handleUsagePurposeStepNext = () => {
     if (!usagePurpose) return;
     setStep("discovery-source");
+  };
+
+  const handleDiscoverySourceStepNext = () => {
+    if (!discoverySource) return;
+    setStep("birth-date");
   };
 
   const handleFinalConfirm = async () => {
@@ -258,6 +266,7 @@ export default function LanguageOnboardingModal({
         interestLanguage: interestCode ? { code: interestCode as InterestLanguage["code"], level: interestLevel } : null,
         birthDate,
         usagePurpose,
+        usagePurposeNote: usagePurpose === "other" ? normalizeUsagePurposeNote(usagePurposeNote) : null,
         discoverySource,
       });
     } finally {
@@ -506,9 +515,6 @@ export default function LanguageOnboardingModal({
               >
                 {usagePurposeCopy.title}
               </h2>
-              <p className="text-[0.85rem] leading-relaxed text-slate-500">
-                {usagePurposeCopy.description}
-              </p>
             </div>
           ) : (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
@@ -660,13 +666,27 @@ export default function LanguageOnboardingModal({
                       <span className="block text-[0.98rem] font-semibold leading-snug text-slate-900">
                         {option.label}
                       </span>
-                      <span className="mt-0.5 block text-[0.8rem] leading-snug text-slate-500">
-                        {option.hint}
-                      </span>
+                      {option.hint ? (
+                        <span className="mt-0.5 block text-[0.8rem] leading-snug text-slate-500">
+                          {option.hint}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 );
               })}
+              {usagePurpose === "other" ? (
+                <textarea
+                  value={usagePurposeNote}
+                  disabled={isConfirming}
+                  onChange={(event) => setUsagePurposeNote(event.target.value)}
+                  maxLength={USAGE_PURPOSE_NOTE_MAX_LENGTH}
+                  rows={3}
+                  placeholder={usagePurposeCopy.otherNotePlaceholder}
+                  aria-label={usagePurposeCopy.otherNotePlaceholder}
+                  className="w-full resize-none rounded-[1.1rem] border border-[#e6dfd2] bg-white px-4 py-3 text-[0.95rem] leading-snug text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.05)] outline-none placeholder:text-slate-400 focus:border-amber-400"
+                />
+              ) : null}
             </div>
           </div>
         ) : (
@@ -736,15 +756,6 @@ export default function LanguageOnboardingModal({
                 {signupCopy.continueAction}
               </button>
             </>
-          ) : step === "birth-date" ? (
-            <button
-              type="button"
-              onClick={handleBirthDateStepNext}
-              disabled={isConfirming || !isEligibleAge}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
-            >
-              {signupCopy.continueAction}
-            </button>
           ) : step === "usage-purpose" ? (
             <button
               type="button"
@@ -754,11 +765,20 @@ export default function LanguageOnboardingModal({
             >
               {signupCopy.continueAction}
             </button>
+          ) : step === "discovery-source" ? (
+            <button
+              type="button"
+              onClick={handleDiscoverySourceStepNext}
+              disabled={isConfirming || !discoverySource}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
+            >
+              {signupCopy.continueAction}
+            </button>
           ) : (
             <button
               type="button"
               onClick={handleFinalConfirm}
-              disabled={isConfirming || !discoverySource}
+              disabled={isConfirming || !isEligibleAge}
               aria-busy={isConfirming}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
             >

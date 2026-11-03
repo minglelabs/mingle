@@ -16,6 +16,7 @@ import {
 import { isDiscoverySource, type DiscoverySource } from "@/lib/discovery-source";
 import {
   isUsagePurpose,
+  normalizeUsagePurposeNote,
   resolveUsagePurposeSegmentationDefaults,
   type UsagePurpose,
 } from "@/lib/usage-purpose";
@@ -267,6 +268,7 @@ export async function PATCH(request: NextRequest) {
     birthDate?: Date | null;
     discoverySource?: DiscoverySource | null;
     usagePurpose?: UsagePurpose | null;
+    usagePurposeNote?: string | null;
     sttSegmentationMode?: string;
     demoEndpointTuningStep?: number;
     imageCropScale?: number | null;
@@ -440,6 +442,10 @@ export async function PATCH(request: NextRequest) {
       const segmentationDefaults = resolveUsagePurposeSegmentationDefaults(body.usagePurpose);
       if (segmentationDefaults) Object.assign(data, segmentationDefaults);
     }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "usagePurposeNote")) {
+    data.usagePurposeNote = normalizeUsagePurposeNote(body.usagePurposeNote);
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "imageCropScale")) {

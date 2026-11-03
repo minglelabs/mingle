@@ -1,6 +1,6 @@
 import { sanitizeSttLanguageSelection } from '@/lib/stt-languages'
 import { isDiscoverySource, type DiscoverySource } from '@/lib/discovery-source'
-import { isUsagePurpose, type UsagePurpose } from '@/lib/usage-purpose'
+import { isUsagePurpose, normalizeUsagePurposeNote, type UsagePurpose } from '@/lib/usage-purpose'
 import { sanitizeInterestLanguages, type InterestLanguage } from '@/lib/interest-languages'
 
 export const LS_KEY_LANGUAGES = 'mingle_demo_languages'
@@ -11,6 +11,7 @@ export const LS_KEY_PENDING_PRIMARY_LANGUAGES = 'mingle_demo_pending_primary_lan
 export const LS_KEY_PENDING_BIRTH_DATE = 'mingle_demo_pending_birth_date'
 export const LS_KEY_PENDING_DISCOVERY_SOURCE = 'mingle_demo_pending_discovery_source'
 export const LS_KEY_PENDING_USAGE_PURPOSE = 'mingle_demo_pending_usage_purpose'
+export const LS_KEY_PENDING_USAGE_PURPOSE_NOTE = 'mingle_demo_pending_usage_purpose_note'
 export const LS_KEY_PENDING_INTEREST_LANGUAGES = 'mingle_demo_pending_interest_languages'
 export const DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT = 'mingle:default-conversation-languages-sync'
 export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
@@ -102,11 +103,22 @@ export function readPendingUsagePurpose(): UsagePurpose | null {
   }
 }
 
+export function readPendingUsagePurposeNote(): string | null {
+  const storage = getLocalStorage()
+  if (!storage) return null
+  try {
+    return normalizeUsagePurposeNote(storage.getItem(LS_KEY_PENDING_USAGE_PURPOSE_NOTE))
+  } catch {
+    return null
+  }
+}
+
 export function clearPendingUsagePurpose(): void {
   const storage = getLocalStorage()
   if (!storage) return
   try {
     storage.removeItem(LS_KEY_PENDING_USAGE_PURPOSE)
+    storage.removeItem(LS_KEY_PENDING_USAGE_PURPOSE_NOTE)
   } catch {
     // Ignore storage failures
   }
