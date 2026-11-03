@@ -61,6 +61,7 @@ export function buildPostImagePrompt(
         ]
       : [`The poster: ${person.look}.`]),
     PERSON_LINES[kind],
+    ...(faces ? ['A photo the poster chose to post because they look good in it: a flattering angle and light, a natural, attractive look.'] : []),
     ...placeLine,
     'It must look like a real, unedited snapshot, not a photoshoot: an ordinary moment, the outfit the person would really wear there.',
     phonePhotoRealism(random, { people: true, faces, focusOnPerson: true, lens: lensForShot(description), scene: `${description} ${place ?? ''}` }),

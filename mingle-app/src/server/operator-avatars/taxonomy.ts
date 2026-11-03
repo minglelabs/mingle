@@ -376,10 +376,11 @@ const SKIN_FEATURES: readonly Option[] = [
  * typical (90), and one mild trait such as slightly wide-set eyes kept 95
  * while easing the typical look (see STRIKING for where it settled).
  */
+// Staff want the accounts good-looking: pretty women and handsome men (2026-11).
 const ATTRACTIVENESS: readonly Option[] = [
-  ['ordinary', 30, 'an ordinary-looking person'],
-  ['pleasant', 40, 'a likable, pretty face'],
-  ['striking', 30, ''],
+  ['ordinary', 5, 'an ordinary-looking person'],
+  ['pleasant', 35, 'a likable, pretty face'],
+  ['striking', 60, ''],
 ]
 
 /**

@@ -10,12 +10,13 @@ type Random = () => number
 
 export type PostPhotoKind = 'self' | 'self_faceless' | 'self_back' | 'friends' | 'scene'
 
+// Staff want far more photos of the poster's face, mostly selfies (2026-11).
 export const POST_PHOTO_KINDS: ReadonlyArray<{ key: PostPhotoKind; weight: number }> = [
-  { key: 'self', weight: 24 },
-  { key: 'self_faceless', weight: 18 },
-  { key: 'self_back', weight: 10 },
-  { key: 'friends', weight: 14 },
-  { key: 'scene', weight: 34 },
+  { key: 'self', weight: 50 },
+  { key: 'self_faceless', weight: 9 },
+  { key: 'self_back', weight: 5 },
+  { key: 'friends', weight: 12 },
+  { key: 'scene', weight: 24 },
 ]
 
 /** Setups for each kind with the poster in it, written as briefs for the post generator. */
@@ -31,6 +32,13 @@ const SETUPS: Record<Exclude<PostPhotoKind, 'scene'>, readonly string[]> = {
     'a friend took a candid while walking, the poster half turned toward the camera',
     'a friend took it at a viewpoint, a park or a riverside, the poster in the lower half of the frame, smiling at the camera',
     'a front-camera selfie at home or in a dorm room, lying on the bed or sitting at the desk, relaxed and unbothered',
+    // More selfies: they are most of what people post of themselves.
+    'a close front-camera selfie from slightly above, the face filling most of the frame, a soft smile',
+    'a front-camera selfie by a window in daylight, the head tilted a little',
+    'a front-camera selfie in the street with a peace sign or a small wave',
+    'a front-camera selfie at a restaurant or café right after the food arrived, the face and the plate both in frame',
+    'a front-camera selfie in a car or a taxi back seat, the seatbelt across the shoulder',
+    'a front-camera selfie after getting ready to go out, standing in the hallway or by the door',
   ],
   self_faceless: [
     'shot looking down at their own outfit and shoes, the phone held high, the face out of frame above',
