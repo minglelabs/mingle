@@ -46,6 +46,7 @@ export type CommenterPersona = {
   language: string
   /** The profile's 관심 언어 with their 1-5 level. */
   learning?: LearningLanguage[]
+  gender?: string | null
 }
 
 /**
@@ -102,7 +103,7 @@ export async function generateOperatorComment(args: {
   generate?: GenerateFn
   random?: Random
 }): Promise<{ text: string; language: string; kind: string } | null> {
-  const profile = reservePosterProfile(args.commenter.id)
+  const profile = reservePosterProfile(args.commenter.id, args.commenter.gender ?? null)
   const choice = commentLanguageFor(args.commenter, args.post.language)
   const learner = reserveLearnerPlan(args.commenter.id, args.commenter.language, args.commenter.learning)
   const kind = pickCommentKind(args.random)

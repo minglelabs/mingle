@@ -54,6 +54,38 @@ export type PersonaSlot = {
   birthYear: number
   gender: PersonaGender | null
   nameStyle: PersonaNameStyle
+  /** How the bio is written, told to the model. */
+  bioStyle: string
+  /** Whether the bio mentions a language they learn. */
+  bioMentionsLearning: boolean
+}
+
+/**
+ * Bio forms, picked by the server. Left to itself the model wrote nearly
+ * every bio as one short line, an emoji, then a longer line about studying a
+ * language (staff, 2026-11). Men in real apps mostly write a few plain words
+ * with no emoji, or, less often, something long and earnest.
+ */
+const BIO_STYLES: ReadonlyArray<{ key: string; female: number; male: number; brief: string }> = [
+  { key: 'minimal', female: 1.5, male: 3.5, brief: 'two to six words, not a full sentence, no emoji (for example a job and a city, or just one interest)' },
+  { key: 'one_line', female: 2, male: 3, brief: 'one short plain sentence, no emoji' },
+  { key: 'list', female: 2, male: 2, brief: 'three or four interests or facts in a row separated by slashes, dots or line breaks, no sentence; at most one emoji' },
+  { key: 'casual', female: 2.5, male: 1, brief: 'one or two casual sentences about what they are into these days, written the way they talk; one emoji at most, often none' },
+  { key: 'emoji', female: 2, male: 0.3, brief: 'a short line built around two or three emoji, few words' },
+  { key: 'earnest', female: 1, male: 1.5, brief: 'three to five earnest sentences: what they do, what they care about and what kind of people or conversations they hope to find; no emoji' },
+  { key: 'dry', female: 1, male: 1.3, brief: 'a single dry, slightly funny remark about themself, no emoji' },
+]
+/** Share of bios that mention a language being learned. */
+const BIO_LEARNING_SHARE = 0.25
+
+function pickBioStyle(gender: PersonaGender | null, random: Random): string {
+  const weightOf = (style: (typeof BIO_STYLES)[number]) => (gender === 'male' ? style.male : gender === 'female' ? style.female : (style.male + style.female) / 2)
+  let roll = random() * BIO_STYLES.reduce((sum, style) => sum + weightOf(style), 0)
+  for (const style of BIO_STYLES) {
+    roll -= weightOf(style)
+    if (roll < 0) return style.brief
+  }
+  return BIO_STYLES[0].brief
 }
 
 export type PersonaDraftResult = { drafts: PersonaDraft[]; missing: number }
@@ -199,6 +231,8 @@ export function planPersonaSlots(request: PersonaDraftRequest, options: { random
       birthYear: currentYear - randomInt(random, request.ageMin, request.ageMax),
       gender: genders[index],
       nameStyle: styles[index],
+      bioStyle: pickBioStyle(genders[index], random),
+      bioMentionsLearning: random() < BIO_LEARNING_SHARE,
     }
   })
 }
@@ -213,7 +247,7 @@ For each item in "personas" return one object with the same "slot" and these fie
   - romanized: the name in Latin letters (e.g. Yuki Tanaka, Minjun Kim).
   At most 40 characters, matching "gender" when one is given. Use common names only: never the name of a real public figure, celebrity, influencer or fictional character.
 - handle: a natural username for that person using only lower-case a-z, 0-9, "_" and "."; 3 to 30 characters, starting with a letter (e.g. yuki.tnk, minjun_0412, lucas.silva).
-- bio: a short casual self-description of at most 140 characters, written in primaryLanguage, the way people really fill in a chat-app profile: interests, hobbies, what they like to talk about, a language they are learning, maybe one emoji. Vary length and style between personas.
+- bio: the self-description this person types into a chat-app profile, at most 140 characters, written in primaryLanguage. Follow the item's "bioStyle" literally: it sets the length, the form and whether there is an emoji. Mention a language they are learning only when "bioMentionsLearning" is true. Never use the stock pattern of a short line, an emoji, then a longer line about studying a language or wanting to chat; bios in one batch must not share a shape or an opening.
 - primaryLanguage: the language this person writes in; exactly one code from the item's "languages" (normally the first).
 - gender: "female" or "male"; the item's gender when it has one.
 
@@ -287,6 +321,8 @@ async function requestChunk(
         age: currentYear - slot.birthYear,
         gender: slot.gender ?? 'any',
         nameStyle: slot.nameStyle,
+        bioStyle: slot.bioStyle,
+        bioMentionsLearning: slot.bioMentionsLearning,
         languages: slot.country.languages,
       })),
     },

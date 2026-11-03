@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { learnerPlan, operatorInterestLanguageFields } from './poster-profile'
+import { learnerPlan, operatorInterestLanguageFields, posterProfile } from './poster-profile'
 import { reserveLearnerPlan } from './generate'
 
 describe('learner level', () => {
@@ -26,5 +26,20 @@ describe('learner level', () => {
   it('writes at the level stored on the profile when there is one', () => {
     expect(reserveLearnerPlan('user-7', 'ja', [{ language: 'ko', level: 4 }]).level.key).toBe('advanced')
     expect(reserveLearnerPlan('user-7', 'ja', [{ language: 'en', level: 4 }]).level).toEqual(learnerPlan('user-7', 'ja').level)
+  })
+})
+
+describe('men\'s posting style', () => {
+  it('is mostly short or earnest and rarely uses emoji, without changing topics', () => {
+    let plain = 0
+    let emoji = 0
+    for (let index = 0; index < 2000; index += 1) {
+      const male = posterProfile(`user-${index}`, ['food', 'travel'], 'male')
+      if (['terse', 'earnest'].includes(male.length.key)) plain += 1
+      if (!male.voice.some((line) => line.startsWith('never uses emoji'))) emoji += 1
+      expect(male.topicFactors).toEqual(posterProfile(`user-${index}`, ['food', 'travel']).topicFactors)
+    }
+    expect(plain / 2000).toBeGreaterThan(0.7)
+    expect(emoji / 2000).toBeLessThan(0.2)
   })
 })

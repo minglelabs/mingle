@@ -90,8 +90,8 @@ export function reserveLearnerPlan(seed: string, nativeLanguage: string, learnin
 }
 
 /** The posting personality of an account, by its id. */
-export function reservePosterProfile(seed: string): PosterProfile {
-  return posterProfile(seed, RESERVE_TOPICS.map((topic) => topic.key))
+export function reservePosterProfile(seed: string, gender: string | null = null): PosterProfile {
+  return posterProfile(seed, RESERVE_TOPICS.map((topic) => topic.key), gender)
 }
 
 /**
@@ -129,6 +129,7 @@ export type ReservePersona = {
   language: string
   /** The profile's 관심 언어 with their 1-5 level; never sent to the model as is. */
   learning?: LearningLanguage[]
+  gender?: string | null
 }
 
 function modelPersona({ learning: _learning, ...persona }: ReservePersona): Omit<ReservePersona, 'learning'> {
@@ -226,7 +227,7 @@ export async function generateReservePosts(args: {
   const generate = args.generate ?? generateJson
   const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
   const random = args.random ?? Math.random
-  const profile = reservePosterProfile(args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`)
+  const profile = reservePosterProfile(args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`, args.persona.gender ?? null)
   const seed = args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`
   const learner = reserveLearnerPlan(seed, args.persona.language, args.persona.learning)
   const slots = args.topics.map((topic, index) => {
@@ -299,7 +300,7 @@ export async function rewriteReservePostText(args: {
   generate?: GenerateFn
 }): Promise<string | null> {
   const generate = args.generate ?? generateJson
-  const profile = reservePosterProfile(args.seed)
+  const profile = reservePosterProfile(args.seed, args.persona.gender ?? args.profile?.gender ?? null)
   const learner = reserveLearnerPlan(args.seed, args.persona.language, args.persona.learning ?? args.profile?.learning)
   const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
   const items = await generate({

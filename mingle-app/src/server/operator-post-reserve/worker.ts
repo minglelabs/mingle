@@ -250,7 +250,7 @@ async function findOperatorsToRefill(target: number, limit: number): Promise<Ref
 export async function loadReservePersona(operatorUserId: string, now: Date, options: { includeInactive?: boolean } = {}): Promise<ReservePersona | null> {
   const operator = await prisma.user.findFirst({
     where: { id: operatorUserId, isOperator: true, isDeleted: false, ...(options.includeInactive ? {} : { isActive: true }) },
-    select: { name: true, bio: true, birthDate: true, locationCity: true, locationCountry: true, primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true },
+    select: { name: true, bio: true, birthDate: true, locationCity: true, locationCountry: true, primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, operatorAccount: { select: { personaGender: true } } },
   })
   const language = operator ? sanitizeSttLanguageSelection(operator.primaryLanguages)[0] : null
   if (!operator || !language) return null
@@ -262,6 +262,7 @@ export async function loadReservePersona(operatorUserId: string, now: Date, opti
     country: operator.locationCountry ?? null,
     language,
     learning: zipInterestLanguages(operator.interestLanguages, operator.interestLanguageLevels).map((item) => ({ language: item.code, level: item.level })),
+    gender: operator.operatorAccount?.personaGender ?? null,
   }
 }
 
