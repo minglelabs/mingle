@@ -336,6 +336,7 @@ const MENU_IOS_HISTORY_SETTLE_WINDOW_MS = 300
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
+const NATIVE_BOTTOM_BAR_CLEARANCE_KEYBOARD_POLL_MS = 250
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
@@ -2917,6 +2918,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.cancelAnimationFrame(frameId)
       window.clearTimeout(timeout180Id)
       window.clearTimeout(timeout360Id)
+    }
+  }, [composerTextareaHeightPx, isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
+
+  // The native bottom banner only moves when the web reports a new clearance.
+  // While the keyboard is up, iOS can move the composer (textarea growing on
+  // Enter, caret scroll-into-view) without any event we listen to, which left
+  // the banner over the textarea until the keyboard was closed and reopened.
+  // Re-measuring on a short interval while typing guarantees the banner
+  // catches up; unchanged values are not re-sent.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isComposerOpen || keyboardViewportInsetPx <= 0) return
+
+    const intervalId = window.setInterval(() => {
+      syncNativeBottomBarClearance()
+    }, NATIVE_BOTTOM_BAR_CLEARANCE_KEYBOARD_POLL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
     }
   }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
 
