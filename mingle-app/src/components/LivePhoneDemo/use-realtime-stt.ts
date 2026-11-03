@@ -491,6 +491,13 @@ type NativeSttSetAecCommand = {
   payload: { enabled: boolean }
 }
 
+// A piece of the translated sentence our TTS is reading aloud (Soniox
+// stt-rt-v6 agent text input); the native STT socket relays it to the server.
+type NativeSttAgentTextCommand = {
+  type: 'native_stt_agent_text'
+  payload: { text: string; endOfSegment: boolean }
+}
+
 type NativeOpenAppSettingsCommand = {
   type: 'native_open_app_settings'
   payload: {
@@ -503,6 +510,7 @@ type NativeSttBridgeCommand =
   | NativeSttStopCommand
   | NativeSttStatusRequestCommand
   | NativeSttSetAecCommand
+  | NativeSttAgentTextCommand
   | NativeOpenAppSettingsCommand
 
 export type NativeMicPermissionRecoveryAction = 'none' | 'open_ios_settings'
@@ -7321,6 +7329,22 @@ export default function useRealtimeSTT({
     effectiveViewerImage,
   ])
 
+  // Reports what our TTS is saying so the STT server can pass it to Soniox as
+  // agent text. A no-op when no STT session is live; the server drops it for
+  // providers other than Soniox v6.
+  const sendAgentText = useCallback((text: string, endOfSegment: boolean) => {
+    if (useNativeSttRef.current) {
+      if (!isCurrentNativeSttOwner()) return
+      sendNativeSttCommand({ type: 'native_stt_agent_text', payload: { text, endOfSegment } })
+      return
+    }
+    const socket = socketRef.current
+    if (!socket || socket.readyState !== WebSocket.OPEN) return
+    try {
+      socket.send(JSON.stringify({ type: 'agent_text', data: { text, end_of_segment: endOfSegment } }))
+    } catch { /* best-effort */ }
+  }, [isCurrentNativeSttOwner, sendNativeSttCommand])
+
   return {
     connectionStatus,
     utterances,
@@ -7356,5 +7380,6 @@ export default function useRealtimeSTT({
     ensureSessionKey,
     startRecording,
     stopRecording: stopRecordingWithOptions,
+    sendAgentText,
   }
 }

@@ -18,7 +18,9 @@ export type SonioxRelayTiming = {
 // beginning of the stream, including silence, without allowing an unbounded queue.
 export class SonioxAudioRelay {
     private readonly maxBufferedBytes: number;
-    private pending: Buffer[] = [];
+    // Audio chunks and agent-text frames, in arrival order: Soniox places
+    // agent text at the audio position where it arrives.
+    private pending: (Buffer | string)[] = [];
     private pendingBytes = 0;
     private readyAt: number | null = null;
     private firstReceivedAt: number | null = null;
@@ -60,6 +62,17 @@ export class SonioxAudioRelay {
         this.pendingBytes += chunk.length;
     }
 
+    /** Sends a text control frame (agent_text) in order with the audio. */
+    sendText(frame: string): boolean {
+        if (this.stopped) return false;
+        if (this.readyAt === null) {
+            if (this.pending.length >= 512) return false;
+            this.pending.push(frame);
+            return true;
+        }
+        return this.send(frame);
+    }
+
     // Must be called only after the provider configuration has been sent.
     start(): boolean {
         if (this.stopped) return false;
@@ -68,8 +81,8 @@ export class SonioxAudioRelay {
         const pending = this.pending;
         this.pending = [];
         this.pendingBytes = 0;
-        for (const chunk of pending) {
-            if (!this.forward(chunk)) return false;
+        for (const item of pending) {
+            if (!(typeof item === 'string' ? this.send(item) : this.forward(item))) return false;
         }
         this.timer = setInterval(() => this.checkAudio(), this.timing.keepaliveIntervalMs ?? 5_000);
         this.timer.unref();

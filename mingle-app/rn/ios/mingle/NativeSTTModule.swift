@@ -2592,6 +2592,22 @@ class NativeSTTModule: RCTEventEmitter {
         resolve(["ok": true])
     }
 
+    /// Soniox v6 agent text: a piece of the translated sentence our TTS is
+    /// reading aloud, relayed on the STT socket in order with the audio.
+    @objc(sendAgentText:endOfSegment:)
+    func sendAgentText(_ text: String, endOfSegment: Bool) {
+        wsQueue.async { [weak self] in
+            guard let self, !self.gracefulStopPending else { return }
+            self.sendJson([
+                "type": "agent_text",
+                "data": [
+                    "text": text,
+                    "end_of_segment": endOfSegment,
+                ],
+            ])
+        }
+    }
+
     @objc(setAec:resolver:rejecter:)
     func setAec(
         _ enabled: Bool,

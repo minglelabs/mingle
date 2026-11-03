@@ -369,6 +369,25 @@ class NativeSTTModule(
     promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
   }
 
+  /** Soniox v6 agent text: a piece of the translated sentence our TTS is reading aloud. */
+  @ReactMethod
+  fun sendAgentText(
+    text: String,
+    endOfSegment: Boolean,
+  ) {
+    if (!isRunning.get() || gracefulStopPending) return
+    val socket = webSocket ?: return
+    val payload = JSONObject()
+      .put("type", "agent_text")
+      .put(
+        "data",
+        JSONObject()
+          .put("text", text)
+          .put("end_of_segment", endOfSegment),
+      )
+    socket.send(payload.toString())
+  }
+
   @ReactMethod
   fun setAec(
     enabled: Boolean,
