@@ -7799,185 +7799,191 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </div>
 
                             <div className="block">
-                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{sttSegmentationModeLabel}</span>
-                                <span className="shrink-0 whitespace-nowrap pr-1 text-gray-500">
-                                  {selectedSttSegmentationMode === 'end'
-                                    ? sttSegmentationModeEndLabel
-                                    : sttSegmentationModeFinLabel}
-                                </span>
-                              </div>
-                              <div
-                                role="group"
-                                aria-label={sttSegmentationModeLabel}
-                                className="grid grid-cols-2 gap-2 rounded-[1.25rem] bg-gray-100 p-1"
-                              >
+                              <div className="mb-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{sttSegmentationModeLabel}</div>
+                              <div role="radiogroup" aria-label={sttSegmentationModeLabel} className="space-y-2">
                                 {([
                                   { value: 'end' as const, label: sttSegmentationModeEndLabel },
                                   { value: 'fin' as const, label: sttSegmentationModeFinLabel },
                                 ]).map((option) => {
                                   const isSelected = selectedSttSegmentationMode === option.value
                                   return (
-                                    <button
+                                    <div
                                       key={option.value}
-                                      type="button"
-                                      aria-pressed={isSelected}
-                                      disabled={isSttSessionRunning}
-                                      onClick={() => handleSttSegmentationModeSelect(option.value)}
-                                      className={`min-h-10 rounded-[1rem] px-2 py-2 text-[0.75rem] font-semibold leading-tight transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                      className={`overflow-hidden rounded-[1.25rem] border transition ${
                                         isSelected
-                                          ? 'border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
-                                          : 'border border-transparent text-gray-500 hover:border-amber-200 hover:bg-white hover:text-amber-700'
+                                          ? 'border-amber-300 bg-amber-50/60 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
+                                          : 'border-gray-200 bg-gray-50'
                                       }`}
                                     >
-                                      {option.label}
-                                    </button>
+                                      <button
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={isSelected}
+                                        disabled={isSttSessionRunning}
+                                        onClick={() => handleSttSegmentationModeSelect(option.value)}
+                                        className="flex min-h-11 w-full items-center gap-3 px-3.5 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        <span
+                                          aria-hidden="true"
+                                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 bg-white transition ${
+                                            isSelected ? 'border-amber-500' : 'border-gray-300'
+                                          }`}
+                                        >
+                                          {isSelected && <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />}
+                                        </span>
+                                        <span className={`text-[0.9rem] font-semibold leading-tight ${isSelected ? 'text-amber-900' : 'text-gray-500'}`}>
+                                          {option.label}
+                                        </span>
+                                      </button>
+                                      {isSelected && shouldShowManualSilenceControl(option.value) && (
+                                      <div className="px-3.5 pb-3">
+                                        <label className="block">
+                                          <div
+                                            className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
+                                              isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
+                                            }`}
+                                          >
+                                            <span className={`min-w-0 flex-1 whitespace-normal break-words pl-1 text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
+                                              {silenceFinalizeLabel}
+                                            </span>
+                                            <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
+                                          </div>
+                                          <div className="relative">
+                                            <input
+                                              type="range"
+                                              min={MIN_SONIOX_SILENCE_MS}
+                                              max={MAX_SONIOX_SILENCE_MS}
+                                              step={100}
+                                              value={sonioxManualFinalizeSilenceMs}
+                                              disabled={isSilenceFinalizeSliderDisabled}
+                                              onPointerDown={(event) => {
+                                                if (isSilenceFinalizeSliderDisabled) return
+                                                event.currentTarget.setPointerCapture(event.pointerId)
+                                                const next = deriveRangeValueFromPointer(
+                                                  event,
+                                                  MIN_SONIOX_SILENCE_MS,
+                                                  MAX_SONIOX_SILENCE_MS,
+                                                  100,
+                                                )
+                                                handleSonioxManualFinalizeSilenceChange(next)
+                                              }}
+                                              onPointerMove={(event) => {
+                                                if (isSilenceFinalizeSliderDisabled) return
+                                                if (event.buttons !== 1) return
+                                                const next = deriveRangeValueFromPointer(
+                                                  event,
+                                                  MIN_SONIOX_SILENCE_MS,
+                                                  MAX_SONIOX_SILENCE_MS,
+                                                  100,
+                                                )
+                                                handleSonioxManualFinalizeSilenceChange(next)
+                                              }}
+                                              onPointerUp={(event) => {
+                                                if (isSilenceFinalizeSliderDisabled) return
+                                                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                                                  event.currentTarget.releasePointerCapture(event.pointerId)
+                                                }
+                                                flushAccountPreferencesSync()
+                                              }}
+                                              onChange={(event) => {
+                                                if (isSilenceFinalizeSliderDisabled) return
+                                                const next = Math.max(
+                                                  MIN_SONIOX_SILENCE_MS,
+                                                  Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
+                                                )
+                                                handleSonioxManualFinalizeSilenceChange(next)
+                                              }}
+                                              className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
+                                              aria-label={`${silenceFinalizeLabel} milliseconds`}
+                                            />
+                                            {isSilenceFinalizeSliderLocked && (
+                                              <>
+                                                <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
+                                                  {silenceFinalizeLockedMessage}
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  aria-label={silenceFinalizeLockedButtonLabel}
+                                                  aria-describedby={silenceFinalizeLockedDescriptionId}
+                                                  onFocus={handleSilenceFinalizeLockedInteraction}
+                                                  onClick={handleSilenceFinalizeLockedInteraction}
+                                                  className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                                />
+                                              </>
+                                            )}
+                                          </div>
+                                        </label>
+                                      </div>
+                                      )}
+                                      {isSelected && shouldShowEndpointTuningControl(option.value) && (
+                                      <div className="px-3.5 pb-3">
+                                        <label className="block">
+                                          <div
+                                            className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
+                                              isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
+                                            }`}
+                                          >
+                                            <span className={`min-w-0 flex-1 whitespace-normal break-words pl-1 text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
+                                              {endpointTuningLabel}
+                                            </span>
+                                            <span className="shrink-0 whitespace-nowrap pr-1">{sonioxEndpointTuningStep + 1}/5</span>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span
+                                              className={`shrink-0 text-[0.6875rem] font-medium ${
+                                                isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
+                                              }`}
+                                            >
+                                              {endpointTuningShortLabel}
+                                            </span>
+                                            <div className="relative min-w-0 flex-1">
+                                              <input
+                                                type="range"
+                                                min={0}
+                                                max={4}
+                                                step={1}
+                                                value={sonioxEndpointTuningStep}
+                                                disabled={isSilenceFinalizeSliderDisabled}
+                                                onChange={(event) => {
+                                                  if (isSilenceFinalizeSliderDisabled) return
+                                                  const next = Math.max(0, Math.min(4, Math.round(Number(event.target.value))))
+                                                  handleSonioxEndpointTuningStepChange(next)
+                                                }}
+                                                className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
+                                                aria-label={endpointTuningLabel}
+                                              />
+                                              {isSilenceFinalizeSliderLocked && (
+                                                <>
+                                                  <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
+                                                    {silenceFinalizeLockedMessage}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    aria-label={silenceFinalizeLockedButtonLabel}
+                                                    aria-describedby={silenceFinalizeLockedDescriptionId}
+                                                    onFocus={handleSilenceFinalizeLockedInteraction}
+                                                    onClick={handleSilenceFinalizeLockedInteraction}
+                                                    className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                                  />
+                                                </>
+                                              )}
+                                            </div>
+                                            <span
+                                              className={`shrink-0 text-[0.6875rem] font-medium ${
+                                                isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
+                                              }`}
+                                            >
+                                              {endpointTuningLongLabel}
+                                            </span>
+                                          </div>
+                                        </label>
+                                      </div>
+                                      )}
+                                    </div>
                                   )
                                 })}
                               </div>
                             </div>
-
-                            {shouldShowManualSilenceControl(selectedSttSegmentationMode) && (
-                            <label className="block">
-                              <div
-                                className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
-                                  isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
-                                }`}
-                              >
-                                <span className={`min-w-0 flex-1 whitespace-normal break-words pl-1 text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
-                                  {silenceFinalizeLabel}
-                                </span>
-                                <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
-                              </div>
-                              <div className="relative">
-                                <input
-                                  type="range"
-                                  min={MIN_SONIOX_SILENCE_MS}
-                                  max={MAX_SONIOX_SILENCE_MS}
-                                  step={100}
-                                  value={sonioxManualFinalizeSilenceMs}
-                                  disabled={isSilenceFinalizeSliderDisabled}
-                                  onPointerDown={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    event.currentTarget.setPointerCapture(event.pointerId)
-                                    const next = deriveRangeValueFromPointer(
-                                      event,
-                                      MIN_SONIOX_SILENCE_MS,
-                                      MAX_SONIOX_SILENCE_MS,
-                                      100,
-                                    )
-                                    handleSonioxManualFinalizeSilenceChange(next)
-                                  }}
-                                  onPointerMove={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    if (event.buttons !== 1) return
-                                    const next = deriveRangeValueFromPointer(
-                                      event,
-                                      MIN_SONIOX_SILENCE_MS,
-                                      MAX_SONIOX_SILENCE_MS,
-                                      100,
-                                    )
-                                    handleSonioxManualFinalizeSilenceChange(next)
-                                  }}
-                                  onPointerUp={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                                      event.currentTarget.releasePointerCapture(event.pointerId)
-                                    }
-                                    flushAccountPreferencesSync()
-                                  }}
-                                  onChange={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    const next = Math.max(
-                                      MIN_SONIOX_SILENCE_MS,
-                                      Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
-                                    )
-                                    handleSonioxManualFinalizeSilenceChange(next)
-                                  }}
-                                  className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
-                                  aria-label={`${silenceFinalizeLabel} milliseconds`}
-                                />
-                                {isSilenceFinalizeSliderLocked && (
-                                  <>
-                                    <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
-                                      {silenceFinalizeLockedMessage}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      aria-label={silenceFinalizeLockedButtonLabel}
-                                      aria-describedby={silenceFinalizeLockedDescriptionId}
-                                      onFocus={handleSilenceFinalizeLockedInteraction}
-                                      onClick={handleSilenceFinalizeLockedInteraction}
-                                      className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                                    />
-                                  </>
-                                )}
-                              </div>
-                            </label>
-                            )}
-
-                            {shouldShowEndpointTuningControl(selectedSttSegmentationMode) && (
-                            <label className="block">
-                              <div
-                                className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
-                                  isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
-                                }`}
-                              >
-                                <span className={`min-w-0 flex-1 whitespace-normal break-words pl-1 text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
-                                  {endpointTuningLabel}
-                                </span>
-                                <span className="shrink-0 whitespace-nowrap pr-1">{sonioxEndpointTuningStep + 1}/5</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`shrink-0 text-[0.6875rem] font-medium ${
-                                    isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
-                                  }`}
-                                >
-                                  {endpointTuningShortLabel}
-                                </span>
-                                <div className="relative min-w-0 flex-1">
-                                  <input
-                                    type="range"
-                                    min={0}
-                                    max={4}
-                                    step={1}
-                                    value={sonioxEndpointTuningStep}
-                                    disabled={isSilenceFinalizeSliderDisabled}
-                                    onChange={(event) => {
-                                      if (isSilenceFinalizeSliderDisabled) return
-                                      const next = Math.max(0, Math.min(4, Math.round(Number(event.target.value))))
-                                      handleSonioxEndpointTuningStepChange(next)
-                                    }}
-                                    className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
-                                    aria-label={endpointTuningLabel}
-                                  />
-                                  {isSilenceFinalizeSliderLocked && (
-                                    <>
-                                      <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
-                                        {silenceFinalizeLockedMessage}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        aria-label={silenceFinalizeLockedButtonLabel}
-                                        aria-describedby={silenceFinalizeLockedDescriptionId}
-                                        onFocus={handleSilenceFinalizeLockedInteraction}
-                                        onClick={handleSilenceFinalizeLockedInteraction}
-                                        className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                                      />
-                                    </>
-                                  )}
-                                </div>
-                                <span
-                                  className={`shrink-0 text-[0.6875rem] font-medium ${
-                                    isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
-                                  }`}
-                                >
-                                  {endpointTuningLongLabel}
-                                </span>
-                              </div>
-                            </label>
-                            )}
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
