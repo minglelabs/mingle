@@ -45,6 +45,8 @@ export type PersonaDraftRequest = {
   /** Names / handles already in the batch, so a regenerated draft differs. */
   avoidNames?: string[]
   avoidHandles?: string[]
+  /** Server only: keep this city and birth year (a new bio for an existing account). */
+  pin?: { city?: string | null; birthYear?: number | null }
 }
 
 export type PersonaSlot = {
@@ -222,13 +224,14 @@ export function planPersonaSlots(request: PersonaDraftRequest, options: { random
 
   return Array.from({ length: request.count }, (_, index) => {
     const country = countries[index % countries.length]
-    const city = pickCity(country, usedCities, random)
+    const pinnedCity = request.pin?.city ? country.cities.find(candidate => candidate.name === request.pin?.city) : undefined
+    const city = pinnedCity ?? pickCity(country, usedCities, random)
     usedCities.add(`${country.code}:${city.name}`)
     return {
       index,
       country,
       city,
-      birthYear: currentYear - randomInt(random, request.ageMin, request.ageMax),
+      birthYear: request.pin?.birthYear ?? currentYear - randomInt(random, request.ageMin, request.ageMax),
       gender: genders[index],
       nameStyle: styles[index],
       bioStyle: pickBioStyle(genders[index], random),

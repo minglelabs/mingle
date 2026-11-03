@@ -203,6 +203,11 @@ function pickLearnerLevel(roll: number): LearnerLevel {
   return LEARNER_LEVELS[0]
 }
 
+/** A fresh 1-5 level from the same mix, for staff asking the AI for a new profile. */
+export function randomLearnerDots(random: () => number = Math.random): number {
+  return pickLearnerLevel(random()).dots
+}
+
 /** The level for a stored 1-5 dot count, or null when it is not one. */
 export function learnerLevelForDots(dots: number | null | undefined): LearnerLevel | null {
   return LEARNER_LEVELS.find((level) => level.dots === dots) ?? null
