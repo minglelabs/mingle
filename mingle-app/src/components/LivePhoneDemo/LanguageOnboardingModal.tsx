@@ -28,6 +28,7 @@ import {
   type DiscoverySource,
 } from "@/lib/discovery-source";
 import { registerNativeBackHandler } from "@/lib/native-back-handler";
+import { resolveUsagePurposeCopy, type UsagePurpose } from "@/lib/usage-purpose";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 import type { InterestLanguage } from "@/lib/interest-languages";
@@ -45,6 +46,7 @@ export type LanguageOnboardingConfirmPayload = {
   /** 관심 언어: the language of the people the user mostly wants to talk with. */
   interestLanguage: InterestLanguage | null;
   birthDate: BirthDateParts;
+  usagePurpose: UsagePurpose;
   discoverySource: DiscoverySource;
 };
 
@@ -57,7 +59,7 @@ interface LanguageOnboardingModalProps {
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-type OnboardingStep = "language" | "interest-language" | "birth-date" | "discovery-source";
+type OnboardingStep = "language" | "interest-language" | "birth-date" | "usage-purpose" | "discovery-source";
 
 // Rendered only while the picker is open (see LivePhoneDemo.tsx), so mount-time
 // state initializers below always pick up the latest defaults with no reset effect.
@@ -80,6 +82,7 @@ export default function LanguageOnboardingModal({
   const [interestCode, setInterestCode] = useState<string | null>(null);
   const [interestLevel, setInterestLevel] = useState(1);
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate);
+  const [usagePurpose, setUsagePurpose] = useState<UsagePurpose | null>(null);
   const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(null);
   const [discoveryOptionCodes, setDiscoveryOptionCodes] = useState(shuffleDiscoverySourceCodes);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -90,6 +93,7 @@ export default function LanguageOnboardingModal({
   const copy = useMemo(() => resolveLanguageOnboardingCopy(language), [language]);
   const signupCopy = useMemo(() => resolveSignupCopy(language), [language]);
   const discoveryCopy = useMemo(() => resolveDiscoverySourceCopy(language), [language]);
+  const usagePurposeCopy = useMemo(() => resolveUsagePurposeCopy(language), [language]);
   const interestCopy = useMemo(() => resolveInterestLanguageCopy(language), [language]);
   const discoveryOptions = useMemo(() => {
     const optionsByCode = new Map(discoveryCopy.options.map((option) => [option.code, option]));
@@ -171,7 +175,8 @@ export default function LanguageOnboardingModal({
   const handleStepBack = useCallback(() => {
     if (isConfirming) return;
     setStep((currentStep) => (
-      currentStep === "discovery-source" ? "birth-date"
+      currentStep === "discovery-source" ? "usage-purpose"
+        : currentStep === "usage-purpose" ? "birth-date"
         : currentStep === "birth-date" ? "interest-language"
           : "language"
     ));
@@ -236,17 +241,23 @@ export default function LanguageOnboardingModal({
 
   const handleBirthDateStepNext = () => {
     if (!isEligibleAge) return;
+    setStep("usage-purpose");
+  };
+
+  const handleUsagePurposeStepNext = () => {
+    if (!usagePurpose) return;
     setStep("discovery-source");
   };
 
   const handleFinalConfirm = async () => {
-    if (isConfirming || !isEligibleAge || !discoverySource) return;
+    if (isConfirming || !isEligibleAge || !usagePurpose || !discoverySource) return;
     setIsConfirming(true);
     try {
       await onConfirm({
         language,
         interestLanguage: interestCode ? { code: interestCode as InterestLanguage["code"], level: interestLevel } : null,
         birthDate,
+        usagePurpose,
         discoverySource,
       });
     } finally {
@@ -484,6 +495,21 @@ export default function LanguageOnboardingModal({
                 {signupCopy.birthDateDescription}
               </p>
             </div>
+          ) : step === "usage-purpose" ? (
+            <div className="space-y-2 px-6 pb-4 pt-0 text-center">
+              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                {usagePurposeCopy.step}
+              </p>
+              <h2
+                id={titleId}
+                className="text-[1.4rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+              >
+                {usagePurposeCopy.title}
+              </h2>
+              <p className="text-[0.85rem] leading-relaxed text-slate-500">
+                {usagePurposeCopy.description}
+              </p>
+            </div>
           ) : (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
               <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
@@ -600,6 +626,49 @@ export default function LanguageOnboardingModal({
               </div>
             </div>
           </div>
+        ) : step === "usage-purpose" ? (
+          <div
+            className="flex flex-1 flex-col overflow-y-auto px-5 py-5"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <div className="mx-auto flex w-full max-w-sm flex-col gap-3">
+              {usagePurposeCopy.options.map((option) => {
+                const isSelected = usagePurpose === option.code;
+                return (
+                  <button
+                    key={option.code}
+                    type="button"
+                    disabled={isConfirming}
+                    onClick={() => setUsagePurpose(option.code)}
+                    aria-pressed={isSelected}
+                    className={`flex min-h-[72px] w-full items-center gap-3 rounded-[1.35rem] border px-4 py-3 text-left transition hover:-translate-y-[1px] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)] ${
+                      isSelected
+                        ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
+                        : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition ${
+                        isSelected
+                          ? "border-amber-500 bg-amber-500 text-white"
+                          : "border-slate-300 bg-white text-transparent"
+                      }`}
+                    >
+                      <Check size={16} strokeWidth={3.2} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[0.98rem] font-semibold leading-snug text-slate-900">
+                        {option.label}
+                      </span>
+                      <span className="mt-0.5 block text-[0.8rem] leading-snug text-slate-500">
+                        {option.hint}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         ) : (
           <div
             className="flex flex-1 flex-col overflow-y-auto px-5 py-5"
@@ -672,6 +741,15 @@ export default function LanguageOnboardingModal({
               type="button"
               onClick={handleBirthDateStepNext}
               disabled={isConfirming || !isEligibleAge}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
+            >
+              {signupCopy.continueAction}
+            </button>
+          ) : step === "usage-purpose" ? (
+            <button
+              type="button"
+              onClick={handleUsagePurposeStepNext}
+              disabled={isConfirming || !usagePurpose}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
             >
               {signupCopy.continueAction}
