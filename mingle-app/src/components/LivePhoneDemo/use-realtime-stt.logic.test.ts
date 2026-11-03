@@ -2226,6 +2226,28 @@ describe('use-realtime-stt pure logic', () => {
     })).toEqual({ kind: 'none' })
   })
 
+  it('reuses a stop-finalized local turn when the server fallback re-sends it with an unknown speaker', () => {
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-stop-fallback',
+      recentFinalizedUtterances: [{
+        id: 'u-local-stop',
+        text: 'Uh, I— you know, when you get',
+        language: 'en',
+        speaker: '1',
+        expiresAt: 5_000,
+        source: 'local',
+      }],
+      nowMs: 1_000,
+      text: 'Uh, I— you know, when you get',
+      language: 'en',
+      speaker: 'unknown',
+    })).toEqual({
+      kind: 'reuse_local',
+      utteranceId: 'u-local-stop',
+    })
+  })
+
   it('keeps multiple recent finalized utterances while pruning expired entries', () => {
     const nextRecent = rememberRecentFinalizedUtterance({
       recentFinalizedUtterances: [

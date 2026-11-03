@@ -1921,7 +1921,12 @@ function isRecentFinalizedSpeakerCompatible(
   speaker?: string | null,
 ): boolean {
   if (!recentFinalizedUtterance.speaker || !speaker) return true
-  return normalizeRecentFinalizedSpeaker(recentFinalizedUtterance.speaker) === normalizeRecentFinalizedSpeaker(speaker)
+  const recentSpeaker = normalizeRecentFinalizedSpeaker(recentFinalizedUtterance.speaker)
+  const nextSpeaker = normalizeRecentFinalizedSpeaker(speaker)
+  // The server's stop fallback re-sends the client's pending text without a
+  // speaker, so an unknown speaker confirms whichever turn the client finalized.
+  if (recentSpeaker === 'unknown' || nextSpeaker === 'unknown') return true
+  return recentSpeaker === nextSpeaker
 }
 
 export function rememberRecentFinalizedUtterance(input: {
@@ -5988,6 +5993,11 @@ export default function useRealtimeSTT({
           : undefined
         let reusedSpeakerAvatarSeed = reusedUtterance?.speakerAvatarSeed
         let reusedSpeakerAvatarIndex = reusedUtterance?.speakerAvatarIndex
+        // An unknown-speaker final must not erase the speaker the local turn already had.
+        const reconciledSpeaker = (
+          normalizeRecentFinalizedSpeaker(finalizedPayload.utterance.speaker) === 'unknown'
+          && reusedUtterance?.speaker
+        ) ? reusedUtterance.speaker : finalizedPayload.utterance.speaker
         if (recentLocalReuseUtteranceId) {
           logSttDebug('finalize.reuse_recent_utterance', {
             reusedUtteranceId: recentLocalReuseUtteranceId,
@@ -6030,7 +6040,7 @@ export default function useRealtimeSTT({
             id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
             text: finalizedPayload.text,
             language: finalizedPayload.language,
-            speaker: finalizedPayload.utterance.speaker || speaker,
+            speaker: reconciledSpeaker || speaker,
             expiresAt: now + 2_000,
             source: 'server',
           },
@@ -6041,6 +6051,7 @@ export default function useRealtimeSTT({
           {
             utterance: {
               ...finalizedPayload.utterance,
+              speaker: reconciledSpeaker,
               id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
               createdAtMs: (recentLocalReuseUtteranceId
                 ? utterancesRef.current.find(item => item.id === recentLocalReuseUtteranceId)?.createdAtMs
@@ -6050,12 +6061,12 @@ export default function useRealtimeSTT({
             text: finalizedPayload.text,
             lang: finalizedPayload.language,
             currentTurnPreviousState,
-            speaker: finalizedPayload.utterance.speaker || speaker,
+            speaker: reconciledSpeaker || speaker,
           },
           {
             sttDurationMs,
             reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
-            speaker: finalizedPayload.utterance.speaker,
+            speaker: reconciledSpeaker,
             ...resolveReconciledSpeakerAvatar({
               reusedSpeakerAvatarSeed,
               reusedSpeakerAvatarIndex,
