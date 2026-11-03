@@ -2844,6 +2844,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       bottomBarTopPx: bottomBarRect.top,
       viewportHeightPx: window.innerHeight,
       safeAreaInsetBottomPx: readSafeAreaInsetBottomPx(),
+      visualViewportOffsetTopPx: window.visualViewport?.offsetTop ?? 0,
     })
 
     if (lastNativeBottomBarClearancePxRef.current === nextClearancePx) return
