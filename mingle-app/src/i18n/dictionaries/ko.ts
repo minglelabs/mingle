@@ -155,6 +155,7 @@ export const koDictionary: BaseAppDictionarySource = {
     reportReasonHarassment: "괴롭힘·불쾌한 행동",
     reportReasonInappropriate: "부적절한 콘텐츠",
     reportReasonImpersonation: "사칭",
+    reportReasonAiGenerated: "AI로 만든 것 같음 (글·사진·프로필)",
     reportReasonOther: "기타",
     authTitle: "인증",
     loginRequiredTitle: "로그인이 필요합니다",

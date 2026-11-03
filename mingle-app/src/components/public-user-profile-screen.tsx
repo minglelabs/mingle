@@ -93,7 +93,7 @@ type PublicUserProfile = {
   isOperator?: boolean;
 };
 
-type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "other";
+type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "ai_generated" | "other";
 
 const PROFILE_SHARE_HISTORY_STATE_KEY = "__MINGLE_PUBLIC_PROFILE_SHARE_SURFACE__";
 
@@ -146,6 +146,7 @@ function getCopy(dictionary: AppDictionary, locale: AppLocale) {
       harassment: dictionary.profile.reportReasonHarassment ?? (isKorean ? "괴롭힘·불쾌한 행동" : "Harassment"),
       inappropriate: dictionary.profile.reportReasonInappropriate ?? (isKorean ? "부적절한 콘텐츠" : "Inappropriate content"),
       impersonation: dictionary.profile.reportReasonImpersonation ?? (isKorean ? "사칭" : "Impersonation"),
+      ai_generated: dictionary.profile.reportReasonAiGenerated ?? (isKorean ? "AI로 만든 것 같음 (글·사진·프로필)" : "Looks AI-generated (text, photo, profile)"),
       other: dictionary.profile.reportReasonOther ?? (isKorean ? "기타" : "Other"),
     } satisfies Record<ReportReason, string>,
   };

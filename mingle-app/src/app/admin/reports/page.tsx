@@ -348,6 +348,7 @@ function reasonLabel(reason: string): string {
     case "harassment": return "괴롭힘";
     case "inappropriate": return "부적절한 콘텐츠";
     case "impersonation": return "사칭";
+    case "ai_generated": return "AI 의심";
     case "other": return "기타";
     default: return reason;
   }
