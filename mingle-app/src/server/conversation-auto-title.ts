@@ -98,6 +98,22 @@ export async function maybeGenerateConversationTitleForSession(args: {
   });
   if (!shouldGenerateConversationTitle({ ...conversation, finalizedTurnCount })) return;
 
+  // Claim this round before the slow AI call. A message written meanwhile sees the
+  // claim and skips, and a failed or stalled call waits for the next doubling instead
+  // of being retried on every message.
+  const claim = await prisma.appConversationChannel.updateMany({
+    where: {
+      id: conversation.id,
+      autoTitleGeneratedAt: conversation.autoTitleGeneratedAt,
+      autoTitleLastTurnCount: conversation.autoTitleLastTurnCount,
+    },
+    data: {
+      autoTitleGeneratedAt: new Date(),
+      autoTitleLastTurnCount: finalizedTurnCount,
+    },
+  });
+  if (claim.count === 0) return;
+
   const messages = await prisma.appMessage.findMany({
     where: {
       sessionKey,
@@ -120,12 +136,9 @@ export async function maybeGenerateConversationTitleForSession(args: {
   const title = await (args.generateTitle || generateConversationTitleWithGemini)(turns);
   if (!title) return;
 
-  await prisma.appConversationChannel.update({
-    where: { id: conversation.id },
-    data: {
-      title,
-      autoTitleGeneratedAt: new Date(),
-      autoTitleLastTurnCount: finalizedTurnCount,
-    },
+  // A title the user typed while the AI was thinking wins.
+  await prisma.appConversationChannel.updateMany({
+    where: { id: conversation.id, userEditedTitleAt: null },
+    data: { title },
   });
 }
