@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react'
+import LanguageFlag from '@/components/language-flag'
 import { Headphones, Image as Photo, Keyboard, Loader2, Plus, Volume2, X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
@@ -40,6 +41,8 @@ export type ConversationImageComposerEarphoneMode = {
   waiting: boolean
   // Speaker mode (reads aloud without earphones): the row shows a speaker.
   speaker?: boolean
+  // The language it reads aloud while on; null when off.
+  readLanguage?: string | null
   label: string
   stateLabel: string
   waitingLabel: string
@@ -442,6 +445,11 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
               >
                 <span>{earphoneMode.label}</span>
                 <span className="flex shrink-0 items-center gap-1.5">
+                  {earphoneMode.enabled && earphoneMode.readLanguage && (
+                    <span aria-hidden="true" data-earphone-mode-read-language-flag={earphoneMode.readLanguage} className="flex shrink-0 items-center text-[13px] leading-none">
+                      <LanguageFlag language={earphoneMode.readLanguage} className="text-[13px] leading-none" />
+                    </span>
+                  )}
                   <span className={`text-[12px] font-semibold ${earphoneMode.enabled ? 'text-amber-600' : 'text-slate-400'}`}>{earphoneMode.stateLabel}</span>
                   <span className="relative inline-flex">
                     {earphoneMode.speaker

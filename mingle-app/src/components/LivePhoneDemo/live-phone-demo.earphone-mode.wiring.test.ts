@@ -157,12 +157,12 @@ describe('earphone mode wiring', () => {
   it('captures device audio only as a per-session pick made in the notice', () => {
     // Offered only where supported: shell capability + the server switch.
     const notice = between(liveDemoSource, '<EarphoneModeNoticeContent', '/>')
-    expect(notice).toContain('captureSource={nativeDeviceAudioSupported && !speakerMode ? sttCaptureSourcePick : undefined}')
+    expect(notice).toContain('captureSource={nativeDeviceAudioSupported && !speakerModeOnSpeaker ? sttCaptureSourcePick : undefined}')
     expect(notice).toContain('onSelectCaptureSource={setSttCaptureSourcePick}')
     expect(notice).toContain('deviceAudioViaBroadcast={isLikelyIOSPlatform()}')
     // What the session captures: shell support + earphone mode on + the pick.
     const effective = between(liveDemoSource, 'const sttCaptureSource = resolveEffectiveSttCaptureSource({', '})')
-    expect(effective).toContain('supported: nativeDeviceAudioSupported && !speakerMode,')
+    expect(effective).toContain('supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker,')
     expect(effective).toContain('earphoneModeEnabled,')
     expect(effective).toContain('pick: sttCaptureSourcePick,')
     expect(liveDemoSource).toContain('captureSource: sttCaptureSource,')
@@ -227,9 +227,28 @@ describe('earphone mode wiring', () => {
   })
 
   it('turns the system echo canceller on only while speaker mode is reading aloud', () => {
-    expect(liveDemoSource).toContain('const speakerModeAecEnabled = speakerMode && !nativeAudioRoute.earphonesConnected && earphoneModeGate.autoReadActive')
+    expect(liveDemoSource).toContain('const speakerModeAecEnabled = speakerModeOnSpeaker && earphoneModeGate.autoReadActive')
     expect(liveDemoSource).toContain('enableAec: aecEnabled || speakerModeAecEnabled,')
     // The persisted account preference still follows the user's own setting.
     expect(liveDemoSource).toContain('echoAllowed: !aecEnabled,')
+  })
+
+  it('shows the read language flag on the mode icon and in the menu row only while the mode is on', () => {
+    expect(liveDemoSource).toContain('{isEarphoneModeOn && earphoneModeReadLanguage && (')
+    expect(liveDemoSource).toContain('data-earphone-mode-read-language-flag={earphoneModeReadLanguage}')
+    expect(liveDemoSource).toContain('readLanguage: earphoneModeEnabled ? earphoneModeReadLanguage : null,')
+    expect(composerSource).toContain('earphoneMode.enabled && earphoneMode.readLanguage && (')
+  })
+
+  it('names it speaker mode without earphones and earphone mode with them (2.3.2+)', () => {
+    expect(liveDemoSource).toContain('const speakerModeOnSpeaker = speakerMode && !nativeAudioRoute.earphonesConnected')
+    expect(liveDemoSource).toContain('speakerModeOnSpeaker ? { ...earphoneModeBaseCopy, label: earphoneModeBaseCopy.speakerLabel } : earphoneModeBaseCopy')
+    expect(liveDemoSource).toContain('{speakerModeOnSpeaker ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}')
+  })
+
+  it('asks about screen recording only with earphones in, and never switches to it unasked', () => {
+    const toggle = between(liveDemoSource, 'const handleEarphoneModeToggle = useCallback(() => {', '}, [primeAudioPlayback])')
+    expect(toggle).toContain("if (toggle.nextEnabled && isSpeakerModeClient() && !getNativeAudioRouteSnapshot().earphonesConnected) {")
+    expect(toggle).toContain("setSttCaptureSourcePick('microphone')")
   })
 })
