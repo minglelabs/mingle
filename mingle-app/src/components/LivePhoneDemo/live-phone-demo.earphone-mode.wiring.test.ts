@@ -225,4 +225,11 @@ describe('earphone mode wiring', () => {
     expect(menu).toContain('aria-pressed={earphoneMode.enabled}')
     expect(composerSource).toContain('{onCloseKeyboard && earphoneMode?.enabled && (')
   })
+
+  it('shows the read language flag on the mode icon and in the menu row only while the mode is on', () => {
+    expect(liveDemoSource).toContain('{isEarphoneModeOn && earphoneModeReadLanguage && (')
+    expect(liveDemoSource).toContain('data-earphone-mode-read-language-flag={earphoneModeReadLanguage}')
+    expect(liveDemoSource).toContain('readLanguage: earphoneModeEnabled ? earphoneModeReadLanguage : null,')
+    expect(composerSource).toContain('earphoneMode.enabled && earphoneMode.readLanguage && (')
+  })
 })
