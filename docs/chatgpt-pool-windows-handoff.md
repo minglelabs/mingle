@@ -348,6 +348,15 @@ orange, or port 80/443 forwarding lost.
     (`pausedUntil` in `/accounts`) and answers 429 when every account is resting.
   - `/health` has `ready`: accounts signed in and not resting. `accounts`
     counts every connected profile, signed out or not.
+  - per-account pacing, so no account chats back to back: after each job an
+    account rests `CHATGPT_POOL_ACCOUNT_GAP_MS` (20 s, randomized up to 1.5x),
+    and takes at most `CHATGPT_POOL_ACCOUNT_PER_HOUR` (30) and
+    `CHATGPT_POOL_ACCOUNT_PER_DAY` (200) jobs. When every account is resting
+    from ChatGPT or at its cap, the request fails at once with 429
+    `account_quota`. `/accounts` shows `restingUntil`, `jobsLastHour`,
+    `jobsLastDay` and `cappedUntil`; capped accounts do not count in `ready`.
+    The counts live in memory, so a server restart starts them over.
+    Test: `node scripts/chatgpt-pool.pacing.test.mjs`.
 - Every log line names the account and, once found, the Chrome profile:
   `done <email> [Profile N (name)] <secs>`.
 
