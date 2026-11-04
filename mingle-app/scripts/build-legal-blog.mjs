@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Builds the HashChat blog index and the slide-deck posts in public/legal/blogs.
 //
-// English is the default. Korean pages live in blogs/ko/ and are served for
-// ?lang=ko by the rewrites in public/legal/vercel.json, so each language has its
-// own static <head> (title, OG image) for link previews.
+// English is the default. Pages live in blogs/en/ and blogs/ko/ and the rewrites in
+// public/legal/vercel.json serve them at /blogs/<slug> (Korean for ?lang=ko), so each
+// language has its own static <head> (title, OG image) for link previews. Nothing may
+// sit at blogs/<slug>.html itself: Vercel serves a matching file before any rewrite.
 //
 //   node mingle-app/scripts/build-legal-blog.mjs
 
@@ -523,10 +524,10 @@ export const DECK_SLUGS = DECKS.map((post) => post.slug);
 export { DECKS, ARTICLES };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  write("blogs/index.html", blogIndex("en"));
+  write("blogs/en/index.html", blogIndex("en"));
   write("blogs/ko/index.html", blogIndex("ko"));
   for (const post of DECKS) {
-    write(`blogs/${post.slug}.html`, deckPost(post, "en"));
+    write(`blogs/en/${post.slug}.html`, deckPost(post, "en"));
     write(`blogs/ko/${post.slug}.html`, deckPost(post, "ko"));
   }
 }
