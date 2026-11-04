@@ -152,19 +152,24 @@ describe('reviewOperatorPost', () => {
     })
   })
 
-  it('stays busy while a 재제작 is running, and lets staff answer once one has hung', async () => {
-    const now = new Date('2026-10-30T06:00:00Z')
-    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, state: 'regenerating' })
-    mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 0 })
-    await expect(reviewOperatorPost(null, 'r1', 'publish', null, now)).resolves.toEqual({ ok: false, error: 'busy' })
-    expect(mocks.reserveUpdateMany).toHaveBeenLastCalledWith({
-      where: { id: 'r1', state: 'regenerating', updatedAt: { lt: new Date('2026-10-30T05:45:00Z') } },
-      data: { state: 'review' },
-    })
-
-    mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 1 })
+  it('is busy only while a 재제작 really runs here; a row a cut-off job left behind is put back and answered', async () => {
     mocks.publishNow.mockResolvedValue({ ok: true, postId: 'p1' })
-    await expect(reviewOperatorPost(null, 'r1', 'publish', null, now)).resolves.toEqual({ ok: true, state: 'published', postId: 'p1' })
+    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, state: 'regenerating' })
+    await expect(reviewOperatorPost(null, 'r1', 'publish', null)).resolves.toEqual({ ok: true, state: 'published', postId: 'p1' })
+    expect(mocks.reserveUpdateMany).toHaveBeenCalledWith({ where: { id: 'r1', state: 'regenerating' }, data: { state: 'review' } })
+
+    // A 재제작 that is running here: its claim has not answered yet.
+    mocks.reserveUpdateMany.mockClear()
+    let claim!: (result: { count: number }) => void
+    mocks.reserveFindUnique.mockResolvedValueOnce(REVIEW_POST)
+    mocks.reserveUpdateMany.mockReturnValueOnce(new Promise((resolve) => { claim = resolve }))
+    const running = reviewOperatorPost(null, 'r1', 'regenerate', null)
+    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, state: 'regenerating' })
+    await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(1))
+    await expect(reviewOperatorPost(null, 'r1', 'publish', null)).resolves.toEqual({ ok: false, error: 'busy' })
+    expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(1)
+    claim({ count: 0 })
+    await expect(running).resolves.toEqual({ ok: false, error: 'busy' })
   })
 })
 
@@ -217,13 +222,29 @@ describe('where this server can draw (the ChatGPT pool)', () => {
 })
 
 describe('releaseOrphanedDrawings', () => {
-  it('puts drawings a previous process left behind back in review as failed', async () => {
-    mocks.reserveUpdateMany.mockResolvedValue({ count: 3 })
-    await expect(releaseOrphanedDrawings()).resolves.toBe(3)
-    expect(mocks.reserveUpdateMany).toHaveBeenCalledWith({
+  it('puts drawings and rewrites a previous process left behind back in review', async () => {
+    mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 3 }).mockResolvedValueOnce({ count: 2 })
+    await expect(releaseOrphanedDrawings()).resolves.toBe(5)
+    expect(mocks.reserveUpdateMany).toHaveBeenNthCalledWith(1, {
       where: { state: 'regenerating', error: 'photo_drawing' },
       data: { state: 'review', error: 'photo_draw_failed' },
     })
+    expect(mocks.reserveUpdateMany).toHaveBeenNthCalledWith(2, { where: { state: 'regenerating' }, data: { state: 'review' } })
+  })
+})
+
+describe('an account left drawing by a cut-off job', () => {
+  it('is put back and answered where the pool draws, not refused as busy', async () => {
+    mocks.canDraw.mockReturnValue(true)
+    mocks.accountFindUnique.mockResolvedValue({ ...PENDING_ACCOUNT, reviewState: 'drawing' })
+    mocks.drawAvatar.mockResolvedValue({ ok: true })
+    await expect(reviewOperatorProfile(null, 'op9', 'regenerate', null)).resolves.toEqual({ ok: true, state: 'drawing' })
+    expect(mocks.accountUpdateMany).toHaveBeenCalledWith({ where: { userId: 'op9', reviewState: 'drawing' }, data: { reviewState: 'pending' } })
+  })
+
+  it('stays busy where nobody draws it here (waiting for the hand-drawn route)', async () => {
+    mocks.accountFindUnique.mockResolvedValue({ ...PENDING_ACCOUNT, reviewState: 'drawing' })
+    await expect(reviewOperatorProfile(null, 'op9', 'regenerate', null)).resolves.toEqual({ ok: false, error: 'busy' })
   })
 })
 

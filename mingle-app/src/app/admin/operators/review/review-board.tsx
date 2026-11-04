@@ -274,8 +274,11 @@ function ReviewActions({
   onAction,
   publishDisabledReason,
   drawAction,
+  inProgress,
 }: {
   busy: Action | null
+  /** A job for this card is running; the answers wait until it is done. */
+  inProgress?: boolean
   onAction: (action: Action, feedback: string) => void
   publishDisabledReason?: string
   /** A post whose photo is not drawn yet: offer to have only the photo drawn (null once it is queued). */
@@ -308,19 +311,19 @@ function ReviewActions({
       <div className="grid grid-cols-3 gap-2">
         <AdminButton
           variant="primary"
-          disabled={busy !== null || Boolean(publishDisabledReason)}
+          disabled={busy !== null || inProgress || Boolean(publishDisabledReason)}
           title={publishDisabledReason}
           onClick={() => onAction('publish', feedback)}
         >
           {busy === 'publish' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
           게시
         </AdminButton>
-        <AdminButton variant="danger" disabled={busy !== null} onClick={() => onAction('delete', feedback)}>
+        <AdminButton variant="danger" disabled={busy !== null || inProgress} onClick={() => onAction('delete', feedback)}>
           {busy === 'delete' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Trash2 className="h-4 w-4" aria-hidden="true" />}
           삭제
         </AdminButton>
         <AdminButton
-          disabled={busy !== null}
+          disabled={busy !== null || inProgress}
           onClick={() => { onAction('regenerate', feedback); setFeedback(''); setFeedbackOpen(false) }}
         >
           {busy === 'regenerate' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
@@ -333,6 +336,7 @@ function ReviewActions({
           {drawAction.drawing ? '사진 그리는 중…' : drawAction.requested ? 'ChatGPT로 그리기 요청됨' : '글은 그대로, 사진만 그리기'}
         </AdminButton>
       ) : null}
+      {inProgress ? <p className="text-xs text-slate-500">사진을 그리는 중이라 끝나면 누를 수 있어요.</p> : null}
       {publishDisabledReason ? <p className="text-xs text-slate-500">{publishDisabledReason}</p> : null}
     </div>
   )
@@ -622,6 +626,7 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
       <ReviewActions
         busy={busy}
+        inProgress={post.photoDrawing}
         onAction={handle}
         publishDisabledReason={!profileApproved ? '계정을 먼저 게시해야 글을 올릴 수 있어요.' : post.photoDescription && !post.imageObjectKey ? '사진을 그린 뒤에 게시할 수 있어요.' : undefined}
         drawAction={post.photoDescription && !post.imageObjectKey ? { requested: post.photoRequested, drawing: post.photoDrawing } : undefined}
@@ -716,7 +721,7 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
       {profile.profileFeedback ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {profile.profileFeedback}</p> : null}
       {drawing ? <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">새 프로필 사진을 ChatGPT로 그리는 중이에요. 그려서 올라오면 다시 검토할 수 있어요.</p> : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
-      <ReviewActions busy={busy} onAction={handle} publishDisabledReason={drawing ? '새 사진을 그리는 중이에요.' : undefined} />
+      <ReviewActions busy={busy} inProgress={drawing} onAction={handle} publishDisabledReason={drawing ? '새 사진을 그리는 중이에요.' : undefined} />
     </AdminCard>
   )
 }
