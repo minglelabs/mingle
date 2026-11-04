@@ -15,6 +15,12 @@ import {
 } from "@/lib/birth-date";
 import { isDiscoverySource, type DiscoverySource } from "@/lib/discovery-source";
 import {
+  isUsagePurpose,
+  normalizeUsagePurposeNote,
+  resolveUsagePurposeSegmentationDefaults,
+  type UsagePurpose,
+} from "@/lib/usage-purpose";
+import {
   PROFILE_IMAGE_MAX_SCALE,
   PROFILE_IMAGE_MIN_SCALE,
 } from "@/lib/profile-image-crop";
@@ -261,6 +267,11 @@ export async function PATCH(request: NextRequest) {
     defaultDisplayLanguage?: string | null;
     birthDate?: Date | null;
     discoverySource?: DiscoverySource | null;
+    usagePurpose?: UsagePurpose | null;
+    usagePurposeNote?: string | null;
+    sttSegmentationMode?: string;
+    demoEndpointTuningStep?: number;
+    demoSilenceFinalizeMs?: number;
     imageCropScale?: number | null;
     imageCropX?: number | null;
     imageCropY?: number | null;
@@ -418,6 +429,23 @@ export async function PATCH(request: NextRequest) {
     } else {
       data.discoverySource = body.discoverySource;
     }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "usagePurpose")) {
+    if (body.usagePurpose === null) {
+      data.usagePurpose = null;
+    } else if (!isUsagePurpose(body.usagePurpose)) {
+      return NextResponse.json({ error: "invalid_usage_purpose" }, { status: 400 });
+    } else {
+      data.usagePurpose = body.usagePurpose;
+      // Sent once, from onboarding: start the speech split where this kind of
+      // user needs it. They can still change it in the room settings.
+      Object.assign(data, resolveUsagePurposeSegmentationDefaults(body.usagePurpose));
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "usagePurposeNote")) {
+    data.usagePurposeNote = normalizeUsagePurposeNote(body.usagePurposeNote);
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "imageCropScale")) {

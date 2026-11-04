@@ -53,6 +53,8 @@ import {
   LS_KEY_PENDING_BIRTH_DATE,
   LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
   LS_KEY_PENDING_DISCOVERY_SOURCE,
+  LS_KEY_PENDING_USAGE_PURPOSE,
+  LS_KEY_PENDING_USAGE_PURPOSE_NOTE,
   LS_KEY_PENDING_INTEREST_LANGUAGES,
   LS_KEY_PENDING_PRIMARY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
@@ -60,9 +62,12 @@ import {
   DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
   clearPendingBirthDate,
   clearPendingDiscoverySource,
+  clearPendingUsagePurpose,
   normalizeLivePhoneDemoAdBannerPosition,
   readPendingBirthDate,
   readPendingDiscoverySource,
+  readPendingUsagePurpose,
+  readPendingUsagePurposeNote,
   readPendingInterestLanguages,
   clearPendingInterestLanguages,
   readPersistedBooleanPreference,
@@ -2314,12 +2319,15 @@ export default function ConversationList({
     const pendingPrimaryLanguages = readPendingPrimaryLanguages();
     const pendingBirthDate = readPendingBirthDate();
     const pendingDiscoverySource = readPendingDiscoverySource();
+    const pendingUsagePurpose = readPendingUsagePurpose();
+    const pendingUsagePurposeNote = readPendingUsagePurposeNote();
     const pendingInterestLanguages = readPendingInterestLanguages();
 
     if (
       pendingDefaultLanguages.length === 0
       && !pendingBirthDate
       && !pendingDiscoverySource
+      && !pendingUsagePurpose
       && pendingInterestLanguages.length === 0
     ) return;
 
@@ -2354,6 +2362,10 @@ export default function ConversationList({
         if (pendingDiscoverySource) {
           patchPayload.discoverySource = pendingDiscoverySource;
         }
+        if (pendingUsagePurpose) {
+          patchPayload.usagePurpose = pendingUsagePurpose;
+          patchPayload.usagePurposeNote = pendingUsagePurposeNote;
+        }
         if (pendingInterestLanguages.length > 0) {
           patchPayload.interestLanguages = pendingInterestLanguages;
         }
@@ -2365,6 +2377,7 @@ export default function ConversationList({
           clearPendingLanguagePreferences();
           clearPendingBirthDate();
           clearPendingDiscoverySource();
+          clearPendingUsagePurpose();
           clearPendingInterestLanguages();
           return;
         }
@@ -2390,6 +2403,7 @@ export default function ConversationList({
         clearPendingLanguagePreferences();
         clearPendingBirthDate();
         clearPendingDiscoverySource();
+        clearPendingUsagePurpose();
         clearPendingInterestLanguages();
       } catch {
         // Keep the pending marker so a later authenticated launch can retry the claim.
@@ -5411,6 +5425,8 @@ export default function ConversationList({
     const languageCode = typeof payload === "string" ? payload : payload.language;
     const birthDateParts = typeof payload === "object" && payload ? payload.birthDate : null;
     const discoverySource = typeof payload === "object" && payload ? payload.discoverySource : null;
+    const usagePurpose = typeof payload === "object" && payload ? payload.usagePurpose : null;
+    const usagePurposeNote = typeof payload === "object" && payload ? payload.usagePurposeNote : null;
     const interestLanguages = typeof payload === "object" && payload?.interestLanguage ? [payload.interestLanguage] : [];
     const formattedBirthDate = birthDateParts ? formatBirthDate(birthDateParts) : null;
 
@@ -5439,6 +5455,14 @@ export default function ConversationList({
       }
       if (discoverySource) {
         window.localStorage.setItem(LS_KEY_PENDING_DISCOVERY_SOURCE, discoverySource);
+      }
+      if (usagePurpose) {
+        window.localStorage.setItem(LS_KEY_PENDING_USAGE_PURPOSE, usagePurpose);
+        if (usagePurposeNote) {
+          window.localStorage.setItem(LS_KEY_PENDING_USAGE_PURPOSE_NOTE, usagePurposeNote);
+        } else {
+          window.localStorage.removeItem(LS_KEY_PENDING_USAGE_PURPOSE_NOTE);
+        }
       }
       if (interestLanguages.length > 0) {
         window.localStorage.setItem(LS_KEY_PENDING_INTEREST_LANGUAGES, JSON.stringify(interestLanguages));
@@ -5472,6 +5496,10 @@ export default function ConversationList({
         if (discoverySource) {
           patchPayload.discoverySource = discoverySource;
         }
+        if (usagePurpose) {
+          patchPayload.usagePurpose = usagePurpose;
+          patchPayload.usagePurposeNote = usagePurposeNote;
+        }
         if (interestLanguages.length > 0) {
           patchPayload.interestLanguages = interestLanguages;
         }
@@ -5497,6 +5525,7 @@ export default function ConversationList({
         clearPendingLanguagePreferences();
         clearPendingBirthDate();
         clearPendingDiscoverySource();
+        clearPendingUsagePurpose();
         clearPendingInterestLanguages();
       } catch {
         return;

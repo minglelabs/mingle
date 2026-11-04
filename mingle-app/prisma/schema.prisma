@@ -69,6 +69,8 @@ model User {
   locationPermissionVerifiedAt DateTime? @map("location_permission_verified_at")
   birthDate                    DateTime? @map("birth_date") @db.Date
   discoverySource              String?   @map("discovery_source")
+  usagePurpose                 String?   @map("usage_purpose")
+  usagePurposeNote             String?   @map("usage_purpose_note")
   isActive                     Boolean   @default(true) @map("is_active")
   deactivatedAt                DateTime? @map("deactivated_at")
   withdrawnAt                  DateTime? @map("withdrawn_at")
