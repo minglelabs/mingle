@@ -218,6 +218,28 @@ export function namespaceSupportsPostingFeed(namespace: string): boolean {
  */
 export const clientSupportsPostingFeed = namespaceSupportsPostingFeed(clientApiNamespace)
 
+/** First app release that removes the translation's own voice from the microphone transcript (Soniox agent text input). */
+const SPEAKER_MODE_MIN_VERSION = [2, 3, 2] as const
+
+/**
+ * Whether the app on this namespace can read translations aloud without
+ * earphones. Without earphones the voice reaches the microphone again, and only
+ * an app from 2.3.2 on tells the STT server what it is reading so that echo is
+ * dropped; an older app would transcribe and translate its own voice in a loop.
+ * Plain web (the '' namespace) is never a speaker-mode client.
+ */
+export function namespaceSupportsSpeakerMode(namespace: string): boolean {
+  const match = normalizeApiNamespace(namespace).match(/^(?:android|ios)\/v(\d+)\.(\d+)\.(\d+)$/)
+  if (!match) return false
+  const version = [Number(match[1]), Number(match[2]), Number(match[3])]
+  for (let index = 0; index < SPEAKER_MODE_MIN_VERSION.length; index += 1) {
+    if (version[index] !== SPEAKER_MODE_MIN_VERSION[index]) {
+      return version[index] > SPEAKER_MODE_MIN_VERSION[index]
+    }
+  }
+  return true
+}
+
 export function shouldRedetectFinalizeSourceLanguage(pathname: string, sourceLanguage?: string): boolean {
   const namespace = parseVersionedApiNamespaceFromFinalizePath(pathname)
   if (!namespace) {

@@ -86,6 +86,26 @@ describe('resolveEarphoneModeGate', () => {
   })
 })
 
+describe('resolveEarphoneModeGate in speaker mode (earphones not required)', () => {
+  it.each([
+    // supported, enabled, connected -> visible, autoRead, waiting
+    [false, true, false, false, false, false],
+    [true, false, false, true, false, false],
+    [true, true, false, true, true, false],
+    [true, true, true, true, true, false],
+  ])('supported=%s enabled=%s connected=%s', (supported, enabled, earphonesConnected, controlVisible, autoReadActive, waitingForEarphones) => {
+    expect(resolveEarphoneModeGate({ supported, enabled, earphonesConnected, earphonesRequired: false })).toEqual({
+      controlVisible,
+      autoReadActive,
+      waitingForEarphones,
+    })
+  })
+
+  it('still requires earphones when not told otherwise', () => {
+    expect(resolveEarphoneModeGate({ supported: true, enabled: true, earphonesConnected: false, earphonesRequired: true }).autoReadActive).toBe(false)
+  })
+})
+
 describe('resolveEarphoneModeToggle', () => {
   it('shows the notice and re-reads the route on every off -> on', () => {
     expect(resolveEarphoneModeToggle(false)).toEqual({ nextEnabled: true, showNotice: true, requestRoute: true })

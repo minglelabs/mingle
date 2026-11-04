@@ -36,6 +36,9 @@ export type EarphoneModeGateInput = {
   supported: boolean
   enabled: boolean
   earphonesConnected: boolean
+  // false = speaker mode: the voice may play out loud, so no earphones are
+  // needed (the app removes its own voice from what the microphone hears).
+  earphonesRequired?: boolean
 }
 
 export type EarphoneModeGate = {
@@ -44,11 +47,12 @@ export type EarphoneModeGate = {
   waitingForEarphones: boolean
 }
 
-// Auto-read needs all three; unknown earphone state counts as not connected.
+// Auto-read needs the mode on and, unless earphones are not required, earphones
+// connected; unknown earphone state counts as not connected.
 export function resolveEarphoneModeGate(input: EarphoneModeGateInput): EarphoneModeGate {
   const controlVisible = input.supported === true
   const enabled = controlVisible && input.enabled === true
-  const connected = controlVisible && input.earphonesConnected === true
+  const connected = controlVisible && (input.earphonesRequired === false || input.earphonesConnected === true)
   return {
     controlVisible,
     autoReadActive: enabled && connected,

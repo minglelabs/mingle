@@ -30,6 +30,25 @@ function languageList(html: string): string {
   return html.slice(start)
 }
 
+describe('earphone mode notice in speaker mode', () => {
+  it('asks only for the read language: no earphone rule, status or capture step', () => {
+    const copy = resolveLivePhoneDemoEarphoneModeCopy('ko')
+    const html = renderNotice({ earphonesRequired: false, earphonesConnected: false })
+    expect(html).toContain(copy.speakerNoticeBody)
+    expect(html).not.toContain(copy.noticeBody)
+    expect(html).not.toContain('data-earphone-status')
+    expect(html).not.toContain('data-earphone-mode-notice-next')
+    expect(html).toContain(copy.noticeConfirmLabel)
+  })
+
+  it('keeps the earphone rule and status for older apps', () => {
+    const copy = resolveLivePhoneDemoEarphoneModeCopy('ko')
+    const html = renderNotice({ earphonesConnected: false })
+    expect(html).toContain(copy.noticeBody)
+    expect(html).toContain('data-earphone-status="disconnected"')
+  })
+})
+
 describe('earphone mode notice language selector', () => {
   it('lists the room languages with the display-language page names, L preselected', () => {
     const list = languageList(renderNotice())
