@@ -4,6 +4,7 @@ import {
   cycleOfEntryKey,
   appendCyclePage,
   appendPage,
+  moveSeenPostOffFirst,
   createCycleList,
   patchCycleList,
   patchCycleListByAuthor,
@@ -220,5 +221,20 @@ describe("cycleOfEntryKey", () => {
     const list = appendCyclePage(createCycleList([{ id: "a" } as FeedPostDto]), [{ id: "a" } as FeedPostDto]);
     expect(list.entries.map((e) => cycleOfEntryKey(e.key))).toEqual([0, 1]);
     expect(cycleOfEntryKey("nope")).toBeNull();
+  });
+});
+
+describe("moveSeenPostOffFirst", () => {
+  it("moves the post the reader was on from first to the end of the page", () => {
+    const page = [post("a"), post("b"), post("c")];
+    expect(moveSeenPostOffFirst(page, "a").map((p) => p.id)).toEqual(["b", "c", "a"]);
+  });
+
+  it("leaves the page alone when another post already leads, or nothing can replace it", () => {
+    const page = [post("b"), post("a")];
+    expect(moveSeenPostOffFirst(page, "a")).toBe(page);
+    expect(moveSeenPostOffFirst(page, null)).toBe(page);
+    const single = [post("a")];
+    expect(moveSeenPostOffFirst(single, "a")).toBe(single);
   });
 });
