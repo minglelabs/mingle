@@ -110,7 +110,11 @@
     },
     {
       "source": "/blogs",
-      "destination": "/blogs/index.html"
+      "destination": "/blogs/en/index.html"
+    },
+    {
+      "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|virtually-deck)",
+      "destination": "/blogs/en/:slug.html"
     },
     {
       "source": "/blogs/:slug",
