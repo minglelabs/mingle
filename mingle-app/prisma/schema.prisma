@@ -68,6 +68,8 @@ model User {
   locationUpdatedAt            DateTime? @map("location_updated_at")
   locationPermissionVerifiedAt DateTime? @map("location_permission_verified_at")
   birthDate                    DateTime? @map("birth_date") @db.Date
+  /// 'female' | 'male' (DB check app_users_gender_chk). Public: shown next to the age on profiles. Operator accounts mirror OperatorAccount.personaGender.
+  gender                       String?
   discoverySource              String?   @map("discovery_source")
   isActive                     Boolean   @default(true) @map("is_active")
   deactivatedAt                DateTime? @map("deactivated_at")

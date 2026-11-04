@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   queryRaw: vi.fn(async () => [{ low: null }]),
   userFindFirst: vi.fn(),
   userCount: vi.fn(),
+  userUpdateMany: vi.fn(),
   auditFindFirst: vi.fn(),
   accountUpdateMany: vi.fn(),
   accountGroupBy: vi.fn(),
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     adminSetting: { findUnique: mocks.settingFindUnique, upsert: mocks.settingUpsert },
-    user: { findFirst: mocks.userFindFirst, count: mocks.userCount },
+    user: { findFirst: mocks.userFindFirst, count: mocks.userCount, updateMany: mocks.userUpdateMany },
     adminAuditLog: { findFirst: mocks.auditFindFirst },
     operatorAccount: { updateMany: mocks.accountUpdateMany, groupBy: mocks.accountGroupBy },
     $queryRaw: mocks.queryRaw,
@@ -263,6 +264,7 @@ describe('avatar generation', () => {
     expect(body.messages[0].content).toContain('profile picture')
     expect(mocks.setAvatar).toHaveBeenCalledWith(null, 'op_1', Buffer.from('png-bytes'), expect.objectContaining({ generated: true }))
     expect(mocks.accountUpdateMany.mock.calls[0][0].data.avatarSpec.labelKo).toContain(' · ')
+    expect(mocks.userUpdateMany).toHaveBeenCalledWith({ where: { id: 'op_1', isOperator: true }, data: { gender: expect.stringMatching(/^(female|male)$/) } })
   })
 
   describe('through the local subscription proxy', () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import type { BirthDateParts } from "@/lib/birth-date";
+import type { ProfileGender } from "@/lib/profile-gender";
 import type { ProfileLocationRecord } from "@/lib/profile-location";
 import { sanitizeInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
 
@@ -22,16 +23,19 @@ export type MyPageProfileRecord = {
   defaultConversationLanguages: string[];
   location: ProfileLocationRecord | null;
   birthDate?: BirthDateParts | null;
+  /** Public gender and age shown in the header badge. */
+  gender?: ProfileGender | null;
+  age?: number | null;
   followersCount: number;
   followingCount: number;
   /** Operator / official account; absent means false. */
   isOfficial?: boolean;
 };
 
-// Only what the profile header shows is written to disk. Location, birth date
-// and the unpublished bio draft stay in memory and are restored by the API
+// Only what the profile header shows is written to disk. Location, birth date,
+// gender/age and the unpublished bio draft stay in memory and are restored by the API
 // refresh that follows every mount.
-type PersistedMyPageProfile = Omit<MyPageProfileRecord, "bioDraft" | "birthDate" | "location">;
+type PersistedMyPageProfile = Omit<MyPageProfileRecord, "bioDraft" | "birthDate" | "gender" | "age" | "location">;
 
 type PersistedMyPageProfileRecord = {
   savedAt: number;

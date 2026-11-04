@@ -8,6 +8,7 @@ import { zipInterestLanguages } from "@/lib/interest-languages";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { USER_IDENTITY_SELECT, identityBadgeFlags } from "@/server/identity/user-identity-select";
 import { calculateProfileAge } from "@/server/user-profile";
+import { normalizeProfileGender } from "@/lib/profile-gender";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,7 @@ const userProfileSelect = {
   // Identity + badge flags (official / operator).
   ...USER_IDENTITY_SELECT,
   birthDate: true,
+  gender: true,
   bio: true,
   nationality: true,
   primaryLanguages: true,
@@ -132,6 +134,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     imageCropX: user.imageCropX,
     imageCropY: user.imageCropY,
     age: calculateProfileAge(user.birthDate),
+    ...(normalizeProfileGender(user.gender) ? { gender: normalizeProfileGender(user.gender) } : {}),
     bio: await getPublishedBioText(user.id, user.bio),
     nationality: user.nationality,
     primaryLanguages,

@@ -262,6 +262,10 @@ export async function generateOperatorAvatar(
       where: { userId },
       data: { avatarSpec: spec, avatarGeneratedAt: now, ...(persona.gender ? { personaGender: persona.gender } : {}) },
     })
+    // The public profile gender mirrors the persona the photo was drawn as.
+    if (persona.gender) {
+      await prisma.user.updateMany({ where: { id: userId, isOperator: true }, data: { gender: persona.gender } })
+    }
     return { ok: true, image: stored.image, spec }
   } catch (error) {
     console.error('[operator-avatar] generate_failed', { error: error instanceof Error ? error.name : 'unknown' })

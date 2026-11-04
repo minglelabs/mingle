@@ -53,6 +53,7 @@ import {
   LS_KEY_PENDING_BIRTH_DATE,
   LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
   LS_KEY_PENDING_DISCOVERY_SOURCE,
+  LS_KEY_PENDING_GENDER,
   LS_KEY_PENDING_INTEREST_LANGUAGES,
   LS_KEY_PENDING_PRIMARY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
@@ -60,9 +61,11 @@ import {
   DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
   clearPendingBirthDate,
   clearPendingDiscoverySource,
+  clearPendingGender,
   normalizeLivePhoneDemoAdBannerPosition,
   readPendingBirthDate,
   readPendingDiscoverySource,
+  readPendingGender,
   readPendingInterestLanguages,
   clearPendingInterestLanguages,
   readPersistedBooleanPreference,
@@ -2315,10 +2318,12 @@ export default function ConversationList({
     const pendingBirthDate = readPendingBirthDate();
     const pendingDiscoverySource = readPendingDiscoverySource();
     const pendingInterestLanguages = readPendingInterestLanguages();
+    const pendingGender = readPendingGender();
 
     if (
       pendingDefaultLanguages.length === 0
       && !pendingBirthDate
+      && !pendingGender
       && !pendingDiscoverySource
       && pendingInterestLanguages.length === 0
     ) return;
@@ -2351,6 +2356,9 @@ export default function ConversationList({
         if (pendingBirthDate) {
           patchPayload.birthDate = pendingBirthDate;
         }
+        if (pendingGender) {
+          patchPayload.gender = pendingGender;
+        }
         if (pendingDiscoverySource) {
           patchPayload.discoverySource = pendingDiscoverySource;
         }
@@ -2364,6 +2372,7 @@ export default function ConversationList({
           setDefaultSelectedLanguages(resolvedPreferences.defaultConversationLanguages);
           clearPendingLanguagePreferences();
           clearPendingBirthDate();
+          clearPendingGender();
           clearPendingDiscoverySource();
           clearPendingInterestLanguages();
           return;
@@ -2389,6 +2398,7 @@ export default function ConversationList({
         setDefaultSelectedLanguages(savedPreferences.defaultConversationLanguages);
         clearPendingLanguagePreferences();
         clearPendingBirthDate();
+        clearPendingGender();
         clearPendingDiscoverySource();
         clearPendingInterestLanguages();
       } catch {
@@ -5411,6 +5421,7 @@ export default function ConversationList({
     const languageCode = typeof payload === "string" ? payload : payload.language;
     const birthDateParts = typeof payload === "object" && payload ? payload.birthDate : null;
     const discoverySource = typeof payload === "object" && payload ? payload.discoverySource : null;
+    const gender = typeof payload === "object" && payload ? payload.gender ?? null : null;
     const interestLanguages = typeof payload === "object" && payload?.interestLanguage ? [payload.interestLanguage] : [];
     const formattedBirthDate = birthDateParts ? formatBirthDate(birthDateParts) : null;
 
@@ -5439,6 +5450,9 @@ export default function ConversationList({
       }
       if (discoverySource) {
         window.localStorage.setItem(LS_KEY_PENDING_DISCOVERY_SOURCE, discoverySource);
+      }
+      if (gender) {
+        window.localStorage.setItem(LS_KEY_PENDING_GENDER, gender);
       }
       if (interestLanguages.length > 0) {
         window.localStorage.setItem(LS_KEY_PENDING_INTEREST_LANGUAGES, JSON.stringify(interestLanguages));
@@ -5469,6 +5483,9 @@ export default function ConversationList({
         if (formattedBirthDate) {
           patchPayload.birthDate = formattedBirthDate;
         }
+        if (gender) {
+          patchPayload.gender = gender;
+        }
         if (discoverySource) {
           patchPayload.discoverySource = discoverySource;
         }
@@ -5496,6 +5513,7 @@ export default function ConversationList({
         savedDefaultLanguages = resolvedPreferences.defaultConversationLanguages;
         clearPendingLanguagePreferences();
         clearPendingBirthDate();
+        clearPendingGender();
         clearPendingDiscoverySource();
         clearPendingInterestLanguages();
       } catch {

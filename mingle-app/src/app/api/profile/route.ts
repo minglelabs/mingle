@@ -14,6 +14,7 @@ import {
   parseBirthDate,
 } from "@/lib/birth-date";
 import { isDiscoverySource, type DiscoverySource } from "@/lib/discovery-source";
+import { isProfileGender, type ProfileGender } from "@/lib/profile-gender";
 import {
   PROFILE_IMAGE_MAX_SCALE,
   PROFILE_IMAGE_MIN_SCALE,
@@ -260,6 +261,7 @@ export async function PATCH(request: NextRequest) {
     defaultConversationLanguages?: string[];
     defaultDisplayLanguage?: string | null;
     birthDate?: Date | null;
+    gender?: ProfileGender | null;
     discoverySource?: DiscoverySource | null;
     imageCropScale?: number | null;
     imageCropX?: number | null;
@@ -407,6 +409,16 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
       }
       data.birthDate = birthDate;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "gender")) {
+    if (body.gender === null) {
+      data.gender = null;
+    } else if (!isProfileGender(body.gender)) {
+      return NextResponse.json({ error: "invalid_gender" }, { status: 400 });
+    } else {
+      data.gender = body.gender;
     }
   }
 
