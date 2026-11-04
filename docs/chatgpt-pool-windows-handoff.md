@@ -332,6 +332,22 @@ orange, or port 80/443 forwarding lost.
 - When ChatGPT offers two candidate images, the runner takes the first without
   clicking. This hasn't been seen yet.
 - The MV3 worker keepalive (`setInterval(getPlatformInfo, 20s)`) must stay.
+- **Floods get the PC flagged.** On 2026-11-03 20:30–23:00 KST the server sent
+  ~7,600 conversation-title requests (a failed title was retried on every new
+  message; fixed in `3d493d1f`). Callers gave up after 120s but their jobs stayed
+  queued, so the pool worked through stale jobs for 15 hours. ChatGPT signed 10
+  of 11 accounts out and showed the last one "Our systems have detected unusual
+  activity coming from your system. Please try again later." Guards since then:
+  - at most `CHATGPT_POOL_MAX_QUEUE` (100) waiting jobs, then 503 `queue_full`;
+  - identical requests share one job (log `same <id> joins …`);
+  - a sync caller that closes its connection takes its waiting job out of the
+    queue (log `cancel …`); a job waiting over 10 min (images 20) fails with 504
+    `queue_timeout`;
+  - the extension (1.2.7) spots ChatGPT's "try again later" error in about 5s
+    and reports `rate_limited`; the server rests that account for an hour
+    (`pausedUntil` in `/accounts`) and answers 429 when every account is resting.
+  - `/health` has `ready`: accounts signed in and not resting. `accounts`
+    counts every connected profile, signed out or not.
 - Every log line names the account and, once found, the Chrome profile:
   `done <email> [Profile N (name)] <secs>`.
 
