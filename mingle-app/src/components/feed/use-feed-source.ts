@@ -9,6 +9,7 @@ import {
   appendCyclePage,
   appendPage,
   createCycleList,
+  moveSeenPostOffFirst,
   patchCycleList,
   patchCycleListByAuthor,
   prependDeepLinkPost,
@@ -72,9 +73,10 @@ type UseFeedSourceReturn = FeedSourceState & {
   /**
    * Pull-to-refresh: fetch a fresh first page (no remembered / linked post
    * pinned) while the current list stays on screen, then swap it in. Resolves
-   * false when the request failed and the list was left as it was.
+   * false when the request failed and the list was left as it was. The post
+   * the reader was on (`seenPostId`) does not open the new page.
    */
-  refreshFromTop: () => Promise<boolean>;
+  refreshFromTop: (seenPostId?: string | null) => Promise<boolean>;
   /** Optimistically patch every appearance of one post (like, comment count). */
   applyPatch: (postId: string, patch: Partial<FeedPostDto>) => void;
   /** Patch every on-screen post by one author (follow). */
@@ -482,7 +484,7 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
     void runInitialLoad(generation);
   }, [runInitialLoad]);
 
-  const refreshFromTop = useCallback(async (): Promise<boolean> => {
+  const refreshFromTop = useCallback(async (seenPostId: string | null = null): Promise<boolean> => {
     // Invalidate any in-flight page: it belongs to the list being replaced.
     const generation = ++generationRef.current;
     loadingRef.current = false;
@@ -498,7 +500,7 @@ export function useFeedSource(options: UseFeedSourceOptions): UseFeedSourceRetur
       setLoadMoreError(false);
       setDeepLinkUnavailable(false);
       setStartIndex(0);
-      setList(createCycleList(first.posts));
+      setList(createCycleList(moveSeenPostOffFirst(first.posts, seenPostId)));
       setPhase("ready");
       return true;
     } catch {

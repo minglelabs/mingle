@@ -344,7 +344,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
 
   // The active post drives the "seen" view tracker (paused while an overlay is open).
   const trackedPostId = anyOverlayOpen ? null : activePost?.id ?? null;
-  usePostViewTracker({ activePostId: trackedPostId, isSignedIn: Boolean(viewerId) });
+  const { markSeen } = usePostViewTracker({ activePostId: trackedPostId, isSignedIn: Boolean(viewerId) });
 
   // ── Analytics: impression / quick skip per appearance (same visit clock,
   // paused while an overlay is open or the app is in the background) ──
@@ -452,7 +452,13 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
     // Keep the spinner up briefly even when the request is instant, so the
     // gap does not just flash open and shut.
     const minimumShown = new Promise<void>((resolve) => window.setTimeout(resolve, 500));
-    void Promise.all([refreshFromTop(), minimumShown]).then(([ok]) => {
+    // The post being left counts as seen before the new page is ranked; a slow
+    // record must not hold the refresh up for long.
+    const seenPostId = activePost?.id ?? null;
+    const seenRecorded = seenPostId
+      ? Promise.race([markSeen(seenPostId), new Promise<void>((resolve) => window.setTimeout(resolve, 1500))])
+      : Promise.resolve();
+    void Promise.all([seenRecorded.then(() => refreshFromTop(seenPostId)), minimumShown]).then(([ok]) => {
       setPullRefreshing(false);
       setPullProgress(0);
       if (!ok) {
@@ -462,7 +468,7 @@ export default function FeedShell({ locale, source: sourceProp, startPostId = nu
       if (scrollEl) scrollEl.scrollTop = 0;
       setActive(0);
     });
-  }, [refreshFromTop, scrollEl, setActive, copy]);
+  }, [refreshFromTop, markSeen, activePost, scrollEl, setActive, copy]);
 
   // Native listeners: touchmove must be non-passive so the pull can replace
   // the browser's own rubber-band (which would show the page behind the feed).

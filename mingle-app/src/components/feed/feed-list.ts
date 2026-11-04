@@ -247,3 +247,13 @@ export function resolveDisplayText(
   }
   return post.sourceText;
 }
+
+/**
+ * Pull-to-refresh: the post the reader was just looking at must not open the
+ * fresh page. Moves it to the end of the page when it came back first and
+ * another post can lead instead; otherwise leaves the page as served.
+ */
+export function moveSeenPostOffFirst(posts: FeedPostDto[], seenPostId: string | null): FeedPostDto[] {
+  if (!seenPostId || posts.length < 2 || posts[0].id !== seenPostId) return posts;
+  return [...posts.slice(1), posts[0]];
+}
