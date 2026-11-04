@@ -4,6 +4,8 @@ import { getSttLanguageDisplayName } from "@/lib/stt-languages";
 export type LivePhoneDemoEarphoneModeCopy = {
   // Button / "+" menu row label and the notice title.
   label: string;
+  // The same mode's name in speaker mode (app 2.3.2 and up, no earphones in).
+  speakerLabel: string;
   onStateLabel: string;
   offStateLabel: string;
   // Toggle is on but no earphones are connected.
@@ -42,6 +44,7 @@ export type LivePhoneDemoEarphoneModeCopy = {
 const EARPHONE_MODE_COPY_BY_LOCALE = {
   ko: {
     label: "이어폰 모드",
+    speakerLabel: "스피커 모드",
     onStateLabel: "켜짐",
     offStateLabel: "꺼짐",
     waitingLabel: "이어폰 연결 대기 중",
@@ -68,6 +71,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   en: {
     label: "Earphone mode",
+    speakerLabel: "Speaker mode",
     onStateLabel: "On",
     offStateLabel: "Off",
     waitingLabel: "Waiting for earphones",
@@ -94,6 +98,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   ja: {
     label: "イヤホンモード",
+    speakerLabel: "スピーカーモード",
     onStateLabel: "オン",
     offStateLabel: "オフ",
     waitingLabel: "イヤホンの接続待ち",
@@ -120,6 +125,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   "zh-CN": {
     label: "耳机模式",
+    speakerLabel: "扬声器模式",
     onStateLabel: "已开启",
     offStateLabel: "已关闭",
     waitingLabel: "等待连接耳机",
@@ -146,6 +152,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   "zh-TW": {
     label: "耳機模式",
+    speakerLabel: "喇叭模式",
     onStateLabel: "已開啟",
     offStateLabel: "已關閉",
     waitingLabel: "等待連接耳機",
@@ -172,6 +179,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   fr: {
     label: "Mode écouteurs",
+    speakerLabel: "Mode haut-parleur",
     onStateLabel: "Activé",
     offStateLabel: "Désactivé",
     waitingLabel: "En attente des écouteurs",
@@ -198,6 +206,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   de: {
     label: "Kopfhörermodus",
+    speakerLabel: "Lautsprechermodus",
     onStateLabel: "Ein",
     offStateLabel: "Aus",
     waitingLabel: "Warten auf Kopfhörer",
@@ -224,6 +233,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   es: {
     label: "Modo auriculares",
+    speakerLabel: "Modo altavoz",
     onStateLabel: "Activado",
     offStateLabel: "Desactivado",
     waitingLabel: "Esperando auriculares",
@@ -250,6 +260,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   pt: {
     label: "Modo fones de ouvido",
+    speakerLabel: "Modo alto-falante",
     onStateLabel: "Ativado",
     offStateLabel: "Desativado",
     waitingLabel: "Aguardando fones de ouvido",
@@ -276,6 +287,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   it: {
     label: "Modalità auricolari",
+    speakerLabel: "Modalità altoparlante",
     onStateLabel: "Attiva",
     offStateLabel: "Disattiva",
     waitingLabel: "In attesa degli auricolari",
@@ -302,6 +314,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   ru: {
     label: "Режим наушников",
+    speakerLabel: "Режим динамика",
     onStateLabel: "Вкл.",
     offStateLabel: "Выкл.",
     waitingLabel: "Ожидание наушников",
@@ -328,6 +341,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   ar: {
     label: "وضع السماعات",
+    speakerLabel: "وضع مكبّر الصوت",
     onStateLabel: "مفعّل",
     offStateLabel: "متوقف",
     waitingLabel: "بانتظار توصيل السماعات",
@@ -354,6 +368,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   hi: {
     label: "ईयरफ़ोन मोड",
+    speakerLabel: "स्पीकर मोड",
     onStateLabel: "चालू",
     offStateLabel: "बंद",
     waitingLabel: "ईयरफ़ोन कनेक्ट होने का इंतज़ार",
@@ -380,6 +395,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   th: {
     label: "โหมดหูฟัง",
+    speakerLabel: "โหมดลำโพง",
     onStateLabel: "เปิด",
     offStateLabel: "ปิด",
     waitingLabel: "กำลังรอเชื่อมต่อหูฟัง",
@@ -406,6 +422,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
   },
   vi: {
     label: "Chế độ tai nghe",
+    speakerLabel: "Chế độ loa ngoài",
     onStateLabel: "Bật",
     offStateLabel: "Tắt",
     waitingLabel: "Đang chờ kết nối tai nghe",
