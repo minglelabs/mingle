@@ -10,7 +10,7 @@
 ## Pages
 
 - [HashChat home](https://translator.minglelabs.app/): what HashChat does and who it is for
-- [The AI Wrapper Business: Where It Stands Today](https://translator.minglelabs.app/blogs/ai-wrapper-business): Mingle Labs talk (Nov 5, 2026) with case studies of AI wrapper businesses and a strategy for what comes next; Korean at ?lang=ko
+- [AI Wrappers: Where the Opportunities Are](https://translator.minglelabs.app/blogs/ai-wrapper-business): Mingle Labs talk (Nov 5, 2026) with case studies of AI wrapper businesses and a strategy for what comes next; Korean at ?lang=ko
 - [The AI Wrapper Business: Surfers Cohort 3 Edition](https://translator.minglelabs.app/blogs/ai-wrapper-business-surfers-3rd): the first, longer version of the AI wrapper talk (Aug 12, 2026)
 - [HashChat Pitch Deck](https://translator.minglelabs.app/blogs/hashchat-pitch-deck): why HashChat exists, early users, and the path from live interpreter to AI-native social network
 - [HashChat Pitch Deck: The Short Version](https://translator.minglelabs.app/blogs/hashchat-pitch-deck-short): the chicken-and-egg problem of language exchange and how live interpretation removes it
