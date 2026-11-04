@@ -207,7 +207,14 @@ they sit in the job's `error` with the same `status`.
 | 429 | `image_limit` | every account hit its daily image limit; `message` says until when |
 | 502 | `bad_reference` | the reference photo could not be attached: send a smaller JPEG/PNG data URL |
 | 502 | `timeout`, `lost`, `ui_changed`, `signed_out`, other | ChatGPT failed on every account tried (up to 4); retry once |
+| 429 | `rate_limited` | ChatGPT is throttling every account ("unusual activity … try again later"); each rests about an hour |
 | 503 | `no_account` | no Chrome profile connected (PC asleep, Chrome closed): tell Nam |
+| 503 | `queue_full` | 100 jobs already waiting: back off, don't retry right away |
+| 504 | `queue_timeout` | no account took the job in 10 min (images 20) |
+
+Identical requests that are waiting or running share one job and one answer.
+A request without `"async"` whose connection closes before an account takes it
+leaves the queue, so a caller's own timeout doesn't leave work behind.
 
 Retry rule of thumb: 502 and `job_not_found` once, after a few seconds.
 Don't loop on 429 or 503.

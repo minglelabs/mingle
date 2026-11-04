@@ -37,9 +37,26 @@ async function page(op, arg) {
   const labelled = (pattern) => [...document.querySelectorAll('button')].find((b) => pattern.test(b.getAttribute('aria-label') || ''))
   const sendButton = () => document.querySelector('[data-testid="send-button"]') || labelled(/^(보내기|Send|Send prompt|프롬프트 보내기)$/i)
   // ChatGPT's newer renderer dropped data-message-author-role; its turns carry a search unit key ending in ":assistant".
+  // Since 2026-11-04 that key is only there while the answer streams; a finished answer
+  // is found by data-turn="assistant".
   const turns = () => {
-    const legacy = [...document.querySelectorAll('[data-message-author-role="assistant"]')]
-    return legacy.length ? legacy : [...document.querySelectorAll('[data-chatgpt-search-unit-key$=":assistant"]')]
+    const pick = (selector) => [...document.querySelectorAll(selector)]
+    for (const found of [
+      pick('[data-message-author-role="assistant"]'),
+      pick('[data-chatgpt-search-unit-key$=":assistant"]'),
+      pick('[data-turn="assistant"]'),
+    ]) {
+      // Keep only the outermost match, so a turn nested in another counts once.
+      const outer = found.filter((el) => !found.some((other) => other !== el && other.contains(el)))
+      if (outer.length) return outer
+    }
+    return []
+  }
+  // What the page has, for the log when no answer is found.
+  const dom = () => {
+    const count = (selector) => document.querySelectorAll(selector).length
+    const tail = (document.querySelector('main')?.innerText || '').replace(/\s+/g, ' ').slice(-80)
+    return `role=${count('[data-message-author-role]')} unit=${count('[data-chatgpt-search-unit-key]')} turn=${count('[data-turn]')} article=${count('article')} md=${count('.markdown, [data-markdown-text-style]')} url=${location.pathname.slice(0, 12)} tail=${JSON.stringify(tail)}`
   }
   // Source chips ("일본 관광청 +1") are popover badges inside the answer; hide them while reading.
   const answerText = (root) => {
@@ -84,6 +101,10 @@ async function page(op, arg) {
       composer: Boolean(composer()),
       signedOut: !composer() && [...document.querySelectorAll('button, a')].some((b) => /^(Log in|로그인)$/i.test(b.innerText.trim())),
       turns: turns().length,
+      dom: dom(),
+      // ChatGPT's own error in place of an answer ("... Please try again later." + 다시 시도), e.g. when it
+      // throttles an account that sent too much. Seen 2026-11-04 on an account after ~15h of nonstop jobs.
+      blocked: (/[^.!?\n]{0,200}(Please try again later|try again later|잠시 후 다시 시도|Too many requests|unusual activity)[^\n]{0,60}/i.exec(document.querySelector('main')?.innerText || '') || [null])[0],
       text: last ? answerText(last.querySelector('[data-markdown-text-style="assistant-message"], .markdown') ?? last) : '',
       streaming: Boolean(document.querySelector('[data-testid="stop-button"]') || labelled(/^(스트리밍 중지|Stop streaming|중지)/i)),
       creating: /Creating image|이미지 생성 중|이미지를 생성하는 중/i.test(document.querySelector('main')?.innerText || ''),
@@ -236,6 +257,7 @@ async function answer(tabId, before, wantImage, timeoutMs, job) {
   let lastPicture = null
   let pictureStable = 0
   let reportedAt = 0
+  let blockedSeen = 0
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     await sleep(1500)
@@ -243,7 +265,7 @@ async function answer(tabId, before, wantImage, timeoutMs, job) {
     if (state && job && Date.now() - reportedAt > 15_000) {
       reportedAt = Date.now()
       const said = state.text ? ` said=${JSON.stringify(state.text.replace(/\s+/g, ' ').slice(0, 80))}` : ''
-      progress(job, `wait turns=${state.turns} images=${state.images} turnState=${state.turnState} states=${state.turnStates} streaming=${state.streaming} creating=${state.creating} text=${state.text.length}${said}`)
+      progress(job, `wait turns=${state.turns} images=${state.images} turnState=${state.turnState} states=${state.turnStates} streaming=${state.streaming} creating=${state.creating} text=${state.text.length}${said}${state.turns <= before.turns && !state.streaming ? ` dom: ${state.dom}` : ''}`)
     }
     const drawing = wantImage && state && state.turnState !== null && state.turnState !== 'complete'
     if (!state || state.streaming || state.creating || drawing) { stable = 0; pictureStable = 0; continue }
@@ -254,7 +276,13 @@ async function answer(tabId, before, wantImage, timeoutMs, job) {
       if (pictureStable >= 2) return { text: state.text, image: true }
       continue
     }
-    if (state.turns <= before.turns) { stable = 0; continue }
+    if (state.turns <= before.turns) {
+      stable = 0
+      // The error stays put, so seeing it on a few checks in a row means no answer is coming.
+      blockedSeen = state.blocked ? blockedSeen + 1 : 0
+      if (blockedSeen >= 3) throw new JobError('rate_limited', state.blocked.trim().slice(0, 200), resetDelayMs(state.blocked))
+      continue
+    }
     if (!wantImage && !state.text) { stable = 0; continue } // the turn shows up before its words do
     stable = state.text === last ? stable + 1 : 0
     last = state.text
