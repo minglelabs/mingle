@@ -95,7 +95,7 @@
           "value": "ko"
         }
       ],
-      "destination": "/blogs/ko/index.html"
+      "destination": "/blogs/ko"
     },
     {
       "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|virtually-deck)",
@@ -106,15 +106,15 @@
           "value": "ko"
         }
       ],
-      "destination": "/blogs/ko/:slug.html"
+      "destination": "/blogs/ko/:slug"
     },
     {
       "source": "/blogs",
-      "destination": "/blogs/en/index.html"
+      "destination": "/blogs/en"
     },
     {
       "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|virtually-deck)",
-      "destination": "/blogs/en/:slug.html"
+      "destination": "/blogs/en/:slug"
     },
     {
       "source": "/blogs/:slug",
