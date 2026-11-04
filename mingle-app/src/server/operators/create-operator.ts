@@ -139,6 +139,8 @@ export async function createOperatorAccount(
       translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
       ...operatorLanguageFields(draft.primaryLanguage),
       birthDate: birthDateFromYear(draft.birthYear, now, random),
+      // Public profile gender mirrors the persona (see User.gender).
+      gender: draft.gender ?? null,
       ...operatorLocationFields(draft, now),
       operatorAccount: {
         create: {

@@ -1,7 +1,7 @@
 "use client";
 
 import ProfileBio from "@/components/profile-bio";
-import ProfileAge from "@/components/profile-age";
+import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
@@ -78,6 +78,7 @@ type PublicUserProfile = {
   imageCropY: number | null;
   bio: string | null;
   age?: number;
+  gender?: string | null;
   nationality: string | null;
   primaryLanguages: string[];
   /** Absent from older servers. */
@@ -635,9 +636,10 @@ export default function PublicUserProfileScreen({
               </div>
 
               <div className="mt-4 pl-2">
-                <p className="flex min-w-0 items-baseline gap-1.5">
+                <p className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
                   <AccountBadge kind={badge} locale={locale} tone="dark" />
+                  <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} locale={locale} />
                   {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
                 </p>
                 <ProfileLanguageLevels
@@ -646,7 +648,6 @@ export default function PublicUserProfileScreen({
                   locale={locale}
                   className="mt-2.5"
                 />
-                <ProfileAge age={profile.age} locale={locale} className="mt-0.5 text-[13px] text-gray-500" />
                 {!isOwnProfile ? (
                   <ProfileLocation
                     profileLocation={profile.location}

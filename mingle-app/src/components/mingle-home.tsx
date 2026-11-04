@@ -46,6 +46,7 @@ import {
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 import {
   readPendingBirthDate,
+  readPendingGender,
   readPendingPrimaryLanguages,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { deriveDefaultSttLanguagesForLocale } from "@/lib/stt-languages";
@@ -1080,6 +1081,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       ? pendingPrimaryLanguages
       : deriveDefaultSttLanguagesForLocale(props.locale).slice(0, 1);
     const pendingBirthDate = readPendingBirthDate() ?? "2000-01-01";
+    const pendingGender = readPendingGender();
 
     try {
       const signupResponse = await fetch("/api/auth/signup", {
@@ -1091,6 +1093,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           password,
           primaryLanguages,
           birthDate: pendingBirthDate,
+          ...(pendingGender ? { gender: pendingGender } : {}),
         }),
       });
       if (!signupResponse.ok && signupResponse.status !== 409) {

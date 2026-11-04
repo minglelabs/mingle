@@ -39,6 +39,9 @@ import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 import type { InterestLanguage } from "@/lib/interest-languages";
 import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
 import LanguageLevelPicker from "@/components/language-level-picker";
+import ProfileGenderPicker from "@/components/profile-gender-picker";
+import { resolveProfileGenderCopy } from "@/i18n/profile-gender-copy";
+import type { ProfileGender } from "@/lib/profile-gender";
 
 const DEFAULT_ONBOARDING_BIRTH_DATE: BirthDateParts = {
   year: 2000,
@@ -51,6 +54,7 @@ export type LanguageOnboardingConfirmPayload = {
   /** 관심 언어: the language of the people the user mostly wants to talk with. */
   interestLanguage: InterestLanguage | null;
   birthDate: BirthDateParts;
+  gender: ProfileGender;
   usagePurpose: UsagePurpose;
   /** Optional free-text reason, only for "other". */
   usagePurposeNote: string | null;
@@ -89,6 +93,7 @@ export default function LanguageOnboardingModal({
   const [interestCode, setInterestCode] = useState<string | null>(null);
   const [interestLevel, setInterestLevel] = useState(1);
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate);
+  const [gender, setGender] = useState<ProfileGender | null>(null);
   const [usagePurpose, setUsagePurpose] = useState<UsagePurpose | null>(null);
   const [usagePurposeNote, setUsagePurposeNote] = useState("");
   const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(null);
@@ -103,6 +108,7 @@ export default function LanguageOnboardingModal({
   const discoveryCopy = useMemo(() => resolveDiscoverySourceCopy(language), [language]);
   const usagePurposeCopy = useMemo(() => resolveUsagePurposeCopy(language), [language]);
   const interestCopy = useMemo(() => resolveInterestLanguageCopy(language), [language]);
+  const genderCopy = useMemo(() => resolveProfileGenderCopy(language), [language]);
   const discoveryOptions = useMemo(() => {
     const optionsByCode = new Map(discoveryCopy.options.map((option) => [option.code, option]));
     return discoveryOptionCodes
@@ -258,13 +264,14 @@ export default function LanguageOnboardingModal({
   };
 
   const handleFinalConfirm = async () => {
-    if (isConfirming || !isEligibleAge || !usagePurpose || !discoverySource) return;
+    if (isConfirming || !isEligibleAge || !gender || !usagePurpose || !discoverySource) return;
     setIsConfirming(true);
     try {
       await onConfirm({
         language,
         interestLanguage: interestCode ? { code: interestCode as InterestLanguage["code"], level: interestLevel } : null,
         birthDate,
+        gender,
         usagePurpose,
         usagePurposeNote: usagePurpose === "other" ? normalizeUsagePurposeNote(usagePurposeNote) : null,
         discoverySource,
@@ -613,6 +620,13 @@ export default function LanguageOnboardingModal({
             style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
           >
             <div className="mx-auto w-full max-w-sm">
+              <ProfileGenderPicker
+                value={gender}
+                onChange={setGender}
+                copy={genderCopy}
+                disabled={isConfirming}
+                className="mb-6"
+              />
               <SignupBirthDatePicker
                 value={birthDate}
                 onChange={setBirthDate}
@@ -778,7 +792,7 @@ export default function LanguageOnboardingModal({
             <button
               type="button"
               onClick={handleFinalConfirm}
-              disabled={isConfirming || !isEligibleAge}
+              disabled={isConfirming || !isEligibleAge || !gender}
               aria-busy={isConfirming}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
             >

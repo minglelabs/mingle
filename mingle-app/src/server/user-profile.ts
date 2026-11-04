@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { zipInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
+import { normalizeProfileGender, type ProfileGender } from "@/lib/profile-gender";
 
 export type UserProfileLocation = {
   latitude: number;
@@ -23,6 +24,7 @@ export const userProfileSelect = {
   handle: true,
   bio: true,
   birthDate: true,
+  gender: true,
   nationality: true,
   primaryLanguages: true,
   interestLanguages: true,
@@ -60,6 +62,8 @@ type SelectedUserProfile = {
   handle: string | null;
   bio: string | null;
   birthDate?: Date | null;
+  /** Optional so hand-built rows (tests, older selects) still type-check. */
+  gender?: string | null;
   nationality: string | null;
   primaryLanguages: string[];
   /** Optional so hand-built rows (tests, older selects) still type-check. */
@@ -92,6 +96,8 @@ export type UserProfile = {
   bio: string | null;
   /** Current age in whole years; the original birth date is never serialized. */
   age?: number;
+  /** Public gender shown next to the age; present only when set. */
+  gender?: ProfileGender;
   nationality: string | null;
   primaryLanguages: string[];
   /** 관심 언어 with the user's level of each; never one of primaryLanguages. */
@@ -146,6 +152,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     handle,
     bio,
     birthDate,
+    gender,
     nationality,
     primaryLanguages,
     interestLanguages,
@@ -179,6 +186,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     normalizedNationality ? [normalizedNationality] : [],
   );
   const age = calculateProfileAge(birthDate, now);
+  const normalizedGender = normalizeProfileGender(gender);
   return {
     id,
     name,
@@ -189,6 +197,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     handle,
     bio,
     ...(age !== undefined ? { age } : {}),
+    ...(normalizedGender ? { gender: normalizedGender } : {}),
     nationality: normalizedPrimaryLanguages[0] ?? normalizedNationality,
     primaryLanguages: normalizedPrimaryLanguages,
     interestLanguages: zipInterestLanguages(interestLanguages, interestLanguageLevels)
