@@ -82,11 +82,11 @@ const DECKS = [
     slug: "ai-wrapper-business",
     deck: "/presentations/ai-beyond-wrapper-business",
     date: "2026-11-05",
-    og: { en: "/presentations/assets/ai-beyond-wrapper-og-en.png?v=2", ko: "/presentations/assets/ai-beyond-wrapper-og.png?v=2" },
+    og: { en: "/presentations/assets/ai-beyond-wrapper-og-en.png?v=3", ko: "/presentations/assets/ai-beyond-wrapper-og.png?v=3" },
     en: {
       kind: "Talk",
       dateLabel: "November 5, 2026",
-      title: "AI Wrappers: Where the Opportunities Are",
+      title: "Exploring Business Opportunities for AI Wrapper Software",
       description: "Case studies of AI wrapper businesses, and a strategy for what comes next.",
       body: [
         "Slides from a talk on AI wrapper software: products that take a user experience that already existed and automate it with AI. The 94 slides walk through vibe coding and agents, character chat, note-taking, AI diet tracking, aggregators, study helpers and more, asking which wrappers held up against Big Tech and which were swept away.",
@@ -96,7 +96,7 @@ const DECKS = [
     ko: {
       kind: "발표",
       dateLabel: "2026년 11월 5일",
-      title: "AI 래퍼 SW 사업 기회 살펴보기",
+      title: "AI Wrapper SW 사업 기회 탐색",
       description: "AI 래퍼의 사례를 소개하고, 미래 전략을 제안합니다.",
       body: [
         "이미 존재하던 유저 경험을 AI로 자동화하는 AI 래퍼 SW 산업을 살펴본 발표 자료입니다. 바이브 코딩과 에이전트, 캐릭터 챗, 노트테이킹, AI 식단 관리, 애그리게이터, 학습 도우미 등 94장에 걸쳐 어떤 래퍼가 빅테크의 쓰나미를 버텼고 어떤 곳이 쓸려 갔는지 정리했습니다.",
