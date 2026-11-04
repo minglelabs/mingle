@@ -49,6 +49,17 @@ describe('earphone mode notice in speaker mode', () => {
   })
 })
 
+describe('speaker mode name', () => {
+  it('has a speaker-mode name in every locale', () => {
+    for (const locale of ['ko', 'en', 'ja', 'zh-CN', 'zh-TW', 'fr', 'de', 'es', 'pt', 'it', 'ru', 'ar', 'hi', 'th', 'vi']) {
+      const copy = resolveLivePhoneDemoEarphoneModeCopy(locale)
+      expect(copy.speakerLabel.trim()).not.toBe('')
+      expect(copy.speakerLabel).not.toBe(copy.label)
+    }
+    expect(resolveLivePhoneDemoEarphoneModeCopy('ko').speakerLabel).toBe('스피커 모드')
+  })
+})
+
 describe('earphone mode notice language selector', () => {
   it('lists the room languages with the display-language page names, L preselected', () => {
     const list = languageList(renderNotice())

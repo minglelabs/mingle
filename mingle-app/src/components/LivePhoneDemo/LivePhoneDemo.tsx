@@ -2296,7 +2296,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     earphonesConnected: nativeAudioRoute.earphonesConnected,
     earphonesRequired: !speakerMode,
   })
-  const earphoneModeCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
+  // Speaker mode is the default name in 2.3.2+; with earphones in, the same
+  // mode is earphone mode again (and may also capture other apps' sound).
+  const speakerModeOnSpeaker = speakerMode && !nativeAudioRoute.earphonesConnected
+  const earphoneModeBaseCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
+  const earphoneModeCopy = useMemo(() => (
+    speakerModeOnSpeaker ? { ...earphoneModeBaseCopy, label: earphoneModeBaseCopy.speakerLabel } : earphoneModeBaseCopy
+  ), [earphoneModeBaseCopy, speakerModeOnSpeaker])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
   // Warns, once per earphone-mode session, that Start is about to open the
   // system screen broadcast / sharing prompt, so it does not come as a shock.
@@ -2323,10 +2329,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     getSttCaptureSourcePickSnapshot,
     getSttCaptureSourcePickServerSnapshot,
   )
-  // Speaker mode listens to the microphone only: no screen broadcast, no
-  // capture of other apps' sound.
+  // Without earphones, speaker mode listens to the microphone only: no screen
+  // broadcast, no capture of other apps' sound.
   const sttCaptureSource = resolveEffectiveSttCaptureSource({
-    supported: nativeDeviceAudioSupported && !speakerMode,
+    supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker,
     earphoneModeEnabled,
     pick: sttCaptureSourcePick,
   })
@@ -6919,6 +6925,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const toggle = resolveEarphoneModeToggle(getEarphoneModePreferenceSnapshot())
     writeEarphoneModeEnabled(toggle.nextEnabled)
     if (toggle.requestRoute) requestNativeAudioRoute()
+    // Turned on without earphones in speaker mode, the notice does not ask
+    // what to translate: stay on the microphone even if earphones go in later,
+    // so screen recording is only ever started from a question that was asked.
+    if (toggle.nextEnabled && isSpeakerModeClient() && !getNativeAudioRouteSnapshot().earphonesConnected) {
+      setSttCaptureSourcePick('microphone')
+    }
     if (toggle.nextEnabled && !(isNativeApp() && isLikelyIOSPlatform())) {
       // A user gesture: unlock the HTML audio element for clips that start
       // later without one (Android app, mobile web).
@@ -6940,7 +6952,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       ? {
           enabled: earphoneModeEnabled,
           waiting: earphoneModeGate.waitingForEarphones,
-          speaker: speakerMode,
+          speaker: speakerModeOnSpeaker,
           readLanguage: earphoneModeEnabled ? earphoneModeReadLanguage : null,
           label: earphoneModeCopy.label,
           stateLabel: earphoneModeEnabled ? earphoneModeCopy.onStateLabel : earphoneModeCopy.offStateLabel,
@@ -6955,7 +6967,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     earphoneModeGate.waitingForEarphones,
     handleEarphoneModeToggle,
     earphoneModeReadLanguage,
-    speakerMode,
+    speakerModeOnSpeaker,
   ])
   const nativePipState = useMemo<NativePipState>(() => ({
     conversationId: conversationId?.trim() || '',
@@ -9747,7 +9759,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
                         }}
                       >
-                        {speakerMode ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}
+                        {speakerModeOnSpeaker ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}
                         {isEarphoneModeOn && earphoneModeReadLanguage && (
                           // The language it reads aloud, so a wrong pick is visible at a glance.
                           <span
@@ -9874,7 +9886,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 languages={normalizedDisplayLanguageOptions}
                 readLanguage={earphoneModeReadLanguage}
                 onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
-                captureSource={nativeDeviceAudioSupported && !speakerMode ? sttCaptureSourcePick : undefined}
+                captureSource={nativeDeviceAudioSupported && !speakerModeOnSpeaker ? sttCaptureSourcePick : undefined}
                 onSelectCaptureSource={setSttCaptureSourcePick}
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}
