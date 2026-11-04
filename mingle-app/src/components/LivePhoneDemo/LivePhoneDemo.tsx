@@ -6941,6 +6941,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           enabled: earphoneModeEnabled,
           waiting: earphoneModeGate.waitingForEarphones,
           speaker: speakerMode,
+          readLanguage: earphoneModeEnabled ? earphoneModeReadLanguage : null,
           label: earphoneModeCopy.label,
           stateLabel: earphoneModeEnabled ? earphoneModeCopy.onStateLabel : earphoneModeCopy.offStateLabel,
           waitingLabel: earphoneModeCopy.waitingLabel,
@@ -6953,6 +6954,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     earphoneModeGate.controlVisible,
     earphoneModeGate.waitingForEarphones,
     handleEarphoneModeToggle,
+    earphoneModeReadLanguage,
     speakerMode,
   ])
   const nativePipState = useMemo<NativePipState>(() => ({
@@ -9746,6 +9748,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         }}
                       >
                         {speakerMode ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}
+                        {isEarphoneModeOn && earphoneModeReadLanguage && (
+                          // The language it reads aloud, so a wrong pick is visible at a glance.
+                          <span
+                            aria-hidden="true"
+                            data-earphone-mode-read-language-flag={earphoneModeReadLanguage}
+                            className="pointer-events-none absolute bottom-[6px] right-[3px] flex h-[15px] min-w-[19px] items-center justify-center rounded-full bg-white px-[2px] text-[10px] leading-none ring-1 ring-gray-200"
+                          >
+                            <LanguageFlag language={earphoneModeReadLanguage} className="text-[10px] leading-none" />
+                          </span>
+                        )}
                         {earphoneModeGate.waitingForEarphones && (
                           <span
                             aria-hidden="true"
