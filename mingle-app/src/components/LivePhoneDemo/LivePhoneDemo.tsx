@@ -2303,6 +2303,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const earphoneModeCopy = useMemo(() => (
     speakerModeOnSpeaker ? { ...earphoneModeBaseCopy, label: earphoneModeBaseCopy.speakerLabel } : earphoneModeBaseCopy
   ), [earphoneModeBaseCopy, speakerModeOnSpeaker])
+  // Speaker mode plays the translation out loud, so its sound reaches the
+  // microphone at full strength and drowns the user's voice. The system echo
+  // canceller is on only while it reads aloud without earphones; every other
+  // mode, and the same mode with earphones in, keeps it off.
+  const speakerModeAecEnabled = speakerModeOnSpeaker && earphoneModeGate.autoReadActive
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
   // Warns, once per earphone-mode session, that Start is about to open the
   // system screen broadcast / sharing prompt, so it does not come as a shock.
@@ -4892,7 +4897,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTtsAudio: handleTtsAudio,
     onTtsCanceled: handleTtsCanceled,
     enableTts: enableAutoTTS && isSoundEnabled,
-    enableAec: aecEnabled,
+    enableAec: aecEnabled || speakerModeAecEnabled,
     captureSource: sttCaptureSource,
     sonioxManualFinalizeSilenceMs,
     sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
