@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/server/admin/guard'
 import { getOperatorAccountDetail } from '@/server/operators/operator-admin-query'
+import { safeBackPath } from '../../_lib/back-path'
 import { OperatorsMain } from '../_components/operator-ui'
 import { buildCountryOptions, buildLanguageOptions } from '../_lib/options'
 import { OperatorEditor } from './operator-editor'
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
 
 type OperatorDetailPageProps = {
   params: Promise<{ userId: string }>
-  searchParams: Promise<{ posts?: string; from?: string }>
+  searchParams: Promise<{ posts?: string; from?: string; back?: string }>
 }
 
 function decodeSegment(value: string): string {
@@ -31,7 +32,7 @@ function decodeSegment(value: string): string {
 export default async function OperatorDetailPage({ params, searchParams }: OperatorDetailPageProps) {
   const { userId } = await params
   await requireAdmin(`/admin/operators/${userId}`)
-  const { posts, from } = await searchParams
+  const { posts, from, back } = await searchParams
   const account = await getOperatorAccountDetail(decodeSegment(userId).trim())
   if (!account) notFound()
 
@@ -45,7 +46,7 @@ export default async function OperatorDetailPage({ params, searchParams }: Opera
         countries={buildCountryOptions()}
         languages={buildLanguageOptions()}
         currentYear={new Date().getUTCFullYear()}
-        backHref={from === 'review' ? '/admin/operators/review' : '/admin/operators'}
+        backHref={safeBackPath(back) ?? (from === 'review' ? '/admin/operators/review' : '/admin/operators')}
       />
       <OperatorPosts userId={account.id} showAll={posts === 'all'} />
     </OperatorsMain>

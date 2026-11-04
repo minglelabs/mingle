@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
+import { AdminNavTracker } from "./admin-nav";
 import { AdminTabBar } from "./admin-tab-bar";
 import type { AdminTabBadges } from "./admin-tabs";
 import { ADMIN_SCROLL_CONTAINER_ID } from "./ui";
@@ -37,6 +38,9 @@ export function AdminShell({
         >
           {children}
         </main>
+        <Suspense fallback={null}>
+          <AdminNavTracker />
+        </Suspense>
         {signedIn ? <AdminTabBar badges={badges} /> : null}
       </div>
     </div>

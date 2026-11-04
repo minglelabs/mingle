@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useMemo, useState, type ChangeEvent } from 'react'
 import { ArrowLeft, Camera, Check, Copy, ExternalLink, Loader2, Plus, RefreshCw, Sparkles, X } from 'lucide-react'
 import LanguageLevelPicker from '@/components/language-level-picker'
@@ -8,6 +7,7 @@ import { MAX_INTEREST_LANGUAGES, type InterestLanguage } from '@/lib/interest-la
 import type { OperatorAccountDetail } from '@/server/operators/operator-admin-query'
 import type { ProfileAiDraft, ProfileAiScope } from '@/server/operators/profile-ai'
 import { OPERATOR_NOTES_MAX_LENGTH, type PersonaDraftField, type PersonaFieldError } from '@/server/operators/persona-rules'
+import { AdminBackLink } from '../../_components/admin-nav'
 import { InactiveChip, Notice, OperatorChip } from '../_components/operator-ui'
 import { ZoomableAvatar } from '../_components/zoomable-avatar'
 import { PersonaFields, type PersonaFieldValues } from '../_components/persona-fields'
@@ -271,9 +271,9 @@ export function OperatorEditor({
   return (
     <div>
       <div className="flex items-center gap-2">
-        <Link href={backHref} className="-ml-2 inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 active:bg-slate-200" aria-label="운영 계정 목록으로">
+        <AdminBackLink href={backHref} className="-ml-2 inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 active:bg-slate-200" aria-label="이전 화면으로">
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </Link>
+        </AdminBackLink>
         <h1 className="min-w-0 flex-1 truncate text-xl font-bold text-slate-900">운영 계정</h1>
       </div>
 
