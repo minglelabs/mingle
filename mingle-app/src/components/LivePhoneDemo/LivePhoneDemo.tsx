@@ -2297,8 +2297,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     earphonesRequired: !speakerMode,
   })  // Speaker mode plays the translation out loud, so its sound reaches the
   // microphone at full strength and drowns the user's voice. The system echo
-  // canceller is on only while it reads aloud; every other mode keeps it off.
-  const speakerModeAecEnabled = speakerMode && earphoneModeGate.autoReadActive
+  // canceller is on only while it reads aloud without earphones; every other
+  // mode, and the same mode with earphones in, keeps it off.
+  const speakerModeAecEnabled = speakerMode && !nativeAudioRoute.earphonesConnected && earphoneModeGate.autoReadActive
 
   const earphoneModeCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)

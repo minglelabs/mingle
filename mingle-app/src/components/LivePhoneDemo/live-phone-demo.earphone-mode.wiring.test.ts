@@ -227,7 +227,7 @@ describe('earphone mode wiring', () => {
   })
 
   it('turns the system echo canceller on only while speaker mode is reading aloud', () => {
-    expect(liveDemoSource).toContain('const speakerModeAecEnabled = speakerMode && earphoneModeGate.autoReadActive')
+    expect(liveDemoSource).toContain('const speakerModeAecEnabled = speakerMode && !nativeAudioRoute.earphonesConnected && earphoneModeGate.autoReadActive')
     expect(liveDemoSource).toContain('enableAec: aecEnabled || speakerModeAecEnabled,')
     // The persisted account preference still follows the user's own setting.
     expect(liveDemoSource).toContain('echoAllowed: !aecEnabled,')
