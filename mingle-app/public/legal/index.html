@@ -2451,6 +2451,11 @@
           var selector = document.getElementById("landing-language");
           if (selector) selector.value = resolved;
 
+          // The blog has English and Korean; keep Korean readers in Korean.
+          document.querySelectorAll('a[href^="/blogs"]').forEach(function (link) {
+            link.setAttribute("href", resolved === "ko" ? "/blogs?lang=ko" : "/blogs");
+          });
+
           try {
             window.localStorage.setItem(storageKey, resolved);
             if (options && options.manual) window.localStorage.setItem(manualLocaleKey, "1");

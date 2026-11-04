@@ -88,6 +88,28 @@
     },
     {
       "source": "/blogs",
+      "has": [
+        {
+          "type": "query",
+          "key": "lang",
+          "value": "ko"
+        }
+      ],
+      "destination": "/blogs/ko/index.html"
+    },
+    {
+      "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|virtually-deck)",
+      "has": [
+        {
+          "type": "query",
+          "key": "lang",
+          "value": "ko"
+        }
+      ],
+      "destination": "/blogs/ko/:slug.html"
+    },
+    {
+      "source": "/blogs",
       "destination": "/blogs/index.html"
     },
     {
