@@ -72,7 +72,7 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare, Volume2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface from '@/components/slide-surface'
@@ -117,7 +117,7 @@ import LanguageFlag from '@/components/language-flag'
 import useRealtimeSTT from './useRealtimeSTT'
 import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances, type ConversationInviteNotice, type ConversationLeaveNotice, type SttStopSource } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
-import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
+import { buildClientApiPath, clientApiNamespace, namespaceSupportsSpeakerMode } from '@/lib/api-contract'
 import { buildConversationShareUrl } from '@/lib/conversation-share-link'
 import { useTtsSettings } from '@/context/tts-settings'
 import { useDeviceAudioCaptureSwitch } from '@/context/device-audio-capture-switch'
@@ -1072,6 +1072,15 @@ function useNativeBannerPositionFromSearch(queryKey: string): LivePhoneDemoAdBan
   )
 }
 
+// Speaker mode: this app reads translations aloud without earphones, because
+// it removes its own voice from what the microphone hears (app 2.3.2 and up).
+function isSpeakerModeClient(): boolean {
+  const apiNamespace = typeof window === 'undefined'
+    ? clientApiNamespace
+    : readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace
+  return namespaceSupportsSpeakerMode(apiNamespace)
+}
+
 // The earphone-mode gate as the stores report it right now (not as of the last
 // render), for decisions that must not wait for React.
 function isEarphoneAutoReadGateOpenNow(): boolean {
@@ -1080,6 +1089,7 @@ function isEarphoneAutoReadGateOpenNow(): boolean {
     supported: isNativeAudioRouteSupported(route),
     enabled: getEarphoneModePreferenceSnapshot(),
     earphonesConnected: route.earphonesConnected,
+    earphonesRequired: !isSpeakerModeClient(),
   }).autoReadActive
 }
 
@@ -2279,10 +2289,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     getNativeAudioRouteServerSnapshot,
   )
   const earphoneModeSupported = isNativeAudioRouteSupported(nativeAudioRoute)
+  const speakerMode = isSpeakerModeClient()
   const earphoneModeGate = resolveEarphoneModeGate({
     supported: earphoneModeSupported,
     enabled: earphoneModeEnabled,
     earphonesConnected: nativeAudioRoute.earphonesConnected,
+    earphonesRequired: !speakerMode,
   })
   const earphoneModeCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
@@ -2311,8 +2323,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     getSttCaptureSourcePickSnapshot,
     getSttCaptureSourcePickServerSnapshot,
   )
+  // Speaker mode listens to the microphone only: no screen broadcast, no
+  // capture of other apps' sound.
   const sttCaptureSource = resolveEffectiveSttCaptureSource({
-    supported: nativeDeviceAudioSupported,
+    supported: nativeDeviceAudioSupported && !speakerMode,
     earphoneModeEnabled,
     pick: sttCaptureSourcePick,
   })
@@ -4576,8 +4590,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             audioBase64,
             contentType,
             // Auto clips only: the shell cuts the clip the moment the route
-            // leaves the earphones. Manual clips keep today's behavior.
-            ...(next.mode === 'auto' ? { stopOnEarphoneDisconnect: true } : {}),
+            // leaves the earphones. Manual clips keep today's behavior, and
+            // speaker mode plays out loud on purpose.
+            ...(next.mode === 'auto' && !isSpeakerModeClient() ? { stopOnEarphoneDisconnect: true } : {}),
           },
         }))
         armNativeTtsEventTimeout(playbackId, next.playbackKey, watchdogTimeoutMs)
@@ -4602,7 +4617,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
       if (!isCurrentClip()) return
       if (next.mode === 'auto' && isNativeApp()) {
-        const connected = await confirmNativeEarphonesConnected()
+        const connected = isSpeakerModeClient() || await confirmNativeEarphonesConnected()
         if (!isCurrentClip()) return
         if (!connected || !earphoneAutoReadArmedRef.current || !isEarphoneAutoReadGateOpenNow()) {
           onPlaybackDone()
@@ -6925,6 +6940,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       ? {
           enabled: earphoneModeEnabled,
           waiting: earphoneModeGate.waitingForEarphones,
+          speaker: speakerMode,
           label: earphoneModeCopy.label,
           stateLabel: earphoneModeEnabled ? earphoneModeCopy.onStateLabel : earphoneModeCopy.offStateLabel,
           waitingLabel: earphoneModeCopy.waitingLabel,
@@ -6937,6 +6953,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     earphoneModeGate.controlVisible,
     earphoneModeGate.waitingForEarphones,
     handleEarphoneModeToggle,
+    speakerMode,
   ])
   const nativePipState = useMemo<NativePipState>(() => ({
     conversationId: conversationId?.trim() || '',
@@ -9728,7 +9745,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
                         }}
                       >
-                        <Headphones size={18} strokeWidth={2.15} />
+                        {speakerMode ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}
                         {earphoneModeGate.waitingForEarphones && (
                           <span
                             aria-hidden="true"
@@ -9840,11 +9857,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 uiLocale={uiLocale}
                 copy={earphoneModeCopy}
                 earphonesConnected={nativeAudioRoute.earphonesConnected}
+                earphonesRequired={!speakerMode}
                 // The list the room's display-language page shows.
                 languages={normalizedDisplayLanguageOptions}
                 readLanguage={earphoneModeReadLanguage}
                 onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
-                captureSource={nativeDeviceAudioSupported ? sttCaptureSourcePick : undefined}
+                captureSource={nativeDeviceAudioSupported && !speakerMode ? sttCaptureSourcePick : undefined}
                 onSelectCaptureSource={setSttCaptureSourcePick}
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}

@@ -58,10 +58,13 @@ function CaptureSourceRadioOption({
 function EarphoneModeNoticeHeader({
   copy,
   earphonesConnected,
+  earphonesRequired,
   stepLabel,
 }: {
   copy: LivePhoneDemoEarphoneModeCopy
   earphonesConnected: boolean
+  // false = speaker mode: no earphone rule and no connection state to show.
+  earphonesRequired: boolean
   stepLabel: string | null
 }) {
   return (
@@ -74,7 +77,10 @@ function EarphoneModeNoticeHeader({
           </span>
         )}
       </div>
-      <p className="mt-1.5 text-sm leading-relaxed text-gray-600">{copy.noticeBody}</p>
+      <p className="mt-1.5 text-sm leading-relaxed text-gray-600">
+        {earphonesRequired ? copy.noticeBody : copy.speakerNoticeBody}
+      </p>
+      {earphonesRequired && (
       <div
         data-earphone-status={earphonesConnected ? 'connected' : 'disconnected'}
         role="status"
@@ -101,6 +107,7 @@ function EarphoneModeNoticeHeader({
           {earphonesConnected ? copy.earphoneStatusConnectedLabel : copy.earphoneStatusDisconnectedLabel}
         </span>
       </div>
+      )}
     </div>
   )
 }
@@ -114,6 +121,7 @@ export default function EarphoneModeNoticeContent({
   uiLocale,
   copy,
   earphonesConnected,
+  earphonesRequired = true,
   languages,
   readLanguage,
   onSelectReadLanguage,
@@ -127,6 +135,9 @@ export default function EarphoneModeNoticeContent({
   uiLocale: string
   copy: LivePhoneDemoEarphoneModeCopy
   earphonesConnected: boolean
+  // false = speaker mode: only the read language is asked (no earphone rule or
+  // status here; the caller passes no capture source either).
+  earphonesRequired?: boolean
   // The room's languages, in the order its display-language page lists them.
   languages: readonly string[]
   // The session's read language (L), one of `languages`.
@@ -157,7 +168,7 @@ export default function EarphoneModeNoticeContent({
   if (currentStep === 2 && captureSource && onSelectCaptureSource) {
     return (
       <div data-qa="live-demo-earphone-mode-notice" data-earphone-mode-notice-step="2">
-        <EarphoneModeNoticeHeader copy={copy} earphonesConnected={earphonesConnected} stepLabel={`2/${totalSteps}`} />
+        <EarphoneModeNoticeHeader copy={copy} earphonesConnected={earphonesConnected} earphonesRequired={earphonesRequired} stepLabel={`2/${totalSteps}`} />
         <p id={captureSourceLabelId} className="mt-4 text-sm font-semibold text-gray-900">
           {copy.captureSourceLabel}
         </p>
@@ -214,6 +225,7 @@ export default function EarphoneModeNoticeContent({
       <EarphoneModeNoticeHeader
         copy={copy}
         earphonesConnected={earphonesConnected}
+        earphonesRequired={earphonesRequired}
         stepLabel={hasCaptureSourceStep ? `1/${totalSteps}` : null}
       />
       {readLanguage && (

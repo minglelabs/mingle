@@ -57,7 +57,8 @@ describe('earphone mode wiring', () => {
 
   it('flags only auto clips with stopOnEarphoneDisconnect and sizes the native watchdog by clip length', () => {
     const nativePlay = between(liveDemoSource, 'const playViaNativeBridge = async () => {', 'const playViaHtmlAudio = async () => {')
-    expect(nativePlay).toContain("...(next.mode === 'auto' ? { stopOnEarphoneDisconnect: true } : {})")
+    // Speaker mode (app 2.3.2+) plays out loud on purpose, so it never sets the flag.
+    expect(nativePlay).toContain("...(next.mode === 'auto' && !isSpeakerModeClient() ? { stopOnEarphoneDisconnect: true } : {})")
     expect(nativePlay).toContain('resolveNativeTtsWatchdogTimeoutMs({')
     expect(nativePlay).toContain('shouldTreatNativeTtsPostAsStart(isNativeAudioRouteSupported(getNativeAudioRouteSnapshot()))')
     expect(liveDemoSource).not.toContain('NATIVE_TTS_EVENT_TIMEOUT_MS')
@@ -72,7 +73,7 @@ describe('earphone mode wiring', () => {
   it('awaits a fresh route before Android auto audio and leaves manual audio unchanged', () => {
     const htmlPlay = between(liveDemoSource, 'const playViaHtmlAudio = async () => {', '// iOS shells always play natively')
     expect(htmlPlay).toContain("if (next.mode === 'auto' && isNativeApp())")
-    expect(htmlPlay).toContain('const connected = await confirmNativeEarphonesConnected()')
+    expect(htmlPlay).toContain('const connected = isSpeakerModeClient() || await confirmNativeEarphonesConnected()')
     expect(htmlPlay).toContain('!connected || !earphoneAutoReadArmedRef.current || !isEarphoneAutoReadGateOpenNow()')
     expect(htmlPlay.indexOf('await confirmNativeEarphonesConnected()')).toBeLessThan(htmlPlay.indexOf('audio.play()'))
   })
@@ -156,12 +157,12 @@ describe('earphone mode wiring', () => {
   it('captures device audio only as a per-session pick made in the notice', () => {
     // Offered only where supported: shell capability + the server switch.
     const notice = between(liveDemoSource, '<EarphoneModeNoticeContent', '/>')
-    expect(notice).toContain('captureSource={nativeDeviceAudioSupported ? sttCaptureSourcePick : undefined}')
+    expect(notice).toContain('captureSource={nativeDeviceAudioSupported && !speakerMode ? sttCaptureSourcePick : undefined}')
     expect(notice).toContain('onSelectCaptureSource={setSttCaptureSourcePick}')
     expect(notice).toContain('deviceAudioViaBroadcast={isLikelyIOSPlatform()}')
     // What the session captures: shell support + earphone mode on + the pick.
     const effective = between(liveDemoSource, 'const sttCaptureSource = resolveEffectiveSttCaptureSource({', '})')
-    expect(effective).toContain('supported: nativeDeviceAudioSupported,')
+    expect(effective).toContain('supported: nativeDeviceAudioSupported && !speakerMode,')
     expect(effective).toContain('earphoneModeEnabled,')
     expect(effective).toContain('pick: sttCaptureSourcePick,')
     expect(liveDemoSource).toContain('captureSource: sttCaptureSource,')
