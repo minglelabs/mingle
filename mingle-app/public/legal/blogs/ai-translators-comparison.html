@@ -666,18 +666,31 @@
         }
       }
     </style>
+    <link rel="stylesheet" href="/assets/site-header.css" />
   </head>
   <body>
     <header class="site-header">
-      <nav class="nav" aria-label="HashChat blog navigation">
+      <nav class="nav" aria-label="HashChat site navigation">
         <a class="brand" href="/" aria-label="HashChat home">
           <img src="/assets/mingle-icon.png" alt="" />
           <span>HashChat</span>
         </a>
-        <div class="nav-links">
-          <a href="/blogs">Blog</a>
-          <a href="#comparison">Comparison</a>
-          <a href="/legal">Legal</a>
+        <div class="nav-actions">
+          <div class="nav-links">
+            <a href="/#problem">Problem</a>
+            <a href="/#product">Product</a>
+            <a href="/#proof">Proof</a>
+            <a href="/#vision">Vision</a>
+            <a class="nav-legal is-current" aria-current="page" href="/blogs">Blog</a>
+            <a class="nav-legal" href="/legal">Legal</a>
+          </div>
+          <label class="language-picker">
+            <span aria-hidden="true">🌐</span>
+            <select id="blog-language" aria-label="Language">
+              <option value="en" selected>🇺🇸 English</option>
+              <option value="ko">🇰🇷 한국어</option>
+            </select>
+          </label>
         </div>
       </nav>
     </header>
@@ -1064,5 +1077,17 @@
         </div>
       </div>
     </footer>
+      <script>
+      (function () {
+        var select = document.getElementById("blog-language");
+        if (!select) return;
+        select.addEventListener("change", function () {
+          var url = new URL(window.location.href);
+          if (select.value === "ko") url.searchParams.set("lang", "ko");
+          else url.searchParams.delete("lang");
+          window.location.href = url.toString();
+        });
+      })();
+    </script>
   </body>
 </html>

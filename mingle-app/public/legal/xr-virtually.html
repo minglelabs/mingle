@@ -7708,24 +7708,7 @@
           if (langParam === "en") return "en";
         }
 
-        const language = String(navigator.language || navigator.userLanguage || "en").toLowerCase();
-
-        if (language.startsWith("ko")) {
-          return "ko";
-        }
-
-        if (language.startsWith("ja")) {
-          return "ja";
-        }
-
-        if (language.startsWith("zh-tw") || language.startsWith("zh-hk") || language.startsWith("zh-mo") || language.includes("hant")) {
-          return "cn-TW";
-        }
-
-        if (language.startsWith("zh")) {
-          return "cn-ZH";
-        }
-
+        // English is the default; other languages only through ?lang=.
         return "en";
       }
 
@@ -7942,7 +7925,7 @@
           applyVirtuallyI18n(targetLang);
 
           const url = new URL(window.location.href);
-          if (targetLang === "ko") {
+          if (targetLang === "en") {
             url.searchParams.delete("lang");
           } else if (targetLang === "cn-ZH") {
             url.searchParams.set("lang", "zh-cn");
