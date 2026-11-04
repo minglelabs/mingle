@@ -2295,7 +2295,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enabled: earphoneModeEnabled,
     earphonesConnected: nativeAudioRoute.earphonesConnected,
     earphonesRequired: !speakerMode,
-  })  // Speaker mode plays the translation out loud, so its sound reaches the
+  })
+  // Speaker mode plays the translation out loud, so its sound reaches the
   // microphone at full strength and drowns the user's voice. The system echo
   // canceller is on only while it reads aloud without earphones; every other
   // mode, and the same mode with earphones in, keeps it off.
