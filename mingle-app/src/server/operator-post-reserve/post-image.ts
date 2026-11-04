@@ -2,7 +2,7 @@ import sharp from 'sharp'
 import { prisma } from '@/lib/prisma'
 import { loadAvatarPersona, requestAvatarImage, type AvatarReference } from '@/server/operator-avatars/generate'
 import { lensForShot, phonePhotoRealism } from '@/server/operator-avatars/photo-realism'
-import { describeAccountLook, seededRandom, type AvatarSpec } from '@/server/operator-avatars/taxonomy'
+import { describeAccountLook, pickAnimeStyle, seededRandom, type AvatarSpec } from '@/server/operator-avatars/taxonomy'
 import { newPostImageKey } from '@/server/posts/post-image-keys'
 import { getPostImage, putPostImage } from '@/server/posts/post-image-storage'
 import { decodePostPhoto, type PostPhotoKind } from './post-photo'
@@ -35,7 +35,7 @@ export function buildPostImagePrompt(
   if (kind === 'scene' && isScreenshot(description)) return buildScreenshotPrompt(description, place)
   const placeLine = place ? [`Taken in ${place}: the street, shops, packaging and objects look like that place, and any writing that happens to be visible is in the local language and script, small and incidental.`] : []
   const frame = `${random() < 0.75 ? 'Vertical 3:4' : 'Horizontal 4:3'} image, like a phone photo. No captions, watermarks, logos, brand names, borders or frames.`
-  if (style === 'anime') return buildAnimePostPrompt(kind, description, place, person, frame)
+  if (style === 'anime') return buildAnimePostPrompt(kind, description, place, person, frame, random)
   if (kind === 'scene' || !person) {
     return [
       'A casual photo someone took on their phone and posted on social media.',
@@ -85,10 +85,13 @@ export function pickPostImageStyle(avatarSpec: unknown, kind: PostPhotoKind, ran
   return kind === 'scene' && random() < ANIME_SCENE_SHARE ? 'anime' : 'photo'
 }
 
-function buildAnimePostPrompt(kind: PostPhotoKind, description: string, place: string | null, person: PostPhotoPerson | null, frame: string): string {
+function buildAnimePostPrompt(kind: PostPhotoKind, description: string, place: string | null, person: PostPhotoPerson | null, frame: string, random: () => number): string {
   const withPoster = kind !== 'scene' && person
+  // With the poster's own drawing attached, its style leads; otherwise each post gets its own style, so the account's pictures do not all look alike.
+  const style = withPoster && person.hasReference ? null : pickAnimeStyle(random)
   return [
-    'An anime-style illustration someone made of a moment from their day and posted on social media, like a still from a slice-of-life anime: clean line art, soft cel shading, gentle natural colors.',
+    'An anime-style illustration someone made of a moment from their day and posted on social media, like a still from a slice-of-life anime.',
+    ...(style ? [`Art style: ${style}.`] : []),
     `It shows: ${description}`,
     ...(place ? [`The setting looks like ${place}; any writing in it is small, incidental and in the local script.`] : []),
     ...(withPoster

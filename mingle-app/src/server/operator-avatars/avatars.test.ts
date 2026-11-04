@@ -437,7 +437,26 @@ describe('anime-style profile pictures', () => {
     expect(anime.length / 3000).toBeGreaterThan(0.28)
     expect(anime.length / 3000).toBeLessThan(0.4)
     const subjects = new Set(anime.map((spec) => spec.attributes.animeSubject))
-    expect([...subjects].sort()).toEqual(['cat', 'dog', 'object', 'person'])
+    expect([...subjects].sort()).toEqual(['cat', 'critter', 'dog', 'landscape', 'object', 'person'])
     for (const spec of anime.filter((item) => item.attributes.animeSubject === 'person')) expect(spec.prompt).toMatch(/young man/)
+  })
+
+  it('differ in style, palette, background, pose and look from one account to the next', () => {
+    const male = { ...american, gender: 'male' as const }
+    const people = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(male, seededRandom(`anime-variety:${index}`)))
+      .filter((spec) => spec.subtype === 'anime_icon' && spec.attributes.animeSubject === 'person')
+    expect(people.length).toBeGreaterThan(400)
+    const distinct = (axis: string) => new Set(people.map((spec) => spec.attributes[axis])).size
+    expect(distinct('animeStyle')).toBeGreaterThanOrEqual(12)
+    expect(distinct('animePalette')).toBeGreaterThanOrEqual(10)
+    expect(distinct('animeBackground')).toBeGreaterThanOrEqual(20)
+    expect(distinct('animeFraming')).toBeGreaterThanOrEqual(10)
+    expect(distinct('animeHairColor')).toBeGreaterThanOrEqual(10)
+    expect(distinct('animeOutfit')).toBeGreaterThanOrEqual(12)
+    // No single art style takes more than a fifth of them.
+    const counts = new Map<string, number>()
+    for (const spec of people) counts.set(spec.attributes.animeStyle, (counts.get(spec.attributes.animeStyle) ?? 0) + 1)
+    expect(Math.max(...counts.values()) / people.length).toBeLessThan(0.2)
+    for (const spec of people) expect(spec.prompt).not.toMatch(/school uniform/i)
   })
 })
