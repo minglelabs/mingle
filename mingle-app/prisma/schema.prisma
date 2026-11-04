@@ -71,6 +71,8 @@ model User {
   /// 'female' | 'male' (DB check app_users_gender_chk). Public: shown next to the age on profiles. Operator accounts mirror OperatorAccount.personaGender.
   gender                       String?
   discoverySource              String?   @map("discovery_source")
+  usagePurpose                 String?   @map("usage_purpose")
+  usagePurposeNote             String?   @map("usage_purpose_note")
   isActive                     Boolean   @default(true) @map("is_active")
   deactivatedAt                DateTime? @map("deactivated_at")
   withdrawnAt                  DateTime? @map("withdrawn_at")
