@@ -225,4 +225,11 @@ describe('earphone mode wiring', () => {
     expect(menu).toContain('aria-pressed={earphoneMode.enabled}')
     expect(composerSource).toContain('{onCloseKeyboard && earphoneMode?.enabled && (')
   })
+
+  it('turns the system echo canceller on only while speaker mode is reading aloud', () => {
+    expect(liveDemoSource).toContain('const speakerModeAecEnabled = speakerMode && earphoneModeGate.autoReadActive')
+    expect(liveDemoSource).toContain('enableAec: aecEnabled || speakerModeAecEnabled,')
+    // The persisted account preference still follows the user's own setting.
+    expect(liveDemoSource).toContain('echoAllowed: !aecEnabled,')
+  })
 })

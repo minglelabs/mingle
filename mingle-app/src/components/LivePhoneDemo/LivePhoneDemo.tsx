@@ -2295,7 +2295,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enabled: earphoneModeEnabled,
     earphonesConnected: nativeAudioRoute.earphonesConnected,
     earphonesRequired: !speakerMode,
-  })
+  })  // Speaker mode plays the translation out loud, so its sound reaches the
+  // microphone at full strength and drowns the user's voice. The system echo
+  // canceller is on only while it reads aloud; every other mode keeps it off.
+  const speakerModeAecEnabled = speakerMode && earphoneModeGate.autoReadActive
+
   const earphoneModeCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
   // Warns, once per earphone-mode session, that Start is about to open the
@@ -4886,7 +4890,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTtsAudio: handleTtsAudio,
     onTtsCanceled: handleTtsCanceled,
     enableTts: enableAutoTTS && isSoundEnabled,
-    enableAec: aecEnabled,
+    enableAec: aecEnabled || speakerModeAecEnabled,
     captureSource: sttCaptureSource,
     sonioxManualFinalizeSilenceMs,
     sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
