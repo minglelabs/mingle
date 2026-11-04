@@ -61,6 +61,21 @@ const MAX_QUEUE = Number(process.env.CHATGPT_POOL_MAX_QUEUE || 100)
 /** A job still waiting for an account after this long fails (504 queue_timeout); its caller has given up. */
 const TEXT_QUEUE_WAIT_MS = 10 * 60_000
 const IMAGE_QUEUE_WAIT_MS = 20 * 60_000
+/**
+ * Per-account pacing, so no ChatGPT account works back to back like a bot.
+ * On 2026-11-04 ChatGPT signed out 10 accounts and flagged the last for "unusual
+ * activity" after each ran hundreds of chats in a row. An account rests
+ * ACCOUNT_GAP_MS (up to 1.5x, randomized) after each job, and takes at most
+ * ACCOUNT_PER_HOUR / ACCOUNT_PER_DAY jobs; past that it is skipped, and when every
+ * account is at its cap the request fails at once with 429 account_quota.
+ * Counts are kept in memory, so a restart starts them over.
+ */
+const envNumber = (name, fallback) => { const value = Number(process.env[name]); return Number.isFinite(value) && value >= 0 ? value : fallback }
+const ACCOUNT_GAP_MS = envNumber('CHATGPT_POOL_ACCOUNT_GAP_MS', 20_000)
+const ACCOUNT_PER_HOUR = envNumber('CHATGPT_POOL_ACCOUNT_PER_HOUR', 30)
+const ACCOUNT_PER_DAY = envNumber('CHATGPT_POOL_ACCOUNT_PER_DAY', 200)
+const HOUR_MS = 3_600_000
+const DAY_MS = 24 * HOUR_MS
 const LABEL = 'app.mingle.chatgpt-pool'
 
 const log = (...args) => console.error(new Date().toISOString(), ...args)
@@ -83,11 +98,42 @@ const queue = []
 const running = new Map()
 
 const online = (agent) => Date.now() - agent.lastSeen < AGENT_STALE_MS
+
+/** Start times of this account's jobs in the last day, oldest first. */
+function recentStarts(agent, now = Date.now()) {
+  agent.starts ??= []
+  while (agent.starts.length && now - agent.starts[0] >= DAY_MS) agent.starts.shift()
+  return agent.starts
+}
+
+/** When this account may take a job again because of its hourly or daily cap; 0 when it is under both. */
+function quotaFreeAt(agent, now = Date.now()) {
+  const starts = recentStarts(agent, now)
+  let freeAt = 0
+  if (ACCOUNT_PER_DAY > 0 && starts.length >= ACCOUNT_PER_DAY) freeAt = starts[starts.length - ACCOUNT_PER_DAY] + DAY_MS
+  const lastHour = starts.filter((at) => now - at < HOUR_MS)
+  if (ACCOUNT_PER_HOUR > 0 && lastHour.length >= ACCOUNT_PER_HOUR) freeAt = Math.max(freeAt, lastHour[lastHour.length - ACCOUNT_PER_HOUR] + HOUR_MS)
+  return freeAt > now ? freeAt : 0
+}
+
+const resting = (agent, now = Date.now()) => now < (agent.restUntil ?? 0)
+
+let restWake = null
+/** Dispatches again when the soonest resting account is free, instead of waiting for its next poll. */
+function wakeAfterRest() {
+  const now = Date.now()
+  const soonest = Math.min(...[...agents.values()].map((agent) => agent.restUntil ?? 0).filter((at) => at > now))
+  if (!Number.isFinite(soonest)) return
+  clearTimeout(restWake)
+  restWake = setTimeout(() => { restWake = null; failUnservable(); dispatch() }, soonest - now + 50)
+  restWake.unref?.()
+}
 const accepts = (job, agent) => !job.account || job.account === agent.email || job.account === agent.id
 
 function eligible(agent, job) {
   if (agent.busy || agent.signedOut || !agent.email || job.tried.has(agent.id) || !accepts(job, agent)) return false
   if (Date.now() < (agent.pausedUntil ?? 0)) return false
+  if (resting(agent) || quotaFreeAt(agent)) return false
   return job.kind !== 'image' || Date.now() >= agent.limitedUntil
 }
 
@@ -101,6 +147,7 @@ function dispatch() {
     queue.splice(queue.indexOf(job), 1)
     agent.busy = true
     agent.lastUsed = Date.now()
+    recentStarts(agent).push(agent.lastUsed)
     job.agent = agent
     job.tried.add(agent.id)
     running.set(job.id, job)
@@ -122,9 +169,13 @@ function failUnservable() {
     const candidates = [...agents.values()].filter((agent) => online(agent) && agent.email && !job.tried.has(agent.id) && accepts(job, agent))
     let error = null
     const paused = candidates.filter((agent) => Date.now() < (agent.pausedUntil ?? 0))
+    const capped = candidates.filter((agent) => quotaFreeAt(agent))
     if (candidates.length > 0 && paused.length === candidates.length) {
       const soonest = Math.min(...paused.map((agent) => agent.pausedUntil))
       error = job.lastError ?? new PoolError(429, 'rate_limited', `ChatGPT is throttling every connected account, the first until ${new Date(soonest).toISOString()}`)
+    } else if (candidates.length > 0 && candidates.every((agent) => paused.includes(agent) || capped.includes(agent))) {
+      const soonest = Math.min(...candidates.map((agent) => (paused.includes(agent) ? agent.pausedUntil : quotaFreeAt(agent))))
+      error = new PoolError(429, 'account_quota', `every account is resting or at its hourly/daily cap (${ACCOUNT_PER_HOUR}/h, ${ACCOUNT_PER_DAY}/day), the first free at ${new Date(soonest).toISOString()}`)
     } else if (candidates.length === 0) {
       error = job.lastError ?? new PoolError(503, 'no_account', job.account ? `${job.account} is not connected` : 'no Chrome profile with the extension is connected')
     } else if (job.kind === 'image' && candidates.every((agent) => Date.now() < agent.limitedUntil)) {
@@ -145,6 +196,11 @@ function finish(jobId, outcome) {
   clearTimeout(job.timer)
   const agent = job.agent
   agent.busy = false
+  // Every finished job, answered or not, used the account: let it rest before the next one.
+  if (ACCOUNT_GAP_MS > 0) {
+    agent.restUntil = Date.now() + Math.round(ACCOUNT_GAP_MS * (1 + Math.random() * 0.5))
+    wakeAfterRest()
+  }
   if (!outcome.error) {
     job.resolve({ account: agent.email, profile: agent.profile ?? null, ...outcome })
     return
@@ -312,6 +368,10 @@ function accountsStatus() {
     limitMessage: agent.limitedUntil > Date.now() ? agent.limitMessage : null,
     pausedUntil: (agent.pausedUntil ?? 0) > Date.now() ? new Date(agent.pausedUntil).toISOString() : null,
     pauseMessage: (agent.pausedUntil ?? 0) > Date.now() ? agent.pauseMessage : null,
+    restingUntil: resting(agent) ? new Date(agent.restUntil).toISOString() : null,
+    jobsLastHour: recentStarts(agent).filter((at) => Date.now() - at < HOUR_MS).length,
+    jobsLastDay: recentStarts(agent).length,
+    cappedUntil: quotaFreeAt(agent) ? new Date(quotaFreeAt(agent)).toISOString() : null,
   }))
 }
 
@@ -434,7 +494,7 @@ function serve() {
       // The main port stays keyless while it listens only on this machine, so the local CLI and MCP need no key.
       const keyed = exposed || (KEY && !LOOPBACK_HOSTS.includes(HOST))
       if (keyed && !keyMatches(request.headers.authorization)) return reply(response, 401, { error: { code: 'unauthorized' } })
-      if (request.method === 'GET' && path === '/health') return reply(response, 200, { ok: true, accounts: accountsStatus().length, ready: accountsStatus().filter((a) => a.email && !a.signedOut && !a.pausedUntil).length, queued: queue.length, running: running.size })
+      if (request.method === 'GET' && path === '/health') return reply(response, 200, { ok: true, accounts: accountsStatus().length, ready: accountsStatus().filter((a) => a.email && !a.signedOut && !a.pausedUntil && !a.cappedUntil).length, queued: queue.length, running: running.size })
       if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus() })
       if (request.method === 'GET' && path.startsWith('/v1/jobs/')) return reply(response, 200, asyncStatus(decodeURIComponent(path.slice('/v1/jobs/'.length))))
       if (request.method === 'POST' && (path === '/v1/chat/completions' || path === '/v1/images/generations')) {
