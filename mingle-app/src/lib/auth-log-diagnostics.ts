@@ -1,5 +1,5 @@
 import { createDecipheriv, hkdfSync } from "node:crypto";
-import { decode as decodeNextAuthJwt, type JWTDecodeParams } from "next-auth/jwt";
+import { decode as decodeNextAuthJwt, type JWT, type JWTDecodeParams } from "next-auth/jwt";
 
 function clean(value: unknown, maxLength = 180): string {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength) || "-";
@@ -40,11 +40,11 @@ function base64UrlToBuffer(value: string): Buffer {
  * so a rejected token can still say when it was issued and when it expired.
  * Only for logging: never trust what this returns.
  */
-export function readSessionClaimsUnverified(
+export function readSessionPayloadUnverified(
   token: string,
   secret: string,
   salt = "",
-): UnverifiedSessionClaims | null {
+): Record<string, unknown> | null {
   try {
     const [protectedHeader, encryptedKey, iv, ciphertext, tag] = token.split(".");
     if (!protectedHeader || encryptedKey !== "" || !iv || !ciphertext || !tag) return null;
@@ -59,15 +59,24 @@ export function readSessionClaimsUnverified(
     decipher.setAAD(Buffer.from(protectedHeader, "ascii"));
     decipher.setAuthTag(base64UrlToBuffer(tag));
     const plaintext = Buffer.concat([decipher.update(base64UrlToBuffer(ciphertext)), decipher.final()]);
-    const payload = JSON.parse(plaintext.toString("utf8")) as Record<string, unknown>;
-    return {
-      iat: typeof payload.iat === "number" ? payload.iat : undefined,
-      exp: typeof payload.exp === "number" ? payload.exp : undefined,
-      sub: typeof payload.sub === "string" ? payload.sub : undefined,
-    };
+    return JSON.parse(plaintext.toString("utf8")) as Record<string, unknown>;
   } catch {
     return null;
   }
+}
+
+export function readSessionClaimsUnverified(
+  token: string,
+  secret: string,
+  salt = "",
+): UnverifiedSessionClaims | null {
+  const payload = readSessionPayloadUnverified(token, secret, salt);
+  if (!payload) return null;
+  return {
+    iat: typeof payload.iat === "number" ? payload.iat : undefined,
+    exp: typeof payload.exp === "number" ? payload.exp : undefined,
+    sub: typeof payload.sub === "string" ? payload.sub : undefined,
+  };
 }
 
 function formatEpochSeconds(value: number | undefined): string {
@@ -104,11 +113,49 @@ export function describeSessionDecodeFailure(
   return parts.join(" ");
 }
 
-/** NextAuth's own decode, plus one log line saying why a session token was rejected. */
+// Before jwt.maxAge was set, sign-in tokens were issued with NextAuth's 30-day default while
+// the cookie lived on, so users were signed out against the intent that a session lasts until
+// sign-out. A token that expired within this window and was issued with exactly that default
+// lifetime is still honoured. The AES-GCM tag has already proven that we issued it.
+const LEGACY_TOKEN_LIFETIME_SECONDS = 30 * 24 * 60 * 60;
+const LEGACY_TOKEN_GRACE_SECONDS = 180 * 24 * 60 * 60;
+const graceLoggedSubs = new Set<string>();
+
+function isExpiredError(error: unknown): boolean {
+  return error instanceof Error && (error as Error & { code?: unknown }).code === "ERR_JWT_EXPIRED";
+}
+
+export function acceptLegacyExpiredSession(
+  params: Pick<JWTDecodeParams, "token" | "secret" | "salt">,
+  nowEpochSeconds = Math.floor(Date.now() / 1000),
+): JWT | null {
+  const secret = Array.isArray(params.secret) ? params.secret[0] : params.secret;
+  if (!params.token || typeof secret !== "string") return null;
+  const payload = readSessionPayloadUnverified(params.token, secret, params.salt ?? "");
+  if (!payload) return null;
+  const { iat, exp } = payload;
+  if (typeof iat !== "number" || typeof exp !== "number") return null;
+  if (exp - iat !== LEGACY_TOKEN_LIFETIME_SECONDS) return null;
+  if (nowEpochSeconds - exp > LEGACY_TOKEN_GRACE_SECONDS) return null;
+  return payload as JWT;
+}
+
+/** NextAuth's own decode, plus a grace period for legacy tokens and a log line for rejected ones. */
 export async function decodeSessionTokenWithDiagnostics(params: JWTDecodeParams) {
   try {
     return await decodeNextAuthJwt(params);
   } catch (error) {
+    if (isExpiredError(error)) {
+      const accepted = acceptLegacyExpiredSession(params);
+      if (accepted) {
+        const sub = typeof accepted.sub === "string" ? accepted.sub : "-";
+        if (!graceLoggedSubs.has(sub) && graceLoggedSubs.size < 5000) {
+          graceLoggedSubs.add(sub);
+          console.warn(`[nextauth:jwt-legacy-accepted] ${describeSessionDecodeFailure(params, error)}`);
+        }
+        return accepted;
+      }
+    }
     console.error(`[nextauth:jwt-decode-failed] ${describeSessionDecodeFailure(params, error)}`);
     throw error;
   }
