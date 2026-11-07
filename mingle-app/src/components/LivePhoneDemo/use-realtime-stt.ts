@@ -2953,6 +2953,9 @@ export function replaceFinalizedUtteranceSourceInStoreState(input: {
 interface BubbleTailState {
   translatedSource: string
   translations: Record<string, string>
+  /** The last fixed piece and its translations: the only context the server sends the model. */
+  contextSource?: string
+  contextTranslations?: Record<string, string>
 }
 
 interface TranslateApiResult {
@@ -4695,6 +4698,17 @@ export default function useRealtimeSTT({
               .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
             { candidates: targetLanguages, sourceLanguage },
           ),
+          ...(typeof rawTailFill.contextSource === 'string' && rawTailFill.contextTranslations
+            && typeof rawTailFill.contextTranslations === 'object'
+            ? {
+              contextSource: rawTailFill.contextSource,
+              contextTranslations: canonicalizeTranslationKeys(
+                Object.fromEntries(Object.entries(rawTailFill.contextTranslations as Record<string, unknown>)
+                  .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
+                { candidates: targetLanguages, sourceLanguage },
+              ),
+            }
+            : {}),
         }
         : undefined
       return {

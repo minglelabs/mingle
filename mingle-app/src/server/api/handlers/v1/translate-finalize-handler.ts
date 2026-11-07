@@ -512,8 +512,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     requestMeta,
     ...(bubbleTailPlan ? {
       bubbleTail: {
-        fixedSource: bubbleTailPlan.fixedSource,
-        fixedTranslations: bubbleTailPlan.fixedTranslations,
+        fixedSource: bubbleTailPlan.contextSource,
+        fixedTranslations: bubbleTailPlan.contextTranslations,
       },
     } : {}),
   }
@@ -560,7 +560,12 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       // Tail mode: the provider filled only the blank. An interim answer covers
       // the complete sentences it names; the final answer covers the whole tail.
       let translations = rawTranslations
-      let tailFill: { translatedSource: string, translations: Record<string, string> } | null = null
+      let tailFill: {
+        translatedSource: string
+        translations: Record<string, string>
+        contextSource: string
+        contextTranslations: Record<string, string>
+      } | null = null
       if (bubbleTailPlan && !meta.usedFallbackFromPreviousState) {
         const coveredLength = isFinal
           ? bubbleTailPlan.remainingSource.length
@@ -570,7 +575,15 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
           ? joinTailTranslations(bubbleTailPlan, rawTranslations, targetLanguages)
           : { ...bubbleTailPlan.fixedTranslations }
         if (!isFinal && hasFill) {
-          tailFill = { translatedSource: extendFixedSource(bubbleTailPlan, coveredLength), translations }
+          tailFill = {
+            translatedSource: extendFixedSource(bubbleTailPlan, coveredLength),
+            translations,
+            // The piece just translated is the next request's only context.
+            contextSource: bubbleTailPlan.remainingSource.slice(0, coveredLength).trim(),
+            contextTranslations: Object.fromEntries(targetLanguages
+              .filter((language) => Boolean(rawTranslations[language]))
+              .map((language) => [language, rawTranslations[language] as string])),
+          }
         }
         if (!isFinal && !hasFill && Object.keys(rawTranslations).length > 0) {
           logTranslateFinalizeWarning('bubble_tail_unmatched_source', {

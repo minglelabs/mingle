@@ -27,25 +27,38 @@ export type BubbleTailPayload = {
   translatedSource: string
   /** Per target language, the fixed translation of `translatedSource`. */
   translations: Record<string, string>
+  /** The last fixed piece (the end of `translatedSource`) and its translations: the prompt's only context. */
+  contextSource?: string
+  contextTranslations?: Record<string, string>
+}
+
+function parseStringRecord(raw: unknown): Record<string, string> {
+  const output: Record<string, string> = {}
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return output
+  for (const [language, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === 'string' && value.trim()) output[language] = value.trim().slice(0, MAX_TAIL_CHARS)
+  }
+  return output
 }
 
 export function parseBubbleTail(raw: unknown): BubbleTailPayload | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const record = raw as Record<string, unknown>
   if (typeof record.translatedSource !== 'string') return null
-  const translations: Record<string, string> = {}
-  const rawTranslations = record.translations
-  if (rawTranslations && typeof rawTranslations === 'object' && !Array.isArray(rawTranslations)) {
-    for (const [language, value] of Object.entries(rawTranslations as Record<string, unknown>)) {
-      if (typeof value === 'string' && value.trim()) translations[language] = value.trim().slice(0, MAX_TAIL_CHARS)
-    }
+  const contextSource = typeof record.contextSource === 'string' ? record.contextSource.trim().slice(0, MAX_TAIL_CHARS) : ''
+  return {
+    translatedSource: record.translatedSource.trim().slice(0, MAX_TAIL_CHARS),
+    translations: parseStringRecord(record.translations),
+    ...(contextSource ? { contextSource, contextTranslations: parseStringRecord(record.contextTranslations) } : {}),
   }
-  return { translatedSource: record.translatedSource.trim().slice(0, MAX_TAIL_CHARS), translations }
 }
 
 export type BubbleTailPlan = {
   fixedSource: string
   fixedTranslations: Record<string, string>
+  /** What the prompt shows of the fixed part: its last piece, or all of it. */
+  contextSource: string
+  contextTranslations: Record<string, string>
   /** Source after the fixed part: what this request translates (or part of it). */
   remainingSource: string
   /** The bubble's trimmed text the plan was made from. */
@@ -79,7 +92,21 @@ export function planBubbleTail(
   const rest = fullText.slice(cut)
   const remainingStart = cut + (rest.length - rest.trimStart().length)
   const remainingSource = fullText.slice(remainingStart).trimEnd()
-  return { fixedSource, fixedTranslations, remainingSource, fullText, remainingStart }
+  const contextTranslations = payload.contextTranslations || {}
+  const useContext = Boolean(payload.contextSource)
+    && fixedSource.endsWith(payload.contextSource as string)
+    && targetLanguages.every((language) => Boolean(contextTranslations[language]))
+  return {
+    fixedSource,
+    fixedTranslations,
+    contextSource: useContext ? payload.contextSource as string : fixedSource,
+    contextTranslations: useContext
+      ? Object.fromEntries(targetLanguages.map((language) => [language, contextTranslations[language] as string]))
+      : fixedTranslations,
+    remainingSource,
+    fullText,
+    remainingStart,
+  }
 }
 
 /** Fixed source after this request: the old fixed part plus `coveredLength` chars of the tail. */

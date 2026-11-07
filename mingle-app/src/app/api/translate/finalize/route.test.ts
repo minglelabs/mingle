@@ -232,11 +232,41 @@ describe('/api/translate/finalize route', () => {
     expect(json.tailFill).toEqual({
       translatedSource: '어제 친구를 만났어. 그리고 집에 갔어.',
       translations: { en: 'I met a friend yesterday. And then we went home.' },
+      contextSource: '그리고 집에 갔어.',
+      contextTranslations: { en: 'And then we went home.' },
     })
     const prompt = readGeminiUserPrompt(0)
-    expect(prompt).toContain('Already translated (fixed, the listener has read it): "어제 친구를 만났어."')
+    expect(prompt).toContain('previous (fixed): "어제 친구를 만났어."')
     expect(prompt).toContain('en: "I met a friend yesterday."')
-    expect(prompt).toContain('Not yet translated (the blank): "그리고 집에 갔어. 그런데 가는"')
+    expect(prompt).toContain('blank: "그리고 집에 갔어. 그런데 가는"')
+  })
+
+  it('shows the model only the last fixed piece as context', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"translatedSource":"","en":""}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 1, totalTokenCount: 6 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    await POST(makeJsonRequest({
+      text: '어제 친구를 만났어. 그리고 집에 갔어. 그런데 가는',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en'],
+      isFinal: false,
+      bubbleTail: {
+        translatedSource: '어제 친구를 만났어. 그리고 집에 갔어.',
+        translations: { en: 'I met a friend yesterday. And then we went home.' },
+        contextSource: '그리고 집에 갔어.',
+        contextTranslations: { en: 'And then we went home.' },
+      },
+    }) as never)
+
+    const prompt = readGeminiUserPrompt(0)
+    expect(prompt).toContain('previous (fixed): "그리고 집에 갔어."')
+    expect(prompt).not.toContain('어제 친구를 만났어')
+    expect(prompt).toContain('blank: "그런데 가는"')
   })
 
   it('interim tail fill with no finished sentence keeps the fixed part unchanged', async () => {
@@ -312,7 +342,7 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
     expect(json.translations).toEqual({ en: 'I met a friend yesterday. But on the way' })
     expect(json.tailFill).toBeUndefined()
-    expect(readGeminiUserPrompt(0)).toContain('Fill the blank: translate the whole blank.')
+    expect(readGeminiUserPrompt(0)).toContain('blank: "그런데 가는"')
   })
 
   it('answers a fully fixed bubble without calling the model', async () => {

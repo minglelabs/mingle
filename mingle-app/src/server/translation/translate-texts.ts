@@ -856,28 +856,21 @@ function buildBubbleTailFillPrompt(
 ): { systemPrompt: string, userPrompt: string } {
   const chineseGlossaryLines = involvesChinese(ctx) ? [CHINESE_VARIANT_GLOSSARY_LINE] : []
   const interim = isInterimBubbleTail(ctx)
-  const fullSource = tail.fixedSource ? `${tail.fixedSource} ${ctx.text}` : ctx.text
+  // Only the last fixed part goes in as context, so the prompt stays short however long the bubble gets.
   const userPromptLines = [
     `source=${ctx.sourceLanguage}`,
     `targets=${ctx.targetLanguages.join(', ')}`,
-    `is_final=${ctx.isFinal ? 'yes' : 'no'}`,
-    '',
-    `Speech bubble so far: "${fullSource}"`,
   ]
   if (tail.fixedSource) {
     userPromptLines.push(
-      '',
-      `Already translated (fixed, the listener has read it): "${tail.fixedSource}"`,
+      `previous (fixed): "${tail.fixedSource}"`,
       ...ctx.targetLanguages.map((language) => `  ${language}: "${tail.fixedTranslations[language] || ''}"`),
     )
   }
-  userPromptLines.push('', `Not yet translated (the blank): "${ctx.text}"`)
-  userPromptLines.push('', interim
-    ? `Fill the blank: translate only the complete sentences at the start of the blank, and copy those exact source words into ${TAIL_TRANSLATED_SOURCE_KEY}.`
-    : 'Fill the blank: translate the whole blank.')
+  userPromptLines.push(`blank: "${ctx.text}"`)
 
   const immediatePreviousTurn = selectPromptImmediatePreviousTurn(ctx.immediatePreviousTurn)
-  if (immediatePreviousTurn) {
+  if (immediatePreviousTurn && !tail.fixedSource) {
     userPromptLines.push(
       '',
       formatSingleTurnForPromptWithOptions('Previous bubble', immediatePreviousTurn, {
@@ -886,25 +879,17 @@ function buildBubbleTailFillPrompt(
     )
   }
 
-  const keysLine = interim
-    ? `Return ONLY strict JSON with keys exactly matching ${TAIL_TRANSLATED_SOURCE_KEY} and the target language codes.`
-    : 'Return ONLY strict JSON with keys exactly matching target language codes.'
   const tailRules = interim
     ? [
-      'The speaker is still talking, so the blank may end in an unfinished sentence.',
-      'Translate every complete sentence at the start of the blank, however short: a one-word sentence such as "Yes." or "네." is complete and must be translated.',
-      'A sentence is complete when it ends with sentence-final punctuation (. ? ! 。 ？ ！) or is clearly finished. Leave an unfinished sentence at the end of the blank untranslated; it will be translated once it is finished.',
-      `${TAIL_TRANSLATED_SOURCE_KEY} holds the exact source text you translated, copied word for word from the start of the blank. When the blank has no complete sentence yet, return "" for ${TAIL_TRANSLATED_SOURCE_KEY} and for every target language.`,
+      `Keys: ${TAIL_TRANSLATED_SOURCE_KEY} and the target language codes.`,
+      'The speaker is still talking. Translate only the complete sentences at the start of the blank, even a one-word one ("Yes.", "네."). A sentence is complete when it ends with . ? ! 。 ？ ！ or is clearly finished; leave an unfinished last sentence untranslated.',
+      `${TAIL_TRANSLATED_SOURCE_KEY} = the source you translated, copied word for word from the start of the blank. No complete sentence yet: "" everywhere.`,
     ]
-    : ['The bubble is finished: translate the entire blank, including its last sentence.']
+    : ['Keys: the target language codes. Translate the whole blank.']
   return {
     systemPrompt: [
-      'You are an expert live-conversation translator.',
-      keysLine,
-      'No explanations, no markdown, no extra keys.',
-      'The start of the speech bubble already has fixed translations that the listener has read; they never change.',
-      'For each target language, return ONLY the translation of the blank, written so that it continues the fixed translation naturally and the whole bubble reads as one fluent translation.',
-      'Never repeat, rephrase or correct the fixed translations. Use them and the whole bubble for context (pronouns, tone, honorifics, terminology).',
+      'You are a live-conversation translator. Return ONLY strict JSON, no extra keys.',
+      'The blank continues a speech bubble whose previous part is already translated and fixed. Translate only the blank so it continues the fixed translation naturally; never repeat or change the fixed part.',
       ...tailRules,
       ...chineseGlossaryLines,
     ].join('\n'),
