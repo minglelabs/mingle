@@ -213,16 +213,6 @@ export type TranslateContext = {
   isFinal: boolean
   systemPromptOverride?: string
   userPromptOverride?: string
-  /**
-   * Fill-in-the-blank bubble translation: `text` is the blank (the source
-   * segments after `fixedCount`), and the earlier segments keep their fixed
-   * translations, which the model sees as context but must not rewrite.
-   */
-  bubbleSegments?: {
-    sources: string[]
-    fixedCount: number
-    fixedTranslations: Record<string, string[]>
-  }
 }
 
 type GeminiUsageMetadata = {
@@ -779,9 +769,6 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
   if (ctx.systemPromptOverride && ctx.userPromptOverride) {
     return { systemPrompt: ctx.systemPromptOverride, userPrompt: ctx.userPromptOverride }
   }
-  if (ctx.bubbleSegments && !ctx.shouldRedetectSourceLanguage) {
-    return buildBubbleSegmentFillPrompt(ctx, ctx.bubbleSegments)
-  }
 
   const immediatePreviousTurn = selectPromptImmediatePreviousTurn(ctx.immediatePreviousTurn)
   const includeSourceLanguage = !ctx.shouldRedetectSourceLanguage
@@ -839,66 +826,6 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
         ...chineseGlossaryLines,
       ].join('\n')),
     userPrompt: ctx.userPromptOverride || userPromptLines.join('\n'),
-  }
-}
-
-export const BLANK_MARKER = '[BLANK]'
-
-function buildBubbleSegmentFillPrompt(
-  ctx: TranslateContext,
-  segments: NonNullable<TranslateContext['bubbleSegments']>,
-): { systemPrompt: string, userPrompt: string } {
-  const chineseGlossaryLines = involvesChinese(ctx) ? [CHINESE_VARIANT_GLOSSARY_LINE] : []
-  const blankNumbers = segments.sources
-    .map((_, index) => index + 1)
-    .filter((number) => number > segments.fixedCount)
-  const blankLabel = blankNumbers.length > 1
-    ? `segments ${blankNumbers[0]}-${blankNumbers[blankNumbers.length - 1]}`
-    : `segment ${blankNumbers[0] ?? segments.sources.length}`
-  const sourceLines = segments.sources.map((source, index) => (
-    `${index + 1}. "${source}"${index + 1 > segments.fixedCount ? ` ${BLANK_MARKER}` : ''}`
-  ))
-  const translationBlocks = ctx.targetLanguages.flatMap((language) => {
-    const fixed = segments.fixedTranslations[language] || []
-    return [
-      `[${language}]`,
-      ...fixed.map((translation, index) => `${index + 1}. "${translation}"`),
-      `${segments.fixedCount + 1}. ${BLANK_MARKER}`,
-    ]
-  })
-  const userPromptLines = [
-    `source=${ctx.sourceLanguage}`,
-    `targets=${ctx.targetLanguages.join(', ')}`,
-    '',
-    'Speech bubble source, split where the speaker paused:',
-    ...sourceLines,
-    '',
-    'Translations so far (fixed, already read by the listener):',
-    ...translationBlocks,
-    '',
-    `Fill ${BLANK_MARKER} in each target language with the translation of ${blankLabel} only.`,
-  ]
-  const immediatePreviousTurn = selectPromptImmediatePreviousTurn(ctx.immediatePreviousTurn)
-  if (immediatePreviousTurn) {
-    userPromptLines.push(
-      '',
-      formatSingleTurnForPromptWithOptions('Previous bubble', immediatePreviousTurn, {
-        includeSourceLanguage: true,
-      }),
-    )
-  }
-  return {
-    systemPrompt: [
-      'You are an expert live-conversation translator.',
-      'Return ONLY strict JSON with keys exactly matching target language codes.',
-      'No explanations, no markdown, no extra keys.',
-      'A speech bubble arrives in segments. Earlier segments already have fixed translations that the listener has read; they never change.',
-      `For each target language, return ONLY the text that replaces ${BLANK_MARKER}: the translation of the blank source segments, written so that it continues the fixed translation naturally and the whole bubble reads as one fluent translation.`,
-      'Never repeat, rephrase or correct the fixed translations. Use them and the whole source for context (pronouns, tone, honorifics, terminology).',
-      'If the blank segment only completes a sentence started earlier, translate it as the natural continuation of that sentence.',
-      ...chineseGlossaryLines,
-    ].join('\n'),
-    userPrompt: userPromptLines.join('\n'),
   }
 }
 

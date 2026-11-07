@@ -61,10 +61,6 @@ import {
   getOrCreateTrackingUserId,
 } from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
-import {
-  appendSegmentTranslation,
-  joinSegmentTexts,
-} from '@/lib/bubble-segments'
 import type { UserSelectableTtsModel } from '@/lib/tts-models'
 import type { SttCaptureSource } from '@/lib/native-device-audio'
 import {
@@ -194,10 +190,6 @@ const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
-// Bubble hold: the STT server keeps a bubble open across Soniox <end> markers
-// until this much silence, and each <end> segment is translated once (fill in
-// the blank) and never rewritten. 0 turns it off (one bubble per <end>).
-const DEFAULT_LIVE_BUBBLE_HOLD_MS = 2_000
 let activeNativeSttOwnerKey: string | null = null
 let activeNativeSttOwnerLeaseId: string | null = null
 // A room can remain mounted as a hidden background consumer while the list is
@@ -432,24 +424,6 @@ const PARTIAL_TRANSLATE_STEP = parsePositiveIntWithFallback(
   process.env.NEXT_PUBLIC_LIVE_PARTIAL_TRANSLATE_CHAR_STEP,
   DEFAULT_PARTIAL_TRANSLATE_STEP,
 )
-const LIVE_BUBBLE_HOLD_MS = (() => {
-  const raw = (process.env.NEXT_PUBLIC_LIVE_BUBBLE_HOLD_MS || '').trim()
-  if (!raw) return DEFAULT_LIVE_BUBBLE_HOLD_MS
-  const parsed = Number.parseInt(raw, 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-})()
-
-/** Ask the STT server for bubble hold on the socket URL (native modules only pass a URL). */
-export function appendBubbleHoldToWsUrl(wsUrl: string, holdMs: number, segmentationMode?: string | null): string {
-  if (holdMs <= 0 || (segmentationMode || '').trim().toLowerCase() === 'fin') return wsUrl
-  try {
-    const url = new URL(wsUrl)
-    url.searchParams.set('bubble_hold_ms', String(Math.floor(holdMs)))
-    return url.toString()
-  } catch {
-    return wsUrl
-  }
-}
 
 type ConnectionStatus = 'idle' | 'connecting' | 'ready' | 'error'
 
@@ -1438,8 +1412,6 @@ export interface ParsedSttTranscriptMessage {
   isFinal: boolean
   speaker: string
   finalizeSource?: string
-  /** Bubble hold: source segments committed by Soniox <end> so far. */
-  committedSegments?: string[]
 }
 
 export function parseSttTranscriptMessage(
@@ -1469,12 +1441,6 @@ export function parseSttTranscriptMessage(
   const speaker = typeof utterance.speaker === 'string' && utterance.speaker.trim()
     ? utterance.speaker.trim()
     : 'unknown'
-  const committedSegments = Array.isArray(data.committed_segments)
-    ? data.committed_segments
-      .filter((segment): segment is string => typeof segment === 'string')
-      .map((segment) => normalizeSttTurnText(segment))
-      .filter(Boolean)
-    : undefined
 
   return {
     rawText,
@@ -1483,7 +1449,6 @@ export function parseSttTranscriptMessage(
     isFinal,
     speaker,
     ...(finalizeSource ? { finalizeSource } : {}),
-    ...(committedSegments ? { committedSegments } : {}),
   }
 }
 
@@ -1656,10 +1621,6 @@ interface PendingSpeakerTurn {
   partialTranslationPriorities: Map<string, TranslationPriority>
   currentTurnPreviousState: CurrentTurnPreviousStatePayload | null
   updatedAtMs: number
-  /** Bubble hold: committed source segments (absent when the server does not hold bubbles). */
-  committedSegments?: string[]
-  /** Bubble hold: per language, the fixed translation of each committed segment. */
-  segmentTranslations?: Record<string, string[]>
   // Display-only script rendering of `source` from the latest partial
   // translation response. Ignored once the turn text moves on.
   originalDisplayText?: { source: string, text: string }
@@ -2990,10 +2951,6 @@ export function replaceFinalizedUtteranceSourceInStoreState(input: {
 
 interface TranslateApiResult {
   translations: Record<string, string>
-  /** Bubble hold: the blank's translation per language, covering segments up to segmentCount. */
-  segmentTranslations?: Record<string, string>
-  segmentFixedCount?: number
-  segmentCount?: number
   sourceLanguage?: string
   // Present only when it differs from the text that was sent.
   sourceDisplayText?: string
@@ -4638,7 +4595,6 @@ export default function useRealtimeSTT({
       excludeUtteranceId?: string
       sttDurationMs?: number
       totalDurationMs?: number
-      bubbleSegments?: { sources: string[], translations: Record<string, string[]> }
     },
   ): Promise<TranslateApiResult> => {
     const apiPath = buildClientApiPath('/translate/finalize')
@@ -4674,9 +4630,6 @@ export default function useRealtimeSTT({
       }
       if (options?.currentTurnPreviousState) {
         body.currentTurnPreviousState = options.currentTurnPreviousState
-      }
-      if (options?.bubbleSegments) {
-        body.bubbleSegments = options.bubbleSegments
       }
       body.clientBundleRev = LIVE_TRANSLATE_CLIENT_BUNDLE_REV
       if (translationModel) {
@@ -4715,26 +4668,11 @@ export default function useRealtimeSTT({
         ? Object.fromEntries(Object.entries(data.translations as Record<string, unknown>)
           .filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
         : {}
-      const rawSegmentTranslations = data.segmentTranslations && typeof data.segmentTranslations === 'object'
-        && !Array.isArray(data.segmentTranslations)
-        ? Object.fromEntries(Object.entries(data.segmentTranslations as Record<string, unknown>)
-          .filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
-        : null
       return {
         translations: canonicalizeTranslationKeys(rawTranslations, {
           candidates: targetLanguages,
           sourceLanguage: responseSourceLanguage || sourceLanguage,
         }),
-        ...(rawSegmentTranslations && typeof data.segmentFixedCount === 'number' && typeof data.segmentCount === 'number'
-          ? {
-            segmentTranslations: canonicalizeTranslationKeys(rawSegmentTranslations, {
-              candidates: targetLanguages,
-              sourceLanguage: responseSourceLanguage || sourceLanguage,
-            }),
-            segmentFixedCount: data.segmentFixedCount,
-            segmentCount: data.segmentCount,
-          }
-          : {}),
         sourceLanguage: responseSourceLanguage,
         ...(typeof data.sourceDisplayText === 'string' && data.sourceDisplayText.trim() && data.sourceDisplayText !== text
           ? { sourceDisplayText: data.sourceDisplayText }
@@ -5184,7 +5122,6 @@ export default function useRealtimeSTT({
       speaker?: string
       speakerAvatarSeed?: string
       speakerAvatarIndex?: number
-      bubbleSegments?: { sources: string[], translations: Record<string, string[]> }
     },
   ) => {
     const { utteranceId, text, lang, currentTurnPreviousState, utterance } = localFinalizeResult
@@ -5203,7 +5140,6 @@ export default function useRealtimeSTT({
       sessionKey, clientContext, clientMessageId: utteranceId,
       sttDurationMs: options?.sttDurationMs,
       currentTurnPreviousState,
-      ...(options?.bubbleSegments ? { bubbleSegments: options.bubbleSegments } : {}),
       clientBundleRev: LIVE_TRANSLATE_CLIENT_BUNDLE_REV,
       ...(translationModel ? { translationModel } : {}),
       ...(recentTurns.length ? { recentTurns, immediatePreviousTurn: recentTurns[recentTurns.length - 1] } : {}),
@@ -5955,7 +5891,7 @@ export default function useRealtimeSTT({
 
     const transcript = parseSttTranscriptMessage(message, getCurrentTargetLanguages())
     if (transcript) {
-      const { rawText, text, language: lang, isFinal, speaker, finalizeSource, committedSegments } = transcript
+      const { rawText, text, language: lang, isFinal, speaker, finalizeSource } = transcript
       logSttDebug('transcript.received', {
         speaker,
         isFinal,
@@ -6139,14 +6075,6 @@ export default function useRealtimeSTT({
             sttDurationMs,
             reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
             speaker: reconciledSpeaker,
-            // Bubble hold: the final request only fills what is still blank and
-            // keeps every translation the listener already read.
-            ...(committedSegments && committedSegments.length > 0 ? {
-              bubbleSegments: {
-                sources: committedSegments,
-                translations: pendingTurn?.segmentTranslations || {},
-              },
-            } : {}),
             ...resolveReconciledSpeakerAvatar({
               reusedSpeakerAvatarSeed,
               reusedSpeakerAvatarIndex,
@@ -6195,10 +6123,6 @@ export default function useRealtimeSTT({
           partialTranslationPriorities: existingPendingTurn?.partialTranslationPriorities || new Map(),
           currentTurnPreviousState: existingPendingTurn?.currentTurnPreviousState || null,
           updatedAtMs: now,
-          ...(committedSegments ? {
-            committedSegments,
-            segmentTranslations: existingPendingTurn?.segmentTranslations || {},
-          } : {}),
         }
         const pendingAvatar = getSpeakerAvatar(speaker, pendingSpeakerAvatarSeed, pendingSpeakerAvatarIndex)
         logSttDebug('transcript.avatar_mapping', {
@@ -6388,11 +6312,7 @@ export default function useRealtimeSTT({
           payload: {
             conversationId: conversationId || '',
             sessionId: nativeSessionId,
-            wsUrl: appendBubbleHoldToWsUrl(
-              appendCoinBillingToWsUrl(getWsUrl(), ensureSessionKey()),
-              LIVE_BUBBLE_HOLD_MS,
-              sttSegmentationMode,
-            ),
+            wsUrl: appendCoinBillingToWsUrl(getWsUrl(), ensureSessionKey()),
             sttModel: 'soniox',
             aecEnabled: enableAec,
             ...(captureSource === 'device_audio' ? { captureSource } : {}),
@@ -6444,11 +6364,7 @@ export default function useRealtimeSTT({
         } catch { /* no-op */ }
       }
 
-      const socket = new WebSocket(appendBubbleHoldToWsUrl(
-        appendCoinBillingToWsUrl(getWsUrl(), ensureSessionKey()),
-        LIVE_BUBBLE_HOLD_MS,
-        sttSegmentationMode,
-      ))
+      const socket = new WebSocket(appendCoinBillingToWsUrl(getWsUrl(), ensureSessionKey()))
       socketRef.current = socket
 
       socket.onopen = () => {
@@ -7159,85 +7075,6 @@ export default function useRealtimeSTT({
       }
 
       const runtime = getPendingTurnTranslationRuntime(pendingTurn.utteranceId)
-      if (pendingTurn.committedSegments) {
-        // Bubble hold: each committed segment is translated once, as the blank
-        // after the bubble's fixed translations, and is never rewritten. The
-        // tail after the last <end> waits for its own <end>.
-        const segments = pendingTurn.committedSegments
-        const requestLanguages = targetLanguages.filter((language) => (
-          normalizeTranslationLanguageKey(language) !== normalizeTranslationLanguageKey(currentLang)
-        ))
-        const segmentTranslations = pendingTurn.segmentTranslations || {}
-        const fixedCount = requestLanguages.length === 0
-          ? segments.length
-          : Math.min(segments.length, ...requestLanguages.map((language) => segmentTranslations[language]?.length ?? 0))
-        if (fixedCount >= segments.length || runtime.controller) continue
-        const segmentRequestSignature = [
-          pendingTurn.utteranceId, 'segments', segments.length, fixedCount, targetLanguageSignature,
-        ].join('\u001f')
-        if (runtime.lastRequestSignature === segmentRequestSignature) continue
-        runtime.lastRequestSignature = segmentRequestSignature
-        runtime.lastTargetSignature = targetLanguageSignature
-        runtime.hasFiredInitialRequest = true
-        runtime.lastRequestedAtMs = Date.now()
-        const segmentRequestSeq = runtime.latestRequestSeq + 1
-        runtime.latestRequestSeq = segmentRequestSeq
-        const segmentRequestPriority: TranslationPriority = { kind: 'partial', seq: segmentRequestSeq }
-        const segmentController = new AbortController()
-        runtime.controller = segmentController
-        const requestSourceText = joinSegmentTexts(segments, currentLang)
-
-        void translateViaApi(requestSourceText, currentLang, targetLanguages, {
-          signal: segmentController.signal,
-          bubbleSegments: { sources: segments, translations: segmentTranslations },
-        }).then((result) => {
-          const latestRuntime = pendingTurnTranslationRuntimeRef.current[pendingTurn.utteranceId]
-          if (latestRuntime?.controller === segmentController) latestRuntime.controller = null
-          const latestPendingTurn = findPendingTurnByUtteranceId(pendingTurn.utteranceId)
-          if (!latestPendingTurn || !latestRuntime || segmentController.signal.aborted) return
-          const fills = result.segmentTranslations
-          if (!fills || result.segmentFixedCount === undefined || result.segmentCount === undefined) {
-            // Retry with the next <end> (or the final request fills the blank).
-            bumpPendingTurnRenderVersion()
-            return
-          }
-          const latestTargetLanguages = buildTurnTargetLanguagesSnapshot(targetLanguages, currentLang)
-          const nextSegmentTranslations = { ...(latestPendingTurn.segmentTranslations || {}) }
-          const nextTranslations = filterTranslationsToTargetLanguages(
-            stripSourceLanguageFromTranslations(latestPendingTurn.partialTranslations, currentLang),
-            latestTargetLanguages,
-          )
-          const nextPriorities = new Map(latestPendingTurn.partialTranslationPriorities)
-          for (const [language, blank] of Object.entries(fills)) {
-            if (!latestTargetLanguages.includes(language)) continue
-            const existing = nextSegmentTranslations[language] || []
-            // Only fill the blank this request was for: fixed segments never change.
-            if (existing.length < result.segmentFixedCount || existing.length >= result.segmentCount) continue
-            const filled = appendSegmentTranslation(existing, result.segmentFixedCount, result.segmentCount, blank)
-            nextSegmentTranslations[language] = filled
-            nextTranslations[language] = joinSegmentTexts(filled, language)
-            nextPriorities.set(language, segmentRequestPriority)
-          }
-          const updatedPendingTurn: PendingSpeakerTurn = {
-            ...latestPendingTurn,
-            segmentTranslations: nextSegmentTranslations,
-            partialTranslations: nextTranslations,
-            partialTranslationPriorities: nextPriorities,
-            currentTurnPreviousState: buildCurrentTurnPreviousStatePayload(
-              currentLang,
-              requestSourceText,
-              nextTranslations,
-            ),
-          }
-          pendingTurnsBySpeakerRef.current[latestPendingTurn.speaker] = updatedPendingTurn
-          if (activePartialSpeakerRef.current === latestPendingTurn.speaker) {
-            partialTranslationsRef.current = nextTranslations
-            setPartialTranslations(nextTranslations)
-          }
-          bumpPendingTurnRenderVersion()
-        })
-        continue
-      }
       const isInitialPartialRequest = !runtime.hasFiredInitialRequest
       const targetLanguagesChanged = runtime.lastTargetSignature !== targetLanguageSignature
       const scheduleDecision = shouldTriggerPartialTranslate({

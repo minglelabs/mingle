@@ -23,13 +23,6 @@ import {
 } from '@/app/api/translate/finalize/utils'
 import { shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import {
-  isBubbleSegmentPlanComplete,
-  joinBubbleSegmentTranslations,
-  parseBubbleSegments,
-  planBubbleSegmentFill,
-  type BubbleSegmentPlan,
-} from '@/lib/bubble-segments'
-import {
   normalizeSelectableTranslationModel,
   resolveDefaultSelectableTranslationModel,
   type UserSelectableTranslationModel,
@@ -425,10 +418,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   }
   const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
   const sourceLanguage = sourceLanguageRaw || 'unknown'
-  const bubbleSegmentsPayload = parseBubbleSegments(body.bubbleSegments)
-  // A bubble translated segment by segment keeps the source language its
-  // fixed segments were translated from, so it is never re-detected.
-  const shouldRedetectSourceLanguage = !bubbleSegmentsPayload && shouldRedetectSourceLanguageFromRequest({
+  const shouldRedetectSourceLanguage = shouldRedetectSourceLanguageFromRequest({
     pathname: requestMeta.requestPathname,
     isFinal,
     sourceLanguage,
@@ -495,13 +485,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const coinRequestDigest = coinKeyDigest(sessionKeyHint, text, targetLanguages.join(','), isFinal)
 
   const immediatePreviousTurn = parseImmediatePreviousTurn(body.immediatePreviousTurn)
-  const bubbleSegmentPlan: BubbleSegmentPlan | null = bubbleSegmentsPayload
-    ? planBubbleSegmentFill(bubbleSegmentsPayload, targetLanguages, sourceLanguage)
-    : null
   const ctx: HandlerTranslateContext = {
-    text: bubbleSegmentPlan && !isBubbleSegmentPlanComplete(bubbleSegmentPlan)
-      ? bubbleSegmentPlan.blankSourceText
-      : text,
+    text,
     sourceLanguage,
     targetLanguages,
     provider: providerConfig.provider,
@@ -510,13 +495,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     currentTurnPreviousState,
     isFinal,
     requestMeta,
-    ...(bubbleSegmentPlan ? {
-      bubbleSegments: {
-        sources: bubbleSegmentPlan.sources,
-        fixedCount: bubbleSegmentPlan.fixedCount,
-        fixedTranslations: bubbleSegmentPlan.fixedTranslations,
-      },
-    } : {}),
   }
   logTranslateFinalizeInfo('request', {
     provider: providerConfig.provider,
@@ -529,10 +507,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     hasImmediatePreviousTurn: Boolean(immediatePreviousTurn),
     hasCurrentTurnPreviousState: Boolean(currentTurnPreviousState),
     currentTurnPreviousLanguages: Object.keys(currentTurnPreviousState?.translations || {}),
-    ...(bubbleSegmentPlan ? {
-      bubbleSegmentCount: bubbleSegmentPlan.sources.length,
-      bubbleSegmentFixedCount: bubbleSegmentPlan.fixedCount,
-    } : {}),
   })
 
   try {
@@ -541,7 +515,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       targetLanguages,
     )
     const buildResponseWithOptionalTts = async (
-      rawTranslations: Record<string, string>,
+      translations: Record<string, string>,
       meta: {
         provider: string
         infrastructureProvider: string
@@ -554,19 +528,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         usedFallbackFromPreviousState?: boolean
       },
     ): Promise<NextResponse> => {
-      // Segment mode: the provider filled only the blank. The response carries
-      // that fill (for the client's fixed segment list) and the whole bubble.
-      const segmentFills = bubbleSegmentPlan && !meta.usedFallbackFromPreviousState ? rawTranslations : null
-      const translations = segmentFills && bubbleSegmentPlan
-        ? joinBubbleSegmentTranslations(bubbleSegmentPlan, segmentFills, targetLanguages)
-        : rawTranslations
       const responsePayload: Record<string, unknown> = {
         translations,
-        ...(segmentFills && bubbleSegmentPlan ? {
-          segmentTranslations: segmentFills,
-          segmentFixedCount: bubbleSegmentPlan.fixedCount,
-          segmentCount: bubbleSegmentPlan.sources.length,
-        } : {}),
         provider: meta.provider,
         infrastructureProvider: meta.infrastructureProvider,
         model: meta.model,
@@ -653,15 +616,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       const response = NextResponse.json(responsePayload)
       ensureTrackingContext(request, response, { sessionKeyHint })
       return response
-    }
-
-    if (bubbleSegmentPlan && isBubbleSegmentPlanComplete(bubbleSegmentPlan)) {
-      // Every segment already has its fixed translation: nothing to ask the model.
-      return await buildResponseWithOptionalTts({}, {
-        provider: 'bubble-segments',
-        infrastructureProvider: 'none',
-        model: 'none',
-      })
     }
 
     let selectedResult: TranslationEngineResult | null = null
@@ -807,25 +761,20 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     // deciding which targets are missing.
     const modelSourceLanguage = selectedResult.sourceLanguage || ''
     const modelDetectedChinese = classifyChineseLanguage(modelSourceLanguage) !== ''
-    const normalizeContentFor = (sourceText: string, translations: Record<string, string>) => normalizeChineseContent({
+    const normalizedContent = normalizeChineseContent({
       sourceLanguage: modelSourceLanguage
         ? (modelDetectedChinese ? 'zh' : modelSourceLanguage)
         : sourceLanguage,
-      sourceText,
-      translations,
+      sourceText: text,
+      translations: selectedResult.translations,
       targetLanguages,
       candidates: targetLanguages,
       ...(modelDetectedChinese
         ? { sourceHint: sourceLanguage, sourceFallback: modelSourceLanguage }
         : {}),
     })
-    // Segment mode translates only the blank, so a sibling Chinese variant is
-    // converted from the blank's source; the display text still covers the bubble.
-    const normalizedContent = normalizeContentFor(ctx.text, selectedResult.translations)
     const normalizedSourceLanguage = normalizedContent.sourceLanguage
-    const sourceDisplayText = bubbleSegmentPlan
-      ? normalizeContentFor(text, {}).sourceDisplayText
-      : normalizedContent.sourceDisplayText
+    const sourceDisplayText = normalizedContent.sourceDisplayText
 
     const translations: Record<string, string> = {}
     for (const lang of targetLanguages) {

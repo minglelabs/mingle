@@ -33,12 +33,6 @@ export type MingleSttClientConfig = {
     stt_segmentation_mode?: string;
     soniox_endpoint_max_delay_ms?: number;
     soniox_endpoint_tuning_step?: number;
-    /**
-     * Keep one bubble open across Soniox <end> markers: each <end> commits a
-     * segment, and the bubble is finalized only after this much silence
-     * following an <end>. 0 or absent keeps one bubble per <end>.
-     */
-    soniox_bubble_hold_ms?: number;
 };
 
 export type MingleSttFinalTurnPayload = {

@@ -206,58 +206,6 @@ describe('/api/translate/finalize route', () => {
     vi.unstubAllGlobals()
   })
 
-  it('fills only the blank segment of a held bubble and keeps the fixed translations', async () => {
-    mockGenerateContent.mockResolvedValue({
-      response: {
-        text: () => '{"en":"and then we went home."}',
-        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
-      },
-    })
-    const POST = await importRouteWithEnv()
-
-    const res = await POST(makeJsonRequest({
-      text: '어제 친구를 만났어. 그리고 집에 갔어.',
-      sourceLanguage: 'ko',
-      targetLanguages: ['en'],
-      isFinal: true,
-      bubbleSegments: {
-        sources: ['어제 친구를 만났어.', '그리고 집에 갔어.'],
-        translations: { en: ['I met a friend yesterday.'] },
-      },
-    }) as never)
-    const json = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(json.translations).toEqual({ en: 'I met a friend yesterday. and then we went home.' })
-    expect(json.segmentTranslations).toEqual({ en: 'and then we went home.' })
-    expect(json.segmentFixedCount).toBe(1)
-    expect(json.segmentCount).toBe(2)
-    const prompt = readGeminiUserPrompt(0)
-    expect(prompt).toContain('1. "I met a friend yesterday."')
-    expect(prompt).toContain('2. "그리고 집에 갔어." [BLANK]')
-    expect(prompt).toContain('Fill [BLANK] in each target language with the translation of segment 2 only.')
-  })
-
-  it('answers a fully translated held bubble without calling the model', async () => {
-    const POST = await importRouteWithEnv()
-
-    const res = await POST(makeJsonRequest({
-      text: '안녕. 잘 지내?',
-      sourceLanguage: 'ko',
-      targetLanguages: ['en', 'ja'],
-      isFinal: true,
-      bubbleSegments: {
-        sources: ['안녕.', '잘 지내?'],
-        translations: { en: ['Hi.', 'How are you?'], ja: ['やあ。', '元気？'] },
-      },
-    }) as never)
-    const json = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(json.translations).toEqual({ en: 'Hi. How are you?', ja: 'やあ。元気？' })
-    expect(mockGenerateContent).not.toHaveBeenCalled()
-  })
-
   it('returns translations and inline Inworld TTS audio when finalize succeeds', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
