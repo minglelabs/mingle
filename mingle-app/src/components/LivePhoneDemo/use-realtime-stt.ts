@@ -2949,8 +2949,16 @@ export function replaceFinalizedUtteranceSourceInStoreState(input: {
   }
 }
 
+/** Tail fill: the leading source of an open bubble and its fixed translations. */
+interface BubbleTailState {
+  translatedSource: string
+  translations: Record<string, string>
+}
+
 interface TranslateApiResult {
   translations: Record<string, string>
+  /** Tail mode: the bubble's new fixed part, when this answer translated more of it. */
+  tailFill?: BubbleTailState
   sourceLanguage?: string
   // Present only when it differs from the text that was sent.
   sourceDisplayText?: string
@@ -3324,6 +3332,8 @@ export default function useRealtimeSTT({
   // (avoids nesting setUtterances inside setPartialTranslations updater,
   //  which causes duplicates in React Strict Mode)
   const partialTranslationsRef = useRef<Record<string, string>>({})
+  // Tail fill per open bubble (utterance id): the part the listener has read never changes.
+  const bubbleTailByUtteranceIdRef = useRef<Record<string, BubbleTailState>>({})
   const partialTranscriptRef = useRef('')
   const partialLangRef = useRef<string | null>(null)
   const pendingTurnsBySpeakerRef = useRef<Record<string, PendingSpeakerTurn>>({})
@@ -4595,6 +4605,7 @@ export default function useRealtimeSTT({
       excludeUtteranceId?: string
       sttDurationMs?: number
       totalDurationMs?: number
+      bubbleTail?: BubbleTailState
     },
   ): Promise<TranslateApiResult> => {
     const apiPath = buildClientApiPath('/translate/finalize')
@@ -4630,6 +4641,9 @@ export default function useRealtimeSTT({
       }
       if (options?.currentTurnPreviousState) {
         body.currentTurnPreviousState = options.currentTurnPreviousState
+      }
+      if (options?.bubbleTail) {
+        body.bubbleTail = options.bubbleTail
       }
       body.clientBundleRev = LIVE_TRANSLATE_CLIENT_BUNDLE_REV
       if (translationModel) {
@@ -4668,11 +4682,27 @@ export default function useRealtimeSTT({
         ? Object.fromEntries(Object.entries(data.translations as Record<string, unknown>)
           .filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
         : {}
+      const rawTailFill = data.tailFill && typeof data.tailFill === 'object' && !Array.isArray(data.tailFill)
+        ? data.tailFill as Record<string, unknown>
+        : null
+      const tailFill: BubbleTailState | undefined = rawTailFill
+        && typeof rawTailFill.translatedSource === 'string'
+        && rawTailFill.translations && typeof rawTailFill.translations === 'object'
+        ? {
+          translatedSource: rawTailFill.translatedSource,
+          translations: canonicalizeTranslationKeys(
+            Object.fromEntries(Object.entries(rawTailFill.translations as Record<string, unknown>)
+              .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
+            { candidates: targetLanguages, sourceLanguage },
+          ),
+        }
+        : undefined
       return {
         translations: canonicalizeTranslationKeys(rawTranslations, {
           candidates: targetLanguages,
           sourceLanguage: responseSourceLanguage || sourceLanguage,
         }),
+        ...(tailFill ? { tailFill } : {}),
         sourceLanguage: responseSourceLanguage,
         ...(typeof data.sourceDisplayText === 'string' && data.sourceDisplayText.trim() && data.sourceDisplayText !== text
           ? { sourceDisplayText: data.sourceDisplayText }
@@ -5135,11 +5165,15 @@ export default function useRealtimeSTT({
     const sessionKey = ensureSessionKey()
     const clientContext = buildClientContextPayload(usageSec)
     const recentTurns = buildRecentTurnContextPayload(utteranceId)
+    // The final request translates only what is left after the fixed part.
+    const bubbleTail = bubbleTailByUtteranceIdRef.current[utteranceId]
+    delete bubbleTailByUtteranceIdRef.current[utteranceId]
     const translationBody: Record<string, unknown> | null = skipTranslation ? null : {
       text, sourceLanguage: lang, targetLanguages, isFinal: true,
       sessionKey, clientContext, clientMessageId: utteranceId,
       sttDurationMs: options?.sttDurationMs,
       currentTurnPreviousState,
+      ...(bubbleTail?.translatedSource ? { bubbleTail } : {}),
       clientBundleRev: LIVE_TRANSLATE_CLIENT_BUNDLE_REV,
       ...(translationModel ? { translationModel } : {}),
       ...(recentTurns.length ? { recentTurns, immediatePreviousTurn: recentTurns[recentTurns.length - 1] } : {}),
@@ -7128,6 +7162,9 @@ export default function useRealtimeSTT({
       translateViaApi(trimmed, currentLang, targetLanguages, {
         signal: controller.signal,
         currentTurnPreviousState: pendingTurn.currentTurnPreviousState,
+        // Tail fill: keep what is already translated, add only finished sentences.
+        bubbleTail: bubbleTailByUtteranceIdRef.current[pendingTurn.utteranceId]
+          || { translatedSource: '', translations: {} },
       }).then((result) => {
         const latestPendingTurn = findPendingTurnByUtteranceId(pendingTurn.utteranceId)
         const latestRuntime = pendingTurnTranslationRuntimeRef.current[pendingTurn.utteranceId]
@@ -7161,8 +7198,11 @@ export default function useRealtimeSTT({
           stripSourceLanguageFromTranslations(latestPendingTurn.partialTranslations, currentLang),
           latestTargetLanguages,
         )
+        if (result.tailFill) {
+          bubbleTailByUtteranceIdRef.current[pendingTurn.utteranceId] = result.tailFill
+        }
         const filteredNew = filterTranslationsToTargetLanguages(
-          stripSourceLanguageFromTranslations(result.translations, currentLang),
+          stripSourceLanguageFromTranslations(result.tailFill?.translations ?? result.translations, currentLang),
           latestTargetLanguages,
         )
         const nextTranslations = { ...filteredExisting }

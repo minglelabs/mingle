@@ -206,6 +206,132 @@ describe('/api/translate/finalize route', () => {
     vi.unstubAllGlobals()
   })
 
+  it('interim tail fill adds only the finished sentence and keeps the fixed part', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"translatedSource":"그리고 집에 갔어.","en":"And then we went home."}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: '어제 친구를 만났어. 그리고 집에 갔어. 그런데 가는',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en'],
+      isFinal: false,
+      bubbleTail: {
+        translatedSource: '어제 친구를 만났어.',
+        translations: { en: 'I met a friend yesterday.' },
+      },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ en: 'I met a friend yesterday. And then we went home.' })
+    expect(json.tailFill).toEqual({
+      translatedSource: '어제 친구를 만났어. 그리고 집에 갔어.',
+      translations: { en: 'I met a friend yesterday. And then we went home.' },
+    })
+    const prompt = readGeminiUserPrompt(0)
+    expect(prompt).toContain('Already translated (fixed, the listener has read it): "어제 친구를 만났어."')
+    expect(prompt).toContain('en: "I met a friend yesterday."')
+    expect(prompt).toContain('Not yet translated (the blank): "그리고 집에 갔어. 그런데 가는"')
+  })
+
+  it('interim tail fill with no finished sentence keeps the fixed part unchanged', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"translatedSource":"","en":""}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 1, totalTokenCount: 6 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: '어제 친구를 만났어. 그런데 가는',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en'],
+      isFinal: false,
+      bubbleTail: {
+        translatedSource: '어제 친구를 만났어.',
+        translations: { en: 'I met a friend yesterday.' },
+      },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ en: 'I met a friend yesterday.' })
+    expect(json.tailFill).toBeUndefined()
+  })
+
+  it('ignores an interim fill whose source is not the start of the tail', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"translatedSource":"전혀 다른 말.","en":"Something else."}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: '그리고 집에 갔어.',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en'],
+      isFinal: false,
+      bubbleTail: { translatedSource: '', translations: {} },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({})
+    expect(json.tailFill).toBeUndefined()
+  })
+
+  it('final tail fill translates the whole rest after the fixed part', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"en":"But on the way"}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: '어제 친구를 만났어. 그런데 가는',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en'],
+      isFinal: true,
+      bubbleTail: {
+        translatedSource: '어제 친구를 만났어.',
+        translations: { en: 'I met a friend yesterday.' },
+      },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ en: 'I met a friend yesterday. But on the way' })
+    expect(json.tailFill).toBeUndefined()
+    expect(readGeminiUserPrompt(0)).toContain('Fill the blank: translate the whole blank.')
+  })
+
+  it('answers a fully fixed bubble without calling the model', async () => {
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: '안녕. 잘 지내?',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en'],
+      isFinal: true,
+      bubbleTail: { translatedSource: '안녕. 잘 지내?', translations: { en: 'Hi. How are you?' } },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ en: 'Hi. How are you?' })
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
   it('returns translations and inline Inworld TTS audio when finalize succeeds', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {

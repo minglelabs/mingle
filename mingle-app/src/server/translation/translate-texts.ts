@@ -70,6 +70,8 @@ export type TranslationEngineResult = {
   sourceLanguage?: string
   sourceLanguagesMixed?: boolean
   sourceTextHasForeignScript?: boolean
+  /** Tail mode (interim): the leading part of the tail the model translated, copied from the source. */
+  tailTranslatedSource?: string
   provider: TranslationProvider
   infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
@@ -213,6 +215,15 @@ export type TranslateContext = {
   isFinal: boolean
   systemPromptOverride?: string
   userPromptOverride?: string
+  /**
+   * Tail fill-in-the-blank: `text` is the tail of the bubble after
+   * `fixedSource`, whose fixed translations the model sees but never rewrites.
+   * Interim requests translate only the complete sentences of the tail.
+   */
+  bubbleTail?: {
+    fixedSource: string
+    fixedTranslations: Record<string, string>
+  }
 }
 
 type GeminiUsageMetadata = {
@@ -769,6 +780,9 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
   if (ctx.systemPromptOverride && ctx.userPromptOverride) {
     return { systemPrompt: ctx.systemPromptOverride, userPrompt: ctx.userPromptOverride }
   }
+  if (ctx.bubbleTail && !ctx.shouldRedetectSourceLanguage) {
+    return buildBubbleTailFillPrompt(ctx, ctx.bubbleTail)
+  }
 
   const immediatePreviousTurn = selectPromptImmediatePreviousTurn(ctx.immediatePreviousTurn)
   const includeSourceLanguage = !ctx.shouldRedetectSourceLanguage
@@ -829,13 +843,111 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
   }
 }
 
+export const TAIL_TRANSLATED_SOURCE_KEY = 'translatedSource'
+
+/** Interim tail requests also return which part of the tail they translated. */
+function isInterimBubbleTail(ctx: Pick<TranslateContext, 'bubbleTail' | 'isFinal' | 'shouldRedetectSourceLanguage'>): boolean {
+  return Boolean(ctx.bubbleTail) && !ctx.isFinal && !ctx.shouldRedetectSourceLanguage
+}
+
+function buildBubbleTailFillPrompt(
+  ctx: TranslateContext,
+  tail: NonNullable<TranslateContext['bubbleTail']>,
+): { systemPrompt: string, userPrompt: string } {
+  const chineseGlossaryLines = involvesChinese(ctx) ? [CHINESE_VARIANT_GLOSSARY_LINE] : []
+  const interim = isInterimBubbleTail(ctx)
+  const fullSource = tail.fixedSource ? `${tail.fixedSource} ${ctx.text}` : ctx.text
+  const userPromptLines = [
+    `source=${ctx.sourceLanguage}`,
+    `targets=${ctx.targetLanguages.join(', ')}`,
+    `is_final=${ctx.isFinal ? 'yes' : 'no'}`,
+    '',
+    `Speech bubble so far: "${fullSource}"`,
+  ]
+  if (tail.fixedSource) {
+    userPromptLines.push(
+      '',
+      `Already translated (fixed, the listener has read it): "${tail.fixedSource}"`,
+      ...ctx.targetLanguages.map((language) => `  ${language}: "${tail.fixedTranslations[language] || ''}"`),
+    )
+  }
+  userPromptLines.push('', `Not yet translated (the blank): "${ctx.text}"`)
+  userPromptLines.push('', interim
+    ? `Fill the blank: translate only the complete sentences at the start of the blank, and copy those exact source words into ${TAIL_TRANSLATED_SOURCE_KEY}.`
+    : 'Fill the blank: translate the whole blank.')
+
+  const immediatePreviousTurn = selectPromptImmediatePreviousTurn(ctx.immediatePreviousTurn)
+  if (immediatePreviousTurn) {
+    userPromptLines.push(
+      '',
+      formatSingleTurnForPromptWithOptions('Previous bubble', immediatePreviousTurn, {
+        includeSourceLanguage: true,
+      }),
+    )
+  }
+
+  const keysLine = interim
+    ? `Return ONLY strict JSON with keys exactly matching ${TAIL_TRANSLATED_SOURCE_KEY} and the target language codes.`
+    : 'Return ONLY strict JSON with keys exactly matching target language codes.'
+  const tailRules = interim
+    ? [
+      'The speaker is still talking, so the blank may end in an unfinished sentence.',
+      'Translate every complete sentence at the start of the blank, however short: a one-word sentence such as "Yes." or "네." is complete and must be translated.',
+      'A sentence is complete when it ends with sentence-final punctuation (. ? ! 。 ？ ！) or is clearly finished. Leave an unfinished sentence at the end of the blank untranslated; it will be translated once it is finished.',
+      `${TAIL_TRANSLATED_SOURCE_KEY} holds the exact source text you translated, copied word for word from the start of the blank. When the blank has no complete sentence yet, return "" for ${TAIL_TRANSLATED_SOURCE_KEY} and for every target language.`,
+    ]
+    : ['The bubble is finished: translate the entire blank, including its last sentence.']
+  return {
+    systemPrompt: [
+      'You are an expert live-conversation translator.',
+      keysLine,
+      'No explanations, no markdown, no extra keys.',
+      'The start of the speech bubble already has fixed translations that the listener has read; they never change.',
+      'For each target language, return ONLY the translation of the blank, written so that it continues the fixed translation naturally and the whole bubble reads as one fluent translation.',
+      'Never repeat, rephrase or correct the fixed translations. Use them and the whole bubble for context (pronouns, tone, honorifics, terminology).',
+      ...tailRules,
+      ...chineseGlossaryLines,
+    ].join('\n'),
+    userPrompt: userPromptLines.join('\n'),
+  }
+}
+
+/** The tail's translated source from a tail-mode answer ('' when absent). */
+export function parseTailTranslatedSource(content: string): string {
+  try {
+    const parsed = JSON.parse(extractJsonText(content)) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return ''
+    const value = (parsed as Record<string, unknown>)[TAIL_TRANSLATED_SOURCE_KEY]
+    return typeof value === 'string' ? value.trim() : ''
+  } catch {
+    return ''
+  }
+}
+
+function withoutTailTranslatedSourceKey(translations: Record<string, string>): Record<string, string> {
+  const output: Record<string, string> = {}
+  for (const [key, value] of Object.entries(translations)) {
+    if (key.toLowerCase() === TAIL_TRANSLATED_SOURCE_KEY.toLowerCase()) continue
+    output[key] = value
+  }
+  return output
+}
+
 // ─── Gemini response schema ─────────────────────────────────────────────────
 
 function buildGeminiResponseSchema(targetLanguages: string[], options?: {
   shouldRedetectSourceLanguage: boolean
+  interimBubbleTail?: boolean
 }): ResponseSchema {
   const properties: Record<string, ResponseSchema> = {}
   const required = [...targetLanguages]
+  if (options?.interimBubbleTail) {
+    properties[TAIL_TRANSLATED_SOURCE_KEY] = {
+      type: SchemaType.STRING,
+      description: 'The source text translated in this answer, copied word for word from the start of the blank ("" when none).',
+    }
+    required.unshift(TAIL_TRANSLATED_SOURCE_KEY)
+  }
 
   if (options?.shouldRedetectSourceLanguage) {
     properties.sourceLanguage = {
@@ -937,6 +1049,7 @@ export async function translateWithGemini(
 
   const responseSchema = buildGeminiResponseSchema(ctx.targetLanguages, {
     shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
+    interimBubbleTail: isInterimBubbleTail(ctx),
   })
   const model = genAI.getGenerativeModel({
     model: config.model,
@@ -990,7 +1103,8 @@ export async function translateWithGemini(
     return null
   }
 
-  const translations = parseTranslations(content)
+  const translations = withoutTailTranslatedSourceKey(parseTranslations(content))
+  const tailTranslatedSource = isInterimBubbleTail(ctx) ? parseTailTranslatedSource(content) : ''
   const declaredSourceLanguage = ctx.shouldRedetectSourceLanguage ? parseDetectedSourceLanguage(content) : ''
   const sourceLanguagesMixed = ctx.shouldRedetectSourceLanguage ? parseSourceLanguagesMixed(content) : false
   const sourceTextHasForeignScript = ctx.shouldRedetectSourceLanguage ? parseSourceTextHasForeignScript(content) : false
@@ -1026,6 +1140,7 @@ export async function translateWithGemini(
     ...(detectedSourceLanguage ? { sourceLanguage: detectedSourceLanguage } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
+    ...(tailTranslatedSource ? { tailTranslatedSource } : {}),
     provider: config.provider,
     infrastructureProvider: config.infrastructureProvider,
     model: config.model,
@@ -1058,6 +1173,10 @@ function buildTranslationResponseJsonSchema(ctx: TranslateContext): Record<strin
     properties.sourceLanguagesMixed = { type: 'boolean', description: 'Whether the current utterance meaningfully mixes multiple source languages.' }
     properties.sourceTextHasForeignScript = { type: 'boolean', description: 'Whether the current utterance contains substantive foreign script for the detected source language.' }
     required.push('sourceLanguage', 'sourceLanguagesMixed', 'sourceTextHasForeignScript')
+  }
+  if (isInterimBubbleTail(ctx)) {
+    properties[TAIL_TRANSLATED_SOURCE_KEY] = { type: 'string', description: 'The source text translated in this answer, copied word for word from the start of the blank ("" when none).' }
+    required.push(TAIL_TRANSLATED_SOURCE_KEY)
   }
   for (const language of ctx.targetLanguages) {
     properties[language] = { type: 'string', description: describeOpenAICompatibleTargetLanguage(language) }
@@ -1289,7 +1408,8 @@ export async function translateWithOpenAICompatible(
     return null
   }
 
-  const translations = parseTranslations(content)
+  const translations = withoutTailTranslatedSourceKey(parseTranslations(content))
+  const tailTranslatedSource = isInterimBubbleTail(ctx) ? parseTailTranslatedSource(content) : ''
   const declaredSourceLanguage = ctx.shouldRedetectSourceLanguage ? parseDetectedSourceLanguage(content) : ''
   const sourceLanguagesMixed = ctx.shouldRedetectSourceLanguage ? parseSourceLanguagesMixed(content) : false
   const sourceTextHasForeignScript = ctx.shouldRedetectSourceLanguage ? parseSourceTextHasForeignScript(content) : false
@@ -1301,6 +1421,17 @@ export async function translateWithOpenAICompatible(
     : ''
 
   if (Object.keys(translations).length === 0) {
+    // Interim tail with no complete sentence yet: a blank answer, not a failure.
+    if (isInterimBubbleTail(ctx) && isBlankTranslationJson(content, ctx.targetLanguages)) {
+      return {
+        provider: config.provider,
+        infrastructureProvider: config.infrastructureProvider,
+        model: config.model,
+        translations: {},
+        emptyReason: 'blank_translations',
+        usage: normalizeUsage({ prompt: promptTokens, completion: completionTokens, reasoning: reasoningTokens, total: totalTokens }),
+      }
+    }
     logError(`${config.provider}_unparseable_json`, { ...buildLogContext(ctx) })
     return null
   }
@@ -1315,6 +1446,7 @@ export async function translateWithOpenAICompatible(
     ...(detectedSourceLanguage ? { sourceLanguage: detectedSourceLanguage } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
+    ...(tailTranslatedSource ? { tailTranslatedSource } : {}),
     provider: config.provider,
     infrastructureProvider: config.infrastructureProvider,
     model: config.model,
