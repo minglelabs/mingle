@@ -21,6 +21,7 @@ export type AdminAuditAction =
   | 'activity.mark_read'
   | 'activity.comment'
   | 'activity.comment_generated'
+  | 'activity.reply_generated'
   | 'inbox.auto_reply'
   | 'settings.auto_reply'
   | 'settings.post_reserve'

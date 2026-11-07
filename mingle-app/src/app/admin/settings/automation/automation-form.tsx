@@ -219,6 +219,7 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
   const [totalTarget, setTotalTarget] = useState(String(initial.settings.accounts.totalTarget))
   const [postsEnabled, setPostsEnabled] = useState(initial.settings.posts.enabled)
   const [chance, setChance] = useState(String(initial.settings.posts.chancePercent))
+  const [engagementEnabled, setEngagementEnabled] = useState(initial.settings.engagement.enabled)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -232,7 +233,7 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
   const chanceValue = toInt(chance)
   const chanceValid = within(chanceValue, 1, 100)
   const valid = intervalValid && perDayValid && totalValid && chanceValid
-  const dirty = avatarsEnabled !== saved.avatars.enabled || accountsEnabled !== saved.accounts.enabled || postsEnabled !== saved.posts.enabled
+  const dirty = avatarsEnabled !== saved.avatars.enabled || accountsEnabled !== saved.accounts.enabled || postsEnabled !== saved.posts.enabled || engagementEnabled !== saved.engagement.enabled
     || (valid && (intervalValue !== saved.avatars.intervalMinutes || perDayValue !== saved.accounts.perDay || totalValue !== saved.accounts.totalTarget || chanceValue !== saved.posts.chancePercent))
 
   const submit = async (event: FormEvent) => {
@@ -250,6 +251,7 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
           avatars: { enabled: avatarsEnabled, intervalMinutes: intervalValue },
           accounts: { enabled: accountsEnabled, perDay: perDayValue, totalTarget: totalValue },
           posts: { enabled: postsEnabled, chancePercent: chanceValue },
+          engagement: { enabled: engagementEnabled },
         }),
       })
       if (response.status === 401) {
@@ -325,6 +327,16 @@ export function AutomationForm({ initial, imageModel }: { initial: Payload; imag
           off="꺼짐: 매일 새 글을 쓰지 않습니다."
         />
         <NumberField id="auto-post-chance" label="계정별 확률" hint="계정마다 하루에 글을 쓸 확률. 1~100%." value={chance} onChange={setChance} unit="% / 일" invalid={!chanceValid} />
+      </Card>
+
+      <Card title="좋아요 · 댓글">
+        <Switch
+          checked={engagementEnabled}
+          onChange={setEngagementEnabled}
+          title="자동 반응"
+          on="켜짐: 최근 4일 안에 올라간 운영 계정 글에 다른 운영 계정들이 시간을 두고 좋아요·댓글을 남깁니다. 글쓴이가 댓글에 답하고, 가끔 다른 사람도 대댓글을 달며, 댓글·대댓글에도 좋아요가 붙습니다. 실제 유저의 글과 댓글에는 반응하지 않습니다."
+          off="꺼짐: 자동으로 반응하지 않습니다."
+        />
       </Card>
 
       <Card title="잠재 글">

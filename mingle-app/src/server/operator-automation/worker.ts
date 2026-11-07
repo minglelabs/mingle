@@ -8,6 +8,7 @@ import { generateReservePosts, pickReserveTopics, reservePosterProfile } from '@
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { loadExistingReserveTexts, loadReservePersona } from '@/server/operator-post-reserve/worker'
 import { canDrawImagesHere } from '@/server/operator-avatars/generate'
+import { runOperatorEngagement, type EngagementRunResult } from '@/server/operator-engagement/engagement'
 import { getAutomationSettings, getAutomationState, saveAutomationState } from './settings'
 
 /**
@@ -17,6 +18,8 @@ import { getAutomationSettings, getAutomationState, saveAutomationState } from '
  *   each from the country furthest below its share of the seed plan.
  * - posts: once a day (Korean time) each approved operator account writes one
  *   new post with a set chance, straight into the review queue.
+ * - engagement: every few minutes, likes, comments, replies and comment likes
+ *   that are due on recent operator posts (operator-engagement/engagement.ts).
  * Automatic accounts and posts go to the front of the review queue; staff
  * publish them there. The same steps are exported for the manual buttons,
  * which ignore the pace but nothing else.
@@ -25,6 +28,8 @@ export const AVATAR_MAX_FAILURES = 3
 const ACCOUNT_AGE_MIN = 20
 const ACCOUNT_AGE_MAX = 34
 const DAY_MS = 24 * 60 * 60_000
+/** How often the reactions on recent posts are brought up to date. */
+const ENGAGEMENT_INTERVAL_MS = 5 * 60_000
 
 /** Audit context of the worker: no admin session is involved. */
 const WORKER_CONTEXT: AdminContext = { sessionId: null, ip: null, userAgent: 'operator-automation' }
@@ -139,6 +144,7 @@ export type AutomationRunSummary = {
   avatar: 'off' | 'waiting' | 'none' | 'generated' | 'failed'
   account: 'off' | 'waiting' | 'target_reached' | 'created' | 'failed'
   posts: 'off' | 'waiting' | { accounts: number; written: number; failed: number }
+  engagement: 'off' | 'waiting' | EngagementRunResult | 'failed'
 }
 
 export type DailyPostsResult = { accounts: number; written: number; failed: number }
@@ -203,8 +209,8 @@ export async function writeDailyOperatorPosts(chancePercent: number, now: Date, 
 export async function runOperatorAutomation(options: { now?: () => Date } = {}): Promise<AutomationRunSummary> {
   const now = options.now ?? (() => new Date())
   const settings = await getAutomationSettings()
-  const summary: AutomationRunSummary = { avatar: 'off', account: 'off', posts: 'off' }
-  if (!settings.avatars.enabled && !settings.accounts.enabled && !settings.posts.enabled) return summary
+  const summary: AutomationRunSummary = { avatar: 'off', account: 'off', posts: 'off', engagement: 'off' }
+  if (!settings.avatars.enabled && !settings.accounts.enabled && !settings.posts.enabled && !settings.engagement.enabled) return summary
   const state = await getAutomationState()
 
   if (settings.accounts.enabled) {
@@ -226,6 +232,17 @@ export async function runOperatorAutomation(options: { now?: () => Date } = {}):
       await saveAutomationState({ lastPostsDay: today })
       console.info('[operator-automation] posts_step_start', { day: today, chancePercent: settings.posts.chancePercent })
       summary.posts = await writeDailyOperatorPosts(settings.posts.chancePercent, now())
+    }
+  }
+
+  if (settings.engagement.enabled) {
+    if (!due(state.lastEngagementAt, ENGAGEMENT_INTERVAL_MS, now())) summary.engagement = 'waiting'
+    else {
+      await saveAutomationState({ lastEngagementAt: now().toISOString() })
+      summary.engagement = await runOperatorEngagement(now()).catch((error) => {
+        console.warn('[operator-automation] engagement_failed', { error: error instanceof Error ? error.name : 'unknown' })
+        return 'failed' as const
+      })
     }
   }
 
