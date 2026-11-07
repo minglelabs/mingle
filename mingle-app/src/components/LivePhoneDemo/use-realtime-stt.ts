@@ -2956,6 +2956,9 @@ interface BubbleTailState {
   /** The last fixed piece and its translations: the only context the server sends the model. */
   contextSource?: string
   contextTranslations?: Record<string, string>
+  /** Draft after the fixed part: shown, but the next request may rewrite it. */
+  draftSource?: string
+  draftTranslations?: Record<string, string>
 }
 
 interface TranslateApiResult {
@@ -4688,26 +4691,24 @@ export default function useRealtimeSTT({
       const rawTailFill = data.tailFill && typeof data.tailFill === 'object' && !Array.isArray(data.tailFill)
         ? data.tailFill as Record<string, unknown>
         : null
-      const tailFill: BubbleTailState | undefined = rawTailFill
-        && typeof rawTailFill.translatedSource === 'string'
-        && rawTailFill.translations && typeof rawTailFill.translations === 'object'
-        ? {
-          translatedSource: rawTailFill.translatedSource,
-          translations: canonicalizeTranslationKeys(
-            Object.fromEntries(Object.entries(rawTailFill.translations as Record<string, unknown>)
+      const readTailTranslations = (raw: unknown): Record<string, string> => (
+        raw && typeof raw === 'object' && !Array.isArray(raw)
+          ? canonicalizeTranslationKeys(
+            Object.fromEntries(Object.entries(raw as Record<string, unknown>)
               .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
             { candidates: targetLanguages, sourceLanguage },
-          ),
-          ...(typeof rawTailFill.contextSource === 'string' && rawTailFill.contextTranslations
-            && typeof rawTailFill.contextTranslations === 'object'
-            ? {
-              contextSource: rawTailFill.contextSource,
-              contextTranslations: canonicalizeTranslationKeys(
-                Object.fromEntries(Object.entries(rawTailFill.contextTranslations as Record<string, unknown>)
-                  .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
-                { candidates: targetLanguages, sourceLanguage },
-              ),
-            }
+          )
+          : {}
+      )
+      const tailFill: BubbleTailState | undefined = rawTailFill && typeof rawTailFill.translatedSource === 'string'
+        ? {
+          translatedSource: rawTailFill.translatedSource,
+          translations: readTailTranslations(rawTailFill.translations),
+          ...(typeof rawTailFill.contextSource === 'string' && rawTailFill.contextSource
+            ? { contextSource: rawTailFill.contextSource, contextTranslations: readTailTranslations(rawTailFill.contextTranslations) }
+            : {}),
+          ...(typeof rawTailFill.draftSource === 'string' && rawTailFill.draftSource
+            ? { draftSource: rawTailFill.draftSource, draftTranslations: readTailTranslations(rawTailFill.draftTranslations) }
             : {}),
         }
         : undefined
@@ -5187,7 +5188,7 @@ export default function useRealtimeSTT({
       sessionKey, clientContext, clientMessageId: utteranceId,
       sttDurationMs: options?.sttDurationMs,
       currentTurnPreviousState,
-      ...(bubbleTail?.translatedSource ? { bubbleTail } : {}),
+      ...(bubbleTail?.translatedSource || bubbleTail?.draftSource ? { bubbleTail } : {}),
       clientBundleRev: LIVE_TRANSLATE_CLIENT_BUNDLE_REV,
       ...(translationModel ? { translationModel } : {}),
       ...(recentTurns.length ? { recentTurns, immediatePreviousTurn: recentTurns[recentTurns.length - 1] } : {}),
@@ -7215,8 +7216,9 @@ export default function useRealtimeSTT({
         if (result.tailFill) {
           bubbleTailByUtteranceIdRef.current[pendingTurn.utteranceId] = result.tailFill
         }
+        // Tail mode: `translations` is what to show (fixed part, then the draft).
         const filteredNew = filterTranslationsToTargetLanguages(
-          stripSourceLanguageFromTranslations(result.tailFill?.translations ?? result.translations, currentLang),
+          stripSourceLanguageFromTranslations(result.translations, currentLang),
           latestTargetLanguages,
         )
         const nextTranslations = { ...filteredExisting }

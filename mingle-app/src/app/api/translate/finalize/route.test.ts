@@ -238,7 +238,7 @@ describe('/api/translate/finalize route', () => {
     const prompt = readGeminiUserPrompt(0)
     expect(prompt).toContain('previous (fixed): "어제 친구를 만났어."')
     expect(prompt).toContain('en: "I met a friend yesterday."')
-    expect(prompt).toContain('blank: "그리고 집에 갔어. 그런데 가는"')
+    expect(prompt).toContain('open: "그리고 집에 갔어. 그런데 가는"')
   })
 
   it('shows the model only the last fixed piece as context', async () => {
@@ -266,7 +266,7 @@ describe('/api/translate/finalize route', () => {
     const prompt = readGeminiUserPrompt(0)
     expect(prompt).toContain('previous (fixed): "그리고 집에 갔어."')
     expect(prompt).not.toContain('어제 친구를 만났어')
-    expect(prompt).toContain('blank: "그런데 가는"')
+    expect(prompt).toContain('open: "그런데 가는"')
   })
 
   it('interim tail fill with no finished sentence keeps the fixed part unchanged', async () => {
@@ -292,7 +292,43 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
     expect(json.translations).toEqual({ en: 'I met a friend yesterday.' })
-    expect(json.tailFill).toBeUndefined()
+    expect(json.tailFill.translatedSource).toBe('어제 친구를 만났어.')
+    expect(json.tailFill.draftSource).toBeUndefined()
+  })
+
+  it('shows a draft of the unfinished sentence and sends it back as rewritable', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"translatedSource":"","en":"","draft":{"source":"그런데 가는 길에","en":"But on the way"}}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: '어제 친구를 만났어. 그런데 가는 길에 비가',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en'],
+      isFinal: false,
+      bubbleTail: {
+        translatedSource: '어제 친구를 만났어.',
+        translations: { en: 'I met a friend yesterday.' },
+        draftSource: '그런데',
+        draftTranslations: { en: 'But' },
+      },
+    }) as never)
+    const json = await res.json()
+
+    expect(json.translations).toEqual({ en: 'I met a friend yesterday. But on the way' })
+    expect(json.tailFill).toMatchObject({
+      translatedSource: '어제 친구를 만났어.',
+      translations: { en: 'I met a friend yesterday.' },
+      draftSource: '그런데 가는 길에',
+      draftTranslations: { en: 'But on the way' },
+    })
+    const prompt = readGeminiUserPrompt(0)
+    expect(prompt).toContain('open: "그런데 가는 길에 비가"')
+    expect(prompt).toContain('draft (shown, not fixed): "그런데"')
   })
 
   it('ignores an interim fill whose source is not the start of the tail', async () => {
@@ -315,7 +351,7 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
     expect(json.translations).toEqual({})
-    expect(json.tailFill).toBeUndefined()
+    expect(json.tailFill.translatedSource).toBe('')
   })
 
   it('final tail fill translates the whole rest after the fixed part', async () => {
@@ -342,7 +378,7 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
     expect(json.translations).toEqual({ en: 'I met a friend yesterday. But on the way' })
     expect(json.tailFill).toBeUndefined()
-    expect(readGeminiUserPrompt(0)).toContain('blank: "그런데 가는"')
+    expect(readGeminiUserPrompt(0)).toContain('open: "그런데 가는"')
   })
 
   it('answers a fully fixed bubble without calling the model', async () => {

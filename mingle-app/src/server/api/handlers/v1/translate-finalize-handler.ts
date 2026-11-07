@@ -23,11 +23,12 @@ import {
 } from '@/app/api/translate/finalize/utils'
 import { shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import {
-  extendFixedSource,
-  joinTailTranslations,
-  matchTranslatedTailLength,
+  hasBubbleTailContent,
+  joinShownTailTranslations,
   parseBubbleTail,
   planBubbleTail,
+  resolveBubbleTailAnswer,
+  type BubbleTailPayload,
   type BubbleTailPlan,
 } from '@/lib/bubble-tail'
 import {
@@ -428,8 +429,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const sourceLanguage = sourceLanguageRaw || 'unknown'
   const bubbleTailPayload = parseBubbleTail(body.bubbleTail)
   // Tail mode keeps the source language its fixed part was translated from.
-  // A final request with nothing fixed yet is an ordinary final translation.
-  const bubbleTailRequested = Boolean(bubbleTailPayload && (!isFinal || bubbleTailPayload.translatedSource))
+  // A final request with nothing translated yet is an ordinary final translation.
+  const bubbleTailRequested = Boolean(bubbleTailPayload && (!isFinal || hasBubbleTailContent(bubbleTailPayload)))
   const shouldRedetectSourceLanguage = !bubbleTailRequested && shouldRedetectSourceLanguageFromRequest({
     pathname: requestMeta.requestPathname,
     isFinal,
@@ -514,6 +515,10 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       bubbleTail: {
         fixedSource: bubbleTailPlan.contextSource,
         fixedTranslations: bubbleTailPlan.contextTranslations,
+        ...(bubbleTailPlan.draftSource ? {
+          draftSource: bubbleTailPlan.draftSource,
+          draftTranslations: bubbleTailPlan.draftTranslations,
+        } : {}),
       },
     } : {}),
   }
@@ -535,9 +540,9 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   })
 
   try {
-    // Tail mode falls back to the fixed translations: they never change.
+    // Tail mode falls back to what the listener sees now: the fixed part and the draft.
     const fallbackTranslations = bubbleTailPlan
-      ? { ...bubbleTailPlan.fixedTranslations }
+      ? joinShownTailTranslations(bubbleTailPlan, targetLanguages)
       : buildFallbackTranslationsFromCurrentTurnPreviousState(
         currentTurnPreviousState,
         targetLanguages,
@@ -555,42 +560,21 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         sourceTextHasForeignScript?: boolean
         usedFallbackFromPreviousState?: boolean
         tailTranslatedSource?: string
+        tailDraft?: { source: string, translations: Record<string, string> }
       },
     ): Promise<NextResponse> => {
-      // Tail mode: the provider filled only the blank. An interim answer covers
-      // the complete sentences it names; the final answer covers the whole tail.
+      // Tail mode: the provider translated only what follows the fixed part.
+      // Complete sentences become fixed, the draft after them may change later.
       let translations = rawTranslations
-      let tailFill: {
-        translatedSource: string
-        translations: Record<string, string>
-        contextSource: string
-        contextTranslations: Record<string, string>
-      } | null = null
+      let tailFill: BubbleTailPayload | null = null
       if (bubbleTailPlan && !meta.usedFallbackFromPreviousState) {
-        const coveredLength = isFinal
-          ? bubbleTailPlan.remainingSource.length
-          : matchTranslatedTailLength(bubbleTailPlan.remainingSource, meta.tailTranslatedSource || '')
-        const hasFill = coveredLength > 0 && Object.keys(rawTranslations).length > 0
-        translations = hasFill
-          ? joinTailTranslations(bubbleTailPlan, rawTranslations, targetLanguages)
-          : { ...bubbleTailPlan.fixedTranslations }
-        if (!isFinal && hasFill) {
-          tailFill = {
-            translatedSource: extendFixedSource(bubbleTailPlan, coveredLength),
-            translations,
-            // The piece just translated is the next request's only context.
-            contextSource: bubbleTailPlan.remainingSource.slice(0, coveredLength).trim(),
-            contextTranslations: Object.fromEntries(targetLanguages
-              .filter((language) => Boolean(rawTranslations[language]))
-              .map((language) => [language, rawTranslations[language] as string])),
-          }
-        }
-        if (!isFinal && !hasFill && Object.keys(rawTranslations).length > 0) {
-          logTranslateFinalizeWarning('bubble_tail_unmatched_source', {
-            ...buildTranslateFinalizeLogContext(ctx),
-            tailTranslatedSource: meta.tailTranslatedSource || '',
-          })
-        }
+        const resolution = resolveBubbleTailAnswer(bubbleTailPlan, {
+          fills: rawTranslations,
+          translatedSource: meta.tailTranslatedSource || '',
+          draft: meta.tailDraft || null,
+        }, targetLanguages, isFinal)
+        translations = resolution.translations
+        tailFill = resolution.tailFill
       }
       const responsePayload: Record<string, unknown> = {
         translations,
@@ -685,7 +669,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
 
     if (bubbleTailPlan && !bubbleTailPlan.remainingSource) {
       // Nothing after the fixed part: nothing to ask the model.
-      return await buildResponseWithOptionalTts({ ...bubbleTailPlan.fixedTranslations }, {
+      return await buildResponseWithOptionalTts({}, {
         provider: 'bubble-tail',
         infrastructureProvider: 'none',
         model: 'none',
@@ -759,6 +743,22 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       }
 
       if (hasUsableTranslationResult(selectedResult, ctx.isFinal)) break
+    }
+
+    if (
+      bubbleTailPlan
+      && selectedResult?.emptyReason === 'blank_translations'
+      && !ctx.isFinal
+      && !providerRequestFailureReason
+    ) {
+      // No complete sentence yet, but the answer may still carry a new draft.
+      return await buildResponseWithOptionalTts({}, {
+        provider: selectedResult.provider,
+        infrastructureProvider: selectedResult.infrastructureProvider,
+        model: selectedResult.model,
+        usage: selectedResult.usage,
+        tailDraft: selectedResult.tailDraft,
+      })
     }
 
     if (
@@ -964,6 +964,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       sourceLanguagesMixed: selectedResult.sourceLanguagesMixed,
       sourceTextHasForeignScript: selectedResult.sourceTextHasForeignScript,
       tailTranslatedSource: selectedResult.tailTranslatedSource,
+      tailDraft: selectedResult.tailDraft,
     })
   } catch (error) {
     logTranslateFinalizeError('unexpected_handler_error', {
