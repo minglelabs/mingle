@@ -24,6 +24,9 @@ import {
     resolveSonioxBoundaryHandling,
     resolveSonioxSegmentationRuntime,
     resolveSonioxEndpointTuningProfile,
+    resolveSonioxBubbleHoldMs,
+    buildEmittedSegments,
+    sliceNewSegment,
     selectSonioxBoundarySpeakerIds,
     stripEndpointMarkers,
     type SonioxBoundaryMarker,
@@ -100,7 +103,9 @@ export function createSttServer(options: SttServerOptions = {}) {
     const wss = new WebSocketServer({ server });
     let connectionCounter = 0;
     wss.on('connection', (clientWs, request) => {
-        handleSttConnection(clientWs, ++connectionCounter, options, readCoinBillingQuery(request.url));
+        handleSttConnection(
+            clientWs, ++connectionCounter, options, readCoinBillingQuery(request.url), readBubbleHoldQuery(request.url),
+        );
     });
     return { server, wss };
 }
@@ -137,11 +142,25 @@ function readCoinBillingQuery(requestUrl: string | undefined): { token: string; 
     }
 }
 
+// Bubble hold also rides on the socket URL, so native STT modules (which
+// whitelist their config fields) opt in without a native release.
+function readBubbleHoldQuery(requestUrl: string | undefined): number | undefined {
+    try {
+        const raw = new URL(requestUrl || '/', 'http://stt.local').searchParams.get('bubble_hold_ms');
+        if (raw === null || !raw.trim()) return undefined;
+        const value = Number(raw);
+        return Number.isFinite(value) ? value : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 function handleSttConnection(
     clientWs: WebSocket,
     connId: number,
     options: SttServerOptions,
     coinQuery: { token: string; sessionKey: string } = { token: '', sessionKey: '' },
+    bubbleHoldQueryMs?: number,
 ) {
     const connectedAt = Date.now();
     console.log(`[conn:${connId}] client connected`);
@@ -683,10 +702,15 @@ function handleSttConnection(
                     Math.min(SONIOX_ENDPOINT_MAX_DELAY_MS_MAX, Math.floor(raw)),
                 );
             })();
-            const endpointTuningProfile = config.soniox_endpoint_tuning_step === undefined
-                || config.soniox_endpoint_tuning_step === null
-                ? null
-                : resolveSonioxEndpointTuningProfile(config.soniox_endpoint_tuning_step);
+            const sonioxBubbleHoldMs = resolveSonioxBubbleHoldMs(config.soniox_bubble_hold_ms ?? bubbleHoldQueryMs);
+            // Bubble hold wants many small segments: Soniox ends as eagerly as it can,
+            // and the bubble boundary comes from the hold silence instead.
+            const endpointTuningProfile = sonioxBubbleHoldMs > 0
+                ? resolveSonioxEndpointTuningProfile(0)
+                : config.soniox_endpoint_tuning_step === undefined
+                    || config.soniox_endpoint_tuning_step === null
+                    ? null
+                    : resolveSonioxEndpointTuningProfile(config.soniox_endpoint_tuning_step);
             const segmentationRuntime = resolveSonioxSegmentationRuntime(
                 segmentationStrategyId,
                 segmentationStrategyId === 'end'
@@ -694,12 +718,13 @@ function handleSttConnection(
                     : sonioxManualFinalizeSilenceMs,
             );
             const usesSonioxEndpointDetection = segmentationRuntime.effective === 'end';
+            const usesBubbleHold = usesSonioxEndpointDetection && sonioxBubbleHoldMs > 0;
             const endpointDelayMs = segmentationRuntime.endpointDelayMs;
             if (segmentationRuntime.requested === 'llm') {
                 console.warn('[stt-server] llm segmentation not yet implemented; using effective=fin');
             }
             console.log(
-                `[conn:${connId}] soniox_segmentation requested=${segmentationRuntime.requested} effective=${segmentationRuntime.effective} manualSilenceMs=${sonioxManualFinalizeSilenceMs} endpointMaxDelayMs=${endpointDelayMs} endpointTuningStep=${endpointTuningProfile?.step ?? 'server-default'} endpointLatencyLevel=${endpointTuningProfile?.latencyAdjustmentLevel ?? 'server-default'} endpointSensitivity=${endpointTuningProfile?.sensitivity ?? 'server-default'}`,
+                `[conn:${connId}] soniox_segmentation requested=${segmentationRuntime.requested} effective=${segmentationRuntime.effective} manualSilenceMs=${sonioxManualFinalizeSilenceMs} endpointMaxDelayMs=${endpointDelayMs} endpointTuningStep=${endpointTuningProfile?.step ?? 'server-default'} endpointLatencyLevel=${endpointTuningProfile?.latencyAdjustmentLevel ?? 'server-default'} endpointSensitivity=${endpointTuningProfile?.sensitivity ?? 'server-default'} bubbleHoldMs=${usesBubbleHold ? sonioxBubbleHoldMs : 0}`,
             );
             type SonioxToken = {
                 text?: unknown;
@@ -731,6 +756,10 @@ function handleSttConnection(
             };
             type SonioxEndSpeakerState = SonioxCommonSpeakerState & {
                 mode: 'end';
+                /** Bubble hold: text committed by each <end> of the open bubble. */
+                committedSegments: string[];
+                committedText: string;
+                holdTimer: ReturnType<typeof setTimeout> | null;
             };
             type SonioxSpeakerState = SonioxFinSpeakerState | SonioxEndSpeakerState;
             type SonioxFinalizeRequest = {
@@ -1030,6 +1059,10 @@ function handleSttConnection(
                 },
             ): MingleSttFinalTurnPayload => {
                 const cleanedText = text.trim();
+                const segmentState = usesBubbleHold ? speakerStates.get((speaker || '').trim() || 'unknown') : undefined;
+                const committedSegments = segmentState && !isFinSpeakerState(segmentState)
+                    ? buildEmittedSegments(segmentState, cleanedText, isFinal)
+                    : null;
                 const cleanedLang = (language || '').trim() || 'unknown';
                 const cleanedSpeaker = (speaker || '').trim() || 'unknown';
                 if (!cleanedText) return null;
@@ -1041,6 +1074,7 @@ function handleSttConnection(
                         data: {
                             is_final: isFinal,
                             ...(finalizeSource ? { finalize_source: finalizeSource } : {}),
+                            ...(committedSegments ? { committed_segments: committedSegments } : {}),
                             utterance: {
                                 text: cleanedText,
                                 language: cleanedLang,
@@ -1057,10 +1091,17 @@ function handleSttConnection(
                 };
             };
 
+            const clearBubbleHold = (state: SonioxSpeakerState) => {
+                if (isFinSpeakerState(state) || !state.holdTimer) return;
+                clearTimeout(state.holdTimer);
+                state.holdTimer = null;
+            };
+
             const disposeSpeakerState = (state: SonioxSpeakerState) => {
                 if (isFinSpeakerState(state)) {
                     state.carry.dispose();
                 }
+                clearBubbleHold(state);
             };
 
             const resetSpeakerTurn = (state: SonioxSpeakerState) => {
@@ -1073,6 +1114,33 @@ function handleSttConnection(
                 state.detectedLang = 'unknown';
                 if (isFinSpeakerState(state)) {
                     state.carry.reset();
+                } else {
+                    clearBubbleHold(state);
+                    state.committedSegments = [];
+                    state.committedText = '';
+                }
+            };
+
+            // Bubble hold: <end> commits the text so far as a segment and keeps
+            // the bubble open; the bubble closes after the hold silence.
+            const commitBubbleSegment = (state: SonioxEndSpeakerState, committedText: string) => {
+                const segment = sliceNewSegment(state.committedText, committedText);
+                if (segment) {
+                    state.committedSegments = [...state.committedSegments, segment];
+                }
+                state.committedText = committedText;
+                clearBubbleHold(state);
+                state.holdTimer = setTimeout(() => {
+                    state.holdTimer = null;
+                    if (sonioxStopRequested) return;
+                    finalizeSpeakerTurn(state.speaker, 'soniox_endpoint');
+                }, sonioxBubbleHoldMs);
+            };
+            const finalizeHeldBubblesOfOtherSpeakers = (speaker: string) => {
+                for (const state of speakerStates.values()) {
+                    if (state.speaker === speaker || isFinSpeakerState(state)) continue;
+                    if (!state.holdTimer) continue;
+                    finalizeSpeakerTurn(state.speaker, 'soniox_endpoint');
                 }
             };
 
@@ -1213,7 +1281,7 @@ function handleSttConnection(
                     );
                     state = { ...commonState, mode: 'fin', carry };
                 } else {
-                    state = { ...commonState, mode: 'end' };
+                    state = { ...commonState, mode: 'end', committedSegments: [], committedText: '', holdTimer: null };
                 }
                 speakerStates.set(speaker, state);
                 return state;
@@ -1361,6 +1429,12 @@ function handleSttConnection(
                     if (!includeByWatermark) continue;
 
                     const frameUpdate = getSpeakerFrameUpdate(tokenSpeaker);
+                    if (usesBubbleHold && stripEndpointMarkers(tokenText).trim()) {
+                        // Speech resumed: this speaker's bubble stays open, and a
+                        // held bubble of another speaker closes now.
+                        clearBubbleHold(speakerState);
+                        finalizeHeldBubblesOfOtherSpeakers(tokenSpeaker);
+                    }
                     if (tokenLanguage !== 'unknown') {
                         frameUpdate.lastDetectedLang = tokenLanguage;
                     }
@@ -1539,6 +1613,22 @@ function handleSttConnection(
                     const requestSpeaker = finalizeRequestForBoundary?.speakers.get(frameUpdate.speaker) || null;
                     if (providerOwnedBoundary && boundarySpeakers.includes(speakerState.speaker)) {
                         const decision = evaluateProviderEndpointDecision({ mergedSnapshot });
+                        if (
+                            decision.action === 'finalize'
+                            && usesBubbleHold
+                            && !isFinSpeakerState(speakerState)
+                            && boundaryHandling.cause === 'provider-endpoint'
+                            && !sonioxStopRequested
+                        ) {
+                            commitBubbleSegment(speakerState, decision.finalText);
+                            emitTranscript(
+                                decision.finalText,
+                                speakerState.detectedLang,
+                                false,
+                                speakerState.speaker,
+                            );
+                            continue;
+                        }
                         if (decision.action === 'finalize') {
                             const payload = emitTranscript(
                                 decision.finalText,

@@ -354,3 +354,15 @@ test('resolveSessionSegmentationStrategy falls back to server default for invali
     assert.equal(resolveSessionSegmentationStrategy(123, 'fin'), 'fin');
     assert.equal(resolveSessionSegmentationStrategy('llm', 'end'), 'end');
 });
+
+test('bubble hold helpers slice new segments and add the final tail', async () => {
+    const { sliceNewSegment, buildEmittedSegments, resolveSonioxBubbleHoldMs } = await import('../segmentation-strategy');
+    assert.equal(sliceNewSegment('', 'Hello.'), 'Hello.');
+    assert.equal(sliceNewSegment('Hello.', 'Hello. How are you?'), 'How are you?');
+    assert.deepEqual(buildEmittedSegments({ committedSegments: ['Hello.'], committedText: 'Hello.' }, 'Hello. And', false), ['Hello.']);
+    assert.deepEqual(buildEmittedSegments({ committedSegments: ['Hello.'], committedText: 'Hello.' }, 'Hello. And', true), ['Hello.', 'And']);
+    assert.equal(resolveSonioxBubbleHoldMs(undefined, ''), 0);
+    assert.equal(resolveSonioxBubbleHoldMs(2000, ''), 2000);
+    assert.equal(resolveSonioxBubbleHoldMs(undefined, '1500'), 1500);
+    assert.equal(resolveSonioxBubbleHoldMs(0, '1500'), 0);
+});

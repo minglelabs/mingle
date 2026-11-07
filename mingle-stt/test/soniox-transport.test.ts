@@ -22,6 +22,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 }
 
 async function fixture(t: TestContext, options: {
+    clientQuery?: string;
     delayHandshake?: boolean;
     handshakeTimeoutMs?: number;
     timing?: { keepaliveIntervalMs: number; firstAudioTimeoutMs: number; audioIdleTimeoutMs: number };
@@ -55,7 +56,7 @@ async function fixture(t: TestContext, options: {
     });
     let receivedClientMessages = 0;
     wss.on('connection', (socket) => socket.on('message', () => receivedClientMessages += 1));
-    const client = new WebSocket(await listen(server));
+    const client = new WebSocket(`${await listen(server)}${options.clientQuery ?? ''}`);
     const messages: any[] = [];
     client.on('message', (data) => messages.push(JSON.parse(data.toString())));
     let closeCode: number | null = null;
@@ -73,9 +74,9 @@ async function fixture(t: TestContext, options: {
         ]);
     });
     await once(client, 'open');
-    const sendConfig = () => client.send(JSON.stringify({
+    const sendConfig = (extra: Record<string, unknown> = {}) => client.send(JSON.stringify({
         stt_model: 'soniox', sample_rate: 16_000, api_namespace: 'ios/v2.0.3',
-        soniox_language_hints: ['ko', 'en'], stt_segmentation_mode: 'end',
+        soniox_language_hints: ['ko', 'en'], stt_segmentation_mode: 'end', ...extra,
     }));
     return {
         client, messages, providerFrames, sendConfig,
@@ -328,4 +329,54 @@ test('agent text after Stop is not sent to Soniox', async (t) => {
         if (frame.binary) return true;
         return JSON.parse(frame.data.toString()).type !== 'agent_text';
     }));
+});
+
+test('bubble hold keeps one bubble across <end> and reports each committed segment', async (t) => {
+    const f = await fixture(t);
+    f.sendConfig({ soniox_bubble_hold_ms: 150 });
+    await f.ready();
+    const sonioxConfig = JSON.parse(f.providerFrames[0].data.toString());
+    assert.equal(sonioxConfig.endpoint_sensitivity, 1.0);
+    const token = (text: string, startMs: number, isFinal = true) => (
+        { text, start_ms: startMs, end_ms: startMs + 100, language: 'en', speaker: '1', is_final: isFinal }
+    );
+    f.providerSocket.send(JSON.stringify({ tokens: [token('Hello', 0), token(' there.', 100), { text: '<end>', is_final: true }] }));
+    await waitFor(() => f.messages.some((msg) => msg.type === 'transcript' && msg.data.committed_segments?.length === 1));
+    f.providerSocket.send(JSON.stringify({ tokens: [token(' How are', 300, false)] }));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(f.messages.filter((msg) => msg.type === 'transcript' && msg.data.is_final).length, 0);
+    f.providerSocket.send(JSON.stringify({ tokens: [token(' How are', 300), token(' you?', 400), { text: '<end>', is_final: true }] }));
+    await waitFor(() => f.messages.some((msg) => msg.type === 'transcript' && msg.data.is_final));
+    const finals = f.messages.filter((msg) => msg.type === 'transcript' && msg.data.is_final);
+    assert.equal(finals.length, 1);
+    assert.equal(finals[0].data.utterance.text, 'Hello there. How are you?');
+    assert.deepEqual(finals[0].data.committed_segments, ['Hello there.', 'How are you?']);
+});
+
+test('bubble hold closes a held bubble as soon as another speaker talks', async (t) => {
+    const f = await fixture(t);
+    f.sendConfig({ soniox_bubble_hold_ms: 5_000 });
+    await f.ready();
+    f.providerSocket.send(JSON.stringify({ tokens: [
+        { text: 'Hi.', start_ms: 0, end_ms: 100, speaker: '1', is_final: true }, { text: '<end>', is_final: true },
+    ] }));
+    await waitFor(() => f.messages.some((msg) => msg.type === 'transcript' && msg.data.committed_segments?.length === 1));
+    f.providerSocket.send(JSON.stringify({ tokens: [{ text: 'Yo', start_ms: 200, end_ms: 300, speaker: '2', is_final: false }] }));
+    await waitFor(() => f.messages.some((msg) => msg.type === 'transcript' && msg.data.is_final));
+    const final = f.messages.find((msg) => msg.type === 'transcript' && msg.data.is_final);
+    assert.equal(final.data.utterance.speaker, '1');
+    assert.deepEqual(final.data.committed_segments, ['Hi.']);
+});
+
+test('bubble hold can be requested on the socket URL', async (t) => {
+    const f = await fixture(t, { clientQuery: '/?bubble_hold_ms=100' });
+    f.sendConfig();
+    await f.ready();
+    f.providerSocket.send(JSON.stringify({ tokens: [
+        { text: 'Hi.', start_ms: 0, end_ms: 100, speaker: '1', is_final: true }, { text: '<end>', is_final: true },
+    ] }));
+    await waitFor(() => f.messages.some((msg) => msg.type === 'transcript' && msg.data.is_final));
+    const final = f.messages.find((msg) => msg.type === 'transcript' && msg.data.is_final);
+    assert.deepEqual(final.data.committed_segments, ['Hi.']);
+    assert.ok(f.messages.some((msg) => msg.type === 'transcript' && !msg.data.is_final && msg.data.committed_segments?.length === 1));
 });
