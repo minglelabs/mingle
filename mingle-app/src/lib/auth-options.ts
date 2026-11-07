@@ -7,6 +7,7 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { resolveAppleOAuthCredentials, type AppleOAuthCredentials } from "@/lib/apple-oauth";
 import { verifyPassword } from "@/lib/email-password-auth";
 import { verifyNativeAuthBridgeToken } from "@/lib/native-auth-bridge";
+import { decodeSessionTokenWithDiagnostics, summarizeAuthLogMeta } from "@/lib/auth-log-diagnostics";
 import { prisma } from "@/lib/prisma";
 import { createWithDefaultHandle } from "@/lib/handles";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
@@ -38,22 +39,6 @@ function isFeatureEnabled(rawValue: string | undefined, defaultValue: boolean): 
   if (["0", "false", "off", "no", "n"].includes(normalized)) return false;
   if (["1", "true", "on", "yes", "y"].includes(normalized)) return true;
   return defaultValue;
-}
-
-function summarizeAuthLogMeta(rawValue: unknown): string {
-  if (!rawValue || typeof rawValue !== "object") return "-";
-  const entry = rawValue as Record<string, unknown>;
-  const keys = Object.keys(entry).slice(0, 8).join(",");
-  const errorValue = entry.error;
-  if (errorValue instanceof Error) {
-    const message = (errorValue.message || "").trim().replace(/\s+/g, " ").slice(0, 180);
-    return `keys=${keys || "-"} error="${message || "-"}"`;
-  }
-  if (typeof errorValue === "string") {
-    const message = errorValue.trim().replace(/\s+/g, " ").slice(0, 180);
-    return `keys=${keys || "-"} error="${message || "-"}"`;
-  }
-  return `keys=${keys || "-"}`;
 }
 
 async function upsertUserForCredentialsSignIn(args: {
@@ -419,6 +404,10 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
     // Keep JWT session strategy because native credential bridge sign-in relies on it.
     strategy: "jwt",
     maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
+  },
+  // Same decode as NextAuth's default; it only adds a log line when a session token is rejected.
+  jwt: {
+    decode: decodeSessionTokenWithDiagnostics,
   },
   // Google returns to this app with a top-level GET, so Lax is sufficient and
   // avoids relying on cross-site cookie behavior in iOS ASWebAuthenticationSession.
