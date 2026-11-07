@@ -5,7 +5,6 @@ import {
   matchTranslatedTailLength,
   parseBubbleTail,
   planBubbleTail,
-  resolveBubbleTailAnswer,
 } from './bubble-tail'
 
 describe('bubble tail', () => {
@@ -37,52 +36,5 @@ describe('bubble tail', () => {
 
   it('rejects a payload without translatedSource', () => {
     expect(parseBubbleTail({ translations: {} })).toBeNull()
-  })
-})
-
-describe('resolveBubbleTailAnswer', () => {
-  const payload = {
-    translatedSource: '안녕.',
-    translations: { en: 'Hi.' },
-    draftSource: '오늘',
-    draftTranslations: { en: 'Today' },
-  }
-
-  it('fixes complete sentences and keeps the new draft rewritable', () => {
-    const plan = planBubbleTail(payload, '안녕. 오늘 날씨가 좋다. 그래서 우리는', ['en'])!
-    const resolved = resolveBubbleTailAnswer(plan, {
-      fills: { en: 'The weather is nice today.' },
-      translatedSource: '오늘 날씨가 좋다.',
-      draft: { source: '그래서', translations: { en: 'So' } },
-    }, ['en'], false)
-    expect(resolved.translations).toEqual({ en: 'Hi. The weather is nice today. So' })
-    expect(resolved.tailFill).toMatchObject({
-      translatedSource: '안녕. 오늘 날씨가 좋다.',
-      translations: { en: 'Hi. The weather is nice today.' },
-      contextSource: '오늘 날씨가 좋다.',
-      draftSource: '그래서',
-    })
-  })
-
-  it('keeps the old draft when the answer has nothing usable', () => {
-    const plan = planBubbleTail(payload, '안녕. 오늘 날씨가', ['en'])!
-    const resolved = resolveBubbleTailAnswer(plan, { fills: {}, translatedSource: '', draft: null }, ['en'], false)
-    expect(resolved.translations).toEqual({ en: 'Hi. Today' })
-    expect(resolved.tailFill?.draftSource).toBe('오늘')
-  })
-
-  it('drops a draft that is not the start of the open part', () => {
-    const plan = planBubbleTail(payload, '안녕. 오늘 날씨가', ['en'])!
-    const resolved = resolveBubbleTailAnswer(plan, {
-      fills: {}, translatedSource: '', draft: { source: '날씨가', translations: { en: 'weather' } },
-    }, ['en'], false)
-    expect(resolved.tailFill?.draftSource).toBe('오늘')
-  })
-
-  it('final answer replaces the draft with the full translation of the open part', () => {
-    const plan = planBubbleTail(payload, '안녕. 오늘 날씨가 좋다', ['en'])!
-    const resolved = resolveBubbleTailAnswer(plan, { fills: { en: 'The weather is nice today' }, translatedSource: '' }, ['en'], true)
-    expect(resolved.translations).toEqual({ en: 'Hi. The weather is nice today' })
-    expect(resolved.tailFill).toBeNull()
   })
 })

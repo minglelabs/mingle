@@ -72,8 +72,6 @@ export type TranslationEngineResult = {
   sourceTextHasForeignScript?: boolean
   /** Tail mode (interim): the leading part of the tail the model translated, copied from the source. */
   tailTranslatedSource?: string
-  /** Tail mode (interim): the new draft after the complete sentences. */
-  tailDraft?: { source: string, translations: Record<string, string> }
   provider: TranslationProvider
   infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
@@ -225,9 +223,6 @@ export type TranslateContext = {
   bubbleTail?: {
     fixedSource: string
     fixedTranslations: Record<string, string>
-    /** The draft the listener sees for the start of `text`; the model may keep or rewrite it. */
-    draftSource?: string
-    draftTranslations?: Record<string, string>
   }
 }
 
@@ -849,7 +844,6 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
 }
 
 export const TAIL_TRANSLATED_SOURCE_KEY = 'translatedSource'
-export const TAIL_DRAFT_KEY = 'draft'
 
 /** Interim tail requests also return which part of the tail they translated. */
 function isInterimBubbleTail(ctx: Pick<TranslateContext, 'bubbleTail' | 'isFinal' | 'shouldRedetectSourceLanguage'>): boolean {
@@ -862,7 +856,7 @@ function buildBubbleTailFillPrompt(
 ): { systemPrompt: string, userPrompt: string } {
   const chineseGlossaryLines = involvesChinese(ctx) ? [CHINESE_VARIANT_GLOSSARY_LINE] : []
   const interim = isInterimBubbleTail(ctx)
-  // Only the last fixed piece goes in as context, so the prompt stays short however long the bubble gets.
+  // Only the last fixed part goes in as context, so the prompt stays short however long the bubble gets.
   const userPromptLines = [
     `source=${ctx.sourceLanguage}`,
     `targets=${ctx.targetLanguages.join(', ')}`,
@@ -873,13 +867,7 @@ function buildBubbleTailFillPrompt(
       ...ctx.targetLanguages.map((language) => `  ${language}: "${tail.fixedTranslations[language] || ''}"`),
     )
   }
-  userPromptLines.push(`open: "${ctx.text}"`)
-  if (tail.draftSource) {
-    userPromptLines.push(
-      `draft (shown, not fixed): "${tail.draftSource}"`,
-      ...ctx.targetLanguages.map((language) => `  ${language}: "${tail.draftTranslations?.[language] || ''}"`),
-    )
-  }
+  userPromptLines.push(`blank: "${ctx.text}"`)
 
   const immediatePreviousTurn = selectPromptImmediatePreviousTurn(ctx.immediatePreviousTurn)
   if (immediatePreviousTurn && !tail.fixedSource) {
@@ -891,51 +879,21 @@ function buildBubbleTailFillPrompt(
     )
   }
 
-  const draftRule = 'The draft is what the listener sees now for the start of open: keep its wording when it still fits, rewrite it when the new words need it.'
   const tailRules = interim
     ? [
-      `Keys: ${TAIL_TRANSLATED_SOURCE_KEY}, the target language codes, and ${TAIL_DRAFT_KEY}.`,
-      'The speaker is still talking. Split open into three parts, in order:',
-      `1. FIXED: every complete sentence at the start of open, even a one-word one ("Yes.", "네."). A sentence is complete when it ends with . ? ! 。 ？ ！ or is clearly finished. Copy their source word for word into ${TAIL_TRANSLATED_SOURCE_KEY} and put their translation under the target language codes.`,
-      `2. DRAFT: the unfinished sentence after them, as far as it can already be translated naturally (cut at a clause, a phrase, whatever reads well). Put its source (word for word) and translation in ${TAIL_DRAFT_KEY}. A draft never contains a complete sentence: complete sentences always go to FIXED.`,
-      '3. The rest stays untranslated.',
-      'Example: open="I met Tom. He was tired because" -> translatedSource="I met Tom.", draft.source="He was tired".',
-      'Any part may be empty: use "" for empty text.',
-      draftRule,
+      `Keys: ${TAIL_TRANSLATED_SOURCE_KEY} and the target language codes.`,
+      'The speaker is still talking. Translate only the complete sentences at the start of the blank, even a one-word one ("Yes.", "네."). A sentence is complete when it ends with . ? ! 。 ？ ！ or is clearly finished; leave an unfinished last sentence untranslated.',
+      `${TAIL_TRANSLATED_SOURCE_KEY} = the source you translated, copied word for word from the start of the blank. No complete sentence yet: "" everywhere.`,
     ]
-    : [
-      'Keys: the target language codes. The bubble is finished: translate all of open.',
-      draftRule,
-    ]
+    : ['Keys: the target language codes. Translate the whole blank.']
   return {
     systemPrompt: [
       'You are a live-conversation translator. Return ONLY strict JSON, no extra keys.',
-      'open continues a speech bubble whose previous part is already translated and fixed. Translate it so it continues the fixed translation naturally; never repeat or change the fixed part.',
+      'The blank continues a speech bubble whose previous part is already translated and fixed. Translate only the blank so it continues the fixed translation naturally; never repeat or change the fixed part.',
       ...tailRules,
       ...chineseGlossaryLines,
     ].join('\n'),
     userPrompt: userPromptLines.join('\n'),
-  }
-}
-
-/** The draft of a tail-mode answer (null when absent or empty). */
-export function parseTailDraft(content: string, targetLanguages: readonly string[]): { source: string, translations: Record<string, string> } | null {
-  try {
-    const parsed = JSON.parse(extractJsonText(content)) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
-    const draft = (parsed as Record<string, unknown>)[TAIL_DRAFT_KEY]
-    if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return null
-    const record = draft as Record<string, unknown>
-    const source = typeof record.source === 'string' ? record.source.trim() : ''
-    if (!source) return null
-    const translations: Record<string, string> = {}
-    for (const language of targetLanguages) {
-      const value = record[language]
-      if (typeof value === 'string' && value.trim()) translations[language] = value.trim()
-    }
-    return { source, translations }
-  } catch {
-    return null
   }
 }
 
@@ -974,18 +932,6 @@ function buildGeminiResponseSchema(targetLanguages: string[], options?: {
       description: 'The source text translated in this answer, copied word for word from the start of the blank ("" when none).',
     }
     required.unshift(TAIL_TRANSLATED_SOURCE_KEY)
-    const draftProperties: Record<string, ResponseSchema> = {
-      source: { type: SchemaType.STRING, description: 'Source of the draft, copied word for word ("" when none).' },
-    }
-    for (const language of targetLanguages) {
-      draftProperties[language] = { type: SchemaType.STRING, description: describeGeminiTargetLanguage(language) }
-    }
-    properties[TAIL_DRAFT_KEY] = {
-      type: SchemaType.OBJECT,
-      properties: draftProperties,
-      required: ['source', ...targetLanguages],
-    }
-    required.push(TAIL_DRAFT_KEY)
   }
 
   if (options?.shouldRedetectSourceLanguage) {
@@ -1144,7 +1090,6 @@ export async function translateWithGemini(
 
   const translations = withoutTailTranslatedSourceKey(parseTranslations(content))
   const tailTranslatedSource = isInterimBubbleTail(ctx) ? parseTailTranslatedSource(content) : ''
-  const tailDraft = isInterimBubbleTail(ctx) ? parseTailDraft(content, ctx.targetLanguages) : null
   const declaredSourceLanguage = ctx.shouldRedetectSourceLanguage ? parseDetectedSourceLanguage(content) : ''
   const sourceLanguagesMixed = ctx.shouldRedetectSourceLanguage ? parseSourceLanguagesMixed(content) : false
   const sourceTextHasForeignScript = ctx.shouldRedetectSourceLanguage ? parseSourceTextHasForeignScript(content) : false
@@ -1164,7 +1109,6 @@ export async function translateWithGemini(
         model: config.model,
         translations: {},
         emptyReason: 'blank_translations',
-        ...(tailDraft ? { tailDraft } : {}),
         usage: normalizeUsage({ prompt: promptTokens, completion: completionTokens, total: totalTokens }),
       }
     }
@@ -1182,7 +1126,6 @@ export async function translateWithGemini(
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
     ...(tailTranslatedSource ? { tailTranslatedSource } : {}),
-    ...(tailDraft ? { tailDraft } : {}),
     provider: config.provider,
     infrastructureProvider: config.infrastructureProvider,
     model: config.model,
@@ -1219,19 +1162,6 @@ function buildTranslationResponseJsonSchema(ctx: TranslateContext): Record<strin
   if (isInterimBubbleTail(ctx)) {
     properties[TAIL_TRANSLATED_SOURCE_KEY] = { type: 'string', description: 'The source text translated in this answer, copied word for word from the start of the blank ("" when none).' }
     required.push(TAIL_TRANSLATED_SOURCE_KEY)
-    const draftProperties: Record<string, unknown> = {
-      source: { type: 'string', description: 'Source of the draft, copied word for word ("" when none).' },
-    }
-    for (const language of ctx.targetLanguages) {
-      draftProperties[language] = { type: 'string', description: describeOpenAICompatibleTargetLanguage(language) }
-    }
-    properties[TAIL_DRAFT_KEY] = {
-      type: 'object',
-      properties: draftProperties,
-      required: ['source', ...ctx.targetLanguages],
-      additionalProperties: false,
-    }
-    required.push(TAIL_DRAFT_KEY)
   }
   for (const language of ctx.targetLanguages) {
     properties[language] = { type: 'string', description: describeOpenAICompatibleTargetLanguage(language) }
@@ -1465,7 +1395,6 @@ export async function translateWithOpenAICompatible(
 
   const translations = withoutTailTranslatedSourceKey(parseTranslations(content))
   const tailTranslatedSource = isInterimBubbleTail(ctx) ? parseTailTranslatedSource(content) : ''
-  const tailDraft = isInterimBubbleTail(ctx) ? parseTailDraft(content, ctx.targetLanguages) : null
   const declaredSourceLanguage = ctx.shouldRedetectSourceLanguage ? parseDetectedSourceLanguage(content) : ''
   const sourceLanguagesMixed = ctx.shouldRedetectSourceLanguage ? parseSourceLanguagesMixed(content) : false
   const sourceTextHasForeignScript = ctx.shouldRedetectSourceLanguage ? parseSourceTextHasForeignScript(content) : false
@@ -1485,7 +1414,6 @@ export async function translateWithOpenAICompatible(
         model: config.model,
         translations: {},
         emptyReason: 'blank_translations',
-        ...(tailDraft ? { tailDraft } : {}),
         usage: normalizeUsage({ prompt: promptTokens, completion: completionTokens, reasoning: reasoningTokens, total: totalTokens }),
       }
     }
@@ -1504,7 +1432,6 @@ export async function translateWithOpenAICompatible(
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
     ...(tailTranslatedSource ? { tailTranslatedSource } : {}),
-    ...(tailDraft ? { tailDraft } : {}),
     provider: config.provider,
     infrastructureProvider: config.infrastructureProvider,
     model: config.model,
