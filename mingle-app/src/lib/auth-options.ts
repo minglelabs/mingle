@@ -405,8 +405,12 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
     strategy: "jwt",
     maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
   },
-  // Same decode as NextAuth's default; it only adds a log line when a session token is rejected.
   jwt: {
+    // session.maxAge only sets the cookie lifetime. The JWT's own `exp` comes from jwt.maxAge,
+    // which NextAuth defaults to 30 days, so sign-in tokens expired while the cookie lived on
+    // and users were silently signed out. Keep both in step.
+    maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
+    // Same decode as NextAuth's default; it only adds a log line when a session token is rejected.
     decode: decodeSessionTokenWithDiagnostics,
   },
   // Google returns to this app with a top-level GET, so Lax is sufficient and
