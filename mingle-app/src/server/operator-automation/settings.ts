@@ -33,12 +33,21 @@ export type AutomationSettings = {
     enabled: boolean
     chancePercent: number
   }
+  /**
+   * Likes, comments, replies and comment likes on recent operator posts from
+   * other operator accounts, building up over the hours after a post goes up
+   * (operator-engagement/engagement.ts).
+   */
+  engagement: {
+    enabled: boolean
+  }
 }
 
 export const AUTOMATION_DEFAULTS: AutomationSettings = {
   avatars: { enabled: false, intervalMinutes: 10 },
   accounts: { enabled: false, perDay: 5, totalTarget: 100 },
   posts: { enabled: false, chancePercent: 20 },
+  engagement: { enabled: false },
 }
 
 export const AUTOMATION_LIMITS = {
@@ -65,6 +74,7 @@ export function normalizeAutomationSettings(value: unknown): AutomationSettings 
   const avatars = record(record(value).avatars)
   const accounts = record(record(value).accounts)
   const posts = record(record(value).posts)
+  const engagement = record(record(value).engagement)
   return {
     avatars: {
       enabled: avatars.enabled === true,
@@ -79,6 +89,7 @@ export function normalizeAutomationSettings(value: unknown): AutomationSettings 
       enabled: posts.enabled === true,
       chancePercent: parseAutomationInt(posts.chancePercent, 'chancePercent') ?? AUTOMATION_DEFAULTS.posts.chancePercent,
     },
+    engagement: { enabled: engagement.enabled === true },
   }
 }
 
@@ -97,12 +108,16 @@ export function parseAutomationSettings(value: unknown): { ok: true; settings: A
   if (typeof posts.enabled !== 'boolean') return { ok: false, error: 'invalid_enabled' }
   const chancePercent = parseAutomationInt(posts.chancePercent, 'chancePercent')
   if (chancePercent === null) return { ok: false, error: 'invalid_chance' }
+  // Optional: a body from before this rule existed leaves it off.
+  const engagement = record(record(value).engagement)
+  if (engagement.enabled !== undefined && typeof engagement.enabled !== 'boolean') return { ok: false, error: 'invalid_enabled' }
   return {
     ok: true,
     settings: {
       avatars: { enabled: avatars.enabled, intervalMinutes },
       accounts: { enabled: accounts.enabled, perDay, totalTarget },
       posts: { enabled: posts.enabled, chancePercent },
+      engagement: { enabled: engagement.enabled === true },
     },
   }
 }
@@ -122,7 +137,7 @@ export async function updateAutomationSettings(ctx: AdminContext, next: Automati
     action: 'settings.automation',
     targetType: 'setting',
     targetId: AUTOMATION_SETTING_KEY,
-    metadata: { avatars: next.avatars, accounts: next.accounts, posts: next.posts },
+    metadata: { avatars: next.avatars, accounts: next.accounts, posts: next.posts, engagement: next.engagement },
   })
   return next
 }
@@ -133,6 +148,7 @@ export type AutomationState = {
   lastAccountAt: string | null
   /** The Korean calendar day ("2026-11-01") the daily posts last ran for. */
   lastPostsDay: string | null
+  lastEngagementAt: string | null
 }
 
 function isoOrNull(value: unknown): string | null {
@@ -147,6 +163,7 @@ export async function getAutomationState(): Promise<AutomationState> {
     lastAvatarAt: isoOrNull(value.lastAvatarAt),
     lastAccountAt: isoOrNull(value.lastAccountAt),
     lastPostsDay: typeof value.lastPostsDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.lastPostsDay) ? value.lastPostsDay : null,
+    lastEngagementAt: isoOrNull(value.lastEngagementAt),
   }
 }
 
