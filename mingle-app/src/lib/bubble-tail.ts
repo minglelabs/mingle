@@ -2,10 +2,10 @@
 //
 // While a bubble is still open, the leading part of its source that already
 // has a translation is fixed: the listener has read it, so it never changes.
-// Each interim request asks the model to translate only the complete sentences
-// of the rest (the tail) and to say which part of the tail it translated; an
-// unfinished sentence stays untranslated until it is finished. The final
-// request translates the whole remaining tail.
+// Each interim request asks the model to translate the start of the rest (the
+// tail) up to a natural cut point (a sentence, a clause, whatever reads well)
+// and to say which part of the tail it translated; the words after that wait
+// for the next request. The final request translates the whole remaining tail.
 
 const MAX_TAIL_CHARS = 8_000
 
@@ -130,6 +130,19 @@ export function matchTranslatedTailLength(remaining: string, translatedPart: str
     if (matched === target.length) return index + 1
   }
   return -1
+}
+
+const CUT_PUNCTUATION = /[.,!?;:…。、，！？；：」』”"')\]]$/
+
+/**
+ * An interim cut is safe only when words already follow it, or when it ends
+ * with punctuation: the words just heard at the very end can still be changed
+ * by what the speaker says next.
+ */
+export function isSafeInterimCut(remaining: string, coveredLength: number): boolean {
+  if (coveredLength <= 0) return false
+  if (remaining.slice(coveredLength).trim()) return true
+  return CUT_PUNCTUATION.test(remaining.trimEnd())
 }
 
 /** Fixed translations followed by the tail's fill, per language. */

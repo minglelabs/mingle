@@ -882,8 +882,10 @@ function buildBubbleTailFillPrompt(
   const tailRules = interim
     ? [
       `Keys: ${TAIL_TRANSLATED_SOURCE_KEY} and the target language codes.`,
-      'The speaker is still talking. Translate only the complete sentences at the start of the blank, even a one-word one ("Yes.", "네."). A sentence is complete when it ends with . ? ! 。 ？ ！ or is clearly finished; leave an unfinished last sentence untranslated.',
-      `${TAIL_TRANSLATED_SOURCE_KEY} = the source you translated, copied word for word from the start of the blank. No complete sentence yet: "" everywhere.`,
+      'The speaker is still talking. Translate the start of the blank up to a safe cut point: the end of a sentence, or the end of a complete clause (its own subject and verb, usually before a comma or a conjunction) whose meaning cannot change with the words that follow. Even a short sentence counts ("Yes.", "네.").',
+      'Your translation is final and never revised, and the next part will be appended after it, so it must read correctly and naturally whatever comes next. Never cut inside a phrase, between a verb and its object, or where the target language would need the next words to order the sentence. When unsure, cut earlier or translate nothing.',
+      'The last words of the blank were just heard and the next words may change them: never include them unless the blank ends with punctuation.',
+      `${TAIL_TRANSLATED_SOURCE_KEY} = the source you translated, copied word for word from the start of the blank. Nothing to translate yet: "" everywhere.`,
     ]
     : ['Keys: the target language codes. Translate the whole blank.']
   return {

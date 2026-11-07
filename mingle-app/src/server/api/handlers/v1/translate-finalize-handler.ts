@@ -24,6 +24,7 @@ import {
 import { shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import {
   extendFixedSource,
+  isSafeInterimCut,
   joinTailTranslations,
   matchTranslatedTailLength,
   parseBubbleTail,
@@ -570,7 +571,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         const coveredLength = isFinal
           ? bubbleTailPlan.remainingSource.length
           : matchTranslatedTailLength(bubbleTailPlan.remainingSource, meta.tailTranslatedSource || '')
-        const hasFill = coveredLength > 0 && Object.keys(rawTranslations).length > 0
+        const safeCut = isFinal || isSafeInterimCut(bubbleTailPlan.remainingSource, coveredLength)
+        const hasFill = safeCut && coveredLength > 0 && Object.keys(rawTranslations).length > 0
         translations = hasFill
           ? joinTailTranslations(bubbleTailPlan, rawTranslations, targetLanguages)
           : { ...bubbleTailPlan.fixedTranslations }

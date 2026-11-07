@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   extendFixedSource,
+  isSafeInterimCut,
   joinTailTranslations,
   matchTranslatedTailLength,
   parseBubbleTail,
@@ -36,5 +37,18 @@ describe('bubble tail', () => {
 
   it('rejects a payload without translatedSource', () => {
     expect(parseBubbleTail({ translations: {} })).toBeNull()
+  })
+})
+
+describe('isSafeInterimCut', () => {
+  it('accepts a cut with words after it or ending in punctuation', () => {
+    expect(isSafeInterimCut('it usually means, their work', 17)).toBe(true)
+    expect(isSafeInterimCut('Yes.', 4)).toBe(true)
+    expect(isSafeInterimCut('I think,', 8)).toBe(true)
+  })
+
+  it('rejects a cut at the very end of words just heard', () => {
+    expect(isSafeInterimCut('it usually means their work', 27)).toBe(false)
+    expect(isSafeInterimCut('anything', 0)).toBe(false)
   })
 })
