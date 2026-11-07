@@ -25,6 +25,7 @@ import {
     resolveSonioxSegmentationRuntime,
     resolveSonioxEndpointTuningProfile,
     resolveSonioxBubbleHoldMs,
+    BUBBLE_HOLD_ENDPOINT_TUNING_STEP,
     buildEmittedSegments,
     sliceNewSegment,
     selectSonioxBoundarySpeakerIds,
@@ -703,10 +704,10 @@ function handleSttConnection(
                 );
             })();
             const sonioxBubbleHoldMs = resolveSonioxBubbleHoldMs(config.soniox_bubble_hold_ms ?? bubbleHoldQueryMs);
-            // Bubble hold wants many small segments: Soniox ends as eagerly as it can,
-            // and the bubble boundary comes from the hold silence instead.
+            // Bubble hold uses the auto-detect step 3 profile (server step 2): the most
+            // eager profiles made Soniox invent backchannels and flip speakers more.
             const endpointTuningProfile = sonioxBubbleHoldMs > 0
-                ? resolveSonioxEndpointTuningProfile(0)
+                ? resolveSonioxEndpointTuningProfile(BUBBLE_HOLD_ENDPOINT_TUNING_STEP)
                 : config.soniox_endpoint_tuning_step === undefined
                     || config.soniox_endpoint_tuning_step === null
                     ? null
@@ -1136,13 +1137,7 @@ function handleSttConnection(
                     finalizeSpeakerTurn(state.speaker, 'soniox_endpoint');
                 }, sonioxBubbleHoldMs);
             };
-            const finalizeHeldBubblesOfOtherSpeakers = (speaker: string) => {
-                for (const state of speakerStates.values()) {
-                    if (state.speaker === speaker || isFinSpeakerState(state)) continue;
-                    if (!state.holdTimer) continue;
-                    finalizeSpeakerTurn(state.speaker, 'soniox_endpoint');
-                }
-            };
+
 
             const finalizeSpeakerTurn = (
                 speaker: string,
@@ -1430,10 +1425,9 @@ function handleSttConnection(
 
                     const frameUpdate = getSpeakerFrameUpdate(tokenSpeaker);
                     if (usesBubbleHold && stripEndpointMarkers(tokenText).trim()) {
-                        // Speech resumed: this speaker's bubble stays open, and a
-                        // held bubble of another speaker closes now.
+                        // The bubble closes only after Soniox <end> AND this speaker's own
+                        // silence; another speaker talking never closes it.
                         clearBubbleHold(speakerState);
-                        finalizeHeldBubblesOfOtherSpeakers(tokenSpeaker);
                     }
                     if (tokenLanguage !== 'unknown') {
                         frameUpdate.lastDetectedLang = tokenLanguage;

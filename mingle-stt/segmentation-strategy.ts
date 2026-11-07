@@ -502,6 +502,8 @@ export function resolveSonioxEndpointDelayMs(
 // ─── Bubble hold (segment commits across <end>) ─────────────────────────────
 
 export const SONIOX_BUBBLE_HOLD_MS_MAX = 10_000;
+/** Server step 2 = auto-detect step 3 in the app (the default profile). */
+export const BUBBLE_HOLD_ENDPOINT_TUNING_STEP = DEFAULT_SONIOX_ENDPOINT_TUNING_STEP;
 
 export function resolveSonioxBubbleHoldMs(
     clientValue: unknown,
