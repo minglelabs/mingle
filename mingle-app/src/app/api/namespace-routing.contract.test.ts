@@ -294,6 +294,7 @@ describe('pre-2.2.0 namespaces after their route trees were removed', () => {
       '/api/android/v2.3.0/client/version-policy',
       '/api/ios/v2.3.1/client/version-policy',
       '/api/android/v2.3.2/client/version-policy',
+      '/api/ios/v2.3.3/client/version-policy',
       '/api/ios/v1.1.0/conversations',
       '/api/android/v2.1.0/feed',
       '/api/client/version-policy',
