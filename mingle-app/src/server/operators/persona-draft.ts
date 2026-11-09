@@ -65,21 +65,23 @@ export type PersonaSlot = {
 }
 
 /**
- * Korean given names the model reaches for every time (staff, 2026-11-09:
- * far too many 서연 and 서윤). The server picks each Korean account's given
- * name from a wide pool instead and the model builds the display name on it.
+ * Left to itself the model kept choosing 서연 and 서윤 for Korean accounts
+ * (staff, 2026-11-09). The server picks each Korean account's given name,
+ * evenly, from this wide pool (the common names are in it too, each just one
+ * of many), and the model builds the display name on it.
  */
-export const KOREAN_OVERUSED_NAMES = ['서연', '서윤', '지우', '하윤', '민서', '지민', '수아', '지유', '하은', '서현', '지아', '유나', '민준', '서준', '지훈', '도윤', '예준']
 export const KOREAN_GIVEN_NAMES: Record<PersonaGender, readonly string[]> = {
   female: [
     '가은', '나연', '다인', '다은', '라희', '미소', '보라', '사랑', '서아', '설아', '소율', '소민', '소윤', '수민', '수빈', '수진', '승아', '시은', '아린', '아윤',
     '연우', '예린', '예나', '예원', '유진', '은서', '은채', '이레', '이설', '주아', '지안', '지원', '채원', '채윤', '채은', '하린', '하영', '하람', '해인', '혜인',
     '혜원', '효린', '희원', '나은', '다현', '민지', '세빈', '송이', '아라', '유리', '윤아', '재이', '정아', '진아', '초롱', '현지', '혜진', '은지', '수정', '보미',
+    '서연', '서윤', '지우', '하윤', '민서', '지민', '수아', '지유', '하은', '서현', '지아', '유나',
     '가영', '나래', '다혜', '라온', '미나', '서영', '선우', '소희', '슬기', '연서', '예지', '유빈', '재은', '하나', '하율', '한결', '현서', '화연', '다솜', '새봄',
   ],
   male: [
     '건우', '규민', '다온', '도현', '동현', '민재', '민혁', '상우', '선호', '성민', '세준', '승현', '시우', '시윤', '연우', '우진', '윤호', '은우', '이준', '재민',
     '재윤', '정우', '주원', '준서', '준혁', '지호', '지환', '찬영', '태양', '태민', '하준', '현우', '현준', '형준', '호진', '희수', '경민', '기범', '대현', '동우',
+    '민준', '서준', '지훈', '도윤', '예준',
     '도훈', '명진', '병준', '성훈', '수호', '승민', '영호', '용준', '인성', '재훈', '종민', '진우', '창민', '태현', '한울', '해성', '현석', '효준', '유찬', '강민',
   ],
 }
@@ -278,7 +280,7 @@ For each item in "personas" return one object with the same "slot" and these fie
   - given_name: only a given or short name in the usual script (e.g. ゆき, 민준, Lucas).
   - nickname: a casual internet-style nickname (e.g. yukinko, 쭌, luquinhas); lower case or mixed scripts are fine.
   - romanized: the name in Latin letters (e.g. Yuki Tanaka, Minjun Kim).
-  When an item has "nameSeed", its given name is that word: build the name on it (a Korean full name with a surname you pick, or the same given name alone, a nickname made from it, or its Latin spelling); never swap it for a more common name. Never use these overused names: ${KOREAN_OVERUSED_NAMES.join(", ")}.
+  When an item has "nameSeed", its given name is that word: build the name on it (a Korean full name with a surname you pick, or the same given name alone, a nickname made from it, or its Latin spelling);, never swap it for another name.
   At most 40 characters, matching "gender" when one is given. Use common names only: never the name of a real public figure, celebrity, influencer or fictional character.
 - handle: a natural username for that person using only lower-case a-z, 0-9, "_" and "."; 3 to 30 characters, starting with a letter (e.g. yuki.tnk, minjun_0412, lucas.silva).
 - bio: the self-description this person types into a chat-app profile, at most 140 characters, written in primaryLanguage. Follow the item's "bioStyle" literally: it sets the length, the form and whether there is an emoji. Mention a language they are learning only when "bioMentionsLearning" is true. Never use the stock pattern of a short line, an emoji, then a longer line about studying a language or wanting to chat; bios in one batch must not share a shape or an opening.
