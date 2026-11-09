@@ -8,6 +8,7 @@
 // for the next request. The final request translates the whole remaining tail.
 
 const MAX_TAIL_CHARS = 8_000
+const MAX_PREVIOUS_CHARS = 600
 
 /** Languages written without spaces between words. */
 const UNSPACED_LANGUAGE_PREFIXES = ['ja', 'zh', 'th', 'lo', 'my', 'km']
@@ -30,6 +31,10 @@ export type BubbleTailPayload = {
   /** The last fixed piece (the end of `translatedSource`) and its translations: the prompt's only context. */
   contextSource?: string
   contextTranslations?: Record<string, string>
+  /** How the previous bubble ended (its last piece), for context while this bubble has nothing fixed. */
+  previousSource?: string
+  previousSourceLanguage?: string
+  previousTranslations?: Record<string, string>
 }
 
 function parseStringRecord(raw: unknown): Record<string, string> {
@@ -46,10 +51,17 @@ export function parseBubbleTail(raw: unknown): BubbleTailPayload | null {
   const record = raw as Record<string, unknown>
   if (typeof record.translatedSource !== 'string') return null
   const contextSource = typeof record.contextSource === 'string' ? record.contextSource.trim().slice(0, MAX_TAIL_CHARS) : ''
+  const previousSource = typeof record.previousSource === 'string' ? record.previousSource.trim().slice(0, MAX_PREVIOUS_CHARS) : ''
+  const previousSourceLanguage = typeof record.previousSourceLanguage === 'string' ? record.previousSourceLanguage.trim().slice(0, 16) : ''
   return {
     translatedSource: record.translatedSource.trim().slice(0, MAX_TAIL_CHARS),
     translations: parseStringRecord(record.translations),
     ...(contextSource ? { contextSource, contextTranslations: parseStringRecord(record.contextTranslations) } : {}),
+    ...(previousSource ? {
+      previousSource,
+      ...(previousSourceLanguage ? { previousSourceLanguage } : {}),
+      previousTranslations: parseStringRecord(record.previousTranslations),
+    } : {}),
   }
 }
 
@@ -59,6 +71,9 @@ export type BubbleTailPlan = {
   /** What the prompt shows of the fixed part: its last piece, or all of it. */
   contextSource: string
   contextTranslations: Record<string, string>
+  /** The previous bubble's last piece, used as context only while nothing in this bubble is fixed. */
+  previousSource: string
+  previousTranslations: Record<string, string>
   /** Source after the fixed part: what this request translates (or part of it). */
   remainingSource: string
   /** The bubble's trimmed text the plan was made from. */
@@ -99,6 +114,7 @@ export function planBubbleTail(
   return {
     fixedSource,
     fixedTranslations,
+    ...resolvePreviousPiece(payload, fixedSource, targetLanguages),
     contextSource: useContext ? payload.contextSource as string : fixedSource,
     contextTranslations: useContext
       ? Object.fromEntries(targetLanguages.map((language) => [language, contextTranslations[language] as string]))
@@ -107,6 +123,24 @@ export function planBubbleTail(
     fullText,
     remainingStart,
   }
+}
+
+function resolvePreviousPiece(
+  payload: BubbleTailPayload,
+  fixedSource: string,
+  targetLanguages: readonly string[],
+): { previousSource: string, previousTranslations: Record<string, string> } {
+  const previousSource = payload.previousSource || ''
+  if (fixedSource || !previousSource) return { previousSource: '', previousTranslations: {} }
+  const source = payload.previousTranslations || {}
+  const previousLanguage = (payload.previousSourceLanguage || '').toLowerCase()
+  const previousTranslations: Record<string, string> = {}
+  for (const language of targetLanguages) {
+    // A target that was the previous bubble's own language reads its source as is.
+    const text = source[language] || (previousLanguage && language.toLowerCase() === previousLanguage ? previousSource : '')
+    if (text) previousTranslations[language] = text
+  }
+  return { previousSource, previousTranslations }
 }
 
 /** Fixed source after this request: the old fixed part plus `coveredLength` chars of the tail. */

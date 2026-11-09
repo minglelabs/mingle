@@ -241,6 +241,35 @@ describe('/api/translate/finalize route', () => {
     expect(prompt).toContain('blank: "그리고 집에 갔어. 그런데 가는"')
   })
 
+  it('starts a new bubble from the previous bubble\'s last piece', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"translatedSource":"","ko":""}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 1, totalTokenCount: 6 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    await POST(makeJsonRequest({
+      text: 'and that is why',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: false,
+      bubbleTail: {
+        translatedSource: '',
+        translations: {},
+        previousSource: '그래서 다시 해봤어.',
+        previousSourceLanguage: 'ko',
+        previousTranslations: { en: 'So I tried again.' },
+      },
+    }) as never)
+
+    const prompt = readGeminiUserPrompt(0)
+    expect(prompt).toContain('previous bubble ended with: "그래서 다시 해봤어."')
+    expect(prompt).toContain('ko: "그래서 다시 해봤어."')
+    expect(prompt).toContain('blank: "and that is why"')
+  })
+
   it('shows the model only the last fixed piece as context', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {

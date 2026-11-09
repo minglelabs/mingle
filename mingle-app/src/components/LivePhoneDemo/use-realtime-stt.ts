@@ -187,6 +187,8 @@ export const LOCAL_UTTERANCE_CACHE_LIMIT = 100
 const NATIVE_STT_QUERY_KEY = 'nativeStt'
 const NATIVE_STT_EVENT = 'mingle:native-stt'
 const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
+// A new bubble gets the previous bubble's last piece as context when that bubble ended this recently.
+const PREVIOUS_BUBBLE_PIECE_WINDOW_MS = 10_000
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
@@ -2956,6 +2958,10 @@ interface BubbleTailState {
   /** The last fixed piece and its translations: the only context the server sends the model. */
   contextSource?: string
   contextTranslations?: Record<string, string>
+  /** How the previous bubble ended: context while this bubble has nothing fixed yet. */
+  previousSource?: string
+  previousSourceLanguage?: string
+  previousTranslations?: Record<string, string>
 }
 
 interface TranslateApiResult {
@@ -3337,6 +3343,8 @@ export default function useRealtimeSTT({
   const partialTranslationsRef = useRef<Record<string, string>>({})
   // Tail fill per open bubble (utterance id): the part the listener has read never changes.
   const bubbleTailByUtteranceIdRef = useRef<Record<string, BubbleTailState>>({})
+  // The bubble that ended last, with its tail state, so the next bubble can start from its last piece.
+  const lastFinishedBubbleRef = useRef<{ utteranceId: string, tail: BubbleTailState | null, finishedAtMs: number } | null>(null)
   const partialTranscriptRef = useRef('')
   const partialLangRef = useRef<string | null>(null)
   const pendingTurnsBySpeakerRef = useRef<Record<string, PendingSpeakerTurn>>({})
@@ -4593,6 +4601,50 @@ export default function useRealtimeSTT({
     return recentTurns
   }, [])
 
+  // The previous bubble's last piece: what followed its last fixed part, or the
+  // whole bubble when nothing in it was fixed. Only bubbles that ended recently.
+  const buildPreviousBubblePiece = useCallback((excludeUtteranceId: string): Pick<BubbleTailState, 'previousSource' | 'previousSourceLanguage' | 'previousTranslations'> | null => {
+    const lastFinished = lastFinishedBubbleRef.current
+    const now = Date.now()
+    let previous: Utterance | null = null
+    for (const utterance of utterancesRef.current) {
+      if (utterance.image || utterance.id === excludeUtteranceId || !utterance.originalText.trim()) continue
+      const endedAtMs = utterance.id === lastFinished?.utteranceId
+        ? lastFinished.finishedAtMs
+        : inferUtteranceCreatedAtMs(utterance)
+      if (endedAtMs === null || now - endedAtMs > PREVIOUS_BUBBLE_PIECE_WINDOW_MS || endedAtMs > now) continue
+      previous = utterance
+    }
+    if (!previous) return null
+    const sourceLanguage = (previous.originalLang || '').trim()
+    const sourceText = previous.originalText.trim()
+    const translations = stripSourceLanguageFromTranslations(previous.translations || {}, sourceLanguage || 'unknown')
+    const tail = lastFinished?.utteranceId === previous.id ? lastFinished.tail : null
+    let pieceSource = sourceText
+    let pieceTranslations: Record<string, string> = translations
+    if (tail?.translatedSource && sourceText.startsWith(tail.translatedSource)) {
+      const rest = sourceText.slice(tail.translatedSource.length).trim()
+      if (rest) {
+        pieceSource = rest
+        pieceTranslations = {}
+        for (const [language, text] of Object.entries(translations)) {
+          const fixed = tail.translations[language] || ''
+          if (fixed && text.startsWith(fixed) && text.slice(fixed.length).trim()) {
+            pieceTranslations[language] = text.slice(fixed.length).trim()
+          }
+        }
+      } else if (tail.contextSource) {
+        pieceSource = tail.contextSource
+        pieceTranslations = tail.contextTranslations || {}
+      }
+    }
+    return {
+      previousSource: pieceSource,
+      ...(sourceLanguage ? { previousSourceLanguage: sourceLanguage } : {}),
+      previousTranslations: pieceTranslations,
+    }
+  }, [])
+
   // ===== HTTP Translation via versioned API namespace =====
   const translateViaApi = useCallback(async (
     text: string,
@@ -5182,6 +5234,7 @@ export default function useRealtimeSTT({
     // The final request translates only what is left after the fixed part.
     const bubbleTail = bubbleTailByUtteranceIdRef.current[utteranceId]
     delete bubbleTailByUtteranceIdRef.current[utteranceId]
+    lastFinishedBubbleRef.current = { utteranceId, tail: bubbleTail || null, finishedAtMs: Date.now() }
     const translationBody: Record<string, unknown> | null = skipTranslation ? null : {
       text, sourceLanguage: lang, targetLanguages, isFinal: true,
       sessionKey, clientContext, clientMessageId: utteranceId,
@@ -7177,8 +7230,13 @@ export default function useRealtimeSTT({
         signal: controller.signal,
         currentTurnPreviousState: pendingTurn.currentTurnPreviousState,
         // Tail fill: keep what is already translated, add only finished sentences.
-        bubbleTail: bubbleTailByUtteranceIdRef.current[pendingTurn.utteranceId]
-          || { translatedSource: '', translations: {} },
+        bubbleTail: (() => {
+          const tail = bubbleTailByUtteranceIdRef.current[pendingTurn.utteranceId]
+            || { translatedSource: '', translations: {} }
+          if (tail.translatedSource) return tail
+          const previousPiece = buildPreviousBubblePiece(pendingTurn.utteranceId)
+          return previousPiece ? { ...tail, ...previousPiece } : tail
+        })(),
       }).then((result) => {
         const latestPendingTurn = findPendingTurnByUtteranceId(pendingTurn.utteranceId)
         const latestRuntime = pendingTurnTranslationRuntimeRef.current[pendingTurn.utteranceId]
@@ -7251,6 +7309,7 @@ export default function useRealtimeSTT({
     }
   }, [
     bumpPendingTurnRenderVersion,
+    buildPreviousBubblePiece,
     connectionStatus,
     findPendingTurnByUtteranceId,
     getPendingTurnTranslationRuntime,

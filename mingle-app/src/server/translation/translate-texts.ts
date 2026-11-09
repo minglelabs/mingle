@@ -223,6 +223,9 @@ export type TranslateContext = {
   bubbleTail?: {
     fixedSource: string
     fixedTranslations: Record<string, string>
+    /** How the previous bubble ended, shown while this bubble has nothing fixed. */
+    previousSource?: string
+    previousTranslations?: Record<string, string>
   }
 }
 
@@ -867,10 +870,18 @@ function buildBubbleTailFillPrompt(
       ...ctx.targetLanguages.map((language) => `  ${language}: "${tail.fixedTranslations[language] || ''}"`),
     )
   }
+  if (!tail.fixedSource && tail.previousSource) {
+    userPromptLines.push(
+      `previous bubble ended with: "${tail.previousSource}"`,
+      ...ctx.targetLanguages
+        .filter((language) => Boolean(tail.previousTranslations?.[language]))
+        .map((language) => `  ${language}: "${tail.previousTranslations?.[language]}"`),
+    )
+  }
   userPromptLines.push(`blank: "${ctx.text}"`)
 
   const immediatePreviousTurn = selectPromptImmediatePreviousTurn(ctx.immediatePreviousTurn)
-  if (immediatePreviousTurn && !tail.fixedSource) {
+  if (immediatePreviousTurn && !tail.fixedSource && !tail.previousSource) {
     userPromptLines.push(
       '',
       formatSingleTurnForPromptWithOptions('Previous bubble', immediatePreviousTurn, {

@@ -515,6 +515,10 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       bubbleTail: {
         fixedSource: bubbleTailPlan.contextSource,
         fixedTranslations: bubbleTailPlan.contextTranslations,
+        ...(bubbleTailPlan.previousSource ? {
+          previousSource: bubbleTailPlan.previousSource,
+          previousTranslations: bubbleTailPlan.previousTranslations,
+        } : {}),
       },
     } : {}),
   }

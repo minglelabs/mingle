@@ -52,3 +52,18 @@ describe('isSafeInterimCut', () => {
     expect(isSafeInterimCut('anything', 0)).toBe(false)
   })
 })
+
+describe('previous bubble piece', () => {
+  it('is context only while this bubble has nothing fixed', () => {
+    const start = planBubbleTail({
+      translatedSource: '', translations: {}, previousSource: 'So I tried again.', previousSourceLanguage: 'en', previousTranslations: { ko: '그래서 다시 해봤어.' },
+    }, '근데 또 안 됐어', ['en'])!
+    expect(start.previousSource).toBe('So I tried again.')
+    expect(start.previousTranslations).toEqual({ en: 'So I tried again.' })
+
+    const later = planBubbleTail({
+      translatedSource: '근데', translations: { en: 'But' }, previousSource: 'So I tried again.', previousTranslations: {},
+    }, '근데 또 안 됐어', ['en'])!
+    expect(later.previousSource).toBe('')
+  })
+})
