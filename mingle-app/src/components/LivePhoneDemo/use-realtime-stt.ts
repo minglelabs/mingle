@@ -14,6 +14,7 @@ import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
 import { MESSAGE_READ_RECEIPTS_REFRESH_EVENT } from '@/lib/message-read-receipts'
 import { normalizeMessageReplyReference, type MessageReplyReference } from '@/lib/message-reply'
 import { MESSAGE_RECALLED_EVENT, normalizeRecalledMessageIds, type MessageRecalledEventDetail } from '@/lib/message-recall'
+import { MESSAGE_RETRANSLATED_EVENT, applyRetranslationToUtterance, type MessageRetranslatedEventDetail } from '@/lib/message-retranslate'
 import { parseSttServerError } from '@/lib/stt-server-error'
 
 import { compareUtteranceOrder } from './utterance-order'
@@ -3723,6 +3724,29 @@ export default function useRealtimeSTT({
     window.addEventListener(MESSAGE_RECALLED_EVENT, onRecalled)
     return () => window.removeEventListener(MESSAGE_RECALLED_EVENT, onRecalled)
   }, [applyRecalledMessageIds, conversationId])
+
+  // The caller's own room shows a retranslation at once; other members pick
+  // it up on the hydration the server's room notification triggers.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !conversationId) return
+    const onRetranslated = (event: Event) => {
+      const detail = (event as CustomEvent<MessageRetranslatedEventDetail>).detail
+      if (!detail || detail.conversationId !== conversationId) return
+      // The warm cache too: buildMergedUtterances re-adds whatever it holds.
+      storedUtterancesRef.current = storedUtterancesRef.current.map((utterance) => applyRetranslationToUtterance(utterance, detail))
+      setUtteranceStore((current) => {
+        let changed = false
+        const utterances = current.utterances.map((utterance) => {
+          const next = applyRetranslationToUtterance(utterance, detail)
+          if (next !== utterance) changed = true
+          return next
+        })
+        return changed ? { ...current, utterances } : current
+      })
+    }
+    window.addEventListener(MESSAGE_RETRANSLATED_EVENT, onRetranslated)
+    return () => window.removeEventListener(MESSAGE_RETRANSLATED_EVENT, onRetranslated)
+  }, [conversationId])
 
   const applyPendingHasOlderUtterances = useCallback(() => {
     const pendingHasOlderUtterances = pendingHasOlderUtterancesRef.current
