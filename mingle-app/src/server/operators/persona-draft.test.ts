@@ -4,7 +4,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: { user: { findMany: vi.fn(async () => [
 
 import type { GenerateJsonRequest } from '@/server/llm/generate-json'
 import { LlmError } from '@/server/llm/generate-json'
-import { generatePersonaDrafts, parsePersonaDraftRequest, planPersonaSlots, type PersonaDraftDeps, type PersonaDraftRequest } from './persona-draft'
+import { KOREAN_OVERUSED_NAMES, generatePersonaDrafts, parsePersonaDraftRequest, planPersonaSlots, type PersonaDraftDeps, type PersonaDraftRequest } from './persona-draft'
 import { findPersonaCountry } from './persona-countries'
 
 const NOW = new Date('2026-09-30T00:00:00Z')
