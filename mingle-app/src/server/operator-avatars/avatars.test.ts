@@ -68,13 +68,16 @@ describe('avatar taxonomy', () => {
     expect(others.size).toBeGreaterThan(8)
   })
 
-  it('shows a face (whole or partly) in roughly half of the photos', () => {
+  it('shows a face (whole or partly) in most of the photos', () => {
     const seen = sampleCategories(american, 2000)
     // Among photos: drawings (category "other") are counted apart.
     const photos = 2000 - (seen.get('other') ?? 0)
     const faces = (seen.get('face') ?? 0) + (seen.get('partial') ?? 0)
-    expect(faces / photos).toBeGreaterThan(0.4)
-    expect(faces / photos).toBeLessThan(0.65)
+    expect(faces / photos).toBeGreaterThan(0.65)
+    expect(faces / photos).toBeLessThan(0.9)
+    // Korean accounts hide the face more, but still show it in most photos.
+    const kr = sampleCategories(korean, 2000)
+    expect(((kr.get('face') ?? 0) + (kr.get('partial') ?? 0)) / (2000 - (kr.get('other') ?? 0))).toBeGreaterThan(0.55)
     for (const { key } of AVATAR_CATEGORIES) expect(seen.get(key) ?? 0).toBeGreaterThan(0)
   })
 
@@ -431,11 +434,11 @@ describe('describeFace', () => {
 })
 
 describe('anime-style profile pictures', () => {
-  it('are about one in three, mostly the account\'s own gender, sometimes a pet or a thing', () => {
+  it('are about one in five, mostly the account\'s own gender, sometimes a pet or a thing', () => {
     const male = { ...american, gender: 'male' as const }
     const anime = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(male, seededRandom(`anime:${index}`))).filter((spec) => spec.subtype === 'anime_icon')
-    expect(anime.length / 3000).toBeGreaterThan(0.28)
-    expect(anime.length / 3000).toBeLessThan(0.4)
+    expect(anime.length / 3000).toBeGreaterThan(0.15)
+    expect(anime.length / 3000).toBeLessThan(0.3)
     const subjects = new Set(anime.map((spec) => spec.attributes.animeSubject))
     expect([...subjects].sort()).toEqual(['cat', 'critter', 'dog', 'landscape', 'object', 'person'])
     for (const spec of anime.filter((item) => item.attributes.animeSubject === 'person')) expect(spec.prompt).toMatch(/young man/)
