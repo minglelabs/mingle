@@ -1971,10 +1971,11 @@ describe('use-realtime-stt pure logic', () => {
   })
 
   it('defaults partial translate mode to time and parses env overrides', () => {
-    expect(parsePartialTranslateMode(undefined)).toBe('time')
+    expect(parsePartialTranslateMode(undefined)).toBe('char')
+    expect(parsePartialTranslateMode('time')).toBe('time')
     expect(parsePartialTranslateMode('char')).toBe('char')
     expect(parsePartialTranslateMode('both')).toBe('both')
-    expect(parsePartialTranslateMode('weird')).toBe('time')
+    expect(parsePartialTranslateMode('weird')).toBe('char')
     expect(parsePositiveIntWithFallback(undefined, 2000)).toBe(2000)
     expect(parsePositiveIntWithFallback('2500', 2000)).toBe(2500)
     expect(parsePositiveIntWithFallback('0', 2000)).toBe(2000)

@@ -364,9 +364,11 @@ export type PartialTranslateMode = 'time' | 'char' | 'both'
 
 export function parsePartialTranslateMode(rawMode: string | undefined): PartialTranslateMode {
   const normalized = (rawMode || '').trim().toLowerCase()
-  if (normalized === 'char') return 'char'
+  if (normalized === 'time') return 'time'
   if (normalized === 'both') return 'both'
-  return 'time'
+  // Default: a new request per N new characters, so the tail translation keeps
+  // pace with speech instead of a fixed clock.
+  return 'char'
 }
 
 export function parsePositiveIntWithFallback(rawValue: string | undefined, fallback: number): number {
