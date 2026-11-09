@@ -1723,6 +1723,8 @@ export function buildLiveUtterance(input: {
   // their authenticated sender and are combined separately for rendering.
   viewerUserId?: string | null
   viewerImage?: string | null
+  /** Tail translation: the part of each translation that will not change any more. */
+  fixedTranslations?: Record<string, string>
 }): Utterance | null {
   const transcript = input.partialTranscript.trim()
   if (!input.pendingTurn || !transcript) return null
@@ -1766,6 +1768,9 @@ export function buildLiveUtterance(input: {
     translationFinalized: Object.fromEntries(
       Object.keys(translations).map(language => [language, false]),
     ),
+    ...(input.fixedTranslations && Object.keys(input.fixedTranslations).length > 0
+      ? { translationFixed: { ...input.fixedTranslations } }
+      : {}),
     createdAtMs: input.pendingTurn.createdAtMs,
   }
 }
@@ -1776,6 +1781,7 @@ export function buildLiveUtterances(input: {
   languages: string[]
   viewerUserId?: string | null
   viewerImage?: string | null
+  fixedTranslationsByUtteranceId?: Record<string, Record<string, string>>
 }): Utterance[] {
   const sortedPendingTurns = [...input.pendingTurns].sort((left, right) => {
     const leftCreatedAt = typeof left.createdAtMs === 'number' ? left.createdAtMs : 0
@@ -1793,6 +1799,7 @@ export function buildLiveUtterances(input: {
       languages: input.languages,
       viewerUserId: input.viewerUserId,
       viewerImage: input.viewerImage,
+      fixedTranslations: input.fixedTranslationsByUtteranceId?.[pendingTurn.utteranceId],
     })
     return utterance ? [utterance] : []
   })
@@ -5124,6 +5131,10 @@ export default function useRealtimeSTT({
     })
     if (!localPayload) return null
     if (options?.replyTo) localPayload.utterance = { ...localPayload.utterance, replyTo: options.replyTo }
+    const fixedTail = bubbleTailByUtteranceIdRef.current[localPayload.utteranceId]
+    if (fixedTail?.translatedSource && Object.keys(fixedTail.translations).length > 0) {
+      localPayload.utterance = { ...localPayload.utterance, translationFixed: { ...fixedTail.translations } }
+    }
     localPayload.utterance = remotePreviews.applyOrder(localPayload.utterance)
     if (isDuplicateTimedSignature({
       previousSig: stopFinalizeDedupRef.current.utteranceId,
@@ -7414,6 +7425,11 @@ export default function useRealtimeSTT({
     languages: liveUtteranceLanguages,
     viewerUserId: effectiveViewerUserId,
     viewerImage: effectiveViewerImage,
+    fixedTranslationsByUtteranceId: Object.fromEntries(
+      Object.entries(bubbleTailByUtteranceIdRef.current)
+        .filter(([, tail]) => Boolean(tail.translatedSource))
+        .map(([utteranceId, tail]) => [utteranceId, tail.translations]),
+    ),
   }), [pendingTurnSnapshots, liveUtteranceLanguages, effectiveViewerUserId, effectiveViewerImage])
   useEffect(() => { livePreviewSender.setPartials(localLiveUtterances) }, [livePreviewSender, localLiveUtterances])
   const liveUtterances = useMemo(() => {
