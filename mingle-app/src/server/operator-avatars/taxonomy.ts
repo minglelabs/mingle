@@ -57,17 +57,18 @@ function pick(options: readonly Option[], random: Random): Option {
 // ─── 1. Kind of photo ────────────────────────────────────────────────────────
 
 export const AVATAR_CATEGORIES: ReadonlyArray<{ key: AvatarCategory; ko: string; weight: number }> = [
-  { key: 'face', ko: '얼굴 위주', weight: 30 },
-  { key: 'partial', ko: '얼굴 일부·가림', weight: 20 },
-  { key: 'back', ko: '뒷모습', weight: 9 },
-  { key: 'body', ko: '몸 위주', weight: 17 },
-  { key: 'part', ko: '손·발·부분', weight: 3 },
-  { key: 'group', ko: '여러 명', weight: 5 },
-  { key: 'object', ko: '사물', weight: 8 },
-  { key: 'animal', ko: '동물', weight: 5 },
-  { key: 'scenery', ko: '풍경·장소', weight: 4 },
-  // Staff like 2D profile pictures (2026-11): about one in three accounts gets an anime-style drawing.
-  { key: 'other', ko: '그림·글자', weight: 76 },
+  // Staff (2026-11-09): too few profile pictures showed a face; the face now leads.
+  { key: 'face', ko: '얼굴 위주', weight: 72 },
+  { key: 'partial', ko: '얼굴 일부·가림', weight: 14 },
+  { key: 'back', ko: '뒷모습', weight: 6 },
+  { key: 'body', ko: '몸 위주', weight: 10 },
+  { key: 'part', ko: '손·발·부분', weight: 2 },
+  { key: 'group', ko: '여러 명', weight: 6 },
+  { key: 'object', ko: '사물', weight: 5 },
+  { key: 'animal', ko: '동물', weight: 4 },
+  { key: 'scenery', ko: '풍경·장소', weight: 2 },
+  // Staff like 2D profile pictures (2026-11): about one in five accounts gets an anime-style drawing.
+  { key: 'other', ko: '그림·글자', weight: 45 },
 ]
 
 /** East Asian profiles hide the face more; Western and Latin American ones show it more. */
@@ -75,14 +76,14 @@ const FACE_SHY_COUNTRIES = new Set(['KR', 'JP', 'TW', 'CN'])
 const FACE_FORWARD_COUNTRIES = new Set(['US', 'CA', 'GB', 'AU', 'FR', 'DE', 'ES', 'IT', 'BR', 'MX', 'AR', 'TR'])
 
 const CATEGORY_COUNTRY_FACTORS: Record<'shy' | 'forward', Partial<Record<AvatarCategory, number>>> = {
-  shy: { face: 0.75, partial: 1.4, back: 1.3, object: 1.2, scenery: 1.2 },
+  shy: { face: 0.9, partial: 1.4, back: 1.3, object: 1.2, scenery: 1.2 },
   forward: { face: 1.3, body: 1.15, partial: 0.8, object: 0.8 },
 }
 
 /** Bio keywords (any language of the persona table) that pull the photo toward a subject. */
 const BIO_HINTS: ReadonlyArray<{ pattern: RegExp; category: AvatarCategory; subtype?: string; factor: number }> = [
-  { pattern: /cat|고양이|猫|ねこ|gato|chat\b|katze|kedi|mèo|แมว|kucing/i, category: 'animal', subtype: 'cat', factor: 6 },
-  { pattern: /dog|강아지|犬|いぬ|perro|cachorro|chien|hund|köpek|chó|หมา|anjing/i, category: 'animal', subtype: 'dog', factor: 4 },
+  { pattern: /cat|고양이|猫|ねこ|gato|chat\b|katze|kedi|mèo|แมว|kucing/i, category: 'animal', subtype: 'cat', factor: 8 },
+  { pattern: /dog|강아지|犬|いぬ|perro|cachorro|chien|hund|köpek|chó|หมา|anjing/i, category: 'animal', subtype: 'dog', factor: 6 },
   { pattern: /gym|헬스|운동|筋トレ|ジム|fitness|academia|gimnasio|workout|健身/i, category: 'body', subtype: 'gym_mirror', factor: 3 },
   { pattern: /coffee|커피|카페|コーヒー|カフェ|café|kaffee|kahve|cà phê|咖啡/i, category: 'object', subtype: 'coffee', factor: 2.5 },
   { pattern: /travel|여행|旅行|viaj|voyage|reisen|seyahat|du lịch|เที่ยว/i, category: 'back', subtype: 'travel_landmark', factor: 2 },
@@ -816,7 +817,7 @@ function dressNote(persona: AvatarPersona, gender: 'female' | 'male' | null): st
  * accounts rarely share the art style, the colors, the pose or the background.
  */
 const ANIME_SUBJECTS: readonly Option[] = [
-  ['person', 7, 'person'],
+  ['person', 12, 'person'],
   ['cat', 1.5, 'cat'],
   ['dog', 1.2, 'dog'],
   ['critter', 1, 'critter'],
@@ -867,8 +868,8 @@ const ANIME_FRAMINGS: readonly Option[] = [
   ['front', 2.5, 'head and shoulders, facing the viewer'], ['three_quarter', 3, 'a three-quarter view from the chest up'], ['profile', 1.2, 'a side profile'],
   ['over_shoulder', 1.2, 'looking back over the shoulder'], ['closeup', 1.5, 'an extreme close-up of the face and eyes'], ['hand_face', 1, 'one hand near the face, the face half covered by the hand or hair'],
   ['tilt', 1.5, 'the head tilted, a casual upper-body shot'], ['from_above', 1.2, 'seen from slightly above, looking up at the viewer'], ['from_below', 0.8, 'seen from slightly below against the sky'],
-  ['sitting_small', 1.2, 'sitting somewhere, small in a wide frame'], ['desk', 1, 'resting the head on folded arms on a desk'], ['walking', 1.2, 'caught mid-stride, the hair and clothes moving'],
-  ['back', 0.8, 'seen from behind, looking out at the background'], ['lying', 0.7, 'lying down, seen from above'],
+  ['sitting_small', 0.6, 'sitting somewhere, small in a wide frame'], ['desk', 1, 'resting the head on folded arms on a desk'], ['walking', 1.2, 'caught mid-stride, the hair and clothes moving'],
+  ['back', 0.3, 'seen from behind, looking out at the background'], ['lying', 0.7, 'lying down, seen from above'],
 ]
 
 const ANIME_ACTIONS: readonly Option[] = [
