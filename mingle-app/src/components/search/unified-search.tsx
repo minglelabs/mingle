@@ -11,6 +11,7 @@ import { feedSourceEndpoint } from "@/lib/feed-routes";
 import { isSearchExcludedHandle } from "@/lib/handles";
 import type { ConnectSearchResult } from "@/components/connect-search-cache";
 import PostGrid from "./post-grid";
+import LiveRooms from "./live-rooms";
 import { buildConnectTrackingHeaders, PersonRow, usePeopleFollow, type PeopleSearchContext } from "./people-follow";
 import {
   createRecentSearchRecorder,
@@ -43,6 +44,8 @@ export type UnifiedSearchProps = {
   onOpenSearchPost: (query: string, postId: string) => void;
   /** Open the full sliding people-list screen ("see all"). */
   onSeeAllPeople: (query: string) => void;
+  /** Open a room from "Live now" (after joining it, for a public room). Absent: the section is hidden. */
+  onOpenLiveRoom?: (conversationId: string) => void;
   /**
    * Controlled query so the parent can restore it on back-navigation (e.g.
    * from `?q=`). The value present at mount is treated as an already-run
@@ -61,6 +64,7 @@ export default function UnifiedSearch({
   onOpenPerson,
   onOpenSearchPost,
   onSeeAllPeople,
+  onOpenLiveRoom,
   query: controlledQuery,
   onQueryChange: controlledOnQueryChange,
   scrollContainerRef,
@@ -340,6 +344,7 @@ export default function UnifiedSearch({
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+        {!normalizedQuery && onOpenLiveRoom ? <LiveRooms locale={locale} onOpenRoom={onOpenLiveRoom} /> : null}
         {showRecent ? (
           <RecentSearches
             copy={copy}

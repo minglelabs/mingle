@@ -2,6 +2,16 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-11 — 공개방, 검색 탭 "지금 라이브", 해시러시 컴퓨터 링크
+
+- Surface: 검색 탭(`search/unified-search.tsx`, `search/live-rooms.tsx`), 대화방 관리·메뉴(`LivePhoneDemo.tsx`), 서버(`app-conversations.ts`, `public-room-controller.ts`, `hash-rush-controller.ts`), DB(`is_public`, `hash_rush_active_at`).
+- 검색 탭: 검색어가 없을 때 맨 위에 "지금 라이브" 가로 줄. 보이스톡 중이거나 최근 15분 안에 해시러시에 들어간 방이 나온다. 공개방이 먼저, 사람이 많은 방이 먼저. 그 아래는 기존 그대로 사람 검색과 포스팅 정사각형 그리드.
+- 공개방 카드: 방 이름, 언어, 인원, 보이스톡 인원·해시러시 배지, "참여"(멤버면 "열기"). 누르면 바로 멤버가 되고 방이 열린다. 정원·차단 검사는 공유 링크 참여와 같다.
+- 비공개방 카드: 자물쇠 + "비공개 방 · 초대받아야 들어갈 수 있어요"와 보이스톡·해시러시 배지만. 이름·언어·멤버는 보이지 않고 누를 수 없다.
+- 공개 설정: 대화방 관리 화면의 공유 링크 위에 "공개방" 스위치. 켜면 공유 링크도 켜진다.
+- 해시러시 컴퓨터 링크: 방 메뉴의 해시러시 아래 "컴퓨터로 해시러시 하기". 그 사람의 입장권(2시간)이 담긴 웹 게임 링크를 복사한다. 컴퓨터 브라우저에서 열면 같은 방 게임에 그 사람으로 들어간다.
+- Verification: 타입 검사, 단위·배선 테스트. 실기기 확인은 아직.
+
 ## 2026-11-10 — 보이스톡: 패널 먼저, 참여는 패널에서 / 키보드 + 메뉴 / 시작 알림 / 목록 표시
 
 - Surface: 대화방(`LivePhoneDemo.tsx`), 보이스톡 판(`VoiceTalkPanel.tsx`), 키보드 모드 + 메뉴(`ConversationImageComposer.tsx`), 대화목록(`conversation-list.tsx`), 서버(`voice-call-controller.ts`, `push-notifications.ts`, `app-conversations.ts`).

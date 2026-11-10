@@ -262,6 +262,9 @@ import { HashRushQuickChatBar } from '@/features/hash-rush/QuickChatBar'
 import type { HashRushChatEntry, HashRushRoomChat } from '@/features/hash-rush/room-chat'
 import { isHashRushGameConfigured } from '@/features/hash-rush/config'
 import { hashRushGameMenuLabel } from '@/features/hash-rush/copy'
+import { buildHashRushPcLink, HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/config'
+import { requestHashRushTicket } from '@/features/hash-rush/ticket'
+import { liveRoomsCopy } from '@/i18n/live-rooms-copy'
 import { buildHashRushChatEntries } from './hash-rush-room-chat'
 import {
   resolveLivePhoneDemoFeedbackCopy,
@@ -2219,6 +2222,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [displayConversationTitle, setDisplayConversationTitle] = useState(conversationTitle ?? '')
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [shareEnabled, setShareEnabled] = useState(false)
+  // Public: listed with its name in the search tab and joinable by anyone.
+  const [isPublicRoom, setIsPublicRoom] = useState(false)
+  const [isTogglingPublic, setIsTogglingPublic] = useState(false)
   const [isTogglingSharing, setIsTogglingSharing] = useState(false)
   const [isRefreshingShareLink, setIsRefreshingShareLink] = useState(false)
   const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>('compose')
@@ -5565,13 +5571,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`conversation_share_status_failed:${response.status}`)
-        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown }>
+        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown; isPublic?: unknown }>
       })
       .then((body) => {
         if (cancelled) return
         const nextShareToken = typeof body.shareToken === 'string' ? body.shareToken : null
         setShareUrl(nextShareToken ? buildConversationShareUrl(window.location.origin, nextShareToken) : null)
         setShareEnabled(body.shareEnabled === true)
+        setIsPublicRoom(body.isPublic === true)
       })
       .catch(() => {
         // Leave whatever was already shown — the toggle below surfaces its
@@ -5664,6 +5671,63 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     roomManagementCopy.shareErrorToastLabel,
     roomManagementCopy.shareRefreshedToastLabel,
   ])
+
+  const liveRoomCopy = useMemo(() => liveRoomsCopy(uiLocale), [uiLocale])
+
+  const handleTogglePublicRoom = useCallback(async (nextPublic: boolean) => {
+    if (isTogglingPublic || !conversationId) return
+    setIsTogglingPublic(true)
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}/visibility`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildTrackingRequestHeaders({
+            sessionKey: resolveConversationSessionKey(),
+            trackingUserId: getOrCreateTrackingUserId(),
+            nativeAppUpdate,
+          }),
+        },
+        body: JSON.stringify({ isPublic: nextPublic }),
+      })
+      if (!response.ok) throw new Error(`conversation_visibility_failed:${response.status}`)
+      const body = await response.json() as { isPublic?: unknown; conversation?: { shareToken?: unknown; shareEnabled?: unknown } }
+      setIsPublicRoom(body.isPublic === true)
+      // Going public switches the share link on.
+      const nextShareToken = typeof body.conversation?.shareToken === 'string' ? body.conversation.shareToken : null
+      if (nextShareToken) setShareUrl(buildConversationShareUrl(window.location.origin, nextShareToken))
+      if (body.conversation?.shareEnabled === true) setShareEnabled(true)
+    } catch {
+      toast.error(roomManagementCopy.shareErrorToastLabel)
+    } finally {
+      setIsTogglingPublic(false)
+    }
+  }, [conversationId, isTogglingPublic, nativeAppUpdate, resolveConversationSessionKey, roomManagementCopy.shareErrorToastLabel])
+
+  // Copies a link that opens this room's Hash Rush game in a computer browser, as this member.
+  const handleCopyHashRushPcLink = useCallback(async () => {
+    if (!conversationId || !HASH_RUSH_PAGE_URL || !HASH_RUSH_SERVER) return
+    try {
+      const grant = await requestHashRushTicket({ conversationId, viewerKey: `pc|${viewerUserId ?? ''}`, fresh: true })
+      const link = buildHashRushPcLink({ pageUrl: HASH_RUSH_PAGE_URL, server: HASH_RUSH_SERVER, room: grant.room, ticket: grant.ticket, lang: uiLocale })
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = link
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+      toast.success(liveRoomCopy.hashRushPcLinkCopied)
+    } catch {
+      toast.error(liveRoomCopy.hashRushPcLinkFailed)
+    }
+  }, [conversationId, liveRoomCopy.hashRushPcLinkCopied, liveRoomCopy.hashRushPcLinkFailed, uiLocale, viewerUserId])
 
   const handleCopyShareLink = useCallback(async () => {
     if (!shareUrl) return
@@ -8844,6 +8908,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 <ChevronRight size={18} strokeWidth={2.4} />
                               </span>
                             </button>
+                            {HASH_RUSH_PAGE_URL ? (
+                              <button
+                                type="button"
+                                data-qa="live-demo-hash-rush-pc-link"
+                                onClick={() => void handleCopyHashRushPcLink()}
+                                className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                              >
+                                <span className="min-w-0 flex-1">{liveRoomCopy.hashRushPcLink}</span>
+                                <span className="shrink-0 text-gray-500">
+                                  <Share size={17} strokeWidth={2.3} />
+                                </span>
+                              </button>
+                            ) : null}
                           </div>
                         ) : null}
 
@@ -9240,6 +9317,30 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               <ChevronRight size={18} strokeWidth={2.4} />
                             </span>
                           </button>
+
+                          <div className="mb-3 rounded-2xl border border-gray-200 px-3.5 py-3" data-qa="live-demo-public-room">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[0.98rem] font-medium text-gray-900">{liveRoomCopy.publicMenuLabel}</p>
+                                <p className="mt-0.5 text-[0.8rem] leading-5 text-gray-500">{liveRoomCopy.publicHint}</p>
+                              </div>
+                              <button
+                                type="button"
+                                role="switch"
+                                data-qa="live-demo-public-room-switch"
+                                aria-checked={isPublicRoom}
+                                aria-label={liveRoomCopy.publicMenuLabel}
+                                onClick={() => void handleTogglePublicRoom(!isPublicRoom)}
+                                disabled={!conversationId || isTogglingPublic}
+                                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border-0 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 ${isPublicRoom ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                              >
+                                <span
+                                  className="absolute left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+                                  style={{ transform: isPublicRoom ? 'translateX(20px)' : 'translateX(0px)' }}
+                                />
+                              </button>
+                            </div>
+                          </div>
 
                           <div className="mb-3 rounded-2xl border border-gray-200 px-3.5 py-3">
                             <div className="flex items-center justify-between gap-3">

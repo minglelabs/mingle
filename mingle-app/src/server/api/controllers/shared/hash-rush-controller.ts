@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
-import { getConversationSessionKeyForMember } from "@/lib/app-conversations";
+import { getConversationSessionKeyForMember, markConversationHashRushActive } from "@/lib/app-conversations";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { prisma } from "@/lib/prisma";
 import { hashRushRoomId, issueHashRushTicket } from "@/server/hash-rush/ticket";
@@ -24,5 +24,7 @@ export async function postHashRushTicketResponse(request: NextRequest, conversat
   const name = (user?.name || "").trim().slice(0, 8);
   const room = hashRushRoomId(conversationId);
   const { ticket, exp, expiresIn } = issueHashRushTicket({ room, userId: resolvedUser.userId, name }, secret);
+  // The search tab lists the room as playing Hash Rush for a while after this.
+  await markConversationHashRushActive(conversationId);
   return NextResponse.json({ ticket, room, name, exp, expiresIn });
 }

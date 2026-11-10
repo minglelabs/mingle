@@ -400,6 +400,13 @@ model AppConversationChannel {
   // that stamps sharedAt (enable, already-on re-stamp, refresh); null while
   // the room was never shared. Member-facing views always use the live title.
   sharedTitle                String?   @map("shared_title")
+  // Public room: listed in the search tab's live rooms with its title, and
+  // anyone may join it from there (through the share link, which turning the
+  // room public switches on). A private room is listed only as a locked card.
+  isPublic                   Boolean   @default(false) @map("is_public")
+  // Last time a member got a Hash Rush ticket for this room's game; the search
+  // tab treats the game as running for a while after it.
+  hashRushActiveAt           DateTime? @map("hash_rush_active_at")
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
@@ -411,6 +418,7 @@ model AppConversationChannel {
   @@unique([ownerUserId, sequenceNumber], map: "app_conversation_channels_owner_sequence_uidx")
   @@index([ownerUserId, updatedAt], map: "app_conversation_channels_owner_updated_at_idx")
   @@index([ownerUserId, status], map: "app_conversation_channels_owner_status_idx")
+  @@index([hashRushActiveAt], map: "app_conversation_channels_hash_rush_active_at_idx")
   @@map("app_conversation_channels")
 }
 
@@ -642,24 +650,24 @@ model AppClientVersionPolicy {
 }
 
 model AdminDashboardDailyMetric {
-  day                DateTime @db.Date
-  platform           String   @default("all")
-  signupCount        Int      @map("signup_count")
-  dauCount           Int      @map("dau_count")
-  messageCount       Int      @map("message_count")
-  usageSeconds       Float    @map("usage_seconds")
-  usageMetricVersion Int      @default(0) @map("usage_metric_version")
-  sttAvgMs           Float?   @map("stt_avg_ms")
-  sttP95Ms           Float?   @map("stt_p95_ms")
-  translationAvgMs   Float?   @map("translation_avg_ms")
-  translationP95Ms   Float?   @map("translation_p95_ms")
+  day                      DateTime @db.Date
+  platform                 String   @default("all")
+  signupCount              Int      @map("signup_count")
+  dauCount                 Int      @map("dau_count")
+  messageCount             Int      @map("message_count")
+  usageSeconds             Float    @map("usage_seconds")
+  usageMetricVersion       Int      @default(0) @map("usage_metric_version")
+  sttAvgMs                 Float?   @map("stt_avg_ms")
+  sttP95Ms                 Float?   @map("stt_p95_ms")
+  translationAvgMs         Float?   @map("translation_avg_ms")
+  translationP95Ms         Float?   @map("translation_p95_ms")
   /// Per-character STT and per-output-token translation latency (usage_metric_version 3).
-  sttMsPerCharAvg          Float? @map("stt_ms_per_char_avg")
-  sttMsPerCharP95          Float? @map("stt_ms_per_char_p95")
-  translationMsPerTokenAvg Float? @map("translation_ms_per_token_avg")
-  translationMsPerTokenP95 Float? @map("translation_ms_per_token_p95")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  sttMsPerCharAvg          Float?   @map("stt_ms_per_char_avg")
+  sttMsPerCharP95          Float?   @map("stt_ms_per_char_p95")
+  translationMsPerTokenAvg Float?   @map("translation_ms_per_token_avg")
+  translationMsPerTokenP95 Float?   @map("translation_ms_per_token_p95")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
   @@id([day, platform])
   @@index([platform, day], map: "admin_dashboard_daily_metrics_platform_day_idx")
@@ -1304,20 +1312,20 @@ model AppCoinPricingRate {
 }
 
 model AppIapProduct {
-  id             String   @id @default(cuid())
+  id                String   @id @default(cuid())
   // ios | android | web
-  platform       String
-  storeProductId String   @map("store_product_id")
+  platform          String
+  storeProductId    String   @map("store_product_id")
   // web only: the product's id at the payment provider (Polar product UUID).
-  providerProductId String? @map("provider_product_id")
-  coinMicro      BigInt   @map("coin_micro")
-  bonusMicro     BigInt   @default(0) @map("bonus_micro")
-  priceUsdCents  Int      @map("price_usd_cents")
-  sortOrder      Int      @default(0) @map("sort_order")
-  isActive       Boolean  @default(true) @map("is_active")
-  badge          String?
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  providerProductId String?  @map("provider_product_id")
+  coinMicro         BigInt   @map("coin_micro")
+  bonusMicro        BigInt   @default(0) @map("bonus_micro")
+  priceUsdCents     Int      @map("price_usd_cents")
+  sortOrder         Int      @default(0) @map("sort_order")
+  isActive          Boolean  @default(true) @map("is_active")
+  badge             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   @@unique([platform, storeProductId], map: "app_iap_products_platform_store_product_uidx")
   @@map("app_iap_products")

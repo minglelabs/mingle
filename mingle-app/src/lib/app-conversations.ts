@@ -96,6 +96,8 @@ export type ConversationChannelSummary = {
   // but only shows/links it while shareEnabled is true.
   shareToken: string | null;
   shareEnabled: boolean;
+  // Listed with its title in the search tab's live rooms, and joinable by anyone from there.
+  isPublic?: boolean;
 };
 
 export type ConversationHydrationUtterance = {
@@ -227,6 +229,7 @@ type ConversationChannelRecord = {
   shareEnabled: boolean;
   sharedAt: Date | null;
   sharedTitle: string | null;
+  isPublic: boolean;
 };
 
 type ListConversationChannelsForUserOptions = {
@@ -252,6 +255,7 @@ const conversationChannelSelect = {
   shareEnabled: true,
   sharedAt: true,
   sharedTitle: true,
+  isPublic: true,
 } satisfies Prisma.AppConversationChannelSelect;
 
 // A pending invitee (see AppConversationChannel.pendingInviteeUserIds) has no
@@ -954,6 +958,7 @@ function serializeConversationChannel(
     pausedAt: (viewerFacingPausedAt !== undefined ? viewerFacingPausedAt : record.pausedAt)?.toISOString() ?? null,
     shareToken: record.shareToken,
     shareEnabled: record.shareEnabled === true,
+    isPublic: record.isPublic === true,
   };
 }
 
@@ -2432,14 +2437,14 @@ export async function getConversationSessionKeyForMember(args: {
 export async function getConversationChannelSharing(args: {
   conversationId: string;
   userId: string;
-}): Promise<{ shareToken: string | null; shareEnabled: boolean; sharedAt: Date | null } | null> {
+}): Promise<{ shareToken: string | null; shareEnabled: boolean; sharedAt: Date | null; isPublic: boolean } | null> {
   const record = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
       ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
-    select: { shareToken: true, shareEnabled: true, sharedAt: true },
+    select: { shareToken: true, shareEnabled: true, sharedAt: true, isPublic: true },
   });
   return record ?? null;
 }
@@ -3925,4 +3930,130 @@ export async function leaveConversationChannel(args: {
   }
 
   throw new Error("conversation_channel_leave_conflict");
+}
+
+
+// ---------------------------------------------------------------------------
+// Public rooms and the search tab's live rooms
+// ---------------------------------------------------------------------------
+
+/** A Hash Rush game counts as running for this long after its last ticket. */
+export const HASH_RUSH_ACTIVE_WINDOW_MS = 15 * 60 * 1000;
+const LIVE_ROOMS_LIMIT = 30;
+
+/**
+ * A member turns the room public or private. Public also switches the share
+ * link on, since joining a public room goes through it.
+ */
+export async function setConversationPublic(args: {
+  conversationId: string;
+  userId: string;
+  isPublic: boolean;
+}): Promise<ConversationChannelSummary | null> {
+  const sessionKey = await getConversationSessionKeyForMember({ conversationId: args.conversationId, userId: args.userId });
+  if (!sessionKey) return null;
+  if (args.isPublic) {
+    const shared = await setConversationShareEnabled({ conversationId: args.conversationId, userId: args.userId, enabled: true });
+    if (!shared) return null;
+  }
+  const record = await prisma.appConversationChannel.update({
+    where: { id: args.conversationId },
+    data: { isPublic: args.isPublic },
+    select: conversationChannelSelect,
+  });
+  return serializeConversationChannelWithPreview(record, args.userId);
+}
+
+/** A room member entered the room's Hash Rush game (a ticket was issued). */
+export async function markConversationHashRushActive(conversationId: string, at: Date = new Date()): Promise<void> {
+  await prisma.appConversationChannel.update({
+    where: { id: conversationId },
+    data: { hashRushActiveAt: at },
+  }).catch(() => undefined);
+}
+
+export type LiveRoomActivity = {
+  /** People in the room's live voice talk call (0: none). */
+  voiceCallParticipantCount: number;
+  /** The room's Hash Rush game was entered recently. */
+  hashRushActive: boolean;
+};
+
+/**
+ * One card in the search tab. A private room shows only that it is live and
+ * what is going on (no title, members or languages) and cannot be joined from
+ * here; a public room shows its title, languages and members.
+ */
+export type LiveRoomCard = LiveRoomActivity & {
+  id: string;
+  isPublic: boolean;
+  isMember: boolean;
+  memberCount: number;
+  title: string | null;
+  languages: string[];
+  members: Array<{ userId: string; name: string | null; image: string | null }>;
+};
+
+/** Rooms with a live voice talk call or a running Hash Rush game, public first, busiest first. */
+export async function listLiveRooms(viewerUserId: string | null, now: Date = new Date()): Promise<LiveRoomCard[]> {
+  const [calls, games] = await Promise.all([
+    prisma.appVoiceCall.findMany({
+      where: { status: "live" },
+      select: { channelId: true, _count: { select: { participants: { where: { leftAt: null } } } } },
+    }).catch(() => []),
+    prisma.appConversationChannel.findMany({
+      where: { hashRushActiveAt: { gte: new Date(now.getTime() - HASH_RUSH_ACTIVE_WINDOW_MS) } },
+      select: { id: true },
+    }),
+  ]);
+  const activity = new Map<string, LiveRoomActivity>();
+  for (const call of calls) {
+    if (call._count.participants <= 0) continue;
+    activity.set(call.channelId, { voiceCallParticipantCount: call._count.participants, hashRushActive: false });
+  }
+  for (const game of games) {
+    const entry = activity.get(game.id) ?? { voiceCallParticipantCount: 0, hashRushActive: false };
+    entry.hashRushActive = true;
+    activity.set(game.id, entry);
+  }
+  if (activity.size === 0) return [];
+
+  const records = await prisma.appConversationChannel.findMany({
+    where: { id: { in: [...activity.keys()] }, ...buildVisibleConversationWhere() },
+    select: { id: true, title: true, isPublic: true, selectedLanguages: true },
+  });
+  const membersByChannelId = await listChannelMembersByChannelId(records.map((record) => record.id));
+  const cards: LiveRoomCard[] = records.map((record) => {
+    const members = filterActiveMembers(membersByChannelId.get(record.id) ?? []);
+    const isPublic = record.isPublic === true;
+    return {
+      id: record.id,
+      isPublic,
+      isMember: !!viewerUserId && members.some((member) => member.userId === viewerUserId),
+      memberCount: members.length,
+      title: isPublic ? record.title : null,
+      languages: isPublic ? record.selectedLanguages.slice(0, 5) : [],
+      members: isPublic
+        ? members.slice(0, 4).map((member) => ({ userId: member.userId, name: member.name ?? null, image: member.image ?? null }))
+        : [],
+      ...(activity.get(record.id) as LiveRoomActivity),
+    };
+  });
+  const busy = (card: LiveRoomCard) => card.voiceCallParticipantCount + (card.hashRushActive ? 1 : 0);
+  return cards
+    .sort((left, right) => Number(right.isPublic) - Number(left.isPublic) || busy(right) - busy(left))
+    .slice(0, LIVE_ROOMS_LIMIT);
+}
+
+/** Anyone joins a public room (the same checks as the share link: capacity, blocks). */
+export async function joinPublicConversationChannel(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<ConversationChannelSummary | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: { id: args.conversationId, isPublic: true, shareEnabled: true, ...buildVisibleConversationWhere() },
+    select: { shareToken: true },
+  });
+  if (!record?.shareToken) return null;
+  return joinConversationChannelViaShareToken({ shareToken: record.shareToken, userId: args.userId });
 }
