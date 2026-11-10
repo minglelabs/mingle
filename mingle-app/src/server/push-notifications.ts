@@ -1,4 +1,4 @@
-import { createPrivateKey, createSign } from "node:crypto";
+import { createHash, createPrivateKey, createSign } from "node:crypto";
 import { connect } from "node:http2";
 import { resolveTeamNotificationCopy, resolveTeamNotificationText } from "@/i18n/team-notification-copy";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +8,7 @@ import { resolveLegalDocumentLocale, resolveSupportedLocaleTag, type LegalDocume
 import { resolvePushNotificationCopy } from "@/i18n/notification-copy";
 import { resolveOperatorInboxPushCopy } from "@/server/operator-inbox/push-copy";
 import { isTeamNotificationType } from "@/lib/user-notification-types";
+import { messageRecallCopy } from "@/lib/message-recall";
 
 type PushPlatform = "ios" | "android";
 
@@ -35,6 +36,16 @@ export type PushMessage = {
   conversationId?: string;
   /** In-app destination the tap should open (e.g. feedHref with post/comment). */
   navigationUrl?: string;
+  /**
+   * Pushes with the same key replace each other on the device (APNs
+   * `apns-collapse-id`, Android notification `tag`) instead of stacking.
+   */
+  collapseKey?: string;
+  /**
+   * The sender unsent this message: a silent push that overwrites the
+   * delivered one (same `collapseKey`) with the "deleted message" placeholder.
+   */
+  recalled?: boolean;
 };
 
 type PushSendResult = {
@@ -67,7 +78,23 @@ const APNS_SANDBOX_HOST = "api.sandbox.push.apple.com";
 const FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 const FCM_TOKEN_AUDIENCE = "https://oauth2.googleapis.com/token";
 
+// Android channel without sound or heads-up, for pushes that only rewrite a
+// notification already on the device. App versions without it fall back to
+// the default channel (the rewrite still happens, with the usual sound).
+const ANDROID_SILENT_CHANNEL_ID = "mingle_silent_updates";
+const ANDROID_DEFAULT_CHANNEL_ID = "mingle_notifications";
+// APNs rejects a collapse id over 64 bytes.
+const COLLAPSE_KEY_MAX_LENGTH = 64;
+
 let cachedFcmAccessToken: CachedFcmAccessToken | null = null;
+
+/** The key a message push and its later "deleted" rewrite share. */
+export function conversationMessageCollapseKey(messageId: string): string {
+  const key = `msg-${messageId}`;
+  return key.length <= COLLAPSE_KEY_MAX_LENGTH && /^[\w-]+$/.test(key)
+    ? key
+    : `msg-${createHash("sha256").update(messageId).digest("hex").slice(0, 40)}`;
+}
 
 function normalizeEnvValue(value: string | undefined): string {
   return value?.trim() ?? "";
@@ -164,8 +191,10 @@ export function resolvePushCopy(message: PushMessage): { title: string; body: st
     };
   }
   if (message.type === "conversation_message") {
-    const preview = (message.messagePreview || "").replace(/\s+/g, " ").trim() || "…";
     const locale = resolveLegalDocumentLocale(resolveSupportedLocaleTag(message.recipientLanguage.trim()) ?? "en");
+    const preview = message.recalled
+      ? messageRecallCopy(locale).placeholder
+      : (message.messagePreview || "").replace(/\s+/g, " ").trim() || "…";
     const copy = CONVERSATION_MESSAGE_PUSH_COPY[locale];
     return { title: copy.title, body: `${label}${copy.separator}${preview}` };
   }
@@ -193,6 +222,7 @@ function createPushData(message: PushMessage): Record<string, string> {
   if (message.sessionKey) data.sessionKey = message.sessionKey;
   if (message.conversationId) data.conversationId = message.conversationId;
   if (message.navigationUrl) data.url = message.navigationUrl;
+  if (message.recalled) data.recalled = "1";
   return data;
 }
 
@@ -215,11 +245,11 @@ async function sendApnsNotification(
   );
   const copy = resolvePushCopy(message);
   const payload = JSON.stringify({
-    aps: {
-      alert: { title: copy.title, body: copy.body },
-      sound: "default",
-      badge: 1,
-    },
+    aps: message.recalled
+      // Rewrites the delivered notification in place: no sound, no badge
+      // change, and no screen wake.
+      ? { alert: { title: copy.title, body: copy.body }, "interruption-level": "passive" }
+      : { alert: { title: copy.title, body: copy.body }, sound: "default", badge: 1 },
     type: message.type,
     notificationId: message.notificationId,
     ...(message.actorId ? { actorId: message.actorId } : {}),
@@ -227,6 +257,7 @@ async function sendApnsNotification(
     ...(message.sessionKey ? { sessionKey: message.sessionKey } : {}),
     ...(message.conversationId ? { conversationId: message.conversationId } : {}),
     ...(message.navigationUrl ? { url: message.navigationUrl } : {}),
+    ...(message.recalled ? { recalled: "1" } : {}),
   });
 
   return new Promise((resolve) => {
@@ -253,6 +284,7 @@ async function sendApnsNotification(
         "apns-topic": config.bundleId,
         "apns-push-type": "alert",
         "apns-priority": "10",
+        ...(message.collapseKey ? { "apns-collapse-id": message.collapseKey } : {}),
         "content-type": "application/json",
       });
 
@@ -345,10 +377,11 @@ async function sendFcmNotification(
           android: {
             priority: "HIGH",
             notification: {
-              channel_id: "mingle_notifications",
+              channel_id: message.recalled ? ANDROID_SILENT_CHANNEL_ID : ANDROID_DEFAULT_CHANNEL_ID,
               icon: "mingle_notification",
-              sound: "default",
+              ...(message.recalled ? {} : { sound: "default" }),
               click_action: "MINGLE_NOTIFICATION_OPEN",
+              ...(message.collapseKey ? { tag: message.collapseKey } : {}),
             },
           },
         },
@@ -553,6 +586,61 @@ export async function sendPushNotificationForConversationMessage(args: {
   senderUserId: string;
   memberUserIds: string[];
 }): Promise<void> {
+  if (!readApnsConfig() && !readFcmConfig()) return;
+  // A push can be sent seconds after the message (it waits for the
+  // translation). A message unsent in that time must not reach a lock screen.
+  const current = await prisma.appMessage.findUnique({
+    where: { id: args.messageId },
+    select: { isDeleted: true },
+  });
+  if (current?.isDeleted) return;
+  await deliverConversationMessagePush({ ...args, recalled: false });
+}
+
+/**
+ * The sender unsent a message: rewrites the push each recipient already got
+ * into the "deleted message" placeholder, silently. A push cannot be taken
+ * back, but one with the same collapse key replaces it on the device.
+ * Members who opened the room after the message (`lastReadAt`) are skipped:
+ * they no longer have that notification, and a rewrite would show a new one.
+ */
+export async function sendPushNotificationForRecalledConversationMessage(args: {
+  messageId: string;
+  messageCreatedAt: Date;
+  sessionKey: string;
+  senderUserId: string;
+  memberUserIds: string[];
+}): Promise<void> {
+  if (!readApnsConfig() && !readFcmConfig()) return;
+  const channel = await prisma.appConversationChannel.findUnique({
+    where: { sessionKey: args.sessionKey },
+    select: { members: { select: { userId: true, lastReadAt: true } } },
+  });
+  const alreadyRead = new Set(
+    (channel?.members ?? [])
+      .filter((member) => member.lastReadAt && member.lastReadAt.getTime() >= args.messageCreatedAt.getTime())
+      .map((member) => member.userId),
+  );
+  await deliverConversationMessagePush({
+    messageId: args.messageId,
+    sessionKey: args.sessionKey,
+    sourceText: "",
+    senderUserId: args.senderUserId,
+    memberUserIds: args.memberUserIds.filter((userId) => !alreadyRead.has(userId)),
+    recalled: true,
+  });
+}
+
+async function deliverConversationMessagePush(args: {
+  messageId: string;
+  sessionKey: string;
+  sourceText: string;
+  sourceLanguage?: string;
+  translations?: Record<string, string>;
+  senderUserId: string;
+  memberUserIds: string[];
+  recalled: boolean;
+}): Promise<void> {
   const apnsConfig = readApnsConfig();
   const fcmConfig = readFcmConfig();
   if (!apnsConfig && !fcmConfig) return;
@@ -589,14 +677,17 @@ export async function sendPushNotificationForConversationMessage(args: {
   const senderName = sender?.name?.trim() || (sender?.handle ? `@${sender.handle}` : "Someone");
   const senderBadge = resolveAccountBadge(sender);
   const toPreview = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 240);
-  if (!toPreview(args.sourceText)) return;
+  if (!args.recalled && !toPreview(args.sourceText)) return;
+  const collapseKey = conversationMessageCollapseKey(args.messageId);
 
   const targetEntries: PushDelivery[] = [];
   for (const recipientUserId of recipientUserIds) {
     const recipient = users.find((user) => user.id === recipientUserId);
     if (!recipient) continue;
     const recipientLanguage = resolveRecipientLanguage(recipient);
-    const messagePreview = toPreview(pickMessagePushText({ ...args, recipientLanguage })) || toPreview(args.sourceText);
+    const messagePreview = args.recalled
+      ? ""
+      : toPreview(pickMessagePushText({ ...args, recipientLanguage })) || toPreview(args.sourceText);
     // Build the room URL in the recipient's own locale, matching the web route
     // `/{locale}/conversations?conversation={channelId}`. Falls back to the raw
     // conversationId (the native tap handler rebuilds the room path from it).
@@ -613,6 +704,8 @@ export async function sendPushNotificationForConversationMessage(args: {
       actorLabel: withAccountBadgeLabel(senderName, senderBadge, recipientLanguage),
       recipientLanguage,
       messagePreview,
+      collapseKey,
+      ...(args.recalled ? { recalled: true } : {}),
       sessionKey: args.sessionKey,
       ...(channelId ? { conversationId: channelId } : {}),
       ...(navigationUrl ? { navigationUrl } : {}),
