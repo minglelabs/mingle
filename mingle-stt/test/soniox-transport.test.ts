@@ -329,3 +329,32 @@ test('agent text after Stop is not sent to Soniox', async (t) => {
         return JSON.parse(frame.data.toString()).type !== 'agent_text';
     }));
 });
+
+test('a final turn reports every language its tokens were labelled with', async (t) => {
+    const f = await fixture(t);
+    f.sendConfig();
+    await f.ready();
+    f.audio(Buffer.alloc(320));
+    await waitFor(() => f.providerFrames.some((frame) => frame.binary));
+    // A non-final label that Soniox later revises must not stay in the turn.
+    f.providerSocket.send(JSON.stringify({ tokens: [
+        { text: 'I ', language: 'en', is_final: true, speaker: '1' },
+        { text: 'bought', language: 'ja', is_final: false, speaker: '1' },
+    ] }));
+    f.providerSocket.send(JSON.stringify({ tokens: [
+        { text: 'bought ', language: 'en', is_final: true, speaker: '1' },
+        { text: '김치', language: 'ko', is_final: true, speaker: '1' },
+        { text: '<end>', is_final: true, speaker: '1' },
+    ] }));
+    f.providerSocket.send(JSON.stringify({ tokens: [
+        { text: 'only english', language: 'en', is_final: true, speaker: '1' },
+        { text: '<end>', is_final: true, speaker: '1' },
+    ] }));
+    await waitFor(() => f.messages.filter((msg) => msg.type === 'transcript' && msg.data.is_final).length === 2);
+    const finals = f.messages.filter((msg) => msg.type === 'transcript' && msg.data.is_final);
+    assert.equal(finals[0].data.utterance.text, 'I bought 김치');
+    assert.deepEqual(finals[0].data.utterance.languages, ['en', 'ko']);
+    assert.deepEqual(finals[1].data.utterance.languages, ['en']);
+    const interims = f.messages.filter((msg) => msg.type === 'transcript' && !msg.data.is_final);
+    assert.ok(interims.every((msg) => msg.data.utterance.languages === undefined));
+});

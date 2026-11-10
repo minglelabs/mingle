@@ -521,7 +521,8 @@ export default function FeedPostCard({
     translate.mode !== "hidden" ? (post.displayLanguage && post.displayLanguage.trim()) || viewerLanguage : null;
   const chipLanguages = useMemo(() => {
     const seen = new Set<string>();
-    const sourceKey = (post.sourceLanguage ?? "").toLowerCase();
+    // A mixed body has a real translation into its own language: keep that chip.
+    const sourceKey = post.sourceLanguagesMixed ? "" : (post.sourceLanguage ?? "").toLowerCase();
     const out: string[] = [];
     for (const language of [viewerChipLanguage, ...(post.translationLanguages ?? [])]) {
       const key = (language ?? "").toLowerCase();
@@ -530,7 +531,7 @@ export default function FeedPostCard({
       out.push(language);
     }
     return out.slice(0, 6);
-  }, [viewerChipLanguage, post.translationLanguages, post.sourceLanguage]);
+  }, [viewerChipLanguage, post.translationLanguages, post.sourceLanguage, post.sourceLanguagesMixed]);
   const selectedChip = pickedText
     ? (pickedLanguage as string)
     : viewerChipLanguage && translate.showingTranslation

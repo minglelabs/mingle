@@ -3,7 +3,7 @@ import type { AdminContext } from '@/server/admin/guard'
 import { writeAdminAudit } from '@/server/admin/audit'
 import { storeReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { hidePostByModerator, unhidePostByModerator } from '@/server/reports/moderation-service'
-import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import { resolveEditTargetLanguages, translatePostBodySettled } from '@/server/translation/post-translation-service'
 import { operatorTextProvider } from '@/server/translation/translate-texts'
 
@@ -52,14 +52,16 @@ export async function editOperatorPostText(ctx: AdminContext, postId: string, ra
   if (!text || text.length > MAX_BODY_LENGTH) return { ok: false, error: 'invalid_text', status: 400 }
   if (text === post.sourceText) return { ok: true }
 
-  const language = await detectSourceLanguage({ text, clientHint: post.sourceLanguage, provider: operatorTextProvider() })
+  const verdict = await detectSourceLanguageVerdict({ text, clientHint: post.sourceLanguage, provider: operatorTextProvider() })
+  const language = verdict.language
+  const mixed = Boolean(language) && verdict.mixed
   const prior = (await prisma.postTranslation.findMany({ where: { postId }, select: { language: true } })).map((row) => row.language)
-  const targets = language ? resolveEditTargetLanguages(language, prior) : []
-  const rows = language && targets.length ? await translatePostBodySettled({ sourceText: text, sourceLanguage: language, targetLanguages: targets, provider: operatorTextProvider() }) : []
+  const targets = language ? resolveEditTargetLanguages(language, prior, null, mixed) : []
+  const rows = language && targets.length ? await translatePostBodySettled({ sourceText: text, sourceLanguage: language, targetLanguages: targets, provider: operatorTextProvider(), sourceLanguagesMixed: mixed }) : []
   const bodyVersion = post.bodyVersion + 1
 
   const swapped = await prisma.$transaction(async (tx) => {
-    const result = await tx.post.updateMany({ where: { id: postId, bodyVersion: post.bodyVersion }, data: { sourceText: text, sourceLanguage: language, bodyVersion } })
+    const result = await tx.post.updateMany({ where: { id: postId, bodyVersion: post.bodyVersion }, data: { sourceText: text, sourceLanguage: language, sourceLanguagesMixed: mixed, bodyVersion } })
     if (result.count === 0) return false
     await tx.postTranslation.deleteMany({ where: { postId, bodyVersion } })
     if (rows.length) await tx.postTranslation.createMany({ data: rows.map((row) => ({ postId, bodyVersion, language: row.language, status: row.status, text: row.text })) })

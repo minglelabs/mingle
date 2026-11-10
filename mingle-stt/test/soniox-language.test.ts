@@ -8,6 +8,7 @@ import {
     getNextTurnDetectedLang,
     hasPendingSonioxTurnText,
     mergeDetectedLang,
+    mergeTurnLanguages,
     shouldUseTokenLanguageForCurrentTurn,
 } from '../soniox-language';
 
@@ -177,4 +178,9 @@ test('global finalize cohort can target only speakers idle long enough', () => {
             detectedLang: 'ko',
         },
     ]);
+});
+
+test('turn languages keep every label once, sorted, without unknown', () => {
+    assert.deepEqual(mergeTurnLanguages(new Set(['ko', 'en']), new Set(['en', 'unknown', ''])), ['en', 'ko']);
+    assert.deepEqual(mergeTurnLanguages(new Set(), new Set(['unknown'])), []);
 });

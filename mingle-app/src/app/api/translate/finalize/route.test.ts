@@ -1992,6 +1992,102 @@ describe('/api/translate/finalize route', () => {
     }
   })
 
+  it('does not ask for the utterance\'s own language when the recognizer labelled one language', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ja":"今日はいい天気ですね","en":"Nice weather today"}',
+        usageMetadata: {},
+      },
+    })
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    const { POST } = await import('@/server/api/controllers/ios/v1.0.4/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_4 }))
+
+    const res = await POST(makeJsonRequest({
+      text: '오늘 날씨 좋네요',
+      sourceLanguage: 'ko',
+      sttLanguages: ['ko'],
+      targetLanguages: ['ko', 'ja', 'en'],
+      isFinal: true,
+    }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    const prompt = JSON.stringify(mockGenerateContent.mock.calls[0])
+    // Every room language stays a hint; only ja and en are asked for.
+    expect(prompt).toContain('language_hints=ko, ja, en')
+    const schema = JSON.stringify(mockGetGenerativeModel.mock.calls.at(-1))
+    expect(schema).not.toContain('"required":["sourceLanguage","sourceLanguagesMixed","sourceTextHasForeignScript","ko"')
+    expect(json.sourceLanguage).toBe('ko')
+    expect(json.translations).toEqual({
+      ko: '오늘 날씨 좋네요',
+      ja: '今日はいい天気ですね',
+      en: 'Nice weather today',
+    })
+  })
+
+  it('asks again for every language when the model says a single-label utterance is mixed', async () => {
+    mockGenerateContent
+      .mockResolvedValueOnce({
+        response: {
+          text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":true,"sourceTextHasForeignScript":false,"ja":"lean","en":"lean"}',
+          usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 10, totalTokenCount: 110 },
+        },
+      })
+      .mockResolvedValueOnce({
+        response: {
+          text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":true,"sourceTextHasForeignScript":false,"ko":"정말 답답해서 죽겠다고","ja":"本当にもどかしくて死にそうだって","en":"I am so frustrated I could die"}',
+          usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 30, totalTokenCount: 150 },
+        },
+      })
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    const { POST } = await import('@/server/api/controllers/ios/v1.0.4/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_4 }))
+
+    const res = await POST(makeJsonRequest({
+      text: '손나 답답해서 죽겠다고',
+      sourceLanguage: 'ko',
+      sttLanguages: ['ko'],
+      targetLanguages: ['ko', 'ja', 'en'],
+      isFinal: true,
+    }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(2)
+    expect(json.sourceLanguagesMixed).toBe(true)
+    expect(json.translations).toEqual({
+      ko: '정말 답답해서 죽겠다고',
+      ja: '本当にもどかしくて死にそうだって',
+      en: 'I am so frustrated I could die',
+    })
+  })
+
+  it('asks for every language when the recognizer labelled two languages', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ko":"오늘 날씨 좋네요","ja":"今日はいい天気ですね","en":"Nice weather today"}',
+        usageMetadata: {},
+      },
+    })
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    const { POST } = await import('@/server/api/controllers/ios/v1.0.4/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_4 }))
+
+    const res = await POST(makeJsonRequest({
+      text: '오늘 날씨 좋네요',
+      sourceLanguage: 'ko',
+      sttLanguages: ['en', 'ko'],
+      targetLanguages: ['ko', 'ja', 'en'],
+      isFinal: true,
+    }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+
+    expect(res.status).toBe(200)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(mockGetGenerativeModel.mock.calls.at(-1))).toContain('"ko"')
+  })
+
   it('keeps translations when the redetected source language is outside the selectable list', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {

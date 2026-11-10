@@ -7,7 +7,7 @@ import {
   normalizeRequestedTranslationLanguage,
   translatePostOnDemand,
 } from '@/server/translation/post-translation-service'
-import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import { resolvePostSourceLanguage } from '@/server/translation/post-chinese-variants'
 import { onDemandTranslationDeps } from '@/server/translation/on-demand-translation-deps'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
@@ -36,7 +36,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   const post = await prisma.post.findFirst({
     where: visibleSinglePostWhere(postId, viewerId),
-    select: { bodyVersion: true, sourceLanguage: true, sourceText: true },
+    select: { bodyVersion: true, sourceLanguage: true, sourceText: true, sourceLanguagesMixed: true },
   })
   if (!post) return json({ error: 'not_found' }, { status: 404 })
 
@@ -49,7 +49,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   return json({
     postId,
     translations: rows
-      .filter((row) => row.language !== post.sourceLanguage && row.text && !isUntranslatedCopy(post.sourceText, row.language, row.text))
+      // A mixed body has a real translation into its own language too.
+      .filter((row) => (post.sourceLanguagesMixed || row.language !== post.sourceLanguage) && row.text && !isUntranslatedCopy(post.sourceText, row.language, row.text))
       .map((row) => ({ language: row.language, text: row.text })),
   })
 }
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const post = await prisma.post.findFirst({
     where: visibleSinglePostWhere(postId, viewerId),
-    select: { sourceText: true, sourceLanguage: true, bodyVersion: true },
+    select: { sourceText: true, sourceLanguage: true, bodyVersion: true, sourceLanguagesMixed: true },
   })
   if (!post) return json({ error: 'not_found' }, { status: 404 })
   if (!post.sourceText || !post.sourceText.trim()) {
@@ -94,17 +95,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
   // Legacy rows stored with a null source language: detect it now and persist,
   // then translate — instead of rejecting. Detection is authoritative.
   let sourceLanguage = post.sourceLanguage
+  let sourceLanguagesMixed = post.sourceLanguagesMixed
   if (!sourceLanguage) {
-    const detected = await detectSourceLanguage({ text: post.sourceText })
+    const verdict = await detectSourceLanguageVerdict({ text: post.sourceText })
+    const detected = verdict.language
     if (!detected) {
       // Genuinely undetectable (e.g. emoji-only) — nothing to translate.
       return json({ error: 'no_text_to_translate' }, { status: 400 })
     }
     await prisma.post.update({
       where: { id: postId },
-      data: { sourceLanguage: detected },
+      data: { sourceLanguage: detected, sourceLanguagesMixed: verdict.mixed },
     })
     sourceLanguage = detected
+    sourceLanguagesMixed = verdict.mixed
   }
 
   const original = { sourceText: post.sourceText, sourceLanguage }
@@ -112,7 +116,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
   // Already in the requested language: the original is the answer, no LLM.
   // A legacy bare `zh` source is compared as its script's variant, so a
   // Traditional post is never served as its own zh-CN translation.
-  if (normalizeRequestedTranslationLanguage(resolvePostSourceLanguage(sourceLanguage, post.sourceText)) === language) {
+  // A body that mixes languages is translated even into its own language.
+  if (!sourceLanguagesMixed && normalizeRequestedTranslationLanguage(resolvePostSourceLanguage(sourceLanguage, post.sourceText)) === language) {
     return json({ postId, language, text: post.sourceText, status: 'ready', ...original })
   }
 
@@ -122,6 +127,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     sourceText: post.sourceText,
     sourceLanguage,
     language,
+    sourceLanguagesMixed,
   })
 
   return json({

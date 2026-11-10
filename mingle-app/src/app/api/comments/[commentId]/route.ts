@@ -4,7 +4,7 @@ import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import { authorizeCommentEdit, updateComment, deleteComment } from '@/server/posts/comment-service'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
-import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import {
   resolveEditTargetLanguages,
   translateCommentBodySettled,
@@ -72,7 +72,10 @@ export async function PATCH(request: NextRequest, context: Ctx) {
   // re-translate the default 4 languages + every language this comment already
   // had, letting them settle BEFORE the atomic body-version swap so the
   // previous body + translations stay visible until commit.
-  const detected = await detectSourceLanguage({ text, clientHint })
+  const verdict = await detectSourceLanguageVerdict({ text, clientHint })
+  const detected = verdict.language
+  // A mixed body is translated into its own language too.
+  const mixed = Boolean(detected) && verdict.mixed
 
   let translationRows: Array<{ language: string; status: string; text: string | null }> = []
   if (detected) {
@@ -82,13 +85,14 @@ export async function PATCH(request: NextRequest, context: Ctx) {
         select: { language: true },
       })
     ).map((r) => r.language)
-    const targets = resolveEditTargetLanguages(detected, priorLanguages)
+    const targets = resolveEditTargetLanguages(detected, priorLanguages, null, mixed)
     if (targets.length > 0) {
       translationRows = (
         await translateCommentBodySettled({
           sourceText: text,
           sourceLanguage: detected,
           targetLanguages: targets,
+          sourceLanguagesMixed: mixed,
         })
       ).map((r) => ({ language: r.language, status: r.status, text: r.text }))
     }
@@ -101,6 +105,7 @@ export async function PATCH(request: NextRequest, context: Ctx) {
       actorId: userId,
       sourceText: text,
       sourceLanguage: detected,
+      sourceLanguagesMixed: mixed,
       translationRows,
       expectedBodyVersion: baseVersion,
     })

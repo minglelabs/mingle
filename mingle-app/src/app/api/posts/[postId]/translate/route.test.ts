@@ -29,6 +29,13 @@ vi.mock('@/server/translation/post-translation-service', async () => {
 })
 vi.mock('@/server/translation/detect-source-language', () => ({
   detectSourceLanguage: mockDetectSourceLanguage,
+  // Callers read the verdict; `mixed` is false unless a test returns an object.
+  detectSourceLanguageVerdict: async (args: unknown) => {
+    const result: unknown = await mockDetectSourceLanguage(args)
+    return result && typeof result === 'object'
+      ? result
+      : { language: (result as string | null | undefined) ?? null, mixed: false }
+  },
 }))
 vi.mock('@/server/translation/on-demand-translation-deps', () => ({ onDemandTranslationDeps: {} }))
 
@@ -81,7 +88,7 @@ describe('POST /api/posts/{postId}/translate', () => {
     expect(res.status).toBe(200)
     expect(mockDetectSourceLanguage).toHaveBeenCalledWith({ text: 'Hola mundo' })
     // Persisted the detected language back onto the row.
-    expect(mockPostUpdate).toHaveBeenCalledWith({ where: { id: 'p1' }, data: { sourceLanguage: 'es' } })
+    expect(mockPostUpdate).toHaveBeenCalledWith({ where: { id: 'p1' }, data: { sourceLanguage: 'es', sourceLanguagesMixed: false } })
     // Translation used the detected language.
     expect(mockTranslatePostOnDemand).toHaveBeenCalledWith(
       expect.anything(),
@@ -129,6 +136,16 @@ describe('POST /api/posts/{postId}/translate', () => {
     const body = await (await POST(makeReq({ language: 'ko-KR' }), makeCtx('p1'))).json()
     expect(body).toMatchObject({ status: 'ready', text: '안녕', language: 'ko' })
     expect(mockTranslatePostOnDemand).not.toHaveBeenCalled()
+  })
+
+  it('translates a mixed-language post even into its own language', async () => {
+    mockPostFindFirst.mockResolvedValue({ sourceText: '오늘 meeting 진짜 long했어', sourceLanguage: 'ko', bodyVersion: 1, sourceLanguagesMixed: true })
+    const res = await POST(makeReq({ language: 'ko' }), makeCtx('p1'))
+    expect(res.status).toBe(200)
+    expect(mockTranslatePostOnDemand).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ sourceLanguage: 'ko', language: 'ko', sourceLanguagesMixed: true }),
+    )
   })
 
   it('rate-limits with translate_post (429 + Retry-After)', async () => {
