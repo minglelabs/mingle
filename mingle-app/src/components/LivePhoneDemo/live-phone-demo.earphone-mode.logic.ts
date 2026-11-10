@@ -380,6 +380,35 @@ export function resolveEarphoneModeFixedTarget(
  * text no longer starts with what was read (it changed): reading on would
  * repeat or contradict what the listener heard.
  */
+// A text is read one sentence at a time: the first clip starts sooner, and
+// the next sentence is synthesized while the one before it plays. Leading
+// sentences shorter than this are read together with what follows them.
+export const EARPHONE_MODE_MIN_SENTENCE_CHARS = 10
+
+// Western terminators end a sentence only before whitespace (so "3.5" and
+// "a.b" stay whole); full-width CJK terminators end one anywhere. Closing
+// quotes and brackets stay with their sentence.
+const EARPHONE_MODE_SENTENCE_END_RE = /(?:[.!?…؟।]+["'”’)\]」』]*(?=\s)|[。！？]+[”’」』）]*)/gu
+
+/**
+ * Where the first sentence of `text` ends (an index into `text`), or null
+ * when it is one sentence: no terminator with readable text after it, or
+ * only ones too early to stand alone.
+ */
+export function firstEarphoneModeSentenceEnd(
+  text: string,
+  minChars: number = EARPHONE_MODE_MIN_SENTENCE_CHARS,
+): number | null {
+  EARPHONE_MODE_SENTENCE_END_RE.lastIndex = 0
+  for (const match of text.matchAll(EARPHONE_MODE_SENTENCE_END_RE)) {
+    const end = (match.index ?? 0) + match[0].length
+    if (end < minChars) continue
+    if (!text.slice(end).trim()) return null
+    return end
+  }
+  return null
+}
+
 export function remainingEarphoneModeText(fullText: string, readText: string): string | null {
   const full = fullText.trim()
   const read = readText.trim()

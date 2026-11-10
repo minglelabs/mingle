@@ -9,6 +9,7 @@ import {
 import {
   EARPHONE_MODE_AUDIO_TIMEOUT_MS,
   EARPHONE_MODE_STALL_TIMEOUT_MS,
+  firstEarphoneModeSentenceEnd,
   type EarphoneModeReadContext,
 } from './live-phone-demo.earphone-mode.logic'
 
@@ -53,6 +54,7 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
     signal: AbortSignal
   }> = []
   const requestOrder: string[] = []
+  const requestTexts: string[] = []
   const dispatched: EarphoneAutoReadDispatchItem[] = []
   const queuedKeys: string[][] = []
   const state = { engineIdle: true, gateOpen: true }
@@ -70,6 +72,7 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
       requests.set(target.playbackKey, { resolve, signal })
       audioRequests.push({ playbackKey: target.playbackKey, resolve, signal })
       requestOrder.push(target.playbackKey)
+      requestTexts.push(target.text)
     }),
     isEngineIdle: () => state.engineIdle,
     canDispatch: () => state.gateOpen,
@@ -102,6 +105,7 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
     requests,
     audioRequests,
     requestOrder,
+    requestTexts,
     snapshot,
     now: () => now,
     async advance(ms: number) {
@@ -774,5 +778,88 @@ describe('EarphoneAutoReadController fixed pieces', () => {
     await h.finishPlayback()
     await h.resolveAudio(key('later'))
     expect(h.dispatched.map((item) => item.text)).toEqual(['앞부분', '뒷부분', '번역 later'])
+  })
+})
+
+describe('firstEarphoneModeSentenceEnd', () => {
+  it('ends the first sentence at a terminator followed by more text', () => {
+    const text = 'Hello there friend. How are you today?'
+    expect(text.slice(0, firstEarphoneModeSentenceEnd(text) ?? 0)).toBe('Hello there friend.')
+  })
+
+  it('returns null for a single sentence', () => {
+    expect(firstEarphoneModeSentenceEnd('Just one sentence here.')).toBeNull()
+    expect(firstEarphoneModeSentenceEnd('끝맺음 없는 문장')).toBeNull()
+  })
+
+  it('keeps short leading sentences with what follows', () => {
+    expect(firstEarphoneModeSentenceEnd('네. 좋아요. 내일 만나요.')).toBeNull()
+    const text = '네. 좋아요, 그럼 내일 봐요. 늦지 마세요.'
+    expect(text.slice(0, firstEarphoneModeSentenceEnd(text) ?? 0)).toBe('네. 좋아요, 그럼 내일 봐요.')
+  })
+
+  it('does not split decimals or dotted words', () => {
+    expect(firstEarphoneModeSentenceEnd('가격은 3.5달러이고 example.com 에서 팝니다')).toBeNull()
+  })
+
+  it('splits full-width CJK terminators without a following space', () => {
+    const text = '今日はとてもいい天気ですね。明日も晴れるでしょう。'
+    expect(text.slice(0, firstEarphoneModeSentenceEnd(text) ?? 0)).toBe('今日はとてもいい天気ですね。')
+  })
+
+  it('keeps a closing quote with its sentence', () => {
+    const text = 'She said “really, truly?” Then she left the room.'
+    expect(text.slice(0, firstEarphoneModeSentenceEnd(text) ?? 0)).toBe('She said “really, truly?”')
+  })
+})
+
+describe('EarphoneAutoReadController sentences', () => {
+  it('reads a final one sentence at a time, synthesizing the next while one plays', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const startedAt = h.now() + 100
+    const row = message('multi', startedAt, {
+      translations: { ko: '첫 번째 문장입니다. 두 번째 문장입니다. 세 번째 문장입니다.' },
+    })
+
+    h.controller.update(h.snapshot([row]))
+    expect(h.requestTexts).toEqual(['첫 번째 문장입니다.'])
+    await h.resolveAudioRequest(0)
+    expect(h.dispatched.map((item) => item.text)).toEqual(['첫 번째 문장입니다.'])
+    // The next sentence is requested while the first plays.
+    expect(h.requestTexts).toEqual(['첫 번째 문장입니다.', '두 번째 문장입니다.'])
+
+    await h.resolveAudioRequest(1)
+    expect(h.dispatched).toHaveLength(1)
+    await h.finishPlayback()
+    expect(h.dispatched.map((item) => item.text)).toEqual(['첫 번째 문장입니다.', '두 번째 문장입니다.'])
+    expect(h.requestTexts).toHaveLength(3)
+
+    await h.resolveAudioRequest(2)
+    await h.finishPlayback()
+    h.controller.update(h.snapshot([row]))
+    await h.advance(1)
+    expect(h.dispatched.map((item) => item.text)).toEqual([
+      '첫 번째 문장입니다.',
+      '두 번째 문장입니다.',
+      '세 번째 문장입니다.',
+    ])
+    expect(h.controller.getCandidateStatus('multi')).toBe('dispatched')
+  })
+
+  it('reads the next row only after every sentence of the one before it', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const startedAt = h.now() + 100
+    const first = message('first', startedAt, { translations: { ko: '앞 메시지 첫 문장. 앞 메시지 끝 문장.' } })
+    const later = message('later', startedAt + 50)
+    h.controller.update(h.snapshot([first, later]))
+
+    await h.resolveAudio(key('later'))
+    await h.resolveAudioRequest(0)
+    await h.resolveAudio(key('first'))
+    await h.finishPlayback()
+    await h.finishPlayback()
+    expect(h.dispatched.map((item) => item.text)).toEqual(['앞 메시지 첫 문장.', '앞 메시지 끝 문장.', '번역 later'])
   })
 })

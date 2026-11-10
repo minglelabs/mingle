@@ -9,6 +9,7 @@ import {
   buildEarphoneModeProgressSignature,
   classifyEarphoneModeUtterance,
   createEarphoneModeWatermark,
+  firstEarphoneModeSentenceEnd,
   isEarphoneModeCandidate,
   isEarphoneModeUtteranceSettled,
   remainingEarphoneModeText,
@@ -59,8 +60,9 @@ type Candidate = {
   signature: string
   lastProgressAtMs: number
   target: EarphoneModeReadTarget | null
-  // Pieces: the fixed text already read aloud, and the full text the current
-  // target was cut from. A piece target leaves the row open for the rest.
+  // Pieces: the text already read aloud, and what has been read once the
+  // current target is (a prefix of the row's text). A piece target (a fixed
+  // part, or one sentence of several) leaves the row open for the rest.
   readText: string
   targetFullText: string
   targetIsPiece: boolean
@@ -245,8 +247,10 @@ export class EarphoneAutoReadController {
           }
           this.emitQueuedPlaybackKeys()
           this.options.dispatch(item)
-          // What is left of that row may already be readable.
+          // What is left of that row may already be readable: synthesize its
+          // next sentence while this one plays.
           if (this.lastSnapshot) this.reconcile(this.lastSnapshot)
+          this.startPrefetches(now)
         }
         // Either handed over or waiting for the player to go idle, which
         // pumps again.
@@ -331,10 +335,18 @@ export class EarphoneAutoReadController {
       const full = classified.state === 'ready'
         ? classified.target
         : resolveEarphoneModeFixedTarget(utterance, snapshot.read)
-      const isPiece = classified.state !== 'ready'
+      const isIncomplete = classified.state !== 'ready'
       const remainder = full ? remainingEarphoneModeText(full.text, candidate.readText) : null
       if (full && remainder) {
-        const next: EarphoneModeReadTarget = { ...full, text: remainder }
+        // Read the remainder one sentence at a time.
+        const fullText = full.text.trim()
+        const sentenceEnd = firstEarphoneModeSentenceEnd(remainder)
+        const pieceText = sentenceEnd === null ? remainder : remainder.slice(0, sentenceEnd).trim()
+        const readAfter = sentenceEnd === null
+          ? fullText
+          : fullText.slice(0, fullText.length - remainder.length + sentenceEnd)
+        const isPiece = isIncomplete || sentenceEnd !== null
+        const next: EarphoneModeReadTarget = { ...full, text: pieceText }
         // A queued piece stays queued while the fixed part only grows after it.
         const keepQueuedPiece = candidate.status === 'ready' && candidate.target && candidate.targetIsPiece
           && candidate.target.playbackKey === next.playbackKey && remainder.startsWith(candidate.target.text)
@@ -343,11 +355,11 @@ export class EarphoneAutoReadController {
             this.discardPrefetch(candidate)
           }
           candidate.target = next
-          candidate.targetFullText = full.text.trim()
+          candidate.targetFullText = readAfter
           candidate.targetIsPiece = isPiece
         }
         candidate.status = 'ready'
-      } else if (!isPiece && candidate.readText) {
+      } else if (!isIncomplete && candidate.readText) {
         // Everything final was read as pieces (or it changed after them): done.
         this.finishCandidate(candidate, 'dispatched')
       } else {
