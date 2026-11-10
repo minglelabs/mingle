@@ -104,6 +104,15 @@ describe('deriveTranslation', () => {
       displayLanguage: 'en',
     })
   })
+  it('a mixed-language body reads its own-language translation like any other', () => {
+    const t: SerializerTranslationRow = { postId: 'p1', bodyVersion: 2, language: 'en', status: 'ready', text: 'The meeting was long' }
+    expect(deriveTranslation({ sourceLanguage: 'en', sourceLanguagesMixed: true }, 'en', t)).toEqual({
+      translationState: 'ready',
+      displayText: 'The meeting was long',
+      displayLanguage: 'en',
+    })
+    expect(deriveTranslation({ sourceLanguage: 'en', sourceLanguagesMixed: true }, 'en', undefined).translationState).toBe('none')
+  })
   it('ready surfaces the translation text', () => {
     const t: SerializerTranslationRow = { postId: 'p1', bodyVersion: 2, language: 'ko', status: 'ready', text: '안녕' }
     expect(deriveTranslation({ sourceLanguage: 'en' }, 'ko', t)).toEqual({

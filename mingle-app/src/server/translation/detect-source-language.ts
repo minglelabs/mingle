@@ -14,6 +14,10 @@
  * Undetectable input (empty, whitespace-only, or emoji/punctuation/digits
  * only) resolves to null without ever calling the provider.
  *
+ * `detectSourceLanguageVerdict` also says whether the text mixes languages.
+ * A mixed body is translated into every default language, its main language
+ * included, so a reader of that language also gets the foreign parts.
+ *
  * Chinese always resolves to zh-CN or zh-TW, never a bare `zh`: the typed
  * script decides, the author's Chinese display language (the client hint)
  * only breaks a tie when the script is ambiguous, and the model's variant
@@ -96,6 +100,13 @@ function fallbackToClientHint(text: string, canonicalHint: string): string | nul
   return isChineseLanguage(canonicalHint) ? resolveChineseSourceVariant(text, canonicalHint) : canonicalHint
 }
 
+export type SourceLanguageVerdict = {
+  /** Canonical language code, or null when undetectable / no usable verdict. */
+  language: string | null
+  /** The model said the text meaningfully mixes two or more languages. False on any fallback. */
+  mixed: boolean
+}
+
 /**
  * Detect the source language of a post/comment body.
  *
@@ -103,10 +114,15 @@ function fallbackToClientHint(text: string, canonicalHint: string): string | nul
  *          undetectable or detection produced no usable verdict.
  */
 export async function detectSourceLanguage(args: DetectSourceLanguageArgs): Promise<string | null> {
+  return (await detectSourceLanguageVerdict(args)).language
+}
+
+/** Same detection, plus whether the text mixes languages. */
+export async function detectSourceLanguageVerdict(args: DetectSourceLanguageArgs): Promise<SourceLanguageVerdict> {
   const { text } = args
 
   // Cheap, provider-free short-circuit for text with no letters at all.
-  if (isUndetectableText(text)) return null
+  if (isUndetectableText(text)) return { language: null, mixed: false }
 
   const canonicalHint = args.clientHint ? canonicalizeTranslationLanguageCode(args.clientHint) : ''
 
@@ -127,19 +143,22 @@ export async function detectSourceLanguage(args: DetectSourceLanguageArgs): Prom
     })
 
     const rawDetected = result.detectedSourceLanguage || ''
-    if (isChineseLanguage(rawDetected)) return resolveChineseSourceVariant(text, canonicalHint, rawDetected)
+    const mixed = result.sourceLanguagesMixed === true
+    if (isChineseLanguage(rawDetected)) {
+      return { language: resolveChineseSourceVariant(text, canonicalHint, rawDetected), mixed }
+    }
 
     const detected = rawDetected ? canonicalizeTranslationLanguageCode(rawDetected) : ''
 
-    if (detected) return detected
+    if (detected) return { language: detected, mixed }
 
     // Detection produced nothing usable — fall back to the client hint only if
     // it canonicalizes to a real language.
-    return fallbackToClientHint(text, canonicalHint)
+    return { language: fallbackToClientHint(text, canonicalHint), mixed: false }
   } catch {
     // Provider failure must not block publishing. Fall back to the client hint
     // when it is a real language, else null (post stays untranslated; the user
     // can request a translation later, which re-detects).
-    return fallbackToClientHint(text, canonicalHint)
+    return { language: fallbackToClientHint(text, canonicalHint), mixed: false }
   }
 }

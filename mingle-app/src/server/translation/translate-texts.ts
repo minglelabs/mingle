@@ -179,13 +179,15 @@ async function translateTextsWithPool(input: TranslateTextsInput): Promise<Trans
       if (typeof value === 'string' && value.trim()) translations[language] = value.trim()
     }
   }
-  const detected = input.redetectSourceLanguage && parsed && typeof parsed === 'object'
-    ? (parsed as Record<string, unknown>).source_language
-    : undefined
+  const record = input.redetectSourceLanguage && parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null
+  // source_language is the pool's own rule; a detection prompt may ask for sourceLanguage instead.
+  const detected = record ? (record.source_language ?? record.sourceLanguage) : undefined
+  const mixed = record?.sourceLanguagesMixed
   return {
     translations,
     ...base,
     ...(typeof detected === 'string' && detected.trim() ? { detectedSourceLanguage: normalizeLang(detected.trim()) || detected.trim() } : {}),
+    ...(typeof mixed === 'boolean' ? { sourceLanguagesMixed: mixed } : {}),
     ...(Object.keys(translations).length ? {} : { emptyReason: 'blank_translations' as const }),
   }
 }

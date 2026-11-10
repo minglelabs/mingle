@@ -51,6 +51,11 @@ export type FeedPostDto = {
   /** Body exactly as written; line breaks and blank lines preserved. */
   sourceText: string
   sourceLanguage: string | null
+  /**
+   * The body mixes languages, so it is translated even into `sourceLanguage`
+   * (that reader gets the foreign parts). Absent on the wire means false.
+   */
+  sourceLanguagesMixed?: true
   bodyVersion: number
   /** Body in `displayLanguage` when `translationState === 'ready'`, else null. */
   displayText: string | null
@@ -58,7 +63,7 @@ export type FeedPostDto = {
   translationState: FeedPostTranslationState
   /**
    * Languages this body already has a finished translation in (current body
-   * version, the source language excluded). Anyone may read them via
+   * version, the source language excluded unless `sourceLanguagesMixed`). Anyone may read them via
    * `GET /posts/{id}/translate`. Optional on the wire: absent means none.
    */
   translationLanguages?: string[]

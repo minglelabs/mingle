@@ -23,7 +23,10 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/server/posts/post-visibility', () => ({
   visibleSinglePostWhere: (postId: string) => ({ id: postId }),
 }))
-vi.mock('@/server/translation/detect-source-language', () => ({ detectSourceLanguage: vi.fn() }))
+vi.mock('@/server/translation/detect-source-language', () => ({
+  detectSourceLanguage: vi.fn(),
+  detectSourceLanguageVerdict: vi.fn(async () => ({ language: null, mixed: false })),
+}))
 vi.mock('@/server/translation/translate-texts', () => ({ operatorTextProvider: () => undefined, translateTexts: h.translateTexts }))
 vi.mock('@/server/translation/on-demand-translation-deps', () => {
   const key = (p: string, v: number, l: string) => `${p}:${v}:${l}`
