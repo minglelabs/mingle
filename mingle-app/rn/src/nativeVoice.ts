@@ -149,7 +149,8 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     roomName: null as string | null,
     micOn: true,
     micAvailable: true,
-    interpretOn: true,
+    interpretOn: false,
+    readingAloud: false,
     mode: 'static' as InterpretVolumeMode,
     origVol: DUCK_ORIG_STATIC,
     trVol: 1,
@@ -175,6 +176,7 @@ export function createVoiceController(deps: VoiceControllerDeps) {
       origVol: state.origVol,
       trVol: state.trVol,
       lanePlaying: state.lanePlaying,
+      readingAloud: state.readingAloud,
     };
   }
 
@@ -335,6 +337,13 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     emit();
   }
 
+  /** The room's speaker / earphone mode started or stopped reading aloud. */
+  function setReadingAloud(on: boolean): void {
+    if (state.readingAloud === on) return;
+    state.readingAloud = on;
+    applyVolumes();
+  }
+
   function setTrVol(fraction: number): void {
     state.trVol = clampVolumeFraction(fraction);
     applyVolumes();
@@ -422,6 +431,7 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     setMode,
     setOrigVol,
     setTrVol,
+    setReadingAloud,
     getSnapshot,
     subscribe(listener: () => void): () => void {
       listeners.add(listener);

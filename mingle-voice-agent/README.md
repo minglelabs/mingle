@@ -2,6 +2,12 @@
 
 ## Production service (group voice rooms)
 
+> **Retired 2026-11-11.** The app no longer uses the interpreter: a voice
+> talk carries original voices only, and the room's own STT messages plus the
+> speaker / earphone mode give the translation. `service.ts` starts no
+> interpreter unless `VOICE_AGENT_INTERPRETER=on`; there is no need to run
+> this service. The rest of this section describes the old behaviour.
+
 `service.ts` is the production entry (`pnpm start`). It does not serve the POC
 page. Every 3 s it lists rooms on the LiveKit server. For each app voice room
 (`voice-*`) that has at least one human, it starts one hidden interpreter

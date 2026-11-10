@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ChevronUp, Languages, PhoneOff, Phone } from 'lucide-react'
+import { ChevronUp, PhoneOff, Phone } from 'lucide-react'
 
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = 8
@@ -48,7 +48,6 @@ const COPY = {
     idle: '보이스톡 · 아무도 없어요',
     live: (n: number) => `보이스톡 · ${n}/${MAX_SEATS}`,
     connecting: '연결 중…',
-    interpret: '통역',
     leave: '나가기',
     me: '나',
     empty: '빈 자리',
@@ -65,7 +64,6 @@ const COPY = {
     idle: 'Voice talk · nobody yet',
     live: (n: number) => `Voice talk · ${n}/${MAX_SEATS}`,
     connecting: 'Connecting…',
-    interpret: 'Interpret',
     leave: 'Leave',
     me: 'Me',
     empty: 'Empty',
@@ -169,7 +167,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
 
   const join = useCallback(() => {
     setFolded(false)
-    post({ type: 'native_voice_open', payload: { conversationId, title: conversationTitle, lang: myLang, interpret: true } })
+    post({ type: 'native_voice_open', payload: { conversationId, title: conversationTitle, lang: myLang, interpret: false } })
   }, [conversationId, conversationTitle, myLang])
 
   // The button only shows the panel; `openSignal` is a counter, so this runs
@@ -194,7 +192,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     setOpened(false)
     post({ type: 'native_voice_close' })
   }, [])
-  const toggleInterpret = useCallback(() => room && post({ type: 'native_voice_set', payload: { interpret: !room.interpretOn } }), [room])
 
   // Seats: who is in the call (live LiveKit view when joined, else the API's).
   const seats = useMemo(() => {
@@ -307,13 +304,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
 
               {joined ? (
                 <div className="flex items-center justify-center gap-2 border-t border-gray-100 px-3 py-2">
-                  <button
-                    type="button"
-                    onClick={toggleInterpret}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8rem] font-semibold ${room?.interpretOn ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-800'}`}
-                  >
-                    <Languages size={15} /> {copy.interpret} {room?.interpretOn ? 'ON' : 'OFF'}
-                  </button>
                   <button type="button" onClick={leave} className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1.5 text-[0.8rem] font-semibold text-rose-600">
                     <PhoneOff size={15} /> {copy.leave}
                   </button>

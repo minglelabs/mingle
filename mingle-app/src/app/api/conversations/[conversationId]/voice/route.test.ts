@@ -71,7 +71,7 @@ describe("/api/conversations/[conversationId]/voice routes", () => {
     expect(verifyHs256(body.token, "test-secret-value-0123456789")).toMatchObject({
       sub: "user-1",
       name: "Mia",
-      attributes: { lang: "ko", interpret: "on", role: "speaker" },
+      attributes: { lang: "ko", interpret: "off", role: "speaker" },
       video: { room: body.room, roomJoin: true },
     });
 

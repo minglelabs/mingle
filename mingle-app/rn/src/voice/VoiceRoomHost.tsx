@@ -23,6 +23,8 @@ export type VoiceRoomHostHandle = {
   set: (payload: VoiceSetCommand['payload']) => void;
   /** The chat screen closed: stop polling. A joined call keeps running. */
   stopStatus: () => void;
+  /** Speaker / earphone mode is reading a translation: quiet the call. */
+  setReadingAloud: (on: boolean) => void;
 };
 
 export type VoiceRoomHostProps = {
@@ -174,7 +176,15 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
       pollRef.current = null;
     }, []);
 
-    useImperativeHandle(ref, () => ({ open, close, requestStatus, set, stopStatus }), [open, close, requestStatus, set, stopStatus]);
+    const setReadingAloud = useCallback((on: boolean) => {
+      controllerRef.current?.setReadingAloud(on);
+    }, []);
+
+    useImperativeHandle(
+      ref,
+      () => ({ open, close, requestStatus, set, stopStatus, setReadingAloud }),
+      [open, close, requestStatus, set, stopStatus, setReadingAloud],
+    );
 
     useEffect(() => () => {
       pollRef.current?.stop();

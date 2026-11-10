@@ -81,7 +81,11 @@ export async function postVoiceCallTokenResponse(request: NextRequest, conversat
   }
   const lang = readLang(body.lang);
   if (!lang) return NextResponse.json({ error: "invalid_lang" }, { status: 400 });
-  const interpretOn = body.interpret !== false;
+  // The call carries the original voices only. Translated speech comes from
+  // the room itself: each phone's STT posts room messages, and the room's
+  // speaker / earphone mode reads them aloud. There is no interpreter bot,
+  // so `interpret` from older apps is ignored.
+  const interpretOn = false;
 
   const config = readLiveKitConfig();
   if (!config) return NextResponse.json({ error: "voice_unavailable" }, { status: 503 });

@@ -8,8 +8,15 @@ import { buildUsageReport, roomsNeedingInterpreter, toHttpUrl, type RoomSnapshot
 // ("voice-*") and keeps one hidden interpreter in each room that has a human.
 // The interpreter leaves by itself 30 s after the last human (IDLE_LEAVE_MS).
 // No POC page is served here; only /health for Railway.
+//
+// Retired (2026-11-11): the app no longer uses the interpreter. A voice talk
+// carries original voices only; each phone's STT posts room messages and the
+// room's speaker / earphone mode reads translations aloud. Running both did
+// the STT, translation and TTS twice and read a line twice. The service now
+// starts no interpreter unless VOICE_AGENT_INTERPRETER=on.
 
 const POLL_MS = Math.max(1000, Number(process.env.VOICE_AGENT_POLL_MS) || 3000);
+const INTERPRETER_ENABLED = (process.env.VOICE_AGENT_INTERPRETER || '').trim().toLowerCase() === 'on';
 const PORT = Number(process.env.PORT) || 8080;
 const APP_INTERNAL_URL = (process.env.APP_INTERNAL_URL || '').trim().replace(/\/$/, '');
 const VOICE_INTERNAL_SECRET = (process.env.VOICE_INTERNAL_SECRET || '').trim();
@@ -32,7 +39,8 @@ async function snapshot(): Promise<RoomSnapshot[]> {
 async function poll(): Promise<void> {
     if (stopping) return;
     try {
-        for (const name of roomsNeedingInterpreter(await snapshot())) {
+        const needing = INTERPRETER_ENABLED ? roomsNeedingInterpreter(await snapshot()) : [];
+        for (const name of needing) {
             void ensureInterpreter(name).catch(() => undefined);
         }
         lastPollOk = Date.now();
@@ -97,6 +105,7 @@ if (missing.length) {
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[service] watching ${env.livekitUrl} every ${POLL_MS} ms, health on :${PORT}/health`);
+    console.log(`[service] watching ${env.livekitUrl} every ${POLL_MS} ms, health on :${PORT}/health`
+        + (INTERPRETER_ENABLED ? '' : ' (interpreter off: VOICE_AGENT_INTERPRETER is not "on")'));
     void poll();
 });

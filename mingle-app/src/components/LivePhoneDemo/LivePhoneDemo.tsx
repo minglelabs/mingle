@@ -1095,12 +1095,21 @@ function isSpeakerModeClient(): boolean {
   return namespaceSupportsSpeakerMode(apiNamespace)
 }
 
+// Speaker mode needs no earphone detection: it reads aloud and the
+// microphone path removes that sound. So any shell that has speaker mode
+// shows the button, also Android below 13, which cannot tell where media
+// plays and so reports no audio route. Earphone mode (and device-audio
+// capture) still needs a reported route.
+function isEarphoneModeControlSupported(route: ReturnType<typeof getNativeAudioRouteSnapshot>): boolean {
+  return isNativeAudioRouteSupported(route) || isSpeakerModeClient()
+}
+
 // The earphone-mode gate as the stores report it right now (not as of the last
 // render), for decisions that must not wait for React.
 function isEarphoneAutoReadGateOpenNow(): boolean {
   const route = getNativeAudioRouteSnapshot()
   return resolveEarphoneModeGate({
-    supported: isNativeAudioRouteSupported(route),
+    supported: isEarphoneModeControlSupported(route),
     enabled: getEarphoneModePreferenceSnapshot(),
     earphonesConnected: route.earphonesConnected,
     earphonesRequired: !isSpeakerModeClient(),
@@ -2340,7 +2349,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     getNativeAudioRouteSnapshot,
     getNativeAudioRouteServerSnapshot,
   )
-  const earphoneModeSupported = isNativeAudioRouteSupported(nativeAudioRoute)
+  const earphoneModeSupported = isEarphoneModeControlSupported(nativeAudioRoute)
   const speakerMode = isSpeakerModeClient()
   const earphoneModeGate = resolveEarphoneModeGate({
     supported: earphoneModeSupported,

@@ -90,6 +90,8 @@ describe('voice controller LiveKit wiring', () => {
       localUserId: 'me',
     });
     await controller.connect('c1');
+    // The interpreter is retired and off by default; this checks its lane wiring.
+    await controller.setInterpret(true);
 
     // Human mic subscribed; tr:ja subscribed; tr:en NOT subscribed.
     const humanPub = Array.from(humanKo.trackPublications.values())[0];
@@ -130,6 +132,7 @@ describe('voice controller LiveKit wiring', () => {
     const { room, handlers } = makeFakeRoom([humanKo]);
     const controller = createVoiceController({ api: fakeApi(), createRoom: () => room, myLang: 'ja', localUserId: 'me' });
     await controller.connect('c1');
+    await controller.setInterpret(true);
     controller.setMode('dynamic');
 
     const send = (obj: unknown) =>
@@ -144,6 +147,32 @@ describe('voice controller LiveKit wiring', () => {
     const humanPub = Array.from(humanKo.trackPublications.values())[0];
     send({ type: 'lane', lang: 'ja', playing: true });
     expect(humanPub.track!.setVolume).toHaveBeenLastCalledWith(0.15);
+  });
+
+  it('carries original voices only and quiets them while the room reads aloud', async () => {
+    const humanKo = participant('u_ko', { lang: 'ko' }, [pub({ trackName: 'mic' })]);
+    const humanJa = participant('u_ja', { lang: 'ja' }, [pub({ trackName: 'mic' })]);
+    const agent = participant('interpreter-voice-c1', { role: 'interpreter' }, [pub({ trackName: 'tr:ja' })]);
+    const { room } = makeFakeRoom([humanKo, humanJa, agent]);
+    const controller = createVoiceController({ api: fakeApi(), createRoom: () => room, myLang: 'ja', localUserId: 'me' });
+    await controller.connect('c1');
+
+    const koPub = Array.from(humanKo.trackPublications.values())[0];
+    const jaPub = Array.from(humanJa.trackPublications.values())[0];
+    const lanePub = Array.from(agent.trackPublications.values())[0];
+    expect(controller.getSnapshot().interpretOn).toBe(false);
+    expect(lanePub.isSubscribed).toBe(false);
+    expect(koPub.isSubscribed).toBe(true);
+
+    controller._internal.applyVolumes();
+    expect(koPub.track!.setVolume).toHaveBeenLastCalledWith(1);
+
+    controller.setReadingAloud(true);
+    expect(koPub.track!.setVolume).toHaveBeenLastCalledWith(0.25);
+    expect(jaPub.track!.setVolume).toHaveBeenLastCalledWith(1);
+
+    controller.setReadingAloud(false);
+    expect(koPub.track!.setVolume).toHaveBeenLastCalledWith(1);
   });
 
   it('ignores data on other topics', async () => {

@@ -100,12 +100,17 @@ export type VolumeState = {
   lanePlaying: boolean;
   /** Dynamic-mode ducked level, default 0.15. */
   duckLow?: number;
+  /** The room's speaker / earphone mode is reading a translation aloud. */
+  readingAloud?: boolean;
 };
 
 /** Volume for a HUMAN speaker's original-audio track. */
 export function originalVolume(participant: VoiceParticipantView, state: VolumeState): number {
-  // Interpret OFF, or this speaker already speaks my language: full original.
-  if (!state.interpretOn || participantLang(participant) === state.myLang) return VOLUME_FULL;
+  // This speaker already speaks my language: full original.
+  if (participantLang(participant) === state.myLang) return VOLUME_FULL;
+  // The call carries original voices only; the room reads translations
+  // aloud on the phone. Keep the other voices quiet while it reads.
+  if (!state.interpretOn) return state.readingAloud ? DUCK_ORIG_STATIC : VOLUME_FULL;
   if (state.mode === 'dynamic') {
     return state.lanePlaying ? (state.duckLow ?? DUCK_ORIG_DYNAMIC_LOW) : VOLUME_FULL;
   }

@@ -3616,6 +3616,12 @@ function AppInner(): React.JSX.Element {
   }, [emitCurrentMicPermissionToWeb, nativeAvailable]);
 
   const emitTtsToWeb = useCallback((payload: Record<string, unknown>) => {
+    // A translation read aloud quiets the other voices in a voice talk.
+    if (payload.type === 'tts_started') {
+      voiceHostRef.current?.setReadingAloud(true);
+    } else if (payload.type === 'tts_ended' || payload.type === 'tts_stopped' || payload.type === 'tts_error') {
+      voiceHostRef.current?.setReadingAloud(false);
+    }
     if (!isPageReadyRef.current) return;
     const serialized = JSON.stringify(payload);
     if (__DEV__) {
@@ -4694,6 +4700,7 @@ function AppInner(): React.JSX.Element {
         console.log(`[Web→NativeTTS] stop reason=${reason}`);
       }
       currentTtsPlaybackRef.current = null;
+      voiceHostRef.current?.setReadingAloud(false);
       void stopNativeTts();
       return;
     }

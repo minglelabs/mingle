@@ -72,6 +72,11 @@ describe('volume mix', () => {
   it('interpret OFF = full original', () => {
     expect(originalVolume(other, { ...base, interpretOn: false })).toBe(1);
   });
+
+  it('interpret OFF, room reading aloud = other languages quiet, mine full', () => {
+    expect(originalVolume(other, { ...base, interpretOn: false, readingAloud: true })).toBe(DUCK_ORIG_STATIC);
+    expect(originalVolume(sameLang, { ...base, interpretOn: false, readingAloud: true })).toBe(1);
+  });
   it('same language speaker = full original', () => {
     expect(originalVolume(sameLang, base)).toBe(1);
   });
