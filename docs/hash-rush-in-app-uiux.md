@@ -5,6 +5,8 @@
 
 ## 구조
 
+> 2026-11-10: 아래 iframe 시트(`HashRushSheet`)와 앱 ↔ 게임 메시지 규격은 지워졌다(네이티브 이식 4단계). 지금은 게임이 mingle-app 안에서 직접 돈다 — 아래 "네이티브 이식" 절을 본다. 이 앞부분은 웹/iframe 시절의 기록으로만 남긴다.
+
 - 앱(mingle) 채팅방 메뉴 "🌻 Hash Rush 같이 하기" → `HashRushSheet`가 게임 페이지를 iframe으로 연다.
 - iframe 주소: `<NEXT_PUBLIC_HASH_RUSH_URL>?server=…&room=mingle-<chatId>&ticket=…&name=…&lang=…&embed=1`
 - 게임은 G2 서버 방(방장 없음)에서 돌아간다. 한 채팅방 = 한 게임 방.

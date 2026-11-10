@@ -6,7 +6,7 @@ import {
   buildHashRushChatEntries,
   resolveHashRushChatSenderId,
   resolveHashRushChatText,
-} from './HashRushSheet.chat'
+} from './hash-rush-room-chat'
 
 const KOREAN_VIEWER: EarphoneModeDisplayContext = {
   preferredDisplayLanguage: 'ko',

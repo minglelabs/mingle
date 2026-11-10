@@ -290,8 +290,8 @@ describe('hash rush stage 2 device fixes', () => {
   it('puts the room chat inside the game: its talk, its composer and quick chat over the layer', () => {
     // The room hands its own messages and composer to the layer.
     expect(liveDemoSource).toContain('chat={hashRushGameChat}')
-    expect(liveDemoSource).toContain('hashRushActive || hashRushGameActive')
-    expect(liveDemoSource).toContain('keepUnknownSenders: hashRushGameActive && !hashRushActive,')
+    expect(liveDemoSource).toContain('? buildHashRushChatEntries({')
+    expect(liveDemoSource).toContain('keepUnknownSenders: true,')
     expect(liveDemoSource).toContain('bubbleDisplayMode="collapsed"')
     // The composer over the game is a mode of the game's own; the room's saved input mode is not written.
     expect(liveDemoSource).toContain("const composerShown = hashRushGameChatShown ? hashRushGameChatMode === 'text' : isComposerOpen")
@@ -300,7 +300,12 @@ describe('hash rush stage 2 device fixes', () => {
     expect(toggle).not.toContain('commitLocalAccountPreferences')
     // Quick chat and the bottom bar rise over the layer (47) only while the game's composer is up.
     expect(liveDemoSource).toContain("${hashRushGameChatShown ? 'z-[48] ' : ''}")
-    expect(liveDemoSource).toContain("hashRushGameChatShown ? 'z-[48]' : 'z-[46]'")
+    expect(liveDemoSource).toContain('<div ref={hashRushQuickChatRef} className={`relative z-[48] shrink-0')
+    expect(liveDemoSource).toContain('const hashRushQuickChatVisible = hashRushGameChatShown && Boolean(conversationId) && !isBlockedCounterpart')
+    expect(liveDemoSource).toContain('const activeKeyboardInsetPx = composerShown && (!hashRushGameChatShown || isComposerTextareaFocused) ? keyboardViewportInsetPx : 0')
+    // Nothing of the old iframe sheet is left in the room.
+    expect(liveDemoSource).not.toContain('HashRushSheet')
+    expect(liveDemoSource).not.toContain('hashRushOpen')
     // Messages go the room's own way.
     expect(liveDemoSource).toContain('<HashRushQuickChatBar uiLocale={uiLocale} onSend={handleHashRushQuickChat} />')
     // In the game: bubbles over hamsters, floating lines, the conversation over the composer.

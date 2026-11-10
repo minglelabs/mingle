@@ -217,7 +217,7 @@
   display: none;
 }
 
-/* While the Hash Rush sheet is up (HashRushSheet.tsx), nothing of the app may
+/* While the Hash Rush game is up (HashRushRoomLayer.tsx), nothing of the app may
    float over the game; toasts are portaled above every layer, so hide them. */
 html[data-hash-rush-open="true"] [data-sonner-toaster] {
   visibility: hidden !important;

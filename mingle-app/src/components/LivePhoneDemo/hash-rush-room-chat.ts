@@ -1,8 +1,7 @@
 // The room's messages as the Hash Rush game hears them: one entry per message
 // (src/features/hash-rush/room-chat.ts has what the game does with them).
 // Kept with the room because it reads messages with the bubbles' own language
-// rules (ChatBubble), which the game does not load. Moved here from the iframe
-// sheet's HashRushSheet.chat.ts, which re-exports it until it goes.
+// rules (ChatBubble), which the game does not load.
 
 import { resolveOriginalDisplayText, type Utterance } from './ChatBubble'
 import {

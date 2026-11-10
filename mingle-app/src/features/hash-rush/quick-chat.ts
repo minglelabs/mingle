@@ -2,8 +2,7 @@
 // `quickChat`), in the game's languages. In the app they sit right above the
 // room's composer while it is up over the game (QuickChatBar.tsx), and a tap
 // sends one as a normal room message, translated like any other
-// (UIUX-ISSUES #155, #156, #201). Moved here from the iframe sheet's
-// HashRushSheet.logic.ts, which re-exports them until it goes.
+// (UIUX-ISSUES #155, #156, #201).
 
 export const HASH_RUSH_QUICK_CHAT = {
   // The game's own list, minus its swear words: these are app-wide default chips.

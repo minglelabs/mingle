@@ -24,7 +24,7 @@
 | 서버 API | 방 상태 / 입장 토큰 / 나가기 / LiveKit 웹훅 | `mingle-app/src/server/voice/*`, `src/app/api/conversations/[conversationId]/voice/**`, `src/app/api/webhooks/livekit` |
 | DB | `app_voice_calls`, `app_voice_call_participants` | 마이그레이션 `20261031082517_add_voice_calls` |
 | 통역 에이전트 | `voice-*` 방에 숨은 통역 참가자를 넣음 (Soniox → GPT/Gemini → Gemini TTS) | `mingle-voice-agent/service.ts` |
-| Hash Rush 입구 | 채팅방 메뉴 "🌻 Hash Rush 같이 하기" → 채팅 위 시트(iframe), 아래로 내리면 채팅 | `LivePhoneDemo/HashRushSheet.tsx` |
+| Hash Rush 입구 | 채팅방 메뉴 "🌻 Hash Rush 같이 하기" → 대화방 위 네이티브 게임 층(iframe 시트는 삭제됨), 아래로 내리면 채팅 | `src/features/hash-rush/HashRushRoomLayer.tsx` |
 | Hash Rush 입장권 | 멤버만, 채팅 이름으로 입장 | `src/server/hash-rush/ticket.ts`, `POST /api/conversations/{id}/hash-rush/ticket` |
 | Hash Rush 서버(G2) | 서버가 방장 대신 게임을 돌림 | hash-rush 저장소 `server/` |
 

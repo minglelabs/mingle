@@ -22,8 +22,7 @@ import type { HashRushSeat } from './protocol'
 //
 // The game hears the last few messages when it starts, then every new one.
 // History the room loads later (scrolling up) and messages that were already
-// there are never heard. (Moved from the iframe sheet's HashRushSheet.logic.ts,
-// which re-exports them until it goes.)
+// there are never heard.
 // ---------------------------------------------------------------------------
 
 export const HASH_RUSH_CHAT_REPLAY_COUNT = 3

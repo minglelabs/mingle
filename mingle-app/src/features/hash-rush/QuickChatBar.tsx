@@ -2,8 +2,7 @@
 
 // The game's ready-made lines (quick-chat.ts) in one sideways row, right above
 // the room's composer while it is up over the game. A tap sends one as a room
-// message; the composer keeps its focus and its keyboard. Moved here from the
-// iframe sheet (HashRushSheet.tsx re-exports it until it goes).
+// message; the composer keeps its focus and its keyboard.
 
 import { hashRushGameCopy } from './copy'
 import { hashRushQuickChat } from './quick-chat'

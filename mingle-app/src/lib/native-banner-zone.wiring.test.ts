@@ -46,7 +46,6 @@ describe("native banner policy wiring", () => {
 
   it("hides the banner for every shared layered screen and overlay", () => {
     for (const relativePath of [
-      "components/LivePhoneDemo/HashRushSheet.tsx",
       "components/LivePhoneDemo/MessageMediaDialog.tsx",
       "components/LivePhoneDemo/MessageReactionParticipants.tsx",
       "components/invite-friends-screen.tsx",
