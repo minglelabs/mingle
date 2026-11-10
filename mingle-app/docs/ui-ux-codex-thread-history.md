@@ -2,6 +2,16 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-10 — 보이스톡: 패널 먼저, 참여는 패널에서 / 키보드 + 메뉴 / 시작 알림 / 목록 표시
+
+- Surface: 대화방(`LivePhoneDemo.tsx`), 보이스톡 판(`VoiceTalkPanel.tsx`), 키보드 모드 + 메뉴(`ConversationImageComposer.tsx`), 대화목록(`conversation-list.tsx`), 서버(`voice-call-controller.ts`, `push-notifications.ts`, `app-conversations.ts`).
+- 패널 먼저: 전화 버튼(음성 모드 좌하단, 키보드 모드 + 메뉴의 "보이스톡")은 판만 띄운다. 판의 "참여"를 눌러야 통화에 들어가고, 그때 STT도 같이 켜진다. 아무도 없으면 "보이스톡 · 아무도 없어요" + 닫기/참여.
+- 받는 쪽: 누가 통화를 시작하면 방의 다른 사람에게 푸시 "보이스톡 · {이름}님이 보이스톡을 시작했어요"(15개 언어)가 가고, 누르면 그 방이 열린다. 방에 들어오면 판이 자동으로 떠서 참여 / 거절 / 그냥 보기(접어 두기) 중 고를 수 있다. 거절한 통화는 새 통화가 시작될 때까지 다시 뜨지 않는다(전화 버튼으로 다시 열 수 있음).
+- 키보드 모드: + 메뉴에 "보이스톡" 줄을 이어폰 줄 뒤, 음성 모드 전환 앞에 넣었다. 통화 중이면 초록 아이콘 + 점.
+- 대화목록: 보이스톡 중인 방은 초록 전화 배지 + 인원 수, 이 폰에서 STT만 켠 방은 주황 마이크 "STT" 배지. 서버가 목록에 `voiceCallParticipantCount`를 실어 보내고, 통화 참여·나가기 때 방 사람들의 목록에 새로고침 신호를 보낸다.
+- 아직: iOS 기본 통화 화면(CallKit)식 수신 화면은 없다. 알림은 일반 푸시다.
+- Verification: 타입 검사, 서버·배선 테스트.
+
 ## 2026-11-10 — 보이스톡과 STT 통합: 마이크 하나, 글은 대화방 메시지로
 
 - Surface: 대화방(`LivePhoneDemo.tsx`), 보이스톡 판(`VoiceTalkPanel.tsx`), 네이티브(`rn/src/voice/VoiceRoomHost.tsx`, `NativeSTTModule.swift`).

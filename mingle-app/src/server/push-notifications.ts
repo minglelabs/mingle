@@ -22,7 +22,7 @@ type PushTarget = {
 export type PushMessage = {
   notificationId: string;
   /**
-   * conversation_message | follow | comment | comment_reply |
+   * conversation_message | follow | comment | comment_reply | voice_call_started |
    * operator_inbox_message (staff alert, copy from
    * `resolveOperatorInboxPushCopy`). Any other type gets a generic copy.
    */
@@ -176,6 +176,26 @@ const CONVERSATION_MESSAGE_PUSH_COPY: Record<LegalDocumentLocale, { title: strin
   vi: { title: "Tin nhắn mới", separator: ": " },
 };
 
+// `voice_call_started`: someone started voice talk in a room, for all 15
+// primary UI languages. `{name}` is the starter as shown.
+const VOICE_CALL_STARTED_PUSH_COPY: Record<LegalDocumentLocale, { title: string; body: string }> = {
+  ko: { title: "보이스톡", body: "{name}님이 보이스톡을 시작했어요" },
+  en: { title: "Voice talk", body: "{name} started a voice talk" },
+  ja: { title: "ボイストーク", body: "{name}さんがボイストークを始めました" },
+  "zh-CN": { title: "语音通话", body: "{name}发起了语音通话" },
+  "zh-TW": { title: "語音通話", body: "{name}發起了語音通話" },
+  fr: { title: "Appel vocal", body: "{name} a lancé un appel vocal" },
+  de: { title: "Sprachanruf", body: "{name} hat einen Sprachanruf gestartet" },
+  es: { title: "Llamada de voz", body: "{name} inició una llamada de voz" },
+  pt: { title: "Chamada de voz", body: "{name} iniciou uma chamada de voz" },
+  it: { title: "Chiamata vocale", body: "{name} ha avviato una chiamata vocale" },
+  ru: { title: "Голосовой звонок", body: "{name} начал(а) голосовой звонок" },
+  ar: { title: "مكالمة صوتية", body: "بدأ {name} مكالمة صوتية" },
+  hi: { title: "वॉइस कॉल", body: "{name} ने वॉइस कॉल शुरू की" },
+  th: { title: "โทรด้วยเสียง", body: "{name} เริ่มการโทรด้วยเสียง" },
+  vi: { title: "Cuộc gọi thoại", body: "{name} đã bắt đầu cuộc gọi thoại" },
+};
+
 /** Title and body shown on the device, in the recipient's language (unknown -> English). */
 export function resolvePushCopy(message: PushMessage): { title: string; body: string } {
   const label = message.actorLabel || "Someone";
@@ -197,6 +217,11 @@ export function resolvePushCopy(message: PushMessage): { title: string; body: st
       : (message.messagePreview || "").replace(/\s+/g, " ").trim() || "…";
     const copy = CONVERSATION_MESSAGE_PUSH_COPY[locale];
     return { title: copy.title, body: `${label}${copy.separator}${preview}` };
+  }
+  if (message.type === "voice_call_started") {
+    const locale = resolveLegalDocumentLocale(resolveSupportedLocaleTag(message.recipientLanguage.trim()) ?? "en");
+    const copy = VOICE_CALL_STARTED_PUSH_COPY[locale];
+    return { title: copy.title, body: copy.body.replace("{name}", label) };
   }
   if (message.type === "operator_inbox_message") {
     return resolveOperatorInboxPushCopy({
@@ -719,4 +744,39 @@ async function deliverConversationMessagePush(args: {
   }
 
   await settlePushDeliveries(targetEntries);
+}
+
+/**
+ * Someone started voice talk in a room: every other member gets a push that
+ * opens the room (where the call panel offers Join / Decline). One push per
+ * call; a second push for the same call replaces the first on the device.
+ */
+export async function sendPushNotificationForVoiceCallStarted(args: {
+  channelId: string;
+  callId: string;
+  starterUserId: string;
+  memberUserIds: string[];
+}): Promise<void> {
+  if (!readApnsConfig() && !readFcmConfig()) return;
+  const recipientUserIds = args.memberUserIds.filter((userId) => userId.trim() && userId !== args.starterUserId);
+  if (recipientUserIds.length === 0) return;
+  const starter = await prisma.user.findUnique({
+    where: { id: args.starterUserId },
+    select: { name: true, handle: true, isOfficial: true, isOperator: true },
+  });
+  const starterName = starter?.name?.trim() || (starter?.handle ? `@${starter.handle}` : "Someone");
+  const starterBadge = resolveAccountBadge(starter);
+  await sendPushToUsers(recipientUserIds, (recipient) => {
+    const roomLocale = resolveSupportedLocaleTag(recipient.language) ?? "en";
+    return {
+      notificationId: args.callId,
+      type: "voice_call_started",
+      actorId: args.starterUserId,
+      actorLabel: withAccountBadgeLabel(starterName, starterBadge, recipient.language),
+      recipientLanguage: recipient.language,
+      conversationId: args.channelId,
+      navigationUrl: `/${roomLocale}/conversations?conversation=${encodeURIComponent(args.channelId)}`,
+      collapseKey: `voice-call-${args.callId}`,
+    };
+  });
 }

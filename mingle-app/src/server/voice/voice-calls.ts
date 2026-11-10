@@ -112,10 +112,11 @@ export async function getLiveCallView(store: VoiceStore, channelId: string): Pro
 export async function joinVoiceCall(
   store: VoiceStore,
   input: { channelId: string; userId: string; lang: string | null; interpretOn: boolean; now?: Date },
-): Promise<VoiceCallView> {
+): Promise<VoiceCallView & { created: boolean }> {
   const now = input.now ?? new Date();
   return store.withChannelLock(input.channelId, async (tx) => {
     let call = await tx.findLiveCall(input.channelId);
+    const created = !call;
     if (!call) {
       call = await tx.createCall({
         channelId: input.channelId,
@@ -134,7 +135,8 @@ export async function joinVoiceCall(
       interpretOn: input.interpretOn,
       speechLanguage: input.lang,
     });
-    return toCallView(call, await tx.listActiveParticipants(call.id));
+    // `created`: this join started the call, so the room's other members are told.
+    return { ...toCallView(call, await tx.listActiveParticipants(call.id)), created };
   });
 }
 

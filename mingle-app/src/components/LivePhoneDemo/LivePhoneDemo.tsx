@@ -1,6 +1,6 @@
 'use client'
 
-import ConversationImageComposer, { type ConversationImageComposerEarphoneMode } from './ConversationImageComposer'
+import ConversationImageComposer, { type ConversationImageComposerEarphoneMode, type ConversationImageComposerVoiceTalk } from './ConversationImageComposer'
 import MessageMediaDialog from './MessageMediaDialog'
 import EarphoneModeNoticeContent from './EarphoneModeNotice'
 import LanguageRadioOption from './LanguageRadioOption'
@@ -2005,7 +2005,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Group voice talk runs in the native app; the web only draws its panel.
   const [voiceTalkAvailable, setVoiceTalkAvailable] = useState(false)
   useEffect(() => setVoiceTalkAvailable(isVoiceTalkAvailable()), [])
-  const [voiceTalkStartSignal, setVoiceTalkStartSignal] = useState(0)
+  const [voiceTalkOpenSignal, setVoiceTalkOpenSignal] = useState(0)
   const [voiceTalkState, setVoiceTalkState] = useState({ live: false, joined: false, connected: false })
   const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean, connected: boolean }) => {
     setVoiceTalkState((prev) => (
@@ -7117,6 +7117,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const earphoneModeControlLabel = earphoneModeGate.waitingForEarphones
     ? `${earphoneModeCopy.label}, ${earphoneModeCopy.waitingLabel}`
     : earphoneModeCopy.label
+  // Keyboard mode "+" menu: the same voice talk panel as the voice-mode phone button.
+  const voiceTalkMenuItem = useMemo<ConversationImageComposerVoiceTalk | undefined>(() => (
+    headerMode === 'conversation' && conversationId && voiceTalkAvailable
+      ? {
+          label: roomManagementCopy.voiceTalkMenuItemLabel,
+          active: voiceTalkState.live || voiceTalkState.joined,
+          onSelect: () => setVoiceTalkOpenSignal((n) => n + 1),
+        }
+      : undefined
+  ), [conversationId, headerMode, roomManagementCopy.voiceTalkMenuItemLabel, voiceTalkAvailable, voiceTalkState.joined, voiceTalkState.live])
   const earphoneModeMenuItem = useMemo<ConversationImageComposerEarphoneMode | undefined>(() => (
     earphoneModeGate.controlVisible
       ? {
@@ -7870,7 +7880,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             myLang={((speechLanguages[0] || ownSelectedLanguages[0] || uiLocale || 'en').split('-')[0] || 'en').toLowerCase()}
             topOffset="calc(54px + env(safe-area-inset-top, 0px))"
             onAvailabilityChange={handleVoiceTalkAvailability}
-            startSignal={voiceTalkStartSignal}
+            openSignal={voiceTalkOpenSignal}
           />
         ) : null}
 
@@ -9984,7 +9994,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
                         onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} /> : earphoneModeMenuItem ? (
+                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} voiceTalk={voiceTalkMenuItem} /> : earphoneModeMenuItem ? (
                       // No sendable conversation: no photo row, but the "+" still
                       // carries the earphone-mode row and the voice-mode switch.
                       <ConversationImageComposer conversationId="" allowPhoto={false} locale={uiLocale}
@@ -10074,7 +10084,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <VoiceTalkButton
                         uiLocale={uiLocale}
                         active={voiceTalkState.live || voiceTalkState.joined}
-                        onPress={() => setVoiceTalkStartSignal((n) => n + 1)}
+                        onPress={() => setVoiceTalkOpenSignal((n) => n + 1)}
                         sizePx={VOICE_MODE_SIDE_BUTTON_SIZE_PX}
                       />
                     ) : null}

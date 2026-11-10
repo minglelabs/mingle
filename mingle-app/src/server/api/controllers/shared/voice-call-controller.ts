@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
-import { getConversationSessionKeyForMember } from "@/lib/app-conversations";
+import { getConversationSessionKeyForMember, listChannelMemberUserIdsBySessionKey } from "@/lib/app-conversations";
+import { notifyConversationMessage } from "@/server/conversation-realtime";
+import { sendPushNotificationForVoiceCallStarted } from "@/server/push-notifications";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { prisma } from "@/lib/prisma";
 import { listRoomIdentities, mintVoiceJoinToken, readLiveKitConfig, verifyLiveKitWebhook } from "@/server/voice/livekit-auth";
@@ -27,7 +29,7 @@ export function setVoiceStoreForTests(next: VoiceStore | null, lookup?: typeof l
   listIdentities = lookup ?? listRoomIdentities;
 }
 
-type MemberCheck = { userId: string } | { response: NextResponse };
+type MemberCheck = { userId: string; sessionKey: string } | { response: NextResponse };
 
 async function requireChannelMember(request: NextRequest, conversationId: string): Promise<MemberCheck> {
   const session = await getServerSession(getAuthOptions());
@@ -39,7 +41,20 @@ async function requireChannelMember(request: NextRequest, conversationId: string
   if (!sessionKey) {
     return { response: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
   }
-  return { userId: resolvedUser.userId };
+  return { userId: resolvedUser.userId, sessionKey };
+}
+
+// The list shows which rooms have a live call: a join or leave refreshes the
+// list of every member. A failure only delays that until the next refresh.
+function refreshMemberLists(sessionKey: string) {
+  after(async () => {
+    try {
+      const memberUserIds = await listChannelMemberUserIdsBySessionKey(sessionKey);
+      await notifyConversationMessage("", memberUserIds, undefined, { timeoutMs: 3000 });
+    } catch (error) {
+      console.warn("[voice] list_refresh_failed", error instanceof Error ? error.name : "unknown");
+    }
+  });
 }
 
 export async function getVoiceCallResponse(request: NextRequest, conversationId: string) {
@@ -77,14 +92,31 @@ export async function postVoiceCallTokenResponse(request: NextRequest, conversat
     listIdentities: (room) => listIdentities(config, room),
   }).catch((error) => console.warn("[voice] reconcile_failed", error));
 
-  let call;
+  let joined;
   try {
-    call = await joinVoiceCall(store, { channelId: conversationId, userId: member.userId, lang, interpretOn });
+    joined = await joinVoiceCall(store, { channelId: conversationId, userId: member.userId, lang, interpretOn });
   } catch (error) {
     if (error instanceof VoiceRoomFullError) {
       return NextResponse.json({ error: "voice_room_full" }, { status: 409 });
     }
     throw error;
+  }
+  const { created, ...call } = joined;
+
+  refreshMemberLists(member.sessionKey);
+  if (created) {
+    // Everyone else in the room gets a voice talk push; tapping it opens the
+    // room, where the panel offers Join or Decline.
+    const sessionKey = member.sessionKey;
+    const starterUserId = member.userId;
+    after(async () => {
+      try {
+        const memberUserIds = await listChannelMemberUserIdsBySessionKey(sessionKey);
+        await sendPushNotificationForVoiceCallStarted({ channelId: conversationId, callId: call.id, starterUserId, memberUserIds });
+      } catch (error) {
+        console.error("[voice] start_push_failed", error instanceof Error ? error.name : "unknown");
+      }
+    });
   }
 
   const self = call.participants.find((participant) => participant.userId === member.userId);
@@ -107,6 +139,7 @@ export async function postVoiceCallLeaveResponse(request: NextRequest, conversat
   const member = await requireChannelMember(request, conversationId);
   if ("response" in member) return member.response;
   const result = await leaveVoiceCall(store, { channelId: conversationId, userId: member.userId });
+  refreshMemberLists(member.sessionKey);
   return NextResponse.json({ ok: true, ended: result.ended });
 }
 

@@ -367,3 +367,13 @@ describe('pickMessagePushText', () => {
     expect(pickMessagePushText({ sourceText: '안녕', recipientLanguage: 'en' })).toBe('안녕')
   })
 })
+
+describe("voice_call_started push copy", () => {
+  it("names the starter in the recipient's language", async () => {
+    const { resolvePushCopy: resolve } = await import("./push-notifications");
+    const base = { notificationId: "call-1", type: "voice_call_started", actorId: "u1", actorLabel: "Mina" };
+    expect(resolve({ ...base, recipientLanguage: "ko" })).toEqual({ title: "보이스톡", body: "Mina님이 보이스톡을 시작했어요" });
+    expect(resolve({ ...base, recipientLanguage: "en" })).toEqual({ title: "Voice talk", body: "Mina started a voice talk" });
+    expect(resolve({ ...base, recipientLanguage: "xx" }).title).toBe("Voice talk");
+  });
+});

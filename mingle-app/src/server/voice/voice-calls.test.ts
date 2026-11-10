@@ -25,6 +25,9 @@ describe("voice calls", () => {
     const second = await joinVoiceCall(store, { channelId: CHANNEL, userId: "user-2", lang: "ja", interpretOn: false });
 
     expect(second.id).toBe(first.id);
+    // Only the join that started the call says so (it triggers the start push).
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
     expect(second.room).toMatch(/^voice-chan-1-/);
     expect(second.participants.map((p) => p.userId)).toEqual(["user-1", "user-2"]);
     expect(second.participants[1]).toMatchObject({ speechLanguage: "ja", interpretOn: false });

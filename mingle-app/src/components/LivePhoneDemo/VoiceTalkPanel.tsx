@@ -43,6 +43,9 @@ const COPY = {
   ko: {
     start: '보이스톡',
     join: '참여',
+    decline: '거절',
+    close: '닫기',
+    idle: '보이스톡 · 아무도 없어요',
     live: (n: number) => `보이스톡 · ${n}/${MAX_SEATS}`,
     connecting: '연결 중…',
     interpret: '통역',
@@ -57,6 +60,9 @@ const COPY = {
   en: {
     start: 'Voice talk',
     join: 'Join',
+    decline: 'Decline',
+    close: 'Close',
+    idle: 'Voice talk · nobody yet',
     live: (n: number) => `Voice talk · ${n}/${MAX_SEATS}`,
     connecting: 'Connecting…',
     interpret: 'Interpret',
@@ -106,18 +112,22 @@ export type VoiceTalkPanelProps = {
   topOffset: string
   /** Lets the room header show a start button; `connected` is a call this phone is in. */
   onAvailabilityChange?: (state: { live: boolean; joined: boolean; connected: boolean }) => void
-  /** Bumped by the header button to start/join. */
-  startSignal?: number
+  /** Bumped by the room's voice talk button: shows the panel (joining is the panel's Join button). */
+  openSignal?: number
 }
 
 export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
-  const { conversationId, conversationTitle, myLang, startSignal, onAvailabilityChange } = props
+  const { conversationId, conversationTitle, myLang, openSignal, onAvailabilityChange } = props
   const copy = (props.uiLocale || '').toLowerCase().startsWith('ko') ? COPY.ko : COPY.en
   const [call, setCall] = useState<StatusCall>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
   const [room, setRoom] = useState<RoomSnapshot | null>(null)
   const [folded, setFolded] = useState(false)
+  // Shown by the voice talk button before joining.
+  const [opened, setOpened] = useState(false)
+  // A call this phone declined stays hidden until a new call starts.
+  const [declinedCallId, setDeclinedCallId] = useState<string | null>(null)
 
   const joined = phase === 'connecting' || phase === 'connected'
 
@@ -162,11 +172,28 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     post({ type: 'native_voice_open', payload: { conversationId, title: conversationTitle, lang: myLang, interpret: true } })
   }, [conversationId, conversationTitle, myLang])
 
-  useEffect(() => {
-    if (startSignal) join()
-  }, [startSignal, join])
+  // The button only shows the panel; `openSignal` is a counter, so this runs
+  // once per press (adjusting state while rendering, not in an effect).
+  const [seenOpenSignal, setSeenOpenSignal] = useState(openSignal ?? 0)
+  if ((openSignal ?? 0) !== seenOpenSignal) {
+    setSeenOpenSignal(openSignal ?? 0)
+    if (openSignal) {
+      setOpened(true)
+      setFolded(false)
+      setDeclinedCallId(null)
+    }
+  }
 
-  const leave = useCallback(() => post({ type: 'native_voice_close' }), [])
+  // Decline an incoming call, or close the panel opened by the button.
+  const dismiss = useCallback(() => {
+    setOpened(false)
+    if (call) setDeclinedCallId(call.id)
+  }, [call])
+
+  const leave = useCallback(() => {
+    setOpened(false)
+    post({ type: 'native_voice_close' })
+  }, [])
   const toggleInterpret = useCallback(() => room && post({ type: 'native_voice_set', payload: { interpret: !room.interpretOn } }), [room])
 
   // Seats: who is in the call (live LiveKit view when joined, else the API's).
@@ -182,7 +209,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     else if (info.offset.y > 24 || info.velocity.y > 300) setFolded(false)
   }, [])
 
-  if (!live && !joined && !error) return null
+  const incoming = live && call?.id !== declinedCallId
+  if (!joined && !error && !opened && !incoming) return null
 
   const count = joined && room ? room.members.length : call?.participants.length ?? 0
 
@@ -205,7 +233,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
           </span>
           <span className="min-w-0 flex-1 truncate text-[0.88rem] font-semibold text-gray-900">
-            {phase === 'connecting' ? copy.connecting : copy.live(count)}
+            {phase === 'connecting' ? copy.connecting : (live || joined ? copy.live(count) : copy.idle)}
           </span>
           {folded ? (
             <div className="flex -space-x-2">
@@ -218,9 +246,24 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
             </div>
           ) : null}
           {!joined ? (
-            <button type="button" onClick={join} className="rounded-full bg-amber-500 px-3 py-1 text-[0.8rem] font-semibold text-white active:bg-amber-600">
-              {copy.join}
-            </button>
+            <>
+              <button
+                type="button"
+                data-qa="voice-talk-dismiss"
+                onClick={dismiss}
+                className="rounded-full bg-gray-100 px-3 py-1 text-[0.8rem] font-semibold text-gray-700 active:bg-gray-200"
+              >
+                {live ? copy.decline : copy.close}
+              </button>
+              <button
+                type="button"
+                data-qa="voice-talk-join"
+                onClick={join}
+                className="rounded-full bg-emerald-500 px-3 py-1 text-[0.8rem] font-semibold text-white active:bg-emerald-600"
+              >
+                {copy.join}
+              </button>
+            </>
           ) : null}
           <button
             type="button"

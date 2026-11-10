@@ -18,7 +18,7 @@ describe('voice talk button in the bottom bar', () => {
     const voiceBar = between(liveDemoSource, 'key="default-bottom-bar"', 'data-qa="live-demo-mic-button"')
     expect(voiceBar).toContain('<VoiceTalkButton')
     expect(voiceBar).toContain("headerMode === 'conversation' && conversationId && voiceTalkAvailable")
-    expect(voiceBar).toContain('setVoiceTalkStartSignal((n) => n + 1)')
+    expect(voiceBar).toContain('setVoiceTalkOpenSignal((n) => n + 1)')
     expect(voiceBar).not.toContain('storedMessageCountLabel')
     expect(voiceBar).not.toContain('formatLivePhoneDemoUsageDuration')
   })
@@ -63,5 +63,29 @@ describe('voice talk and STT share one mic', () => {
   it('drives the call mic from the STT session state', () => {
     const block = between(liveDemoSource, 'const voiceTalkConnected = voiceTalkState.connected', 'const confirmScreenCaptureNotice')
     expect(block).toContain('setVoiceTalkMic(isSttSessionRunning || isPreparingStart || startPreparationInFlightRef.current)')
+  })
+})
+
+describe('voice talk panel opens before joining', () => {
+  const panelSource = readFileSync(new URL('./VoiceTalkPanel.tsx', import.meta.url), 'utf8')
+  const composerSource = readFileSync(new URL('./ConversationImageComposer.tsx', import.meta.url), 'utf8')
+
+  it('only shows the panel on the button; joining is the panel Join button', () => {
+    expect(panelSource).toContain('openSignal?: number')
+    expect(panelSource).not.toContain('startSignal')
+    expect(panelSource).toContain('data-qa="voice-talk-join"')
+    expect(panelSource).toContain('onClick={join}')
+  })
+
+  it('offers Decline for an incoming call and hides that call until a new one', () => {
+    expect(panelSource).toContain('data-qa="voice-talk-dismiss"')
+    expect(panelSource).toContain('{live ? copy.decline : copy.close}')
+    expect(panelSource).toContain('const incoming = live && call?.id !== declinedCallId')
+  })
+
+  it('puts a voice talk row in the keyboard-mode + menu', () => {
+    expect(composerSource).toContain('data-qa="live-demo-voice-talk-menu-item"')
+    expect(liveDemoSource).toContain('voiceTalk={voiceTalkMenuItem}')
+    expect(liveDemoSource).toContain('label: roomManagementCopy.voiceTalkMenuItemLabel')
   })
 })

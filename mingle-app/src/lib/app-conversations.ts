@@ -84,6 +84,9 @@ export type ConversationChannelSummary = {
   // up to 4 of these KakaoTalk-style. Empty for solo rooms and anonymous
   // callers.
   otherMembers: ConversationChannelOtherMember[];
+  // People in this room's live voice talk right now (0 or absent: no call).
+  // The list shows it apart from a room that only has speech-to-text on.
+  voiceCallParticipantCount?: number;
   createdAt: string;
   updatedAt: string;
   pausedAt: string | null;
@@ -1377,14 +1380,27 @@ async function listConversationChannelsForMember(
   }
 
   const sessionKeys = [...new Set(records.map((record) => record.sessionKey))];
-  const [latestMessageSummaryBySessionKey, messageCountBySessionKey, unreadMessageCountByChannelId] = await Promise.all([
+  const [latestMessageSummaryBySessionKey, messageCountBySessionKey, unreadMessageCountByChannelId, voiceCallCountByChannelId] = await Promise.all([
     listLatestMessageSummaryBySessionKey(sessionKeys),
     listVisibleMessageCountsBySessionKey(sessionKeys),
     listUnreadMessageCountsByChannelId(records.map((record) => record.id), viewerUserId),
+    listLiveVoiceCallParticipantCountsByChannelId(records.map((record) => record.id)),
   ]);
 
   return records
     .map((record) => {
+      const summary = buildListedChannelSummary(record);
+      const voiceCount = voiceCallCountByChannelId.get(record.id) ?? 0;
+      return voiceCount > 0 ? { ...summary, voiceCallParticipantCount: voiceCount } : summary;
+    })
+    .sort((left, right) => {
+      const leftTimestamp = Date.parse(left.latestMessageAt || left.createdAt) || 0;
+      const rightTimestamp = Date.parse(right.latestMessageAt || right.createdAt) || 0;
+      return rightTimestamp - leftTimestamp;
+    });
+
+  function buildListedChannelSummary(record: ConversationChannelRecord): ConversationChannelSummary {
+    {
       const latestMessage = latestMessageSummaryBySessionKey.get(record.sessionKey);
       const viewerFacingDisplayLanguage = resolveViewerFacingDisplayLanguage(
         record.defaultDisplayLanguage,
@@ -1423,12 +1439,27 @@ async function listConversationChannelsForMember(
           resolvePendingInviteeProfiles(record),
         ),
       );
-    })
-    .sort((left, right) => {
-      const leftTimestamp = Date.parse(left.latestMessageAt || left.createdAt) || 0;
-      const rightTimestamp = Date.parse(right.latestMessageAt || right.createdAt) || 0;
-      return rightTimestamp - leftTimestamp;
+    }
+  }
+}
+
+/** Active (not left) participants of each channel's live voice call. */
+async function listLiveVoiceCallParticipantCountsByChannelId(channelIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (channelIds.length === 0) return counts;
+  try {
+    const calls = await prisma.appVoiceCall.findMany({
+      where: { channelId: { in: channelIds }, status: "live" },
+      select: { channelId: true, _count: { select: { participants: { where: { leftAt: null } } } } },
     });
+    for (const call of calls) {
+      if (call._count.participants > 0) counts.set(call.channelId, call._count.participants);
+    }
+  } catch (error) {
+    // The list must load even where the voice tables are missing.
+    console.warn("[conversations] voice_call_counts_failed", error instanceof Error ? error.name : "unknown");
+  }
+  return counts;
 }
 
 export async function listConversationChannelsForUser(
