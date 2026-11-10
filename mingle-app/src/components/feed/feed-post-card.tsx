@@ -1,7 +1,8 @@
 "use client";
 
 import type { FeedPostDto } from "@/lib/feed-post-dto";
-import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileNationalityBadge from "@/components/profile-nationality-badge";
+import { resolveNationalityCountry } from "@/lib/nationality";
 import type { FeedCopy } from "@/i18n/feed-copy";
 import AccountBadge from "@/components/posts/account-badge";
 import { CompactLanguageLevels } from "@/components/profile-language-levels";
@@ -611,9 +612,11 @@ export default function FeedPostCard({
               {displayName.charAt(0).toUpperCase()}
             </span>
           )}
-          {post.author.languages?.primary.length ? (
-            <ProfileLanguageFlagStack languages={post.author.languages.primary.slice(0, 2)} size={48} badgeSize={20} />
-          ) : null}
+          <ProfileNationalityBadge
+            country={resolveNationalityCountry(post.author.nationality, post.author.languages?.primary)}
+            size={48}
+            badgeSize={20}
+          />
         </span>
         <span className="flex min-w-0 flex-col items-start gap-1">
           <span className="flex min-w-0 items-center gap-2">

@@ -13,6 +13,7 @@ import {
 } from "@/lib/stt-languages";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 import { NEW_REGISTERED_USER_TRANSLATION_MODEL } from "@/lib/translation-models";
+import { defaultNationalityForLanguage } from "@/lib/nationality";
 
 type SignupPayload = {
   email?: unknown;
@@ -109,6 +110,8 @@ export async function POST(request: Request) {
         passwordHash,
         translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
         nationality: primaryLanguages[0] ?? null,
+        // 국적 starts as the country of the language picked in onboarding.
+        nationalityCountry: defaultNationalityForLanguage(primaryLanguages[0]),
         primaryLanguages,
         defaultConversationLanguages: deriveDefaultConversationLanguages(primaryLanguages),
         defaultDisplayLanguage: primaryLanguages[0] ?? null,

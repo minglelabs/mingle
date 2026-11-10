@@ -14,7 +14,8 @@ import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/pr
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import ExistingConversationChoiceDialog from "@/components/existing-conversation-choice-dialog";
 import ProfileImagePreview from "@/components/profile-image-preview";
-import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileNationalityBadge from "@/components/profile-nationality-badge";
+import { resolveNationalityCountry } from "@/lib/nationality";
 import ProfileLanguageLevels from "@/components/profile-language-levels";
 import { sanitizeInterestLanguages } from "@/lib/interest-languages";
 import ProfileShareScreen from "@/components/profile-share-screen";
@@ -80,6 +81,8 @@ type PublicUserProfile = {
   age?: number;
   gender?: string | null;
   nationality: string | null;
+  /** 국적 (ISO 3166-1 alpha-2). Absent from older servers. */
+  nationalityCountry?: string | null;
   primaryLanguages: string[];
   /** Absent from older servers. */
   interestLanguages?: unknown;
@@ -157,14 +160,14 @@ function ProfileAvatar({
   image,
   label,
   crop,
-  languages,
+  country,
   size = 88,
   onClick,
 }: {
   image: string | null;
   label: string;
   crop?: ProfileImageCropInput;
-  languages: readonly string[];
+  country: string | null;
   size?: number;
   onClick?: () => void;
 }) {
@@ -191,7 +194,7 @@ function ProfileAvatar({
           <UserRound size={Math.round(size * 0.58)} className="text-gray-400" aria-hidden="true" />
         )}
       </div>
-      <ProfileLanguageFlagStack languages={languages} size={size} />
+      <ProfileNationalityBadge country={country} size={size} />
     </button>
   );
 }
@@ -526,6 +529,7 @@ export default function PublicUserProfileScreen({
     profile?.primaryLanguages,
     profile?.nationality ? [profile.nationality] : [],
   );
+  const nationalityCountry = resolveNationalityCountry(profile?.nationalityCountry, primaryLanguages);
   const languageOption = getLanguageOption(primaryLanguages[0] ?? profile?.nationality);
   const languageName = languageOption
     ? getSttLanguageDisplayName(languageOption.code, locale) ?? languageOption.englishName
@@ -614,7 +618,7 @@ export default function PublicUserProfileScreen({
                   <ProfileAvatar
                     image={profile.image}
                     label={nameLabel}
-                    languages={primaryLanguages}
+                    country={nationalityCountry}
                     crop={{
                       scale: profile.imageCropScale,
                       x: profile.imageCropX,
