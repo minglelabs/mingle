@@ -13,6 +13,7 @@ import {
 } from "react";
 import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { MessageRecallProvider } from "./LivePhoneDemo/MessageRecall";
+import { MessageRetranslateProvider } from "./LivePhoneDemo/MessageRetranslate";
 import { MessageReadReceiptsProvider } from "./LivePhoneDemo/MessageReadReceipts";
 import { signIn, signOut, useSession } from "next-auth/react";
 import {
@@ -1979,6 +1980,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       {isLiveDemoMounted ? (
         <MessageReactionsProvider conversationId={props.conversationId} active={props.isVisible !== false} enabled={status === "authenticated" && !props.isBlockedCounterpart}>
         <MessageRecallProvider conversationId={props.conversationId} enabled={status === "authenticated"}>
+        <MessageRetranslateProvider conversationId={props.conversationId} enabled={status === "authenticated"}>
         <MessageReadReceiptsProvider
           conversationId={props.conversationId}
           active={props.isVisible !== false}
@@ -2063,6 +2065,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           isMultiMember={props.isMultiMember}
         />
         </MessageReadReceiptsProvider>
+        </MessageRetranslateProvider>
         </MessageRecallProvider>
         </MessageReactionsProvider>
       ) : (

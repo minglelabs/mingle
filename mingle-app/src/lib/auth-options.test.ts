@@ -80,6 +80,12 @@ describe("getAuthOptions", () => {
     mockUserUpsert.mockResolvedValue({});
   });
 
+  it("gives the session JWT the same lifetime as the session cookie", () => {
+    const options = getAuthOptions("google");
+    expect(options.session?.maxAge).toBeGreaterThan(30 * 24 * 60 * 60);
+    expect(options.jwt?.maxAge).toBe(options.session?.maxAge);
+  });
+
   it("uses Lax cookies for Google and None cookies for Apple's form_post callback", () => {
     const googleCookies = getAuthOptions("google").cookies;
     const appleCookies = getAuthOptions(" Apple ").cookies;

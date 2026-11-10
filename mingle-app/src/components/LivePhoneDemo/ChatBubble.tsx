@@ -23,6 +23,7 @@ import ConversationImageBubble from './ConversationImageBubble'
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
 import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
 import { MessageRecallScope } from './MessageRecall'
+import { MessageRetranslateScope } from './MessageRetranslate'
 import { MessageReadReceipt } from './MessageReadReceipts'
 import { MessageReplyQuote, MessageReplyScope } from './MessageReply'
 import { buildMessageReplyReference } from '@/lib/message-reply'
@@ -809,6 +810,7 @@ function ExpandedChatBubbleRow({
       onPlayPronunciation={isOriginal
         ? (!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined)
         : (() => onPlayTranslation?.(utterance, lang, text))}
+      retranslateLanguage={!isOriginal && translationState === 'final' ? lang : undefined}
       className={bubbleSurfaceClassName}
     >
       {bubbleBody}
@@ -1095,6 +1097,7 @@ function ChatBubble({
       onPlayPronunciation={isOriginalLanguageSelected
         ? (!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined)
         : (() => onPlayTranslation?.(utterance, activeLanguage, activeText))}
+      retranslateLanguage={!isOriginalLanguageSelected && activeTranslationEntry?.state === 'final' ? activeLanguage : undefined}
       style={{ maxWidth: '100%' }}
       className="inline rounded-xl bg-transparent px-0 py-0 shadow-none"
     >
@@ -1412,10 +1415,14 @@ function ChatBubble({
     : <>{avatarColumn}{messageColumn}</>
   // A solo-era turn carries no speakerUserId (see isOwnMessage), whoever sent it, so the server's own flag decides there.
   const canRecall = !isDraft && !isRecalled && (utterance.sentByViewer === true || isOwnMessage)
+  // Photos carry no text of their own to translate again.
+  const canRetranslate = !isDraft && !isRecalled && !messageImage
   const replyReference = isDraft || isRecalled ? null : buildMessageReplyReference(utterance)
   const reactiveContent = <MessageReactionScope id={isDraft || isRecalled ? undefined : utterance.id} locale={uiLocale}>
     <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>
-      <MessageReplyScope reference={replyReference}>{bubbleContent}</MessageReplyScope>
+      <MessageRetranslateScope id={canRetranslate ? utterance.id : undefined} locale={uiLocale}>
+        <MessageReplyScope reference={replyReference}>{bubbleContent}</MessageReplyScope>
+      </MessageRetranslateScope>
     </MessageRecallScope>
   </MessageReactionScope>
 

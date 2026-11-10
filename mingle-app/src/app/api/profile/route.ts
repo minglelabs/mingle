@@ -15,6 +15,7 @@ import {
 } from "@/lib/birth-date";
 import { isDiscoverySource, type DiscoverySource } from "@/lib/discovery-source";
 import { isProfileGender, type ProfileGender } from "@/lib/profile-gender";
+import { defaultNationalityForLanguage, normalizeNationalityCountry } from "@/lib/nationality";
 import {
   isUsagePurpose,
   normalizeUsagePurposeNote,
@@ -261,6 +262,7 @@ export async function PATCH(request: NextRequest) {
     name?: string | null;
     bio?: string | null;
     nationality?: string | null;
+    nationalityCountry?: string | null;
     primaryLanguages?: string[];
     interestLanguages?: string[];
     interestLanguageLevels?: number[];
@@ -382,6 +384,20 @@ export async function PATCH(request: NextRequest) {
     initialDisplayLanguageCandidate = primaryLanguages.value[0] ?? null;
   }
 
+  // 국적 (ISO 3166-1 alpha-2), edited on My page; independent of the languages.
+  const hasNationalityCountry = Object.prototype.hasOwnProperty.call(body, "nationalityCountry");
+  if (hasNationalityCountry) {
+    if (body.nationalityCountry === null) {
+      data.nationalityCountry = null;
+    } else {
+      const nationalityCountry = normalizeNationalityCountry(body.nationalityCountry);
+      if (!nationalityCountry) {
+        return NextResponse.json({ error: "invalid_nationality_country" }, { status: 400 });
+      }
+      data.nationalityCountry = nationalityCountry;
+    }
+  }
+
   if (Object.prototype.hasOwnProperty.call(body, "interestLanguages")) {
     // [{ code, level }]; an empty list clears them. Overlap with the primary
     // languages is dropped when the profile is read.
@@ -500,10 +516,19 @@ export async function PATCH(request: NextRequest) {
   if (initialDisplayLanguageCandidate !== undefined || data.defaultConversationLanguages) {
     const existingPreference = await prisma.user.findUnique({
       where: { id: userId },
-      select: { defaultDisplayLanguage: true, defaultConversationLanguages: true },
+      select: { defaultDisplayLanguage: true, defaultConversationLanguages: true, nationalityCountry: true },
     });
     if (existingPreference?.defaultDisplayLanguage === null && initialDisplayLanguageCandidate !== undefined) {
       data.defaultDisplayLanguage = initialDisplayLanguageCandidate;
+    }
+    // Onboarding asks only the language; 국적 starts as that language's
+    // country. Set once (while empty) so later language edits keep it.
+    if (
+      existingPreference?.nationalityCountry === null
+      && !hasNationalityCountry
+      && initialDisplayLanguageCandidate
+    ) {
+      data.nationalityCountry = defaultNationalityForLanguage(initialDisplayLanguageCandidate);
     }
     // OAuth signup (events.createUser in auth-options.ts) creates Royce's
     // welcome message before this route ever runs, using a hardcoded "en"

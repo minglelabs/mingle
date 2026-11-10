@@ -79,6 +79,7 @@ import SlideSurface from '@/components/slide-surface'
 import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
 import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
+import { RETRANSLATE_TIP_SHOWN_STORAGE_KEY, messageRetranslateCopy } from '@/lib/message-retranslate'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
@@ -4926,6 +4927,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
     : (isConnecting || isReady || isActive)
   nativePipSttRunningRef.current = isSttSessionRunning
+  // One-time tip (per device) for the long-press "translate again", shown
+  // the first time a room shows a finished translation.
+  const retranslateTipCheckedRef = useRef(false)
+  useEffect(() => {
+    if (retranslateTipCheckedRef.current || !isVisible || !conversationId || !isStorageHydrated) return
+    const hasFinishedTranslation = utterances.some((utterance) => (
+      !utterance.recalled && !utterance.image
+      && Object.entries(utterance.translations || {}).some(([language, text]) => (
+        Boolean(text?.trim()) && utterance.translationFinalized?.[language] !== false
+      ))
+    ))
+    if (!hasFinishedTranslation) return
+    retranslateTipCheckedRef.current = true
+    try {
+      if (window.localStorage.getItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY)) return
+      window.localStorage.setItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY, String(Date.now()))
+    } catch {
+      return
+    }
+    toast.message(messageRetranslateCopy(uiLocale).tip, { duration: 6000 })
+  }, [conversationId, isStorageHydrated, isVisible, uiLocale, utterances])
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
   const selectedSttSegmentationMode: SttSegmentationMode = sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE
   const handleSttSegmentationModeSelect = useCallback((nextMode: SttSegmentationMode) => {

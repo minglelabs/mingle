@@ -76,6 +76,7 @@ describe("/api/users/[userId] route", () => {
       name: "미나",
       bio: "Hello",
       nationality: "ko",
+      nationalityCountry: "KR",
       primaryLanguages: ["ko"],
       interestLanguages: [],
       location: null,

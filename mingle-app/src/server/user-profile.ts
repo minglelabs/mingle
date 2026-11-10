@@ -4,6 +4,7 @@ import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { zipInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 import { normalizeProfileGender, type ProfileGender } from "@/lib/profile-gender";
+import { resolveNationalityCountry } from "@/lib/nationality";
 
 export type UserProfileLocation = {
   latitude: number;
@@ -26,6 +27,7 @@ export const userProfileSelect = {
   birthDate: true,
   gender: true,
   nationality: true,
+  nationalityCountry: true,
   primaryLanguages: true,
   interestLanguages: true,
   interestLanguageLevels: true,
@@ -65,6 +67,8 @@ type SelectedUserProfile = {
   /** Optional so hand-built rows (tests, older selects) still type-check. */
   gender?: string | null;
   nationality: string | null;
+  /** Optional so hand-built rows (tests, older selects) still type-check. */
+  nationalityCountry?: string | null;
   primaryLanguages: string[];
   /** Optional so hand-built rows (tests, older selects) still type-check. */
   interestLanguages?: string[];
@@ -98,7 +102,10 @@ export type UserProfile = {
   age?: number;
   /** Public gender shown next to the age; present only when set. */
   gender?: ProfileGender;
+  /** Legacy: the first primary language (a language code, not a country). */
   nationality: string | null;
+  /** 국적, ISO 3166-1 alpha-2; the stored one, else mapped from the first primary language. */
+  nationalityCountry: string | null;
   primaryLanguages: string[];
   /** 관심 언어 with the user's level of each; never one of primaryLanguages. */
   interestLanguages: InterestLanguage[];
@@ -154,6 +161,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     birthDate,
     gender,
     nationality,
+    nationalityCountry,
     primaryLanguages,
     interestLanguages,
     interestLanguageLevels,
@@ -199,6 +207,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     ...(age !== undefined ? { age } : {}),
     ...(normalizedGender ? { gender: normalizedGender } : {}),
     nationality: normalizedPrimaryLanguages[0] ?? normalizedNationality,
+    nationalityCountry: resolveNationalityCountry(nationalityCountry, normalizedPrimaryLanguages),
     primaryLanguages: normalizedPrimaryLanguages,
     interestLanguages: zipInterestLanguages(interestLanguages, interestLanguageLevels)
       .filter((entry) => !normalizedPrimaryLanguages.includes(entry.code)),

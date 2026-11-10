@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom'
 import { MessageReactionPicker } from './MessageReactions'
 import { MessageRecallMenuItem } from './MessageRecall'
 import { MessageReplyMenuItem } from './MessageReply'
+import { MessageRetranslateMenuItem } from './MessageRetranslate'
 import { cn } from '@/lib/utils'
 import { copyTextWithFeedback } from './live-phone-demo.copy'
 
@@ -34,6 +35,8 @@ interface CopyableBubbleSurfaceProps extends ComponentPropsWithoutRef<'div'> {
   /** A "save" row (chat photos), shown when both are set. */
   saveLabel?: string
   onSave?: () => void
+  /** The translation language this surface shows; offers "translate again" inside a MessageRetranslateScope. */
+  retranslateLanguage?: string
   onActivate?: () => void
 }
 
@@ -65,6 +68,7 @@ export default function CopyableBubbleSurface({
   onPlayPronunciation,
   saveLabel,
   onSave,
+  retranslateLanguage,
   onActivate,
   children,
   className,
@@ -263,6 +267,7 @@ export default function CopyableBubbleSurface({
             </button>
           </>
         )}
+        <MessageRetranslateMenuItem language={retranslateLanguage} onDone={closeMenu} />
         <MessageReplyMenuItem onDone={closeMenu} />
         <MessageRecallMenuItem onDone={closeMenu} />
       </div>

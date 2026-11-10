@@ -24,20 +24,27 @@ const OPTIONS: ReadonlyArray<{
   },
 ];
 
-/** Two big ♀ / ♂ buttons in the same pink / blue as the profile gender-age badge. */
+/**
+ * Two big ♀ / ♂ buttons in the same pink / blue as the profile gender-age badge.
+ * `size="large"` is the onboarding screen: tall cards that fill the width, so
+ * one thumb tap anywhere on them picks the gender.
+ */
 export default function ProfileGenderPicker({
   value,
   onChange,
   copy,
   disabled = false,
   className = "",
+  size = "regular",
 }: {
   value: ProfileGender | null;
   onChange: (gender: ProfileGender) => void;
   copy: ProfileGenderCopy;
   disabled?: boolean;
   className?: string;
+  size?: "regular" | "large";
 }) {
+  const isLarge = size === "large";
   return (
     <div className={className}>
       <div role="radiogroup" aria-label={copy.label} className="grid grid-cols-2 gap-3">
@@ -51,17 +58,21 @@ export default function ProfileGenderPicker({
               aria-checked={isSelected}
               disabled={disabled}
               onClick={() => onChange(gender)}
-              className={`flex h-14 items-center justify-center gap-2 rounded-[1.2rem] border text-[0.98rem] font-semibold transition disabled:opacity-60 ${
+              className={`flex items-center justify-center border font-semibold transition active:scale-[0.97] disabled:opacity-60 ${
+                isLarge
+                  ? "h-40 flex-col gap-3 rounded-[1.6rem] text-[1.1rem]"
+                  : "h-14 gap-2 rounded-[1.2rem] text-[0.98rem]"
+              } ${
                 isSelected ? selectedClass : "border-[#ece6db] bg-white text-slate-700"
               }`}
             >
-              <Icon size={20} strokeWidth={2.6} className={iconClass} aria-hidden="true" />
+              <Icon size={isLarge ? 44 : 20} strokeWidth={2.6} className={iconClass} aria-hidden="true" />
               {gender === "female" ? copy.female : copy.male}
             </button>
           );
         })}
       </div>
-      <p className="mt-2 text-center text-[0.78rem] text-slate-500">{copy.publicHint}</p>
+      <p className={`${isLarge ? "mt-4" : "mt-2"} text-center text-[0.78rem] text-slate-500`}>{copy.publicHint}</p>
     </div>
   );
 }
