@@ -71,11 +71,17 @@ Run these from the worktree root.
    ```bash
    node mingle-app/scripts/qa-agent-device.mjs servers
    ```
-   `ok: true` needs devbox running in this worktree **and** a LAN host the phone can reach. If it is not ok, stop and
-   ask the owner. To start devbox yourself you need their yes, and it runs in a terminal tab:
+   `ok: true` needs devbox running in this worktree, the web page and the feed API answering, and a URL the phone
+   can reach. If it is not ok, stop and ask the owner. To start devbox yourself you need their yes, and it runs in a
+   terminal tab. Use the device profile on a Cloudflare tunnel slot, so the phone reaches it over https on any
+   network (slot 3 → `https://mingle-app-devbox-3.minglelabs.app`). Pin a slot nobody else is using; slots 1 and 2
+   are usually taken by other sessions, and a bare `scripts/devbox up` claims whichever slot is free first.
    ```bash
-   scripts/devbox up --profile local --host "$(ipconfig getifaddr en0)"
+   VAULT_ADDR=http://127.0.0.1:8200 scripts/devbox up --profile device --tunnel-provider cloudflare --tunnel-slot 3
    ```
+   On the device profile the database is remote, so read app data through the app's own API (signed in as the QA
+   account), not with SQL. The LAN profile (`--profile local --host "$(ipconfig getifaddr en0)"`) also works when
+   the phone shares the Mac's Wi-Fi, but each LAN IP change needs a rebuild.
 3. Build the QA app, then install it. `build` makes a Release build with the QA bridge on: the JS bundle is
    embedded (no Metro), the WebView is inspectable, every web and fallback URL points at this worktree's devbox, and
    ads use Google's test units, so production ads are never requested. The first build takes about 10 minutes, so
@@ -86,6 +92,8 @@ Run these from the worktree root.
    node mingle-app/scripts/qa-agent-device.mjs build
    node mingle-app/scripts/qa-agent-device.mjs install [--fresh]
    ```
+   From an agent shell that itself runs in a macOS sandbox (Codex, Kiro), Swift macros fail to expand; build with
+   `MINGLE_QA_SWIFT_DISABLE_SANDBOX=1 node mingle-app/scripts/qa-agent-device.mjs build`.
 4. Start the device session. `prepare-wda` compiles and signs WebDriverAgent locally (team `3RFBMN8TKZ`, bundle
    `com.minglelabs.mingle.rn.WebDriverAgentRunner`) without touching the phone; do it once per machine, ahead of
    time. `start` then installs and launches WDA on the phone and prints the screen size in points.
@@ -93,6 +101,10 @@ Run these from the worktree root.
    node mingle-app/scripts/qa-agent-device.mjs prepare-wda
    node mingle-app/scripts/qa-agent-device.mjs start
    ```
+   `start` takes the iPhone's hardware UDID (the one `devices` prints, e.g. `00008110-…`), not the CoreDevice id
+   that `xcrun devicectl list devices` shows. Pass `--udid` when more than one iPhone is known. If iOS answers
+   "Not authorized for performing UI testing actions", the phone is locked or UI automation was reset after
+   reconnecting: ask the owner to unlock it, or to turn on Settings → Developer → Enable UI Automation.
 5. Create the run folder `mingle-app/qa/agent/runs/<YYYYMMDD-HHMM>-<branch>/`, with `shots/`, and start
    `notes.md`. In it, record the commit, the branch, the phone model and iOS version, the server URL and the start
    time in UTC (you need that for event queries).
@@ -125,13 +137,20 @@ would tap. Read state with `snapshot`/`eval`, but never use `eval` to click for 
 | QA bridge method | `eval 'window.__MINGLE_QA__.seedScrollPerformanceHistory()'` |
 | Relaunch | `app terminate`, then `app launch`. |
 | Native logs | `logs --grep STT` (device syslog lines from the app since the session started). |
-| Client events | Local DB, read-only: `SELECT created_at, event_type, metadata FROM app.app_event_logs WHERE created_at > '<start UTC>' ORDER BY created_at;` |
+| Client events | LAN profile only (local DB), read-only: `SELECT created_at, event_type, metadata FROM app.app_event_logs WHERE created_at > '<start UTC>' ORDER BY created_at;` |
 
 For the DB, use `DATABASE_URL` from the devbox environment or `mingle-app/.env.local` in the main checkout. Before
-querying, check that the host is `localhost` or `127.0.0.1`.
+querying, check that the host is `localhost` or `127.0.0.1`; if it is not (the device profile), skip SQL and use the
+app's API instead.
 
 Rules while driving:
 
+- Before each tap, check `app state` returns `4` (the app is in front). After a system sheet, a notification or a
+  reconnect the app can be in the background, and taps then land on whatever is in front.
+- In a room, tap the microphone only when `snapshot` shows `micVisualState` as `running` or `connecting`; before that,
+  the tap is swallowed or toggles the wrong state.
+- On iOS, `eval` runs in the last WebView the session found, which can be a hidden or stale one. Judge what is on
+  screen from the screenshot, and use `eval` only for state the screenshot cannot show.
 - Take a screenshot after every step that has an oracle, and look at it before judging. Crop and zoom with
   `sips`/`ffmpeg` when edges or alignment matter.
 - Repeat timing-sensitive checks (flicker, first-tap response, races) at least twice and record `n/m`.

@@ -30,11 +30,13 @@ Scripts in `mingle-app/scripts/`:
 
 ## Running
 
-1. Start the local stack in this worktree, reachable from the phone over Wi-Fi (Claude asks before starting it):
+1. Start devbox in this worktree on a Cloudflare tunnel slot nobody else uses (the agent asks before starting it):
    ```bash
-   scripts/devbox up --profile local --host "$(ipconfig getifaddr en0)"
+   VAULT_ADDR=http://127.0.0.1:8200 scripts/devbox up --profile device --tunnel-provider cloudflare --tunnel-slot 3
    ```
-2. Connect the iPhone by USB, unlocked and trusted, with Developer Mode on.
+   The phone then reaches it at `https://mingle-app-devbox-<slot>.minglelabs.app` on any network. The device profile
+   uses a remote database, so the agent reads app data through the app's API.
+2. Connect the iPhone by USB, unlocked and trusted, with Developer Mode and Settings → Developer → Enable UI Automation on.
 3. In Claude Code: `/qa` (scenarios for the current diff), `/qa all`, `/qa P0`, or `/qa <scenario-id>`.
 4. Open the published report. Work through the manual checklist. Tell Claude where you disagree.
 
@@ -57,7 +59,7 @@ node mingle-app/scripts/qa-agent-scenarios.mjs check
 
 ## Limits
 
-- iPhone or iOS Simulator. Android is not driven yet. On the simulator, phone-only checks (real microphone,
+- iPhone, Android phone (`--android`, over adb and UiAutomator2) or iOS Simulator (`--sim`). On the simulator, phone-only checks (real microphone,
   earphones, production ads, real performance) are reported as pending.
 - The agent cannot speak, so speech accuracy is scored only with injected audio or when the owner reads the
   fixture sentences.
