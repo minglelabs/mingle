@@ -23,6 +23,13 @@
 //   node scripts/qa-agent-device.mjs app <launch|terminate|state>
 //   node scripts/qa-agent-device.mjs logs [--grep TEXT]         # syslog / logcat lines since the last call
 //   node scripts/qa-agent-device.mjs stop                       # end the session and the Appium server
+//   node scripts/qa-agent-device.mjs audio-fixtures             # golden fixtures (ground-truth transcripts), rendered or not
+//   node scripts/qa-agent-device.mjs inject-audio <fixtureId> [--leading-ms 500] [--trailing-ms 3000]
+//                                                               # replace the mic samples with a fixture (app logic; skips the real mic path)
+//   node scripts/qa-agent-device.mjs injection-events           # the injection milestones the app saw
+//   node scripts/qa-agent-device.mjs clear-injection            # back to the real microphone
+//   node scripts/qa-agent-device.mjs play-audio <fixtureId> [--volume 0.8]
+//                                                               # play a fixture on the Mac speaker next to the phone (real mic path)
 //
 // Coordinates are WebView CSS pixels on both platforms (iOS points; Android device px / devicePixelRatio),
 // printed by `start` and `screenshot`. Screenshots stay in device pixels.
@@ -33,6 +40,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
+
+import { goldenFixture, goldenFixtures, wavDurationMs } from './qa-agent-peer.lib.mjs';
 
 const APP_ROOT = path.resolve(import.meta.dirname, '..');
 const REPO_ROOT = path.resolve(APP_ROOT, '..');
@@ -673,6 +682,61 @@ async function cmdEval(expression) {
   console.log(JSON.stringify({ result: parsed?.mingleQaResult ?? null }, null, 2));
 }
 
+const QA_BRIDGE_MISSING = 'window.__MINGLE_QA__ is missing: the page needs qa=1&nativeQa=1&sttDebug=1&ttsDebug=1 and a QA-bridge build';
+
+async function evalInWebView(expression) {
+  const state = requireSession();
+  const result = await inWebView(state, () => appium(state, 'POST', '/session/:session/execute/sync', {
+    script: `return JSON.stringify({ mingleQaResult: (${expression}) });`,
+    args: [],
+  }));
+  const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+  return parsed?.mingleQaResult ?? null;
+}
+
+function cmdAudioFixtures() {
+  console.log(JSON.stringify(goldenFixtures().map(({ id, language, transcript, rendered }) => ({ id, language, transcript, rendered })), null, 2));
+}
+
+// Digital injection: the native STT module swaps the mic buffers for the fixture, keeping their pace.
+// Good for app logic (segmentation, order, translation timing); it skips the room, the mic and iOS voice
+// processing, and it does not reach a voice talk call (LiveKit captures the mic on its own).
+async function cmdInjectAudio(args) {
+  const fixture = goldenFixture(args[0] || fail('inject-audio needs a fixture id (see audio-fixtures)'));
+  const base64 = fs.readFileSync(fixture.wav).toString('base64');
+  const options = {
+    fixtureId: fixture.id,
+    base64,
+    leadingSilenceMs: Number(readOption(args, '--leading-ms') ?? 500),
+    trailingSilenceMs: Number(readOption(args, '--trailing-ms') ?? 3000),
+  };
+  const posted = await evalInWebView(`window.__MINGLE_QA__ ? window.__MINGLE_QA__.qaInjectAudio(${JSON.stringify(options)}) : 'missing'`);
+  if (posted === 'missing') fail(QA_BRIDGE_MISSING);
+  console.log(JSON.stringify({ injected: fixture.id, posted, transcript: fixture.transcript, durationMs: wavDurationMs(fixture.wav) }));
+}
+
+async function cmdInjectionEvents() {
+  const events = await evalInWebView('window.__MINGLE_QA__ ? window.__MINGLE_QA__.getQaAudioInjectionEvents() : "missing"');
+  if (events === 'missing') fail(QA_BRIDGE_MISSING);
+  console.log(JSON.stringify({ events }, null, 2));
+}
+
+async function cmdClearInjection() {
+  const cleared = await evalInWebView('window.__MINGLE_QA__ ? window.__MINGLE_QA__.qaClearAudioInjection() : "missing"');
+  if (cleared === 'missing') fail(QA_BRIDGE_MISSING);
+  console.log(JSON.stringify({ cleared }));
+}
+
+// Acoustic playback: the Mac speaker plays the fixture, so the sound goes through the air, the phone's
+// mic and iOS voice processing like a person talking. Keep the phone about 30 cm from the Mac.
+function cmdPlayAudio(args) {
+  const fixture = goldenFixture(args[0] || fail('play-audio needs a fixture id (see audio-fixtures)'));
+  const volume = String(readOption(args, '--volume') ?? '0.8');
+  const startedAtMs = Date.now();
+  execFileSync('afplay', ['-v', volume, fixture.wav], { stdio: 'ignore' });
+  console.log(JSON.stringify({ played: fixture.id, transcript: fixture.transcript, language: fixture.language, startedAtMs, endedAtMs: Date.now() }));
+}
+
 async function cmdApp(args) {
   const state = requireSession();
   const action = args[0] || 'state';
@@ -1022,6 +1086,11 @@ async function main() {
     case 'app': await cmdApp(args); break;
     case 'logs': await cmdLogs(args); break;
     case 'stop': await cmdStop(); break;
+    case 'audio-fixtures': cmdAudioFixtures(); break;
+    case 'inject-audio': await cmdInjectAudio(args); break;
+    case 'injection-events': await cmdInjectionEvents(); break;
+    case 'clear-injection': await cmdClearInjection(); break;
+    case 'play-audio': cmdPlayAudio(args); break;
     default:
       console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 28).join('\n'));
       process.exitCode = command === 'help' ? 0 : 2;
