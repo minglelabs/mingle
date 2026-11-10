@@ -42,6 +42,7 @@ model User {
   demoEndpointMaxDelayMs       Int?      @default(3000) @map("demo_endpoint_max_delay_ms")
   demoEndpointTuningStep       Int?      @default(2) @map("demo_endpoint_tuning_step")
   translationModel             String?   @map("translation_model")
+  // Unused since 2026-11-11: there is one TTS model and no user choice.
   ttsModel                     String?   @map("tts_model")
   adBannerPosition             String?   @map("ad_banner_position")
   demoInputMode                String?   @map("demo_input_mode")

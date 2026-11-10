@@ -4,7 +4,7 @@ import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
 // Exercise the real bubble-tap TTS callback without mounting the room, so the
-// manual playback path cannot drift from the auto TTS path's model choice.
+// request it sends stays checked: there is one TTS model, chosen by the server.
 const source = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
 const tree = ts.createSourceFile('LivePhoneDemo.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 
@@ -24,7 +24,7 @@ function bubbleTtsCallback(context: Record<string, unknown>): (input: BubbleTtsI
   }).outputText, context)
 }
 
-function buildContext(requestTtsModel: string | undefined) {
+function buildContext() {
   const requests: Array<{ url: string, body: Record<string, unknown> }> = []
   const fetch = async (url: string, init: RequestInit) => {
     requests.push({ url, body: JSON.parse(String(init.body)) })
@@ -40,7 +40,6 @@ function buildContext(requestTtsModel: string | undefined) {
       fetch,
       Blob,
       TTS_API_PATH: '/api/ios/v2.1.0/tts/inworld',
-      requestTtsModel,
       nativeAppUpdate: null,
       resolveConversationSessionKey: () => 'session-1',
       getOrCreateTrackingUserId: () => 'tracking-1',
@@ -55,21 +54,13 @@ function buildContext(requestTtsModel: string | undefined) {
 const input: BubbleTtsInput = { playbackKey: 'utt-1:ko', text: '안녕하세요', language: 'ko' }
 
 describe('bubble-tap TTS request wiring', () => {
-  it('sends the TTS model the user picked, like the auto TTS path', async () => {
-    const { requests, context } = buildContext('inworld-tts-1.5-mini')
+  it('asks the TTS route for the tapped text and never names a model', async () => {
+    const { requests, context } = buildContext()
     const blob = await bubbleTtsCallback(context)(input)
 
     expect(blob?.type).toBe('audio/wav')
     expect(requests).toHaveLength(1)
     expect(requests[0].url).toBe('/api/ios/v2.1.0/tts/inworld')
-    expect(requests[0].body.ttsModel).toBe('inworld-tts-1.5-mini')
-  })
-
-  it('omits ttsModel while the user has not picked one, so the server default applies', async () => {
-    const { requests, context } = buildContext(undefined)
-    await bubbleTtsCallback(context)(input)
-
-    expect(requests).toHaveLength(1)
     expect(requests[0].body).not.toHaveProperty('ttsModel')
     expect(requests[0].body).toMatchObject({
       text: '안녕하세요',

@@ -62,7 +62,6 @@ import {
   getOrCreateTrackingUserId,
 } from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
-import type { UserSelectableTtsModel } from '@/lib/tts-models'
 import type { SttCaptureSource } from '@/lib/native-device-audio'
 import { shouldRequestInterimFill } from '@/lib/bubble-tail'
 import {
@@ -1578,7 +1577,6 @@ interface UseRealtimeSTTOptions {
   storageNamespace?: string
   translationModel?: UserSelectableTranslationModel
   // User-selected TTS model, sent with every TTS request. Undefined -> server default (gemini-3.8-flash-lite-tts).
-  ttsModel?: UserSelectableTtsModel
   // The signed-in viewer's own account id, stamped onto every locally
   // finalized utterance so ChatBubble can tell "mine" from "theirs" once a
   // room has more than one real member. Unused by solo rooms.
@@ -2989,9 +2987,6 @@ interface TranslateApiResult {
   sourceDisplayText?: string
   sourceLanguagesMixed?: boolean
   sourceTextHasForeignScript?: boolean
-  ttsLanguage?: string
-  ttsAudioBase64?: string
-  ttsAudioMime?: string
   provider?: string
   infrastructureProvider?: string
   model?: string
@@ -3167,7 +3162,6 @@ export default function useRealtimeSTT({
   sessionKeyOverride,
   storageNamespace,
   translationModel,
-  ttsModel,
   viewerUserId = null,
   viewerImage = null,
   sttSegmentationMode,
@@ -4691,8 +4685,6 @@ export default function useRealtimeSTT({
     targetLanguages: string[],
     options?: {
       signal?: AbortSignal
-      ttsLanguage?: string
-      enableTts?: boolean
       isFinal?: boolean
       clientMessageId?: string
       currentTurnPreviousState?: CurrentTurnPreviousStatePayload | null
@@ -4743,14 +4735,7 @@ export default function useRealtimeSTT({
       if (translationModel) {
         body.translationModel = translationModel
       }
-      const normalizedTtsLang = (options?.ttsLanguage || '').trim()
-      if (normalizedTtsLang && options?.isFinal !== true) {
-        body.tts = {
-          language: normalizedTtsLang,
-          enabled: options?.enableTts === true,
-          ...(ttsModel ? { ttsModel } : {}),
-        }
-      }
+      // Speech is never requested here: a translation must not wait for it.
       const res = await fetch(buildClientApiPath('/translate/finalize'), {
         method: 'POST',
         headers: {
@@ -4768,7 +4753,6 @@ export default function useRealtimeSTT({
       const data = await res.json()
       if (typeof data.coinBalance === 'number') applyCoinBalance(data.coinBalance)
       if (data.coinExhausted === true) notifyCoinsExhausted()
-      const ttsAudioBase64 = typeof data.ttsAudioBase64 === 'string' ? data.ttsAudioBase64 : undefined
       const responseSourceLanguage = typeof data.sourceLanguage === 'string'
         ? normalizeIncomingSourceLanguage(data.sourceLanguage, text, { candidates: [sourceLanguage, ...targetLanguages] })
         : undefined
@@ -4814,9 +4798,6 @@ export default function useRealtimeSTT({
           : {}),
         sourceLanguagesMixed: data.sourceLanguagesMixed === true,
         sourceTextHasForeignScript: data.sourceTextHasForeignScript === true,
-        ttsLanguage: typeof data.ttsLanguage === 'string' ? data.ttsLanguage : undefined,
-        ttsAudioBase64,
-        ttsAudioMime: typeof data.ttsAudioMime === 'string' ? data.ttsAudioMime : undefined,
         provider: typeof data.provider === 'string' ? data.provider : undefined,
         infrastructureProvider: typeof data.infrastructureProvider === 'string' ? data.infrastructureProvider : undefined,
         model: typeof data.model === 'string' ? data.model : undefined,
@@ -4827,7 +4808,7 @@ export default function useRealtimeSTT({
     } catch {
       return { translations: {} }
     }
-  }, [buildRecentTurnContextPayload, ensureSessionKey, translationModel, ttsModel, usageSec])
+  }, [buildRecentTurnContextPayload, ensureSessionKey, translationModel, usageSec])
 
   const logClientEvent = useCallback(async (payload: ClientEventLogPayload) => {
     try {
@@ -4992,7 +4973,6 @@ export default function useRealtimeSTT({
           language: normalizedLang,
           sessionKey: ensureSessionKey(),
           clientContext: buildClientContextPayload(usageSec),
-          ...(ttsModel ? { ttsModel } : {}),
         }),
       })
       if (res.status === 402) notifyCoinsExhausted({ userInitiated: true })
@@ -5005,7 +4985,7 @@ export default function useRealtimeSTT({
     } catch {
       return null
     }
-  }, [ensureSessionKey, ttsModel, usageSec])
+  }, [ensureSessionKey, usageSec])
 
   const requestTtsForRenderedTranslation = useCallback((
     utteranceId: string,

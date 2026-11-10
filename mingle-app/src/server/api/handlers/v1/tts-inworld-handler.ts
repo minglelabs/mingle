@@ -8,8 +8,7 @@ import {
   parseClientContext,
 } from '@/lib/app-analytics'
 import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
-import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
-import { resolveTtsRuntimeSelection, synthesizeSpeech } from '@/server/api/shared/tts-provider'
+import { synthesizeSpeech } from '@/server/api/shared/tts-provider'
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
 import { randomUUID } from 'node:crypto'
 import { estimateTtsAudioSeconds, resolveCoinBillingUserId } from '@/server/coins/request-billing'
@@ -27,30 +26,16 @@ function normalizeLanguage(input?: string): string | null {
 export async function handleTtsInworldV1(request: NextRequest) {
   const body = await request.json().catch((): Record<string, unknown> => ({}))
   const text = typeof body?.text === 'string' ? body.text.trim() : ''
-  const requestedVoiceId = typeof body?.voiceId === 'string' ? body.voiceId.trim() : ''
   const language = normalizeLanguage(typeof body?.language === 'string' ? body.language : '')
   const sessionKeyHint = typeof body?.sessionKey === 'string' ? body.sessionKey.trim() : null
   const clientMessageId = typeof body?.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : null
   const clientContext = parseClientContext(body?.clientContext)
-  // User-selected TTS model sent by the client; missing/invalid -> default (gemini-3.8-flash-lite-tts).
-  const ttsSelection = resolveTtsRuntimeSelection(body?.ttsModel)
+  // `ttsModel` and `voiceId` from older clients are ignored: there is one model.
 
   const buildMissingCredentialsResponse = () => {
-    const response = NextResponse.json(
-      {
-        error:
-          'INWORLD_BASIC (or INWORLD_RUNTIME_BASE64_CREDENTIAL / INWORLD_BASIC_CREDENTIAL) is required',
-      },
-      { status: 500 },
-    )
+    const response = NextResponse.json({ error: 'GEMINI_API_KEY is required' }, { status: 500 })
     ensureTrackingContext(request, response, { sessionKeyHint })
     return response
-  }
-
-  // Inworld path keeps the original check order (credentials, then text).
-  // Gemini can synthesize without Inworld credentials; it only needs them to fall back.
-  if (ttsSelection.provider === 'inworld' && !getInworldAuthHeaderValue()) {
-    return buildMissingCredentialsResponse()
   }
 
   if (!text) {
@@ -73,13 +58,7 @@ export async function handleTtsInworldV1(request: NextRequest) {
   const sessionPromise = getServerSession(getAuthOptions()).catch(() => null)
 
   try {
-    const result = await synthesizeSpeech({
-      text,
-      language,
-      requestedVoiceId,
-      ttsModel: ttsSelection.value,
-    })
-    const fallbackMetadata = result.fallbackFrom ? { fallbackFrom: result.fallbackFrom } : {}
+    const result = await synthesizeSpeech({ text, language })
 
     if (!result.ok) {
       if (result.reason === 'missing_credentials') {
@@ -89,10 +68,9 @@ export async function handleTtsInworldV1(request: NextRequest) {
       if (result.reason === 'upstream_error') {
         const status = result.status ?? 502
         const errorResponse = NextResponse.json(
-          { error: 'inworld_tts_failed', status, detail: result.detail ?? '' },
+          { error: 'tts_failed', status, detail: result.detail ?? '' },
           { status },
         )
-        if (result.fallbackFrom) errorResponse.headers.set('X-TTS-Fallback-From', result.fallbackFrom)
 
         const tracking = ensureTrackingContext(request, errorResponse, { sessionKeyHint })
         fireAndForgetDbWrite('tts.inworld.failed', async () => {
@@ -117,7 +95,6 @@ export async function handleTtsInworldV1(request: NextRequest) {
               textLength: text.length,
               clientMessageId,
               provider: result.provider,
-              ...fallbackMetadata,
             },
           })
         })
@@ -141,7 +118,6 @@ export async function handleTtsInworldV1(request: NextRequest) {
       'X-TTS-Provider': result.provider,
       'X-TTS-Voice-Id': result.voiceId,
     }
-    if (result.fallbackFrom) headers['X-TTS-Fallback-From'] = result.fallbackFrom
     if (coinBillingUserId) {
       const charge = await chargeCoinUsageSafely({
         userId: coinBillingUserId,
@@ -182,14 +158,13 @@ export async function handleTtsInworldV1(request: NextRequest) {
           audioBytes: audioBuffer.byteLength,
           clientMessageId,
           provider: result.provider,
-          ...fallbackMetadata,
         },
       })
     })
 
     return audioResponse
   } catch (error) {
-    console.error('Inworld TTS route error:', error)
-    return NextResponse.json({ error: 'inworld_tts_internal_error' }, { status: 500 })
+    console.error('TTS route error:', error)
+    return NextResponse.json({ error: 'tts_internal_error' }, { status: 500 })
   }
 }

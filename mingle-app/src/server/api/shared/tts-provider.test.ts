@@ -10,21 +10,9 @@ const TTS_ENV_KEYS = [
   'GEMINI_TTS_STYLE_KO',
   'GEMINI_TTS_STYLE_JA',
   'GEMINI_TTS_TIMEOUT_MS',
-  'INWORLD_JWT',
-  'INWORLD_BASIC',
-  'INWORLD_BASIC_KEY',
-  'INWORLD_RUNTIME_BASE64_CREDENTIAL',
-  'INWORLD_BASIC_CREDENTIAL',
-  'INWORLD_API_KEY',
-  'INWORLD_API_SECRET',
-  'INWORLD_TTS_MODEL_ID',
-  'INWORLD_TTS_SPEAKING_RATE',
-  'INWORLD_TTS_DEFAULT_VOICE_ID',
 ] as const
 
 const savedEnv: Record<string, string | undefined> = {}
-
-const MP3_BYTES = Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0x00, 0x00])
 
 function wavBytes(): Buffer {
   const b = Buffer.alloc(48)
@@ -38,10 +26,6 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   })
-}
-
-function inworldAudioResponse(): Response {
-  return jsonResponse({ audioContent: MP3_BYTES.toString('base64') })
 }
 
 function geminiAudioResponse(audio: Buffer, mimeType?: string): Response {
@@ -75,7 +59,6 @@ beforeEach(() => {
     savedEnv[key] = process.env[key]
     delete process.env[key]
   }
-  process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
   process.env.GEMINI_API_KEY = 'test-gemini-key'
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
@@ -89,161 +72,37 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('resolveTtsRuntimeSelection (re-exported from @/lib/tts-models)', () => {
-  it('maps Inworld to the INWORLD_TTS_MODEL_ID runtime model and Gemini to its own id', async () => {
-    const { resolveTtsRuntimeSelection } = await loadModule()
-    expect(resolveTtsRuntimeSelection(undefined)).toEqual({
-      value: 'gemini-3.8-flash-lite-tts', provider: 'gemini', runtimeModel: 'gemini-3.8-flash-lite-tts',
-    })
-    expect(resolveTtsRuntimeSelection('inworld-tts-1.5-mini')).toEqual({
-      value: 'inworld-tts-1.5-mini', provider: 'inworld', runtimeModel: 'inworld-tts-1.5-mini',
-    })
-    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-2'
-    expect(resolveTtsRuntimeSelection('inworld-tts-1.5-mini').runtimeModel).toBe('inworld-tts-2')
-    expect(resolveTtsRuntimeSelection('gemini-3.8-flash-lite-tts')).toEqual({
-      value: 'gemini-3.8-flash-lite-tts', provider: 'gemini', runtimeModel: 'gemini-3.8-flash-lite-tts',
-    })
-  })
-
-  it('resolves invalid values to the gemini-3.8-flash-lite-tts default', async () => {
-    const { resolveTtsRuntimeSelection } = await loadModule()
-    expect(resolveTtsRuntimeSelection('gemini').value).toBe('gemini-3.8-flash-lite-tts')
-    expect(resolveTtsRuntimeSelection(123).value).toBe('gemini-3.8-flash-lite-tts')
-    expect(resolveTtsRuntimeSelection({ ttsModel: 'inworld-tts-1.5-mini' }).value).toBe('gemini-3.8-flash-lite-tts')
-  })
-})
-
-describe('synthesizeSpeech — default (no ttsModel)', () => {
-  it('uses gemini-3.8-flash-lite-tts when ttsModel is missing', async () => {
+describe('synthesizeSpeech — the one model', () => {
+  it('always uses gemini-3.8-flash-lite-tts', async () => {
     const wav = wavBytes()
     const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wav, 'audio/wav'))
     vi.stubGlobal('fetch', fetchMock)
-    const { synthesizeSpeech } = await loadModule()
+    const { synthesizeSpeech, TTS_MODEL } = await loadModule()
 
     const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
 
-    expect(result).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts' })
-    expect(result.fallbackFrom).toBeUndefined()
+    expect(TTS_MODEL).toBe('gemini-3.8-flash-lite-tts')
+    expect(result).toMatchObject({ ok: true, provider: 'gemini' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(bodyOf(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-lite-tts')
-  })
-
-  it('resolves an invalid ttsModel to Gemini and falls back to Inworld when Gemini fails', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ error: { message: 'quota' } }, 429))
-      .mockResolvedValueOnce(inworldAudioResponse())
-    vi.stubGlobal('fetch', fetchMock)
-    const { synthesizeSpeech } = await loadModule()
-
-    const result = await synthesizeSpeech({
-      text: 'hello',
-      language: null,
-      requestedVoiceId: 'Ashley',
-      ttsModel: 'polly',
-    })
-
-    expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini', voiceId: 'Ashley' })
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(bodyOf(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-lite-tts')
-    expect(urlOf(fetchMock.mock.calls[1])).toBe('https://api.inworld.ai/tts/v1/voice')
-  })
-
-  it('falls back to Inworld without calling Gemini when GEMINI_API_KEY is missing', async () => {
-    delete process.env.GEMINI_API_KEY
-    const fetchMock = vi.fn().mockResolvedValueOnce(inworldAudioResponse())
-    vi.stubGlobal('fetch', fetchMock)
-    const { synthesizeSpeech } = await loadModule()
-
-    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley' })
-
-    expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(urlOf(fetchMock.mock.calls[0])).toBe('https://api.inworld.ai/tts/v1/voice')
-  })
-})
-
-describe('synthesizeSpeech — inworld (explicit choice)', () => {
-  it('sends the same Inworld request as before the refactor', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ voices: [{ voiceId: 'KoVoice' }] }))
-      .mockResolvedValueOnce(inworldAudioResponse())
-    vi.stubGlobal('fetch', fetchMock)
-    const { synthesizeSpeech } = await loadModule()
-
-    const result = await synthesizeSpeech({ text: '안녕하세요', language: 'ko', ttsModel: 'inworld-tts-1.5-mini' })
-
-    expect(result).toMatchObject({
-      ok: true,
-      provider: 'inworld',
-      mime: 'audio/mpeg',
-      voiceId: 'KoVoice',
-      modelId: 'inworld-tts-1.5-mini',
-    })
-    expect(result.fallbackFrom).toBeUndefined()
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(urlOf(fetchMock.mock.calls[0])).toContain('https://api.inworld.ai/tts/v1/voices?filter=')
-    expect(urlOf(fetchMock.mock.calls[1])).toBe('https://api.inworld.ai/tts/v1/voice')
-    const init = fetchMock.mock.calls[1][1] as RequestInit
-    expect(init.headers).toEqual({ Authorization: 'Basic ZmFrZTpmYWtl', 'Content-Type': 'application/json' })
-    expect(bodyOf(fetchMock.mock.calls[1])).toEqual({
-      text: '안녕하세요',
-      voiceId: 'KoVoice',
-      modelId: 'inworld-tts-1.5-mini',
-      audioConfig: { speakingRate: 1.3 },
-    })
-  })
-
-  it('uses the requested Inworld voice without a voice lookup', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(inworldAudioResponse())
-    vi.stubGlobal('fetch', fetchMock)
-    const { synthesizeSpeech } = await loadModule()
-
-    const result = await synthesizeSpeech({
-      text: 'hello',
-      language: null,
-      requestedVoiceId: 'Ashley',
-      ttsModel: 'inworld-tts-1.5-mini',
-    })
-
-    expect(result).toMatchObject({ ok: true, provider: 'inworld', voiceId: 'Ashley' })
-    expect(result.fallbackFrom).toBeUndefined()
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(urlOf(fetchMock.mock.calls[0])).toBe('https://api.inworld.ai/tts/v1/voice')
-  })
-
-  it('reports missing Inworld credentials without calling fetch', async () => {
-    delete process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const { synthesizeSpeech } = await loadModule()
-
-    const result = await synthesizeSpeech({ text: 'hello', language: 'en', ttsModel: 'inworld-tts-1.5-mini' })
-
-    expect(result).toMatchObject({ ok: false, provider: 'inworld', reason: 'missing_credentials' })
-    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 
 describe('synthesizeSpeech — gemini', () => {
-  it('uses the male Korean voice, passes non-PCM WAV through and ignores the client Inworld voiceId', async () => {
+  it('uses the male Korean voice and passes non-PCM WAV through', async () => {
     const wav = wavBytes()
     const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wav, 'audio/wav'))
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({
-      text: '빠른 답장 감사합니다.',
-      language: 'ko',
-      requestedVoiceId: 'KoVoice',
-      ttsModel: 'gemini-3.8-flash-tts',
-    })
+    const result = await synthesizeSpeech({ text: '빠른 답장 감사합니다.', language: 'ko' })
 
     expect(result).toMatchObject({
       ok: true,
       provider: 'gemini',
       mime: 'audio/wav',
       voiceId: 'ko-kr-csagent-8',
-      modelId: 'gemini-3.8-flash-tts',
+      modelId: 'gemini-3.8-flash-lite-tts',
     })
     if (!result.ok) throw new Error('expected success')
     // The fake WAV has no fmt chunk, so post-processing leaves it untouched.
@@ -253,7 +112,7 @@ describe('synthesizeSpeech — gemini', () => {
     const init = fetchMock.mock.calls[0][1] as RequestInit
     expect((init.headers as Record<string, string>)['x-goog-api-key']).toBe('test-gemini-key')
     const body = bodyOf(fetchMock.mock.calls[0])
-    expect(body.model).toBe('gemini-3.8-flash-tts')
+    expect(body.model).toBe('gemini-3.8-flash-lite-tts')
     expect(body.response_format).toEqual({ type: 'audio' })
     expect(body.generation_config).toEqual({ speech_config: [{ voice: 'ko-kr-csagent-8' }] })
     // Text is verbatim; pace rides in the structured (never spoken) style annotation.
@@ -305,7 +164,7 @@ describe('synthesizeSpeech — gemini', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' })
+    const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
 
     if (!result.ok) throw new Error('expected success')
     expect(result.mime).toBe('audio/wav')
@@ -341,7 +200,7 @@ describe('synthesizeSpeech — gemini', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-tts' })
+    const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
 
     if (!result.ok) throw new Error('expected success')
     expect(result.provider).toBe('gemini')
@@ -369,96 +228,66 @@ describe('synthesizeSpeech — gemini', () => {
     expect(normalizeGeminiAudio(wav, '')).toEqual({ audio: wav, mime: 'audio/wav' })
   })
 
-  it('falls back to Inworld on a non-2xx Gemini response', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ error: { message: 'quota' } }, 429))
-      .mockResolvedValueOnce(inworldAudioResponse())
+  it('returns the failure of a non-2xx Gemini response: there is no fallback', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ error: { message: 'quota' } }, 429))
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({
-      text: 'hello',
-      language: null,
-      requestedVoiceId: 'Ashley',
-      ttsModel: 'gemini-3.8-flash-tts',
-    })
+    const result = await synthesizeSpeech({ text: 'hello', language: null })
 
-    expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini', voiceId: 'Ashley' })
+    expect(result).toMatchObject({ ok: false, provider: 'gemini', reason: 'upstream_error', status: 429 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(urlOf(fetchMock.mock.calls[0])).toContain('generativelanguage.googleapis.com')
-    expect(urlOf(fetchMock.mock.calls[1])).toBe('https://api.inworld.ai/tts/v1/voice')
   })
 
-  it('falls back to Inworld when Gemini times out', async () => {
+  it('returns a timeout failure when Gemini does not answer in time', async () => {
     process.env.GEMINI_TTS_TIMEOUT_MS = '20'
     const fetchMock = vi.fn()
       .mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
         init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
       }))
-      .mockResolvedValueOnce(inworldAudioResponse())
     vi.stubGlobal('fetch', fetchMock)
-    const { synthesizeSpeech, synthesizeWithGemini } = await loadModule()
+    const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley', ttsModel: 'gemini-3.8-flash-tts' })
-    expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini' })
+    const result = await synthesizeSpeech({ text: 'hello', language: null })
 
-    fetchMock.mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
-      init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
-    }))
-    const direct = await synthesizeWithGemini({ text: 'hello', language: null, modelId: 'gemini-3.8-flash-tts' })
-    expect(direct).toMatchObject({ ok: false, reason: 'timeout' })
+    expect(result).toMatchObject({ ok: false, provider: 'gemini', reason: 'timeout' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back to Inworld when Gemini returns no audio', async () => {
+  it('returns invalid_audio when Gemini returns no audio', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ steps: [{ type: 'model_output', content: [{ type: 'text', text: 'hi' }] }] }))
-      .mockResolvedValueOnce(inworldAudioResponse())
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley', ttsModel: 'gemini-3.8-flash-tts' })
+    const result = await synthesizeSpeech({ text: 'hello', language: null })
 
-    expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini' })
-  })
-
-  it('falls back to Inworld on a Gemini fetch exception', async () => {
-    const fetchMock = vi.fn()
-      .mockRejectedValueOnce(new Error('network down'))
-      .mockResolvedValueOnce(inworldAudioResponse())
-    vi.stubGlobal('fetch', fetchMock)
-    const { synthesizeSpeech } = await loadModule()
-
-    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley', ttsModel: 'gemini-3.8-flash-tts' })
-
-    expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini' })
-  })
-
-  it('falls back without calling Gemini when GEMINI_API_KEY is missing', async () => {
-    delete process.env.GEMINI_API_KEY
-    const fetchMock = vi.fn().mockResolvedValueOnce(inworldAudioResponse())
-    vi.stubGlobal('fetch', fetchMock)
-    const { synthesizeSpeech } = await loadModule()
-
-    const result = await synthesizeSpeech({ text: 'hello', language: null, requestedVoiceId: 'Ashley', ttsModel: 'gemini-3.8-flash-tts' })
-
-    expect(result).toMatchObject({ ok: true, provider: 'inworld', fallbackFrom: 'gemini' })
+    expect(result).toMatchObject({ ok: false, provider: 'gemini', reason: 'invalid_audio' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(urlOf(fetchMock.mock.calls[0])).toBe('https://api.inworld.ai/tts/v1/voice')
   })
 
-  it('returns the Inworld failure (with fallbackFrom) when Gemini fails and Inworld has no credentials', async () => {
-    delete process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({}, 500))
+  it('returns an exception failure on a Gemini fetch exception', async () => {
+    const fetchMock = vi.fn().mockRejectedValueOnce(new Error('network down'))
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-tts' })
+    const result = await synthesizeSpeech({ text: 'hello', language: null })
 
-    expect(result).toMatchObject({
-      ok: false,
-      provider: 'inworld',
-      reason: 'missing_credentials',
-      fallbackFrom: 'gemini',
-    })
+    expect(result).toMatchObject({ ok: false, provider: 'gemini', reason: 'exception' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports missing credentials without calling fetch when GEMINI_API_KEY is missing', async () => {
+    delete process.env.GEMINI_API_KEY
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeech } = await loadModule()
+
+    const result = await synthesizeSpeech({ text: 'hello', language: null })
+
+    expect(result).toMatchObject({ ok: false, provider: 'gemini', reason: 'missing_credentials' })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 

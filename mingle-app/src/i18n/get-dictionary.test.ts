@@ -177,7 +177,6 @@ describe("getDictionary", () => {
 
       expect(dictionary.demo.textSizeLabel).toBeTruthy();
       expect(dictionary.demo.translationModelLabel).toBeTruthy();
-      expect(dictionary.demo.ttsModelLabel).toBeTruthy();
       expect(dictionary.demo.adBannerPositionBottomLabel).toBeTruthy();
       expect(dictionary.conversations?.searchPlaceholder).toBeTruthy();
       expect(dictionary.conversations?.newConversationButtonLabel).toBeTruthy();

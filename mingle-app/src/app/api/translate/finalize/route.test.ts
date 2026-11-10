@@ -95,13 +95,6 @@ vi.mock('@google/generative-ai', () => {
   }
 })
 
-function buildBase64Audio(prefix: 'mpeg' | 'wav' = 'mpeg'): string {
-  const bytes = prefix === 'mpeg'
-    ? Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00, 0x00])
-    : Buffer.from([0x52, 0x49, 0x46, 0x46, 0x00, 0x00])
-  return bytes.toString('base64')
-}
-
 function clearTranslationEnv() {
   delete process.env.TRANSLATE_PROVIDER
   delete process.env.TRANSLATE_MODEL
@@ -145,9 +138,6 @@ function setQwenTranslateEnv(args?: {
 async function importRouteWithEnv() {
   vi.resetModules()
   setGeminiTranslateEnv()
-  process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
-  process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
-  process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
 
   const mod = await import('@/app/api/translate/finalize/route')
   return mod.POST
@@ -391,7 +381,7 @@ describe('/api/translate/finalize route', () => {
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
-  it('returns translations and inline Inworld TTS audio when finalize succeeds', async () => {
+  it('never synthesizes speech with a translation, even when an older client asks for it', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '{"ko":"안녕하세요"}',
@@ -404,17 +394,6 @@ describe('/api/translate/finalize route', () => {
     })
 
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(
-        JSON.stringify({ voices: [{ voiceId: 'KoVoice' }] }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ))
-      .mockResolvedValueOnce(new Response(
-        JSON.stringify({
-          audioContent: `data:audio/mpeg;base64,${buildBase64Audio('mpeg')}`,
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ))
-
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithEnv()
 
@@ -425,6 +404,7 @@ describe('/api/translate/finalize route', () => {
       tts: {
         enabled: true,
         language: 'ko',
+        voiceId: 'KoVoice',
         ttsModel: 'inworld-tts-1.5-mini',
       },
     }) as never)
@@ -433,136 +413,12 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
     expect(json.translations).toEqual({ ko: '안녕하세요' })
     expect(json.provider).toBe('gemini')
-    expect(json.ttsLanguage).toBe('ko')
-    expect(json.ttsVoiceId).toBe('KoVoice')
-    expect(typeof json.ttsAudioBase64).toBe('string')
-    expect(json.ttsAudioMime).toBe('audio/mpeg')
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('uses Gemini TTS for inline audio when tts.ttsModel is a Gemini model and ignores the Inworld voiceId', async () => {
-    mockGenerateContent.mockResolvedValue({
-      response: {
-        text: () => '{"ko":"안녕하세요"}',
-        usageMetadata: {},
-      },
-    })
-    const wav = Buffer.alloc(48)
-    wav.write('RIFF', 0, 'ascii')
-    wav.write('WAVE', 8, 'ascii')
-    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
-      JSON.stringify({
-        steps: [{ type: 'model_output', content: [{ type: 'audio', data: wav.toString('base64'), mime_type: 'audio/wav' }] }],
-      }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    ))
-
-    vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithEnv()
-    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
-
-    const res = await POST(makeJsonRequest({
-      text: 'hello',
-      sourceLanguage: 'en',
-      targetLanguages: ['ko'],
-      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'gemini-3.8-flash-tts' },
-    }) as never)
-    const json = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(json.ttsAudioMime).toBe('audio/wav')
-    // Korean inline audio uses the male Korean Gemini voice.
-    expect(json.ttsVoiceId).toBe('ko-kr-csagent-8')
-    expect(Buffer.from(json.ttsAudioBase64, 'base64').equals(wav)).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(String(fetchMock.mock.calls[0][0])).toBe('https://generativelanguage.googleapis.com/v1beta/interactions')
-    const geminiBody = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))
-    expect(geminiBody.model).toBe('gemini-3.8-flash-tts')
-    expect(geminiBody.generation_config).toEqual({ speech_config: [{ voice: 'ko-kr-csagent-8' }] })
-    expect(geminiBody.input[0].content[0].annotations).toEqual([{ type: 'speech_metadata', style: 'speaking rapidly' }])
-  })
-
-  it('uses the gemini-3.8-flash-lite-tts default for inline audio when tts.ttsModel is missing', async () => {
-    mockGenerateContent.mockResolvedValue({
-      response: {
-        text: () => '{"ko":"안녕하세요"}',
-        usageMetadata: {},
-      },
-    })
-    const wav = Buffer.alloc(48)
-    wav.write('RIFF', 0, 'ascii')
-    wav.write('WAVE', 8, 'ascii')
-    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
-      JSON.stringify({
-        steps: [{ type: 'model_output', content: [{ type: 'audio', data: wav.toString('base64'), mime_type: 'audio/wav' }] }],
-      }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    ))
-
-    vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithEnv()
-    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
-
-    const res = await POST(makeJsonRequest({
-      text: 'hello',
-      sourceLanguage: 'en',
-      targetLanguages: ['ko'],
-      tts: { enabled: true, language: 'ko' },
-    }) as never)
-    const json = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(json.ttsAudioMime).toBe('audio/wav')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-lite-tts')
-  })
-
-  it('falls back to Inworld inline audio when Gemini TTS fails and resolves an invalid tts.ttsModel to the Gemini default', async () => {
-    mockGenerateContent.mockResolvedValue({
-      response: {
-        text: () => '{"ko":"안녕하세요"}',
-        usageMetadata: {},
-      },
-    })
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
-      .mockResolvedValueOnce(new Response(
-        JSON.stringify({ audioContent: `data:audio/mpeg;base64,${buildBase64Audio('mpeg')}` }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ))
-      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
-      .mockResolvedValueOnce(new Response(
-        JSON.stringify({ audioContent: `data:audio/mpeg;base64,${buildBase64Audio('mpeg')}` }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ))
-
-    vi.stubGlobal('fetch', fetchMock)
-    const POST = await importRouteWithEnv()
-    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
-
-    const fallbackRes = await POST(makeJsonRequest({
-      text: 'hello',
-      sourceLanguage: 'en',
-      targetLanguages: ['ko'],
-      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'gemini-3.8-flash-lite-tts' },
-    }) as never)
-    const fallbackJson = await fallbackRes.json()
-    expect(fallbackJson.ttsAudioMime).toBe('audio/mpeg')
-    expect(fallbackJson.ttsVoiceId).toBe('KoVoice')
-    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-lite-tts')
-    expect(String(fetchMock.mock.calls[1][0])).toBe('https://api.inworld.ai/tts/v1/voice')
-
-    const invalidRes = await POST(makeJsonRequest({
-      text: 'hello',
-      sourceLanguage: 'en',
-      targetLanguages: ['ko'],
-      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'bogus' },
-    }) as never)
-    const invalidJson = await invalidRes.json()
-    expect(invalidJson.ttsAudioMime).toBe('audio/mpeg')
-    expect(fetchMock).toHaveBeenCalledTimes(4)
-    expect(JSON.parse(String((fetchMock.mock.calls[2][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-lite-tts')
-    expect(String(fetchMock.mock.calls[3][0])).toBe('https://api.inworld.ai/tts/v1/voice')
+    expect(json).not.toHaveProperty('ttsAudioBase64')
+    expect(json).not.toHaveProperty('ttsAudioMime')
+    expect(json).not.toHaveProperty('ttsLanguage')
+    expect(json).not.toHaveProperty('ttsVoiceId')
+    // No request leaves for a TTS provider.
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('uses previous-state fallback when provider returns empty response', async () => {
@@ -574,17 +430,6 @@ describe('/api/translate/finalize route', () => {
     })
 
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(
-        JSON.stringify({ voices: [{ voiceId: 'KoVoice' }] }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ))
-      .mockResolvedValueOnce(new Response(
-        JSON.stringify({
-          audioContent: `data:audio/mpeg;base64,${buildBase64Audio('mpeg')}`,
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ))
-
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithEnv()
 
@@ -600,19 +445,13 @@ describe('/api/translate/finalize route', () => {
           ko: '이전 번역',
         },
       },
-      tts: {
-        enabled: true,
-        language: 'ko',
-        ttsModel: 'inworld-tts-1.5-mini',
-      },
     }) as never)
     const json = await res.json()
 
     expect(res.status).toBe(200)
     expect(json.usedFallbackFromPreviousState).toBe(true)
     expect(json.translations).toEqual({ ko: '이전 번역' })
-    expect(typeof json.ttsAudioBase64).toBe('string')
-    expect(json.ttsAudioMime).toBe('audio/mpeg')
+    expect(json).not.toHaveProperty('ttsAudioBase64')
   })
 
   it('uses previous-state fallback for blank interim Gemini JSON without translation logs', async () => {
@@ -1042,9 +881,6 @@ describe('/api/translate/finalize route', () => {
     vi.resetModules()
     setGeminiTranslateEnv()
     process.env.OPENROUTER_API_KEY = 'test-openrouter-key'
-    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
-    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
-    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
 
     const { POST } = await import('@/app/api/translate/finalize/route')
 
@@ -1085,9 +921,6 @@ describe('/api/translate/finalize route', () => {
       model: 'qwen/qwen3.5-9b',
     })
     process.env.GEMINI_API_KEY = 'test-gemini-key'
-    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
-    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
-    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
 
     const { POST } = await import('@/app/api/translate/finalize/route')
 
@@ -1140,9 +973,6 @@ describe('/api/translate/finalize route', () => {
     vi.resetModules()
     setGeminiTranslateEnv()
     process.env.OPENAI_API_KEY = 'test-openai-key'
-    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
-    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
-    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
 
     const { POST } = await import('@/app/api/translate/finalize/route')
 
@@ -1194,9 +1024,6 @@ describe('/api/translate/finalize route', () => {
     vi.resetModules()
     setGeminiTranslateEnv()
     process.env.OPENAI_API_KEY = 'test-openai-key'
-    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
-    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
-    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
 
     const { POST } = await import('@/app/api/translate/finalize/route')
 
@@ -1322,9 +1149,6 @@ describe('/api/translate/finalize route', () => {
     vi.resetModules()
     setGeminiTranslateEnv()
     process.env.OPENAI_API_KEY = 'test-openai-key'
-    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
-    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
-    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
 
     const { POST } = await import('@/server/api/controllers/ios/v1.0.6/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_6 }))
 

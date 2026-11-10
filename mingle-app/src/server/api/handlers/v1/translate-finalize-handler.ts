@@ -10,7 +10,6 @@ import { EXPECTED_ACCOUNT_HEADER, matchesExpectedAccount } from '@/lib/request-a
 import { prisma } from '@/lib/prisma'
 import { classifyChineseLanguage } from '@/lib/chinese-variant'
 import { normalizeChineseContent } from '@/server/chinese-script-conversion'
-import { synthesizeSpeech } from '@/server/api/shared/tts-provider'
 import {
   buildFallbackTranslationsFromCurrentTurnPreviousState,
   normalizeLang,
@@ -50,7 +49,7 @@ import {
 } from '@/server/translation/translate-texts'
 
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
-import { coinKeyDigest, estimateTtsAudioSeconds, resolveCoinBillingUserId } from '@/server/coins/request-billing'
+import { coinKeyDigest, resolveCoinBillingUserId } from '@/server/coins/request-billing'
 import { canSpendCoins, chargeCoinUsageSafely } from '@/server/coins/wallet'
 
 export const runtime = 'nodejs'
@@ -369,33 +368,6 @@ function resolveTranslationProviderFromEnv(): TranslationProvider {
   return normalizeTranslationProvider(raw) || 'gemini'
 }
 
-// ─── TTS ─────────────────────────────────────────────────────────────────────
-
-async function synthesizeTtsInline(args: {
-  text: string
-  language: string
-  requestedVoiceId?: string
-  ttsModel?: unknown
-}): Promise<{ audioBase64: string, audioMime: string, voiceId: string, provider: string, modelId: string, audioSeconds: number } | null> {
-  if (!args.text.trim() || !args.language.trim()) return null
-  const result = await synthesizeSpeech({
-    text: args.text,
-    language: args.language,
-    requestedVoiceId: args.requestedVoiceId,
-    ttsModel: args.ttsModel,
-  })
-  if (!result.ok) return null
-
-  return {
-    audioBase64: result.audio.toString('base64'),
-    audioMime: result.mime,
-    voiceId: result.voiceId,
-    provider: result.provider,
-    modelId: result.modelId,
-    audioSeconds: estimateTtsAudioSeconds(result.audio, result.mime),
-  }
-}
-
 // ─── Main handler ────────────────────────────────────────────────────────────
 
 export async function handleTranslateFinalizeV1(request: NextRequest) {
@@ -406,12 +378,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const body = await request.json().catch((): Record<string, unknown> => ({}))
   const text = typeof body.text === 'string' ? body.text.trim() : ''
   const targetLanguagesRaw: unknown[] = Array.isArray(body.targetLanguages) ? body.targetLanguages : []
-  const ttsPayload = (typeof body.tts === 'object' && body.tts !== null) ? body.tts as Record<string, unknown> : null
-  const ttsLanguage = normalizeLang(typeof ttsPayload?.language === 'string' ? ttsPayload.language : '')
-  const ttsVoiceId = typeof ttsPayload?.voiceId === 'string' ? ttsPayload.voiceId.trim() : ''
-  // User-selected TTS model; missing/invalid values resolve to the default (gemini-3.8-flash-lite-tts) downstream.
-  const ttsModel = ttsPayload?.ttsModel
-  const enableTts = ttsPayload?.enabled === true
+  // `body.tts` from older clients is ignored: a translation response never
+  // waits for speech. The client asks the TTS route once the text is shown.
   const isFinal = body.isFinal === true
   const currentTurnPreviousState = parseCurrentTurnPreviousState(body.currentTurnPreviousState)
   const clientBundleRev = typeof body.clientBundleRev === 'string' ? body.clientBundleRev.trim() : null
@@ -649,38 +617,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         })
         coinsExhausted = charge?.balanceExhausted === true
         if (charge?.wallet) responsePayload.coinBalance = charge.wallet.balance
-      }
-
-      if (enableTts && ttsLanguage && targetLanguages.includes(ttsLanguage) && !coinsExhausted) {
-        const ttsText = (translations[ttsLanguage] || '').trim()
-        if (ttsText) {
-          const ttsResult = await synthesizeTtsInline({
-            text: ttsText,
-            language: ttsLanguage,
-            requestedVoiceId: ttsVoiceId,
-            ttsModel,
-          })
-
-          if (ttsResult) {
-            responsePayload.ttsLanguage = ttsLanguage
-            responsePayload.ttsAudioBase64 = ttsResult.audioBase64
-            responsePayload.ttsAudioMime = ttsResult.audioMime
-            responsePayload.ttsVoiceId = ttsResult.voiceId
-            if (coinBillingUserId) {
-              const charge = await chargeCoinUsageSafely({
-                userId: coinBillingUserId,
-                kind: 'tts',
-                units: { char: ttsText.length, second: ttsResult.audioSeconds },
-                model: ttsResult.modelId,
-                provider: ttsResult.provider,
-                sessionKey: sessionKeyHint,
-                idempotencyKey: `tts:${coinBillingUserId}:${coinClientMessageId || '-'}:${coinKeyDigest(sessionKeyHint, ttsLanguage, ttsText)}`,
-              })
-              coinsExhausted = charge?.balanceExhausted === true
-              if (charge?.wallet) responsePayload.coinBalance = charge.wallet.balance
-            }
-          }
-        }
       }
 
       if (coinsExhausted) responsePayload.coinExhausted = true

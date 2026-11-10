@@ -21,10 +21,6 @@ import {
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
 import {
-  normalizeSelectableTtsModel,
-  type UserSelectableTtsModel,
-} from '@/lib/tts-models'
-import {
   DEFAULT_BUBBLE_DISPLAY_MODE,
   normalizeLivePhoneDemoBubbleDisplayMode,
   type LivePhoneDemoBubbleDisplayMode,
@@ -47,7 +43,6 @@ export type AccountPreferencesResponse = {
   sonioxEndpointMaxDelayMs?: unknown
   sonioxEndpointTuningStep?: unknown
   translationModel?: unknown
-  ttsModel?: unknown
   adBannerPosition?: unknown
   inputMode?: unknown
   speakerEnabled?: unknown
@@ -66,7 +61,6 @@ export interface LivePhoneDemoAccountPreferences {
   // PATCHes omit it and the server default applies. Optional so
   // LivePhoneDemoLegacy (older namespaces, no TTS model choice) keeps compiling
   // unchanged; buildHydratedAccountPreferences always sets it.
-  ttsModel?: UserSelectableTtsModel | null
   adBannerPosition: LivePhoneDemoAdBannerPosition | null
   inputMode: LivePhoneDemoInputMode
   speakerEnabled: boolean
@@ -81,7 +75,6 @@ export interface AccountPreferencesPatchBody {
   sonioxEndpointMaxDelayMs: number
   sonioxEndpointTuningStep: number
   translationModel?: UserSelectableTranslationModel
-  ttsModel?: UserSelectableTtsModel
   adBannerPosition: LivePhoneDemoAdBannerPosition | null
   inputMode: LivePhoneDemoInputMode
   speakerEnabled: boolean
@@ -174,17 +167,14 @@ export function reconcileAccountPreferencesHydration(input: {
   startedSavedAt: number | null
   isLegacyNamespace: boolean
   preserveLocalTranslationModel?: boolean
-  preserveLocalTtsModel?: boolean
 }): AccountPreferencesCacheSnapshot {
   const current = readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)
   if (current && (current.pendingSync || current.savedAt !== input.startedSavedAt)) {
     const takeServerTranslationModel = !input.preserveLocalTranslationModel
-    const takeServerTtsModel = !input.preserveLocalTtsModel
-    if (input.startedSavedAt === null && (takeServerTranslationModel || takeServerTtsModel)) {
+    if (input.startedSavedAt === null && takeServerTranslationModel) {
       const merged = {
         ...current.preferences,
-        ...(takeServerTranslationModel ? { translationModel: input.preferences.translationModel } : {}),
-        ...(takeServerTtsModel ? { ttsModel: input.preferences.ttsModel } : {}),
+        translationModel: input.preferences.translationModel,
       }
       writeCachedAccountPreferences(input.identity, merged, { pendingSync: current.pendingSync })
       return readCachedAccountPreferencesSnapshot(input.identity, input.isLegacyNamespace)!
@@ -276,7 +266,6 @@ export function buildHydratedAccountPreferences(
       : normalizeSonioxEndpointTuningStepPreference(body?.sonioxEndpointTuningStep),
     translationModel: normalizeSelectableTranslationModel(body?.translationModel) || DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     // No default fallback: null must survive hydration and the local cache.
-    ttsModel: normalizeSelectableTtsModel(body?.ttsModel),
     adBannerPosition: normalizeLivePhoneDemoAdBannerPosition(body?.adBannerPosition) ?? DEFAULT_AD_BANNER_POSITION,
     inputMode: normalizeLivePhoneDemoInputMode(body?.inputMode) ?? DEFAULT_INPUT_MODE,
     speakerEnabled: normalizeBooleanPreference(body?.speakerEnabled, DEFAULT_SPEAKER_ENABLED),
@@ -406,10 +395,7 @@ export function shouldApplyAccountPreferencesHydration(args: {
 
 export function buildAccountPreferencesPatchBody(
   preferences: LivePhoneDemoAccountPreferences,
-  // ttsModel is opt-in (unlike translationModel) so LivePhoneDemoLegacy, which
-  // passes no options, never writes a TTS model it cannot show. A null ttsModel
-  // (never picked) is always omitted so the stored value stays NULL.
-  options?: { includeTranslationModel?: boolean, includeTtsModel?: boolean },
+  options?: { includeTranslationModel?: boolean },
 ): AccountPreferencesPatchBody {
   return {
     textSizeLevel: preferences.textSizeLevel,
@@ -417,7 +403,6 @@ export function buildAccountPreferencesPatchBody(
     sonioxEndpointMaxDelayMs: preferences.sonioxEndpointMaxDelayMs,
     sonioxEndpointTuningStep: preferences.sonioxEndpointTuningStep,
     ...(options?.includeTranslationModel === false ? {} : { translationModel: preferences.translationModel }),
-    ...(options?.includeTtsModel === true && preferences.ttsModel ? { ttsModel: preferences.ttsModel } : {}),
     adBannerPosition: preferences.adBannerPosition,
     inputMode: preferences.inputMode,
     speakerEnabled: preferences.speakerEnabled,
@@ -436,7 +421,6 @@ export function serializeAccountPreferencesSyncState(
     preferences.sonioxEndpointMaxDelayMs,
     preferences.sonioxEndpointTuningStep,
     preferences.translationModel,
-    preferences.ttsModel ?? '',
     preferences.adBannerPosition ?? '',
     preferences.inputMode,
     preferences.speakerEnabled ? '1' : '0',
@@ -472,24 +456,6 @@ export function shouldRetryAccountPreferencesSync(args: {
   mounted: boolean
 }): boolean {
   return args.allowSync && args.pendingSync && args.mounted
-}
-
-// The TTS model uses the same send rule as the translation model.
-export function shouldSendTtsModelPreference(
-  args: Parameters<typeof shouldSendTranslationModelPreference>[0],
-): boolean {
-  return shouldSendTranslationModelPreference(args)
-}
-
-// The model to put on a TTS request (/tts/inworld `ttsModel`, finalize
-// `tts.ttsModel`). A never-picked (null) model is omitted so the server default
-// applies; an explicit choice follows shouldSendTtsModelPreference.
-export function resolveRequestTtsModel(
-  ttsModel: UserSelectableTtsModel | null | undefined,
-  args: Parameters<typeof shouldSendTranslationModelPreference>[0],
-): UserSelectableTtsModel | undefined {
-  if (!ttsModel) return undefined
-  return shouldSendTtsModelPreference(args) ? ttsModel : undefined
 }
 
 export function shouldSendTranslationModelPreference(args: {

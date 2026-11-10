@@ -169,7 +169,6 @@ import {
   shouldRetryAccountPreferencesSync,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
-  resolveRequestTtsModel,
   type AccountPreferencesResponse,
   type AccountPreferencesCacheIdentity,
   type LivePhoneDemoAccountPreferences,
@@ -189,11 +188,6 @@ import {
   type TranslationModelBadge,
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
-import {
-  DEFAULT_SELECTABLE_TTS_MODEL,
-  TTS_MODEL_OPTIONS,
-  type UserSelectableTtsModel,
-} from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { requestNativeBannerZone } from '@/lib/native-banner-zone'
 import { reportUiDiagnostic } from '@/lib/ui-diagnostics'
@@ -1461,7 +1455,6 @@ interface LivePhoneDemoProps {
   endpointTuningShortLabel: string
   endpointTuningLongLabel: string
   translationModelLabel: string
-  ttsModelLabel: string
   adBannerPositionLabel: string
   adBannerPositionTopLabel: string
   adBannerPositionBottomLabel: string
@@ -1958,7 +1951,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   endpointTuningShortLabel,
   endpointTuningLongLabel,
   translationModelLabel,
-  ttsModelLabel,
   adBannerPositionLabel,
   adBannerPositionTopLabel,
   adBannerPositionBottomLabel,
@@ -2191,7 +2183,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const menuContentScreen: LivePhoneDemoMenuScreen = menuScreen
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
-  const [ttsModelMenuOpen, setTtsModelMenuOpen] = useState(false)
   const [bubbleDisplayModeMenuOpen, setBubbleDisplayModeMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(
     initialCachedAccountPreferences?.textSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
@@ -2210,10 +2201,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(
     initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
-  )
-  // null = never picked; the settings row shows the effective default instead.
-  const [ttsModel, setTtsModel] = useState<UserSelectableTtsModel | null>(
-    initialCachedAccountPreferences?.ttsModel ?? null,
   )
   const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(
     initialCachedAccountPreferences?.bubbleDisplayMode ?? DEFAULT_BUBBLE_DISPLAY_MODE,
@@ -2480,8 +2467,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizeButtonRef = useRef<HTMLButtonElement | null>(null)
   const translationModelDropdownRef = useRef<HTMLDivElement | null>(null)
   const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
-  const ttsModelDropdownRef = useRef<HTMLDivElement | null>(null)
-  const ttsModelButtonRef = useRef<HTMLButtonElement | null>(null)
   const bubbleDisplayModeDropdownRef = useRef<HTMLDivElement | null>(null)
   const bubbleDisplayModeButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuHistoryDepthRef = useRef(readInitialMenuHistoryDepth().depth)
@@ -2520,11 +2505,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const [accountPreferencesSuccessfulHydrationGeneration, setAccountPreferencesSuccessfulHydrationGeneration] = useState(0)
   const [translationModelUserSelectedSinceHydrationStart, setTranslationModelUserSelectedSinceHydrationStart] = useState(false)
-  const [ttsModelUserSelectedSinceHydrationStart, setTtsModelUserSelectedSinceHydrationStart] = useState(false)
   const initialAccountHydrationWithoutCacheRef = useRef(false)
   const accountPreferencesHydratedFromServerRef = useRef(false)
   const translationModelUserSelectedSinceHydrationStartRef = useRef(false)
-  const ttsModelUserSelectedSinceHydrationStartRef = useRef(false)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const accountPreferencesPendingSyncRef = useRef(
     initialCachedAccountPreferencesSnapshot?.pendingSync === true,
@@ -2532,7 +2515,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const silenceFinalizeLockedDescriptionId = useId()
   const textSizeListboxId = useId()
   const translationModelListboxId = useId()
-  const ttsModelListboxId = useId()
   const bubbleDisplayModeListboxId = useId()
   const legacyNativeBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeBannerPosition')
   const nativeConversationBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeConversationBannerPosition')
@@ -2559,7 +2541,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       initialCachedAccountPreferences?.sonioxEndpointTuningStep ?? DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
     translationModel:
       initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
-    ttsModel: initialCachedAccountPreferences?.ttsModel ?? null,
     adBannerPosition: initialCachedAccountPreferences?.adBannerPosition ?? null,
     inputMode: initialCachedAccountPreferences?.inputMode ?? DEFAULT_INPUT_MODE,
     speakerEnabled: initialCachedAccountPreferences?.speakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
@@ -2575,14 +2556,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sonioxEndpointMaxDelayMs,
     sonioxEndpointTuningStep,
     translationModel,
-    ttsModel,
     adBannerPosition,
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
     bubbleDisplayMode,
     sttSegmentationMode,
-  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel, ttsModel])
+  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -2594,12 +2574,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
-  )
-  // What the server will actually use: the explicit choice, else the default.
-  const effectiveTtsModel: UserSelectableTtsModel = ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL
-  const selectedTtsModelOption = useMemo(
-    () => TTS_MODEL_OPTIONS.find((option) => option.value === effectiveTtsModel) || TTS_MODEL_OPTIONS[0],
-    [effectiveTtsModel],
   )
   const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
     return shouldSendTranslationModelPreference({
@@ -2614,22 +2588,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableAccountPreferencesSync,
     translationModel,
     translationModelUserSelectedSinceHydrationStart,
-  ])
-  // Sent on every TTS request (no DB lookup on the TTS path) once the user picked
-  // a model. Undefined -> server default (gemini-3.8-flash-lite-tts).
-  const requestTtsModel = useMemo<UserSelectableTtsModel | undefined>(() => {
-    return resolveRequestTtsModel(ttsModel, {
-      allowSync: enableAccountPreferencesSync,
-      requestedHydrationGeneration: accountPreferencesRequestedHydrationGeneration,
-      successfulHydrationGeneration: accountPreferencesSuccessfulHydrationGeneration,
-      userSelectedSinceHydrationStart: ttsModelUserSelectedSinceHydrationStart,
-    })
-  }, [
-    accountPreferencesRequestedHydrationGeneration,
-    accountPreferencesSuccessfulHydrationGeneration,
-    enableAccountPreferencesSync,
-    ttsModel,
-    ttsModelUserSelectedSinceHydrationStart,
   ])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root' || isAttachmentMenuOpen
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
@@ -2666,7 +2624,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setSonioxEndpointMaxDelayMs(preferences.sonioxEndpointMaxDelayMs)
     setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
     setTranslationModel(preferences.translationModel)
-    setTtsModel(preferences.ttsModel ?? null)
     setBubbleDisplayMode(preferences.bubbleDisplayMode)
     setAdBannerPosition(preferences.adBannerPosition)
   }, [])
@@ -3173,12 +3130,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       initialAccountHydrationWithoutCacheRef.current = false
       accountPreferencesHydratedFromServerRef.current = false
       translationModelUserSelectedSinceHydrationStartRef.current = false
-      ttsModelUserSelectedSinceHydrationStartRef.current = false
       accountPreferencesLastSyncedStateKeyRef.current = null
       setAccountPreferencesRequestedHydrationGeneration(0)
       setAccountPreferencesSuccessfulHydrationGeneration(0)
       setTranslationModelUserSelectedSinceHydrationStart(false)
-      setTtsModelUserSelectedSinceHydrationStart(false)
       return () => {
         cancelled = true
       }
@@ -3193,10 +3148,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     initialAccountHydrationWithoutCacheRef.current = hydrationStartedSavedAt === null
     accountPreferencesHydratedFromServerRef.current = false
     translationModelUserSelectedSinceHydrationStartRef.current = false
-    ttsModelUserSelectedSinceHydrationStartRef.current = false
     setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
     setTranslationModelUserSelectedSinceHydrationStart(false)
-    setTtsModelUserSelectedSinceHydrationStart(false)
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
@@ -3227,7 +3180,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           startedSavedAt: hydrationStartedSavedAt,
           isLegacyNamespace: isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
           preserveLocalTranslationModel: translationModelUserSelectedSinceHydrationStartRef.current,
-          preserveLocalTtsModel: ttsModelUserSelectedSinceHydrationStartRef.current,
         })
         accountPreferencesPendingSyncRef.current = snapshot.pendingSync
         accountPreferencesLastSyncedStateKeyRef.current = snapshot.pendingSync
@@ -3320,9 +3272,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             includeTranslationModel: !initialAccountHydrationWithoutCacheRef.current
               || accountPreferencesHydratedFromServerRef.current
               || translationModelUserSelectedSinceHydrationStartRef.current,
-            includeTtsModel: !initialAccountHydrationWithoutCacheRef.current
-              || accountPreferencesHydratedFromServerRef.current
-              || ttsModelUserSelectedSinceHydrationStartRef.current,
           })),
         })
         if (!response.ok) throw new Error(`account_preferences_patch_failed:${response.status}`)
@@ -3518,7 +3467,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     menuHistoryDepthRef.current = boundedDepth
     setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
-    setTtsModelMenuOpen(false)
     setBubbleDisplayModeMenuOpen(false)
     setMenuScreenTransitionMode(nextScreenTransitionMode)
     setMenuScreenDirection(nextDirection)
@@ -3680,11 +3628,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return false
     }
 
-    if (ttsModelMenuOpen) {
-      setTtsModelMenuOpen(false)
-      return false
-    }
-
     if (bubbleDisplayModeMenuOpen) {
       setBubbleDisplayModeMenuOpen(false)
       return false
@@ -3705,7 +3648,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
 
     return true
-  }, [bubbleDisplayModeMenuOpen, closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen, ttsModelMenuOpen])
+  }, [bubbleDisplayModeMenuOpen, closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
 
   const requestCloseTopmostOverlay = useCallback(() => (
     !handleMenuSurfaceRequestClose()
@@ -3861,26 +3804,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     syncAccountPreferencesOverride(nextPreferences)
   }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
-  // Mirrors handleTranslationModelSelect. Called by the TTS model row in the settings menu.
-  // Any tap is an explicit choice, including the option shown as the default:
-  // null -> value counts as a change, so it is cached with pendingSync and PATCHed.
-  const handleTtsModelSelect = useCallback((nextTtsModel: UserSelectableTtsModel) => {
-    setTtsModelMenuOpen(false)
-    setTtsModelUserSelectedSinceHydrationStart(true)
-    ttsModelUserSelectedSinceHydrationStartRef.current = true
-    const wasAlreadySelected = latestAccountPreferencesRef.current.ttsModel === nextTtsModel
-    const nextPreferences = commitLocalAccountPreferences({
-      ...latestAccountPreferencesRef.current,
-      ttsModel: nextTtsModel,
-    })
-    if (wasAlreadySelected && initialAccountHydrationWithoutCacheRef.current && !accountPreferencesHydratedFromServerRef.current) {
-      writeCachedAccountPreferences(accountPreferencesCacheIdentity, nextPreferences, { pendingSync: true })
-      accountPreferencesPendingSyncRef.current = true
-    }
-    setTtsModel(nextTtsModel)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride(nextPreferences)
-  }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
   const handleBubbleDisplayModeSelect = useCallback((nextBubbleDisplayMode: LivePhoneDemoBubbleDisplayMode) => {
     setBubbleDisplayModeMenuOpen(false)
@@ -4178,15 +4101,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
         return
       }
-      if (ttsModelMenuOpen) {
-        setTtsModelMenuOpen(false)
-        try {
-          ttsModelButtonRef.current?.focus({ preventScroll: true })
-        } catch {
-          ttsModelButtonRef.current?.focus()
-        }
-        return
-      }
       if (bubbleDisplayModeMenuOpen) {
         setBubbleDisplayModeMenuOpen(false)
         try {
@@ -4203,7 +4117,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [bubbleDisplayModeButtonRef, bubbleDisplayModeMenuOpen, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen, ttsModelMenuOpen])
+  }, [bubbleDisplayModeButtonRef, bubbleDisplayModeMenuOpen, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
 
   useEffect(() => {
     if (!textSizeMenuOpen) return
@@ -4243,21 +4157,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('pointerdown', handlePointerDown)
     }
   }, [translationModelMenuOpen])
-
-  useEffect(() => {
-    if (!ttsModelMenuOpen) return
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Node)) return
-      if (ttsModelDropdownRef.current?.contains(event.target)) return
-      setTtsModelMenuOpen(false)
-    }
-
-    window.addEventListener('pointerdown', handlePointerDown)
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown)
-    }
-  }, [ttsModelMenuOpen])
 
   useEffect(() => {
     if (!bubbleDisplayModeMenuOpen) return
@@ -4345,11 +4244,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return true
     }
 
-    if (ttsModelMenuOpen) {
-      setTtsModelMenuOpen(false)
-      return true
-    }
-
     if (bubbleDisplayModeMenuOpen) {
       setBubbleDisplayModeMenuOpen(false)
       return true
@@ -4389,7 +4283,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     requestMenuBackStep,
     textSizeMenuOpen,
     translationModelMenuOpen,
-    ttsModelMenuOpen,
     bubbleDisplayModeMenuOpen,
   ])
 
@@ -4909,8 +4802,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           language,
           sessionKey,
           clientMessageId: input.playbackKey,
-          // Same model as auto TTS; omitted while the user has not picked one (server default).
-          ...(requestTtsModel ? { ttsModel: requestTtsModel } : {}),
         }),
       })
       if (response.status === 402) notifyCoinsExhausted({ userInitiated: true })
@@ -4924,7 +4815,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       return null
     }
-  }, [nativeAppUpdate, requestTtsModel, resolveConversationSessionKey])
+  }, [nativeAppUpdate, resolveConversationSessionKey])
 
   const {
     utterances,
@@ -4978,7 +4869,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sessionKeyOverride,
     storageNamespace,
     translationModel: requestTranslationModel,
-    ttsModel: requestTtsModel,
     viewerUserId,
     viewerImage,
   })
@@ -8275,7 +8165,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     type="button"
                                     onClick={() => {
                                       setTranslationModelMenuOpen(false)
-                                      setTtsModelMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen(false)
                                       setTextSizeMenuOpen((open) => !open)
                                     }}
@@ -8580,7 +8469,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     onClick={() => {
                                       setTextSizeMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen(false)
-                                      setTtsModelMenuOpen(false)
                                       setTranslationModelMenuOpen((open) => !open)
                                     }}
                                     aria-label={translationModelLabel}
@@ -8679,110 +8567,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{ttsModelLabel}</span>
-                                <div ref={ttsModelDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
-                                  <button
-                                    ref={ttsModelButtonRef}
-                                    type="button"
-                                    onClick={() => {
-                                      setTextSizeMenuOpen(false)
-                                      setTranslationModelMenuOpen(false)
-                                      setBubbleDisplayModeMenuOpen(false)
-                                      setTtsModelMenuOpen((open) => !open)
-                                    }}
-                                    aria-label={ttsModelLabel}
-                                    aria-haspopup="listbox"
-                                    aria-expanded={ttsModelMenuOpen}
-                                    aria-controls={ttsModelListboxId}
-                                    className="group relative flex h-full w-full items-center overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                                  >
-                                    <div className="min-w-0 flex-1 text-center">
-                                      <div className="truncate text-[0.95rem] font-semibold text-gray-900">
-                                        {selectedTtsModelOption.label}
-                                      </div>
-                                    </div>
-                                    <span
-                                      className={`ml-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
-                                        ttsModelMenuOpen
-                                          ? 'bg-transparent text-amber-700'
-                                          : 'bg-transparent text-gray-500 group-hover:text-amber-600'
-                                      }`}
-                                    >
-                                      <ChevronDown
-                                        size={16}
-                                        strokeWidth={2.3}
-                                        className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                                          ttsModelMenuOpen ? 'rotate-180' : 'rotate-0'
-                                        }`}
-                                      />
-                                    </span>
-                                  </button>
-                                  <AnimatePresence initial={false}>
-                                    {ttsModelMenuOpen && (
-                                      <motion.div
-                                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, y: -6, scale: 0.985 }}
-                                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                                        className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[272px] max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
-                                      >
-                                        <motion.div
-                                          initial={{ opacity: 0, height: 0 }}
-                                          animate={{ opacity: 1, height: 'auto' }}
-                                          exit={{ opacity: 0, height: 0 }}
-                                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                                          className="overflow-hidden"
-                                        >
-                                          <div
-                                            id={ttsModelListboxId}
-                                            role="listbox"
-                                            aria-label={ttsModelLabel}
-                                            className="space-y-1.5 p-2.5"
-                                          >
-                                            {TTS_MODEL_OPTIONS.map((option) => {
-                                              const isSelected = option.value === effectiveTtsModel
-
-                                              return (
-                                                <button
-                                                  key={option.value}
-                                                  type="button"
-                                                  role="option"
-                                                  aria-selected={isSelected}
-                                                  onClick={() => handleTtsModelSelect(option.value)}
-                                                  className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
-                                                    isSelected
-                                                      ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
-                                                      : 'bg-white text-gray-800 hover:bg-gray-50'
-                                                  }`}
-                                                >
-                                                  <div className="min-w-0 flex flex-1 items-center justify-center gap-2.5 text-center">
-                                                    <span className="truncate text-[0.94rem] font-semibold">
-                                                      {option.label}
-                                                    </span>
-                                                  </div>
-                                                  <span
-                                                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
-                                                      isSelected
-                                                        ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
-                                                        : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
-                                                    }`}
-                                                  >
-                                                    <Check size={14} strokeWidth={2.6} />
-                                                  </span>
-                                                </button>
-                                              )
-                                            })}
-                                          </div>
-                                        </motion.div>
-                                      </motion.div>
-                                    )}
-                                  </AnimatePresence>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="block">
-                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
                                 <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{bubbleDisplayCopy.displayModeLabel}</span>
                                 <div ref={bubbleDisplayModeDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
                                   <button
@@ -8792,7 +8576,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     onClick={() => {
                                       setTextSizeMenuOpen(false)
                                       setTranslationModelMenuOpen(false)
-                                      setTtsModelMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen((open) => !open)
                                     }}
                                     aria-label={bubbleDisplayCopy.displayModeLabel}
