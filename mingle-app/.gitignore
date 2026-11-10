@@ -56,3 +56,7 @@ next-env.d.ts
 
 # Appium runtime cache (local only)
 /.appium/
+
+# Agent QA runs and local QA account (local only)
+/qa/agent/local/
+/qa/agent/runs/

@@ -404,6 +404,17 @@ android {
     }
 }
 
+// The React Native gradle plugin pins usesCleartextTraffic=false on release in finalizeDsl, which
+// overrides defaultConfig above, so a release build pointed at an http devbox could not load its
+// page (net::ERR_CLEARTEXT_NOT_PERMITTED). onVariants runs after finalizeDsl. Only QA-bridge builds
+// get cleartext, so a store build pointed at an http URL by mistake still blocks it.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        def releaseCleartext = allowCleartextTraffic && runtimeQaBridgeEnabled == "1"
+        variant.manifestPlaceholders.put("usesCleartextTraffic", releaseCleartext.toString())
+    }
+}
+
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")

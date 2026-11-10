@@ -152,6 +152,12 @@ jobs:
         working-directory: .
         run: node --test scripts/devbox-ngrok-parse.test.mjs scripts/devbox-runtime-config.test.mjs
 
+      - name: Run QA script tests and validate the agent QA scenarios
+        if: matrix.shard == 1
+        run: |
+          pnpm test:scripts
+          node scripts/qa-agent-scenarios.mjs check
+
       - name: Run TDD suite (unit)
         run: pnpm test:unit --shard=${{ matrix.shard }}/4
 
