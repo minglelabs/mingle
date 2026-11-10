@@ -8,7 +8,19 @@ import {
   parseClientContext,
 } from '@/lib/app-analytics'
 import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
-import { synthesizeSpeech } from '@/server/api/shared/tts-provider'
+import {
+  openSpeechPcmStream,
+  synthesizeSpeech,
+  type TtsPcmStream,
+  type TtsSynthesisResult,
+} from '@/server/api/shared/tts-provider'
+import {
+  TTS_STREAM_CONTENT_TYPE,
+  TTS_STREAM_FRAME_AUDIO,
+  TTS_STREAM_SAMPLE_RATE_HEADER,
+  encodeTtsStreamEnd,
+  encodeTtsStreamFrame,
+} from '@/lib/tts-stream-format'
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
 import { randomUUID } from 'node:crypto'
 import { estimateTtsAudioSeconds, resolveCoinBillingUserId } from '@/server/coins/request-billing'
@@ -30,6 +42,9 @@ export async function handleTtsInworldV1(request: NextRequest) {
   const sessionKeyHint = typeof body?.sessionKey === 'string' ? body.sessionKey.trim() : null
   const clientMessageId = typeof body?.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : null
   const clientContext = parseClientContext(body?.clientContext)
+  // A client that can play audio as it arrives asks for a stream; anything
+  // else gets the whole clip.
+  const wantsStream = body?.stream === true
   // `ttsModel` and `voiceId` from older clients are ignored: there is one model.
 
   const buildMissingCredentialsResponse = () => {
@@ -57,8 +72,107 @@ export async function handleTtsInworldV1(request: NextRequest) {
   // optional current-client analytics write.
   const sessionPromise = getServerSession(getAuthOptions()).catch(() => null)
 
+  // Frames of `@/lib/tts-stream-format`: audio as it is generated, then one
+  // end frame with the coin balance. Charged when the stream ends, for the
+  // audio that was sent (also when the client stopped listening halfway).
+  const respondWithPcmStream = (stream: TtsPcmStream) => {
+    let sentBytes = 0
+    let settled = false
+    const settle = async (): Promise<{ coinBalance?: number, coinExhausted?: boolean }> => {
+      if (settled) return {}
+      settled = true
+      const audioSeconds = Math.ceil(sentBytes / 2 / stream.sampleRate)
+      let end: { coinBalance?: number, coinExhausted?: boolean } = {}
+      if (coinBillingUserId && sentBytes > 0) {
+        const charge = await chargeCoinUsageSafely({
+          userId: coinBillingUserId,
+          kind: 'tts',
+          units: { char: text.length, second: audioSeconds },
+          model: stream.modelId,
+          provider: stream.provider,
+          sessionKey: sessionKeyHint,
+          idempotencyKey: `tts:${coinBillingUserId}:${randomUUID()}`,
+        })
+        end = {
+          ...(charge?.wallet ? { coinBalance: charge.wallet.balance } : {}),
+          ...(charge?.balanceExhausted ? { coinExhausted: true } : {}),
+        }
+      }
+      fireAndForgetDbWrite('tts.inworld.success', async () => {
+        const userId = await resolveUserIdForTrackedWrite({
+          request,
+          session: await sessionPromise,
+          tracking: streamTracking,
+          clientContext,
+        })
+        if (!userId) return
+        await createTrackedEventLog({
+          userId,
+          tracking: streamTracking,
+          clientContext,
+          sessionKey: streamTracking.sessionKey,
+          eventType: 'tts_generated',
+          metadata: {
+            language,
+            voiceId: stream.voiceId,
+            modelId: stream.modelId,
+            textLength: text.length,
+            audioBytes: sentBytes,
+            clientMessageId,
+            provider: stream.provider,
+            streamed: true,
+          },
+        })
+      })
+      return end
+    }
+    const bodyStream = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        try {
+          const next = await stream.pcm.next()
+          if (next.done) {
+            controller.enqueue(encodeTtsStreamEnd(await settle()))
+            controller.close()
+            return
+          }
+          sentBytes += next.value.length
+          controller.enqueue(encodeTtsStreamFrame(TTS_STREAM_FRAME_AUDIO, next.value))
+        } catch (error) {
+          // Cut off upstream: close without an end frame. What was sent plays.
+          console.warn('[tts] stream cut off', { sentBytes, error: error instanceof Error ? error.message : String(error) })
+          await settle()
+          controller.close()
+        }
+      },
+      async cancel() {
+        stream.cancel()
+        await stream.pcm.return(undefined).catch(() => undefined)
+        await settle()
+      },
+    })
+    const streamResponse = new NextResponse(bodyStream, {
+      headers: {
+        'Content-Type': TTS_STREAM_CONTENT_TYPE,
+        'Cache-Control': 'no-store',
+        // Tell proxies not to hold the audio back.
+        'X-Accel-Buffering': 'no',
+        [TTS_STREAM_SAMPLE_RATE_HEADER]: String(stream.sampleRate),
+        'X-TTS-Provider': stream.provider,
+        'X-TTS-Voice-Id': stream.voiceId,
+      },
+    })
+    const streamTracking = ensureTrackingContext(request, streamResponse, { sessionKeyHint })
+    return streamResponse
+  }
+
   try {
-    const result = await synthesizeSpeech({ text, language })
+    const streamed = wantsStream ? await openSpeechPcmStream({ text, language }) : null
+    if (streamed?.ok) {
+      return respondWithPcmStream(streamed)
+    }
+    // A stream that failed is reported like a failed whole answer; a stream
+    // that is not available (null) is answered whole.
+    const result: TtsSynthesisResult = streamed ?? await synthesizeSpeech({ text, language })
 
     if (!result.ok) {
       if (result.reason === 'missing_credentials') {

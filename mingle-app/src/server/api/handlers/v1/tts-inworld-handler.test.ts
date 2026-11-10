@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TtsStreamFrameParser } from '@/lib/tts-stream-format'
 
 const { createTrackedEventLogMock, resolveUserIdMock } = vi.hoisted(() => ({
   createTrackedEventLogMock: vi.fn(),
@@ -28,6 +29,7 @@ const ENV_KEYS = [
   'GEMINI_API_KEY',
   'GEMINI_TTS_VOICE',
   'GEMINI_TTS_TIMEOUT_MS',
+  'GEMINI_TTS_SPEED',
 ] as const
 const savedEnv: Record<string, string | undefined> = {}
 
@@ -41,6 +43,23 @@ function geminiWavResponse(): Response {
   wav.write('WAVE', 8, 'ascii')
   return jsonResponse({
     steps: [{ type: 'model_output', content: [{ type: 'audio', data: wav.toString('base64'), mime_type: 'audio/wav' }] }],
+  })
+}
+
+function loudPcm(samples: number, level = 12000): Buffer {
+  const pcm = Buffer.alloc(samples * 2)
+  for (let i = 0; i < samples; i++) pcm.writeInt16LE(i % 2 === 0 ? level : -level, i * 2)
+  return pcm
+}
+
+function geminiStreamResponse(pieces: Buffer[]): Response {
+  const events = pieces.map((piece) => ({
+    event_type: 'step.delta',
+    delta: { type: 'audio', mime_type: 'audio/l16', sample_rate: 24000, data: piece.toString('base64') },
+  }))
+  return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
+    status: 200,
+    headers: { 'Content-Type': 'text/event-stream' },
   })
 }
 
@@ -176,5 +195,55 @@ describe('handleTtsInworldV1', () => {
 
     expect(res.status).toBe(400)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('streams PCM frames and an end frame when the client asks for a stream', async () => {
+    // 100 ms of silence, 200 ms of speech, 300 ms of silence at 24 kHz.
+    const pieces = [Buffer.alloc(2400 * 2), loudPcm(4800), Buffer.alloc(7200 * 2)]
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiStreamResponse(pieces))
+    vi.stubGlobal('fetch', fetchMock)
+    const handler = await loadHandler()
+
+    const res = await handler(makeRequest({ text: 'hello', language: 'en', stream: true, clientMessageId: 'm1' }) as never)
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toBe('application/x-mingle-tts-stream')
+    expect(res.headers.get('X-TTS-Sample-Rate')).toBe('24000')
+    expect(bodyOfCall(fetchMock.mock.calls[0]).stream).toBe(true)
+    const frames = new TtsStreamFrameParser().push(new Uint8Array(await res.arrayBuffer()))
+    await flushAsync()
+
+    expect(frames.at(-1)).toEqual({ type: 'end', end: {} })
+    const audio = Buffer.concat(frames.flatMap((frame) => (frame.type === 'audio' ? [Buffer.from(frame.pcm)] : [])))
+    // 80 ms of padding is kept on each side of the 200 ms of speech.
+    expect(audio.length).toBe((1920 + 4800 + 1920) * 2)
+    expect(audio.subarray(1920 * 2, (1920 + 4800) * 2).equals(loudPcm(4800))).toBe(true)
+    expect(createTrackedEventLogMock.mock.calls[0][0]).toMatchObject({
+      eventType: 'tts_generated',
+      metadata: { streamed: true, audioBytes: audio.length, modelId: 'gemini-3.8-flash-lite-tts', clientMessageId: 'm1' },
+    })
+  })
+
+  it('reports a failed stream like a failed whole answer', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('quota', { status: 429 })))
+    const handler = await loadHandler()
+
+    const res = await handler(makeRequest({ text: 'hello', stream: true }) as never)
+
+    expect(res.status).toBe(429)
+    expect(await res.json()).toEqual({ error: 'tts_failed', status: 429, detail: 'quota' })
+  })
+
+  it('answers whole when a tempo change rules streaming out', async () => {
+    process.env.GEMINI_TTS_SPEED = '1.2'
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiWavResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    const handler = await loadHandler()
+
+    const res = await handler(makeRequest({ text: 'hello', language: 'en', stream: true }) as never)
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toBe('audio/wav')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

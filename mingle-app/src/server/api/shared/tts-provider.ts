@@ -12,6 +12,7 @@
 
 import { decodeAudioContent, detectAudioMime, wrapPcm16AsWav } from '@/server/api/shared/audio-utils'
 import {
+  StreamingSilenceTrimmer,
   floatToPcm16Buffer,
   parsePcm16Wav,
   pcm16ToMonoFloat,
@@ -439,6 +440,68 @@ export async function synthesizeWithGemini(input: TtsSynthesisInput): Promise<Tt
     ? postProcessGeminiAudio(normalized.audio, getGeminiTtsSpeed(input.language))
     : normalized.audio
   return { ok: true, provider: 'gemini', audio, mime: normalized.mime, voiceId, modelId }
+}
+
+export type TtsPcmStream = {
+  ok: true
+  provider: TtsProviderId
+  voiceId: string
+  modelId: string
+  sampleRate: number
+  /**
+   * 16-bit little-endian mono PCM in playing order, silence trimmed at both
+   * ends like the whole answer. Throws when the upstream stream breaks.
+   */
+  pcm: AsyncGenerator<Buffer>
+  /** Stops the upstream request; call when the audio is no longer wanted. */
+  cancel: () => void
+}
+
+/**
+ * Synthesize and hand the audio over as it is generated. Returns null when
+ * this answer cannot be streamed and must be asked for whole instead
+ * (`synthesizeSpeech`): a tempo change (`GEMINI_TTS_SPEED`) needs the whole
+ * clip, and so does an upstream answer that is not raw PCM.
+ * Resolves once the first audio has arrived, or with the failure.
+ */
+export async function openSpeechPcmStream(input: TtsSynthesisInput): Promise<TtsPcmStream | TtsSynthesisFailure | null> {
+  if (getGeminiTtsSpeed(input.language) !== 1) return null
+  const opened = await openGeminiTts(input)
+  if (!opened.ok) return opened
+  const { voiceId, modelId, pieces, cancel } = opened
+
+  let first: IteratorResult<GeminiAudioPiece>
+  try {
+    first = await pieces.next()
+  } catch (error) {
+    console.warn('[tts] gemini stream failed before any audio', { modelId })
+    return { ok: false, provider: 'gemini', reason: 'exception', error, voiceId, modelId }
+  }
+  if (first.done) {
+    return { ok: false, provider: 'gemini', reason: 'invalid_audio', voiceId, modelId }
+  }
+  if (!isRawPcmMime(first.value.mime)) {
+    cancel()
+    return null
+  }
+
+  const sampleRate = parseSampleRate(first.value.mime, first.value.sampleRate)
+  const trimmer = new StreamingSilenceTrimmer(sampleRate)
+  async function* pcm(): AsyncGenerator<Buffer> {
+    try {
+      const head = trimmer.push(first.value!.audio)
+      if (head.length > 0) yield head
+      for await (const piece of pieces) {
+        const out = trimmer.push(piece.audio)
+        if (out.length > 0) yield out
+      }
+      const tail = trimmer.end()
+      if (tail.length > 0) yield tail
+    } finally {
+      cancel()
+    }
+  }
+  return { ok: true, provider: 'gemini', voiceId, modelId, sampleRate, pcm: pcm(), cancel }
 }
 
 /** Synthesize with the one TTS model. A failure is returned as is: there is no fallback. */
