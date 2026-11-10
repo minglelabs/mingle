@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { TtsStreamClip } from '@/lib/tts-stream-clip'
 import type { Utterance } from './ChatBubble'
 import {
   EarphoneAutoReadController,
@@ -47,10 +48,10 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
   let now = 10_000_000
   let nextTimerId = 1
   const timers = new Map<number, { at: number, callback: () => void }>()
-  const requests = new Map<string, { resolve: (blob: Blob | null) => void, signal: AbortSignal }>()
+  const requests = new Map<string, { resolve: (blob: Blob | TtsStreamClip | null) => void, signal: AbortSignal }>()
   const audioRequests: Array<{
     playbackKey: string
-    resolve: (blob: Blob | null) => void
+    resolve: (blob: Blob | TtsStreamClip | null) => void
     signal: AbortSignal
   }> = []
   const requestOrder: string[] = []
@@ -117,13 +118,13 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
       }
       await flushAsync()
     },
-    async resolveAudio(playbackKey: string, blob: Blob | null = new Blob(['audio'])) {
+    async resolveAudio(playbackKey: string, blob: Blob | TtsStreamClip | null = new Blob(['audio'])) {
       const request = requests.get(playbackKey)
       if (!request) throw new Error(`no request for ${playbackKey}`)
       request.resolve(blob)
       await flushAsync()
     },
-    async resolveAudioRequest(index: number, blob: Blob | null = new Blob(['audio'])) {
+    async resolveAudioRequest(index: number, blob: Blob | TtsStreamClip | null = new Blob(['audio'])) {
       const request = audioRequests[index]
       if (!request) throw new Error(`no audio request at index ${index}`)
       request.resolve(blob)
@@ -531,7 +532,7 @@ describe('EarphoneAutoReadController read language', () => {
 
     await h.resolveAudioRequest(1, new Blob(['current audio']))
     expect(h.dispatched[0]).toMatchObject({ text: '수정된 번역' })
-    expect(await h.dispatched[0]!.audioBlob.text()).toBe('current audio')
+    expect(await (h.dispatched[0]!.audioBlob as Blob).text()).toBe('current audio')
   })
 
   it('re-synthesizes a revised ready prefetch while it waits behind an earlier message', async () => {
@@ -555,7 +556,7 @@ describe('EarphoneAutoReadController read language', () => {
     await h.resolveAudioRequest(1, new Blob(['current audio']))
     await h.finishPlayback()
     expect(h.dispatched[1]).toMatchObject({ utteranceId: 'prefetched', text: '최신 번역' })
-    expect(await h.dispatched[1]!.audioBlob.text()).toBe('current audio')
+    expect(await (h.dispatched[1]!.audioBlob as Blob).text()).toBe('current audio')
   })
 
   it('discards a pending translation when a same-ID message is reclassified as spoken in the read language', async () => {
@@ -608,7 +609,7 @@ describe('EarphoneAutoReadController read language', () => {
     expect(h.dispatchedIds()).toEqual([])
     await h.resolveAudioRequest(1, new Blob(['final audio']))
     expect(h.dispatched[0]).toMatchObject({ text: '확장된 최종 번역' })
-    expect(await h.dispatched[0]!.audioBlob.text()).toBe('final audio')
+    expect(await (h.dispatched[0]!.audioBlob as Blob).text()).toBe('final audio')
   })
 
   it('keeps pending audio when a row changes but resolves to the same immutable read target', async () => {
@@ -861,5 +862,60 @@ describe('EarphoneAutoReadController sentences', () => {
     await h.finishPlayback()
     await h.finishPlayback()
     expect(h.dispatched.map((item) => item.text)).toEqual(['앞 메시지 첫 문장.', '앞 메시지 끝 문장.', '번역 later'])
+  })
+})
+
+describe('EarphoneAutoReadController clips still arriving', () => {
+  function arrivingClip(): TtsStreamClip {
+    const clip = new TtsStreamClip(24000)
+    clip.push(new Uint8Array([1, 2]))
+    return clip
+  }
+
+  it('hands a clip over while it is still arriving and leaves it loading', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    h.controller.update(h.snapshot([message('a', h.now() + 100)]))
+    const clip = arrivingClip()
+    await h.resolveAudio(key('a'), clip)
+
+    expect(h.dispatched[0]!.audioBlob).toBe(clip)
+    expect(clip.isEnded).toBe(false)
+  })
+
+  it('stops loading a queued clip that is dropped before it plays', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    h.state.engineIdle = false
+    h.controller.update(h.snapshot([message('a', h.now() + 100)]))
+    const clip = arrivingClip()
+    await h.resolveAudio(key('a'), clip)
+    expect(h.dispatched).toHaveLength(0)
+
+    h.controller.disarm()
+    expect(clip.isEnded).toBe(true)
+  })
+
+  it('stops loading a clip that arrives for a request nobody waits for any more', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const row = message('a', h.now() + 100)
+    h.controller.update(h.snapshot([row]))
+    h.controller.update(h.snapshot([]))
+    const clip = arrivingClip()
+    await h.resolveAudio(key('a'), clip)
+
+    expect(h.dispatched).toHaveLength(0)
+    expect(clip.isEnded).toBe(true)
+  })
+
+  it('skips a clip that holds no audio', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    h.controller.update(h.snapshot([message('a', h.now() + 100)]))
+    await h.resolveAudio(key('a'), new TtsStreamClip(24000))
+
+    expect(h.dispatched).toHaveLength(0)
+    expect(h.controller.getCandidateStatus('a')).toBe('skipped')
   })
 })

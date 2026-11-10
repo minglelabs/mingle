@@ -11,6 +11,7 @@ import {
   resolveNativeDeviceAudioSupported,
   setSttCaptureSourcePick,
   shouldPlayTtsViaNativeShell,
+  shouldStreamTtsToNativeShell,
   subscribeNativeDeviceAudioCapability,
   subscribeSttCaptureSourcePick,
 } from './native-device-audio'
@@ -158,5 +159,28 @@ describe('page-wide stores', () => {
     setSttCaptureSourcePick('device_audio')
     expect(first).toHaveBeenCalledTimes(1)
     expect(second).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('shouldStreamTtsToNativeShell', () => {
+  const streaming = { type: 'capabilities', nativeTts: true, nativeTtsStream: true }
+  const wholeOnly = { type: 'capabilities', nativeTts: true }
+
+  it('streams only to a shell that reports it can play a stream', () => {
+    expect(shouldStreamTtsToNativeShell({ isNativeApp: true, isIOS: true, capabilities: streaming })).toBe(true)
+    expect(shouldStreamTtsToNativeShell({ isNativeApp: true, isIOS: false, capabilities: streaming })).toBe(true)
+    // Shells built before streaming, on either platform.
+    expect(shouldStreamTtsToNativeShell({ isNativeApp: true, isIOS: true, capabilities: wholeOnly })).toBe(false)
+    expect(shouldStreamTtsToNativeShell({ isNativeApp: true, isIOS: true, capabilities: null })).toBe(false)
+    expect(shouldStreamTtsToNativeShell({ isNativeApp: true, isIOS: false, capabilities: wholeOnly })).toBe(false)
+  })
+
+  it('never streams to a plain browser or to a shell that does not play clips itself', () => {
+    expect(shouldStreamTtsToNativeShell({ isNativeApp: false, isIOS: false, capabilities: streaming })).toBe(false)
+    expect(shouldStreamTtsToNativeShell({
+      isNativeApp: true,
+      isIOS: false,
+      capabilities: { type: 'capabilities', nativeTtsStream: true },
+    })).toBe(false)
   })
 })

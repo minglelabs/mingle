@@ -1,4 +1,5 @@
 import type { Utterance } from './ChatBubble'
+import { isPlayableTtsClipAudio, isTtsStreamClip, type TtsClipAudio } from '@/lib/tts-stream-clip'
 import { compareUtteranceOrder } from './utterance-order'
 import {
   EARPHONE_MODE_AUDIO_TIMEOUT_MS,
@@ -30,13 +31,14 @@ export type EarphoneAutoReadSnapshot = {
   viewerUserId: string | null
 }
 
-export type EarphoneAutoReadDispatchItem = EarphoneModeReadTarget & { audioBlob: Blob }
+// `audioBlob` is a complete clip or one still arriving (it plays as it arrives).
+export type EarphoneAutoReadDispatchItem = EarphoneModeReadTarget & { audioBlob: TtsClipAudio }
 
 export type EarphoneAutoReadControllerOptions = {
   now: () => number
   setTimer: (callback: () => void, delayMs: number) => unknown
   clearTimer: (handle: unknown) => void
-  synthesize: (target: EarphoneModeReadTarget, signal: AbortSignal) => Promise<Blob | null>
+  synthesize: (target: EarphoneModeReadTarget, signal: AbortSignal) => Promise<TtsClipAudio | null>
   // The room's player has nothing to play and no manual request in flight.
   isEngineIdle: () => boolean
   // Checked synchronously right before a clip is handed over, so a gate that
@@ -67,7 +69,7 @@ type Candidate = {
   targetFullText: string
   targetIsPiece: boolean
   audio: 'idle' | 'loading' | 'ready' | 'failed'
-  audioBlob: Blob | null
+  audioBlob: TtsClipAudio | null
   audioRequestedAtMs: number
   abort: AbortController | null
 }
@@ -234,6 +236,8 @@ export class EarphoneAutoReadController {
       if (candidate.audio === 'ready' && candidate.audioBlob && candidate.target) {
         if (this.options.isEngineIdle() && this.options.canDispatch()) {
           const item: EarphoneAutoReadDispatchItem = { ...candidate.target, audioBlob: candidate.audioBlob }
+          // The clip now belongs to the player: releasing the candidate must not cancel it.
+          candidate.audioBlob = null
           if (candidate.targetIsPiece) {
             // A fixed piece of a row still open: read it now, then wait for the rest.
             candidate.readText = candidate.targetFullText
@@ -400,6 +404,7 @@ export class EarphoneAutoReadController {
       // Pieces read in the old language say nothing about the new one.
       candidate.readText = ''
       candidate.audio = 'idle'
+      if (isTtsStreamClip(candidate.audioBlob)) candidate.audioBlob.cancel()
       candidate.audioBlob = null
       // Waiting for the new language's translation starts now.
       candidate.lastProgressAtMs = now
@@ -437,7 +442,7 @@ export class EarphoneAutoReadController {
     candidate.audio = 'loading'
     candidate.audioRequestedAtMs = now
 
-    let request: Promise<Blob | null>
+    let request: Promise<TtsClipAudio | null>
     try {
       request = this.options.synthesize(target, abort.signal)
     } catch {
@@ -446,10 +451,14 @@ export class EarphoneAutoReadController {
     void request
       .catch(() => null)
       .then((blob) => {
-        if (candidate.abort !== abort || abort.signal.aborted) return
+        if (candidate.abort !== abort || abort.signal.aborted || candidate.status !== 'ready') {
+          // Nobody will play it: a clip still arriving stops loading.
+          if (isTtsStreamClip(blob)) blob.cancel()
+          if (candidate.abort === abort) candidate.abort = null
+          return
+        }
         candidate.abort = null
-        if (candidate.status !== 'ready') return
-        if (blob && blob.size > 0) {
+        if (isPlayableTtsClipAudio(blob)) {
           candidate.audio = 'ready'
           candidate.audioBlob = blob
         } else {
@@ -463,16 +472,20 @@ export class EarphoneAutoReadController {
     candidate.status = status
     // Abort a prefetch still in flight and release its slot: a finished
     // candidate holds neither audio nor a request.
-    candidate.abort?.abort()
-    candidate.abort = null
-    candidate.audio = 'idle'
-    candidate.audioBlob = null
+    this.releaseAudio(candidate)
   }
 
   private discardPrefetch(candidate: Candidate): void {
+    this.releaseAudio(candidate)
+  }
+
+  // Drops the candidate's request and clip. A clip still arriving that was
+  // not handed to the player stops loading.
+  private releaseAudio(candidate: Candidate): void {
     candidate.abort?.abort()
     candidate.abort = null
     candidate.audio = 'idle'
+    if (isTtsStreamClip(candidate.audioBlob)) candidate.audioBlob.cancel()
     candidate.audioBlob = null
   }
 
@@ -486,9 +499,7 @@ export class EarphoneAutoReadController {
     this.clearTimer()
     this.lastSnapshot = null
     for (const candidate of this.candidates.values()) {
-      candidate.abort?.abort()
-      candidate.abort = null
-      candidate.audioBlob = null
+      this.releaseAudio(candidate)
     }
     this.candidates = new Map()
   }

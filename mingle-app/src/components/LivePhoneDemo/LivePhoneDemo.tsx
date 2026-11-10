@@ -56,12 +56,21 @@ import {
   resolveNativeDeviceAudioSupported,
   setSttCaptureSourcePick,
   shouldPlayTtsViaNativeShell,
+  shouldStreamTtsToNativeShell,
   subscribeNativeDeviceAudioCapability,
   subscribeSttCaptureSourcePick,
 } from '@/lib/native-device-audio'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
+import {
+  isTtsStreamClip,
+  isTtsStreamResponse,
+  readTtsStreamResponse,
+  type TtsClipAudio,
+  type TtsStreamClip,
+} from '@/lib/tts-stream-clip'
+import type { TtsStreamEnd } from '@/lib/tts-stream-format'
 import { TtsAgentTextScheduler } from './tts-agent-text'
-import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
+import { applyCoinBalance, applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
 import CoinBalanceChip, { formatCoinCount } from '@/components/coins/coin-balance-chip'
 import HashSeedIcon from '@/components/coins/hash-seed-icon'
@@ -1532,6 +1541,24 @@ interface LivePhoneDemoProps {
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
+// Streamed clips: pieces smaller than this are joined before they cross the
+// bridge to the shell, and a clip whose length is not known yet is given this
+// long before the watchdog gives up on it.
+const NATIVE_TTS_STREAM_MIN_PIECE_SECONDS = 0.1
+const NATIVE_TTS_STREAM_OPEN_WATCHDOG_MS = 30_000
+
+function shouldRequestTtsStream(): boolean {
+  return shouldStreamTtsToNativeShell({
+    isNativeApp: isNativeApp(),
+    isIOS: isLikelyIOSPlatform(),
+    capabilities: readCachedNativeShellCapabilities(),
+  })
+}
+
+function applyCoinBalanceFromTtsStreamEnd(end: TtsStreamEnd) {
+  if (typeof end.coinBalance === 'number') applyCoinBalance(end.coinBalance)
+  if (end.coinExhausted) notifyCoinsExhausted()
+}
 const LIVE_UTTERANCE_PREVIEW_DEBOUNCE_MS = 250
 
 // Mirrors ChatBubble's own display-language resolution (same helpers, same
@@ -1586,7 +1613,8 @@ export function buildLatestUtterancePayload(
 type TtsQueueItem = {
   playbackKey: string
   utteranceId: string
-  audioBlob: Blob | null
+  // A complete clip, or one still arriving that plays as it arrives.
+  audioBlob: TtsClipAudio | null
   language: string
   kind: 'original' | 'translation'
   // 'auto' items come from earphone mode (the legacy slot handlers below are
@@ -2421,6 +2449,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
+  // The clip being played, while its audio is still arriving.
+  const currentTtsStreamClipRef = useRef<TtsStreamClip | null>(null)
   // Soniox v6 agent text: what the playing TTS clip says, sent to STT timed to
   // playback so the echo of our own voice is dropped from the transcript.
   const sendAgentTextRef = useRef<((text: string, endOfSegment: boolean) => void) | null>(null)
@@ -4374,6 +4404,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // closed, so this only reports how far an interrupted clip got.
     ttsAgentText.interrupt()
     ttsAgentTextClipRef.current = null
+    // A clip still arriving stops loading (and stops feeding the shell).
+    currentTtsStreamClipRef.current?.cancel()
+    currentTtsStreamClipRef.current = null
     const player = playerAudioRef.current
     if (player) {
       player.pause()
@@ -4529,6 +4562,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const onPlaybackDone = () => {
       if (!isCurrentClip()) return
+      currentTtsStreamClipRef.current?.cancel()
+      currentTtsStreamClipRef.current = null
       clearNativeTtsEventTimer()
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
@@ -4538,8 +4573,90 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       processTtsQueueRef.current()
     }
 
+    // A clip that is still arriving goes to the shell piece by piece: the
+    // first piece starts it, the rest follows as it arrives.
+    const playStreamViaNativeBridge = (clip: TtsStreamClip) => {
+      const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
+      const post = (type: string, payload: Record<string, unknown>) => {
+        window.ReactNativeWebView!.postMessage(JSON.stringify({ type, payload }))
+      }
+      // Until the clip has ended its length is unknown: allow a long clip,
+      // then tighten once the length is known.
+      const armWatchdog = () => {
+        armNativeTtsEventTimeout(playbackId, next.playbackKey, resolveNativeTtsWatchdogTimeoutMs({
+          durationMs: clip.isEnded ? clip.durationMs : NATIVE_TTS_STREAM_OPEN_WATCHDOG_MS,
+          byteLength: clip.byteLength,
+        }))
+      }
+      if (agentTextClip) {
+        // `tts_started` from the shell starts the agent text (see the listener).
+        agentTextClip.durationMs = clip.isEnded ? clip.durationMs : 0
+        ttsAgentTextClipRef.current = agentTextClip
+      }
+      currentTtsStreamClipRef.current = clip
+      let started = false
+      // Small pieces are joined so the bridge carries fewer messages.
+      let pending: Uint8Array[] = []
+      let pendingBytes = 0
+      const flush = () => {
+        if (pendingBytes === 0) return
+        const joined = new Uint8Array(pendingBytes)
+        let offset = 0
+        for (const piece of pending) {
+          joined.set(piece, offset)
+          offset += piece.byteLength
+        }
+        pending = []
+        pendingBytes = 0
+        const pcmBase64 = bytesToBase64(joined)
+        if (!started) {
+          started = true
+          post('native_tts_stream_start', {
+            playbackId,
+            utteranceId: next.playbackKey,
+            sampleRate: clip.sampleRate,
+            pcmBase64,
+            ...(next.mode === 'auto' && !isSpeakerModeClient() ? { stopOnEarphoneDisconnect: true } : {}),
+          })
+        } else {
+          post('native_tts_stream_chunk', { playbackId, pcmBase64 })
+        }
+      }
+      const minBytes = Math.round(clip.sampleRate * 2 * NATIVE_TTS_STREAM_MIN_PIECE_SECONDS)
+      clip.consume({
+        onPcm: (pcm) => {
+          if (!isCurrentClip()) return
+          pending.push(pcm)
+          pendingBytes += pcm.byteLength
+          if (pendingBytes >= minBytes) flush()
+        },
+        onEnd: () => {
+          if (!isCurrentClip()) return
+          flush()
+          if (!started) {
+            onPlaybackDone()
+            return
+          }
+          post('native_tts_stream_end', { playbackId })
+          armWatchdog()
+        },
+      })
+      if (!isCurrentClip()) return
+      // What had already arrived is sent at once, whatever its size.
+      flush()
+      if (!clip.isEnded) armWatchdog()
+      // Shells that report audio routes also report `tts_started`.
+      if (shouldTreatNativeTtsPostAsStart(isNativeAudioRouteSupported(getNativeAudioRouteSnapshot()))) {
+        markPlaybackStarted()
+      }
+    }
+
     const playViaNativeBridge = async () => {
       try {
+        if (isTtsStreamClip(audioBlob)) {
+          playStreamViaNativeBridge(audioBlob)
+          return
+        }
         const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
         const audioBytes = new Uint8Array(await audioBlob.arrayBuffer())
         const contentType = audioBlob.type || 'audio/mpeg'
@@ -4599,7 +4716,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
       }
 
-      const objectUrl = URL.createObjectURL(audioBlob)
+      // The page's own player needs the clip whole.
+      let wholeClip: Blob | null
+      if (isTtsStreamClip(audioBlob)) {
+        currentTtsStreamClipRef.current = audioBlob
+        wholeClip = await audioBlob.toWavBlob()
+        if (!isCurrentClip()) return
+        currentTtsStreamClipRef.current = null
+      } else {
+        wholeClip = audioBlob
+      }
+      if (!wholeClip) {
+        onPlaybackDone()
+        return
+      }
+      const objectUrl = URL.createObjectURL(wholeClip)
       currentAudioUrlRef.current = objectUrl
       audio.src = objectUrl
 
@@ -4777,7 +4908,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     text: string
     language: string
     signal?: AbortSignal
-  }): Promise<Blob | null> => {
+  }): Promise<TtsClipAudio | null> => {
     const text = input.text.trim()
     const language = input.language.trim()
     if (!text || !language) return null
@@ -4802,10 +4933,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           language,
           sessionKey,
           clientMessageId: input.playbackKey,
+          // A shell that plays audio as it arrives gets it as it is generated.
+          ...(shouldRequestTtsStream() ? { stream: true } : {}),
         }),
       })
       if (response.status === 402) notifyCoinsExhausted({ userInitiated: true })
       if (!response.ok) return null
+      if (isTtsStreamResponse(response)) {
+        // Resolves at the first audio; the balance comes in the end frame.
+        return await readTtsStreamResponse(response, { onEnd: applyCoinBalanceFromTtsStreamEnd })
+      }
       applyCoinBalanceFromHeaders(response.headers)
       const arrayBuffer = await response.arrayBuffer()
       if (!arrayBuffer || arrayBuffer.byteLength === 0) return null
@@ -5784,7 +5921,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       text: normalizedText,
       language: target.language,
     })
-    if (manualTtsRequestSeqRef.current !== requestSeq) return
+    if (manualTtsRequestSeqRef.current !== requestSeq) {
+      // Superseded while it loaded: a clip still arriving stops loading.
+      if (isTtsStreamClip(audioBlob)) audioBlob.cancel()
+      return
+    }
 
     manualTtsPendingSeqRef.current = null
     setPendingManualTtsTarget(null)

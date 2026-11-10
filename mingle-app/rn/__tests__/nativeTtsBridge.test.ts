@@ -4,6 +4,7 @@ import {
   normalizeNativeTtsPlayResult,
   playNativeTts,
   resolveNativeTtsPlayRequest,
+  resolveNativeTtsStreamStartRequest,
   resolveNativeTtsStartedEvent,
 } from '../src/nativeTts';
 
@@ -102,5 +103,33 @@ describe('tts_stopped reason (contract A.5)', () => {
     expect(stopped).toEqual({ type: 'tts_stopped', utteranceId: '', playbackId: '' });
     expect('reason' in stopped).toBe(false);
     expect('reason' in buildNativeTtsStoppedEvent({ playbackId: 'pb', utteranceId: 'u' }, '  ')).toBe(false);
+  });
+});
+
+describe('resolveNativeTtsStreamStartRequest', () => {
+  const base = { utteranceId: 'translation:u1:ko', pcmBase64: 'AAAA' };
+
+  it('falls back to the utterance id, 24 kHz and no earphone guard', () => {
+    expect(resolveNativeTtsStreamStartRequest(base)).toEqual({
+      utteranceId: 'translation:u1:ko',
+      playbackId: 'translation:u1:ko',
+      sampleRate: 24000,
+      pcmBase64: 'AAAA',
+      stopOnEarphoneDisconnect: false,
+    });
+  });
+
+  it('keeps a valid playback id, sample rate and the earphone guard', () => {
+    expect(resolveNativeTtsStreamStartRequest({
+      ...base,
+      playbackId: ' p1 ',
+      sampleRate: 16000,
+      stopOnEarphoneDisconnect: true,
+    })).toMatchObject({ playbackId: 'p1', sampleRate: 16000, stopOnEarphoneDisconnect: true });
+  });
+
+  it('replaces a sample rate the players cannot use', () => {
+    expect(resolveNativeTtsStreamStartRequest({ ...base, sampleRate: 96000 }).sampleRate).toBe(24000);
+    expect(resolveNativeTtsStreamStartRequest({ ...base, sampleRate: Number.NaN }).sampleRate).toBe(24000);
   });
 });

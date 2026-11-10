@@ -46,11 +46,16 @@ import {
 
 import {
   addNativeTtsListener,
+  appendNativeTtsStream,
   buildNativeTtsStoppedEvent,
+  endNativeTtsStream,
   isNativeTtsAvailable,
+  isNativeTtsStreamAvailable,
   playNativeTts,
   resolveNativeTtsPlayRequest,
   resolveNativeTtsStartedEvent,
+  resolveNativeTtsStreamStartRequest,
+  startNativeTtsStream,
   stopNativeTts,
 } from './src/nativeTts';
 import {
@@ -781,6 +786,25 @@ type NativeTtsCommand =
         // Earphone mode (contract A.5): iOS stops this clip when earphones go away.
         stopOnEarphoneDisconnect?: boolean;
       };
+    }
+  | {
+      // A clip whose PCM arrives in pieces; `pcmBase64` is the first piece.
+      type: 'native_tts_stream_start';
+      payload: {
+        utteranceId: string;
+        playbackId?: string;
+        sampleRate?: number;
+        pcmBase64: string;
+        stopOnEarphoneDisconnect?: boolean;
+      };
+    }
+  | {
+      type: 'native_tts_stream_chunk';
+      payload: { playbackId: string; pcmBase64: string };
+    }
+  | {
+      type: 'native_tts_stream_end';
+      payload: { playbackId: string };
     }
   | {
       type: 'native_tts_stop';
@@ -4635,6 +4659,52 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_tts_stream_start') {
+      const request = resolveNativeTtsStreamStartRequest(parsed.payload);
+      const { utteranceId, playbackId } = request;
+      currentTtsPlaybackRef.current = { utteranceId, playbackId };
+      if (__DEV__) {
+        console.log(`[Web→NativeTTS] stream start utteranceId=${utteranceId} playbackId=${playbackId} sampleRate=${request.sampleRate} base64Len=${request.pcmBase64.length} stopOnEarphoneDisconnect=${request.stopOnEarphoneDisconnect}`);
+      }
+      void startNativeTtsStream(request).then((result) => {
+        // Resolves once sound really started, like NativeTTSModule.play.
+        const startedEvent = resolveNativeTtsStartedEvent(result, request, currentTtsPlaybackRef.current);
+        if (startedEvent) {
+          emitTtsToWeb(startedEvent);
+        } else if (__DEV__) {
+          console.log(`[NativeTTS] no tts_started (stream) playbackId=${playbackId} ok=${result.ok} reason=${result.reason ?? ''}`);
+        }
+      }, (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (__DEV__) {
+          console.log(`[NativeTTS] stream start error playbackId=${playbackId}: ${message}`);
+        }
+        if (currentTtsPlaybackRef.current?.playbackId === playbackId) {
+          currentTtsPlaybackRef.current = null;
+        }
+        emitTtsToWeb({ type: 'tts_error', utteranceId, playbackId, message });
+      });
+      return;
+    }
+
+    if (parsed.type === 'native_tts_stream_chunk') {
+      const playbackId = typeof parsed.payload?.playbackId === 'string' ? parsed.payload.playbackId : '';
+      const pcmBase64 = typeof parsed.payload?.pcmBase64 === 'string' ? parsed.payload.pcmBase64 : '';
+      // Pieces of a clip that was stopped or replaced meanwhile are dropped.
+      if (playbackId && pcmBase64 && currentTtsPlaybackRef.current?.playbackId === playbackId) {
+        appendNativeTtsStream(playbackId, pcmBase64);
+      }
+      return;
+    }
+
+    if (parsed.type === 'native_tts_stream_end') {
+      const playbackId = typeof parsed.payload?.playbackId === 'string' ? parsed.payload.playbackId : '';
+      if (playbackId && currentTtsPlaybackRef.current?.playbackId === playbackId) {
+        endNativeTtsStream(playbackId);
+      }
+      return;
+    }
+
     if (parsed.type === 'native_audio_route_request') {
       if (__DEV__) {
         console.log('[Web→NativeAudioRoute] request');
@@ -5147,6 +5217,7 @@ function AppInner(): React.JSX.Element {
       audioRoute: nativeAudioRouteAvailable,
       deviceAudioCapture: nativeDeviceAudioCaptureAvailable,
       nativeTts: isNativeTtsAvailable(),
+      nativeTtsStream: isNativeTtsStreamAvailable(),
     }));
     // Earphone mode (contract A.2a): the latest route follows the capabilities
     // message on every load end.

@@ -24,7 +24,7 @@ function bubbleTtsCallback(context: Record<string, unknown>): (input: BubbleTtsI
   }).outputText, context)
 }
 
-function buildContext() {
+function buildContext(options: { stream?: boolean } = {}) {
   const requests: Array<{ url: string, body: Record<string, unknown> }> = []
   const fetch = async (url: string, init: RequestInit) => {
     requests.push({ url, body: JSON.parse(String(init.body)) })
@@ -34,13 +34,20 @@ function buildContext() {
       headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'audio/wav' : null) },
     }
   }
+  const streamClip = { streamed: true }
   return {
     requests,
+    streamClip,
     context: {
       fetch,
       Blob,
       TTS_API_PATH: '/api/ios/v2.1.0/tts/inworld',
       nativeAppUpdate: null,
+      // Whether the shell plays clips as they arrive, and the streamed-answer reader.
+      shouldRequestTtsStream: () => options.stream === true,
+      isTtsStreamResponse: () => options.stream === true,
+      readTtsStreamResponse: async () => streamClip,
+      applyCoinBalanceFromTtsStreamEnd: () => {},
       resolveConversationSessionKey: () => 'session-1',
       getOrCreateTrackingUserId: () => 'tracking-1',
       buildTrackingRequestHeaders: () => ({}),
@@ -68,5 +75,20 @@ describe('bubble-tap TTS request wiring', () => {
       sessionKey: 'session-1',
       clientMessageId: 'utt-1:ko',
     })
+  })
+
+  it('asks for a stream on a shell that plays one, and hands over the clip still arriving', async () => {
+    const { requests, context, streamClip } = buildContext({ stream: true })
+    const clip = await bubbleTtsCallback(context)(input)
+
+    expect(requests[0].body.stream).toBe(true)
+    expect(clip).toBe(streamClip)
+  })
+
+  it('does not ask for a stream elsewhere', async () => {
+    const { requests, context } = buildContext()
+    await bubbleTtsCallback(context)(input)
+
+    expect(requests[0].body).not.toHaveProperty('stream')
   })
 })
