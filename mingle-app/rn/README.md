@@ -76,6 +76,11 @@ All `native_set_banner_zone` messages are sent from `src/lib/native-banner-zone.
 the intersection of three gates: the route is `/{locale}/conversations`, the list/room requested `list`/`conversation`
 (`requestNativeBannerZone`), and no overlay holds a suppression (`suppressNativeBanner`).
 
+The shell follows the web: a `hidden` from the web is never undone by the shell, and after any non-banner route the
+shell stays hidden until the web asks again (it only restores by itself across a list <-> room URL change it hid for).
+For app builds up to 2.3.4, which could restore the list banner after the web hid it, the web states `hidden` again a
+few times after each hide.
+
 - New route: nothing to do. `NativeBannerRouteGuard` (root layout) re-syncs on every route change and the route gate hides it.
 - New modal, sheet, viewer, or layered screen over the list/room: call `useNativeBannerSuppression(isOpen)`.
   `SlideSurface` (every role except `main`), `MessageMediaDialog` (the photo viewer), and the shared overlays already do.

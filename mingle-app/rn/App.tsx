@@ -137,6 +137,7 @@ import {
   type NativeWebRestorePayload,
 } from './src/webViewRestore';
 import {
+  applyWebNativeBannerZoneRequest,
   resolveNativeBannerNavigationState,
   type NativeBannerZone as BannerZone,
   type StableNativeBannerZone,
@@ -4473,12 +4474,15 @@ function AppInner(): React.JSX.Element {
     if (parsed.type === 'native_set_banner_zone') {
       const zone = parsed.payload?.zone;
       if (zone === 'list' || zone === 'conversation' || zone === 'hidden') {
-        if (zone === 'list' || zone === 'conversation') {
-          stableBannerZoneRef.current = zone;
-          pendingNavigationBannerZoneRef.current = null;
-        }
-        activeBannerZoneRef.current = zone;
-        setActiveBannerZone(zone);
+        const nextState = applyWebNativeBannerZoneRequest({
+          activeZone: activeBannerZoneRef.current,
+          stableZone: stableBannerZoneRef.current,
+          pendingNavigationZone: pendingNavigationBannerZoneRef.current,
+        }, zone);
+        activeBannerZoneRef.current = nextState.activeZone;
+        stableBannerZoneRef.current = nextState.stableZone;
+        pendingNavigationBannerZoneRef.current = nextState.pendingNavigationZone;
+        setActiveBannerZone(nextState.activeZone);
       }
       return;
     }

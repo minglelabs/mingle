@@ -1,4 +1,5 @@
 import {
+  applyWebNativeBannerZoneRequest,
   resolveNativeBannerNavigationState,
   resolveNativeBannerZoneForUrl,
   type NativeBannerNavigationState,
@@ -24,7 +25,7 @@ describe('native banner navigation state', () => {
     expect(resolveNativeBannerZoneForUrl('https://mingle.example/')).toBe('hidden');
   });
 
-  it('hides the list banner while a conversations sub-route is open and restores it on return', () => {
+  it('hides the list banner on a conversations sub-route and waits for the web to ask again on return', () => {
     const listState: NativeBannerNavigationState = {
       activeZone: 'list',
       stableZone: 'list',
@@ -37,12 +38,61 @@ describe('native banner navigation state', () => {
     expect(onSubRoute).toEqual({
       activeZone: 'hidden',
       stableZone: 'list',
-      pendingNavigationZone: 'hidden',
+      pendingNavigationZone: null,
     });
-    expect(resolveNativeBannerNavigationState(
+    const backOnList = resolveNativeBannerNavigationState(
       onSubRoute,
       'https://mingle.example/ko/conversations',
-    )).toEqual(listState);
+    );
+    expect(backOnList).toBe(onSubRoute);
+    expect(applyWebNativeBannerZoneRequest(backOnList, 'list')).toEqual(listState);
+  });
+
+  it('never shows a banner on its own when the list is reached from the launch feed', () => {
+    let state: NativeBannerNavigationState = {
+      activeZone: 'hidden',
+      stableZone: 'list',
+      pendingNavigationZone: null,
+    };
+    state = resolveNativeBannerNavigationState(state, 'https://mingle.example/ko/feed');
+    state = resolveNativeBannerNavigationState(state, 'https://mingle.example/ko/feed?nativeTabRoot=1');
+    // Onboarding or the sign-in gate may be covering the list: only the web knows.
+    state = resolveNativeBannerNavigationState(state, 'https://mingle.example/ko/conversations');
+    expect(state.activeZone).toBe('hidden');
+    state = resolveNativeBannerNavigationState(state, 'https://mingle.example/ko/conversations');
+    expect(state.activeZone).toBe('hidden');
+  });
+
+  it('does not undo a hidden zone the web asked for while a room transition was pending', () => {
+    const pendingRoom = resolveNativeBannerNavigationState({
+      activeZone: 'list',
+      stableZone: 'list',
+      pendingNavigationZone: null,
+    }, 'https://mingle.example/ko/conversations?conversation=conversation-1');
+    expect(pendingRoom.pendingNavigationZone).toBe('conversation');
+
+    const hiddenByWeb = applyWebNativeBannerZoneRequest(pendingRoom, 'hidden');
+    expect(hiddenByWeb).toEqual({
+      activeZone: 'hidden',
+      stableZone: 'list',
+      pendingNavigationZone: null,
+    });
+    expect(resolveNativeBannerNavigationState(
+      hiddenByWeb,
+      'https://mingle.example/ko/conversations',
+    )).toBe(hiddenByWeb);
+  });
+
+  it('takes the zone the web asks for as the new stable zone', () => {
+    expect(applyWebNativeBannerZoneRequest({
+      activeZone: 'hidden',
+      stableZone: 'list',
+      pendingNavigationZone: 'conversation',
+    }, 'conversation')).toEqual({
+      activeZone: 'conversation',
+      stableZone: 'conversation',
+      pendingNavigationZone: null,
+    });
   });
 
   it('does not restore a list banner hidden explicitly by the authentication gate', () => {

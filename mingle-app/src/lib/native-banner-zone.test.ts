@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  NATIVE_BANNER_HIDDEN_REASSERT_DELAYS_MS,
   isNativeBannerAllowedPathname,
   requestNativeBannerZone,
   resetNativeBannerZoneStateForTests,
@@ -205,6 +206,35 @@ describe("native banner zone arbiter", () => {
     syncNativeBannerZone();
 
     expect(postedZones()).toEqual(["hidden"]);
+  });
+
+  it("states a hidden zone again while it still holds, for shells that restore the banner on their own", () => {
+    vi.useFakeTimers();
+    try {
+      requestNativeBannerZone("hidden");
+      postMessage.mockClear();
+
+      vi.advanceTimersByTime(3000);
+
+      expect(postedZones()).toEqual(NATIVE_BANNER_HIDDEN_REASSERT_DELAYS_MS.map(() => "hidden"));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops restating hidden once a surface asks for a visible zone", () => {
+    vi.useFakeTimers();
+    try {
+      requestNativeBannerZone("hidden");
+      requestNativeBannerZone("list");
+      postMessage.mockClear();
+
+      vi.advanceTimersByTime(3000);
+
+      expect(postedZones()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does nothing outside the native app", () => {
