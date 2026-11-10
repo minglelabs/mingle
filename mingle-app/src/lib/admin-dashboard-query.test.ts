@@ -808,9 +808,9 @@ describe("loadTranslationModelMessageSeries", () => {
       total: entry.total,
       share: entry.share,
     }))).toEqual([
-      { key: "gemini-2.5-flash-lite", label: "gemini-2.5-flash-lite", values: [0, 6, 0], total: 6, share: 0.3 },
       { key: "gpt-6-luna", label: "gpt-6-luna", values: [5, 0, 0], total: 5, share: 0.25 },
       { key: "claude-haiku-5-5", label: "claude-haiku-5-5", values: [0, 4, 0], total: 4, share: 0.2 },
+      { key: "gemini-2.5-flash-lite", label: "gemini-2.5-flash-lite", values: [0, 6, 0], total: 6, share: 0.3 },
       { key: "other", label: "기타", values: [0, 0, 5], total: 5, share: 0.25 },
     ]);
   });

@@ -145,7 +145,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sonioxManualFinalizeSilenceMs: 500,
         sonioxEndpointMaxDelayMs: 2000,
         sonioxEndpointTuningStep: DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
-        translationModel: 'gemini-2.5-flash-lite',
+        translationModel: 'claude-haiku-5-5',
         adBannerPosition: null,
         inputMode: 'voice',
         speakerEnabled: false,
@@ -163,7 +163,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       sonioxManualFinalizeSilenceMs: 500,
       sonioxEndpointMaxDelayMs: 2000,
       sonioxEndpointTuningStep: DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
-      translationModel: 'gemini-2.5-flash-lite',
+      translationModel: 'claude-haiku-5-5',
       adBannerPosition: 'top',
       inputMode: 'text',
       speakerEnabled: true,
@@ -204,7 +204,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sonioxManualFinalizeSilenceMs: 500,
         sonioxEndpointMaxDelayMs: 2000,
         sonioxEndpointTuningStep: DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
-        translationModel: 'gemini-2.5-flash-lite',
+        translationModel: 'claude-haiku-5-5',
         adBannerPosition: 'top',
         inputMode: 'voice',
         speakerEnabled: false,
@@ -383,7 +383,7 @@ describe('shouldSendTranslationModelPreference', () => {
 
 describe('buildAccountPreferencesPatchBody', () => {
   it('omits an unhydrated default model while syncing another setting', () => {
-    const preferences = buildHydratedAccountPreferences({ translationModel: 'gemini-2.5-flash-lite' }, false)
+    const preferences = buildHydratedAccountPreferences({ translationModel: 'claude-haiku-5-5' }, false)
     const body = buildAccountPreferencesPatchBody(preferences, { includeTranslationModel: false })
     expect(body).not.toHaveProperty('translationModel')
     expect(body.textSizeLevel).toBe(preferences.textSizeLevel)
