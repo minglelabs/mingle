@@ -174,6 +174,10 @@ export interface Utterance {
   targetLanguages?: string[]
   translations: Record<string, string>
   translationFinalized?: Record<string, boolean>
+  // Per language, the leading part of an interim translation that will not
+  // change any more (tail translation of an open bubble). Shown like a final
+  // translation and read aloud piece by piece.
+  translationFixed?: Record<string, string>
   translationStatus?: 'pending' | 'retrying'
   createdAtMs?: number
   serverCreatedAtMs?: number
@@ -914,10 +918,13 @@ function ChatBubble({
   const translationEntries = targetLangs
     .map((lang) => {
       const { text, finalized } = findDisplayTranslation(utterance, lang, displayLanguageResolver)
+      // An interim translation that is all fixed already reads like a final one.
+      const fixed = findLanguageRecordValue(utterance.translationFixed, lang, displayLanguageResolver)?.trim() || ''
+      const isFixed = Boolean(fixed) && fixed === text.trim()
       return {
         lang,
         text,
-        state: text && finalized !== false ? 'final' as const : 'interim' as const,
+        state: text && (finalized !== false || isFixed) ? 'final' as const : 'interim' as const,
       }
   })
   const completedTranslationEntries = translationEntries.filter(({ text }) => Boolean(text))
@@ -1492,6 +1499,15 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
       if (pk.length !== nk.length) return false
       for (const k of pk) {
         if (pu.translations[k] !== nu.translations[k]) return false
+      }
+    }
+    if (pu.translationFixed !== nu.translationFixed) {
+      const pf = pu.translationFixed || {}
+      const nf = nu.translationFixed || {}
+      const pk = Object.keys(pf)
+      if (pk.length !== Object.keys(nf).length) return false
+      for (const k of pk) {
+        if (pf[k] !== nf[k]) return false
       }
     }
     if (pu.translationFinalized !== nu.translationFinalized) {
