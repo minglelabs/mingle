@@ -8,6 +8,7 @@ One entry per UI/UX fix, newest first. This is the only copy; add new entries he
 - Issue: 보이스톡 버튼이 상단 바에 있어서 대화방 기능으로 잘 보이지 않았다. 하단 바 왼쪽은 사용시간/메시지 수 표시가 차지하고 있었다.
 - Resolution: 상단 바의 전화 버튼을 없애고, 하단 바 왼쪽(사용시간/메시지 수 자리)에 44px 전화 버튼(`VoiceTalkButton`, `data-qa="live-demo-voice-talk-button"`)을 넣었다. 통화 중이면 초록색 + 초록 점. 이어폰 모드 버튼은 그대로 마이크 왼쪽에 있다.
 - Usage: 사용시간/메시지 수는 햄버거 메뉴의 "사용량" 줄(`data-qa="live-demo-menu-usage"`)로 옮겼다. 사용 제한이 있을 때는 진행 막대 + 남은 시간을 같은 줄에 보여준다. 라벨은 15개 언어 모두 추가.
+- Follow-up (실기기): 왼쪽 셀이 `justify-between` + `pl-1`이라 전화·이어폰 버튼이 벌어져 좌우 간격이 달랐다. 오른쪽 셀(사진·키보드)과 똑같이 `gap-1`, 여백 없음으로 맞춰 좌우 대칭으로 만들었다.
 - Verification: 타입 검사, `live-phone-demo.voice-talk-bottom-bar.wiring.test.ts`.
 
 ## 2026-11-10 — Hash Rush 네이티브 이식 4단계: iframe 시트와 v2 대화방 배치 코드 삭제

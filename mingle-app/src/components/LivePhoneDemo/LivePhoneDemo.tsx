@@ -10030,9 +10030,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -12 }}
                     transition={{ duration: 0.09, ease: 'easeOut' }}
-                    className={earphoneModeGate.controlVisible
-                      ? 'flex min-w-0 items-end justify-between gap-1 self-end pl-1'
-                      : 'flex items-end self-end justify-self-start pl-1'}
+                    // Mirrors the right cell (image + keyboard): same gap, no
+                    // extra inset, so both sides sit at equal distances.
+                    className="flex min-w-0 items-center gap-1 self-end justify-self-start"
                   >
                     {/* Group voice talk lives where the usage counters used to be;
                         the counters moved into the menu's usage row. */}
@@ -10043,9 +10043,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         onPress={() => setVoiceTalkStartSignal((n) => n + 1)}
                         sizePx={VOICE_MODE_SIDE_BUTTON_SIZE_PX}
                       />
-                    ) : (
-                      <span aria-hidden="true" />
-                    )}
+                    ) : null}
                     {earphoneModeGate.controlVisible && (
                       <button
                         type="button"
