@@ -5245,7 +5245,10 @@ export default function useRealtimeSTT({
     const clientContext = buildClientContextPayload(usageSec)
     const recentTurns = buildRecentTurnContextPayload(utteranceId)
     // The final request translates only what is left after the fixed part.
+    // A bubble finalized twice (stop, then the server's own final) keeps its fixed part.
     const bubbleTail = bubbleTailByUtteranceIdRef.current[utteranceId]
+      || (lastFinishedBubbleRef.current?.utteranceId === utteranceId ? lastFinishedBubbleRef.current.tail : null)
+      || undefined
     delete bubbleTailByUtteranceIdRef.current[utteranceId]
     lastFinishedBubbleRef.current = { utteranceId, tail: bubbleTail || null, finishedAtMs: Date.now() }
     const translationBody: Record<string, unknown> | null = skipTranslation ? null : {
@@ -6169,10 +6172,21 @@ export default function useRealtimeSTT({
           nowMs: now,
         })
 
-        finalizeTurnWithTranslation(
+        // The server's final for a bubble that stop already finalized: the same
+        // text needs no second translation, and a changed text keeps showing what
+        // is translated so far while its own translation is on the way.
+        const reusedFinalIsSameText = Boolean(reusedUtterance)
+          && reusedUtterance?.originalText === finalizedPayload.text
+          && reusedUtterance?.originalLang === finalizedPayload.language
+        if (!reusedFinalIsSameText) finalizeTurnWithTranslation(
           {
             utterance: {
               ...finalizedPayload.utterance,
+              ...(reusedUtterance ? {
+                translations: { ...reusedUtterance.translations },
+                translationFinalized: Object.fromEntries(Object.keys(reusedUtterance.translations || {}).map(key => [key, false])),
+                ...(reusedUtterance.translationFixed ? { translationFixed: reusedUtterance.translationFixed } : {}),
+              } : {}),
               speaker: reconciledSpeaker,
               id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
               createdAtMs: (recentLocalReuseUtteranceId
