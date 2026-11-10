@@ -98,6 +98,8 @@ export type ConversationChannelSummary = {
   shareEnabled: boolean;
   // Listed with its title in the search tab's live rooms, and joinable by anyone from there.
   isPublic?: boolean;
+  // The 7-digit number people type in Search to find this room.
+  roomCode?: number;
 };
 
 export type ConversationHydrationUtterance = {
@@ -230,6 +232,7 @@ type ConversationChannelRecord = {
   sharedAt: Date | null;
   sharedTitle: string | null;
   isPublic: boolean;
+  roomCode: number;
 };
 
 type ListConversationChannelsForUserOptions = {
@@ -256,6 +259,7 @@ const conversationChannelSelect = {
   sharedAt: true,
   sharedTitle: true,
   isPublic: true,
+  roomCode: true,
 } satisfies Prisma.AppConversationChannelSelect;
 
 // A pending invitee (see AppConversationChannel.pendingInviteeUserIds) has no
@@ -959,6 +963,7 @@ function serializeConversationChannel(
     shareToken: record.shareToken,
     shareEnabled: record.shareEnabled === true,
     isPublic: record.isPublic === true,
+    roomCode: record.roomCode,
   };
 }
 
@@ -2437,14 +2442,14 @@ export async function getConversationSessionKeyForMember(args: {
 export async function getConversationChannelSharing(args: {
   conversationId: string;
   userId: string;
-}): Promise<{ shareToken: string | null; shareEnabled: boolean; sharedAt: Date | null; isPublic: boolean } | null> {
+}): Promise<{ shareToken: string | null; shareEnabled: boolean; sharedAt: Date | null; isPublic: boolean; roomCode: number } | null> {
   const record = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
       ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
-    select: { shareToken: true, shareEnabled: true, sharedAt: true, isPublic: true },
+    select: { shareToken: true, shareEnabled: true, sharedAt: true, isPublic: true, roomCode: true },
   });
   return record ?? null;
 }
@@ -2935,10 +2940,28 @@ export async function joinConversationChannelViaShareToken(args: {
   shareToken: string;
   userId: string;
 }): Promise<ConversationChannelSummary | null> {
+  return joinConversationChannel({ by: { shareToken: args.shareToken, shareEnabled: true }, userId: args.userId });
+}
+
+/**
+ * Adds `userId` to a room the caller already decided they may join (a public
+ * room, or a private room whose member accepted their join request). Same
+ * capacity, block and rejoin rules as the share link.
+ */
+export async function joinConversationChannelById(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<ConversationChannelSummary | null> {
+  return joinConversationChannel({ by: { id: args.conversationId }, userId: args.userId });
+}
+
+async function joinConversationChannel(args: {
+  by: { shareToken: string; shareEnabled: true } | { id: string };
+  userId: string;
+}): Promise<ConversationChannelSummary | null> {
   const conversationRecord = await prisma.appConversationChannel.findFirst({
     where: {
-      shareToken: args.shareToken,
-      shareEnabled: true,
+      ...args.by,
       ...buildVisibleConversationWhere(),
     },
     select: { ...conversationChannelSelect, ownerUserId: true },
@@ -2990,9 +3013,8 @@ export async function joinConversationChannelViaShareToken(args: {
 
     const freshChannel = await tx.appConversationChannel.findFirst({
       where: {
+        ...args.by,
         id: conversationRecord.id,
-        shareToken: args.shareToken,
-        shareEnabled: true,
         ...buildVisibleConversationWhere(),
       },
       select: {
@@ -3941,10 +3963,7 @@ export async function leaveConversationChannel(args: {
 export const HASH_RUSH_ACTIVE_WINDOW_MS = 15 * 60 * 1000;
 const LIVE_ROOMS_LIMIT = 30;
 
-/**
- * A member turns the room public or private. Public also switches the share
- * link on, since joining a public room goes through it.
- */
+/** A member turns the room public (listed and joinable by anyone) or private (join requests only). */
 export async function setConversationPublic(args: {
   conversationId: string;
   userId: string;
@@ -3952,10 +3971,6 @@ export async function setConversationPublic(args: {
 }): Promise<ConversationChannelSummary | null> {
   const sessionKey = await getConversationSessionKeyForMember({ conversationId: args.conversationId, userId: args.userId });
   if (!sessionKey) return null;
-  if (args.isPublic) {
-    const shared = await setConversationShareEnabled({ conversationId: args.conversationId, userId: args.userId, enabled: true });
-    if (!shared) return null;
-  }
   const record = await prisma.appConversationChannel.update({
     where: { id: args.conversationId },
     data: { isPublic: args.isPublic },
@@ -4051,9 +4066,147 @@ export async function joinPublicConversationChannel(args: {
   userId: string;
 }): Promise<ConversationChannelSummary | null> {
   const record = await prisma.appConversationChannel.findFirst({
-    where: { id: args.conversationId, isPublic: true, shareEnabled: true, ...buildVisibleConversationWhere() },
-    select: { shareToken: true },
+    where: { id: args.conversationId, isPublic: true, ...buildVisibleConversationWhere() },
+    select: { id: true },
   });
-  if (!record?.shareToken) return null;
-  return joinConversationChannelViaShareToken({ shareToken: record.shareToken, userId: args.userId });
+  if (!record) return null;
+  return joinConversationChannelById({ conversationId: args.conversationId, userId: args.userId });
+}
+
+
+// ---------------------------------------------------------------------------
+// Finding a room by its number, and join requests for private rooms
+// ---------------------------------------------------------------------------
+
+export type RoomCodeLookup = {
+  id: string;
+  roomCode: number;
+  isPublic: boolean;
+  isMember: boolean;
+  memberCount: number;
+  /** Shown for a public room or to a member; a private room stays nameless to others. */
+  title: string | null;
+  languages: string[];
+  /** This viewer's join request for a private room. */
+  request: "none" | "pending" | "declined";
+};
+
+export async function findConversationByRoomCode(code: number, viewerUserId: string): Promise<RoomCodeLookup | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: { roomCode: code, ...buildVisibleConversationWhere() },
+    select: { id: true, roomCode: true, title: true, isPublic: true, selectedLanguages: true },
+  });
+  if (!record) return null;
+  const members = filterActiveMembers((await listChannelMembersByChannelId([record.id])).get(record.id) ?? []);
+  const isMember = members.some((member) => member.userId === viewerUserId);
+  const request = isMember || record.isPublic
+    ? null
+    : await prisma.appConversationJoinRequest.findUnique({
+      where: { channelId_userId: { channelId: record.id, userId: viewerUserId } },
+      select: { status: true },
+    });
+  const visible = record.isPublic || isMember;
+  return {
+    id: record.id,
+    roomCode: record.roomCode,
+    isPublic: record.isPublic,
+    isMember,
+    memberCount: members.length,
+    title: visible ? record.title : null,
+    languages: visible ? record.selectedLanguages.slice(0, 5) : [],
+    request: request?.status === "pending" ? "pending" : request?.status === "declined" ? "declined" : "none",
+  };
+}
+
+export type RoomCodeJoinResult =
+  | { kind: "joined"; conversation: ConversationChannelSummary }
+  | { kind: "requested"; requestId: string; channelId: string; sessionKey: string; created: boolean }
+  | { kind: "not_found" };
+
+/** Public room or a member: in. Private room: a pending join request (asked again after a decline). */
+export async function joinOrRequestByRoomCode(code: number, userId: string): Promise<RoomCodeJoinResult> {
+  const found = await findConversationByRoomCode(code, userId);
+  if (!found) return { kind: "not_found" };
+  if (found.isPublic || found.isMember) {
+    const conversation = await joinConversationChannelById({ conversationId: found.id, userId });
+    return conversation ? { kind: "joined", conversation } : { kind: "not_found" };
+  }
+  const channel = await prisma.appConversationChannel.findUnique({ where: { id: found.id }, select: { sessionKey: true } });
+  const existing = await prisma.appConversationJoinRequest.findUnique({
+    where: { channelId_userId: { channelId: found.id, userId } },
+    select: { id: true, status: true },
+  });
+  if (existing?.status === "pending") {
+    return { kind: "requested", requestId: existing.id, channelId: found.id, sessionKey: channel?.sessionKey ?? "", created: false };
+  }
+  const request = await prisma.appConversationJoinRequest.upsert({
+    where: { channelId_userId: { channelId: found.id, userId } },
+    create: { channelId: found.id, userId },
+    update: { status: "pending", decidedAt: null, decidedByUserId: null, createdAt: new Date() },
+    select: { id: true },
+  });
+  return { kind: "requested", requestId: request.id, channelId: found.id, sessionKey: channel?.sessionKey ?? "", created: true };
+}
+
+export type ConversationJoinRequestView = {
+  id: string;
+  userId: string;
+  name: string | null;
+  image: string | null;
+  createdAt: string;
+};
+
+/** Pending requests of a room, for its members. Null when the caller is not a member. */
+export async function listConversationJoinRequests(args: { conversationId: string; userId: string }): Promise<ConversationJoinRequestView[] | null> {
+  const sessionKey = await getConversationSessionKeyForMember({ conversationId: args.conversationId, userId: args.userId });
+  if (!sessionKey) return null;
+  const requests = await prisma.appConversationJoinRequest.findMany({
+    where: { channelId: args.conversationId, status: "pending" },
+    orderBy: { createdAt: "asc" },
+    take: 50,
+    select: { id: true, userId: true, createdAt: true, user: { select: { name: true, image: true } } },
+  });
+  return requests.map((request) => ({
+    id: request.id,
+    userId: request.userId,
+    name: request.user.name ?? null,
+    image: request.user.image ?? null,
+    createdAt: request.createdAt.toISOString(),
+  }));
+}
+
+export type JoinRequestDecision =
+  | { kind: "accepted"; requesterUserId: string; conversation: ConversationChannelSummary }
+  | { kind: "declined"; requesterUserId: string }
+  | { kind: "not_found" };
+
+/** A member accepts (the requester becomes a member) or declines a pending request. */
+export async function decideConversationJoinRequest(args: {
+  conversationId: string;
+  requestId: string;
+  userId: string;
+  accept: boolean;
+}): Promise<JoinRequestDecision> {
+  const sessionKey = await getConversationSessionKeyForMember({ conversationId: args.conversationId, userId: args.userId });
+  if (!sessionKey) return { kind: "not_found" };
+  const request = await prisma.appConversationJoinRequest.findFirst({
+    where: { id: args.requestId, channelId: args.conversationId, status: "pending" },
+    select: { id: true, userId: true },
+  });
+  if (!request) return { kind: "not_found" };
+  if (args.accept) {
+    // Capacity and block rules apply here; a failure leaves the request pending.
+    const conversation = await joinConversationChannelById({ conversationId: args.conversationId, userId: request.userId });
+    if (!conversation) return { kind: "not_found" };
+    await prisma.appConversationJoinRequest.update({
+      where: { id: request.id },
+      data: { status: "accepted", decidedAt: new Date(), decidedByUserId: args.userId },
+    });
+    return { kind: "accepted", requesterUserId: request.userId, conversation };
+  }
+  await prisma.appConversationJoinRequest.update({
+    where: { id: request.id },
+    data: { status: "declined", decidedAt: new Date(), decidedByUserId: args.userId },
+  });
+  return { kind: "declined", requesterUserId: request.userId };
 }

@@ -702,6 +702,7 @@ export async function getConversationShareResponse(
     shareEnabled: sharing.shareEnabled,
     sharedAt: sharing.sharedAt?.toISOString() ?? null,
     isPublic: sharing.isPublic === true,
+    roomCode: sharing.roomCode,
   });
 }
 

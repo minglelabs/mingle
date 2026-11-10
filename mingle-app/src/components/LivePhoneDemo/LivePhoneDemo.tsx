@@ -265,6 +265,7 @@ import { hashRushGameMenuLabel } from '@/features/hash-rush/copy'
 import { buildHashRushPcLink, HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/config'
 import { requestHashRushTicket } from '@/features/hash-rush/ticket'
 import { liveRoomsCopy } from '@/i18n/live-rooms-copy'
+import { formatRoomCode } from '@/lib/room-code'
 import { buildHashRushChatEntries } from './hash-rush-room-chat'
 import {
   resolveLivePhoneDemoFeedbackCopy,
@@ -2225,6 +2226,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Public: listed with its name in the search tab and joinable by anyone.
   const [isPublicRoom, setIsPublicRoom] = useState(false)
   const [isTogglingPublic, setIsTogglingPublic] = useState(false)
+  // The number people type in Search to find this room.
+  const [roomCode, setRoomCode] = useState<number | null>(null)
+  // Private-room join requests waiting for a member (room management screen).
+  const [joinRequests, setJoinRequests] = useState<Array<{ id: string, userId: string, name: string | null, image: string | null }>>([])
+  const [decidingJoinRequestId, setDecidingJoinRequestId] = useState<string | null>(null)
   const [isTogglingSharing, setIsTogglingSharing] = useState(false)
   const [isRefreshingShareLink, setIsRefreshingShareLink] = useState(false)
   const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>('compose')
@@ -5571,7 +5577,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`conversation_share_status_failed:${response.status}`)
-        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown; isPublic?: unknown }>
+        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown; isPublic?: unknown; roomCode?: unknown }>
       })
       .then((body) => {
         if (cancelled) return
@@ -5579,6 +5585,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setShareUrl(nextShareToken ? buildConversationShareUrl(window.location.origin, nextShareToken) : null)
         setShareEnabled(body.shareEnabled === true)
         setIsPublicRoom(body.isPublic === true)
+        setRoomCode(typeof body.roomCode === 'number' ? body.roomCode : null)
       })
       .catch(() => {
         // Leave whatever was already shown — the toggle below surfaces its
@@ -5703,6 +5710,69 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setIsTogglingPublic(false)
     }
   }, [conversationId, isTogglingPublic, nativeAppUpdate, resolveConversationSessionKey, roomManagementCopy.shareErrorToastLabel])
+
+  const loadJoinRequests = useCallback(async () => {
+    if (!conversationId) return
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}/join-requests`), { cache: 'no-store' })
+      if (!response.ok) return
+      const body = await response.json() as { requests?: Array<{ id: string, userId: string, name: string | null, image: string | null }> }
+      setJoinRequests(Array.isArray(body.requests) ? body.requests : [])
+    } catch {
+      // Shown again on the next visit to the screen.
+    }
+  }, [conversationId])
+
+  useEffect(() => {
+    if (menuScreen !== 'conversation-management') return
+    void loadJoinRequests()
+  }, [loadJoinRequests, menuScreen])
+
+  const handleDecideJoinRequest = useCallback(async (requestId: string, accept: boolean) => {
+    if (!conversationId || decidingJoinRequestId) return
+    setDecidingJoinRequestId(requestId)
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}/join-requests/${requestId}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accept }),
+      })
+      const body = await response.json().catch(() => null) as { error?: string } | null
+      if (!response.ok) {
+        toast.error(body?.error === 'room_full' ? liveRoomCopy.roomFull : liveRoomCopy.joinFailed)
+        return
+      }
+      setJoinRequests((current) => current.filter((request) => request.id !== requestId))
+      toast.success(accept ? liveRoomCopy.requestAccepted : liveRoomCopy.requestDeclined)
+    } catch {
+      toast.error(liveRoomCopy.joinFailed)
+    } finally {
+      setDecidingJoinRequestId(null)
+    }
+  }, [conversationId, decidingJoinRequestId, liveRoomCopy.joinFailed, liveRoomCopy.requestAccepted, liveRoomCopy.requestDeclined, liveRoomCopy.roomFull])
+
+  const handleCopyRoomCode = useCallback(async () => {
+    const text = formatRoomCode(roomCode)
+    if (!text) return
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+      toast.success(liveRoomCopy.roomNumberCopied)
+    } catch {
+      toast.error(roomManagementCopy.shareErrorToastLabel)
+    }
+  }, [liveRoomCopy.roomNumberCopied, roomCode, roomManagementCopy.shareErrorToastLabel])
 
   // Copies a link that opens this room's Hash Rush game in a computer browser, as this member.
   const handleCopyHashRushPcLink = useCallback(async () => {
@@ -9317,6 +9387,57 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               <ChevronRight size={18} strokeWidth={2.4} />
                             </span>
                           </button>
+
+                          {roomCode ? (
+                            <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-gray-200 px-3.5 py-3" data-qa="live-demo-room-code">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[0.8rem] text-gray-500">{liveRoomCopy.roomNumber}</p>
+                                <p className="text-[1.35rem] font-semibold tabular-nums tracking-wide text-gray-900">{formatRoomCode(roomCode)}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void handleCopyRoomCode()}
+                                className="shrink-0 text-[0.85rem] font-semibold text-amber-600"
+                              >
+                                {roomManagementCopy.shareLinkCopyButtonLabel}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {joinRequests.length > 0 ? (
+                            <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50/60 px-3.5 py-3" data-qa="live-demo-join-requests">
+                              <p className="pb-2 text-[0.98rem] font-medium text-gray-900">{liveRoomCopy.requestsHeading} · {joinRequests.length}</p>
+                              <ul className="space-y-2">
+                                {joinRequests.map((request) => (
+                                  <li key={request.id} className="flex items-center gap-2.5">
+                                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-100 text-[0.8rem] font-bold text-amber-800">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      {request.image ? <img src={request.image} alt="" className="h-full w-full object-cover" /> : (Array.from((request.name || '?').trim())[0] || '?').toUpperCase()}
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-[0.92rem] text-gray-900">{request.name || '?'}</span>
+                                    <button
+                                      type="button"
+                                      data-qa="live-demo-join-request-decline"
+                                      disabled={decidingJoinRequestId === request.id}
+                                      onClick={() => void handleDecideJoinRequest(request.id, false)}
+                                      className="shrink-0 rounded-full bg-white px-3 py-1 text-[0.8rem] font-semibold text-gray-600 ring-1 ring-gray-200 disabled:opacity-60"
+                                    >
+                                      {liveRoomCopy.decline}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      data-qa="live-demo-join-request-accept"
+                                      disabled={decidingJoinRequestId === request.id}
+                                      onClick={() => void handleDecideJoinRequest(request.id, true)}
+                                      className="shrink-0 rounded-full bg-amber-500 px-3 py-1 text-[0.8rem] font-semibold text-white disabled:opacity-60"
+                                    >
+                                      {liveRoomCopy.accept}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
 
                           <div className="mb-3 rounded-2xl border border-gray-200 px-3.5 py-3" data-qa="live-demo-public-room">
                             <div className="flex items-center justify-between gap-3">

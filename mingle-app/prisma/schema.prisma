@@ -93,43 +93,44 @@ model User {
   createdAt                    DateTime  @default(now()) @map("created_at")
   updatedAt                    DateTime  @updatedAt @map("updated_at")
 
-  bioState                ProfileBioState?
-  bioVersions             ProfileBioVersion[]
-  reactions               AppMessageReaction[]
-  messages                AppMessage[]
-  eventLogs               AppEventLog[]
-  feedbackEntries         AppFeedback[]
-  versionPoliciesCreated  AppClientVersionPolicy[]
-  accounts                Account[]
-  sessions                Session[]
-  passwordResetTokens     PasswordResetToken[]
-  conversationChannels    AppConversationChannel[]
-  conversationMemberships AppConversationChannelMember[]
-  voiceCallParticipations AppVoiceCallParticipant[]
-  followingRelations      UserFollow[]                   @relation("UserFollowing")
-  followerRelations       UserFollow[]                   @relation("UserFollowers")
-  receivedNotifications   UserNotification[]             @relation("UserNotificationsReceived")
-  sentNotifications       UserNotification[]             @relation("UserNotificationsSent")
-  pushTokens              UserPushToken[]
-  blockingRelations       UserBlock[]                    @relation("UserBlocking")
-  blockedByRelations      UserBlock[]                    @relation("UserBlockedBy")
-  sentUserReports         UserReport[]                   @relation("UserReportsSent")
-  receivedUserReports     UserReport[]                   @relation("UserReportsReceived")
-  posts                   Post[]
-  postComments            PostComment[]
-  postLikes               PostLike[]
-  postCommentLikes        PostCommentLike[]
-  postViews               PostView[]
-  profileViewsMade        ProfileView[]                  @relation("ProfileViewViewer")
-  profileViewsReceived    ProfileView[]                  @relation("ProfileViewProfile")
-  postHides               PostHide[]
-  postDrafts              PostDraft[]
-  recentSearches          RecentSearch[]
-  repliedToComments       PostComment[]                  @relation("PostCommentReplyToUser")
-  operatorAccount         OperatorAccount?
-  adminNotifyTarget       AdminNotifyTarget?
-  operatorPostJobs        OperatorPostJob[]
-  operatorPostReserve     OperatorPostReserve[]
+  bioState                 ProfileBioState?
+  bioVersions              ProfileBioVersion[]
+  reactions                AppMessageReaction[]
+  messages                 AppMessage[]
+  eventLogs                AppEventLog[]
+  feedbackEntries          AppFeedback[]
+  versionPoliciesCreated   AppClientVersionPolicy[]
+  accounts                 Account[]
+  sessions                 Session[]
+  passwordResetTokens      PasswordResetToken[]
+  conversationChannels     AppConversationChannel[]
+  conversationMemberships  AppConversationChannelMember[]
+  voiceCallParticipations  AppVoiceCallParticipant[]
+  conversationJoinRequests AppConversationJoinRequest[]
+  followingRelations       UserFollow[]                   @relation("UserFollowing")
+  followerRelations        UserFollow[]                   @relation("UserFollowers")
+  receivedNotifications    UserNotification[]             @relation("UserNotificationsReceived")
+  sentNotifications        UserNotification[]             @relation("UserNotificationsSent")
+  pushTokens               UserPushToken[]
+  blockingRelations        UserBlock[]                    @relation("UserBlocking")
+  blockedByRelations       UserBlock[]                    @relation("UserBlockedBy")
+  sentUserReports          UserReport[]                   @relation("UserReportsSent")
+  receivedUserReports      UserReport[]                   @relation("UserReportsReceived")
+  posts                    Post[]
+  postComments             PostComment[]
+  postLikes                PostLike[]
+  postCommentLikes         PostCommentLike[]
+  postViews                PostView[]
+  profileViewsMade         ProfileView[]                  @relation("ProfileViewViewer")
+  profileViewsReceived     ProfileView[]                  @relation("ProfileViewProfile")
+  postHides                PostHide[]
+  postDrafts               PostDraft[]
+  recentSearches           RecentSearch[]
+  repliedToComments        PostComment[]                  @relation("PostCommentReplyToUser")
+  operatorAccount          OperatorAccount?
+  adminNotifyTarget        AdminNotifyTarget?
+  operatorPostJobs         OperatorPostJob[]
+  operatorPostReserve      OperatorPostReserve[]
 
   @@index([lastSeenAt], map: "app_users_last_seen_at_idx")
   @@index([createdAt], map: "app_users_created_at_idx")
@@ -404,16 +405,21 @@ model AppConversationChannel {
   // anyone may join it from there (through the share link, which turning the
   // room public switches on). A private room is listed only as a locked card.
   isPublic                   Boolean   @default(false) @map("is_public")
+  // The room number people type in Search to find the room: 7 digits, shown
+  // as "482 1937". Random (not sequential) so neighbours are not guessable;
+  // the database picks a free one (next_room_code() in the app schema).
+  roomCode                   Int       @unique @default(dbgenerated("next_room_code()")) @map("room_code")
   // Last time a member got a Hash Rush ticket for this room's game; the search
   // tab treats the game as running for a while after it.
   hashRushActiveAt           DateTime? @map("hash_rush_active_at")
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
-  owner      User                           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  members    AppConversationChannelMember[]
-  invites    AppConversationChannelInvite[]
-  voiceCalls AppVoiceCall[]
+  owner        User                           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members      AppConversationChannelMember[]
+  invites      AppConversationChannelInvite[]
+  voiceCalls   AppVoiceCall[]
+  joinRequests AppConversationJoinRequest[]
 
   @@unique([ownerUserId, sequenceNumber], map: "app_conversation_channels_owner_sequence_uidx")
   @@index([ownerUserId, updatedAt], map: "app_conversation_channels_owner_updated_at_idx")
@@ -1454,4 +1460,25 @@ model AppVoiceCallParticipant {
   @@index([userId, joinedAt], map: "app_voice_call_participants_user_joined_idx")
   @@index([callId, leftAt], map: "app_voice_call_participants_call_left_idx")
   @@map("app_voice_call_participants")
+}
+
+// Someone who found a private room by its number asks to join; a member
+// accepts (they become a member) or declines. One open request per person
+// and room; a decided request can be asked again later.
+model AppConversationJoinRequest {
+  id              String    @id @default(cuid())
+  channelId       String    @map("channel_id")
+  userId          String    @map("user_id")
+  status          String    @default("pending") // "pending" | "accepted" | "declined"
+  decidedByUserId String?   @map("decided_by_user_id")
+  decidedAt       DateTime? @map("decided_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  channel AppConversationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([channelId, status])
+  @@map("app_conversation_join_requests")
 }
