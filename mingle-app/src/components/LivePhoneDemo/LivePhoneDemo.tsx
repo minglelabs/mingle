@@ -69,6 +69,13 @@ import {
   type TtsStreamClip,
 } from '@/lib/tts-stream-clip'
 import type { TtsStreamEnd } from '@/lib/tts-stream-format'
+import {
+  readTtsDeliveryMode,
+  ttsDeliverySplitsSentences,
+  ttsDeliveryStreams,
+  writeTtsDeliveryMode,
+  type TtsDeliveryMode,
+} from '@/lib/tts-delivery-mode'
 import { TtsAgentTextScheduler } from './tts-agent-text'
 import { applyCoinBalance, applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
@@ -1547,8 +1554,16 @@ const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
 const NATIVE_TTS_STREAM_MIN_PIECE_SECONDS = 0.1
 const NATIVE_TTS_STREAM_OPEN_WATCHDOG_MS = 30_000
 
+// Experiment switch in the room menu; the labels are not translated.
+const TTS_DELIVERY_MODE_LABEL = 'TTS 방식 (실험)'
+const TTS_DELIVERY_MODE_OPTIONS: ReadonlyArray<{ value: TtsDeliveryMode, label: string }> = [
+  { value: 'sentence', label: '문장 단위' },
+  { value: 'stream', label: '스트리밍' },
+  { value: 'sentence_stream', label: '둘 다' },
+]
+
 function shouldRequestTtsStream(): boolean {
-  return shouldStreamTtsToNativeShell({
+  return ttsDeliveryStreams(readTtsDeliveryMode()) && shouldStreamTtsToNativeShell({
     isNativeApp: isNativeApp(),
     isIOS: isLikelyIOSPlatform(),
     capabilities: readCachedNativeShellCapabilities(),
@@ -2212,6 +2227,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [bubbleDisplayModeMenuOpen, setBubbleDisplayModeMenuOpen] = useState(false)
+  // Experiment switch (per device): sentence by sentence, streamed, or both.
+  const [ttsDeliveryMode, setTtsDeliveryMode] = useState<TtsDeliveryMode>(() => readTtsDeliveryMode())
+  const handleTtsDeliveryModeSelect = useCallback((mode: TtsDeliveryMode) => {
+    writeTtsDeliveryMode(mode)
+    setTtsDeliveryMode(mode)
+  }, [])
   const [textSizeLevel, setTextSizeLevel] = useState<number>(
     initialCachedAccountPreferences?.textSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
   )
@@ -7158,6 +7179,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       now: () => Date.now(),
       setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
       clearTimer: (handle) => window.clearTimeout(handle as number),
+      splitSentences: () => ttsDeliverySplitsSentences(readTtsDeliveryMode()),
       synthesize: (target, signal) => synthesizeBubbleTtsViaApiRef.current({
         playbackKey: target.playbackKey,
         text: target.text,
@@ -8843,6 +8865,34 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </div>
                               </div>
                             )}
+
+                            <div className="block">
+                              <div className="mb-2 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                                <span className="shrink-0 whitespace-nowrap pl-1 text-[0.98rem] font-medium text-gray-900">{TTS_DELIVERY_MODE_LABEL}</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {TTS_DELIVERY_MODE_OPTIONS.map((option) => {
+                                  const isSelected = ttsDeliveryMode === option.value
+
+                                  return (
+                                    <button
+                                      key={option.value}
+                                      data-qa={`live-demo-tts-delivery-${option.value}`}
+                                      type="button"
+                                      aria-pressed={isSelected}
+                                      onClick={() => handleTtsDeliveryModeSelect(option.value)}
+                                      className={`flex h-11 items-center justify-center rounded-2xl border text-[0.92rem] font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${
+                                        isSelected
+                                          ? 'border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
+                                          : 'border-[#E5E7EB] bg-white text-gray-700 hover:border-[#D1D5DB] hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
 
                           </div>
                         </div>

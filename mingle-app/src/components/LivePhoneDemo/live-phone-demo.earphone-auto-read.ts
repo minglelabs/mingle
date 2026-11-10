@@ -47,6 +47,9 @@ export type EarphoneAutoReadControllerOptions = {
   dispatch: (item: EarphoneAutoReadDispatchItem) => void
   onQueuedPlaybackKeysChange?: (playbackKeys: readonly string[]) => void
   readOwnMessages?: boolean
+  // Read a text one sentence at a time (default). When it answers false the
+  // whole remaining text is one clip. Asked for every clip, so it can change.
+  splitSentences?: () => boolean
   stallTimeoutMs?: number
   audioTimeoutMs?: number
   prefetchLimit?: number
@@ -344,7 +347,7 @@ export class EarphoneAutoReadController {
       if (full && remainder) {
         // Read the remainder one sentence at a time.
         const fullText = full.text.trim()
-        const sentenceEnd = firstEarphoneModeSentenceEnd(remainder)
+        const sentenceEnd = (this.options.splitSentences?.() ?? true) ? firstEarphoneModeSentenceEnd(remainder) : null
         const pieceText = sentenceEnd === null ? remainder : remainder.slice(0, sentenceEnd).trim()
         const readAfter = sentenceEnd === null
           ? fullText

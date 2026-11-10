@@ -865,6 +865,27 @@ describe('EarphoneAutoReadController sentences', () => {
   })
 })
 
+describe('EarphoneAutoReadController sentence switch', () => {
+  it('reads the whole text as one clip when sentences are switched off, and follows the switch', async () => {
+    let split = false
+    const h = createHarness({ splitSentences: () => split })
+    h.controller.arm(h.snapshot([]))
+    const whole = '첫 번째 문장입니다. 두 번째 문장입니다.'
+    h.controller.update(h.snapshot([message('a', h.now() + 100, { translations: { ko: whole } })]))
+    expect(h.requestTexts).toEqual([whole])
+    await h.resolveAudioRequest(0)
+    await h.finishPlayback()
+    expect(h.dispatched.map((item) => item.text)).toEqual([whole])
+
+    split = true
+    h.controller.update(h.snapshot([
+      message('a', h.now() - 100, { translations: { ko: whole } }),
+      message('b', h.now() + 100, { translations: { ko: whole } }),
+    ]))
+    expect(h.requestTexts.at(-1)).toBe('첫 번째 문장입니다.')
+  })
+})
+
 describe('EarphoneAutoReadController clips still arriving', () => {
   function arrivingClip(): TtsStreamClip {
     const clip = new TtsStreamClip(24000)
