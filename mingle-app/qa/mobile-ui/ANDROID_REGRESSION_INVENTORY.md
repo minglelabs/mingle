@@ -42,5 +42,5 @@ This inventory lists the regression targets that are explicitly wired into the c
 ## Notes
 
 - The Android inventory includes both contract targets and Appium targets because either one can be the authoritative guard for a historical atom.
-- Atoms that are missing from this inventory are not necessarily missing from mobile automation overall. Some are covered only on iOS, and the rest are classified in [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md).
-- Use [ANDROID_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_BACKLOG.md) to see which atoms are outside the Android inventory specifically.
+- Atoms that are missing from this inventory are not necessarily missing from mobile automation overall. Some are covered only on iOS, and the rest are classified in [ATOM_CLASSIFICATION.md](ATOM_CLASSIFICATION.md).
+- Use [ANDROID_REGRESSION_BACKLOG.md](ANDROID_REGRESSION_BACKLOG.md) to see which atoms are outside the Android inventory specifically.
