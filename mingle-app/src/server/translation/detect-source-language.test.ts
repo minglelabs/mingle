@@ -6,7 +6,7 @@ vi.mock('./translate-texts', () => ({
   translateTexts: mockTranslateTexts,
 }))
 
-import { detectSourceLanguage, isUndetectableText } from './detect-source-language'
+import { DETECTION_SAMPLE_CHARS, detectSourceLanguage, isUndetectableText } from './detect-source-language'
 
 describe('isUndetectableText', () => {
   it('is true for empty / whitespace / emoji / punctuation / digits only', () => {
@@ -41,6 +41,23 @@ describe('detectSourceLanguage', () => {
     expect(mockTranslateTexts).toHaveBeenCalledWith(
       expect.objectContaining({ redetectSourceLanguage: true, isFinal: true }),
     )
+  })
+
+  it('asks for the language only: one answer key, no translation targets', async () => {
+    mockTranslateTexts.mockResolvedValue({ detectedSourceLanguage: 'ko', translations: { en: '-' } })
+    await detectSourceLanguage({ text: '안녕하세요', clientHint: 'ko' })
+    const input = mockTranslateTexts.mock.calls[0]?.[0]
+    expect(input.targetLanguages).toEqual(['en'])
+    expect(input.systemPromptOverride).toContain('You do NOT translate')
+    expect(input.userPromptOverride).toBe('language_hints=en, zh-CN, ja, ko\nsourceLanguage=ko\ntext="안녕하세요"')
+  })
+
+  it('sends only the start of a long body', async () => {
+    mockTranslateTexts.mockResolvedValue({ detectedSourceLanguage: 'en', translations: { en: '-' } })
+    await detectSourceLanguage({ text: 'word '.repeat(1_000) })
+    const input = mockTranslateTexts.mock.calls[0]?.[0]
+    expect(input.text.length).toBe(DETECTION_SAMPLE_CHARS)
+    expect(input.userPromptOverride.length).toBeLessThan(DETECTION_SAMPLE_CHARS + 100)
   })
 
   it('falls back to a valid client hint when detection yields nothing', async () => {

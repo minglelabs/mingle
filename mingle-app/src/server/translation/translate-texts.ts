@@ -211,6 +211,8 @@ export type TranslateContext = {
   targetLanguages: string[]
   provider: TranslationProvider
   shouldRedetectSourceLanguage: boolean
+  /** Redetect prompt only: the room's languages when `targetLanguages` leaves one out. */
+  languageHints?: string[]
   immediatePreviousTurn: RecentTurnContext | null
   isFinal: boolean
   systemPromptOverride?: string
@@ -795,7 +797,7 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
   const userPromptLines = ctx.shouldRedetectSourceLanguage
     ? [
       'Current turn:',
-      `language_hints=${targetLangCodes}`,
+      `language_hints=${ctx.languageHints?.length ? ctx.languageHints.join(', ') : targetLangCodes}`,
       `sourceLanguage=${ctx.sourceLanguage}`,
       `text="${ctx.text}"`,
     ]

@@ -37,6 +37,7 @@ import type { ConversationHydrationCursor, ConversationHydrationUtterance } from
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { classifyChineseLanguage, resolveChineseVariant } from '@/lib/chinese-variant'
 import { pickSourceLanguageBubbleFlags } from '@/lib/source-language-bubble-flags'
+import { parseSttLanguageLabels } from '@/lib/stt-language-labels'
 import { canonicalizeSonioxLanguageHintCode } from '@/lib/stt-languages'
 import {
   resolveDefaultMingleClientReleaseVariant,
@@ -1423,6 +1424,8 @@ export interface ParsedSttTranscriptMessage {
   isFinal: boolean
   speaker: string
   finalizeSource?: string
+  /** Final transcripts only: every language the recognizer labelled this turn's words with. */
+  languages?: string[]
 }
 
 export function parseSttTranscriptMessage(
@@ -1452,6 +1455,7 @@ export function parseSttTranscriptMessage(
   const speaker = typeof utterance.speaker === 'string' && utterance.speaker.trim()
     ? utterance.speaker.trim()
     : 'unknown'
+  const sttLanguageLabels = parseSttLanguageLabels(utterance.languages)
 
   return {
     rawText,
@@ -1460,6 +1464,7 @@ export function parseSttTranscriptMessage(
     isFinal,
     speaker,
     ...(finalizeSource ? { finalizeSource } : {}),
+    ...(isFinal && sttLanguageLabels.length ? { languages: sttLanguageLabels } : {}),
   }
 }
 
@@ -5261,6 +5266,8 @@ export default function useRealtimeSTT({
       speaker?: string
       speakerAvatarSeed?: string
       speakerAvatarIndex?: number
+      /** Recognizer labels of this turn, when the STT server sent its own final. */
+      sttLanguages?: string[]
     },
   ) => {
     const { utteranceId, text, lang, currentTurnPreviousState, utterance } = localFinalizeResult
@@ -5286,6 +5293,7 @@ export default function useRealtimeSTT({
       sessionKey, clientContext, clientMessageId: utteranceId,
       sttDurationMs: options?.sttDurationMs,
       currentTurnPreviousState,
+      ...(options?.sttLanguages?.length ? { sttLanguages: options.sttLanguages } : {}),
       ...(bubbleTail?.translatedSource ? { bubbleTail } : {}),
       clientBundleRev: LIVE_TRANSLATE_CLIENT_BUNDLE_REV,
       ...(translationModel ? { translationModel } : {}),
@@ -6038,7 +6046,7 @@ export default function useRealtimeSTT({
 
     const transcript = parseSttTranscriptMessage(message, getCurrentTargetLanguages())
     if (transcript) {
-      const { rawText, text, language: lang, isFinal, speaker, finalizeSource } = transcript
+      const { rawText, text, language: lang, isFinal, speaker, finalizeSource, languages: sttLanguages } = transcript
       logSttDebug('transcript.received', {
         speaker,
         isFinal,
@@ -6232,6 +6240,7 @@ export default function useRealtimeSTT({
           {
             sttDurationMs,
             reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
+            ...(sttLanguages ? { sttLanguages } : {}),
             speaker: reconciledSpeaker,
             ...resolveReconciledSpeakerAvatar({
               reusedSpeakerAvatarSeed,
