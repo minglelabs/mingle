@@ -51,6 +51,11 @@ const nextConfig = {
       // 2.3.1 (device-audio capture in earphone mode) adds none either.
       // 2.3.2 (Soniox agent text input for echo removal) adds none either.
       // 2.3.3 (store keywords) adds none either.
+      // 2.3.4 (unsent-message push rewrite is server-side) adds none either.
+      ...['ios', 'android'].flatMap(platform => [
+        { source: `/api/${platform}/v2.3.4`, destination: `/api/${platform}/v2.2.0` },
+        { source: `/api/${platform}/v2.3.4/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
+      ]),
       ...['ios', 'android'].flatMap(platform => [
         { source: `/api/${platform}/v2.3.3`, destination: `/api/${platform}/v2.2.0` },
         { source: `/api/${platform}/v2.3.3/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
