@@ -192,3 +192,58 @@ export function joinTailTranslations(
   }
   return joined
 }
+
+// ===== When to ask for the next interim fill =====
+//
+// Most interim requests come back with nothing fixed: the model can only cut at
+// a clause or sentence boundary, and a boundary almost always shows up as a
+// punctuation mark in the STT text. So a request is worth sending when a new
+// mark has appeared, and otherwise only after a long stretch of new text.
+
+const CUT_CANDIDATE = /[.,!?;:…。、，！？；：،؛؟।]/g
+const SENTENCE_END = /[.!?…。！？؟।]$/
+const DENSE_SCRIPT_CHAR = /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Myanmar}\p{Script=Khmer}]/gu
+const NON_SPACE = /\S/g
+
+/** New characters that trigger a request when no new mark appeared. */
+export const INTERIM_FILL_FALLBACK_CHARS_DENSE = 40
+export const INTERIM_FILL_FALLBACK_CHARS_DEFAULT = 80
+
+/**
+ * Punctuation marks the model could cut at: a mark with words after it, or a
+ * sentence-ending mark at the very end. Marks inside numbers ("3.5", "1,000")
+ * do not count.
+ */
+export function countInterimCutCandidates(text: string): number {
+  const trimmed = (text || '').trim()
+  let count = 0
+  for (const match of trimmed.matchAll(CUT_CANDIDATE)) {
+    const index = match.index
+    const before = trimmed[index - 1] || ''
+    const after = trimmed[index + 1] || ''
+    if (/\d/.test(before) && /\d/.test(after)) continue
+    if (index < trimmed.length - 1 || SENTENCE_END.test(trimmed)) count += 1
+  }
+  return count
+}
+
+/**
+ * Scripts that say more per character (Hangul, Han, kana, Thai, ...) get the
+ * shorter fallback. Decided from the text itself, so an unknown or wrong
+ * language label does not matter.
+ */
+export function resolveInterimFillFallbackChars(text: string): number {
+  const total = (text.match(NON_SPACE) || []).length
+  if (total === 0) return INTERIM_FILL_FALLBACK_CHARS_DEFAULT
+  const dense = (text.match(DENSE_SCRIPT_CHAR) || []).length
+  return dense * 2 >= total ? INTERIM_FILL_FALLBACK_CHARS_DENSE : INTERIM_FILL_FALLBACK_CHARS_DEFAULT
+}
+
+/** True when the text since the last request is worth a new interim request. */
+export function shouldRequestInterimFill(currentText: string, lastRequestedText: string): boolean {
+  const current = (currentText || '').trim()
+  const last = (lastRequestedText || '').trim()
+  if (!current || current === last) return false
+  if (countInterimCutCandidates(current) > countInterimCutCandidates(last)) return true
+  return current.length >= last.length + resolveInterimFillFallbackChars(current)
+}

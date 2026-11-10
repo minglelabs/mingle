@@ -64,6 +64,7 @@ import {
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
 import type { UserSelectableTtsModel } from '@/lib/tts-models'
 import type { SttCaptureSource } from '@/lib/native-device-audio'
+import { shouldRequestInterimFill } from '@/lib/bubble-tail'
 import {
   REALTIME_FALLBACK_POLL_INTERVAL_MS,
   shouldRunRealtimeFallbackRefresh,
@@ -361,15 +362,16 @@ function isNativeAppRuntime(): boolean {
     && typeof window.ReactNativeWebView?.postMessage === 'function'
 }
 
-export type PartialTranslateMode = 'time' | 'char' | 'both'
+export type PartialTranslateMode = 'time' | 'char' | 'both' | 'clause'
 
 export function parsePartialTranslateMode(rawMode: string | undefined): PartialTranslateMode {
   const normalized = (rawMode || '').trim().toLowerCase()
   if (normalized === 'time') return 'time'
   if (normalized === 'both') return 'both'
-  // Default: a new request per N new characters, so the tail translation keeps
-  // pace with speech instead of a fixed clock.
-  return 'char'
+  if (normalized === 'char') return 'char'
+  // Default: a new request when the tail may have a new cut point (a new
+  // punctuation mark, or a long stretch of new text). See shouldRequestInterimFill.
+  return 'clause'
 }
 
 export function parsePositiveIntWithFallback(rawValue: string | undefined, fallback: number): number {
@@ -412,9 +414,13 @@ export function shouldTriggerPartialTranslate(input: {
     && input.elapsedSinceLastRequestMs >= input.intervalMs
   )
 
+  const clauseTriggered = input.mode === 'clause'
+    && shouldRequestInterimFill(normalizedCurrentText, normalizedLastRequestedText)
+  const triggered = charTriggered || timeTriggered || clauseTriggered
+
   return {
-    shouldRequest: charTriggered || timeTriggered,
-    nextLastTranslateLen: charTriggered || timeTriggered ? nextLastTranslateLen : input.lastTranslateLen,
+    shouldRequest: triggered,
+    nextLastTranslateLen: triggered ? nextLastTranslateLen : input.lastTranslateLen,
   }
 }
 

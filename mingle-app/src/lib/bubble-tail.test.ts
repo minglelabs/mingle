@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  countInterimCutCandidates,
   extendFixedSource,
   isSafeInterimCut,
   joinTailTranslations,
   matchTranslatedTailLength,
   parseBubbleTail,
   planBubbleTail,
+  resolveInterimFillFallbackChars,
+  shouldRequestInterimFill,
 } from './bubble-tail'
 
 describe('bubble tail', () => {
@@ -65,5 +68,34 @@ describe('previous bubble piece', () => {
       translatedSource: '근데', translations: { en: 'But' }, previousSource: 'So I tried again.', previousTranslations: {},
     }, '근데 또 안 됐어', ['en'])!
     expect(later.previousSource).toBe('')
+  })
+})
+
+describe('interim fill gate', () => {
+  it('counts marks with words after them and sentence ends', () => {
+    expect(countInterimCutCandidates('I think, maybe')).toBe(1)
+    expect(countInterimCutCandidates('I think,')).toBe(0)
+    expect(countInterimCutCandidates('Yes.')).toBe(1)
+    expect(countInterimCutCandidates('안녕하세요. 오늘은')).toBe(1)
+    expect(countInterimCutCandidates('今日は天気が良いので、午後から')).toBe(1)
+    expect(countInterimCutCandidates('it costs 3.5 dollars or 1,000 won')).toBe(0)
+  })
+
+  it('uses the shorter fallback for dense scripts, judged from the text', () => {
+    expect(resolveInterimFillFallbackChars('오늘 회의에서는 다음 분기')).toBe(40)
+    expect(resolveInterimFillFallbackChars('今日は天気がとても良い')).toBe(40)
+    expect(resolveInterimFillFallbackChars('Today I want to talk about')).toBe(80)
+    expect(resolveInterimFillFallbackChars('')).toBe(80)
+  })
+
+  it('asks on a new mark, or after the fallback stretch without one', () => {
+    expect(shouldRequestInterimFill('먼저 결과를 정리하고, 그다음에', '먼저 결과를')).toBe(true)
+    expect(shouldRequestInterimFill('먼저 결과를 정리하고', '먼저 결과를')).toBe(false)
+    expect(shouldRequestInterimFill('same text', 'same text')).toBe(false)
+    const korean = '가'.repeat(45)
+    expect(shouldRequestInterimFill(korean, '가가가')).toBe(true)
+    const english = 'word '.repeat(12).trim()
+    expect(shouldRequestInterimFill(english, 'word')).toBe(false)
+    expect(shouldRequestInterimFill('word '.repeat(18).trim(), 'word')).toBe(true)
   })
 })
