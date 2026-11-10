@@ -58,7 +58,7 @@ Run the whole ChatGPT pool on Nam's Windows PC instead of the MacBook:
 | Pool server | `node ~/.mingle/chatgpt-pool/chatgpt-pool.mjs serve`, launchd `app.mingle.chatgpt-pool` | same script under `%USERPROFILE%\.mingle\chatgpt-pool\`, started at log-on |
 | Ports | 10320 loopback, keyless (extensions + local CLI); 10321 loopback, key required (public) | same; both bound to `127.0.0.1` only |
 | Env | `CHATGPT_POOL_KEY` (from `~/.mingle/chatgpt-pool/api-key`), `CHATGPT_POOL_PUBLIC_PORT=10321` | same |
-| Extension | MV3 unpacked, loaded from `~/.mingle/chatgpt-pool/extension/` in 11 profiles, version **1.2.0** | loaded from `%USERPROFILE%\.mingle\chatgpt-pool\extension\` in every Windows profile |
+| Extension | MV3 unpacked, loaded from `~/.mingle/chatgpt-pool/extension/` in 11 profiles, version **1.2.1** | loaded from `%USERPROFILE%\.mingle\chatgpt-pool\extension\` in every Windows profile |
 | Public route | Cloudflare named tunnel `chatgpt-pool` (id `a5309179-…`), config `~/.mingle/chatgpt-pool/cloudflared.yml`, launchd `app.mingle.chatgpt-pool-cf` | no tunnel: DNS-only A record → home IP → router 443 → Caddy → `127.0.0.1:10321` (step 7) |
 | Old tunnel | ngrok, launchd `app.mingle.chatgpt-pool-tunnel` | not moved; turned off at cutover |
 | Log | `~/Library/Logs/app.mingle.chatgpt-pool.log` | `%USERPROFILE%\.mingle\chatgpt-pool\pool.log` |
@@ -332,6 +332,31 @@ orange, or port 80/443 forwarding lost.
 - When ChatGPT offers two candidate images, the runner takes the first without
   clicking. This hasn't been seen yet.
 - The MV3 worker keepalive (`setInterval(getPlatformInfo, 20s)`) must stay.
+- **Floods get the PC flagged.** On 2026-11-03 20:30–23:00 KST the server sent
+  ~7,600 conversation-title requests (a failed title was retried on every new
+  message; fixed in `3d493d1f`). Callers gave up after 120s but their jobs stayed
+  queued, so the pool worked through stale jobs for 15 hours. ChatGPT signed 10
+  of 11 accounts out and showed the last one "Our systems have detected unusual
+  activity coming from your system. Please try again later." Guards since then:
+  - at most `CHATGPT_POOL_MAX_QUEUE` (100) waiting jobs, then 503 `queue_full`;
+  - identical requests share one job (log `same <id> joins …`);
+  - a sync caller that closes its connection takes its waiting job out of the
+    queue (log `cancel …`); a job waiting over 10 min (images 20) fails with 504
+    `queue_timeout`;
+  - the extension (1.2.7) spots ChatGPT's "try again later" error in about 5s
+    and reports `rate_limited`; the server rests that account for an hour
+    (`pausedUntil` in `/accounts`) and answers 429 when every account is resting.
+  - `/health` has `ready`: accounts signed in and not resting. `accounts`
+    counts every connected profile, signed out or not.
+  - per-account pacing, so no account chats back to back: after each job an
+    account rests `CHATGPT_POOL_ACCOUNT_GAP_MS` (20 s, randomized up to 1.5x),
+    and takes at most `CHATGPT_POOL_ACCOUNT_PER_HOUR` (30) and
+    `CHATGPT_POOL_ACCOUNT_PER_DAY` (200) jobs. When every account is resting
+    from ChatGPT or at its cap, the request fails at once with 429
+    `account_quota`. `/accounts` shows `restingUntil`, `jobsLastHour`,
+    `jobsLastDay` and `cappedUntil`; capped accounts do not count in `ready`.
+    The counts live in memory, so a server restart starts them over.
+    Test: `node scripts/chatgpt-pool.pacing.test.mjs`.
 - Every log line names the account and, once found, the Chrome profile:
   `done <email> [Profile N (name)] <secs>`.
 

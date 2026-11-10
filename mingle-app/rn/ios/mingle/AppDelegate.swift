@@ -140,6 +140,13 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
   ) {
     // Keep APNs delivery and background notifications intact, but do not show
     // a banner, sound, or badge update while the conversation is already open.
+    // The sender unsent this message: in the background iOS rewrites the
+    // delivered notification itself (same apns-collapse-id, which is also the
+    // request identifier); in the foreground nothing is presented, so the
+    // stale one is removed here.
+    if notification.request.content.userInfo["recalled"] as? String == "1" {
+      center.removeDeliveredNotifications(withIdentifiers: [notification.request.identifier])
+    }
     completionHandler([])
   }
 

@@ -58,6 +58,8 @@ export type PublishPostInput = {
   extraImages?: ReadonlyArray<{ objectKey: string; dimensions: ImageDimensions | null }>
   /** Translations already made from `text` (staff review): used as is, only the other languages are translated. */
   knownTranslations?: ReadonlyArray<{ language: string; text: string }>
+  /** `chatgpt-pool` for an operator's post (operatorTextProvider); a real user's post leaves it unset. */
+  translationProvider?: 'chatgpt-pool'
   /** Client language hint; the server detection is authoritative. */
   clientHint?: string | null
   /** Raw idempotency key; a malformed value is ignored (server id, no dedupe). */
@@ -162,7 +164,7 @@ export async function publishPost(input: PublishPostInput): Promise<PublishPostR
 
   // ── Text post: detect → translate (settle within budget) → publish. ──
   // Server detection is authoritative; the client value is only a fallback.
-  const detected = await detectSourceLanguage({ text, clientHint: input.clientHint ?? null })
+  const detected = await detectSourceLanguage({ text, clientHint: input.clientHint ?? null, provider: input.translationProvider })
 
   const targetLanguages = detected ? resolveDefaultPostTranslationLanguages(detected) : []
   const known = new Map((input.knownTranslations ?? []).map((row) => [canonicalizeTranslationLanguageCode(row.language), row.text]))
@@ -178,6 +180,7 @@ export async function publishPost(input: PublishPostInput): Promise<PublishPostR
           sourceText: text,
           sourceLanguage: detected,
           targetLanguages: remaining,
+          provider: input.translationProvider,
         })
       : []),
   ]

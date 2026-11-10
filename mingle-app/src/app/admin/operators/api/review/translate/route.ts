@@ -4,6 +4,7 @@ import { requireAdminApi } from '@/server/admin/guard'
 import { STAFF_TRANSLATION_LANGUAGE, translateForStaff } from '@/server/operator-inbox/staff-translate'
 import { reviewTranslationsFor, withReviewTranslation } from '@/server/operator-post-reserve/review-translations'
 import { translatePostBodySettled } from '@/server/translation/post-translation-service'
+import { operatorTextProvider } from '@/server/translation/translate-texts'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
   // uses it as the post's Korean translation instead of translating again.
   // A post without its own language is written in the account's first language.
   const sourceLanguage = row.language ?? row.operatorUser.primaryLanguages[0] ?? 'auto'
-  const [settled] = await translatePostBodySettled({ sourceText: row.text, sourceLanguage, targetLanguages: [STAFF_TRANSLATION_LANGUAGE] })
+  const [settled] = await translatePostBodySettled({ sourceText: row.text, sourceLanguage, targetLanguages: [STAFF_TRANSLATION_LANGUAGE], provider: operatorTextProvider() })
   const text = settled?.status === 'ready' ? settled.text : null
   if (!text) return json({ error: 'translate_failed' }, 502)
   await prisma.operatorPostReserve.updateMany({

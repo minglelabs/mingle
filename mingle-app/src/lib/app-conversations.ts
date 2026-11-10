@@ -4,6 +4,7 @@ import { normalizeConversationMessageImage, type ConversationMessageImage } from
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
+import { resolveNationalityCountry } from "@/lib/nationality";
 import { formatLocalizedConversationTitle } from "@/i18n/conversations";
 import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
 import { resolveAccountBadge, type AccountBadgeKind } from "@/lib/account-badge";
@@ -324,6 +325,8 @@ type ChannelMemberProfile = {
   defaultDisplayLanguage: string | null;
   selectedLanguages: string[];
   nationality: string | null;
+  /** 국적 (ISO 3166-1 alpha-2) for the avatar flag; stored, else mapped from the first primary language. */
+  nationalityCountry: string | null;
   primaryLanguages: string[];
   status: string;
   pausedAt: Date | null;
@@ -380,6 +383,8 @@ type PendingInviteeProfile = {
   defaultConversationLanguages: string[];
   defaultDisplayLanguage: string | null;
   nationality: string | null;
+  /** 국적 (ISO 3166-1 alpha-2) for the avatar flag; stored, else mapped from the first primary language. */
+  nationalityCountry: string | null;
   primaryLanguages: string[];
   isOfficial: boolean;
   isOperator: boolean;
@@ -462,6 +467,7 @@ async function listPendingInviteeProfilesByUserIds(
       defaultConversationLanguages: true,
       defaultDisplayLanguage: true,
       nationality: true,
+      nationalityCountry: true,
       primaryLanguages: true,
       isOfficial: true,
       isOperator: true,
@@ -486,6 +492,7 @@ async function listPendingInviteeProfilesByUserIds(
       defaultConversationLanguages: resolveDefaultConversationLanguages(row.defaultConversationLanguages),
       defaultDisplayLanguage: resolvePersistedDisplayLanguage(row.defaultDisplayLanguage),
       nationality: primaryLanguages[0] ?? normalizedNationality,
+      nationalityCountry: resolveNationalityCountry(row.nationalityCountry, primaryLanguages),
       primaryLanguages,
       isOfficial: row.isOfficial === true,
       isOperator: row.isOperator === true,
@@ -525,6 +532,7 @@ async function listChannelMembersByChannelId(
           defaultConversationLanguages: true,
           defaultDisplayLanguage: true,
           nationality: true,
+          nationalityCountry: true,
           primaryLanguages: true,
           isOfficial: true,
           isOperator: true,
@@ -567,6 +575,7 @@ async function listChannelMembersByChannelId(
       // name/handle are (see GET /api/users/[userId], which already exposes
       // this to other users), not the per-room STT selection above.
       nationality: primaryLanguages[0] ?? normalizedNationality,
+      nationalityCountry: resolveNationalityCountry(row.user.nationalityCountry, primaryLanguages),
       primaryLanguages,
       status: row.status,
       pausedAt: row.pausedAt,
@@ -2475,6 +2484,8 @@ export type ConversationMemberSummary = {
   // Account-level "주 사용 언어" profile badge, distinct from selectedLanguages
   // above (that's this room's STT config). Public the same way name/handle are.
   nationality: string | null;
+  /** 국적 (ISO 3166-1 alpha-2) for the avatar flag; stored, else mapped from the first primary language. */
+  nationalityCountry: string | null;
   primaryLanguages: string[];
   // True when a block exists between the caller and this member (either
   // direction). name/handle/image are nulled out for a blocked member so
@@ -2542,6 +2553,7 @@ export async function listConversationMembersForUser(args: {
       imageCropY: blocked ? null : member.imageCropY,
       selectedLanguages: member.selectedLanguages,
       nationality: member.nationality,
+      nationalityCountry: member.nationalityCountry,
       primaryLanguages: member.primaryLanguages,
       blocked,
       ...identityBadgeFlags(member),
@@ -2558,6 +2570,7 @@ export async function listConversationMembersForUser(args: {
     imageCropY: profile.imageCropY,
     selectedLanguages: profile.defaultConversationLanguages,
     nationality: profile.nationality,
+    nationalityCountry: profile.nationalityCountry,
     primaryLanguages: profile.primaryLanguages,
     blocked: false,
     ...identityBadgeFlags(profile),
@@ -2633,7 +2646,7 @@ export async function inviteMembersToConversationChannel(args: {
     // would otherwise let a stale [...existing.pendingInviteeUserIds] write
     // overflow MAX_CONVERSATION_MEMBERS or resurrect a member who just joined
     // via the link and was pulled out of pending.
-    await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM app.app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
 
     const freshChannel = await tx.appConversationChannel.findFirst({
       where: {
@@ -2937,7 +2950,7 @@ export async function joinConversationChannelViaShareToken(args: {
 
   const record = await prisma.$transaction(async (tx) => {
     // Acquire row-level lock on the conversation channel to serialize concurrent joins against capacity and pending invitee updates
-    await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${conversationRecord.id} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM app.app_conversation_channels WHERE id = ${conversationRecord.id} FOR UPDATE`;
 
     const freshChannel = await tx.appConversationChannel.findFirst({
       where: {
@@ -3214,10 +3227,9 @@ async function getConversationHydrationStateForRecord(args: {
   const nameByUserId = new Map((members ?? []).map((member) => [member.userId, member.name]));
   const handleByUserId = new Map((members ?? []).map((member) => [member.userId, member.handle]));
   const badgeByUserId = new Map((members ?? []).map((member) => [member.userId, resolveAccountBadge(member)]));
-  // See ConversationHydrationState.operatorDisclosure. Uses the same
-  // (snapshot-adjusted) member list as the rest of this state, so a share
-  // snapshot discloses exactly the operators who were in the room then.
-  const operatorDisclosure = filterActiveMembers(members).some((member) => member.isOperator);
+  // Staff decided (2026-10-31) that operator accounts look like any other
+  // user everywhere in the app, chat rooms included: no notice is shown.
+  const operatorDisclosure = false;
   const blockedCounterpartByChannelId = await resolveBlockedCounterpartUserIdByChannelId(
     args.viewerUserId,
     membersByChannelId,
@@ -3626,7 +3638,7 @@ export async function setConversationShareEnabled(args: {
       const record = await prisma.$transaction(async (tx) => {
         // Same lock joinConversationChannelViaShareToken takes, so an enable
         // and a concurrent disable serialize on this row instead of racing.
-        await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM app.app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
 
         // Re-read the on/off state and token UNDER the lock — this, not the
         // unlocked authorize read above, is what the decision is made on.
@@ -3744,7 +3756,7 @@ export async function refreshConversationShareSnapshot(args: {
   }
 
   const record = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM app.app_conversation_channels WHERE id = ${args.conversationId} FOR UPDATE`;
 
     // Re-read under the lock: only refresh a snapshot that is STILL live. A
     // disable that revoked the link (shareToken=null, shareEnabled=false)

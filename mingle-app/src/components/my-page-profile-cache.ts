@@ -1,6 +1,7 @@
 "use client";
 
 import type { BirthDateParts } from "@/lib/birth-date";
+import type { ProfileGender } from "@/lib/profile-gender";
 import type { ProfileLocationRecord } from "@/lib/profile-location";
 import { sanitizeInterestLanguages, type InterestLanguage } from "@/lib/interest-languages";
 
@@ -17,21 +18,26 @@ export type MyPageProfileRecord = {
   name: string | null;
   bio: string | null;
   nationality: string | null;
+  /** 국적 (ISO 3166-1 alpha-2), the flag on the avatar. Optional: older caches have none. */
+  nationalityCountry?: string | null;
   primaryLanguages: string[];
   interestLanguages?: InterestLanguage[];
   defaultConversationLanguages: string[];
   location: ProfileLocationRecord | null;
   birthDate?: BirthDateParts | null;
+  /** Public gender and age shown in the header badge. */
+  gender?: ProfileGender | null;
+  age?: number | null;
   followersCount: number;
   followingCount: number;
   /** Operator / official account; absent means false. */
   isOfficial?: boolean;
 };
 
-// Only what the profile header shows is written to disk. Location, birth date
-// and the unpublished bio draft stay in memory and are restored by the API
+// Only what the profile header shows is written to disk. Location, birth date,
+// gender/age and the unpublished bio draft stay in memory and are restored by the API
 // refresh that follows every mount.
-type PersistedMyPageProfile = Omit<MyPageProfileRecord, "bioDraft" | "birthDate" | "location">;
+type PersistedMyPageProfile = Omit<MyPageProfileRecord, "bioDraft" | "birthDate" | "gender" | "age" | "location">;
 
 type PersistedMyPageProfileRecord = {
   savedAt: number;
@@ -108,6 +114,7 @@ function normalizePersistedRecord(value: unknown, now = Date.now()): MyPageProfi
     || !isNullableString(profile.name)
     || !isNullableString(profile.bio)
     || !isNullableString(profile.nationality)
+    || !(typeof profile.nationalityCountry === "undefined" || isNullableString(profile.nationalityCountry))
     || !isStringArray(profile.primaryLanguages)
     || !isStringArray(profile.defaultConversationLanguages)
     || !isCount(profile.followersCount)
@@ -127,6 +134,7 @@ function normalizePersistedRecord(value: unknown, now = Date.now()): MyPageProfi
     name: profile.name,
     bio: profile.bio,
     nationality: profile.nationality,
+    nationalityCountry: profile.nationalityCountry ?? null,
     primaryLanguages: profile.primaryLanguages,
     interestLanguages: sanitizeInterestLanguages(profile.interestLanguages),
     defaultConversationLanguages: profile.defaultConversationLanguages,
@@ -181,6 +189,7 @@ export function writeMyPageProfileCache(userId: string, profile: MyPageProfileRe
       name: profile.name,
       bio: profile.bio,
       nationality: profile.nationality,
+      nationalityCountry: profile.nationalityCountry ?? null,
       primaryLanguages: profile.primaryLanguages,
       interestLanguages: profile.interestLanguages ?? [],
       defaultConversationLanguages: profile.defaultConversationLanguages,

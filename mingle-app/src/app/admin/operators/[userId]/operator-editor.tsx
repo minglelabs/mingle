@@ -1,12 +1,13 @@
 'use client'
 
-import Link from 'next/link'
 import { useMemo, useState, type ChangeEvent } from 'react'
-import { ArrowLeft, Camera, Check, Copy, ExternalLink, Loader2, Plus, RefreshCw, X } from 'lucide-react'
+import { ArrowLeft, Camera, Check, Copy, ExternalLink, Loader2, Plus, RefreshCw, Sparkles, X } from 'lucide-react'
 import LanguageLevelPicker from '@/components/language-level-picker'
 import { MAX_INTEREST_LANGUAGES, type InterestLanguage } from '@/lib/interest-languages'
 import type { OperatorAccountDetail } from '@/server/operators/operator-admin-query'
+import type { ProfileAiDraft, ProfileAiScope } from '@/server/operators/profile-ai'
 import { OPERATOR_NOTES_MAX_LENGTH, type PersonaDraftField, type PersonaFieldError } from '@/server/operators/persona-rules'
+import { AdminBackLink } from '../../_components/admin-nav'
 import { InactiveChip, Notice, OperatorChip } from '../_components/operator-ui'
 import { ZoomableAvatar } from '../_components/zoomable-avatar'
 import { PersonaFields, type PersonaFieldValues } from '../_components/persona-fields'
@@ -55,6 +56,27 @@ function buildPatch(
   return patch
 }
 
+/** The form with an AI draft filled in; only the fields the draft has change. */
+function withDraft(values: PersonaFieldValues, draft: ProfileAiDraft): PersonaFieldValues {
+  return {
+    ...values,
+    ...(draft.bio !== undefined ? { bio: draft.bio } : {}),
+    ...(draft.name !== undefined ? { name: draft.name } : {}),
+    ...(draft.handle !== undefined ? { handle: draft.handle } : {}),
+    ...(draft.city !== undefined ? { city: draft.city } : {}),
+    ...(draft.birthYear !== undefined ? { birthYear: String(draft.birthYear) } : {}),
+  }
+}
+
+const AI_ERROR_TEXT: Record<string, string> = {
+  no_persona: '페르소나 국가가 없는 계정(스태프 계정)은 AI로 만들 수 없습니다.',
+  draft_failed: 'AI가 답하지 못했습니다. 잠시 뒤 다시 눌러 주세요.',
+}
+
+/** The new photo is drawn in the background; the editor checks every 10 s for up to 6 minutes. */
+const PHOTO_POLL_MS = 10_000
+const PHOTO_POLL_LIMIT = 36
+
 export function OperatorEditor({
   initial,
   countries,
@@ -79,6 +101,7 @@ export function OperatorEditor({
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const [photo, setPhoto] = useState<{ status: 'idle' | 'uploading' | 'failed'; error?: string }>({ status: 'idle' })
   const [copied, setCopied] = useState(false)
+  const [aiBusy, setAiBusy] = useState<ProfileAiScope | 'photo' | null>(null)
 
   const baseline = useMemo(() => detailToValues(account), [account])
   const patch = useMemo(
@@ -151,6 +174,89 @@ export function OperatorEditor({
     }
   }
 
+  const requestDraft = async (scope: ProfileAiScope): Promise<ProfileAiDraft | null> => {
+    const result = await sendJson<{ draft: ProfileAiDraft }>(`${endpoint}/ai`, { scope })
+    if (result.ok) return result.data.draft
+    setMessage({ tone: 'error', text: AI_ERROR_TEXT[result.error] ?? requestErrorMessage(result.error) })
+    return null
+  }
+
+  /** 소개글만 / 소개글·프사 빼고: fills the form; staff check it and press save. */
+  const fillWithAi = async (scope: 'bio' | 'profile') => {
+    if (aiBusy || saving) return
+    setAiBusy(scope)
+    setMessage(null)
+    const draft = await requestDraft(scope)
+    setAiBusy(null)
+    if (!draft) return
+    setValues(current => withDraft(current, draft))
+    if (draft.interestLanguages) setInterest(draft.interestLanguages)
+    setErrors([])
+    setMessage({ tone: 'success', text: 'AI가 채웠습니다. 확인하고 저장을 눌러 주세요.' })
+  }
+
+  /** Draws a new photo in the background and waits for it to land on the account. */
+  const drawPhoto = async (): Promise<boolean> => {
+    const before = account.image
+    const started = await sendJson<{ drawing: boolean }>(`/admin/operators/api/${encodeURIComponent(account.id)}/avatar/generate?background=1`, {})
+    if (!started.ok) {
+      setMessage({ tone: 'error', text: requestErrorMessage(started.error) })
+      return false
+    }
+    for (let attempt = 0; attempt < PHOTO_POLL_LIMIT; attempt += 1) {
+      await new Promise(resolve => window.setTimeout(resolve, PHOTO_POLL_MS))
+      const result = await getJson<{ account: OperatorAccountDetail }>(endpoint)
+      if (result.ok && result.data.account.image && result.data.account.image !== before) {
+        setAccount(current => ({ ...current, image: result.data.account.image }))
+        return true
+      }
+    }
+    setMessage({ tone: 'error', text: '사진을 아직 받지 못했습니다. 잠시 뒤 새로고침하거나 다시 눌러 주세요.' })
+    return false
+  }
+
+  const redrawPhoto = async () => {
+    if (aiBusy || saving) return
+    if (!window.confirm('프로필 사진을 AI로 새로 그려서 바로 바꿉니다. 30초~2분 걸립니다.')) return
+    setAiBusy('photo')
+    setMessage(null)
+    const done = await drawPhoto()
+    setAiBusy(null)
+    if (done) setMessage({ tone: 'success', text: '새 프로필 사진으로 바꿨습니다.' })
+  }
+
+  /** 전체: a new profile and bio, saved right away, then a photo drawn for the new profile. */
+  const remakeAll = async () => {
+    if (aiBusy || saving) return
+    if (!window.confirm('이름·아이디·도시·나이·관심 언어·소개글을 AI로 새로 만들어 바로 저장하고, 프로필 사진도 새로 그립니다. 국가와 성별은 그대로입니다.')) return
+    setAiBusy('all')
+    setMessage(null)
+    const draft = await requestDraft('all')
+    if (!draft) {
+      setAiBusy(null)
+      return
+    }
+    const nextValues = withDraft(values, draft)
+    const nextInterest = draft.interestLanguages ?? interest
+    const nextPatch = buildPatch(baseline, nextValues, account.notes ?? '', notes, account.interestLanguages, nextInterest)
+    setValues(nextValues)
+    setInterest(nextInterest)
+    if (Object.keys(nextPatch).length) {
+      const saved = await sendJson<{ account: OperatorAccountDetail }>(endpoint, nextPatch, 'PATCH')
+      if (!saved.ok) {
+        setAiBusy(null)
+        setErrors(saved.errors)
+        setMessage({ tone: 'error', text: requestErrorMessage(saved.error) })
+        return
+      }
+      applyAccount(saved.data.account)
+    }
+    setMessage({ tone: 'success', text: '저장했습니다. 프로필 사진을 그리는 중입니다…' })
+    const done = await drawPhoto()
+    setAiBusy(null)
+    if (done) setMessage({ tone: 'success', text: '전체를 새로 만들었습니다. 소개는 잠시 뒤 번역됩니다.' })
+  }
+
   const copyLink = async () => {
     if (!account.profilePath) return
     try {
@@ -165,9 +271,9 @@ export function OperatorEditor({
   return (
     <div>
       <div className="flex items-center gap-2">
-        <Link href={backHref} className="-ml-2 inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 active:bg-slate-200" aria-label="운영 계정 목록으로">
+        <AdminBackLink href={backHref} className="-ml-2 inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 active:bg-slate-200" aria-label="이전 화면으로">
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </Link>
+        </AdminBackLink>
         <h1 className="min-w-0 flex-1 truncate text-xl font-bold text-slate-900">운영 계정</h1>
       </div>
 
@@ -205,6 +311,30 @@ export function OperatorEditor({
         {photo.status === 'failed' && photo.error ? <div className="mt-3"><Notice tone="error">{photo.error}</Notice></div> : null}
         <p className="mt-3 break-words text-xs leading-5 text-slate-500">
           이 계정은 로그인할 수 없고, 앱에서 이름 옆에 항상 &lsquo;운영 계정&rsquo; 표시가 붙습니다. 사진은 정사각형으로 잘리고 위치 정보는 지워집니다.
+        </p>
+      </section>
+
+      <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-4" aria-label="AI로 다시 만들기">
+        <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+          <Sparkles className="h-4 w-4 text-violet-500" aria-hidden="true" />
+          AI로 다시 만들기
+          <span className="font-normal text-slate-400">(국가·성별은 그대로)</span>
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            ['bio', '소개글만', () => fillWithAi('bio')],
+            ['photo', '프사만', redrawPhoto],
+            ['profile', '소개글·프사 빼고', () => fillWithAi('profile')],
+            ['all', '전체', remakeAll],
+          ] as const).map(([key, label, run]) => (
+            <button key={key} type="button" className={`${SECONDARY_BUTTON} px-2`} onClick={run} disabled={Boolean(aiBusy) || saving || (key !== 'bio' && key !== 'profile' && dirty)}>
+              {aiBusy === key ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          소개글만·소개글·프사 빼고는 칸만 채우고 저장은 직접 누릅니다. 프사만·전체는 바로 반영됩니다(저장 안 한 수정이 있으면 먼저 저장).
         </p>
       </section>
 

@@ -25,14 +25,18 @@ import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
  */
 export default function InterestLanguageSheet({
   locale,
-  primaryLanguages,
+  initialLanguage = null,
   onSave,
   onClose,
   closeLabel,
 }: {
   locale: string;
-  /** Left out of the list: a 관심 언어 is never one the user already speaks. */
-  primaryLanguages: readonly string[];
+  /**
+   * Checked when the sheet opens, so a user who already picked it elsewhere
+   * (e.g. a second language in an older profile) only has to choose a level.
+   * Nothing is left out of the list: a missing language strands the user.
+   */
+  initialLanguage?: string | null;
   onSave: (language: InterestLanguage) => Promise<boolean>;
   onClose: () => void;
   /** The dismiss button's label: "Later" when asked unprompted, otherwise close. */
@@ -42,18 +46,20 @@ export default function InterestLanguageSheet({
   const copy = useMemo(() => resolveLanguageOnboardingCopy(locale), [locale]);
   const interestCopy = useMemo(() => resolveInterestLanguageCopy(locale), [locale]);
   const [query, setQuery] = useState("");
-  const [code, setCode] = useState<string | null>(null);
+  const languageItems = useMemo(() => buildLanguageSelectorItems(locale), [locale]);
+  const [code, setCode] = useState<string | null>(() => {
+    const initial = initialLanguage ? canonicalizeSttLanguageCode(initialLanguage) : "";
+    if (!initial) return null;
+    return languageItems.find((item) => canonicalizeSttLanguageCode(item.code) === initial)?.code ?? null;
+  });
   const [level, setLevel] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
 
-  const spoken = useMemo(() => new Set(primaryLanguages.map((language) => canonicalizeSttLanguageCode(language))), [primaryLanguages]);
-  const languageItems = useMemo(() => buildLanguageSelectorItems(locale), [locale]);
   const { priorityItems, otherItems } = useMemo(() => {
-    const visible = filterLanguageSelectorItems(languageItems, query)
-      .filter((item) => !spoken.has(canonicalizeSttLanguageCode(item.code)));
+    const visible = filterLanguageSelectorItems(languageItems, query);
     return partitionLanguageSelectorItemsByPriority(sortLanguageSelectorItems(visible, "locale", locale));
-  }, [languageItems, locale, query, spoken]);
+  }, [languageItems, locale, query]);
 
   useEffect(() => {
     const previous = document.body.style.overflow;

@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   loadPersona: vi.fn(),
   loadTexts: vi.fn(),
   publishNow: vi.fn(),
+  canDraw: vi.fn(() => false),
+  drawAvatar: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -28,7 +30,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.audit }))
-vi.mock('@/server/operator-avatars/generate', () => ({ planOperatorAvatar: mocks.generateAvatar }))
+vi.mock('@/server/operator-avatars/generate', () => ({ planOperatorAvatar: mocks.generateAvatar, canDrawImagesHere: mocks.canDraw, generateOperatorAvatar: mocks.drawAvatar }))
 vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: mocks.drawImage }))
 vi.mock('@/server/operator-post-reserve/generate', () => ({
   generateReservePosts: mocks.generatePosts,
@@ -39,9 +41,10 @@ vi.mock('@/server/operator-post-reserve/worker', () => ({
   loadReservePersona: mocks.loadPersona,
   loadExistingReserveTexts: mocks.loadTexts,
   publishReservePostNow: mocks.publishNow,
+  PHOTO_REQUESTED: 'photo_requested',
 }))
 
-import { normalizeReviewFeedback, parseReviewAction, reviewOperatorPost, reviewOperatorProfile } from './review'
+import { normalizeReviewFeedback, parseReviewAction, releaseOrphanedDrawings, reviewOperatorPost, reviewOperatorProfile, setReviewPostText } from './review'
 
 const PENDING_ACCOUNT = { reviewState: 'pending', user: { isOperator: true, isDeleted: false } }
 const REVIEW_POST = {
@@ -54,6 +57,7 @@ beforeEach(() => {
   mocks.transaction.mockResolvedValue([])
   mocks.accountUpdateMany.mockResolvedValue({ count: 1 })
   mocks.reserveUpdateMany.mockResolvedValue({ count: 1 })
+  mocks.canDraw.mockReturnValue(false)
 })
 
 describe('review input', () => {
@@ -116,10 +120,26 @@ describe('reviewOperatorPost', () => {
     mocks.drawImage.mockResolvedValue({ objectKey: 'post-images/op1/a.jpg', width: 900, height: 1200 })
     mocks.reserveUpdate.mockImplementation(async ({ data }) => ({ ...REVIEW_POST, ...data }))
 
+    mocks.canDraw.mockReturnValue(true)
+
     const result = await reviewOperatorPost(null, 'r1', 'regenerate', '더 짧게')
-    expect(result).toMatchObject({ ok: true, state: 'review', post: { text: 'new text', imageObjectKey: 'post-images/op1/a.jpg' } })
+    // The new text shows at once; the photo follows in the background.
+    expect(result).toMatchObject({ ok: true, state: 'review', post: { text: 'new text', photoDrawing: true } })
     expect(mocks.generatePosts).toHaveBeenCalledWith(expect.objectContaining({ revision: { previousText: 'old text', feedback: '더 짧게' } }))
-    expect(mocks.reserveUpdate.mock.calls[0][0].data).toMatchObject({ state: 'review', language: null, imageWidth: 900 })
+    expect(mocks.reserveUpdate.mock.calls[0][0].data).toMatchObject({ state: 'regenerating', language: null, error: 'photo_drawing' })
+    await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
+    expect(mocks.reserveUpdateMany.mock.calls[1][0].data).toMatchObject({ state: 'review', imageObjectKey: 'post-images/op1/a.jpg', imageWidth: 900 })
+  })
+
+  it('leaves the photo of a rewritten post to be drawn by hand where no pool is set up', async () => {
+    mocks.reserveFindUnique.mockResolvedValue(REVIEW_POST)
+    mocks.loadPersona.mockResolvedValue({ language: 'ja' })
+    mocks.loadTexts.mockResolvedValue([])
+    mocks.generatePosts.mockResolvedValue([{ topic: 'daily', text: 'new text', language: 'ja', imagePrompt: '[scene] ramen' }])
+    mocks.reserveUpdate.mockImplementation(async ({ data }) => ({ ...REVIEW_POST, ...data }))
+    await expect(reviewOperatorPost(null, 'r1', 'regenerate', null)).resolves.toMatchObject({ ok: true, post: { photoRequested: true } })
+    expect(mocks.drawImage).not.toHaveBeenCalled()
+    expect(mocks.reserveUpdate.mock.calls[0][0].data).toMatchObject({ state: 'review', error: 'photo_requested' })
   })
 
   it('puts a failed rewrite back in review', async () => {
@@ -132,18 +152,117 @@ describe('reviewOperatorPost', () => {
     })
   })
 
-  it('stays busy while a 재제작 is running, and lets staff answer once one has hung', async () => {
-    const now = new Date('2026-10-30T06:00:00Z')
-    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, state: 'regenerating' })
-    mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 0 })
-    await expect(reviewOperatorPost(null, 'r1', 'publish', null, now)).resolves.toEqual({ ok: false, error: 'busy' })
-    expect(mocks.reserveUpdateMany).toHaveBeenLastCalledWith({
-      where: { id: 'r1', state: 'regenerating', updatedAt: { lt: new Date('2026-10-30T05:45:00Z') } },
-      data: { state: 'review' },
-    })
-
-    mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 1 })
+  it('is busy only while a 재제작 really runs here; a row a cut-off job left behind is put back and answered', async () => {
     mocks.publishNow.mockResolvedValue({ ok: true, postId: 'p1' })
-    await expect(reviewOperatorPost(null, 'r1', 'publish', null, now)).resolves.toEqual({ ok: true, state: 'published', postId: 'p1' })
+    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, state: 'regenerating' })
+    await expect(reviewOperatorPost(null, 'r1', 'publish', null)).resolves.toEqual({ ok: true, state: 'published', postId: 'p1' })
+    expect(mocks.reserveUpdateMany).toHaveBeenCalledWith({ where: { id: 'r1', state: 'regenerating' }, data: { state: 'review' } })
+
+    // A 재제작 that is running here: its claim has not answered yet.
+    mocks.reserveUpdateMany.mockClear()
+    let claim!: (result: { count: number }) => void
+    mocks.reserveFindUnique.mockResolvedValueOnce(REVIEW_POST)
+    mocks.reserveUpdateMany.mockReturnValueOnce(new Promise((resolve) => { claim = resolve }))
+    const running = reviewOperatorPost(null, 'r1', 'regenerate', null)
+    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, state: 'regenerating' })
+    await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(1))
+    await expect(reviewOperatorPost(null, 'r1', 'publish', null)).resolves.toEqual({ ok: false, error: 'busy' })
+    expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(1)
+    claim({ count: 0 })
+    await expect(running).resolves.toEqual({ ok: false, error: 'busy' })
+  })
+})
+
+describe('where this server can draw (the ChatGPT pool)', () => {
+  beforeEach(() => mocks.canDraw.mockReturnValue(true))
+
+  it('answers at once and draws only the photo of a post in the background', async () => {
+    mocks.reserveFindUnique
+      .mockResolvedValueOnce({ ...REVIEW_POST, imagePrompt: '[self] a selfie' })
+      .mockResolvedValueOnce({ ...REVIEW_POST, imagePrompt: '[self] a selfie', state: 'regenerating', error: 'photo_drawing' })
+    mocks.drawImage.mockResolvedValue({ objectKey: 'posts/op1/a.jpg', width: 1280, height: 960 })
+    const result = await reviewOperatorPost(null, 'r1', 'draw', '웃는 얼굴로')
+    expect(result).toMatchObject({ ok: true, state: 'review', post: { photoDrawing: true } })
+    expect(mocks.reserveUpdateMany.mock.calls[0][0]).toMatchObject({ where: { id: 'r1', state: 'review' }, data: { state: 'regenerating', error: 'photo_drawing' } })
+    await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
+    expect(mocks.drawImage).toHaveBeenCalledWith('op1', '[self] a selfie\nStaff feedback on this photo, to follow: 웃는 얼굴로')
+    expect(mocks.generatePosts).not.toHaveBeenCalled()
+    const done = mocks.reserveUpdateMany.mock.calls[1][0]
+    expect(done.data).toMatchObject({ state: 'review', imageObjectKey: 'posts/op1/a.jpg', error: null })
+    expect(done.data.text).toBeUndefined()
+  })
+
+  it('marks a failed background drawing so the draw button comes back', async () => {
+    mocks.reserveFindUnique.mockResolvedValue({ ...REVIEW_POST, imagePrompt: '[self] a selfie' })
+    mocks.drawImage.mockResolvedValue(null)
+    await expect(reviewOperatorPost(null, 'r1', 'draw', null)).resolves.toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(mocks.reserveUpdateMany).toHaveBeenCalledTimes(2))
+    expect(mocks.reserveUpdateMany.mock.calls[1][0].data).toEqual({ state: 'review', error: 'photo_draw_failed' })
+  })
+
+  it('draws a new profile photo in the background on 재제작', async () => {
+    mocks.accountFindUnique.mockResolvedValue(PENDING_ACCOUNT)
+    mocks.drawAvatar.mockResolvedValue({ ok: true, image: 'https://img.example/b.jpg', spec: {} })
+    await expect(reviewOperatorProfile(null, 'op1', 'regenerate', '안경 없이')).resolves.toEqual({ ok: true, state: 'drawing' })
+    expect(mocks.accountUpdate.mock.calls[0][0].data).toMatchObject({ reviewState: 'drawing' })
+    await vi.waitFor(() => expect(mocks.accountUpdateMany).toHaveBeenCalled())
+    expect(mocks.drawAvatar).toHaveBeenCalledWith(null, 'op1', { feedback: '안경 없이' })
+    expect(mocks.accountUpdateMany.mock.calls[0][0]).toMatchObject({ where: { userId: 'op1', reviewState: 'drawing' }, data: { reviewState: 'pending' } })
+    expect(mocks.generateAvatar).not.toHaveBeenCalled()
+  })
+
+  it('leaves the profile photo to be drawn by hand when the pool fails', async () => {
+    mocks.accountFindUnique.mockResolvedValue(PENDING_ACCOUNT)
+    mocks.drawAvatar.mockResolvedValue({ ok: false, error: 'image_unavailable' })
+    mocks.generateAvatar.mockResolvedValue({ prompt: 'p' })
+    await expect(reviewOperatorProfile(null, 'op1', 'regenerate', null)).resolves.toEqual({ ok: true, state: 'drawing' })
+    await vi.waitFor(() => expect(mocks.accountUpdateMany).toHaveBeenCalled())
+    expect(mocks.accountUpdateMany.mock.calls[0][0].data).toEqual({ avatarSpec: { prompt: 'p' } })
+  })
+})
+
+describe('releaseOrphanedDrawings', () => {
+  it('puts drawings and rewrites a previous process left behind back in review', async () => {
+    mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 3 }).mockResolvedValueOnce({ count: 2 })
+    await expect(releaseOrphanedDrawings()).resolves.toBe(5)
+    expect(mocks.reserveUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: { state: 'regenerating', error: 'photo_drawing' },
+      data: { state: 'review', error: 'photo_draw_failed' },
+    })
+    expect(mocks.reserveUpdateMany).toHaveBeenNthCalledWith(2, { where: { state: 'regenerating' }, data: { state: 'review' } })
+  })
+})
+
+describe('an account left drawing by a cut-off job', () => {
+  it('is put back and answered where the pool draws, not refused as busy', async () => {
+    mocks.canDraw.mockReturnValue(true)
+    mocks.accountFindUnique.mockResolvedValue({ ...PENDING_ACCOUNT, reviewState: 'drawing' })
+    mocks.drawAvatar.mockResolvedValue({ ok: true })
+    await expect(reviewOperatorProfile(null, 'op9', 'regenerate', null)).resolves.toEqual({ ok: true, state: 'drawing' })
+    expect(mocks.accountUpdateMany).toHaveBeenCalledWith({ where: { userId: 'op9', reviewState: 'drawing' }, data: { reviewState: 'pending' } })
+  })
+
+  it('stays busy where nobody draws it here (waiting for the hand-drawn route)', async () => {
+    mocks.accountFindUnique.mockResolvedValue({ ...PENDING_ACCOUNT, reviewState: 'drawing' })
+    await expect(reviewOperatorProfile(null, 'op9', 'regenerate', null)).resolves.toEqual({ ok: false, error: 'busy' })
+  })
+})
+
+describe('setReviewPostText', () => {
+  it('saves staff-written text on a post in review and audits it', async () => {
+    mocks.reserveFindUnique
+      .mockResolvedValueOnce({ state: 'review', operatorUserId: 'op1' })
+      .mockResolvedValueOnce({ ...REVIEW_POST, text: '새 글' })
+    mocks.reserveUpdateMany.mockResolvedValue({ count: 1 })
+    await expect(setReviewPostText({} as never, 'r1', '  새 글  ')).resolves.toMatchObject({ ok: true, post: { text: '새 글' } })
+    expect(mocks.reserveUpdateMany).toHaveBeenCalledWith({ where: { id: 'r1', state: 'review' }, data: { text: '새 글' } })
+    expect(mocks.audit).toHaveBeenCalledWith({}, expect.objectContaining({ metadata: { decision: 'edit_text', length: 3 } }))
+  })
+
+  it('refuses empty or too long text, and a post that is not in review', async () => {
+    await expect(setReviewPostText({} as never, 'r1', '   ')).resolves.toEqual({ ok: false, error: 'invalid_text' })
+    await expect(setReviewPostText({} as never, 'r1', 'a'.repeat(1001))).resolves.toEqual({ ok: false, error: 'invalid_text' })
+    mocks.reserveFindUnique.mockResolvedValueOnce({ state: 'published', operatorUserId: 'op1' })
+    await expect(setReviewPostText({} as never, 'r1', 'ok')).resolves.toEqual({ ok: false, error: 'not_found' })
   })
 })

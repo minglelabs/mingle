@@ -3,7 +3,9 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { ChevronLeft, Heart, Loader2, MessageCircle, SendHorizontal, X } from 'lucide-react'
+import type { OperatorPostStats } from '@/lib/operator-post-stats'
 import type { OperatorPostThread, ThreadComment } from '@/server/operator-activity/thread'
+import { OperatorPostStatsRow } from '../../_components/operator-post-stats-row'
 import { InboxAvatar, KoreanViewSwitch } from '../../inbox/_components/inbox-ui'
 import { useAdminInboxRealtime } from '../../inbox/_components/use-admin-inbox-realtime'
 import { useStaffKoreanView } from '../../inbox/_components/use-staff-korean-view'
@@ -99,9 +101,11 @@ function CommentRow({ postId, comment, korean, nowMs, focused, isReply, canReply
  * that comments or replies as that operator. The draft is converted to the
  * operator's language on the server, like posts and inbox replies.
  */
-export function PostThreadView({ initialThread, focusCommentId }: {
+export function PostThreadView({ initialThread, focusCommentId, postStats = null }: {
   initialThread: OperatorPostThread
   focusCommentId: string | null
+  /** The post's stats row (operator posts only), as of the page load. */
+  postStats?: OperatorPostStats | null
 }) {
   const [thread, setThread] = useState(initialThread)
   const [korean, setKorean] = useStaffKoreanView()
@@ -281,6 +285,7 @@ export function PostThreadView({ initialThread, focusCommentId }: {
             <span className="inline-flex items-center gap-1"><Heart size={13} aria-hidden="true" />{post.likeCount}</span>
             <span className="inline-flex items-center gap-1"><MessageCircle size={13} aria-hidden="true" />{post.commentCount}</span>
           </p>
+          <OperatorPostStatsRow stats={postStats} className="mt-2" />
         </article>
 
         {thread.comments.length === 0 ? (

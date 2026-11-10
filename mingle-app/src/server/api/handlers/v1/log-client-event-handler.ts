@@ -566,14 +566,16 @@ export async function handleLogClientEventV1(request: NextRequest) {
             await sendMessagePush(translations)
           }
         }
-        // Translation availability must be published before optional AI title
-        // generation, which can stall independently of message delivery.
+        // The AI title can take minutes (the ChatGPT pool waits up to 120s and retries),
+        // so it runs after the response and never holds the sender's write.
         if (body.translationPending !== true) {
-          try {
-            await maybeGenerateConversationTitleForSession({ sessionKey: tracking.sessionKey })
-          } catch (error) {
-            console.error('Conversation auto title generation failed:', error)
-          }
+          after(async () => {
+            try {
+              await maybeGenerateConversationTitleForSession({ sessionKey: tracking.sessionKey })
+            } catch (error) {
+              console.error('Conversation auto title generation failed:', error)
+            }
+          })
         }
         if (messageId && body.translationUpdate !== true) {
           const committedMessageId = messageId

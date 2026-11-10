@@ -1,6 +1,8 @@
 "use client";
 
 import type { FeedPostDto } from "@/lib/feed-post-dto";
+import ProfileNationalityBadge from "@/components/profile-nationality-badge";
+import { resolveNationalityCountry } from "@/lib/nationality";
 import type { FeedCopy } from "@/i18n/feed-copy";
 import AccountBadge from "@/components/posts/account-badge";
 import { CompactLanguageLevels } from "@/components/profile-language-levels";
@@ -31,6 +33,8 @@ import { isScrolledToEnd, READ_DWELL_MS, readClockRunning, readVerdict } from "@
 import { readOnlyPostKind } from "@/components/feed/read-only-post";
 import { useFeedFollow, type FollowError } from "@/components/feed/use-feed-follow";
 import { useFeedLike, type LikeError, type LikeMethod, type LikeState } from "@/components/feed/use-feed-like";
+import OperatorPostStatsRow from "@/components/feed/operator-post-stats-row";
+import { useOperatorPostStats } from "@/components/feed/use-operator-post-stats";
 import { shouldToastTranslateFailure, useFeedTranslate } from "@/components/feed/use-feed-translate";
 import type { FeedPostMemory, FeedReadProgress, FeedTranslateChoice } from "@/components/feed/feed-card-memory";
 import {
@@ -254,6 +258,7 @@ export default function FeedPostCard({
   );
   const { buttonState: followState, follow } = useFeedFollow({
     authorId: post.author.id,
+    postId: post.id,
     followingAuthor: post.followingAuthor,
     isMine: post.isMine,
     isSignedIn,
@@ -577,6 +582,10 @@ export default function FeedPostCard({
   // Feed-sized account badge: the shared chip is tuned for dense lists.
   const feedBadgeClass = "!px-2 !py-1 !text-[13px] [&>svg]:!h-3.5 [&>svg]:!w-3.5";
 
+  // Staff only: the server answers only staff/admin viewers (or the operator
+  // account itself), and only for operator posts. Everyone else gets null.
+  const operatorStats = useOperatorPostStats(post.id, viewerId);
+
   const authorSlot = (
     <div className="relative mb-3 flex items-center gap-3">
       <button
@@ -586,21 +595,29 @@ export default function FeedPostCard({
         className="flex min-w-0 items-center gap-3 rounded-full transition active:opacity-70"
         aria-label={authorLabel}
       >
-        {post.author.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={post.author.imageUrl}
-            alt=""
-            className="h-12 w-12 shrink-0 rounded-full object-cover"
-            draggable={false}
-            loading={eagerImage ? "eager" : "lazy"}
-            decoding="async"
+        {/* The author's languages as flags at the bottom-left, as on profiles. */}
+        <span className="relative shrink-0">
+          {post.author.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={post.author.imageUrl}
+              alt=""
+              className="h-12 w-12 shrink-0 rounded-full object-cover"
+              draggable={false}
+              loading={eagerImage ? "eager" : "lazy"}
+              decoding="async"
+            />
+          ) : (
+            <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-bold ${fg.chipClass}`}>
+              {displayName.charAt(0).toUpperCase()}
+            </span>
+          )}
+          <ProfileNationalityBadge
+            country={resolveNationalityCountry(post.author.nationality, post.author.languages?.primary)}
+            size={48}
+            badgeSize={20}
           />
-        ) : (
-          <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-bold ${fg.chipClass}`}>
-            {displayName.charAt(0).toUpperCase()}
-          </span>
-        )}
+        </span>
         <span className="flex min-w-0 flex-col items-start gap-1">
           <span className="flex min-w-0 items-center gap-2">
             <span className={`max-w-[10rem] truncate text-[17px] font-bold ${fg.textClass}`}>
@@ -819,7 +836,16 @@ export default function FeedPostCard({
         centerExpandSlot={centerExpandSlot}
         centerCollapseSlot={centerCollapseSlot}
         ariaLabel={ariaLabel}
-        authorSlot={authorSlot}
+        authorSlot={
+          operatorStats ? (
+            <>
+              <OperatorPostStatsRow stats={operatorStats} locale={locale} />
+              {authorSlot}
+            </>
+          ) : (
+            authorSlot
+          )
+        }
         actionSlot={actionSlot}
         controlSlot={controlSlot}
         snippetToggleSlot={snippetToggleSlot}

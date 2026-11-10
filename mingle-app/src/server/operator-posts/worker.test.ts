@@ -94,8 +94,8 @@ describe('claimDueOperatorPostJobs', () => {
     const [strings, ...values] = m.queryRaw.mock.calls[0] as [TemplateStringsArray, ...unknown[]]
     const query = Prisma.sql(strings, ...values)
     const sql = query.sql.replace(/\s+/g, ' ')
-    expect(sql).toContain("UPDATE app_operator_post_jobs SET state = 'publishing', attempts = attempts + 1")
-    expect(sql).toContain("WHERE id IN ( SELECT id FROM app_operator_post_jobs WHERE state = 'queued' AND publish_at <= ")
+    expect(sql).toContain("UPDATE app.app_operator_post_jobs SET state = 'publishing', attempts = attempts + 1")
+    expect(sql).toContain("WHERE id IN ( SELECT id FROM app.app_operator_post_jobs WHERE state = 'queued' AND publish_at <= ")
     expect(sql).toContain('ORDER BY publish_at ASC, id ASC LIMIT ? FOR UPDATE SKIP LOCKED )')
     expect(sql).toContain('RETURNING')
     // The caller's clock, bound as UTC (the DB session time zone is not UTC).

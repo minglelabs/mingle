@@ -48,6 +48,7 @@ describe("native banner policy wiring", () => {
     for (const relativePath of [
       "components/LivePhoneDemo/MessageMediaDialog.tsx",
       "components/LivePhoneDemo/MessageReactionParticipants.tsx",
+      "components/coins/coin-host.tsx",
       "components/invite-friends-screen.tsx",
       "components/native-conversation-share-overlay.tsx",
       "components/native-profile-link-overlay.tsx",
@@ -62,4 +63,12 @@ describe("native banner policy wiring", () => {
     expect(readSource("components/slide-surface.tsx"))
       .toContain('useNativeBannerSuppression(open && role !== "main")');
   });
+
+  it('keeps the banner hidden through every onboarding phase', () => {
+    const list = readSource('components/conversation-list.tsx')
+    expect(list).toContain('|| languageOnboardingPhase !== "ready"')
+    expect(list).not.toMatch(/isListOverlayOpen:[\s\S]{0,600}\|\| languageOnboardingModalOpen/)
+    const modal = readSource('components/LivePhoneDemo/LanguageOnboardingModal.tsx')
+    expect(modal).toContain('useNativeBannerSuppression();')
+  })
 });

@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  ADMIN_DASHBOARD_DEFAULT_TAB,
+  ADMIN_DASHBOARD_TAB_OPTIONS,
   averageSeries,
+  buildAdminDashboardHref,
   buildChartGeometry,
   buildCumulativeSeries,
   buildSharedScaleChartGeometries,
   buildTranslationModelSeries,
+  dashboardTabUsesPlatform,
   enumerateDayKeys,
   fillDailySeries,
   formatCompactNumber,
@@ -17,6 +21,7 @@ import {
   niceCeil,
   normalizeDashboardPlatform,
   normalizeDashboardDays,
+  normalizeDashboardTab,
   resolveChartFrame,
   resolveHoverIndex,
   resolveTodayKey,
@@ -106,6 +111,38 @@ describe("platform filter", () => {
     expect(normalizeDashboardPlatform("ios")).toBe("ios");
     expect(normalizeDashboardPlatform(undefined)).toBe("all");
     expect(normalizeDashboardPlatform("web")).toBe("all");
+  });
+});
+
+describe("dashboard tabs", () => {
+  it("lists 가입·리텐션 · 사용량·성능 · 번역 모델 · SNS · 운영 계정 글 in order", () => {
+    expect(ADMIN_DASHBOARD_TAB_OPTIONS.map((option) => [option.value, option.label])).toEqual([
+      ["growth", "가입·리텐션"],
+      ["usage", "사용량·성능"],
+      ["models", "번역 모델"],
+      ["sns", "SNS"],
+      ["operators", "운영 계정 글"],
+    ]);
+  });
+
+  it("accepts every tab and falls back to 가입·리텐션 for anything else", () => {
+    for (const option of ADMIN_DASHBOARD_TAB_OPTIONS) expect(normalizeDashboardTab(option.value)).toBe(option.value);
+    expect(ADMIN_DASHBOARD_DEFAULT_TAB).toBe("growth");
+    expect(normalizeDashboardTab(undefined)).toBe("growth");
+    expect(normalizeDashboardTab("")).toBe("growth");
+    expect(normalizeDashboardTab("revenue")).toBe("growth");
+    expect(normalizeDashboardTab("SNS")).toBe("growth");
+    expect(normalizeDashboardTab(["sns"])).toBe("growth");
+  });
+
+  it("shows the OS filter only on the tabs whose queries take it", () => {
+    expect(ADMIN_DASHBOARD_TAB_OPTIONS.filter((option) => dashboardTabUsesPlatform(option.value)).map((option) => option.value))
+      .toEqual(["usage", "models"]);
+  });
+
+  it("builds a dashboard URL that keeps the tab, range and OS together", () => {
+    expect(buildAdminDashboardHref({ tab: "sns", days: 7, platform: "ios" })).toBe("/admin/dashboard?tab=sns&days=7&platform=ios");
+    expect(buildAdminDashboardHref({ tab: "growth", days: 30, platform: "all" })).toBe("/admin/dashboard?tab=growth&days=30");
   });
 });
 

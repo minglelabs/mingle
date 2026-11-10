@@ -4,8 +4,8 @@ import { zipInterestLanguages, type InterestLanguage } from '@/lib/interest-lang
 import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
-import { planOperatorAvatar } from '@/server/operator-avatars/generate'
-import { generateReservePosts, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
+import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar } from '@/server/operator-avatars/generate'
+import { generateReservePosts, pickReserveTopics, reservePosterProfile, rewriteReservePostText } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
@@ -20,6 +20,104 @@ import { loadExistingReserveTexts, loadReservePersona, PHOTO_REQUESTED, publishR
  */
 
 export const REVIEW_ITEMS_PER_PAGE = 20
+/** The pool could not draw the photo just now; the draw button stays, to try again. */
+const PHOTO_DRAW_FAILED = 'photo_draw_failed'
+/** The pool is drawing the photo in the background (the row is `regenerating`). */
+const PHOTO_DRAWING = 'photo_drawing'
+
+/**
+ * The 재제작 / drawing jobs this process is running right now. A row marked
+ * `regenerating` / `drawing` with no job here was cut off (a restart, a crash)
+ * and nothing will ever finish it, so it is put back instead of answering
+ * "busy": busy means a job is really running.
+ */
+const runningHere = new Set<string>()
+const postJob = (reserveId: string) => `post:${reserveId}`
+const profileJob = (userId: string) => `profile:${userId}`
+
+/** Puts a post whose job is not running here back in review; true when it was cut off. */
+async function releaseIfCutOff(reserveId: string): Promise<boolean> {
+  if (runningHere.has(postJob(reserveId))) return false
+  const drawing = await prisma.operatorPostReserve.updateMany({
+    where: { id: reserveId, state: 'regenerating', error: PHOTO_DRAWING },
+    data: { state: 'review', error: PHOTO_DRAW_FAILED },
+  })
+  const rewriting = await prisma.operatorPostReserve.updateMany({
+    where: { id: reserveId, state: 'regenerating' },
+    data: { state: 'review' },
+  })
+  return drawing.count + rewriting.count > 0
+}
+
+/** Same for an account whose new photo is drawn by the pool: back to pending when no job runs here. */
+async function releaseProfileIfCutOff(userId: string): Promise<boolean> {
+  if (!canDrawImagesHere() || runningHere.has(profileJob(userId))) return false
+  const released = await prisma.operatorAccount.updateMany({ where: { userId, reviewState: 'drawing' }, data: { reviewState: 'pending' } })
+  return released.count > 0
+}
+
+/**
+ * Draws a post's photo through the pool after the request has answered, and
+ * puts the row back in review with the photo, or marked failed so the draw
+ * button stays. Never throws.
+ */
+async function drawPostPhotoInBackground(reserveId: string, operatorUserId: string, description: string, onDrawn: () => Promise<unknown>, onFailed: () => Promise<unknown>): Promise<void> {
+  try {
+    const image = await drawReservePostImage(operatorUserId, description)
+    await prisma.operatorPostReserve.updateMany({
+      where: { id: reserveId, state: 'regenerating' },
+      data: image
+        ? { state: 'review', imageObjectKey: image.objectKey, imageWidth: image.width, imageHeight: image.height, error: null }
+        : { state: 'review', error: PHOTO_DRAW_FAILED },
+    })
+    await (image ? onDrawn() : onFailed())
+  } catch (error) {
+    console.warn('[operator-review] background_draw_failed', { reserveId, error: error instanceof Error ? error.name : 'unknown' })
+    await prisma.operatorPostReserve.updateMany({ where: { id: reserveId, state: 'regenerating' }, data: { state: 'review', error: PHOTO_DRAW_FAILED } }).catch(() => {})
+  } finally {
+    runningHere.delete(postJob(reserveId))
+  }
+}
+
+/**
+ * At server start: a background drawing lives only in the process that
+ * started it, so after a deploy or restart nothing will finish the rows it
+ * left `regenerating`. Put them back in review as failed, so the card stops
+ * waiting and the draw button returns. Never throws.
+ */
+export async function releaseOrphanedDrawings(): Promise<number> {
+  try {
+    const drawings = await prisma.operatorPostReserve.updateMany({
+      where: { state: 'regenerating', error: PHOTO_DRAWING },
+      data: { state: 'review', error: PHOTO_DRAW_FAILED },
+    })
+    // A rewrite cut off mid-way keeps its old text; it only goes back to review.
+    const rewrites = await prisma.operatorPostReserve.updateMany({ where: { state: 'regenerating' }, data: { state: 'review' } })
+    const released = { count: drawings.count + rewrites.count }
+    if (released.count) console.warn('[operator-review] released_orphaned_drawings', { count: released.count })
+    return released.count
+  } catch (error) {
+    console.warn('[operator-review] release_orphaned_failed', { error: error instanceof Error ? error.name : 'unknown' })
+    return 0
+  }
+}
+
+/** One post of the review queue as its card shows it, for the card to poll while its photo is drawn. */
+export async function getReviewPost(reserveId: string): Promise<ReviewPost | null> {
+  let row = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
+  if (row?.state === 'regenerating' && (await releaseIfCutOff(reserveId))) {
+    row = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
+  }
+  return row ? toReviewPost(row) : null
+}
+
+/** A profile's review state and photo, for its card to poll while a new photo is drawn. */
+export async function getReviewProfileState(userId: string): Promise<{ profileState: string; image: string | null } | null> {
+  const account = await prisma.operatorAccount.findUnique({ where: { userId }, select: { reviewState: true, user: { select: { image: true } } } })
+  if (!account) return null
+  const cutOff = account.reviewState === 'drawing' && (await releaseProfileIfCutOff(userId))
+  return { profileState: cutOff ? 'pending' : account.reviewState, image: account.user.image }
+}
 const MAX_FEEDBACK_LENGTH = 1000
 
 /** `draw`: have the post's photo drawn by hand (in ChatGPT) without changing the text. */
@@ -52,6 +150,10 @@ export type ReviewPost = {
   error: string | null
   /** The photo is queued to be drawn by hand. */
   photoRequested: boolean
+  /** The pool is drawing the photo right now (the card polls). */
+  photoDrawing: boolean
+  /** The pool's last try at the photo failed; drawing it again is allowed. */
+  photoDrawFailed: boolean
 }
 
 export type ReviewProfile = {
@@ -114,6 +216,8 @@ function toReviewPost(row: {
     reviewFeedback: row.reviewFeedback,
     error: row.error,
     photoRequested: !row.imageObjectKey && row.error === PHOTO_REQUESTED,
+    photoDrawing: row.state === 'regenerating' && row.error === PHOTO_DRAWING,
+    photoDrawFailed: !row.imageObjectKey && row.error === PHOTO_DRAW_FAILED,
   }
 }
 
@@ -300,9 +404,41 @@ export async function reviewOperatorProfile(
     return { ok: true, state: 'deleted' }
   }
 
+  if (account.reviewState === 'drawing' && !(await releaseProfileIfCutOff(userId))) return { ok: false, error: 'busy' }
+  // 재제작 where this server can draw (the ChatGPT pool): the new photo is
+  // drawn in the background (longer than the hosting proxy keeps a request
+  // open) while the account shows as drawing; the card polls. Once drawn the
+  // account is back in review; a failed drawing falls back to drawing by hand.
+  if (canDrawImagesHere()) {
+    runningHere.add(profileJob(userId))
+    try {
+      await prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'drawing', reviewFeedback: feedback } })
+    } catch (error) {
+      runningHere.delete(profileJob(userId))
+      throw error
+    }
+    void (async () => {
+      try {
+        const drawn = await generateOperatorAvatar(ctx, userId, { feedback })
+        if (drawn.ok) {
+          await prisma.operatorAccount.updateMany({ where: { userId, reviewState: 'drawing' }, data: { reviewState: 'pending' } })
+          await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', feedback, drawing: false } })
+          return
+        }
+        const plan = await planOperatorAvatar(userId, { feedback })
+        await prisma.operatorAccount.updateMany({ where: { userId, reviewState: 'drawing' }, data: plan ? { avatarSpec: plan } : { reviewState: 'pending' } })
+        await writeAdminAudit(ctx, { action: 'operator.review', operatorUserId: userId, targetType: 'user', targetId: userId, metadata: { decision: 'regenerate', feedback, drawing: Boolean(plan) } })
+      } catch (error) {
+        console.warn('[operator-review] background_avatar_failed', { userId, error: error instanceof Error ? error.name : 'unknown' })
+        await prisma.operatorAccount.updateMany({ where: { userId, reviewState: 'drawing' }, data: { reviewState: 'pending' } }).catch(() => {})
+      } finally {
+        runningHere.delete(profileJob(userId))
+      }
+    })()
+    return { ok: true, state: 'drawing' }
+  }
   // 재제작: a new photo spec (with the feedback) waits to be drawn by hand in
   // ChatGPT (scripts/draw-pending-photos.mts); the current photo stays until then.
-  if (account.reviewState === 'drawing') return { ok: false, error: 'busy' }
   const plan = await planOperatorAvatar(userId, { feedback })
   if (!plan) return { ok: false, error: 'regenerate_failed' }
   await prisma.operatorAccount.update({ where: { userId }, data: { reviewState: 'drawing', reviewFeedback: feedback, avatarSpec: plan } })
@@ -312,10 +448,7 @@ export async function reviewOperatorProfile(
 
 export type PostReviewResult =
   | { ok: true; state: 'published' | 'deleted' | 'review'; postId?: string | null; post?: ReviewPost }
-  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' }
-
-/** A 재제작 (text, then a photo through the hand-off route) never takes this long. */
-const STALE_REGENERATING_MS = 15 * 60 * 1000
+  | { ok: false; error: 'not_found' | 'profile_pending' | 'photo_pending' | 'busy' | 'publish_failed' | 'regenerate_failed' | 'draw_failed' }
 
 /** 게시 / 삭제 / 재제작 for a post waiting for review. */
 export async function reviewOperatorPost(
@@ -330,15 +463,9 @@ export async function reviewOperatorPost(
     select: { ...POST_SELECT, operatorUserId: true, operatorUser: { select: { isActive: true } } },
   })
   if (!row || !REVIEW_POST_STATES.includes(row.state)) return { ok: false, error: 'not_found' }
-  if (row.state === 'regenerating') {
-    // A 재제작 whose request died (a deploy restart, a timeout) never puts the
-    // row back; past the longest a 재제작 can take, staff may answer it again.
-    const released = await prisma.operatorPostReserve.updateMany({
-      where: { id: reserveId, state: 'regenerating', updatedAt: { lt: new Date(now.getTime() - STALE_REGENERATING_MS) } },
-      data: { state: 'review' },
-    })
-    if (released.count === 0) return { ok: false, error: 'busy' }
-  }
+  // Busy only while a job is really running here; a row left `regenerating` by
+  // a cut-off job is put back and answered.
+  if (row.state === 'regenerating' && !(await releaseIfCutOff(reserveId))) return { ok: false, error: 'busy' }
   // Feedback on every answer is kept on the row and in the audit log, not only on 재제작.
   const audit = (decision: string, extra: Record<string, string | boolean | null> = {}) => writeAdminAudit(ctx, {
     action: 'operator_post.review', operatorUserId: row.operatorUserId, targetType: 'reserve', targetId: reserveId, metadata: { decision, feedback, ...extra },
@@ -364,6 +491,30 @@ export async function reviewOperatorPost(
 
   if (action === 'draw') {
     if (!row.imagePrompt || row.imageObjectKey) return { ok: false, error: 'not_found' }
+    if (canDrawImagesHere()) {
+      // Drawn right here (the ChatGPT pool), the text untouched, in the
+      // background: a photo of a person takes over two minutes, longer than
+      // the hosting proxy keeps a request open. The card polls until it is in.
+      runningHere.add(postJob(reserveId))
+      let claimedDraw: { count: number }
+      try {
+        claimedDraw = await prisma.operatorPostReserve.updateMany({
+          where: { id: reserveId, state: 'review' },
+          data: { state: 'regenerating', error: PHOTO_DRAWING, ...(feedback ? { reviewFeedback: feedback } : {}) },
+        })
+      } catch (error) {
+        runningHere.delete(postJob(reserveId))
+        throw error
+      }
+      if (claimedDraw.count === 0) {
+        runningHere.delete(postJob(reserveId))
+        return { ok: false, error: 'busy' }
+      }
+      const description = feedback ? `${row.imagePrompt}\nStaff feedback on this photo, to follow: ${feedback}` : row.imagePrompt
+      void drawPostPhotoInBackground(reserveId, row.operatorUserId, description, () => audit('draw', { photo: true }), () => audit('draw', { photo: false }))
+      const drawing = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: POST_SELECT })
+      return { ok: true, state: 'review', post: toReviewPost(drawing ?? { ...row, state: 'regenerating', error: PHOTO_DRAWING }) }
+    }
     const updated = await prisma.operatorPostReserve.update({
       where: { id: reserveId },
       data: { error: PHOTO_REQUESTED, ...(feedback ? { reviewFeedback: feedback } : {}) },
@@ -373,12 +524,14 @@ export async function reviewOperatorPost(
     return { ok: true, state: 'review', post: toReviewPost(updated) }
   }
 
-  const claimed = await prisma.operatorPostReserve.updateMany({
-    where: { id: reserveId, state: 'review' },
-    data: { state: 'regenerating', reviewFeedback: feedback },
-  })
-  if (claimed.count === 0) return { ok: false, error: 'busy' }
+  runningHere.add(postJob(reserveId))
+  let handedToDraw = false
   try {
+    const claimed = await prisma.operatorPostReserve.updateMany({
+      where: { id: reserveId, state: 'review' },
+      data: { state: 'regenerating', reviewFeedback: feedback },
+    })
+    if (claimed.count === 0) return { ok: false, error: 'busy' }
     const persona = await loadReservePersona(row.operatorUserId, now, { includeInactive: true })
     if (!persona) throw new Error('persona_unavailable')
     const [generated] = await generateReservePosts({
@@ -389,26 +542,31 @@ export async function reviewOperatorPost(
       revision: { previousText: row.text, feedback },
     })
     if (!generated) throw new Error('nothing_generated')
-    // Drawn before it can go out, so staff judge the photo too: here only
-    // where a hand-off route exists, else by hand later (photo_pending).
-    const image = generated.imagePrompt ? await drawReservePostImage(row.operatorUserId, generated.imagePrompt) : null
+    // Drawn before it can go out, so staff judge the photo too. Where the pool
+    // draws, the new text shows at once and the photo follows in the background
+    // (the card polls); elsewhere it waits to be drawn by hand.
+    const drawHere = Boolean(generated.imagePrompt) && canDrawImagesHere()
     const updated = await prisma.operatorPostReserve.update({
       where: { id: reserveId },
       data: {
-        state: 'review',
+        state: drawHere ? 'regenerating' : 'review',
         text: generated.text,
         topic: generated.topic,
         language: generated.language === persona.language ? null : generated.language,
         imagePrompt: generated.imagePrompt,
-        imageObjectKey: image?.objectKey ?? null,
-        imageWidth: image?.width ?? null,
-        imageHeight: image?.height ?? null,
-        // A photo still to draw is queued for drawing by hand right away.
-        error: generated.imagePrompt && !image ? PHOTO_REQUESTED : null,
+        imageObjectKey: null,
+        imageWidth: null,
+        imageHeight: null,
+        error: drawHere ? PHOTO_DRAWING : generated.imagePrompt ? PHOTO_REQUESTED : null,
       },
       select: POST_SELECT,
     })
-    await audit('regenerate', { photo: generated.imagePrompt ? Boolean(image) : null })
+    if (drawHere) {
+      handedToDraw = true
+      void drawPostPhotoInBackground(reserveId, row.operatorUserId, generated.imagePrompt!, () => audit('regenerate', { photo: true }), () => audit('regenerate', { photo: false }))
+    } else {
+      await audit('regenerate', { photo: generated.imagePrompt ? false : null })
+    }
     return { ok: true, state: 'review', post: toReviewPost(updated) }
   } catch (error) {
     await prisma.operatorPostReserve.updateMany({
@@ -417,6 +575,8 @@ export async function reviewOperatorPost(
     })
     await audit('regenerate', { ok: false })
     return { ok: false, error: 'regenerate_failed' }
+  } finally {
+    if (!handedToDraw) runningHere.delete(postJob(reserveId))
   }
 }
 
@@ -477,4 +637,86 @@ export async function setReviewPostPhotos(
     metadata: { count: kept.length },
   })
   return { ok: true, post: toReviewPost(updated) }
+}
+
+/** Longest post text staff may write in review (same cap as a published post). */
+const MAX_REVIEW_TEXT_LENGTH = 1000
+
+/**
+ * Staff rewrote a post's text in review by hand. The photo and its plan stay;
+ * translations made from the old text are left behind (they carry their
+ * source text and are only reused for the same text).
+ */
+export async function setReviewPostText(
+  ctx: AdminContext,
+  id: string,
+  text: unknown,
+): Promise<{ ok: true; post: ReviewPost } | { ok: false; error: 'not_found' | 'invalid_text' | 'busy' }> {
+  if (typeof text !== 'string') return { ok: false, error: 'invalid_text' }
+  const trimmed = text.trim()
+  if (!trimmed || trimmed.length > MAX_REVIEW_TEXT_LENGTH) return { ok: false, error: 'invalid_text' }
+  const row = await prisma.operatorPostReserve.findUnique({ where: { id }, select: { state: true, operatorUserId: true } })
+  if (!row || !REVIEW_POST_STATES.includes(row.state)) return { ok: false, error: 'not_found' }
+  const updated = await prisma.operatorPostReserve.updateMany({ where: { id, state: 'review' }, data: { text: trimmed } })
+  if (updated.count === 0) return { ok: false, error: 'busy' }
+  const saved = await prisma.operatorPostReserve.findUnique({ where: { id }, select: POST_SELECT })
+  await writeAdminAudit(ctx, {
+    action: 'operator_post.review',
+    operatorUserId: row.operatorUserId,
+    targetType: 'reserve',
+    targetId: id,
+    metadata: { decision: 'edit_text', length: trimmed.length },
+  })
+  return saved ? { ok: true, post: toReviewPost(saved) } : { ok: false, error: 'not_found' }
+}
+
+/**
+ * A new text for a post in review, written by the model (the ChatGPT pool
+ * where the server has its key) for the same person, language and photo,
+ * with optional staff feedback. Nothing is saved: staff read it in the editor
+ * and save it with setReviewPostText.
+ */
+export async function draftReviewPostText(
+  id: string,
+  feedback: unknown,
+  now: Date = new Date(),
+): Promise<{ ok: true; text: string } | { ok: false; error: 'not_found' | 'regenerate_failed' }> {
+  const row = await prisma.operatorPostReserve.findUnique({
+    where: { id },
+    select: { state: true, text: true, topic: true, language: true, imagePrompt: true, operatorUserId: true },
+  })
+  if (!row || !REVIEW_POST_STATES.includes(row.state)) return { ok: false, error: 'not_found' }
+  try {
+    const persona = await loadReservePersona(row.operatorUserId, now, { includeInactive: true })
+    if (!persona) return { ok: false, error: 'regenerate_failed' }
+    const account = await prisma.user.findUnique({
+      where: { id: row.operatorUserId },
+      select: { primaryLanguages: true, interestLanguages: true, interestLanguageLevels: true, operatorAccount: { select: { personaGender: true } } },
+    })
+    const profile = {
+      gender: account?.operatorAccount?.personaGender ?? null,
+      age: persona.age,
+      city: persona.city,
+      country: persona.country,
+      bio: persona.bio,
+      speaks: account?.primaryLanguages ?? [persona.language],
+      learning: account ? zipInterestLanguages(account.interestLanguages, account.interestLanguageLevels).map((item) => ({ language: item.code, level: item.level })) : [],
+    }
+    const photo = row.imagePrompt ? decodePostPhoto(row.imagePrompt) : null
+    const text = await rewriteReservePostText({
+      persona,
+      previousText: row.text,
+      language: row.language ?? persona.language,
+      photo: photo ? { kind: photo.kind, description: photo.description } : null,
+      feedback: normalizeReviewFeedback(feedback),
+      existingTexts: await loadExistingReserveTexts(row.operatorUserId),
+      seed: row.operatorUserId,
+      topic: row.topic,
+      profile,
+    })
+    return text ? { ok: true, text } : { ok: false, error: 'regenerate_failed' }
+  } catch (error) {
+    console.warn('[operator-review] draft_text_failed', { id, error: error instanceof Error ? error.message.slice(0, 60) : 'unknown' })
+    return { ok: false, error: 'regenerate_failed' }
+  }
 }

@@ -131,7 +131,7 @@
       <article>
         <nav class="lang-nav"><a href="/legal/en/privacy-policy.html">English</a><a href="/legal/ko/privacy-policy.html">Korean</a><a href="/legal/ja/privacy-policy.html">Japanese</a><a href="/legal/zh-cn/privacy-policy.html">Chinese (Simplified)</a><a href="/legal/zh-tw/privacy-policy.html" aria-current="page">Chinese (Traditional)</a><a href="/legal/fr/privacy-policy.html">French</a><a href="/legal/de/privacy-policy.html">German</a><a href="/legal/es/privacy-policy.html">Spanish</a><a href="/legal/pt/privacy-policy.html">Portuguese</a><a href="/legal/it/privacy-policy.html">Italian</a><a href="/legal/ru/privacy-policy.html">Russian</a><a href="/legal/ar/privacy-policy.html">Arabic</a><a href="/legal/hi/privacy-policy.html">Hindi</a><a href="/legal/th/privacy-policy.html">Thai</a><a href="/legal/vi/privacy-policy.html">Vietnamese</a></nav>
         <h1>名樂隱私權政策</h1>
-        <p class="meta"><strong>最後更新：</strong> October 8, 2026</p>
+        <p class="meta"><strong>最後更新：</strong> October 31, 2026</p>
         <p>本隱私權政策解釋了 Mingle Labs, Inc.（「HashChat」、「我們」、「我們的」）在您使用 HashChat 行動應用程式、網站和相關服務（統稱為「服務」）時如何收集、使用、共享和保護個人資料。</p>
         <h2>1.範圍</h2>
 <p>本政策適用於為消費者 HashChat 帳戶和使用而處理的資訊。它不適用於我們根據單獨的合約僅代表企業客戶處理的資料。</p>
@@ -141,7 +141,7 @@
 
 <ul>
   <li>帳戶資訊：姓名、電子郵件地址、登入提供者詳細資料、帳戶識別碼和個人資料首選項。</li>
-  <li>翻譯和語音資料：您提交進行翻譯的文字、提供語音辨識和翻譯所需的語音/音訊輸入、翻譯輸出和語言設定。</li>
+  <li>翻譯和語音資料：您提交進行翻譯的文字、提供語音辨識和翻譯所需的語音/音訊輸入（包括您在耳機模式中選擇開啟時，裝置上其他應用程式播放的音訊）、翻譯輸出和語言設定。</li>
   <li>技術和使用資料：裝置類型、作業系統、應用程式版本、IP 位址、請求時間戳記、崩潰日誌、效能日誌和功能互動事件。</li>
   <li>支援通訊：您在請求協助時發送給我們的訊息和附件。</li>
 </ul>
@@ -153,6 +153,7 @@
 
 <h2>3. 音訊處理與非保留</h2>
 <p>HashChat 即時處理麥克風音訊以提供語音辨識和翻譯。原始音訊透過串流傳輸進行處理，並且在請求完成後不會被 HashChat 儲存。</p>
+<p>在 HashChat 行動應用程式的耳機模式中，您可以將要翻譯的聲音選擇為「麥克風 + 此裝置播放的聲音」。選擇此項後，HashChat 會透過 Android 的螢幕錄製與播放音訊擷取權限（MediaProjection）或 iOS 的螢幕直播（ReplayKit 廣播擴充功能），擷取裝置上其他應用程式正在播放的音訊（例如影片的聲音）。只有在您主動開始並於系統提示中同意後才會擷取，且僅在該次工作階段進行期間擷取。擷取的音訊會與麥克風音訊混合，並與僅使用麥克風時一樣，即時串流傳輸至 HashChat 伺服器及語音轉文字服務提供者（Soniox）；原始音訊在處理後不會被 HashChat 儲存。由此產生的轉錄文字與譯文會像口說內容一樣儲存為對話訊息，並可能被該對話的其他參與者看到。HashChat 不會從螢幕錄製或直播中取得螢幕畫面或影片，只會使用音訊。禁止音訊擷取的應用程式的聲音以及電話通話不會被擷取。您可以隨時在應用程式內，或透過系統通知或狀態列停止擷取。</p>
 <p>HashChat 不會保留用於模型訓練的原始錄音存檔。為了安全、防止濫用和服務可靠性，我們可能會保留有限的非音訊技術診斷（例如，錯誤代碼和計時指標）。</p>
 
 
@@ -175,7 +176,7 @@
 <p>我們不出售個人資料。我們可能會與以下人員分享數據：</p>
 <ul>
   <li>服務提供者：託管、儲存、身份驗證、客戶支援、分析、崩潰報告以及根據合約處理資料的其他基礎設施供應商。</li>
-  <li>Soniox：語音到文字處理所需的音訊串流和相關上下文。</li>
+  <li>Soniox：語音到文字處理所需的音訊串流（麥克風音訊，以及您在耳機模式中選擇開啟時裝置上其他應用程式播放的音訊）和相關上下文。</li>
   <li>Inworld：語音生成功能和合成音訊傳輸所需的文字和語言上下文。</li>
   <li>Google：使用帳戶驗證和基於文字的服務操作。 HashChat 不會將原始語音音訊傳送給 Google 進行語音處理。</li>
   <li>Anthropic：使用 Claude 模型產生翻譯所需的、您提交翻譯的文字及語言脈絡。</li>

@@ -11,7 +11,7 @@ type Tx = Prisma.TransactionClient
 
 // Serialize only state changes, never hold a database transaction during translation.
 async function lockUser(tx: Tx, userId: string) {
-  await tx.$queryRaw`SELECT id FROM app_users WHERE id = ${userId} FOR UPDATE`
+  await tx.$queryRaw`SELECT id FROM app.app_users WHERE id = ${userId} FOR UPDATE`
 }
 
 export async function prepareBioEdit(tx: Tx, userId: string, oldText: string | null, newText: string | null): Promise<string | null> {

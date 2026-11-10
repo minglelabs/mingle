@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   notificationFindUnique: vi.fn(),
   channelFindUnique: vi.fn(),
   tokenDeleteMany: vi.fn(),
+  messageFindUnique: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -15,13 +16,16 @@ vi.mock('@/lib/prisma', () => ({
     userNotification: { findUnique: m.notificationFindUnique },
     appConversationChannel: { findUnique: m.channelFindUnique },
     userPushToken: { deleteMany: m.tokenDeleteMany },
+    appMessage: { findUnique: m.messageFindUnique },
   },
 }))
 
 import {
   pickMessagePushText,
   resolvePushCopy,
+  conversationMessageCollapseKey,
   sendPushNotificationForConversationMessage,
+  sendPushNotificationForRecalledConversationMessage,
   sendPushNotificationForUserNotification,
   sendPushToUsers,
   type PushMessage,
@@ -44,7 +48,12 @@ async function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
 }
 const fetchMock = vi.fn(fakeFetch)
 
-type SentFcmMessage = { token: string; notification: { title: string; body: string }; data: Record<string, string> }
+type SentFcmMessage = {
+  token: string
+  notification: { title: string; body: string }
+  data: Record<string, string>
+  android: { notification: { channel_id: string; sound?: string; tag?: string } }
+}
 
 function sentMessages(): SentFcmMessage[] {
   return fetchMock.mock.calls
@@ -96,6 +105,7 @@ beforeEach(() => {
   vi.stubEnv('FCM_PRIVATE_KEY', fcmPrivateKey)
   m.channelFindUnique.mockResolvedValue({ id: 'chan_1' })
   m.tokenDeleteMany.mockResolvedValue({ count: 0 })
+  m.messageFindUnique.mockResolvedValue({ isDeleted: false })
 })
 
 afterEach(() => {
@@ -203,6 +213,73 @@ describe('sendPushNotificationForConversationMessage', () => {
     deadTokens.add('fcm-en')
     await send()
     expect(m.tokenDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ['en'] } } })
+  })
+
+  it('tags the push so a later rewrite can replace it', async () => {
+    roomWith({})
+    await send()
+    expect(sentMessages().map((sent) => sent.android.notification)).toEqual([
+      expect.objectContaining({ tag: 'msg-msg_1', channel_id: 'mingle_notifications', sound: 'default' }),
+      expect.objectContaining({ tag: 'msg-msg_1', channel_id: 'mingle_notifications', sound: 'default' }),
+    ])
+  })
+
+  it('sends nothing for a message unsent before its push went out', async () => {
+    roomWith({})
+    m.messageFindUnique.mockResolvedValue({ isDeleted: true })
+    await send()
+    expect(sentMessages()).toEqual([])
+  })
+
+  describe('after the sender unsends the message', () => {
+    const sentAt = new Date('2026-11-10T00:00:00Z')
+
+    async function recall() {
+      await sendPushNotificationForRecalledConversationMessage({
+        messageId: 'msg_1',
+        messageCreatedAt: sentAt,
+        sessionKey: 'sess_1',
+        senderUserId: 'sender',
+        memberUserIds: ['sender', 'ko_user', 'en_user'],
+      })
+    }
+
+    it('silently rewrites the delivered push into the deleted placeholder', async () => {
+      roomWith({})
+      m.channelFindUnique.mockResolvedValue({ id: 'chan_1', members: [
+        { userId: 'ko_user', lastReadAt: null },
+        { userId: 'en_user', lastReadAt: new Date(sentAt.getTime() - 1000) },
+      ] })
+      await recall()
+      expect(sentBodyByToken()).toEqual({
+        'fcm-ko': 'Mina님: 삭제된 메시지입니다',
+        'fcm-en': 'Mina: This message was deleted',
+      })
+      for (const sent of sentMessages()) {
+        expect(sent.android.notification).toMatchObject({ tag: 'msg-msg_1', channel_id: 'mingle_silent_updates' })
+        expect(sent.android.notification.sound).toBeUndefined()
+        expect(sent.data).toMatchObject({ type: 'conversation_message', recalled: '1', conversationId: 'chan_1' })
+      }
+    })
+
+    it('skips a member who already opened the room after the message', async () => {
+      roomWith({})
+      m.channelFindUnique.mockResolvedValue({ id: 'chan_1', members: [
+        { userId: 'ko_user', lastReadAt: new Date(sentAt.getTime() + 1000) },
+        { userId: 'en_user', lastReadAt: null },
+      ] })
+      await recall()
+      expect(Object.keys(sentBodyByToken())).toEqual(['fcm-en'])
+    })
+  })
+})
+
+describe('conversationMessageCollapseKey', () => {
+  it('stays within the 64-byte APNs limit for any id', () => {
+    expect(conversationMessageCollapseKey('cm1abc')).toBe('msg-cm1abc')
+    const long = conversationMessageCollapseKey('x'.repeat(300))
+    expect(long).toMatch(/^msg-[0-9a-f]{40}$/)
+    expect(conversationMessageCollapseKey('메시지')).toMatch(/^msg-[0-9a-f]{40}$/)
   })
 })
 

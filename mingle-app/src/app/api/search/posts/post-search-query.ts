@@ -34,20 +34,20 @@ export function buildPostSearchSql({ viewerId, query, offset, take }: PostSearch
   const viewerClause = viewerId
     ? Prisma.sql`
         AND NOT EXISTS (
-          SELECT 1 FROM app_user_blocks b WHERE b.blocker_id = ${viewerId} AND b.blocked_id = p.author_id
+          SELECT 1 FROM app.app_user_blocks b WHERE b.blocker_id = ${viewerId} AND b.blocked_id = p.author_id
         )
         AND NOT EXISTS (
-          SELECT 1 FROM app_user_blocks b WHERE b.blocker_id = p.author_id AND b.blocked_id = ${viewerId}
+          SELECT 1 FROM app.app_user_blocks b WHERE b.blocker_id = p.author_id AND b.blocked_id = ${viewerId}
         )
         AND NOT EXISTS (
-          SELECT 1 FROM app_post_hides h WHERE h.post_id = p.id AND h.user_id = ${viewerId}
+          SELECT 1 FROM app.app_post_hides h WHERE h.post_id = p.id AND h.user_id = ${viewerId}
         )`
     : Prisma.empty
 
   return Prisma.sql`
     SELECT p.id
-    FROM app_posts p
-    JOIN app_users a ON a.id = p.author_id
+    FROM app.app_posts p
+    JOIN app.app_users a ON a.id = p.author_id
     WHERE p.visibility = 'public'
       AND (p.is_deleted IS NULL OR p.is_deleted = false)
       AND p.moderation_hidden_at IS NULL
@@ -56,7 +56,7 @@ export function buildPostSearchSql({ viewerId, query, offset, take }: PostSearch
       AND (
         p.source_text ILIKE ${pattern} ESCAPE '\\'
         OR EXISTS (
-          SELECT 1 FROM app_post_translations t
+          SELECT 1 FROM app.app_post_translations t
           WHERE t.post_id = p.id
             AND t.body_version = p.body_version
             AND t.status = 'ready'
@@ -67,7 +67,7 @@ export function buildPostSearchSql({ viewerId, query, offset, take }: PostSearch
       (
         p.like_count + 2 * (
           SELECT count(DISTINCT c.author_id)
-          FROM app_post_comments c
+          FROM app.app_post_comments c
           WHERE c.post_id = p.id
             AND (c.is_deleted IS NULL OR c.is_deleted = false)
             AND c.author_id <> p.author_id

@@ -11,6 +11,7 @@ import AccountBadge from "@/components/posts/account-badge";
 import type { AccountBadgeKind } from "@/lib/account-badge";
 import { X, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
+import FlagEmoji from "@/components/flag-emoji";
 
 type ProfileImagePreviewProps = {
   open: boolean;
@@ -153,7 +154,7 @@ export default function ProfileImagePreview({
                 {language ? (
                   <LanguageFlag language={language} className="text-[1.35rem] leading-none" />
                 ) : flag ? (
-                  <span className="text-[1.35rem] leading-none" aria-hidden="true">{flag}</span>
+                  <FlagEmoji emoji={flag} className="text-[1.35rem] leading-none" />
                 ) : null}
                 <span className="flex flex-col items-start">
                   {languageLabel ? <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-white/55">{languageLabel}</span> : null}

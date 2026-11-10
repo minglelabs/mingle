@@ -3,7 +3,8 @@ import { getSttLanguageDisplayName } from '@/lib/stt-languages'
 import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
 import { hasContactDetails } from '@/server/operators/persona-rules'
 import { encodePostPhoto, pickPostPhoto } from './post-photo'
-import { learnerPlan, posterProfile, type LearnerPlan, type PosterProfile } from './poster-profile'
+import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
+import { learnerLevelForDots, learnerPlan, posterProfile, type LearnerPlan, type PosterProfile } from './poster-profile'
 
 /**
  * Writes latent posts for one operator account: original short posts in the
@@ -73,14 +74,24 @@ export function pickReserveTopics(count: number, random: Random = Math.random, f
   return picked
 }
 
-/** What the account is learning and how often it posts in that language. */
-export function reserveLearnerPlan(seed: string, nativeLanguage: string): LearnerPlan {
-  return learnerPlan(seed, nativeLanguage)
+export type LearningLanguage = { language: string; level: number | null }
+
+/**
+ * What the account is learning and how often it posts in that language. The
+ * level shown on its profile (관심 언어) wins over the seeded one, so posts
+ * match the profile also after staff change it.
+ */
+export function reserveLearnerPlan(seed: string, nativeLanguage: string, learning: readonly LearningLanguage[] = []): LearnerPlan {
+  const plan = learnerPlan(seed, nativeLanguage)
+  const code = canonicalizeSttLanguageCode(plan.language)
+  const stored = learning.find((entry) => canonicalizeSttLanguageCode(entry.language) === code)
+  const level = learnerLevelForDots(stored?.level)
+  return level ? { ...plan, level } : plan
 }
 
 /** The posting personality of an account, by its id. */
-export function reservePosterProfile(seed: string): PosterProfile {
-  return posterProfile(seed, RESERVE_TOPICS.map((topic) => topic.key))
+export function reservePosterProfile(seed: string, gender: string | null = null): PosterProfile {
+  return posterProfile(seed, RESERVE_TOPICS.map((topic) => topic.key), gender)
 }
 
 /**
@@ -116,6 +127,13 @@ export type ReservePersona = {
   country: string | null
   /** The language every post is written in (primaryLanguages[0]). */
   language: string
+  /** The profile's 관심 언어 with their 1-5 level; never sent to the model as is. */
+  learning?: LearningLanguage[]
+  gender?: string | null
+}
+
+function modelPersona({ learning: _learning, ...persona }: ReservePersona): Omit<ReservePersona, 'learning'> {
+  return persona
 }
 
 export type GeneratedReservePost = {
@@ -135,8 +153,8 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
     `Each slot names the language to write in. ${languageName} (${persona.language}) is this person's own language: write those posts exactly the way a native speaker of the persona's age types on their phone to friends, with the slang, abbreviations, sentence endings and written laughter that are normal in that language right now.`,
     'A slot in any other language is written by this person as a learner of it, at the level in "learner". Make the level audible: the mistakes and stiffness that a native speaker of the persona\'s own language really makes in that language, not random errors. Learner posts are simpler and more polite than the person\'s native posts, the poster quirks mostly do not carry over, and a learner may add the same line in their own language underneath.',
     'When a slot has "photo", the post goes out with one phone photo of that kind; when "photo" is false there is no photo and "photo" stays empty. Write the text as a caption or remark that fits the photo, and describe the photo in "photo" in English, in one or two sentences, as a casual phone snapshot: what is in it, where, and how it is framed.',
-    'Photo kinds: "self" shows the poster with their face; "self_faceless" shows the poster but not their face; "self_back" shows the poster from behind; "friends" shows the poster with friends; "scene" shows no recognizable person (food, a drink, a desk, a street, a view, a shop front, a pet, an object, a hand holding something). A slot with the poster in it also has a "setup" (who took it, framing, pose): follow it, and pick a concrete place in the persona\'s city and an outfit that fit the post and the person. Refer to the poster as "the poster" and never describe their face, hair or body: that is added later. Everyone is an adult; no school uniforms.',
-    'Get the real world right in the photo: the sun sets only in the west (an east-facing beach like Haeundae or Gwangalli has sunrises, not sunsets), a landmark is only where it really stands as seen from that spot, and anything the description says about the body is anatomically possible.',
+    'Photo kinds: "self" shows the poster with their face; "self_faceless" shows the poster but not their face; "self_back" shows the poster from behind; "friends" shows the poster with friends; "scene" shows no recognizable person (a street, a view, a shop front, a pet, an object, a desk, a hand holding something, or food or a drink, which is at most one scene in three). A slot with the poster in it also has a "setup" (who took it, framing, pose): follow it, and pick a concrete place in the persona\'s city and an outfit that fit the post and the person. Refer to the poster as "the poster" and never describe their face, hair or body: that is added later. Everyone is an adult; no school uniforms.',
+    'Get the real world right in the photo: a landmark is only where it really stands as seen from that spot, and anything the description says about the body is anatomically possible. Most photos are taken in ordinary daylight, indoors or at night; a sunset, dusk or evening-sun photo is rare (at most one post in fifteen), and when there is one it faces west (an east-facing beach like Haeundae or Gwangalli has sunrises, not sunsets).',
     'What is on their own screen (notes, a chat, a map, a playlist, a score) is a screenshot, not a "scene": start the description with "Screenshot of", and never describe a photo of a phone or computer screen.',
     'Never a photo of handwriting or study material (a notebook, handwritten notes, flashcards, a textbook or worksheet page): drawn, they look fake. For a study or language post, show something else around it (the café or desk, a drink, the view) or make the post about something else.',
     'People post in wildly different ways, and "poster" is how this one does. It comes first: where it conflicts with the general advice below, "poster" wins. Let the type, length and voice show clearly across the set, so that this person could not be mistaken for another account. Register and punctuation hold in every post; each quirk shows in only about one post in three, never in all of them, and never in the same position twice in a row.',
@@ -209,9 +227,9 @@ export async function generateReservePosts(args: {
   const generate = args.generate ?? generateJson
   const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
   const random = args.random ?? Math.random
-  const profile = reservePosterProfile(args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`)
+  const profile = reservePosterProfile(args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`, args.persona.gender ?? null)
   const seed = args.seed ?? `${args.persona.name ?? ''}|${args.persona.city ?? ''}|${args.persona.language}`
-  const learner = reserveLearnerPlan(seed, args.persona.language)
+  const learner = reserveLearnerPlan(seed, args.persona.language, args.persona.learning)
   const slots = args.topics.map((topic, index) => {
     const language = random() < learner.share ? learner.language : args.persona.language
     return {
@@ -230,7 +248,7 @@ export async function generateReservePosts(args: {
   const items = await generate({
     instructions: [buildReserveInstructions(args.persona), ...(revisionLine ? [revisionLine] : [])].join('\n'),
     input: {
-      persona: args.persona,
+      persona: modelPersona(args.persona),
       poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
       learner: { language: learner.language, level: learner.level.brief },
       slots: slots.map((slot) => ({ ...slot, photo: slot.photo ? slot.photo.kind : false, ...(slot.photo?.setup ? { setup: slot.photo.setup } : {}) })),
@@ -249,6 +267,93 @@ export async function generateReservePosts(args: {
     timeoutMs: CALL_TIMEOUT_MS,
   })
 
+  return collectGeneratedPosts(items, slots, args.topics, seen)
+}
+
+/**
+ * A new text for one post staff are reviewing, the photo kept: same person,
+ * same language, same photo (the caption must fit it), clearly different from
+ * the old text, staff feedback first. Null when nothing usable came back.
+ * Throws `LlmError` when the call itself fails.
+ */
+export async function rewriteReservePostText(args: {
+  persona: ReservePersona
+  previousText: string
+  /** The post's language (its own, or the persona's). */
+  language: string
+  /** The photo it goes out with: kind and description. Null for a text post. */
+  photo: { kind: string; description: string } | null
+  feedback: string | null
+  existingTexts: string[]
+  seed: string
+  topic: string | null
+  /** Everything on the account's profile, so the text sounds like this exact person. */
+  profile?: {
+    gender: string | null
+    age: number | null
+    city: string | null
+    country: string | null
+    bio: string | null
+    speaks: string[]
+    learning: Array<{ language: string; level: number | null }>
+  }
+  generate?: GenerateFn
+}): Promise<string | null> {
+  const generate = args.generate ?? generateJson
+  const profile = reservePosterProfile(args.seed, args.persona.gender ?? args.profile?.gender ?? null)
+  const learner = reserveLearnerPlan(args.seed, args.persona.language, args.persona.learning ?? args.profile?.learning)
+  const briefs = new Map(RESERVE_TOPICS.map((topic) => [topic.key, topic.brief]))
+  const items = await generate({
+    instructions: [
+      buildReserveInstructions(args.persona),
+      'This call rewrites ONE post staff sent back, so "slots" has one slot. Its photo is already decided: "fixedPhoto" describes it. Keep that photo and write a new text that fits it as its caption; copy "fixedPhoto" unchanged into "photo" (empty when there is none).',
+      `The input also has "revision": the post's current text ("previousText"). The new text must be clearly different from it in wording and opening${args.feedback ? ', and follow the staff "feedback" first, also where it conflicts with the advice above' : ''}.`,
+      'Keep what the post is about (the subject of "previousText" and the photo) unless the staff "feedback" asks for something else; change how it is said.',
+      'Do not copy the register, length or sentence endings of "previousText": staff sent it back, so it may be off. Write it the way this person really posts: usually one to three short lines, not a paragraph.',
+      'Register: someone under 40 posting on a social app writes casually. In Korean that means 반말 or short 해요-style endings with ㅋㅋ/ㅠㅠ as the voice allows, never the written -습니다/-ㅂ니다 style; in other languages, the casual phone register of that age.',
+      'The input also has "profile": everything on this person\'s profile (gender, age, city and country, bio, the languages they speak and the ones they learn with a level from 1 to 5). The text must be something this exact person would post: their age group\'s everyday register in their own language (a young native speaker types casually to friends, not in polite written style, unless "poster" says otherwise), their life as the bio tells it (job or study, where they live, what they like), their gender, and, when the slot is in a language they learn, that level. Use facts from the bio; never contradict the profile or invent a different life.',
+    ].join('\n'),
+    input: {
+      persona: modelPersona(args.persona),
+      poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
+      learner: { language: learner.language, level: learner.level.brief },
+      slots: [{
+        slot: 1,
+        topic: args.topic ? briefs.get(args.topic) ?? args.topic : 'the same subject as previousText',
+        shape: 'whatever fits this person and the photo best; usually short, as "poster" says',
+        language: args.language,
+        photo: args.photo ? args.photo.kind : false,
+        ...(args.photo ? { fixedPhoto: args.photo.description } : {}),
+      }],
+      alreadyWritten: args.existingTexts.slice(-AVOID_SAMPLE_MAX).map((text) => Array.from(text).slice(0, AVOID_SAMPLE_CHARS).join('')),
+      revision: { previousText: args.previousText, ...(args.feedback ? { feedback: args.feedback } : {}) },
+      ...(args.profile ? { profile: args.profile } : {}),
+    },
+    responseSchema: RESPONSE_SCHEMA,
+    validate: (value) => {
+      const posts = (value as { posts?: unknown } | null)?.posts
+      if (!Array.isArray(posts)) throw new Error('invalid_posts')
+      return posts as Array<{ slot?: unknown; text?: unknown; photo?: unknown }>
+    },
+    model: resolveReserveModel(),
+    temperature: 1,
+    maxOutputTokens: 2048,
+    timeoutMs: CALL_TIMEOUT_MS,
+  })
+  const previousKey = reservePostKey(args.previousText)
+  for (const item of items) {
+    const text = cleanReservePost(item?.text)
+    if (text && reservePostKey(text) !== previousKey) return text
+  }
+  return null
+}
+
+function collectGeneratedPosts(
+  items: Array<{ slot?: unknown; text?: unknown; photo?: unknown }>,
+  slots: Array<{ language: string; photo: ReturnType<typeof pickPostPhoto> | null }>,
+  topics: string[],
+  seen: Set<string>,
+): GeneratedReservePost[] {
   const result: GeneratedReservePost[] = []
   const usedSlots = new Set<number>()
   for (const item of items) {
@@ -262,7 +367,7 @@ export async function generateReservePosts(args: {
     usedSlots.add(slot)
     const plan = slots[slot - 1].photo
     const photo = plan && typeof item.photo === 'string' ? item.photo.replace(/\s+/g, ' ').trim().slice(0, IMAGE_PROMPT_MAX_CHARS) : ''
-    result.push({ topic: args.topics[slot - 1], text, language: slots[slot - 1].language, imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo) : null })
+    result.push({ topic: topics[slot - 1], text, language: slots[slot - 1].language, imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo) : null })
   }
   return result
 }

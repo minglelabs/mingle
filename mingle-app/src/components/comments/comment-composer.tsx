@@ -9,7 +9,7 @@ import { uploadCommentImage } from "./comment-api";
 import type { CommentImageUpload } from "./comment-types";
 import { cn } from "@/lib/utils";
 import { commentsCopy, formatCommentsCopy } from "@/i18n/comments-copy";
-import { MAX_COMMENT_LENGTH, composerEnterAction } from "./comment-state";
+import { MAX_COMMENT_LENGTH, composerEnterAction, isTouchInput } from "./comment-state";
 import type { ReplyTarget, WriteOutcome } from "./use-comment-sheet";
 import AccountBadge from "@/components/posts/account-badge";
 import { resolveAccountBadge } from "@/lib/account-badge";
@@ -40,15 +40,6 @@ function focusWithoutPan(el: HTMLTextAreaElement) {
   el.focus({ preventScroll: true });
   const end = el.value.length;
   el.setSelectionRange(end, end);
-}
-
-/** A touch keyboard has no Shift key, so Enter must stay a newline there. */
-function isTouchInput(): boolean {
-  if (typeof window === "undefined") return false;
-  if (typeof window.matchMedia === "function") {
-    return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
-  }
-  return typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
 }
 
 /**

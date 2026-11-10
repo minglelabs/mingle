@@ -4,16 +4,43 @@ import { useMemo, useState } from "react";
 import { ArrowDownWideNarrow, ArrowUpNarrowWide } from "lucide-react";
 import {
   type DashboardMetric,
+  type MetricKind,
   formatMetricDisplayValue,
 } from "@/lib/admin-dashboard-metrics";
+import type { UsageDayStatus } from "@/lib/admin-dashboard-usage";
+import { DashboardSpinner } from "./dashboard-spinner";
 
 type SortOrder = "desc" | "asc";
+
+function MetricCellValue({ value, kind, status }: { value: number | null; kind: MetricKind; status: UsageDayStatus }) {
+  if (status === "pending") {
+    return (
+      <span className="inline-flex h-5 items-center">
+        <DashboardSpinner />
+        <span className="sr-only">계산 중</span>
+      </span>
+    );
+  }
+  if (status === "failed") return <span className="text-xs font-medium text-rose-600">오류</span>;
+  return <>{formatMetricDisplayValue(value, kind)}</>;
+}
 
 /**
  * Daily values of every metric. Below `sm` each day is a card with a
  * label/value grid (no sideways scroll at 375 px); from `sm` up it is a table.
+ * `dayStatus` (by metric key, in point order) marks the cells still being
+ * computed, which show a spinner, and those that failed to load. `pendingText`
+ * replaces the "N일 계산 중" status, for before it is known which days that is.
  */
-export function MetricsTable({ metrics }: { metrics: DashboardMetric[] }) {
+export function MetricsTable({
+  metrics,
+  dayStatus,
+  pendingText,
+}: {
+  metrics: DashboardMetric[];
+  dayStatus?: Readonly<Record<string, readonly UsageDayStatus[]>>;
+  pendingText?: string;
+}) {
   const [order, setOrder] = useState<SortOrder>("desc");
 
   const rowData = useMemo(() => {
@@ -29,9 +56,13 @@ export function MetricsTable({ metrics }: { metrics: DashboardMetric[] }) {
         label: metric.label,
         kind: metric.kind,
         value: metric.points[index]?.value ?? null,
+        status: dayStatus?.[metric.key]?.[index] ?? "ready",
       })),
     }));
-  }, [metrics, order]);
+  }, [metrics, dayStatus, order]);
+
+  const pendingDays = rowData.filter((row) => row.values.some((col) => col.status === "pending")).length;
+  const hasFailure = rowData.some((row) => row.values.some((col) => col.status === "failed"));
 
   const toggleOrder = () => {
     setOrder((prev) => (prev === "desc" ? "asc" : "desc"));
@@ -41,9 +72,20 @@ export function MetricsTable({ metrics }: { metrics: DashboardMetric[] }) {
   return (
     <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2">
-        <span className="text-xs font-medium text-slate-500">
-          {rowData.length}일 · {order === "desc" ? "최신순" : "오래된순"}
-        </span>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-xs font-medium text-slate-500">
+            {rowData.length}일 · {order === "desc" ? "최신순" : "오래된순"}
+          </span>
+          {pendingDays > 0 ? (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500" role="status">
+              <DashboardSpinner />
+              {pendingText ?? `${pendingDays}일 계산 중`}
+            </span>
+          ) : null}
+          {hasFailure ? (
+            <span className="text-xs font-medium text-rose-600" role="alert">일부 값을 불러오지 못했습니다</span>
+          ) : null}
+        </div>
         <button
           className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           onClick={toggleOrder}
@@ -63,7 +105,7 @@ export function MetricsTable({ metrics }: { metrics: DashboardMetric[] }) {
                 <div className="min-w-0" key={col.key}>
                   <dt className="break-words text-xs text-slate-500">{col.label}</dt>
                   <dd className="break-words text-sm font-medium tabular-nums text-slate-800">
-                    {formatMetricDisplayValue(col.value, col.kind)}
+                    <MetricCellValue value={col.value} kind={col.kind} status={col.status} />
                   </dd>
                 </div>
               ))}
@@ -100,7 +142,7 @@ export function MetricsTable({ metrics }: { metrics: DashboardMetric[] }) {
                 </td>
                 {row.values.map((col) => (
                   <td className="px-3 py-1.5 tabular-nums text-slate-600" key={col.key}>
-                    {formatMetricDisplayValue(col.value, col.kind)}
+                    <MetricCellValue value={col.value} kind={col.kind} status={col.status} />
                   </td>
                 ))}
               </tr>

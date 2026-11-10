@@ -27,6 +27,7 @@ import {
   storedCommentKorean,
   toActivityPerson,
 } from './activity'
+import { operatorTextProvider } from '@/server/translation/translate-texts'
 
 /**
  * A post's comment thread as one operator account sees it, and commenting as
@@ -359,13 +360,14 @@ export async function commentAsOperator(ctx: AdminContext, input: {
   if (!text) throw new OperatorCommentError('conversion_failed')
   if (text.length > OPERATOR_COMMENT_MAX_LENGTH) throw new OperatorCommentError('text_too_long')
 
-  const detected = await detectSourceLanguage({ text, clientHint: conversion.language })
+  const detected = await detectSourceLanguage({ text, clientHint: conversion.language, provider: operatorTextProvider() })
   const translationRows = detected && detected.trim()
     ? (
         await translateCommentBodySettled({
           sourceText: text,
           sourceLanguage: detected,
           targetLanguages: resolveDefaultPostTranslationLanguages(detected),
+          provider: operatorTextProvider(),
         })
       ).map((row) => ({ language: row.language, status: row.status, text: row.text }))
     : []

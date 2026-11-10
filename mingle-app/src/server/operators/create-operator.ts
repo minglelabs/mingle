@@ -74,7 +74,7 @@ export function operatorLanguageFields(primaryLanguage: string) {
   }
 }
 
-/** City-center location (already 2 dp), stamped as a normal verified location. */
+/** City-center location (already 2 dp), stamped as a normal verified location, plus the persona's nationality. */
 export function operatorLocationFields(
   location: Pick<PersonaDraft, 'personaCountry' | 'city' | 'countryName' | 'latitude' | 'longitude'>,
   now: Date,
@@ -85,6 +85,8 @@ export function operatorLocationFields(
     locationCity: location.city,
     locationCountry: location.countryName,
     locationCountryCode: location.personaCountry.toLowerCase(),
+    // The persona's 국적 (flag on the avatar) is its country.
+    nationalityCountry: location.personaCountry.toUpperCase(),
     locationUpdatedAt: now,
     locationPermissionVerifiedAt: now,
   }
@@ -102,7 +104,17 @@ export type CreatedOperatorAccount = {
 export async function createOperatorAccount(
   ctx: AdminContext,
   input: PersonaDraft,
-  options: { notes?: string | null; now?: Date; random?: Random } = {},
+  options: {
+    notes?: string | null
+    now?: Date
+    random?: Random
+    /**
+     * Waits for staff review: hidden (inactive) until staff publish it in the
+     * review queue, at the front of it (`reviewRank`). Without it the account is
+     * live at once.
+     */
+    inReview?: { reviewRank: number }
+  } = {},
 ): Promise<CreatedOperatorAccount> {
   const now = options.now ?? new Date()
   const random = options.random ?? Math.random
@@ -125,9 +137,12 @@ export async function createOperatorAccount(
       bio: draft.bio || null,
       isOperator: true,
       isOfficial: false,
+      ...(options.inReview ? { isActive: false } : {}),
       translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
       ...operatorLanguageFields(draft.primaryLanguage),
       birthDate: birthDateFromYear(draft.birthYear, now, random),
+      // Public profile gender mirrors the persona (see User.gender).
+      gender: draft.gender ?? null,
       ...operatorLocationFields(draft, now),
       operatorAccount: {
         create: {
@@ -135,6 +150,7 @@ export async function createOperatorAccount(
           personaGender: draft.gender ?? null,
           notes: notes.value,
           createdBySessionId: ctx.sessionId,
+          ...(options.inReview ? { reviewState: 'pending', reviewRank: options.inReview.reviewRank } : {}),
         },
       },
     },

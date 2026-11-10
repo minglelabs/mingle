@@ -24,7 +24,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: mocks.audit }))
 vi.mock('@/server/operator-inbox/send', () => ({ sendOperatorMessage: mocks.send }))
-vi.mock('@/server/llm/generate-json', () => ({ generateJson: mocks.generateJson }))
+vi.mock('@/server/llm/generate-json', () => ({ resolveJsonProvider: () => 'gemini', extractJsonText: (t: string) => t, generateJson: mocks.generateJson }))
 
 import { ageOn, buildAutoReplyInstructions, loadAutoReplyContext, resolveAutoReplyModel, validateAutoReply } from './generate'
 import { normalizeAutoReplySettings, parseAutoReplyDelayMinutes, updateAutoReplySettings } from './settings'

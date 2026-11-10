@@ -6,12 +6,14 @@ import {
   isOldEnoughForSignup,
   parseBirthDate,
 } from "@/lib/birth-date";
+import { isProfileGender } from "@/lib/profile-gender";
 import {
   deriveDefaultConversationLanguages,
   sanitizeSttLanguageSelection,
 } from "@/lib/stt-languages";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 import { NEW_REGISTERED_USER_TRANSLATION_MODEL } from "@/lib/translation-models";
+import { defaultNationalityForLanguage } from "@/lib/nationality";
 
 type SignupPayload = {
   email?: unknown;
@@ -19,6 +21,7 @@ type SignupPayload = {
   password?: unknown;
   primaryLanguages?: unknown;
   birthDate?: unknown;
+  gender?: unknown;
 };
 
 function normalizeName(rawValue: unknown): string {
@@ -78,6 +81,12 @@ export async function POST(request: Request) {
     birthDate = parseBirthDate("2000-01-01");
   }
 
+  // Picked in onboarding before the account exists; older app builds send none.
+  if (payload?.gender !== undefined && payload?.gender !== null && !isProfileGender(payload.gender)) {
+    return NextResponse.json({ error: "invalid_gender" }, { status: 400 });
+  }
+  const gender = isProfileGender(payload?.gender) ? payload.gender : null;
+
   const passwordHash = hashPassword(password);
   const now = new Date();
   const existing = await prisma.user.findUnique({
@@ -101,10 +110,13 @@ export async function POST(request: Request) {
         passwordHash,
         translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
         nationality: primaryLanguages[0] ?? null,
+        // 국적 starts as the country of the language picked in onboarding.
+        nationalityCountry: defaultNationalityForLanguage(primaryLanguages[0]),
         primaryLanguages,
         defaultConversationLanguages: deriveDefaultConversationLanguages(primaryLanguages),
         defaultDisplayLanguage: primaryLanguages[0] ?? null,
         birthDate,
+        gender,
         firstSeenAt: now,
         lastSeenAt: now,
       },

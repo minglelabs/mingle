@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({ userFindFirst: vi.fn(), translateTexts: vi.fn() }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: { user: { findFirst: m.userFindFirst } } }))
-vi.mock('@/server/translation/translate-texts', () => ({ translateTexts: m.translateTexts }))
+vi.mock('@/server/translation/translate-texts', () => ({ operatorTextProvider: () => undefined, translateTexts: m.translateTexts }))
 
 import { OperatorAccountRequiredError } from '@/server/operators/operator-guard'
 import {

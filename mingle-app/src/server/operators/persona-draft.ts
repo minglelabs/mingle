@@ -45,6 +45,8 @@ export type PersonaDraftRequest = {
   /** Names / handles already in the batch, so a regenerated draft differs. */
   avoidNames?: string[]
   avoidHandles?: string[]
+  /** Server only: keep this city and birth year (a new bio for an existing account). */
+  pin?: { city?: string | null; birthYear?: number | null }
 }
 
 export type PersonaSlot = {
@@ -54,6 +56,69 @@ export type PersonaSlot = {
   birthYear: number
   gender: PersonaGender | null
   nameStyle: PersonaNameStyle
+  /** A given name picked by the server for Korean accounts (null elsewhere): left to itself the model kept choosing 서연 and 서윤. */
+  nameSeed: string | null
+  /** How the bio is written, told to the model. */
+  bioStyle: string
+  /** Whether the bio mentions a language they learn. */
+  bioMentionsLearning: boolean
+}
+
+/**
+ * Left to itself the model kept choosing 서연 and 서윤 for Korean accounts
+ * (staff, 2026-11-09). The server picks each Korean account's given name,
+ * evenly, from this wide pool (the common names are in it too, each just one
+ * of many), and the model builds the display name on it.
+ */
+export const KOREAN_GIVEN_NAMES: Record<PersonaGender, readonly string[]> = {
+  female: [
+    '가은', '나연', '다인', '다은', '라희', '미소', '보라', '사랑', '서아', '설아', '소율', '소민', '소윤', '수민', '수빈', '수진', '승아', '시은', '아린', '아윤',
+    '연우', '예린', '예나', '예원', '유진', '은서', '은채', '이레', '이설', '주아', '지안', '지원', '채원', '채윤', '채은', '하린', '하영', '하람', '해인', '혜인',
+    '혜원', '효린', '희원', '나은', '다현', '민지', '세빈', '송이', '아라', '유리', '윤아', '재이', '정아', '진아', '초롱', '현지', '혜진', '은지', '수정', '보미',
+    '서연', '서윤', '지우', '하윤', '민서', '지민', '수아', '지유', '하은', '서현', '지아', '유나',
+    '가영', '나래', '다혜', '라온', '미나', '서영', '선우', '소희', '슬기', '연서', '예지', '유빈', '재은', '하나', '하율', '한결', '현서', '화연', '다솜', '새봄',
+  ],
+  male: [
+    '건우', '규민', '다온', '도현', '동현', '민재', '민혁', '상우', '선호', '성민', '세준', '승현', '시우', '시윤', '연우', '우진', '윤호', '은우', '이준', '재민',
+    '재윤', '정우', '주원', '준서', '준혁', '지호', '지환', '찬영', '태양', '태민', '하준', '현우', '현준', '형준', '호진', '희수', '경민', '기범', '대현', '동우',
+    '민준', '서준', '지훈', '도윤', '예준',
+    '도훈', '명진', '병준', '성훈', '수호', '승민', '영호', '용준', '인성', '재훈', '종민', '진우', '창민', '태현', '한울', '해성', '현석', '효준', '유찬', '강민',
+  ],
+}
+
+function pickKoreanGivenName(gender: PersonaGender | null, random: Random): string {
+  const pool = gender === 'female' || gender === 'male'
+    ? KOREAN_GIVEN_NAMES[gender]
+    : [...KOREAN_GIVEN_NAMES.female, ...KOREAN_GIVEN_NAMES.male]
+  return pool[randomInt(random, 0, pool.length - 1)]
+}
+
+/**
+ * Bio forms, picked by the server. Left to itself the model wrote nearly
+ * every bio as one short line, an emoji, then a longer line about studying a
+ * language (staff, 2026-11). Men in real apps mostly write a few plain words
+ * with no emoji, or, less often, something long and earnest.
+ */
+const BIO_STYLES: ReadonlyArray<{ key: string; female: number; male: number; brief: string }> = [
+  { key: 'minimal', female: 1.5, male: 3.5, brief: 'two to six words, not a full sentence, no emoji (for example a job and a city, or just one interest)' },
+  { key: 'one_line', female: 2, male: 3, brief: 'one short plain sentence, no emoji' },
+  { key: 'list', female: 2, male: 2, brief: 'three or four interests or facts in a row separated by slashes, dots or line breaks, no sentence; at most one emoji' },
+  { key: 'casual', female: 2.5, male: 1, brief: 'one or two casual sentences about what they are into these days, written the way they talk; one emoji at most, often none' },
+  { key: 'emoji', female: 2, male: 0.3, brief: 'a short line built around two or three emoji, few words' },
+  { key: 'earnest', female: 1, male: 1.5, brief: 'three to five earnest sentences: what they do, what they care about and what kind of people or conversations they hope to find; no emoji' },
+  { key: 'dry', female: 1, male: 1.3, brief: 'a single dry, slightly funny remark about themself, no emoji' },
+]
+/** Share of bios that mention a language being learned. */
+const BIO_LEARNING_SHARE = 0.25
+
+function pickBioStyle(gender: PersonaGender | null, random: Random): string {
+  const weightOf = (style: (typeof BIO_STYLES)[number]) => (gender === 'male' ? style.male : gender === 'female' ? style.female : (style.male + style.female) / 2)
+  let roll = random() * BIO_STYLES.reduce((sum, style) => sum + weightOf(style), 0)
+  for (const style of BIO_STYLES) {
+    roll -= weightOf(style)
+    if (roll < 0) return style.brief
+  }
+  return BIO_STYLES[0].brief
 }
 
 export type PersonaDraftResult = { drafts: PersonaDraft[]; missing: number }
@@ -190,15 +255,19 @@ export function planPersonaSlots(request: PersonaDraftRequest, options: { random
 
   return Array.from({ length: request.count }, (_, index) => {
     const country = countries[index % countries.length]
-    const city = pickCity(country, usedCities, random)
+    const pinnedCity = request.pin?.city ? country.cities.find(candidate => candidate.name === request.pin?.city) : undefined
+    const city = pinnedCity ?? pickCity(country, usedCities, random)
     usedCities.add(`${country.code}:${city.name}`)
     return {
       index,
       country,
       city,
-      birthYear: currentYear - randomInt(random, request.ageMin, request.ageMax),
+      birthYear: request.pin?.birthYear ?? currentYear - randomInt(random, request.ageMin, request.ageMax),
       gender: genders[index],
       nameStyle: styles[index],
+      nameSeed: country.code === 'KR' ? pickKoreanGivenName(genders[index], random) : null,
+      bioStyle: pickBioStyle(genders[index], random),
+      bioMentionsLearning: random() < BIO_LEARNING_SHARE,
     }
   })
 }
@@ -211,9 +280,10 @@ For each item in "personas" return one object with the same "slot" and these fie
   - given_name: only a given or short name in the usual script (e.g. ゆき, 민준, Lucas).
   - nickname: a casual internet-style nickname (e.g. yukinko, 쭌, luquinhas); lower case or mixed scripts are fine.
   - romanized: the name in Latin letters (e.g. Yuki Tanaka, Minjun Kim).
+  When an item has "nameSeed", its given name is that word: build the name on it (a Korean full name with a surname you pick, or the same given name alone, a nickname made from it, or its Latin spelling);, never swap it for another name.
   At most 40 characters, matching "gender" when one is given. Use common names only: never the name of a real public figure, celebrity, influencer or fictional character.
 - handle: a natural username for that person using only lower-case a-z, 0-9, "_" and "."; 3 to 30 characters, starting with a letter (e.g. yuki.tnk, minjun_0412, lucas.silva).
-- bio: a short casual self-description of at most 140 characters, written in primaryLanguage, the way people really fill in a chat-app profile: interests, hobbies, what they like to talk about, a language they are learning, maybe one emoji. Vary length and style between personas.
+- bio: the self-description this person types into a chat-app profile, at most 140 characters, written in primaryLanguage. Follow the item's "bioStyle" literally: it sets the length, the form and whether there is an emoji. Mention a language they are learning only when "bioMentionsLearning" is true. Never use the stock pattern of a short line, an emoji, then a longer line about studying a language or wanting to chat; bios in one batch must not share a shape or an opening.
 - primaryLanguage: the language this person writes in; exactly one code from the item's "languages" (normally the first).
 - gender: "female" or "male"; the item's gender when it has one.
 
@@ -287,6 +357,9 @@ async function requestChunk(
         age: currentYear - slot.birthYear,
         gender: slot.gender ?? 'any',
         nameStyle: slot.nameStyle,
+        ...(slot.nameSeed ? { nameSeed: slot.nameSeed } : {}),
+        bioStyle: slot.bioStyle,
+        bioMentionsLearning: slot.bioMentionsLearning,
         languages: slot.country.languages,
       })),
     },

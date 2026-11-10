@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { reservePosterProfile } from '@/server/operator-post-reserve/generate'
+import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
+import { OperatorPostStatsRow } from '../../_components/operator-post-stats-row'
 import { ReviewPhotos } from '../review/review-board'
 import { PostTakedownButton } from '../../feed/_components/post-takedown-button'
 
@@ -48,6 +50,7 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
   ])
   const profile = reservePosterProfile(userId)
   const hasMore = !showAll && (publishedCount > published.length || queuedCount > queued.length)
+  const statsByPost = await loadOperatorPostStats({ postIds: published.map((post) => post.id) })
 
   return (
     <div className="mt-3 space-y-3">
@@ -75,6 +78,7 @@ export async function OperatorPosts({ userId, showAll }: OperatorPostsProps) {
                 <p className="mt-1 text-xs text-slate-500">
                   {DATE_FORMAT.format(post.publishedAt)} · {post.sourceLanguage ?? '?'} · 좋아요 {post.likeCount} · 댓글 {post.commentCount}
                 </p>
+                <OperatorPostStatsRow stats={statsByPost.get(post.id)} className="mt-2" />
                 {post.comments.length ? (
                   <ul className="mt-2 space-y-1 rounded-xl bg-slate-50 p-2.5">
                     {post.comments.map((comment) => (

@@ -23,6 +23,15 @@ import {
 } from '@/app/api/translate/finalize/utils'
 import { shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import {
+  extendFixedSource,
+  isSafeInterimCut,
+  joinTailTranslations,
+  matchTranslatedTailLength,
+  parseBubbleTail,
+  planBubbleTail,
+  type BubbleTailPlan,
+} from '@/lib/bubble-tail'
+import {
   normalizeSelectableTranslationModel,
   resolveDefaultSelectableTranslationModel,
   type UserSelectableTranslationModel,
@@ -418,7 +427,11 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   }
   const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
   const sourceLanguage = sourceLanguageRaw || 'unknown'
-  const shouldRedetectSourceLanguage = shouldRedetectSourceLanguageFromRequest({
+  const bubbleTailPayload = parseBubbleTail(body.bubbleTail)
+  // Tail mode keeps the source language its fixed part was translated from.
+  // A final request with nothing fixed yet is an ordinary final translation.
+  const bubbleTailRequested = Boolean(bubbleTailPayload && (!isFinal || bubbleTailPayload.translatedSource))
+  const shouldRedetectSourceLanguage = !bubbleTailRequested && shouldRedetectSourceLanguageFromRequest({
     pathname: requestMeta.requestPathname,
     isFinal,
     sourceLanguage,
@@ -485,8 +498,11 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const coinRequestDigest = coinKeyDigest(sessionKeyHint, text, targetLanguages.join(','), isFinal)
 
   const immediatePreviousTurn = parseImmediatePreviousTurn(body.immediatePreviousTurn)
+  const bubbleTailPlan: BubbleTailPlan | null = bubbleTailPayload && bubbleTailRequested
+    ? planBubbleTail(bubbleTailPayload, text, targetLanguages)
+    : null
   const ctx: HandlerTranslateContext = {
-    text,
+    text: bubbleTailPlan ? bubbleTailPlan.remainingSource : text,
     sourceLanguage,
     targetLanguages,
     provider: providerConfig.provider,
@@ -495,6 +511,16 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     currentTurnPreviousState,
     isFinal,
     requestMeta,
+    ...(bubbleTailPlan ? {
+      bubbleTail: {
+        fixedSource: bubbleTailPlan.contextSource,
+        fixedTranslations: bubbleTailPlan.contextTranslations,
+        ...(bubbleTailPlan.previousSource ? {
+          previousSource: bubbleTailPlan.previousSource,
+          previousTranslations: bubbleTailPlan.previousTranslations,
+        } : {}),
+      },
+    } : {}),
   }
   logTranslateFinalizeInfo('request', {
     provider: providerConfig.provider,
@@ -507,15 +533,22 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     hasImmediatePreviousTurn: Boolean(immediatePreviousTurn),
     hasCurrentTurnPreviousState: Boolean(currentTurnPreviousState),
     currentTurnPreviousLanguages: Object.keys(currentTurnPreviousState?.translations || {}),
+    ...(bubbleTailPlan ? {
+      bubbleTailFixedChars: bubbleTailPlan.fixedSource.length,
+      bubbleTailRemainingChars: bubbleTailPlan.remainingSource.length,
+    } : {}),
   })
 
   try {
-    const fallbackTranslations = buildFallbackTranslationsFromCurrentTurnPreviousState(
-      currentTurnPreviousState,
-      targetLanguages,
-    )
+    // Tail mode falls back to the fixed translations: they never change.
+    const fallbackTranslations = bubbleTailPlan
+      ? { ...bubbleTailPlan.fixedTranslations }
+      : buildFallbackTranslationsFromCurrentTurnPreviousState(
+        currentTurnPreviousState,
+        targetLanguages,
+      )
     const buildResponseWithOptionalTts = async (
-      translations: Record<string, string>,
+      rawTranslations: Record<string, string>,
       meta: {
         provider: string
         infrastructureProvider: string
@@ -526,10 +559,48 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         sourceLanguagesMixed?: boolean
         sourceTextHasForeignScript?: boolean
         usedFallbackFromPreviousState?: boolean
+        tailTranslatedSource?: string
       },
     ): Promise<NextResponse> => {
+      // Tail mode: the provider filled only the blank. An interim answer covers
+      // the complete sentences it names; the final answer covers the whole tail.
+      let translations = rawTranslations
+      let tailFill: {
+        translatedSource: string
+        translations: Record<string, string>
+        contextSource: string
+        contextTranslations: Record<string, string>
+      } | null = null
+      if (bubbleTailPlan && !meta.usedFallbackFromPreviousState) {
+        const coveredLength = isFinal
+          ? bubbleTailPlan.remainingSource.length
+          : matchTranslatedTailLength(bubbleTailPlan.remainingSource, meta.tailTranslatedSource || '')
+        const safeCut = isFinal || isSafeInterimCut(bubbleTailPlan.remainingSource, coveredLength)
+        const hasFill = safeCut && coveredLength > 0 && Object.keys(rawTranslations).length > 0
+        translations = hasFill
+          ? joinTailTranslations(bubbleTailPlan, rawTranslations, targetLanguages)
+          : { ...bubbleTailPlan.fixedTranslations }
+        if (!isFinal && hasFill) {
+          tailFill = {
+            translatedSource: extendFixedSource(bubbleTailPlan, coveredLength),
+            translations,
+            // The piece just translated is the next request's only context.
+            contextSource: bubbleTailPlan.remainingSource.slice(0, coveredLength).trim(),
+            contextTranslations: Object.fromEntries(targetLanguages
+              .filter((language) => Boolean(rawTranslations[language]))
+              .map((language) => [language, rawTranslations[language] as string])),
+          }
+        }
+        if (!isFinal && !hasFill && Object.keys(rawTranslations).length > 0) {
+          logTranslateFinalizeWarning('bubble_tail_unmatched_source', {
+            ...buildTranslateFinalizeLogContext(ctx),
+            tailTranslatedSource: meta.tailTranslatedSource || '',
+          })
+        }
+      }
       const responsePayload: Record<string, unknown> = {
         translations,
+        ...(tailFill ? { tailFill } : {}),
         provider: meta.provider,
         infrastructureProvider: meta.infrastructureProvider,
         model: meta.model,
@@ -616,6 +687,15 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       const response = NextResponse.json(responsePayload)
       ensureTrackingContext(request, response, { sessionKeyHint })
       return response
+    }
+
+    if (bubbleTailPlan && !bubbleTailPlan.remainingSource) {
+      // Nothing after the fixed part: nothing to ask the model.
+      return await buildResponseWithOptionalTts({ ...bubbleTailPlan.fixedTranslations }, {
+        provider: 'bubble-tail',
+        infrastructureProvider: 'none',
+        model: 'none',
+      })
     }
 
     let selectedResult: TranslationEngineResult | null = null
@@ -765,7 +845,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       sourceLanguage: modelSourceLanguage
         ? (modelDetectedChinese ? 'zh' : modelSourceLanguage)
         : sourceLanguage,
-      sourceText: text,
+      // Tail mode translated only the tail, so a sibling Chinese variant is converted from it.
+      sourceText: ctx.text,
       translations: selectedResult.translations,
       targetLanguages,
       candidates: targetLanguages,
@@ -774,7 +855,20 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         : {}),
     })
     const normalizedSourceLanguage = normalizedContent.sourceLanguage
-    const sourceDisplayText = normalizedContent.sourceDisplayText
+    const sourceDisplayText = bubbleTailPlan
+      ? normalizeChineseContent({
+        sourceLanguage: modelSourceLanguage
+          ? (modelDetectedChinese ? 'zh' : modelSourceLanguage)
+          : sourceLanguage,
+        sourceText: text,
+        translations: {},
+        targetLanguages,
+        candidates: targetLanguages,
+        ...(modelDetectedChinese
+          ? { sourceHint: sourceLanguage, sourceFallback: modelSourceLanguage }
+          : {}),
+      }).sourceDisplayText
+      : normalizedContent.sourceDisplayText
 
     const translations: Record<string, string> = {}
     for (const lang of targetLanguages) {
@@ -792,6 +886,17 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         returnedLanguages: Object.keys(selectedResult.translations),
       })
 
+      if (!ctx.isFinal && bubbleTailPlan) {
+        // A tail fill must cover every language at once, or the fixed parts drift apart.
+        return await buildResponseWithOptionalTts(fallbackTranslations, {
+          provider: selectedResult.provider,
+          infrastructureProvider: selectedResult.infrastructureProvider,
+          model: selectedResult.model,
+          usage: selectedResult.usage,
+          sourceDisplayText,
+          usedFallbackFromPreviousState: true,
+        })
+      }
       if (!ctx.isFinal) {
         const fallbackTranslationsForMissingTargets: Record<string, string> = {}
         for (const language of missingTargetLanguages) {
@@ -864,6 +969,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       sourceDisplayText,
       sourceLanguagesMixed: selectedResult.sourceLanguagesMixed,
       sourceTextHasForeignScript: selectedResult.sourceTextHasForeignScript,
+      tailTranslatedSource: selectedResult.tailTranslatedSource,
     })
   } catch (error) {
     logTranslateFinalizeError('unexpected_handler_error', {

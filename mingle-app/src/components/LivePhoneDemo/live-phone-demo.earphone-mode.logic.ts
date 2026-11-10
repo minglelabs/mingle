@@ -2,6 +2,7 @@ import {
   buildTargetLanguagesForUtterance,
   createDisplayLanguageResolver,
   findDisplayTranslation,
+  findLanguageRecordValue,
   resolveInitialDisplayLanguage,
   type Utterance,
 } from './ChatBubble'
@@ -36,6 +37,9 @@ export type EarphoneModeGateInput = {
   supported: boolean
   enabled: boolean
   earphonesConnected: boolean
+  // false = speaker mode: the voice may play out loud, so no earphones are
+  // needed (the app removes its own voice from what the microphone hears).
+  earphonesRequired?: boolean
 }
 
 export type EarphoneModeGate = {
@@ -44,11 +48,12 @@ export type EarphoneModeGate = {
   waitingForEarphones: boolean
 }
 
-// Auto-read needs all three; unknown earphone state counts as not connected.
+// Auto-read needs the mode on and, unless earphones are not required, earphones
+// connected; unknown earphone state counts as not connected.
 export function resolveEarphoneModeGate(input: EarphoneModeGateInput): EarphoneModeGate {
   const controlVisible = input.supported === true
   const enabled = controlVisible && input.enabled === true
-  const connected = controlVisible && input.earphonesConnected === true
+  const connected = controlVisible && (input.earphonesRequired === false || input.earphonesConnected === true)
   return {
     controlVisible,
     autoReadActive: enabled && connected,
@@ -340,6 +345,47 @@ export function resolveEarphoneModeReadTarget(
 ): EarphoneModeReadTarget | null {
   const inspection = inspectEarphoneModeReadLanguage(utterance, read)
   return inspection ? buildEarphoneModeReadTarget(utterance, inspection) : null
+}
+
+// The fixed part of a row's interim translation into L (it will not change
+// any more), read before the row completes. null when there is none, and
+// always for a row whose original is in L.
+export function resolveEarphoneModeFixedTarget(
+  utterance: Utterance,
+  read: EarphoneModeReadContext,
+): EarphoneModeReadTarget | null {
+  if (!utterance.translationFixed) return null
+  const readLanguage = read.readLanguage?.trim()
+  if (!readLanguage) return null
+  const resolver = createDisplayLanguageResolver(utterance, read.languageOrder)
+  const readKey = resolver.keyOf(readLanguage)
+  if (!readKey || readKey === resolver.originalKey) return null
+  for (const language of buildTargetLanguagesForUtterance(utterance, read.languageOrder, resolver)) {
+    if (resolver.keyOf(language) !== readKey) continue
+    const fixed = findLanguageRecordValue(utterance.translationFixed, language, resolver)?.trim()
+    if (!fixed) return null
+    return {
+      playbackKey: buildTranslationBubblePlaybackKey(utterance.id, language),
+      utteranceId: utterance.id,
+      language,
+      kind: 'translation',
+      text: fixed,
+    }
+  }
+  return null
+}
+
+/**
+ * What is left to read of `fullText` after `readText` was read. null when the
+ * text no longer starts with what was read (it changed): reading on would
+ * repeat or contradict what the listener heard.
+ */
+export function remainingEarphoneModeText(fullText: string, readText: string): string | null {
+  const full = fullText.trim()
+  const read = readText.trim()
+  if (!read) return full
+  if (!full.startsWith(read)) return null
+  return full.slice(read.length).trim()
 }
 
 export function isOwnEarphoneModeUtterance(utterance: Utterance, viewerUserId: string | null | undefined): boolean {

@@ -86,10 +86,10 @@ export async function requeueStalePublishingJobs(now: Date): Promise<{ requeued:
 /** Atomically claim up to `limit` due queued jobs (oldest publish time first). */
 export async function claimDueOperatorPostJobs(now: Date, limit: number): Promise<ClaimedOperatorPostJob[]> {
   return prisma.$queryRaw<ClaimedOperatorPostJob[]>`
-    UPDATE app_operator_post_jobs
+    UPDATE app.app_operator_post_jobs
     SET state = 'publishing', attempts = attempts + 1, updated_at = ${sqlUtcTimestamp(now)}
     WHERE id IN (
-      SELECT id FROM app_operator_post_jobs
+      SELECT id FROM app.app_operator_post_jobs
       WHERE state = 'queued' AND publish_at <= ${sqlUtcTimestamp(now)}
       ORDER BY publish_at ASC, id ASC
       LIMIT ${limit}

@@ -224,9 +224,14 @@ function proxyHttpToService(req, res, targetPort, label) {
 
   upstreamReq.on('error', (error) => {
     console.error(`[railway] ${label} proxy error: ${error.message}`);
-    if (!res.headersSent) {
-      res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
+    if (res.headersSent) {
+      // The status line and part of the body are already out. Writing "Bad Gateway" now
+      // would splice text into the streamed HTML/RSC payload, which the browser reports
+      // as a client-side exception; aborting the response makes it a failed request.
+      res.destroy(error);
+      return;
     }
+    res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
     res.end('Bad Gateway');
   });
 

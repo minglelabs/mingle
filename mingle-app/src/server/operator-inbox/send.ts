@@ -17,7 +17,7 @@ import { notifyConversationMessage } from '@/server/conversation-realtime'
 import { notifyOperatorInboxActivity } from '@/server/operator-inbox/notify'
 import { requireOperatorAccount, type OperatorAccountRecord } from '@/server/operators/operator-guard'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
-import { translateTexts, type TranslateTextsResult, type TranslationUsage } from '@/server/translation/translate-texts'
+import { operatorTextProvider, translateTexts, type TranslateTextsResult, type TranslationUsage } from '@/server/translation/translate-texts'
 
 /**
  * Operator replies from the admin inbox (contract §5 "Reply language"):
@@ -192,7 +192,7 @@ function canonicalTranslations(result: TranslateTextsResult, text: string, staff
 
 async function requestTranslation(input: Parameters<typeof translateTexts>[0]): Promise<TranslateTextsResult> {
   try {
-    return await translateTexts(input)
+    return await translateTexts({ ...input, provider: operatorTextProvider() })
   } catch (error) {
     throw new OperatorSendError('translation_failed', { cause: error })
   }
@@ -232,6 +232,7 @@ async function translateStaffReply(args: {
   if (missing.length > 0) {
     try {
       const retry = await translateTexts({
+        provider: operatorTextProvider(),
         text,
         sourceLanguage: staffLanguage || 'auto',
         targetLanguages: missing,

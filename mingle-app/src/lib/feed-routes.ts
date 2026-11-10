@@ -46,6 +46,18 @@ export function composeHref(locale: string, options?: { draftId?: string | null 
   return withQuery(`/${locale}/compose`, { draftId: options?.draftId })
 }
 
+/** Query key `userProfileHref` puts the source post id under. */
+export const PROFILE_FROM_POST_QUERY_KEY = 'fromPost'
+
+/**
+ * Another user's profile. `fromPostId`: that user's post the profile is opened
+ * from (feed card, post viewer); the profile records it with the visit, for
+ * the staff-only operator post stats.
+ */
+export function userProfileHref(locale: string, userId: string, options?: { fromPostId?: string | null }): string {
+  return withQuery(`/${locale}/users/${encodeURIComponent(userId)}`, { [PROFILE_FROM_POST_QUERY_KEY]: options?.fromPostId })
+}
+
 export function editPostHref(locale: string, postId: string): string {
   return `/${locale}/posts/${encodeURIComponent(postId)}/edit`
 }

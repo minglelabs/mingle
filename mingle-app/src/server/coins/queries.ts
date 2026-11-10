@@ -69,7 +69,7 @@ export async function getCoinUsageSummary(
       SUM(charged_micro)::bigint AS charged,
       SUM(COALESCE((units->>'second')::float8, 0))::float8 AS seconds,
       COUNT(*)::bigint AS count
-    FROM app_coin_usage_charges
+    FROM app.app_coin_usage_charges
     WHERE user_id = ${userId}
       AND shadow = false
       AND created_at >= ${utcTimestampLiteral(since)}::timestamp

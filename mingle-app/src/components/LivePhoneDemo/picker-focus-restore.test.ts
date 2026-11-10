@@ -76,14 +76,31 @@ describe('scheduleFocusRestore', () => {
     expect(detached.focus).not.toHaveBeenCalled()
   })
 
-  // Cancelling the iOS chooser keeps DOM focus on the textarea but drops the
-  // keyboard; only another focus() call brings the keyboard back.
-  it('refocuses a control that is still document.activeElement', () => {
-    const focused = makeControl('TEXTAREA')
+  // Cancelling the chooser keeps DOM focus on the textarea but drops the
+  // keyboard. iOS needs another focus(); the Android WebView ignores focus() on
+  // the focused element, so it blurs first.
+  it('blurs, then refocuses a control that is still document.activeElement', () => {
+    const calls: string[] = []
+    const focused = makeControl('TEXTAREA', {
+      blur: vi.fn(() => calls.push('blur')),
+      focus: vi.fn(() => calls.push('focus')),
+    })
     const timers = makeTimers()
     scheduleFocusRestore(focused, { doc: { activeElement: focused }, timers })
     timers.flush()
+    expect(calls).toEqual(['blur', 'focus'])
     expect(focused.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it('does not blur a control that lost focus to the body', () => {
+    const body = makeControl('BODY')
+    const blur = vi.fn()
+    const textarea = makeControl('TEXTAREA', { blur })
+    const timers = makeTimers()
+    scheduleFocusRestore(textarea, { doc: { activeElement: body, body }, timers })
+    timers.flush()
+    expect(blur).not.toHaveBeenCalled()
+    expect(textarea.focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
   it('skips the refocus when focus already moved to another element', () => {

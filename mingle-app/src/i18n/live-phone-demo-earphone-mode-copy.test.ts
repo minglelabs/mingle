@@ -13,7 +13,8 @@ describe('live-phone-demo-earphone-mode-copy', () => {
     expect(copy.label).toBe('이어폰 모드')
     expect(copy.noticeConfirmLabel).toBe('확인')
     expect(copy.noticeBody).toContain('이어폰이나 헤드셋')
-    expect(copy.noticeNotConnectedBody).toContain('연결하면')
+    expect(copy.earphoneStatusConnectedLabel).toBe('이어폰 연결됨')
+    expect(copy.earphoneStatusDisconnectedLabel).toBe('이어폰 연결 안 됨')
   })
 
   it('provides complete copy for all 15 primary UI locales', () => {

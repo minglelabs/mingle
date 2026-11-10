@@ -207,7 +207,15 @@ they sit in the job's `error` with the same `status`.
 | 429 | `image_limit` | every account hit its daily image limit; `message` says until when |
 | 502 | `bad_reference` | the reference photo could not be attached: send a smaller JPEG/PNG data URL |
 | 502 | `timeout`, `lost`, `ui_changed`, `signed_out`, other | ChatGPT failed on every account tried (up to 4); retry once |
+| 429 | `rate_limited` | ChatGPT is throttling every account ("unusual activity … try again later"); each rests about an hour |
 | 503 | `no_account` | no Chrome profile connected (PC asleep, Chrome closed): tell Nam |
+| 429 | `account_quota` | every account is resting or at its pacing cap (30 jobs/hour, 200/day each); `message` says when the first is free. Don't loop |
+| 503 | `queue_full` | 100 jobs already waiting: back off, don't retry right away |
+| 504 | `queue_timeout` | no account took the job in 10 min (images 20) |
+
+Identical requests that are waiting or running share one job and one answer.
+A request without `"async"` whose connection closes before an account takes it
+leaves the queue, so a caller's own timeout doesn't leave work behind.
 
 Retry rule of thumb: 502 and `job_not_found` once, after a few seconds.
 Don't loop on 429 or 503.
@@ -219,6 +227,9 @@ on the first error.
 
 - Throughput is small: about 11 requests at a time (one per account). More
   wait in a queue.
+- Each account is paced: it rests about 20-30 s after every job and takes at
+  most 30 jobs an hour and 200 a day, so ChatGPT does not flag the PC for
+  unusual activity. Over the cap you get 429 `account_quota`.
 - Free accounts have a daily image limit. The pool skips limited accounts;
   when all are limited you get 429.
 - Answers come from ChatGPT web, so they can vary in wording and quality.

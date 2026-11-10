@@ -16,6 +16,7 @@
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { zipInterestLanguages } from '@/lib/interest-languages'
 import { sanitizeSttLanguageSelection } from '@/lib/stt-languages'
+import { resolveNationalityCountry } from '@/lib/nationality'
 import { identityBadgeFlags } from '@/server/identity/user-identity-select'
 import type {
   FeedPostDto,
@@ -43,6 +44,7 @@ export type SerializerAuthorRow = {
   isOperator?: boolean | null
   /** Language row under the name (AUTHOR_LANGUAGE_SELECT); optional likewise. */
   nationality?: string | null
+  nationalityCountry?: string | null
   primaryLanguages?: string[] | null
   interestLanguages?: string[] | null
   interestLanguageLevels?: number[] | null
@@ -51,6 +53,7 @@ export type SerializerAuthorRow = {
 /** The author columns for the language row under the name. */
 export const AUTHOR_LANGUAGE_SELECT = {
   nationality: true,
+  nationalityCountry: true,
   primaryLanguages: true,
   interestLanguages: true,
   interestLanguageLevels: true,
@@ -63,6 +66,13 @@ export function serializeAuthorLanguages(author: SerializerAuthorRow): FeedPostD
   const interest = zipInterestLanguages(author.interestLanguages, author.interestLanguageLevels)
     .filter((entry) => !primary.includes(entry.code))
   return primary.length || interest.length ? { primary, interest } : undefined
+}
+
+/** The author's 국적 (flag on the avatar): stored, else mapped from the first primary language. */
+export function serializeAuthorNationality(author: SerializerAuthorRow): string | null {
+  const nationality = author.nationality ? sanitizeSttLanguageSelection([author.nationality])[0] ?? null : null
+  const primary = sanitizeSttLanguageSelection(author.primaryLanguages ?? [], nationality ? [nationality] : [])
+  return resolveNationalityCountry(author.nationalityCountry, primary)
 }
 
 /**
@@ -286,6 +296,7 @@ export function deriveTranslation(
 export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContext): FeedPostDto {
   const isMine = ctx.viewerId != null && ctx.viewerId === post.authorId
   const authorLanguages = serializeAuthorLanguages(post.author)
+  const authorNationality = serializeAuthorNationality(post.author)
   const { translationState, displayText, displayLanguage } = deriveTranslation(
     post,
     ctx.displayLanguage,
@@ -306,6 +317,7 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
       // Badge flags only when true; absent on the wire means false.
       ...identityBadgeFlags(post.author),
       ...(authorLanguages ? { languages: authorLanguages } : {}),
+      ...(authorNationality ? { nationality: authorNationality } : {}),
     },
     sourceText: post.sourceText ?? '',
     sourceLanguage: post.sourceLanguage,

@@ -31,23 +31,41 @@ type UsePostViewTrackerOptions = {
  * - Flicking past in < 1s leaves the post unseen.
  * - Fires at most once per post; signed-out viewers record nothing.
  */
-export function usePostViewTracker(options: UsePostViewTrackerOptions): void {
+export function usePostViewTracker(options: UsePostViewTrackerOptions): { markSeen: (postId: string) => Promise<void> } {
   const { activePostId, isSignedIn } = options;
 
   const visitRef = useRef<VisitState>(createVisitState());
   const reportedRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const report = useCallback((postId: string) => {
-    if (reportedRef.current.has(postId)) return;
+  const send = useCallback((postId: string): Promise<void> => {
+    if (reportedRef.current.has(postId)) return Promise.resolve();
     reportedRef.current.add(postId);
-    // Fire-and-forget; a failed view record must not disturb the feed.
-    void fetch(buildClientApiPath(`/posts/${encodeURIComponent(postId)}/view`), {
+    // A failed view record must not disturb the feed.
+    return fetch(buildClientApiPath(`/posts/${encodeURIComponent(postId)}/view`), {
       method: "POST",
       cache: "no-store",
       keepalive: true,
-    }).catch(() => {});
+    }).then(
+      () => {},
+      () => {},
+    );
   }, []);
+
+  const report = useCallback((postId: string) => {
+    void send(postId);
+  }, [send]);
+
+  /**
+   * Records a post as seen right now, without the 1s dwell, and resolves once
+   * the request is done. For a deliberate pull-to-refresh: the post on screen
+   * has been looked at, and the refreshed feed is ranked from what the server
+   * knows, so the record has to land before the refetch.
+   */
+  const markSeen = useCallback(
+    (postId: string): Promise<void> => (isSignedIn ? send(postId) : Promise.resolve()),
+    [isSignedIn, send],
+  );
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -106,4 +124,6 @@ export function usePostViewTracker(options: UsePostViewTrackerOptions): void {
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [activePostId, isSignedIn, apply, schedule, clearTimer]);
+
+  return { markSeen };
 }

@@ -93,6 +93,9 @@ async function fixture(t: TestContext, options: {
         audio(chunk: Buffer) {
             client.send(JSON.stringify({ type: 'audio_chunk', data: { chunk: chunk.toString('base64') } }));
         },
+        agentText(text: string, endOfSegment: boolean) {
+            client.send(JSON.stringify({ type: 'agent_text', data: { text, end_of_segment: endOfSegment } }));
+        },
     };
 }
 
@@ -282,4 +285,47 @@ test('send backpressure and async send errors are terminal and empty chunks are 
     blockedRelay.start();
     blockedRelay.receive(Buffer.alloc(320));
     assert.equal(failures[1].category, 'audio_backpressure');
+});
+
+test('v6 start enables agent text, and agent text reaches Soniox in order with the audio', async (t) => {
+    const f = await fixture(t, { delayHandshake: true });
+    f.agentText('before config ', false); // no session yet: dropped
+    f.sendConfig();
+    f.audio(Buffer.from([1, 2]));
+    f.agentText('Which one ', false);
+    f.audio(Buffer.from([3, 4]));
+    await waitFor(() => f.receivedClientMessages === 5);
+    await f.accept();
+    await f.ready();
+    await waitFor(() => f.providerFrames.length === 4);
+    const start = JSON.parse(f.providerFrames[0].data.toString());
+    assert.equal(start.model, 'stt-rt-v6');
+    assert.equal(start.enable_agent_text_input, true);
+    assert.deepEqual(f.providerFrames[1].data, Buffer.from([1, 2]));
+    assert.equal(f.providerFrames[2].binary, false);
+    assert.deepEqual(JSON.parse(f.providerFrames[2].data.toString()), {
+        type: 'agent_text', text: 'Which one ', end_of_segment: false,
+    });
+    assert.deepEqual(f.providerFrames[3].data, Buffer.from([3, 4]));
+    f.agentText('would you like?', true);
+    await waitFor(() => f.providerFrames.length === 5);
+    assert.deepEqual(JSON.parse(f.providerFrames[4].data.toString()), {
+        type: 'agent_text', text: 'would you like?', end_of_segment: true,
+    });
+});
+
+test('agent text after Stop is not sent to Soniox', async (t) => {
+    const f = await fixture(t);
+    f.sendConfig();
+    await f.ready();
+    f.audio(Buffer.from([1, 2]));
+    await waitFor(() => f.providerFrames.length === 2);
+    f.client.send(JSON.stringify({ type: 'stop_recording', data: { pending_text: '', pending_language: 'ko' } }));
+    f.agentText('late ', true);
+    await waitFor(() => f.receivedClientMessages === 4);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.ok(f.providerFrames.every((frame) => {
+        if (frame.binary) return true;
+        return JSON.parse(frame.data.toString()).type !== 'agent_text';
+    }));
 });

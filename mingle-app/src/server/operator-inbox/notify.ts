@@ -16,7 +16,8 @@ import { encodeOperatorInboxActorLabel } from '@/server/operator-inbox/push-copy
  *   `/admin/inbox` refetches;
  * - when the sender is NOT an operator, pushes `operator_inbox_message` to
  *   every AdminNotifyTarget (staff's own HashChat accounts) except the sender,
- *   at most once per room every 20 s. The tap opens `/admin/inbox/<id>`.
+ *   once per batch of messages (see OPERATOR_INBOX_BATCH_GAP_MS). The tap
+ *   opens `/admin/inbox/<id>`.
  * Rooms without an operator cost one indexed lookup and nothing else. It
  * never throws, and every call site still wraps it so a failure can never
  * affect the send.
@@ -34,26 +35,41 @@ export type OperatorInboxActivity = {
   kind: 'text' | 'photo'
 }
 
-/** Staff get at most one alert per room in this window; the inbox itself updates live. */
-export const OPERATOR_INBOX_PUSH_COALESCE_MS = 20_000
+/**
+ * Staff get one alert per "batch" of user messages in a room. A message starts
+ * a new batch when the room's previous user message is at least this old, or
+ * when an operator replied since then. Messages inside a batch only refresh
+ * the inbox, however long the batch runs.
+ */
+export const OPERATOR_INBOX_BATCH_GAP_MS = 5 * 60_000
 
 const ADMIN_INBOX_PUBLISH_TIMEOUT_MS = 2_000
 // A process-local window is enough: the app runs as one long-lived service
 // (the realtime bus is single-instance too).
-const lastPushAtByRoom = new Map<string, number>()
+const lastInboundAtByRoom = new Map<string, number>()
 const MAX_TRACKED_ROOMS = 1_000
 
-/** Claims the room's alert slot, or returns false while its window is still open. */
-function claimPushSlot(roomId: string, now: number): boolean {
-  const lastPushAt = lastPushAtByRoom.get(roomId)
-  if (lastPushAt !== undefined && now - lastPushAt < OPERATOR_INBOX_PUSH_COALESCE_MS) return false
-  lastPushAtByRoom.set(roomId, now)
-  if (lastPushAtByRoom.size > MAX_TRACKED_ROOMS) {
-    for (const [trackedRoomId, pushedAt] of lastPushAtByRoom) {
-      if (now - pushedAt >= OPERATOR_INBOX_PUSH_COALESCE_MS) lastPushAtByRoom.delete(trackedRoomId)
+/**
+ * Records a user message in the room and returns true when it starts a new
+ * batch (and so should alert staff).
+ */
+function startsNewBatch(roomId: string, now: number): boolean {
+  const lastInboundAt = lastInboundAtByRoom.get(roomId)
+  // Re-insert so the map stays ordered oldest activity first.
+  lastInboundAtByRoom.delete(roomId)
+  lastInboundAtByRoom.set(roomId, now)
+  if (lastInboundAtByRoom.size > MAX_TRACKED_ROOMS) {
+    for (const [trackedRoomId, at] of lastInboundAtByRoom) {
+      if (lastInboundAtByRoom.size <= MAX_TRACKED_ROOMS && now - at < OPERATOR_INBOX_BATCH_GAP_MS) break
+      if (trackedRoomId !== roomId) lastInboundAtByRoom.delete(trackedRoomId)
     }
   }
-  return true
+  return lastInboundAt === undefined || now - lastInboundAt >= OPERATOR_INBOX_BATCH_GAP_MS
+}
+
+/** An operator reply closes the batch: the user's next message alerts again. */
+function closeBatch(roomId: string): void {
+  lastInboundAtByRoom.delete(roomId)
 }
 
 function displayName(user: { name: string | null; handle: string | null } | null | undefined): string {
@@ -92,7 +108,10 @@ async function notify(activity: OperatorInboxActivity): Promise<void> {
     ? activity.senderUserId.trim()
     : null
   // An operator reply (the admin send path) only refreshes the inbox.
-  if (senderUserId && room.members.some((member) => member.userId === senderUserId)) return
+  if (senderUserId && room.members.some((member) => member.userId === senderUserId)) {
+    closeBatch(room.id)
+    return
+  }
   const sender = senderUserId
     ? await prisma.user.findUnique({
         where: { id: senderUserId },
@@ -100,6 +119,8 @@ async function notify(activity: OperatorInboxActivity): Promise<void> {
       })
     : null
   if (sender?.isOperator) return
+  // Track every user message, even when no staff target is set up yet.
+  if (!startsNewBatch(room.id, Date.now())) return
 
   const targets = await prisma.adminNotifyTarget.findMany({
     where: {
@@ -109,7 +130,6 @@ async function notify(activity: OperatorInboxActivity): Promise<void> {
     select: { userId: true },
   })
   if (targets.length === 0) return
-  if (!claimPushSlot(room.id, Date.now())) return
 
   const operatorNames = room.members.map((member) => displayName(member.user)).filter(Boolean)
   const senderName = displayName(sender)

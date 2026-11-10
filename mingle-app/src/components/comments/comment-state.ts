@@ -325,6 +325,15 @@ export function composerEnterAction(event: {
   return event.shiftKey ? 'newline' : 'send'
 }
 
+/** A touch keyboard has no Shift key, so Enter must stay a newline there. */
+export function isTouchInput(): boolean {
+  if (typeof window === 'undefined') return false
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia('(hover: none) and (pointer: coarse)').matches
+  }
+  return typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
+}
+
 // ─── Permissions ─────────────────────────────────────────────────────────────
 
 export function canEdit(comment: CommentDto, viewerId: string | null): boolean {

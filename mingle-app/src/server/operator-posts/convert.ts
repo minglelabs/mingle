@@ -18,7 +18,7 @@ import {
   resolveChineseTargetText,
 } from '@/server/translation/post-chinese-variants'
 import { buildTranslationUserPrompt } from '@/server/translation/post-translation-service'
-import { translateTexts } from '@/server/translation/translate-texts'
+import { operatorTextProvider, translateTexts } from '@/server/translation/translate-texts'
 import { personaLanguageOf } from './operator-check'
 
 export type PersonaConversion = {
@@ -120,6 +120,7 @@ export async function convertToPersonaLanguage(args: {
   let result: Awaited<ReturnType<typeof translateTexts>>
   try {
     result = await translateTexts({
+      provider: operatorTextProvider(),
       text,
       sourceLanguage: 'auto',
       targetLanguages: [language],

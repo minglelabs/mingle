@@ -251,6 +251,7 @@ type ProduceTranslationArgs = {
   language: string
   systemPrompt: string
   modelSelection?: TranslateTextsInput['modelSelection']
+  provider?: TranslateTextsInput['provider']
   /**
    * Ready text of another language for the SAME body version (repository
    * paths). Lets a failed Chinese target fall back to the other variant.
@@ -276,6 +277,7 @@ async function produceTranslation(args: ProduceTranslationArgs): Promise<string 
       sourceLanguage: args.sourceLanguage,
       targetLanguages: [args.language],
       modelSelection: args.modelSelection,
+      provider: args.provider,
       isFinal: true,
       systemPromptOverride: extraRule ? `${args.systemPrompt}\n${extraRule}` : args.systemPrompt,
       userPromptOverride: buildTranslationUserPrompt(args.sourceText, args.sourceLanguage, [args.language]),
@@ -698,7 +700,12 @@ type TranslateBodySettledArgs = {
   targetLanguages: string[]
   budgetMs?: number
   modelSelection?: TranslateTextsInput['modelSelection']
+  /** `chatgpt-pool` for operator text (operatorTextProvider); the budget then allows for the pool's 10-25 s answers. */
+  provider?: TranslateTextsInput['provider']
 }
+
+/** The pool answers in 10-25 s (longer when busy); a body translated there gets this long. */
+const POOL_TRANSLATION_BUDGET_MS = 150_000
 
 /**
  * The settled batch for one body. The source is resolved (a bare `zh` gets
@@ -723,8 +730,11 @@ async function translateBodySettled(
         language,
         systemPrompt,
         modelSelection: args.modelSelection,
+        provider: args.provider,
       }),
-    args.budgetMs ?? SETTLE_TRANSLATION_BUDGET_MS,
+    args.provider === 'chatgpt-pool'
+      ? Math.max(args.budgetMs ?? 0, POOL_TRANSLATION_BUDGET_MS)
+      : args.budgetMs ?? SETTLE_TRANSLATION_BUDGET_MS,
   )
   return fillChineseSiblingRows(rows, sourceLanguage, args.sourceText)
 }
