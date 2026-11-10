@@ -29,6 +29,13 @@ vi.mock('@/server/translation/post-translation-service', async () => {
 })
 vi.mock('@/server/translation/detect-source-language', () => ({
   detectSourceLanguage: mockDetectSourceLanguage,
+  // Callers read the verdict; `mixed` is false unless a test returns an object.
+  detectSourceLanguageVerdict: async (args: unknown) => {
+    const result: unknown = await mockDetectSourceLanguage(args)
+    return result && typeof result === 'object'
+      ? result
+      : { language: (result as string | null | undefined) ?? null, mixed: false }
+  },
 }))
 vi.mock('@/server/translation/on-demand-translation-deps', () => ({ onDemandTranslationDeps: {} }))
 
@@ -65,7 +72,7 @@ describe('POST /api/comments/{commentId}/translate', () => {
     const res = await POST(makeReq({ language: 'en' }), makeCtx('c1'))
     expect(res.status).toBe(200)
     expect(mockDetectSourceLanguage).toHaveBeenCalledWith({ text: 'Ciao mondo' })
-    expect(mockCommentUpdate).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { sourceLanguage: 'it' } })
+    expect(mockCommentUpdate).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { sourceLanguage: 'it', sourceLanguagesMixed: false } })
     expect(mockTranslateCommentOnDemand).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ sourceLanguage: 'it', language: 'en' }),

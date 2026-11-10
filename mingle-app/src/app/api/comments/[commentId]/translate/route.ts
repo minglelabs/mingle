@@ -7,7 +7,7 @@ import {
   normalizeRequestedTranslationLanguage,
   translateCommentOnDemand,
 } from '@/server/translation/post-translation-service'
-import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import { resolvePostSourceLanguage } from '@/server/translation/post-chinese-variants'
 import { onDemandTranslationDeps } from '@/server/translation/on-demand-translation-deps'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest, context: Ctx) {
       ...visibleSingleCommentWhere(commentId, userId),
       OR: [{ isDeleted: null }, { isDeleted: false }],
     },
-    select: { id: true, bodyVersion: true, sourceText: true, sourceLanguage: true },
+    select: { id: true, bodyVersion: true, sourceText: true, sourceLanguage: true, sourceLanguagesMixed: true },
   })
   if (!comment) return json({ error: 'not_found' }, { status: 404 })
   if (!comment.sourceText || !comment.sourceText.trim()) {
@@ -70,16 +70,19 @@ export async function POST(request: NextRequest, context: Ctx) {
   // Legacy rows with a null source language: detect and persist it now, then
   // translate — instead of returning 400 no_source_language. Detection wins.
   let sourceLanguage = comment.sourceLanguage
+  let sourceLanguagesMixed = comment.sourceLanguagesMixed
   if (!sourceLanguage) {
-    const detected = await detectSourceLanguage({ text: comment.sourceText })
+    const verdict = await detectSourceLanguageVerdict({ text: comment.sourceText })
+    const detected = verdict.language
     if (!detected) {
       return json({ error: 'no_text_to_translate' }, { status: 400 })
     }
     await prisma.postComment.update({
       where: { id: comment.id },
-      data: { sourceLanguage: detected },
+      data: { sourceLanguage: detected, sourceLanguagesMixed: verdict.mixed },
     })
     sourceLanguage = detected
+    sourceLanguagesMixed = verdict.mixed
   }
 
   const base = {
@@ -93,7 +96,8 @@ export async function POST(request: NextRequest, context: Ctx) {
   // Already in the requested language: the original is the answer, no LLM.
   // A legacy bare `zh` source is compared as its script's variant, so a
   // Traditional comment is never served as its own zh-CN translation.
-  if (normalizeRequestedTranslationLanguage(resolvePostSourceLanguage(sourceLanguage, comment.sourceText)) === language) {
+  // A body that mixes languages is translated even into its own language.
+  if (!sourceLanguagesMixed && normalizeRequestedTranslationLanguage(resolvePostSourceLanguage(sourceLanguage, comment.sourceText)) === language) {
     return json({ ...base, text: comment.sourceText, status: 'ready' })
   }
 
@@ -103,6 +107,7 @@ export async function POST(request: NextRequest, context: Ctx) {
     sourceText: comment.sourceText,
     sourceLanguage,
     language,
+    sourceLanguagesMixed,
   })
 
   return json({

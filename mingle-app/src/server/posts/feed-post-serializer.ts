@@ -85,6 +85,8 @@ export type SerializerPostRow = {
   bodyVersion: number
   sourceText: string | null
   sourceLanguage: string | null
+  /** The body mixes languages: it is translated even into its own language. Optional for older selects. */
+  sourceLanguagesMixed?: boolean
   backgroundKey: string | null
   imageObjectKey: string | null
   /**
@@ -248,14 +250,15 @@ function isPositiveInt(value: number | null | undefined): value is number {
  * Derive `{ translationState, displayText, displayLanguage }` for one post.
  *
  * - No resolved display language -> `none`, original shown, displayLanguage null.
- * - Original language == display language -> `same_language`.
+ * - Original language == display language -> `same_language`, unless the body
+ *   mixes languages (then its own language has a translation like any other).
  * - Otherwise the CURRENT body-version translation for that language decides:
  *   ready -> `ready` (displayText = translation), pending -> `pending`,
  *   failed -> `failed`, missing -> `none`. Earlier body versions are never
  *   consulted because the loader only ever indexes current-version rows.
  */
 export function deriveTranslation(
-  post: Pick<SerializerPostRow, 'sourceLanguage'> & Partial<Pick<SerializerPostRow, 'sourceText'>>,
+  post: Pick<SerializerPostRow, 'sourceLanguage'> & Partial<Pick<SerializerPostRow, 'sourceText' | 'sourceLanguagesMixed'>>,
   displayLanguage: string | null,
   translation: SerializerTranslationRow | undefined,
 ): { translationState: FeedPostTranslationState; displayText: string | null; displayLanguage: string | null } {
@@ -266,7 +269,7 @@ export function deriveTranslation(
   const canonicalSource = post.sourceLanguage
     ? canonicalizeTranslationLanguageCode(post.sourceLanguage)
     : ''
-  if (canonicalSource && canonicalSource === displayLanguage) {
+  if (canonicalSource && canonicalSource === displayLanguage && !post.sourceLanguagesMixed) {
     return { translationState: 'same_language', displayText: null, displayLanguage }
   }
 
@@ -302,9 +305,10 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
     ctx.displayLanguage,
     ctx.translationByPostId.get(post.id),
   )
-  // The source language is the original, not a translation of it.
+  // The source language is the original, not a translation of it; a mixed
+  // body has a real translation into its own language too.
   const translationLanguages = (ctx.translationLanguagesByPostId?.get(post.id) ?? []).filter(
-    (language) => language !== post.sourceLanguage,
+    (language) => post.sourceLanguagesMixed === true || language !== post.sourceLanguage,
   )
 
   return {
@@ -321,6 +325,7 @@ export function serializeFeedPost(post: SerializerPostRow, ctx: SerializerContex
     },
     sourceText: post.sourceText ?? '',
     sourceLanguage: post.sourceLanguage,
+    ...(post.sourceLanguagesMixed ? { sourceLanguagesMixed: true as const } : {}),
     bodyVersion: post.bodyVersion,
     displayText,
     displayLanguage,

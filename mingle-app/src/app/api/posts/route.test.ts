@@ -36,6 +36,13 @@ vi.mock('next/server', async (importOriginal) => {
 })
 vi.mock('@/server/translation/detect-source-language', () => ({
   detectSourceLanguage: mockDetectSourceLanguage,
+  // Callers read the verdict; `mixed` is false unless a test returns an object.
+  detectSourceLanguageVerdict: async (args: unknown) => {
+    const result: unknown = await mockDetectSourceLanguage(args)
+    return result && typeof result === 'object'
+      ? result
+      : { language: (result as string | null | undefined) ?? null, mixed: false }
+  },
 }))
 vi.mock('@/server/translation/post-translation-service', () => ({
   translatePostBodySettled: mockTranslatePostBodySettled,

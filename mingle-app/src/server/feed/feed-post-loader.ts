@@ -31,6 +31,7 @@ export const feedPostRowSelect = {
   bodyVersion: true,
   sourceText: true,
   sourceLanguage: true,
+  sourceLanguagesMixed: true,
   backgroundKey: true,
   imageObjectKey: true,
   imageWidth: true,

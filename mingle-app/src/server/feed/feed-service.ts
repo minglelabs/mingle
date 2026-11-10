@@ -229,6 +229,7 @@ export const FEED_PAGE_SELECT = {
   bodyVersion: true,
   sourceText: true,
   sourceLanguage: true,
+  sourceLanguagesMixed: true,
   backgroundKey: true,
   imageObjectKey: true,
   imageWidth: true,

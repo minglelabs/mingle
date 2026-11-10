@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { visibleSinglePostWhere, ownPostWhere } from '@/server/posts/post-visibility'
 import { isKnownBackgroundKey } from '@/lib/post-backgrounds'
 import { nextBackgroundKey } from '@/components/compose/compose-background'
-import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import {
   resolveEditTargetLanguages,
   translatePostBodySettled,
@@ -160,13 +160,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const newBodyVersion = existing.bodyVersion + 1
 
     let detected: string | null = null
+    let mixed = false
     let settledRows: Awaited<ReturnType<typeof translatePostBodySettled>> = []
 
     if (nextText !== null && nextText.trim().length > 0) {
       const clientHint = typeof input.sourceLanguage === 'string' && input.sourceLanguage.trim()
         ? input.sourceLanguage.trim()
         : null
-      detected = await detectSourceLanguage({ text: nextText, clientHint })
+      const verdict = await detectSourceLanguageVerdict({ text: nextText, clientHint })
+      detected = verdict.language
+      mixed = Boolean(detected) && verdict.mixed
 
       if (detected) {
         // Default 4 + every language this post already had a translation for.
@@ -176,12 +179,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
             select: { language: true },
           })
         ).map((r) => r.language)
-        const targets = resolveEditTargetLanguages(detected, priorLanguages)
+        const targets = resolveEditTargetLanguages(detected, priorLanguages, null, mixed)
         if (targets.length > 0) {
           settledRows = await translatePostBodySettled({
             sourceText: nextText,
             sourceLanguage: detected,
             targetLanguages: targets,
+            sourceLanguagesMixed: mixed,
           })
         }
       }
@@ -195,6 +199,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
           data: {
             sourceText: nextText,
             sourceLanguage: detected,
+            sourceLanguagesMixed: mixed,
             bodyVersion: newBodyVersion,
             ...sideData,
           },

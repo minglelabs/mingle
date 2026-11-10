@@ -14,7 +14,7 @@
 import { prisma } from '@/lib/prisma'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { isKnownBackgroundKey, randomBackgroundKey } from '@/lib/post-backgrounds'
-import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import {
   resolveDefaultPostTranslationLanguages,
   translatePostBodySettled,
@@ -164,9 +164,12 @@ export async function publishPost(input: PublishPostInput): Promise<PublishPostR
 
   // ── Text post: detect → translate (settle within budget) → publish. ──
   // Server detection is authoritative; the client value is only a fallback.
-  const detected = await detectSourceLanguage({ text, clientHint: input.clientHint ?? null, provider: input.translationProvider })
+  const verdict = await detectSourceLanguageVerdict({ text, clientHint: input.clientHint ?? null, provider: input.translationProvider })
+  const detected = verdict.language
+  // A mixed body is translated into its own language too.
+  const mixed = Boolean(detected) && verdict.mixed
 
-  const targetLanguages = detected ? resolveDefaultPostTranslationLanguages(detected) : []
+  const targetLanguages = detected ? resolveDefaultPostTranslationLanguages(detected, null, mixed) : []
   const known = new Map((input.knownTranslations ?? []).map((row) => [canonicalizeTranslationLanguageCode(row.language), row.text]))
   const knownRows = targetLanguages.flatMap((language) => {
     const translated = known.get(canonicalizeTranslationLanguageCode(language))
@@ -181,6 +184,7 @@ export async function publishPost(input: PublishPostInput): Promise<PublishPostR
           sourceLanguage: detected,
           targetLanguages: remaining,
           provider: input.translationProvider,
+          sourceLanguagesMixed: mixed,
         })
       : []),
   ]
@@ -196,6 +200,7 @@ export async function publishPost(input: PublishPostInput): Promise<PublishPostR
             authorId,
             sourceText: text,
             sourceLanguage: detected,
+            sourceLanguagesMixed: mixed,
             backgroundKey,
             imageObjectKey,
             ...imageColumns,
