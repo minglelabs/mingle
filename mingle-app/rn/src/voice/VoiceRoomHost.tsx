@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 
 import { createVoiceController, type VoiceController } from '../nativeVoice';
+import { setNativeSttVoiceCallActive } from '../nativeStt';
 import { createVoiceApi, type VoiceApi, type VoiceCall } from './voiceApi';
 import { createLiveKitRoom } from './createLiveKitRoom';
 import { createVoiceStatusPoll, type VoiceStatusPoll } from './voiceStatusPoll';
@@ -90,7 +91,12 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
       detach();
       conversationRef.current = null;
       if (controller) {
-        void controller.leave().finally(() => emitPhase('left', convId));
+        void controller.leave().finally(() => {
+          // After the call let go of the audio session, so STT (if it is
+          // still on) takes the session back instead of losing it.
+          setNativeSttVoiceCallActive(false);
+          emitPhase('left', convId);
+        });
       }
     }, [detach, emitPhase]);
 
@@ -111,6 +117,8 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
         controllerRef.current = controller;
         conversationRef.current = args.conversationId;
         unsubscribeRef.current = controller.subscribe(scheduleRoom);
+        // Before connecting: STT must not release the session under the call.
+        setNativeSttVoiceCallActive(true);
         emitPhase('connecting', args.conversationId);
         if (args.interpret === false) void controller.setInterpret(false);
         void controller
@@ -122,6 +130,7 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
           .catch((error: unknown) => {
             emitPhase('error', args.conversationId, (error as { kind?: string })?.kind);
             if (controllerRef.current === controller) {
+              setNativeSttVoiceCallActive(false);
               detach();
               conversationRef.current = null;
             }
@@ -171,6 +180,7 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
       pollRef.current?.stop();
       const controller = controllerRef.current;
       detach();
+      if (controller) setNativeSttVoiceCallActive(false);
       controller?.leave().catch(() => undefined);
     }, [detach]);
 

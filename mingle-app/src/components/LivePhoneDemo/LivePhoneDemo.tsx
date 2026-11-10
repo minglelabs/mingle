@@ -256,7 +256,7 @@ import {
 } from '@/components/native-app-update-card'
 import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
-import VoiceTalkPanel, { VoiceTalkButton, isVoiceTalkAvailable } from './VoiceTalkPanel'
+import VoiceTalkPanel, { VoiceTalkButton, isVoiceTalkAvailable, setVoiceTalkMic } from './VoiceTalkPanel'
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
 import { HashRushQuickChatBar } from '@/features/hash-rush/QuickChatBar'
 import type { HashRushChatEntry, HashRushRoomChat } from '@/features/hash-rush/room-chat'
@@ -6028,6 +6028,40 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
     void handleStartRecording()
   }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning, sttCaptureSource])
+
+  // Voice talk and STT are one mic, owned by the Start/Stop button.
+  // - Joining a call turns STT on too: speech becomes the room's messages
+  //   (the call panel has no text of its own) and the voice is sent as well.
+  // - While in a call, Stop mutes the call's mic and Start unmutes it.
+  // - Leaving the call stops STT only when the call was what started it.
+  const voiceTalkConnected = voiceTalkState.connected
+  const voiceTalkWasConnectedRef = useRef(false)
+  const voiceTalkStartedSttRef = useRef(false)
+  useEffect(() => {
+    const wasConnected = voiceTalkWasConnectedRef.current
+    voiceTalkWasConnectedRef.current = voiceTalkConnected
+    if (voiceTalkConnected && !wasConnected) {
+      if (!isSttSessionRunning && !startPreparationInFlightRef.current) {
+        voiceTalkStartedSttRef.current = true
+        void handleStartRecording()
+      }
+    } else if (!voiceTalkConnected && wasConnected) {
+      if (voiceTalkStartedSttRef.current && isSttSessionRunning) void handleStopRecording()
+      voiceTalkStartedSttRef.current = false
+    }
+  }, [handleStartRecording, handleStopRecording, isSttSessionRunning, voiceTalkConnected])
+  useEffect(() => {
+    if (!voiceTalkConnected) return
+    // The ref covers the moment between asking STT to start and its state.
+    setVoiceTalkMic(isSttSessionRunning || isPreparingStart || startPreparationInFlightRef.current)
+  }, [isPreparingStart, isSttSessionRunning, voiceTalkConnected])
+  // Stopping STT by hand during a call: the call no longer owns that session.
+  const voiceTalkSttWasBusyRef = useRef(false)
+  useEffect(() => {
+    const busy = isSttSessionRunning || isPreparingStart
+    if (voiceTalkSttWasBusyRef.current && !busy) voiceTalkStartedSttRef.current = false
+    voiceTalkSttWasBusyRef.current = busy
+  }, [isPreparingStart, isSttSessionRunning])
 
   const confirmScreenCaptureNotice = useCallback(() => {
     screenCaptureNoticeAcknowledgedRef.current = true

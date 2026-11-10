@@ -44,3 +44,24 @@ describe('voice talk button in the bottom bar', () => {
     expect(resolveLivePhoneDemoRoomManagementCopy('en').usageMenuItemLabel).toBe('Usage')
   })
 })
+
+describe('voice talk and STT share one mic', () => {
+  const panelSource = readFileSync(new URL('./VoiceTalkPanel.tsx', import.meta.url), 'utf8')
+
+  it('keeps the call panel free of its own text and mic button', () => {
+    expect(panelSource).not.toContain('captions')
+    expect(panelSource).not.toContain('toggleMic')
+    expect(panelSource).toContain('export function setVoiceTalkMic(on: boolean)')
+  })
+
+  it('starts STT when a call connects and stops only what the call started', () => {
+    const block = between(liveDemoSource, 'const voiceTalkConnected = voiceTalkState.connected', 'const confirmScreenCaptureNotice')
+    expect(block).toContain('voiceTalkStartedSttRef.current = true\n        void handleStartRecording()')
+    expect(block).toContain('if (voiceTalkStartedSttRef.current && isSttSessionRunning) void handleStopRecording()')
+  })
+
+  it('drives the call mic from the STT session state', () => {
+    const block = between(liveDemoSource, 'const voiceTalkConnected = voiceTalkState.connected', 'const confirmScreenCaptureNotice')
+    expect(block).toContain('setVoiceTalkMic(isSttSessionRunning || isPreparingStart || startPreparationInFlightRef.current)')
+  })
+})

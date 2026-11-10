@@ -3,7 +3,11 @@
 // Group voice talk inside the chat room (KakaoTalk style: the room stays the
 // same room, voice is switched on and off). A panel slides down from under the
 // top bar with up to 8 seats; drag it up (or tap the handle) to fold it into a
-// slim bar. What people say shows as plain text lines.
+// slim bar.
+//
+// The panel has no text of its own and no mic button. Voice talk and the room's
+// speech-to-text are one mic: the room's Start/Stop button owns it, the call
+// only adds sending the voice. What people say shows as the room's messages.
 //
 // The call itself runs in the native app (LiveKit audio). This panel only
 // draws it and sends button presses over the RN bridge (see
@@ -11,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ChevronUp, Mic, MicOff, Languages, PhoneOff, Phone } from 'lucide-react'
+import { ChevronUp, Languages, PhoneOff, Phone } from 'lucide-react'
 
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = 8
@@ -19,7 +23,6 @@ const MAX_SEATS = 8
 type CallParticipant = { userId: string; name: string | null; image: string | null }
 type StatusCall = { id: string; participants: CallParticipant[]; maxParticipants: number } | null
 type RoomMember = { identity: string; userId: string; name: string; isLocal: boolean; isSpeaking: boolean }
-type RoomCaption = { id: string; speakerName: string; original: string; isPartial: boolean; isEcho: boolean; translations: Record<string, string> }
 type RoomSnapshot = {
   status: string
   /** Language the app joined with; its translation lane is the one we hear. */
@@ -28,7 +31,6 @@ type RoomSnapshot = {
   micOn: boolean
   micAvailable: boolean
   interpretOn: boolean
-  captions: RoomCaption[]
 }
 type Phase = 'idle' | 'connecting' | 'connected' | 'left' | 'error'
 
@@ -43,7 +45,6 @@ const COPY = {
     join: '참여',
     live: (n: number) => `보이스톡 · ${n}/${MAX_SEATS}`,
     connecting: '연결 중…',
-    mic: '마이크',
     interpret: '통역',
     leave: '나가기',
     me: '나',
@@ -58,7 +59,6 @@ const COPY = {
     join: 'Join',
     live: (n: number) => `Voice talk · ${n}/${MAX_SEATS}`,
     connecting: 'Connecting…',
-    mic: 'Mic',
     interpret: 'Interpret',
     leave: 'Leave',
     me: 'Me',
@@ -91,16 +91,9 @@ function initial(name: string | null | undefined): string {
   return trimmed ? Array.from(trimmed)[0].toUpperCase() : '?'
 }
 
-// Plain text lines: original, then my language's translation when there is one.
-function captionLines(captions: RoomCaption[], myLang: string, limit = 3): Array<{ id: string; who: string; text: string; partial: boolean }> {
-  return captions
-    .filter((c) => !c.isEcho && (c.original || '').trim())
-    .slice(0, limit)
-    .map((c) => {
-      const translated = c.translations?.[myLang]
-      return { id: c.id, who: c.speakerName, text: translated ? `${translated}  (${c.original})` : c.original, partial: c.isPartial }
-    })
-    .reverse()
+/** The room's Start/Stop button drives the call's mic through this. */
+export function setVoiceTalkMic(on: boolean) {
+  post({ type: 'native_voice_set', payload: { mic: on } })
 }
 
 export type VoiceTalkPanelProps = {
@@ -174,7 +167,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   }, [startSignal, join])
 
   const leave = useCallback(() => post({ type: 'native_voice_close' }), [])
-  const toggleMic = useCallback(() => room && post({ type: 'native_voice_set', payload: { mic: !room.micOn } }), [room])
   const toggleInterpret = useCallback(() => room && post({ type: 'native_voice_set', payload: { interpret: !room.interpretOn } }), [room])
 
   // Seats: who is in the call (live LiveKit view when joined, else the API's).
@@ -184,11 +176,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
       : (call?.participants ?? []).map((p) => ({ key: p.userId, name: p.name || '', isLocal: false, isSpeaking: false, image: p.image }))
     return people.slice(0, MAX_SEATS)
   }, [call, joined, room])
-
-  // Show captions in the language the app actually joined with, so the text
-  // matches the interpretation voice (the room's language list can start with
-  // another language).
-  const lines = useMemo(() => (room ? captionLines(room.captions, room.myLang || myLang) : []), [room, myLang])
 
   const onDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (info.offset.y < -24 || info.velocity.y < -300) setFolded(true)
@@ -273,28 +260,10 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                 ))}
               </div>
 
-              {lines.length ? (
-                <div className="space-y-0.5 border-t border-gray-100 px-3 py-2 text-[0.82rem] leading-snug text-gray-700">
-                  {lines.map((line) => (
-                    <p key={line.id} className={line.partial ? 'text-gray-400' : ''}>
-                      <span className="font-semibold text-gray-900">{line.who}</span> {line.text}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
-
               {error ? <p className="px-3 pb-2 text-[0.8rem] text-rose-600">{error}</p> : null}
 
               {joined ? (
                 <div className="flex items-center justify-center gap-2 border-t border-gray-100 px-3 py-2">
-                  <button
-                    type="button"
-                    onClick={toggleMic}
-                    disabled={!room?.micAvailable}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8rem] font-semibold ${room?.micOn ? 'bg-gray-100 text-gray-800' : 'bg-gray-800 text-white'} disabled:opacity-40`}
-                  >
-                    {room?.micOn ? <Mic size={15} /> : <MicOff size={15} />} {copy.mic}
-                  </button>
                   <button
                     type="button"
                     onClick={toggleInterpret}

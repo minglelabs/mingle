@@ -2,6 +2,17 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-10 — 보이스톡과 STT 통합: 마이크 하나, 글은 대화방 메시지로
+
+- Surface: 대화방(`LivePhoneDemo.tsx`), 보이스톡 판(`VoiceTalkPanel.tsx`), 네이티브(`rn/src/voice/VoiceRoomHost.tsx`, `NativeSTTModule.swift`).
+- Issue: 보이스톡 판에 자막 줄과 마이크 버튼이 따로 있었다. 대화방의 STT(메시지)와 같은 일을 하는 기능이 둘이었다.
+- Resolution: 판에서 자막 줄과 마이크 버튼을 없앴다. 판에는 자리(8명), 통역, 나가기만 남는다. 말한 내용은 대화방 메시지로만 보인다.
+  - 보이스톡에 연결되면 STT도 같이 켠다(이미 켜져 있으면 그대로).
+  - 통화 중에는 Start/Stop 버튼이 마이크 하나를 맡는다: Stop이면 통화 마이크도 꺼지고(듣기만), Start면 다시 켜진다.
+  - 통화에서 나가면, 통화가 켠 STT만 같이 끈다. 먼저 켜 둔 STT는 그대로 둔다.
+- Native (iOS): 통화 중에는 STT가 멈춰도 오디오 세션을 놓지 않는다(`setVoiceCallActive`). 통화 중 STT는 세션을 `.voiceChat`로 유지하고 STT 엔진의 음성 처리는 끈다(통화 쪽 에코 제거와 겹치지 않게). 통화 시작·종료 때 STT 캡처를 다시 건다.
+- Verification: 타입 검사, 배선 테스트. 통화와 STT가 실제로 마이크를 같이 쓰는지는 실기기에서 두 대로 확인이 필요하다.
+
 ## 2026-11-10 — 보이스톡 버튼을 하단 바 왼쪽으로, 사용량은 메뉴로
 
 - Surface: 대화방 하단 바·상단 바·햄버거 메뉴(`LivePhoneDemo.tsx`), `VoiceTalkPanel.tsx`.

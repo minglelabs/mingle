@@ -59,6 +59,8 @@ type NativeSttModuleType = {
   start(options: NativeSttStartOptions): Promise<{ sampleRate: number }>;
   stop(options?: NativeSttStopOptions): Promise<void>;
   setAec(enabled: boolean): Promise<{ ok: boolean }>;
+  // iOS only, absent on older builds: a group voice call shares the mic with STT.
+  setVoiceCallActive?: (active: boolean) => void;
   // Absent on builds before Soniox v6 agent text input.
   sendAgentText?: (text: string, endOfSegment: boolean) => void;
   getMicrophonePermissionStatus(): Promise<NativeSttMicrophonePermissionStatus>;
@@ -132,6 +134,15 @@ export async function setNativeSttAec(enabled: boolean): Promise<void> {
     return;
   }
   await nativeModule.setAec(enabled);
+}
+
+/** A group voice call started or ended; STT and the call share one mic. */
+export function setNativeSttVoiceCallActive(active: boolean): void {
+  try {
+    nativeModule?.setVoiceCallActive?.(active);
+  } catch {
+    /* older native build */
+  }
 }
 
 export function sendNativeSttAgentText(text: string, endOfSegment: boolean): void {
