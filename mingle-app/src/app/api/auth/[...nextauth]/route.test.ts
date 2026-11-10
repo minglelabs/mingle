@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextAuthOptions } from "next-auth";
+import { NextRequest } from "next/server";
 
 const { nextAuthMock, getAuthOptionsMock } = vi.hoisted(() => ({
   nextAuthMock: vi.fn(),
@@ -73,5 +74,28 @@ describe("/api/auth/[...nextauth] route", () => {
     const providerIds = providers.map((provider) => provider.id);
     expect(providerIds).toEqual(["google"]);
     expect(providers.every((provider) => provider.type !== "credentials")).toBe(true);
+  });
+
+  it("returns a replayed OAuth callback from a signed-in browser to the app", async () => {
+    const previous = process.env.NEXTAUTH_URL;
+    process.env.NEXTAUTH_URL = "https://app.example.test";
+    const complete = "https://app.example.test/api/native-auth/complete?provider=google&requestId=rq_1";
+    nextAuthMock.mockResolvedValue(new Response(null, {
+      status: 302,
+      headers: { location: "https://app.example.test/api/auth/error?error=OAuthCallback" },
+    }));
+    const request = new NextRequest("https://app.example.test/api/auth/callback/google?state=s&code=c", {
+      headers: {
+        cookie: `__Secure-next-auth.session-token=t; __Secure-next-auth.callback-url=${encodeURIComponent(complete)}`,
+      },
+    });
+    try {
+      const response = await GET(request, { params: Promise.resolve({ nextauth: ["callback", "google"] }) });
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe(complete);
+    } finally {
+      if (previous === undefined) delete process.env.NEXTAUTH_URL;
+      else process.env.NEXTAUTH_URL = previous;
+    }
   });
 });
