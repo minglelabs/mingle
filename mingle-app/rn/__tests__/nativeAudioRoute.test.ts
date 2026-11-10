@@ -110,11 +110,35 @@ describe('capabilities message (contract A.1)', () => {
       type: 'capabilities',
       openAppSettings: true,
       audioRoute: true,
+      deviceAudioCapture: false,
+      nativeTts: false,
     });
     expect(buildNativeShellCapabilities({ audioRoute: false })).toEqual({
       type: 'capabilities',
       openAppSettings: true,
       audioRoute: false,
+      deviceAudioCapture: false,
+      nativeTts: false,
+    });
+  });
+
+  it('reports device-audio capture only when the shell says it can', () => {
+    expect(buildNativeShellCapabilities({ audioRoute: false, deviceAudioCapture: true })).toEqual({
+      type: 'capabilities',
+      openAppSettings: true,
+      audioRoute: false,
+      deviceAudioCapture: true,
+      nativeTts: false,
+    });
+  });
+
+  it('reports native TTS playback only when the shell says it can', () => {
+    expect(buildNativeShellCapabilities({ audioRoute: true, nativeTts: true })).toEqual({
+      type: 'capabilities',
+      openAppSettings: true,
+      audioRoute: true,
+      deviceAudioCapture: false,
+      nativeTts: true,
     });
   });
 });

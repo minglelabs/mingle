@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   settingFindUnique: vi.fn(),
   settingUpsert: vi.fn(),
+  queryRaw: vi.fn(async () => [{ low: null }]),
   userFindFirst: vi.fn(),
   userCount: vi.fn(),
+  userUpdateMany: vi.fn(),
   auditFindFirst: vi.fn(),
   accountUpdateMany: vi.fn(),
   accountGroupBy: vi.fn(),
@@ -16,9 +18,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     adminSetting: { findUnique: mocks.settingFindUnique, upsert: mocks.settingUpsert },
-    user: { findFirst: mocks.userFindFirst, count: mocks.userCount },
+    user: { findFirst: mocks.userFindFirst, count: mocks.userCount, updateMany: mocks.userUpdateMany },
     adminAuditLog: { findFirst: mocks.auditFindFirst },
     operatorAccount: { updateMany: mocks.accountUpdateMany, groupBy: mocks.accountGroupBy },
+    $queryRaw: mocks.queryRaw,
   },
 }))
 vi.mock('@/server/admin/audit', () => ({ writeAdminAudit: vi.fn() }))
@@ -65,11 +68,16 @@ describe('avatar taxonomy', () => {
     expect(others.size).toBeGreaterThan(8)
   })
 
-  it('shows a face (whole or partly) in roughly half of the photos', () => {
+  it('shows a face (whole or partly) in most of the photos', () => {
     const seen = sampleCategories(american, 2000)
+    // Among photos: drawings (category "other") are counted apart.
+    const photos = 2000 - (seen.get('other') ?? 0)
     const faces = (seen.get('face') ?? 0) + (seen.get('partial') ?? 0)
-    expect(faces / 2000).toBeGreaterThan(0.4)
-    expect(faces / 2000).toBeLessThan(0.65)
+    expect(faces / photos).toBeGreaterThan(0.65)
+    expect(faces / photos).toBeLessThan(0.9)
+    // Korean accounts hide the face more, but still show it in most photos.
+    const kr = sampleCategories(korean, 2000)
+    expect(((kr.get('face') ?? 0) + (kr.get('partial') ?? 0)) / (2000 - (kr.get('other') ?? 0))).toBeGreaterThan(0.55)
     for (const { key } of AVATAR_CATEGORIES) expect(seen.get(key) ?? 0).toBeGreaterThan(0)
   })
 
@@ -83,7 +91,7 @@ describe('avatar taxonomy', () => {
 
   it('follows the bio: a cat person mostly gets a cat', () => {
     const seen = sampleCategories({ ...korean, bio: '고양이 두 마리 집사' }, 1000)
-    expect(seen.get('animal') ?? 0).toBeGreaterThan(200)
+    expect((seen.get('animal') ?? 0) / (1000 - (seen.get('other') ?? 0))).toBeGreaterThan(0.2)
   })
 
   it('keeps the outfit, light and flaws consistent with the person and the place', () => {
@@ -259,6 +267,7 @@ describe('avatar generation', () => {
     expect(body.messages[0].content).toContain('profile picture')
     expect(mocks.setAvatar).toHaveBeenCalledWith(null, 'op_1', Buffer.from('png-bytes'), expect.objectContaining({ generated: true }))
     expect(mocks.accountUpdateMany.mock.calls[0][0].data.avatarSpec.labelKo).toContain(' · ')
+    expect(mocks.userUpdateMany).toHaveBeenCalledWith({ where: { id: 'op_1', isOperator: true }, data: { gender: expect.stringMatching(/^(female|male)$/) } })
   })
 
   describe('through the local subscription proxy', () => {
@@ -350,14 +359,14 @@ describe('automation rules', () => {
   })
 
   it('is off by default and validates staff input', () => {
-    expect(normalizeAutomationSettings(null)).toEqual({ avatars: { enabled: false, intervalMinutes: 10 }, accounts: { enabled: false, perDay: 5, totalTarget: 100 } })
-    expect(parseAutomationSettings({ avatars: { enabled: true, intervalMinutes: 0 }, accounts: { enabled: false, perDay: 5, totalTarget: 100 } })).toEqual({ ok: false, error: 'invalid_interval' })
-    expect(parseAutomationSettings({ avatars: { enabled: true, intervalMinutes: 10 }, accounts: { enabled: true, perDay: 3, totalTarget: 150 } }).ok).toBe(true)
+    expect(normalizeAutomationSettings(null)).toEqual({ avatars: { enabled: false, intervalMinutes: 10 }, accounts: { enabled: false, perDay: 5, totalTarget: 100 }, posts: { enabled: false, chancePercent: 20 }, engagement: { enabled: false } })
+    expect(parseAutomationSettings({ avatars: { enabled: true, intervalMinutes: 0 }, accounts: { enabled: false, perDay: 5, totalTarget: 100 }, posts: { enabled: false, chancePercent: 20 } })).toEqual({ ok: false, error: 'invalid_interval' })
+    expect(parseAutomationSettings({ avatars: { enabled: true, intervalMinutes: 10 }, accounts: { enabled: true, perDay: 3, totalTarget: 150 }, posts: { enabled: true, chancePercent: 20 } }).ok).toBe(true)
   })
 
   it('does nothing while both rules are off', async () => {
     mocks.settingFindUnique.mockResolvedValue(null)
-    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'off', account: 'off' })
+    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'off', account: 'off', posts: 'off', engagement: 'off' })
     expect(mocks.userFindFirst).not.toHaveBeenCalled()
   })
 
@@ -370,14 +379,14 @@ describe('automation rules', () => {
     }
     const recent = new Date(NOW.getTime() - 60_000).toISOString()
     state(recent, recent)
-    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'waiting', account: 'waiting' })
+    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'waiting', account: 'waiting', posts: 'off', engagement: 'off' })
 
     state(new Date(NOW.getTime() - 11 * 60_000).toISOString(), new Date(NOW.getTime() - 7 * 60 * 60_000).toISOString())
     mocks.accountGroupBy.mockResolvedValue([{ personaCountry: 'KR', _count: { _all: 1 } }])
     mocks.drafts.mockResolvedValue({ drafts: [{ name: 'Yui', handle: 'yui' }], missing: 0 })
     mocks.createAccount.mockResolvedValue({ userId: 'op_new', handle: 'yui', requestedHandle: 'yui', bioQueued: false })
     mocks.userFindFirst.mockResolvedValue(null) // no account without a photo
-    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'none', account: 'created' })
+    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'none', account: 'created', posts: 'off', engagement: 'off' })
     expect(mocks.drafts.mock.calls[0][0]).toMatchObject({ count: 1, countries: ['JP'] })
     expect(mocks.createAccount).toHaveBeenCalledWith(expect.objectContaining({ sessionId: null }), { name: 'Yui', handle: 'yui' }, expect.anything())
   })
@@ -389,7 +398,7 @@ describe('automation rules', () => {
         : null
     ))
     mocks.accountGroupBy.mockResolvedValue([{ personaCountry: 'KR', _count: { _all: 3 } }])
-    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'off', account: 'target_reached' })
+    expect(await runOperatorAutomation({ now: () => NOW })).toEqual({ avatar: 'off', account: 'target_reached', posts: 'off', engagement: 'off' })
     expect(mocks.drafts).not.toHaveBeenCalled()
   })
 })
@@ -421,5 +430,36 @@ describe('describeFace', () => {
   it('lets ordinary faces carry plain traits', () => {
     const plain = Array.from({ length: 100 }, (_, index) => kinds('ordinary', `ordinary:${index}`).prompt).filter((prompt) => /puffy|bulbous|heavy chin|a long face|broad, round face|round cheeks|flat|thin lips|small, narrow eyes|low, narrow forehead|long midface|long philtrum|large nose|sparse|dark under-eye|wide, square jaw/.test(prompt))
     expect(plain.length).toBeGreaterThan(80)
+  })
+})
+
+describe('anime-style profile pictures', () => {
+  it('are about one in five, mostly the account\'s own gender, sometimes a pet or a thing', () => {
+    const male = { ...american, gender: 'male' as const }
+    const anime = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(male, seededRandom(`anime:${index}`))).filter((spec) => spec.subtype === 'anime_icon')
+    expect(anime.length / 3000).toBeGreaterThan(0.15)
+    expect(anime.length / 3000).toBeLessThan(0.3)
+    const subjects = new Set(anime.map((spec) => spec.attributes.animeSubject))
+    expect([...subjects].sort()).toEqual(['cat', 'critter', 'dog', 'landscape', 'object', 'person'])
+    for (const spec of anime.filter((item) => item.attributes.animeSubject === 'person')) expect(spec.prompt).toMatch(/young man/)
+  })
+
+  it('differ in style, palette, background, pose and look from one account to the next', () => {
+    const male = { ...american, gender: 'male' as const }
+    const people = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(male, seededRandom(`anime-variety:${index}`)))
+      .filter((spec) => spec.subtype === 'anime_icon' && spec.attributes.animeSubject === 'person')
+    expect(people.length).toBeGreaterThan(400)
+    const distinct = (axis: string) => new Set(people.map((spec) => spec.attributes[axis])).size
+    expect(distinct('animeStyle')).toBeGreaterThanOrEqual(12)
+    expect(distinct('animePalette')).toBeGreaterThanOrEqual(10)
+    expect(distinct('animeBackground')).toBeGreaterThanOrEqual(20)
+    expect(distinct('animeFraming')).toBeGreaterThanOrEqual(10)
+    expect(distinct('animeHairColor')).toBeGreaterThanOrEqual(10)
+    expect(distinct('animeOutfit')).toBeGreaterThanOrEqual(12)
+    // No single art style takes more than a fifth of them.
+    const counts = new Map<string, number>()
+    for (const spec of people) counts.set(spec.attributes.animeStyle, (counts.get(spec.attributes.animeStyle) ?? 0) + 1)
+    expect(Math.max(...counts.values()) / people.length).toBeLessThan(0.2)
+    for (const spec of people) expect(spec.prompt).not.toMatch(/school uniform/i)
   })
 })

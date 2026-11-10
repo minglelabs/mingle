@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockSession, mockSessionKey, mockMembers, mockFindFirst, mockFindUnique, mockLock, mockUpdate, mockUpdateContents, mockNotify } = vi.hoisted(() => ({
+const { mockSession, mockSessionKey, mockMembers, mockFindFirst, mockFindUnique, mockLock, mockUpdate, mockUpdateContents, mockNotify, mockRecallPush } = vi.hoisted(() => ({
+  mockRecallPush: vi.fn(),
   mockFindUnique: vi.fn(),
   mockLock: vi.fn(),
   mockSession: vi.fn(),
@@ -13,6 +14,11 @@ const { mockSession, mockSessionKey, mockMembers, mockFindFirst, mockFindUnique,
   mockNotify: vi.fn(),
 }));
 
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: (task: () => unknown) => { void task(); },
+}));
+vi.mock("@/server/push-notifications", () => ({ sendPushNotificationForRecalledConversationMessage: mockRecallPush }));
 vi.mock("next-auth", () => ({ getServerSession: mockSession }));
 vi.mock("@/lib/auth-options", () => ({ getAuthOptions: () => ({}) }));
 vi.mock("@/lib/app-conversations", () => ({
@@ -45,7 +51,7 @@ describe("POST /api/conversations/[conversationId]/recall", () => {
     mockSession.mockResolvedValue({ user: { id: "user_1" } });
     mockSessionKey.mockResolvedValue("sess_1");
     mockMembers.mockResolvedValue(["user_1", "user_2"]);
-    mockFindFirst.mockResolvedValue({ id: "msg_1", userId: "user_1", clientMessageId: "u-1700000000000-1", isDeleted: false, metadata: {} });
+    mockFindFirst.mockResolvedValue({ id: "msg_1", userId: "user_1", clientMessageId: "u-1700000000000-1", isDeleted: false, metadata: {}, createdAt: new Date(1700000000000) });
     mockFindUnique.mockResolvedValue({ metadata: { image: { objectKey: "k" } } });
   });
 
@@ -61,6 +67,18 @@ describe("POST /api/conversations/[conversationId]/recall", () => {
     });
     expect(mockUpdateContents).toHaveBeenCalledWith({ where: { messageId: "msg_1" }, data: { isDeleted: true } });
     expect(mockNotify).toHaveBeenCalledWith("sess_1", ["user_1", "user_2"], undefined, { timeoutMs: 3000 });
+    // The push already delivered is rewritten into the "deleted message" placeholder.
+    expect(mockRecallPush).toHaveBeenCalledWith({
+      messageId: "msg_1", messageCreatedAt: new Date(1700000000000), sessionKey: "sess_1",
+      senderUserId: "user_1", memberUserIds: ["user_1", "user_2"],
+    });
+  });
+
+  it("still succeeds when the push rewrite fails", async () => {
+    mockRecallPush.mockRejectedValueOnce(new Error("apns down"));
+    vi.spyOn(console, "error").mockImplementationOnce(() => {});
+
+    expect((await recall({ messageId: "u-1700000000000-1" })).status).toBe(200);
   });
 
   it("refuses another member's message", async () => {
@@ -75,6 +93,7 @@ describe("POST /api/conversations/[conversationId]/recall", () => {
 
     expect((await recall({ messageId: "u-1700000000000-1" })).status).toBe(200);
     expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockRecallPush).not.toHaveBeenCalled();
   });
 
   it("rejects non-members, anonymous callers and unknown messages", async () => {

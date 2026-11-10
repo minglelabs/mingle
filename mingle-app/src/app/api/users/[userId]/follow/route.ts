@@ -6,6 +6,7 @@ import { buildPostHogRequestContext } from "@/lib/posthog-request-context";
 import { digestAnalyticsValue } from "@/lib/search-analytics";
 import { captureMingleEvent } from "@/lib/posthog-server";
 import { notifyOperatorActivity } from "@/server/operator-activity/notify";
+import { readSourcePostIdFromBody, resolveSourcePostId } from "@/server/posts/source-post";
 import { sendPushNotificationForUserNotification } from "@/server/push-notifications";
 
 export const runtime = "nodejs";
@@ -152,9 +153,17 @@ async function notifyNewFollower(args: { followerId: string; followingId: string
   }
 }
 
+/**
+ * Follow. Optional JSON body `{ sourcePostId }`: the followed user's post the
+ * follow was made from (feed card "+", or a profile opened from that post),
+ * kept on the follow for the staff-only operator post stats. Any other id is
+ * dropped.
+ */
 export async function POST(request: NextRequest, { params }: FollowRouteProps) {
   const result = await resolveFollowTarget(await getServerSession(getAuthOptions()), params);
   if ("response" in result) return result.response;
+
+  const sourcePostId = await resolveSourcePostId(await readSourcePostIdFromBody(request), result.followingId);
 
   let created = false;
   try {
@@ -162,6 +171,7 @@ export async function POST(request: NextRequest, { params }: FollowRouteProps) {
       data: {
         followerId: result.followerId,
         followingId: result.followingId,
+        ...(sourcePostId ? { sourcePostId } : {}),
       },
     });
     created = true;

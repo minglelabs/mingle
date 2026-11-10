@@ -26,7 +26,7 @@ describe('runtime contract', () => {
 
     expect(projectFile).toContain('NEXT_PUBLIC_SITE_URL = "https://mingle-2-0-0-production.up.railway.app";');
     expect(projectFile).toContain('NEXT_PUBLIC_WS_URL = "wss://mingle-2-0-0-production.up.railway.app/stt";');
-    expect(projectFile).toContain('NEXT_PUBLIC_API_NAMESPACE = ios/v2.3.0;');
+    expect(projectFile).toContain('NEXT_PUBLIC_API_NAMESPACE = ios/v2.3.4;');
     expect(infoPlist).toContain('<key>MingleDefaultWsURL</key>');
     expect(infoPlist).toContain('<string>$(NEXT_PUBLIC_WS_URL)</string>');
 
@@ -38,6 +38,23 @@ describe('runtime contract', () => {
     expect(fullUrlReadIndex).toBeGreaterThanOrEqual(0);
     expect(schemeHostReadIndex).toBeGreaterThanOrEqual(0);
     expect(fullUrlReadIndex).toBeLessThan(schemeHostReadIndex);
+  });
+
+  it('ships every iOS target (app and broadcast extension) at the API namespace version', () => {
+    const projectFile = readWorkspaceFile('ios/mingle.xcodeproj/project.pbxproj');
+    const valuesOf = (key: string) =>
+      Array.from(projectFile.matchAll(new RegExp(`\\b${key} = ([^;]+);`, 'g')), (m) => m[1].trim());
+
+    const marketingVersions = valuesOf('MARKETING_VERSION');
+    const buildNumbers = valuesOf('CURRENT_PROJECT_VERSION');
+    const namespaces = valuesOf('NEXT_PUBLIC_API_NAMESPACE');
+
+    // App Debug/Release + MingleBroadcast Debug/Release.
+    expect(marketingVersions.length).toBeGreaterThanOrEqual(4);
+    expect(buildNumbers.length).toBe(marketingVersions.length);
+    expect(new Set(marketingVersions).size).toBe(1);
+    expect(new Set(buildNumbers).size).toBe(1);
+    expect(new Set(namespaces)).toEqual(new Set([`ios/v${marketingVersions[0]}`]));
   });
 
   it('never switches the WebView to another host', () => {

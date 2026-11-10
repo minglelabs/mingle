@@ -86,6 +86,7 @@ describe('createOperatorAccount', () => {
       locationCity: 'Osaka',
       locationCountry: 'Japan',
       locationCountryCode: 'jp',
+      nationalityCountry: 'JP',
       locationUpdatedAt: NOW,
       operatorAccount: { create: { personaCountry: 'JP', notes: 'travel persona', createdBySessionId: 'sess-1' } },
     })
@@ -199,6 +200,7 @@ describe('updateOperatorAccount', () => {
       locationCity: 'Busan',
       locationCountry: 'South Korea',
       locationCountryCode: 'kr',
+      nationalityCountry: 'KR',
       locationLatitude: 35.18,
     })
     expect(mocks.txOperatorAccountUpsert).toHaveBeenCalledWith({

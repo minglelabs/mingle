@@ -8,6 +8,10 @@ import { zipInterestLanguages } from '@/lib/interest-languages'
 import { requireAdmin } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { listReviewQueue } from '@/server/operator-review/review'
+import { loadOperatorPostStats } from '@/server/operator-post-stats/load'
+import { AdminBackLink } from '../../../_components/admin-nav'
+import { safeBackPath, withBack } from '../../../_lib/back-path'
+import { OperatorPostStatsRow } from '../../../_components/operator-post-stats-row'
 import { OperatorPostEditor } from '../../../feed/_components/operator-post-editor'
 import { PostTakedownButton } from '../../../feed/_components/post-takedown-button'
 import { OperatorAvatar, OperatorsMain } from '../../_components/operator-ui'
@@ -38,7 +42,7 @@ type View = 'grid' | 'list'
 
 type ProfilePageProps = {
   params: Promise<{ userId: string }>
-  searchParams: Promise<{ tab?: string; view?: string; after?: string }>
+  searchParams: Promise<{ tab?: string; view?: string; after?: string; back?: string }>
 }
 
 function decodeSegment(value: string): string {
@@ -114,10 +118,15 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
     tab === 'review' ? listReviewQueue({ userId: user.id, cursor: query.after || undefined }) : Promise.resolve(null),
   ])
 
+  // The full cards (list view) carry each post's stats row.
+  const statsByPost = await loadOperatorPostStats({ postIds: view === 'list' ? published.map((post) => post.id) : [] })
   const base = `/admin/operators/${encodeURIComponent(user.id)}/profile`
+  // Where "‹ 검토" returns to (the review page the reader came from); kept across this screen's tabs.
+  const back = safeBackPath(query.back)
   const href = (next: { tab?: Tab; view?: View; after?: string }, anchor?: string) => {
     const params = new URLSearchParams({ tab: next.tab ?? tab, view: next.view ?? view })
     if (next.after) params.set('after', next.after)
+    if (back) params.set('back', back)
     return `${base}?${params.toString()}${anchor ? `#${anchor}` : ''}`
   }
   const primaryLanguages = user.primaryLanguages
@@ -137,8 +146,8 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
     <OperatorsMain>
       <div className="mx-auto w-full max-w-[520px]">
         <div className="mb-3 flex items-center justify-between text-sm">
-          <Link href="/admin/operators/review" className="font-semibold text-sky-700">‹ 검토</Link>
-          <Link href={`/admin/operators/${encodeURIComponent(user.id)}?from=review`} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700">프로필 편집</Link>
+          <AdminBackLink href={back ?? '/admin/operators/review'} className="font-semibold text-sky-700">‹ 검토</AdminBackLink>
+          <Link href={withBack(`/admin/operators/${encodeURIComponent(user.id)}?from=review`, href({}))} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700">프로필 편집</Link>
         </div>
 
         {/* Profile header, laid out like the app's My Page. */}
@@ -202,6 +211,7 @@ export default async function OperatorProfilePage({ params, searchParams }: Prof
                   <p className="mt-2 text-xs text-slate-500">
                     {DATE_FORMAT.format(post.publishedAt)} · {post.sourceLanguage ?? '?'} · 좋아요 {post.likeCount} · 댓글 {post.commentCount}
                   </p>
+                  <OperatorPostStatsRow stats={statsByPost.get(post.id)} className="mt-2" />
                   {post.comments.length ? (
                     <ul className="mt-2 space-y-1 rounded-lg bg-slate-50 p-2 text-sm">
                       {post.comments.map((comment) => (

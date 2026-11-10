@@ -3,6 +3,7 @@ import {
   type TranslationLanguageCode,
 } from "@/lib/translation-languages";
 import { getSttLanguageFlag } from "@/lib/stt-languages";
+import FlagEmoji from "@/components/flag-emoji";
 
 type LanguageFlagProps = {
   language: string;
@@ -21,13 +22,13 @@ function EnglishUsUkFlag({ className = "" }: Pick<LanguageFlagProps, "className"
         className="absolute inset-0 flex items-center justify-center"
         style={{ clipPath: "polygon(0 0, 100% 0, 0 100%)" }}
       >
-        <span className="whitespace-nowrap">🇺🇸</span>
+        <FlagEmoji emoji="🇺🇸" className="whitespace-nowrap" />
       </span>
       <span
         className="absolute inset-0 flex items-center justify-center"
         style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)" }}
       >
-        <span className="whitespace-nowrap">🇬🇧</span>
+        <FlagEmoji emoji="🇬🇧" className="whitespace-nowrap" />
       </span>
     </span>
   );
@@ -40,9 +41,5 @@ export default function LanguageFlag({ language, className = "" }: LanguageFlagP
     return <EnglishUsUkFlag className={className} />;
   }
 
-  return (
-    <span className={className} aria-hidden="true">
-      {getSttLanguageFlag(language)}
-    </span>
-  );
+  return <FlagEmoji emoji={getSttLanguageFlag(language)} className={className} />;
 }

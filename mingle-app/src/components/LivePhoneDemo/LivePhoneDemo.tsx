@@ -36,7 +36,7 @@ import {
   type EarphoneAutoReadDispatchItem,
   type EarphoneAutoReadSnapshot,
 } from './live-phone-demo.earphone-auto-read'
-import { applyNativeTtsEvent } from './live-phone-demo.native-tts-events'
+import { applyNativeTtsEvent, isNativeTtsEventForActiveClip, type NativeTtsEventDetail } from './live-phone-demo.native-tts-events'
 import {
   confirmNativeEarphonesConnected,
   getNativeAudioRouteServerSnapshot,
@@ -46,7 +46,21 @@ import {
   requestNativeAudioRoute,
   subscribeNativeAudioRoute,
 } from '@/lib/native-audio-route'
+import {
+  getNativeDeviceAudioCapabilityServerSnapshot,
+  getNativeDeviceAudioCapabilitySnapshot,
+  getSttCaptureSourcePickServerSnapshot,
+  getSttCaptureSourcePickSnapshot,
+  readCachedNativeShellCapabilities,
+  resolveEffectiveSttCaptureSource,
+  resolveNativeDeviceAudioSupported,
+  setSttCaptureSourcePick,
+  shouldPlayTtsViaNativeShell,
+  subscribeNativeDeviceAudioCapability,
+  subscribeSttCaptureSourcePick,
+} from '@/lib/native-device-audio'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
+import { TtsAgentTextScheduler } from './tts-agent-text'
 import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
 import CoinBalanceChip, { formatCoinCount } from '@/components/coins/coin-balance-chip'
@@ -58,13 +72,14 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare, Volume2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface from '@/components/slide-surface'
 import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
 import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
+import { RETRANSLATE_TIP_SHOWN_STORAGE_KEY, messageRetranslateCopy } from '@/lib/message-retranslate'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
@@ -85,7 +100,6 @@ import { useLanguageSelectorNavigation } from './use-language-selector-navigatio
 import ConversationEmptyState from './ConversationEmptyState'
 import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
 import ChatAccountBadge from './ChatAccountBadge'
-import ConversationOperatorDisclosure from './ConversationOperatorDisclosure'
 import { labelNameWithAccountBadge, resolveRoomAccountBadge } from './chat-account-badge.logic'
 import { resolveAccountBadge } from '@/lib/account-badge'
 import type { ConversationChannelOtherMember } from '@/lib/app-conversations'
@@ -104,9 +118,10 @@ import LanguageFlag from '@/components/language-flag'
 import useRealtimeSTT from './useRealtimeSTT'
 import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances, type ConversationInviteNotice, type ConversationLeaveNotice, type SttStopSource } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
-import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
+import { buildClientApiPath, clientApiNamespace, namespaceSupportsSpeakerMode } from '@/lib/api-contract'
 import { buildConversationShareUrl } from '@/lib/conversation-share-link'
 import { useTtsSettings } from '@/context/tts-settings'
+import { useDeviceAudioCaptureSwitch } from '@/context/device-audio-capture-switch'
 import {
   DEFAULT_STT_LANGUAGES,
   MAX_STT_LANGUAGE_SELECTION,
@@ -323,6 +338,7 @@ const MENU_IOS_HISTORY_SETTLE_WINDOW_MS = 300
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
+const NATIVE_BOTTOM_BAR_CLEARANCE_KEYBOARD_POLL_MS = 250
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
@@ -713,6 +729,26 @@ function isNativeIosAppRuntime(): boolean {
   return apiNamespace.startsWith('ios/')
 }
 
+// The screen-capture pre-prompt is shown until the user continues past it
+// with "Don't show this again" checked; then never again on this device.
+const SCREEN_CAPTURE_NOTICE_DISMISSED_KEY = 'mingle.screenCaptureNotice.dismissed'
+
+function readScreenCaptureNoticeDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(SCREEN_CAPTURE_NOTICE_DISMISSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeScreenCaptureNoticeDismissed(): void {
+  try {
+    window.localStorage.setItem(SCREEN_CAPTURE_NOTICE_DISMISSED_KEY, '1')
+  } catch {
+    // Storage blocked: the notice shows again next session, which is harmless.
+  }
+}
+
 function isLikelyIOSPlatform(): boolean {
   if (typeof navigator === 'undefined') {
     return false
@@ -1037,6 +1073,15 @@ function useNativeBannerPositionFromSearch(queryKey: string): LivePhoneDemoAdBan
   )
 }
 
+// Speaker mode: this app reads translations aloud without earphones, because
+// it removes its own voice from what the microphone hears (app 2.3.2 and up).
+function isSpeakerModeClient(): boolean {
+  const apiNamespace = typeof window === 'undefined'
+    ? clientApiNamespace
+    : readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace
+  return namespaceSupportsSpeakerMode(apiNamespace)
+}
+
 // The earphone-mode gate as the stores report it right now (not as of the last
 // render), for decisions that must not wait for React.
 function isEarphoneAutoReadGateOpenNow(): boolean {
@@ -1045,6 +1090,7 @@ function isEarphoneAutoReadGateOpenNow(): boolean {
     supported: isNativeAudioRouteSupported(route),
     enabled: getEarphoneModePreferenceSnapshot(),
     earphonesConnected: route.earphonesConnected,
+    earphonesRequired: !isSpeakerModeClient(),
   }).autoReadActive
 }
 
@@ -1531,6 +1577,16 @@ type TtsQueueItem = {
   // 'auto' items come from earphone mode (the legacy slot handlers below are
   // gated by the fixed-off TTS setting and never add any).
   mode: 'auto' | 'manual'
+  // The sentence the clip reads, reported to STT as agent text while it plays.
+  text?: string
+}
+
+// The clip whose sentence is being reported as agent text, once it starts.
+type TtsAgentTextClip = {
+  key: string
+  playbackKey: string
+  text: string
+  durationMs: number
 }
 
 type BubbleTtsTarget = {
@@ -2234,13 +2290,58 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     getNativeAudioRouteServerSnapshot,
   )
   const earphoneModeSupported = isNativeAudioRouteSupported(nativeAudioRoute)
+  const speakerMode = isSpeakerModeClient()
   const earphoneModeGate = resolveEarphoneModeGate({
     supported: earphoneModeSupported,
     enabled: earphoneModeEnabled,
     earphonesConnected: nativeAudioRoute.earphonesConnected,
+    earphonesRequired: !speakerMode,
   })
-  const earphoneModeCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
+  // Speaker mode is the default name in 2.3.2+; with earphones in, the same
+  // mode is earphone mode again (and may also capture other apps' sound).
+  const speakerModeOnSpeaker = speakerMode && !nativeAudioRoute.earphonesConnected
+  const earphoneModeBaseCopy = useMemo(() => resolveLivePhoneDemoEarphoneModeCopy(uiLocale), [uiLocale])
+  const earphoneModeCopy = useMemo(() => (
+    speakerModeOnSpeaker ? { ...earphoneModeBaseCopy, label: earphoneModeBaseCopy.speakerLabel } : earphoneModeBaseCopy
+  ), [earphoneModeBaseCopy, speakerModeOnSpeaker])
+  // Speaker mode plays the translation out loud, so its sound reaches the
+  // microphone at full strength and drowns the user's voice. The system echo
+  // canceller is on only while it reads aloud without earphones; every other
+  // mode, and the same mode with earphones in, keeps it off.
+  const speakerModeAecEnabled = speakerModeOnSpeaker && earphoneModeGate.autoReadActive
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
+  // Warns, once per earphone-mode session, that Start is about to open the
+  // system screen broadcast / sharing prompt, so it does not come as a shock.
+  const [screenCaptureNoticeOpen, setScreenCaptureNoticeOpen] = useState(false)
+  const screenCaptureNoticeAcknowledgedRef = useRef(false)
+  // "Don't show this again" starts checked: most users see the notice once.
+  const [screenCaptureNoticeDontShowAgain, setScreenCaptureNoticeDontShowAgain] = useState(true)
+  // Device audio: translate what other apps play instead of the microphone.
+  // Picked in the earphone-mode notice, on shells that can capture it, unless
+  // the server's kill switch (DEVICE_AUDIO_CAPTURE_ENABLED*) turned it off.
+  const nativeDeviceAudioCapable = useSyncExternalStore(
+    subscribeNativeDeviceAudioCapability,
+    getNativeDeviceAudioCapabilitySnapshot,
+    getNativeDeviceAudioCapabilityServerSnapshot,
+  )
+  const deviceAudioCaptureSwitch = useDeviceAudioCaptureSwitch()
+  const nativeDeviceAudioSupported = resolveNativeDeviceAudioSupported({
+    shellCapable: nativeDeviceAudioCapable,
+    serverSwitch: deviceAudioCaptureSwitch,
+    isIOS: isLikelyIOSPlatform(),
+  })
+  const sttCaptureSourcePick = useSyncExternalStore(
+    subscribeSttCaptureSourcePick,
+    getSttCaptureSourcePickSnapshot,
+    getSttCaptureSourcePickServerSnapshot,
+  )
+  // Without earphones, speaker mode listens to the microphone only: no screen
+  // broadcast, no capture of other apps' sound.
+  const sttCaptureSource = resolveEffectiveSttCaptureSource({
+    supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker,
+    earphoneModeEnabled,
+    pick: sttCaptureSourcePick,
+  })
   // The read language (L) picked in the notice. Session state only: never
   // persisted, dropped on every on/off edge (see the reset below).
   const [earphoneModeReadLanguagePick, setEarphoneModeReadLanguagePick] = useState<EarphoneModeReadLanguagePick | null>(null)
@@ -2273,6 +2374,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
+  // Soniox v6 agent text: what the playing TTS clip says, sent to STT timed to
+  // playback so the echo of our own voice is dropped from the transcript.
+  const sendAgentTextRef = useRef<((text: string, endOfSegment: boolean) => void) | null>(null)
+  const [ttsAgentText] = useState(() => new TtsAgentTextScheduler({
+    send: (text, endOfSegment) => sendAgentTextRef.current?.(text, endOfSegment),
+  }))
+  const ttsAgentTextClipRef = useRef<TtsAgentTextClip | null>(null)
   const isTtsProcessingRef = useRef(false)
   const ttsWaitTimerRef = useRef<number | null>(null)
   const nativeTtsPlaybackSeqRef = useRef(0)
@@ -2781,6 +2889,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       bottomBarTopPx: bottomBarRect.top,
       viewportHeightPx: window.innerHeight,
       safeAreaInsetBottomPx: readSafeAreaInsetBottomPx(),
+      visualViewportOffsetTopPx: window.visualViewport?.offsetTop ?? 0,
     })
 
     if (lastNativeBottomBarClearancePxRef.current === nextClearancePx) return
@@ -2853,6 +2962,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.cancelAnimationFrame(frameId)
       window.clearTimeout(timeout180Id)
       window.clearTimeout(timeout360Id)
+    }
+  }, [composerTextareaHeightPx, isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
+
+  // The native bottom banner only moves when the web reports a new clearance.
+  // While the keyboard is up, iOS can move the composer (textarea growing on
+  // Enter, caret scroll-into-view) without any event we listen to, which left
+  // the banner over the textarea until the keyboard was closed and reopened.
+  // Re-measuring on a short interval while typing guarantees the banner
+  // catches up; unchanged values are not re-sent.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isComposerOpen || keyboardViewportInsetPx <= 0) return
+
+    const intervalId = window.setInterval(() => {
+      syncNativeBottomBarClearance()
+    }, NATIVE_BOTTOM_BAR_CLEARANCE_KEYBOARD_POLL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
     }
   }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
 
@@ -4280,6 +4408,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const cleanupCurrentAudio = useCallback(() => {
+    // Whatever was playing is cut here; a clip that ended normally was already
+    // closed, so this only reports how far an interrupted clip got.
+    ttsAgentText.interrupt()
+    ttsAgentTextClipRef.current = null
     const player = playerAudioRef.current
     if (player) {
       player.pause()
@@ -4293,7 +4425,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       URL.revokeObjectURL(currentAudioUrlRef.current)
       currentAudioUrlRef.current = null
     }
-  }, [])
+  }, [ttsAgentText])
 
   const clearTtsWaitTimer = useCallback(() => {
     if (ttsWaitTimerRef.current) {
@@ -4310,12 +4442,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const sendNativeTtsStopCommand = useCallback((reason: NativeTtsStopReason) => {
+    ttsAgentText.interrupt()
+    ttsAgentTextClipRef.current = null
     if (!isNativeApp()) return
     window.ReactNativeWebView!.postMessage(JSON.stringify({
       type: 'native_tts_stop',
       payload: { reason },
     }))
-  }, [])
+  }, [ttsAgentText])
 
   const allocateNativeTtsPlaybackId = useCallback((playbackKey: string) => {
     nativeTtsPlaybackSeqRef.current += 1
@@ -4340,13 +4474,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
       nativeTtsEventTimerRef.current = null
+      ttsAgentText.interrupt()
+      ttsAgentTextClipRef.current = null
       currentTtsClipSeqRef.current += 1
       currentTtsItemRef.current = null
       setSpeakingItem(prev => (prev?.playbackKey === playbackKey ? null : prev))
       isTtsProcessingRef.current = false
       processTtsQueueRef.current()
     }, timeoutMs)
-  }, [clearNativeTtsEventTimer])
+  }, [clearNativeTtsEventTimer, ttsAgentText])
 
   // Lets earphone mode hand over its next clip once the player is idle. Always
   // deferred so the controller is never re-entered from inside a dispatch.
@@ -4418,10 +4554,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
 
     const isCurrentClip = () => currentTtsClipSeqRef.current === clipSeq
+    const agentTextClip: TtsAgentTextClip | null = next.text
+      ? { key: `${next.playbackKey}::${clipSeq}`, playbackKey: next.playbackKey, text: next.text, durationMs: 0 }
+      : null
 
     // Pending "…" -> animated bars, only once sound really comes out.
     const markPlaybackStarted = () => {
       if (!isCurrentClip()) return
+      if (agentTextClip) ttsAgentText.start(agentTextClip.key, agentTextClip.text, agentTextClip.durationMs)
       setSpeakingItem(prev => (prev && prev.seq === clipSeq && !prev.started ? { ...prev, started: true } : prev))
     }
 
@@ -4441,10 +4581,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
         const audioBytes = new Uint8Array(await audioBlob.arrayBuffer())
         const contentType = audioBlob.type || 'audio/mpeg'
+        const estimatedDurationMs = estimateTtsAudioDurationMs(audioBytes, contentType)
         const watchdogTimeoutMs = resolveNativeTtsWatchdogTimeoutMs({
-          durationMs: estimateTtsAudioDurationMs(audioBytes, contentType),
+          durationMs: estimatedDurationMs,
           byteLength: audioBytes.byteLength,
         })
+        if (agentTextClip) {
+          agentTextClip.durationMs = estimatedDurationMs ?? 0
+          // `tts_started` from the shell starts the agent text (see the listener).
+          ttsAgentTextClipRef.current = agentTextClip
+        }
         const audioBase64 = bytesToBase64(audioBytes)
         // Stopped (falling edge, manual tap, reset) while the clip was read.
         if (!isCurrentClip()) return
@@ -4456,8 +4602,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             audioBase64,
             contentType,
             // Auto clips only: the shell cuts the clip the moment the route
-            // leaves the earphones. Manual clips keep today's behavior.
-            ...(next.mode === 'auto' ? { stopOnEarphoneDisconnect: true } : {}),
+            // leaves the earphones. Manual clips keep today's behavior, and
+            // speaker mode plays out loud on purpose.
+            ...(next.mode === 'auto' && !isSpeakerModeClient() ? { stopOnEarphoneDisconnect: true } : {}),
           },
         }))
         armNativeTtsEventTimeout(playbackId, next.playbackKey, watchdogTimeoutMs)
@@ -4482,7 +4629,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
       if (!isCurrentClip()) return
       if (next.mode === 'auto' && isNativeApp()) {
-        const connected = await confirmNativeEarphonesConnected()
+        const connected = isSpeakerModeClient() || await confirmNativeEarphonesConnected()
         if (!isCurrentClip()) return
         if (!connected || !earphoneAutoReadArmedRef.current || !isEarphoneAutoReadGateOpenNow()) {
           onPlaybackDone()
@@ -4495,10 +4642,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       audio.src = objectUrl
 
       audio.onplaying = () => {
+        if (agentTextClip) agentTextClip.durationMs = Number.isFinite(audio.duration) ? audio.duration * 1000 : 0
         markPlaybackStarted()
       }
 
       audio.onended = () => {
+        if (agentTextClip) ttsAgentText.finish(agentTextClip.key)
         if (currentAudioUrlRef.current === objectUrl) {
           URL.revokeObjectURL(objectUrl)
           currentAudioUrlRef.current = null
@@ -4507,6 +4656,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
 
       audio.onerror = () => {
+        if (isCurrentClip()) ttsAgentText.interrupt()
         if (currentAudioUrlRef.current === objectUrl) {
           URL.revokeObjectURL(objectUrl)
           currentAudioUrlRef.current = null
@@ -4533,13 +4683,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       })
     }
 
-    // NativeTTSModule은 iOS 전용 — Android에서는 HTML audio로 재생
-    if (isNativeApp() && isLikelyIOSPlatform()) {
+    // iOS shells always play natively; Android shells do once they report
+    // `nativeTts` (they lower other apps' volume while the clip plays).
+    // Older Android shells keep the HTML audio path.
+    if (shouldPlayTtsViaNativeShell({
+      isNativeApp: isNativeApp(),
+      isIOS: isLikelyIOSPlatform(),
+      capabilities: readCachedNativeShellCapabilities(),
+    })) {
       void playViaNativeBridge()
     } else {
       void playViaHtmlAudio()
     }
-  }, [allocateNativeTtsPlaybackId, armNativeTtsEventTimeout, cleanupCurrentAudio, clearNativeTtsEventTimer, clearTtsWaitTimer, ensureAudioPlayer, scheduleEarphoneAutoReadPump])
+  }, [allocateNativeTtsPlaybackId, armNativeTtsEventTimeout, cleanupCurrentAudio, clearNativeTtsEventTimer, clearTtsWaitTimer, ensureAudioPlayer, scheduleEarphoneAutoReadPump, ttsAgentText])
 
   useEffect(() => {
     processTtsQueueRef.current = processTtsQueue
@@ -4550,10 +4706,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!isNativeApp()) return
 
     const handleNativeTtsEvent = (event: Event) => {
-      applyNativeTtsEvent((event as CustomEvent<unknown>).detail, {
+      const detail = (event as CustomEvent<unknown>).detail
+      const activeClip = {
         playbackId: activeNativeTtsPlaybackIdRef.current,
         playbackKey: activeNativeTtsUtteranceIdRef.current,
-      }, {
+      }
+      const eventType = detail && typeof detail === 'object' ? (detail as { type?: unknown }).type : null
+      if (
+        (eventType === 'tts_ended' || eventType === 'tts_stopped' || eventType === 'tts_error')
+        && isNativeTtsEventForActiveClip(detail as NativeTtsEventDetail, activeClip)
+      ) {
+        // Played to the end: the rest of the sentence goes out. Stopped or
+        // failed: only what was heard.
+        if (eventType === 'tts_ended') ttsAgentText.finish(ttsAgentTextClipRef.current?.key)
+        else ttsAgentText.interrupt()
+        ttsAgentTextClipRef.current = null
+      }
+      applyNativeTtsEvent(detail, activeClip, {
         finishCurrentClip: () => {
           const finishedSeq = currentTtsItemRef.current?.seq ?? null
           activeNativeTtsPlaybackIdRef.current = null
@@ -4565,6 +4734,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           setSpeakingItem(prev => (finishedSeq === null || prev?.seq === finishedSeq ? null : prev))
         },
         markStarted: (playbackKey) => {
+          const agentTextClip = ttsAgentTextClipRef.current
+          if (agentTextClip && agentTextClip.playbackKey === playbackKey) {
+            ttsAgentText.start(agentTextClip.key, agentTextClip.text, agentTextClip.durationMs)
+          }
           setSpeakingItem(prev => (
             prev && !prev.started && prev.playbackKey === playbackKey ? { ...prev, started: true } : prev
           ))
@@ -4583,7 +4756,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener(NATIVE_TTS_EVENT, handleNativeTtsEvent as EventListener)
     }
-  }, [clearNativeTtsEventTimer])
+  }, [clearNativeTtsEventTimer, ttsAgentText])
 
   // Reserve a slot in the TTS queue when a TTS request is about to be made.
   // This ensures playback order matches utterance order regardless of response arrival order.
@@ -4712,6 +4885,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     operatorDisclosure,
     isInitialServerHydrationPending,
     replaceConversationHistoryForQa,
+    sendAgentText,
     // Demo animation states
     isDemoAnimating,
     demoTypingText,
@@ -4724,7 +4898,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTtsAudio: handleTtsAudio,
     onTtsCanceled: handleTtsCanceled,
     enableTts: enableAutoTTS && isSoundEnabled,
-    enableAec: aecEnabled,
+    enableAec: aecEnabled || speakerModeAecEnabled,
+    captureSource: sttCaptureSource,
     sonioxManualFinalizeSilenceMs,
     sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
     sonioxEndpointMaxDelayMs,
@@ -4738,10 +4913,41 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     viewerUserId,
     viewerImage,
   })
+
+  useEffect(() => {
+    sendAgentTextRef.current = sendAgentText
+  }, [sendAgentText])
+
+  useEffect(() => () => {
+    // Leaving the room closes any open agent-text turn.
+    ttsAgentText.interrupt()
+    ttsAgentText.dispose()
+  }, [ttsAgentText])
   const isSttSessionRunning = isNativeAppRuntime
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
     : (isConnecting || isReady || isActive)
   nativePipSttRunningRef.current = isSttSessionRunning
+  // One-time tip (per device) for the long-press "translate again", shown
+  // the first time a room shows a finished translation.
+  const retranslateTipCheckedRef = useRef(false)
+  useEffect(() => {
+    if (retranslateTipCheckedRef.current || !isVisible || !conversationId || !isStorageHydrated) return
+    const hasFinishedTranslation = utterances.some((utterance) => (
+      !utterance.recalled && !utterance.image
+      && Object.entries(utterance.translations || {}).some(([language, text]) => (
+        Boolean(text?.trim()) && utterance.translationFinalized?.[language] !== false
+      ))
+    ))
+    if (!hasFinishedTranslation) return
+    retranslateTipCheckedRef.current = true
+    try {
+      if (window.localStorage.getItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY)) return
+      window.localStorage.setItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY, String(Date.now()))
+    } catch {
+      return
+    }
+    toast.message(messageRetranslateCopy(uiLocale).tip, { duration: 6000 })
+  }, [conversationId, isStorageHydrated, isVisible, uiLocale, utterances])
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
   const selectedSttSegmentationMode: SttSegmentationMode = sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE
   const handleSttSegmentationModeSelect = useCallback((nextMode: SttSegmentationMode) => {
@@ -5514,6 +5720,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       language: target.language,
       kind: target.kind,
       mode: 'manual',
+      text: normalizedText,
     }]
     processTtsQueue()
   }, [
@@ -5741,6 +5948,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     scheduleTtsResumeAfterStopClick()
   }, [isSttSessionRunning, onSttSessionRunningChange, scheduleTtsResumeAfterStopClick, stopRecording])
 
+  // The capture source is fixed when a session starts. When it changes under a
+  // running session (picked in the notice, or earphone mode turned off), end
+  // that session so the next Start captures what the room now says it does.
+  const appliedSttCaptureSourceRef = useRef(sttCaptureSource)
+  useEffect(() => {
+    if (appliedSttCaptureSourceRef.current === sttCaptureSource) return
+    appliedSttCaptureSourceRef.current = sttCaptureSource
+    if (isSttSessionRunning) void handleStopRecording()
+  }, [handleStopRecording, isSttSessionRunning, sttCaptureSource])
+
   const performMicAction = useCallback((source: SttStopSource) => {
     const shouldStopConnectingSession = isConnecting
       && (!isNativeAppRuntime || isNativeSttSessionOwner)
@@ -5751,8 +5968,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       void handleStopRecording({ forceNativeStop: !isSttSessionRunning, stopSource: source })
       return
     }
+    if (
+      sttCaptureSource === 'device_audio'
+      && !screenCaptureNoticeAcknowledgedRef.current
+      && !readScreenCaptureNoticeDismissed()
+    ) {
+      setScreenCaptureNoticeDontShowAgain(true)
+      // Start opens the system screen prompt: say so first.
+      setScreenCaptureNoticeOpen(true)
+      return
+    }
     void handleStartRecording()
-  }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning])
+  }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning, sttCaptureSource])
+
+  const confirmScreenCaptureNotice = useCallback(() => {
+    screenCaptureNoticeAcknowledgedRef.current = true
+    if (screenCaptureNoticeDontShowAgain) writeScreenCaptureNoticeDismissed()
+    setScreenCaptureNoticeOpen(false)
+    void handleStartRecording()
+  }, [handleStartRecording, screenCaptureNoticeDontShowAgain])
+
+  const cancelScreenCaptureNotice = useCallback(() => {
+    setScreenCaptureNoticeOpen(false)
+  }, [])
 
   const handleMicClick = useCallback(() => {
     micPointerActivationRef.current = false
@@ -6624,6 +6862,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           language: item.language,
           kind: item.kind,
           mode: 'auto',
+          text: item.text,
         }]
         processTtsQueueRef.current()
       },
@@ -6692,6 +6931,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // the room's display language again.
   useEffect(() => subscribeEarphoneModePreference(() => {
     setEarphoneModeReadLanguagePick(null)
+    // The capture source lasts one session too: every new one starts on the
+    // default, the microphone plus device audio (page 2/2 of the notice shows
+    // it, and what Start will open, before the first Start).
+    setSttCaptureSourcePick('device_audio')
+    // A new session warns about the screen prompt again.
+    screenCaptureNoticeAcknowledgedRef.current = false
   }), [])
 
   const handleEarphoneModeReadLanguageSelect = useCallback((language: string) => {
@@ -6707,6 +6952,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const toggle = resolveEarphoneModeToggle(getEarphoneModePreferenceSnapshot())
     writeEarphoneModeEnabled(toggle.nextEnabled)
     if (toggle.requestRoute) requestNativeAudioRoute()
+    // Turned on without earphones in speaker mode, the notice does not ask
+    // what to translate: stay on the microphone even if earphones go in later,
+    // so screen recording is only ever started from a question that was asked.
+    if (toggle.nextEnabled && isSpeakerModeClient() && !getNativeAudioRouteSnapshot().earphonesConnected) {
+      setSttCaptureSourcePick('microphone')
+    }
     if (toggle.nextEnabled && !(isNativeApp() && isLikelyIOSPlatform())) {
       // A user gesture: unlock the HTML audio element for clips that start
       // later without one (Android app, mobile web).
@@ -6728,6 +6979,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       ? {
           enabled: earphoneModeEnabled,
           waiting: earphoneModeGate.waitingForEarphones,
+          speaker: speakerModeOnSpeaker,
+          readLanguage: earphoneModeEnabled ? earphoneModeReadLanguage : null,
           label: earphoneModeCopy.label,
           stateLabel: earphoneModeEnabled ? earphoneModeCopy.onStateLabel : earphoneModeCopy.offStateLabel,
           waitingLabel: earphoneModeCopy.waitingLabel,
@@ -6740,6 +6993,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     earphoneModeGate.controlVisible,
     earphoneModeGate.waitingForEarphones,
     handleEarphoneModeToggle,
+    earphoneModeReadLanguage,
+    speakerModeOnSpeaker,
   ])
   const nativePipState = useMemo<NativePipState>(() => ({
     conversationId: conversationId?.trim() || '',
@@ -7576,7 +7831,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-2 font-semibold">{textSizeLabel}</span>
+                                <span className="min-w-0 flex-1 pl-1 pt-2 text-[0.98rem] font-medium text-gray-900">{textSizeLabel}</span>
                                 <div ref={textSizeDropdownRef} className="relative flex h-12 max-w-[68%] shrink-0 items-center">
                                   <button
                                     ref={textSizeButtonRef}
@@ -7692,189 +7947,195 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </div>
 
                             <div className="block">
-                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-1.5 font-semibold">{sttSegmentationModeLabel}</span>
-                                <span className="shrink-0 whitespace-nowrap text-gray-500">
-                                  {selectedSttSegmentationMode === 'end'
-                                    ? sttSegmentationModeEndLabel
-                                    : sttSegmentationModeFinLabel}
-                                </span>
-                              </div>
-                              <div
-                                role="group"
-                                aria-label={sttSegmentationModeLabel}
-                                className="grid grid-cols-2 gap-2 rounded-[1.25rem] bg-gray-100 p-1"
-                              >
+                              <div className="mb-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{sttSegmentationModeLabel}</div>
+                              <div role="radiogroup" aria-label={sttSegmentationModeLabel} className="space-y-2">
                                 {([
                                   { value: 'end' as const, label: sttSegmentationModeEndLabel },
                                   { value: 'fin' as const, label: sttSegmentationModeFinLabel },
                                 ]).map((option) => {
                                   const isSelected = selectedSttSegmentationMode === option.value
                                   return (
-                                    <button
+                                    <div
                                       key={option.value}
-                                      type="button"
-                                      aria-pressed={isSelected}
-                                      disabled={isSttSessionRunning}
-                                      onClick={() => handleSttSegmentationModeSelect(option.value)}
-                                      className={`min-h-10 rounded-[1rem] px-2 py-2 text-[0.75rem] font-semibold leading-tight transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                      className={`overflow-hidden rounded-[1.25rem] border transition ${
                                         isSelected
-                                          ? 'border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
-                                          : 'border border-transparent text-gray-500 hover:border-amber-200 hover:bg-white hover:text-amber-700'
+                                          ? 'border-amber-300 bg-amber-50/60 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
+                                          : 'border-gray-200 bg-gray-50'
                                       }`}
                                     >
-                                      {option.label}
-                                    </button>
+                                      <button
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={isSelected}
+                                        disabled={isSttSessionRunning}
+                                        onClick={() => handleSttSegmentationModeSelect(option.value)}
+                                        className="flex min-h-11 w-full items-center gap-3 px-3.5 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        <span
+                                          aria-hidden="true"
+                                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 bg-white transition ${
+                                            isSelected ? 'border-amber-500' : 'border-gray-300'
+                                          }`}
+                                        >
+                                          {isSelected && <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />}
+                                        </span>
+                                        <span className={`text-[0.9rem] font-semibold leading-tight ${isSelected ? 'text-amber-900' : 'text-gray-500'}`}>
+                                          {option.label}
+                                        </span>
+                                      </button>
+                                      {isSelected && shouldShowManualSilenceControl(option.value) && (
+                                      <div className="px-3.5 pb-3">
+                                        <label className="block">
+                                          <div
+                                            className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
+                                              isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
+                                            }`}
+                                          >
+                                            <span className={`min-w-0 flex-1 whitespace-normal break-words pl-1 text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
+                                              {silenceFinalizeLabel}
+                                            </span>
+                                            <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
+                                          </div>
+                                          <div className="relative">
+                                            <input
+                                              type="range"
+                                              min={MIN_SONIOX_SILENCE_MS}
+                                              max={MAX_SONIOX_SILENCE_MS}
+                                              step={100}
+                                              value={sonioxManualFinalizeSilenceMs}
+                                              disabled={isSilenceFinalizeSliderDisabled}
+                                              onPointerDown={(event) => {
+                                                if (isSilenceFinalizeSliderDisabled) return
+                                                event.currentTarget.setPointerCapture(event.pointerId)
+                                                const next = deriveRangeValueFromPointer(
+                                                  event,
+                                                  MIN_SONIOX_SILENCE_MS,
+                                                  MAX_SONIOX_SILENCE_MS,
+                                                  100,
+                                                )
+                                                handleSonioxManualFinalizeSilenceChange(next)
+                                              }}
+                                              onPointerMove={(event) => {
+                                                if (isSilenceFinalizeSliderDisabled) return
+                                                if (event.buttons !== 1) return
+                                                const next = deriveRangeValueFromPointer(
+                                                  event,
+                                                  MIN_SONIOX_SILENCE_MS,
+                                                  MAX_SONIOX_SILENCE_MS,
+                                                  100,
+                                                )
+                                                handleSonioxManualFinalizeSilenceChange(next)
+                                              }}
+                                              onPointerUp={(event) => {
+                                                if (isSilenceFinalizeSliderDisabled) return
+                                                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                                                  event.currentTarget.releasePointerCapture(event.pointerId)
+                                                }
+                                                flushAccountPreferencesSync()
+                                              }}
+                                              onChange={(event) => {
+                                                if (isSilenceFinalizeSliderDisabled) return
+                                                const next = Math.max(
+                                                  MIN_SONIOX_SILENCE_MS,
+                                                  Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
+                                                )
+                                                handleSonioxManualFinalizeSilenceChange(next)
+                                              }}
+                                              className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
+                                              aria-label={`${silenceFinalizeLabel} milliseconds`}
+                                            />
+                                            {isSilenceFinalizeSliderLocked && (
+                                              <>
+                                                <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
+                                                  {silenceFinalizeLockedMessage}
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  aria-label={silenceFinalizeLockedButtonLabel}
+                                                  aria-describedby={silenceFinalizeLockedDescriptionId}
+                                                  onFocus={handleSilenceFinalizeLockedInteraction}
+                                                  onClick={handleSilenceFinalizeLockedInteraction}
+                                                  className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                                />
+                                              </>
+                                            )}
+                                          </div>
+                                        </label>
+                                      </div>
+                                      )}
+                                      {isSelected && shouldShowEndpointTuningControl(option.value) && (
+                                      <div className="px-3.5 pb-3">
+                                        <label className="block">
+                                          <div
+                                            className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
+                                              isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
+                                            }`}
+                                          >
+                                            <span className={`min-w-0 flex-1 whitespace-normal break-words pl-1 text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
+                                              {endpointTuningLabel}
+                                            </span>
+                                            <span className="shrink-0 whitespace-nowrap pr-1">{sonioxEndpointTuningStep + 1}/5</span>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span
+                                              className={`shrink-0 text-[0.6875rem] font-medium ${
+                                                isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
+                                              }`}
+                                            >
+                                              {endpointTuningShortLabel}
+                                            </span>
+                                            <div className="relative min-w-0 flex-1">
+                                              <input
+                                                type="range"
+                                                min={0}
+                                                max={4}
+                                                step={1}
+                                                value={sonioxEndpointTuningStep}
+                                                disabled={isSilenceFinalizeSliderDisabled}
+                                                onChange={(event) => {
+                                                  if (isSilenceFinalizeSliderDisabled) return
+                                                  const next = Math.max(0, Math.min(4, Math.round(Number(event.target.value))))
+                                                  handleSonioxEndpointTuningStepChange(next)
+                                                }}
+                                                className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
+                                                aria-label={endpointTuningLabel}
+                                              />
+                                              {isSilenceFinalizeSliderLocked && (
+                                                <>
+                                                  <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
+                                                    {silenceFinalizeLockedMessage}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    aria-label={silenceFinalizeLockedButtonLabel}
+                                                    aria-describedby={silenceFinalizeLockedDescriptionId}
+                                                    onFocus={handleSilenceFinalizeLockedInteraction}
+                                                    onClick={handleSilenceFinalizeLockedInteraction}
+                                                    className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                                  />
+                                                </>
+                                              )}
+                                            </div>
+                                            <span
+                                              className={`shrink-0 text-[0.6875rem] font-medium ${
+                                                isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
+                                              }`}
+                                            >
+                                              {endpointTuningLongLabel}
+                                            </span>
+                                          </div>
+                                        </label>
+                                      </div>
+                                      )}
+                                    </div>
                                   )
                                 })}
                               </div>
                             </div>
 
-                            {shouldShowManualSilenceControl(selectedSttSegmentationMode) && (
-                            <label className="block">
-                              <div
-                                className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
-                                  isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
-                                }`}
-                              >
-                                <span className="min-w-0 flex-1 whitespace-normal break-words leading-[1.1]">
-                                  {silenceFinalizeLabel}
-                                </span>
-                                <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
-                              </div>
-                              <div className="relative">
-                                <input
-                                  type="range"
-                                  min={MIN_SONIOX_SILENCE_MS}
-                                  max={MAX_SONIOX_SILENCE_MS}
-                                  step={100}
-                                  value={sonioxManualFinalizeSilenceMs}
-                                  disabled={isSilenceFinalizeSliderDisabled}
-                                  onPointerDown={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    event.currentTarget.setPointerCapture(event.pointerId)
-                                    const next = deriveRangeValueFromPointer(
-                                      event,
-                                      MIN_SONIOX_SILENCE_MS,
-                                      MAX_SONIOX_SILENCE_MS,
-                                      100,
-                                    )
-                                    handleSonioxManualFinalizeSilenceChange(next)
-                                  }}
-                                  onPointerMove={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    if (event.buttons !== 1) return
-                                    const next = deriveRangeValueFromPointer(
-                                      event,
-                                      MIN_SONIOX_SILENCE_MS,
-                                      MAX_SONIOX_SILENCE_MS,
-                                      100,
-                                    )
-                                    handleSonioxManualFinalizeSilenceChange(next)
-                                  }}
-                                  onPointerUp={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                                      event.currentTarget.releasePointerCapture(event.pointerId)
-                                    }
-                                    flushAccountPreferencesSync()
-                                  }}
-                                  onChange={(event) => {
-                                    if (isSilenceFinalizeSliderDisabled) return
-                                    const next = Math.max(
-                                      MIN_SONIOX_SILENCE_MS,
-                                      Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
-                                    )
-                                    handleSonioxManualFinalizeSilenceChange(next)
-                                  }}
-                                  className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
-                                  aria-label={`${silenceFinalizeLabel} milliseconds`}
-                                />
-                                {isSilenceFinalizeSliderLocked && (
-                                  <>
-                                    <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
-                                      {silenceFinalizeLockedMessage}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      aria-label={silenceFinalizeLockedButtonLabel}
-                                      aria-describedby={silenceFinalizeLockedDescriptionId}
-                                      onFocus={handleSilenceFinalizeLockedInteraction}
-                                      onClick={handleSilenceFinalizeLockedInteraction}
-                                      className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                                    />
-                                  </>
-                                )}
-                              </div>
-                            </label>
-                            )}
-
-                            {shouldShowEndpointTuningControl(selectedSttSegmentationMode) && (
-                            <label className="block">
-                              <div
-                                className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
-                                  isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
-                                }`}
-                              >
-                                <span className="min-w-0 flex-1 whitespace-normal break-words leading-[1.1]">
-                                  {endpointTuningLabel}
-                                </span>
-                                <span className="shrink-0 whitespace-nowrap">{sonioxEndpointTuningStep + 1}/5</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`shrink-0 text-[0.6875rem] font-medium ${
-                                    isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
-                                  }`}
-                                >
-                                  {endpointTuningShortLabel}
-                                </span>
-                                <div className="relative min-w-0 flex-1">
-                                  <input
-                                    type="range"
-                                    min={0}
-                                    max={4}
-                                    step={1}
-                                    value={sonioxEndpointTuningStep}
-                                    disabled={isSilenceFinalizeSliderDisabled}
-                                    onChange={(event) => {
-                                      if (isSilenceFinalizeSliderDisabled) return
-                                      const next = Math.max(0, Math.min(4, Math.round(Number(event.target.value))))
-                                      handleSonioxEndpointTuningStepChange(next)
-                                    }}
-                                    className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
-                                    aria-label={endpointTuningLabel}
-                                  />
-                                  {isSilenceFinalizeSliderLocked && (
-                                    <>
-                                      <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
-                                        {silenceFinalizeLockedMessage}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        aria-label={silenceFinalizeLockedButtonLabel}
-                                        aria-describedby={silenceFinalizeLockedDescriptionId}
-                                        onFocus={handleSilenceFinalizeLockedInteraction}
-                                        onClick={handleSilenceFinalizeLockedInteraction}
-                                        className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                                      />
-                                    </>
-                                  )}
-                                </div>
-                                <span
-                                  className={`shrink-0 text-[0.6875rem] font-medium ${
-                                    isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
-                                  }`}
-                                >
-                                  {endpointTuningLongLabel}
-                                </span>
-                              </div>
-                            </label>
-                            )}
-
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-1.5 font-semibold">{translationModelLabel}</span>
+                                <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{translationModelLabel}</span>
                                 <div ref={translationModelDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
                                   <button
                                     ref={translationModelButtonRef}
@@ -7981,7 +8242,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-1.5 font-semibold">{ttsModelLabel}</span>
+                                <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{ttsModelLabel}</span>
                                 <div ref={ttsModelDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
                                   <button
                                     ref={ttsModelButtonRef}
@@ -8085,7 +8346,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-1.5 font-semibold">{bubbleDisplayCopy.displayModeLabel}</span>
+                                <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{bubbleDisplayCopy.displayModeLabel}</span>
                                 <div ref={bubbleDisplayModeDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
                                   <button
                                     ref={bubbleDisplayModeButtonRef}
@@ -8192,7 +8453,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             {isNativeAppRuntime && (
                               <div className="block">
                                 <div className="mb-2 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
-                                  <span className="shrink-0 whitespace-nowrap">{adBannerPositionLabel}</span>
+                                  <span className="shrink-0 whitespace-nowrap pl-1 text-[0.98rem] font-medium text-gray-900">{adBannerPositionLabel}</span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                   {([
@@ -8853,13 +9114,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   style={{ height: `${nativeChatTopSpacerPx}px` }}
                 />
               )}
-              {operatorDisclosure ? (
-                <ConversationOperatorDisclosure
-                  locale={uiLocale}
-                  stickyTopPx={nativeChatTopSpacerPx}
-                  className="mb-2"
-                />
-              ) : null}
+
               {hasOlderUtterances && (
                 <button
                   onClick={handleLoadOlder}
@@ -9531,7 +9786,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
                         }}
                       >
-                        <Headphones size={18} strokeWidth={2.15} />
+                        {speakerModeOnSpeaker ? <Volume2 size={18} strokeWidth={2.15} /> : <Headphones size={18} strokeWidth={2.15} />}
+                        {isEarphoneModeOn && earphoneModeReadLanguage && (
+                          // The language it reads aloud, so a wrong pick is visible at a glance.
+                          <span
+                            aria-hidden="true"
+                            data-earphone-mode-read-language-flag={earphoneModeReadLanguage}
+                            className="pointer-events-none absolute bottom-[6px] right-[3px] flex h-[15px] min-w-[19px] items-center justify-center rounded-full bg-white px-[2px] text-[10px] leading-none ring-1 ring-gray-200"
+                          >
+                            <LanguageFlag language={earphoneModeReadLanguage} className="text-[10px] leading-none" />
+                          </span>
+                        )}
                         {earphoneModeGate.waitingForEarphones && (
                           <span
                             aria-hidden="true"
@@ -9643,13 +9908,74 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 uiLocale={uiLocale}
                 copy={earphoneModeCopy}
                 earphonesConnected={nativeAudioRoute.earphonesConnected}
+                earphonesRequired={!speakerMode}
                 // The list the room's display-language page shows.
                 languages={normalizedDisplayLanguageOptions}
                 readLanguage={earphoneModeReadLanguage}
                 onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
+                captureSource={nativeDeviceAudioSupported && !speakerModeOnSpeaker ? sttCaptureSourcePick : undefined}
+                onSelectCaptureSource={setSttCaptureSourcePick}
+                deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}
                 coinCostNotice={coinTtsCostNotice}
               />
+            </MessageMediaDialog>
+          )}
+          {screenCaptureNoticeOpen && (
+            <MessageMediaDialog title={earphoneModeCopy.screenCaptureNoticeTitle} onClose={cancelScreenCaptureNotice}>
+              <div data-qa="live-demo-screen-capture-notice" className="flex flex-col items-center px-2 pb-1 pt-4 text-center">
+                {/* Earphone mode's own icon, with a screen-share badge: the
+                    request comes from earphone mode. */}
+                <span aria-hidden="true" className="relative flex rounded-full bg-amber-100/80 p-2">
+                  <span
+                    className="flex h-16 w-16 items-center justify-center rounded-full text-white shadow-[0_10px_24px_-8px_rgba(249,115,22,0.55)]"
+                    style={{ backgroundImage: 'linear-gradient(135deg, #fbbf24 0%, #f97316 100%)' }}
+                  >
+                    <Headphones size={30} strokeWidth={2.1} />
+                  </span>
+                  <span className="absolute -bottom-0.5 -right-0.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-gray-900 text-white">
+                    <ScreenShare size={15} strokeWidth={2.3} />
+                  </span>
+                </span>
+                <h2 className="mt-5 text-xl font-bold leading-tight text-gray-900">
+                  {earphoneModeCopy.screenCaptureNoticeTitle}
+                </h2>
+                <p className="mt-1.5 text-lg font-semibold leading-snug text-orange-500">
+                  {earphoneModeCopy.screenCaptureNoticeBody}
+                </p>
+                <p data-screen-capture-notice-reason className="mt-3 text-[0.95rem] font-medium leading-relaxed text-gray-700">
+                  {earphoneModeCopy.screenCaptureNoticeReason}
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-gray-500">
+                  {earphoneModeCopy.screenCaptureNoticeOffHint}
+                </p>
+                <button
+                  type="button"
+                  data-screen-capture-notice-continue
+                  onClick={confirmScreenCaptureNotice}
+                  className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-2xl text-base font-semibold text-white shadow-[0_8px_20px_-10px_rgba(249,115,22,0.7)] transition-transform active:scale-[0.98]"
+                  style={{ backgroundImage: 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)' }}
+                >
+                  {earphoneModeCopy.screenCaptureNoticeContinueLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelScreenCaptureNotice}
+                  className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-2xl text-sm font-semibold text-gray-500 transition-colors hover:bg-gray-50"
+                >
+                  {earphoneModeCopy.screenCaptureNoticeCancelLabel}
+                </button>
+                <label className="mt-3 inline-flex cursor-pointer select-none items-center gap-2 text-sm text-gray-500">
+                  <input
+                    type="checkbox"
+                    data-screen-capture-notice-dont-show-again
+                    checked={screenCaptureNoticeDontShowAgain}
+                    onChange={(event) => setScreenCaptureNoticeDontShowAgain(event.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 accent-orange-500"
+                  />
+                  {earphoneModeCopy.screenCaptureNoticeDontShowAgainLabel}
+                </label>
+              </div>
             </MessageMediaDialog>
           )}
         </div>

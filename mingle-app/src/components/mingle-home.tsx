@@ -13,6 +13,7 @@ import {
 } from "react";
 import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { MessageRecallProvider } from "./LivePhoneDemo/MessageRecall";
+import { MessageRetranslateProvider } from "./LivePhoneDemo/MessageRetranslate";
 import { MessageReadReceiptsProvider } from "./LivePhoneDemo/MessageReadReceipts";
 import { signIn, signOut, useSession } from "next-auth/react";
 import {
@@ -46,6 +47,7 @@ import {
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 import {
   readPendingBirthDate,
+  readPendingGender,
   readPendingPrimaryLanguages,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { deriveDefaultSttLanguagesForLocale } from "@/lib/stt-languages";
@@ -1080,6 +1082,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       ? pendingPrimaryLanguages
       : deriveDefaultSttLanguagesForLocale(props.locale).slice(0, 1);
     const pendingBirthDate = readPendingBirthDate() ?? "2000-01-01";
+    const pendingGender = readPendingGender();
 
     try {
       const signupResponse = await fetch("/api/auth/signup", {
@@ -1091,6 +1094,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           password,
           primaryLanguages,
           birthDate: pendingBirthDate,
+          ...(pendingGender ? { gender: pendingGender } : {}),
         }),
       });
       if (!signupResponse.ok && signupResponse.status !== 409) {
@@ -1976,6 +1980,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       {isLiveDemoMounted ? (
         <MessageReactionsProvider conversationId={props.conversationId} active={props.isVisible !== false} enabled={status === "authenticated" && !props.isBlockedCounterpart}>
         <MessageRecallProvider conversationId={props.conversationId} enabled={status === "authenticated"}>
+        <MessageRetranslateProvider conversationId={props.conversationId} enabled={status === "authenticated"}>
         <MessageReadReceiptsProvider
           conversationId={props.conversationId}
           active={props.isVisible !== false}
@@ -2060,6 +2065,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           isMultiMember={props.isMultiMember}
         />
         </MessageReadReceiptsProvider>
+        </MessageRetranslateProvider>
         </MessageRecallProvider>
         </MessageReactionsProvider>
       ) : (

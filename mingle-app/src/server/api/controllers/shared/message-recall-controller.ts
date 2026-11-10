@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { after, NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import type { Prisma } from '@prisma/client/index'
 import { getAuthOptions } from '@/lib/auth-options'
@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { getConversationSessionKeyForMember, listChannelMemberUserIdsBySessionKey } from '@/lib/app-conversations'
 import { MESSAGE_RECALLED_AT_METADATA_KEY, readMessageRecalledAtMs } from '@/lib/message-recall'
 import { notifyConversationMessage } from '@/server/conversation-realtime'
+import { sendPushNotificationForRecalledConversationMessage } from '@/server/push-notifications'
 import { messageIdentity } from './message-reaction-controller'
 
 // Unsends one of the caller's own messages (text, voice or photo) for everyone
@@ -25,7 +26,7 @@ export async function recallConversationMessage(request: NextRequest, conversati
   }
   const message = await prisma.appMessage.findFirst({
     where: { sessionKey, AND: [messageIdentity([messageId])] },
-    select: { id: true, userId: true, clientMessageId: true, isDeleted: true, metadata: true },
+    select: { id: true, userId: true, clientMessageId: true, isDeleted: true, metadata: true, createdAt: true },
   })
   if (!message) return NextResponse.json({ error: 'message_not_found' }, { status: 404 })
   if (message.userId !== userId) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
@@ -52,5 +53,17 @@ export async function recallConversationMessage(request: NextRequest, conversati
   // Open rooms drop the bubble on their next hydration; lists refresh their preview.
   const members = await listChannelMemberUserIdsBySessionKey(sessionKey)
   await notifyConversationMessage(sessionKey, members, undefined, { timeoutMs: 3000 })
+  // The push already on recipients' lock screens still shows the text:
+  // rewrite it into the "deleted message" placeholder. Never fails the recall.
+  after(async () => {
+    try {
+      await sendPushNotificationForRecalledConversationMessage({
+        messageId: message.id, messageCreatedAt: message.createdAt, sessionKey,
+        senderUserId: userId, memberUserIds: members,
+      })
+    } catch (error) {
+      console.error('[message-recall] push rewrite failed', error instanceof Error ? error.name : 'unknown')
+    }
+  })
   return NextResponse.json({ ok: true, messageId })
 }

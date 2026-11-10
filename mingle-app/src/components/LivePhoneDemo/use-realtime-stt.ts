@@ -14,6 +14,7 @@ import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
 import { MESSAGE_READ_RECEIPTS_REFRESH_EVENT } from '@/lib/message-read-receipts'
 import { normalizeMessageReplyReference, type MessageReplyReference } from '@/lib/message-reply'
 import { MESSAGE_RECALLED_EVENT, normalizeRecalledMessageIds, type MessageRecalledEventDetail } from '@/lib/message-recall'
+import { MESSAGE_RETRANSLATED_EVENT, applyRetranslationToUtterance, type MessageRetranslatedEventDetail } from '@/lib/message-retranslate'
 import { parseSttServerError } from '@/lib/stt-server-error'
 
 import { compareUtteranceOrder } from './utterance-order'
@@ -62,6 +63,8 @@ import {
 } from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
 import type { UserSelectableTtsModel } from '@/lib/tts-models'
+import type { SttCaptureSource } from '@/lib/native-device-audio'
+import { shouldRequestInterimFill } from '@/lib/bubble-tail'
 import {
   REALTIME_FALLBACK_POLL_INTERVAL_MS,
   shouldRunRealtimeFallbackRefresh,
@@ -186,6 +189,8 @@ export const LOCAL_UTTERANCE_CACHE_LIMIT = 100
 const NATIVE_STT_QUERY_KEY = 'nativeStt'
 const NATIVE_STT_EVENT = 'mingle:native-stt'
 const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
+// A new bubble gets the previous bubble's last piece as context when that bubble ended this recently.
+const PREVIOUS_BUBBLE_PIECE_WINDOW_MS = 10_000
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
@@ -357,13 +362,16 @@ function isNativeAppRuntime(): boolean {
     && typeof window.ReactNativeWebView?.postMessage === 'function'
 }
 
-export type PartialTranslateMode = 'time' | 'char' | 'both'
+export type PartialTranslateMode = 'time' | 'char' | 'both' | 'clause'
 
 export function parsePartialTranslateMode(rawMode: string | undefined): PartialTranslateMode {
   const normalized = (rawMode || '').trim().toLowerCase()
-  if (normalized === 'char') return 'char'
+  if (normalized === 'time') return 'time'
   if (normalized === 'both') return 'both'
-  return 'time'
+  if (normalized === 'char') return 'char'
+  // Default: a new request when the tail may have a new cut point (a new
+  // punctuation mark, or a long stretch of new text). See shouldRequestInterimFill.
+  return 'clause'
 }
 
 export function parsePositiveIntWithFallback(rawValue: string | undefined, fallback: number): number {
@@ -406,9 +414,13 @@ export function shouldTriggerPartialTranslate(input: {
     && input.elapsedSinceLastRequestMs >= input.intervalMs
   )
 
+  const clauseTriggered = input.mode === 'clause'
+    && shouldRequestInterimFill(normalizedCurrentText, normalizedLastRequestedText)
+  const triggered = charTriggered || timeTriggered || clauseTriggered
+
   return {
-    shouldRequest: charTriggered || timeTriggered,
-    nextLastTranslateLen: charTriggered || timeTriggered ? nextLastTranslateLen : input.lastTranslateLen,
+    shouldRequest: triggered,
+    nextLastTranslateLen: triggered ? nextLastTranslateLen : input.lastTranslateLen,
   }
 }
 
@@ -455,6 +467,8 @@ type NativeSttStartCommand = {
     wsUrl: string
     sttModel: string
     aecEnabled: boolean
+    // Sent only for device audio; shells without it capture the microphone.
+    captureSource?: SttCaptureSource
     apiNamespace: string
     releaseVariant: MingleClientReleaseVariant
     behaviorProfile: MingleBehaviorProfile
@@ -488,6 +502,13 @@ type NativeSttSetAecCommand = {
   payload: { enabled: boolean }
 }
 
+// A piece of the translated sentence our TTS is reading aloud (Soniox
+// stt-rt-v6 agent text input); the native STT socket relays it to the server.
+type NativeSttAgentTextCommand = {
+  type: 'native_stt_agent_text'
+  payload: { text: string; endOfSegment: boolean }
+}
+
 type NativeOpenAppSettingsCommand = {
   type: 'native_open_app_settings'
   payload: {
@@ -500,6 +521,7 @@ type NativeSttBridgeCommand =
   | NativeSttStopCommand
   | NativeSttStatusRequestCommand
   | NativeSttSetAecCommand
+  | NativeSttAgentTextCommand
   | NativeOpenAppSettingsCommand
 
 export type NativeMicPermissionRecoveryAction = 'none' | 'open_ios_settings'
@@ -577,6 +599,17 @@ export function shouldOpenNativeMicSettingsOnRetry(input: {
   if (!input.useNativeStt) return false
   if (input.connectionStatus !== 'idle') return false
   return input.recoveryAction === 'open_ios_settings'
+}
+
+// The user closed the system screen-capture prompt of a device-audio start:
+// a cancel, so the room goes back to idle instead of showing an error.
+export function isNativeDeviceAudioConsentDeclined(input: {
+  code?: string
+  message?: string
+}): boolean {
+  const code = (input.code || '').trim().toLowerCase()
+  if (code === 'device_audio_permission') return true
+  return (input.message || '').trim().toLowerCase() === 'device_audio_permission_denied'
 }
 
 export function shouldResetConnectionToIdleForNativeMicRecovery(input: {
@@ -1533,6 +1566,8 @@ interface UseRealtimeSTTOptions {
   onTtsCanceled?: (utteranceId: string) => void
   enableTts?: boolean
   enableAec?: boolean
+  // What a native session transcribes. Fixed when the session starts.
+  captureSource?: SttCaptureSource
   sonioxManualFinalizeSilenceMs?: number
   sonioxEndpointMaxDelayMs?: number
   sonioxEndpointTuningStep?: number
@@ -1697,6 +1732,8 @@ export function buildLiveUtterance(input: {
   // their authenticated sender and are combined separately for rendering.
   viewerUserId?: string | null
   viewerImage?: string | null
+  /** Tail translation: the part of each translation that will not change any more. */
+  fixedTranslations?: Record<string, string>
 }): Utterance | null {
   const transcript = input.partialTranscript.trim()
   if (!input.pendingTurn || !transcript) return null
@@ -1740,6 +1777,9 @@ export function buildLiveUtterance(input: {
     translationFinalized: Object.fromEntries(
       Object.keys(translations).map(language => [language, false]),
     ),
+    ...(input.fixedTranslations && Object.keys(input.fixedTranslations).length > 0
+      ? { translationFixed: { ...input.fixedTranslations } }
+      : {}),
     createdAtMs: input.pendingTurn.createdAtMs,
   }
 }
@@ -1750,6 +1790,7 @@ export function buildLiveUtterances(input: {
   languages: string[]
   viewerUserId?: string | null
   viewerImage?: string | null
+  fixedTranslationsByUtteranceId?: Record<string, Record<string, string>>
 }): Utterance[] {
   const sortedPendingTurns = [...input.pendingTurns].sort((left, right) => {
     const leftCreatedAt = typeof left.createdAtMs === 'number' ? left.createdAtMs : 0
@@ -1767,6 +1808,7 @@ export function buildLiveUtterances(input: {
       languages: input.languages,
       viewerUserId: input.viewerUserId,
       viewerImage: input.viewerImage,
+      fixedTranslations: input.fixedTranslationsByUtteranceId?.[pendingTurn.utteranceId],
     })
     return utterance ? [utterance] : []
   })
@@ -1905,7 +1947,12 @@ function isRecentFinalizedSpeakerCompatible(
   speaker?: string | null,
 ): boolean {
   if (!recentFinalizedUtterance.speaker || !speaker) return true
-  return normalizeRecentFinalizedSpeaker(recentFinalizedUtterance.speaker) === normalizeRecentFinalizedSpeaker(speaker)
+  const recentSpeaker = normalizeRecentFinalizedSpeaker(recentFinalizedUtterance.speaker)
+  const nextSpeaker = normalizeRecentFinalizedSpeaker(speaker)
+  // The server's stop fallback re-sends the client's pending text without a
+  // speaker, so an unknown speaker confirms whichever turn the client finalized.
+  if (recentSpeaker === 'unknown' || nextSpeaker === 'unknown') return true
+  return recentSpeaker === nextSpeaker
 }
 
 export function rememberRecentFinalizedUtterance(input: {
@@ -2920,8 +2967,23 @@ export function replaceFinalizedUtteranceSourceInStoreState(input: {
   }
 }
 
+/** Tail fill: the leading source of an open bubble and its fixed translations. */
+interface BubbleTailState {
+  translatedSource: string
+  translations: Record<string, string>
+  /** The last fixed piece and its translations: the only context the server sends the model. */
+  contextSource?: string
+  contextTranslations?: Record<string, string>
+  /** How the previous bubble ended: context while this bubble has nothing fixed yet. */
+  previousSource?: string
+  previousSourceLanguage?: string
+  previousTranslations?: Record<string, string>
+}
+
 interface TranslateApiResult {
   translations: Record<string, string>
+  /** Tail mode: the bubble's new fixed part, when this answer translated more of it. */
+  tailFill?: BubbleTailState
   sourceLanguage?: string
   // Present only when it differs from the text that was sent.
   sourceDisplayText?: string
@@ -3095,6 +3157,7 @@ export default function useRealtimeSTT({
   onTtsCanceled,
   enableTts,
   enableAec = false,
+  captureSource = 'microphone',
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
   sonioxEndpointMaxDelayMs = DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
   sonioxEndpointTuningStep = DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
@@ -3294,6 +3357,10 @@ export default function useRealtimeSTT({
   // (avoids nesting setUtterances inside setPartialTranslations updater,
   //  which causes duplicates in React Strict Mode)
   const partialTranslationsRef = useRef<Record<string, string>>({})
+  // Tail fill per open bubble (utterance id): the part the listener has read never changes.
+  const bubbleTailByUtteranceIdRef = useRef<Record<string, BubbleTailState>>({})
+  // The bubble that ended last, with its tail state, so the next bubble can start from its last piece.
+  const lastFinishedBubbleRef = useRef<{ utteranceId: string, tail: BubbleTailState | null, finishedAtMs: number } | null>(null)
   const partialTranscriptRef = useRef('')
   const partialLangRef = useRef<string | null>(null)
   const pendingTurnsBySpeakerRef = useRef<Record<string, PendingSpeakerTurn>>({})
@@ -3693,6 +3760,29 @@ export default function useRealtimeSTT({
     window.addEventListener(MESSAGE_RECALLED_EVENT, onRecalled)
     return () => window.removeEventListener(MESSAGE_RECALLED_EVENT, onRecalled)
   }, [applyRecalledMessageIds, conversationId])
+
+  // The caller's own room shows a retranslation at once; other members pick
+  // it up on the hydration the server's room notification triggers.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !conversationId) return
+    const onRetranslated = (event: Event) => {
+      const detail = (event as CustomEvent<MessageRetranslatedEventDetail>).detail
+      if (!detail || detail.conversationId !== conversationId) return
+      // The warm cache too: buildMergedUtterances re-adds whatever it holds.
+      storedUtterancesRef.current = storedUtterancesRef.current.map((utterance) => applyRetranslationToUtterance(utterance, detail))
+      setUtteranceStore((current) => {
+        let changed = false
+        const utterances = current.utterances.map((utterance) => {
+          const next = applyRetranslationToUtterance(utterance, detail)
+          if (next !== utterance) changed = true
+          return next
+        })
+        return changed ? { ...current, utterances } : current
+      })
+    }
+    window.addEventListener(MESSAGE_RETRANSLATED_EVENT, onRetranslated)
+    return () => window.removeEventListener(MESSAGE_RETRANSLATED_EVENT, onRetranslated)
+  }, [conversationId])
 
   const applyPendingHasOlderUtterances = useCallback(() => {
     const pendingHasOlderUtterances = pendingHasOlderUtterancesRef.current
@@ -4550,6 +4640,50 @@ export default function useRealtimeSTT({
     return recentTurns
   }, [])
 
+  // The previous bubble's last piece: what followed its last fixed part, or the
+  // whole bubble when nothing in it was fixed. Only bubbles that ended recently.
+  const buildPreviousBubblePiece = useCallback((excludeUtteranceId: string): Pick<BubbleTailState, 'previousSource' | 'previousSourceLanguage' | 'previousTranslations'> | null => {
+    const lastFinished = lastFinishedBubbleRef.current
+    const now = Date.now()
+    let previous: Utterance | null = null
+    for (const utterance of utterancesRef.current) {
+      if (utterance.image || utterance.id === excludeUtteranceId || !utterance.originalText.trim()) continue
+      const endedAtMs = utterance.id === lastFinished?.utteranceId
+        ? lastFinished.finishedAtMs
+        : inferUtteranceCreatedAtMs(utterance)
+      if (endedAtMs === null || now - endedAtMs > PREVIOUS_BUBBLE_PIECE_WINDOW_MS || endedAtMs > now) continue
+      previous = utterance
+    }
+    if (!previous) return null
+    const sourceLanguage = (previous.originalLang || '').trim()
+    const sourceText = previous.originalText.trim()
+    const translations = stripSourceLanguageFromTranslations(previous.translations || {}, sourceLanguage || 'unknown')
+    const tail = lastFinished?.utteranceId === previous.id ? lastFinished.tail : null
+    let pieceSource = sourceText
+    let pieceTranslations: Record<string, string> = translations
+    if (tail?.translatedSource && sourceText.startsWith(tail.translatedSource)) {
+      const rest = sourceText.slice(tail.translatedSource.length).trim()
+      if (rest) {
+        pieceSource = rest
+        pieceTranslations = {}
+        for (const [language, text] of Object.entries(translations)) {
+          const fixed = tail.translations[language] || ''
+          if (fixed && text.startsWith(fixed) && text.slice(fixed.length).trim()) {
+            pieceTranslations[language] = text.slice(fixed.length).trim()
+          }
+        }
+      } else if (tail.contextSource) {
+        pieceSource = tail.contextSource
+        pieceTranslations = tail.contextTranslations || {}
+      }
+    }
+    return {
+      previousSource: pieceSource,
+      ...(sourceLanguage ? { previousSourceLanguage: sourceLanguage } : {}),
+      previousTranslations: pieceTranslations,
+    }
+  }, [])
+
   // ===== HTTP Translation via versioned API namespace =====
   const translateViaApi = useCallback(async (
     text: string,
@@ -4565,6 +4699,7 @@ export default function useRealtimeSTT({
       excludeUtteranceId?: string
       sttDurationMs?: number
       totalDurationMs?: number
+      bubbleTail?: BubbleTailState
     },
   ): Promise<TranslateApiResult> => {
     const apiPath = buildClientApiPath('/translate/finalize')
@@ -4600,6 +4735,9 @@ export default function useRealtimeSTT({
       }
       if (options?.currentTurnPreviousState) {
         body.currentTurnPreviousState = options.currentTurnPreviousState
+      }
+      if (options?.bubbleTail) {
+        body.bubbleTail = options.bubbleTail
       }
       body.clientBundleRev = LIVE_TRANSLATE_CLIENT_BUNDLE_REV
       if (translationModel) {
@@ -4638,11 +4776,38 @@ export default function useRealtimeSTT({
         ? Object.fromEntries(Object.entries(data.translations as Record<string, unknown>)
           .filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
         : {}
+      const rawTailFill = data.tailFill && typeof data.tailFill === 'object' && !Array.isArray(data.tailFill)
+        ? data.tailFill as Record<string, unknown>
+        : null
+      const tailFill: BubbleTailState | undefined = rawTailFill
+        && typeof rawTailFill.translatedSource === 'string'
+        && rawTailFill.translations && typeof rawTailFill.translations === 'object'
+        ? {
+          translatedSource: rawTailFill.translatedSource,
+          translations: canonicalizeTranslationKeys(
+            Object.fromEntries(Object.entries(rawTailFill.translations as Record<string, unknown>)
+              .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
+            { candidates: targetLanguages, sourceLanguage },
+          ),
+          ...(typeof rawTailFill.contextSource === 'string' && rawTailFill.contextTranslations
+            && typeof rawTailFill.contextTranslations === 'object'
+            ? {
+              contextSource: rawTailFill.contextSource,
+              contextTranslations: canonicalizeTranslationKeys(
+                Object.fromEntries(Object.entries(rawTailFill.contextTranslations as Record<string, unknown>)
+                  .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
+                { candidates: targetLanguages, sourceLanguage },
+              ),
+            }
+            : {}),
+        }
+        : undefined
       return {
         translations: canonicalizeTranslationKeys(rawTranslations, {
           candidates: targetLanguages,
           sourceLanguage: responseSourceLanguage || sourceLanguage,
         }),
+        ...(tailFill ? { tailFill } : {}),
         sourceLanguage: responseSourceLanguage,
         ...(typeof data.sourceDisplayText === 'string' && data.sourceDisplayText.trim() && data.sourceDisplayText !== text
           ? { sourceDisplayText: data.sourceDisplayText }
@@ -4998,6 +5163,10 @@ export default function useRealtimeSTT({
     })
     if (!localPayload) return null
     if (options?.replyTo) localPayload.utterance = { ...localPayload.utterance, replyTo: options.replyTo }
+    const fixedTail = bubbleTailByUtteranceIdRef.current[localPayload.utteranceId]
+    if (fixedTail?.translatedSource && Object.keys(fixedTail.translations).length > 0) {
+      localPayload.utterance = { ...localPayload.utterance, translationFixed: { ...fixedTail.translations } }
+    }
     localPayload.utterance = remotePreviews.applyOrder(localPayload.utterance)
     if (isDuplicateTimedSignature({
       previousSig: stopFinalizeDedupRef.current.utteranceId,
@@ -5105,11 +5274,19 @@ export default function useRealtimeSTT({
     const sessionKey = ensureSessionKey()
     const clientContext = buildClientContextPayload(usageSec)
     const recentTurns = buildRecentTurnContextPayload(utteranceId)
+    // The final request translates only what is left after the fixed part.
+    // A bubble finalized twice (stop, then the server's own final) keeps its fixed part.
+    const bubbleTail = bubbleTailByUtteranceIdRef.current[utteranceId]
+      || (lastFinishedBubbleRef.current?.utteranceId === utteranceId ? lastFinishedBubbleRef.current.tail : null)
+      || undefined
+    delete bubbleTailByUtteranceIdRef.current[utteranceId]
+    lastFinishedBubbleRef.current = { utteranceId, tail: bubbleTail || null, finishedAtMs: Date.now() }
     const translationBody: Record<string, unknown> | null = skipTranslation ? null : {
       text, sourceLanguage: lang, targetLanguages, isFinal: true,
       sessionKey, clientContext, clientMessageId: utteranceId,
       sttDurationMs: options?.sttDurationMs,
       currentTurnPreviousState,
+      ...(bubbleTail?.translatedSource ? { bubbleTail } : {}),
       clientBundleRev: LIVE_TRANSLATE_CLIENT_BUNDLE_REV,
       ...(translationModel ? { translationModel } : {}),
       ...(recentTurns.length ? { recentTurns, immediatePreviousTurn: recentTurns[recentTurns.length - 1] } : {}),
@@ -5971,6 +6148,11 @@ export default function useRealtimeSTT({
           : undefined
         let reusedSpeakerAvatarSeed = reusedUtterance?.speakerAvatarSeed
         let reusedSpeakerAvatarIndex = reusedUtterance?.speakerAvatarIndex
+        // An unknown-speaker final must not erase the speaker the local turn already had.
+        const reconciledSpeaker = (
+          normalizeRecentFinalizedSpeaker(finalizedPayload.utterance.speaker) === 'unknown'
+          && reusedUtterance?.speaker
+        ) ? reusedUtterance.speaker : finalizedPayload.utterance.speaker
         if (recentLocalReuseUtteranceId) {
           logSttDebug('finalize.reuse_recent_utterance', {
             reusedUtteranceId: recentLocalReuseUtteranceId,
@@ -6013,17 +6195,29 @@ export default function useRealtimeSTT({
             id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
             text: finalizedPayload.text,
             language: finalizedPayload.language,
-            speaker: finalizedPayload.utterance.speaker || speaker,
+            speaker: reconciledSpeaker || speaker,
             expiresAt: now + 2_000,
             source: 'server',
           },
           nowMs: now,
         })
 
-        finalizeTurnWithTranslation(
+        // The server's final for a bubble that stop already finalized: the same
+        // text needs no second translation, and a changed text keeps showing what
+        // is translated so far while its own translation is on the way.
+        const reusedFinalIsSameText = Boolean(reusedUtterance)
+          && reusedUtterance?.originalText === finalizedPayload.text
+          && reusedUtterance?.originalLang === finalizedPayload.language
+        if (!reusedFinalIsSameText) finalizeTurnWithTranslation(
           {
             utterance: {
               ...finalizedPayload.utterance,
+              ...(reusedUtterance ? {
+                translations: { ...reusedUtterance.translations },
+                translationFinalized: Object.fromEntries(Object.keys(reusedUtterance.translations || {}).map(key => [key, false])),
+                ...(reusedUtterance.translationFixed ? { translationFixed: reusedUtterance.translationFixed } : {}),
+              } : {}),
+              speaker: reconciledSpeaker,
               id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
               createdAtMs: (recentLocalReuseUtteranceId
                 ? utterancesRef.current.find(item => item.id === recentLocalReuseUtteranceId)?.createdAtMs
@@ -6033,12 +6227,12 @@ export default function useRealtimeSTT({
             text: finalizedPayload.text,
             lang: finalizedPayload.language,
             currentTurnPreviousState,
-            speaker: finalizedPayload.utterance.speaker || speaker,
+            speaker: reconciledSpeaker || speaker,
           },
           {
             sttDurationMs,
             reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
-            speaker: finalizedPayload.utterance.speaker,
+            speaker: reconciledSpeaker,
             ...resolveReconciledSpeakerAvatar({
               reusedSpeakerAvatarSeed,
               reusedSpeakerAvatarIndex,
@@ -6279,6 +6473,7 @@ export default function useRealtimeSTT({
             wsUrl: appendCoinBillingToWsUrl(getWsUrl(), ensureSessionKey()),
             sttModel: 'soniox',
             aecEnabled: enableAec,
+            ...(captureSource === 'device_audio' ? { captureSource } : {}),
             apiNamespace: runtimeBehaviorContext.apiNamespace,
             releaseVariant: runtimeBehaviorContext.releaseVariant,
             behaviorProfile: runtimeBehaviorContext.behaviorProfile,
@@ -6392,7 +6587,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, ensureSessionKey, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
+  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, captureSource, ensureSessionKey, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
 
   // Keep the native listener stable while a session is active. Usage tracking
   // changes several callbacks on each tick, and re-subscribing here would
@@ -6791,6 +6986,11 @@ export default function useRealtimeSTT({
           handlers.resetToIdle()
           return
         }
+        if (isNativeDeviceAudioConsentDeclined(detail)) {
+          logSttDebug('native.error.device_audio_consent_declined', { code: detail.code })
+          handlers.resetToIdle()
+          return
+        }
         handlers.handleSttTransportError({ native: true, message: detail.message })
         return
       }
@@ -7086,6 +7286,14 @@ export default function useRealtimeSTT({
       translateViaApi(trimmed, currentLang, targetLanguages, {
         signal: controller.signal,
         currentTurnPreviousState: pendingTurn.currentTurnPreviousState,
+        // Tail fill: keep what is already translated, add only finished sentences.
+        bubbleTail: (() => {
+          const tail = bubbleTailByUtteranceIdRef.current[pendingTurn.utteranceId]
+            || { translatedSource: '', translations: {} }
+          if (tail.translatedSource) return tail
+          const previousPiece = buildPreviousBubblePiece(pendingTurn.utteranceId)
+          return previousPiece ? { ...tail, ...previousPiece } : tail
+        })(),
       }).then((result) => {
         const latestPendingTurn = findPendingTurnByUtteranceId(pendingTurn.utteranceId)
         const latestRuntime = pendingTurnTranslationRuntimeRef.current[pendingTurn.utteranceId]
@@ -7119,8 +7327,11 @@ export default function useRealtimeSTT({
           stripSourceLanguageFromTranslations(latestPendingTurn.partialTranslations, currentLang),
           latestTargetLanguages,
         )
+        if (result.tailFill) {
+          bubbleTailByUtteranceIdRef.current[pendingTurn.utteranceId] = result.tailFill
+        }
         const filteredNew = filterTranslationsToTargetLanguages(
-          stripSourceLanguageFromTranslations(result.translations, currentLang),
+          stripSourceLanguageFromTranslations(result.tailFill?.translations ?? result.translations, currentLang),
           latestTargetLanguages,
         )
         const nextTranslations = { ...filteredExisting }
@@ -7155,6 +7366,7 @@ export default function useRealtimeSTT({
     }
   }, [
     bumpPendingTurnRenderVersion,
+    buildPreviousBubblePiece,
     connectionStatus,
     findPendingTurnByUtteranceId,
     getPendingTurnTranslationRuntime,
@@ -7259,6 +7471,11 @@ export default function useRealtimeSTT({
     languages: liveUtteranceLanguages,
     viewerUserId: effectiveViewerUserId,
     viewerImage: effectiveViewerImage,
+    fixedTranslationsByUtteranceId: Object.fromEntries(
+      Object.entries(bubbleTailByUtteranceIdRef.current)
+        .filter(([, tail]) => Boolean(tail.translatedSource))
+        .map(([utteranceId, tail]) => [utteranceId, tail.translations]),
+    ),
   }), [pendingTurnSnapshots, liveUtteranceLanguages, effectiveViewerUserId, effectiveViewerImage])
   useEffect(() => { livePreviewSender.setPartials(localLiveUtterances) }, [livePreviewSender, localLiveUtterances])
   const liveUtterances = useMemo(() => {
@@ -7286,6 +7503,22 @@ export default function useRealtimeSTT({
     effectiveViewerUserId,
     effectiveViewerImage,
   ])
+
+  // Reports what our TTS is saying so the STT server can pass it to Soniox as
+  // agent text. A no-op when no STT session is live; the server drops it for
+  // providers other than Soniox v6.
+  const sendAgentText = useCallback((text: string, endOfSegment: boolean) => {
+    if (useNativeSttRef.current) {
+      if (!isCurrentNativeSttOwner()) return
+      sendNativeSttCommand({ type: 'native_stt_agent_text', payload: { text, endOfSegment } })
+      return
+    }
+    const socket = socketRef.current
+    if (!socket || socket.readyState !== WebSocket.OPEN) return
+    try {
+      socket.send(JSON.stringify({ type: 'agent_text', data: { text, end_of_segment: endOfSegment } }))
+    } catch { /* best-effort */ }
+  }, [isCurrentNativeSttOwner, sendNativeSttCommand])
 
   return {
     connectionStatus,
@@ -7322,5 +7555,6 @@ export default function useRealtimeSTT({
     ensureSessionKey,
     startRecording,
     stopRecording: stopRecordingWithOptions,
+    sendAgentText,
   }
 }

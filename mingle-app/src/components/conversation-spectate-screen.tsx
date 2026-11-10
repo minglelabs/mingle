@@ -3,7 +3,6 @@
 import { Play, Smartphone } from "lucide-react";
 import { useEffect, useRef, type MouseEvent } from "react";
 import ChatBubble from "@/components/LivePhoneDemo/ChatBubble";
-import ConversationOperatorDisclosure from "@/components/LivePhoneDemo/ConversationOperatorDisclosure";
 import { labelNameWithAccountBadge } from "@/components/LivePhoneDemo/chat-account-badge.logic";
 import { resolveAccountBadge } from "@/lib/account-badge";
 import {
@@ -190,7 +189,6 @@ export default function ConversationSpectateScreen({
           className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 py-6"
           style={{ touchAction: "pan-y" }}
         >
-          {state?.operatorDisclosure ? <ConversationOperatorDisclosure locale={locale} /> : null}
           {status === "loading" ? (
             <div className="flex h-full items-center justify-center text-slate-400">
               <Smartphone className="h-6 w-6 animate-pulse" aria-hidden="true" />

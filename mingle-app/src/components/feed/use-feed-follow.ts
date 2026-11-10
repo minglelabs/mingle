@@ -12,6 +12,8 @@ export type FollowButtonState =
 
 type UseFeedFollowOptions = {
   authorId: string;
+  /** The card's post: sent as the follow's source (staff-only operator post stats). */
+  postId?: string;
   /** DTO `followingAuthor`: true = already following, null = self/signed-out. */
   followingAuthor: boolean | null;
   isMine: boolean;
@@ -68,7 +70,7 @@ export function resolveFollowButtonState(
  * - Unfollow lives on the author's profile, not here.
  */
 export function useFeedFollow(options: UseFeedFollowOptions): UseFeedFollowReturn {
-  const { authorId, followingAuthor, isMine, isSignedIn, onRequireLogin, onFollowed, onError } = options;
+  const { authorId, postId, followingAuthor, isMine, isSignedIn, onRequireLogin, onFollowed, onError } = options;
 
   const [local, setLocal] = useState<LocalFollowState>("idle");
   // Follow the DTO flag: when it flips back to "not following" (e.g. the list
@@ -104,6 +106,9 @@ export function useFeedFollow(options: UseFeedFollowOptions): UseFeedFollowRetur
         const res = await fetch(buildClientApiPath(`/users/${encodeURIComponent(authorId)}/follow`), {
           method: "POST",
           cache: "no-store",
+          ...(postId
+            ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourcePostId: postId }) }
+            : {}),
         });
         if (!res.ok) {
           const error = await followFailureFromResponse(res);
@@ -121,7 +126,7 @@ export function useFeedFollow(options: UseFeedFollowOptions): UseFeedFollowRetur
         pendingRef.current = false;
       }
     })();
-  }, [authorId, buttonState, isSignedIn, onRequireLogin, onFollowed, onError]);
+  }, [authorId, postId, buttonState, isSignedIn, onRequireLogin, onFollowed, onError]);
 
   return { buttonState, follow };
 }

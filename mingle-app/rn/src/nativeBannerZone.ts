@@ -33,6 +33,20 @@ export function resolveNativeBannerNavigationState(
   const inferredZone = resolveNativeBannerZoneForUrl(rawUrl);
   if (!inferredZone) return current;
 
+  // A screen that never shows a banner: hide and forget any pending restore.
+  // The web re-requests the zone when it comes back to the list or a room, so
+  // the shell must not put a banner back on its own after such a screen (the
+  // app launches on the feed, and the list reached from it may be showing
+  // onboarding or the sign-in gate).
+  if (inferredZone === 'hidden') {
+    if (current.activeZone === 'hidden' && current.pendingNavigationZone === null) return current;
+    return {
+      ...current,
+      activeZone: 'hidden',
+      pendingNavigationZone: null,
+    };
+  }
+
   if (inferredZone !== current.stableZone) {
     return {
       ...current,
@@ -41,9 +55,10 @@ export function resolveNativeBannerNavigationState(
     };
   }
 
-  // A hidden zone requested by the web authentication/search overlay is
-  // authoritative. Restore the stable zone only when native navigation first
-  // hid the banner while waiting for a different route to settle.
+  // Restore the stable zone only when native navigation itself hid the banner
+  // while a list <-> room transition settled. A zone the web asked for clears
+  // the pending restore (see applyWebNativeBannerZoneRequest), so an explicit
+  // "hidden" from the web is never undone here.
   if (current.activeZone === 'hidden' && current.pendingNavigationZone !== null) {
     return {
       ...current,
@@ -53,4 +68,20 @@ export function resolveNativeBannerNavigationState(
   }
 
   return current;
+}
+
+/**
+ * The web asked for a zone (`native_set_banner_zone`). The web is the authority
+ * on banner visibility, so this always wins over a restore the shell had
+ * pending from its own navigation tracking.
+ */
+export function applyWebNativeBannerZoneRequest(
+  current: NativeBannerNavigationState,
+  zone: NativeBannerZone,
+): NativeBannerNavigationState {
+  return {
+    activeZone: zone,
+    stableZone: zone === 'hidden' ? current.stableZone : zone,
+    pendingNavigationZone: null,
+  };
 }

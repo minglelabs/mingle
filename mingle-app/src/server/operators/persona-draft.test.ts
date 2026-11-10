@@ -176,3 +176,13 @@ describe('generatePersonaDrafts', () => {
     consoleWarn.mockRestore()
   })
 })
+
+describe('bio styles', () => {
+  it('are picked by the server, mostly plain for men, and seldom about learning a language', () => {
+    const slots = planPersonaSlots({ ...REQUEST, count: 50, genderMix: 'male' }, { random: seeded(9), now: NOW })
+    const plain = slots.filter((slot) => /no emoji/.test(slot.bioStyle)).length
+    expect(plain / slots.length).toBeGreaterThan(0.55)
+    expect(new Set(slots.map((slot) => slot.bioStyle)).size).toBeGreaterThan(3)
+    expect(slots.filter((slot) => slot.bioMentionsLearning).length).toBeLessThan(25)
+  })
+})

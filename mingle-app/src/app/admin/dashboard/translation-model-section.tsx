@@ -30,8 +30,8 @@ export function resolveTranslationModelColor(key: TranslationModelSeriesKey): st
 }
 
 /**
- * Starts the live query without awaiting it, so the page can run it alongside its other
- * data and hand the promise to TranslationModelSection. A no-op handler goes on at once:
+ * Starts the live query without awaiting it, so the page can stream its header and tabs
+ * while it runs and hand the promise to TranslationModelSection. A no-op handler goes on at once:
  * a failure that lands before the section awaits the promise must not surface as an
  * unhandled rejection -- the section is what reports it.
  */

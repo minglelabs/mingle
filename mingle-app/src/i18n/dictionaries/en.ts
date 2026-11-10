@@ -155,6 +155,7 @@ export const enDictionary: BaseAppDictionarySource = {
     reportReasonHarassment: "Harassment",
     reportReasonInappropriate: "Inappropriate content",
     reportReasonImpersonation: "Impersonation",
+    reportReasonAiGenerated: "Looks AI-generated (text, photo, profile)",
     reportReasonOther: "Other",
     authTitle: "Authentication",
     loginRequiredTitle: "Sign-in required",

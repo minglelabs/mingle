@@ -45,6 +45,8 @@ export type FeedPostDto = {
       primary: string[]
       interest: Array<{ code: string; level: number }>
     }
+    /** 국적 (ISO 3166-1 alpha-2), the flag on the avatar. Absent when unknown. */
+    nationality?: string
   }
   /** Body exactly as written; line breaks and blank lines preserved. */
   sourceText: string

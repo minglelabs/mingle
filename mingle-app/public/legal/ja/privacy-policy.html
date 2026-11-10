@@ -131,7 +131,7 @@
       <article>
         <nav class="lang-nav"><a href="/legal/en/privacy-policy.html">English</a><a href="/legal/ko/privacy-policy.html">Korean</a><a href="/legal/ja/privacy-policy.html" aria-current="page">Japanese</a><a href="/legal/zh-cn/privacy-policy.html">Chinese (Simplified)</a><a href="/legal/zh-tw/privacy-policy.html">Chinese (Traditional)</a><a href="/legal/fr/privacy-policy.html">French</a><a href="/legal/de/privacy-policy.html">German</a><a href="/legal/es/privacy-policy.html">Spanish</a><a href="/legal/pt/privacy-policy.html">Portuguese</a><a href="/legal/it/privacy-policy.html">Italian</a><a href="/legal/ru/privacy-policy.html">Russian</a><a href="/legal/ar/privacy-policy.html">Arabic</a><a href="/legal/hi/privacy-policy.html">Hindi</a><a href="/legal/th/privacy-policy.html">Thai</a><a href="/legal/vi/privacy-policy.html">Vietnamese</a></nav>
         <h1>HashChatのプライバシーポリシー</h1>
-        <p class="meta"><strong>最終更新日:</strong> October 8, 2026</p>
+        <p class="meta"><strong>最終更新日:</strong> October 31, 2026</p>
         <p>このプライバシー ポリシーでは、Mingle Labs, Inc. (「HashChat」、「当社」、「当社」、または「当社」) が、お客様が HashChat モバイル アプリ、Web サイト、および関連サービス (総称して「サービス」) を使用する際に、個人データをどのように収集、使用、共有、保護するかについて説明します。</p>
         <h2>1. 範囲</h2>
 <p>このポリシーは、消費者のHashChatアカウントおよび使用のために処理される情報に適用されます。これは、別の契約に基づいて企業顧客に代わって当社が処理するデータには適用されません。</p>
@@ -141,7 +141,7 @@
 
 <ul>
   <li>アカウント情報: 名前、電子メール アドレス、サインイン プロバイダーの詳細、アカウント ID、プロファイル設定。</li>
-  <li>翻訳と音声データ: 翻訳のために送信するテキスト、音声認識と翻訳を提供するために必要な音声/音声入力、翻訳された出力、および言語設定。</li>
+  <li>翻訳と音声データ: 翻訳のために送信するテキスト、音声認識と翻訳を提供するために必要な音声/音声入力（イヤホンモードでお客様が選択した場合は、端末上の他のアプリが再生する音声を含む）、翻訳された出力、および言語設定。</li>
   <li>技術データと使用状況データ: デバイスの種類、オペレーティング システム、アプリのバージョン、IP アドレス、リクエストのタイムスタンプ、クラッシュ ログ、パフォーマンス ログ、機能の相互作用イベント。</li>
   <li>サポート通信: サポートをリクエストするときにお客様が送信するメッセージと添付ファイル。</li>
 </ul>
@@ -153,6 +153,7 @@
 
 <h2>3. 音声処理と非保持</h2>
 <p>HashChat はマイク音声をリアルタイムで処理して、音声認識と翻訳を提供します。未処理の音声は処理のためにストリーミングされ、リクエストの完了後に HashChat によって保存されることはありません。</p>
+<p>HashChat モバイルアプリのイヤホンモードでは、翻訳する音として「マイク + この端末で再生される音」を選択できます。これを選択すると、HashChat は Android の画面キャプチャ・再生音声キャプチャの権限（MediaProjection）または iOS の画面ブロードキャスト（ReplayKit ブロードキャスト拡張機能）を使用して、端末上の他のアプリが再生する音声（動画の音声など）をキャプチャします。キャプチャは、お客様が自ら開始し、システムの確認画面で許可した場合にのみ行われ、そのセッションの実行中に限られます。キャプチャした音声はマイクの音声とミックスされ、マイクのみの場合と同じように HashChat のサーバーおよび音声テキスト変換プロバイダー（Soniox）へリアルタイムでストリーミングされます。未処理の音声は、処理後に HashChat によって保存されることはありません。こうして得られた文字起こしと翻訳は、話した内容と同様に会話メッセージとして保存され、その会話の他の参加者に表示される場合があります。HashChat は画面キャプチャやブロードキャストから画面の画像や映像を取得せず、音声のみを使用します。音声のキャプチャを禁止しているアプリの音や電話の通話はキャプチャされません。キャプチャは、アプリ内またはシステムの通知やステータスバーからいつでも停止できます。</p>
 <p>HashChat は、モデルのトレーニング用に生の音声録音のアーカイブを保持しません。当社は、セキュリティ、悪用防止、およびサービスの信頼性のために、限定された非音声技術診断 (エラー コードやタイミング メトリクスなど) を保持する場合があります。</p>
 
 
@@ -175,7 +176,7 @@
 <p>当社は個人データを販売しません。当社は以下の者とデータを共有する場合があります。</p>
 <ul>
   <li>サービス プロバイダー: ホスティング、ストレージ、認証、カスタマー サポート、分析、クラッシュ レポート、および契約に基づいてデータを処理するその他のインフラストラクチャ ベンダー。</li>
-  <li>Soniox: 音声からテキストへの処理に必要なオーディオ ストリームと関連コンテキスト。</li>
+  <li>Soniox: 音声からテキストへの処理に必要なオーディオ ストリーム（マイクの音声、およびイヤホンモードでお客様が選択した場合は端末上の他のアプリが再生する音声）と関連コンテキスト。</li>
   <li>Inworld: 音声生成機能と合成音声配信に必要なテキストと言語コンテキスト。</li>
   <li>Google: アカウント認証とテキストベースのサービス操作 (使用される場合)。 HashChat は、音声処理のために生の音声を Google に送信しません。</li>
   <li>Anthropic: Claude モデルで翻訳を生成するために必要な、翻訳のために送信されたテキストおよび言語コンテキスト。</li>

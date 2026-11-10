@@ -709,3 +709,70 @@ describe('EarphoneAutoReadController read language', () => {
     expect(h.dispatched.map((item) => [item.utteranceId, item.language, item.text])).toEqual([['both', 'ja', '翻訳 both']])
   })
 })
+
+describe('EarphoneAutoReadController fixed pieces', () => {
+  function speaking(id: string, startedAtMs: number, fixed: string): Utterance {
+    return message(id, startedAtMs, {
+      translations: { ko: fixed },
+      translationFinalized: { ko: false },
+      translationFixed: { ko: fixed },
+    })
+  }
+
+  it('reads each fixed piece while the row is spoken, then only the rest of the final', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const startedAt = h.now() + 100
+
+    h.controller.update(h.snapshot([], [speaking('live', startedAt, '첫 조각')]))
+    await h.resolveAudio(key('live'))
+    expect(h.dispatched.map((item) => item.text)).toEqual(['첫 조각'])
+
+    await h.finishPlayback()
+    h.controller.update(h.snapshot([], [speaking('live', startedAt, '첫 조각 둘째 조각')]))
+    await h.resolveAudio(key('live'))
+    expect(h.dispatched.map((item) => item.text)).toEqual(['첫 조각', '둘째 조각'])
+
+    await h.finishPlayback()
+    const final = message('live', startedAt, { translations: { ko: '첫 조각 둘째 조각 마지막' } })
+    h.controller.update(h.snapshot([final]))
+    await h.resolveAudio(key('live'))
+    expect(h.dispatched.map((item) => item.text)).toEqual(['첫 조각', '둘째 조각', '마지막'])
+
+    await h.finishPlayback()
+    h.controller.update(h.snapshot([final]))
+    await h.advance(1)
+    expect(h.dispatched).toHaveLength(3)
+  })
+
+  it('does not read a final that only repeats what was read', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const startedAt = h.now() + 100
+    h.controller.update(h.snapshot([], [speaking('live', startedAt, '전부 다')]))
+    await h.resolveAudio(key('live'))
+    await h.finishPlayback()
+
+    h.controller.update(h.snapshot([message('live', startedAt, { translations: { ko: '전부 다' } })]))
+    await h.advance(1)
+    expect(h.dispatched.map((item) => item.text)).toEqual(['전부 다'])
+    expect(h.controller.getCandidateStatus('live')).toBe('dispatched')
+  })
+
+  it('holds a later row until the open row is finished', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const startedAt = h.now() + 100
+    const later = message('later', startedAt + 50)
+    h.controller.update(h.snapshot([later], [speaking('live', startedAt, '앞부분')]))
+    await h.resolveAudio(key('live'))
+    await h.finishPlayback()
+    expect(h.dispatchedIds()).toEqual(['live'])
+
+    h.controller.update(h.snapshot([message('live', startedAt, { translations: { ko: '앞부분 뒷부분' } }), later]))
+    await h.resolveAudio(key('live'))
+    await h.finishPlayback()
+    await h.resolveAudio(key('later'))
+    expect(h.dispatched.map((item) => item.text)).toEqual(['앞부분', '뒷부분', '번역 later'])
+  })
+})

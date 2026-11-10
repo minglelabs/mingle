@@ -14,6 +14,14 @@ import {
   parseBirthDate,
 } from "@/lib/birth-date";
 import { isDiscoverySource, type DiscoverySource } from "@/lib/discovery-source";
+import { isProfileGender, type ProfileGender } from "@/lib/profile-gender";
+import { defaultNationalityForLanguage, normalizeNationalityCountry } from "@/lib/nationality";
+import {
+  isUsagePurpose,
+  normalizeUsagePurposeNote,
+  resolveUsagePurposeSegmentationDefaults,
+  type UsagePurpose,
+} from "@/lib/usage-purpose";
 import {
   PROFILE_IMAGE_MAX_SCALE,
   PROFILE_IMAGE_MIN_SCALE,
@@ -254,13 +262,20 @@ export async function PATCH(request: NextRequest) {
     name?: string | null;
     bio?: string | null;
     nationality?: string | null;
+    nationalityCountry?: string | null;
     primaryLanguages?: string[];
     interestLanguages?: string[];
     interestLanguageLevels?: number[];
     defaultConversationLanguages?: string[];
     defaultDisplayLanguage?: string | null;
     birthDate?: Date | null;
+    gender?: ProfileGender | null;
     discoverySource?: DiscoverySource | null;
+    usagePurpose?: UsagePurpose | null;
+    usagePurposeNote?: string | null;
+    sttSegmentationMode?: string;
+    demoEndpointTuningStep?: number;
+    demoSilenceFinalizeMs?: number;
     imageCropScale?: number | null;
     imageCropX?: number | null;
     imageCropY?: number | null;
@@ -369,6 +384,20 @@ export async function PATCH(request: NextRequest) {
     initialDisplayLanguageCandidate = primaryLanguages.value[0] ?? null;
   }
 
+  // 국적 (ISO 3166-1 alpha-2), edited on My page; independent of the languages.
+  const hasNationalityCountry = Object.prototype.hasOwnProperty.call(body, "nationalityCountry");
+  if (hasNationalityCountry) {
+    if (body.nationalityCountry === null) {
+      data.nationalityCountry = null;
+    } else {
+      const nationalityCountry = normalizeNationalityCountry(body.nationalityCountry);
+      if (!nationalityCountry) {
+        return NextResponse.json({ error: "invalid_nationality_country" }, { status: 400 });
+      }
+      data.nationalityCountry = nationalityCountry;
+    }
+  }
+
   if (Object.prototype.hasOwnProperty.call(body, "interestLanguages")) {
     // [{ code, level }]; an empty list clears them. Overlap with the primary
     // languages is dropped when the profile is read.
@@ -410,6 +439,16 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, "gender")) {
+    if (body.gender === null) {
+      data.gender = null;
+    } else if (!isProfileGender(body.gender)) {
+      return NextResponse.json({ error: "invalid_gender" }, { status: 400 });
+    } else {
+      data.gender = body.gender;
+    }
+  }
+
   if (Object.prototype.hasOwnProperty.call(body, "discoverySource")) {
     if (body.discoverySource === null) {
       data.discoverySource = null;
@@ -418,6 +457,23 @@ export async function PATCH(request: NextRequest) {
     } else {
       data.discoverySource = body.discoverySource;
     }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "usagePurpose")) {
+    if (body.usagePurpose === null) {
+      data.usagePurpose = null;
+    } else if (!isUsagePurpose(body.usagePurpose)) {
+      return NextResponse.json({ error: "invalid_usage_purpose" }, { status: 400 });
+    } else {
+      data.usagePurpose = body.usagePurpose;
+      // Sent once, from onboarding: start the speech split where this kind of
+      // user needs it. They can still change it in the room settings.
+      Object.assign(data, resolveUsagePurposeSegmentationDefaults(body.usagePurpose));
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "usagePurposeNote")) {
+    data.usagePurposeNote = normalizeUsagePurposeNote(body.usagePurposeNote);
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "imageCropScale")) {
@@ -460,10 +516,19 @@ export async function PATCH(request: NextRequest) {
   if (initialDisplayLanguageCandidate !== undefined || data.defaultConversationLanguages) {
     const existingPreference = await prisma.user.findUnique({
       where: { id: userId },
-      select: { defaultDisplayLanguage: true, defaultConversationLanguages: true },
+      select: { defaultDisplayLanguage: true, defaultConversationLanguages: true, nationalityCountry: true },
     });
     if (existingPreference?.defaultDisplayLanguage === null && initialDisplayLanguageCandidate !== undefined) {
       data.defaultDisplayLanguage = initialDisplayLanguageCandidate;
+    }
+    // Onboarding asks only the language; 국적 starts as that language's
+    // country. Set once (while empty) so later language edits keep it.
+    if (
+      existingPreference?.nationalityCountry === null
+      && !hasNationalityCountry
+      && initialDisplayLanguageCandidate
+    ) {
+      data.nationalityCountry = defaultNationalityForLanguage(initialDisplayLanguageCandidate);
     }
     // OAuth signup (events.createUser in auth-options.ts) creates Royce's
     // welcome message before this route ever runs, using a hardcoded "en"

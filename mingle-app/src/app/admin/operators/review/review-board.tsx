@@ -1,16 +1,18 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ImageIcon, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { ImageIcon, Loader2, MessageSquarePlus, Pencil, Pin, PinOff, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react'
 import type { ReviewItem, ReviewPost, ReviewProfile } from '@/server/operator-review/review'
 import { AdminButton, AdminCard, AdminChip, adminTextareaClassName } from '../../_components/ui'
 import LanguageFlag from '@/components/language-flag'
 import ProfileLanguageLevels, { CompactLanguageLevels } from '@/components/profile-language-levels'
 import type { InterestLanguage } from '@/lib/interest-languages'
 import PostLanguageChips, { ORIGINAL_CHIP } from '@/components/feed/post-language-chips'
+import { withBack } from '../../_lib/back-path'
 import { OperatorAvatar } from '../_components/operator-ui'
+import { PhotoRedrawPanel } from '../../feed/_components/photo-redraw-panel'
 import { koreanLanguageName } from '../_lib/options'
 
 type Action = 'publish' | 'delete' | 'regenerate' | 'draw'
@@ -32,14 +34,23 @@ const ERROR_COPY: Record<string, string> = {
   invalid_image: '사진을 읽지 못했어요. 다른 파일로 해 주세요.',
   file_too_large: '사진이 너무 커요(15MB까지).',
   invalid_photos: '사진 목록이 올바르지 않아요. 새로고침 후 다시 해 주세요.',
+  invalid_text: '글은 1~1000자로 써 주세요.',
 }
 
 type ReviewPhoto = { objectKey: string; width: number | null; height: number | null }
 const MAX_POST_PHOTOS = 10
 
 /** The account's profile in the admin: its posts in review and published, as on the app's My Page. */
-export function profileHref(userId: string): string {
-  return `/admin/operators/${encodeURIComponent(userId)}/profile`
+export function profileHref(userId: string, back?: string): string {
+  const href = `/admin/operators/${encodeURIComponent(userId)}/profile`
+  return back ? withBack(href, back) : href
+}
+
+/** The review page the reader is on (with its page of the list), for the screens opened from it to return to. */
+function useReviewPath(): string {
+  const pathname = usePathname()
+  const search = useSearchParams().toString()
+  return `${pathname}${search ? `?${search}` : ''}`
 }
 
 export function reviewImageUrl(objectKey: string): string {
@@ -50,14 +61,16 @@ export function reviewImageUrl(objectKey: string): string {
  * Edit a post's photos: add (upload), remove, reorder; the first is the one
  * the feed shows first. Saved as a whole; removing every photo makes a text post.
  */
-function PhotoEditor({ postId, initial, onSaved, onCancel }: {
+function PhotoEditor({ postId, language, initial, onSaved, onCancel }: {
   postId: string
+  language: string | null
   initial: ReviewPhoto[]
   onSaved: (post: ReviewPost) => void
   onCancel: () => void
 }) {
   const [photos, setPhotos] = useState(initial)
   const [uploading, setUploading] = useState(0)
+  const [drawing, setDrawing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -136,7 +149,26 @@ function PhotoEditor({ postId, initial, onSaved, onCancel }: {
             <input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { void add(event.target.files); event.target.value = '' }} />
           </label>
         ) : null}
+        {photos.length + uploading < MAX_POST_PHOTOS && !drawing ? (
+          <button
+            type="button"
+            onClick={() => setDrawing(true)}
+            className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed border-sky-300 bg-white text-xs font-semibold text-sky-700"
+          >
+            <Sparkles className="h-6 w-6" aria-hidden="true" />
+            <span className="mt-1 text-center leading-4">AI로 만들기<br />(레퍼런스 가능)</span>
+          </button>
+        ) : null}
       </div>
+      {drawing ? (
+        <PhotoRedrawPanel
+          postId={postId}
+          language={language}
+          review
+          onClose={() => setDrawing(false)}
+          onCandidate={(photo) => setPhotos((current) => current.length < MAX_POST_PHOTOS ? [...current, { objectKey: photo.objectKey, width: photo.width || null, height: photo.height || null }] : current)}
+        />
+      ) : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
       <div className="mt-2 flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600">취소</button>
@@ -162,6 +194,35 @@ function formatAt(iso: string): string {
   return AT_FORMAT.format(new Date(iso))
 }
 
+/** How often and how long a card asks whether the pool has drawn its photo yet. */
+const DRAW_POLL_MS = 10_000
+const DRAW_POLL_LIMIT_MS = 15 * 60_000
+
+async function readReview(kind: 'profile' | 'post', id: string) {
+  const response = await fetch(`/admin/operators/api/review?kind=${kind}&id=${encodeURIComponent(id)}`, { cache: 'no-store' })
+  if (!response.ok) return null
+  return await response.json().catch(() => null) as Record<string, unknown> | null
+}
+
+/** Calls `check` every 10s while `active`, for up to 15 minutes; `check` returns true when done. */
+function useDrawPolling(active: boolean, check: () => Promise<boolean>) {
+  useEffect(() => {
+    if (!active) return
+    let stopped = false
+    const started = Date.now()
+    const timer = setInterval(async () => {
+      if (stopped) return
+      const done = await check().catch(() => false)
+      if (done || Date.now() - started > DRAW_POLL_LIMIT_MS) {
+        stopped = true
+        clearInterval(timer)
+      }
+    }, DRAW_POLL_MS)
+    return () => { stopped = true; clearInterval(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active])
+}
+
 async function sendReview(kind: 'profile' | 'post', id: string, action: Action, feedback: string) {
   const response = await fetch('/admin/operators/api/review', {
     method: 'POST',
@@ -175,9 +236,10 @@ async function sendReview(kind: 'profile' | 'post', id: string, action: Action, 
 
 /** Opens the account editor (bio, 관심 언어, age, city…); its back arrow returns here. */
 function EditLink({ userId }: { userId: string }) {
+  const reviewPath = useReviewPath()
   return (
     <Link
-      href={`/admin/operators/${encodeURIComponent(userId)}?from=review`}
+      href={withBack(`/admin/operators/${encodeURIComponent(userId)}?from=review`, reviewPath)}
       className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100"
     >
       <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
@@ -222,12 +284,15 @@ function ReviewActions({
   onAction,
   publishDisabledReason,
   drawAction,
+  inProgress,
 }: {
   busy: Action | null
+  /** A job for this card is running; the answers wait until it is done. */
+  inProgress?: boolean
   onAction: (action: Action, feedback: string) => void
   publishDisabledReason?: string
   /** A post whose photo is not drawn yet: offer to have only the photo drawn (null once it is queued). */
-  drawAction?: { requested: boolean }
+  drawAction?: { requested: boolean; drawing?: boolean }
 }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [feedback, setFeedback] = useState('')
@@ -256,19 +321,19 @@ function ReviewActions({
       <div className="grid grid-cols-3 gap-2">
         <AdminButton
           variant="primary"
-          disabled={busy !== null || Boolean(publishDisabledReason)}
+          disabled={busy !== null || inProgress || Boolean(publishDisabledReason)}
           title={publishDisabledReason}
           onClick={() => onAction('publish', feedback)}
         >
           {busy === 'publish' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
           게시
         </AdminButton>
-        <AdminButton variant="danger" disabled={busy !== null} onClick={() => onAction('delete', feedback)}>
+        <AdminButton variant="danger" disabled={busy !== null || inProgress} onClick={() => onAction('delete', feedback)}>
           {busy === 'delete' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Trash2 className="h-4 w-4" aria-hidden="true" />}
           삭제
         </AdminButton>
         <AdminButton
-          disabled={busy !== null}
+          disabled={busy !== null || inProgress}
           onClick={() => { onAction('regenerate', feedback); setFeedback(''); setFeedbackOpen(false) }}
         >
           {busy === 'regenerate' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
@@ -276,11 +341,12 @@ function ReviewActions({
         </AdminButton>
       </div>
       {drawAction ? (
-        <AdminButton block disabled={busy !== null || drawAction.requested} onClick={() => { onAction('draw', feedback); setFeedback(''); setFeedbackOpen(false) }}>
-          {busy === 'draw' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ImageIcon className="h-4 w-4" aria-hidden="true" />}
-          {drawAction.requested ? 'ChatGPT로 그리기 요청됨' : '글은 그대로, 사진만 그리기'}
+        <AdminButton block disabled={busy !== null || drawAction.requested || drawAction.drawing} onClick={() => { onAction('draw', feedback); setFeedback(''); setFeedbackOpen(false) }}>
+          {busy === 'draw' || drawAction.drawing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ImageIcon className="h-4 w-4" aria-hidden="true" />}
+          {drawAction.drawing ? '사진 그리는 중…' : drawAction.requested ? 'ChatGPT로 그리기 요청됨' : '글은 그대로, 사진만 그리기'}
         </AdminButton>
       ) : null}
+      {inProgress ? <p className="text-xs text-slate-500">사진을 그리는 중이라 끝나면 누를 수 있어요.</p> : null}
       {publishDisabledReason ? <p className="text-xs text-slate-500">{publishDisabledReason}</p> : null}
     </div>
   )
@@ -391,15 +457,70 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
   profileApproved: boolean
   onDone: () => void
 }) {
+  const reviewPath = useReviewPath()
   const [post, setPost] = useState(initial)
   const [busy, setBusy] = useState<Action | null>(null)
   const [error, setError] = useState<string | null>(null)
   const sourceLanguage = post.language ?? author.languages[0] ?? null
   const translation = useStaffTranslation({ id: post.id }, post.text, setError)
   const [editingPhotos, setEditingPhotos] = useState(false)
+  const [editingText, setEditingText] = useState(false)
+  const [draft, setDraft] = useState(post.text)
+  const [savingText, setSavingText] = useState(false)
+  const [aiNote, setAiNote] = useState('')
+  const [drafting, setDrafting] = useState(false)
+
+  /** The AI writes a new text into the editor (same person, language and photo); saving stays with staff. */
+  async function draftWithAi() {
+    setDrafting(true)
+    setError(null)
+    try {
+      const response = await fetch('/admin/operators/api/review/text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: post.id, feedback: aiNote }),
+      })
+      const payload = await response.json().catch(() => ({})) as { text?: string; error?: string }
+      if (!response.ok || !payload.text) throw new Error(payload.error ?? 'request_failed')
+      setDraft(payload.text)
+    } catch (caught) {
+      setError(ERROR_COPY[(caught as Error).message] ?? 'AI가 글을 쓰지 못했어요. 다시 눌러 주세요.')
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  async function saveText() {
+    setSavingText(true)
+    setError(null)
+    try {
+      const response = await fetch('/admin/operators/api/review/text', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: post.id, text: draft }),
+      })
+      const payload = await response.json().catch(() => ({})) as { post?: ReviewPost; error?: string }
+      if (!response.ok || !payload.post) throw new Error(payload.error ?? 'request_failed')
+      setPost(payload.post)
+      setEditingText(false)
+    } catch (caught) {
+      setError(ERROR_COPY[(caught as Error).message] ?? '글을 저장하지 못했어요.')
+    } finally {
+      setSavingText(false)
+    }
+  }
   const photos: ReviewPhoto[] = post.imageObjectKey
     ? [{ objectKey: post.imageObjectKey, width: post.imageWidth, height: post.imageHeight }, ...post.extraImages]
     : []
+
+  // The pool draws in the background; ask every 10s until the photo is in.
+  useDrawPolling(post.photoDrawing, async () => {
+    const latest = (await readReview('post', post.id))?.post as ReviewPost | undefined
+    if (!latest || latest.photoDrawing) return false
+    setPost(latest)
+    if (latest.photoDrawFailed) setError(ERROR_COPY.draw_failed)
+    return true
+  })
 
   async function handle(action: Action, feedback: string) {
     if (action === 'delete' && !window.confirm('이 글을 삭제할까요?')) return
@@ -420,15 +541,24 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
     <AdminCard as="article" id={`post-${post.id}`} className={`${CARD_CLASS} scroll-mt-4`}>
       {/* Laid out like a post in the app's feed: author row, text, then the photo at full width. */}
       <div className="mb-2 flex items-center gap-2">
-        <Link href={profileHref(author.userId)} aria-label={`${author.name ?? author.handle} 프로필`}>
+        <Link href={profileHref(author.userId, reviewPath)} aria-label={`${author.name ?? author.handle} 프로필`}>
           <OperatorAvatar image={author.image} name={author.name} size={36} languages={author.languages} />
         </Link>
         <div className="min-w-0 flex-1">
-          <Link href={profileHref(author.userId)} className="block truncate text-sm font-semibold text-slate-900">{author.name ?? '(이름 없음)'}</Link>
+          <Link href={profileHref(author.userId, reviewPath)} className="block truncate text-sm font-semibold text-slate-900">{author.name ?? '(이름 없음)'}</Link>
           <p className="truncate text-xs text-slate-500">@{author.handle} · 글 {formatAt(at)}</p>
           <CompactLanguageLevels primaryLanguages={author.languages} interestLanguages={author.interestLanguages} locale="ko" className="mt-1" />
         </div>
-        <EditLink userId={author.userId} />
+        {/* Edits this post's text; the account itself is edited from its profile page (tap the name). */}
+        <button
+          type="button"
+          onClick={() => { setDraft(post.text); setEditingText(true) }}
+          disabled={editingText || busy !== null}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+        >
+          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          글 편집
+        </button>
         <PinButton kind="post" id={post.id} pinned={pinned} />
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -436,11 +566,52 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
         {post.topic ? <AdminChip>{post.topic}</AdminChip> : null}
         {post.photoKind ? <AdminChip tone="warning">사진: {PHOTO_KIND[post.photoKind] ?? post.photoKind}</AdminChip> : null}
       </div>
-      <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{translation.shownText}</p>
-      <StaffTranslationChips sourceLanguage={sourceLanguage} translation={translation} />
+      {editingText ? (
+        <div className="space-y-2">
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            rows={6}
+            maxLength={1000}
+            autoFocus
+            className={`${adminTextareaClassName} text-[15px] leading-6`}
+            disabled={savingText || drafting}
+          />
+          {/* Only the text is rewritten; the photo stays. The result lands in the box above, unsaved. */}
+          <div className="flex gap-2">
+            <input
+              value={aiNote}
+              onChange={(event) => setAiNote(event.target.value)}
+              placeholder="AI에게 요청 (선택) — 예: 더 짧게, 질문으로 끝내기"
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+              disabled={drafting || savingText}
+            />
+            <AdminButton disabled={drafting || savingText} onClick={() => void draftWithAi()}>
+              {drafting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
+              {drafting ? 'AI가 쓰는 중…' : 'AI로 글만 다시 쓰기'}
+            </AdminButton>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-slate-400">{draft.trim().length}/1000</span>
+            <div className="flex gap-2">
+              <AdminButton disabled={savingText} onClick={() => setEditingText(false)}>취소</AdminButton>
+              <AdminButton variant="primary" disabled={savingText || !draft.trim() || draft.trim() === post.text.trim()} onClick={() => void saveText()}>
+                {savingText ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+                저장
+              </AdminButton>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-900">{translation.shownText}</p>
+          <StaffTranslationChips sourceLanguage={sourceLanguage} translation={translation} />
+        </>
+      )}
       {editingPhotos ? (
         <PhotoEditor
           postId={post.id}
+          language={sourceLanguage}
           initial={photos}
           onSaved={(saved) => { setPost(saved); setEditingPhotos(false) }}
           onCancel={() => setEditingPhotos(false)}
@@ -450,7 +621,10 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       ) : post.photoDescription ? (
         // Where the photo will go: its description on white, so it is not read as the post text.
         <div className="mt-2 flex aspect-square w-full flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-6 text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{post.photoRequested ? '사진 · ChatGPT로 그리는 중' : '사진 · 아직 안 그림'}</p>
+          <p className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            {post.photoDrawing ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null}
+            {post.photoDrawing ? '사진 · ChatGPT로 그리는 중 (1~3분)' : post.photoRequested ? '사진 · ChatGPT로 그리는 중' : '사진 · 아직 안 그림'}
+          </p>
           <p className="text-sm leading-6 text-slate-700">{post.photoDescription}</p>
         </div>
       ) : null}
@@ -463,9 +637,10 @@ function PostCard({ post: initial, at, pinned, author, profileApproved, onDone }
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
       <ReviewActions
         busy={busy}
+        inProgress={post.photoDrawing}
         onAction={handle}
         publishDisabledReason={!profileApproved ? '계정을 먼저 게시해야 글을 올릴 수 있어요.' : post.photoDescription && !post.imageObjectKey ? '사진을 그린 뒤에 게시할 수 있어요.' : undefined}
-        drawAction={post.photoDescription && !post.imageObjectKey ? { requested: post.photoRequested } : undefined}
+        drawAction={post.photoDescription && !post.imageObjectKey ? { requested: post.photoRequested, drawing: post.photoDrawing } : undefined}
       />
     </AdminCard>
   )
@@ -480,10 +655,20 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
   onApproved: () => void
   onDeleted: () => void
 }) {
+  const reviewPath = useReviewPath()
   const [busy, setBusy] = useState<Action | null>(null)
   const [error, setError] = useState<string | null>(null)
   const bio = useStaffTranslation({ kind: 'profile', id: profile.userId }, profile.bio ?? '', setError)
   const [drawing, setDrawing] = useState(profile.profileState === 'drawing')
+
+  // Where the pool draws, a new profile photo arrives in the background; ask every 10s.
+  useDrawPolling(drawing, async () => {
+    const latest = await readReview('profile', profile.userId)
+    if (!latest || latest.profileState === 'drawing') return false
+    setDrawing(false)
+    if (typeof latest.image === 'string') onImage(latest.image)
+    return true
+  })
 
   async function handle(action: Action, feedback: string) {
     if (action === 'delete' && !window.confirm(`${profile.name ?? profile.handle} 계정과 검토 중인 글을 모두 삭제할까요?`)) return
@@ -511,7 +696,7 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
   return (
     <AdminCard as="article" id={`profile-${profile.userId}`} className={`${CARD_CLASS} scroll-mt-4`}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <Link href={profileHref(profile.userId)} className="text-xs font-semibold text-slate-500">새 계정 · 가입 {formatAt(at)} · 프로필 보기 ›</Link>
+        <Link href={profileHref(profile.userId, reviewPath)} className="text-xs font-semibold text-slate-500">새 계정 · 가입 {formatAt(at)} · 프로필 보기 ›</Link>
         <div className="flex items-center">
           <EditLink userId={profile.userId} />
           <PinButton kind="profile" id={profile.userId} pinned={pinned} />
@@ -548,7 +733,7 @@ function ProfileCard({ profile, at, pinned, image, onImage, onApproved, onDelete
       {profile.profileFeedback ? <p className="mt-2 text-xs text-slate-500">지난 피드백: {profile.profileFeedback}</p> : null}
       {drawing ? <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">새 프로필 사진을 ChatGPT로 그리는 중이에요. 그려서 올라오면 다시 검토할 수 있어요.</p> : null}
       {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
-      <ReviewActions busy={busy} onAction={handle} publishDisabledReason={drawing ? '새 사진을 그리는 중이에요.' : undefined} />
+      <ReviewActions busy={busy} inProgress={drawing} onAction={handle} publishDisabledReason={drawing ? '새 사진을 그리는 중이에요.' : undefined} />
     </AdminCard>
   )
 }

@@ -17,6 +17,8 @@ export const REPORT_REASONS = [
   'harassment',
   'inappropriate',
   'impersonation',
+  // Text, photo or profile that looks AI-made (staff, 2026-11).
+  'ai_generated',
   'other',
 ] as const
 

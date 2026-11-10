@@ -40,6 +40,8 @@ let state: CoinWalletState = { status: "idle", wallet: null };
 let sttBillingToken: string | null = null;
 let inFlight: Promise<void> | null = null;
 let lastLoadedAt = 0;
+// Whether the most recent wallet read reached the server.
+let lastLoadSucceeded = false;
 const listeners = new Set<() => void>();
 
 function setState(next: CoinWalletState) {
@@ -106,9 +108,11 @@ export function refreshCoinWallet(options: { force?: boolean } = {}): Promise<vo
       sttBillingToken = typeof data.sttBillingToken === "string" ? data.sttBillingToken : null;
       lastLoadedAt = Date.now();
       lastIdentityCheckAt = lastLoadedAt;
+      lastLoadSucceeded = true;
       setState({ status: "ready", wallet: data });
     })
     .catch(() => {
+      lastLoadSucceeded = false;
       setState({ status: state.wallet ? "ready" : "error", wallet: state.wallet });
     })
     .finally(() => {
@@ -152,14 +156,26 @@ export function applyCoinBalanceFromHeaders(headers: Headers) {
  * (userInitiated). A background refusal while already at zero, such as an
  * untranslated text message, only keeps the room banner: sending text with no
  * coins must not pop a sheet on every message.
+ *
+ * The sheet waits for a fresh wallet read and opens only if that read confirms
+ * the balance is gone. A refusal can be stale (a request queued or retried
+ * after a top-up, or a session that ended before the daily refill), and the
+ * sheet stayed open over a positive balance until the user closed it.
  */
 export function notifyCoinsExhausted(options: { userInitiated?: boolean } = {}) {
   const alreadyExhausted = state.wallet?.exhausted === true;
-  if (state.wallet && isCoinBillingActive(state.wallet)) {
-    setState({ status: "ready", wallet: { ...state.wallet, balance: 0, freeBalance: 0, paidBalance: 0, lowBalance: true, exhausted: true } });
-  }
-  if (!alreadyExhausted || options.userInitiated) dispatchCoinUiEvent({ type: "exhausted" });
-  void refreshCoinWallet({ force: true });
+  const shouldRaise = !alreadyExhausted || options.userInitiated === true;
+  void refreshCoinWallet({ force: true }).then(() => {
+    const wallet = state.wallet;
+    // Coin UI exists only while billing is enforced.
+    if (!isCoinBillingActive(wallet)) return;
+    if (lastLoadSucceeded && !wallet.exhausted) return;
+    if (!wallet.exhausted) {
+      // The wallet could not be re-read: trust the refusal.
+      setState({ status: "ready", wallet: { ...wallet, balance: 0, freeBalance: 0, paidBalance: 0, lowBalance: true, exhausted: true } });
+    }
+    if (shouldRaise) dispatchCoinUiEvent({ type: "exhausted" });
+  });
 }
 
 /**

@@ -1,11 +1,12 @@
 "use client";
 
 import ProfileBio from "@/components/profile-bio";
-import ProfileAge from "@/components/profile-age";
+import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { PROFILE_FROM_POST_QUERY_KEY } from "@/lib/feed-routes";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import { formatHandle } from "@/lib/handles";
@@ -13,7 +14,8 @@ import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/pr
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
 import ExistingConversationChoiceDialog from "@/components/existing-conversation-choice-dialog";
 import ProfileImagePreview from "@/components/profile-image-preview";
-import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileNationalityBadge from "@/components/profile-nationality-badge";
+import { resolveNationalityCountry } from "@/lib/nationality";
 import ProfileLanguageLevels from "@/components/profile-language-levels";
 import { sanitizeInterestLanguages } from "@/lib/interest-languages";
 import ProfileShareScreen from "@/components/profile-share-screen";
@@ -77,7 +79,10 @@ type PublicUserProfile = {
   imageCropY: number | null;
   bio: string | null;
   age?: number;
+  gender?: string | null;
   nationality: string | null;
+  /** 국적 (ISO 3166-1 alpha-2). Absent from older servers. */
+  nationalityCountry?: string | null;
   primaryLanguages: string[];
   /** Absent from older servers. */
   interestLanguages?: unknown;
@@ -92,7 +97,7 @@ type PublicUserProfile = {
   isOperator?: boolean;
 };
 
-type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "other";
+type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "ai_generated" | "other";
 
 const PROFILE_SHARE_HISTORY_STATE_KEY = "__MINGLE_PUBLIC_PROFILE_SHARE_SURFACE__";
 
@@ -145,6 +150,7 @@ function getCopy(dictionary: AppDictionary, locale: AppLocale) {
       harassment: dictionary.profile.reportReasonHarassment ?? (isKorean ? "괴롭힘·불쾌한 행동" : "Harassment"),
       inappropriate: dictionary.profile.reportReasonInappropriate ?? (isKorean ? "부적절한 콘텐츠" : "Inappropriate content"),
       impersonation: dictionary.profile.reportReasonImpersonation ?? (isKorean ? "사칭" : "Impersonation"),
+      ai_generated: dictionary.profile.reportReasonAiGenerated ?? (isKorean ? "AI로 만든 것 같음 (글·사진·프로필)" : "Looks AI-generated (text, photo, profile)"),
       other: dictionary.profile.reportReasonOther ?? (isKorean ? "기타" : "Other"),
     } satisfies Record<ReportReason, string>,
   };
@@ -154,14 +160,14 @@ function ProfileAvatar({
   image,
   label,
   crop,
-  languages,
+  country,
   size = 88,
   onClick,
 }: {
   image: string | null;
   label: string;
   crop?: ProfileImageCropInput;
-  languages: readonly string[];
+  country: string | null;
   size?: number;
   onClick?: () => void;
 }) {
@@ -188,7 +194,7 @@ function ProfileAvatar({
           <UserRound size={Math.round(size * 0.58)} className="text-gray-400" aria-hidden="true" />
         )}
       </div>
-      <ProfileLanguageFlagStack languages={languages} size={size} />
+      <ProfileNationalityBadge country={country} size={size} />
     </button>
   );
 }
@@ -235,6 +241,9 @@ export default function PublicUserProfileScreen({
   const profileShareHistoryId = normalizedUserId || profile?.id?.trim() || "";
   const sessionUserId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
   const isOwnProfile = Boolean(sessionUserId && sessionUserId === normalizedUserId);
+  // The profile owner's post this screen was opened from (feed card, post
+  // viewer), sent with the visit and a follow for the staff-only post stats.
+  const sourcePostId = searchParams.get(PROFILE_FROM_POST_QUERY_KEY)?.trim() || null;
   useEffect(() => {
     if (!open || sessionStatus === "loading") return;
 
@@ -293,6 +302,27 @@ export default function PublicUserProfileScreen({
     setMessageError(false);
   }, [normalizedUserId]);
 
+  // One profile-visit record per opening of another user's profile, once it
+  // loaded. Fire-and-forget: a failed record never disturbs the screen.
+  const recordedVisitRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) {
+      recordedVisitRef.current = null;
+      return;
+    }
+    if (!profile || isOwnProfile) return;
+    const visitKey = `${profile.id}\u0000${sourcePostId ?? ""}`;
+    if (recordedVisitRef.current === visitKey) return;
+    recordedVisitRef.current = visitKey;
+    void fetch(buildClientApiPath(`/users/${encodeURIComponent(profile.id)}/view`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sourcePostId ? { sourcePostId } : {}),
+      cache: "no-store",
+      keepalive: true,
+    }).catch(() => {});
+  }, [isOwnProfile, open, profile, sourcePostId]);
+
   const closeProfileShare = useCallback(() => {
     if (hasProfileShareHistoryEntry(profileShareHistoryId)) {
       window.history.back();
@@ -342,7 +372,9 @@ export default function PublicUserProfileScreen({
     try {
       const response = await fetch(
         buildClientApiPath(`/users/${encodeURIComponent(profile.id)}/follow`),
-        { method: nextIsFollowing ? "POST" : "DELETE" },
+        nextIsFollowing && sourcePostId
+          ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourcePostId }) }
+          : { method: nextIsFollowing ? "POST" : "DELETE" },
       );
       if (!response.ok) throw new Error("follow_failed");
       setProfile((current) => current ? { ...current, isFollowing: nextIsFollowing } : current);
@@ -351,7 +383,7 @@ export default function PublicUserProfileScreen({
     } finally {
       setIsActionPending(false);
     }
-  }, [isActionPending, isOwnProfile, profile]);
+  }, [isActionPending, isOwnProfile, profile, sourcePostId]);
 
   const handleToggleBlock = useCallback(async () => {
     if (isOwnProfile || !profile || isActionPending) return;
@@ -497,6 +529,7 @@ export default function PublicUserProfileScreen({
     profile?.primaryLanguages,
     profile?.nationality ? [profile.nationality] : [],
   );
+  const nationalityCountry = resolveNationalityCountry(profile?.nationalityCountry, primaryLanguages);
   const languageOption = getLanguageOption(primaryLanguages[0] ?? profile?.nationality);
   const languageName = languageOption
     ? getSttLanguageDisplayName(languageOption.code, locale) ?? languageOption.englishName
@@ -585,7 +618,7 @@ export default function PublicUserProfileScreen({
                   <ProfileAvatar
                     image={profile.image}
                     label={nameLabel}
-                    languages={primaryLanguages}
+                    country={nationalityCountry}
                     crop={{
                       scale: profile.imageCropScale,
                       x: profile.imageCropX,
@@ -607,9 +640,10 @@ export default function PublicUserProfileScreen({
               </div>
 
               <div className="mt-4 pl-2">
-                <p className="flex min-w-0 items-baseline gap-1.5">
+                <p className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
                   <AccountBadge kind={badge} locale={locale} tone="dark" />
+                  <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} locale={locale} />
                   {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
                 </p>
                 <ProfileLanguageLevels
@@ -618,7 +652,6 @@ export default function PublicUserProfileScreen({
                   locale={locale}
                   className="mt-2.5"
                 />
-                <ProfileAge age={profile.age} locale={locale} className="mt-0.5 text-[13px] text-gray-500" />
                 {!isOwnProfile ? (
                   <ProfileLocation
                     profileLocation={profile.location}

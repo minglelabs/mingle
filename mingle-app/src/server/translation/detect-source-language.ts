@@ -32,6 +32,8 @@ export type DetectSourceLanguageArgs = {
    */
   clientHint?: string | null
   modelSelection?: TranslateTextsInput['modelSelection']
+  /** `chatgpt-pool` for operator text (operatorTextProvider). */
+  provider?: 'chatgpt-pool'
 }
 
 /**
@@ -93,6 +95,7 @@ export async function detectSourceLanguage(args: DetectSourceLanguageArgs): Prom
       redetectSourceLanguage: true,
       isFinal: true,
       modelSelection: args.modelSelection,
+      provider: args.provider,
     })
 
     const rawDetected = result.detectedSourceLanguage || ''

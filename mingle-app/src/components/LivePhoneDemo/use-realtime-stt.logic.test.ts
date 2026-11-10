@@ -42,6 +42,7 @@ import {
   shouldBlockNativeSttSessionEvent,
   shouldApplyNativeBridgeConnectionStatus,
   shouldResetConnectionToIdleForNativeMicRecovery,
+  isNativeDeviceAudioConsentDeclined,
   shouldPromoteConnectionStatusFromNativeActivity,
   shouldHandleNativeBridgeServerMessage,
   shouldTrackUsageForConnectionStatus,
@@ -853,6 +854,16 @@ describe('use-realtime-stt pure logic', () => {
       code: 'mic_permission',
       message: 'Microphone permission denied',
     })).toBe(false)
+  })
+
+  it('treats a declined device-audio prompt as a cancel on any platform', () => {
+    expect(isNativeDeviceAudioConsentDeclined({ code: 'device_audio_permission' })).toBe(true)
+    expect(isNativeDeviceAudioConsentDeclined({ message: 'device_audio_permission_denied' })).toBe(true)
+    expect(isNativeDeviceAudioConsentDeclined({ code: ' Device_Audio_Permission ' })).toBe(true)
+    // A capture that broke after the prompt is a real failure.
+    expect(isNativeDeviceAudioConsentDeclined({ code: 'device_audio_start', message: 'Media projection unavailable' })).toBe(false)
+    expect(isNativeDeviceAudioConsentDeclined({ code: 'mic_permission' })).toBe(false)
+    expect(isNativeDeviceAudioConsentDeclined({})).toBe(false)
   })
 
   it('maps native bridge statuses back into UI connection state for restore flows', () => {
@@ -1960,10 +1971,12 @@ describe('use-realtime-stt pure logic', () => {
   })
 
   it('defaults partial translate mode to time and parses env overrides', () => {
-    expect(parsePartialTranslateMode(undefined)).toBe('time')
+    expect(parsePartialTranslateMode(undefined)).toBe('clause')
+    expect(parsePartialTranslateMode('time')).toBe('time')
     expect(parsePartialTranslateMode('char')).toBe('char')
     expect(parsePartialTranslateMode('both')).toBe('both')
-    expect(parsePartialTranslateMode('weird')).toBe('time')
+    expect(parsePartialTranslateMode('clause')).toBe('clause')
+    expect(parsePartialTranslateMode('weird')).toBe('clause')
     expect(parsePositiveIntWithFallback(undefined, 2000)).toBe(2000)
     expect(parsePositiveIntWithFallback('2500', 2000)).toBe(2500)
     expect(parsePositiveIntWithFallback('0', 2000)).toBe(2000)
@@ -2013,6 +2026,28 @@ describe('use-realtime-stt pure logic', () => {
       elapsedSinceLastRequestMs: 2000,
       intervalMs: 2000,
     }).shouldRequest).toBe(true)
+  })
+
+  it('clause mode asks again on a new punctuation mark or a long stretch of new text', () => {
+    const base = {
+      mode: 'clause' as const,
+      isInitialRequest: false,
+      targetLanguagesChanged: false,
+      lastTranslateLen: 0,
+      charStep: 20,
+      elapsedSinceLastRequestMs: 5000,
+      intervalMs: 2000,
+    }
+    const ask = (currentText: string, lastRequestedText: string) => shouldTriggerPartialTranslate({
+      ...base, currentText, lastRequestedText, textLength: currentText.length,
+    }).shouldRequest
+
+    // More words, no new mark: wait.
+    expect(ask('I dropped out of college after the first six months', 'I dropped out')).toBe(false)
+    // A comma with words after it: a possible cut point.
+    expect(ask('I dropped out of college, but then', 'I dropped out')).toBe(true)
+    // Same marks as the last request: wait.
+    expect(ask('I dropped out of college, but then stayed', 'I dropped out of college, but then')).toBe(false)
   })
 
   it('can still use char threshold mode when enabled', () => {
@@ -2213,6 +2248,28 @@ describe('use-realtime-stt pure logic', () => {
       language: 'ko',
       speaker: '3',
     })).toEqual({ kind: 'none' })
+  })
+
+  it('reuses a stop-finalized local turn when the server fallback re-sends it with an unknown speaker', () => {
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-stop-fallback',
+      recentFinalizedUtterances: [{
+        id: 'u-local-stop',
+        text: 'Uh, I— you know, when you get',
+        language: 'en',
+        speaker: '1',
+        expiresAt: 5_000,
+        source: 'local',
+      }],
+      nowMs: 1_000,
+      text: 'Uh, I— you know, when you get',
+      language: 'en',
+      speaker: 'unknown',
+    })).toEqual({
+      kind: 'reuse_local',
+      utteranceId: 'u-local-stop',
+    })
   })
 
   it('keeps multiple recent finalized utterances while pruning expired entries', () => {

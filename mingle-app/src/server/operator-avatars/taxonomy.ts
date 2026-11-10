@@ -57,16 +57,18 @@ function pick(options: readonly Option[], random: Random): Option {
 // ─── 1. Kind of photo ────────────────────────────────────────────────────────
 
 export const AVATAR_CATEGORIES: ReadonlyArray<{ key: AvatarCategory; ko: string; weight: number }> = [
-  { key: 'face', ko: '얼굴 위주', weight: 30 },
-  { key: 'partial', ko: '얼굴 일부·가림', weight: 20 },
-  { key: 'back', ko: '뒷모습', weight: 9 },
-  { key: 'body', ko: '몸 위주', weight: 17 },
-  { key: 'part', ko: '손·발·부분', weight: 3 },
-  { key: 'group', ko: '여러 명', weight: 5 },
-  { key: 'object', ko: '사물', weight: 8 },
-  { key: 'animal', ko: '동물', weight: 5 },
-  { key: 'scenery', ko: '풍경·장소', weight: 4 },
-  { key: 'other', ko: '그림·글자', weight: 5 },
+  // Staff (2026-11-09): too few profile pictures showed a face; the face now leads.
+  { key: 'face', ko: '얼굴 위주', weight: 72 },
+  { key: 'partial', ko: '얼굴 일부·가림', weight: 14 },
+  { key: 'back', ko: '뒷모습', weight: 6 },
+  { key: 'body', ko: '몸 위주', weight: 10 },
+  { key: 'part', ko: '손·발·부분', weight: 2 },
+  { key: 'group', ko: '여러 명', weight: 6 },
+  { key: 'object', ko: '사물', weight: 5 },
+  { key: 'animal', ko: '동물', weight: 4 },
+  { key: 'scenery', ko: '풍경·장소', weight: 2 },
+  // Staff like 2D profile pictures (2026-11): about one in five accounts gets an anime-style drawing.
+  { key: 'other', ko: '그림·글자', weight: 45 },
 ]
 
 /** East Asian profiles hide the face more; Western and Latin American ones show it more. */
@@ -74,14 +76,14 @@ const FACE_SHY_COUNTRIES = new Set(['KR', 'JP', 'TW', 'CN'])
 const FACE_FORWARD_COUNTRIES = new Set(['US', 'CA', 'GB', 'AU', 'FR', 'DE', 'ES', 'IT', 'BR', 'MX', 'AR', 'TR'])
 
 const CATEGORY_COUNTRY_FACTORS: Record<'shy' | 'forward', Partial<Record<AvatarCategory, number>>> = {
-  shy: { face: 0.75, partial: 1.4, back: 1.3, object: 1.2, scenery: 1.2 },
+  shy: { face: 0.9, partial: 1.4, back: 1.3, object: 1.2, scenery: 1.2 },
   forward: { face: 1.3, body: 1.15, partial: 0.8, object: 0.8 },
 }
 
 /** Bio keywords (any language of the persona table) that pull the photo toward a subject. */
 const BIO_HINTS: ReadonlyArray<{ pattern: RegExp; category: AvatarCategory; subtype?: string; factor: number }> = [
-  { pattern: /cat|고양이|猫|ねこ|gato|chat\b|katze|kedi|mèo|แมว|kucing/i, category: 'animal', subtype: 'cat', factor: 6 },
-  { pattern: /dog|강아지|犬|いぬ|perro|cachorro|chien|hund|köpek|chó|หมา|anjing/i, category: 'animal', subtype: 'dog', factor: 4 },
+  { pattern: /cat|고양이|猫|ねこ|gato|chat\b|katze|kedi|mèo|แมว|kucing/i, category: 'animal', subtype: 'cat', factor: 8 },
+  { pattern: /dog|강아지|犬|いぬ|perro|cachorro|chien|hund|köpek|chó|หมา|anjing/i, category: 'animal', subtype: 'dog', factor: 6 },
   { pattern: /gym|헬스|운동|筋トレ|ジム|fitness|academia|gimnasio|workout|健身/i, category: 'body', subtype: 'gym_mirror', factor: 3 },
   { pattern: /coffee|커피|카페|コーヒー|カフェ|café|kaffee|kahve|cà phê|咖啡/i, category: 'object', subtype: 'coffee', factor: 2.5 },
   { pattern: /travel|여행|旅行|viaj|voyage|reisen|seyahat|du lịch|เที่ยว/i, category: 'back', subtype: 'travel_landmark', factor: 2 },
@@ -127,7 +129,7 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
   ],
   back: [
     sub('sea_gaze', '바다를 바라봄', 3, 'seen from behind, standing and looking out at the sea'),
-    sub('sunset_gaze', '노을을 바라봄', 3, 'seen from behind against a sunset sky'),
+    sub('sunset_gaze', '노을을 바라봄', 1, 'seen from behind against a sunset sky'),
     sub('walking_street', '길 걷는 중', 3, 'seen from behind, walking down a street'),
     sub('stairs', '계단 오르는 중', 1.5, 'seen from behind, climbing outdoor stairs'),
     sub('window_gaze', '창밖을 봄', 2, 'seen from behind, looking out of a window'),
@@ -209,7 +211,7 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('fish_turtle', '물고기·거북이', 0.3, 'a pet fish or small turtle in a tank'),
   ],
   scenery: [
-    sub('sunset', '노을', 3, 'a sunset sky'),
+    sub('sunset', '노을', 1, 'a sunset sky'),
     sub('clouds', '구름', 1.5, 'clouds in a blue sky'),
     sub('night_sky', '밤하늘·달', 1.5, 'the moon in a night sky'),
     sub('sea', '바다 수평선', 2.5, 'the sea and horizon'),
@@ -220,7 +222,7 @@ export const AVATAR_SUBTYPES: Record<AvatarCategory, readonly Subtype[]> = {
     sub('landmark', '여행지', 1.5, 'a famous kind of landmark photographed like a tourist would'),
   ],
   other: [
-    sub('anime_icon', '애니풍 그림', 3, 'an anime-style drawing of an original character, cropped to the head and shoulders like a profile icon'),
+    sub('anime_icon', '애니풍 그림', 30, 'an anime-style drawing'),
     sub('sticker_char', '캐릭터 스티커', 2.5, 'a cute, simple cartoon animal or blob character in the style of a messenger-app sticker, on a plain white background, with two or three hand-drawn words in a speech bubble in the everyday language of {country}'),
     sub('lettering', '글자 이미지', 1, 'a short word or a name in loose hand-lettered script on a soft pastel background'),
     sub('doodle', '낙서풍 자화상', 2, 'a simple hand-drawn doodle self-portrait on paper, in an original style'),
@@ -614,12 +616,13 @@ const FILTERS: readonly Option[] = [
   ['none', 12, 'no filter'], ['bw', 0.8, 'black and white'],
 ]
 
+// Evening light is kept rare: profile pictures had turned mostly sunsets and late-afternoon sun (staff, 2026-11).
 const LIGHTING: readonly Option[] = [
-  ['daylight', 5, 'ordinary daylight'], ['window', 3, 'soft light from a window'], ['golden', 2, 'low evening sun'], ['fluorescent', 2, 'flat indoor fluorescent light'],
+  ['daylight', 5, 'ordinary daylight'], ['window', 3, 'soft light from a window'], ['golden', 0.6, 'low evening sun'], ['fluorescent', 2, 'flat indoor fluorescent light'],
   ['warm_lamp', 2, 'warm indoor lamp light'], ['night', 1.2, 'at night under street lamps and city lights'], ['neon', 0.8, 'colored neon light at night'],
   ['overcast', 1.5, 'grey overcast light'], ['screen', 0.4, 'lit only by a screen in a dark room'],
-  ['side_sun', 2.5, 'low late-afternoon sun from one side, warm on one side of the person and on the wall or street behind, the other side in soft shade'],
-  ['backlit_shade', 3, 'late afternoon in shade with the bright sky behind as the main light, so the person is slightly backlit: the face a little darker and duller than the sky and as lit as the shade around it, the sky blown out to near white'],
+  ['side_sun', 1, 'low late-afternoon sun from one side, warm on one side of the person and on the wall or street behind, the other side in soft shade'],
+  ['backlit_shade', 1.5, 'late afternoon in shade with the bright sky behind as the main light, so the person is slightly backlit: the face a little darker and duller than the sky and as lit as the shade around it, the sky blown out to near white'],
 ]
 
 const FLAWS: readonly Option[] = [
@@ -807,6 +810,153 @@ function dressNote(persona: AvatarPersona, gender: 'female' | 'male' | null): st
   return dress ? `, styled in ${dress}; the outfit is well coordinated` : '; the outfit is well coordinated'
 }
 
+/**
+ * What an anime-style profile picture shows: mostly the person, sometimes a
+ * pet, another animal, a thing they like or a place. Every axis below is
+ * picked separately (staff, 2026-11: the pictures all looked alike), so two
+ * accounts rarely share the art style, the colors, the pose or the background.
+ */
+const ANIME_SUBJECTS: readonly Option[] = [
+  ['person', 12, 'person'],
+  ['cat', 1.5, 'cat'],
+  ['dog', 1.2, 'dog'],
+  ['critter', 1, 'critter'],
+  ['object', 1.3, 'object'],
+  ['landscape', 0.9, 'landscape'],
+]
+
+/** The drawing style: the largest lever on how alike the pictures look. */
+const ANIME_STYLES: readonly Option[] = [
+  ['soft_pastel', 2, 'soft pastel colors with delicate thin line art and a dreamy glow, like a modern shoujo illustration'],
+  ['cel_modern', 2.5, 'crisp cel shading with clean bold lines and vivid colors, like a recent TV anime key visual'],
+  ['retro_90s', 1.8, 'a 1990s anime look: slightly grainy film texture, a muted warm palette, hand-drawn cels and big glossy eyes'],
+  ['watercolor', 1.6, 'a loose watercolor anime illustration with paper texture and softly bleeding edges'],
+  ['painted', 1.6, 'a softly painted storybook anime look, gouache-like shading and a hand-painted background'],
+  ['manga_ink', 1.2, 'a black-and-white manga ink drawing with screentone shading and a single accent color'],
+  ['chibi', 1.4, 'cute chibi proportions, a big head and a tiny body, rounded simple shapes'],
+  ['flat_vector', 1.4, 'a flat, minimal vector-style anime icon: simple shapes, no outlines, a limited palette'],
+  ['lofi', 1.6, 'a lo-fi anime aesthetic: cozy, slightly desaturated, grainy, with a soft glow'],
+  ['neon', 1, 'a neon-lit anime look with colored rim light and glowing signs'],
+  ['pencil', 1.2, 'a colored-pencil and crayon anime drawing with visible hand-drawn texture'],
+  ['sketchy', 1, 'a rough sketchy line drawing with loose blocks of color, like an artist\'s quick colored doodle'],
+  ['pop', 0.9, 'bold pop-art colors with thick outlines and halftone dots'],
+  ['cinematic', 1.4, 'a cinematic anime film still with dramatic light and a shallow depth of field'],
+  ['sparkle', 0.8, 'a sparkly, glittery anime look with star highlights and a light bloom'],
+]
+
+const ANIME_PALETTES: readonly Option[] = [
+  ['pastel_pink_blue', 2, 'pastel pink and baby blue'], ['earth', 2, 'warm earth tones: beige, brown and olive'], ['night_blue', 2, 'deep night blues with one warm yellow light'],
+  ['mint_cream', 1.5, 'mint green and cream'], ['mono_accent', 1.5, 'near-monochrome with a single bright accent color'], ['vivid', 2, 'vivid saturated primary colors'],
+  ['teal_orange', 1.5, 'teal and orange'], ['lavender_peach', 1.5, 'lavender and peach'], ['black_white_red', 0.8, 'black, white and red'],
+  ['sage', 1.5, 'muted sage green and dusty tones'], ['sky', 1.8, 'clear sky blue and white'], ['sunny', 1.2, 'sunny yellow and fresh green'], ['berry', 1, 'berry purple and rose'],
+]
+
+const ANIME_BACKGROUNDS: readonly Option[] = [
+  ['plain_color', 2.5, 'a plain solid color background'], ['gradient', 2, 'a soft color gradient background'], ['bokeh', 1.5, 'soft bokeh lights'],
+  ['classroom_window', 0.8, 'a bright window with curtains moving in the wind'], ['cafe', 1.5, 'a cozy cafe interior with a shelf and plants'],
+  ['bedroom_night', 1.5, 'a bedroom at night with fairy lights and a desk lamp'], ['rainy_street', 1.2, 'a rainy city street at night with reflections'],
+  ['cherry_blossom', 1.2, 'a park with falling petals'], ['clouds', 1.8, 'a wide blue sky with big clouds'], ['rain_window', 1.2, 'a rain-streaked window with blurred lights'],
+  ['stars', 1.2, 'a starry night sky'], ['seaside', 1.2, 'a seaside promenade in the middle of the day'], ['rooftop', 1.2, 'a rooftop with a wire fence and city buildings far below'],
+  ['train', 1, 'a quiet train platform'], ['forest', 1.1, 'a forest with light shafts through the leaves'], ['street_shops', 1.2, 'a shopping street with small signs and lanterns'],
+  ['wallpaper', 1.2, 'a patterned wallpaper of small shapes'], ['geometry', 1.2, 'big flat geometric shapes in two or three colors'], ['snow', 0.8, 'a snowy street with soft flakes'],
+  ['autumn', 1, 'a path covered in autumn leaves'], ['library', 0.8, 'tall bookshelves in a quiet library'], ['convenience', 0.8, 'a convenience store glowing in the night'],
+  ['field', 1, 'a green field with wind in the grass'], ['balcony', 1.2, 'a balcony with potted plants and laundry'], ['dawn', 0.8, 'a pale morning sky just after dawn'],
+  ['sunset', 0.4, 'a warm evening sky'], ['festival', 0.8, 'a summer festival with paper lanterns'], ['kitchen', 0.8, 'a small kitchen with morning light'],
+]
+
+const ANIME_FRAMINGS: readonly Option[] = [
+  ['front', 2.5, 'head and shoulders, facing the viewer'], ['three_quarter', 3, 'a three-quarter view from the chest up'], ['profile', 1.2, 'a side profile'],
+  ['over_shoulder', 1.2, 'looking back over the shoulder'], ['closeup', 1.5, 'an extreme close-up of the face and eyes'], ['hand_face', 1, 'one hand near the face, the face half covered by the hand or hair'],
+  ['tilt', 1.5, 'the head tilted, a casual upper-body shot'], ['from_above', 1.2, 'seen from slightly above, looking up at the viewer'], ['from_below', 0.8, 'seen from slightly below against the sky'],
+  ['sitting_small', 0.6, 'sitting somewhere, small in a wide frame'], ['desk', 1, 'resting the head on folded arms on a desk'], ['walking', 1.2, 'caught mid-stride, the hair and clothes moving'],
+  ['back', 0.3, 'seen from behind, looking out at the background'], ['lying', 0.7, 'lying down, seen from above'],
+]
+
+const ANIME_ACTIONS: readonly Option[] = [
+  ['none', 5, ''], ['drink', 2, 'holding a drink'], ['headphones', 2, 'wearing big headphones'], ['ice_cream', 1, 'eating an ice cream'], ['book', 1.2, 'holding a book'],
+  ['umbrella', 1.2, 'holding an umbrella'], ['peace', 1.2, 'making a peace sign'], ['wave', 1.2, 'waving'], ['camera', 1, 'holding a camera'], ['sleepy', 1, 'half asleep, yawning'],
+  ['scarf', 1, 'a scarf blowing in the wind'], ['guitar', 0.7, 'playing a guitar'], ['pet', 0.9, 'with a small pet on the shoulder'], ['phone', 1, 'looking at a phone'],
+  ['bike', 0.8, 'with a bicycle'], ['snack', 1, 'munching a snack'], ['stretch', 0.8, 'stretching the arms up'], ['laptop', 0.8, 'typing on a laptop'], ['balloon', 0.5, 'holding a balloon'],
+]
+
+/** Anime hair is not limited to natural colors. */
+const ANIME_HAIR_COLORS: readonly Option[] = [
+  ['black', 4, 'black'], ['dark_brown', 3, 'dark brown'], ['brown', 2, 'brown'], ['blonde', 1.5, 'blonde'], ['silver', 1.2, 'silver-white'], ['pink', 1.2, 'pastel pink'],
+  ['blue', 1.2, 'blue'], ['navy', 1.5, 'dark navy'], ['lavender', 1, 'lavender'], ['mint', 0.8, 'mint green'], ['red', 1, 'deep red'], ['orange', 0.8, 'ginger orange'],
+  ['two_tone', 1, 'two-tone, dark at the roots and bright at the tips'], ['teal', 0.8, 'teal'],
+]
+
+const ANIME_EYES: readonly Option[] = [
+  ['brown', 3, 'brown'], ['amber', 1.5, 'amber'], ['blue', 2, 'blue'], ['green', 1.5, 'green'], ['violet', 1.2, 'violet'], ['red', 0.8, 'ruby red'],
+  ['gold', 1, 'golden'], ['teal', 1, 'teal'], ['gray', 1, 'gray'], ['pink', 0.6, 'pink'],
+]
+
+const ANIME_OUTFITS: Record<'female' | 'male', readonly Option[]> = {
+  female: [
+    ['hoodie', 3, 'a hoodie'], ['sweater', 3, 'an oversized sweater'], ['denim', 2, 'a denim jacket'], ['trench', 1.5, 'a trench coat'], ['yukata', 0.8, 'a yukata'],
+    ['sundress', 2, 'a sundress'], ['cardigan', 2, 'a cardigan over a blouse'], ['tank', 1.2, 'a tank top'], ['turtleneck', 1.5, 'a turtleneck'], ['raincoat', 1, 'a yellow raincoat'],
+    ['apron', 1, 'a cafe apron'], ['varsity', 1, 'a varsity jacket'], ['knit_vest', 1.5, 'a knit vest over a shirt'], ['pajamas', 1, 'cozy pajamas'], ['scarf_coat', 1.5, 'a long coat and a scarf'],
+    ['sport', 1, 'a track jacket'], ['overalls', 1, 'overalls over a striped top'],
+  ],
+  male: [
+    ['hoodie', 3, 'a hoodie'], ['sweater', 2.5, 'a knit sweater'], ['denim', 2, 'a denim jacket'], ['trench', 1.5, 'a long coat'], ['yukata', 0.8, 'a yukata'],
+    ['shirt', 2.5, 'an open-collar shirt with the sleeves rolled up'], ['tee', 2.5, 'a plain T-shirt'], ['bomber', 1.8, 'a bomber jacket'], ['turtleneck', 1.4, 'a turtleneck'],
+    ['raincoat', 1, 'a yellow raincoat'], ['apron', 1, 'a cafe apron'], ['varsity', 1.2, 'a varsity jacket'], ['pajamas', 1, 'cozy pajamas'], ['scarf_coat', 1.4, 'a coat and a scarf'],
+    ['sport', 1.2, 'a track jacket'], ['suit', 0.8, 'a loosened tie and a work shirt'], ['windbreaker', 1.2, 'a windbreaker'],
+  ],
+}
+
+const ANIME_CAT_COATS: readonly Option[] = [
+  ['orange', 2, 'an orange tabby cat'], ['black', 2, 'a black cat with bright eyes'], ['white', 1.5, 'a white cat with blue eyes'], ['calico', 1.5, 'a calico cat'], ['gray', 1.5, 'a gray tabby cat'],
+  ['tuxedo', 1.5, 'a tuxedo cat'], ['cream_long', 1, 'a fluffy cream long-haired cat'], ['siamese', 1, 'a cream cat with dark points'], ['scottish', 1, 'a round-faced gray cat with folded ears'],
+]
+
+const ANIME_CAT_POSES: readonly Option[] = [
+  ['sleep', 2, 'sleeping curled up'], ['stare', 2, 'sitting upright and staring at the viewer'], ['peek', 1.5, 'peeking out from behind a corner'], ['yawn', 1.2, 'yawning widely'],
+  ['stretch', 1.2, 'stretching'], ['loaf', 1.5, 'loafing on a windowsill'], ['cup', 1, 'with its paws on a cup'], ['scarf', 1, 'wearing a tiny scarf'], ['butterfly', 1, 'watching a butterfly'],
+  ['box', 1.2, 'sitting in a cardboard box'], ['pot', 0.8, 'sitting in a flower pot'], ['look_back', 1.2, 'looking back over its shoulder, tail curled'],
+]
+
+const ANIME_DOG_COATS: readonly Option[] = [
+  ['shiba', 2, 'a shiba inu'], ['corgi', 2, 'a corgi'], ['golden', 1.5, 'a golden retriever'], ['pomeranian', 1.2, 'a fluffy pomeranian'], ['lab', 1.2, 'a black labrador'],
+  ['husky', 1, 'a husky'], ['pug', 1, 'a pug'], ['spitz', 1, 'a white spitz'], ['mutt', 1.5, 'a scruffy brown mixed-breed dog'], ['dachshund', 1, 'a dachshund'], ['poodle', 0.8, 'a curly poodle'],
+]
+
+const ANIME_DOG_POSES: readonly Option[] = [
+  ['smile', 2, 'smiling with its tongue out'], ['tilt', 2, 'tilting its head'], ['bandana', 1.2, 'wearing a bandana'], ['run', 1.2, 'running through a field'], ['sleep', 1, 'dozing'],
+  ['ball', 1.2, 'with a ball in its mouth'], ['raincoat', 1, 'in a tiny raincoat'], ['window', 1.2, 'looking out of a window'], ['ears', 1, 'with its ears flapping in the wind'], ['sit', 1.5, 'sitting politely'],
+]
+
+const ANIME_CRITTERS: readonly Option[] = [
+  ['rabbit', 1.5, 'a round white rabbit nibbling a leaf'], ['fox', 1.5, 'a small fox sitting in tall grass'], ['hamster', 1.2, 'a hamster stuffing its cheeks'], ['bird', 1.2, 'a small bird on a branch'],
+  ['penguin', 1.2, 'a penguin waddling'], ['frog', 1, 'a frog on a lily pad in the rain'], ['bear', 1, 'a bear cub with a honey pot'], ['capybara', 1.2, 'a capybara relaxing in a hot spring'],
+  ['deer', 0.8, 'a young deer in a clearing'], ['hedgehog', 1, 'a hedgehog curled up'], ['red_panda', 1, 'a red panda on a branch'], ['otter', 1, 'an otter holding a pebble'],
+  ['owl', 0.8, 'a fluffy owl'], ['duck', 1, 'a duckling in a puddle'], ['sheep', 0.8, 'a fluffy sheep'], ['seal', 0.8, 'a seal pup on the ice'], ['jellyfish', 0.5, 'a glowing jellyfish'],
+]
+
+const ANIME_OBJECTS: readonly Option[] = [
+  ['iced_coffee', 1.5, 'an iced coffee with condensation'], ['bubble_tea', 1.5, 'a bubble tea'], ['shortcake', 1, 'a strawberry shortcake'], ['ramen', 1, 'a steaming bowl of ramen'],
+  ['succulent', 1.2, 'a small succulent in a pot'], ['film_camera', 1.2, 'a vintage film camera'], ['headphones', 1.2, 'a pair of headphones'], ['controller', 1, 'a game controller'],
+  ['paper_plane', 0.8, 'a paper airplane in the air'], ['books', 1, 'a stack of books with a mug'], ['umbrella', 1, 'an umbrella in the rain'], ['bicycle', 1, 'a bicycle leaning on a wall'],
+  ['sneakers', 1, 'a pair of sneakers'], ['guitar', 0.8, 'an acoustic guitar'], ['skateboard', 0.7, 'a skateboard'], ['cassette', 0.8, 'a retro cassette player'], ['ice_cream', 1, 'an ice cream cone'],
+  ['bento', 1, 'a bento box'], ['tea_set', 0.8, 'a tea set'], ['cactus', 0.8, 'a cactus'], ['desk_lamp', 0.8, 'a desk lamp glowing in a dark room'], ['polaroids', 0.8, 'a few polaroid photos'],
+  ['snow_globe', 0.6, 'a snow globe'], ['moon', 0.8, 'a crescent moon and stars'], ['keyboard', 0.7, 'a mechanical keyboard'], ['sunflower', 0.9, 'a sunflower'], ['bonsai', 0.5, 'a bonsai tree'],
+  ['pixel_heart', 0.5, 'a pixel-art heart'], ['balloons', 0.6, 'a bunch of balloons'], ['lantern', 0.6, 'a paper lantern'], ['notebook', 0.8, 'an open notebook with a pen'],
+]
+
+const ANIME_SCENES: readonly Option[] = [
+  ['platform', 1.2, 'a quiet train platform with a vending machine'], ['night_city', 1.5, 'a city skyline at night with lit windows'], ['sea', 1.2, 'a calm sea under a huge sky'],
+  ['street_rain', 1.2, 'a narrow alley in the rain with a glowing sign'], ['mountain', 1, 'a mountain lake with mist'], ['cafe', 1, 'an empty cafe with the chairs turned toward the window'],
+  ['crossing', 1, 'a street crossing with an old streetlight'], ['field', 1, 'a wide green field with a single tree'], ['space', 0.8, 'a night sky full of stars over a campsite'],
+  ['snow', 0.8, 'a snowy village with warm lit windows'], ['school_roof', 0.8, 'a rooftop with a water tank and a clear sky'], ['bridge', 0.8, 'a river bridge with city lights'],
+  ['bookshop', 0.8, 'a small bookshop at night'], ['greenhouse', 0.7, 'a sunlit greenhouse'], ['shrine', 0.7, 'a quiet shrine path with stone lanterns'], ['bus_stop', 0.8, 'a lone bus stop in the rain'],
+]
+
+/** One art style line for an anime picture, for drawings other than the profile picture. */
+export function pickAnimeStyle(random: Random): string {
+  return pick(ANIME_STYLES, random)[2]
+}
+
 /** Pictures made in an app, not photographed: the phone-photo lines would turn them into photos. */
 const DIGITAL_SUBTYPES = new Set(['anime_icon', 'sticker_char', 'lettering', 'emoji_plain'])
 /** Pictures whose subject is a few words. */
@@ -871,7 +1021,9 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     take('filter', FILTERS),
     take('flaw', flawsFor(mirrorShot)),
   ].filter(Boolean).join('; ')
-  const lines: string[] = ['A casual photo that someone uses as their social media profile picture.']
+  const lines: string[] = [category === 'other' && DIGITAL_SUBTYPES.has(subtype.key)
+    ? 'A picture that someone uses as their social media profile picture.'
+    : 'A casual photo that someone uses as their social media profile picture.']
 
   if (category === 'face' || category === 'partial') {
     const mirror = subtype.key === 'mirror_phone'
@@ -946,6 +1098,35 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
     env = 'outdoor'
   } else {
     lines.push(`Subject: ${subtype.text.replace('{country}', persona.countryName ?? 'the persona\'s country')}. No photographic person in the image.`)
+    if (subtype.key === 'anime_icon') {
+      take('animeSubject', ANIME_SUBJECTS)
+      const subject = attributes.animeSubject
+      lines.push(`Art style: ${take('animeStyle', ANIME_STYLES)}. Colors: ${take('animePalette', ANIME_PALETTES)}.`)
+      if (subject === 'person') {
+        const table = gender ?? (random() < 0.5 ? 'female' : 'male')
+        const color = take('animeHairColor', ANIME_HAIR_COLORS)
+        const length = take('hairLength', HAIR_LENGTH[table])
+        // Drawn hair is not dyed over its roots; short hair cannot be tied up.
+        const styles = HAIR_STYLE[table].filter((option) => option[0] !== 'roots' && !(['short', 'bob', 'buzz'].includes(attributes.hairLength) && TIED_STYLES.has(option[0])))
+        const hair = `${length} ${color} hair, ${take('hairStyle', styles)}`
+        const doing = take('animeAction', ANIME_ACTIONS)
+        lines.push(`It shows an original character, drawn like a profile icon: a ${gender === 'female' ? 'young woman' : gender === 'male' ? 'young man' : 'young adult'} ${ageBand(persona.age, gender)}, matching the account.`)
+        lines.push(`Framing: ${take('animeFraming', ANIME_FRAMINGS)}. Look: ${hair}; ${take('animeEyes', ANIME_EYES)} eyes; ${take('expression', EXPRESSIONS)}; wearing ${take('animeOutfit', ANIME_OUTFITS[table])}${doing ? `; ${doing}` : ''}.`)
+        const accessory = take('accessory', ACCESSORIES)
+        if (accessory) lines.push(`Accessory: ${accessory}.`)
+      } else if (subject === 'cat') {
+        lines.push(`It shows ${take('animeCat', ANIME_CAT_COATS)}, ${take('animeCatPose', ANIME_CAT_POSES)}, drawn cute and expressive and filling the square like a profile icon.`)
+      } else if (subject === 'dog') {
+        lines.push(`It shows ${take('animeDog', ANIME_DOG_COATS)}, ${take('animeDogPose', ANIME_DOG_POSES)}, drawn cute and expressive and filling the square like a profile icon.`)
+      } else if (subject === 'critter') {
+        lines.push(`It shows ${take('animeCritter', ANIME_CRITTERS)}, drawn cute and expressive and filling the square like a profile icon.`)
+      } else if (subject === 'object') {
+        lines.push(`It shows ${take('animeObject', ANIME_OBJECTS)}, drawn with care and filling the square like a profile icon. No people.`)
+      } else {
+        lines.push(`It shows a scene with no people: ${take('animeScene', ANIME_SCENES)}, framed like a profile icon.`)
+      }
+      if (subject !== 'landscape') lines.push(`Background: ${take('animeBackground', ANIME_BACKGROUNDS)}.`)
+    }
     if (LETTER_SUBTYPES.has(subtype.key)) lines.push('The words are the subject: spelled correctly, something a young person there would really write, and nothing else is written anywhere.')
   }
 

@@ -1,6 +1,13 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminDashboardDateRange } from "./admin-dashboard-metrics";
-import { parseDayKey, resolveAdminDashboardRange, resolveTodayKey, shiftDayKey, startOfDayUtc } from "./admin-dashboard-metrics";
+import {
+  formatDayKey,
+  parseDayKey,
+  resolveAdminDashboardRange,
+  resolveTodayKey,
+  shiftDayKey,
+  startOfDayUtc,
+} from "./admin-dashboard-metrics";
 
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
@@ -22,9 +29,12 @@ vi.mock("@/lib/prisma", () => ({
 
 import {
   clearAdminDashboardCache,
+  DAILY_METRIC_CACHE_CHUNK_DAYS,
   loadAdminDashboardMetrics,
   loadTranslationModelMessageSeries,
+  startAdminDashboardMetricsLoad,
 } from "./admin-dashboard-query";
+import type { UsageMetricPart } from "./admin-dashboard-usage";
 
 function makeRange(dayKeys: string[]): AdminDashboardDateRange {
   const rangeStart = startOfDayUtc(dayKeys[0]);
@@ -57,6 +67,35 @@ function setRawMetricResults(dayKey: string): void {
     .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 220, p95_ms: 360 }])
     .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 90, p95_ms: 240 }])
     .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 30, p95_ms: 50 }]);
+}
+
+type RawMetricRow = { day: Date; value: bigint; avg_ms: number; p95_ms: number };
+
+/**
+ * One row per UTC day in [start, end) that fits every metric query (count `value`,
+ * latency `avg_ms`/`p95_ms`). The figures come from the day of the month, so each day's
+ * numbers are distinct whichever batch computed them.
+ */
+function rowsForEveryDay(start: Date, end: Date): RawMetricRow[] {
+  const rows: RawMetricRow[] = [];
+  for (const cursor = new Date(start); cursor.getTime() < end.getTime(); cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    const dayOfMonth = cursor.getUTCDate();
+    rows.push({ day: new Date(cursor), value: BigInt(dayOfMonth), avg_ms: dayOfMonth * 10, p95_ms: dayOfMonth * 20 });
+  }
+  return rows;
+}
+
+function dayOfMonth(dayKey: string): number {
+  return Number(dayKey.slice(8));
+}
+
+/** Contiguous dayKeys split into the chunks the loader computes and stores one after another. */
+function toChunks(dayKeys: readonly string[]): string[][] {
+  const chunks: string[][] = [];
+  for (let start = 0; start < dayKeys.length; start += DAILY_METRIC_CACHE_CHUNK_DAYS) {
+    chunks.push(dayKeys.slice(start, start + DAILY_METRIC_CACHE_CHUNK_DAYS));
+  }
+  return chunks;
 }
 
 afterEach(() => {
@@ -421,13 +460,18 @@ describe("loadAdminDashboardMetrics", () => {
     const yesterday = shiftDayKey(today, -1);
     const dayKeys = ["2026-08-02", "2026-08-03", yesterday, today];
     setRawMetricResults("2026-08-02");
+    setRawMetricResults(today);
     mocks.deleteMany.mockResolvedValue({ count: 2 });
     mocks.upsert.mockResolvedValue({});
 
     const metrics = await loadAdminDashboardMetrics(makeRange(dayKeys), { forceRefresh: true });
 
     expect(mocks.findMany).not.toHaveBeenCalled();
-    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(8);
+    // The two cacheable days as one chunk, then yesterday and today live, never the months between.
+    expect(mocks.queryRawUnsafe.mock.calls.map(([, start, end]) => [formatDayKey(start), formatDayKey(end)])).toEqual([
+      ...Array(8).fill(["2026-08-02", "2026-08-04"]),
+      ...Array(8).fill([yesterday, shiftDayKey(today, 1)]),
+    ]);
     expect(mocks.deleteMany).toHaveBeenCalledTimes(1);
     const deletedDays: Date[] = mocks.deleteMany.mock.calls[0][0].where.day.in;
     expect(deletedDays).toHaveLength(2);
@@ -437,7 +481,227 @@ describe("loadAdminDashboardMetrics", () => {
       { day: rawDay("2026-08-02"), platform: "all" },
       { day: rawDay("2026-08-03"), platform: "all" },
     ]);
-    expect(metrics[0].points).toHaveLength(4);
+    expect(metrics[0].points.map((point) => point.value)).toEqual([5, 0, 0, 5]);
+  });
+
+  describe("filling the daily metric cache in chunks", () => {
+    // These tests install persistent mock implementations; keep them out of other tests.
+    beforeEach(() => {
+      vi.resetAllMocks();
+    });
+    afterEach(() => {
+      vi.resetAllMocks();
+    });
+
+    it.each([
+      ["every cached row is from an older metric version", false],
+      ["forceRefresh", true],
+    ] as const)("computes and stores the cacheable days chunk by chunk when %s", async (_case, forceRefresh) => {
+      const range = resolveAdminDashboardRange(new Date(), 30);
+      const cacheableDays = range.dayKeys.slice(0, -2);
+      const chunks = toChunks(cacheableDays);
+      const events: string[] = [];
+      // Production right after a USAGE_METRIC_VERSION bump: a row for every day, none usable.
+      mocks.findMany.mockResolvedValue(cacheableDays.map((day) => ({
+        day: rawDay(day), signupCount: 9, dauCount: 8, messageCount: 7,
+        usageSeconds: 6, usageMetricVersion: 2, sttAvgMs: null, sttP95Ms: null,
+        translationAvgMs: null, translationP95Ms: null,
+      })));
+      mocks.deleteMany.mockImplementation(async () => {
+        events.push("delete");
+        return { count: cacheableDays.length };
+      });
+      // Each event names its query by the order the eight distinct statements first ran.
+      const statements: string[] = [];
+      mocks.queryRawUnsafe.mockImplementation(async (sql: string, start: Date, end: Date) => {
+        if (!statements.includes(sql)) statements.push(sql);
+        events.push(`query#${statements.indexOf(sql)} ${formatDayKey(start)}..${formatDayKey(end)}`);
+        return rowsForEveryDay(start, end);
+      });
+      mocks.upsert.mockImplementation(async (args) => {
+        events.push(`store ${formatDayKey(args.where.day_platform.day)}`);
+        return {};
+      });
+
+      const metrics = await loadAdminDashboardMetrics(range, { forceRefresh });
+
+      const span = (days: readonly string[]) => `${days[0]}..${shiftDayKey(days[days.length - 1], 1)}`;
+      const queryEvents = (query: number) => events.filter((event) => event.startsWith(`query#${query} `));
+      const stores = events.filter((event) => event.startsWith("store "));
+      expect(chunks.length).toBeGreaterThan(1);
+      if (forceRefresh) expect(events[0]).toBe("delete");
+      // Every query computes the chunks once each, in day order, then yesterday and today.
+      expect(statements).toHaveLength(8);
+      for (let query = 0; query < 8; query += 1) {
+        expect(queryEvents(query)).toEqual([...chunks, range.dayKeys.slice(28)].map((days) => `query#${query} ${span(days)}`));
+      }
+      // A chunk is stored only once all eight of its queries have run; yesterday and today never are.
+      for (const chunk of chunks) {
+        const lastQuery = Math.max(...events.flatMap((event, index) => (event.endsWith(` ${span(chunk)}`) ? [index] : [])));
+        const chunkStores = events.flatMap((event, index) => (chunk.includes(event.slice(6)) && event.startsWith("store ") ? [index] : []));
+        expect(chunkStores).toHaveLength(chunk.length);
+        expect(Math.min(...chunkStores)).toBeGreaterThan(lastQuery);
+      }
+      expect(stores).toEqual(cacheableDays.map((day) => `store ${day}`));
+      expect(mocks.findMany).toHaveBeenCalledTimes(forceRefresh ? 0 : 1);
+      // Every day keeps the figures of its own rows, whichever batch computed it.
+      expect(metrics[0].points.map((point) => point.value)).toEqual(range.dayKeys.map(dayOfMonth));
+      expect(metrics[4].points.map((point) => point.value)).toEqual(range.dayKeys.map((day) => dayOfMonth(day) * 10));
+    });
+
+    it("keeps the chunks stored before a failure, and the next load computes only the days still missing", async () => {
+      const range = resolveAdminDashboardRange(new Date(), 30);
+      const cacheableDays = range.dayKeys.slice(0, -2);
+      const storedDayCount = 2 * DAILY_METRIC_CACHE_CHUNK_DAYS;
+      const firstUnstoredDay = cacheableDays[storedDayCount];
+      const storedRows: { day: Date }[] = [];
+      mocks.queryRawUnsafe.mockImplementation(async (_sql: string, start: Date, end: Date) => {
+        if (formatDayKey(start) === firstUnstoredDay) {
+          throw new Error("canceling statement due to statement timeout");
+        }
+        return rowsForEveryDay(start, end);
+      });
+      mocks.upsert.mockImplementation(async (args) => {
+        storedRows.push(args.create);
+        return {};
+      });
+      mocks.findMany.mockResolvedValueOnce([]);
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await expect(loadAdminDashboardMetrics(range)).rejects.toThrow("statement timeout");
+      expect(storedRows.map((row) => formatDayKey(row.day))).toEqual(cacheableDays.slice(0, storedDayCount));
+      // Logged once per query, where it failed.
+      expect(consoleError).toHaveBeenCalledTimes(8);
+      consoleError.mockRestore();
+
+      // The next load reads those rows back from the cache table and starts where the
+      // failed one stopped.
+      mocks.queryRawUnsafe.mockReset();
+      mocks.queryRawUnsafe.mockImplementation(async (_sql: string, start: Date, end: Date) => rowsForEveryDay(start, end));
+      mocks.upsert.mockReset();
+      mocks.upsert.mockResolvedValue({});
+      mocks.findMany.mockResolvedValueOnce([...storedRows]);
+
+      const metrics = await loadAdminDashboardMetrics(range);
+
+      const queriedFrom = mocks.queryRawUnsafe.mock.calls.map(([, start]) => formatDayKey(start));
+      expect(queriedFrom[0]).toBe(firstUnstoredDay);
+      expect(queriedFrom.filter((day) => day < firstUnstoredDay)).toEqual([]);
+      expect(mocks.upsert.mock.calls.map(([args]) => formatDayKey(args.where.day_platform.day)))
+        .toEqual(cacheableDays.slice(storedDayCount));
+      expect(metrics[0].points.map((point) => point.value)).toEqual(range.dayKeys.map(dayOfMonth));
+    });
+  });
+});
+
+describe("startAdminDashboardMetricsLoad", () => {
+  // These tests install persistent mock implementations; keep them out of other tests.
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  /** The queries' start order, which is also each batch's part order. */
+  const QUERY_ORDER = [
+    "signups", "dau", "messages", "usage_seconds",
+    "stt_latency_ms", "translation_latency_ms", "stt_latency_ms_per_char", "translation_latency_ms_per_token",
+  ];
+  /** STT per character is the only query that reads the message text, and the slowest one. */
+  const isSttPerChar = (sql: string) => sql.includes("app_message_contents");
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const storedDays = () => mocks.upsert.mock.calls.map(([args]) => formatDayKey(args.where.day_platform.day));
+
+  it("resolves with the cached days while the other days are still being computed", async () => {
+    const range = resolveAdminDashboardRange(new Date(), 7);
+    const cachedDays = range.dayKeys.slice(0, 3);
+    mocks.findMany.mockResolvedValue(cachedDays.map((day, index) => ({
+      day: rawDay(day), signupCount: index + 1, dauCount: 8, messageCount: 7, usageSeconds: 60,
+      usageMetricVersion: 3, sttAvgMs: 120, sttP95Ms: 300, translationAvgMs: null, translationP95Ms: null,
+      sttMsPerCharAvg: null, sttMsPerCharP95: null, translationMsPerTokenAvg: null, translationMsPerTokenP95: null,
+    })));
+    // No computed day ever comes back.
+    mocks.queryRawUnsafe.mockImplementation(() => new Promise(() => {}));
+
+    const load = await startAdminDashboardMetricsLoad(range, { platform: "ios" });
+
+    expect(load.cached.signups).toEqual(Object.fromEntries(cachedDays.map((day, index) => [day, { value: index + 1, secondary: null }])));
+    expect(load.cached.stt_latency_ms[cachedDays[2]]).toEqual({ value: 120, secondary: 300 });
+    expect(load.cached.translation_latency_ms[cachedDays[2]]).toEqual({ value: null, secondary: null });
+    // The missing chunk, then yesterday and today: one part per metric, each already started.
+    expect(load.parts.map((part) => [part.metric, part.dayKeys])).toEqual([
+      ...QUERY_ORDER.map((metric) => [metric, range.dayKeys.slice(3, 5)]),
+      ...QUERY_ORDER.map((metric) => [metric, range.dayKeys.slice(5)]),
+    ]);
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(8);
+    for (const [, start, end, platform] of mocks.queryRawUnsafe.mock.calls) {
+      expect([formatDayKey(start), formatDayKey(end), platform]).toEqual([range.dayKeys[3], range.dayKeys[5], "ios"]);
+    }
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("streams the other metrics while the slowest is on its first chunk, and stores a chunk only once all its metrics are in", async () => {
+    const range = resolveAdminDashboardRange(new Date(), 30);
+    const chunks = toChunks(range.dayKeys.slice(0, -2));
+    mocks.findMany.mockResolvedValue([]);
+    mocks.upsert.mockResolvedValue({});
+    const held: { from: string; release: () => void }[] = [];
+    mocks.queryRawUnsafe.mockImplementation((sql: string, start: Date, end: Date) => {
+      const rows = rowsForEveryDay(start, end);
+      if (!isSttPerChar(sql)) return Promise.resolve(rows);
+      return new Promise((resolve) => held.push({ from: formatDayKey(start), release: () => resolve(rows) }));
+    });
+
+    const load = await startAdminDashboardMetricsLoad(range);
+    const settled = new Set<UsageMetricPart>();
+    for (const part of load.parts) void part.result.then(() => settled.add(part));
+    const pending = () => load.parts.filter((part) => !settled.has(part)).map((part) => `${part.metric} ${part.dayKeys[0]}`);
+    await flush();
+
+    // Every other metric has every day, today and yesterday included.
+    const sttPerCharParts = [...chunks, range.dayKeys.slice(28)].map((days) => `stt_latency_ms_per_char ${days[0]}`);
+    expect(pending()).toEqual(sttPerCharParts);
+    const signups = await load.parts.find((part) => part.metric === "signups" && part.dayKeys[0] === range.dayKeys[28])!.result;
+    expect(signups).toEqual({
+      ok: true,
+      days: Object.fromEntries(range.dayKeys.slice(28).map((day) => [day, { value: dayOfMonth(day), secondary: null }])),
+    });
+    // One query at a time per metric, and no chunk is stored while one of its metrics is missing.
+    expect(held.map((query) => query.from)).toEqual([chunks[0][0]]);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+
+    held[0].release();
+    await flush();
+    expect(pending()).toEqual(sttPerCharParts.slice(1));
+    expect(storedDays()).toEqual(chunks[0]);
+    expect(held.map((query) => query.from)).toEqual([chunks[0][0], chunks[1][0]]);
+  });
+
+  it("fails only the parts of the query that failed, and stores no chunk without it", async () => {
+    const range = resolveAdminDashboardRange(new Date(), 30);
+    const chunks = toChunks(range.dayKeys.slice(0, -2));
+    mocks.findMany.mockResolvedValue([]);
+    mocks.upsert.mockResolvedValue({});
+    mocks.queryRawUnsafe.mockImplementation(async (sql: string, start: Date, end: Date) => {
+      if (isSttPerChar(sql) && formatDayKey(start) === chunks[1][0]) {
+        throw new Error("canceling statement due to statement timeout");
+      }
+      return rowsForEveryDay(start, end);
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const load = await startAdminDashboardMetricsLoad(range);
+    const results = await Promise.all(load.parts.map((part) => part.result));
+    await expect(load.done).rejects.toThrow("statement timeout");
+
+    // That query is not run again after it failed, for later chunks or for yesterday and today.
+    const failed = load.parts.flatMap((part, index) => (results[index].ok ? [] : [`${part.metric} ${part.dayKeys[0]}`]));
+    expect(failed).toEqual([...chunks.slice(1), range.dayKeys.slice(28)].map((days) => `stt_latency_ms_per_char ${days[0]}`));
+    expect(mocks.queryRawUnsafe.mock.calls.filter(([sql]) => isSttPerChar(sql))).toHaveLength(2);
+    expect(storedDays()).toEqual(chunks[0]);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
   });
 });
 

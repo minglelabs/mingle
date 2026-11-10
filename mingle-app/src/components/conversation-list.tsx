@@ -31,6 +31,11 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
+import {
+  hasConfirmedLanguageOnboarding,
+  markLanguageOnboardingConfirmed,
+  persistLanguageOnboardingChoice,
+} from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Bell, Check, Loader2, LogOut, PencilLine, Search, Settings, Share2, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -48,24 +53,24 @@ import { resolveRoomAccountBadge } from "@/components/LivePhoneDemo/chat-account
 import IdentityRow from "@/components/posts/identity-row";
 import { withAccountBadgeLabel, type AccountBadgeKind } from "@/lib/account-badge";
 import {
-  LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
-  LS_KEY_PENDING_BIRTH_DATE,
   LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
-  LS_KEY_PENDING_DISCOVERY_SOURCE,
-  LS_KEY_PENDING_INTEREST_LANGUAGES,
   LS_KEY_PENDING_PRIMARY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
   DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
   clearPendingBirthDate,
   clearPendingDiscoverySource,
+  clearPendingGender,
   normalizeLivePhoneDemoAdBannerPosition,
   readPendingBirthDate,
   readPendingDiscoverySource,
+  readPendingGender,
+  clearPendingUsagePurpose,
+  readPendingUsagePurpose,
+  readPendingUsagePurposeNote,
   readPendingInterestLanguages,
   clearPendingInterestLanguages,
-  readPersistedBooleanPreference,
   readPersistedLivePhoneDemoPreferences,
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
@@ -78,7 +83,6 @@ import {
   resolveLanguageSelectorUnionAfterOwnLanguagesChange,
 } from "@/components/LivePhoneDemo/language-selector.logic";
 import {
-  formatBirthDate,
 } from "@/lib/birth-date";
 import {
   resolveOnboardingDefaultLanguage,
@@ -86,6 +90,10 @@ import {
   shouldAutoOpenLanguageOnboarding,
 } from "@/components/LivePhoneDemo/language-onboarding.logic";
 import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
+import {
+  resolveOnboardingLanguagePreferences,
+  type ProfileLanguagePreferencesPayload,
+} from "@/components/conversation-list.onboarding-languages";
 import {
   deriveDefaultConversationLanguages,
   deriveDefaultSttLanguagesForLocale,
@@ -493,54 +501,6 @@ function readPendingPrimaryLanguages(): string[] {
   } catch {
     return [];
   }
-}
-
-type ProfileLanguagePreferencesPayload = {
-  primaryLanguages?: unknown;
-  defaultConversationLanguages?: unknown;
-};
-
-type ResolvedOnboardingLanguagePreferences = {
-  primaryLanguages: string[];
-  defaultConversationLanguages: string[];
-  patch: {
-    primaryLanguages?: string[];
-    defaultConversationLanguages?: string[];
-  };
-};
-
-function resolveOnboardingLanguagePreferences(
-  profile: ProfileLanguagePreferencesPayload,
-  pendingPrimaryLanguages: readonly string[],
-  pendingDefaultConversationLanguages: readonly string[],
-): ResolvedOnboardingLanguagePreferences {
-  const serverPrimaryLanguages = sanitizeSttLanguageSelection(profile.primaryLanguages);
-  const serverDefaultConversationLanguages = sanitizeSttLanguageSelection(
-    profile.defaultConversationLanguages,
-  );
-  const fallbackPrimaryLanguages = sanitizeSttLanguageSelection(pendingPrimaryLanguages);
-  const fallbackDefaultConversationLanguages = sanitizeSttLanguageSelection(
-    pendingDefaultConversationLanguages,
-  );
-  const primaryLanguages = serverPrimaryLanguages.length > 0
-    ? serverPrimaryLanguages
-    : fallbackPrimaryLanguages;
-  const defaultConversationLanguages = serverDefaultConversationLanguages.length > 0
-    ? serverDefaultConversationLanguages
-    : fallbackDefaultConversationLanguages;
-
-  return {
-    primaryLanguages,
-    defaultConversationLanguages,
-    patch: {
-      ...(serverPrimaryLanguages.length === 0 && primaryLanguages.length > 0
-        ? { primaryLanguages }
-        : {}),
-      ...(serverDefaultConversationLanguages.length === 0 && defaultConversationLanguages.length > 0
-        ? { defaultConversationLanguages }
-        : {}),
-    },
-  };
 }
 
 function clearPendingLanguagePreferences(): void {
@@ -2314,12 +2274,17 @@ export default function ConversationList({
     const pendingPrimaryLanguages = readPendingPrimaryLanguages();
     const pendingBirthDate = readPendingBirthDate();
     const pendingDiscoverySource = readPendingDiscoverySource();
+    const pendingUsagePurpose = readPendingUsagePurpose();
+    const pendingUsagePurposeNote = readPendingUsagePurposeNote();
     const pendingInterestLanguages = readPendingInterestLanguages();
+    const pendingGender = readPendingGender();
 
     if (
       pendingDefaultLanguages.length === 0
       && !pendingBirthDate
+      && !pendingGender
       && !pendingDiscoverySource
+      && !pendingUsagePurpose
       && pendingInterestLanguages.length === 0
     ) return;
 
@@ -2343,6 +2308,7 @@ export default function ConversationList({
           profile,
           onboardingPrimaryLanguages,
           pendingDefaultLanguages,
+          pendingInterestLanguages.map((entry) => entry.code),
         );
 
         const patchPayload: Record<string, unknown> = {
@@ -2351,8 +2317,15 @@ export default function ConversationList({
         if (pendingBirthDate) {
           patchPayload.birthDate = pendingBirthDate;
         }
+        if (pendingGender) {
+          patchPayload.gender = pendingGender;
+        }
         if (pendingDiscoverySource) {
           patchPayload.discoverySource = pendingDiscoverySource;
+        }
+        if (pendingUsagePurpose) {
+          patchPayload.usagePurpose = pendingUsagePurpose;
+          patchPayload.usagePurposeNote = pendingUsagePurposeNote;
         }
         if (pendingInterestLanguages.length > 0) {
           patchPayload.interestLanguages = pendingInterestLanguages;
@@ -2364,7 +2337,9 @@ export default function ConversationList({
           setDefaultSelectedLanguages(resolvedPreferences.defaultConversationLanguages);
           clearPendingLanguagePreferences();
           clearPendingBirthDate();
+          clearPendingGender();
           clearPendingDiscoverySource();
+          clearPendingUsagePurpose();
           clearPendingInterestLanguages();
           return;
         }
@@ -2389,7 +2364,9 @@ export default function ConversationList({
         setDefaultSelectedLanguages(savedPreferences.defaultConversationLanguages);
         clearPendingLanguagePreferences();
         clearPendingBirthDate();
+        clearPendingGender();
         clearPendingDiscoverySource();
+        clearPendingUsagePurpose();
         clearPendingInterestLanguages();
       } catch {
         // Keep the pending marker so a later authenticated launch can retry the claim.
@@ -3647,17 +3624,7 @@ export default function ConversationList({
       replaceConversationOverlayUrl(readConversationIdFromLocation(), "initial-route-marker");
     }
 
-    let hasConfirmedLanguageOnboarding = false;
-    try {
-      hasConfirmedLanguageOnboarding = readPersistedBooleanPreference(
-        window.localStorage.getItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED),
-        false,
-      );
-    } catch {
-      hasConfirmedLanguageOnboarding = false;
-    }
-
-    const nextLanguageOnboardingPhase = shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding)
+    const nextLanguageOnboardingPhase = shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding())
       ? "selection"
       : "ready";
     resolvedLanguageOnboardingPhase = nextLanguageOnboardingPhase;
@@ -4001,7 +3968,9 @@ export default function ConversationList({
         || showSortMenu
         || renameDialogConversationId
         || deleteDialogConversationId
-        || languageOnboardingModalOpen
+        // No banner anywhere in onboarding: not while it resolves, not
+        // during the steps, not while the app switches to the picked locale.
+        || languageOnboardingPhase !== "ready"
         || notificationSurfaceOpen
         || conversationProfileId
       ),
@@ -4011,7 +3980,7 @@ export default function ConversationList({
     conversationProfileId,
     deleteDialogConversationId,
     isCreateChoiceModalOpen,
-    languageOnboardingModalOpen,
+    languageOnboardingPhase,
     notificationSurfaceOpen,
     renameDialogConversationId,
     rowActionMenu,
@@ -5406,44 +5375,17 @@ export default function ConversationList({
   const handleLanguageOnboardingConfirm = useCallback(async (
     payload: LanguageOnboardingConfirmPayload | string,
   ) => {
-    const languageCode = typeof payload === "string" ? payload : payload.language;
-    const birthDateParts = typeof payload === "object" && payload ? payload.birthDate : null;
-    const discoverySource = typeof payload === "object" && payload ? payload.discoverySource : null;
-    const interestLanguages = typeof payload === "object" && payload?.interestLanguage ? [payload.interestLanguage] : [];
-    const formattedBirthDate = birthDateParts ? formatBirthDate(birthDateParts) : null;
-
-    // Seed the room's default output languages from the chosen app language the
-    // same way a brand-new conversation would (chosen language + en/ko/ja, deduped),
-    // not just the single picked language -- see deriveDefaultSttLanguagesForLocale.
-    const normalizedTargets = deriveDefaultSttLanguagesForLocale(languageCode);
-    const normalizedPrimaryLanguages = sanitizeSttLanguageSelection(
-      [languageCode],
-      normalizedTargets.slice(0, 1),
-    );
-
-    try {
-      window.localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(normalizedTargets));
-      window.localStorage.setItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED, "0");
-      window.localStorage.setItem(
-        LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
-        JSON.stringify(normalizedTargets),
-      );
-      window.localStorage.setItem(
-        LS_KEY_PENDING_PRIMARY_LANGUAGES,
-        JSON.stringify(normalizedPrimaryLanguages),
-      );
-      if (formattedBirthDate) {
-        window.localStorage.setItem(LS_KEY_PENDING_BIRTH_DATE, formattedBirthDate);
-      }
-      if (discoverySource) {
-        window.localStorage.setItem(LS_KEY_PENDING_DISCOVERY_SOURCE, discoverySource);
-      }
-      if (interestLanguages.length > 0) {
-        window.localStorage.setItem(LS_KEY_PENDING_INTEREST_LANGUAGES, JSON.stringify(interestLanguages));
-      }
-    } catch {
-      // Ignore storage failures; the onboarding modal will simply reopen next launch.
-    }
+    const {
+      languageCode,
+      defaultConversationLanguages: normalizedTargets,
+      primaryLanguages: normalizedPrimaryLanguages,
+      formattedBirthDate,
+      gender,
+      discoverySource,
+      usagePurpose,
+      usagePurposeNote,
+      interestLanguages,
+    } = persistLanguageOnboardingChoice(payload);
 
     let savedPrimaryLanguages: string[] = normalizedPrimaryLanguages;
     let savedDefaultLanguages: string[] = normalizedTargets;
@@ -5459,6 +5401,7 @@ export default function ConversationList({
           profile,
           normalizedPrimaryLanguages,
           normalizedTargets,
+          interestLanguages.map((entry) => entry.code),
         );
 
         const patchPayload: Record<string, unknown> = {
@@ -5467,8 +5410,15 @@ export default function ConversationList({
         if (formattedBirthDate) {
           patchPayload.birthDate = formattedBirthDate;
         }
+        if (gender) {
+          patchPayload.gender = gender;
+        }
         if (discoverySource) {
           patchPayload.discoverySource = discoverySource;
+        }
+        if (usagePurpose) {
+          patchPayload.usagePurpose = usagePurpose;
+          patchPayload.usagePurposeNote = usagePurposeNote;
         }
         if (interestLanguages.length > 0) {
           patchPayload.interestLanguages = interestLanguages;
@@ -5494,18 +5444,16 @@ export default function ConversationList({
         savedDefaultLanguages = resolvedPreferences.defaultConversationLanguages;
         clearPendingLanguagePreferences();
         clearPendingBirthDate();
+        clearPendingGender();
         clearPendingDiscoverySource();
+        clearPendingUsagePurpose();
         clearPendingInterestLanguages();
       } catch {
         return;
       }
     }
 
-    try {
-      window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, "1");
-    } catch {
-      // Ignore storage failures; the onboarding modal will simply reopen next launch.
-    }
+    markLanguageOnboardingConfirmed();
 
     defaultConversationLanguagesSyncVersionRef.current += 1;
     setPreferredDisplayLanguages(savedPrimaryLanguages);

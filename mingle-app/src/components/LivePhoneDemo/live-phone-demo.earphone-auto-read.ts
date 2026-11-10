@@ -11,6 +11,8 @@ import {
   createEarphoneModeWatermark,
   isEarphoneModeCandidate,
   isEarphoneModeUtteranceSettled,
+  remainingEarphoneModeText,
+  resolveEarphoneModeFixedTarget,
   type EarphoneModeReadContext,
   type EarphoneModeReadTarget,
   type EarphoneModeWatermark,
@@ -57,6 +59,11 @@ type Candidate = {
   signature: string
   lastProgressAtMs: number
   target: EarphoneModeReadTarget | null
+  // Pieces: the fixed text already read aloud, and the full text the current
+  // target was cut from. A piece target leaves the row open for the rest.
+  readText: string
+  targetFullText: string
+  targetIsPiece: boolean
   audio: 'idle' | 'loading' | 'ready' | 'failed'
   audioBlob: Blob | null
   audioRequestedAtMs: number
@@ -105,6 +112,7 @@ export class EarphoneAutoReadController {
   private candidates = new Map<string, Candidate>()
   private timer: unknown = null
   private lastQueuedKeys = ''
+  private lastSnapshot: EarphoneAutoReadSnapshot | null = null
 
   constructor(options: EarphoneAutoReadControllerOptions) {
     this.options = options
@@ -224,9 +232,21 @@ export class EarphoneAutoReadController {
       if (candidate.audio === 'ready' && candidate.audioBlob && candidate.target) {
         if (this.options.isEngineIdle() && this.options.canDispatch()) {
           const item: EarphoneAutoReadDispatchItem = { ...candidate.target, audioBlob: candidate.audioBlob }
-          this.finishCandidate(candidate, 'dispatched')
+          if (candidate.targetIsPiece) {
+            // A fixed piece of a row still open: read it now, then wait for the rest.
+            candidate.readText = candidate.targetFullText
+            candidate.status = 'waiting'
+            candidate.target = null
+            candidate.targetIsPiece = false
+            candidate.lastProgressAtMs = now
+            this.discardPrefetch(candidate)
+          } else {
+            this.finishCandidate(candidate, 'dispatched')
+          }
           this.emitQueuedPlaybackKeys()
           this.options.dispatch(item)
+          // What is left of that row may already be readable.
+          if (this.lastSnapshot) this.reconcile(this.lastSnapshot)
         }
         // Either handed over or waiting for the player to go idle, which
         // pumps again.
@@ -245,6 +265,7 @@ export class EarphoneAutoReadController {
   }
 
   private reconcile(snapshot: EarphoneAutoReadSnapshot): void {
+    this.lastSnapshot = snapshot
     const watermark = this.watermark
     if (!watermark) return
 
@@ -276,6 +297,9 @@ export class EarphoneAutoReadController {
           signature: buildEarphoneModeProgressSignature(utterance, isDraft),
           lastProgressAtMs: now,
           target: null,
+          readText: '',
+          targetFullText: '',
+          targetIsPiece: false,
           audio: 'idle',
           audioBlob: null,
           audioRequestedAtMs: 0,
@@ -299,21 +323,41 @@ export class EarphoneAutoReadController {
         viewerUserId: snapshot.viewerUserId,
         readOwnMessages: this.options.readOwnMessages ?? EARPHONE_MODE_READ_OWN_MESSAGES,
       })
-      if (classified.state === 'ready') {
-        if (candidate.status === 'ready' && candidate.target && !isSameReadTarget(candidate.target, classified.target)) {
-          this.discardPrefetch(candidate)
+      if (classified.state === 'unreadable') {
+        this.finishCandidate(candidate, 'skipped')
+        continue
+      }
+      // The final translation, or while incomplete its fixed part.
+      const full = classified.state === 'ready'
+        ? classified.target
+        : resolveEarphoneModeFixedTarget(utterance, snapshot.read)
+      const isPiece = classified.state !== 'ready'
+      const remainder = full ? remainingEarphoneModeText(full.text, candidate.readText) : null
+      if (full && remainder) {
+        const next: EarphoneModeReadTarget = { ...full, text: remainder }
+        // A queued piece stays queued while the fixed part only grows after it.
+        const keepQueuedPiece = candidate.status === 'ready' && candidate.target && candidate.targetIsPiece
+          && candidate.target.playbackKey === next.playbackKey && remainder.startsWith(candidate.target.text)
+        if (!keepQueuedPiece) {
+          if (candidate.status === 'ready' && candidate.target && !isSameReadTarget(candidate.target, next)) {
+            this.discardPrefetch(candidate)
+          }
+          candidate.target = next
+          candidate.targetFullText = full.text.trim()
+          candidate.targetIsPiece = isPiece
         }
         candidate.status = 'ready'
-        candidate.target = classified.target
-      } else if (classified.state === 'incomplete') {
+      } else if (!isPiece && candidate.readText) {
+        // Everything final was read as pieces (or it changed after them): done.
+        this.finishCandidate(candidate, 'dispatched')
+      } else {
         if (candidate.status === 'ready') {
           this.discardPrefetch(candidate)
           candidate.lastProgressAtMs = now
         }
         candidate.status = 'waiting'
         candidate.target = null
-      } else if (classified.state === 'unreadable') {
-        this.finishCandidate(candidate, 'skipped')
+        candidate.targetIsPiece = false
       }
     }
 
@@ -340,6 +384,9 @@ export class EarphoneAutoReadController {
       candidate.abort = null
       candidate.status = 'waiting'
       candidate.target = null
+      candidate.targetIsPiece = false
+      // Pieces read in the old language say nothing about the new one.
+      candidate.readText = ''
       candidate.audio = 'idle'
       candidate.audioBlob = null
       // Waiting for the new language's translation starts now.
@@ -425,6 +472,7 @@ export class EarphoneAutoReadController {
 
   private resetCandidates(): void {
     this.clearTimer()
+    this.lastSnapshot = null
     for (const candidate of this.candidates.values()) {
       candidate.abort?.abort()
       candidate.abort = null

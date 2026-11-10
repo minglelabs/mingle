@@ -28,10 +28,20 @@ import {
   type DiscoverySource,
 } from "@/lib/discovery-source";
 import { registerNativeBackHandler } from "@/lib/native-back-handler";
+import {
+  USAGE_PURPOSE_NOTE_MAX_LENGTH,
+  normalizeUsagePurposeNote,
+  resolveUsagePurposeCopy,
+  type UsagePurpose,
+} from "@/lib/usage-purpose";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 import type { InterestLanguage } from "@/lib/interest-languages";
 import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
 import LanguageLevelPicker from "@/components/language-level-picker";
+import ProfileGenderPicker from "@/components/profile-gender-picker";
+import { resolveProfileGenderCopy } from "@/i18n/profile-gender-copy";
+import type { ProfileGender } from "@/lib/profile-gender";
 
 const DEFAULT_ONBOARDING_BIRTH_DATE: BirthDateParts = {
   year: 2000,
@@ -44,6 +54,10 @@ export type LanguageOnboardingConfirmPayload = {
   /** 관심 언어: the language of the people the user mostly wants to talk with. */
   interestLanguage: InterestLanguage | null;
   birthDate: BirthDateParts;
+  gender: ProfileGender;
+  usagePurpose: UsagePurpose;
+  /** Optional free-text reason, only for "other". */
+  usagePurposeNote: string | null;
   discoverySource: DiscoverySource;
 };
 
@@ -56,7 +70,10 @@ interface LanguageOnboardingModalProps {
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-type OnboardingStep = "language" | "interest-language" | "birth-date" | "discovery-source";
+type OnboardingStep = "language" | "interest-language" | "usage-purpose" | "discovery-source" | "gender" | "birth-date";
+
+// Long enough to see the tapped gender light up before the next screen slides in.
+const GENDER_AUTO_ADVANCE_MS = 220;
 
 // Rendered only while the picker is open (see LivePhoneDemo.tsx), so mount-time
 // state initializers below always pick up the latest defaults with no reset effect.
@@ -68,6 +85,9 @@ export default function LanguageOnboardingModal({
   uiLocale,
   onConfirm,
 }: LanguageOnboardingModalProps) {
+  // Mounted only while onboarding is on screen: no native ad banner at any
+  // step, whatever zone the screen underneath asked for.
+  useNativeBannerSuppression();
   const titleId = useId();
   const [step, setStep] = useState<OnboardingStep>("language");
   const [query, setQuery] = useState("");
@@ -76,6 +96,9 @@ export default function LanguageOnboardingModal({
   const [interestCode, setInterestCode] = useState<string | null>(null);
   const [interestLevel, setInterestLevel] = useState(1);
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate);
+  const [gender, setGender] = useState<ProfileGender | null>(null);
+  const [usagePurpose, setUsagePurpose] = useState<UsagePurpose | null>(null);
+  const [usagePurposeNote, setUsagePurposeNote] = useState("");
   const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(null);
   const [discoveryOptionCodes, setDiscoveryOptionCodes] = useState(shuffleDiscoverySourceCodes);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -86,7 +109,9 @@ export default function LanguageOnboardingModal({
   const copy = useMemo(() => resolveLanguageOnboardingCopy(language), [language]);
   const signupCopy = useMemo(() => resolveSignupCopy(language), [language]);
   const discoveryCopy = useMemo(() => resolveDiscoverySourceCopy(language), [language]);
+  const usagePurposeCopy = useMemo(() => resolveUsagePurposeCopy(language), [language]);
   const interestCopy = useMemo(() => resolveInterestLanguageCopy(language), [language]);
+  const genderCopy = useMemo(() => resolveProfileGenderCopy(language), [language]);
   const discoveryOptions = useMemo(() => {
     const optionsByCode = new Map(discoveryCopy.options.map((option) => [option.code, option]));
     return discoveryOptionCodes
@@ -167,8 +192,10 @@ export default function LanguageOnboardingModal({
   const handleStepBack = useCallback(() => {
     if (isConfirming) return;
     setStep((currentStep) => (
-      currentStep === "discovery-source" ? "birth-date"
-        : currentStep === "birth-date" ? "interest-language"
+      currentStep === "birth-date" ? "gender"
+        : currentStep === "gender" ? "discovery-source"
+        : currentStep === "discovery-source" ? "usage-purpose"
+        : currentStep === "usage-purpose" ? "interest-language"
           : "language"
     ));
   }, [isConfirming]);
@@ -194,6 +221,18 @@ export default function LanguageOnboardingModal({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [interestCode, step]);
+
+  const genderAdvanceTimerRef = useRef<number | null>(null);
+  const clearGenderAdvance = useCallback(() => {
+    if (genderAdvanceTimerRef.current === null) return;
+    window.clearTimeout(genderAdvanceTimerRef.current);
+    genderAdvanceTimerRef.current = null;
+  }, []);
+  // Leaving the gender screen any other way (back gesture) cancels a pending advance.
+  useEffect(() => {
+    if (step !== "gender") clearGenderAdvance();
+  }, [clearGenderAdvance, step]);
+  useEffect(() => clearGenderAdvance, [clearGenderAdvance]);
 
   const edgeSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -227,22 +266,48 @@ export default function LanguageOnboardingModal({
 
   const handleInterestStepNext = () => {
     if (!interestCode) return;
-    setStep("birth-date");
+    setStep("usage-purpose");
   };
 
-  const handleBirthDateStepNext = () => {
-    if (!isEligibleAge) return;
+  const handleUsagePurposeStepNext = () => {
+    if (!usagePurpose) return;
     setStep("discovery-source");
   };
 
+  const handleDiscoverySourceStepNext = () => {
+    if (!discoverySource) return;
+    setStep("gender");
+  };
+
+  // One tap picks the gender and moves on; the footer button stays for
+  // someone who came back to this screen and keeps the same answer.
+  const handleGenderSelect = (nextGender: ProfileGender) => {
+    if (isConfirming) return;
+    setGender(nextGender);
+    clearGenderAdvance();
+    genderAdvanceTimerRef.current = window.setTimeout(() => {
+      genderAdvanceTimerRef.current = null;
+      setStep("birth-date");
+    }, GENDER_AUTO_ADVANCE_MS);
+  };
+
+  const handleGenderStepNext = () => {
+    if (!gender) return;
+    clearGenderAdvance();
+    setStep("birth-date");
+  };
+
   const handleFinalConfirm = async () => {
-    if (isConfirming || !isEligibleAge || !discoverySource) return;
+    if (isConfirming || !isEligibleAge || !gender || !usagePurpose || !discoverySource) return;
     setIsConfirming(true);
     try {
       await onConfirm({
         language,
         interestLanguage: interestCode ? { code: interestCode as InterestLanguage["code"], level: interestLevel } : null,
         birthDate,
+        gender,
+        usagePurpose,
+        usagePurposeNote: usagePurpose === "other" ? normalizeUsagePurposeNote(usagePurposeNote) : null,
         discoverySource,
       });
     } finally {
@@ -465,6 +530,18 @@ export default function LanguageOnboardingModal({
                 />
               </div>
             </div>
+          ) : step === "gender" ? (
+            <div className="space-y-2 px-6 pb-4 pt-0 text-center">
+              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                {genderCopy.label}
+              </p>
+              <h2
+                id={titleId}
+                className="text-[1.4rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+              >
+                {genderCopy.stepTitle}
+              </h2>
+            </div>
           ) : step === "birth-date" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
               <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
@@ -479,6 +556,18 @@ export default function LanguageOnboardingModal({
               <p className="text-[0.85rem] leading-relaxed text-slate-500">
                 {signupCopy.birthDateDescription}
               </p>
+            </div>
+          ) : step === "usage-purpose" ? (
+            <div className="space-y-2 px-6 pb-4 pt-0 text-center">
+              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                {usagePurposeCopy.step}
+              </p>
+              <h2
+                id={titleId}
+                className="text-[1.4rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+              >
+                {usagePurposeCopy.title}
+              </h2>
             </div>
           ) : (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
@@ -571,6 +660,21 @@ export default function LanguageOnboardingModal({
               </div>
             )}
           </div>
+        ) : step === "gender" ? (
+          <div
+            className="flex flex-1 flex-col justify-center overflow-y-auto px-6 py-4"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <div className="mx-auto w-full max-w-sm">
+              <ProfileGenderPicker
+                value={gender}
+                onChange={handleGenderSelect}
+                copy={genderCopy}
+                disabled={isConfirming}
+                size="large"
+              />
+            </div>
+          </div>
         ) : step === "birth-date" ? (
           <div
             className="flex flex-1 flex-col justify-center overflow-y-auto px-6 py-4"
@@ -594,6 +698,63 @@ export default function LanguageOnboardingModal({
               >
                 {isEligibleAge ? signupCopy.birthDateAgeHint : signupCopy.birthDateUnderage}
               </div>
+            </div>
+          </div>
+        ) : step === "usage-purpose" ? (
+          <div
+            className="flex flex-1 flex-col overflow-y-auto px-5 py-5"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <div className="mx-auto flex w-full max-w-sm flex-col gap-3">
+              {usagePurposeCopy.options.map((option) => {
+                const isSelected = usagePurpose === option.code;
+                return (
+                  <button
+                    key={option.code}
+                    type="button"
+                    disabled={isConfirming}
+                    onClick={() => setUsagePurpose(option.code)}
+                    aria-pressed={isSelected}
+                    className={`flex min-h-[72px] w-full items-center gap-3 rounded-[1.35rem] border px-4 py-3 text-left transition hover:-translate-y-[1px] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)] ${
+                      isSelected
+                        ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
+                        : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition ${
+                        isSelected
+                          ? "border-amber-500 bg-amber-500 text-white"
+                          : "border-slate-300 bg-white text-transparent"
+                      }`}
+                    >
+                      <Check size={16} strokeWidth={3.2} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[0.98rem] font-semibold leading-snug text-slate-900">
+                        {option.label}
+                      </span>
+                      {option.hint ? (
+                        <span className="mt-0.5 block text-[0.8rem] leading-snug text-slate-500">
+                          {option.hint}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
+              {usagePurpose === "other" ? (
+                <textarea
+                  value={usagePurposeNote}
+                  disabled={isConfirming}
+                  onChange={(event) => setUsagePurposeNote(event.target.value)}
+                  maxLength={USAGE_PURPOSE_NOTE_MAX_LENGTH}
+                  rows={3}
+                  placeholder={usagePurposeCopy.otherNotePlaceholder}
+                  aria-label={usagePurposeCopy.otherNotePlaceholder}
+                  className="w-full resize-none rounded-[1.1rem] border border-[#e6dfd2] bg-white px-4 py-3 text-[0.95rem] leading-snug text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.05)] outline-none placeholder:text-slate-400 focus:border-amber-400"
+                />
+              ) : null}
             </div>
           </div>
         ) : (
@@ -663,11 +824,29 @@ export default function LanguageOnboardingModal({
                 {signupCopy.continueAction}
               </button>
             </>
-          ) : step === "birth-date" ? (
+          ) : step === "usage-purpose" ? (
             <button
               type="button"
-              onClick={handleBirthDateStepNext}
-              disabled={isConfirming || !isEligibleAge}
+              onClick={handleUsagePurposeStepNext}
+              disabled={isConfirming || !usagePurpose}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
+            >
+              {signupCopy.continueAction}
+            </button>
+          ) : step === "discovery-source" ? (
+            <button
+              type="button"
+              onClick={handleDiscoverySourceStepNext}
+              disabled={isConfirming || !discoverySource}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
+            >
+              {signupCopy.continueAction}
+            </button>
+          ) : step === "gender" ? (
+            <button
+              type="button"
+              onClick={handleGenderStepNext}
+              disabled={isConfirming || !gender}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
             >
               {signupCopy.continueAction}
@@ -676,7 +855,7 @@ export default function LanguageOnboardingModal({
             <button
               type="button"
               onClick={handleFinalConfirm}
-              disabled={isConfirming || !discoverySource}
+              disabled={isConfirming || !isEligibleAge || !gender}
               aria-busy={isConfirming}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
             >

@@ -17,7 +17,9 @@ import {
   isCoinBillingActive,
   refreshCoinWallet,
   subscribeCoinUi,
+  useCoinWallet,
 } from "@/lib/coin-wallet-client";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 import CoinExhaustedSheet from "./coin-exhausted-sheet";
 import CoinStorePanel from "./coin-store-panel";
 
@@ -69,6 +71,18 @@ export default function CoinHost() {
       setExhaustedOpen(true);
     }
   }), [storeOpen]);
+
+  // The store and the "out of coins" sheet open over a chat room or the list;
+  // the native banner draws above the web view, so hide it while either is up.
+  useNativeBannerSuppression(signedIn && (storeOpen || exhaustedOpen));
+
+  // Coins came back (top-up, daily refill, a corrected read): the sheet no
+  // longer describes the wallet, so it closes on its own.
+  const { wallet } = useCoinWallet();
+  const walletHasCoins = wallet !== null && !wallet.exhausted;
+  useEffect(() => {
+    if (exhaustedOpen && walletHasCoins) setExhaustedOpen(false);
+  }, [exhaustedOpen, walletHasCoins]);
 
   if (!signedIn || !mounted) return null;
 

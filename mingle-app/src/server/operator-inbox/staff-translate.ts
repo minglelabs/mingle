@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
-import { translateTexts } from '@/server/translation/translate-texts'
+import { operatorTextProvider, translateTexts } from '@/server/translation/translate-texts'
 
 /**
  * Admin-only reading aid for the operator inbox (contract §5): staff read the
@@ -99,6 +99,7 @@ async function translateOne(request: StaffTranslationRequest, language: string):
   const promise = (async () => {
     try {
       const result = await translateTexts({
+        provider: operatorTextProvider(),
         text,
         sourceLanguage: sourceLanguage || 'auto',
         targetLanguages: [language],

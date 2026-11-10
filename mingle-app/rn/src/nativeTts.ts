@@ -45,8 +45,13 @@ type NativeTtsEventMap = {
 const nativeModule = NativeModules.NativeTTSModule as NativeTtsModuleType | undefined;
 const nativeEmitter = nativeModule ? new NativeEventEmitter(NativeModules.NativeTTSModule) : null;
 
+/**
+ * True when this shell plays TTS clips natively (`native_tts_play`). iOS has
+ * always done so; Android does from the build that lowers other apps' volume
+ * while a clip plays, and reports it as `nativeTts` in its capabilities.
+ */
 export function isNativeTtsAvailable(): boolean {
-  return Platform.OS === 'ios' && Boolean(nativeModule && nativeEmitter);
+  return (Platform.OS === 'ios' || Platform.OS === 'android') && Boolean(nativeModule && nativeEmitter);
 }
 
 /**

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireAdminApi } from '@/server/admin/guard'
 import {
+  getReviewPost,
+  getReviewProfileState,
   normalizeReviewFeedback,
   parseReviewAction,
   reviewOperatorPost,
@@ -30,6 +32,25 @@ function json(payload: object, status = 200): NextResponse {
  * waiting for review: `{ kind: 'profile' | 'post', id, action: 'publish' |
  * 'delete' | 'regenerate', feedback? }`. 재제작 waits for the new photo or post.
  */
+/**
+ * GET /admin/operators/api/review?kind=post|profile&id=… — the item as its
+ * card shows it, for the card to poll while the pool draws its photo.
+ */
+export async function GET(request: Request) {
+  const auth = await requireAdminApi()
+  if (!auth.ok) return auth.response
+  const params = new URL(request.url).searchParams
+  const kind = params.get('kind')
+  const id = params.get('id')?.trim() ?? ''
+  if ((kind !== 'profile' && kind !== 'post') || !id) return json({ error: 'invalid_request' }, 400)
+  if (kind === 'post') {
+    const post = await getReviewPost(id)
+    return post ? json({ post }) : json({ error: 'not_found' }, 404)
+  }
+  const profile = await getReviewProfileState(id)
+  return profile ? json(profile) : json({ error: 'not_found' }, 404)
+}
+
 export async function POST(request: Request) {
   const auth = await requireAdminApi()
   if (!auth.ok) return auth.response

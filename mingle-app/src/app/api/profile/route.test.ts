@@ -101,6 +101,7 @@ describe("/api/profile route", () => {
       bio: "Hello",
       bioDraft: "Hello",
       nationality: "ko",
+      nationalityCountry: "KR",
       primaryLanguages: ["ko"],
       interestLanguages: [],
       defaultConversationLanguages: [],
@@ -123,7 +124,9 @@ describe("/api/profile route", () => {
         name: true,
         bio: true,
         birthDate: true,
+        gender: true,
         nationality: true,
+        nationalityCountry: true,
         primaryLanguages: true,
         interestLanguages: true,
         interestLanguageLevels: true,
@@ -201,7 +204,9 @@ describe("/api/profile route", () => {
         name: true,
         bio: true,
         birthDate: true,
+        gender: true,
         nationality: true,
+        nationalityCountry: true,
         primaryLanguages: true,
         interestLanguages: true,
         interestLanguageLevels: true,
@@ -437,6 +442,71 @@ describe("/api/profile route", () => {
 
     expect(response.status).toBe(200);
     expect(mockEnsureSignupWelcomeOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("maps 국적 from the onboarding language only while it is empty", async () => {
+    mockUserFindUnique.mockResolvedValue({
+      defaultDisplayLanguage: null,
+      defaultConversationLanguages: [],
+      nationalityCountry: null,
+      birthDate: null,
+    });
+    mockUserUpdate.mockResolvedValue({
+      id: "user_123", name: null, image: null, handle: null, bio: null,
+      nationality: "ko", nationalityCountry: "KR", primaryLanguages: ["ko"], defaultConversationLanguages: [],
+      _count: { followerRelations: 0, followingRelations: 0 },
+    });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ primaryLanguages: ["ko"] }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ nationalityCountry: "KR" }),
+    }));
+    expect((await response.json()).nationalityCountry).toBe("KR");
+
+    mockUserUpdate.mockClear();
+    mockUserFindUnique.mockResolvedValue({
+      defaultDisplayLanguage: "ko",
+      defaultConversationLanguages: ["ko"],
+      nationalityCountry: "KR",
+      birthDate: null,
+    });
+    await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ primaryLanguages: ["en"] }),
+    }));
+    expect(mockUserUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty("nationalityCountry");
+  });
+
+  it("saves an edited 국적 and rejects an unknown country", async () => {
+    mockUserUpdate.mockResolvedValue({
+      id: "user_123", name: null, image: null, handle: null, bio: null,
+      nationality: "pt", nationalityCountry: "BR", primaryLanguages: ["pt"], defaultConversationLanguages: [],
+      _count: { followerRelations: 0, followingRelations: 0 },
+    });
+    const ok = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nationalityCountry: "br" }),
+    }));
+    expect(ok.status).toBe(200);
+    expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ nationalityCountry: "BR" }),
+    }));
+
+    const bad = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nationalityCountry: "Korea" }),
+    }));
+    expect(bad.status).toBe(400);
+    expect(await bad.json()).toEqual({ error: "invalid_nationality_country" });
   });
 
   it("updates birthDate when valid and old enough", async () => {

@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import ChatBubble from "@/components/LivePhoneDemo/ChatBubble";
-import ConversationOperatorDisclosure from "@/components/LivePhoneDemo/ConversationOperatorDisclosure";
 import { labelNameWithAccountBadge } from "@/components/LivePhoneDemo/chat-account-badge.logic";
 import { resolveAccountBadge } from "@/lib/account-badge";
 import SlideSurface from "@/components/slide-surface";
@@ -379,8 +378,6 @@ export default function NativeConversationShareOverlay() {
             className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
             style={{ touchAction: "pan-y" }}
           >
-            {/* Shown before the viewer decides to join a room with a HashChat-run member. */}
-            {state?.operatorDisclosure ? <ConversationOperatorDisclosure locale={spectateLocale} /> : null}
             {status === "loading" ? (
               <div className="flex h-full items-center justify-center text-slate-400">
                 <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />

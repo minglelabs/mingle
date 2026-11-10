@@ -3,16 +3,19 @@ import LanguageFlag from "@/components/language-flag";
 type ProfileLanguageFlagStackProps = {
   languages: readonly string[];
   size: number;
+  /** Overrides the badge size (default: a third of the avatar, at least 24px). */
+  badgeSize?: number;
 };
 
 export default function ProfileLanguageFlagStack({
   languages,
   size,
+  badgeSize: badgeSizeOverride,
 }: ProfileLanguageFlagStackProps) {
   const visibleLanguages = languages.filter((language) => language.trim().length > 0);
   if (visibleLanguages.length === 0) return null;
 
-  const badgeSize = Math.max(24, Math.round(size * 0.32));
+  const badgeSize = badgeSizeOverride ?? Math.max(24, Math.round(size * 0.32));
   const overlap = Math.round(badgeSize * 0.4);
 
   return (

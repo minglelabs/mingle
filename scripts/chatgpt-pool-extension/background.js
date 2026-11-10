@@ -37,9 +37,26 @@ async function page(op, arg) {
   const labelled = (pattern) => [...document.querySelectorAll('button')].find((b) => pattern.test(b.getAttribute('aria-label') || ''))
   const sendButton = () => document.querySelector('[data-testid="send-button"]') || labelled(/^(보내기|Send|Send prompt|프롬프트 보내기)$/i)
   // ChatGPT's newer renderer dropped data-message-author-role; its turns carry a search unit key ending in ":assistant".
+  // Since 2026-11-04 that key is only there while the answer streams; a finished answer
+  // is found by data-turn="assistant".
   const turns = () => {
-    const legacy = [...document.querySelectorAll('[data-message-author-role="assistant"]')]
-    return legacy.length ? legacy : [...document.querySelectorAll('[data-chatgpt-search-unit-key$=":assistant"]')]
+    const pick = (selector) => [...document.querySelectorAll(selector)]
+    for (const found of [
+      pick('[data-message-author-role="assistant"]'),
+      pick('[data-chatgpt-search-unit-key$=":assistant"]'),
+      pick('[data-turn="assistant"]'),
+    ]) {
+      // Keep only the outermost match, so a turn nested in another counts once.
+      const outer = found.filter((el) => !found.some((other) => other !== el && other.contains(el)))
+      if (outer.length) return outer
+    }
+    return []
+  }
+  // What the page has, for the log when no answer is found.
+  const dom = () => {
+    const count = (selector) => document.querySelectorAll(selector).length
+    const tail = (document.querySelector('main')?.innerText || '').replace(/\s+/g, ' ').slice(-80)
+    return `role=${count('[data-message-author-role]')} unit=${count('[data-chatgpt-search-unit-key]')} turn=${count('[data-turn]')} article=${count('article')} md=${count('.markdown, [data-markdown-text-style]')} url=${location.pathname.slice(0, 12)} tail=${JSON.stringify(tail)}`
   }
   // Source chips ("일본 관광청 +1") are popover badges inside the answer; hide them while reading.
   const answerText = (root) => {
@@ -57,9 +74,24 @@ async function page(op, arg) {
 
   if (op === 'state') {
     const last = turns().at(-1)
-    // The composer's box: its form, or (newer layouts without one) a few levels up from the editor.
+    // The composer's box: its form, or (newer layouts without one) the nearest
+    // ancestor of the editor that also holds the send / voice button. Attachment
+    // previews sit somewhere in there, not always within a fixed number of levels.
     const box = composer()
-    const form = box?.closest('form') ?? box?.parentElement?.parentElement?.parentElement?.parentElement ?? null
+    const send = sendButton()
+    let form = box?.closest('form') ?? null
+    if (!form && box) {
+      let node = box.parentElement
+      for (let depth = 0; node && depth < 12; depth += 1, node = node.parentElement) {
+        if ((send && node.contains(send)) || node.querySelector('[data-testid="composer-speech-button"], [data-testid*="composer-footer"]')) { form = node; break }
+      }
+      form ??= box.parentElement?.parentElement?.parentElement?.parentElement ?? null
+    }
+    // A finished preview: a loaded picture in the composer that is not a drawn result.
+    const previews = form ? [...form.querySelectorAll('img')].filter((img) => img.complete && img.naturalWidth > 0 && !img.closest('[data-testid="generated-image-gallery"]')) : []
+    // Still uploading: any progress ring, busy marker or spinner inside the composer.
+    const uploading = form ? form.querySelectorAll('[role=progressbar], [aria-busy="true"], .animate-spin, circle[stroke-dasharray]').length : 0
+    const sendState = !send ? 'none' : send.disabled || send.getAttribute('aria-disabled') === 'true' ? 'disabled' : 'enabled'
     const states = turnStates()
     const pictures = generated()
     return {
@@ -69,11 +101,19 @@ async function page(op, arg) {
       composer: Boolean(composer()),
       signedOut: !composer() && [...document.querySelectorAll('button, a')].some((b) => /^(Log in|로그인)$/i.test(b.innerText.trim())),
       turns: turns().length,
+      dom: dom(),
+      // ChatGPT's own error in place of an answer ("... Please try again later." + 다시 시도), e.g. when it
+      // throttles an account that sent too much. Seen 2026-11-04 on an account after ~15h of nonstop jobs.
+      blocked: (/[^.!?\n]{0,200}(Please try again later|try again later|잠시 후 다시 시도|Too many requests|unusual activity)[^\n]{0,60}/i.exec(document.querySelector('main')?.innerText || '') || [null])[0],
       text: last ? answerText(last.querySelector('[data-markdown-text-style="assistant-message"], .markdown') ?? last) : '',
       streaming: Boolean(document.querySelector('[data-testid="stop-button"]') || labelled(/^(스트리밍 중지|Stop streaming|중지)/i)),
       creating: /Creating image|이미지 생성 중|이미지를 생성하는 중/i.test(document.querySelector('main')?.innerText || ''),
       images: pictures.length,
-      attached: Boolean(form && [...form.querySelectorAll('img')].some((img) => img.naturalWidth > 0) && form.querySelectorAll('[role=progressbar]').length === 0),
+      // Done uploading: a preview is there, nothing is spinning, and ChatGPT lets you send.
+      attached: previews.length > 0 && uploading === 0 && sendState === 'enabled',
+      preview: previews.length,
+      uploading,
+      sendState,
     }
   }
   if (op === 'email') {
@@ -95,35 +135,53 @@ async function page(op, arg) {
     return true
   }
   if (op === 'attach') {
-    const blob = await (await fetch(arg)).blob()
-    const file = new File([blob], `reference.${(blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`, { type: blob.type })
-    const files = () => {
-      const data = new DataTransfer()
-      data.items.add(file)
-      return data
+    // Returns { how, detail }. Never throws: an exception here used to come back
+    // as an empty result and was reported as "no file input" / "no composer".
+    const detail = []
+    try {
+      // Decode the data URL by hand. fetch(data:…) runs under chatgpt.com's CSP
+      // (connect-src), which can refuse it.
+      const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(String(arg ?? ''))
+      if (!match) return { how: null, detail: 'reference is not a data URL' }
+      const type = match[1] || 'image/jpeg'
+      const raw = match[2] ? atob(match[3]) : decodeURIComponent(match[3])
+      const bytes = new Uint8Array(raw.length)
+      for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i)
+      const file = new File([bytes], `reference.${(type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`, { type })
+      detail.push(`file ${type} ${Math.round(file.size / 1024)}KB`)
+      const files = () => {
+        const data = new DataTransfer()
+        data.items.add(file)
+        return data
+      }
+      // 1) A file input already in the page (older ChatGPT keeps one hidden in the composer).
+      const inputs = [...document.querySelectorAll('input[type=file]')]
+      detail.push(`inputs=${inputs.length}`)
+      const input = inputs.find((i) => /image/.test(i.accept || '') && !i.hasAttribute('capture')) ?? inputs[0]
+      if (input) {
+        input.files = files().files
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+        return { how: 'input', detail: detail.join(' ') }
+      }
+      // 2) Newer ChatGPT creates the input only from its "+" menu, which would open a
+      // file dialog. Paste the picture into the composer instead, as a user would.
+      const box = composer()
+      if (!box) return { how: null, detail: [...detail, 'no composer'].join(' ') }
+      detail.push(`composer=${box.tagName.toLowerCase()}${box.id ? '#' + box.id : ''}`)
+      box.focus()
+      const pasted = new ClipboardEvent('paste', { clipboardData: files(), bubbles: true, cancelable: true })
+      box.dispatchEvent(pasted)
+      if (pasted.defaultPrevented) return { how: 'paste', detail: detail.join(' ') }
+      detail.push('paste ignored')
+      // 3) Dropping it on the composer.
+      const target = box.closest('form') ?? box
+      for (const type of ['dragenter', 'dragover', 'drop']) {
+        target.dispatchEvent(new DragEvent(type, { dataTransfer: files(), bubbles: true, cancelable: true }))
+      }
+      return { how: 'drop', detail: detail.join(' ') }
+    } catch (error) {
+      return { how: null, detail: [...detail, `error ${error?.name ?? ''}: ${error?.message ?? error}`].join(' ') }
     }
-    // 1) A file input already in the page (older ChatGPT keeps one hidden in the composer).
-    const inputs = [...document.querySelectorAll('input[type=file]')]
-    const input = inputs.find((i) => /image/.test(i.accept || '') && !i.hasAttribute('capture')) ?? inputs[0]
-    if (input) {
-      input.files = files().files
-      input.dispatchEvent(new Event('change', { bubbles: true }))
-      return 'input'
-    }
-    // 2) Newer ChatGPT creates the input only from its "+" menu, which would open a
-    // file dialog. Paste the picture into the composer instead, as a user would.
-    const box = composer()
-    if (!box) return false
-    box.focus()
-    const pasted = new ClipboardEvent('paste', { clipboardData: files(), bubbles: true, cancelable: true })
-    box.dispatchEvent(pasted)
-    if (pasted.defaultPrevented) return 'paste'
-    // 3) Dropping it on the composer.
-    const target = box.closest('form') ?? box
-    for (const type of ['dragenter', 'dragover', 'drop']) {
-      target.dispatchEvent(new DragEvent(type, { dataTransfer: files(), bubbles: true, cancelable: true }))
-    }
-    return 'drop'
   }
   if (op === 'image') {
     // The newest gallery's widest picture (the full-size one, not a preview); with two candidates, the first.
@@ -199,13 +257,15 @@ async function answer(tabId, before, wantImage, timeoutMs, job) {
   let lastPicture = null
   let pictureStable = 0
   let reportedAt = 0
+  let blockedSeen = 0
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     await sleep(1500)
     const state = await inPage(tabId, 'state').catch(() => null)
     if (state && job && Date.now() - reportedAt > 15_000) {
       reportedAt = Date.now()
-      progress(job, `wait turns=${state.turns} images=${state.images} turnState=${state.turnState} states=${state.turnStates} streaming=${state.streaming} creating=${state.creating} text=${state.text.length}`)
+      const said = state.text ? ` said=${JSON.stringify(state.text.replace(/\s+/g, ' ').slice(0, 80))}` : ''
+      progress(job, `wait turns=${state.turns} images=${state.images} turnState=${state.turnState} states=${state.turnStates} streaming=${state.streaming} creating=${state.creating} text=${state.text.length}${said}${state.turns <= before.turns && !state.streaming ? ` dom: ${state.dom}` : ''}`)
     }
     const drawing = wantImage && state && state.turnState !== null && state.turnState !== 'complete'
     if (!state || state.streaming || state.creating || drawing) { stable = 0; pictureStable = 0; continue }
@@ -216,13 +276,66 @@ async function answer(tabId, before, wantImage, timeoutMs, job) {
       if (pictureStable >= 2) return { text: state.text, image: true }
       continue
     }
-    if (state.turns <= before.turns) { stable = 0; continue }
+    if (state.turns <= before.turns) {
+      stable = 0
+      // The error stays put, so seeing it on a few checks in a row means no answer is coming.
+      blockedSeen = state.blocked ? blockedSeen + 1 : 0
+      if (blockedSeen >= 3) throw new JobError('rate_limited', state.blocked.trim().slice(0, 200), resetDelayMs(state.blocked))
+      continue
+    }
     if (!wantImage && !state.text) { stable = 0; continue } // the turn shows up before its words do
     stable = state.text === last ? stable + 1 : 0
     last = state.text
     if (stable >= (wantImage ? 3 : 1)) return { text: state.text, image: false }
   }
   throw new JobError('timeout', 'no answer in time')
+}
+
+/**
+ * Waits for the attached reference photo to finish uploading.
+ * Done when ChatGPT shows the preview, nothing spins and send is enabled. If the
+ * send button never turns on (empty composer in some layouts), a preview that has
+ * stopped spinning for 5s counts too. Logs each change of the upload state, so a
+ * new ChatGPT layout shows up in the log instead of as a bare timeout.
+ */
+async function uploaded(tabId, job, how) {
+  const started = Date.now()
+  const deadline = started + 60_000
+  let lastShape = ''
+  let settledSince = 0
+  let goneSince = 0
+  let reattached = 0
+  while (Date.now() < deadline) {
+    const state = await inPage(tabId, 'state').catch(() => null)
+    if (state) {
+      const shape = `preview=${state.preview} uploading=${state.uploading} send=${state.sendState}`
+      if (shape !== lastShape) {
+        progress(job, `upload ${Math.round((Date.now() - started) / 1000)}s ${shape}`)
+        lastShape = shape
+      }
+      if (state.attached) return
+      const settled = state.preview > 0 && state.uploading === 0
+      settledSince = settled ? settledSince || Date.now() : 0
+      if (settledSince && Date.now() - settledSince >= 5_000) {
+        progress(job, 'upload settled without send enabled; going on')
+        return
+      }
+      // ChatGPT sometimes re-renders the composer just after the page loads and
+      // drops the photo: no preview, nothing uploading, the voice button back
+      // instead of send. Attach it again in the same tab instead of giving up.
+      const gone = state.preview === 0 && state.uploading === 0
+      goneSince = gone ? goneSince || Date.now() : 0
+      if (goneSince && Date.now() - goneSince >= 2_000 && reattached < 3) {
+        reattached += 1
+        const again = await inPage(tabId, 'attach', job.reference).catch(() => null)
+        progress(job, `photo dropped by the page; attached again by ${again?.how ?? 'nothing'} (${reattached}/3)`)
+        goneSince = 0
+        lastShape = ''
+      }
+    }
+    await sleep(1000)
+  }
+  throw new JobError('timeout', `the reference photo did not finish uploading (attached by ${how}; ${lastShape || 'no state'}; attached again ${reattached}x)`)
 }
 
 /** Tells the pool which step a job is on, for its log; never fails the job. */
@@ -239,10 +352,15 @@ async function runJob(job) {
   progress(job, ready.composer ? 'composer ready' : 'signed out')
   if (!ready.composer) throw new JobError('signed_out', 'log in to ChatGPT in this profile')
   if (job.reference) {
-    const how = await inPage(tab.id, 'attach', job.reference)
-    if (!how) throw new JobError('ui_changed', 'no composer to attach the reference photo to')
+    // Give the freshly loaded page a moment to finish its own re-render, which
+    // otherwise can drop a photo attached in the first second.
+    await sleep(1500)
+    const attached = await inPage(tab.id, 'attach', job.reference).catch((error) => ({ how: null, detail: `inject failed: ${error?.message ?? error}` }))
+    const how = attached?.how
+    progress(job, `attach: ${attached?.detail ?? 'no result from the page'}`)
+    if (!how) throw new JobError('ui_changed', `could not attach the reference photo (${attached?.detail ?? 'no result from the page'})`)
     progress(job, `reference attached by ${how}`)
-    await until(tab.id, (s) => s.attached, 40_000, `the reference photo did not finish uploading (attached by ${how})`)
+    await uploaded(tab.id, job, how)
   }
   const prompt = job.kind === 'image'
     ? `${job.reference ? '첨부한 사진 속 사람을 그대로 살려서 ' : ''}이미지 1장 생성해줘: ${job.prompt}`

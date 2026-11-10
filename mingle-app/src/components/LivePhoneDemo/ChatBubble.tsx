@@ -23,6 +23,7 @@ import ConversationImageBubble from './ConversationImageBubble'
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
 import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
 import { MessageRecallScope } from './MessageRecall'
+import { MessageRetranslateScope } from './MessageRetranslate'
 import { MessageReadReceipt } from './MessageReadReceipts'
 import { MessageReplyQuote, MessageReplyScope } from './MessageReply'
 import { buildMessageReplyReference } from '@/lib/message-reply'
@@ -173,6 +174,10 @@ export interface Utterance {
   targetLanguages?: string[]
   translations: Record<string, string>
   translationFinalized?: Record<string, boolean>
+  // Per language, the leading part of an interim translation that will not
+  // change any more (tail translation of an open bubble). Shown like a final
+  // translation and read aloud piece by piece.
+  translationFixed?: Record<string, string>
   translationStatus?: 'pending' | 'retrying'
   createdAtMs?: number
   serverCreatedAtMs?: number
@@ -805,6 +810,7 @@ function ExpandedChatBubbleRow({
       onPlayPronunciation={isOriginal
         ? (!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined)
         : (() => onPlayTranslation?.(utterance, lang, text))}
+      retranslateLanguage={!isOriginal && translationState === 'final' ? lang : undefined}
       className={bubbleSurfaceClassName}
     >
       {bubbleBody}
@@ -912,10 +918,13 @@ function ChatBubble({
   const translationEntries = targetLangs
     .map((lang) => {
       const { text, finalized } = findDisplayTranslation(utterance, lang, displayLanguageResolver)
+      // An interim translation that is all fixed already reads like a final one.
+      const fixed = findLanguageRecordValue(utterance.translationFixed, lang, displayLanguageResolver)?.trim() || ''
+      const isFixed = Boolean(fixed) && fixed === text.trim()
       return {
         lang,
         text,
-        state: text && finalized !== false ? 'final' as const : 'interim' as const,
+        state: text && (finalized !== false || isFixed) ? 'final' as const : 'interim' as const,
       }
   })
   const completedTranslationEntries = translationEntries.filter(({ text }) => Boolean(text))
@@ -1088,6 +1097,7 @@ function ChatBubble({
       onPlayPronunciation={isOriginalLanguageSelected
         ? (!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined)
         : (() => onPlayTranslation?.(utterance, activeLanguage, activeText))}
+      retranslateLanguage={!isOriginalLanguageSelected && activeTranslationEntry?.state === 'final' ? activeLanguage : undefined}
       style={{ maxWidth: '100%' }}
       className="inline rounded-xl bg-transparent px-0 py-0 shadow-none"
     >
@@ -1405,10 +1415,14 @@ function ChatBubble({
     : <>{avatarColumn}{messageColumn}</>
   // A solo-era turn carries no speakerUserId (see isOwnMessage), whoever sent it, so the server's own flag decides there.
   const canRecall = !isDraft && !isRecalled && (utterance.sentByViewer === true || isOwnMessage)
+  // Photos carry no text of their own to translate again.
+  const canRetranslate = !isDraft && !isRecalled && !messageImage
   const replyReference = isDraft || isRecalled ? null : buildMessageReplyReference(utterance)
   const reactiveContent = <MessageReactionScope id={isDraft || isRecalled ? undefined : utterance.id} locale={uiLocale}>
     <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>
-      <MessageReplyScope reference={replyReference}>{bubbleContent}</MessageReplyScope>
+      <MessageRetranslateScope id={canRetranslate ? utterance.id : undefined} locale={uiLocale}>
+        <MessageReplyScope reference={replyReference}>{bubbleContent}</MessageReplyScope>
+      </MessageRetranslateScope>
     </MessageRecallScope>
   </MessageReactionScope>
 
@@ -1485,6 +1499,15 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
       if (pk.length !== nk.length) return false
       for (const k of pk) {
         if (pu.translations[k] !== nu.translations[k]) return false
+      }
+    }
+    if (pu.translationFixed !== nu.translationFixed) {
+      const pf = pu.translationFixed || {}
+      const nf = nu.translationFixed || {}
+      const pk = Object.keys(pf)
+      if (pk.length !== Object.keys(nf).length) return false
+      for (const k of pk) {
+        if (pf[k] !== nf[k]) return false
       }
     }
     if (pu.translationFinalized !== nu.translationFinalized) {

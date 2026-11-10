@@ -94,17 +94,48 @@ function postNativeBannerZoneCommand(zone: NativeBannerZone): void {
 let requestedNativeBannerZone: NativeBannerZone = 'hidden'
 const nativeBannerSuppressions = new Set<symbol>()
 
+function resolveCurrentNativeBannerZone(): NativeBannerZone {
+  return resolveEffectiveNativeBannerZone({
+    requestedZone: requestedNativeBannerZone,
+    pathname: typeof window === 'undefined' ? '' : window.location.pathname,
+    suppressionCount: nativeBannerSuppressions.size,
+  })
+}
+
+// App builds up to 2.3.4 can put the list banner back by themselves after the
+// web hid it: the shell restores its last visible zone when a navigation it was
+// tracking settles on /conversations, and that can land after our "hidden"
+// (seen over onboarding on a fresh install). A hidden zone is therefore sent
+// again a few times while it still holds; any newer sync replaces the schedule.
+export const NATIVE_BANNER_HIDDEN_REASSERT_DELAYS_MS = [150, 500, 1200, 2500] as const
+let hiddenReassertTimers: Array<ReturnType<typeof setTimeout>> = []
+
+function clearHiddenReassertTimers(): void {
+  for (const timer of hiddenReassertTimers) clearTimeout(timer)
+  hiddenReassertTimers = []
+}
+
+function scheduleHiddenReassert(): void {
+  if (typeof window === 'undefined') return
+  const bridgeWindow = window as NativeBannerZoneBridgeWindow
+  if (typeof bridgeWindow.ReactNativeWebView?.postMessage !== 'function') return
+
+  hiddenReassertTimers = NATIVE_BANNER_HIDDEN_REASSERT_DELAYS_MS.map((delayMs) => setTimeout(() => {
+    if (resolveCurrentNativeBannerZone() !== 'hidden') return
+    postNativeBannerZoneCommand('hidden')
+  }, delayMs))
+}
+
 /**
  * Re-posts the effective zone. Every call posts (no de-duplication) because the
  * native shell can move its own zone on navigation, so the web side must be
  * able to reassert it.
  */
 export function syncNativeBannerZone(): void {
-  postNativeBannerZoneCommand(resolveEffectiveNativeBannerZone({
-    requestedZone: requestedNativeBannerZone,
-    pathname: typeof window === 'undefined' ? '' : window.location.pathname,
-    suppressionCount: nativeBannerSuppressions.size,
-  }))
+  const zone = resolveCurrentNativeBannerZone()
+  postNativeBannerZoneCommand(zone)
+  clearHiddenReassertTimers()
+  if (zone === 'hidden') scheduleHiddenReassert()
 }
 
 /**
@@ -137,4 +168,5 @@ export function suppressNativeBanner(): () => void {
 export function resetNativeBannerZoneStateForTests(): void {
   requestedNativeBannerZone = 'hidden'
   nativeBannerSuppressions.clear()
+  clearHiddenReassertTimers()
 }

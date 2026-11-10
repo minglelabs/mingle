@@ -118,6 +118,8 @@ vi.mock("@/lib/app-conversations", () => ({
 import { handleLogClientEventV1 } from "@/server/api/handlers/v1/log-client-event-handler";
 import { mintVoiceOrderReceipt } from '@/lib/voice-order-receipt';
 
+const runAfterCallbacks = () => Promise.all(mockAfterCallbacks.map((callback) => callback()));
+
 describe("handleLogClientEventV1", () => {
   afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
@@ -200,12 +202,15 @@ describe("handleLogClientEventV1", () => {
     expect(mockAppMessageUpsert.mock.lastCall?.[0].create.metadata.orderStartedAtMs).toBe(order);
   });
 
-  it("publishes translations before waiting for optional title generation", async () => {
+  it("publishes translations and leaves the AI title for after the response", async () => {
     await handleLogClientEventV1(new NextRequest('https://example.com/api/ios/v2.0.2/log/client-event', {
       method: 'POST', body: JSON.stringify({ sessionKey: 'sess_123', clientMessageId: 'voice_1',
         eventType: 'stt_turn_finalized', sourceText: 'hello', sourceLanguage: 'en',
         translations: { ko: '안녕' }, translationUpdate: true }),
     }));
+    expect(mockNotifyConversationMessage).toHaveBeenCalledOnce();
+    expect(mockMaybeGenerateConversationTitleForSession).not.toHaveBeenCalled();
+    await runAfterCallbacks();
     expect(mockNotifyConversationMessage.mock.invocationCallOrder[0]).toBeLessThan(mockMaybeGenerateConversationTitleForSession.mock.invocationCallOrder[0]);
   });
 
@@ -393,6 +398,7 @@ describe("handleLogClientEventV1", () => {
     expect(response.status).toBe(200);
     expect(mockAppMessageUpsert.mock.calls[0][0].where).toEqual({ sessionKey_clientMessageId: { sessionKey: "sess_123", clientMessageId: "durable_1" } });
     expect(mockAppMessageContentUpsert).toHaveBeenCalledTimes(2);
+    await runAfterCallbacks();
     expect(mockMaybeGenerateConversationTitleForSession).toHaveBeenCalledOnce();
     expect(mockMaterializePendingConversationInvitees).not.toHaveBeenCalled();
     expect(mockNotifyConversationMessage).toHaveBeenCalledOnce();
@@ -415,6 +421,7 @@ describe("handleLogClientEventV1", () => {
     expect(await response.json()).toEqual({ ok: true });
     expect(mockAppMessageUpsert).toHaveBeenCalledOnce();
     expect(mockAppMessageContentUpsert).toHaveBeenCalledTimes(2);
+    await runAfterCallbacks();
     expect(mockMaybeGenerateConversationTitleForSession).toHaveBeenCalledOnce();
     expect(mockMaterializePendingConversationInvitees).toHaveBeenCalledOnce();
     expect(mockNotifyConversationMessage).toHaveBeenCalledOnce();
@@ -543,6 +550,7 @@ describe("handleLogClientEventV1", () => {
         }),
       }),
     );
+    await runAfterCallbacks();
     expect(mockMaybeGenerateConversationTitleForSession).toHaveBeenCalledWith({
       sessionKey: "sess_123",
     });
@@ -648,11 +656,12 @@ describe("handleLogClientEventV1", () => {
     }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
-    expect(mockAfter).toHaveBeenCalledOnce();
-    expect(mockAfterCallbacks).toHaveLength(1);
+    // The AI title runs first, then the operator inbox notify.
+    expect(mockAfter).toHaveBeenCalledTimes(2);
+    expect(mockAfterCallbacks).toHaveLength(2);
     expect(mockNotifyOperatorInboxActivity).not.toHaveBeenCalled();
 
-    const afterCallback = mockAfterCallbacks[0];
+    const afterCallback = mockAfterCallbacks[1];
     expect(afterCallback).toBeDefined();
     const callbackResult = afterCallback?.();
     expect(mockNotifyOperatorInboxActivity).toHaveBeenCalledOnce();
@@ -679,7 +688,7 @@ describe("handleLogClientEventV1", () => {
       }),
     }));
     expect(response.status).toBe(200);
-    expect(mockAfter).not.toHaveBeenCalled();
+    await runAfterCallbacks();
     expect(mockNotifyOperatorInboxActivity).not.toHaveBeenCalled();
   });
 
@@ -697,10 +706,10 @@ describe("handleLogClientEventV1", () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ ok: true });
       expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledOnce();
-      expect(mockAfter).toHaveBeenCalledOnce();
+      expect(mockAfter).toHaveBeenCalledTimes(2);
       expect(mockNotifyOperatorInboxActivity).not.toHaveBeenCalled();
       expect(mockCreateTrackedEventLog).toHaveBeenCalledOnce();
-      const afterCallback = mockAfterCallbacks[0];
+      const afterCallback = mockAfterCallbacks[1];
       expect(afterCallback).toBeDefined();
       await afterCallback?.();
       expect(mockNotifyOperatorInboxActivity).toHaveBeenCalledOnce();

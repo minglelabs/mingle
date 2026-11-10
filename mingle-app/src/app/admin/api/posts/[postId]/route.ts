@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic'
 
 /**
  * PATCH /admin/api/posts/[postId] — `{ text }` replaces an operator post's
- * text; `{ hidden }` takes it down or puts it back up. Real users' posts are refused.
+ * text (other posts are refused); `{ hidden }` takes any post down or puts it
+ * back up (an operator's goes back to review, any other is only hidden).
  */
 export async function PATCH(request: Request, context: { params: Promise<{ postId: string }> }) {
   const auth = await requireAdminApi()

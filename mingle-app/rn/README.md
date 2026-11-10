@@ -13,7 +13,7 @@ The RN app requires the following environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v2.3.0`, Android: `android/v2.3.0`)
+- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v2.3.4`, Android: `android/v2.3.4`)
 - `RN_CLIENT_VERSION` (optional, fallback: iOS `CFBundleShortVersionString`, Android `BuildConfig.MINGLE_CLIENT_VERSION`)
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
 - `RN_AD_BANNER_POSITION` (optional: `top` | `bottom`, default: `bottom`)
@@ -75,6 +75,11 @@ by default, so a new screen needs no banner code.
 All `native_set_banner_zone` messages are sent from `src/lib/native-banner-zone.ts` (web) and the zone it posts is
 the intersection of three gates: the route is `/{locale}/conversations`, the list/room requested `list`/`conversation`
 (`requestNativeBannerZone`), and no overlay holds a suppression (`suppressNativeBanner`).
+
+The shell follows the web: a `hidden` from the web is never undone by the shell, and after any non-banner route the
+shell stays hidden until the web asks again (it only restores by itself across a list <-> room URL change it hid for).
+For app builds up to 2.3.4, which could restore the list banner after the web hid it, the web states `hidden` again a
+few times after each hide.
 
 - New route: nothing to do. `NativeBannerRouteGuard` (root layout) re-syncs on every route change and the route gate hides it.
 - New modal, sheet, viewer, or layered screen over the list/room: call `useNativeBannerSuppression(isOpen)`.

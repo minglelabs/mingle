@@ -88,7 +88,33 @@
     },
     {
       "source": "/blogs",
-      "destination": "/blogs/index.html"
+      "has": [
+        {
+          "type": "query",
+          "key": "lang",
+          "value": "ko"
+        }
+      ],
+      "destination": "/blogs/ko"
+    },
+    {
+      "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|virtually-deck)",
+      "has": [
+        {
+          "type": "query",
+          "key": "lang",
+          "value": "ko"
+        }
+      ],
+      "destination": "/blogs/ko/:slug"
+    },
+    {
+      "source": "/blogs",
+      "destination": "/blogs/en"
+    },
+    {
+      "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|virtually-deck)",
+      "destination": "/blogs/en/:slug"
     },
     {
       "source": "/blogs/:slug",

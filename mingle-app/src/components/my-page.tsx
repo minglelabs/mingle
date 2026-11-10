@@ -21,7 +21,6 @@ import { BIO_CHANGED_EVENT } from "@/lib/profile-bio";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import ProfileUsageContent from "@/components/profile-usage-content";
-import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import ProfileLocation from "@/components/profile-location";
 import ProfilePostGrid from "@/components/search/profile-post-grid";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
@@ -33,6 +32,14 @@ import { resolveInterestLanguageCopy } from "@/i18n/interest-language-copy";
 import InterestLanguageSheet from "@/components/interest-language-sheet";
 import LanguageFlag from "@/components/language-flag";
 import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
+import ProfileGenderPicker from "@/components/profile-gender-picker";
+import ProfileNationalityPicker from "@/components/profile-nationality-picker";
+import ProfileNationalityBadge from "@/components/profile-nationality-badge";
+import { resolveProfileNationalityCopy } from "@/i18n/profile-nationality-copy";
+import { normalizeNationalityCountry, resolveNationalityCountry } from "@/lib/nationality";
+import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
+import { resolveProfileGenderCopy } from "@/i18n/profile-gender-copy";
+import { normalizeProfileGender, type ProfileGender } from "@/lib/profile-gender";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
 import {
@@ -129,8 +136,10 @@ type ProfileDraft = {
   name: string;
   bio: string;
   nationality: SttLanguageCode | null;
+  nationalityCountry: string | null;
   primaryLanguages: SttLanguageCode[];
   birthDate: BirthDateParts | null;
+  gender: ProfileGender | null;
 };
 
 const NO_INTEREST_LANGUAGES: readonly InterestLanguage[] = [];
@@ -295,14 +304,14 @@ function getNationalityOption(value: string | null | undefined) {
 
 function ProfileAvatar({
   alt,
-  languages,
+  country,
   imageUrl,
   imageCrop,
   size = 88,
   onClick,
 }: {
   alt: string;
-  languages: readonly string[];
+  country: string | null;
   imageUrl?: string | null;
   imageCrop?: ProfileImageCropInput;
   size?: number;
@@ -333,7 +342,7 @@ function ProfileAvatar({
           <UserRound size={Math.round(size * 0.58)} className="text-gray-400" aria-hidden="true" />
         )}
       </div>
-      <ProfileLanguageFlagStack languages={languages} size={size} />
+      <ProfileNationalityBadge country={country} size={size} />
     </button>
   );
 }
@@ -490,6 +499,7 @@ function ProfileSettingsPanel({
       harassment: dictionary.profile.reportReasonHarassment ?? (locale === "ko" ? "괴롭힘·불쾌한 행동" : "Harassment"),
       inappropriate: dictionary.profile.reportReasonInappropriate ?? (locale === "ko" ? "부적절한 콘텐츠" : "Inappropriate content"),
       impersonation: dictionary.profile.reportReasonImpersonation ?? (locale === "ko" ? "사칭" : "Impersonation"),
+      ai_generated: dictionary.profile.reportReasonAiGenerated ?? (locale === "ko" ? "AI로 만든 것 같음 (글·사진·프로필)" : "Looks AI-generated (text, photo, profile)"),
       other: dictionary.profile.reportReasonOther ?? (locale === "ko" ? "기타" : "Other"),
     } as Record<string, string>,
   };
@@ -1487,7 +1497,9 @@ function ProfileEditPanel({
   initialName,
   initialHandle,
   initialPrimaryLanguages,
+  initialNationalityCountry,
   initialBirthDate,
+  initialGender,
   onClose,
   onSave,
   open,
@@ -1500,7 +1512,9 @@ function ProfileEditPanel({
   initialName: string;
   initialHandle: string;
   initialPrimaryLanguages: readonly string[];
+  initialNationalityCountry: string | null;
   initialBirthDate?: BirthDateParts | null;
+  initialGender?: ProfileGender | null;
   onClose: () => void;
   onSave: (draft: ProfileDraft) => Promise<ProfileSaveResult>;
   open: boolean;
@@ -1514,6 +1528,8 @@ function ProfileEditPanel({
   ));
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
   const [hasBirthDate, setHasBirthDate] = useState(Boolean(initialBirthDate));
+  const [gender, setGender] = useState<ProfileGender | null>(initialGender ?? null);
+  const [nationalityCountry, setNationalityCountry] = useState<string | null>(initialNationalityCountry);
   const [imageDraft, setImageDraft] = useState<ProfileImageCropperChange>({
     file: null,
     crop: { ...DEFAULT_PROFILE_IMAGE_CROP },
@@ -1546,6 +1562,8 @@ function ProfileEditPanel({
     handleInvalid: dictionary.profile.handleInvalidMessage ?? (locale === "ko" ? "아이디는 영문, 숫자, 밑줄(_)과 마침표(.)만 사용할 수 있습니다." : "Use only letters, numbers, underscores (_), and periods (.)."),
   };
   const signupCopy = useMemo(() => resolveSignupCopy(locale), [locale]);
+  const genderCopy = useMemo(() => resolveProfileGenderCopy(locale), [locale]);
+  const nationalityCopy = useMemo(() => resolveProfileNationalityCopy(locale), [locale]);
   const isEligibleAge = useMemo(() => isOldEnoughForSignup(birthDate), [birthDate]);
   const languageCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(locale), [locale]);
   const initialImageCropScale = initialImageCrop?.scale;
@@ -1568,12 +1586,14 @@ function ProfileEditPanel({
     setPrimaryLanguages(sanitizeSttLanguageSelection(initialPrimaryLanguages));
     setBirthDate(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
     setHasBirthDate(Boolean(initialBirthDate));
+    setGender(initialGender ?? null);
+    setNationalityCountry(initialNationalityCountry);
     setImageDraft({
       file: null,
       crop: normalizedInitialImageCrop,
     });
     setSaveError(null);
-  }, [initialBirthDate, initialBio, initialHandle, initialName, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
+  }, [initialBirthDate, initialBio, initialGender, initialHandle, initialName, initialNationalityCountry, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
 
   const handleSave = useCallback(async () => {
     if (isSaving) return;
@@ -1589,8 +1609,10 @@ function ProfileEditPanel({
         name: name.trim(),
         bio: bio.trim(),
         nationality: primaryLanguages[0] ?? null,
+        nationalityCountry,
         primaryLanguages,
         birthDate: hasBirthDate ? birthDate : null,
+        gender,
       });
       if (saved === "saved") {
         if (editOpenRef.current && epoch === saveEpoch.current) onClose();
@@ -1602,7 +1624,7 @@ function ProfileEditPanel({
     } finally {
       setIsSaving(false);
     }
-  }, [bio, birthDate, copy.handleInvalid, copy.handleTaken, copy.saveError, handle, hasBirthDate, imageDraft, isSaving, name, onClose, onSave, primaryLanguages]);
+  }, [bio, birthDate, copy.handleInvalid, copy.handleTaken, copy.saveError, gender, handle, hasBirthDate, imageDraft, isSaving, name, nationalityCountry, onClose, onSave, primaryLanguages]);
 
   return (
     <SlideSurface
@@ -1694,6 +1716,23 @@ function ProfileEditPanel({
                 <span className="mt-1 block text-right text-[12px] text-gray-400">{bio.length}/160</span>
                 {editingSession?.user?.id && <ProfileBio userId={editingSession.user.id} locale={locale} editing />}
               </label>
+
+              <fieldset className="min-w-0 w-full max-w-full">
+                <legend className="mb-2 text-[13px] font-semibold text-gray-600">{genderCopy.label}</legend>
+                <ProfileGenderPicker value={gender} onChange={setGender} copy={genderCopy} disabled={isSaving} />
+              </fieldset>
+
+              <fieldset className="min-w-0 w-full max-w-full">
+                <legend className="mb-2 text-[13px] font-semibold text-gray-600">{nationalityCopy.label}</legend>
+                <ProfileNationalityPicker
+                  value={nationalityCountry}
+                  onChange={setNationalityCountry}
+                  copy={nationalityCopy}
+                  locale={locale}
+                  suggestedLanguages={primaryLanguages}
+                  disabled={isSaving}
+                />
+              </fieldset>
 
               <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">
@@ -1837,6 +1876,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   );
   const nationality = getNationalityOption(profile.nationality || primaryLanguages[0] || null)?.locale ?? null;
   const nationalityFlag = getNationalityOption(nationality)?.flag;
+  const nationalityCountry = resolveNationalityCountry(profile.nationalityCountry, primaryLanguages);
   const nationalityName = nationality
     ? getSttLanguageDisplayName(nationality, locale)
       ?? getNationalityOption(nationality)?.label
@@ -2054,6 +2094,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           bio: typeof data.bio === "string" ? data.bio : null,
           bioDraft: typeof data.bioDraft === "string" ? data.bioDraft : data.bioDraft === null ? null : undefined,
           nationality: typeof data.nationality === "string" ? data.nationality : null,
+          nationalityCountry: normalizeNationalityCountry(data.nationalityCountry),
           primaryLanguages: sanitizeSttLanguageSelection(
             data.primaryLanguages,
             typeof data.nationality === "string" && data.nationality ? [data.nationality] : [],
@@ -2064,6 +2105,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             ? null
             : normalizeProfileLocation(data.location),
           birthDate: parseProfileBirthDate(data.birthDate),
+          gender: normalizeProfileGender(data.gender),
+          age: typeof data.age === "number" ? data.age : null,
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
           isOfficial: data.isOfficial === true,
@@ -2205,8 +2248,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           name: draft.name,
           bio: draft.bio,
           nationality: draft.nationality,
+          ...(draft.nationalityCountry ? { nationalityCountry: draft.nationalityCountry } : {}),
           primaryLanguages: draft.primaryLanguages,
           birthDate: draft.birthDate ? formatBirthDate(draft.birthDate) : null,
+          ...(draft.gender ? { gender: draft.gender } : {}),
           imageCropScale: draft.imageCrop.scale,
           imageCropX: draft.imageCrop.x,
           imageCropY: draft.imageCrop.y,
@@ -2234,7 +2279,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         bio: typeof saved.bio === "string" ? saved.bio : saved.bio === null ? null : current.bio,
         bioDraft: typeof saved.bioDraft === "string" ? saved.bioDraft : saved.bioDraft === null ? null : current.bioDraft,
         birthDate: parseProfileBirthDate(saved.birthDate) ?? current.birthDate,
+        gender: normalizeProfileGender(saved.gender) ?? current.gender,
+        age: typeof saved.age === "number" ? saved.age : current.age,
         nationality: typeof saved.nationality === "string" ? saved.nationality : current.nationality,
+        nationalityCountry: normalizeNationalityCountry(saved.nationalityCountry) ?? current.nationalityCountry,
         primaryLanguages: sanitizeSttLanguageSelection(
           saved.primaryLanguages,
           typeof saved.nationality === "string" && saved.nationality ? [saved.nationality] : [],
@@ -2359,7 +2407,9 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         initialName={name}
         initialHandle={profile.handle ?? ""}
         initialPrimaryLanguages={primaryLanguages}
+        initialNationalityCountry={nationalityCountry}
         initialBirthDate={profile.birthDate}
+        initialGender={profile.gender}
         onClose={() => closeMyPageSurface({ id: MY_PAGE_PROFILE_EDIT_SURFACE_ID })}
         onSave={handleSaveProfile}
         open={showProfileEdit}
@@ -2367,7 +2417,6 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       {interestSheetOpen ? (
         <InterestLanguageSheet
           locale={locale}
-          primaryLanguages={primaryLanguages}
           onSave={(language) => handleSaveInterestLanguages([language])}
           onClose={() => setInterestSheetOpen(false)}
         />
@@ -2485,7 +2534,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             <div className="flex shrink-0 flex-col items-center">
               <ProfileAvatar
                 alt={name}
-                languages={primaryLanguages}
+                country={nationalityCountry}
                 imageUrl={profileImageUrl}
                 imageCrop={{
                   scale: profile.imageCropScale,
@@ -2518,9 +2567,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           </div>
 
           <div className="mt-4 pl-2">
-            <p className="flex min-w-0 items-baseline gap-1.5">
+            <p className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-[15px] font-semibold text-slate-950">{name}</span>
               <AccountBadge kind={resolveAccountBadge(profile)} locale={locale} tone="dark" />
+              <ProfileGenderAgeBadge gender={profile.gender} age={profile.age} locale={locale} />
               {profile.handle ? <span className="min-w-0 truncate text-[13px] text-gray-500">{formatHandle(profile.handle)}</span> : null}
             </p>
             <ProfileLanguageLevels

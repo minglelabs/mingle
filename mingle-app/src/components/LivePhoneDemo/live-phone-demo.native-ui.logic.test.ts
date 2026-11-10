@@ -123,6 +123,22 @@ describe('live-phone-demo native ui bridge logic', () => {
     })).toBe(104)
   })
 
+  it('lifts the clearance by the visual viewport scroll so the banner stays above a growing composer', () => {
+    // Keyboard open, textarea grew, iOS scrolled the visual viewport 40px.
+    expect(resolveNativeBottomBarBannerClearancePx({
+      bottomBarTopPx: 380,
+      viewportHeightPx: 844,
+      safeAreaInsetBottomPx: 34,
+      visualViewportOffsetTopPx: 40,
+    })).toBe(470)
+    expect(resolveNativeBottomBarBannerClearancePx({
+      bottomBarTopPx: 380,
+      viewportHeightPx: 844,
+      safeAreaInsetBottomPx: 34,
+      visualViewportOffsetTopPx: Number.NaN,
+    })).toBe(430)
+  })
+
   it('clamps invalid bottom banner clearance inputs to zero', () => {
     expect(resolveNativeBottomBarBannerClearancePx({
       bottomBarTopPx: 120,

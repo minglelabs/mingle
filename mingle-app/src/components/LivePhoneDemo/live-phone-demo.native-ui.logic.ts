@@ -75,20 +75,31 @@ export function isNativeUiBridgeEnabledFromSearch(search: string): boolean {
   }
 }
 
+// The native banner is placed in screen coordinates, but the bottom bar rect
+// is relative to the layout viewport. While the keyboard is open, iOS scrolls
+// the visual viewport to keep the caret in view (e.g. when the textarea grows
+// on Enter), which moves the bar up on screen by `visualViewport.offsetTop`.
 export function resolveNativeBottomBarBannerClearancePx(input: {
   bottomBarTopPx: number
   viewportHeightPx: number
   safeAreaInsetBottomPx: number
+  visualViewportOffsetTopPx?: number
 }): number {
   const bottomBarTopPx = Number(input.bottomBarTopPx)
   const viewportHeightPx = Number(input.viewportHeightPx)
   const safeAreaInsetBottomPx = Number(input.safeAreaInsetBottomPx)
+  const visualViewportOffsetTopPx = Number(input.visualViewportOffsetTopPx ?? 0)
 
   const safeBottomBarTopPx = Number.isFinite(bottomBarTopPx) ? bottomBarTopPx : 0
   const safeViewportHeightPx = Number.isFinite(viewportHeightPx) ? viewportHeightPx : 0
   const safeSafeAreaInsetBottomPx = Number.isFinite(safeAreaInsetBottomPx) ? safeAreaInsetBottomPx : 0
+  const safeVisualViewportOffsetTopPx = Number.isFinite(visualViewportOffsetTopPx) && visualViewportOffsetTopPx > 0
+    ? visualViewportOffsetTopPx
+    : 0
 
-  return Math.max(0, Math.round(safeViewportHeightPx - safeBottomBarTopPx - safeSafeAreaInsetBottomPx))
+  return Math.max(0, Math.round(
+    safeViewportHeightPx - (safeBottomBarTopPx - safeVisualViewportOffsetTopPx) - safeSafeAreaInsetBottomPx,
+  ))
 }
 
 function isLoopbackHost(host: string): boolean {

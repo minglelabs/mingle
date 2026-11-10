@@ -56,6 +56,26 @@ const POLL_HOLD_MS = 20_000
 const AGENT_STALE_MS = 75_000
 const TEXT_TIMEOUT_MS = 5 * 60_000
 const IMAGE_TIMEOUT_MS = 8 * 60_000
+/** More waiting jobs than this are refused (503 queue_full) instead of piling up for hours. */
+const MAX_QUEUE = Number(process.env.CHATGPT_POOL_MAX_QUEUE || 100)
+/** A job still waiting for an account after this long fails (504 queue_timeout); its caller has given up. */
+const TEXT_QUEUE_WAIT_MS = 10 * 60_000
+const IMAGE_QUEUE_WAIT_MS = 20 * 60_000
+/**
+ * Per-account pacing, so no ChatGPT account works back to back like a bot.
+ * On 2026-11-04 ChatGPT signed out 10 accounts and flagged the last for "unusual
+ * activity" after each ran hundreds of chats in a row. An account rests
+ * ACCOUNT_GAP_MS (up to 1.5x, randomized) after each job, and takes at most
+ * ACCOUNT_PER_HOUR / ACCOUNT_PER_DAY jobs; past that it is skipped, and when every
+ * account is at its cap the request fails at once with 429 account_quota.
+ * Counts are kept in memory, so a restart starts them over.
+ */
+const envNumber = (name, fallback) => { const value = Number(process.env[name]); return Number.isFinite(value) && value >= 0 ? value : fallback }
+const ACCOUNT_GAP_MS = envNumber('CHATGPT_POOL_ACCOUNT_GAP_MS', 20_000)
+const ACCOUNT_PER_HOUR = envNumber('CHATGPT_POOL_ACCOUNT_PER_HOUR', 30)
+const ACCOUNT_PER_DAY = envNumber('CHATGPT_POOL_ACCOUNT_PER_DAY', 200)
+const HOUR_MS = 3_600_000
+const DAY_MS = 24 * HOUR_MS
 const LABEL = 'app.mingle.chatgpt-pool'
 
 const log = (...args) => console.error(new Date().toISOString(), ...args)
@@ -78,10 +98,42 @@ const queue = []
 const running = new Map()
 
 const online = (agent) => Date.now() - agent.lastSeen < AGENT_STALE_MS
+
+/** Start times of this account's jobs in the last day, oldest first. */
+function recentStarts(agent, now = Date.now()) {
+  agent.starts ??= []
+  while (agent.starts.length && now - agent.starts[0] >= DAY_MS) agent.starts.shift()
+  return agent.starts
+}
+
+/** When this account may take a job again because of its hourly or daily cap; 0 when it is under both. */
+function quotaFreeAt(agent, now = Date.now()) {
+  const starts = recentStarts(agent, now)
+  let freeAt = 0
+  if (ACCOUNT_PER_DAY > 0 && starts.length >= ACCOUNT_PER_DAY) freeAt = starts[starts.length - ACCOUNT_PER_DAY] + DAY_MS
+  const lastHour = starts.filter((at) => now - at < HOUR_MS)
+  if (ACCOUNT_PER_HOUR > 0 && lastHour.length >= ACCOUNT_PER_HOUR) freeAt = Math.max(freeAt, lastHour[lastHour.length - ACCOUNT_PER_HOUR] + HOUR_MS)
+  return freeAt > now ? freeAt : 0
+}
+
+const resting = (agent, now = Date.now()) => now < (agent.restUntil ?? 0)
+
+let restWake = null
+/** Dispatches again when the soonest resting account is free, instead of waiting for its next poll. */
+function wakeAfterRest() {
+  const now = Date.now()
+  const soonest = Math.min(...[...agents.values()].map((agent) => agent.restUntil ?? 0).filter((at) => at > now))
+  if (!Number.isFinite(soonest)) return
+  clearTimeout(restWake)
+  restWake = setTimeout(() => { restWake = null; failUnservable(); dispatch() }, soonest - now + 50)
+  restWake.unref?.()
+}
 const accepts = (job, agent) => !job.account || job.account === agent.email || job.account === agent.id
 
 function eligible(agent, job) {
   if (agent.busy || agent.signedOut || !agent.email || job.tried.has(agent.id) || !accepts(job, agent)) return false
+  if (Date.now() < (agent.pausedUntil ?? 0)) return false
+  if (resting(agent) || quotaFreeAt(agent)) return false
   return job.kind !== 'image' || Date.now() >= agent.limitedUntil
 }
 
@@ -95,6 +147,7 @@ function dispatch() {
     queue.splice(queue.indexOf(job), 1)
     agent.busy = true
     agent.lastUsed = Date.now()
+    recentStarts(agent).push(agent.lastUsed)
     job.agent = agent
     job.tried.add(agent.id)
     running.set(job.id, job)
@@ -108,9 +161,22 @@ function dispatch() {
 /** Fails a waiting job that no connected account can take. */
 function failUnservable() {
   for (const job of [...queue]) {
+    if (Date.now() - job.queuedAt > (job.kind === 'image' ? IMAGE_QUEUE_WAIT_MS : TEXT_QUEUE_WAIT_MS)) {
+      queue.splice(queue.indexOf(job), 1)
+      job.reject(job.lastError ?? new PoolError(504, 'queue_timeout', `no account took the job within ${Math.round((Date.now() - job.queuedAt) / 60_000)} min`))
+      continue
+    }
     const candidates = [...agents.values()].filter((agent) => online(agent) && agent.email && !job.tried.has(agent.id) && accepts(job, agent))
     let error = null
-    if (candidates.length === 0) {
+    const paused = candidates.filter((agent) => Date.now() < (agent.pausedUntil ?? 0))
+    const capped = candidates.filter((agent) => quotaFreeAt(agent))
+    if (candidates.length > 0 && paused.length === candidates.length) {
+      const soonest = Math.min(...paused.map((agent) => agent.pausedUntil))
+      error = job.lastError ?? new PoolError(429, 'rate_limited', `ChatGPT is throttling every connected account, the first until ${new Date(soonest).toISOString()}`)
+    } else if (candidates.length > 0 && candidates.every((agent) => paused.includes(agent) || capped.includes(agent))) {
+      const soonest = Math.min(...candidates.map((agent) => (paused.includes(agent) ? agent.pausedUntil : quotaFreeAt(agent))))
+      error = new PoolError(429, 'account_quota', `every account is resting or at its hourly/daily cap (${ACCOUNT_PER_HOUR}/h, ${ACCOUNT_PER_DAY}/day), the first free at ${new Date(soonest).toISOString()}`)
+    } else if (candidates.length === 0) {
       error = job.lastError ?? new PoolError(503, 'no_account', job.account ? `${job.account} is not connected` : 'no Chrome profile with the extension is connected')
     } else if (job.kind === 'image' && candidates.every((agent) => Date.now() < agent.limitedUntil)) {
       const soonest = Math.min(...candidates.map((agent) => agent.limitedUntil))
@@ -130,6 +196,11 @@ function finish(jobId, outcome) {
   clearTimeout(job.timer)
   const agent = job.agent
   agent.busy = false
+  // Every finished job, answered or not, used the account: let it rest before the next one.
+  if (ACCOUNT_GAP_MS > 0) {
+    agent.restUntil = Date.now() + Math.round(ACCOUNT_GAP_MS * (1 + Math.random() * 0.5))
+    wakeAfterRest()
+  }
   if (!outcome.error) {
     job.resolve({ account: agent.email, profile: agent.profile ?? null, ...outcome })
     return
@@ -141,7 +212,12 @@ function finish(jobId, outcome) {
     agent.limitMessage = message ?? ''
   }
   if (code === 'signed_out') agent.signedOut = true
-  const error = new PoolError(code === 'image_refused' ? 422 : code === 'image_limit' ? 429 : 502, code, `${agent.email}: ${message ?? ''}`)
+  // ChatGPT answered with its own "try again later" error: rest the account for every kind of job.
+  if (code === 'rate_limited') {
+    agent.pausedUntil = Date.now() + Math.min(retryAfterMs || 30 * 60_000, 3 * 3_600_000)
+    agent.pauseMessage = message ?? ''
+  }
+  const error = new PoolError(code === 'image_refused' ? 422 : code === 'image_limit' || code === 'rate_limited' ? 429 : 502, code, `${agent.email}: ${message ?? ''}`)
   // A refusal is about the prompt; a pinned job has nowhere else to go.
   if (code === 'image_refused' || code === 'bad_reference' || job.account || job.tried.size >= 4) {
     job.reject(error)
@@ -153,12 +229,41 @@ function finish(jobId, outcome) {
   dispatch()
 }
 
-function submit({ kind, prompt, reference = null, account = null }) {
-  return new Promise((resolveJob, rejectJob) => {
-    queue.push({ id: randomUUID(), kind, prompt, reference, account, tried: new Set(), resolve: resolveJob, reject: rejectJob })
+/** Identical requests (same kind, account, prompt and reference) waiting or running: key -> { job, promise, waiters }. */
+const shared = new Map()
+
+/**
+ * Queues a job, or joins an identical one already waiting or running, so a caller
+ * that repeats itself does not fill the queue. `signal` aborts when the caller's
+ * connection closes; a waiting job nobody waits for any more leaves the queue.
+ */
+function submit({ kind, prompt, reference = null, account = null }, signal = null) {
+  const key = JSON.stringify([kind, account, prompt, reference && createHash('sha256').update(reference).digest('hex')])
+  let entry = shared.get(key)
+  if (entry) {
+    log('same', entry.job.id.slice(0, 8), `joins a ${running.has(entry.job.id) ? 'running' : 'waiting'} identical job`)
+  } else {
+    if (queue.length >= MAX_QUEUE) throw new PoolError(503, 'queue_full', `${queue.length} jobs are already waiting`)
+    const job = { id: randomUUID(), kind, prompt, reference, account, tried: new Set(), queuedAt: Date.now() }
+    const promise = new Promise((resolveJob, rejectJob) => { job.resolve = resolveJob; job.reject = rejectJob })
+    entry = { job, promise, waiters: 0 }
+    shared.set(key, entry)
+    const forget = () => { if (shared.get(key) === entry) shared.delete(key) }
+    promise.then(forget, forget)
+    queue.push(job)
     failUnservable()
     dispatch()
-  })
+  }
+  entry.waiters += 1
+  signal?.addEventListener('abort', () => {
+    entry.waiters -= 1
+    const at = queue.indexOf(entry.job)
+    if (entry.waiters > 0 || at < 0) return
+    queue.splice(at, 1)
+    log('cancel', entry.job.id.slice(0, 8), 'the caller left before an account took it')
+    entry.job.reject(new PoolError(499, 'cancelled', 'the caller closed the connection'))
+  }, { once: true })
+  return entry.promise
 }
 
 /**
@@ -261,6 +366,12 @@ function accountsStatus() {
     email: agent.email, profile: agent.profile, agentId: agent.id, busy: agent.busy, signedOut: agent.signedOut,
     imageLimitedUntil: agent.limitedUntil > Date.now() ? new Date(agent.limitedUntil).toISOString() : null,
     limitMessage: agent.limitedUntil > Date.now() ? agent.limitMessage : null,
+    pausedUntil: (agent.pausedUntil ?? 0) > Date.now() ? new Date(agent.pausedUntil).toISOString() : null,
+    pauseMessage: (agent.pausedUntil ?? 0) > Date.now() ? agent.pauseMessage : null,
+    restingUntil: resting(agent) ? new Date(agent.restUntil).toISOString() : null,
+    jobsLastHour: recentStarts(agent).filter((at) => Date.now() - at < HOUR_MS).length,
+    jobsLastDay: recentStarts(agent).length,
+    cappedUntil: quotaFreeAt(agent) ? new Date(quotaFreeAt(agent)).toISOString() : null,
   }))
 }
 
@@ -335,7 +446,7 @@ function asyncStatus(id) {
   return { id, object: 'job', status: entry.status, created: entry.created, ...(entry.result ? { result: entry.result } : {}), ...(entry.error ? { error: entry.error } : {}) }
 }
 
-async function handleApi(path, body) {
+async function handleApi(path, body, signal = null) {
   const image = path === '/v1/images/generations' || /image/i.test(body.model ?? '')
   const lastUser = partsText([...(body.messages ?? [])].reverse().find((m) => m.role === 'user')?.content)
   const prompt = path === '/v1/images/generations' ? String(body.prompt ?? '') : image ? lastUser.replace(/^Generate this image\.\s*/i, '') : chatPrompt(body.messages ?? [])
@@ -343,7 +454,7 @@ async function handleApi(path, body) {
   const reference = path === '/v1/images/generations' ? (typeof body.reference === 'string' ? body.reference : null) : referenceIn(body.messages)
   const started = Date.now()
   log(image ? 'image' : 'chat', JSON.stringify(prompt.slice(0, 70)))
-  const result = await submit({ kind: image ? 'image' : 'text', prompt: prompt.trim(), reference, account: body.account ?? null })
+  const result = await submit({ kind: image ? 'image' : 'text', prompt: prompt.trim(), reference, account: body.account ?? null }, signal)
   log('done', result.profile ? `${result.account} [${result.profile}]` : result.account, `${Math.round((Date.now() - started) / 1000)}s`)
   if (path === '/v1/images/generations') return { created: Math.floor(Date.now() / 1000), account: result.account, profile: result.profile, data: [{ b64_json: result.image.base64 }] }
   const content = image ? `![image](data:${result.image.type};base64,${result.image.base64})` : result.text
@@ -372,7 +483,7 @@ function serve() {
         if (path === '/agent/progress') {
           const agent = agents.get(String(body.agentId ?? ''))
           if (agent) agent.lastSeen = Date.now()
-          log('step', who(agent), String(body.jobId ?? '').slice(0, 8), String(body.step ?? '').slice(0, 120))
+          log('step', who(agent), String(body.jobId ?? '').slice(0, 8), String(body.step ?? '').slice(0, 400))
           return reply(response, 200, { ok: true })
         }
         const agent = agents.get(String(body.agentId ?? ''))
@@ -383,13 +494,16 @@ function serve() {
       // The main port stays keyless while it listens only on this machine, so the local CLI and MCP need no key.
       const keyed = exposed || (KEY && !LOOPBACK_HOSTS.includes(HOST))
       if (keyed && !keyMatches(request.headers.authorization)) return reply(response, 401, { error: { code: 'unauthorized' } })
-      if (request.method === 'GET' && path === '/health') return reply(response, 200, { ok: true, accounts: accountsStatus().length, queued: queue.length, running: running.size })
+      if (request.method === 'GET' && path === '/health') return reply(response, 200, { ok: true, accounts: accountsStatus().length, ready: accountsStatus().filter((a) => a.email && !a.signedOut && !a.pausedUntil && !a.cappedUntil).length, queued: queue.length, running: running.size })
       if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus() })
       if (request.method === 'GET' && path.startsWith('/v1/jobs/')) return reply(response, 200, asyncStatus(decodeURIComponent(path.slice('/v1/jobs/'.length))))
       if (request.method === 'POST' && (path === '/v1/chat/completions' || path === '/v1/images/generations')) {
         const body = await readBody(request)
         if (body.async === true) return reply(response, 202, startAsync(path, body))
-        return reply(response, 200, await handleApi(path, body))
+        // A caller that gives up (its own timeout) closes the connection; its job then leaves the queue.
+        const left = new AbortController()
+        response.on('close', () => { if (!response.writableEnded) left.abort() })
+        return reply(response, 200, await handleApi(path, body, left.signal))
       }
       return reply(response, 404, { error: { code: 'not_found' } })
     } catch (error) {

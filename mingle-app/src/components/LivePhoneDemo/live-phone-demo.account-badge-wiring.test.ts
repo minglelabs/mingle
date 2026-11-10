@@ -79,17 +79,8 @@ describe('room (LivePhoneDemo.tsx)', () => {
     }
   })
 
-  it('pins the disclosure at the top of the chat scroll container, gated by operatorDisclosure', () => {
-    const [disclosure] = findElements(tree, 'ConversationOperatorDisclosure')
-    expect(disclosure).toBeDefined()
-    const scroll = jsxAncestors(disclosure).find((node) => attributeText(node, 'data-qa') === '"live-demo-chat-scroll"')
-    expect(scroll).toBeDefined()
-    expect(attributeText(disclosure, 'stickyTopPx')).toBe('{nativeChatTopSpacerPx}')
-    const scrollText = scroll!.getText()
-    const disclosureAt = scrollText.indexOf('<ConversationOperatorDisclosure')
-    expect(scrollText.lastIndexOf('operatorDisclosure ?', disclosureAt)).toBeGreaterThan(-1)
-    expect(disclosureAt).toBeLessThan(scrollText.indexOf('hasOlderUtterances &&'))
-    expect(disclosureAt).toBeLessThan(scrollText.indexOf('timelineItems.map'))
+  it('shows no operator notice in the chat: operator accounts look like any other user', () => {
+    expect(findElements(tree, 'ConversationOperatorDisclosure')).toHaveLength(0)
   })
 
   it('labels invite and leave notice names', () => {
@@ -149,13 +140,11 @@ describe('other chat surfaces', () => {
   })
 
   it.each(['../conversation-spectate-screen.tsx', '../native-conversation-share-overlay.tsx'])(
-    'shows the disclosure inside the shared-room message list (%s)',
-    (path) => {
-      const tree = parse(path)
-      const [disclosure] = findElements(tree, 'ConversationOperatorDisclosure')
-      expect(disclosure).toBeDefined()
-      expect(jsxAncestors(disclosure).some((node) => attributeText(node, 'ref') === '{messagesContainerRef}')).toBe(true)
-      expect(tree.getText()).toContain('state?.operatorDisclosure ?')
+    'shows no operator notice in the shared-room message list (%s)',
+    (file) => {
+      const tree = parse(file)
+      expect(findElements(tree, 'ConversationOperatorDisclosure')).toHaveLength(0)
+      expect(tree.getText()).not.toContain('operatorDisclosure ?')
     },
   )
 })

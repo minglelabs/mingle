@@ -131,7 +131,7 @@
       <article>
         <nav class="lang-nav"><a href="/legal/en/privacy-policy.html" aria-current="page">English</a><a href="/legal/ko/privacy-policy.html">Korean</a><a href="/legal/ja/privacy-policy.html">Japanese</a><a href="/legal/zh-cn/privacy-policy.html">Chinese (Simplified)</a><a href="/legal/zh-tw/privacy-policy.html">Chinese (Traditional)</a><a href="/legal/fr/privacy-policy.html">French</a><a href="/legal/de/privacy-policy.html">German</a><a href="/legal/es/privacy-policy.html">Spanish</a><a href="/legal/pt/privacy-policy.html">Portuguese</a><a href="/legal/it/privacy-policy.html">Italian</a><a href="/legal/ru/privacy-policy.html">Russian</a><a href="/legal/ar/privacy-policy.html">Arabic</a><a href="/legal/hi/privacy-policy.html">Hindi</a><a href="/legal/th/privacy-policy.html">Thai</a><a href="/legal/vi/privacy-policy.html">Vietnamese</a></nav>
         <h1>HashChat Privacy Policy</h1>
-        <p class="meta"><strong>Last updated:</strong> October 8, 2026</p>
+        <p class="meta"><strong>Last updated:</strong> October 31, 2026</p>
         <p>This Privacy Policy explains how Mingle Labs, Inc. ("HashChat," "we," "our," or "us") collects, uses, shares, and protects personal data when you use the HashChat mobile app, website, and related services (collectively, the "Service").</p>
         <h2>1. Scope</h2>
 <p>This Policy applies to information processed for consumer HashChat accounts and usage. It does not apply to data we process solely on behalf of enterprise customers under separate contracts.</p>
@@ -141,7 +141,7 @@
 
 <ul>
   <li>Account Information: name, email address, sign-in provider details, account identifiers, and profile preferences.</li>
-  <li>Translation and Voice Data: text you submit for translation, voice/audio input needed to provide speech recognition and translation, translated output, and language settings.</li>
+  <li>Translation and Voice Data: text you submit for translation, voice/audio input needed to provide speech recognition and translation (including audio played by other apps on your device, if you choose that option in earphone mode), translated output, and language settings.</li>
   <li>Technical and Usage Data: device type, operating system, app version, IP address, request timestamps, crash logs, performance logs, and feature interaction events.</li>
   <li>Support Communications: messages and attachments you send to us when requesting help.</li>
 </ul>
@@ -153,6 +153,7 @@
 
 <h2>3. Audio Processing and Non-Retention</h2>
 <p>HashChat processes microphone audio in real time to provide speech recognition and translation. Raw audio is streamed for processing and is not stored by HashChat after the request is completed.</p>
+<p>In earphone mode in the HashChat mobile apps, you can choose to translate "Microphone + sound playing on this device." With this option, HashChat captures the audio that other apps on your device play (for example, a video) using Android's screen capture and audio playback capture permission (MediaProjection) or iOS screen broadcast (a ReplayKit broadcast extension). This capture happens only after you start it and approve the system prompt, and only while that session is running. The captured audio is mixed with your microphone audio and streamed in real time to HashChat's servers and our speech-to-text provider (Soniox) in the same way as microphone audio, and raw audio is not stored by HashChat after processing. The resulting transcripts and translations are saved as conversation messages, just like spoken messages, and may be visible to other participants in that conversation. HashChat does not capture screen images or video from the screen capture or broadcast, only audio. Audio from apps that block audio capture is not captured, and neither are phone calls. You can stop capture at any time in the app or from the system notification or status bar.</p>
 <p>HashChat does not keep a retained archive of raw voice recordings for model training. We may keep limited non-audio technical diagnostics (for example, error codes and timing metrics) for security, abuse prevention, and service reliability.</p>
 
 
@@ -175,7 +176,7 @@
 <p>We do not sell personal data. We may share data with:</p>
 <ul>
   <li>Service Providers: hosting, storage, authentication, customer support, analytics, crash reporting, and other infrastructure vendors that process data under contract.</li>
-  <li>Soniox: audio stream and related context needed for speech-to-text processing.</li>
+  <li>Soniox: audio stream (microphone audio, plus audio played by other apps on your device if you choose that option in earphone mode) and related context needed for speech-to-text processing.</li>
   <li>Inworld: text and language context needed for voice generation features and synthesized audio delivery.</li>
   <li>Google: account authentication and text-based service operations where used. HashChat does not send raw voice audio to Google for speech processing.</li>
   <li>Anthropic: text you submit for translation and the language context needed to generate translations with Claude models.</li>
