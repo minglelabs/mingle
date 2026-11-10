@@ -70,7 +70,10 @@ interface LanguageOnboardingModalProps {
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-type OnboardingStep = "language" | "interest-language" | "birth-date" | "usage-purpose" | "discovery-source";
+type OnboardingStep = "language" | "interest-language" | "usage-purpose" | "discovery-source" | "gender" | "birth-date";
+
+// Long enough to see the tapped gender light up before the next screen slides in.
+const GENDER_AUTO_ADVANCE_MS = 220;
 
 // Rendered only while the picker is open (see LivePhoneDemo.tsx), so mount-time
 // state initializers below always pick up the latest defaults with no reset effect.
@@ -189,7 +192,8 @@ export default function LanguageOnboardingModal({
   const handleStepBack = useCallback(() => {
     if (isConfirming) return;
     setStep((currentStep) => (
-      currentStep === "birth-date" ? "discovery-source"
+      currentStep === "birth-date" ? "gender"
+        : currentStep === "gender" ? "discovery-source"
         : currentStep === "discovery-source" ? "usage-purpose"
         : currentStep === "usage-purpose" ? "interest-language"
           : "language"
@@ -217,6 +221,18 @@ export default function LanguageOnboardingModal({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [interestCode, step]);
+
+  const genderAdvanceTimerRef = useRef<number | null>(null);
+  const clearGenderAdvance = useCallback(() => {
+    if (genderAdvanceTimerRef.current === null) return;
+    window.clearTimeout(genderAdvanceTimerRef.current);
+    genderAdvanceTimerRef.current = null;
+  }, []);
+  // Leaving the gender screen any other way (back gesture) cancels a pending advance.
+  useEffect(() => {
+    if (step !== "gender") clearGenderAdvance();
+  }, [clearGenderAdvance, step]);
+  useEffect(() => clearGenderAdvance, [clearGenderAdvance]);
 
   const edgeSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -260,6 +276,24 @@ export default function LanguageOnboardingModal({
 
   const handleDiscoverySourceStepNext = () => {
     if (!discoverySource) return;
+    setStep("gender");
+  };
+
+  // One tap picks the gender and moves on; the footer button stays for
+  // someone who came back to this screen and keeps the same answer.
+  const handleGenderSelect = (nextGender: ProfileGender) => {
+    if (isConfirming) return;
+    setGender(nextGender);
+    clearGenderAdvance();
+    genderAdvanceTimerRef.current = window.setTimeout(() => {
+      genderAdvanceTimerRef.current = null;
+      setStep("birth-date");
+    }, GENDER_AUTO_ADVANCE_MS);
+  };
+
+  const handleGenderStepNext = () => {
+    if (!gender) return;
+    clearGenderAdvance();
     setStep("birth-date");
   };
 
@@ -496,6 +530,18 @@ export default function LanguageOnboardingModal({
                 />
               </div>
             </div>
+          ) : step === "gender" ? (
+            <div className="space-y-2 px-6 pb-4 pt-0 text-center">
+              <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
+                {genderCopy.label}
+              </p>
+              <h2
+                id={titleId}
+                className="text-[1.4rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+              >
+                {genderCopy.stepTitle}
+              </h2>
+            </div>
           ) : step === "birth-date" ? (
             <div className="space-y-2 px-6 pb-4 pt-0 text-center">
               <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
@@ -614,7 +660,7 @@ export default function LanguageOnboardingModal({
               </div>
             )}
           </div>
-        ) : step === "birth-date" ? (
+        ) : step === "gender" ? (
           <div
             className="flex flex-1 flex-col justify-center overflow-y-auto px-6 py-4"
             style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
@@ -622,11 +668,19 @@ export default function LanguageOnboardingModal({
             <div className="mx-auto w-full max-w-sm">
               <ProfileGenderPicker
                 value={gender}
-                onChange={setGender}
+                onChange={handleGenderSelect}
                 copy={genderCopy}
                 disabled={isConfirming}
-                className="mb-6"
+                size="large"
               />
+            </div>
+          </div>
+        ) : step === "birth-date" ? (
+          <div
+            className="flex flex-1 flex-col justify-center overflow-y-auto px-6 py-4"
+            style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
+          >
+            <div className="mx-auto w-full max-w-sm">
               <SignupBirthDatePicker
                 value={birthDate}
                 onChange={setBirthDate}
@@ -784,6 +838,15 @@ export default function LanguageOnboardingModal({
               type="button"
               onClick={handleDiscoverySourceStepNext}
               disabled={isConfirming || !discoverySource}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
+            >
+              {signupCopy.continueAction}
+            </button>
+          ) : step === "gender" ? (
+            <button
+              type="button"
+              onClick={handleGenderStepNext}
+              disabled={isConfirming || !gender}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
             >
               {signupCopy.continueAction}
