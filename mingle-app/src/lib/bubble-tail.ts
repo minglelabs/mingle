@@ -208,6 +208,8 @@ const NON_SPACE = /\S/g
 /** New characters that trigger a request when no new mark appeared. */
 export const INTERIM_FILL_FALLBACK_CHARS_DENSE = 40
 export const INTERIM_FILL_FALLBACK_CHARS_DEFAULT = 80
+/** A new mark triggers a request only after fallback / 4 new characters (10 dense, 20 otherwise). */
+const INTERIM_FILL_MIN_CHARS_DIVISOR = 4
 
 /**
  * Punctuation marks the model could cut at: a mark with words after it, or a
@@ -244,6 +246,12 @@ export function shouldRequestInterimFill(currentText: string, lastRequestedText:
   const current = (currentText || '').trim()
   const last = (lastRequestedText || '').trim()
   if (!current || current === last) return false
-  if (countInterimCutCandidates(current) > countInterimCutCandidates(last)) return true
-  return current.length >= last.length + resolveInterimFillFallbackChars(current)
+  const grown = current.length - last.length
+  const fallbackChars = resolveInterimFillFallbackChars(current)
+  // Speech full of short phrases ("Well... so... what now? Huh?!") adds a mark
+  // every few characters: wait for a minimum of new text so each request
+  // carries a few of them instead of one request per mark.
+  const minChars = fallbackChars / INTERIM_FILL_MIN_CHARS_DIVISOR
+  if (grown >= minChars && countInterimCutCandidates(current) > countInterimCutCandidates(last)) return true
+  return grown >= fallbackChars
 }

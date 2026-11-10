@@ -92,6 +92,11 @@ describe('interim fill gate', () => {
     expect(shouldRequestInterimFill('먼저 결과를 정리하고, 그다음에', '먼저 결과를')).toBe(true)
     expect(shouldRequestInterimFill('먼저 결과를 정리하고', '먼저 결과를')).toBe(false)
     expect(shouldRequestInterimFill('same text', 'same text')).toBe(false)
+    // Many marks close together: one request per stretch of new text, not per mark.
+    expect(shouldRequestInterimFill('하... 그럼... 어', '하')).toBe(true)
+    expect(shouldRequestInterimFill('하... 그럼', '하')).toBe(false)
+    expect(shouldRequestInterimFill('Yes. No. Well, I', 'Yes')).toBe(false)
+    expect(shouldRequestInterimFill('Yes. No. Well, I mean, maybe', 'Yes')).toBe(true)
     const korean = '가'.repeat(45)
     expect(shouldRequestInterimFill(korean, '가가가')).toBe(true)
     const english = 'word '.repeat(12).trim()
