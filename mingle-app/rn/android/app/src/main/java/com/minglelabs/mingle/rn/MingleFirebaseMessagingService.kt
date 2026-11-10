@@ -20,6 +20,18 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
   }
 
   override fun onMessageReceived(message: RemoteMessage) {
+    // The sender unsent this message. In the background the system tray
+    // rewrites the delivered notification itself (same tag); in the foreground
+    // nothing is shown, so the stale one is removed here. FCM posts a tagged
+    // notification under id 0.
+    if (message.data["recalled"] == "1") {
+      if (isAppInForeground()) {
+        message.notification?.tag?.let { tag ->
+          getSystemService(NotificationManager::class.java).cancel(tag, 0)
+        }
+      }
+      return
+    }
     if (Build.VERSION.SDK_INT >= 33 &&
       checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
     ) {
@@ -79,20 +91,36 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
 
   companion object {
     const val CHANNEL_ID = "mingle_notifications"
+    // Must match ANDROID_SILENT_CHANNEL_ID in server/push-notifications.ts.
+    const val SILENT_CHANNEL_ID = "mingle_silent_updates"
 
     fun ensureNotificationChannel(context: Context) {
       if (Build.VERSION.SDK_INT < 26) return
       val manager = context.getSystemService(NotificationManager::class.java)
-      if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-      manager.createNotificationChannel(
-        NotificationChannel(
-          CHANNEL_ID,
-          "HashChat notifications",
-          NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-          description = "Notifications from HashChat"
-        },
-      )
+      if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+        manager.createNotificationChannel(
+          NotificationChannel(
+            CHANNEL_ID,
+            "HashChat notifications",
+            NotificationManager.IMPORTANCE_HIGH,
+          ).apply {
+            description = "Notifications from HashChat"
+          },
+        )
+      }
+      // For pushes that only rewrite a notification already shown (an unsent
+      // message becomes "deleted message"): no sound, no heads-up.
+      if (manager.getNotificationChannel(SILENT_CHANNEL_ID) == null) {
+        manager.createNotificationChannel(
+          NotificationChannel(
+            SILENT_CHANNEL_ID,
+            "HashChat silent updates",
+            NotificationManager.IMPORTANCE_LOW,
+          ).apply {
+            description = "Updates to notifications already shown"
+          },
+        )
+      }
     }
   }
 }
