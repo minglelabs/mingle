@@ -256,7 +256,7 @@ import {
 } from '@/components/native-app-update-card'
 import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
-import VoiceTalkPanel, { VoiceTalkHeaderButton, isVoiceTalkAvailable } from './VoiceTalkPanel'
+import VoiceTalkPanel, { VoiceTalkButton, isVoiceTalkAvailable } from './VoiceTalkPanel'
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
 import { HashRushQuickChatBar } from '@/features/hash-rush/QuickChatBar'
 import type { HashRushChatEntry, HashRushRoomChat } from '@/features/hash-rush/room-chat'
@@ -7950,14 +7950,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               ) : null}
             </div>
-            {headerMode === 'conversation' && conversationId && voiceTalkAvailable ? (
-              <VoiceTalkHeaderButton
-                uiLocale={uiLocale}
-                active={voiceTalkState.live || voiceTalkState.joined}
-                onPress={() => setVoiceTalkStartSignal((n) => n + 1)}
-                className={navSurfaceClassName}
-              />
-            ) : null}
             {isNativeIosPipAvailable && headerMode === 'conversation' && conversationId ? (
               <button
                 data-qa="live-demo-picture-in-picture-button"
@@ -8060,6 +8052,32 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </span>
                               </button>
                             )}
+
+                            <div
+                              data-qa="live-demo-menu-usage"
+                              className="flex w-full items-center justify-between gap-3 px-1 py-1 text-[0.98rem] font-medium text-gray-900"
+                            >
+                              <span className="min-w-0 flex-1">{roomManagementCopy.usageMenuItemLabel}</span>
+                              <span className="flex shrink-0 items-center gap-2 text-sm font-normal tabular-nums text-gray-500">
+                                {isUsageLimited ? (
+                                  <>
+                                    <span className="h-2 w-20 overflow-hidden rounded-full bg-gray-200">
+                                      <span
+                                        className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                                        style={{ width: `${usagePercent}%` }}
+                                      />
+                                    </span>
+                                    <span className={isLimitReached ? 'font-semibold text-red-400' : ''}>
+                                      {formatLivePhoneDemoUsageDuration(remainingSec)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span>{formatLivePhoneDemoUsageDuration(usageSec)}</span>
+                                )}
+                                <span aria-hidden="true">·</span>
+                                <span>{storedMessageCountLabel}</span>
+                              </span>
+                            </div>
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
@@ -10013,33 +10031,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     exit={{ opacity: 0, x: -12 }}
                     transition={{ duration: 0.09, ease: 'easeOut' }}
                     className={earphoneModeGate.controlVisible
-                      ? 'flex min-w-0 items-end justify-between gap-1 self-end pl-2'
-                      : 'self-end justify-self-start pl-2'}
+                      ? 'flex min-w-0 items-end justify-between gap-1 self-end pl-1'
+                      : 'flex items-end self-end justify-self-start pl-1'}
                   >
-                    <div className={`flex h-[33px] flex-col items-start justify-end gap-0${earphoneModeGate.controlVisible ? ' min-w-0' : ''}`}>
-                      <div className={`flex items-center gap-1.5${earphoneModeGate.controlVisible ? ' min-w-0 max-w-full' : ''}`}>
-                        {isUsageLimited ? (
-                          <>
-                            <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
-                              <div
-                                className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                                style={{ width: `${usagePercent}%` }}
-                              />
-                            </div>
-                            <span className={`text-sm leading-4 tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}${earphoneModeGate.controlVisible ? ' shrink-0' : ''}`}>
-                              {formatLivePhoneDemoUsageDuration(remainingSec)}
-                            </span>
-                          </>
-                        ) : (
-                          <span className={`text-sm leading-4 tabular-nums text-gray-400${earphoneModeGate.controlVisible ? ' min-w-0 truncate' : ''}`}>
-                            {formatLivePhoneDemoUsageDuration(usageSec)}
-                          </span>
-                        )}
-                      </div>
-                      <span className={`text-sm leading-4 tabular-nums text-gray-400${earphoneModeGate.controlVisible ? ' max-w-full truncate' : ''}`}>
-                        {storedMessageCountLabel}
-                      </span>
-                    </div>
+                    {/* Group voice talk lives where the usage counters used to be;
+                        the counters moved into the menu's usage row. */}
+                    {headerMode === 'conversation' && conversationId && voiceTalkAvailable ? (
+                      <VoiceTalkButton
+                        uiLocale={uiLocale}
+                        active={voiceTalkState.live || voiceTalkState.joined}
+                        onPress={() => setVoiceTalkStartSignal((n) => n + 1)}
+                        sizePx={VOICE_MODE_SIDE_BUTTON_SIZE_PX}
+                      />
+                    ) : (
+                      <span aria-hidden="true" />
+                    )}
                     {earphoneModeGate.controlVisible && (
                       <button
                         type="button"

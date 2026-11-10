@@ -2,6 +2,14 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-10 — 보이스톡 버튼을 하단 바 왼쪽으로, 사용량은 메뉴로
+
+- Surface: 대화방 하단 바·상단 바·햄버거 메뉴(`LivePhoneDemo.tsx`), `VoiceTalkPanel.tsx`.
+- Issue: 보이스톡 버튼이 상단 바에 있어서 대화방 기능으로 잘 보이지 않았다. 하단 바 왼쪽은 사용시간/메시지 수 표시가 차지하고 있었다.
+- Resolution: 상단 바의 전화 버튼을 없애고, 하단 바 왼쪽(사용시간/메시지 수 자리)에 44px 전화 버튼(`VoiceTalkButton`, `data-qa="live-demo-voice-talk-button"`)을 넣었다. 통화 중이면 초록색 + 초록 점. 이어폰 모드 버튼은 그대로 마이크 왼쪽에 있다.
+- Usage: 사용시간/메시지 수는 햄버거 메뉴의 "사용량" 줄(`data-qa="live-demo-menu-usage"`)로 옮겼다. 사용 제한이 있을 때는 진행 막대 + 남은 시간을 같은 줄에 보여준다. 라벨은 15개 언어 모두 추가.
+- Verification: 타입 검사, `live-phone-demo.voice-talk-bottom-bar.wiring.test.ts`.
+
 ## 2026-11-10 — Hash Rush 네이티브 이식 4단계: iframe 시트와 v2 대화방 배치 코드 삭제
 
 - Surface: 대화방(`LivePhoneDemo.tsx`), 보이스톡 판(`VoiceTalkPanel.tsx`), 옛 시트(`LivePhoneDemo/HashRushSheet*`).
