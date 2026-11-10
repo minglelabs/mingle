@@ -40,6 +40,33 @@ function geminiAudioResponse(audio: Buffer, mimeType?: string): Response {
   })
 }
 
+/** Gemini's streamed answer: headerless 24 kHz PCM pieces as server-sent events. */
+function geminiStreamResponse(pieces: Buffer[], extraEvents: unknown[] = []): Response {
+  const events: unknown[] = [
+    { event_type: 'interaction.created' },
+    { event_type: 'step.start', index: 0 },
+    ...pieces.map((piece) => ({
+      event_type: 'step.delta',
+      index: 0,
+      delta: { type: 'audio', mime_type: 'audio/l16', sample_rate: 24000, channels: 1, data: piece.toString('base64') },
+    })),
+    ...extraEvents,
+    { event_type: 'interaction.completed' },
+  ]
+  // CRLF and a split in the middle of a line, as a real network delivers it.
+  const text = events.map((event) => `data: ${JSON.stringify(event)}\r\n\r\n`).join('')
+  const bytes = new TextEncoder().encode(text)
+  const cut = Math.floor(bytes.length / 2)
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes.slice(0, cut))
+      controller.enqueue(bytes.slice(cut))
+      controller.close()
+    },
+  })
+  return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+}
+
 function urlOf(call: unknown[]): string {
   return String(call[0])
 }
@@ -85,6 +112,46 @@ describe('synthesizeSpeech — the one model', () => {
     expect(result).toMatchObject({ ok: true, provider: 'gemini' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(bodyOf(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-lite-tts')
+  })
+})
+
+describe('synthesizeSpeech — streamed answer', () => {
+  it('asks Gemini for a stream and joins the PCM pieces into one WAV', async () => {
+    // Loud samples throughout, so silence trimming removes nothing.
+    const pieceA = Buffer.alloc(4800)
+    const pieceB = Buffer.alloc(9600)
+    for (let i = 0; i < pieceA.length; i += 2) pieceA.writeInt16LE(i % 4 === 0 ? 12000 : -12000, i)
+    for (let i = 0; i < pieceB.length; i += 2) pieceB.writeInt16LE(i % 4 === 0 ? 9000 : -9000, i)
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiStreamResponse([pieceA, pieceB]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeech } = await loadModule()
+
+    const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
+
+    expect(bodyOf(fetchMock.mock.calls[0]).stream).toBe(true)
+    if (!result.ok) throw new Error('expected success')
+    expect(result.mime).toBe('audio/wav')
+    expect(result.audio.subarray(0, 4).toString('ascii')).toBe('RIFF')
+    expect(result.audio.readUInt32LE(24)).toBe(24000)
+    expect(result.audio.subarray(44).equals(Buffer.concat([pieceA, pieceB]))).toBe(true)
+  })
+
+  it('returns invalid_audio when the stream carries no audio', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(geminiStreamResponse([])))
+    const { synthesizeSpeech } = await loadModule()
+
+    expect(await synthesizeSpeech({ text: 'hello', language: 'en' }))
+      .toMatchObject({ ok: false, reason: 'invalid_audio' })
+  })
+
+  it('fails when the stream reports an error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(
+      geminiStreamResponse([Buffer.alloc(480, 1)], [{ event_type: 'error', error: { message: 'overloaded' } }]),
+    ))
+    const { synthesizeSpeech } = await loadModule()
+
+    expect(await synthesizeSpeech({ text: 'hello', language: 'en' }))
+      .toMatchObject({ ok: false, provider: 'gemini', reason: 'exception' })
   })
 })
 

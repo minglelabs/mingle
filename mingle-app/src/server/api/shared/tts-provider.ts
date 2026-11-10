@@ -243,13 +243,76 @@ export function postProcessGeminiAudio(audio: Buffer, speed: number): Buffer {
   return wrapPcm16AsWav(floatToPcm16Buffer(stretched), wav.sampleRate, 1)
 }
 
+type GeminiStreamEvent = {
+  event_type?: string
+  delta?: GeminiAudioContent
+  error?: { message?: string }
+}
+
+/** One piece of audio as Gemini sent it. */
+export type GeminiAudioPiece = { audio: Buffer, mime: string, sampleRate?: number }
+
+/** `data:` payloads of a server-sent event stream, one parsed JSON value each. */
+async function* readSseJson(body: ReadableStream<Uint8Array>): AsyncGenerator<unknown> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffered = ''
+  const parseLine = (line: string): unknown => {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('data:')) return undefined
+    const payload = trimmed.slice(5).trim()
+    if (!payload || payload === '[DONE]') return undefined
+    try {
+      return JSON.parse(payload)
+    } catch {
+      return undefined
+    }
+  }
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffered += decoder.decode(value, { stream: true })
+      let newline = buffered.indexOf('\n')
+      while (newline >= 0) {
+        const parsed = parseLine(buffered.slice(0, newline))
+        buffered = buffered.slice(newline + 1)
+        if (parsed !== undefined) yield parsed
+        newline = buffered.indexOf('\n')
+      }
+    }
+    const parsed = parseLine(buffered)
+    if (parsed !== undefined) yield parsed
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+export type GeminiTtsOpenResult =
+  | {
+    ok: true
+    voiceId: string
+    modelId: string
+    /** Audio pieces in playing order. Throws when the stream breaks or times out. */
+    pieces: AsyncGenerator<GeminiAudioPiece>
+    /** Stops the upstream request; call when the pieces are no longer wanted. */
+    cancel: () => void
+  }
+  | TtsSynthesisFailure
+
 /**
- * Gemini synthesis. The text is sent verbatim (Gemini 3.8 TTS treats `text`
- * as a verbatim transcript and may read inline directions aloud). Pace is
- * set by the structured `speech_metadata.style` annotation, which the model
- * follows but never speaks; `system_instruction` is refused by TTS models.
+ * Opens a Gemini synthesis. The text is sent verbatim (Gemini 3.8 TTS treats
+ * `text` as a verbatim transcript and may read inline directions aloud). Pace
+ * is set by the structured `speech_metadata.style` annotation, which the
+ * model follows but never speaks; `system_instruction` is refused by TTS
+ * models.
+ *
+ * The request asks for a stream (`stream: true`): Gemini then sends raw
+ * 24 kHz PCM as it is generated, the first piece well under a second in and
+ * the last one about a second sooner than the same request answered whole.
+ * A JSON (non-stream) answer is read as one piece.
  */
-export async function synthesizeWithGemini(input: TtsSynthesisInput): Promise<TtsSynthesisResult> {
+export async function openGeminiTts(input: TtsSynthesisInput): Promise<GeminiTtsOpenResult> {
   const modelId = TTS_MODEL
   const voiceId = getGeminiTtsVoice(input.language)
   const style = getGeminiTtsStyle(input.language)
@@ -260,8 +323,13 @@ export async function synthesizeWithGemini(input: TtsSynthesisInput): Promise<Tt
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), getGeminiTtsTimeoutMs())
+  const cancel = () => {
+    clearTimeout(timer)
+    controller.abort()
+  }
+  let response: Response
   try {
-    const response = await fetch(GEMINI_INTERACTIONS_URL, {
+    response = await fetch(GEMINI_INTERACTIONS_URL, {
       method: 'POST',
       headers: {
         'x-goog-api-key': apiKey,
@@ -283,46 +351,94 @@ export async function synthesizeWithGemini(input: TtsSynthesisInput): Promise<Tt
         },
         // Do not retain user utterances server-side (default is store=true).
         store: false,
+        stream: true,
       }),
       cache: 'no-store',
       signal: controller.signal,
     })
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '')
-      return {
-        ok: false,
-        provider: 'gemini',
-        reason: 'upstream_error',
-        status: response.status,
-        detail: detail.slice(0, 300),
-        voiceId,
-        modelId,
-      }
-    }
-
-    const data = await response.json() as GeminiInteractionResponse
-    const audioItem = extractGeminiAudio(data)
-    const raw = decodeAudioContent(audioItem?.data)
-    if (!audioItem || !raw || raw.length === 0) {
-      return { ok: false, provider: 'gemini', reason: 'invalid_audio', voiceId, modelId }
-    }
-
-    const normalized = normalizeGeminiAudio(
-      raw,
-      audioItem.mime_type || audioItem.mimeType || '',
-      audioItem.sample_rate,
-    )
-    const audio = normalized.mime === 'audio/wav'
-      ? postProcessGeminiAudio(normalized.audio, getGeminiTtsSpeed(input.language))
-      : normalized.audio
-    return { ok: true, provider: 'gemini', audio, mime: normalized.mime, voiceId, modelId }
   } catch (error) {
+    clearTimeout(timer)
     const aborted = controller.signal.aborted
     return { ok: false, provider: 'gemini', reason: aborted ? 'timeout' : 'exception', error, voiceId, modelId }
-  } finally {
-    clearTimeout(timer)
   }
+
+  if (!response.ok) {
+    clearTimeout(timer)
+    const detail = await response.text().catch(() => '')
+    return {
+      ok: false,
+      provider: 'gemini',
+      reason: 'upstream_error',
+      status: response.status,
+      detail: detail.slice(0, 300),
+      voiceId,
+      modelId,
+    }
+  }
+
+  const isEventStream = (response.headers.get('content-type') || '').toLowerCase().includes('text/event-stream')
+  async function* pieces(): AsyncGenerator<GeminiAudioPiece> {
+    try {
+      if (!isEventStream || !response.body) {
+        const audioItem = extractGeminiAudio(await response.json() as GeminiInteractionResponse)
+        const raw = decodeAudioContent(audioItem?.data)
+        if (audioItem && raw && raw.length > 0) {
+          yield { audio: raw, mime: audioItem.mime_type || audioItem.mimeType || '', sampleRate: audioItem.sample_rate }
+        }
+        return
+      }
+      for await (const parsed of readSseJson(response.body)) {
+        const event = parsed as GeminiStreamEvent
+        if (event?.event_type === 'error') throw new Error(event.error?.message || 'gemini_stream_error')
+        const delta = event?.delta
+        if (delta?.type !== 'audio' || typeof delta.data !== 'string' || !delta.data) continue
+        const raw = decodeAudioContent(delta.data)
+        if (!raw || raw.length === 0) continue
+        yield { audio: raw, mime: delta.mime_type || delta.mimeType || '', sampleRate: delta.sample_rate }
+      }
+    } finally {
+      cancel()
+    }
+  }
+  return { ok: true, voiceId, modelId, pieces: pieces(), cancel }
+}
+
+function isRawPcmMime(mime: string): boolean {
+  const base = mime.trim().toLowerCase().split(';')[0]
+  return base === 'audio/l16' || base === 'audio/pcm'
+}
+
+/** Gemini synthesis, answered whole: every piece of the stream, joined and post-processed. */
+export async function synthesizeWithGemini(input: TtsSynthesisInput): Promise<TtsSynthesisResult> {
+  const opened = await openGeminiTts(input)
+  if (!opened.ok) return opened
+  const { voiceId, modelId } = opened
+
+  const collected: GeminiAudioPiece[] = []
+  let timedOut = false
+  const timeoutWatch = setTimeout(() => { timedOut = true }, getGeminiTtsTimeoutMs())
+  try {
+    for await (const piece of opened.pieces) collected.push(piece)
+  } catch (error) {
+    return { ok: false, provider: 'gemini', reason: timedOut ? 'timeout' : 'exception', error, voiceId, modelId }
+  } finally {
+    clearTimeout(timeoutWatch)
+  }
+  if (collected.length === 0) {
+    return { ok: false, provider: 'gemini', reason: 'invalid_audio', voiceId, modelId }
+  }
+
+  // Streamed pieces are headerless PCM that only make sense joined; a single
+  // piece may be a container (WAV) and is passed to the sniffing below as is.
+  const first = collected[0]
+  const joined = collected.length === 1 ? first.audio : Buffer.concat(collected.map((piece) => piece.audio))
+  const normalized = collected.length > 1 && isRawPcmMime(first.mime)
+    ? { audio: wrapPcm16AsWav(joined, parseSampleRate(first.mime, first.sampleRate), 1), mime: 'audio/wav' }
+    : normalizeGeminiAudio(joined, first.mime, first.sampleRate)
+  const audio = normalized.mime === 'audio/wav'
+    ? postProcessGeminiAudio(normalized.audio, getGeminiTtsSpeed(input.language))
+    : normalized.audio
+  return { ok: true, provider: 'gemini', audio, mime: normalized.mime, voiceId, modelId }
 }
 
 /** Synthesize with the one TTS model. A failure is returned as is: there is no fallback. */
