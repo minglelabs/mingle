@@ -3488,6 +3488,9 @@ run_ios_mobile_install() {
   xcrun devicectl device install app --device "$coredevice_id" "$app_path"
 
   if [[ -n "$bundle_id" ]]; then
+    if defer_mobile_app_launch ios "$coredevice_id" "$bundle_id"; then
+      return 0
+    fi
     log "launching iOS app bundle: $bundle_id"
     xcrun devicectl device process launch --device "$coredevice_id" "$bundle_id" >/dev/null 2>&1 || \
       log "iOS app launch skipped (manual launch may be required)"
@@ -3570,11 +3573,69 @@ run_android_mobile_install() {
       ./gradlew "$gradle_task"
   )
 
+  if [[ -n "$app_id" ]] && defer_mobile_app_launch android "$serial" "$app_id"; then
+    return 0
+  fi
   if [[ -n "$app_id" ]]; then
     log "launching Android app package: $app_id"
     adb -s "$serial" shell monkey -p "$app_id" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || \
       log "Android app launch skipped (manual launch may be required)"
   fi
+}
+
+# `up` installs the phone apps before the web server starts. An app opened
+# then loads a half-served page: the HTML shows but some JS never arrives,
+# so nothing on screen takes a tap until the app is restarted. `up` points
+# DEVBOX_DEFERRED_APP_LAUNCH_FILE at a file; installs write their launch
+# there, and launch_deferred_mobile_apps runs them once the web is ready.
+defer_mobile_app_launch() {
+  local platform="$1"
+  local device_id="$2"
+  local app_id="$3"
+  [[ -n "${DEVBOX_DEFERRED_APP_LAUNCH_FILE:-}" ]] || return 1
+  printf '%s %s %s\n' "$platform" "$device_id" "$app_id" >>"$DEVBOX_DEFERRED_APP_LAUNCH_FILE"
+  log "$platform app installed; it opens once the web server is ready"
+  return 0
+}
+
+launch_deferred_mobile_apps() {
+  local launch_file="$1"
+  local web_port="$2"
+  local timeout_sec="${3:-240}"
+  [[ -s "$launch_file" ]] || { rm -f "$launch_file"; return 0; }
+
+  local waited=0
+  until curl -s -o /dev/null --max-time 5 "http://127.0.0.1:$web_port/api/auth/session"; do
+    if [[ "$waited" -ge "$timeout_sec" ]]; then
+      log "web server not ready after ${timeout_sec}s; opening the apps anyway"
+      break
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+  # Compile the first screens before a phone asks for them.
+  local warm_path
+  for warm_path in /en/conversations /ko/conversations; do
+    curl -s -o /dev/null --max-time 120 "http://127.0.0.1:$web_port$warm_path" || true
+  done
+
+  local platform device_id app_id
+  while read -r platform device_id app_id; do
+    [[ -n "$app_id" ]] || continue
+    case "$platform" in
+      ios)
+        log "launching iOS app bundle: $app_id"
+        xcrun devicectl device process launch --device "$device_id" "$app_id" </dev/null >/dev/null 2>&1 || \
+          log "iOS app launch skipped (manual launch may be required)"
+        ;;
+      android)
+        log "launching Android app package: $app_id"
+        adb -s "$device_id" shell monkey -p "$app_id" -c android.intent.category.LAUNCHER 1 </dev/null >/dev/null 2>&1 || \
+          log "Android app launch skipped (manual launch may be required)"
+        ;;
+    esac
+  done <"$launch_file"
+  rm -f "$launch_file"
 }
 
 run_mobile_install_targets() {
@@ -5516,6 +5577,7 @@ cmd_up() {
   resolve_vault_path "$vault_override"
   log "stateless mode: skipping automatic vault -> .env.local sync (.env.local is user-managed)"
   local runtime_env_file=""
+  local deferred_app_launch_file=""
   local runtime_nextauth_secret=""
   local runtime_realtime_secret=""
   local runtime_admob_app_id_ios=""
@@ -5813,6 +5875,10 @@ $(ngrok_plan_capacity_hint)"
       "$ios_udid" \
       "$effective_ios_site_url"
 
+    if [[ "$profile" != "device" || "$device_app_env" != "prod" ]]; then
+      deferred_app_launch_file="$(mktemp "${TMPDIR:-/tmp}/devbox-app-launch.XXXXXX")"
+    fi
+    DEVBOX_DEFERRED_APP_LAUNCH_FILE="$deferred_app_launch_file" \
     run_mobile_install_targets \
       "$do_rn_ios" \
       "$do_android" \
@@ -5942,6 +6008,11 @@ $(ngrok_plan_capacity_hint)"
   fi
 
   rm -f "$runtime_env_file"
+
+  if [[ -n "$deferred_app_launch_file" ]]; then
+    # Not in pids: wait_for_any_child_exit would stop `up` when it finishes.
+    launch_deferred_mobile_apps "$deferred_app_launch_file" "$DEVBOX_WEB_PORT" &
+  fi
 
   if [[ "$started_tunnel_mode" == "ngrok-inline" ]]; then
     log "ngrok is running with this process group (Ctrl+C to stop all)"

@@ -8,6 +8,12 @@ const { mockGetServerSession, mockSessionKeyForMember, mockResolveUser, mockFind
   mockFindUser: vi.fn(),
 }));
 
+// after() needs a live request scope; the start push and list refresh it
+// schedules are not what these tests check.
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: vi.fn(),
+}));
 vi.mock("next-auth", () => ({ getServerSession: mockGetServerSession }));
 vi.mock("@/lib/auth-options", () => ({ getAuthOptions: () => ({}) }));
 vi.mock("@/lib/app-conversations", () => ({ getConversationSessionKeyForMember: mockSessionKeyForMember }));
