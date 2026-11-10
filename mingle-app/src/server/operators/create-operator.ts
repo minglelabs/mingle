@@ -74,7 +74,7 @@ export function operatorLanguageFields(primaryLanguage: string) {
   }
 }
 
-/** City-center location (already 2 dp), stamped as a normal verified location. */
+/** City-center location (already 2 dp), stamped as a normal verified location, plus the persona's nationality. */
 export function operatorLocationFields(
   location: Pick<PersonaDraft, 'personaCountry' | 'city' | 'countryName' | 'latitude' | 'longitude'>,
   now: Date,
@@ -85,6 +85,8 @@ export function operatorLocationFields(
     locationCity: location.city,
     locationCountry: location.countryName,
     locationCountryCode: location.personaCountry.toLowerCase(),
+    // The persona's 국적 (flag on the avatar) is its country.
+    nationalityCountry: location.personaCountry.toUpperCase(),
     locationUpdatedAt: now,
     locationPermissionVerifiedAt: now,
   }

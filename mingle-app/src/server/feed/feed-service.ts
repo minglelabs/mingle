@@ -78,6 +78,7 @@ export interface FeedResultPost {
     isOfficial?: boolean
     isOperator?: boolean
     nationality?: string | null
+    nationalityCountry?: string | null
     primaryLanguages?: string[]
     interestLanguages?: string[]
     interestLanguageLevels?: number[]

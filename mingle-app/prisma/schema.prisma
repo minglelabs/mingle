@@ -53,6 +53,8 @@ model User {
   handle                       String    @unique(map: "app_users_handle_key")
   bio                          String?   @db.Text
   nationality                  String?
+  /// 국적: ISO 3166-1 alpha-2, upper case. Mapped from the first primary language at onboarding; editable on My page. Shown as the flag on the avatar. (`nationality` above is a legacy language code.)
+  nationalityCountry           String?   @map("nationality_country")
   primaryLanguages             String[]  @default([]) @map("primary_languages")
   /// Languages of the people this user mostly wants to talk with (관심 언어),
   /// at most 3, with the user's own level of each (1-5) at the same index.

@@ -103,6 +103,7 @@ describe("my page profile cache", () => {
       bioDraft: undefined,
       birthDate: null,
       location: null,
+      nationalityCountry: null,
     });
     expect(localStorage.getItem(STORAGE_KEY)).not.toContain("Seoul");
     expect(localStorage.getItem(STORAGE_KEY)).not.toContain("Unpublished");

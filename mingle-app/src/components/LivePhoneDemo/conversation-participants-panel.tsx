@@ -1,6 +1,7 @@
 "use client";
 
-import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileNationalityBadge from "@/components/profile-nationality-badge";
+import { normalizeNationalityCountry, resolveNationalityCountry } from "@/lib/nationality";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform } from "@/lib/profile-image-crop";
@@ -49,6 +50,7 @@ type ParticipantProfile = {
   imageCropY: number | null;
   handle: string | null;
   nationality: string | null;
+  nationalityCountry: string | null;
   primaryLanguages: string[];
   blocked: boolean;
   // Another member's account badge ('operator' = run by HashChat staff), from
@@ -102,6 +104,7 @@ function parseParticipantProfile(value: unknown): ParticipantProfile | null {
     imageCropY: finiteNumberOrNull(value.imageCropY),
     handle: nullableString(value.handle),
     nationality: primaryLanguages[0] ?? nationality,
+    nationalityCountry: normalizeNationalityCountry(value.nationalityCountry),
     primaryLanguages,
     blocked: false,
     accountBadge: null,
@@ -126,6 +129,7 @@ function parseConversationMemberProfile(value: unknown): ParticipantProfile | nu
     imageCropY: finiteNumberOrNull(value.imageCropY),
     handle: nullableString(value.handle),
     nationality: primaryLanguages[0] ?? nationality,
+    nationalityCountry: normalizeNationalityCountry(value.nationalityCountry),
     primaryLanguages,
     blocked: value.blocked === true,
     accountBadge: resolveAccountBadge(readAccountBadgeFlags(value)),
@@ -153,6 +157,7 @@ function buildSessionFallbackProfile(
     imageCropY: null,
     handle: null,
     nationality: null,
+    nationalityCountry: null,
     primaryLanguages: [],
     blocked: false,
     accountBadge: null,
@@ -219,9 +224,10 @@ function ParticipantRow({
             <UserRound size={28} className="text-gray-400" aria-hidden="true" />
           )}
         </div>
-        {displayLanguages.length > 0 ? (
-          <ProfileLanguageFlagStack languages={displayLanguages} size={56} />
-        ) : null}
+        <ProfileNationalityBadge
+          country={resolveNationalityCountry(member.nationalityCountry, displayLanguages)}
+          size={56}
+        />
       </div>
 
       <div className="min-w-0 flex-1">
