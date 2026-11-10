@@ -48,6 +48,7 @@ describe("native banner policy wiring", () => {
     for (const relativePath of [
       "components/LivePhoneDemo/MessageMediaDialog.tsx",
       "components/LivePhoneDemo/MessageReactionParticipants.tsx",
+      "components/coins/coin-host.tsx",
       "components/invite-friends-screen.tsx",
       "components/native-conversation-share-overlay.tsx",
       "components/native-profile-link-overlay.tsx",

@@ -17,5 +17,16 @@ export default function NativeBannerRouteGuard() {
     syncNativeBannerZone();
   }, [pathname]);
 
+  // The native shell re-reads the URL when a page load finishes or a cached
+  // page is shown again, and may move its banner zone then; state it again.
+  useEffect(() => {
+    window.addEventListener("load", syncNativeBannerZone);
+    window.addEventListener("pageshow", syncNativeBannerZone);
+    return () => {
+      window.removeEventListener("load", syncNativeBannerZone);
+      window.removeEventListener("pageshow", syncNativeBannerZone);
+    };
+  }, []);
+
   return null;
 }
