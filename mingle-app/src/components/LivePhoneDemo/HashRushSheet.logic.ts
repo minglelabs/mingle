@@ -12,6 +12,7 @@
 //                { source: 'hashchat', type: 'chat', id, userId, text }
 
 import type { LivePhoneDemoBubbleDisplayMode } from './live-phone-demo.bubble-display'
+import type { HashRushChatEntry } from '@/features/hash-rush/room-chat'
 
 export const HASH_RUSH_APP_SOURCE = 'hashchat'
 export const HASH_RUSH_GAME_SOURCE = 'hash-rush'
@@ -95,102 +96,19 @@ export function hashRushChatMessage(entry: Pick<HashRushChatEntry, 'id' | 'userI
 }
 
 // ---------------------------------------------------------------------------
-// The room's talk over the hamsters
-//
-// Talk in the game is the room's own chat (normal room messages: history,
-// translation, push and coins as always). Each message goes to the game as
-// `chat` and the game shows it over the sender's hamster. `text` is what this
-// viewer reads: the translation into their language once it has landed, else
-// the original. When the translation lands the same id goes again, and the
-// game only swaps the words.
-//
-// The game hears the last few messages when it says `ready`, then every new
-// one while its page is up. History the room loads later (scrolling up) and
-// messages that were already there are never sent.
+// The room's talk over the hamsters: one feed for the iframe page and the
+// native game alike, kept with the game now (src/features/hash-rush/room-chat.ts).
 // ---------------------------------------------------------------------------
 
-export const HASH_RUSH_CHAT_REPLAY_COUNT = 3
-// A new message's time can come from the server or another phone. This much
-// clock difference still counts as new.
-export const HASH_RUSH_CHAT_CLOCK_SKEW_MS = 10_000
-
-export type HashRushChatEntry = {
-  id: string
-  /** The sender's user id: the same id their Hash Rush ticket carries. */
-  userId: string
-  /** What this viewer reads (empty while the message is still being spoken). */
-  text: string
-  /** The message's place in the room (utteranceOrderTime). */
-  orderTimeMs: number
-  /** Still being spoken: it goes to the game once it is a message. */
-  pending: boolean
-}
-
-export type HashRushChatFeed = {
-  startedAtMs: number
-  /** In the room when the game said `ready` and not replayed: never sent. */
-  oldIds: ReadonlySet<string>
-  /** Being spoken when the game said `ready`: sent once it lands. */
-  inFlightIds: ReadonlySet<string>
-  /** What the game last heard for each message it got. */
-  sentText: ReadonlyMap<string, string>
-}
-
-export type HashRushChatFeedStep = { feed: HashRushChatFeed, posts: HashRushChatEntry[] }
-
-/** The game said `ready`: it hears the last few messages, and later only new ones. */
-export function startHashRushChatFeed(
-  entries: readonly HashRushChatEntry[],
-  nowMs: number,
-  replayCount = HASH_RUSH_CHAT_REPLAY_COUNT,
-): HashRushChatFeedStep {
-  const landed = entries.filter((entry) => !entry.pending && entry.text)
-  const replay = replayCount > 0 ? landed.slice(-replayCount) : []
-  const replayIds = new Set(replay.map((entry) => entry.id))
-  return {
-    feed: {
-      startedAtMs: nowMs,
-      oldIds: new Set(landed.filter((entry) => !replayIds.has(entry.id)).map((entry) => entry.id)),
-      inFlightIds: new Set(entries.filter((entry) => entry.pending).map((entry) => entry.id)),
-      sentText: new Map(replay.map((entry) => [entry.id, entry.text])),
-    },
-    posts: replay,
-  }
-}
-
-/** What the game has not heard yet: new messages, and new words for ones it has. */
-export function advanceHashRushChatFeed(
-  feed: HashRushChatFeed,
-  entries: readonly HashRushChatEntry[],
-  clockSkewMs = HASH_RUSH_CHAT_CLOCK_SKEW_MS,
-): HashRushChatFeedStep {
-  const posts: HashRushChatEntry[] = []
-  let oldIds: Set<string> | null = null
-  let sentText: Map<string, string> | null = null
-  for (const entry of entries) {
-    if (entry.pending || !entry.text) continue
-    const sent = (sentText ?? feed.sentText).get(entry.id)
-    if (sent === entry.text) continue
-    if (sent === undefined) {
-      if ((oldIds ?? feed.oldIds).has(entry.id)) continue
-      const isNew = feed.inFlightIds.has(entry.id) || entry.orderTimeMs >= feed.startedAtMs - clockSkewMs
-      if (!isNew) {
-        // Older history coming into the room (scrolling up): never sent.
-        oldIds ??= new Set(feed.oldIds)
-        oldIds.add(entry.id)
-        continue
-      }
-    }
-    sentText ??= new Map(feed.sentText)
-    sentText.set(entry.id, entry.text)
-    posts.push(entry)
-  }
-  if (!oldIds && !sentText) return { feed, posts }
-  return {
-    feed: { ...feed, oldIds: oldIds ?? feed.oldIds, sentText: sentText ?? feed.sentText },
-    posts,
-  }
-}
+export {
+  HASH_RUSH_CHAT_CLOCK_SKEW_MS,
+  HASH_RUSH_CHAT_REPLAY_COUNT,
+  advanceHashRushChatFeed,
+  startHashRushChatFeed,
+  type HashRushChatEntry,
+  type HashRushChatFeed,
+  type HashRushChatFeedStep,
+} from '@/features/hash-rush/room-chat'
 
 // ---------------------------------------------------------------------------
 // The sheet in the room
@@ -261,32 +179,11 @@ export function resolveHashRushBubbleDisplayMode(
 }
 
 // ---------------------------------------------------------------------------
-// Quick chat: the game's own ready-made lines (hash-rush src/client/i18n.js,
-// `quickChat`), in the game's languages. A tap sends one as a normal room
-// message, translated like any other.
+// Quick chat: the game's own ready-made lines, kept with the game now
+// (src/features/hash-rush/quick-chat.ts).
 // ---------------------------------------------------------------------------
 
-export const HASH_RUSH_QUICK_CHAT = {
-  // The game's own list, minus its swear words: these are app-wide default chips.
-  ko: ['ㄱㄱ', '잠만', 'ㅋㅋㅋ', 'ㅇㅋ', 'ㄴㄴ', 'ㅎㅇ', '굳굳 👍', 'ㄲㅂ', 'ㅈㅅ', 'ㄷㄷ', '한 판 더?', '팀 바꾸자', 'ㅂㅂ'],
-  en: ['gogo', 'wait', 'lol', 'ok', 'nope', 'hey', 'gj 👍', 'unlucky', 'my bad', 'omg', 'Again?', 'swap teams?', 'bye'],
-  ja: ['いこいこ', 'ちょい待ち', 'www', 'おけ', 'むり', 'ちわ', 'ナイス 👍', 'おしい', 'すまん', 'やば', 'もう一回?', 'チーム替えよう', 'またね'],
-  'zh-Hans': ['冲冲冲', '等下', '哈哈哈', '好', '不要', '嗨', '666 👍', '可惜', '我的锅', '天哪', '再来?', '换队吧', '拜拜'],
-  'zh-Hant': ['衝衝衝', '等一下', '哈哈哈', '好', '不要', '嗨', '讚啦 👍', '可惜', '歹勢', '天啊', '再來?', '換隊吧', '掰掰'],
-} as const satisfies Record<string, readonly string[]>
-
-/** The game's own pick (its pickLanguage): Korean, Japanese, Chinese by script, else English. */
-export function hashRushQuickChat(locale: string): readonly string[] {
-  const tag = (locale || '').trim().toLowerCase().replace(/_/g, '-')
-  if (tag.startsWith('ko')) return HASH_RUSH_QUICK_CHAT.ko
-  if (tag.startsWith('ja')) return HASH_RUSH_QUICK_CHAT.ja
-  if (tag.startsWith('zh')) {
-    return !tag.includes('hans') && /hant|-(tw|hk|mo)\b/.test(tag)
-      ? HASH_RUSH_QUICK_CHAT['zh-Hant']
-      : HASH_RUSH_QUICK_CHAT['zh-Hans']
-  }
-  return HASH_RUSH_QUICK_CHAT.en
-}
+export { HASH_RUSH_QUICK_CHAT, hashRushQuickChat } from '@/features/hash-rush/quick-chat'
 
 // ---------------------------------------------------------------------------
 // Entry tickets

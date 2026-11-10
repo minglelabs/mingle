@@ -24,6 +24,12 @@ export type HashRushGameCopy = {
   settings: string
   sound: string
   swapSides: string
+  /** The 💬 button: the room's composer up over the game. */
+  chat: string
+  closeChat: string
+  /** On the 💬 button while the room's voice interpretation is on. */
+  interpreting: string
+  quickChat: string
   /** The lobby's countdown pill. */
   startsIn: (seconds: number) => string
   /** Under the result: the next round needs nobody to press anything. */
@@ -63,6 +69,10 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     settings: '설정',
     sound: '소리',
     swapSides: '꿀밤 버튼 좌우 바꾸기',
+    chat: '채팅',
+    closeChat: '채팅 닫기',
+    interpreting: '음성 통역 중',
+    quickChat: '빠른 채팅',
     startsIn: (s) => `⏱ ${s}초 뒤 시작`,
     nextRoundIn: (s) => `다음 판은 ${s}초 뒤 자동으로 시작해요`,
     nextRoundSoon: '다음 판은 곧 자동으로 시작해요',
@@ -95,6 +105,10 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     settings: 'Settings',
     sound: 'Sound',
     swapSides: 'Move the bonk button to the other side',
+    chat: 'Chat',
+    closeChat: 'Close chat',
+    interpreting: 'Voice interpretation on',
+    quickChat: 'Quick chat',
     startsIn: (s) => `⏱ Starts in ${s}s`,
     nextRoundIn: (s) => `The next round starts by itself in ${s}s`,
     nextRoundSoon: 'The next round starts by itself soon',
@@ -127,6 +141,10 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     settings: '設定',
     sound: 'サウンド',
     swapSides: 'ゲンコツボタンを反対側へ',
+    chat: 'チャット',
+    closeChat: 'チャットを閉じる',
+    interpreting: '音声通訳中',
+    quickChat: 'クイックチャット',
     startsIn: (s) => `⏱ ${s}秒後にスタート`,
     nextRoundIn: (s) => `次のラウンドは${s}秒後に自動で始まります`,
     nextRoundSoon: '次のラウンドはまもなく自動で始まります',

@@ -901,6 +901,229 @@
   display: none !important;
 }
 
+/* ---------- the room's talk (stage 3) ----------
+   The chat room's own messages over the game, drawn the room's own way: one
+   bubble each, in this viewer's language (room-chat.ts). New ones float up
+   just over the strip of controls, on top of every card (#214): crisp for five
+   seconds, faint for five more (#196, #198), nearly gone over a hamster (#203)
+   and clear again once the round is over (#222). A touch on one opens the
+   whole conversation in its place (#190); while the room's composer is up the
+   conversation stands just over it, see-through, fading out at the top (#183). */
+
+.talk {
+  position: absolute;
+  z-index: 4;
+  left: calc(var(--hr-field-x, 0px) + 4px);
+  top: calc(var(--hr-field-y, 0px) + var(--hr-field-height, 0px) - 6px);
+  transform: translateY(-100%);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: calc(var(--hr-field-width, 100%) - 8px);
+  max-height: calc(var(--hr-field-height, 100%) * 0.42);
+  padding-top: 18px;
+  overflow: hidden;
+  pointer-events: none;
+  /* The oldest lines go out at the top. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+  font-family: var(--font-sans);
+  line-height: normal;
+}
+
+/* A wide map: its left side, over the pad (#191 keeps the talk just above it). */
+.stage:not(.tall) .talk {
+  top: calc(var(--hr-field-y, 0px) + var(--hr-field-height, 0px) - 64px);
+  width: min(46%, 340px);
+}
+
+@media (pointer: coarse) {
+  .stage:not(.tall) .talk {
+    top: calc(var(--hr-field-y, 0px) + var(--hr-field-height, 0px) - 224px);
+  }
+}
+
+.talkRow {
+  flex: none;
+  margin-top: 4px;
+}
+
+/* A floating line: the line as a whole is touched, to open the conversation. */
+.talkLine {
+  pointer-events: auto;
+  touch-action: none;
+  transition: filter 0.2s, opacity 0.8s;
+  animation: talkIn 0.25s ease-out;
+}
+
+.talkLine > * {
+  pointer-events: none;
+}
+
+/* Past its crisp seconds: a faint trace, still there to touch. */
+.talkFaint {
+  opacity: 0.3;
+}
+
+/* A hamster under it: a ghost of itself, and the touch is the game's. */
+.talkLine[data-under='true'] {
+  filter: opacity(0.18);
+  pointer-events: none;
+}
+
+/* Opened: the whole conversation, scrolled by touch, with no scroll bar (#219). */
+.talk.talkPanel {
+  justify-content: flex-start;
+  max-height: min(45vh, calc(var(--hr-field-height, 100vh) * 0.7));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  pointer-events: auto;
+  scrollbar-width: none;
+}
+
+.talk.talkPanel::-webkit-scrollbar {
+  display: none;
+}
+
+/* Over the room's composer: across the screen, just above its quick chat. */
+.stage .talk.talkPanel.talkDocked {
+  top: auto;
+  left: 0;
+  width: 100%;
+  transform: none;
+  max-height: min(34vh, 230px);
+  padding: 22px max(6px, env(safe-area-inset-right)) 6px max(6px, env(safe-area-inset-left));
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 40px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 40px);
+}
+
+/* The room's bubbles, see-through enough to keep the map in view; the words
+   around them (name, time) haloed so they read over grass and hedge. The
+   one-bubble view has no switch to more here. */
+.talk :global([data-chat-message-bubble]) {
+  background-color: rgba(255, 255, 255, 0.88);
+}
+
+.talk :global([data-chat-message-bubble][data-bubble-speaker='own']) {
+  background-color: rgba(255, 249, 230, 0.9);
+}
+
+.talk :global([data-chat-speaker-header]),
+.talk :global([data-chat-bubble-own-meta]),
+.talk :global([data-chat-bubble-other-meta]) {
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 5px #fff;
+}
+
+.talk :global([data-chat-bubble-controls]) {
+  display: none;
+}
+
+/* ---------- the room's chat button (stage 3) ----------
+   One tap puts the room's composer up over the game, the quick chat on top of
+   it. With a mouse in the bottom right corner (#203); with touch on a wide
+   screen in the bottom middle, and on a phone at the foot of the gap between
+   the pad and the bonk button with the round's own buttons above it (#189).
+   Over every card, plain outside a round and once the round is over (#216, #221). */
+
+.chatButton {
+  position: absolute;
+  z-index: 5;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 2px solid rgba(232, 220, 190, 0.6);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: filter 0.2s;
+}
+
+.chatButton:active {
+  scale: 0.94;
+}
+
+.chatButton[hidden] {
+  display: none !important;
+}
+
+.chatButtonSolid,
+.ended .chatButton {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* The room's voice interpretation is on. */
+.chatDot {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+@media (pointer: coarse) {
+  .stage:not(.tall) .chatButton {
+    right: auto;
+    left: 50%;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+  }
+
+  /* The foot of the gap, under the score and settings buttons, out of reach of
+     the pad's and the bonk button's hit areas as they are. */
+  .tall .chatButton {
+    right: auto;
+    left: calc(50% + 15px);
+    bottom: calc(var(--hr-foot) + 4px);
+    transform: translateX(-50%);
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+
+  .tall.bonkLeft .chatButton {
+    left: calc(50% - 15px);
+  }
+
+  .tall.hasChat .dock {
+    bottom: calc(var(--hr-foot) + 52px);
+    gap: 4px;
+  }
+}
+
+/* The room's composer is up over the game: the controls lie under it or under
+   the keyboard and take nothing (client.ts turns them off as well). */
+.chatting .pad,
+.chatting .bonk,
+.chatting .throw,
+.chatting .dock,
+.chatting .chatButton,
+.chatting .watchStrip,
+.chatting .hintTouch {
+  visibility: hidden;
+}
+
+@keyframes talkIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 @keyframes pulse {
   to {
     transform: scale(1.06);

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 const sheetSource = readFileSync(new URL('./HashRushSheet.tsx', import.meta.url), 'utf8')
 const liveDemoSource = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
 const voicePanelSource = readFileSync(new URL('./VoiceTalkPanel.tsx', import.meta.url), 'utf8')
+const quickChatBarSource = readFileSync(new URL('../../features/hash-rush/QuickChatBar.tsx', import.meta.url), 'utf8')
 const globalCss = readFileSync(new URL('../../app/globals.css', import.meta.url), 'utf8')
 
 function between(source: string, startMarker: string, endMarker: string): string {
@@ -26,7 +27,7 @@ describe('hash rush sheet wiring', () => {
     expect(room).toContain('style={hashRushOpen ? HASH_RUSH_CHAT_STRIP_SURFACE_STYLE : CHAT_SCROLL_SURFACE_STYLE}')
     expect(room).toContain("${hashRushOpen ? 'z-[46] ' : ''}")
     expect(room).toContain('{hashRushQuickChatVisible ? (')
-    expect(liveDemoSource).toContain('const hashRushQuickChatVisible = hashRushOpen && Boolean(conversationId) && !isBlockedCounterpart')
+    expect(liveDemoSource).toContain('const hashRushQuickChatVisible = (hashRushOpen || hashRushGameChatShown) && Boolean(conversationId) && !isBlockedCounterpart')
     // The slot comes first, then the strip, quick chat and the composer.
     const slotAt = room.indexOf('ref={hashRushSlotRef}')
     const stripAt = room.indexOf('{/* Chat Area */}')
@@ -57,7 +58,7 @@ describe('hash rush sheet wiring', () => {
     const quickChat = between(liveDemoSource, 'const handleHashRushQuickChat = useCallback(', '}, [composerCopy.manualSpeakerLabel, submitExternalUtterance])')
     expect(quickChat).toContain('submitExternalUtterance({')
     expect(liveDemoSource).toContain('<HashRushQuickChatBar uiLocale={uiLocale} onSend={handleHashRushQuickChat} />')
-    expect(sheetSource).toContain('onPointerDown={(event) => event.preventDefault()}')
+    expect(quickChatBarSource).toContain('onPointerDown={(event) => event.preventDefault()}')
   })
 
   it('tells the game the room talk on ready and as it comes', () => {
@@ -111,7 +112,7 @@ describe('hash rush sheet wiring', () => {
   // HashRushGame.wiring.test.ts); this sheet stays unused until it is removed.
 
   it('lifts the chat composer only for its own keyboard and folds the voice talk panel', () => {
-    expect(liveDemoSource).toContain('const activeKeyboardInsetPx = isComposerOpen && (!hashRushOpen || isComposerTextareaFocused) ? keyboardViewportInsetPx : 0')
+    expect(liveDemoSource).toContain('const activeKeyboardInsetPx = composerShown && (!(hashRushOpen || hashRushGameChatShown) || isComposerTextareaFocused) ? keyboardViewportInsetPx : 0')
     expect(liveDemoSource).toContain('onFocus={handleComposerTextareaFocus}')
     expect(liveDemoSource).toContain('onBlur={handleComposerTextareaBlur}')
     expect(liveDemoSource).toContain('forceFolded={hashRushOpen}')

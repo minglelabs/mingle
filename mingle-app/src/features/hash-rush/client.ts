@@ -60,6 +60,7 @@ import {
   type HashRushTitleWords,
   type HashRushVerdict,
 } from './score'
+import { createChatBubbles, type HashRushBubble, type HashRushChatEntry } from './room-chat'
 import type { HashRushTicketGrant } from './ticket'
 
 export type HashRushGameElements = {
@@ -212,6 +213,18 @@ export type HashRushGameClient = {
   stand(): void
   /** The score table of the round on screen, null between rounds. */
   scoreboard(): HashRushScoreboard | null
+  /**
+   * A room message, in this viewer's language: up in the bubble over the
+   * speaker's hamster. The same id again is its translation come in. `quiet`:
+   * no chime (the viewer's own line, or one heard again).
+   */
+  hearRoom(entry: Pick<HashRushChatEntry, 'id' | 'userId' | 'text'>, options?: { quiet?: boolean }): void
+  /**
+   * The room's composer is up over the game: the controls take no touch and no
+   * key, and this hamster stands still. Once it goes down they come back a
+   * moment later, so the tap that put the keyboard away lands on nothing.
+   */
+  setChatting(chatting: boolean): void
   /** Out of sight the round goes on, silent, and this hamster stands still. */
   setVisible(visible: boolean): void
   /** A voice talk is on in the room: the music makes way, the effects stay. */
@@ -232,6 +245,10 @@ const RESULT_AFTER_MS = 1_500
 // How long a newcomer's row glows in the lobby.
 const FRESH_MS = 4_000
 const blankCareer = () => [0, 0, 0, 0, 0, 0, 0, 0]
+// After the room's composer goes down, the controls wait this long.
+const CHAT_INPUT_GUARD_MS = 350
+// The room's talk floating over the map fades over a hamster like the buttons do.
+const FADES_OVER_HAMSTERS = '[data-hr-fade]'
 const SIT_EVERY_MS = 2_000
 const LINE_CHECK_EVERY_MS = 2_000
 const FADE_CHECK_EVERY_MS = 100
@@ -276,8 +293,9 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
   const audio = createAudio({ audioSession: false })
   const buzz = haptics()
   const others = createOthersSmoother(isFree)
-  // Over whose hamster something was said; the room's talk comes in a later phase.
-  const bubbles = new Map()
+  // What the room said over whose hamster: seat -> bubble, as the renderer draws it.
+  const bubbles = new Map<number, HashRushBubble>()
+  const sayInBubble = createChatBubbles(bubbles)
   const pid = newPid()
   const listening = new AbortController()
 
@@ -321,6 +339,9 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
   // Steering is on from a round's start to its winning seed; seen or not.
   let inputWanted = false
   let visible = true
+  // The room's composer is up over the game, or has just gone down.
+  let chatting = false
+  let chatGuardTimer = 0
   let raf = 0
   let lastFrame = 0
   let retryTimer = 0
@@ -599,7 +620,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
   }
 
   function syncInput() {
-    input.enable(inputWanted && visible)
+    input.enable(inputWanted && visible && !chatting && !chatGuardTimer)
   }
 
   function syncWatching() {
@@ -860,21 +881,33 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
   // The buttons lie over the map. Whenever a hamster runs under one it fades by
   // half on a phone (the buttons are the only way to play there), so nobody loses
   // sight of a hamster behind it. Once the round is over they stay clear.
+  // The room's talk floating over the map fades the same way (data-under: its
+  // own stylesheet takes it nearly away, #189, #203), and stays clear once the
+  // round is over (#222).
   function fadeOverHamsters(round: HashRushRound) {
     const over = round.phase === 'over'
     el.stage.classList.toggle(classes.ended, over)
+    const talk = [...el.stage.querySelectorAll<HTMLElement>(FADES_OVER_HAMSTERS)]
     if (over) {
       for (const node of el.overMap) node.classList.remove(classes.under)
+      for (const node of talk) delete node.dataset.under
       return
     }
     const spots = round.players.map((p) => renderer.toScreen(p.x, p.y))
-    for (const node of el.overMap) {
+    const isUnder = (node: HTMLElement) => {
       const r = node.getBoundingClientRect()
-      const under = r.width > 0 && spots.some(({ x, y, unit }: { x: number, y: number, unit: number }) => {
+      return r.width > 0 && spots.some(({ x, y, unit }: { x: number, y: number, unit: number }) => {
         const pad = 22 * unit
         return x > r.left - pad && x < r.right + pad && y > r.top - pad && y < r.bottom + pad
       })
+    }
+    for (const node of el.overMap) {
+      const under = isUnder(node)
       node.classList.toggle(classes.under, under)
+    }
+    for (const node of talk) {
+      if (isUnder(node)) node.dataset.under = 'true'
+      else delete node.dataset.under
     }
   }
 
@@ -993,6 +1026,28 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
     scoreboard() {
       return game ? buildScoreboard(game, meId, record()) : null
     },
+    hearRoom(entry, options) {
+      if (destroyed) return
+      const { fresh } = sayInBubble(lobby?.seats, entry, performance.now())
+      // A soft chime for what somebody else says, as the game's own chat had (it is the game's sound).
+      if (fresh && !options?.quiet && visible && !document.hidden) audio.play.chat()
+    },
+    setChatting(next) {
+      if (destroyed || chatting === next) return
+      chatting = next
+      window.clearTimeout(chatGuardTimer)
+      chatGuardTimer = 0
+      if (next) {
+        syncInput()
+        standStill()
+        return
+      }
+      chatGuardTimer = window.setTimeout(() => {
+        chatGuardTimer = 0
+        syncInput()
+      }, CHAT_INPUT_GUARD_MS)
+      syncInput()
+    },
     setVisible(next) {
       if (visible === next) return
       visible = next
@@ -1026,6 +1081,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       window.clearTimeout(resultTimer)
       window.clearTimeout(bannerTimer)
       window.clearTimeout(freshTimer)
+      window.clearTimeout(chatGuardTimer)
       window.clearInterval(lineCheck)
       listening.abort()
       for (const type of TAP_EVENTS) window.removeEventListener(type, tryUnlock, true)

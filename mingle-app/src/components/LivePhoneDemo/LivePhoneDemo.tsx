@@ -243,16 +243,17 @@ import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
 import VoiceTalkPanel, { VoiceTalkHeaderButton, isVoiceTalkAvailable } from './VoiceTalkPanel'
 // The iframe sheet (HashRushSheet) stays here unused until the native game replaces it for good.
-import HashRushSheet, { HashRushQuickChatBar, useHashRushSheetFrame } from './HashRushSheet'
+import HashRushSheet, { useHashRushSheetFrame } from './HashRushSheet'
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
+import { HashRushQuickChatBar } from '@/features/hash-rush/QuickChatBar'
+import type { HashRushChatEntry, HashRushRoomChat } from '@/features/hash-rush/room-chat'
 import { isHashRushGameConfigured } from '@/features/hash-rush/config'
 import { hashRushGameMenuLabel } from '@/features/hash-rush/copy'
 import {
   HASH_RUSH_CHAT_STRIP_HEIGHT_PX,
   resolveHashRushBubbleDisplayMode,
-  type HashRushChatEntry,
 } from './HashRushSheet.logic'
-import { buildHashRushChatEntries } from './HashRushSheet.chat'
+import { buildHashRushChatEntries } from './hash-rush-room-chat'
 import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
@@ -1978,7 +1979,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // alive in this room, also while lowered; `hashRushGameOpen` is it being up.
   const [hashRushGameActive, setHashRushGameActive] = useState(false)
   const [hashRushGameOpen, setHashRushGameOpen] = useState(false)
-  const closeHashRushGame = useCallback(() => setHashRushGameOpen(false), [])
+  // The room's composer up over the native game (its 💬), in a mode of the
+  // game's own: 'text' with the keyboard, 'voice' with Start. The input mode
+  // the viewer keeps for the room is never written by it.
+  const [hashRushGameChatMode, setHashRushGameChatMode] = useState<'text' | 'voice' | null>(null)
+  const closeHashRushGame = useCallback(() => {
+    setHashRushGameOpen(false)
+    setHashRushGameChatMode(null)
+  }, [])
   // While the sheet is up the room keeps an empty slot for it between the top
   // bar and the room's talk strip; the sheet is placed over that slot inside
   // the room's root.
@@ -2200,6 +2208,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
+  // The game's composer is up (only while the game is, in a room the viewer can write to).
+  const hashRushGameChatShown = hashRushGameOpen && hashRushGameChatMode !== null && Boolean(conversationId) && !isBlockedCounterpart
+  // What the bottom bar shows: the keyboard composer or voice (Start). Over the
+  // game it is the game's own mode; the room's saved one (isComposerOpen) stays.
+  const composerShown = hashRushGameChatShown ? hashRushGameChatMode === 'text' : isComposerOpen
   // The composer's text box has focus (its keyboard, not the game's, is up).
   const [isComposerTextareaFocused, setIsComposerTextareaFocused] = useState(false)
   // The message the next typed send replies to (set from a bubble's menu).
@@ -2906,10 +2919,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.clearTimeout(timeout180Id)
       window.clearTimeout(timeout360Id)
     }
-  }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
+  }, [composerShown, keyboardViewportInsetPx, syncNativeBottomBarClearance])
 
   useEffect(() => {
-    if (!isComposerOpen) {
+    if (!composerShown) {
       composerFocusRequestedRef.current = false
       return
     }
@@ -2929,7 +2942,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.clearTimeout(timerId)
     }
-  }, [focusComposerTextarea, isComposerOpen, syncComposerTextareaHeight])
+  }, [composerShown, focusComposerTextarea, syncComposerTextareaHeight])
 
   useEffect(() => {
     const textarea = composerTextareaRef.current
@@ -2941,12 +2954,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useLayoutEffect(() => {
     syncComposerTextareaHeight(composerTextareaRef.current)
-  }, [isComposerOpen, syncComposerTextareaHeight])
+  }, [composerShown, syncComposerTextareaHeight])
 
   useEffect(() => {
-    if (isComposerOpen) return
+    if (composerShown) return
     setComposerTextareaHeightPx(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
-  }, [isComposerOpen])
+  }, [composerShown])
 
   // Persist selected languages
   useEffect(() => {
@@ -3794,6 +3807,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setHashRushActive(false)
     setHashRushGameOpen(false)
     setHashRushGameActive(false)
+    setHashRushGameChatMode(null)
   }, [isVisible])
 
   useEffect(() => {
@@ -5841,6 +5855,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const handleToggleComposer = useCallback(() => {
+    // Over the Hash Rush game the switch is the game's own: keyboard or Start.
+    // The input mode kept for the room stays as it is.
+    if (hashRushGameChatShown) {
+      const nextMode = hashRushGameChatMode === 'text' ? 'voice' : 'text'
+      composerFocusRequestedRef.current = nextMode === 'text'
+      if (nextMode === 'voice') composerTextareaRef.current?.blur()
+      setHashRushGameChatMode(nextMode)
+      return
+    }
     const next = !isComposerOpen
     commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
@@ -5857,7 +5880,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       composerTextareaRef.current?.blur()
     }
     setIsComposerOpen(next)
-  }, [commitLocalAccountPreferences, isComposerOpen])
+  }, [commitLocalAccountPreferences, hashRushGameChatMode, hashRushGameChatShown, isComposerOpen])
+
+  // The game's 💬: the room's composer comes up over the game, in the input
+  // mode the viewer keeps for the room (keyboard or Start) unless one is asked.
+  const openHashRushGameChat = useCallback((mode?: 'text' | 'voice') => {
+    const nextMode = mode ?? (isComposerOpen ? 'text' : 'voice')
+    composerFocusRequestedRef.current = nextMode === 'text'
+    setHashRushGameChatMode(nextMode)
+    // Already drawn under the game: focus it now, inside the tap (iOS only
+    // raises the keyboard from a touch).
+    if (nextMode === 'text' && composerTextareaRef.current) focusComposerTextarea()
+  }, [focusComposerTextarea, isComposerOpen])
+
+  const closeHashRushGameChat = useCallback(() => {
+    composerFocusRequestedRef.current = false
+    composerTextareaRef.current?.blur()
+    setHashRushGameChatMode(null)
+  }, [])
 
   const handleComposerDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextDraft = event.currentTarget.value
@@ -5917,7 +5957,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   // Quick chat sits right above the composer while Hash Rush is up, in rooms
   // the viewer can still write to.
-  const hashRushQuickChatVisible = hashRushOpen && Boolean(conversationId) && !isBlockedCounterpart
+  const hashRushQuickChatVisible = (hashRushOpen || hashRushGameChatShown) && Boolean(conversationId) && !isBlockedCounterpart
 
   const handleComposerTextareaFocus = useCallback(() => setIsComposerTextareaFocused(true), [])
   const handleComposerTextareaBlur = useCallback(() => setIsComposerTextareaFocused(false), [])
@@ -5928,9 +5968,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleReplyToMessage = useCallback((reference: MessageReplyReference) => {
     setReplyTarget(reference)
-    if (isComposerOpen) focusComposerTextarea()
+    // From the talk read back over the game: the game's composer, with the keyboard.
+    if (hashRushGameOpen && hashRushGameChatMode !== 'text') openHashRushGameChat('text')
+    else if (composerShown) focusComposerTextarea()
     else handleToggleComposer()
-  }, [focusComposerTextarea, handleToggleComposer, isComposerOpen])
+  }, [composerShown, focusComposerTextarea, handleToggleComposer, hashRushGameChatMode, hashRushGameOpen, openHashRushGameChat])
 
   const handleCancelReply = useCallback(() => setReplyTarget(null), [])
 
@@ -6687,16 +6729,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // The room's talk as the Hash Rush game hears it, in the language the
   // room's one-bubble view shows this viewer. Only while the game is here.
   const hashRushChatEntries = useMemo(() => (
-    hashRushActive
+    hashRushActive || hashRushGameActive
       ? buildHashRushChatEntries({
           utterances: displayUtterances,
           draftIds: draftUtteranceIds,
           display: earphoneModeDisplay,
           viewerUserId,
           isSharedRoom: isMultiMember,
+          // The native game floats every line over the map, whoever said it.
+          keepUnknownSenders: hashRushGameActive && !hashRushActive,
         })
       : NO_HASH_RUSH_CHAT_ENTRIES
-  ), [displayUtterances, draftUtteranceIds, earphoneModeDisplay, hashRushActive, isMultiMember, viewerUserId])
+  ), [displayUtterances, draftUtteranceIds, earphoneModeDisplay, hashRushActive, hashRushGameActive, isMultiMember, viewerUserId])
   // L: the notice pick for this room while it is still a room language,
   // otherwise the room's display language.
   const earphoneModeReadLanguage = resolveEarphoneModeReadLanguage({
@@ -7182,7 +7226,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   })
   // While Hash Rush is up, only the composer's own keyboard lifts the composer
   // (and the talk strip on top of it); a keyboard the game opens is the sheet's.
-  const activeKeyboardInsetPx = isComposerOpen && (!hashRushOpen || isComposerTextareaFocused) ? keyboardViewportInsetPx : 0
+  const activeKeyboardInsetPx = composerShown && (!(hashRushOpen || hashRushGameChatShown) || isComposerTextareaFocused) ? keyboardViewportInsetPx : 0
   // The sheet takes the slot the room keeps for it, but a keyboard never moves
   // or resizes it: the composer and the strip rise over the game instead.
   const hashRushSheetFrame = useHashRushSheetFrame({
@@ -7191,6 +7235,89 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     rootRef: liveDemoRootRef,
     held: keyboardViewportInsetPx > 0 || (isComposerOpen && isComposerTextareaFocused),
   })
+  // The room's talk and composer inside the native game (room-chat.ts). How
+  // much of the game's foot the quick chat and the composer cover while up
+  // (the keyboard under them included): the game stands its conversation on it.
+  const hashRushQuickChatRef = useRef<HTMLDivElement | null>(null)
+  const [hashRushGameDockHeightPx, setHashRushGameDockHeightPx] = useState(0)
+  useLayoutEffect(() => {
+    if (!hashRushGameChatShown) return
+    const root = liveDemoRootRef.current
+    const quickChat = hashRushQuickChatRef.current
+    const bottomBar = bottomBarRef.current
+    if (!root || !quickChat) return
+    const measure = () => {
+      const height = Math.max(0, Math.round(root.getBoundingClientRect().bottom - quickChat.getBoundingClientRect().top))
+      setHashRushGameDockHeightPx((current) => (current === height ? current : height))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(root)
+    observer.observe(quickChat)
+    if (bottomBar) observer.observe(bottomBar)
+    return () => observer.disconnect()
+  }, [activeKeyboardInsetPx, composerShown, hashRushGameChatShown])
+  const hashRushGameUtterancesById = useMemo(() => (
+    hashRushGameActive ? new Map(displayUtterances.map((utterance) => [utterance.id, utterance])) : null
+  ), [displayUtterances, hashRushGameActive])
+  // One room message the room's own way, always as one bubble in this viewer's language.
+  const renderHashRushGameMessage = useCallback((id: string) => {
+    const utterance = hashRushGameUtterancesById?.get(id)
+    if (!utterance) return null
+    return (
+      <MemoizedLivePhoneDemoChatMessageRow
+        utterance={utterance}
+        uiLocale={uiLocale}
+        preferredDisplayLanguage={preferredDisplayLanguage}
+        preferredDisplayLanguages={normalizedPreferredDisplayLanguages}
+        defaultDisplayLanguage={resolvedDefaultDisplayLanguage}
+        languageOrder={normalizedDisplayLanguageOptions}
+        hiddenLanguages={othersOnlyLanguages}
+        isDraft={false}
+        onPlayOriginal={handlePlayOriginalBubbleTts}
+        onPlayTranslation={handlePlayTranslationBubbleTts}
+        bubbleTextClassName={chatBubbleTextClassName}
+        shouldAnimateEntrance={false}
+        viewerUserId={viewerUserId}
+        onOpenProfile={handleOpenProfileForBubble}
+        bubbleDisplayMode="collapsed"
+      />
+    )
+  }, [
+    chatBubbleTextClassName,
+    handleOpenProfileForBubble,
+    handlePlayOriginalBubbleTts,
+    handlePlayTranslationBubbleTts,
+    hashRushGameUtterancesById,
+    normalizedDisplayLanguageOptions,
+    normalizedPreferredDisplayLanguages,
+    othersOnlyLanguages,
+    preferredDisplayLanguage,
+    resolvedDefaultDisplayLanguage,
+    uiLocale,
+    viewerUserId,
+  ])
+  const hashRushGameChat = useMemo<HashRushRoomChat>(() => ({
+    entries: hashRushChatEntries,
+    renderMessage: renderHashRushGameMessage,
+    canWrite: Boolean(conversationId) && !isBlockedCounterpart,
+    open: hashRushGameChatShown,
+    dockHeightPx: hashRushGameDockHeightPx,
+    interpreting: isReady,
+    onOpen: openHashRushGameChat,
+    onClose: closeHashRushGameChat,
+  }), [
+    closeHashRushGameChat,
+    conversationId,
+    hashRushChatEntries,
+    hashRushGameChatShown,
+    hashRushGameDockHeightPx,
+    isBlockedCounterpart,
+    isReady,
+    openHashRushGameChat,
+    renderHashRushGameMessage,
+  ])
   const scrollToBottomButtonBottomPx = resolveScrollToBottomButtonBottomPx({
     baseBottomPx: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX,
     isNativeAppRuntime,
@@ -7229,10 +7356,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     isLimitReached,
     hasComposerDraft: composerHasDraft,
   })
-  const bottomBarTopPaddingPx = isComposerOpen
+  const bottomBarTopPaddingPx = composerShown
     ? COMPOSER_MODE_TOP_MARGIN_PX
     : VOICE_MODE_TOP_MARGIN_PX
-  const bottomBarBottomMarginPx = isComposerOpen
+  const bottomBarBottomMarginPx = composerShown
     ? COMPOSER_MODE_BOTTOM_MARGIN_PX
     : VOICE_MODE_BOTTOM_MARGIN_PX
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
@@ -7566,6 +7693,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             playerName={(session?.user?.name || '').trim()}
             uiLocale={uiLocale}
             voiceActive={voiceTalkState.connected}
+            chat={hashRushGameChat}
             onClose={closeHashRushGame}
           />
         ) : null}
@@ -9517,21 +9645,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           {/* Hash Rush up: the game's ready-made lines right above the composer,
               sent as normal room messages. */}
           {hashRushQuickChatVisible ? (
-            <div className="relative z-[46] shrink-0 border-t border-gray-100 bg-white">
+            // Over the native game (47) while its 💬 has the composer up.
+            <div ref={hashRushQuickChatRef} className={`relative ${hashRushGameChatShown ? 'z-[48]' : 'z-[46]'} shrink-0 border-t border-gray-100 bg-white`}>
               <HashRushQuickChatBar uiLocale={uiLocale} onSend={handleHashRushQuickChat} />
             </div>
           ) : null}
 
           {/* Bottom Bar with STT / Text Composer Toggle */}
           <motion.div
-            layout={!isComposerOpen}
-            layoutDependency={isComposerOpen}
+            layout={!composerShown}
+            layoutDependency={composerShown}
             onLayoutAnimationComplete={syncNativeBottomBarClearance}
             ref={bottomBarRef}
             data-qa="live-demo-bottom-bar"
             // Above the Hash Rush sheet while it is up: a keyboard lifts the
             // composer over the game. Quick chat above it carries the line.
-            className={`relative shrink-0 border-t bg-white ${hashRushOpen ? 'z-[46] ' : ''}${
+            className={`relative shrink-0 border-t bg-white ${hashRushOpen ? 'z-[46] ' : ''}${hashRushGameChatShown ? 'z-[48] ' : ''}${
               hashRushQuickChatVisible ? 'border-white' : 'border-gray-100'
             }`}
             transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
@@ -9554,11 +9683,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               </div>
             ) : (
             <AnimatePresence initial={false} mode="popLayout">
-              {isComposerOpen ? (
+              {composerShown ? (
                 <motion.div
                   key="composer-bottom-bar"
                   layout={false}
-                  layoutDependency={isComposerOpen}
+                  layoutDependency={composerShown}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
@@ -9706,7 +9835,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <motion.div
                   key="default-bottom-bar"
                   layout
-                  layoutDependency={isComposerOpen}
+                  layoutDependency={composerShown}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}

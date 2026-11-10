@@ -18,13 +18,32 @@
 // pad stays held while the thumb stays down. The score table has a button of
 // its own (and Tab held with a keyboard, #39, #182); a result card put away
 // comes back with it (#42).
+//
+// The chat room's talk is part of the game (room-chat.ts): the room's own
+// messages float over the map in the room's one-bubble look and go up over
+// the speaker's hamster, and the 💬 button puts the room's own composer up
+// over the game. While it is up the controls take nothing and the map keeps
+// its size; a tap on the game puts it away again (#181, #183, #188).
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { ChevronLeft, Loader2 } from 'lucide-react'
 import styles from './hash-rush-game.module.css'
 import { HASH_RUSH_SERVER } from './config'
 import { hashRushGameCopy } from './copy'
 import { resolveHashRushField, type HashRushFieldLayout } from './layout'
+import {
+  advanceHashRushChatFeed,
+  floatLines,
+  HASH_RUSH_CHAT_REPLAY_COUNT,
+  liveLines,
+  nextFloatChange,
+  refloatLines,
+  startHashRushChatFeed,
+  type FloatingLine,
+  type HashRushChatEntry,
+  type HashRushChatFeed,
+  type HashRushRoomChat,
+} from './room-chat'
 import { requestHashRushTicket } from './ticket'
 import {
   HashRushBoard,
@@ -41,6 +60,17 @@ import type { HashRushScoreboard } from './score'
 const BONK_SIDE_STORE = 'hash-rush-bonk-left'
 // The table over a round follows the round as it goes.
 const BOARD_REFRESH_MS = 400
+// The conversation opened from a floating line folds back once left alone this long.
+const TALK_BROWSE_IDLE_MS = 8000
+// After the room's composer goes down, the page has this long to grow back
+// from under the keyboard before the map is measured anew.
+const CHAT_RESIZE_HOLD_MS = 600
+// A touch on the conversation that moves less than this, and is let go sooner
+// than a long press (which opens a bubble's own menu), is a tap.
+const TALK_TAP_SLOP_PX = 10
+const TALK_TAP_MAX_MS = 400
+
+const landed = (entry: HashRushChatEntry) => !entry.pending && !!entry.text
 
 const CLASSES: HashRushGameClasses = {
   chip: styles.chip,
@@ -82,6 +112,8 @@ type Props = {
   visible: boolean
   /** This room's voice talk is connected: the game holds its music, the back pill shows a green dot. */
   voiceActive: boolean
+  /** The chat room's talk and composer (room-chat.ts); none, no talk in the game. */
+  chat?: HashRushRoomChat
   /** Back to the chat: lowers the game. */
   onBack: () => void
 }
@@ -99,8 +131,10 @@ const typing = () => {
   return node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || (node instanceof HTMLElement && node.isContentEditable)
 }
 
-export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive, onBack }: Props) {
+export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive, chat, onBack }: Props) {
   const copy = hashRushGameCopy(uiLocale)
+  const chatOpen = !!chat?.open
+  const chatEntries = chat?.entries
   const stageRef = useRef<HTMLDivElement | null>(null)
   const arenaRef = useRef<HTMLDivElement | null>(null)
   const backRef = useRef<HTMLButtonElement | null>(null)
@@ -122,8 +156,10 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
   const toolsMoreRef = useRef<HTMLButtonElement | null>(null)
   const scoreButtonRef = useRef<HTMLButtonElement | null>(null)
   const boardCardRef = useRef<HTMLDivElement | null>(null)
+  const chatButtonRef = useRef<HTMLButtonElement | null>(null)
+  const talkPanelRef = useRef<HTMLDivElement | null>(null)
   const clientRef = useRef<HashRushGameClient | null>(null)
-  const latestRef = useRef({ viewerKey, playerName, uiLocale, visible, voiceActive })
+  const latestRef = useRef({ viewerKey, playerName, uiLocale, visible, voiceActive, chatOpen, chatEntries, onCloseChat: chat?.onClose })
   // The screen's own shape: a tall one shows the map turned, with the touch
   // controls in a strip of their own under it.
   const [tall, setTall] = useState<boolean | null>(null)
@@ -143,6 +179,21 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
   const [scoreView, setScoreView] = useState<HashRushScoreView>('total')
   // The result or title card put away, by its key; a new card comes up again.
   const [hiddenCard, setHiddenCard] = useState('')
+  // A new game client each time one loads: the room's talk is told to it afresh.
+  const [clientEpoch, setClientEpoch] = useState(0)
+  // The room's talk: what the game has heard of it, the lines floating over the
+  // map (as of `floatAt`), and the conversation opened from them to read back.
+  const chatFeedRef = useRef<HashRushChatFeed | null>(null)
+  const [floating, setFloating] = useState<FloatingLine[]>([])
+  const [floatAt, setFloatAt] = useState(0)
+  const [browsing, setBrowsing] = useState(false)
+  const browseTimerRef = useRef(0)
+  const talkTapRef = useRef<{ id: number, x: number, y: number, top: number, at: number } | null>(null)
+  const talkAtEndRef = useRef(true)
+  // The page's height while the room's composer is up, and how long it is kept
+  // once the composer is down: a smaller page in that time is the keyboard's.
+  const heldSizeRef = useRef<{ height: number, until: number } | null>(null)
+  const measureRef = useRef<(() => void) | null>(null)
 
   const cardKey = cardKeyOf(view)
   const cardHidden = !!cardKey && hiddenCard === cardKey
@@ -153,8 +204,8 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
   const cardHiddenRef = useRef(cardHidden)
 
   useEffect(() => {
-    latestRef.current = { viewerKey, playerName, uiLocale, visible, voiceActive }
-  }, [viewerKey, playerName, uiLocale, visible, voiceActive])
+    latestRef.current = { viewerKey, playerName, uiLocale, visible, voiceActive, chatOpen, chatEntries, onCloseChat: chat?.onClose }
+  }, [viewerKey, playerName, uiLocale, visible, voiceActive, chatOpen, chatEntries, chat?.onClose])
 
   useEffect(() => {
     viewRef.current = view
@@ -164,11 +215,21 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
   // ---- Where the map goes: the whole width it can, at the top of the arena ----
   // The stage is the whole screen; the arena is what the stylesheet leaves of
   // it for the map (under the status bar, over a phone's controls).
+  // While the room's composer is up the map keeps its place and size: a
+  // keyboard only covers the foot of the screen, it never squeezes the game
+  // (Android resizes the page for it). Once it is down the page grows back
+  // first, so the map never shrinks for a moment either (#181, #187).
   useLayoutEffect(() => {
     const stage = stageRef.current
     const arena = arenaRef.current
     if (!stage || !arena) return
     const measure = () => {
+      const held = heldSizeRef.current
+      if (held) {
+        const now = performance.now()
+        if (stage.clientHeight < held.height - 1 && now < held.until) return
+        if (now >= held.until) heldSizeRef.current = null
+      }
       const shapeTall = stage.clientHeight > stage.clientWidth
       setTall(shapeTall)
       const next = resolveHashRushField(arena.clientWidth, arena.clientHeight, shapeTall)
@@ -179,14 +240,21 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
       ))
     }
     measure()
+    measureRef.current = measure
     if (typeof ResizeObserver === 'undefined') {
       window.addEventListener('resize', measure)
-      return () => window.removeEventListener('resize', measure)
+      return () => {
+        measureRef.current = null
+        window.removeEventListener('resize', measure)
+      }
     }
     const observer = new ResizeObserver(measure)
     observer.observe(stage)
     observer.observe(arena)
-    return () => observer.disconnect()
+    return () => {
+      measureRef.current = null
+      observer.disconnect()
+    }
   }, [])
 
   useEffect(() => {
@@ -215,9 +283,12 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
     const toolsMore = toolsMoreRef.current
     const back = backRef.current
     const scoreButton = scoreButtonRef.current
+    const chatButton = chatButtonRef.current
     if (Object.values(parts).some((node) => !node) || !toolsMore || !back || !scoreButton) return
     const elements = { ...parts, overMap: [] } as unknown as HashRushGameElements
     elements.overMap = [elements.pad, elements.bonk, elements.throwButton, toolsMore, back, scoreButton]
+    // On a wide screen the chat button lies over the map as well.
+    if (chatButton) elements.overMap.push(chatButton)
     let cancelled = false
     let client: HashRushGameClient | null = null
     import('./client')
@@ -236,8 +307,14 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
         clientRef.current = client
         client.setVisible(latest.visible)
         client.setVoice(latest.voiceActive)
+        client.setChatting(latest.chatOpen)
+        // The last few lines of the room's talk go up over their speakers' hamsters, quietly.
+        for (const entry of (latest.chatEntries ?? []).filter(landed).slice(-HASH_RUSH_CHAT_REPLAY_COUNT)) {
+          client.hearRoom(entry, { quiet: true })
+        }
         client.start()
         setSoundOff(client.soundOff())
+        setClientEpoch((epoch) => epoch + 1)
       })
       .catch(() => {
         // The game's code could not be loaded (offline, a deploy in between).
@@ -250,17 +327,174 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
     }
   }, [conversationId, loadAttempt])
 
+  // The last few lines of the room's talk float up again, crisp for a few
+  // seconds however old: the composer went down, the conversation folded, or
+  // the game came back into sight (#188).
+  const refloat = useCallback(() => {
+    const now = Date.now()
+    setFloating(refloatLines(latestRef.current.chatEntries ?? [], now))
+    setFloatAt(now)
+  }, [])
+
+  const wasVisibleRef = useRef(visible)
   useEffect(() => {
     clientRef.current?.setVisible(visible)
+    const was = wasVisibleRef.current
+    wasVisibleRef.current = visible
     if (!visible) {
       setToolsOpen(false)
       setBoardRound(-1)
-    }
-  }, [visible])
+      setBrowsing(false)
+    } else if (!was) refloat()
+  }, [refloat, visible])
 
   useEffect(() => {
     clientRef.current?.setVoice(voiceActive)
   }, [voiceActive])
+
+  // ---- The room's talk ----
+  // What the game has not heard yet goes up in the bubble over the speaker's
+  // hamster, in this viewer's language (a translation landing later only
+  // changes its words), and floats over the map in the room's own bubble.
+  useEffect(() => {
+    if (!chatEntries) return
+    const now = Date.now()
+    const started = !chatFeedRef.current
+    const step = chatFeedRef.current
+      ? advanceHashRushChatFeed(chatFeedRef.current, chatEntries)
+      : startHashRushChatFeed(chatEntries, now)
+    chatFeedRef.current = step.feed
+    if (!step.posts.length) return
+    // A chime for what somebody else says; none for this viewer's own lines,
+    // nor for the few replayed as the game opens (told to a client still
+    // loading once it is there).
+    const client = clientRef.current
+    for (const post of step.posts) {
+      client?.hearRoom(post, { quiet: started || post.userId === latestRef.current.viewerKey })
+    }
+    setFloating((lines) => floatLines(lines, step.posts, now))
+    setFloatAt(now)
+  }, [chatEntries])
+
+  // Crisp lines go faint, faint ones go away, each in its time.
+  useEffect(() => {
+    const next = nextFloatChange(floating, floatAt)
+    if (!Number.isFinite(next)) return
+    const timer = window.setTimeout(() => {
+      const now = Date.now()
+      setFloating((lines) => liveLines(lines, now))
+      setFloatAt(now)
+    }, Math.max(0, next - floatAt) + 20)
+    return () => window.clearTimeout(timer)
+  }, [floating, floatAt])
+
+  // The room's composer up over the game: the controls take nothing (they lie
+  // under it or the keyboard) and this hamster stands still.
+  useEffect(() => {
+    clientRef.current?.setChatting(chatOpen)
+  }, [chatOpen, clientEpoch])
+
+  const wasChatOpenRef = useRef(chatOpen)
+  useEffect(() => {
+    const was = wasChatOpenRef.current
+    wasChatOpenRef.current = chatOpen
+    if (chatOpen) {
+      const stage = stageRef.current
+      heldSizeRef.current = stage ? { height: stage.clientHeight, until: Number.POSITIVE_INFINITY } : null
+      // The conversation stands over the composer instead; the table and the settings go.
+      setBoardRound(-1)
+      setToolsOpen(false)
+      setBrowsing(false)
+      talkAtEndRef.current = true
+      return
+    }
+    if (!was) return
+    refloat()
+    // The page grows back from under the keyboard first, then the map is measured.
+    const held = heldSizeRef.current
+    if (held) held.until = performance.now() + CHAT_RESIZE_HOLD_MS
+    measureRef.current?.()
+    const timer = window.setTimeout(() => measureRef.current?.(), CHAT_RESIZE_HOLD_MS + 20)
+    return () => window.clearTimeout(timer)
+  }, [chatOpen, refloat])
+
+  // A tap anywhere on the game puts the composer and its keyboard away, and
+  // is no move: the controls are off until a moment after (client.ts).
+  useEffect(() => {
+    if (!chatOpen) return
+    const away = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (!stageRef.current?.contains(target) || talkPanelRef.current?.contains(target)) return
+      latestRef.current.onCloseChat?.()
+    }
+    window.addEventListener('pointerdown', away, true)
+    return () => window.removeEventListener('pointerdown', away, true)
+  }, [chatOpen])
+
+  // A touch on a floating line opens the whole conversation in its place, to
+  // read back without the keyboard (#190). It folds on a tap, inside it or
+  // anywhere else, or once left alone for a while.
+  const stayBrowsing = useCallback(() => {
+    window.clearTimeout(browseTimerRef.current)
+    browseTimerRef.current = window.setTimeout(() => setBrowsing(false), TALK_BROWSE_IDLE_MS)
+  }, [])
+
+  const openTalk = useCallback(() => {
+    talkAtEndRef.current = true
+    setBrowsing(true)
+    stayBrowsing()
+  }, [stayBrowsing])
+
+  const wasBrowsingRef = useRef(false)
+  useEffect(() => {
+    const was = wasBrowsingRef.current
+    wasBrowsingRef.current = browsing
+    if (browsing) {
+      const away = (event: PointerEvent) => {
+        if (!talkPanelRef.current?.contains(event.target as Node)) setBrowsing(false)
+      }
+      window.addEventListener('pointerdown', away, true)
+      return () => window.removeEventListener('pointerdown', away, true)
+    }
+    window.clearTimeout(browseTimerRef.current)
+    if (was && !latestRef.current.chatOpen) refloat()
+  }, [browsing, refloat])
+
+  useEffect(() => () => window.clearTimeout(browseTimerRef.current), [])
+
+  // On the conversation a tap folds it (or, over the composer, puts the
+  // composer away: #188); a slide scrolls it, a long press opens a bubble's
+  // own menu, and a bubble's own buttons keep their taps.
+  const onTalkPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    talkTapRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, top: event.currentTarget.scrollTop, at: event.timeStamp }
+    if (!latestRef.current.chatOpen) stayBrowsing()
+  }, [stayBrowsing])
+
+  const onTalkPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const tap = talkTapRef.current
+    talkTapRef.current = null
+    if (!tap || tap.id !== event.pointerId) return
+    const still = Math.hypot(event.clientX - tap.x, event.clientY - tap.y) < TALK_TAP_SLOP_PX
+      && Math.abs(event.currentTarget.scrollTop - tap.top) < 4
+      && event.timeStamp - tap.at < TALK_TAP_MAX_MS
+    if (!still || (event.target as Element).closest?.('button, a, [role="button"]')) return
+    if (latestRef.current.chatOpen) latestRef.current.onCloseChat?.()
+    else setBrowsing(false)
+  }, [])
+
+  const onTalkScroll = useCallback(() => {
+    const panel = talkPanelRef.current
+    if (!panel) return
+    talkAtEndRef.current = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 30
+    if (!latestRef.current.chatOpen) stayBrowsing()
+  }, [stayBrowsing])
+
+  // Opened, it shows the newest lines, and keeps to them as more come.
+  const talkPanelUp = !!chat && (chatOpen || browsing)
+  useLayoutEffect(() => {
+    const panel = talkPanelRef.current
+    if (panel && talkAtEndRef.current) panel.scrollTop = panel.scrollHeight
+  }, [talkPanelUp, chatEntries, chat?.dockHeightPx])
 
   // ---- Settings ----
   useEffect(() => {
@@ -420,6 +654,8 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
         cardUp && styles.resultUp,
         watcher && styles.watcher,
         boardShown && styles.boardUp,
+        chat?.canWrite && styles.hasChat,
+        chatOpen && styles.chatting,
       )}
       style={stageStyle}
       data-qa="hash-rush-game"
@@ -507,6 +743,27 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
         ) : null}
       </div>
 
+      {/* The room's composer, up over the game in one tap: at the foot of the
+          gap between the pad and the bonk button (#189), over every card,
+          plain outside a round (#221). A red dot while voice interpretation is on. */}
+      {chat ? (
+        <button
+          ref={chatButtonRef}
+          type="button"
+          className={cx(styles.chatButton, view.kind !== 'round' && styles.chatButtonSolid)}
+          aria-label={copy.chat}
+          title={copy.chat}
+          hidden={!chat.canWrite}
+          onClick={chat.onOpen}
+          data-qa="hash-rush-chat-button"
+        >
+          <span aria-hidden="true">💬</span>
+          {chat.interpreting ? (
+            <i role="img" aria-label={copy.interpreting} title={copy.interpreting} className={styles.chatDot} data-qa="hash-rush-interpreting-dot" />
+          ) : null}
+        </button>
+      ) : null}
+
       {boardShown && board ? (
         <HashRushBoard
           board={board}
@@ -536,6 +793,45 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
       ) : null}
       {view.kind === 'title' && cardUp ? (
         <HashRushTitleCard words={view.words} board={view.board} nextAt={view.nextAt} at={view.at} copy={copy} art={art} onClose={hideCard} />
+      ) : null}
+
+      {/* The room's talk, over every card too (#214): the room's own bubbles,
+          one per message in this viewer's language. New lines float just over
+          the controls, crisp, then faint (#196, #198), nearly gone over a
+          hamster (#203). Opened, the whole conversation: over the composer
+          while it is up (#183), else in the lines' place to read back (#190). */}
+      {chat && talkPanelUp ? (
+        <div
+          ref={talkPanelRef}
+          className={cx(styles.talk, styles.talkPanel, chatOpen && styles.talkDocked)}
+          style={chatOpen ? { bottom: chat.dockHeightPx } : undefined}
+          onPointerDown={onTalkPointerDown}
+          onPointerUp={onTalkPointerUp}
+          onPointerCancel={() => (talkTapRef.current = null)}
+          onScroll={onTalkScroll}
+          data-qa="hash-rush-room-talk"
+          data-open={chatOpen ? 'composer' : 'read'}
+        >
+          {(chatEntries ?? []).filter(landed).map((entry) => (
+            <div key={entry.id} className={styles.talkRow} data-qa="hash-rush-talk-row">
+              {chat.renderMessage(entry.id)}
+            </div>
+          ))}
+        </div>
+      ) : chat && floating.length ? (
+        <div className={styles.talk} data-qa="hash-rush-room-talk" data-open="none">
+          {floating.map((line) => (
+            <div
+              key={line.id}
+              className={cx(styles.talkRow, styles.talkLine, line.crispUntil <= floatAt && styles.talkFaint)}
+              onPointerDown={openTalk}
+              data-hr-fade=""
+              data-qa="hash-rush-talk-line"
+            >
+              {chat.renderMessage(line.id)}
+            </div>
+          ))}
+        </div>
       ) : null}
 
       {/* The way back to the chat, over the map's top left corner and over every card. */}

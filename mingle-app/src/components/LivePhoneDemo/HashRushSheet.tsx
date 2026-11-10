@@ -36,7 +36,6 @@ import {
   hashRushChatMessage,
   hashRushCopy,
   hashRushGameOrigin,
-  hashRushQuickChat,
   hashRushVisibilityMessage,
   hashRushVoiceMessage,
   isHashRushTicketReusable,
@@ -178,39 +177,8 @@ export function useHashRushSheetFrame(input: {
   return frame
 }
 
-/** The game's ready-made lines in one scrolling row; a tap sends one as a room message. */
-export function HashRushQuickChatBar({ uiLocale, onSend }: { uiLocale: string, onSend: (text: string) => void }) {
-  const copy = hashRushCopy(uiLocale)
-  return (
-    <div
-      role="toolbar"
-      aria-label={copy.quickChat}
-      // Sideways swipes scroll the row; the room's edge swipe must not start here.
-      onPointerDown={(event) => event.stopPropagation()}
-      onTouchStart={(event) => event.stopPropagation()}
-      className="no-scrollbar flex gap-1.5 overflow-x-auto overscroll-x-contain py-1.5"
-      style={{
-        touchAction: 'pan-x',
-        paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
-        paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
-      }}
-      data-qa="hash-rush-quick-chat"
-    >
-      {hashRushQuickChat(uiLocale).map((text) => (
-        <button
-          key={text}
-          type="button"
-          // Keep the composer's focus (and its keyboard) while tapping a line.
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={() => onSend(text)}
-          className="shrink-0 whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 py-1 text-[0.88rem] font-medium leading-5 text-gray-800 transition-colors active:bg-gray-100"
-        >
-          {text}
-        </button>
-      ))}
-    </div>
-  )
-}
+// The game's ready-made lines in one row, kept with the game now (src/features/hash-rush/QuickChatBar.tsx).
+export { HashRushQuickChatBar } from '@/features/hash-rush/QuickChatBar'
 
 type Props = {
   /** Up in the room. Lowered, the game keeps running out of sight. */

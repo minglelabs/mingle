@@ -12,6 +12,9 @@
 // - While it is up, the room's edge swipe, the iOS swipe-back and the WebView's
 //   back/forward gestures never take a swipe on the game, and the ad banner and
 //   the app's toasts stay hidden (docs/hash-rush-in-app-uiux.md A2-A4).
+// - The room's own composer and quick chat rise over the layer (the room
+//   raises them above it) when the game's 💬 asks; Android back puts them
+//   away before it lowers the game.
 
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
@@ -20,6 +23,7 @@ import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import HashRushGame from './HashRushGame'
 import { hashRushGameCopy } from './copy'
+import type { HashRushRoomChat } from './room-chat'
 
 // Android back lowers the game before the room's own layers (composer and
 // menus at 10, the room at 4-5) and after screens opened over the room (20+).
@@ -51,11 +55,15 @@ type Props = {
   uiLocale: string
   /** This room's voice talk is connected. */
   voiceActive: boolean
+  /** The room's talk and composer in the game (room-chat.ts). */
+  chat?: HashRushRoomChat
   onClose: () => void
 }
 
-export default function HashRushRoomLayer({ open, conversationId, viewerKey, playerName, uiLocale, voiceActive, onClose }: Props) {
+export default function HashRushRoomLayer({ open, conversationId, viewerKey, playerName, uiLocale, voiceActive, chat, onClose }: Props) {
   const copy = hashRushGameCopy(uiLocale)
+  const chatOpen = !!chat?.open
+  const closeChat = chat?.onClose
 
   useNativeBannerSuppression(open)
 
@@ -64,13 +72,15 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
     return registerNativeEdgeSwipeSuppression()
   }, [open])
 
+  // Back puts the room's composer away first, then lowers the game.
   useEffect(() => {
     if (!open) return
     return registerNativeBackHandler(() => {
-      onClose()
+      if (chatOpen && closeChat) closeChat()
+      else onClose()
       return true
     }, NATIVE_BACK_PRIORITY)
-  }, [onClose, open])
+  }, [chatOpen, closeChat, onClose, open])
 
   useEffect(() => {
     if (!open) return
@@ -103,6 +113,7 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
         uiLocale={uiLocale}
         visible={open}
         voiceActive={voiceActive}
+        chat={chat}
         onBack={onClose}
       />
     </motion.div>

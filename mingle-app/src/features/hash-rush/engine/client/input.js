@@ -204,18 +204,22 @@ export function createInput({ stage, canvas, pad, bonkBtn, throwBtn, toWorldDir,
   // Nor may the page scroll or the browser take the gesture while the pad is held.
   pad.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false, signal });
 
+  // (mingle) A press while the controls are off is no press: read() runs every
+  // frame, so a button held down then would swing (or throw) once they are on.
   bonkBtn.addEventListener('pointerdown', (e) => {
-    button = true;
-    if (enabled) played();
     e.preventDefault();
+    if (!enabled) return;
+    button = true;
+    played();
   }, { signal });
   for (const type of ['pointerup', 'pointercancel', 'pointerleave']) bonkBtn.addEventListener(type, () => (button = false), { signal });
   // On a phone the bonk button is held to wait for a hit, so throwing a seed gets
   // a button of its own: hold it, turn, let go.
   throwBtn.addEventListener('pointerdown', (e) => {
-    throwHeld = true;
-    if (enabled) played();
     e.preventDefault();
+    if (!enabled) return;
+    throwHeld = true;
+    played();
   }, { signal });
   for (const type of ['pointerup', 'pointercancel', 'pointerleave']) throwBtn.addEventListener(type, () => (throwHeld = false), { signal });
 

@@ -287,4 +287,30 @@ describe('hash rush stage 2 device fixes', () => {
     // The pad, a swipe, the bonk and throw buttons and the keys all count.
     expect(input.match(/played\(\);/g)?.length).toBeGreaterThanOrEqual(5)
   })
+  it('puts the room chat inside the game: its talk, its composer and quick chat over the layer', () => {
+    // The room hands its own messages and composer to the layer.
+    expect(liveDemoSource).toContain('chat={hashRushGameChat}')
+    expect(liveDemoSource).toContain('hashRushActive || hashRushGameActive')
+    expect(liveDemoSource).toContain('keepUnknownSenders: hashRushGameActive && !hashRushActive,')
+    expect(liveDemoSource).toContain('bubbleDisplayMode="collapsed"')
+    // The composer over the game is a mode of the game's own; the room's saved input mode is not written.
+    expect(liveDemoSource).toContain("const composerShown = hashRushGameChatShown ? hashRushGameChatMode === 'text' : isComposerOpen")
+    const toggle = between(liveDemoSource, 'const handleToggleComposer = useCallback(', 'const next = !isComposerOpen')
+    expect(toggle).toContain('if (hashRushGameChatShown) {')
+    expect(toggle).not.toContain('commitLocalAccountPreferences')
+    // Quick chat and the bottom bar rise over the layer (47) only while the game's composer is up.
+    expect(liveDemoSource).toContain("${hashRushGameChatShown ? 'z-[48] ' : ''}")
+    expect(liveDemoSource).toContain("hashRushGameChatShown ? 'z-[48]' : 'z-[46]'")
+    // Messages go the room's own way.
+    expect(liveDemoSource).toContain('<HashRushQuickChatBar uiLocale={uiLocale} onSend={handleHashRushQuickChat} />')
+    // In the game: bubbles over hamsters, floating lines, the conversation over the composer.
+    expect(gameSource).toContain("client?.hearRoom(post, { quiet: started || post.userId === latestRef.current.viewerKey })")
+    expect(gameSource).toContain('clientRef.current?.setChatting(chatOpen)')
+    expect(gameSource).toContain('style={chatOpen ? { bottom: chat.dockHeightPx } : undefined}')
+    expect(gameSource).toContain('onClick={chat.onOpen}')
+    expect(gameSource).toContain('hidden={!chat.canWrite}')
+    expect(clientSource).toContain('input.enable(inputWanted && visible && !chatting && !chatGuardTimer)')
+    // Android back puts the composer away before it lowers the game.
+    expect(layerSource).toContain('if (chatOpen && closeChat) closeChat()')
+  })
 })
