@@ -31,6 +31,11 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
+import {
+  hasConfirmedLanguageOnboarding,
+  markLanguageOnboardingConfirmed,
+  persistLanguageOnboardingChoice,
+} from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Bell, Check, Loader2, LogOut, PencilLine, Search, Settings, Share2, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -48,15 +53,8 @@ import { resolveRoomAccountBadge } from "@/components/LivePhoneDemo/chat-account
 import IdentityRow from "@/components/posts/identity-row";
 import { withAccountBadgeLabel, type AccountBadgeKind } from "@/lib/account-badge";
 import {
-  LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
-  LS_KEY_PENDING_BIRTH_DATE,
   LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
-  LS_KEY_PENDING_DISCOVERY_SOURCE,
-  LS_KEY_PENDING_GENDER,
-  LS_KEY_PENDING_USAGE_PURPOSE,
-  LS_KEY_PENDING_USAGE_PURPOSE_NOTE,
-  LS_KEY_PENDING_INTEREST_LANGUAGES,
   LS_KEY_PENDING_PRIMARY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
@@ -73,7 +71,6 @@ import {
   readPendingUsagePurposeNote,
   readPendingInterestLanguages,
   clearPendingInterestLanguages,
-  readPersistedBooleanPreference,
   readPersistedLivePhoneDemoPreferences,
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
@@ -86,7 +83,6 @@ import {
   resolveLanguageSelectorUnionAfterOwnLanguagesChange,
 } from "@/components/LivePhoneDemo/language-selector.logic";
 import {
-  formatBirthDate,
 } from "@/lib/birth-date";
 import {
   resolveOnboardingDefaultLanguage,
@@ -3628,17 +3624,7 @@ export default function ConversationList({
       replaceConversationOverlayUrl(readConversationIdFromLocation(), "initial-route-marker");
     }
 
-    let hasConfirmedLanguageOnboarding = false;
-    try {
-      hasConfirmedLanguageOnboarding = readPersistedBooleanPreference(
-        window.localStorage.getItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED),
-        false,
-      );
-    } catch {
-      hasConfirmedLanguageOnboarding = false;
-    }
-
-    const nextLanguageOnboardingPhase = shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding)
+    const nextLanguageOnboardingPhase = shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding())
       ? "selection"
       : "ready";
     resolvedLanguageOnboardingPhase = nextLanguageOnboardingPhase;
@@ -5389,58 +5375,17 @@ export default function ConversationList({
   const handleLanguageOnboardingConfirm = useCallback(async (
     payload: LanguageOnboardingConfirmPayload | string,
   ) => {
-    const languageCode = typeof payload === "string" ? payload : payload.language;
-    const birthDateParts = typeof payload === "object" && payload ? payload.birthDate : null;
-    const discoverySource = typeof payload === "object" && payload ? payload.discoverySource : null;
-    const gender = typeof payload === "object" && payload ? payload.gender ?? null : null;
-    const usagePurpose = typeof payload === "object" && payload ? payload.usagePurpose : null;
-    const usagePurposeNote = typeof payload === "object" && payload ? payload.usagePurposeNote : null;
-    const interestLanguages = typeof payload === "object" && payload?.interestLanguage ? [payload.interestLanguage] : [];
-    const formattedBirthDate = birthDateParts ? formatBirthDate(birthDateParts) : null;
-
-    // Seed the room's default output languages from the chosen app language the
-    // same way a brand-new conversation would (chosen language + en/ko/ja, deduped),
-    // not just the single picked language -- see deriveDefaultSttLanguagesForLocale.
-    const normalizedTargets = deriveDefaultSttLanguagesForLocale(languageCode);
-    const normalizedPrimaryLanguages = sanitizeSttLanguageSelection(
-      [languageCode],
-      normalizedTargets.slice(0, 1),
-    );
-
-    try {
-      window.localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(normalizedTargets));
-      window.localStorage.setItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED, "0");
-      window.localStorage.setItem(
-        LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
-        JSON.stringify(normalizedTargets),
-      );
-      window.localStorage.setItem(
-        LS_KEY_PENDING_PRIMARY_LANGUAGES,
-        JSON.stringify(normalizedPrimaryLanguages),
-      );
-      if (formattedBirthDate) {
-        window.localStorage.setItem(LS_KEY_PENDING_BIRTH_DATE, formattedBirthDate);
-      }
-      if (discoverySource) {
-        window.localStorage.setItem(LS_KEY_PENDING_DISCOVERY_SOURCE, discoverySource);
-      }
-      if (gender) {
-        window.localStorage.setItem(LS_KEY_PENDING_GENDER, gender);
-      }
-      if (usagePurpose) {
-        window.localStorage.setItem(LS_KEY_PENDING_USAGE_PURPOSE, usagePurpose);
-        if (usagePurposeNote) {
-          window.localStorage.setItem(LS_KEY_PENDING_USAGE_PURPOSE_NOTE, usagePurposeNote);
-        } else {
-          window.localStorage.removeItem(LS_KEY_PENDING_USAGE_PURPOSE_NOTE);
-        }
-      }
-      if (interestLanguages.length > 0) {
-        window.localStorage.setItem(LS_KEY_PENDING_INTEREST_LANGUAGES, JSON.stringify(interestLanguages));
-      }
-    } catch {
-      // Ignore storage failures; the onboarding modal will simply reopen next launch.
-    }
+    const {
+      languageCode,
+      defaultConversationLanguages: normalizedTargets,
+      primaryLanguages: normalizedPrimaryLanguages,
+      formattedBirthDate,
+      gender,
+      discoverySource,
+      usagePurpose,
+      usagePurposeNote,
+      interestLanguages,
+    } = persistLanguageOnboardingChoice(payload);
 
     let savedPrimaryLanguages: string[] = normalizedPrimaryLanguages;
     let savedDefaultLanguages: string[] = normalizedTargets;
@@ -5508,11 +5453,7 @@ export default function ConversationList({
       }
     }
 
-    try {
-      window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, "1");
-    } catch {
-      // Ignore storage failures; the onboarding modal will simply reopen next launch.
-    }
+    markLanguageOnboardingConfirmed();
 
     defaultConversationLanguagesSyncVersionRef.current += 1;
     setPreferredDisplayLanguages(savedPrimaryLanguages);

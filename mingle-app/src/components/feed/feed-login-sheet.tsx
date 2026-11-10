@@ -1,11 +1,26 @@
 "use client";
 
+import { storeAppLocale } from "@/components/app-locale-preference-sync";
+import type { LanguageOnboardingConfirmPayload } from "@/components/LivePhoneDemo/LanguageOnboardingModal";
+import {
+  resolveOnboardingDefaultLanguage,
+  resolveUiLocaleForLanguage,
+} from "@/components/LivePhoneDemo/language-onboarding.logic";
+import {
+  hasConfirmedLanguageOnboarding,
+  markLanguageOnboardingConfirmed,
+  persistLanguageOnboardingChoice,
+} from "@/components/LivePhoneDemo/language-onboarding.storage";
+import { readPersistedLivePhoneDemoPreferences } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import SlideSurface from "@/components/slide-surface";
 import type { AppDictionary, AppLocale } from "@/i18n";
+import { deriveDefaultSttLanguagesForLocale } from "@/lib/stt-languages";
 import { Loader2, X } from "lucide-react";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
+// Only a first-time visitor who opens the gate ever needs the onboarding screens.
+const LanguageOnboardingModal = lazy(() => import("@/components/LivePhoneDemo/LanguageOnboardingModal"));
 
 type FeedLoginSheetProps = {
   /** The return path while open (post, viewer or compose); null when closed. */
@@ -27,6 +42,11 @@ type FeedLoginSheetProps = {
  * so a like, comment or compose that needed an account resumes where it began.
  * Unlike the conversation tab, the feed is readable signed out, so this gate
  * can be closed.
+ *
+ * The feed is the app's first screen and needs no onboarding to read, so a
+ * visitor can reach this gate before ever seeing the onboarding screens the
+ * conversation tab opens with. They run here first (and can be closed, which
+ * closes the gate), so an account is never created without them.
  */
 export default function FeedLoginSheet({
   returnTo,
@@ -38,8 +58,41 @@ export default function FeedLoginSheet({
   notice = null,
   onClose,
 }: FeedLoginSheetProps) {
-  const open = returnTo !== null;
+  const gateOpen = returnTo !== null;
+  // Bumped when onboarding finishes here; the storage read below is the source of truth.
+  const [onboardingRevision, setOnboardingRevision] = useState(0);
+  const needsOnboarding = useMemo(
+    () => gateOpen && !hasConfirmedLanguageOnboarding(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gateOpen, onboardingRevision],
+  );
+  const onboardingDefaultLanguage = useMemo(() => {
+    if (!needsOnboarding) return "";
+    const persisted = readPersistedLivePhoneDemoPreferences(deriveDefaultSttLanguagesForLocale(locale));
+    return resolveOnboardingDefaultLanguage(persisted.selectedLanguages, locale);
+  }, [locale, needsOnboarding]);
+  const handleOnboardingConfirm = useCallback((payload: LanguageOnboardingConfirmPayload) => {
+    const choice = persistLanguageOnboardingChoice(payload);
+    markLanguageOnboardingConfirmed();
+    // The sign-in screen stays in the current language; the stored choice takes
+    // over on the navigation that follows sign-in (AppLocalePreferenceSync).
+    storeAppLocale(resolveUiLocaleForLanguage(choice.defaultConversationLanguages[0] ?? choice.languageCode));
+    setOnboardingRevision((revision) => revision + 1);
+  }, []);
+  const open = gateOpen && !needsOnboarding;
   return (
+    <>
+    {needsOnboarding ? (
+      <Suspense fallback={null}>
+        <LanguageOnboardingModal
+          dismissible
+          onClose={onClose}
+          initialLanguage={onboardingDefaultLanguage}
+          uiLocale={locale}
+          onConfirm={handleOnboardingConfirm}
+        />
+      </Suspense>
+    ) : null}
     <SlideSurface
       open={open}
       onClose={onClose}
@@ -77,5 +130,6 @@ export default function FeedLoginSheet({
         </>
       ) : null}
     </SlideSurface>
+    </>
   );
 }
