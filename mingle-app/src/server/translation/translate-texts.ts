@@ -30,14 +30,16 @@ import { extractJsonText, resolveJsonProvider } from '@/server/llm/generate-json
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite'
-// Translation is on the live conversation path, so both providers always run on their fast
-// tier. There is deliberately no switch back to the standard tier.
+// Only used when TRANSLATE_PROVIDER=gemini is set without TRANSLATE_MODEL.
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite'
+// The fast tier runs only for live conversation translation (`TranslateContext.fast`, set by
+// the finalize handler). Posts, comments, language detection, retranslation and operator text
+// run on the standard tier.
 // Gemini Priority inference: top-level `serviceTier` on generateContent. Gemma has no
 // Priority tier, so it is only sent for Gemini models.
 const GEMINI_TRANSLATION_SERVICE_TIER = 'priority'
-// OpenAI Fast mode ('priority' is the same tier under its earlier name). Sent on every
-// request of the `openai` provider (GPT-6 Luna); qwen via OpenRouter never gets it.
+// OpenAI Fast mode ('priority' is the same tier under its earlier name), for the `openai`
+// provider (GPT-6 Luna) only; qwen via OpenRouter never gets it.
 const OPENAI_TRANSLATION_SERVICE_TIER = 'priority'
 const DEFAULT_QWEN_MODEL = 'Qwen/Qwen3.5-9B'
 const DEFAULT_DASHSCOPE_QWEN_MODEL = 'Qwen3.5-9B'
@@ -217,6 +219,8 @@ export type TranslateContext = {
   languageHints?: string[]
   immediatePreviousTurn: RecentTurnContext | null
   isFinal: boolean
+  /** Live conversation translation: run on the provider's fast tier. Everything else leaves it off. */
+  fast?: boolean
   systemPromptOverride?: string
   userPromptOverride?: string
   /**
@@ -246,10 +250,10 @@ type GeminiTranslationRequest = GenerateContentRequest & {
   serviceTier?: typeof GEMINI_TRANSLATION_SERVICE_TIER
 }
 
-function buildGeminiTranslationRequest(userPrompt: string): GeminiTranslationRequest {
+function buildGeminiTranslationRequest(userPrompt: string, fast: boolean): GeminiTranslationRequest {
   return {
     contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-    serviceTier: GEMINI_TRANSLATION_SERVICE_TIER,
+    ...(fast ? { serviceTier: GEMINI_TRANSLATION_SERVICE_TIER } : {}),
   }
 }
 
@@ -368,7 +372,7 @@ export function isGoogleGenerativeProviderConfig(
 }
 
 function resolveTranslationProvider(): TranslationProvider {
-  return normalizeTranslationProvider(readTranslateEnv('TRANSLATE_PROVIDER')) || 'gemini'
+  return normalizeTranslationProvider(readTranslateEnv('TRANSLATE_PROVIDER')) || 'openai'
 }
 
 function resolveOpenAICompatibleBaseUrl(provider: TranslationProvider): string {
@@ -1062,7 +1066,7 @@ export async function translateWithGemini(
     },
   })
 
-  const request = buildGeminiTranslationRequest(userPrompt)
+  const request = buildGeminiTranslationRequest(userPrompt, ctx.fast === true)
   const generateContentWithRetry = async () => {
     try {
       return await model.generateContent(request)
@@ -1225,7 +1229,7 @@ async function createOpenAICompatibleCompletion(
   if (config.provider === 'openai') {
     payload.response_format = buildOpenRouterQwenJsonSchemaResponseFormat(ctx)
     payload.reasoning_effort = 'none'
-    payload.service_tier = OPENAI_TRANSLATION_SERVICE_TIER
+    if (ctx.fast) payload.service_tier = OPENAI_TRANSLATION_SERVICE_TIER
   }
 
   if (config.extraBody) {

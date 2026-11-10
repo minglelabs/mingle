@@ -183,7 +183,7 @@ describe('account preferences client cache', () => {
   })
 
   it('keeps an early settings edit without replacing a new account model seeded by the server', () => {
-    const local = { ...buildPreferences(), translationModel: 'gemini-2.5-flash-lite' as const }
+    const local = { ...buildPreferences(), translationModel: 'claude-haiku-5-5' as const }
     const server = { ...local, translationModel: 'gpt-6-luna' as const }
     edit(local, { ...local, textSizeLevel: 3 })
 
@@ -197,7 +197,7 @@ describe('account preferences client cache', () => {
   })
 
   it('preserves a model explicitly chosen during a new account hydration', () => {
-    const local = { ...buildPreferences(), translationModel: 'gemini-2.5-flash-lite' as const }
+    const local = { ...buildPreferences(), translationModel: 'claude-haiku-5-5' as const }
     const server = { ...local, translationModel: 'gpt-6-luna' as const }
     edit(local, { ...local, translationModel: 'gpt-6-luna' })
 

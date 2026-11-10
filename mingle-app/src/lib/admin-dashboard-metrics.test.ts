@@ -495,7 +495,7 @@ describe("buildTranslationModelSeries", () => {
     expect(series[1].points.map((point) => point.value)).toEqual([0, 5, 1]);
   });
 
-  it("orders series by TRANSLATION_MODEL_OPTIONS with 기타 last, whatever the row order or volume", () => {
+  it("orders series by TRANSLATION_MODEL_OPTIONS, then retired models, with 기타 last, whatever the row order or volume", () => {
     const series = buildTranslationModelSeries([
       { day: "2026-08-02", model: "unknown", value: 900 },
       { day: "2026-08-02", model: "gpt-6-luna", value: 500 },
@@ -504,9 +504,10 @@ describe("buildTranslationModelSeries", () => {
     ], dayKeys);
 
     expect(series.map((entry) => entry.label)).toEqual([
-      "gemini-2.5-flash-lite",
       "gpt-6-luna",
       "claude-haiku-5-5",
+      // Retired: its past messages keep their own series instead of folding into GPT-6 Luna.
+      "gemini-2.5-flash-lite",
       "기타",
     ]);
   });
@@ -536,8 +537,8 @@ describe("buildTranslationModelSeries", () => {
     ], dayKeys);
 
     expect(series.map((entry) => [entry.key, entry.total, entry.share])).toEqual([
-      ["gemini-2.5-flash-lite", 40, 0.4],
       ["gpt-6-luna", 50, 0.5],
+      ["gemini-2.5-flash-lite", 40, 0.4],
       ["other", 10, 0.1],
     ]);
   });

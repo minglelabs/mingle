@@ -1,6 +1,9 @@
 import {
+  RETIRED_TRANSLATION_MODELS,
   TRANSLATION_MODEL_OPTIONS,
+  normalizeRetiredTranslationModel,
   normalizeSelectableTranslationModel,
+  type RetiredTranslationModel,
   type UserSelectableTranslationModel,
 } from "@/lib/translation-models";
 
@@ -453,7 +456,10 @@ export const OTHER_TRANSLATION_MODEL_SERIES_KEY = "other";
 export const OTHER_TRANSLATION_MODEL_SERIES_LABEL = "기타";
 
 /** A selectable model's value, or the "기타" pool. */
-export type TranslationModelSeriesKey = UserSelectableTranslationModel | typeof OTHER_TRANSLATION_MODEL_SERIES_KEY;
+export type TranslationModelSeriesKey =
+  | UserSelectableTranslationModel
+  | RetiredTranslationModel
+  | typeof OTHER_TRANSLATION_MODEL_SERIES_KEY;
 
 /** One day's message count for one reported app_messages.translation_model string, as
  * the query returns it (case- and space-folded, not yet canonicalized). */
@@ -471,7 +477,9 @@ export type TranslationModelSeries = {
 
 /**
  * Folds raw per-day translation_model counts into one series per selectable model, in
- * TRANSLATION_MODEL_OPTIONS order, with every unrecognized value pooled into a trailing
+ * TRANSLATION_MODEL_OPTIONS order, then one per retired model (RETIRED_TRANSLATION_MODELS:
+ * its past messages keep their own series instead of folding into the model that replaced
+ * it), with every unrecognized value pooled into a trailing
  * "기타" series. Raw strings are canonicalized here with the app's own normalizer rather
  * than in SQL, so legacy aliases (e.g. "openai/gpt-6-luna") land on their model. Series
  * with no message in the range are dropped; the rest are zero-filled over dayKeys, since
@@ -484,9 +492,11 @@ export function buildTranslationModelSeries(
   const optionKeys = new Set<string>(TRANSLATION_MODEL_OPTIONS.map((option) => option.value));
   const countsByKey = new Map<TranslationModelSeriesKey, Map<string, number>>();
   for (const row of rows) {
+    const retired = normalizeRetiredTranslationModel(row.model);
     const canonical = normalizeSelectableTranslationModel(row.model);
     // A canonical value without an option would otherwise vanish from every series.
-    const key = canonical && optionKeys.has(canonical) ? canonical : OTHER_TRANSLATION_MODEL_SERIES_KEY;
+    const key: TranslationModelSeriesKey = retired
+      ?? (canonical && optionKeys.has(canonical) ? canonical : OTHER_TRANSLATION_MODEL_SERIES_KEY);
     const countsByDay = countsByKey.get(key) ?? new Map<string, number>();
     countsByDay.set(row.day, (countsByDay.get(row.day) ?? 0) + row.value);
     countsByKey.set(key, countsByDay);
@@ -494,6 +504,7 @@ export function buildTranslationModelSeries(
 
   const slots: { key: TranslationModelSeriesKey; label: string }[] = [
     ...TRANSLATION_MODEL_OPTIONS.map((option) => ({ key: option.value, label: option.label })),
+    ...RETIRED_TRANSLATION_MODELS.map((model) => ({ key: model, label: model })),
     { key: OTHER_TRANSLATION_MODEL_SERIES_KEY, label: OTHER_TRANSLATION_MODEL_SERIES_LABEL },
   ];
   const series = slots

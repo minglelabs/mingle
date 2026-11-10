@@ -261,7 +261,6 @@ async function resolveSelectedTranslationModel(
 // next of these (skipping the selected one and any whose API key is missing).
 const TRANSLATION_FALLBACK_MODELS: UserSelectableTranslationModel[] = [
   'gpt-6-luna',
-  'gemini-2.5-flash-lite',
   'claude-haiku-5-5',
 ]
 
@@ -538,6 +537,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     immediatePreviousTurn,
     currentTurnPreviousState,
     isFinal,
+    // Live conversation translation: always on the fast tier.
+    fast: true,
     requestMeta,
     ...(bubbleTailPlan ? {
       bubbleTail: {
