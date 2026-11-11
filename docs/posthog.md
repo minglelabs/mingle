@@ -47,6 +47,31 @@ CJK character is included only as a one-character diagnostic token so repeated
 letter searches can be identified. Account and target user IDs are sent only
 as SHA-256 digests.
 
+### Invite ticket funnel
+
+Main metric: weekly active cross-language conversation pairs. The invite
+funnel, in order (`inviter_digest` is a SHA-256 of the inviter's account id;
+no name, code or link is sent):
+
+| Step | Event | Sent by | Properties |
+| --- | --- | --- | --- |
+| Ticket made | `mingle_invite_ticket_created` | browser, on copy or share | `method` (`copy`/`share`) |
+| Link opened | `mingle_invite_link_opened` | browser, `/i/{code}` page | `platform`, `valid` |
+| Install pressed | `mingle_invite_install_clicked` | browser, `/i/{code}` page | `platform`, `store` |
+| Invite reached the app | `mingle_invite_received` | browser (WebView) | `source` (`link`/`install_referrer`) |
+| Signed up through it | `mingle_invite_accepted` | server | `invite_source` (`link`/`install_referrer`/`code`), `reward_coins`, `inviter_digest` |
+| Room opened | `mingle_invite_room_opened` | browser (WebView) | `source`, `rewarded` |
+| First chat in one room | `mingle_invite_first_chat` | server | `inviter_digest`, `bonus_coins` |
+| Talked again within 7 days | `mingle_invite_rechat_7d` | server | `inviter_digest`, `hours_since_first_chat` |
+
+An install is only seen directly on Android (`mingle_invite_received` with
+`source: install_referrer`); iOS has no install referrer, so there the install
+step is read from `mingle_invite_install_clicked` followed by
+`mingle_invite_accepted`. "First chat" means both people have sent a message in
+the same room; "talked again" is a message 12 hours to 7 days after that. Link
+previews fetched by messengers do not run the page script, so they do not
+count as opens.
+
 It deliberately excludes source text, translated text, full URLs and query
 parameters, IP addresses, user-agent strings, session keys, access tokens, and
 arbitrary client metadata. It does not send raw search text, names, or handles.

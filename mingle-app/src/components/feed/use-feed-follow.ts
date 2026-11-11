@@ -1,5 +1,6 @@
 "use client";
 
+import { requestProfileBasics } from "@/lib/profile-basics";
 import { isAccountRestrictedResponse } from "@/lib/account-restriction";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -99,9 +100,15 @@ export function useFeedFollow(options: UseFeedFollowOptions): UseFeedFollowRetur
     }
 
     pendingRef.current = true;
-    setLocal("pending");
 
     void (async () => {
+      // Gender and birth date are asked before the first follow; closing the
+      // question drops the follow.
+      if (!(await requestProfileBasics())) {
+        pendingRef.current = false;
+        return;
+      }
+      setLocal("pending");
       try {
         const res = await fetch(buildClientApiPath(`/users/${encodeURIComponent(authorId)}/follow`), {
           method: "POST",

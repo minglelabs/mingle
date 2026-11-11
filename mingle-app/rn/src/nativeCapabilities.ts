@@ -10,6 +10,9 @@
  * (lowering other apps' volume meanwhile); absent or false means the web plays
  * them itself. iOS shells always played natively, so the web keeps doing that
  * there even when the flag is absent.
+ * `contacts` is true when the shell can read the address book and open a
+ * written text message (`native_contacts_request`, `native_sms_compose`);
+ * absent or false means the contact-sync screen offers neither.
  */
 export type NativeShellCapabilities = {
   type: 'capabilities';
@@ -17,6 +20,7 @@ export type NativeShellCapabilities = {
   audioRoute: boolean;
   deviceAudioCapture: boolean;
   nativeTts: boolean;
+  contacts: boolean;
 };
 
 // The capabilities message is sent once per load end and a room usually mounts
@@ -27,6 +31,7 @@ export function buildNativeShellCapabilities(options: {
   audioRoute: boolean;
   deviceAudioCapture?: boolean;
   nativeTts?: boolean;
+  contacts?: boolean;
 }): NativeShellCapabilities {
   return {
     type: 'capabilities',
@@ -34,5 +39,6 @@ export function buildNativeShellCapabilities(options: {
     audioRoute: options.audioRoute === true,
     deviceAudioCapture: options.deviceAudioCapture === true,
     nativeTts: options.nativeTts === true,
+    contacts: options.contacts === true,
   };
 }
