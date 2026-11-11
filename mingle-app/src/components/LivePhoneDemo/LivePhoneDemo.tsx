@@ -6235,72 +6235,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     void handleStartRecording()
   }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning, sttCaptureSource])
 
-  // Voice talk and STT are one mic, owned by the Start/Stop button.
-  // - Joining a call turns STT on too: speech becomes the room's messages
-  //   (the call panel has no text of its own) and the voice is sent as well.
-  // - While in a call, Stop mutes the call's mic and Start unmutes it.
-  // - Leaving the call stops STT only when the call was what started it.
+  // Voice talk and speech-to-text are separate features with separate switches.
+  // - Joining or leaving a call never starts or stops speech-to-text, and
+  //   never touches speaker / earphone mode. The Start/Stop button and the
+  //   speaker button mean the same thing in a call as outside one.
+  // - The call's own mic is the panel's mic button (listen only when off).
+  // - Captions and the interpreted voice come only from speech-to-text, so a
+  //   viewer in a call with it off is told so in the panel.
   const voiceTalkConnected = voiceTalkState.connected
-  const voiceTalkWasConnectedRef = useRef(false)
-  const voiceTalkStartedSttRef = useRef(false)
-  useEffect(() => {
-    const wasConnected = voiceTalkWasConnectedRef.current
-    voiceTalkWasConnectedRef.current = voiceTalkConnected
-    if (voiceTalkConnected && !wasConnected) {
-      if (!isSttSessionRunning && !startPreparationInFlightRef.current) {
-        voiceTalkStartedSttRef.current = true
-        void handleStartRecording()
-      }
-    } else if (!voiceTalkConnected && wasConnected) {
-      if (voiceTalkStartedSttRef.current && isSttSessionRunning) void handleStopRecording()
-      voiceTalkStartedSttRef.current = false
-    }
-  }, [handleStartRecording, handleStopRecording, isSttSessionRunning, voiceTalkConnected])
-  // The call's mic is its own switch (the panel's mic button). Speech-to-text
-  // going on or off never moves it: voice without captions and captions
-  // without voice are both allowed.
   useEffect(() => {
     if (!voiceTalkConnected) return
     setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly: voiceTalkListenOnly }))
   }, [voiceTalkConnected, voiceTalkListenOnly])
-  // Joining a call also turns speaker / earphone mode on (the interpreted
-  // voice), the way it starts speech-to-text: everything a call needs is on at
-  // once, and each part can be switched off by itself. Leaving turns off only
-  // what the call turned on and the viewer did not touch since.
-  const voiceTalkStartedSpeakerModeRef = useRef(false)
-  const voiceTalkSpeakerModeWasConnectedRef = useRef(false)
-  const earphoneModeControlVisible = earphoneModeGate.controlVisible
-  useEffect(() => {
-    const wasConnected = voiceTalkSpeakerModeWasConnectedRef.current
-    voiceTalkSpeakerModeWasConnectedRef.current = voiceTalkConnected
-    if (voiceTalkConnected && !wasConnected) {
-      if (earphoneModeControlVisible && !getEarphoneModePreferenceSnapshot()) {
-        voiceTalkStartedSpeakerModeRef.current = true
-        // Turned on without a question asked: never start screen recording from it.
-        setSttCaptureSourcePick('microphone')
-        writeEarphoneModeEnabled(true)
-        requestNativeAudioRoute()
-      }
-    } else if (!voiceTalkConnected && wasConnected) {
-      if (voiceTalkStartedSpeakerModeRef.current && getEarphoneModePreferenceSnapshot()) writeEarphoneModeEnabled(false)
-      voiceTalkStartedSpeakerModeRef.current = false
-    }
-  }, [earphoneModeControlVisible, voiceTalkConnected])
-  // Switched off by hand during the call: the call no longer owns it.
-  useEffect(() => {
-    if (!earphoneModeEnabled) voiceTalkStartedSpeakerModeRef.current = false
-  }, [earphoneModeEnabled])
   // A new call starts with the mic on.
   useEffect(() => {
     if (!voiceTalkState.joined) setVoiceTalkListenOnly(false)
   }, [voiceTalkState.joined])
-  // Stopping STT by hand during a call: the call no longer owns that session.
-  const voiceTalkSttWasBusyRef = useRef(false)
-  useEffect(() => {
-    const busy = isSttSessionRunning || isPreparingStart
-    if (voiceTalkSttWasBusyRef.current && !busy) voiceTalkStartedSttRef.current = false
-    voiceTalkSttWasBusyRef.current = busy
-  }, [isPreparingStart, isSttSessionRunning])
 
   const confirmScreenCaptureNotice = useCallback(() => {
     screenCaptureNoticeAcknowledgedRef.current = true
@@ -8124,6 +8074,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             leaveSignal={voiceTalkLeaveSignal}
             listenOnly={voiceTalkListenOnly}
             onListenOnlyChange={setVoiceTalkListenOnly}
+            captionsOn={isSttSessionRunning || isPreparingStart}
           />
         ) : null}
 

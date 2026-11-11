@@ -5,11 +5,11 @@
 // top bar with up to 8 seats; drag it up (or tap the handle) to fold it into a
 // slim bar.
 //
-// Voice talk and the room's speech-to-text are separate switches. Joining a
-// call turns both on (and speaker mode, the interpreted voice); after that
-// the panel's mic button owns the voice sent into the call, and the room's
-// Start/Stop button owns speech-to-text (the text and its translation). What
-// people say shows as the room's messages only while their speech-to-text is on.
+// Voice talk and the room's speech-to-text are separate features: a call
+// never starts or stops speech-to-text. The panel's mic button owns the voice
+// sent into the call; the room's Start/Stop button owns speech-to-text (the
+// text and its translation). What people say shows as the room's messages
+// only while their speech-to-text is on, and the panel says so when it is off.
 //
 // The call itself runs in the native app (LiveKit audio). This panel only
 // draws it and sends button presses over the RN bridge (see
@@ -62,6 +62,7 @@ const COPY = {
     listenOnly: '듣기만 하는 중',
     leaveTitle: '보이스톡에서 나갈까요?',
     cancel: '취소',
+    captionsOffHint: '자막·통역은 꺼져 있어요. 켜려면 아래 시작 버튼을 누르세요.',
   },
   en: {
     start: 'Voice talk',
@@ -83,6 +84,7 @@ const COPY = {
     listenOnly: 'Listening only',
     leaveTitle: 'Leave voice talk?',
     cancel: 'Cancel',
+    captionsOffHint: 'Captions and interpretation are off. Press Start below to turn them on.',
   },
 }
 
@@ -139,6 +141,8 @@ export type VoiceTalkPanelProps = {
   /** Listen only: in a seat, sending no voice. Owned by the room (it drives the mic). */
   listenOnly?: boolean
   onListenOnlyChange?: (listenOnly: boolean) => void
+  /** The room's speech-to-text is running. Off in a call means voice only: the panel says so. */
+  captionsOn?: boolean
 }
 
 export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
@@ -392,6 +396,12 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
               </div>
 
               {error ? <p className="px-3 pb-2 text-[0.8rem] text-rose-600">{error}</p> : null}
+
+              {joined && props.captionsOn === false ? (
+                <p data-qa="voice-talk-captions-off-hint" className="px-3 pb-2 text-center text-[0.76rem] text-gray-500">
+                  {copy.captionsOffHint}
+                </p>
+              ) : null}
 
               {joined ? (
                 <div className="flex items-center justify-center gap-2 border-t border-gray-100 px-3 py-2">

@@ -50,16 +50,18 @@ describe('voice talk and STT are separate switches', () => {
   const panelSource = readFileSync(new URL('./VoiceTalkPanel.tsx', import.meta.url), 'utf8')
 
   it('keeps the call panel free of its own text; its mic button is the listen-only switch', () => {
-    expect(panelSource).not.toContain('captions')
+    // No caption list of its own (what people say is the room's messages); it only says when captions are off.
+    expect(panelSource).not.toContain('captions.map')
+    expect(panelSource).not.toContain('snapshot.captions')
     expect(panelSource).not.toContain('toggleMic')
     expect(panelSource).toContain('export function setVoiceTalkMic(on: boolean)')
     expect(panelSource).toContain('data-qa="voice-talk-mic-toggle"')
   })
 
-  it('starts STT when a call connects and stops only what the call started', () => {
+  it('does not start or stop STT when a call connects or ends', () => {
     const block = between(liveDemoSource, 'const voiceTalkConnected = voiceTalkState.connected', 'const confirmScreenCaptureNotice')
-    expect(block).toContain('voiceTalkStartedSttRef.current = true\n        void handleStartRecording()')
-    expect(block).toContain('if (voiceTalkStartedSttRef.current && isSttSessionRunning) void handleStopRecording()')
+    expect(block).not.toContain('handleStartRecording')
+    expect(block).not.toContain('handleStopRecording')
   })
 
   it('drives the call mic from the listen-only switch alone', () => {

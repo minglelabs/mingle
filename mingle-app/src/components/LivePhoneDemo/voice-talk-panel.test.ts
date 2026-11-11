@@ -13,39 +13,38 @@ describe('voice talk mic', () => {
     expect(resolveVoiceTalkMic({ listenOnly: true })).toBe(false)
   })
 
-  it('is not moved by speech-to-text going on or off', () => {
-    const micEffect = liveDemoSource.slice(
-      liveDemoSource.indexOf("// The call's mic is its own switch"),
-      liveDemoSource.indexOf('// Joining a call also turns speaker / earphone mode on'),
-    )
-    expect(micEffect).toContain('setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly: voiceTalkListenOnly }))')
-    expect(micEffect).toContain('}, [voiceTalkConnected, voiceTalkListenOnly])')
-    expect(micEffect).not.toContain('isSttSessionRunning')
-    expect(micEffect).not.toContain('handleStopRecording')
-  })
-
   it('starts every call with the mic on', () => {
     expect(liveDemoSource).toContain('if (!voiceTalkState.joined) setVoiceTalkListenOnly(false)')
   })
 })
 
-describe('joining a call turns everything on', () => {
+describe('a call and speech-to-text are separate', () => {
   const block = liveDemoSource.slice(
-    liveDemoSource.indexOf('const voiceTalkConnected = voiceTalkState.connected'),
-    liveDemoSource.indexOf('// Stopping STT by hand during a call'),
+    liveDemoSource.indexOf('// Voice talk and speech-to-text are separate features with separate switches.'),
+    liveDemoSource.indexOf('const confirmScreenCaptureNotice = useCallback'),
   )
 
-  it('starts speech-to-text, and stops on leaving only what the call started', () => {
-    expect(block).toContain('voiceTalkStartedSttRef.current = true\n        void handleStartRecording()')
-    expect(block).toContain('if (voiceTalkStartedSttRef.current && isSttSessionRunning) void handleStopRecording()')
+  it('never starts or stops speech-to-text when a call is joined or left', () => {
+    expect(block.length).toBeGreaterThan(0)
+    expect(block).not.toContain('handleStartRecording')
+    expect(block).not.toContain('handleStopRecording')
+    expect(block).not.toContain('isSttSessionRunning')
   })
 
-  it('turns speaker mode on without starting screen recording, and off again only if the call turned it on', () => {
-    expect(block).toContain('if (earphoneModeControlVisible && !getEarphoneModePreferenceSnapshot()) {')
-    expect(block).toContain("setSttCaptureSourcePick('microphone')\n        writeEarphoneModeEnabled(true)")
-    expect(block).toContain('if (voiceTalkStartedSpeakerModeRef.current && getEarphoneModePreferenceSnapshot()) writeEarphoneModeEnabled(false)')
-    // Switched off by hand during the call: leaving does not touch it.
-    expect(block).toContain('if (!earphoneModeEnabled) voiceTalkStartedSpeakerModeRef.current = false')
+  it('never switches speaker / earphone mode', () => {
+    expect(block).not.toContain('writeEarphoneModeEnabled')
+    expect(block).not.toContain('setSttCaptureSourcePick')
+  })
+
+  it('moves the call mic only by the listen-only switch', () => {
+    expect(block).toContain('setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly: voiceTalkListenOnly }))')
+    expect(block).toContain('}, [voiceTalkConnected, voiceTalkListenOnly])')
+  })
+
+  it('tells a viewer in a call that captions and interpretation are off', () => {
+    expect(liveDemoSource).toContain('captionsOn={isSttSessionRunning || isPreparingStart}')
+    expect(panelSource).toContain('{joined && props.captionsOn === false ? (')
+    expect(panelSource).toContain("captionsOffHint: '자막·통역은 꺼져 있어요. 켜려면 아래 시작 버튼을 누르세요.'")
   })
 
   it('runs the echo canceller while in a call, so the other voices are not transcribed as mine', () => {
