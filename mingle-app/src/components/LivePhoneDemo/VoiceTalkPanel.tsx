@@ -25,6 +25,7 @@ import { buildClientApiPath } from '@/lib/api-contract'
 import { useRoomPresence } from '@/lib/room-presence'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import { VOICE_TALK_MAX_SEATS, voiceTalkCopy } from '@/i18n/voice-talk-copy'
+import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
 
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = VOICE_TALK_MAX_SEATS
@@ -231,7 +232,15 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const [startPrompt, setStartPrompt] = useState(false)
   // A call this phone declined is not offered again by itself; its message in
   // the room still joins it.
-  const [declinedCallId, setDeclinedCallId] = useState<string | null>(null)
+  // Kept on the device too: a declined call is not offered again after a restart.
+  const [declined, setDeclined] = useState<{ conversationId: string, callId: string | null } | null>(null)
+  const declinedCallId = declined && declined.conversationId === conversationId
+    ? declined.callId
+    : readDeclinedInvite('voice-talk', conversationId)
+  const setDeclinedCallId = useCallback((callId: string | null) => {
+    writeDeclinedInvite('voice-talk', conversationId, callId)
+    setDeclined({ conversationId, callId })
+  }, [conversationId])
 
   const joined = phase === 'connecting' || phase === 'connected'
   // The phase as the event handler below needs it (it outlives a render).
@@ -346,7 +355,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   // Decline the call that just started: it is not offered again by itself.
   const decline = useCallback(() => {
     if (call) setDeclinedCallId(call.id)
-  }, [call])
+  }, [call, setDeclinedCallId])
 
   const leave = useCallback(() => {
     setConfirmLeave(false)
@@ -363,7 +372,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
       if (localId) setCall({ ...call, participants: call.participants.filter((p) => p.userId !== localId) })
     }
     post({ type: 'native_voice_close' })
-  }, [call, conversationId, onListenOnlyChange, room, viewerUserId])
+  }, [call, conversationId, onListenOnlyChange, room, setDeclinedCallId, viewerUserId])
 
   // Seats: who is in the call (live LiveKit view when joined, else the API's).
   const seats = useMemo(() => {

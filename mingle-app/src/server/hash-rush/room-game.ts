@@ -30,8 +30,13 @@ export interface HashRushGameStore {
   touch(channelId: string, input: { sessionId: string; now: Date; cutoff: Date; revive: boolean }): Promise<boolean>;
 }
 
+/** A last-seen time this far ahead of now is not one any phone sent: a game left with it is over. */
+export const HASH_RUSH_FUTURE_SLACK_MS = 60_000;
+
 export function isHashRushGameLive(record: HashRushGameRecord | null, now: Date): record is HashRushGameRecord & { sessionId: string } {
-  return !!record?.sessionId && !!record.activeAt && record.activeAt.getTime() >= now.getTime() - HASH_RUSH_LIVE_WINDOW_MS;
+  if (!record?.sessionId || !record.activeAt) return false;
+  const at = record.activeAt.getTime();
+  return at >= now.getTime() - HASH_RUSH_LIVE_WINDOW_MS && at <= now.getTime() + HASH_RUSH_FUTURE_SLACK_MS;
 }
 
 export type HashRushJoinResult = {
@@ -93,7 +98,8 @@ export const prismaHashRushGameStore: HashRushGameStore = {
       UPDATE "app"."app_conversation_channels"
       SET "hash_rush_session_id" = ${sessionId}, "hash_rush_started_by_user_id" = ${userId}, "hash_rush_active_at" = ${utc(now)}
       WHERE "id" = ${channelId}
-        AND ("hash_rush_session_id" IS NULL OR "hash_rush_active_at" IS NULL OR "hash_rush_active_at" < ${utc(cutoff)})`;
+        AND ("hash_rush_session_id" IS NULL OR "hash_rush_active_at" IS NULL OR "hash_rush_active_at" < ${utc(cutoff)}
+          OR "hash_rush_active_at" > ${utc(new Date(now.getTime() + HASH_RUSH_FUTURE_SLACK_MS))})`;
     return count > 0;
   },
   async touch(channelId, { sessionId, now, cutoff, revive }) {

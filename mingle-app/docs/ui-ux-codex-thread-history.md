@@ -2,6 +2,11 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-12 — 초대 카드: 끝난 게임은 안 뜨고, 거절은 앱을 다시 켜도 유지
+
+- Id: `2026-11-12-invite-cards-ended-and-declined`
+- The Hash Rush invite card kept coming back after the game was over: a heartbeat written before the time-zone fix left the room's game "last seen" hours in the future, so it looked live until then. A last-seen time more than a minute ahead of now now counts as over (and a new game may replace it); the live rooms list uses the same rule. A declined invite card, for Hash Rush and for voice talk, is now remembered on the device per room: closing and reopening the app does not bring it back for that game or call. The room's message (`참여하기`) and the room menu still join it; a new game or call offers a card again. Web and server only. Physical-device verification pending.
+
 ## 2026-11-12 — 보이스톡 자막: 끊긴 줄이 화면에 남던 문제
 
 - Id: `2026-11-12-voice-talk-caption-drafts-age-out`

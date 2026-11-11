@@ -40,3 +40,12 @@ describe("a room's Hash Rush game", () => {
     expect(back).toEqual({ sessionId: game.sessionId, startedByUserId: "a", started: false });
   });
 });
+
+describe("a game time from the future", () => {
+  it("is not a live game: one written hours ahead (a time zone slip) is over", () => {
+    const now = new Date("2026-11-11T15:00:00.000Z");
+    const record = { sessionId: "s1", startedByUserId: "u1", activeAt: new Date(now.getTime() + 9 * 60 * 60_000) };
+    expect(isHashRushGameLive(record, now)).toBe(false);
+    expect(isHashRushGameLive({ ...record, activeAt: new Date(now.getTime() + 2_000) }, now)).toBe(true);
+  });
+});

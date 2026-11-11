@@ -291,6 +291,7 @@ import HashRushHowToPage from '@/features/hash-rush/HashRushHowToPage'
 import HashRushRankingPage from '@/features/hash-rush/HashRushRankingPage'
 import { HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/config'
 import { buildVoiceCaptionClientMessageId } from '@/lib/voice-caption'
+import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
 import { liveRoomsCopy } from '@/i18n/live-rooms-copy'
 import { formatRoomCode } from '@/lib/room-code'
 import { buildHashRushChatEntries } from './hash-rush-room-chat'
@@ -7303,7 +7304,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     latestAnnouncedSessionId: latestAnnouncedHashRushSessionId,
   })
   const hashRushLiveSessionId = hashRushRoomGame?.sessionId ?? null
-  const [declinedHashRushSessionId, setDeclinedHashRushSessionId] = useState<string | null>(null)
+  // The game this viewer turned down in this room: not offered again, also
+  // after the app restarts (kept on the device).
+  const [declinedHashRush, setDeclinedHashRush] = useState<{ conversationId: string | null, sessionId: string | null } | null>(null)
+  const declinedHashRushSessionId = declinedHashRush && declinedHashRush.conversationId === conversationId
+    ? declinedHashRush.sessionId
+    : readDeclinedInvite('hash-rush', conversationId)
+  const setDeclinedHashRushSessionId = useCallback((sessionId: string | null) => {
+    writeDeclinedInvite('hash-rush', conversationId, sessionId)
+    setDeclinedHashRush({ conversationId: conversationId ?? null, sessionId })
+  }, [conversationId])
   const enterHashRushGame = useCallback(() => {
     setHashRushGameActive(true)
     setHashRushGameOpen(true)
@@ -7316,7 +7326,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setHashRushGameOpen(false)
     setHashRushGameActive(false)
     setHashRushGameChatMode(null)
-  }, [hashRushLiveSessionId])
+  }, [hashRushLiveSessionId, setDeclinedHashRushSessionId])
   // The Hash Rush page's main button: it was pressed on purpose, so no second question.
   const handleHashRushPageEnter = useCallback(() => {
     requestCloseMenuPanel()

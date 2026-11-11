@@ -4046,7 +4046,8 @@ export async function listLiveRooms(viewerUserId: string | null, now: Date = new
       select: { channelId: true, _count: { select: { participants: { where: { leftAt: null } } } } },
     }).catch(() => []),
     prisma.appConversationChannel.findMany({
-      where: { hashRushActiveAt: { gte: new Date(now.getTime() - HASH_RUSH_ACTIVE_WINDOW_MS) } },
+      // A time far ahead of now is not a live game (see room-game.ts).
+      where: { hashRushActiveAt: { gte: new Date(now.getTime() - HASH_RUSH_ACTIVE_WINDOW_MS), lte: new Date(now.getTime() + 60_000) } },
       select: { id: true },
     }),
   ]);

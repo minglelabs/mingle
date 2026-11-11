@@ -56,6 +56,9 @@ history:
    (`hash-rush-incoming`) low on the screen; both `hash-rush-incoming-decline` and `hash-rush-incoming-join` respond to
    one tap (it did nothing on an iPhone 11 before). `나가기` (`hash-rush-game-quit`) asks once, then ends the game for
    that phone and returns to the room.
+10. On the other device, decline the invite card, close the app completely and open the room again: the card does not
+    come back for that game (the room message's `참여하기` still joins). When every player has left, the card stops
+    showing within a minute (the game is over), and the next new game offers a card again.
 
 ## Oracle (pass when)
 

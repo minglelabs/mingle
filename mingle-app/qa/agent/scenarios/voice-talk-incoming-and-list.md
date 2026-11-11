@@ -40,6 +40,10 @@ LiveKit, so the server drops the seat after its grace period; do the steps withi
 8. The second account leaves (`POST .../voice/leave`). Within a few seconds the list badge goes away without a
    manual refresh.
 
+Declined calls stay declined:
+- Decline the incoming card, close the app completely, reopen the room while the call is still live: no card for
+  that call (the room message still joins). A later new call offers a card again.
+
 ## Oracle (pass when)
 
 - The push names the starter, in the recipient's language, and opens that room (T9).
