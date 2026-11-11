@@ -301,6 +301,75 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     expect(purchase).toMatchObject({ platform: 'web', status: 'refunded', environment: 'sandbox', priceCurrency: 'USD', priceAmountMicros: 9_990_000n })
   })
 
+  it('gifts purchased coins only, keeps a 10% fee, and never sends the same gift twice', async () => {
+    const purchases = await import('@/server/coins/purchases')
+    const gifts = await import('@/server/coins/gifts')
+    const makeUser = async () => (await prisma.user.create({ data: { handle: `gift${randomUUID().replace(/-/g, '').slice(0, 20)}` }, select: { id: true } })).id
+    const [senderId, recipientId, blockedId] = [await makeUser(), await makeUser(), await makeUser()]
+    try {
+      // 1,000 free (daily refill) + 10,600 purchased.
+      await wallet.getCoinWallet(senderId)
+      const storeTransactionId = `tx-${randomUUID()}`
+      await purchases.grantVerifiedPurchase(senderId, {
+        platform: 'ios' as const,
+        storeTransactionId,
+        storeOriginalTransactionId: null,
+        storeProductId: 'coin_10000',
+        environment: 'sandbox' as const,
+        priceAmountMicros: 9_990_000n,
+        priceCurrency: 'USD',
+        storefrontCountry: 'USA',
+        rawPayload: { test: true },
+      })
+      expect((await gifts.getCoinGiftInfo(senderId)).giftableCoins).toBe(10_600)
+
+      // Free coins do not count: 11,000 is more than was bought.
+      await expect(gifts.sendCoinGift({ senderId, recipientId, coins: 11_000, idempotencyKey: 'too-much' }))
+        .rejects.toMatchObject({ code: 'gift_insufficient_paid_balance', giftableCoins: 10_600 })
+
+      const sent = await gifts.sendCoinGift({ senderId, recipientId, coins: 600, idempotencyKey: 'g1' })
+      expect(sent).toMatchObject({ duplicate: false, sentCoins: 600, feeCoins: 60, receivedCoins: 540, giftableCoins: 10_000 })
+      expect(sent.wallet).toMatchObject({ freeBalance: 1000, paidBalance: 10_000 })
+      const again = await gifts.sendCoinGift({ senderId, recipientId, coins: 600, idempotencyKey: 'g1' })
+      expect(again).toMatchObject({ duplicate: true, giftableCoins: 10_000 })
+
+      const received = await prisma.appCoinWallet.findUniqueOrThrow({ where: { userId: recipientId } })
+      expect(received.paidBalanceMicro).toBe(540n * COIN)
+      expect(received.freeBalanceMicro).toBe(0n)
+      // Receiving a gift is not a visit: the recipient's own daily cycle has not started.
+      expect(received.lastDailyGrantAt).toBeNull()
+
+      // Hash received as a gift cannot be passed on.
+      await expect(gifts.sendCoinGift({ senderId: recipientId, recipientId: senderId, coins: 1, idempotencyKey: 'back' }))
+        .rejects.toMatchObject({ code: 'gift_insufficient_paid_balance' })
+
+      await prisma.userBlock.create({ data: { blockerId: blockedId, blockedId: senderId } })
+      await expect(gifts.sendCoinGift({ senderId, recipientId: blockedId, coins: 1, idempotencyKey: 'blocked' }))
+        .rejects.toMatchObject({ code: 'gift_recipient_unavailable' })
+      await expect(gifts.sendCoinGift({ senderId, recipientId: 'no-such-user', coins: 1, idempotencyKey: 'missing' }))
+        .rejects.toMatchObject({ code: 'gift_recipient_unavailable' })
+
+      const history = await (await import('@/server/coins/queries')).getCoinHistory(senderId, null)
+      expect(history.items[0]).toMatchObject({ type: 'removal', reason: 'gift_sent', coins: 600 })
+
+      // Refunding the purchase also takes the gifted Hash back from the recipient, once.
+      const paidOf = async (userId: string) => (await prisma.appCoinWallet.findUniqueOrThrow({ where: { userId } })).paidBalanceMicro
+      expect(await purchases.refundPurchase(storeTransactionId)).toBe('refunded')
+      expect(await paidOf(senderId)).toBe(0n)
+      expect(await paidOf(recipientId)).toBe(0n)
+      expect(await purchases.refundPurchase(storeTransactionId)).toBe('already_refunded')
+      expect(await prisma.appCoinLedger.count({ where: { userId: recipientId, type: 'refund_clawback' } })).toBe(1)
+
+      for (const userId of [senderId, recipientId]) {
+        const total = await sums(userId)
+        expect(total.ledger).toBe(total.wallet)
+        expect(total.lots).toBe(total.wallet)
+      }
+    } finally {
+      await prisma.user.deleteMany({ where: { id: { in: [senderId, recipientId, blockedId] } } })
+    }
+  })
+
   it('lists store products per platform', async () => {
     const purchases = await import('@/server/coins/purchases')
     const products = await purchases.listCoinProducts('android')

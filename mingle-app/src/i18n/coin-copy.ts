@@ -4,7 +4,7 @@ import { resolvePrimaryUiLocale, type PrimaryUiLocale } from "@/i18n/mingle-loca
 // Copy for coins, shown to users as "Hash" (Korean "해씨", other languages
 // the word "hash" in their own script): balance chip, store, "out of coins" sheet, banners and the
 // usage screen (docs/coin-iap-spec.md 9). Placeholders: {free} {paid} {cap}
-// {time} {minutes} {coins} {stt} {tts}.
+// {time} {minutes} {coins} {stt} {tts} {name} {fee}.
 export type CoinCopy = {
   coin: string;
   storeTitle: string;
@@ -54,6 +54,19 @@ export type CoinCopy = {
   // Room participants list: Hash each member has spent in this room.
   roomUsageTitle: string;
   roomUsed: string;
+  // Gifting purchased Hash from another user's profile.
+  gift: string;
+  giftTitle: string;
+  giftAmountLabel: string;
+  giftAvailable: string;
+  giftRule: string;
+  giftFeeNotice: string;
+  giftNotEnough: string;
+  giftSuccess: string;
+  giftFailed: string;
+  sourceGiftReceived: string;
+  sourceGiftSent: string;
+  giftRefundNotice: string;
 };
 
 const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
@@ -64,7 +77,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "결제 중…", purchasePending: "승인 대기 중", purchaseSuccess: "해씨 {coins}개가 충전됐어요", purchaseFailed: "결제를 완료하지 못했어요",
     productsLoadError: "상품을 불러오지 못했어요", retry: "다시 시도", updateRequired: "앱을 업데이트하면 충전할 수 있어요",
     webUnavailable: "지금은 앱에서만 충전할 수 있어요", ttsCostNotice: "음성 통역을 켜면 해씨가 더 빨리 줄어요. 대화는 분당 약 {stt}해씨, 음성 통역을 켜면 분당 약 {tts}해씨예요.",
-    restore: "구매 복원", viewUsage: "사용 내역 보기", terms: "구매한 해씨는 만료되지 않으며, 환불은 스토어 정책을 따릅니다.",
+    restore: "구매 복원", viewUsage: "사용 내역 보기", terms: "구매한 해씨는 만료되지 않아요. 일부라도 사용하거나 선물한 패키지는 환불되지 않으며, 환불을 요청하면 사용 정보가 스토어에 전달돼요.",
     exhaustedTitle: "해씨를 다 썼어요", exhaustedBody: "번역과 통역을 계속하려면 해씨를 충전해 주세요.",
     exhaustedBanner: "해씨가 없어 번역과 통역이 멈췄어요", lowBanner: "해씨가 얼마 남지 않았어요", charge: "충전하기", close: "닫기",
     usedCoins: "사용한 해씨", rangeToday: "오늘", range7d: "7일", range30d: "30일",
@@ -72,6 +85,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "내역", sourceDailyFree: "무료 충전", sourcePurchase: "구매", sourceAdmin: "운영자 지급", sourceBonus: "보너스",
     sourceRefund: "환불", sourceExpired: "만료", conversationFallback: "대화", noHistory: "아직 내역이 없어요", loadMore: "더 보기",
     roomUsageTitle: "이 대화방에서 쓴 해씨", roomUsed: "{coins} 사용",
+    gift: "선물하기", giftTitle: "{name}님에게 해씨 선물하기", giftAmountLabel: "선물할 해씨", giftAvailable: "선물 가능 {coins}", giftRule: "구매한 해씨만 선물할 수 있어요. 무료로 받은 해씨는 선물할 수 없어요.",
+    giftFeeNotice: "수수료 {fee}%를 뺀 {coins}해씨가 전달돼요", giftNotEnough: "선물할 수 있는 해씨가 부족해요", giftSuccess: "{name}님에게 해씨 {coins}개를 선물했어요", giftFailed: "선물을 보내지 못했어요", sourceGiftReceived: "선물 받음", sourceGiftSent: "선물 보냄", giftRefundNotice: "선물한 해씨가 들어 있던 패키지는 환불되지 않아요.",
   },
   en: {
     coin: "Hash", storeTitle: "Hash Store", balanceLabel: "Your Hash", freePaid: "Free {free} · Purchased {paid}",
@@ -80,7 +95,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "Processing…", purchasePending: "Waiting for approval", purchaseSuccess: "{coins} Hash added", purchaseFailed: "The purchase could not be completed",
     productsLoadError: "Could not load the products", retry: "Try again", updateRequired: "Update the app to get Hash",
     webUnavailable: "Hash can only be bought in the app for now", ttsCostNotice: "Voice interpreting uses Hash faster. A conversation costs about {stt} Hash per minute, or about {tts} Hash per minute with voice interpreting on.",
-    restore: "Restore purchases", viewUsage: "View usage", terms: "Purchased Hash never expires. Refunds follow the store's policy.",
+    restore: "Restore purchases", viewUsage: "View usage", terms: "Purchased Hash never expires. A pack is not refundable once any of it has been used or gifted, and if you request a refund, its usage is shared with the store.",
     exhaustedTitle: "You're out of Hash", exhaustedBody: "Add Hash to keep translating and interpreting.",
     exhaustedBanner: "Translation and interpreting are paused: no Hash left", lowBanner: "You're running low on Hash", charge: "Get Hash", close: "Close",
     usedCoins: "Hash used", rangeToday: "Today", range7d: "7 days", range30d: "30 days",
@@ -88,6 +103,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "History", sourceDailyFree: "Free top-up", sourcePurchase: "Purchase", sourceAdmin: "From HashChat", sourceBonus: "Bonus",
     sourceRefund: "Refund", sourceExpired: "Expired", conversationFallback: "Conversation", noHistory: "No history yet", loadMore: "Show more",
     roomUsageTitle: "Hash used in this chat", roomUsed: "{coins} used",
+    gift: "Send a gift", giftTitle: "Gift Hash to {name}", giftAmountLabel: "Hash to gift", giftAvailable: "Giftable: {coins}", giftRule: "Only Hash you purchased can be gifted. Free Hash cannot be gifted.",
+    giftFeeNotice: "After a {fee}% fee, {coins} Hash will be delivered", giftNotEnough: "You don't have enough giftable Hash", giftSuccess: "You gifted {coins} Hash to {name}", giftFailed: "The gift could not be sent", sourceGiftReceived: "Gift received", sourceGiftSent: "Gift sent", giftRefundNotice: "A pack you gift Hash from can no longer be refunded.",
   },
   ja: {
     coin: "ハッシュ", storeTitle: "ハッシュストア", balanceLabel: "保有ハッシュ", freePaid: "無料 {free} · 購入 {paid}",
@@ -96,7 +113,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "処理中…", purchasePending: "承認待ち", purchaseSuccess: "{coins} ハッシュをチャージしました", purchaseFailed: "購入を完了できませんでした",
     productsLoadError: "商品を読み込めませんでした", retry: "再試行", updateRequired: "アプリを更新するとチャージできます",
     webUnavailable: "現在はアプリでのみチャージできます", ttsCostNotice: "音声通訳をオンにするとハッシュの消費が速くなります。会話は1分あたり約{stt}ハッシュ、音声通訳をオンにすると1分あたり約{tts}ハッシュです。",
-    restore: "購入を復元", viewUsage: "利用履歴を見る", terms: "購入したハッシュに有効期限はありません。返金はストアのポリシーに従います。",
+    restore: "購入を復元", viewUsage: "利用履歴を見る", terms: "購入したハッシュに有効期限はありません。一部でも使用または贈ったパックは返金されず、返金をリクエストすると使用情報がストアに提供されます。",
     exhaustedTitle: "ハッシュがなくなりました", exhaustedBody: "翻訳と通訳を続けるにはハッシュをチャージしてください。",
     exhaustedBanner: "ハッシュがないため翻訳と通訳が停止しました", lowBanner: "ハッシュが残りわずかです", charge: "チャージする", close: "閉じる",
     usedCoins: "使用したハッシュ", rangeToday: "今日", range7d: "7日間", range30d: "30日間",
@@ -104,6 +121,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "履歴", sourceDailyFree: "無料チャージ", sourcePurchase: "購入", sourceAdmin: "運営からの付与", sourceBonus: "ボーナス",
     sourceRefund: "返金", sourceExpired: "期限切れ", conversationFallback: "会話", noHistory: "履歴はまだありません", loadMore: "もっと見る",
     roomUsageTitle: "このトークで使ったハッシュ", roomUsed: "{coins} 使用",
+    gift: "ギフトを贈る", giftTitle: "{name}さんにハッシュを贈る", giftAmountLabel: "贈るハッシュ", giftAvailable: "贈れるハッシュ {coins}", giftRule: "購入したハッシュのみ贈れます。無料でもらったハッシュは贈れません。",
+    giftFeeNotice: "手数料{fee}%を差し引いた{coins}ハッシュが届きます", giftNotEnough: "贈れるハッシュが足りません", giftSuccess: "{name}さんにハッシュを{coins}個贈りました", giftFailed: "ギフトを送信できませんでした", sourceGiftReceived: "ギフト受け取り", sourceGiftSent: "ギフト送信", giftRefundNotice: "ハッシュを贈ったパックは返金できなくなります。",
   },
   "zh-CN": {
     coin: "哈希", storeTitle: "哈希商店", balanceLabel: "持有哈希", freePaid: "免费 {free} · 充值 {paid}",
@@ -112,7 +131,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "处理中…", purchasePending: "等待批准", purchaseSuccess: "已充值 {coins} 哈希", purchaseFailed: "未能完成购买",
     productsLoadError: "无法加载商品", retry: "重试", updateRequired: "更新应用后即可充值",
     webUnavailable: "目前只能在应用内充值", ttsCostNotice: "开启语音口译后哈希消耗更快。对话每分钟约 {stt} 哈希，开启语音口译后每分钟约 {tts} 哈希。",
-    restore: "恢复购买", viewUsage: "查看使用记录", terms: "购买的哈希不会过期，退款遵循应用商店政策。",
+    restore: "恢复购买", viewUsage: "查看使用记录", terms: "购买的哈希不会过期。套餐一旦部分使用或赠送即不予退款；申请退款时，使用信息将提供给商店。",
     exhaustedTitle: "哈希已用完", exhaustedBody: "请充值哈希以继续使用翻译和口译。",
     exhaustedBanner: "哈希不足，翻译和口译已暂停", lowBanner: "哈希即将用完", charge: "去充值", close: "关闭",
     usedCoins: "已用哈希", rangeToday: "今天", range7d: "7天", range30d: "30天",
@@ -120,6 +139,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "记录", sourceDailyFree: "免费补充", sourcePurchase: "购买", sourceAdmin: "官方赠送", sourceBonus: "奖励",
     sourceRefund: "退款", sourceExpired: "已过期", conversationFallback: "对话", noHistory: "暂无记录", loadMore: "查看更多",
     roomUsageTitle: "本聊天已用哈希", roomUsed: "已用 {coins}",
+    gift: "赠送", giftTitle: "向{name}赠送哈希", giftAmountLabel: "赠送数量", giftAvailable: "可赠送 {coins}", giftRule: "只能赠送购买的哈希，免费获得的哈希无法赠送。",
+    giftFeeNotice: "扣除 {fee}% 手续费后，对方将收到 {coins} 哈希", giftNotEnough: "可赠送的哈希不足", giftSuccess: "已向{name}赠送 {coins} 哈希", giftFailed: "赠送失败", sourceGiftReceived: "收到赠送", sourceGiftSent: "已赠送", giftRefundNotice: "赠出哈希的套餐将无法退款。",
   },
   "zh-TW": {
     coin: "哈希", storeTitle: "哈希商店", balanceLabel: "持有哈希", freePaid: "免費 {free} · 儲值 {paid}",
@@ -128,7 +149,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "處理中…", purchasePending: "等待核准", purchaseSuccess: "已儲值 {coins} 哈希", purchaseFailed: "無法完成購買",
     productsLoadError: "無法載入商品", retry: "重試", updateRequired: "更新 App 後即可儲值",
     webUnavailable: "目前只能在 App 內儲值", ttsCostNotice: "開啟語音口譯後哈希消耗更快。對話每分鐘約 {stt} 哈希，開啟語音口譯後每分鐘約 {tts} 哈希。",
-    restore: "回復購買", viewUsage: "查看使用紀錄", terms: "購買的哈希不會過期，退款依商店政策辦理。",
+    restore: "回復購買", viewUsage: "查看使用紀錄", terms: "購買的哈希不會過期。套餐一旦部分使用或贈送即不予退款；申請退款時，使用資訊將提供給商店。",
     exhaustedTitle: "哈希已用完", exhaustedBody: "請儲值哈希以繼續使用翻譯和口譯。",
     exhaustedBanner: "哈希不足，翻譯和口譯已暫停", lowBanner: "哈希即將用完", charge: "前往儲值", close: "關閉",
     usedCoins: "已用哈希", rangeToday: "今天", range7d: "7天", range30d: "30天",
@@ -136,6 +157,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "紀錄", sourceDailyFree: "免費補充", sourcePurchase: "購買", sourceAdmin: "官方贈送", sourceBonus: "獎勵",
     sourceRefund: "退款", sourceExpired: "已過期", conversationFallback: "對話", noHistory: "尚無紀錄", loadMore: "查看更多",
     roomUsageTitle: "本聊天已用哈希", roomUsed: "已用 {coins}",
+    gift: "贈送", giftTitle: "向{name}贈送哈希", giftAmountLabel: "贈送數量", giftAvailable: "可贈送 {coins}", giftRule: "只能贈送購買的哈希，免費獲得的哈希無法贈送。",
+    giftFeeNotice: "扣除 {fee}% 手續費後，對方將收到 {coins} 哈希", giftNotEnough: "可贈送的哈希不足", giftSuccess: "已向{name}贈送 {coins} 哈希", giftFailed: "贈送失敗", sourceGiftReceived: "收到贈送", sourceGiftSent: "已贈送", giftRefundNotice: "贈出哈希的套餐將無法退款。",
   },
   fr: {
     coin: "Hash", storeTitle: "Boutique Hash", balanceLabel: "Vos Hash", freePaid: "Gratuits {free} · Achetés {paid}",
@@ -144,7 +167,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "Traitement…", purchasePending: "En attente d'approbation", purchaseSuccess: "{coins} Hash ajoutés", purchaseFailed: "L'achat n'a pas pu être finalisé",
     productsLoadError: "Impossible de charger les offres", retry: "Réessayer", updateRequired: "Mettez l'app à jour pour obtenir des Hash",
     webUnavailable: "Pour l'instant, les Hash s'achètent uniquement dans l'app", ttsCostNotice: "L'interprétation vocale consomme les Hash plus vite. Une conversation coûte environ {stt} Hash par minute, ou environ {tts} Hash par minute avec l'interprétation vocale.",
-    restore: "Restaurer les achats", viewUsage: "Voir l'utilisation", terms: "Les Hash achetés n'expirent pas. Les remboursements suivent la politique de la boutique.",
+    restore: "Restaurer les achats", viewUsage: "Voir l'utilisation", terms: "Les Hash achetés n’expirent pas. Un pack n’est plus remboursable dès qu’une partie a été utilisée ou offerte, et toute demande de remboursement transmet son utilisation à la boutique.",
     exhaustedTitle: "Vous n'avez plus de Hash", exhaustedBody: "Ajoutez des Hash pour continuer à traduire et interpréter.",
     exhaustedBanner: "Traduction et interprétation en pause : plus de Hash", lowBanner: "Il vous reste peu de Hash", charge: "Obtenir des Hash", close: "Fermer",
     usedCoins: "Hash utilisés", rangeToday: "Aujourd'hui", range7d: "7 jours", range30d: "30 jours",
@@ -152,6 +175,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Historique", sourceDailyFree: "Recharge gratuite", sourcePurchase: "Achat", sourceAdmin: "Offert par HashChat", sourceBonus: "Bonus",
     sourceRefund: "Remboursement", sourceExpired: "Expiré", conversationFallback: "Conversation", noHistory: "Aucun historique", loadMore: "Voir plus",
     roomUsageTitle: "Hash utilisés dans cette discussion", roomUsed: "{coins} utilisés",
+    gift: "Offrir", giftTitle: "Offrir des Hash à {name}", giftAmountLabel: "Hash à offrir", giftAvailable: "Offrables : {coins}", giftRule: "Seuls les Hash achetés peuvent être offerts. Les Hash gratuits ne peuvent pas l'être.",
+    giftFeeNotice: "Après {fee} % de frais, {coins} Hash seront remis", giftNotEnough: "Vous n'avez pas assez de Hash offrables", giftSuccess: "Vous avez offert {coins} Hash à {name}", giftFailed: "Le cadeau n'a pas pu être envoyé", sourceGiftReceived: "Cadeau reçu", sourceGiftSent: "Cadeau envoyé", giftRefundNotice: "Un pack dont vous offrez des Hash n’est plus remboursable.",
   },
   de: {
     coin: "Hash", storeTitle: "Hash-Shop", balanceLabel: "Deine Hash", freePaid: "Gratis {free} · Gekauft {paid}",
@@ -160,7 +185,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "Wird verarbeitet…", purchasePending: "Wartet auf Genehmigung", purchaseSuccess: "{coins} Hash hinzugefügt", purchaseFailed: "Der Kauf konnte nicht abgeschlossen werden",
     productsLoadError: "Angebote konnten nicht geladen werden", retry: "Erneut versuchen", updateRequired: "Aktualisiere die App, um Hash zu kaufen",
     webUnavailable: "Hash kann derzeit nur in der App gekauft werden", ttsCostNotice: "Sprachdolmetschen verbraucht Hash schneller. Ein Gespräch kostet etwa {stt} Hash pro Minute, mit Sprachdolmetschen etwa {tts} Hash pro Minute.",
-    restore: "Käufe wiederherstellen", viewUsage: "Nutzung ansehen", terms: "Gekaufte Hash verfallen nicht. Erstattungen richten sich nach den Store-Richtlinien.",
+    restore: "Käufe wiederherstellen", viewUsage: "Nutzung ansehen", terms: "Gekaufte Hash verfallen nicht. Ein Paket ist nicht erstattungsfähig, sobald ein Teil davon verwendet oder verschenkt wurde; bei einer Erstattungsanfrage wird seine Nutzung an den Store übermittelt.",
     exhaustedTitle: "Kein Hash mehr", exhaustedBody: "Lade Hash auf, um weiter zu übersetzen und zu dolmetschen.",
     exhaustedBanner: "Übersetzung und Dolmetschen pausiert: kein Hash", lowBanner: "Dein Hash geht zur Neige", charge: "Hash holen", close: "Schließen",
     usedCoins: "Verbrauchte Hash", rangeToday: "Heute", range7d: "7 Tage", range30d: "30 Tage",
@@ -168,6 +193,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Verlauf", sourceDailyFree: "Gratis-Auffüllung", sourcePurchase: "Kauf", sourceAdmin: "Von HashChat", sourceBonus: "Bonus",
     sourceRefund: "Erstattung", sourceExpired: "Abgelaufen", conversationFallback: "Unterhaltung", noHistory: "Noch kein Verlauf", loadMore: "Mehr anzeigen",
     roomUsageTitle: "In diesem Chat verbrauchte Hash", roomUsed: "{coins} verbraucht",
+    gift: "Verschenken", giftTitle: "Hash an {name} verschenken", giftAmountLabel: "Hash zum Verschenken", giftAvailable: "Verschenkbar: {coins}", giftRule: "Nur gekaufte Hash können verschenkt werden. Kostenlose Hash nicht.",
+    giftFeeNotice: "Nach {fee} % Gebühr kommen {coins} Hash an", giftNotEnough: "Du hast nicht genug verschenkbare Hash", giftSuccess: "Du hast {name} {coins} Hash geschenkt", giftFailed: "Das Geschenk konnte nicht gesendet werden", sourceGiftReceived: "Geschenk erhalten", sourceGiftSent: "Geschenk gesendet", giftRefundNotice: "Ein Paket, aus dem du Hash verschenkst, ist nicht mehr erstattungsfähig.",
   },
   es: {
     coin: "Hash", storeTitle: "Tienda de Hash", balanceLabel: "Tus Hash", freePaid: "Gratis {free} · Comprados {paid}",
@@ -176,7 +203,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "Procesando…", purchasePending: "Esperando aprobación", purchaseSuccess: "Se añadieron {coins} Hash", purchaseFailed: "No se pudo completar la compra",
     productsLoadError: "No se pudieron cargar los productos", retry: "Reintentar", updateRequired: "Actualiza la app para conseguir Hash",
     webUnavailable: "Por ahora los Hash solo se compran en la app", ttsCostNotice: "La interpretación por voz gasta Hash más rápido. Una conversación cuesta unos {stt} Hash por minuto, o unos {tts} Hash por minuto con la interpretación por voz.",
-    restore: "Restaurar compras", viewUsage: "Ver uso", terms: "Los Hash comprados no caducan. Los reembolsos siguen la política de la tienda.",
+    restore: "Restaurar compras", viewUsage: "Ver uso", terms: "Los Hash comprados no caducan. Un paquete no es reembolsable una vez usado o regalado en parte, y si solicitas un reembolso, su uso se comparte con la tienda.",
     exhaustedTitle: "Te quedaste sin Hash", exhaustedBody: "Añade Hash para seguir traduciendo e interpretando.",
     exhaustedBanner: "Traducción e interpretación en pausa: sin Hash", lowBanner: "Te quedan pocos Hash", charge: "Conseguir Hash", close: "Cerrar",
     usedCoins: "Hash usados", rangeToday: "Hoy", range7d: "7 días", range30d: "30 días",
@@ -184,6 +211,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Historial", sourceDailyFree: "Recarga gratis", sourcePurchase: "Compra", sourceAdmin: "Regalo de HashChat", sourceBonus: "Bono",
     sourceRefund: "Reembolso", sourceExpired: "Caducado", conversationFallback: "Conversación", noHistory: "Aún no hay historial", loadMore: "Ver más",
     roomUsageTitle: "Hash usados en este chat", roomUsed: "{coins} usados",
+    gift: "Regalar", giftTitle: "Regalar Hash a {name}", giftAmountLabel: "Hash para regalar", giftAvailable: "Regalables: {coins}", giftRule: "Solo puedes regalar Hash comprados. Los Hash gratuitos no se pueden regalar.",
+    giftFeeNotice: "Tras una comisión del {fee} %, se entregarán {coins} Hash", giftNotEnough: "No tienes suficientes Hash regalables", giftSuccess: "Regalaste {coins} Hash a {name}", giftFailed: "No se pudo enviar el regalo", sourceGiftReceived: "Regalo recibido", sourceGiftSent: "Regalo enviado", giftRefundNotice: "Un paquete del que regalas Hash ya no se puede reembolsar.",
   },
   pt: {
     coin: "Hash", storeTitle: "Loja de Hash", balanceLabel: "Seus Hash", freePaid: "Grátis {free} · Comprados {paid}",
@@ -192,7 +221,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "Processando…", purchasePending: "Aguardando aprovação", purchaseSuccess: "{coins} Hash adicionados", purchaseFailed: "Não foi possível concluir a compra",
     productsLoadError: "Não foi possível carregar os produtos", retry: "Tentar novamente", updateRequired: "Atualize o app para conseguir Hash",
     webUnavailable: "Por enquanto, os Hash só podem ser comprados no app", ttsCostNotice: "A interpretação por voz gasta Hash mais rápido. Uma conversa custa cerca de {stt} Hash por minuto, ou cerca de {tts} Hash por minuto com a interpretação por voz.",
-    restore: "Restaurar compras", viewUsage: "Ver uso", terms: "Hash comprados não expiram. Reembolsos seguem a política da loja.",
+    restore: "Restaurar compras", viewUsage: "Ver uso", terms: "Hash comprados não expiram. Um pacote não é reembolsável depois que qualquer parte dele foi usada ou presenteada, e ao pedir reembolso o uso é informado à loja.",
     exhaustedTitle: "Seus Hash acabaram", exhaustedBody: "Adicione Hash para continuar traduzindo e interpretando.",
     exhaustedBanner: "Tradução e interpretação pausadas: sem Hash", lowBanner: "Seus Hash estão acabando", charge: "Obter Hash", close: "Fechar",
     usedCoins: "Hash usados", rangeToday: "Hoje", range7d: "7 dias", range30d: "30 dias",
@@ -200,6 +229,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Histórico", sourceDailyFree: "Recarga grátis", sourcePurchase: "Compra", sourceAdmin: "Presente do HashChat", sourceBonus: "Bônus",
     sourceRefund: "Reembolso", sourceExpired: "Expirado", conversationFallback: "Conversa", noHistory: "Ainda não há histórico", loadMore: "Ver mais",
     roomUsageTitle: "Hash usados nesta conversa", roomUsed: "{coins} usados",
+    gift: "Presentear", giftTitle: "Presentear {name} com Hash", giftAmountLabel: "Hash para presentear", giftAvailable: "Disponível para presente: {coins}", giftRule: "Só é possível presentear Hash comprados. Hash gratuitos não podem ser presenteados.",
+    giftFeeNotice: "Após a taxa de {fee}%, {coins} Hash serão entregues", giftNotEnough: "Você não tem Hash suficientes para presentear", giftSuccess: "Você presenteou {name} com {coins} Hash", giftFailed: "Não foi possível enviar o presente", sourceGiftReceived: "Presente recebido", sourceGiftSent: "Presente enviado", giftRefundNotice: "Um pacote do qual você presenteia Hash não pode mais ser reembolsado.",
   },
   it: {
     coin: "Hash", storeTitle: "Negozio Hash", balanceLabel: "I tuoi Hash", freePaid: "Gratis {free} · Acquistati {paid}",
@@ -208,7 +239,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "Elaborazione…", purchasePending: "In attesa di approvazione", purchaseSuccess: "{coins} Hash aggiunti", purchaseFailed: "Impossibile completare l'acquisto",
     productsLoadError: "Impossibile caricare i prodotti", retry: "Riprova", updateRequired: "Aggiorna l'app per ottenere Hash",
     webUnavailable: "Per ora gli Hash si acquistano solo nell'app", ttsCostNotice: "L'interpretariato vocale consuma Hash più in fretta. Una conversazione costa circa {stt} Hash al minuto, o circa {tts} Hash al minuto con l'interpretariato vocale.",
-    restore: "Ripristina acquisti", viewUsage: "Vedi utilizzo", terms: "Gli Hash acquistati non scadono. I rimborsi seguono le regole dello store.",
+    restore: "Ripristina acquisti", viewUsage: "Vedi utilizzo", terms: "Gli Hash acquistati non scadono. Un pacchetto non è rimborsabile una volta utilizzato o regalato anche in parte; se chiedi un rimborso, il suo utilizzo viene comunicato allo store.",
     exhaustedTitle: "Hai finito gli Hash", exhaustedBody: "Aggiungi Hash per continuare a tradurre e interpretare.",
     exhaustedBanner: "Traduzione e interpretariato in pausa: Hash esauriti", lowBanner: "Gli Hash stanno per finire", charge: "Ottieni Hash", close: "Chiudi",
     usedCoins: "Hash usati", rangeToday: "Oggi", range7d: "7 giorni", range30d: "30 giorni",
@@ -216,6 +247,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Cronologia", sourceDailyFree: "Ricarica gratis", sourcePurchase: "Acquisto", sourceAdmin: "Regalo di HashChat", sourceBonus: "Bonus",
     sourceRefund: "Rimborso", sourceExpired: "Scaduto", conversationFallback: "Conversazione", noHistory: "Nessuna cronologia", loadMore: "Mostra altro",
     roomUsageTitle: "Hash usati in questa chat", roomUsed: "{coins} usati",
+    gift: "Regala", giftTitle: "Regala Hash a {name}", giftAmountLabel: "Hash da regalare", giftAvailable: "Regalabili: {coins}", giftRule: "Puoi regalare solo gli Hash acquistati. Gli Hash gratuiti non si possono regalare.",
+    giftFeeNotice: "Dopo una commissione del {fee}%, verranno consegnati {coins} Hash", giftNotEnough: "Non hai abbastanza Hash regalabili", giftSuccess: "Hai regalato {coins} Hash a {name}", giftFailed: "Impossibile inviare il regalo", sourceGiftReceived: "Regalo ricevuto", sourceGiftSent: "Regalo inviato", giftRefundNotice: "Un pacchetto da cui regali Hash non è più rimborsabile.",
   },
   ru: {
     coin: "Хэш", storeTitle: "Магазин Хэш", balanceLabel: "Ваш Хэш", freePaid: "Бесплатно {free} · Куплено {paid}",
@@ -224,7 +257,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "Обработка…", purchasePending: "Ожидает одобрения", purchaseSuccess: "Добавлено Хэш: {coins}", purchaseFailed: "Не удалось завершить покупку",
     productsLoadError: "Не удалось загрузить товары", retry: "Повторить", updateRequired: "Обновите приложение, чтобы пополнять Хэш",
     webUnavailable: "Пока Хэш можно купить только в приложении", ttsCostNotice: "С голосовым переводом Хэш расходуется быстрее. Разговор стоит около {stt} Хэш в минуту, а с голосовым переводом — около {tts} Хэш в минуту.",
-    restore: "Восстановить покупки", viewUsage: "Посмотреть расход", terms: "Купленный Хэш не сгорает. Возвраты выполняются по правилам магазина.",
+    restore: "Восстановить покупки", viewUsage: "Посмотреть расход", terms: "Купленный Хэш не сгорает. Пакет не подлежит возврату, если его часть использована или подарена; при запросе возврата сведения об использовании передаются магазину.",
     exhaustedTitle: "Хэш закончился", exhaustedBody: "Пополните Хэш, чтобы продолжить перевод.",
     exhaustedBanner: "Перевод приостановлен: Хэш закончился", lowBanner: "Хэш заканчивается", charge: "Пополнить", close: "Закрыть",
     usedCoins: "Потрачено Хэш", rangeToday: "Сегодня", range7d: "7 дней", range30d: "30 дней",
@@ -232,6 +265,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "История", sourceDailyFree: "Бесплатное пополнение", sourcePurchase: "Покупка", sourceAdmin: "Подарок от HashChat", sourceBonus: "Бонус",
     sourceRefund: "Возврат", sourceExpired: "Истекло", conversationFallback: "Разговор", noHistory: "Истории пока нет", loadMore: "Показать ещё",
     roomUsageTitle: "Хэш, потраченный в этом чате", roomUsed: "Потрачено {coins}",
+    gift: "Подарить", giftTitle: "Подарить Хэш: {name}", giftAmountLabel: "Сколько подарить", giftAvailable: "Доступно для подарка: {coins}", giftRule: "Дарить можно только купленный Хэш. Бесплатный Хэш подарить нельзя.",
+    giftFeeNotice: "За вычетом комиссии {fee}% будет доставлено {coins} Хэш", giftNotEnough: "Недостаточно Хэша для подарка", giftSuccess: "Вы подарили {coins} Хэш: {name}", giftFailed: "Не удалось отправить подарок", sourceGiftReceived: "Получен подарок", sourceGiftSent: "Отправлен подарок", giftRefundNotice: "Пакет, из которого вы дарите Хэш, больше нельзя вернуть.",
   },
   ar: {
     coin: "هاش", storeTitle: "متجر هاش", balanceLabel: "رصيدك من هاش", freePaid: "مجاني {free} · مشترى {paid}",
@@ -240,7 +275,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "جارٍ المعالجة…", purchasePending: "بانتظار الموافقة", purchaseSuccess: "تمت إضافة {coins} هاش", purchaseFailed: "تعذر إكمال الشراء",
     productsLoadError: "تعذر تحميل المنتجات", retry: "إعادة المحاولة", updateRequired: "حدّث التطبيق لشراء هاش",
     webUnavailable: "حاليًا يمكن شراء هاش من داخل التطبيق فقط", ttsCostNotice: "الترجمة الصوتية تستهلك هاش بسرعة أكبر. تكلف المحادثة نحو {stt} هاش في الدقيقة، ونحو {tts} هاش في الدقيقة مع تشغيل الترجمة الصوتية.",
-    restore: "استعادة المشتريات", viewUsage: "عرض الاستخدام", terms: "رصيد هاش المشترى لا تنتهي صلاحيته. الاسترداد يتبع سياسة المتجر.",
+    restore: "استعادة المشتريات", viewUsage: "عرض الاستخدام", terms: "لا تنتهي صلاحية الهاش المشترى. لا يمكن استرداد الحزمة بعد استخدام أي جزء منها أو إهدائه، وعند طلب الاسترداد تُرسل معلومات استخدامها إلى المتجر.",
     exhaustedTitle: "نفد رصيدك من هاش", exhaustedBody: "أضف هاش لمتابعة الترجمة والترجمة الفورية.",
     exhaustedBanner: "توقفت الترجمة والترجمة الفورية: لا يوجد هاش", lowBanner: "رصيدك من هاش على وشك النفاد", charge: "احصل على هاش", close: "إغلاق",
     usedCoins: "هاش المستخدم", rangeToday: "اليوم", range7d: "7 أيام", range30d: "30 يومًا",
@@ -248,6 +283,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "السجل", sourceDailyFree: "تعبئة مجانية", sourcePurchase: "شراء", sourceAdmin: "هدية من HashChat", sourceBonus: "مكافأة",
     sourceRefund: "استرداد", sourceExpired: "منتهية", conversationFallback: "محادثة", noHistory: "لا يوجد سجل بعد", loadMore: "عرض المزيد",
     roomUsageTitle: "هاش المستخدم في هذه المحادثة", roomUsed: "استخدم {coins}",
+    gift: "إهداء", giftTitle: "إهداء هاش إلى {name}", giftAmountLabel: "الهاش المراد إهداؤه", giftAvailable: "المتاح للإهداء: {coins}", giftRule: "يمكن إهداء الهاش الذي اشتريته فقط. لا يمكن إهداء الهاش المجاني.",
+    giftFeeNotice: "بعد خصم رسوم {fee}٪ سيصل {coins} هاش", giftNotEnough: "ليس لديك هاش كافٍ للإهداء", giftSuccess: "أهديت {coins} هاش إلى {name}", giftFailed: "تعذر إرسال الهدية", sourceGiftReceived: "هدية مستلمة", sourceGiftSent: "هدية مرسلة", giftRefundNotice: "لا يمكن استرداد الحزمة التي تهدي منها الهاش.",
   },
   hi: {
     coin: "हैश", storeTitle: "हैश स्टोर", balanceLabel: "आपके हैश", freePaid: "मुफ़्त {free} · खरीदे गए {paid}",
@@ -256,7 +293,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "प्रोसेस हो रहा है…", purchasePending: "मंज़ूरी की प्रतीक्षा", purchaseSuccess: "{coins} हैश जोड़े गए", purchaseFailed: "खरीदारी पूरी नहीं हो सकी",
     productsLoadError: "प्रोडक्ट लोड नहीं हो सके", retry: "फिर से कोशिश करें", updateRequired: "हैश पाने के लिए ऐप अपडेट करें",
     webUnavailable: "अभी हैश केवल ऐप में खरीदे जा सकते हैं", ttsCostNotice: "वॉइस इंटरप्रेटिंग चालू करने पर हैश तेज़ी से खर्च होते हैं। बातचीत में प्रति मिनट लगभग {stt} हैश लगते हैं, और वॉइस इंटरप्रेटिंग चालू होने पर प्रति मिनट लगभग {tts} हैश।",
-    restore: "खरीदारी बहाल करें", viewUsage: "उपयोग देखें", terms: "खरीदे गए हैश कभी समाप्त नहीं होते। रिफ़ंड स्टोर की नीति के अनुसार होते हैं।",
+    restore: "खरीदारी बहाल करें", viewUsage: "उपयोग देखें", terms: "खरीदे गए हैश की समय-सीमा समाप्त नहीं होती। पैक का कोई भी हिस्सा उपयोग या उपहार में देने के बाद रिफ़ंड नहीं होता, और रिफ़ंड माँगने पर उपयोग की जानकारी स्टोर को दी जाती है।",
     exhaustedTitle: "आपके हैश खत्म हो गए", exhaustedBody: "अनुवाद और इंटरप्रेटिंग जारी रखने के लिए हैश जोड़ें।",
     exhaustedBanner: "हैश न होने से अनुवाद और इंटरप्रेटिंग रुक गई है", lowBanner: "आपके हैश कम बचे हैं", charge: "हैश पाएं", close: "बंद करें",
     usedCoins: "इस्तेमाल किए गए हैश", rangeToday: "आज", range7d: "7 दिन", range30d: "30 दिन",
@@ -264,6 +301,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "इतिहास", sourceDailyFree: "मुफ़्त रीफ़िल", sourcePurchase: "खरीदारी", sourceAdmin: "HashChat की ओर से", sourceBonus: "बोनस",
     sourceRefund: "रिफ़ंड", sourceExpired: "समाप्त", conversationFallback: "बातचीत", noHistory: "अभी कोई इतिहास नहीं", loadMore: "और देखें",
     roomUsageTitle: "इस चैट में इस्तेमाल हुए हैश", roomUsed: "{coins} इस्तेमाल",
+    gift: "उपहार दें", giftTitle: "{name} को हैश उपहार दें", giftAmountLabel: "उपहार में देने वाले हैश", giftAvailable: "उपहार योग्य: {coins}", giftRule: "केवल खरीदे गए हैश उपहार में दिए जा सकते हैं। मुफ़्त हैश उपहार में नहीं दिए जा सकते।",
+    giftFeeNotice: "{fee}% शुल्क के बाद {coins} हैश पहुँचेंगे", giftNotEnough: "उपहार देने के लिए पर्याप्त हैश नहीं हैं", giftSuccess: "आपने {name} को {coins} हैश उपहार में दिए", giftFailed: "उपहार नहीं भेजा जा सका", sourceGiftReceived: "उपहार मिला", sourceGiftSent: "उपहार भेजा", giftRefundNotice: "जिस पैक से आप हैश उपहार में देते हैं, उसका रिफ़ंड नहीं हो सकता।",
   },
   th: {
     coin: "แฮช", storeTitle: "ร้านแฮช", balanceLabel: "แฮชของคุณ", freePaid: "ฟรี {free} · ซื้อ {paid}",
@@ -272,7 +311,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "กำลังดำเนินการ…", purchasePending: "รอการอนุมัติ", purchaseSuccess: "เติม {coins} แฮชแล้ว", purchaseFailed: "ทำรายการซื้อไม่สำเร็จ",
     productsLoadError: "โหลดสินค้าไม่สำเร็จ", retry: "ลองอีกครั้ง", updateRequired: "อัปเดตแอปเพื่อเติมแฮช",
     webUnavailable: "ตอนนี้ซื้อแฮชได้ในแอปเท่านั้น", ttsCostNotice: "เมื่อเปิดล่ามเสียง แฮชจะหมดเร็วขึ้น การสนทนาใช้ประมาณ {stt} แฮชต่อนาที และประมาณ {tts} แฮชต่อนาทีเมื่อเปิดล่ามเสียง",
-    restore: "กู้คืนการซื้อ", viewUsage: "ดูการใช้งาน", terms: "แฮชที่ซื้อไม่มีวันหมดอายุ การคืนเงินเป็นไปตามนโยบายของสโตร์",
+    restore: "กู้คืนการซื้อ", viewUsage: "ดูการใช้งาน", terms: "แฮชที่ซื้อไม่มีวันหมดอายุ แพ็กที่ใช้หรือส่งเป็นของขวัญไปแม้บางส่วนจะขอคืนเงินไม่ได้ และเมื่อขอคืนเงิน ข้อมูลการใช้งานจะถูกส่งให้ร้านค้า",
     exhaustedTitle: "แฮชหมดแล้ว", exhaustedBody: "เติมแฮชเพื่อแปลและล่ามต่อ",
     exhaustedBanner: "การแปลและล่ามหยุดชั่วคราวเพราะแฮชหมด", lowBanner: "แฮชใกล้หมดแล้ว", charge: "เติมแฮช", close: "ปิด",
     usedCoins: "แฮชที่ใช้ไป", rangeToday: "วันนี้", range7d: "7 วัน", range30d: "30 วัน",
@@ -280,6 +319,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "ประวัติ", sourceDailyFree: "เติมฟรี", sourcePurchase: "ซื้อ", sourceAdmin: "จาก HashChat", sourceBonus: "โบนัส",
     sourceRefund: "คืนเงิน", sourceExpired: "หมดอายุ", conversationFallback: "การสนทนา", noHistory: "ยังไม่มีประวัติ", loadMore: "ดูเพิ่มเติม",
     roomUsageTitle: "แฮชที่ใช้ในแชทนี้", roomUsed: "ใช้ไป {coins}",
+    gift: "ส่งของขวัญ", giftTitle: "ส่งแฮชเป็นของขวัญให้ {name}", giftAmountLabel: "จำนวนแฮชที่จะส่ง", giftAvailable: "ส่งเป็นของขวัญได้ {coins}", giftRule: "ส่งเป็นของขวัญได้เฉพาะแฮชที่ซื้อเท่านั้น แฮชที่ได้รับฟรีส่งไม่ได้",
+    giftFeeNotice: "หลังหักค่าธรรมเนียม {fee}% ผู้รับจะได้ {coins} แฮช", giftNotEnough: "แฮชที่ส่งเป็นของขวัญได้มีไม่พอ", giftSuccess: "คุณส่ง {coins} แฮชให้ {name} แล้ว", giftFailed: "ส่งของขวัญไม่สำเร็จ", sourceGiftReceived: "ได้รับของขวัญ", sourceGiftSent: "ส่งของขวัญ", giftRefundNotice: "แพ็กที่คุณส่งแฮชเป็นของขวัญจะขอคืนเงินไม่ได้อีก",
   },
   vi: {
     coin: "Hash", storeTitle: "Cửa hàng Hash", balanceLabel: "Hash của bạn", freePaid: "Miễn phí {free} · Đã mua {paid}",
@@ -288,7 +329,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     purchasing: "Đang xử lý…", purchasePending: "Đang chờ phê duyệt", purchaseSuccess: "Đã nạp {coins} Hash", purchaseFailed: "Không thể hoàn tất giao dịch",
     productsLoadError: "Không tải được sản phẩm", retry: "Thử lại", updateRequired: "Cập nhật ứng dụng để nạp Hash",
     webUnavailable: "Hiện chỉ có thể mua Hash trong ứng dụng", ttsCostNotice: "Bật phiên dịch giọng nói sẽ tốn Hash nhanh hơn. Trò chuyện tốn khoảng {stt} Hash mỗi phút, hoặc khoảng {tts} Hash mỗi phút khi bật phiên dịch giọng nói.",
-    restore: "Khôi phục giao dịch mua", viewUsage: "Xem mức sử dụng", terms: "Hash đã mua không hết hạn. Hoàn tiền theo chính sách của cửa hàng ứng dụng.",
+    restore: "Khôi phục giao dịch mua", viewUsage: "Xem mức sử dụng", terms: "Hash đã mua không hết hạn. Gói đã dùng hoặc tặng dù chỉ một phần sẽ không được hoàn tiền, và khi yêu cầu hoàn tiền, thông tin sử dụng sẽ được gửi cho cửa hàng.",
     exhaustedTitle: "Bạn đã hết Hash", exhaustedBody: "Nạp Hash để tiếp tục dịch và phiên dịch.",
     exhaustedBanner: "Dịch và phiên dịch đã tạm dừng vì hết Hash", lowBanner: "Bạn sắp hết Hash", charge: "Nạp Hash", close: "Đóng",
     usedCoins: "Hash đã dùng", rangeToday: "Hôm nay", range7d: "7 ngày", range30d: "30 ngày",
@@ -296,6 +337,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Lịch sử", sourceDailyFree: "Nạp miễn phí", sourcePurchase: "Mua", sourceAdmin: "HashChat tặng", sourceBonus: "Thưởng",
     sourceRefund: "Hoàn tiền", sourceExpired: "Hết hạn", conversationFallback: "Cuộc trò chuyện", noHistory: "Chưa có lịch sử", loadMore: "Xem thêm",
     roomUsageTitle: "Hash đã dùng trong cuộc trò chuyện này", roomUsed: "Đã dùng {coins}",
+    gift: "Tặng quà", giftTitle: "Tặng Hash cho {name}", giftAmountLabel: "Số Hash muốn tặng", giftAvailable: "Có thể tặng: {coins}", giftRule: "Chỉ có thể tặng Hash đã mua. Hash miễn phí không thể tặng.",
+    giftFeeNotice: "Sau khi trừ phí {fee}%, {coins} Hash sẽ được gửi đi", giftNotEnough: "Bạn không đủ Hash có thể tặng", giftSuccess: "Bạn đã tặng {coins} Hash cho {name}", giftFailed: "Không gửi được quà", sourceGiftReceived: "Nhận quà", sourceGiftSent: "Đã tặng quà", giftRefundNotice: "Gói mà bạn tặng Hash sẽ không thể hoàn tiền nữa.",
   },
 };
 

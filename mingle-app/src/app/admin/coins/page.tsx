@@ -40,6 +40,7 @@ const SOURCE_LABELS: Record<string, string> = {
   admin_grant: "어드민 충전",
   signup_bonus: "가입 보너스",
   refund_reversal: "환불 보정",
+  gift: "선물 받음",
 };
 const LEDGER_LABELS: Record<string, string> = {
   grant: "충전",
@@ -47,6 +48,7 @@ const LEDGER_LABELS: Record<string, string> = {
   expire: "만료",
   refund_clawback: "환불 회수",
   admin_revoke: "어드민 회수",
+  gift_sent: "선물 보냄",
   adjust: "조정",
 };
 const RESULT_MESSAGES: Record<string, string> = {

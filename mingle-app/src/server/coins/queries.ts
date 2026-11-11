@@ -113,10 +113,12 @@ export type CoinHistoryItem =
   | {
       id: string
       type: 'grant'
-      // daily_free | purchase | admin_grant | signup_bonus | refund_reversal
+      // daily_free | purchase | admin_grant | signup_bonus | refund_reversal | gift
       source: string
       coins: number
       at: string
+      // Gifts only: who sent it.
+      counterpart?: string | null
     }
   | {
       id: string
@@ -129,11 +131,13 @@ export type CoinHistoryItem =
     }
   | {
       id: string
-      // expire | refund_clawback | admin_revoke | adjust
+      // expire | refund_clawback | admin_revoke | adjust | gift_sent
       type: 'removal'
       reason: string
       coins: number
       at: string
+      // Gifts only: who received it.
+      counterpart?: string | null
     }
 
 const HISTORY_PAGE_SIZE = 100
@@ -174,6 +178,22 @@ export async function getCoinHistory(userId: string, cursor: string | null): Pro
     : []
   const titleBySessionKey = new Map(channels.map(channel => [channel.sessionKey, channel.title]))
 
+  // Gift rows name the other user.
+  const giftUserId = (meta: unknown): string | null => {
+    const value = meta as { fromUserId?: unknown; toUserId?: unknown } | null
+    const id = value?.fromUserId ?? value?.toUserId
+    return typeof id === 'string' ? id : null
+  }
+  const giftUserIds = [...new Set(rows.map(row => giftUserId(row.meta)).filter((id): id is string => Boolean(id)))]
+  const giftUsers = giftUserIds.length
+    ? await prisma.user.findMany({ where: { id: { in: giftUserIds } }, select: { id: true, name: true, handle: true } })
+    : []
+  const giftUserName = new Map(giftUsers.map(user => [user.id, user.name?.trim() || `@${user.handle}`]))
+  const counterpartOf = (meta: unknown) => {
+    const id = giftUserId(meta)
+    return id ? { counterpart: giftUserName.get(id) ?? null } : {}
+  }
+
   const items: Array<CoinHistoryItem | UsageGroup> = []
   const usageGroups = new Map<string, UsageGroup>()
   for (const row of rows) {
@@ -186,11 +206,12 @@ export async function getCoinHistory(userId: string, cursor: string | null): Pro
         source: typeof meta?.source === 'string' ? meta.source : 'admin_grant',
         coins: microToSpentCoins(row.amountMicro),
         at,
+        ...counterpartOf(row.meta),
       })
       continue
     }
     if (row.type !== 'spend') {
-      items.push({ id: row.id.toString(), type: 'removal', reason: row.type, coins: microToSpentCoins(row.amountMicro), at })
+      items.push({ id: row.id.toString(), type: 'removal', reason: row.type, coins: microToSpentCoins(row.amountMicro), at, ...counterpartOf(row.meta) })
       continue
     }
     const charge = row.usageChargeId ? chargeById.get(row.usageChargeId) : undefined
