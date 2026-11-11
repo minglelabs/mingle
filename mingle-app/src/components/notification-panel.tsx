@@ -1,5 +1,6 @@
 "use client";
 
+import { requestProfileBasics } from "@/lib/profile-basics";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { resolveLegalDocumentLocale } from "@/i18n/config";
 import { resolveNotificationCopy, type NotificationCopy } from "@/i18n/notification-copy";
@@ -434,6 +435,7 @@ export default function NotificationPanel({
   const handleFollowBack = useCallback(async (notification: NotificationRecord) => {
     const actor = notification.actors[0];
     if (!actor || notification.isFollowing || pendingFollowIds.has(notification.id)) return;
+    if (!(await requestProfileBasics())) return;
 
     setFollowErrorId(null);
     setPendingFollowIds((current) => new Set(current).add(notification.id));

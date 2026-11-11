@@ -1,5 +1,6 @@
 "use client";
 
+import { requestProfileBasics } from "@/lib/profile-basics";
 import ProfileBio from "@/components/profile-bio";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
 import type { AppDictionary, AppLocale } from "@/i18n";
@@ -373,9 +374,10 @@ export default function PublicUserProfileScreen({
 
   const handleToggleFollow = useCallback(async () => {
     if (isOwnProfile || !profile || isActionPending || profile.isBlocked) return;
+    const nextIsFollowing = !profile.isFollowing;
+    if (nextIsFollowing && !(await requestProfileBasics())) return;
     setIsActionPending(true);
     setActionError(false);
-    const nextIsFollowing = !profile.isFollowing;
     try {
       const response = await fetch(
         buildClientApiPath(`/users/${encodeURIComponent(profile.id)}/follow`),
@@ -448,6 +450,7 @@ export default function PublicUserProfileScreen({
 
   const handleMessage = useCallback(async () => {
     if (isOwnProfile || !profile || isMessagePending || profile.isBlocked) return;
+    if (!(await requestProfileBasics())) return;
     setIsMessagePending(true);
     setMessageError(false);
     try {
