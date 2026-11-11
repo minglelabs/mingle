@@ -168,8 +168,9 @@ class NativeSTTForegroundService : Service() {
     fun start(
       context: Context,
       deviceAudio: Boolean = false,
-      onDeviceAudioStarted: ((Throwable?) -> Unit)? = null,
       holder: String = HOLDER_STT,
+      // Last, so a trailing lambda lands here.
+      onDeviceAudioStarted: ((Throwable?) -> Unit)? = null,
     ) {
       val voiceCallOnly = synchronized(holders) {
         holders.add(holder)
