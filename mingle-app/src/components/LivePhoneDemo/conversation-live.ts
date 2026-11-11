@@ -289,7 +289,7 @@ export class LivePreviewSender {
         originalLang: item.utterance.originalLang, translations: item.utterance.translations,
         targetLanguages: item.utterance.targetLanguages,
         sequence, final: item.final })) item.lastSent = now
-      // At most four frames/second per room hook, even with many speakers.
+      // One frame per flush (every 100ms) per room hook, even with many speakers.
       break
     }
   }

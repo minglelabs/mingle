@@ -195,6 +195,9 @@ const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
 const PREVIOUS_BUBBLE_PIECE_WINDOW_MS = 10_000
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
+// Listeners see a streamed translation grow in steps this short. Unchanged
+// previews still go out once a second (LivePreviewSender).
+const LIVE_PREVIEW_FLUSH_INTERVAL_MS = 100
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
 let activeNativeSttOwnerKey: string | null = null
 let activeNativeSttOwnerLeaseId: string | null = null
@@ -4371,7 +4374,7 @@ export default function useRealtimeSTT({
       })
       // Also expires abandoned drafts if a sender disconnects mid-sentence.
       if (remotePreviews.expire()) setRemotePreviewVersion(v => v + 1)
-    }, 250)
+    }, LIVE_PREVIEW_FLUSH_INTERVAL_MS)
     const renewTimer = window.setInterval(() => {
       if (renewing || socket?.readyState !== WebSocket.OPEN) return
       renewing = true
