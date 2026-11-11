@@ -1,15 +1,19 @@
 "use client";
 
-import { Check, ChevronLeft, Copy, Gift, Loader2, MessageSquareText, Search, UserRound, Users, X } from "lucide-react";
+import { Check, ChevronLeft, Copy, Gift, Loader2, MessageSquareText, Search, ShieldCheck, UserRound, Users, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
 import SlideSurface from "@/components/slide-surface";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
+import { fillPhoneFriendsCopy, resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { refreshCoinWallet } from "@/lib/coin-wallet-client";
+import { matchContactsOnServer, type MatchedContact } from "@/lib/contact-match-client";
+import { formatHandle } from "@/lib/handles";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import {
   filterContacts,
@@ -24,6 +28,8 @@ import {
   type NativeContactsPermission,
 } from "@/lib/native-contacts";
 import { postNativeLocationSettings } from "@/lib/native-location";
+import { maskE164 } from "@/lib/phone-number";
+import { requestProfileBasics } from "@/lib/profile-basics";
 import {
   buildInviteLinkUrl,
   fillReferralInviteMessage,
@@ -98,6 +104,17 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
   const requestSequenceRef = useRef(0);
   const pendingRequestIdRef = useRef("");
 
+  // Friends already on HashChat: needs the user's own verified number, then
+  // the contacts' numbers are matched as hashes (see contact-match-client).
+  const phoneCopy = useMemo(() => resolvePhoneFriendsCopy(locale), [locale]);
+  // undefined: not read yet; null: no verified number.
+  const [ownPhone, setOwnPhone] = useState<string | null | undefined>(undefined);
+  const [verifySheetOpen, setVerifySheetOpen] = useState(false);
+  const [matches, setMatches] = useState<MatchedContact[] | null>(null);
+  const [isMatching, setIsMatching] = useState(false);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(() => new Set());
+  const [pendingFollowIds, setPendingFollowIds] = useState<Set<string>>(() => new Set());
+
   const senderName = session?.user?.name?.trim() || "HashChat";
 
   const inviteMessage = useMemo(() => {
@@ -139,6 +156,17 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
         }
       } catch {
         // The code card stays on its loading state; contacts still work.
+      }
+    })();
+
+    void (async () => {
+      try {
+        const response = await fetch(buildClientApiPath("/phone"), { cache: "no-store" });
+        if (!response.ok) return;
+        const body = await response.json() as { phoneE164?: unknown };
+        if (!cancelled) setOwnPhone(typeof body.phoneE164 === "string" ? body.phoneE164 : null);
+      } catch {
+        // No friend matching this time; inviting still works.
       }
     })();
 
@@ -246,7 +274,58 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
     });
   }, [inviteMessage]);
 
-  const filteredContacts = useMemo(() => filterContacts(contacts ?? [], query), [contacts, query]);
+  useEffect(() => {
+    if (!open || !contacts || !ownPhone) return;
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) setIsMatching(true); });
+    void matchContactsOnServer(contacts, ownPhone)
+      .then((found) => {
+        if (cancelled) return;
+        setMatches(found);
+        setFollowingIds(new Set(found.filter((match) => match.user.isFollowing).map((match) => match.user.userId)));
+      })
+      .catch(() => {
+        if (!cancelled) setMatches([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsMatching(false);
+      });
+    return () => { cancelled = true; };
+  }, [contacts, open, ownPhone]);
+
+  const handleFollow = useCallback(async (userId: string) => {
+    if (pendingFollowIds.has(userId) || followingIds.has(userId)) return;
+    if (!(await requestProfileBasics())) return;
+    setPendingFollowIds((current) => new Set(current).add(userId));
+    try {
+      const response = await fetch(buildClientApiPath(`/users/${encodeURIComponent(userId)}/follow`), { method: "POST" });
+      if (response.ok) setFollowingIds((current) => new Set(current).add(userId));
+      else toast(phoneCopy.errorGeneric);
+    } catch {
+      toast(phoneCopy.errorGeneric);
+    } finally {
+      setPendingFollowIds((current) => {
+        const next = new Set(current);
+        next.delete(userId);
+        return next;
+      });
+    }
+  }, [followingIds, pendingFollowIds, phoneCopy.errorGeneric]);
+
+  const handlePhoneVerified = useCallback((phoneE164: string) => {
+    setVerifySheetOpen(false);
+    setOwnPhone(phoneE164);
+    toast(phoneCopy.verifiedToast);
+    // Friend matching needs the address book too.
+    if (!contacts && nativeSupported && permission !== "blocked") loadContacts();
+  }, [contacts, loadContacts, nativeSupported, permission, phoneCopy.verifiedToast]);
+
+  // Contacts already on HashChat are listed above, not offered an invite.
+  const matchedContactIds = useMemo(() => new Set((matches ?? []).map((match) => match.contact.id)), [matches]);
+  const filteredContacts = useMemo(
+    () => filterContacts(contacts ?? [], query).filter((contact) => !matchedContactIds.has(contact.id)),
+    [contacts, matchedContactIds, query],
+  );
   const visibleContacts = filteredContacts.slice(0, visibleCount);
 
   const handleListScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
@@ -371,6 +450,88 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
           )}
         </section>
 
+        {nativeSupported && ownPhone !== undefined ? (
+          <section className="mt-4 rounded-2xl border border-gray-100 px-4 py-4" data-testid="contact-sync-friends">
+            {ownPhone === null ? (
+              <>
+                <div className="flex items-start gap-3">
+                  <ShieldCheck size={22} strokeWidth={2} className="mt-0.5 shrink-0 text-blue-600" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold leading-snug">{phoneCopy.findTitle}</p>
+                    <p className="mt-1 text-[13px] leading-relaxed text-gray-500">{phoneCopy.findBody}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVerifySheetOpen(true)}
+                  className="mt-3 flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 text-[14.5px] font-bold text-white transition active:bg-blue-700"
+                >
+                  {phoneCopy.verifyButton}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[15px] font-bold">
+                    {matches ? fillPhoneFriendsCopy(phoneCopy.friendsOnHashChat, { count: matches.length }) : phoneCopy.findTitle}
+                  </p>
+                  <p className="shrink-0 text-[12px] text-gray-400" dir="ltr">
+                    {fillPhoneFriendsCopy(phoneCopy.verifiedAs, { phone: maskE164(ownPhone) })}
+                  </p>
+                </div>
+                {!contacts ? null : isMatching ? (
+                  <p className="mt-3 flex items-center gap-2 text-[13px] text-gray-500">
+                    <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+                    {phoneCopy.matching}
+                  </p>
+                ) : matches && matches.length > 0 ? (
+                  <ul className="mt-1">
+                    {matches.map(({ contact, user }) => {
+                      const isFollowing = followingIds.has(user.userId);
+                      const isPending = pendingFollowIds.has(user.userId);
+                      return (
+                        <li key={user.userId} className="flex items-center gap-3 border-b border-gray-50 py-3 last:border-b-0">
+                          <div className="relative h-10 w-10 shrink-0">
+                            {user.image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={user.image} alt="" className="h-10 w-10 rounded-full object-cover" />
+                            ) : (
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100">
+                                <UserRound size={21} className="text-gray-400" aria-hidden="true" />
+                              </div>
+                            )}
+                            <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 border-white bg-emerald-500">
+                              <Check size={11} strokeWidth={3.4} className="text-white" aria-hidden="true" />
+                            </span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[15px] font-semibold">{contact.name}</p>
+                            <p className="truncate text-[13px] text-gray-500">
+                              {[user.name?.trim(), formatHandle(user.handle)].filter(Boolean).join(" · ")}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={isPending || isFollowing}
+                            onClick={() => void handleFollow(user.userId)}
+                            className={isFollowing
+                              ? "h-9 shrink-0 rounded-full border border-gray-200 px-4 text-[13.5px] font-semibold text-gray-500"
+                              : "flex h-9 min-w-[72px] shrink-0 items-center justify-center rounded-full bg-slate-950 px-4 text-[13.5px] font-semibold text-white transition active:opacity-80 disabled:opacity-60"}
+                          >
+                            {isPending ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : isFollowing ? phoneCopy.following : phoneCopy.follow}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : matches ? (
+                  <p className="mt-2 text-[13px] leading-relaxed text-gray-500">{phoneCopy.noMatches}</p>
+                ) : null}
+              </>
+            )}
+          </section>
+        ) : null}
+
         <section className="mt-4">
           {!nativeSupported ? (
             <p className="rounded-2xl bg-gray-50 px-4 py-4 text-center text-[13.5px] leading-relaxed text-gray-500">{copy.appOnly}</p>
@@ -458,6 +619,14 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
           </button>
         ) : null}
       </div>
+      {verifySheetOpen ? (
+        <PhoneVerifySheet
+          copy={phoneCopy}
+          locale={locale}
+          onClose={() => setVerifySheetOpen(false)}
+          onVerified={handlePhoneVerified}
+        />
+      ) : null}
     </SlideSurface>
   );
 }
