@@ -5,10 +5,11 @@
 // top bar with up to 8 seats; drag it up (or tap the handle) to fold it into a
 // slim bar.
 //
-// Voice talk and the room's speech-to-text are one mic: the room's Start/Stop
-// button owns it, the call only adds sending the voice. What people say shows
-// as the room's messages. The panel's mic button keeps a seat while sending
-// no voice (listen only); speech-to-text goes on as the room has it.
+// Voice talk and the room's speech-to-text are separate switches. Joining a
+// call turns both on (and speaker mode, the interpreted voice); after that
+// the panel's mic button owns the voice sent into the call, and the room's
+// Start/Stop button owns speech-to-text (the text and its translation). What
+// people say shows as the room's messages only while their speech-to-text is on.
 //
 // The call itself runs in the native app (LiveKit audio). This panel only
 // draws it and sends button presses over the RN bridge (see
@@ -106,14 +107,14 @@ function initial(name: string | null | undefined): string {
   return trimmed ? Array.from(trimmed)[0].toUpperCase() : '?'
 }
 
-/** The room's Start/Stop button drives the call's mic through this. */
+/** Switches the voice this phone sends into the call. */
 export function setVoiceTalkMic(on: boolean) {
   post({ type: 'native_voice_set', payload: { mic: on } })
 }
 
-/** The call's mic: on while the room's speech-to-text runs, unless the viewer only listens. */
-export function resolveVoiceTalkMic(input: { sttBusy: boolean; listenOnly: boolean }): boolean {
-  return input.sttBusy && !input.listenOnly
+/** The call's mic: on unless the viewer only listens. The room's speech-to-text does not move it. */
+export function resolveVoiceTalkMic(input: { listenOnly: boolean }): boolean {
+  return !input.listenOnly
 }
 
 /** What a press on the room's voice talk button does: open the panel, or ask to leave a call this phone is in. */

@@ -5025,7 +5025,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTtsAudio: handleTtsAudio,
     onTtsCanceled: handleTtsCanceled,
     enableTts: enableAutoTTS && isSoundEnabled,
-    enableAec: aecEnabled || speakerModeAecEnabled,
+    // In a call the other voices come out of this phone: without the echo
+    // canceller the microphone would transcribe them as this viewer's words.
+    enableAec: aecEnabled || speakerModeAecEnabled || voiceTalkState.joined,
     captureSource: sttCaptureSource,
     sonioxManualFinalizeSilenceMs,
     sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
@@ -6254,14 +6256,40 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       voiceTalkStartedSttRef.current = false
     }
   }, [handleStartRecording, handleStopRecording, isSttSessionRunning, voiceTalkConnected])
+  // The call's mic is its own switch (the panel's mic button). Speech-to-text
+  // going on or off never moves it: voice without captions and captions
+  // without voice are both allowed.
   useEffect(() => {
     if (!voiceTalkConnected) return
-    // The ref covers the moment between asking STT to start and its state.
-    setVoiceTalkMic(resolveVoiceTalkMic({
-      sttBusy: isSttSessionRunning || isPreparingStart || startPreparationInFlightRef.current,
-      listenOnly: voiceTalkListenOnly,
-    }))
-  }, [isPreparingStart, isSttSessionRunning, voiceTalkConnected, voiceTalkListenOnly])
+    setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly: voiceTalkListenOnly }))
+  }, [voiceTalkConnected, voiceTalkListenOnly])
+  // Joining a call also turns speaker / earphone mode on (the interpreted
+  // voice), the way it starts speech-to-text: everything a call needs is on at
+  // once, and each part can be switched off by itself. Leaving turns off only
+  // what the call turned on and the viewer did not touch since.
+  const voiceTalkStartedSpeakerModeRef = useRef(false)
+  const voiceTalkSpeakerModeWasConnectedRef = useRef(false)
+  const earphoneModeControlVisible = earphoneModeGate.controlVisible
+  useEffect(() => {
+    const wasConnected = voiceTalkSpeakerModeWasConnectedRef.current
+    voiceTalkSpeakerModeWasConnectedRef.current = voiceTalkConnected
+    if (voiceTalkConnected && !wasConnected) {
+      if (earphoneModeControlVisible && !getEarphoneModePreferenceSnapshot()) {
+        voiceTalkStartedSpeakerModeRef.current = true
+        // Turned on without a question asked: never start screen recording from it.
+        setSttCaptureSourcePick('microphone')
+        writeEarphoneModeEnabled(true)
+        requestNativeAudioRoute()
+      }
+    } else if (!voiceTalkConnected && wasConnected) {
+      if (voiceTalkStartedSpeakerModeRef.current && getEarphoneModePreferenceSnapshot()) writeEarphoneModeEnabled(false)
+      voiceTalkStartedSpeakerModeRef.current = false
+    }
+  }, [earphoneModeControlVisible, voiceTalkConnected])
+  // Switched off by hand during the call: the call no longer owns it.
+  useEffect(() => {
+    if (!earphoneModeEnabled) voiceTalkStartedSpeakerModeRef.current = false
+  }, [earphoneModeEnabled])
   // A new call starts with the mic on.
   useEffect(() => {
     if (!voiceTalkState.joined) setVoiceTalkListenOnly(false)

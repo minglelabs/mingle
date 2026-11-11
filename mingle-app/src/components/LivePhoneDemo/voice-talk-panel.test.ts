@@ -8,24 +8,48 @@ const panelSource = readFileSync(new URL('./VoiceTalkPanel.tsx', import.meta.url
 const liveDemoSource = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
 
 describe('voice talk mic', () => {
-  it('sends voice only while speech-to-text runs and the viewer is not listening only', () => {
-    expect(resolveVoiceTalkMic({ sttBusy: true, listenOnly: false })).toBe(true)
-    expect(resolveVoiceTalkMic({ sttBusy: true, listenOnly: true })).toBe(false)
-    expect(resolveVoiceTalkMic({ sttBusy: false, listenOnly: false })).toBe(false)
-    expect(resolveVoiceTalkMic({ sttBusy: false, listenOnly: true })).toBe(false)
+  it('follows only the listen-only switch', () => {
+    expect(resolveVoiceTalkMic({ listenOnly: false })).toBe(true)
+    expect(resolveVoiceTalkMic({ listenOnly: true })).toBe(false)
   })
 
-  it('keeps speech-to-text running while listening only (only the call mic follows the switch)', () => {
+  it('is not moved by speech-to-text going on or off', () => {
     const micEffect = liveDemoSource.slice(
-      liveDemoSource.indexOf('setVoiceTalkMic(resolveVoiceTalkMic({'),
-      liveDemoSource.indexOf('// A new call starts with the mic on.'),
+      liveDemoSource.indexOf("// The call's mic is its own switch"),
+      liveDemoSource.indexOf('// Joining a call also turns speaker / earphone mode on'),
     )
-    expect(micEffect).toContain('listenOnly: voiceTalkListenOnly')
+    expect(micEffect).toContain('setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly: voiceTalkListenOnly }))')
+    expect(micEffect).toContain('}, [voiceTalkConnected, voiceTalkListenOnly])')
+    expect(micEffect).not.toContain('isSttSessionRunning')
     expect(micEffect).not.toContain('handleStopRecording')
   })
 
   it('starts every call with the mic on', () => {
     expect(liveDemoSource).toContain('if (!voiceTalkState.joined) setVoiceTalkListenOnly(false)')
+  })
+})
+
+describe('joining a call turns everything on', () => {
+  const block = liveDemoSource.slice(
+    liveDemoSource.indexOf('const voiceTalkConnected = voiceTalkState.connected'),
+    liveDemoSource.indexOf('// Stopping STT by hand during a call'),
+  )
+
+  it('starts speech-to-text, and stops on leaving only what the call started', () => {
+    expect(block).toContain('voiceTalkStartedSttRef.current = true\n        void handleStartRecording()')
+    expect(block).toContain('if (voiceTalkStartedSttRef.current && isSttSessionRunning) void handleStopRecording()')
+  })
+
+  it('turns speaker mode on without starting screen recording, and off again only if the call turned it on', () => {
+    expect(block).toContain('if (earphoneModeControlVisible && !getEarphoneModePreferenceSnapshot()) {')
+    expect(block).toContain("setSttCaptureSourcePick('microphone')\n        writeEarphoneModeEnabled(true)")
+    expect(block).toContain('if (voiceTalkStartedSpeakerModeRef.current && getEarphoneModePreferenceSnapshot()) writeEarphoneModeEnabled(false)')
+    // Switched off by hand during the call: leaving does not touch it.
+    expect(block).toContain('if (!earphoneModeEnabled) voiceTalkStartedSpeakerModeRef.current = false')
+  })
+
+  it('runs the echo canceller while in a call, so the other voices are not transcribed as mine', () => {
+    expect(liveDemoSource).toContain('enableAec: aecEnabled || speakerModeAecEnabled || voiceTalkState.joined,')
   })
 })
 
