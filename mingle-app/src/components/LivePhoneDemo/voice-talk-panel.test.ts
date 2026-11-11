@@ -139,7 +139,10 @@ describe('voice talk seat', () => {
     expect(render({})).not.toContain('mingle-voice-ripple')
     const speaking = render({ isSpeaking: true })
     expect(speaking.split('mingle-voice-ripple ').length - 1).toBe(2)
-    expect(speaking).toContain('bg-amber-300/30')
+    // Neutral gray, not the amber of the avatar placeholder.
+    expect(speaking).toContain('bg-slate-400/25')
+    expect(speaking).toContain('bg-slate-300/30')
+    expect(speaking).not.toMatch(/bg-amber-(200|300)\/\d+/)
     expect(speaking).not.toContain('ring-amber-400')
     expect(render({ isSpeaking: true, micOn: false })).not.toContain('mingle-voice-ripple')
   })

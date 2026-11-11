@@ -495,7 +495,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
           {folded ? (
             <div className="flex -space-x-2">
               {seats.slice(0, 4).map((s) => (
-                <span key={s.key} className={`inline-flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 bg-amber-100 text-[0.65rem] font-bold text-amber-800 ${s.isSpeaking ? 'border-amber-400' : 'border-white'}`}>
+                <span key={s.key} className={`inline-flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 bg-amber-100 text-[0.65rem] font-bold text-amber-800 ${s.isSpeaking ? 'border-slate-400' : 'border-white'}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {s.image ? <img src={s.image} alt="" className="h-full w-full object-cover" /> : initial(s.name)}
                 </span>
@@ -687,10 +687,11 @@ export function VoiceTalkSeatView(props: {
       <span className="relative inline-flex h-12 w-12 items-center justify-center">
         {speaking ? (
           <>
-            {/* Two translucent rings spreading out in turn, over a faint steady glow. */}
-            <span aria-hidden="true" data-qa="voice-talk-seat-speaking" className="mingle-voice-ripple pointer-events-none absolute inset-0 rounded-full bg-amber-300/30" />
-            <span aria-hidden="true" className="mingle-voice-ripple mingle-voice-ripple-late pointer-events-none absolute inset-0 rounded-full bg-amber-300/30" />
-            <span aria-hidden="true" className="pointer-events-none absolute -inset-[3px] rounded-full bg-amber-200/35" />
+            {/* Two translucent rings spreading out in turn, over a faint steady glow.
+                Neutral gray: a tinted ring read as a stain around the photo. */}
+            <span aria-hidden="true" data-qa="voice-talk-seat-speaking" className="mingle-voice-ripple pointer-events-none absolute inset-0 rounded-full bg-slate-400/25" />
+            <span aria-hidden="true" className="mingle-voice-ripple mingle-voice-ripple-late pointer-events-none absolute inset-0 rounded-full bg-slate-400/25" />
+            <span aria-hidden="true" className="pointer-events-none absolute -inset-[3px] rounded-full bg-slate-300/30" />
           </>
         ) : null}
         {seat && onOpenProfile ? (
