@@ -68,6 +68,12 @@ import {
   type NativeShellCapabilities,
 } from './src/nativeCapabilities';
 import {
+  buildNativeInviteEventScript,
+  parseInstallReferrerInvite,
+  parseNativeInviteLink,
+  type NativeInvite,
+} from './src/inviteLink';
+import {
   NATIVE_CONTACTS_EVENT,
   createNativeContactsBridge,
   isNativeContactsAvailable,
@@ -2199,6 +2205,45 @@ function AppInner(): React.JSX.Element {
     }
     return handled;
   }, [handleIncomingConversationShareLink]);
+  // Invite tickets (src/inviteLink.ts). The page keeps the code itself until
+  // the person is signed in, so the shell only has to deliver it once the page
+  // can listen; an invite that arrives earlier waits for the next load end.
+  const pendingInviteRef = useRef<NativeInvite | null>(null);
+  const flushPendingInviteToWeb = useCallback(() => {
+    const invite = pendingInviteRef.current;
+    if (!invite || !isPageReadyRef.current || !webViewRef.current) return;
+    pendingInviteRef.current = null;
+    webViewRef.current.injectJavaScript(buildNativeInviteEventScript(invite));
+  }, []);
+  const deliverInviteToWeb = useCallback((invite: NativeInvite) => {
+    pendingInviteRef.current = invite;
+    flushPendingInviteToWeb();
+  }, [flushPendingInviteToWeb]);
+  const handleIncomingInviteLink = useCallback((rawUrl: string) => {
+    const invite = parseNativeInviteLink(rawUrl, WEB_APP_BASE_URL);
+    if (!invite) return false;
+    deliverInviteToWeb(invite);
+    return true;
+  }, [deliverInviteToWeb]);
+  // Android, once after a fresh install: the Play Store hands back the
+  // referrer the invite landing page put on its install link.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const runtimeConfigModule = (NativeModules as {
+      NativeRuntimeConfigModule?: { consumeInstallReferrer?: () => Promise<string | null> };
+    }).NativeRuntimeConfigModule;
+    if (!runtimeConfigModule?.consumeInstallReferrer) return;
+    let cancelled = false;
+    void runtimeConfigModule.consumeInstallReferrer().then((referrer) => {
+      const invite = parseInstallReferrerInvite(referrer);
+      if (!cancelled && invite) deliverInviteToWeb(invite);
+    }).catch(() => {
+      // No Play Store on this device, or the referrer is gone: nothing to carry over.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [deliverInviteToWeb]);
   const consumePendingProfileLink = useCallback(async () => {
     const getPendingProfileLink = NATIVE_CONVERSATION_RESTORE_STORAGE.getPendingProfileLink;
     if (!getPendingProfileLink) return;
@@ -2244,12 +2289,15 @@ function AppInner(): React.JSX.Element {
     if (rawUrl && handleIncomingConversationShareLinkOnce(rawUrl)) {
       return false;
     }
+    if (rawUrl && handleIncomingInviteLink(rawUrl)) {
+      return false;
+    }
     if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {
       openNativeExternalUrl(rawUrl);
       return false;
     }
     return true;
-  }, [handleIncomingConversationShareLinkOnce, handleIncomingProfileLinkOnce]);
+  }, [handleIncomingConversationShareLinkOnce, handleIncomingInviteLink, handleIncomingProfileLinkOnce]);
   // A "successful" injectJavaScript call only proves the script was handed
   // to the WebView, not that the page's own JS has hydrated enough to have
   // NativeProfileLinkOverlay's event listener (or even its window-global
@@ -2321,7 +2369,8 @@ function AppInner(): React.JSX.Element {
       if (!mounted || typeof rawUrl !== 'string') return;
       recordProfileLinkTrace('react_native_linking_event');
       if (handleIncomingProfileLinkOnce(rawUrl)) return;
-      handleIncomingConversationShareLinkOnce(rawUrl);
+      if (handleIncomingConversationShareLinkOnce(rawUrl)) return;
+      handleIncomingInviteLink(rawUrl);
     };
 
     void Linking.getInitialURL().then(handleUrl).catch(() => {
@@ -2346,7 +2395,7 @@ function AppInner(): React.JSX.Element {
       pendingPushTapRouteRetryTimersRef.current = [];
       clearPendingConversationShareRouteRetries();
     };
-  }, [clearPendingConversationShareRouteRetries, clearPendingProfileRouteRetries, handleIncomingConversationShareLinkOnce, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption, schedulePendingPushTapConsumption]);
+  }, [clearPendingConversationShareRouteRetries, clearPendingProfileRouteRetries, handleIncomingConversationShareLinkOnce, handleIncomingInviteLink, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption, schedulePendingPushTapConsumption]);
   useEffect(() => {
     let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -5133,6 +5182,7 @@ function AppInner(): React.JSX.Element {
       schedulePendingPushTapFlush(true);
     }
     flushPendingConversationShareToWeb();
+    flushPendingInviteToWeb();
     emitToWeb(buildNativeShellCapabilities({
       audioRoute: nativeAudioRouteAvailable,
       deviceAudioCapture: nativeDeviceAudioCaptureAvailable,
@@ -5203,7 +5253,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingInviteToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     // Record the failure before anything else: react-native-webview calls

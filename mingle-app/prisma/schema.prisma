@@ -80,6 +80,11 @@ model User {
   /// Whose invite code this user entered (once, never changed). Both sides got the referral coins then.
   referredByUserId             String?   @map("referred_by_user_id")
   referredAt                   DateTime? @map("referred_at")
+  /// How the invite reached the app: 'link' (tapped the invite link), 'install_referrer' (Play install referrer), 'code' (typed the code).
+  referralSource               String?   @map("referral_source")
+  /// When this user and their inviter had both sent a message in one room, and when they talked again (12h+ later, within 7 days). Set once each.
+  referralFirstChatAt          DateTime? @map("referral_first_chat_at")
+  referralRechatAt             DateTime? @map("referral_rechat_at")
   /// When the contact-sync screen was shown on its own after signup. Null = not shown yet.
   contactSyncPromptedAt        DateTime? @map("contact_sync_prompted_at")
   isActive                     Boolean   @default(true) @map("is_active")

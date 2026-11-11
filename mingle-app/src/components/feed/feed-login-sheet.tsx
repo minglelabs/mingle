@@ -1,5 +1,6 @@
 "use client";
 
+import { useHasPendingInvite } from "@/lib/native-invite";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import type { LanguageOnboardingConfirmPayload } from "@/components/LivePhoneDemo/LanguageOnboardingModal";
 import {
@@ -59,6 +60,7 @@ export default function FeedLoginSheet({
   onClose,
 }: FeedLoginSheetProps) {
   const gateOpen = returnTo !== null;
+  const inviteOnboarding = useHasPendingInvite();
   // Bumped when onboarding finishes here; the storage read below is the source of truth.
   const [onboardingRevision, setOnboardingRevision] = useState(0);
   const needsOnboarding = useMemo(
@@ -89,6 +91,7 @@ export default function FeedLoginSheet({
           onClose={onClose}
           initialLanguage={onboardingDefaultLanguage}
           uiLocale={locale}
+          invite={inviteOnboarding}
           onConfirm={handleOnboardingConfirm}
         />
       </Suspense>

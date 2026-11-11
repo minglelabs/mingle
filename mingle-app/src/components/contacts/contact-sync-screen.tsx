@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, ChevronLeft, Copy, Gift, Loader2, MessageSquareText, Search, UserRound, Users, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -8,6 +9,7 @@ import SlideSurface from "@/components/slide-surface";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { refreshCoinWallet } from "@/lib/coin-wallet-client";
+import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import {
   filterContacts,
   isNativeContactsSupported,
@@ -21,8 +23,13 @@ import {
   type NativeContactsPermission,
 } from "@/lib/native-contacts";
 import { postNativeLocationSettings } from "@/lib/native-location";
-import { buildProfileLinkUrl } from "@/lib/profile-link";
-import { fillReferralInviteMessage, normalizeReferralCode, REFERRAL_CODE_LENGTH } from "@/lib/referral-code";
+import {
+  buildInviteLinkUrl,
+  fillReferralInviteMessage,
+  normalizeReferralCode,
+  REFERRAL_CODE_LENGTH,
+  REFERRAL_REWARD_COINS,
+} from "@/lib/referral-code";
 
 type ContactSyncScreenProps = {
   open: boolean;
@@ -35,6 +42,7 @@ type ContactSyncScreenProps = {
 type ReferralState = {
   code: string;
   redeemed: boolean;
+  rewardCoins: number;
 };
 
 // Rows drawn at once; the rest appear as the list is scrolled.
@@ -67,13 +75,14 @@ async function copyText(value: string): Promise<boolean> {
 
 export default function ContactSyncScreen({ open, onClose, locale, prompt = false }: ContactSyncScreenProps) {
   const { data: session } = useSession();
+  const router = useRouter();
   const copy = useMemo(() => resolveContactSyncCopy(locale), [locale]);
-  const fill = useCallback(
-    (template: string) => fillReferralInviteMessage(template, { name: "", code: "", link: "" }),
-    [],
-  );
-
   const [referral, setReferral] = useState<ReferralState | null>(null);
+  const rewardCoins = referral?.rewardCoins ?? REFERRAL_REWARD_COINS;
+  const fill = useCallback(
+    (template: string) => fillReferralInviteMessage(template, { name: "", code: "", link: "", coins: rewardCoins }),
+    [rewardCoins],
+  );
   const [codeInput, setCodeInput] = useState("");
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [isRedeeming, setIsRedeeming] = useState(false);
@@ -88,7 +97,6 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
   const requestSequenceRef = useRef(0);
   const pendingRequestIdRef = useRef("");
 
-  const userId = session?.user?.id ?? "";
   const senderName = session?.user?.name?.trim() || "HashChat";
 
   const inviteMessage = useMemo(() => {
@@ -96,9 +104,10 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
     return fillReferralInviteMessage(copy.inviteMessage, {
       name: senderName,
       code: referral.code,
-      link: (userId && buildProfileLinkUrl(window.location.origin, userId)) || window.location.origin,
+      link: buildInviteLinkUrl(window.location.origin, referral.code) || window.location.origin,
+      coins: rewardCoins,
     });
-  }, [copy.inviteMessage, referral?.code, senderName, userId]);
+  }, [copy.inviteMessage, referral?.code, rewardCoins, senderName]);
 
   const loadContacts = useCallback(() => {
     requestSequenceRef.current += 1;
@@ -119,7 +128,11 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
         if (!response.ok) return;
         const body = await response.json() as Partial<ReferralState>;
         if (!cancelled && typeof body.code === "string") {
-          setReferral({ code: body.code, redeemed: body.redeemed === true });
+          setReferral({
+            code: body.code,
+            redeemed: body.redeemed === true,
+            rewardCoins: typeof body.rewardCoins === "number" ? body.rewardCoins : REFERRAL_REWARD_COINS,
+          });
         }
       } catch {
         // The code card stays on its loading state; contacts still work.
@@ -178,14 +191,27 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
       const response = await fetch(buildClientApiPath("/referral/redeem"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, source: "code", openRoom: true, locale }),
       });
-      const body = await response.json().catch(() => ({})) as { error?: string };
+      const body = await response.json().catch(() => ({})) as {
+        error?: string; rewarded?: boolean; conversationId?: string | null;
+      };
+      if (response.ok && body.rewarded === false) {
+        // The code is real but this account already accepted an invite.
+        setReferral((current) => (current ? { ...current, redeemed: true } : current));
+        setRedeemError(copy.errorAlready);
+        return;
+      }
       if (response.ok) {
         setReferral((current) => (current ? { ...current, redeemed: true } : current));
         setCodeInput("");
         toast(fill(copy.redeemSuccess));
         void refreshCoinWallet({ force: true });
+        if (body.conversationId) {
+          // The room with the friend who invited them is where they wanted to go.
+          onClose();
+          replaceWithConversationListThenPush(router, `/${locale}/conversations`, body.conversationId);
+        }
         return;
       }
       if (body.error === "already_redeemed") {
@@ -203,7 +229,7 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
     } finally {
       setIsRedeeming(false);
     }
-  }, [codeInput, copy, fill, isRedeeming]);
+  }, [codeInput, copy, fill, isRedeeming, locale, onClose, router]);
 
   const handleInvite = useCallback((contact: NativeContact) => {
     const phone = contact.phones[0];

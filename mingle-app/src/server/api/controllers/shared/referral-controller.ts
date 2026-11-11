@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
+import { normalizeInviteSource } from '@/lib/referral-code'
 import {
   ReferralError,
+  acceptInvite,
   getReferralState,
   markContactSyncPrompted,
   redeemReferralCode,
@@ -58,13 +60,24 @@ export async function patchReferral(request: NextRequest) {
   return json({ ok: true })
 }
 
-/** POST /referral/redeem { code } — enters someone's invite code; both sides get coins. */
+/**
+ * POST /referral/redeem { code, source?, openRoom? } — accepts someone's
+ * invite; both sides get coins. With openRoom (invite link / install
+ * referrer) the 1:1 room with the inviter is opened and returned, and an
+ * account that had already accepted an invite still gets the room, unpaid.
+ */
 export async function redeemReferral(request: NextRequest) {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
   const body = await readJsonBody(request)
+  const source = normalizeInviteSource(body.source)
   try {
-    return json({ ok: true, ...(await redeemReferralCode(userId, body.code)) })
+    if (body.openRoom === true) {
+      const locale = typeof body.locale === 'string' ? body.locale.slice(0, 16) : undefined
+      return json({ ok: true, ...(await acceptInvite(userId, body.code, { source, locale })) })
+    }
+    const { rewardCoins } = await redeemReferralCode(userId, body.code, { source })
+    return json({ ok: true, rewarded: true, rewardCoins })
   } catch (error) {
     if (error instanceof ReferralError) return json({ error: error.code }, REDEEM_ERROR_STATUS[error.code])
     throw error

@@ -517,5 +517,9 @@ export async function createTrackedEventLog(args: {
       event: "mingle_message_sent",
       properties: postHogProperties,
     });
+    // Invited pairs: first chat and talking again (src/server/referral.ts).
+    void import("@/server/referral").then(({ noteInvitePairMessage }) => (
+      noteInvitePairMessage({ userId, messageId: args.messageId })
+    )).catch(() => {});
   }
 }

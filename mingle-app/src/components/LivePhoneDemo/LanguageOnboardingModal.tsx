@@ -54,7 +54,8 @@ export type LanguageOnboardingConfirmPayload = {
   /** 관심 언어: the language of the people the user mostly wants to talk with. */
   interestLanguage: InterestLanguage | null;
   birthDate: BirthDateParts;
-  gender: ProfileGender;
+  /** null only on the short invite flow, which does not ask. */
+  gender: ProfileGender | null;
   usagePurpose: UsagePurpose;
   /** Optional free-text reason, only for "other". */
   usagePurposeNote: string | null;
@@ -67,6 +68,12 @@ interface LanguageOnboardingModalProps {
   initialLanguage: string;
   initialBirthDate?: BirthDateParts;
   uiLocale: string;
+  /**
+   * The person came through a friend's invite ticket: only the language and
+   * the birth date (age check) are asked. The purpose is set to "social" and
+   * the discovery source to "friend"; interest language and gender are skipped.
+   */
+  invite?: boolean;
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
@@ -83,6 +90,7 @@ export default function LanguageOnboardingModal({
   initialLanguage,
   initialBirthDate = DEFAULT_ONBOARDING_BIRTH_DATE,
   uiLocale,
+  invite = false,
   onConfirm,
 }: LanguageOnboardingModalProps) {
   // Mounted only while onboarding is on screen: no native ad banner at any
@@ -192,13 +200,14 @@ export default function LanguageOnboardingModal({
   const handleStepBack = useCallback(() => {
     if (isConfirming) return;
     setStep((currentStep) => (
-      currentStep === "birth-date" ? "gender"
+      invite ? "language"
+        : currentStep === "birth-date" ? "gender"
         : currentStep === "gender" ? "discovery-source"
         : currentStep === "discovery-source" ? "usage-purpose"
         : currentStep === "usage-purpose" ? "interest-language"
           : "language"
     ));
-  }, [isConfirming]);
+  }, [invite, isConfirming]);
 
   useEffect(() => registerNativeBackHandler(() => {
     if (isConfirming) return true;
@@ -260,6 +269,10 @@ export default function LanguageOnboardingModal({
   if (typeof document === "undefined") return null;
 
   const handleLanguageStepNext = () => {
+    if (invite) {
+      setStep("birth-date");
+      return;
+    }
     if (interestCode && canonicalizeSttLanguageCode(interestCode) === ownLanguageCode) setInterestCode(null);
     setStep("interest-language");
   };
@@ -298,7 +311,25 @@ export default function LanguageOnboardingModal({
   };
 
   const handleFinalConfirm = async () => {
-    if (isConfirming || !isEligibleAge || !gender || !usagePurpose || !discoverySource) return;
+    if (isConfirming || !isEligibleAge) return;
+    if (invite) {
+      setIsConfirming(true);
+      try {
+        await onConfirm({
+          language,
+          interestLanguage: null,
+          birthDate,
+          gender: null,
+          usagePurpose: "social",
+          usagePurposeNote: null,
+          discoverySource: "friend",
+        });
+      } finally {
+        setIsConfirming(false);
+      }
+      return;
+    }
+    if (!gender || !usagePurpose || !discoverySource) return;
     setIsConfirming(true);
     try {
       await onConfirm({
@@ -855,7 +886,7 @@ export default function LanguageOnboardingModal({
             <button
               type="button"
               onClick={handleFinalConfirm}
-              disabled={isConfirming || !isEligibleAge || !gender}
+              disabled={isConfirming || !isEligibleAge || (!invite && !gender)}
               aria-busy={isConfirming}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
             >

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { fillReferralInviteMessage, generateReferralCode, normalizeReferralCode } from './referral-code'
+import {
+  buildInviteAppUrl,
+  buildInviteLinkUrl,
+  buildPlayStoreInviteUrl,
+  fillReferralInviteMessage,
+  generateReferralCode,
+  normalizeReferralCode,
+} from './referral-code'
 
 describe('referral-code', () => {
   it('accepts 5 lower-case letters or digits, case- and space-insensitively', () => {
@@ -26,5 +33,19 @@ describe('referral-code', () => {
       code: 'ab3de',
       link: 'https://example.com/p/u1',
     })).toBe('Mina: code ab3de, 1,000 each. https://example.com/p/u1')
+  })
+
+  it('builds the invite ticket link, the app link and the Play Store link that carries the code', () => {
+    expect(buildInviteLinkUrl('https://app.example.com', 'AB3DE')).toBe('https://app.example.com/i/ab3de')
+    expect(buildInviteLinkUrl('https://app.example.com', 'bad')).toBeNull()
+    expect(buildInviteAppUrl('ab3de')).toBe('mingle://invite/ab3de')
+    expect(buildPlayStoreInviteUrl('https://play.google.com/store/apps/details?id=com.x', 'ab3de'))
+      .toBe('https://play.google.com/store/apps/details?id=com.x&referrer=invite%3Dab3de')
+    expect(buildPlayStoreInviteUrl('https://play.google.com/store/apps/details?id=com.x', 'bad'))
+      .toBe('https://play.google.com/store/apps/details?id=com.x')
+  })
+
+  it('uses the configured reward in a filled message', () => {
+    expect(fillReferralInviteMessage('{coins}', { name: '', code: '', link: '', coins: 500 })).toBe('500')
   })
 })
