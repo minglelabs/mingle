@@ -69,9 +69,9 @@
       "id": "04-booking",
       "capture": "captures/{lang}/booking.png",
       "caption": {
-        "ko": "해외 미용실·식당\n예약 전화도 통역",
+        "ko": "해외 스시집·음식점\n예약 전화도 통역",
         "en": "Booking calls abroad,\ninterpreted too",
-        "ja": "韓国の美容室やお店の\n予約電話も通訳",
+        "ja": "韓国の飲食店やお店の\n予約電話も通訳",
         "zh-cn": "海外预约电话\n也能翻译",
         "zh-tw": "海外預約電話\n也能翻譯",
         "ar": "مكالمات الحجز في الخارج\nمترجمة أيضًا",
@@ -89,7 +89,7 @@
         "lines": "booking",
         "count": 4,
         "background": [
-          "booking/salon.jpg",
+          "booking/sushi.jpg",
           "booking/restaurant.jpg"
         ]
       }
