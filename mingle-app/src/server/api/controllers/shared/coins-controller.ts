@@ -23,6 +23,7 @@ import {
 import { verifyPolarWebhookSignature } from '@/server/coins/polar'
 import { getCoinHistory, getCoinUsageSummary, getConversationCoinUsage, normalizeCoinUsageRange } from '@/server/coins/queries'
 import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingToken } from '@/server/coins/stt-token'
+import type { CoinPriceList } from '@/lib/coin-price-list'
 import { canSpendCoins, chargeCoinUsage, disabledCoinWallet, getCoinWallet } from '@/server/coins/wallet'
 import { resolveCoinBillingMode, resolveUserCoinBillingMode } from '@/server/coins/config'
 import { prisma } from '@/lib/prisma'
@@ -88,11 +89,26 @@ export async function readCoinProducts(request: NextRequest) {
   // The unversioned API is the web app: it sells through Polar checkout, never inside the store apps.
   const platform: CoinProductPlatform = resolveRequestPlatform(request, request.nextUrl.searchParams.get('platform')) ?? 'web'
   // What one minute of interpreting (speech recognition) costs right now, for the "about N minutes" hint.
-  const perMinute = quoteCoinUsage(await loadCoinPricingRates(), { kind: 'stt', units: { second: 60 }, at: new Date() })
+  const rates = await loadCoinPricingRates()
+  const now = new Date()
+  const coinsFor = (quote: { chargedMicro: bigint }) => Number(quote.chargedMicro) / 1_000_000
+  const perMinute = quoteCoinUsage(rates, { kind: 'stt', units: { second: 60 }, at: now })
+  // The store's price list: every paid feature at today's rates.
+  const priceList: CoinPriceList = {
+    voicePerMinute: coinsFor(perMinute),
+    readAloudPerAudioMinute: coinsFor(quoteCoinUsage(rates, { kind: 'tts', units: { second: 60 }, at: now })),
+    readAloudPerConversationMinute: coinsFor(quoteCoinUsage(rates, {
+      kind: 'tts',
+      units: { second: TTS_AUDIO_SECONDS_PER_CONVERSATION_MINUTE },
+      at: now,
+    })),
+    typedMessage: coinsFor(quoteCoinUsage(rates, { kind: 'translation', units: { message: 1 }, at: now })),
+  }
   return json({
     platform,
     products: await listCoinProducts(platform),
-    sttCoinsPerMinute: Number(perMinute.chargedMicro) / 1_000_000,
+    sttCoinsPerMinute: coinsFor(perMinute),
+    priceList,
   })
 }
 
