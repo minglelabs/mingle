@@ -1,7 +1,7 @@
 import { isSupportedLocale, getDictionary, type AppLocale } from "@/i18n";
 import FeedShell from "@/components/feed/feed-shell";
 import BottomTabBar from "@/components/bottom-tab-bar";
-import PostingFeedRouteGuard from "@/components/feed/posting-feed-route-guard";
+import PostingFeedRouteGuard, { FirstRunHomeGuard } from "@/components/feed/posting-feed-route-guard";
 import { notFound } from "next/navigation";
 import { isAppleOAuthConfigured, isGoogleOAuthConfigured } from "@/lib/auth-options";
 
@@ -20,6 +20,7 @@ export default async function FeedPage({ params }: FeedPageProps) {
 
   return (
     <PostingFeedRouteGuard locale={locale}>
+      <FirstRunHomeGuard locale={locale}>
       <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
         {/* The feed is full-bleed; it renders the glass tab bar over its bottom. */}
         <div className="min-h-0 flex-1">
@@ -32,6 +33,7 @@ export default async function FeedPage({ params }: FeedPageProps) {
           />
         </div>
       </main>
+      </FirstRunHomeGuard>
     </PostingFeedRouteGuard>
   );
 }

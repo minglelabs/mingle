@@ -1,5 +1,6 @@
 "use client";
 
+import { requestProfileBasics } from "@/lib/profile-basics";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
@@ -197,6 +198,7 @@ export default function FollowListScreen({
 
   const handleFollow = useCallback(async (user: FollowListUser) => {
     if (user.isFollowing || pendingFollowIds.has(user.id)) return;
+    if (!(await requestProfileBasics())) return;
 
     setFollowErrorId(null);
     setPendingFollowIds((current) => new Set(current).add(user.id));

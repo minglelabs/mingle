@@ -9,6 +9,15 @@ import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
 import { resolveFirstUnreadUtteranceId, shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
 import { resolveAccessibilityCopy } from '@/i18n/accessibility-copy'
 import { MessageReplyComposerBar, MessageReplyProvider } from './MessageReply'
+import SpeechLengthCard from '@/components/LivePhoneDemo/SpeechLengthCard'
+import { resolveFirstRunCopy } from '@/i18n/first-run-copy'
+import { captureMingleClientEvent } from '@/lib/posthog-client'
+import {
+  DEFAULT_SPEECH_LENGTH_OPTION,
+  matchSpeechLengthOption,
+  resolveSpeechLengthPreferences,
+  type SpeechLengthOption,
+} from '@/lib/speech-length'
 import type { MessageReplyReference } from '@/lib/message-reply'
 import {
   arePlaybackKeyListsEqual,
@@ -1483,6 +1492,11 @@ interface LivePhoneDemoProps {
   initialDefaultDisplayLanguage?: string | null
   autoStartOnMount?: boolean
   onAutoStartHandled?: () => void
+  // First run on this device (see @/lib/first-run): the room starts a new
+  // user on the default speech length and, right after its first translation,
+  // offers the four lengths to choose from.
+  speechLengthIntro?: boolean
+  onFirstSpeakCompleted?: () => void
   isVisible?: boolean
   enableNativeBannerBridge?: boolean
   onStartRecordingRequested?: () => Promise<LivePhoneDemoStartRecordingPreparation | void> | LivePhoneDemoStartRecordingPreparation | void
@@ -1975,6 +1989,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   initialTranslationLanguagesLinked,
   initialDefaultDisplayLanguage,
   isVisible = true,
+  speechLengthIntro = false,
+  onFirstSpeakCompleted,
   enableNativeBannerBridge = true,
   onStartRecordingRequested,
   onSttSessionRunningChange,
@@ -5958,6 +5974,120 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (isSttSessionRunning) void handleStopRecording()
   }, [handleStopRecording, isSttSessionRunning, sttCaptureSource])
 
+  // ── First run: speech length ──────────────────────────────────────────
+  // A new user (no speech split ever chosen) starts on the default length
+  // before the room first listens, then sees the four choices right after
+  // their first translation. Both settings are fixed when a session starts,
+  // so a choice made while listening ends the session and starts a new one.
+  const firstRunCopy = useMemo(() => resolveFirstRunCopy(uiLocale), [uiLocale])
+  const [speechLengthCardOpen, setSpeechLengthCardOpen] = useState(false)
+  const [isApplyingSpeechLength, setIsApplyingSpeechLength] = useState(false)
+  const speechLengthRestartPendingRef = useRef(false)
+  const speechLengthIntroDoneRef = useRef(false)
+  const speechLengthDefaultAppliedRef = useRef(false)
+  const onFirstSpeakCompletedRef = useRef(onFirstSpeakCompleted)
+  onFirstSpeakCompletedRef.current = onFirstSpeakCompleted
+
+  const applySpeechLengthPreferences = useCallback((option: SpeechLengthOption) => {
+    const preferences = resolveSpeechLengthPreferences(option)
+    const nextPreferences = commitLocalAccountPreferences({
+      ...latestAccountPreferencesRef.current,
+      ...preferences,
+    })
+    setSttSegmentationMode(preferences.sttSegmentationMode)
+    if (preferences.sttSegmentationMode === 'end') {
+      setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
+    } else {
+      setSonioxManualFinalizeSilenceMs(preferences.sonioxManualFinalizeSilenceMs)
+    }
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride(nextPreferences)
+  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
+
+  useEffect(() => {
+    if (!speechLengthIntro || speechLengthDefaultAppliedRef.current) return
+    // Wait for the account's saved settings: an existing account signing in
+    // on a new device has a speech split this device has not loaded yet.
+    if (!isStorageHydrated || accountPreferencesHydratedGeneration === 0) return
+    speechLengthDefaultAppliedRef.current = true
+    // Someone who already chose a speech split keeps it.
+    if (sttSegmentationMode !== null) return
+    applySpeechLengthPreferences(DEFAULT_SPEECH_LENGTH_OPTION)
+  }, [accountPreferencesHydratedGeneration, applySpeechLengthPreferences, isStorageHydrated, speechLengthIntro, sttSegmentationMode])
+
+  // Translations already in the room when it first listens (a welcome
+  // message, an earlier conversation) do not count as the first one.
+  const speechLengthBaselineIdsRef = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    if (!speechLengthIntro || speechLengthIntroDoneRef.current || !isVisible) return
+    const finishedIds = utterances
+      .filter((utterance) => (
+        !utterance.recalled && !utterance.image
+        && Object.entries(utterance.translations || {}).some(([language, text]) => (
+          Boolean(text?.trim()) && utterance.translationFinalized?.[language] !== false
+        ))
+      ))
+      .map((utterance) => utterance.id)
+    if (speechLengthBaselineIdsRef.current === null) {
+      if (isSttSessionRunning) speechLengthBaselineIdsRef.current = new Set(finishedIds)
+      return
+    }
+    const baseline = speechLengthBaselineIdsRef.current
+    if (!finishedIds.some((id) => !baseline.has(id))) return
+    speechLengthIntroDoneRef.current = true
+    setSpeechLengthCardOpen(true)
+    captureMingleClientEvent('mingle_first_run_step', { step: 'length_shown' })
+    onFirstSpeakCompletedRef.current?.()
+  }, [isSttSessionRunning, isVisible, speechLengthIntro, utterances])
+
+  const selectedSpeechLengthOption = matchSpeechLengthOption({
+    sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
+    sonioxEndpointTuningStep,
+    sonioxManualFinalizeSilenceMs,
+  })
+
+  const handleSpeechLengthClose = useCallback(() => {
+    setSpeechLengthCardOpen(false)
+    captureMingleClientEvent('mingle_first_run_step', { step: 'length_closed' })
+  }, [])
+
+  const handleSpeechLengthSelect = useCallback(async (option: SpeechLengthOption) => {
+    if (isApplyingSpeechLength) return
+    captureMingleClientEvent('mingle_first_run_step', { step: 'length_chosen', choice: option })
+    setSpeechLengthCardOpen(false)
+    if (option === selectedSpeechLengthOption) return
+    setIsApplyingSpeechLength(true)
+    try {
+      const wasRunning = isSttSessionRunning
+      if (wasRunning) await handleStopRecording()
+      applySpeechLengthPreferences(option)
+      speechLengthRestartPendingRef.current = wasRunning
+      showFloatingToast(firstRunCopy.lengthApplied)
+    } finally {
+      setIsApplyingSpeechLength(false)
+    }
+  }, [
+    applySpeechLengthPreferences,
+    firstRunCopy.lengthApplied,
+    handleStopRecording,
+    isApplyingSpeechLength,
+    isSttSessionRunning,
+    selectedSpeechLengthOption,
+    showFloatingToast,
+  ])
+
+  // Listen again once the stopped session is gone and the new setting is in.
+  useEffect(() => {
+    if (!speechLengthRestartPendingRef.current || isApplyingSpeechLength) return
+    if (isSttSessionRunning || isConnecting || isPreparingStart) return
+    speechLengthRestartPendingRef.current = false
+    void handleStartRecording()
+  }, [handleStartRecording, isApplyingSpeechLength, isConnecting, isPreparingStart, isSttSessionRunning, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode])
+
+  useEffect(() => {
+    if (!isVisible) setSpeechLengthCardOpen(false)
+  }, [isVisible])
+
   const performMicAction = useCallback((source: SttStopSource) => {
     const shouldStopConnectingSession = isConnecting
       && (!isNativeAppRuntime || isNativeSttSessionOwner)
@@ -9341,6 +9471,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </motion.div>
               )}
             </AnimatePresence>
+            {speechLengthCardOpen ? (
+              <div
+                className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3"
+                style={{ bottom: copyToastBottomOffsetPx }}
+              >
+                <SpeechLengthCard
+                  copy={firstRunCopy}
+                  selected={selectedSpeechLengthOption}
+                  disabled={isApplyingSpeechLength}
+                  onSelect={(option) => { void handleSpeechLengthSelect(option) }}
+                  onClose={handleSpeechLengthClose}
+                />
+              </div>
+            ) : null}
             {showEmptyState && (
               <ConversationEmptyState uiLocale={uiLocale} />
             )}
