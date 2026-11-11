@@ -1789,6 +1789,19 @@ export function buildLiveUtterance(input: {
   }
 }
 
+/**
+ * A committed row keeps its tail state's fixed translations (the part that
+ * will not change any more) until the final translation lands, so earphone
+ * auto-read can go on reading the pieces already fixed.
+ */
+export function withBubbleTailFixedTranslations(
+  utterance: Utterance,
+  tail: Pick<BubbleTailState, 'translatedSource' | 'translations'> | null | undefined,
+): Utterance {
+  if (!tail?.translatedSource || Object.keys(tail.translations).length === 0) return utterance
+  return { ...utterance, translationFixed: { ...tail.translations } }
+}
+
 export function buildLiveUtterances(input: {
   pendingTurns: Array<Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language' | 'text' | 'partialTranslations'>
     & Partial<Pick<PendingSpeakerTurn, 'originalDisplayText'>>>
@@ -5168,10 +5181,10 @@ export default function useRealtimeSTT({
     })
     if (!localPayload) return null
     if (options?.replyTo) localPayload.utterance = { ...localPayload.utterance, replyTo: options.replyTo }
-    const fixedTail = bubbleTailByUtteranceIdRef.current[localPayload.utteranceId]
-    if (fixedTail?.translatedSource && Object.keys(fixedTail.translations).length > 0) {
-      localPayload.utterance = { ...localPayload.utterance, translationFixed: { ...fixedTail.translations } }
-    }
+    localPayload.utterance = withBubbleTailFixedTranslations(
+      localPayload.utterance,
+      bubbleTailByUtteranceIdRef.current[localPayload.utteranceId],
+    )
     localPayload.utterance = remotePreviews.applyOrder(localPayload.utterance)
     if (isDuplicateTimedSignature({
       previousSig: stopFinalizeDedupRef.current.utteranceId,
@@ -6112,6 +6125,12 @@ export default function useRealtimeSTT({
         if (!finalizedPayload) {
           return
         }
+        // Like a stop: the committed row keeps the part already fixed (and read
+        // aloud piece by piece) until its final translation lands.
+        finalizedPayload.utterance = withBubbleTailFixedTranslations(
+          finalizedPayload.utterance,
+          bubbleTailByUtteranceIdRef.current[finalizedPayload.utteranceId],
+        )
         const finalizedAvatar = getSpeakerAvatar(
           finalizedPayload.utterance.speaker,
           finalizedPayload.utterance.speakerAvatarSeed,

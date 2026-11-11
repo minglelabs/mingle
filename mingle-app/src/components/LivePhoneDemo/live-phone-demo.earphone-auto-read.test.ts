@@ -745,6 +745,32 @@ describe('EarphoneAutoReadController fixed pieces', () => {
     expect(h.dispatched).toHaveLength(3)
   })
 
+  it('reads a queued piece when the row commits before its final translation', async () => {
+    const h = createHarness()
+    h.controller.arm(h.snapshot([]))
+    const startedAt = h.now() + 100
+    h.controller.update(h.snapshot([], [speaking('live', startedAt, '첫 조각')]))
+    await h.resolveAudio(key('live'))
+    // The first piece is still playing when the second one is fixed.
+    h.controller.update(h.snapshot([], [speaking('live', startedAt, '첫 조각 둘째 조각')]))
+    await h.resolveAudio(key('live'))
+
+    // The bubble ends: committed, its final translation still on the way.
+    const committed = message('live', startedAt, {
+      translations: { ko: '첫 조각 둘째 조각 셋' },
+      translationFinalized: { ko: false },
+      translationFixed: { ko: '첫 조각 둘째 조각' },
+    })
+    h.controller.update(h.snapshot([committed]))
+    await h.finishPlayback()
+    expect(h.dispatched.map((item) => item.text)).toEqual(['첫 조각', '둘째 조각'])
+
+    await h.finishPlayback()
+    h.controller.update(h.snapshot([message('live', startedAt, { translations: { ko: '첫 조각 둘째 조각 마지막' } })]))
+    await h.resolveAudio(key('live'))
+    expect(h.dispatched.map((item) => item.text)).toEqual(['첫 조각', '둘째 조각', '마지막'])
+  })
+
   it('does not read a final that only repeats what was read', async () => {
     const h = createHarness()
     h.controller.arm(h.snapshot([]))
