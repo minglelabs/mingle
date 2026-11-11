@@ -28,7 +28,7 @@ describe('ChatBubble', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders one unified message bubble with language badges and a timestamp above the expand/collapse button', () => {
+  it('renders one unified message bubble with language badges and a timestamp (no fold button for one language)', () => {
     vi.spyOn(Date, 'now').mockReturnValue(
       new Date('2026-03-11T13:06:10+09:00').getTime(),
     )
@@ -56,7 +56,8 @@ describe('ChatBubble', () => {
     expect(html).toContain('height="32"')
     expect(html).toContain('data-chat-message-bubble')
     expect(html).toContain('data-chat-bubble-language-badges')
-    expect(html).toContain('aria-label="Expand"')
+    // One language row: nothing to fold (see the one-row test below).
+    expect(html).not.toContain('aria-label="Expand"')
     expect(html).toContain('data-original-language-quote-badge')
     expect(html).toContain('data-original-language-quote-icon')
     expect(html).toContain('text-black')
@@ -85,12 +86,12 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-chat-message-bubble-stack')).toBeLessThan(
       html.indexOf('data-original-bubble-timestamp'),
     )
-    expect(html.indexOf('data-original-bubble-timestamp')).toBeLessThan(
-      html.indexOf('data-chat-bubble-controls'),
-    )
+    expect(html).not.toContain('data-chat-bubble-controls')
     expect(html).toContain('data-chat-bubble-other-meta="true"')
-    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 flex-col gap-0 self-end items-start"')
-    expect(html).toContain('items-start self-start text-left')
+    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 flex-col gap-0.5 self-end pb-1 items-start"')
+    // The time sits in the column by the bubble, 10px, lined up on the bubble's side.
+    expect(html.indexOf('data-chat-bubble-other-meta')).toBeLessThan(html.indexOf('data-original-bubble-timestamp'))
+    expect(html).toContain('items-start self-start text-left text-[10px] font-medium')
     expect(html).not.toContain('items-end self-end text-right')
     expect(html).toContain('max-width:100%')
     expect(html).toContain('px-2.5 py-1')
@@ -111,6 +112,21 @@ describe('ChatBubble', () => {
       html.indexOf('data-copyable-bubble'),
     )
     expect(html).toContain('class="align-middle"')
+  })
+
+  it('folds and unfolds on a double tap, only when there is more than one language row (no fold button)', () => {
+    const one = renderToStaticMarkup(createElement(ChatBubble, {
+      utterance: { id: 'u-one', originalText: '안녕', originalLang: 'ko', targetLanguages: [], translations: {} },
+      uiLocale: 'ko',
+    }))
+    expect(one).not.toContain('data-chat-bubble-toggle')
+    expect(one).not.toContain('data-copyable-bubble-double-tap-action="toggle"')
+    const two = renderToStaticMarkup(createElement(ChatBubble, {
+      utterance: { id: 'u-two', originalText: '안녕', originalLang: 'ko', targetLanguages: ['en'], translations: { en: 'Hi' } },
+      uiLocale: 'ko',
+    }))
+    expect(two).not.toContain('data-chat-bubble-toggle')
+    expect(two).toContain('data-copyable-bubble-double-tap-action="toggle"')
   })
 
   it('renders expanded original and translation rows as copyable surfaces without persistent copy buttons', () => {
@@ -137,10 +153,9 @@ describe('ChatBubble', () => {
     expect((html.match(/data-chat-language-badge-visual="true"/g) || []).length).toBe(3)
     expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(3)
     expect((html.match(/data-message-copy-button="true"/g) || []).length).toBe(0)
-    expect(html).toContain('data-chat-bubble-toggle="true"')
-    expect(html).toContain('aria-expanded="true"')
-    expect(html).toContain('aria-label="Collapse"')
-    expect(html).toContain('>Collapse</button>')
+    expect(html).not.toContain('data-chat-bubble-toggle')
+    // Each row folds the bubble on a double tap.
+    expect((html.match(/data-copyable-bubble-double-tap-action="toggle"/g) || []).length).toBe(3)
     expect(html).toContain('data-chat-bubble-content-switch="expanded"')
     expect(html).toContain('my-0.5 h-px w-full bg-gray-200/60')
     expect(html).toContain('mr-1.5 inline-flex align-middle')
@@ -166,7 +181,7 @@ describe('ChatBubble', () => {
     )
   })
 
-  it('keeps the localized toggle attached to the bubble bottom edge on both sides', () => {
+  it('keeps the meta column attached to the bubble bottom edge on both sides', () => {
     const renderBubble = (speakerUserId: string, viewerUserId: string) => renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -189,7 +204,7 @@ describe('ChatBubble', () => {
     const otherHtml = renderBubble('user-other', 'user-me')
     const otherMessageColumnTag = openingTag(otherHtml, 'data-chat-message-column')
     const otherContentSwitchTag = openingTag(otherHtml, 'data-chat-bubble-content-switch="collapsed"')
-    const otherControlsTag = openingTag(otherHtml, 'data-chat-bubble-controls')
+    const otherMetaTag = openingTag(otherHtml, 'data-chat-bubble-other-meta')
 
     expect(otherMessageColumnTag).toContain('flex-col items-start gap-px')
     expect(otherMessageColumnTag).not.toContain('gap-1 ')
@@ -198,12 +213,12 @@ describe('ChatBubble', () => {
     expect(otherContentSwitchTag).toContain('min-w-0 w-max max-w-full shrink')
     expect(otherContentSwitchTag).toContain('flex-basis:max-content')
     expect(otherContentSwitchTag).not.toContain('flex-1')
-    expect(otherControlsTag).toContain('self-start')
-    expect(otherControlsTag).not.toContain('mb-1.5')
+    expect(otherMetaTag).toContain('self-end')
+    expect(otherMetaTag).toContain('items-start')
     const otherBubbleLineTag = openingTag(otherHtml, 'data-chat-bubble-line')
     expect(otherBubbleLineTag).toContain('items-end gap-1')
     expect(otherHtml.indexOf('data-chat-message-bubble-stack')).toBeLessThan(
-      otherHtml.indexOf('data-chat-bubble-controls'),
+      otherHtml.indexOf('data-chat-bubble-other-meta'),
     )
 
     const ownHtml = renderBubble('user-me', 'user-me')
@@ -339,7 +354,8 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('data-message-copy-button')
     expect(html).toContain('data-copyable-bubble')
     expect((html.match(/data-message-copy-button/g) || []).length).toBe(0)
-    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(1)
+    // Two languages: a double tap folds or unfolds; reading aloud is in the long-press menu.
+    expect((html.match(/data-copyable-bubble-double-tap-action="toggle"/g) || []).length).toBe(1)
     expect(html).not.toContain('data-original-bubble-body')
     expect(html.indexOf('data-translation-bubble-body')).toBeLessThan(
       html.indexOf('data-copyable-bubble'),
@@ -481,7 +497,7 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('>UNKNOWN<')
   })
 
-  it('routes original and translated bubbles to pronunciation playback on double tap', () => {
+  it('folds or unfolds a bubble with a translation on double tap (reading aloud stays in the menu)', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -498,7 +514,7 @@ describe('ChatBubble', () => {
       }),
     )
 
-    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(1)
+    expect((html.match(/data-copyable-bubble-double-tap-action="toggle"/g) || []).length).toBe(1)
     expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(2)
     expect((html.match(/data-original-language-quote-badge/g) || []).length).toBe(1)
     expect(html).not.toContain('data-message-tts-button')
@@ -570,7 +586,7 @@ describe('ChatBubble', () => {
     )
   })
 
-  it('right-aligns own messages without an avatar and stacks time above controls beside the bubble', () => {
+  it('right-aligns own messages without an avatar and puts the time beside the bubble', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -589,13 +605,8 @@ describe('ChatBubble', () => {
     expect(html).toContain('justify-end')
     expect(html).not.toContain('flex-row-reverse')
     expect(html).not.toContain('data-speaker-avatar-column')
+    expect(html).not.toContain('data-chat-bubble-controls')
     expect(html.indexOf('data-original-bubble-timestamp')).toBeLessThan(
-      html.indexOf('data-chat-bubble-controls'),
-    )
-    expect(html.indexOf('data-original-bubble-timestamp')).toBeLessThan(
-      html.indexOf('data-chat-message-bubble-stack'),
-    )
-    expect(html.indexOf('data-chat-bubble-controls')).toBeLessThan(
       html.indexOf('data-chat-message-bubble-stack'),
     )
     expect(html).toContain('data-chat-bubble-own-meta="true"')

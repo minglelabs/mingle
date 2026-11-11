@@ -36,7 +36,6 @@ import {
   DEFAULT_BUBBLE_DISPLAY_MODE,
   type LivePhoneDemoBubbleDisplayMode,
 } from './live-phone-demo.bubble-display'
-import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-display-copy'
 import ChatAccountBadge from './ChatAccountBadge'
 import { readAccountBadgeKind } from './chat-account-badge.logic'
 import type { AccountBadgeKind } from '@/lib/account-badge'
@@ -722,6 +721,8 @@ interface ExpandedChatBubbleRowProps {
   onPlayOriginal?: (utterance: Utterance) => void
   onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
   onSelectLanguage?: (language: string) => void
+  /** A double tap folds the bubble back to one language. */
+  onDoubleTap?: () => void
 }
 
 function ExpandedChatBubbleRow({
@@ -746,6 +747,7 @@ function ExpandedChatBubbleRow({
   onPlayOriginal,
   onPlayTranslation,
   onSelectLanguage,
+  onDoubleTap,
 }: ExpandedChatBubbleRowProps) {
   const hasText = Boolean(text.trim())
   const rowPlaybackKey = isOriginal
@@ -817,6 +819,7 @@ function ExpandedChatBubbleRow({
         ? (!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined)
         : (() => onPlayTranslation?.(utterance, lang, text))}
       retranslateLanguage={!isOriginal && translationState === 'final' ? lang : undefined}
+      onDoubleTap={onDoubleTap}
       className={bubbleSurfaceClassName}
     >
       {bubbleBody}
@@ -907,7 +910,6 @@ function ChatBubble({
   const speakerLabel = (utterance.speaker || '').trim() || 'speaker'
   const copyActionCopy = resolveLivePhoneDemoCopyActionCopy(uiLocale)
   const ttsActionCopy = resolveLivePhoneDemoTtsActionCopy(uiLocale)
-  const bubbleDisplayCopy = resolveLivePhoneDemoBubbleDisplayCopy(uiLocale)
   const [isBubbleExpanded, setIsBubbleExpanded] = useState(
     bubbleDisplayMode === 'expanded',
   )
@@ -1010,6 +1012,11 @@ function ChatBubble({
     })),
   ]
 
+  // A double tap on the bubble folds or unfolds it (reading aloud stays in
+  // the long-press menu). One language row has nothing to fold.
+  const canToggleBubble = !messageImage && !isRecalled && expandedBubbleEntries.length > 1
+  const toggleBubbleExpanded = canToggleBubble ? () => setIsBubbleExpanded((expanded) => !expanded) : undefined
+
   const activeBubbleText = (
     <span
       data-current-bubble-content
@@ -1105,35 +1112,12 @@ function ChatBubble({
         ? (!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined)
         : (() => onPlayTranslation?.(utterance, activeLanguage, activeText))}
       retranslateLanguage={!isOriginalLanguageSelected && activeTranslationEntry?.state === 'final' ? activeLanguage : undefined}
+      onDoubleTap={toggleBubbleExpanded}
       style={{ maxWidth: '100%' }}
       className="inline rounded-xl bg-transparent px-0 py-0 shadow-none"
     >
       {activeBubbleText}
     </CopyableBubbleSurface>
-  )
-
-  const bubbleControls = (
-    <div
-      data-chat-bubble-controls
-      className={`flex shrink-0 flex-col gap-0 ${isOwnMessage ? 'items-end self-end' : 'items-start self-start'}`}
-    >
-      <button
-        type="button"
-        data-chat-bubble-toggle
-        aria-label={isBubbleExpanded ? bubbleDisplayCopy.collapseBubbleLabel : bubbleDisplayCopy.expandBubbleLabel}
-        aria-expanded={isBubbleExpanded}
-        title={isBubbleExpanded ? bubbleDisplayCopy.collapseBubbleLabel : bubbleDisplayCopy.expandBubbleLabel}
-        onPointerDown={(event) => event.stopPropagation()}
-        onTouchStart={(event) => event.stopPropagation()}
-        onClick={(event) => {
-          event.stopPropagation()
-          setIsBubbleExpanded((expanded) => !expanded)
-        }}
-        className="inline-flex h-5 min-w-0 touch-manipulation items-center justify-center whitespace-nowrap rounded-md px-0 text-[10px] font-medium leading-5 text-black/[0.34] transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-95"
-      >
-        {isBubbleExpanded ? bubbleDisplayCopy.collapseBubbleLabel : bubbleDisplayCopy.expandBubbleLabel}
-      </button>
-    </div>
   )
 
   const originalLanguageKey = displayLanguageKey(originalDisplayLanguage)
@@ -1308,6 +1292,7 @@ function ChatBubble({
                   onPlayOriginal={onPlayOriginal}
                   onPlayTranslation={onPlayTranslation}
                   onSelectLanguage={selectDisplayLanguage}
+                  onDoubleTap={toggleBubbleExpanded}
                 />
               ))}
             </div>
@@ -1351,19 +1336,27 @@ function ChatBubble({
     </AnimatePresence>
   )
 
-  // Own and other/animal bubbles share the same "time stacked above the
-  // expand/collapse button" meta column — previously only own bubbles got
-  // this, while other bubbles got a timestamp under the avatar instead.
-  // Own messages sit at the right edge of the screen, so their meta column
-  // right-aligns; other/animal messages sit next to a left-anchored bubble,
-  // so their meta column hugs the bubble on the left instead.
+  // Own and other/animal bubbles share one meta column (read mark over the
+  // time). Own messages sit at the right edge, so the
+  // column hugs the bubble on its right; others hug it on the left.
   const bubbleTimestamp = hasTimestamp ? (
     <ChatBubbleTimestamp
       createdAtMs={utterance.createdAtMs}
       uiLocale={uiLocale}
+      // A time on two lines (older messages) lines up on the bubble's side.
       align={isOwnMessage ? 'right' : 'left'}
-      minWidth="2.5rem"
-      className="text-[10px] font-medium leading-5 text-black/[0.34]"
+      minWidth="0"
+      className="text-[10px] font-medium text-black/[0.34]"
+    />
+  ) : null
+  // Read mark (a check, or how many have not read it) right by the bubble.
+  const bubbleReadReceipt = !isDraft && !isRecalled ? (
+    <MessageReadReceipt
+      senderUserId={utterance.speakerUserId}
+      // Not yet stored → nobody can have read it; createdAtMs (device
+      // clock) is only a stand-in until the server time arrives.
+      createdAtMs={utterance.serverPersistedAtMs ?? utterance.createdAtMs}
+      locale={uiLocale}
     />
   ) : null
 
@@ -1371,20 +1364,11 @@ function ChatBubble({
     <div
       data-chat-bubble-own-meta={isOwnMessage || undefined}
       data-chat-bubble-other-meta={isOwnMessage ? undefined : true}
-      className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
+      className={`flex shrink-0 flex-col gap-0.5 self-end pb-1 ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
-      {!isDraft && !isRecalled && (
-        <MessageReadReceipt
-          senderUserId={utterance.speakerUserId}
-          // Not yet stored → nobody can have read it; createdAtMs (device
-          // clock) is only a stand-in until the server time arrives.
-          createdAtMs={utterance.serverPersistedAtMs ?? utterance.createdAtMs}
-          locale={uiLocale}
-          align={isOwnMessage ? 'right' : 'left'}
-        />
-      )}
+      {/* Read mark over the time, both 10px, lined up on the bubble's side. */}
+      {bubbleReadReceipt}
       {bubbleTimestamp}
-      {!messageImage && !isRecalled && bubbleControls}
     </div>
   )
 
