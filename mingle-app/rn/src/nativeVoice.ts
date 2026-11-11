@@ -121,6 +121,8 @@ export type VoiceSnapshot = {
   micOn: boolean;
   micAvailable: boolean;
   interpretOn: boolean;
+  /** Translations read aloud while interpreting. */
+  listenOn: boolean;
   mode: InterpretVolumeMode;
   origVol: number;
   trVol: number;
@@ -153,6 +155,7 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     micOn: true,
     micAvailable: true,
     interpretOn: false,
+    listenOn: true,
     readingAloud: false,
     mode: 'static' as InterpretVolumeMode,
     origVol: DUCK_ORIG_STATIC,
@@ -169,12 +172,13 @@ export function createVoiceController(deps: VoiceControllerDeps) {
   }
 
   function subscriptionState(): SubscriptionState {
-    return { interpretOn: state.interpretOn, myLang: deps.myLang };
+    return { interpretOn: state.interpretOn, listenOn: state.listenOn, myLang: deps.myLang };
   }
 
   function volumeState(): VolumeState {
     return {
       interpretOn: state.interpretOn,
+      listenOn: state.listenOn,
       myLang: deps.myLang,
       mode: state.mode,
       origVol: state.origVol,
@@ -323,6 +327,17 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     await room?.localParticipant.setAttributes?.({ interpret: on ? 'on' : 'off' }).catch(() => undefined);
   }
 
+  /** Translations read aloud on my language's lane; off keeps captions only. */
+  async function setListen(on: boolean): Promise<void> {
+    state.listenOn = on;
+    state.lanePlaying = false;
+    syncSubscriptions();
+    applyVolumes();
+    emit();
+    // The interpreter reads aloud (and charges) only for the people listening.
+    await room?.localParticipant.setAttributes?.({ listen: on ? 'on' : 'off' }).catch(() => undefined);
+  }
+
   async function setMicOn(on: boolean): Promise<void> {
     if (!state.micAvailable) return;
     state.micOn = on;
@@ -433,6 +448,7 @@ export function createVoiceController(deps: VoiceControllerDeps) {
       micOn: state.micOn,
       micAvailable: state.micAvailable,
       interpretOn: state.interpretOn,
+      listenOn: state.listenOn,
       mode: state.mode,
       origVol: state.origVol,
       trVol: state.trVol,
@@ -444,6 +460,7 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     connect,
     leave,
     setInterpret,
+    setListen,
     setMicOn,
     setMode,
     setOrigVol,

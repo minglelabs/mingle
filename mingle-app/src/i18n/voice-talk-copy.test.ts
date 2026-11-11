@@ -5,7 +5,7 @@ import { voiceTalkCopy, type VoiceTalkCopy } from './voice-talk-copy'
 describe('voiceTalkCopy', () => {
   it('translates every word in all 15 primary UI locales', () => {
     const keys = Object.keys(voiceTalkCopy('en')) as Array<keyof VoiceTalkCopy>
-    for (const key of ['leave', 'me', 'empty', 'micOnState', 'interpretOnState', 'interpretHint', 'live', 'messageJoin', 'startTitle'] as const) {
+    for (const key of ['leave', 'me', 'empty', 'micOnState', 'interpretOnState', 'listenOnState', 'live', 'messageJoin', 'startTitle'] as const) {
       const values = new Set<string>()
       for (const locale of PRIMARY_UI_LOCALES) {
         const value = voiceTalkCopy(locale)[key]

@@ -273,6 +273,7 @@ import VoiceTalkPanel, {
   resolveVoiceTalkButtonPress,
   resolveVoiceTalkMic,
   setVoiceTalkInterpret,
+  setVoiceTalkListen,
   setVoiceTalkMic,
 } from './VoiceTalkPanel'
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
@@ -2083,6 +2084,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Interpretation in the call: captions and the interpreted voice of what
   // the others say, for this viewer.
   const [voiceTalkInterpretOn, setVoiceTalkInterpretOn] = useState(false)
+  // Translations read aloud while interpreting; a person may want captions only.
+  const [voiceTalkListenOn, setVoiceTalkListenOn] = useState(true)
   const [voiceTalkState, setVoiceTalkState] = useState<{ live: boolean, joined: boolean, connected: boolean, callId: string | null }>(
     { live: false, joined: false, connected: false, callId: null },
   )
@@ -6319,7 +6322,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (voiceTalkState.joined) return
     setVoiceTalkListenOnly(false)
     setVoiceTalkInterpretOn(false)
+    setVoiceTalkListenOn(true)
   }, [voiceTalkState.joined])
+
+  const handleVoiceTalkInterpretSync = useCallback((state: { interpretOn: boolean, listenOn: boolean }) => {
+    setVoiceTalkInterpretOn(state.interpretOn)
+    setVoiceTalkListenOn(state.listenOn)
+  }, [])
+
+  const handleVoiceTalkListenChange = useCallback((on: boolean) => {
+    setVoiceTalkListenOn(on)
+    setVoiceTalkListen(on)
+  }, [])
 
   const handleVoiceTalkInterpretChange = useCallback((on: boolean) => {
     setVoiceTalkInterpretOn(on)
@@ -8219,6 +8233,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             onListenOnlySync={setVoiceTalkListenOnly}
             interpretOn={voiceTalkInterpretOn}
             onInterpretChange={handleVoiceTalkInterpretChange}
+            listenOn={voiceTalkListenOn}
+            onListenChange={handleVoiceTalkListenChange}
+            onInterpretSync={handleVoiceTalkInterpretSync}
+            earphonesConnected={nativeAudioRoute.earphonesConnected}
             onOpenProfile={handleOpenProfileForBubble}
             viewerUserId={viewerUserId}
           />

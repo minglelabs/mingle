@@ -168,6 +168,7 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
       if (!controller) return;
       if (payload.mic !== undefined) void controller.setMicOn(payload.mic);
       if (payload.interpret !== undefined) void controller.setInterpret(payload.interpret);
+      if (payload.listen !== undefined) void controller.setListen(payload.listen);
       if (payload.mode !== undefined) controller.setMode(payload.mode);
       if (payload.origVol !== undefined) controller.setOrigVol(payload.origVol);
       if (payload.volume !== undefined) controller.setCallVol(payload.volume);

@@ -77,6 +77,11 @@ function isInterpreting(participant: RemoteParticipant): boolean {
     return participant.attributes.interpret === 'on';
 }
 
+/** Interpreting and hearing translations read aloud (`listen` is "off" for captions only). */
+function isListening(participant: RemoteParticipant): boolean {
+    return isInterpreting(participant) && participant.attributes.listen !== 'off';
+}
+
 function pruneRecent(list: Recent[], now: number): void {
     while (list.length && now - list[0].at > ECHO_WINDOW_MS) list.shift();
 }
@@ -227,7 +232,7 @@ export class Interpreter {
 
     private listenersFor(lang: string): string[] {
         return this.humans()
-            .filter((participant) => isInterpreting(participant) && normalizeLang(participant.attributes.lang) === lang)
+            .filter((participant) => isListening(participant) && normalizeLang(participant.attributes.lang) === lang)
             .map((participant) => participant.identity);
     }
 
@@ -333,7 +338,8 @@ export class Interpreter {
             meta.provider = result.provider;
             meta.translatedAt = Date.now();
             this.send({ type: 'translation', id, lang: targetLang, text: result.text, provider: result.provider });
-            if (!result.text) return audio.end();
+            // Read aloud only when someone in that language listens (captions only otherwise).
+            if (!result.text || this.listenersFor(targetLang).length === 0) return audio.end();
             await synthesizeStream(result.text, targetLang, (samples) => {
                 if (!meta.firstAudioAt) meta.firstAudioAt = Date.now();
                 audio.push(samples);

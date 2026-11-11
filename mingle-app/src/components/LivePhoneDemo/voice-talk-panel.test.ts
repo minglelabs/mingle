@@ -47,7 +47,8 @@ describe('a call takes over speech-to-text', () => {
   it('has an interpret button that the room reads, and a hint while it is off', () => {
     expect(liveDemoSource).toContain('onInterpretChange={handleVoiceTalkInterpretChange}')
     expect(panelSource).toContain('data-qa="voice-talk-interpret-toggle"')
-    expect(panelSource).toContain('{joined && !interpretOn ? (')
+    expect(panelSource).toContain('data-qa="voice-talk-listen-toggle"')
+    expect(panelSource).not.toContain('interpretHint')
   })
 
   it('keeps the room speaker mode off in a call: the interpreter reads on the call itself', () => {
@@ -100,13 +101,15 @@ describe('voice talk panel', () => {
     expect(copySource).toContain("micOffState: '내 목소리 꺼짐'")
     expect(panelSource).not.toContain('마이크 끄기')
     expect(panelSource).not.toContain('마이크 켜기')
-    expect(panelSource).toContain('{copy.micOffState}</span></> : <><Mic size={16} className="shrink-0" /> <span className="truncate">{copy.micOnState}')
+    expect(panelSource).toContain('{listenOnly ? <MicOff size={22} /> : <Mic size={22} />}')
   })
 
-  it('gives the mic, interpret and leave buttons a full-height tap target and space between them', () => {
-    const row = panelSource.slice(panelSource.indexOf('data-qa="voice-talk-mic-toggle"') - 400, panelSource.indexOf('data-qa="voice-talk-leave"') + 400)
-    expect(row).toContain('gap-2')
-    expect(row.split('h-11').length - 1).toBe(3)
+  it('shows four round icon buttons with room between them: mic, interpret, read-aloud, leave', () => {
+    const row = panelSource.slice(panelSource.indexOf('data-qa="voice-talk-mic-toggle"') - 400, panelSource.indexOf('data-qa="voice-talk-leave"') + 900)
+    expect(row).toContain('gap-4')
+    expect(row.split('h-12 w-16').length - 1).toBe(4)
+    expect(row).not.toContain('{copy.micOnState}</span>')
+    expect(row).toContain('aria-label={listenOnly ? copy.micOffState : copy.micOnState}')
   })
 
   it('shows my own mic switch at once and the others\' from the call', () => {
@@ -311,7 +314,7 @@ describe('seats shown', () => {
   })
 
   it('keeps the leave button gray, so the red mic-on is the only red', () => {
-    const leaveButton = panelSource.slice(panelSource.indexOf('data-qa="voice-talk-leave"'), panelSource.indexOf('{copy.leave}', panelSource.indexOf('data-qa="voice-talk-leave"')))
+    const leaveButton = panelSource.slice(panelSource.indexOf('data-qa="voice-talk-leave"'), panelSource.indexOf('<PhoneOff', panelSource.indexOf('data-qa="voice-talk-leave"')))
     expect(leaveButton).toContain('bg-gray-100')
     expect(leaveButton).not.toContain('rose')
   })

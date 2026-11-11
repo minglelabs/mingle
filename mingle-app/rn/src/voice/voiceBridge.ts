@@ -13,7 +13,7 @@
 //   { type: 'native_voice_close' }                                                        // leave
 //   { type: 'native_voice_status_request', payload: { conversationId } }                 // poll GET /voice
 //   { type: 'native_voice_status_stop' }                                                  // stop polling
-//   { type: 'native_voice_set', payload: { mic?, interpret?, mode?, origVol? } }
+//   { type: 'native_voice_set', payload: { mic?, interpret?, listen?, mode?, origVol? } }
 //
 // native -> web events (dispatched on window as CustomEvent detail):
 //   { type: 'state', phase: 'idle'|'connecting'|'connected'|'left'|'error', conversationId, errorKind? }
@@ -45,6 +45,8 @@ export type VoiceSetCommand = {
   payload: {
     mic?: boolean;
     interpret?: boolean;
+    /** Translations read aloud on my language's lane (captions stay with `interpret`). */
+    listen?: boolean;
     mode?: 'static' | 'dynamic';
     origVol?: number;
     /** The viewer's volume for the whole call (0..1). */
@@ -101,6 +103,7 @@ export function parseVoiceBridgeCommand(parsed: unknown): VoiceBridgeCommand | n
     const out: VoiceSetCommand['payload'] = {};
     if (typeof payload.mic === 'boolean') out.mic = payload.mic;
     if (typeof payload.interpret === 'boolean') out.interpret = payload.interpret;
+    if (typeof payload.listen === 'boolean') out.listen = payload.listen;
     if (payload.mode === 'static' || payload.mode === 'dynamic') out.mode = payload.mode;
     if (typeof payload.origVol === 'number' && Number.isFinite(payload.origVol)) {
       out.origVol = Math.max(0, Math.min(1, payload.origVol));

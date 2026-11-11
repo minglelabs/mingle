@@ -52,6 +52,10 @@ describe('shouldSubscribe', () => {
     expect(shouldSubscribe({ kind: 'audio', trackName: 'tr:ja' }, agent, { interpretOn: true, myLang: 'ja' })).toBe(true);
     expect(shouldSubscribe({ kind: 'audio', trackName: 'tr:en' }, agent, { interpretOn: true, myLang: 'ja' })).toBe(false);
   });
+  it('drops the lane when read-aloud is off, keeping interpretation on', () => {
+    expect(shouldSubscribe({ kind: 'audio', trackName: 'tr:ja' }, agent, { interpretOn: true, listenOn: false, myLang: 'ja' })).toBe(false);
+    expect(shouldSubscribe({ kind: 'audio', trackName: 'tr:ja' }, agent, { interpretOn: true, listenOn: true, myLang: 'ja' })).toBe(true);
+  });
   it('never subscribes interpreter lane when interpret OFF', () => {
     expect(shouldSubscribe({ kind: 'audio', trackName: 'tr:ja' }, agent, { interpretOn: false, myLang: 'ja' })).toBe(false);
   });
@@ -85,6 +89,9 @@ describe('volume mix', () => {
     expect(originalVolume(other, base)).toBe(1);
     expect(originalVolume(other, { ...base, readingAloud: true })).toBe(DUCK_ORIG_STATIC);
     expect(originalVolume(sameLang, { ...base, readingAloud: true })).toBe(1);
+  });
+  it('with read-aloud off there is no lane to duck for', () => {
+    expect(originalVolume(other, { ...base, lanePlaying: true, listenOn: false })).toBe(1);
   });
   it('an interpreter lane ducks only while it plays', () => {
     expect(originalVolume(other, { ...base, mode: 'dynamic', lanePlaying: false })).toBe(1);

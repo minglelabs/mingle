@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ChevronUp, Languages, Mic, MicOff, PhoneOff, Phone, Plus } from 'lucide-react'
+import { ChevronUp, Headphones, Languages, Mic, MicOff, PhoneOff, Phone, Plus, Volume2, VolumeX } from 'lucide-react'
 import LanguageFlag from '@/components/language-flag'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { useRoomPresence } from '@/lib/room-presence'
@@ -43,6 +43,8 @@ type RoomSnapshot = {
   micOn: boolean
   micAvailable: boolean
   interpretOn: boolean
+  /** Builds from 2026-11-11 on. */
+  listenOn?: boolean
 }
 type Phase = 'idle' | 'connecting' | 'connected' | 'left' | 'error'
 
@@ -139,6 +141,11 @@ export async function setVoiceTalkInterpret(conversationId: string, on: boolean)
   post({ type: 'native_voice_set', payload: { interpret: on } })
 }
 
+/** Turns the translations read aloud on or off; interpretation (captions) stays as it is. */
+export function setVoiceTalkListen(on: boolean): void {
+  post({ type: 'native_voice_set', payload: { listen: on } })
+}
+
 /** The call's mic: on unless the viewer only listens. The room's speech-to-text does not move it. */
 export function resolveVoiceTalkMic(input: { listenOnly: boolean }): boolean {
   return !input.listenOnly
@@ -176,6 +183,13 @@ export type VoiceTalkPanelProps = {
   /** Interpretation (captions and the interpreted voice of the others) is on for this viewer. Owned by the room. */
   interpretOn?: boolean
   onInterpretChange?: (on: boolean) => void
+  /** Translations read aloud, on while interpretation is on unless turned off. Owned by the room. */
+  listenOn?: boolean
+  onListenChange?: (on: boolean) => void
+  /** The app reported interpretation and read-aloud (on returning to the room): show them, switch nothing. */
+  onInterpretSync?: (state: { interpretOn: boolean; listenOn: boolean }) => void
+  /** Earphones are in: the read-aloud button shows them instead of the speaker. */
+  earphonesConnected?: boolean
   /** Opens a member's profile when their seat is tapped. */
   onOpenProfile?: (userId: string) => void
   /** This viewer's account id: always counted as having the room open. */
@@ -186,7 +200,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const { conversationId, conversationTitle, myLang, openSignal, leaveSignal, onAvailabilityChange, onListenOnlyChange, onOpenProfile } = props
   const listenOnly = props.listenOnly === true
   const interpretOn = props.interpretOn === true
-  const { onInterpretChange } = props
+  const { onInterpretChange, onListenChange } = props
+  const listenOn = props.listenOn !== false
   const viewerUserId = props.viewerUserId ?? null
   const copy = voiceTalkCopy(props.uiLocale)
   const [call, setCall] = useState<StatusCall>(null)
@@ -205,6 +220,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const phaseRef = useRef<Phase>('idle')
   const onListenOnlySyncRef = useRef(props.onListenOnlySync)
   useEffect(() => { onListenOnlySyncRef.current = props.onListenOnlySync }, [props.onListenOnlySync])
+  const onInterpretSyncRef = useRef(props.onInterpretSync)
+  useEffect(() => { onInterpretSyncRef.current = props.onInterpretSync }, [props.onInterpretSync])
 
   useEffect(() => {
     if (!conversationId || !bridge()) return
@@ -228,6 +245,10 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         // The app's mic is the truth: a muted call stays muted however often
         // this screen is closed and opened.
         if (detail.snapshot && typeof detail.snapshot.micOn === 'boolean') onListenOnlySyncRef.current?.(!detail.snapshot.micOn)
+        // Interpretation and read-aloud too: they go on with the room closed.
+        if (detail.snapshot && typeof detail.snapshot.interpretOn === 'boolean') {
+          onInterpretSyncRef.current?.({ interpretOn: detail.snapshot.interpretOn, listenOn: detail.snapshot.listenOn !== false })
+        }
       }
       else if (detail.type === 'state') {
         phaseRef.current = detail.phase
@@ -617,48 +638,67 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                 </div>
               ) : null}
 
-              {joined && !interpretOn ? (
-                <p data-qa="voice-talk-interpret-hint" className="px-3 pb-2 text-center text-[0.76rem] text-gray-500">
-                  {copy.interpretHint}
-                </p>
-              ) : null}
-
               {joined ? (
-                <div className="flex items-center justify-center gap-2 border-t border-gray-100 px-3 py-2.5">
-                  {/* Shows the mic's state; pressing it switches. */}
+                // Four round buttons, icons only (color says on or off), with
+                // room between them so a thumb does not hit the neighbor.
+                <div className="flex items-center justify-center gap-4 border-t border-gray-100 px-3 py-3">
+                  {/* The voice this phone sends into the call. */}
                   <button
                     type="button"
                     data-qa="voice-talk-mic-toggle"
                     aria-pressed={!listenOnly}
+                    aria-label={listenOnly ? copy.micOffState : copy.micOnState}
+                    title={listenOnly ? copy.micOffState : copy.micOnState}
                     onClick={() => onListenOnlyChange?.(!listenOnly)}
-                    className={`inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 text-[0.78rem] font-semibold transition-colors ${
+                    className={`inline-flex h-12 w-16 items-center justify-center rounded-full transition-colors ${
                       listenOnly ? 'bg-gray-100 text-gray-400 active:bg-gray-200' : 'bg-red-500 text-white shadow-sm active:bg-red-600'
                     }`}
                   >
-                    {listenOnly ? <><MicOff size={16} className="shrink-0" /> <span className="truncate">{copy.micOffState}</span></> : <><Mic size={16} className="shrink-0" /> <span className="truncate">{copy.micOnState}</span></>}
+                    {listenOnly ? <MicOff size={22} /> : <Mic size={22} />}
                   </button>
-                  {/* Captions and the interpreted voice of what the others say. */}
+                  {/* Interpretation: captions of what the others say. */}
                   <button
                     type="button"
                     data-qa="voice-talk-interpret-toggle"
                     aria-pressed={interpretOn}
+                    aria-label={interpretOn ? copy.interpretOnState : copy.interpretOffState}
+                    title={interpretOn ? copy.interpretOnState : copy.interpretOffState}
                     onClick={() => onInterpretChange?.(!interpretOn)}
-                    className={`inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 text-[0.78rem] font-semibold transition-colors ${
+                    className={`inline-flex h-12 w-16 items-center justify-center rounded-full transition-colors ${
                       interpretOn ? 'bg-emerald-500 text-white shadow-sm active:bg-emerald-600' : 'bg-gray-100 text-gray-400 active:bg-gray-200'
                     }`}
                   >
-                    <Languages size={16} className="shrink-0" /> <span className="truncate">{interpretOn ? copy.interpretOnState : copy.interpretOffState}</span>
+                    <Languages size={22} />
+                  </button>
+                  {/* The translations read aloud (speaker, or earphones when in). Needs interpretation. */}
+                  <button
+                    type="button"
+                    data-qa="voice-talk-listen-toggle"
+                    aria-pressed={interpretOn && listenOn}
+                    aria-label={listenOn ? copy.listenOnState : copy.listenOffState}
+                    title={listenOn ? copy.listenOnState : copy.listenOffState}
+                    disabled={!interpretOn}
+                    onClick={() => onListenChange?.(!listenOn)}
+                    className={`inline-flex h-12 w-16 items-center justify-center rounded-full transition-colors disabled:opacity-40 ${
+                      interpretOn && listenOn ? 'bg-amber-400 text-white shadow-sm active:bg-amber-500' : 'bg-gray-100 text-gray-400 active:bg-gray-200'
+                    }`}
+                  >
+                    {props.earphonesConnected
+                      ? <Headphones size={22} />
+                      : listenOn ? <Volume2 size={22} /> : <VolumeX size={22} />}
                   </button>
                   <button
                     type="button"
                     data-qa="voice-talk-leave"
+                    aria-label={copy.leave}
+                    title={copy.leave}
                     // Inside the panel the button is unmistakable: it leaves at
                     // once. Only the room's phone button asks first.
                     onClick={leave}
                     // Plain gray: red is the mic's "on", and two red buttons both read as warnings.
-                    className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-full bg-gray-100 px-2 text-[0.78rem] font-semibold text-gray-700 active:bg-gray-200"
+                    className="inline-flex h-12 w-16 items-center justify-center rounded-full bg-gray-100 text-gray-700 active:bg-gray-200"
                   >
-                    <PhoneOff size={16} className="shrink-0" /> <span className="truncate">{copy.leave}</span>
+                    <PhoneOff size={22} />
                   </button>
                 </div>
               ) : null}

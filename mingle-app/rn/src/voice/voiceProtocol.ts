@@ -72,6 +72,8 @@ export type TrackPublicationView = {
 
 export type SubscriptionState = {
   interpretOn: boolean;
+  /** Translations read aloud (my language's lane). Off = captions only. Default on. */
+  listenOn?: boolean;
   /** The local user's chosen listening language (e.g. 'ja'). */
   myLang: string;
 };
@@ -89,7 +91,7 @@ export function shouldSubscribe(
 ): boolean {
   if (pub.kind !== 'audio') return false;
   if (isInterpreterParticipant(participant)) {
-    return state.interpretOn && pub.trackName === LANE_PREFIX + state.myLang;
+    return state.interpretOn && state.listenOn !== false && pub.trackName === LANE_PREFIX + state.myLang;
   }
   return true;
 }
@@ -100,6 +102,8 @@ export function shouldSubscribe(
 
 export type VolumeState = {
   interpretOn: boolean;
+  /** Translations read aloud: off means no lane, so nothing ducks for it. */
+  listenOn?: boolean;
   myLang: string;
   mode: InterpretVolumeMode;
   /** Static-mode original-audio volume fraction (slider), default 0.25. */
@@ -130,7 +134,7 @@ export function originalVolume(participant: VoiceParticipantView, state: VolumeS
   // being read.
   if (state.readingAloud) return DUCK_ORIG_STATIC;
   // An interpreter lane (older servers) playing for my language.
-  if (state.interpretOn && state.lanePlaying) return state.duckLow ?? DUCK_ORIG_DYNAMIC_LOW;
+  if (state.interpretOn && state.listenOn !== false && state.lanePlaying) return state.duckLow ?? DUCK_ORIG_DYNAMIC_LOW;
   return VOLUME_FULL;
 }
 
