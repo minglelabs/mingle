@@ -60,8 +60,9 @@ export async function recordHashRushRound(report: HashRushRoundReport): Promise<
   for (const p of report.players) {
     kept += await prisma.$executeRaw`
       INSERT INTO "app"."app_hash_rush_round_players"
+        -- played_at is a timestamp without time zone holding UTC, as Prisma writes it.
         ("id", "match_id", "channel_id", "user_id", "won", "seeds", "bonks", "bonked", "teams", "map", "played_at")
-      VALUES (${`hr_${report.matchId}_${p.userId}`.slice(0, 120)}, ${report.matchId}, ${report.channelId}, ${p.userId}, ${p.won}, ${p.seeds}, ${p.bonks}, ${p.bonked}, ${report.teams}, ${report.map}, ${report.playedAt})
+      VALUES (${`hr_${report.matchId}_${p.userId}`.slice(0, 120)}, ${report.matchId}, ${report.channelId}, ${p.userId}, ${p.won}, ${p.seeds}, ${p.bonks}, ${p.bonked}, ${report.teams}, ${report.map}, (${report.playedAt}::timestamptz AT TIME ZONE 'UTC'))
       ON CONFLICT ("match_id", "user_id") DO NOTHING`;
   }
   return kept;

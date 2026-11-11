@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 
@@ -74,7 +75,11 @@ export async function joinHashRushGame(
 }
 
 // Raw updates: the channel's updatedAt orders the room list, and a heartbeat
-// must not move the room to the top.
+// must not move the room to the top. The column is a timestamp without time
+// zone holding UTC (as Prisma writes it), so every time goes in as UTC: a
+// plain Date parameter is a timestamptz, and the database would shift it by
+// its own time zone (Asia/Seoul locally: +9 h, and every join conflicted).
+const utc = (date: Date) => Prisma.sql`(${date}::timestamptz AT TIME ZONE 'UTC')`
 export const prismaHashRushGameStore: HashRushGameStore = {
   async read(channelId) {
     const rows = await prisma.$queryRaw<Array<{ session_id: string | null; started_by: string | null; active_at: Date | null }>>`
@@ -86,19 +91,19 @@ export const prismaHashRushGameStore: HashRushGameStore = {
   async tryStart(channelId, { sessionId, userId, now, cutoff }) {
     const count = await prisma.$executeRaw`
       UPDATE "app"."app_conversation_channels"
-      SET "hash_rush_session_id" = ${sessionId}, "hash_rush_started_by_user_id" = ${userId}, "hash_rush_active_at" = ${now}
+      SET "hash_rush_session_id" = ${sessionId}, "hash_rush_started_by_user_id" = ${userId}, "hash_rush_active_at" = ${utc(now)}
       WHERE "id" = ${channelId}
-        AND ("hash_rush_session_id" IS NULL OR "hash_rush_active_at" IS NULL OR "hash_rush_active_at" < ${cutoff})`;
+        AND ("hash_rush_session_id" IS NULL OR "hash_rush_active_at" IS NULL OR "hash_rush_active_at" < ${utc(cutoff)})`;
     return count > 0;
   },
   async touch(channelId, { sessionId, now, cutoff, revive }) {
     const count = revive
       ? await prisma.$executeRaw`
-          UPDATE "app"."app_conversation_channels" SET "hash_rush_active_at" = ${now}
+          UPDATE "app"."app_conversation_channels" SET "hash_rush_active_at" = ${utc(now)}
           WHERE "id" = ${channelId} AND "hash_rush_session_id" = ${sessionId}`
       : await prisma.$executeRaw`
-          UPDATE "app"."app_conversation_channels" SET "hash_rush_active_at" = ${now}
-          WHERE "id" = ${channelId} AND "hash_rush_session_id" = ${sessionId} AND "hash_rush_active_at" >= ${cutoff}`;
+          UPDATE "app"."app_conversation_channels" SET "hash_rush_active_at" = ${utc(now)}
+          WHERE "id" = ${channelId} AND "hash_rush_session_id" = ${sessionId} AND "hash_rush_active_at" >= ${utc(cutoff)}`;
     return count > 0;
   },
 };
