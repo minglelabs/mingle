@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { coinsToMicro } from '@/lib/coin-units'
 import { findOrCreateDirectConversation } from '@/lib/app-conversations'
 import { captureMingleEvent } from '@/lib/posthog-server'
+import { ensureMutualFollowBetween } from '@/server/follows/mutual-follow'
 import { generateReferralCode, normalizeReferralCode, type InviteSource } from '@/lib/referral-code'
 import { resolveUsagePurposeSegmentationDefaults } from '@/lib/usage-purpose'
 import { grantLot, hasLedgerEntry, withLockedWallet } from '@/server/coins/ledger'
@@ -10,7 +11,8 @@ import { grantLot, hasLedgerEntry, withLockedWallet } from '@/server/coins/ledge
 // Invites. Each user has one invite code; it is also their invite-ticket link
 // (/i/{code}). A user may accept one other person's invite once: by tapping
 // the link, through the Play install referrer, or by typing the code. Both
-// then get the join reward, and a 1:1 room between the two is opened.
+// then get the join reward, follow each other, and a 1:1 room between the
+// two is opened.
 
 const CODE_ATTEMPTS = 8
 const RECHAT_MIN_GAP_MS = 12 * 60 * 60 * 1000
@@ -58,6 +60,15 @@ export class ReferralError extends Error {
 
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002'
+}
+
+/** The inviter and the invited follow each other; a failure never undoes the invite. */
+async function followEachOther(userId: string, inviterUserId: string): Promise<void> {
+  try {
+    await ensureMutualFollowBetween(userId, inviterUserId)
+  } catch (error) {
+    console.warn('[invite] mutual_follow_failed', error instanceof Error ? error.message : String(error))
+  }
 }
 
 /** PostHog never gets an account id: the tracking id, or a digest when there is none. */
@@ -210,6 +221,7 @@ export async function redeemReferralCode(
     event: 'mingle_invite_accepted',
     properties: { invite_source: source, reward_coins: rewardCoins, inviter_digest: digest(inviter.id) },
   })
+  await followEachOther(userId, inviter.id)
   return { rewardCoins, inviterUserId: inviter.id }
 }
 
@@ -245,6 +257,10 @@ export async function acceptInvite(
   } catch (error) {
     if (!(error instanceof ReferralError) || (error.code !== 'already_redeemed' && error.code !== 'not_allowed')) throw error
   }
+
+  // A link tap is a wish to talk to this person even when the account had
+  // already accepted an invite, so the follows are made either way.
+  await followEachOther(userId, ticket.inviter.id)
 
   let conversationId: string | null = null
   try {

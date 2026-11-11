@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   userFindMany: vi.fn(),
   messageFindUnique: vi.fn(),
   messageFindFirst: vi.fn(),
+  mutualFollow: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -21,6 +22,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 vi.mock('@/lib/app-conversations', () => ({ findOrCreateDirectConversation: mocks.findOrCreateDirectConversation }))
 vi.mock('@/lib/posthog-server', () => ({ captureMingleEvent: mocks.capture }))
+vi.mock('@/server/follows/mutual-follow', () => ({ ensureMutualFollowBetween: mocks.mutualFollow }))
 vi.mock('@/server/coins/ledger', () => ({
   grantLot: mocks.grantLot,
   hasLedgerEntry: mocks.hasLedgerEntry,
@@ -62,6 +64,7 @@ beforeEach(() => {
   mocks.hasLedgerEntry.mockResolvedValue(false)
   mocks.grantLot.mockResolvedValue({ lotId: 'lot' })
   mocks.findOrCreateDirectConversation.mockResolvedValue({ conversation: { id: 'room1' }, reused: false })
+  mocks.mutualFollow.mockResolvedValue(2)
   delete process.env.COIN_INVITE_JOIN_COINS
   delete process.env.COIN_INVITE_FIRST_CHAT_COINS
 })
@@ -70,6 +73,7 @@ describe('redeemReferralCode', () => {
   it('pays 1,000 free coins to both sides, once each', async () => {
     stubUsers({ id: 'me', referredByUserId: null }, { id: 'friend', referredByUserId: null })
     await expect(redeemReferralCode('me', ' AB3DE ', { source: 'link' })).resolves.toEqual({ rewardCoins: 1000, inviterUserId: 'friend' })
+    expect(mocks.mutualFollow).toHaveBeenCalledWith('me', 'friend')
 
     expect(mocks.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'me', referredByUserId: null },
@@ -158,6 +162,7 @@ describe('acceptInvite', () => {
       rewarded: true, rewardCoins: 1000, conversationId: 'room1', inviterName: 'Yuki',
     })
     expect(mocks.findOrCreateDirectConversation).toHaveBeenCalledWith({ userId: 'me', targetUserId: 'friend', locale: 'ja' })
+    expect(mocks.mutualFollow).toHaveBeenCalledWith('me', 'friend')
     expect(mocks.capture).toHaveBeenCalledWith(expect.objectContaining({
       event: 'mingle_invite_accepted',
       properties: expect.objectContaining({ invite_source: 'install_referrer' }),
@@ -170,6 +175,13 @@ describe('acceptInvite', () => {
       rewarded: false, rewardCoins: 0, conversationId: 'room1', inviterName: 'Yuki',
     })
     expect(mocks.grantLot).not.toHaveBeenCalled()
+    expect(mocks.mutualFollow).toHaveBeenCalledWith('me', 'friend')
+  })
+
+  it('keeps the invite when the follows cannot be made', async () => {
+    stubUsers({ id: 'me', referredByUserId: null }, inviter)
+    mocks.mutualFollow.mockRejectedValueOnce(new Error('db down'))
+    await expect(acceptInvite('me', 'abcde')).resolves.toMatchObject({ rewarded: true, conversationId: 'room1' })
   })
 
   it('rejects an unknown or own code and survives a room that cannot open', async () => {
