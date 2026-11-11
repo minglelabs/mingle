@@ -192,17 +192,30 @@ function chatHtml(lang) {
 // `call`: the same room during a voice talk (the app's voice call), drawn the
 // way the voice talk build shows it (src/components/LivePhoneDemo/VoiceTalkPanel.tsx
 // on feat/voicetalk-windows-livekit-mvp): the call panel under the top bar with
-// the 8 seats (the speaker's avatar ringed by the soft gray ripple, each seat's
-// language flag at its bottom left), "Mic on" in red and "Leave"; the room's
-// talk under it, every line in both languages; the phone button bottom left in
-// green with its dot. The panel's words exist in Korean and English only in
-// that build, so every other language reads the English, as the app does.
+// the people in the call and one open seat (the speaker's avatar ringed by the
+// soft gray ripple, each seat's language flag at its bottom left), "My voice on"
+// in red and a gray "Leave"; the room's talk under it, every line in both
+// languages; the phone button bottom left in green with its dot. The words are
+// the app's own (src/i18n/voice-talk-copy.ts there), in every language.
 const VOICE_TALK_COPY = {
-  ko: { live: (n) => `보이스톡 · ${n}/8`, me: '나', empty: '빈 자리', micOn: '마이크 켜짐', leave: '나가기' },
-  en: { live: (n) => `Voice talk · ${n}/8`, me: 'Me', empty: 'Empty', micOn: 'Mic on', leave: 'Leave' },
+  ko: { name: '보이스톡', me: '나', empty: '빈 자리', micOn: '내 목소리 켜짐', leave: '나가기' },
+  en: { name: 'Voice talk', me: 'Me', empty: 'Open seat', micOn: 'My voice on', leave: 'Leave' },
+  ja: { name: 'ボイストーク', me: '自分', empty: '空き席', micOn: '自分の声 オン', leave: '退出' },
+  'zh-cn': { name: '语音通话', me: '我', empty: '空位', micOn: '我的声音 开', leave: '退出' },
+  'zh-tw': { name: '語音通話', me: '我', empty: '空位', micOn: '我的聲音 開', leave: '離開' },
+  fr: { name: 'Appel vocal', me: 'Moi', empty: 'Place libre', micOn: 'Ma voix activée', leave: 'Quitter' },
+  de: { name: 'Sprachanruf', me: 'Ich', empty: 'Freier Platz', micOn: 'Meine Stimme an', leave: 'Verlassen' },
+  es: { name: 'Llamada de voz', me: 'Yo', empty: 'Lugar libre', micOn: 'Mi voz activada', leave: 'Salir' },
+  pt: { name: 'Chamada de voz', me: 'Eu', empty: 'Lugar livre', micOn: 'Minha voz ligada', leave: 'Sair' },
+  it: { name: 'Chiamata vocale', me: 'Io', empty: 'Posto libero', micOn: 'La mia voce attiva', leave: 'Esci' },
+  ru: { name: 'Голосовой звонок', me: 'Я', empty: 'Свободно', micOn: 'Мой голос вкл.', leave: 'Выйти' },
+  ar: { name: 'مكالمة صوتية', me: 'أنا', empty: 'مقعد فارغ', micOn: 'صوتي مفعّل', leave: 'مغادرة' },
+  hi: { name: 'वॉइस कॉल', me: 'मैं', empty: 'खाली जगह', micOn: 'मेरी आवाज़ चालू', leave: 'छोड़ें' },
+  th: { name: 'โทรด้วยเสียง', me: 'ฉัน', empty: 'ที่ว่าง', micOn: 'เสียงของฉัน เปิด', leave: 'ออก' },
+  vi: { name: 'Gọi thoại', me: 'Tôi', empty: 'Chỗ trống', micOn: 'Giọng tôi bật', leave: 'Rời đi' },
 };
 function voiceTalkPanel(lang, { partner, partnerName, partnerAvatar, meAvatar, speaking }) {
-  const copy = lang === 'ko' ? VOICE_TALK_COPY.ko : VOICE_TALK_COPY.en;
+  const copy = VOICE_TALK_COPY[lang] || VOICE_TALK_COPY.en;
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const seat = (who) => `
     <div class="vt-seat">
@@ -213,17 +226,17 @@ function voiceTalkPanel(lang, { partner, partnerName, partnerAvatar, meAvatar, s
       </span>
       <span class="vt-label">${esc(who.label)}</span>
     </div>`;
-  const empty = `<div class="vt-seat"><span class="vt-ring"><span class="vt-face vt-empty"></span></span><span class="vt-label">${copy.empty}</span></div>`;
+  const empty = `<div class="vt-seat"><span class="vt-ring"><span class="vt-face vt-empty"><svg viewBox="0 0 24 24" class="vt-plus"><path d="M12 5v14M5 12h14"/></svg></span></span><span class="vt-label">${copy.empty}</span></div>`;
   const seats = [
     seat({ avatar: meAvatar, lang, label: copy.me, speaking: speaking === 'me' }),
     seat({ avatar: partnerAvatar, lang: partner, label: partnerName, speaking: speaking === 'friend' }),
-    ...Array.from({ length: 6 }, () => empty),
+    empty,
   ].join('');
   const mic = '<svg viewBox="0 0 24 24" style="width:17px;height:17px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
   const phoneOff = '<svg viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 4.2 2 2 0 0 1 5.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8.9 9.7"/><path d="M22 2 2 22"/></svg>';
   return `
   <div class="vt-panel">
-    <div class="vt-top"><span class="vt-dot"><i></i><b></b></span><span class="vt-title">${copy.live(2)}</span>
+    <div class="vt-top"><span class="vt-dot"><i></i><b></b></span><span class="vt-title">${copy.name} · 2/8</span>
       <svg viewBox="0 0 24 24" class="vt-chev"><path d="m18 15-6-6-6 6"/></svg></div>
     <div class="vt-grid">${seats}</div>
     <div class="vt-buttons" dir="ltr"><span class="vt-mic">${mic}${copy.micOn}</span><span class="vt-leave">${phoneOff}${copy.leave}</span></div>
@@ -238,7 +251,8 @@ const VOICE_TALK_CSS = `
   .vt-dot b{position:absolute;inset:0;border-radius:50%;background:#10B981}
   .vt-title{flex:1;font-size:14px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .vt-chev{width:18px;height:18px;color:#6B7280;stroke-width:2.4}
-  .vt-grid{display:grid;grid-template-columns:repeat(4,1fr);column-gap:8px;row-gap:10px;padding:4px 12px 8px}
+  .vt-grid{display:flex;flex-wrap:wrap;justify-content:center;column-gap:8px;row-gap:10px;padding:4px 12px 8px}
+  .vt-grid .vt-seat{width:calc(25% - 6px)}
   .vt-seat{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
   .vt-ring{position:relative;width:48px;height:48px;display:inline-flex}
   .vt-ripple{position:absolute;inset:0;border-radius:50%;background:rgba(148,163,184,.25)}
@@ -248,6 +262,7 @@ const VOICE_TALK_CSS = `
   .vt-face{position:relative;width:48px;height:48px;border-radius:50%;background:#FEF3C7;overflow:hidden;display:flex;align-items:center;justify-content:center}
   .vt-face img{width:40px;height:40px}
   .vt-empty{background:#F9FAFB;border:1px dashed #D1D5DB}
+  .vt-plus{width:18px;height:18px;fill:none;stroke:#D1D5DB;stroke-width:2.2;stroke-linecap:round}
   .vt-flag{position:absolute;left:-2px;bottom:-2px;min-width:18px;height:18px;padding:0 2px;border-radius:9px;background:#fff;box-shadow:0 0 0 1px #E5E7EB;
     display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1}
   .vt-label{width:100%;text-align:center;font-size:11.2px;font-weight:500;color:#4B5563;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -255,7 +270,7 @@ const VOICE_TALK_CSS = `
   .vt-mic,.vt-leave{height:44px;min-width:124px;padding:0 20px;border-radius:22px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
     font-size:13.8px;font-weight:600;white-space:nowrap}
   .vt-mic{background:#EF4444;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08)}
-  .vt-leave{background:#FFF1F2;color:#E11D48}
+  .vt-leave{background:#F3F4F6;color:#374151}
   .vt-phone{position:relative;color:#10B981;margin-top:4px}
   .vt-phone i{position:absolute;right:-3px;top:-2px;width:7px;height:7px;border-radius:50%;background:#10B981;box-shadow:0 0 0 2px #fff}
 `;
@@ -319,7 +334,7 @@ function dmHtml(lang, kind, { call = false } = {}) {
   .start{margin:0 auto;background:linear-gradient(90deg,#FFB400,#FF7A00);color:#fff;border-radius:24px;height:46px;width:112px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:17px;font-weight:600;box-shadow:0 6px 14px rgba(255,140,0,.3)}
   .start.live{background:#1F2430;box-shadow:0 6px 14px rgba(31,36,48,.25)}
   svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-  ${call ? `${VOICE_TALK_CSS} main{padding-top:274px}` : ''}
+  ${call ? `${VOICE_TALK_CSS} main{padding-top:200px}` : ''}
   </style></head><body>
   <header><span class="back">‹</span><span class="title">${esc(title)}</span>
     <span class="pill">${[lang, partner].map((l) => chat.flags[l]).join('')}<b>⌄</b></span>
