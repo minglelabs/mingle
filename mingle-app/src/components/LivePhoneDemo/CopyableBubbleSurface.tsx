@@ -38,6 +38,8 @@ interface CopyableBubbleSurfaceProps extends ComponentPropsWithoutRef<'div'> {
   /** The translation language this surface shows; offers "translate again" inside a MessageRetranslateScope. */
   retranslateLanguage?: string
   onActivate?: () => void
+  /** What a double tap does (a chat bubble: fold or unfold); otherwise it reads aloud, or copies. */
+  onDoubleTap?: () => void
 }
 
 export function didLongPressQualify(
@@ -70,6 +72,7 @@ export default function CopyableBubbleSurface({
   onSave,
   retranslateLanguage,
   onActivate,
+  onDoubleTap,
   children,
   className,
   style,
@@ -280,7 +283,7 @@ export default function CopyableBubbleSurface({
       ref={surfaceRef}
       {...props}
       data-copyable-bubble
-      data-copyable-bubble-double-tap-action={showPlayPronunciationButton ? 'play-pronunciation' : 'copy'}
+      data-copyable-bubble-double-tap-action={onDoubleTap ? 'toggle' : showPlayPronunciationButton ? 'play-pronunciation' : 'copy'}
       tabIndex={0}
       onClick={(event) => {
         props.onClick?.(event)
@@ -310,6 +313,10 @@ export default function CopyableBubbleSurface({
         // 터치 더블탭으로 이미 처리된 경우 dblclick 중복 발동 방지
         if (touchDoubleTapFiredRef.current) {
           touchDoubleTapFiredRef.current = false
+          return
+        }
+        if (onDoubleTap) {
+          onDoubleTap()
           return
         }
         if (showPlayPronunciationButton) {
@@ -342,7 +349,9 @@ export default function CopyableBubbleSurface({
             touchDoubleTapFiredRef.current = true
             // 브라우저 dblclick 이벤트 억제 시도
             event.preventDefault()
-            if (showPlayPronunciationButton) {
+            if (onDoubleTap) {
+              onDoubleTap()
+            } else if (showPlayPronunciationButton) {
               handlePlayPronunciation()
             } else {
               handleCopy(text)
