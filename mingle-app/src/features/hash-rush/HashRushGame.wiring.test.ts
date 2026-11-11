@@ -324,7 +324,8 @@ describe('hash rush stage 2 device fixes', () => {
     // In the game: bubbles over hamsters, floating lines, the conversation over the composer.
     expect(gameSource).toContain("client?.hearRoom(post, { quiet: started || post.userId === latestRef.current.viewerKey })")
     expect(gameSource).toContain('clientRef.current?.setChatting(chatOpen)')
-    expect(gameSource).toContain('style={chatOpen ? { bottom: chat.dockHeightPx } : undefined}')
+    expect(gameSource).toContain('bottom: chat.dockHeightPx,')
+    expect(gameSource).toContain('never past the back pill at the top')
     expect(gameSource).toContain('onClick={chat.onOpen}')
     expect(gameSource).toContain('hidden={!chat.canWrite}')
     expect(clientSource).toContain('input.enable(inputWanted && visible && !chatting && !chatGuardTimer)')

@@ -844,7 +844,13 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
         <div
           ref={talkPanelRef}
           className={cx(styles.talk, styles.talkPanel, chatOpen && styles.talkDocked)}
-          style={chatOpen ? { bottom: chat.dockHeightPx } : undefined}
+          style={chatOpen
+            ? {
+                bottom: chat.dockHeightPx,
+                // The read-back panel's height, but never past the back pill at the top.
+                maxHeight: `min(45vh, calc(var(--hr-field-height, 100vh) * 0.7), calc(100% - ${chat.dockHeightPx}px - env(safe-area-inset-top, 0px) - 56px))`,
+              }
+            : undefined}
           onPointerDown={onTalkPointerDown}
           onPointerUp={onTalkPointerUp}
           onPointerCancel={() => (talkTapRef.current = null)}

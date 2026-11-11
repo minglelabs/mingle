@@ -1022,7 +1022,9 @@
   left: 0;
   width: 100%;
   transform: none;
-  max-height: min(34vh, 230px);
+  /* As tall as the read-back panel (the inline style also keeps it under the
+     top bar when the composer and keyboard stand high). */
+  max-height: min(45vh, calc(var(--hr-field-height, 100vh) * 0.7));
   padding: 22px max(6px, env(safe-area-inset-right)) 6px max(6px, env(safe-area-inset-left));
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 40px);
   mask-image: linear-gradient(to bottom, transparent 0, #000 40px);
