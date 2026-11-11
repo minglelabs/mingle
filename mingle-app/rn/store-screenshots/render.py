@@ -82,14 +82,13 @@ while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
 </script></body></html>"""
 
 
-# 02, 03, 04: composed scenes. Two photos fill the slide, one above, one below,
+# 04: a composed scene. Two photos fill the slide, one above, one below,
 # blending into each other (photos with no words in them, so every language
-# shares them): the two friends in their own cities for 02 (chat) and 03 (voice
-# talk), the places people book abroad for 04. The phone leans in on its screen
+# shares them): the places people book abroad. The phone leans in on its screen
 # from capture.mjs, and the conversation's lines float beside it as the app's
 # bubbles: each speaker's own words, then the other's language under them. Mine
 # are tinted like the app's own bubbles. "lines" names the list in dm.json;
-# "cardsTop" keeps the cards under the call panel on the voice talk screens.
+# "cardsTop" keeps the cards under the call panel.
 BOOKING_PAGE = """<!doctype html>
 <html lang="{lang}" dir="{dir}"><head><meta charset="utf-8"><style>
 html,body{{margin:0;width:{W}px;height:{H}px;overflow:hidden}}
@@ -137,6 +136,38 @@ const top0={top0}, band={band}, gap=26;
 cards.forEach((c,i)=>{{let fs=40;c.style.setProperty('--fs',fs+'px');
   while(c.offsetHeight>band-gap&&fs>26){{fs-=2;c.style.setProperty('--fs',fs+'px');}}
   c.style.top=(top0+i*band)+'px';}});
+</script></body></html>"""
+
+
+# 02, 03: the app screen stays the subject. The phone stands upright and full size
+# as on the plain slides; the two friends' cities fill the slide behind it (one
+# above, one below, blending), dimmed and softened so the screen stays the
+# brightest thing, with the headline in white over the top photo.
+PHOTO_PAGE = """<!doctype html>
+<html lang="{lang}" dir="{dir}"><head><meta charset="utf-8"><style>
+html,body{{margin:0;width:{W}px;height:{H}px;overflow:hidden}}
+body{{background:#1A140E url("{bg}") center top/{W}px auto no-repeat;font-family:{font},-apple-system,"SF Pro Display","Helvetica Neue",sans-serif}}
+.below{{position:absolute;left:0;right:0;bottom:0;height:1500px;background:url("{bg2}") center/cover no-repeat;
+  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 520px);mask-image:linear-gradient(180deg,transparent 0,#000 520px)}}
+.veil{{position:absolute;inset:0;background:linear-gradient(180deg,rgba(18,12,6,.55) 0%,rgba(18,12,6,.25) 22%,rgba(18,12,6,.35) 60%,rgba(18,12,6,.55) 100%);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}}
+h1{{position:absolute;top:150px;left:60px;right:60px;margin:0;text-align:center;font-size:118px;line-height:1.16;font-weight:800;
+  letter-spacing:-1px;color:#fff;white-space:pre;text-shadow:0 6px 30px rgba(0,0,0,.45)}}
+.phone{{position:absolute;left:84px;top:560px;width:1122px;height:2440px;border-radius:150px;
+  background:#1F2430;box-shadow:0 50px 120px rgba(0,0,0,.55),inset 0 0 0 6px #343A48}}
+.screen{{position:absolute;left:36px;top:36px;width:1050px;height:2272px;border-radius:118px;overflow:hidden;background:#000}}
+.bar{{height:126px;background:{bar};color:{ink};position:relative;font-family:-apple-system,"SF Pro Text",sans-serif}}
+.bar .time{{position:absolute;left:110px;top:40px;font-size:46px;font-weight:600;letter-spacing:-.5px}}
+.screen img{{width:100%;height:2146px;display:block}}
+.island{{position:absolute;left:50%;top:30px;width:290px;height:84px;margin-left:-145px;border-radius:42px;background:#000}}
+</style></head><body>
+<div class="below"></div><div class="veil"></div>
+<h1 id="t">{caption}</h1>
+<div class="phone"><div class="screen"><div class="bar" dir="ltr"><span class="time">9:41</span></div>
+<img src="{img}"><div class="island"></div></div></div>
+<script>
+const t=document.getElementById('t');let s=118;
+while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
 </script></body></html>"""
 
 
@@ -213,6 +244,17 @@ def main() -> None:
                     continue
                 capture = HERE / shot["capture"].format(lang=lang)
                 bar, ink = status_bar_colors(capture)
+                if shot.get("photo"):
+                    render(PHOTO_PAGE.format(
+                        bar=bar, ink=ink, lang=lang, dir="rtl" if lang == "ar" else "ltr", W=W, H=H,
+                        font=FONT.get(lang, '"SF Pro Display"'),
+                        caption=html.escape(shot["caption"][lang]),
+                        bg=(HERE / shot["photo"][0]).as_uri(),
+                        bg2=(HERE / shot["photo"][1]).as_uri(),
+                        img=capture.as_uri(),
+                    ), out, work)
+                    rendered[(lang, shot["id"])] = out
+                    continue
                 if shot.get("scene"):
                     scene = shot["scene"]
                     lines = dm[scene["lines"]][: scene.get("count", 4)]
