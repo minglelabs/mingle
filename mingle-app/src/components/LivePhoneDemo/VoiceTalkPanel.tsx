@@ -15,7 +15,7 @@
 // draws it and sends button presses over the RN bridge (see
 // rn/src/voice/voiceBridge.ts for the message shapes).
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
 import { ChevronUp, Mic, MicOff, PhoneOff, Phone } from 'lucide-react'
 import LanguageFlag from '@/components/language-flag'
@@ -117,6 +117,46 @@ function post(command: Record<string, unknown>) {
   bridge()?.postMessage(JSON.stringify(command))
 }
 
+// The call this phone is in, remembered across an app restart. A restart
+// drops the connection without telling the server, which would keep this
+// phone's seat taken (and this viewer shown as in the call) until the server
+// notices. The next time the room opens, a remembered call that this phone
+// is no longer connected to is left explicitly.
+const JOINED_CALL_STORAGE_PREFIX = 'mingle_voice_joined_call:'
+
+function readJoinedCallMarker(conversationId: string): string | null {
+  try {
+    return window.localStorage.getItem(JOINED_CALL_STORAGE_PREFIX + conversationId)
+  } catch {
+    return null
+  }
+}
+
+function writeJoinedCallMarker(conversationId: string, callId: string | null): void {
+  try {
+    if (callId) window.localStorage.setItem(JOINED_CALL_STORAGE_PREFIX + conversationId, callId)
+    else window.localStorage.removeItem(JOINED_CALL_STORAGE_PREFIX + conversationId)
+  } catch {
+    // No storage: the server frees the seat by itself a little later.
+  }
+}
+
+/**
+ * Whether the room's call is one this phone was in before a restart and is
+ * no longer connected to: remembered here, still listing this viewer on the
+ * server, and not joined by the app now.
+ */
+export function isAbandonedJoinedCall(input: {
+  rememberedCallId: string | null
+  call: { id: string; participants: ReadonlyArray<{ userId: string }> } | null
+  viewerUserId: string | null
+  joinedNow: boolean
+}): boolean {
+  if (input.joinedNow || !input.call || !input.rememberedCallId || !input.viewerUserId) return false
+  return input.rememberedCallId === input.call.id
+    && input.call.participants.some((participant) => participant.userId === input.viewerUserId)
+}
+
 export function isVoiceTalkAvailable(): boolean {
   return bridge() !== null
 }
@@ -196,15 +236,30 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const [declinedCallId, setDeclinedCallId] = useState<string | null>(null)
 
   const joined = phase === 'connecting' || phase === 'connected'
+  // The phase as the event handler below needs it (it outlives a render).
+  const phaseRef = useRef<Phase>('idle')
 
   useEffect(() => {
     if (!conversationId || !bridge()) return
     const onEvent = (event: Event) => {
       const detail = (event as CustomEvent<VoiceEvent>).detail
       if (!detail || ('conversationId' in detail && detail.conversationId && detail.conversationId !== conversationId)) return
-      if (detail.type === 'status') setCall(detail.call)
-      else if (detail.type === 'room') setRoom(detail.snapshot)
+      if (detail.type === 'status') {
+        // The app reports a call it is in before the first status arrives, so
+        // "not joined" here is real. A call remembered from before a restart
+        // is left now, and this viewer leaves its seat at once.
+        const joinedNow = phaseRef.current === 'connecting' || phaseRef.current === 'connected'
+        if (isAbandonedJoinedCall({ rememberedCallId: readJoinedCallMarker(conversationId), call: detail.call, viewerUserId, joinedNow }) && detail.call) {
+          writeJoinedCallMarker(conversationId, null)
+          void fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/leave`), { method: 'POST' }).catch(() => undefined)
+          setCall({ ...detail.call, participants: detail.call.participants.filter((p) => p.userId !== viewerUserId) })
+          return
+        }
+        setCall(detail.call)
+      } else if (detail.type === 'room') setRoom(detail.snapshot)
       else if (detail.type === 'state') {
+        phaseRef.current = detail.phase
+        if (detail.phase === 'left') writeJoinedCallMarker(conversationId, null)
         setPhase(detail.phase)
         if (detail.phase === 'error') setError(detail.errorKind === 'voice_room_full' ? copy.full : copy.error)
         if (detail.phase === 'connecting') setError(null)
@@ -218,7 +273,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
       // Leaving the room screen stops the polling; a joined call keeps running.
       post({ type: 'native_voice_status_stop' })
     }
-  }, [conversationId, copy.error, copy.full])
+  }, [conversationId, copy.error, copy.full, viewerUserId])
 
   // An error line goes away by itself.
   useEffect(() => {
@@ -230,6 +285,10 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const live = !!call && call.participants.length > 0
   const connected = phase === 'connected'
   const liveCallId = live ? call?.id ?? null : null
+  // Remember the call this phone is in, for the restart case above.
+  useEffect(() => {
+    if (connected && liveCallId) writeJoinedCallMarker(conversationId, liveCallId)
+  }, [connected, conversationId, liveCallId])
   useEffect(() => {
     onAvailabilityChange?.({ live, joined, connected, callId: liveCallId })
   }, [live, joined, connected, liveCallId, onAvailabilityChange])
@@ -280,6 +339,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     onListenOnlyChange?.(false)
     // The panel goes away now, not when the app and the server have caught
     // up: this phone is out of the call, and out of its seat, at once.
+    phaseRef.current = 'left'
+    writeJoinedCallMarker(conversationId, null)
     setPhase('left')
     setRoom(null)
     if (call) {
@@ -288,7 +349,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
       if (localId) setCall({ ...call, participants: call.participants.filter((p) => p.userId !== localId) })
     }
     post({ type: 'native_voice_close' })
-  }, [call, onListenOnlyChange, room, viewerUserId])
+  }, [call, conversationId, onListenOnlyChange, room, viewerUserId])
 
   // Seats: who is in the call (live LiveKit view when joined, else the API's).
   const seats = useMemo(() => {

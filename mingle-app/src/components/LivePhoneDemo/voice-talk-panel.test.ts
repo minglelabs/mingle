@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   VoiceTalkButton,
   VoiceTalkSeatView,
+  isAbandonedJoinedCall,
   parseRoomMemberSummaries,
   resolveVoiceTalkBystanders,
   resolveVoiceTalkButtonPress,
@@ -218,5 +219,38 @@ describe('voice talk dialogs and the ad banner', () => {
     expect(panelSource).toContain('useNativeBannerSuppression(dialogOpen)')
     // Before the early return, so it also holds while the panel itself is not shown.
     expect(panelSource.indexOf('useNativeBannerSuppression(dialogOpen)')).toBeLessThan(panelSource.indexOf('if (!joined && !error) {'))
+  })
+})
+
+describe('a call left behind by an app restart', () => {
+  const call = { id: 'c1', participants: [{ userId: 'me' }, { userId: 'other' }] }
+
+  it('is one this phone remembers, the server still lists me in, and the app is not in now', () => {
+    expect(isAbandonedJoinedCall({ rememberedCallId: 'c1', call, viewerUserId: 'me', joinedNow: false })).toBe(true)
+  })
+
+  it('is not one the app is still connected to (the page reloaded, the call went on)', () => {
+    expect(isAbandonedJoinedCall({ rememberedCallId: 'c1', call, viewerUserId: 'me', joinedNow: true })).toBe(false)
+  })
+
+  it('is not another call, a call I am not listed in, or a call this phone never joined', () => {
+    expect(isAbandonedJoinedCall({ rememberedCallId: 'c0', call, viewerUserId: 'me', joinedNow: false })).toBe(false)
+    expect(isAbandonedJoinedCall({ rememberedCallId: 'c1', call: { id: 'c1', participants: [{ userId: 'other' }] }, viewerUserId: 'me', joinedNow: false })).toBe(false)
+    // My other phone is in it; this one never was.
+    expect(isAbandonedJoinedCall({ rememberedCallId: null, call, viewerUserId: 'me', joinedNow: false })).toBe(false)
+    expect(isAbandonedJoinedCall({ rememberedCallId: 'c1', call: null, viewerUserId: 'me', joinedNow: false })).toBe(false)
+  })
+
+  it('is left on the server and emptied from its seat as soon as the room opens', () => {
+    const handler = panelSource.slice(panelSource.indexOf("if (detail.type === 'status') {"), panelSource.indexOf("} else if (detail.type === 'room')"))
+    expect(handler).toContain('/voice/leave')
+    expect(handler).toContain("method: 'POST'")
+    expect(handler).toContain('writeJoinedCallMarker(conversationId, null)')
+    expect(handler).toContain('participants: detail.call.participants.filter((p) => p.userId !== viewerUserId)')
+  })
+
+  it('remembers a call once connected and forgets it on leaving', () => {
+    expect(panelSource).toContain('if (connected && liveCallId) writeJoinedCallMarker(conversationId, liveCallId)')
+    expect(panelSource).toContain("if (detail.phase === 'left') writeJoinedCallMarker(conversationId, null)")
   })
 })

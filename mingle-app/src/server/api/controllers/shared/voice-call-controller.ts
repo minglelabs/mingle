@@ -84,9 +84,37 @@ export function setVoiceCallAnnouncerForTests(next: typeof announceCallStarted |
   if (next) announceCallStarted = next;
 }
 
+// Reading the call also frees the seats of apps that were closed without
+// leaving (LiveKit no longer has them), so a phone that only looks at the
+// room sees who is really there. Every open room reads this every few
+// seconds; LiveKit is asked at most once per interval per room.
+const READ_RECONCILE_INTERVAL_MS = 5_000;
+const lastReadReconcileAt = new Map<string, number>();
+export function resetVoiceReadReconcileForTests() {
+  lastReadReconcileAt.clear();
+}
+
+async function reconcileOnRead(conversationId: string) {
+  const config = readLiveKitConfig();
+  if (!config) return;
+  const now = Date.now();
+  if (now - (lastReadReconcileAt.get(conversationId) ?? 0) < READ_RECONCILE_INTERVAL_MS) return;
+  lastReadReconcileAt.set(conversationId, now);
+  if (lastReadReconcileAt.size > 2000) {
+    for (const [key, at] of lastReadReconcileAt) {
+      if (now - at > 60_000) lastReadReconcileAt.delete(key);
+    }
+  }
+  await reconcileLiveCall(store, {
+    channelId: conversationId,
+    listIdentities: (room) => listIdentities(config, room),
+  }).catch((error) => console.warn("[voice] read_reconcile_failed", error instanceof Error ? error.name : "unknown"));
+}
+
 export async function getVoiceCallResponse(request: NextRequest, conversationId: string) {
   const member = await requireChannelMember(request, conversationId);
   if ("response" in member) return member.response;
+  await reconcileOnRead(conversationId);
   return NextResponse.json({ call: await getLiveCallView(store, conversationId) });
 }
 

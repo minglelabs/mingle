@@ -24,7 +24,7 @@ vi.mock("@/server/voice/prisma-voice-store", () => ({ prismaVoiceStore: {} }));
 import { GET } from "@/app/api/conversations/[conversationId]/voice/route";
 import { POST as TOKEN } from "@/app/api/conversations/[conversationId]/voice/token/route";
 import { POST as LEAVE } from "@/app/api/conversations/[conversationId]/voice/leave/route";
-import { setVoiceCallAnnouncerForTests, setVoiceStoreForTests } from "@/server/api/controllers/shared/voice-call-controller";
+import { resetVoiceReadReconcileForTests, setVoiceCallAnnouncerForTests, setVoiceStoreForTests } from "@/server/api/controllers/shared/voice-call-controller";
 import { after } from "next/server";
 import { createMemoryVoiceStore } from "@/server/voice/memory-voice-store";
 import { verifyHs256 } from "@/server/voice/livekit-auth";
@@ -104,6 +104,35 @@ describe("/api/conversations/[conversationId]/voice routes", () => {
     // The same call: one call per room, and no second announcement.
     expect(joinedBody.call.id).toBe(started.call.id);
     expect(announce).toHaveBeenCalledTimes(1);
+  });
+
+  it("frees the seat of an app that was closed without leaving when the call is read, asking LiveKit at most once per interval", async () => {
+    resetVoiceReadReconcileForTests();
+    const lookup = vi.fn<(config: unknown, room: string) => Promise<string[] | null>>().mockResolvedValue([]);
+    setVoiceStoreForTests(store, lookup as never);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-11T10:00:00Z"));
+      await TOKEN(tokenRequest({ lang: "ko" }), params);
+      lookup.mockClear();
+
+      // Just joined: LiveKit may not list them yet, so the seat is kept.
+      vi.setSystemTime(new Date("2026-11-11T10:00:10Z"));
+      expect((await (await GET(new NextRequest("http://localhost/api/conversations/chan-1/voice"), params)).json()).call.participants).toHaveLength(1);
+      expect(lookup).toHaveBeenCalledTimes(1);
+
+      // Read again right away: LiveKit is not asked a second time.
+      vi.setSystemTime(new Date("2026-11-11T10:00:12Z"));
+      await GET(new NextRequest("http://localhost/api/conversations/chan-1/voice"), params);
+      expect(lookup).toHaveBeenCalledTimes(1);
+
+      // Past the grace, LiveKit still does not have them: the seat is freed and the call ends.
+      vi.setSystemTime(new Date("2026-11-11T10:01:00Z"));
+      expect((await (await GET(new NextRequest("http://localhost/api/conversations/chan-1/voice"), params)).json()).call).toBeNull();
+      expect(lookup).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("returns 403 to someone who is not in the chat room", async () => {
