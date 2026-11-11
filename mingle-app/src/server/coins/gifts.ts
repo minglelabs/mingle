@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { MICRO_PER_COIN, microToDisplayCoins } from '@/lib/coin-units'
-import { grantLot, hasLedgerEntry, takeFromLots, withLockedWalletPair, type CoinLotSource } from './ledger'
+import { grantLot, hasLedgerEntry, takeFromLots, withLockedWallet, withLockedWalletPair, type CoinLotSource } from './ledger'
 import { snapshotFromContext, type CoinWalletSnapshot } from './wallet'
 
 // Gifting Hash to another user. Only Hash the sender bought can be gifted: free
@@ -135,4 +135,47 @@ export async function sendCoinGift(input: {
     })
     return result(false)
   }, { now: input.now })
+}
+
+/**
+ * A refunded purchase also takes back the Hash that was gifted out of it, as
+ * far as the recipient still has it: otherwise buy -> gift -> refund would
+ * leave the recipient with Hash nobody paid for. Each gift is clawed back in
+ * its own transaction and is idempotent, so a retried refund finishes what an
+ * interrupted one left. Hash the recipient already spent is not owed.
+ */
+export async function clawBackGiftsOfRefundedPurchase(input: { purchaseId: string; lotId: string }): Promise<bigint> {
+  const gifted = await prisma.appCoinSpendAllocation.findMany({
+    where: { lotId: input.lotId, ledger: { type: 'gift_sent' } },
+    select: { amountMicro: true, ledger: { select: { id: true, amountMicro: true, idempotencyKey: true, meta: true } } },
+  })
+  let clawedBackMicro = 0n
+  for (const allocation of gifted) {
+    const sentMicro = -allocation.ledger.amountMicro
+    const meta = allocation.ledger.meta as { receivedMicro?: unknown } | null
+    if (sentMicro <= 0n || typeof meta?.receivedMicro !== 'string' || !/^\d+$/.test(meta.receivedMicro)) continue
+    const received = await prisma.appCoinLedger.findUnique({
+      where: { idempotencyKey: `${allocation.ledger.idempotencyKey}:received` },
+      select: { userId: true, lotId: true },
+    })
+    if (!received?.lotId) continue
+    // This purchase's share of what the recipient got (a gift can draw on several purchases).
+    const shareMicro = (BigInt(meta.receivedMicro) * allocation.amountMicro) / sentMicro
+    const key = `refund:${input.purchaseId}:gift:${allocation.ledger.id}`
+    const giftLotId = received.lotId
+    clawedBackMicro += await withLockedWallet(received.userId, async (ctx) => {
+      if (shareMicro <= 0n || await hasLedgerEntry(ctx, key)) return 0n
+      const taken = await takeFromLots(ctx, {
+        type: 'refund_clawback',
+        amountMicro: shareMicro,
+        idempotencyKey: key,
+        purchaseId: input.purchaseId,
+        filter: { lotId: giftLotId },
+        meta: { giftRefund: true },
+      })
+      return taken.spentMicro
+      // Not a visit by the recipient.
+    }, { skipDailyGrant: true })
+  }
+  return clawedBackMicro
 }

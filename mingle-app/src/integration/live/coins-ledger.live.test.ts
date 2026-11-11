@@ -309,9 +309,10 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
     try {
       // 1,000 free (daily refill) + 10,600 purchased.
       await wallet.getCoinWallet(senderId)
+      const storeTransactionId = `tx-${randomUUID()}`
       await purchases.grantVerifiedPurchase(senderId, {
         platform: 'ios' as const,
-        storeTransactionId: `tx-${randomUUID()}`,
+        storeTransactionId,
         storeOriginalTransactionId: null,
         storeProductId: 'coin_10000',
         environment: 'sandbox' as const,
@@ -348,13 +349,22 @@ describe.skipIf(!TEST_DATABASE_URL)('coin ledger (live PostgreSQL)', () => {
       await expect(gifts.sendCoinGift({ senderId, recipientId: 'no-such-user', coins: 1, idempotencyKey: 'missing' }))
         .rejects.toMatchObject({ code: 'gift_recipient_unavailable' })
 
+      const history = await (await import('@/server/coins/queries')).getCoinHistory(senderId, null)
+      expect(history.items[0]).toMatchObject({ type: 'removal', reason: 'gift_sent', coins: 600 })
+
+      // Refunding the purchase also takes the gifted Hash back from the recipient, once.
+      const paidOf = async (userId: string) => (await prisma.appCoinWallet.findUniqueOrThrow({ where: { userId } })).paidBalanceMicro
+      expect(await purchases.refundPurchase(storeTransactionId)).toBe('refunded')
+      expect(await paidOf(senderId)).toBe(0n)
+      expect(await paidOf(recipientId)).toBe(0n)
+      expect(await purchases.refundPurchase(storeTransactionId)).toBe('already_refunded')
+      expect(await prisma.appCoinLedger.count({ where: { userId: recipientId, type: 'refund_clawback' } })).toBe(1)
+
       for (const userId of [senderId, recipientId]) {
         const total = await sums(userId)
         expect(total.ledger).toBe(total.wallet)
         expect(total.lots).toBe(total.wallet)
       }
-      const history = await (await import('@/server/coins/queries')).getCoinHistory(senderId, null)
-      expect(history.items[0]).toMatchObject({ type: 'removal', reason: 'gift_sent', coins: 600 })
     } finally {
       await prisma.user.deleteMany({ where: { id: { in: [senderId, recipientId, blockedId] } } })
     }
