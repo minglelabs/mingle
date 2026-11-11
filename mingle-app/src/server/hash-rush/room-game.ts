@@ -77,11 +77,11 @@ export async function joinHashRushGame(
 // must not move the room to the top.
 export const prismaHashRushGameStore: HashRushGameStore = {
   async read(channelId) {
-    const row = await prisma.appConversationChannel.findUnique({
-      where: { id: channelId },
-      select: { hashRushSessionId: true, hashRushStartedByUserId: true, hashRushActiveAt: true },
-    });
-    return row ? { sessionId: row.hashRushSessionId, startedByUserId: row.hashRushStartedByUserId, activeAt: row.hashRushActiveAt } : null;
+    const rows = await prisma.$queryRaw<Array<{ session_id: string | null; started_by: string | null; active_at: Date | null }>>`
+      SELECT "hash_rush_session_id" AS session_id, "hash_rush_started_by_user_id" AS started_by, "hash_rush_active_at" AS active_at
+      FROM "app"."app_conversation_channels" WHERE "id" = ${channelId} LIMIT 1`;
+    const row = rows[0];
+    return row ? { sessionId: row.session_id, startedByUserId: row.started_by, activeAt: row.active_at } : null;
   },
   async tryStart(channelId, { sessionId, userId, now, cutoff }) {
     const count = await prisma.$executeRaw`
