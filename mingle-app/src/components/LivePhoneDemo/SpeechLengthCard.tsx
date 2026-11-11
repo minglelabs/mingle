@@ -1,28 +1,36 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
+import { useMemo, useState } from "react";
 import SpeechLengthScale from "@/components/LivePhoneDemo/SpeechLengthScale";
 import type { FirstRunCopy } from "@/i18n/first-run-copy";
-import type { SpeechLengthLevel } from "@/lib/speech-length";
+import { groupSpeechLengthPreview, type SpeechLengthLevel } from "@/lib/speech-length";
 
 /**
  * Shown once, right after a new user's first finished bubble: how long a
- * sentence should be kept together. The current level is already selected, so
- * the card can be ignored or closed; a tap applies the choice at once.
+ * sentence should be kept together. Picking a number only changes the example
+ * conversation above the scale, where the bubbles merge or split as that
+ * level would; "Apply" is what changes the setting (and, if the room is
+ * listening, restarts it). The current level starts selected, so the card can
+ * also just be closed.
  */
 export default function SpeechLengthCard({
   copy,
   selected,
   disabled = false,
-  onSelect,
+  onApply,
   onClose,
 }: {
   copy: FirstRunCopy;
   selected: SpeechLengthLevel;
   disabled?: boolean;
-  onSelect: (level: SpeechLengthLevel) => void;
+  onApply: (level: SpeechLengthLevel) => void;
   onClose: () => void;
 }) {
+  const [picked, setPicked] = useState<SpeechLengthLevel>(selected);
+  const bubbles = useMemo(() => groupSpeechLengthPreview(picked, copy.lengthPreview), [copy.lengthPreview, picked]);
+
   return (
     <div
       role="group"
@@ -44,9 +52,40 @@ export default function SpeechLengthCard({
           <X size={18} strokeWidth={2.4} aria-hidden />
         </button>
       </div>
-      <div className="mt-3">
-        <SpeechLengthScale copy={copy} selected={selected} disabled={disabled} onSelect={onSelect} />
+      <div
+        aria-hidden
+        data-qa="speech-length-preview"
+        data-bubbles={bubbles.length}
+        className="mt-3 flex flex-col items-end gap-1.5 rounded-2xl bg-slate-50 px-3 py-2.5"
+      >
+        <AnimatePresence initial={false} mode="popLayout">
+          {bubbles.map((bubble) => (
+            <motion.div
+              key={bubble.key}
+              layout
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ type: "spring", stiffness: 520, damping: 38, mass: 0.7 }}
+              className="max-w-[86%] rounded-[1.05rem] rounded-br-md bg-amber-400 px-3 py-1.5 text-[0.82rem] font-medium leading-snug text-slate-950"
+            >
+              {bubble.text}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
+      <div className="mt-3">
+        <SpeechLengthScale copy={copy} selected={picked} disabled={disabled} onSelect={setPicked} />
+      </div>
+      <button
+        type="button"
+        data-qa="speech-length-apply"
+        disabled={disabled}
+        onClick={() => onApply(picked)}
+        className="mt-3 flex h-12 w-full items-center justify-center rounded-2xl bg-slate-950 text-[0.98rem] font-bold text-white transition active:scale-[0.99] disabled:opacity-50"
+      >
+        {copy.lengthApply}
+      </button>
     </div>
   );
 }

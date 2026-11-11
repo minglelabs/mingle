@@ -222,6 +222,7 @@ import AppTopHeader from "@/components/app-top-header";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
 import { feedHref } from "@/lib/feed-routes";
+import { requestProfileBasics } from "@/lib/profile-basics";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
@@ -4769,6 +4770,11 @@ export default function ConversationList({
       });
       return;
     }
+
+    // Reading what other people wrote puts the user in front of them, so a
+    // room with other members asks for gender and birth date first, like a
+    // follow or a comment. Closing the question leaves the room unopened.
+    if (matchedConversation.isMultiMember && !(await requestProfileBasics())) return;
 
     try {
       await openConversationSummary(matchedConversation);

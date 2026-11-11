@@ -2,7 +2,7 @@
  * Gender and birth date ("profile basics") are no longer asked before the
  * first screen. They are asked the first time the user does something that
  * puts them in front of people they do not know: a follow, a comment, a post,
- * or a message from someone's profile. `requestProfileBasics()` is awaited at
+ * a message from someone's profile, or opening a room with other people in it. `requestProfileBasics()` is awaited at
  * those moments; it resolves true when the profile already has both (or once
  * the user fills them in) and false when the user closes the question, in
  * which case the caller drops the action.

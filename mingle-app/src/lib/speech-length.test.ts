@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_SPEECH_LENGTH_LEVEL,
   SPEECH_LENGTH_LEVELS,
+  groupSpeechLengthPreview,
   isExactSpeechLengthLevel,
   matchSpeechLengthLevel,
   resolveSpeechLengthPreferences,
@@ -47,5 +48,20 @@ describe('speech length levels', () => {
     expect(matchSpeechLengthLevel(oneSecond)).toBe(4)
     expect(matchSpeechLengthLevel({ ...oneSecond, sonioxManualFinalizeSilenceMs: 3500 })).toBe(5)
     expect(matchSpeechLengthLevel({ ...oneSecond, sonioxManualFinalizeSilenceMs: 4500 })).toBe(6)
+  })
+})
+
+describe('speech length preview', () => {
+  const pieces = ['Hi!', 'I got here.', 'Nice day.', 'Tomorrow,', 'any food?', "Let's go!"]
+
+  it('merges the example into one fewer bubble at each longer level', () => {
+    expect(SPEECH_LENGTH_LEVELS.map((level) => groupSpeechLengthPreview(level, pieces).length)).toEqual([6, 5, 4, 3, 2, 1])
+    expect(groupSpeechLengthPreview(6, pieces)).toEqual([{ key: 'p0', text: "Hi! I got here. Nice day. Tomorrow, any food? Let's go!" }])
+    expect(groupSpeechLengthPreview(4, pieces).map((bubble) => bubble.key)).toEqual(['p0', 'p2', 'p4'])
+  })
+
+  it('joins Japanese and Chinese pieces without a space', () => {
+    expect(groupSpeechLengthPreview(5, ['やあ!', '着いたよ。', 'いいね。', 'a', 'b', 'c'])[0].text).toBe('やあ! 着いたよ。いいね。')
+    expect(groupSpeechLengthPreview(2, ['嗨！', '到了。', '', '', '', ''])[0].text).toBe('嗨！到了。')
   })
 })

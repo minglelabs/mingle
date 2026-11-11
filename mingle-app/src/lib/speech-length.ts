@@ -69,3 +69,35 @@ export function isExactSpeechLengthLevel(level: SpeechLengthLevel, settings: {
     ? preferences.sonioxEndpointTuningStep === settings.sonioxEndpointTuningStep
     : preferences.sonioxManualFinalizeSilenceMs === settings.sonioxManualFinalizeSilenceMs
 }
+
+/**
+ * How the first-run card's example speech splits into bubbles at each level:
+ * six short pieces become six bubbles at the shortest level and one at the
+ * longest, so moving along the scale visibly merges or splits them.
+ */
+const PREVIEW_GROUPS: Record<SpeechLengthLevel, readonly (readonly number[])[]> = {
+  1: [[0], [1], [2], [3], [4], [5]],
+  2: [[0, 1], [2], [3], [4], [5]],
+  3: [[0, 1], [2, 3], [4], [5]],
+  4: [[0, 1], [2, 3], [4, 5]],
+  5: [[0, 1, 2], [3, 4, 5]],
+  6: [[0, 1, 2, 3, 4, 5]],
+}
+
+// Chinese and Japanese run sentences together without a space.
+const NO_SPACE_AFTER = /[　-〿぀-ヿ㐀-鿿＀-￯]$/
+
+export type SpeechLengthPreviewBubble = { key: string; text: string }
+
+export function groupSpeechLengthPreview(level: SpeechLengthLevel, pieces: readonly string[]): SpeechLengthPreviewBubble[] {
+  return PREVIEW_GROUPS[level]
+    .map((indexes) => {
+      const parts = indexes.map((index) => pieces[index]?.trim() ?? '').filter(Boolean)
+      const text = parts.reduce((joined, part) => (
+        !joined ? part : `${joined}${NO_SPACE_AFTER.test(joined) ? '' : ' '}${part}`
+      ), '')
+      // Keyed by the first piece, so a bubble that grows keeps its place.
+      return { key: `p${indexes[0]}`, text }
+    })
+    .filter((bubble) => bubble.text)
+}

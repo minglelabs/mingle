@@ -9256,7 +9256,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   copy={firstRunCopy}
                   selected={selectedSpeechLengthLevel}
                   disabled={isApplyingSpeechLength}
-                  onSelect={(level) => { void handleSpeechLengthSelect(level, 'card') }}
+                  onApply={(level) => { void handleSpeechLengthSelect(level, 'card') }}
                   onClose={handleSpeechLengthClose}
                 />
               </div>
