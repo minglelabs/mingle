@@ -242,6 +242,69 @@ describe('/api/translate/finalize route', () => {
     expect(prompt).toContain('blank: "그리고 집에 갔어. 그런데 가는"')
   })
 
+  it('streams an interim tail fill as NDJSON: pieces first, then the usual answer once', async () => {
+    const encoder = new TextEncoder()
+    const content = '{"translatedSource":"그리고 집에 갔어.","en":"And then we went home."}'
+    const sse = [
+      `data: ${JSON.stringify({ model: 'gpt-6-luna', choices: [{ delta: { content: content.slice(0, 40) } }] })}\n\n`,
+      `data: ${JSON.stringify({ choices: [{ delta: { content: content.slice(40, 55) } }] })}\n\n`,
+      `data: ${JSON.stringify({ choices: [{ delta: { content: content.slice(55) }, finish_reason: 'stop' }] })}\n\n`,
+      'data: [DONE]\n\n',
+    ]
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of sse) controller.enqueue(encoder.encode(chunk))
+        controller.close()
+      },
+    }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+
+    const res = await POST(makeJsonRequest({
+      text: '어제 친구를 만났어. 그리고 집에 갔어. 그런데 가는',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en'],
+      isFinal: false,
+      stream: true,
+      translationModel: 'gpt-6-luna',
+      bubbleTail: {
+        translatedSource: '어제 친구를 만났어.',
+        translations: { en: 'I met a friend yesterday.' },
+      },
+    }) as never)
+
+    expect(res.headers.get('content-type')).toContain('application/x-ndjson')
+    const lines = (await res.text()).trim().split('\n').map((line) => JSON.parse(line))
+    const partials = lines.filter((line) => line.type === 'partial')
+    const finals = lines.filter((line) => line.type === 'final')
+    expect(partials.length).toBeGreaterThan(0)
+    for (const partial of partials) {
+      expect(partial.translations.en.startsWith('I met a friend yesterday. ')).toBe(true)
+    }
+    expect(finals).toHaveLength(1)
+    expect(finals[0].status).toBe(200)
+    expect(finals[0].body.translations).toEqual({ en: 'I met a friend yesterday. And then we went home.' })
+    expect(finals[0].body.tailFill.translatedSource).toBe('어제 친구를 만났어. 그리고 집에 갔어.')
+    const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))
+    expect(payload.stream).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores stream for a final request and answers plain JSON', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"en","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ko":"안녕"}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+    const res = await POST(makeJsonRequest({
+      text: 'hello', sourceLanguage: 'en', targetLanguages: ['ko'], isFinal: true, stream: true,
+    }) as never)
+    expect(res.headers.get('content-type')).toContain('application/json')
+  })
+
   it('starts a new bubble from the previous bubble\'s last piece', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {

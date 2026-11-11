@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildInterimTailPartialTranslations,
   countInterimCutCandidates,
   extendFixedSource,
   isSafeInterimCut,
@@ -102,5 +103,23 @@ describe('interim fill gate', () => {
     const english = 'word '.repeat(12).trim()
     expect(shouldRequestInterimFill(english, 'word')).toBe(false)
     expect(shouldRequestInterimFill('word '.repeat(18).trim(), 'word')).toBe(true)
+  })
+})
+
+describe('buildInterimTailPartialTranslations', () => {
+  const plan = planBubbleTail({ translatedSource: 'Hello.', translations: { ko: '안녕.' } }, 'Hello. Nice to meet you. And', ['ko'])!
+  const key = 'translatedSource'
+
+  it('waits until the answer names a cut the finished answer would keep', () => {
+    expect(buildInterimTailPartialTranslations(plan, { values: { [key]: 'Nice to' }, complete: new Set() }, ['ko'], key)).toBeNull()
+    expect(buildInterimTailPartialTranslations(plan, { values: { [key]: 'Bye.', ko: '잘' }, complete: new Set([key]) }, ['ko'], key)).toBeNull()
+    expect(buildInterimTailPartialTranslations(plan, { values: { [key]: 'Nice to meet you.' }, complete: new Set([key]) }, ['ko'], key)).toBeNull()
+  })
+
+  it('shows the fixed part followed by the fill so far', () => {
+    expect(buildInterimTailPartialTranslations(plan, {
+      values: { [key]: 'Nice to meet you.', ko: '만나서 반' },
+      complete: new Set([key]),
+    }, ['ko'], key)).toEqual({ ko: '안녕. 만나서 반' })
   })
 })

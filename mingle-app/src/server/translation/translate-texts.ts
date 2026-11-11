@@ -235,6 +235,12 @@ export type TranslateContext = {
     previousSource?: string
     previousTranslations?: Record<string, string>
   }
+  /**
+   * OpenAI only: stream the answer and call this with everything received so
+   * far after each chunk. Display only; the returned result is still the
+   * whole answer, parsed and checked as usual.
+   */
+  onPartialContent?: (content: string) => void
 }
 
 type GeminiUsageMetadata = {
@@ -1226,10 +1232,15 @@ async function createOpenAICompatibleCompletion(
     payload.reasoning = { effort: 'none', exclude: true }
   }
 
+  const onPartialContent = config.provider === 'openai' ? ctx.onPartialContent : undefined
   if (config.provider === 'openai') {
     payload.response_format = buildOpenRouterQwenJsonSchemaResponseFormat(ctx)
     payload.reasoning_effort = 'none'
     if (ctx.fast) payload.service_tier = OPENAI_TRANSLATION_SERVICE_TIER
+    if (onPartialContent) {
+      payload.stream = true
+      payload.stream_options = { include_usage: true }
+    }
   }
 
   if (config.extraBody) {
@@ -1261,6 +1272,10 @@ async function createOpenAICompatibleCompletion(
       cache: 'no-store',
       ...(signal ? { signal } : {}),
     })
+
+    if (onPartialContent && response.ok && response.body) {
+      return await readOpenAIChatCompletionStream(response.body, onPartialContent)
+    }
 
     const rawText = await response.text()
     let parsedBody: OpenAICompatibleResponseLike | null = null
@@ -1319,6 +1334,85 @@ async function createOpenAICompatibleCompletion(
     })
     await sleep(retryInMs)
     return await executeRequest()
+  }
+}
+
+type OpenAIChatCompletionChunk = {
+  model?: unknown
+  service_tier?: unknown
+  choices?: Array<{ delta?: { content?: unknown }, finish_reason?: unknown }>
+  usage?: OpenAICompatibleResponseLike['usage'] | null
+  error?: { message?: unknown, code?: unknown }
+}
+
+/**
+ * Reads a chat-completions SSE stream into the same shape as a plain answer,
+ * calling `onPartialContent` with the text so far after each content chunk.
+ */
+export async function readOpenAIChatCompletionStream(
+  body: ReadableStream<Uint8Array>,
+  onPartialContent: (content: string) => void,
+): Promise<OpenAICompatibleResponseLike> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let content = ''
+  let model: unknown
+  let serviceTier: unknown
+  let finishReason: unknown
+  let usage: OpenAICompatibleResponseLike['usage']
+
+  const handleLine = (line: string): boolean => {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('data:')) return false
+    const data = trimmed.slice(5).trim()
+    if (data === '[DONE]') return true
+    let chunk: OpenAIChatCompletionChunk
+    try {
+      chunk = JSON.parse(data) as OpenAIChatCompletionChunk
+    } catch {
+      return false
+    }
+    if (chunk.error) {
+      const message = typeof chunk.error.message === 'string' ? chunk.error.message.trim() : ''
+      const code = typeof chunk.error.code === 'string' || typeof chunk.error.code === 'number'
+        ? String(chunk.error.code).trim()
+        : ''
+      throw new Error(`OpenAI-compatible provider error${code ? ` [${code}]` : ''} ${message || 'Unknown provider error'}`)
+    }
+    if (chunk.model !== undefined) model = chunk.model
+    if (chunk.service_tier !== undefined) serviceTier = chunk.service_tier
+    if (chunk.usage) usage = chunk.usage
+    const choice = chunk.choices?.[0]
+    if (choice?.finish_reason !== undefined && choice.finish_reason !== null) finishReason = choice.finish_reason
+    const delta = choice?.delta?.content
+    if (typeof delta === 'string' && delta) {
+      content += delta
+      try { onPartialContent(content) } catch { /* A display hook cannot break the translation. */ }
+    }
+    return false
+  }
+
+  let done = false
+  while (!done) {
+    const { value, done: streamDone } = await reader.read()
+    if (value) buffer += decoder.decode(value, { stream: true })
+    if (streamDone) buffer += decoder.decode()
+    const lines = buffer.split('\n')
+    buffer = streamDone ? '' : (lines.pop() ?? '')
+    for (const line of lines) {
+      if (handleLine(line)) done = true
+    }
+    if (streamDone) done = true
+  }
+  // Stops reading after [DONE]; a no-op when the stream already ended.
+  await reader.cancel().catch(() => undefined)
+
+  return {
+    model,
+    service_tier: serviceTier,
+    choices: [{ finish_reason: finishReason, message: { content } }],
+    ...(usage ? { usage } : {}),
   }
 }
 

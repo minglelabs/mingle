@@ -256,3 +256,32 @@ export function shouldRequestInterimFill(currentText: string, lastRequestedText:
   if (grown >= minChars && countInterimCutCandidates(current) > countInterimCutCandidates(last)) return true
   return grown >= fallbackChars
 }
+
+// ===== Streamed interim fills =====
+
+const PARTIAL_MARKER = /<\/?(?:end|fin)>/gi
+
+/**
+ * What an interim tail answer still being streamed lets the bubble show:
+ * the fixed translations plus the fill so far, per language. Null until the
+ * answer has named the source it covers and that cut is one the finished
+ * answer would keep (the same checks as the finished answer), so nothing
+ * shows that the final answer would throw away.
+ */
+export function buildInterimTailPartialTranslations(
+  plan: BubbleTailPlan,
+  fields: { values: Record<string, string>, complete: Set<string> },
+  targetLanguages: readonly string[],
+  translatedSourceKey: string,
+): Record<string, string> | null {
+  if (!fields.complete.has(translatedSourceKey)) return null
+  const coveredLength = matchTranslatedTailLength(plan.remainingSource, fields.values[translatedSourceKey] || '')
+  if (coveredLength <= 0 || !isSafeInterimCut(plan.remainingSource, coveredLength)) return null
+  const fills: Record<string, string> = {}
+  for (const language of targetLanguages) {
+    const fill = (fields.values[language] || '').replace(PARTIAL_MARKER, '').trim()
+    if (fill) fills[language] = fill
+  }
+  if (Object.keys(fills).length === 0) return null
+  return joinTailTranslations(plan, fills, targetLanguages)
+}
