@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Writes the two hand-written blog articles in every site language.
 
-The English pages stay the source: public/legal/blogs/<slug>.html. Their text is
+The English pages stay the source: public/legal/blogs/en/<slug>.html (kept out of the public
+path so a ?lang= rewrite on /blogs/<slug> can fire; a file there would be served first). Their text is
 cut into leaf blocks (headings, paragraphs, list items, table cells...) in document
 order; scripts/legal-blog-i18n/articles/<slug>.<lang>.json holds each block's
 translated inner HTML under the same index, plus the page's title and descriptions.
@@ -148,13 +149,13 @@ def page(slug, lang, source):
 def main():
     if "--export" in sys.argv:
         for slug in SLUGS:
-            soup = BeautifulSoup((BLOGS / f"{slug}.html").read_text(encoding="utf-8"), "html.parser")
+            soup = BeautifulSoup((BLOGS / "en" / f"{slug}.html").read_text(encoding="utf-8"), "html.parser")
             print(json.dumps({slug: {str(i): inner(b).strip() for i, b in enumerate(blocks(soup))}}, ensure_ascii=False, indent=1))
         return
     for slug in SLUGS:
-        source = (BLOGS / f"{slug}.html").read_text(encoding="utf-8")
+        source = (BLOGS / "en" / f"{slug}.html").read_text(encoding="utf-8")
         for lang in LANGS:
-            out = BLOGS / f"{slug}.html" if lang == "en" else BLOGS / lang / f"{slug}.html"
+            out = BLOGS / lang / f"{slug}.html"
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(page(slug, lang, source), encoding="utf-8")
             print("wrote", out.relative_to(BLOGS.parent))
