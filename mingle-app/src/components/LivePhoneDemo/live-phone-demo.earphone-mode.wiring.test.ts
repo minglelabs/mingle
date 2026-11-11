@@ -162,7 +162,7 @@ describe('earphone mode wiring', () => {
     expect(notice).toContain('deviceAudioViaBroadcast={isLikelyIOSPlatform()}')
     // What the session captures: shell support + earphone mode on + the pick.
     const effective = between(liveDemoSource, 'const sttCaptureSource = resolveEffectiveSttCaptureSource({', '})')
-    expect(effective).toContain('supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker,')
+    expect(effective).toContain('supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker && !voiceTalkState.joined,')
     expect(effective).toContain('earphoneModeEnabled,')
     expect(effective).toContain('pick: sttCaptureSourcePick,')
     expect(liveDemoSource).toContain('captureSource: sttCaptureSource,')

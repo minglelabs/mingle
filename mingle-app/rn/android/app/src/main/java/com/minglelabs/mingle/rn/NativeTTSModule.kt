@@ -134,7 +134,7 @@ class NativeTTSModule(
         file.writeBytes(audioBytes)
         clipFile = file
         val nextPlayer = MediaPlayer().apply {
-          setAudioAttributes(PLAYBACK_ATTRIBUTES)
+          setAudioAttributes(playbackAttributesNow())
           setDataSource(file.absolutePath)
           setOnCompletionListener { finished -> onClipFinished(finished) }
           setOnErrorListener { failed, what, extra ->
@@ -212,7 +212,7 @@ class NativeTTSModule(
         // once, so the buffer stays small: sound starts with the first pieces.
         val bufferBytes = if (minBufferBytes > 0) minBufferBytes * 2 else sampleRate / 5 * 2
         val track = AudioTrack.Builder()
-          .setAudioAttributes(PLAYBACK_ATTRIBUTES)
+          .setAudioAttributes(playbackAttributesNow())
           .setAudioFormat(format)
           .setTransferMode(AudioTrack.MODE_STREAM)
           .setBufferSizeInBytes(bufferBytes)
@@ -363,6 +363,14 @@ class NativeTTSModule(
     emit("ttsError", payload)
   }
 
+  // During a voice talk the phone is in communication mode, and its echo
+  // canceller removes from the microphone only what plays as call audio. A
+  // translation read as media would go back into the call, so the other
+  // person would hear their own words translated. In a call it plays as call
+  // audio (and follows the call volume); otherwise as media, as before.
+  private fun playbackAttributesNow(): AudioAttributes =
+    if (audioManager.mode == AudioManager.MODE_IN_COMMUNICATION) CALL_PLAYBACK_ATTRIBUTES else PLAYBACK_ATTRIBUTES
+
   // ── Audio focus: other apps duck while a clip plays ─────────────────────
 
   private fun requestDuckingFocus() {
@@ -501,6 +509,10 @@ class NativeTTSModule(
 
     private val PLAYBACK_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
       .setUsage(AudioAttributes.USAGE_MEDIA)
+      .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+      .build()
+    private val CALL_PLAYBACK_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
+      .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
       .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
       .build()
   }

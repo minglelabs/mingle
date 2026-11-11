@@ -149,6 +149,8 @@ export interface Utterance {
   voiceCall?: VoiceCallMessage
   // A Hash Rush game that started: the same kind of card.
   hashRush?: HashRushMessage
+  /** Said in a voice talk: only this viewer and the others with interpretation on see it. */
+  voiceCaption?: true
   id: string
   speaker?: string
   speakerAvatarSeed?: string
@@ -987,7 +989,11 @@ function ChatBubble({
     ? `${bubbleTextClassName} text-gray-400`
     : `${bubbleTextClassName} ${isOriginalLanguageSelected ? 'text-gray-900' : activeTranslationEntry?.state === 'interim' ? 'text-gray-400' : 'text-gray-700'}`
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
-  const bubbleBackgroundClassName = isOwnMessage ? 'bg-amber-50/80' : 'bg-white'
+  // A call caption is tinted and dashed: it is not a message the whole room has.
+  const isVoiceCaption = utterance.voiceCaption === true && !isRecalled
+  const bubbleBackgroundClassName = isVoiceCaption
+    ? 'bg-sky-50/80 !border-dashed !border-sky-200'
+    : isOwnMessage ? 'bg-amber-50/80' : 'bg-white'
   const bubbleCornerClassName = isOwnMessage ? 'rounded-tl-2xl' : 'rounded-tl-none'
   const expandedBubblePaddingClassName = isCounterpartMessage ? 'px-2 pt-0.5 pb-1' : 'px-2 py-1'
   const collapsedBubblePaddingClassName = isCounterpartMessage ? 'px-2.5 pt-0.5 pb-1' : 'px-2.5 py-1'

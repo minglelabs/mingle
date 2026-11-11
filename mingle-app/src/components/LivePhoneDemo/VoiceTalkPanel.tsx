@@ -5,11 +5,13 @@
 // top bar with the people in the call (up to 8); drag it up (or tap the handle) to fold it into a
 // slim bar.
 //
-// Voice talk and the room's speech-to-text are separate features: a call
-// never starts or stops speech-to-text. The panel's mic button owns the voice
-// sent into the call; the room's Start/Stop button owns speech-to-text (the
-// text and its translation). What people say shows as the room's messages
-// only while their speech-to-text is on, and the panel says so when it is off.
+// In a call the room's own Start/Stop and speaker buttons are locked, and the
+// panel has the two switches that matter: the mic button owns the voice sent
+// into the call, and the interpret button turns on captions and the
+// interpreted voice of what the others say. While anyone in the call has
+// interpretation on, every phone writes down its own speech; those lines are
+// call captions, read only by the people who had it on (and whoever said
+// them), never by the rest of the room. See src/lib/voice-caption.ts.
 //
 // The call itself runs in the native app (LiveKit audio). This panel only
 // draws it and sends button presses over the RN bridge (see
@@ -17,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ChevronUp, Mic, MicOff, PhoneOff, Phone, Plus } from 'lucide-react'
+import { ChevronUp, Languages, Mic, MicOff, PhoneOff, Phone, Plus } from 'lucide-react'
 import LanguageFlag from '@/components/language-flag'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { useRoomPresence } from '@/lib/room-presence'
@@ -31,7 +33,8 @@ type CallParticipant = { userId: string; name: string | null; image: string | nu
 // `startedBy` comes from servers that send it.
 type StatusCall = { id: string; participants: CallParticipant[]; maxParticipants: number; startedBy?: { userId: string; name: string | null } | null } | null
 // `lang` and `micOn` come from app builds that share them; older builds send neither.
-type RoomMember = { identity: string; userId: string; name: string; isLocal: boolean; isSpeaking: boolean; lang?: string; micOn?: boolean }
+// `interpretOff` is false only for a member who turned interpretation on.
+type RoomMember = { identity: string; userId: string; name: string; isLocal: boolean; isSpeaking: boolean; lang?: string; micOn?: boolean; interpretOff?: boolean }
 type RoomSnapshot = {
   status: string
   /** Language the app joined with; its translation lane is the one we hear. */
@@ -122,6 +125,49 @@ export function setVoiceTalkMic(on: boolean) {
   post({ type: 'native_voice_set', payload: { mic: on } })
 }
 
+/**
+ * Turns this viewer's interpretation on or off: the server first (it decides
+ * who reads each caption), then the call, so the others' phones start writing
+ * down only once the server knows who reads it.
+ */
+export async function setVoiceTalkInterpret(conversationId: string, on: boolean): Promise<void> {
+  await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/interpret`), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ on }),
+  }).catch(() => undefined)
+  post({ type: 'native_voice_set', payload: { interpret: on } })
+}
+
+/**
+ * Whose billing identity this phone's speech-to-text carries while it writes
+ * down its own speech for the call. `null`: could not ask.
+ */
+export async function fetchVoiceTalkSttBilling(conversationId: string): Promise<{ token: string | null } | null> {
+  try {
+    const response = await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/interpret`), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    })
+    if (!response.ok) return null
+    const body = await response.json() as { sttBillingToken?: unknown }
+    return { token: typeof body.sttBillingToken === 'string' ? body.sttBillingToken : null }
+  } catch {
+    return null
+  }
+}
+
+/** Who in the call has interpretation on (user ids), this phone's own switch included. */
+export function resolveVoiceTalkInterpretViewers(input: {
+  members: ReadonlyArray<{ userId: string; isLocal: boolean; interpretOff?: boolean }>
+  interpretOn: boolean
+}): string[] {
+  return input.members
+    .filter((member) => (member.isLocal ? input.interpretOn : member.interpretOff === false))
+    .map((member) => member.userId)
+}
+
 /** The call's mic: on unless the viewer only listens. The room's speech-to-text does not move it. */
 export function resolveVoiceTalkMic(input: { listenOnly: boolean }): boolean {
   return !input.listenOnly
@@ -156,8 +202,11 @@ export type VoiceTalkPanelProps = {
   onListenOnlyChange?: (listenOnly: boolean) => void
   /** The app reported its mic (on returning to the room): show it, switch nothing. */
   onListenOnlySync?: (listenOnly: boolean) => void
-  /** The room's speech-to-text is running. Off in a call means voice only: the panel says so. */
-  captionsOn?: boolean
+  /** Interpretation (captions and the interpreted voice of the others) is on for this viewer. Owned by the room. */
+  interpretOn?: boolean
+  onInterpretChange?: (on: boolean) => void
+  /** Who in the call has interpretation on, as it changes (user ids). */
+  onInterpretViewersChange?: (viewers: string[]) => void
   /** Opens a member's profile when their seat is tapped. */
   onOpenProfile?: (userId: string) => void
   /** This viewer's account id: always counted as having the room open. */
@@ -167,6 +216,8 @@ export type VoiceTalkPanelProps = {
 export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const { conversationId, conversationTitle, myLang, openSignal, leaveSignal, onAvailabilityChange, onListenOnlyChange, onOpenProfile } = props
   const listenOnly = props.listenOnly === true
+  const interpretOn = props.interpretOn === true
+  const { onInterpretChange, onInterpretViewersChange } = props
   const viewerUserId = props.viewerUserId ?? null
   const copy = voiceTalkCopy(props.uiLocale)
   const [call, setCall] = useState<StatusCall>(null)
@@ -329,6 +380,14 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         }))
     return people.slice(0, MAX_SEATS)
   }, [call, joined, listenOnly, myLang, room])
+
+  // Who reads what is said: the room starts and stops writing down on this.
+  const interpretViewersKey = joined && room
+    ? resolveVoiceTalkInterpretViewers({ members: room.members, interpretOn }).join('|')
+    : ''
+  useEffect(() => {
+    onInterpretViewersChange?.(interpretViewersKey ? interpretViewersKey.split('|') : [])
+  }, [interpretViewersKey, onInterpretViewersChange])
 
   // Room members who are not in the call, shown small under the seats.
   const presence = useRoomPresence(conversationId)
@@ -597,25 +656,37 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                 </div>
               ) : null}
 
-              {joined && props.captionsOn === false ? (
-                <p data-qa="voice-talk-captions-off-hint" className="px-3 pb-2 text-center text-[0.76rem] text-gray-500">
-                  {copy.captionsOffHint}
+              {joined && !interpretOn ? (
+                <p data-qa="voice-talk-interpret-hint" className="px-3 pb-2 text-center text-[0.76rem] text-gray-500">
+                  {copy.interpretHint}
                 </p>
               ) : null}
 
               {joined ? (
-                <div className="flex items-center justify-center gap-4 border-t border-gray-100 px-3 py-2.5">
+                <div className="flex items-center justify-center gap-2 border-t border-gray-100 px-3 py-2.5">
                   {/* Shows the mic's state; pressing it switches. */}
                   <button
                     type="button"
                     data-qa="voice-talk-mic-toggle"
                     aria-pressed={!listenOnly}
                     onClick={() => onListenOnlyChange?.(!listenOnly)}
-                    className={`inline-flex h-11 min-w-[124px] items-center justify-center gap-1.5 rounded-full px-5 text-[0.86rem] font-semibold transition-colors ${
+                    className={`inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 text-[0.78rem] font-semibold transition-colors ${
                       listenOnly ? 'bg-gray-100 text-gray-400 active:bg-gray-200' : 'bg-red-500 text-white shadow-sm active:bg-red-600'
                     }`}
                   >
-                    {listenOnly ? <><MicOff size={17} /> {copy.micOffState}</> : <><Mic size={17} /> {copy.micOnState}</>}
+                    {listenOnly ? <><MicOff size={16} className="shrink-0" /> <span className="truncate">{copy.micOffState}</span></> : <><Mic size={16} className="shrink-0" /> <span className="truncate">{copy.micOnState}</span></>}
+                  </button>
+                  {/* Captions and the interpreted voice of what the others say. */}
+                  <button
+                    type="button"
+                    data-qa="voice-talk-interpret-toggle"
+                    aria-pressed={interpretOn}
+                    onClick={() => onInterpretChange?.(!interpretOn)}
+                    className={`inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 text-[0.78rem] font-semibold transition-colors ${
+                      interpretOn ? 'bg-emerald-500 text-white shadow-sm active:bg-emerald-600' : 'bg-gray-100 text-gray-400 active:bg-gray-200'
+                    }`}
+                  >
+                    <Languages size={16} className="shrink-0" /> <span className="truncate">{interpretOn ? copy.interpretOnState : copy.interpretOffState}</span>
                   </button>
                   <button
                     type="button"
@@ -624,9 +695,9 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                     // once. Only the room's phone button asks first.
                     onClick={leave}
                     // Plain gray: red is the mic's "on", and two red buttons both read as warnings.
-                    className="inline-flex h-11 min-w-[124px] items-center justify-center gap-1.5 rounded-full bg-gray-100 px-5 text-[0.86rem] font-semibold text-gray-700 active:bg-gray-200"
+                    className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-full bg-gray-100 px-2 text-[0.78rem] font-semibold text-gray-700 active:bg-gray-200"
                   >
-                    <PhoneOff size={17} /> {copy.leave}
+                    <PhoneOff size={16} className="shrink-0" /> <span className="truncate">{copy.leave}</span>
                   </button>
                 </div>
               ) : null}

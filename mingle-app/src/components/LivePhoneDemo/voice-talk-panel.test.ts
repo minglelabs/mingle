@@ -24,36 +24,36 @@ describe('voice talk mic', () => {
   })
 
   it('starts every call with the mic on', () => {
-    expect(liveDemoSource).toContain('if (!voiceTalkState.joined) setVoiceTalkListenOnly(false)')
+    expect(liveDemoSource).toContain('    if (voiceTalkState.joined) return\n    setVoiceTalkListenOnly(false)')
   })
 })
 
-describe('a call and speech-to-text are separate', () => {
+describe('a call takes over speech-to-text', () => {
   const block = liveDemoSource.slice(
-    liveDemoSource.indexOf('// Voice talk and speech-to-text are separate features with separate switches.'),
+    liveDemoSource.indexOf('// A voice talk takes over the room'),
     liveDemoSource.indexOf('const confirmScreenCaptureNotice = useCallback'),
   )
 
-  it('never starts or stops speech-to-text when a call is joined or left', () => {
+  it('starts and stops speech-to-text by itself, for the call', () => {
     expect(block.length).toBeGreaterThan(0)
-    expect(block).not.toContain('handleStartRecording')
-    expect(block).not.toContain('handleStopRecording')
-    expect(block).not.toContain('isSttSessionRunning')
-  })
-
-  it('never switches speaker / earphone mode', () => {
-    expect(block).not.toContain('writeEarphoneModeEnabled')
-    expect(block).not.toContain('setSttCaptureSourcePick')
+    expect(block).toContain('handleStartRecording()')
+    expect(block).toContain('handleStopRecording()')
+    expect(block).toContain('setSttBillingOverride(')
   })
 
   it('moves the call mic only by the listen-only switch', () => {
     expect(block).toContain('setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly }))')
   })
 
-  it('tells a viewer in a call that captions and interpretation are off', () => {
-    expect(liveDemoSource).toContain('captionsOn={isSttSessionRunning || isPreparingStart}')
-    expect(panelSource).toContain('{joined && props.captionsOn === false ? (')
-    expect(copySource).toContain("captionsOffHint: '자막·통역은 꺼져 있어요. 켜려면 아래 Start 버튼을 누르세요.'")
+  it('has an interpret button that the room reads, and a hint while it is off', () => {
+    expect(liveDemoSource).toContain('onInterpretChange={handleVoiceTalkInterpretChange}')
+    expect(liveDemoSource).toContain('onInterpretViewersChange={setVoiceTalkViewers}')
+    expect(panelSource).toContain('data-qa="voice-talk-interpret-toggle"')
+    expect(panelSource).toContain('{joined && !interpretOn ? (')
+  })
+
+  it('reads translations aloud only while interpretation is on in a call', () => {
+    expect(liveDemoSource).toContain('const earphoneModeEnabled = voiceTalkState.joined ? voiceTalkInterpretOn : earphoneModePreference')
   })
 
   it('runs the echo canceller while in a call, so the other voices are not transcribed as mine', () => {
@@ -102,13 +102,13 @@ describe('voice talk panel', () => {
     expect(copySource).toContain("micOffState: '내 목소리 꺼짐'")
     expect(panelSource).not.toContain('마이크 끄기')
     expect(panelSource).not.toContain('마이크 켜기')
-    expect(panelSource).toContain('{listenOnly ? <><MicOff size={17} /> {copy.micOffState}</> : <><Mic size={17} /> {copy.micOnState}</>}')
+    expect(panelSource).toContain('{copy.micOffState}</span></> : <><Mic size={16} className="shrink-0" /> <span className="truncate">{copy.micOnState}')
   })
 
-  it('gives the mic and leave buttons a full-height tap target and space between them', () => {
+  it('gives the mic, interpret and leave buttons a full-height tap target and space between them', () => {
     const row = panelSource.slice(panelSource.indexOf('data-qa="voice-talk-mic-toggle"') - 400, panelSource.indexOf('data-qa="voice-talk-leave"') + 400)
-    expect(row).toContain('gap-4')
-    expect(row.split('h-11').length - 1).toBe(2)
+    expect(row).toContain('gap-2')
+    expect(row.split('h-11').length - 1).toBe(3)
   })
 
   it('shows my own mic switch at once and the others\' from the call', () => {

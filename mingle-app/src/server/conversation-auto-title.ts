@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { chatgptPoolChat } from "@/server/chatgpt-pool/client";
 import { resolveJsonProvider } from "@/server/llm/generate-json";
@@ -118,6 +119,8 @@ export async function maybeGenerateConversationTitleForSession(args: {
     where: {
       sessionKey,
       OR: [{ isDeleted: false }, { isDeleted: null }],
+      // Call captions are not the room's talk.
+      metadata: { path: ["voiceCaption"], equals: Prisma.AnyNull },
     },
     orderBy: { createdAt: "asc" },
     take: AUTO_CONVERSATION_TITLE_CONTEXT_MESSAGE_LIMIT,

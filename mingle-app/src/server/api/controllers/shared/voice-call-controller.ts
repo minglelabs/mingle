@@ -8,6 +8,8 @@ import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { prisma } from "@/lib/prisma";
 import { listRoomIdentities, mintVoiceJoinToken, readLiveKitConfig, verifyLiveKitWebhook } from "@/server/voice/livekit-auth";
 import { prismaVoiceStore } from "@/server/voice/prisma-voice-store";
+import { mintSttBillingToken } from "@/server/coins/stt-token";
+import { resolveCoinBillingMode } from "@/server/coins/config";
 import { VOICE_CALL_MESSAGE_TEXT, buildVoiceCallMessageClientId } from "@/lib/voice-call-message";
 import {
   applyLiveKitWebhookEvent,
@@ -15,6 +17,9 @@ import {
   joinVoiceCall,
   leaveVoiceCall,
   reconcileLiveCall,
+  setVoiceInterpret,
+  voiceCaptionPayer,
+  voiceCaptionViewers,
   type LiveKitWebhookEvent,
   type VoiceStore,
   VoiceRoomFullError,
@@ -211,6 +216,35 @@ export async function postVoiceCallLeaveResponse(request: NextRequest, conversat
   const result = await leaveVoiceCall(store, { channelId: conversationId, userId: member.userId });
   refreshMemberLists(member.sessionKey);
   return NextResponse.json({ ok: true, ended: result.ended });
+}
+
+/**
+ * POST { on? }: with `on`, turns this person's interpretation on or off in
+ * the room's call. Always answers who has it on (`viewers`) and the billing
+ * identity this phone's speech-to-text must carry while it writes down its
+ * own speech for them (`sttBillingToken`): the speaker's own when they have
+ * interpretation on, else a reader's. Null: nobody else reads it, or coins
+ * are off (`billing: false`).
+ */
+export async function postVoiceCallInterpretResponse(request: NextRequest, conversationId: string) {
+  const member = await requireChannelMember(request, conversationId);
+  if ("response" in member) return member.response;
+  const body = await request.json().catch(() => null) as { on?: unknown } | null;
+  const call = typeof body?.on === "boolean"
+    ? await setVoiceInterpret(store, { channelId: conversationId, userId: member.userId, on: body.on })
+    : await getLiveCallView(store, conversationId);
+  if (!call || !call.participants.some((participant) => participant.userId === member.userId)) {
+    return NextResponse.json({ error: "not_in_call" }, { status: 409 });
+  }
+  const billing = resolveCoinBillingMode() !== "off";
+  const payer = voiceCaptionPayer(call, member.userId);
+  return NextResponse.json({
+    callId: call.id,
+    viewers: voiceCaptionViewers(call),
+    payerUserId: payer,
+    billing,
+    sttBillingToken: billing && payer ? mintSttBillingToken(payer) : null,
+  });
 }
 
 export async function postLiveKitWebhookResponse(request: NextRequest) {

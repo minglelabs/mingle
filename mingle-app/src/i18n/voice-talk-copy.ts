@@ -3,8 +3,7 @@ import { resolveLegalDocumentLocale, resolveSupportedLocaleTag, type LegalDocume
 /**
  * Voice talk words, 15 primary UI languages: the panel under the top bar, its
  * start/join/leave dialogs, the incoming card and the "started a voice talk"
- * message in the room. The room's speech-to-text button stays "Start"/"Stop"
- * in English in every language (see LivePhoneDemo), so the hint names it so.
+ * message in the room.
  */
 export const VOICE_TALK_MAX_SEATS = 8
 
@@ -38,7 +37,11 @@ export type VoiceTalkCopy = {
   startedBySomeone: string
   /** Incoming card when the viewer's own call is still going. */
   startedByMe: string
-  captionsOffHint: string
+  /** The interpret button: captions and the interpreted voice of what the others say. */
+  interpretOnState: string
+  interpretOffState: string
+  /** Under the seats while interpretation is off. */
+  interpretHint: string
   /** The room message, seen by the one who started it. */
   messageStartedByMe: string
   /** The room message's join button. */
@@ -77,7 +80,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name}님이 보이스톡을 시작했습니다.`,
     startedBySomeone: '보이스톡이 시작됐습니다.',
     startedByMe: '내가 시작한 보이스톡이 진행 중입니다.',
-    captionsOffHint: '자막·통역은 꺼져 있어요. 켜려면 아래 Start 버튼을 누르세요.',
+    interpretOnState: '통역 켜짐',
+    interpretOffState: '통역 꺼짐',
+    interpretHint: '통역을 켜면 상대 말이 자막과 음성으로 통역돼요. 켜 둔 동안 해씨가 차감돼요.',
     messageStartedByMe: '보이스톡을 시작했습니다.',
     messageJoin: '참여하기',
     joined: '참여 중',
@@ -110,7 +115,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} started a voice talk.`,
     startedBySomeone: 'A voice talk has started.',
     startedByMe: 'The voice talk you started is still going.',
-    captionsOffHint: 'Captions and interpretation are off. Press Start below to turn them on.',
+    interpretOnState: 'Interpret on',
+    interpretOffState: 'Interpret off',
+    interpretHint: 'Turn on Interpret to read and hear what the others say in your language. It uses Hash while it is on.',
     messageStartedByMe: 'You started a voice talk.',
     messageJoin: 'Join',
     joined: 'In the call',
@@ -143,7 +150,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name}さんがボイストークを始めました。`,
     startedBySomeone: 'ボイストークが始まりました。',
     startedByMe: 'あなたが始めたボイストークが続いています。',
-    captionsOffHint: '字幕と通訳はオフです。オンにするには下の Start を押してください。',
+    interpretOnState: '通訳 オン',
+    interpretOffState: '通訳 オフ',
+    interpretHint: '通訳をオンにすると、相手の話が字幕と音声で通訳されます。オンの間はHashを使います。',
     messageStartedByMe: 'ボイストークを始めました。',
     messageJoin: '参加する',
     joined: '参加中',
@@ -176,7 +185,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} 发起了语音通话。`,
     startedBySomeone: '语音通话已开始。',
     startedByMe: '你发起的语音通话仍在进行。',
-    captionsOffHint: '字幕和翻译已关闭。按下方的 Start 即可开启。',
+    interpretOnState: '翻译 开',
+    interpretOffState: '翻译 关',
+    interpretHint: '开启翻译后，对方的话会以字幕和语音为你翻译。开启期间会消耗 Hash。',
     messageStartedByMe: '你发起了语音通话。',
     messageJoin: '加入',
     joined: '通话中',
@@ -209,7 +220,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} 發起了語音通話。`,
     startedBySomeone: '語音通話已開始。',
     startedByMe: '你發起的語音通話仍在進行。',
-    captionsOffHint: '字幕和翻譯已關閉。按下方的 Start 即可開啟。',
+    interpretOnState: '翻譯 開',
+    interpretOffState: '翻譯 關',
+    interpretHint: '開啟翻譯後，對方的話會以字幕和語音為你翻譯。開啟期間會消耗 Hash。',
     messageStartedByMe: '你發起了語音通話。',
     messageJoin: '加入',
     joined: '通話中',
@@ -242,7 +255,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} a lancé un appel vocal.`,
     startedBySomeone: 'Un appel vocal a commencé.',
     startedByMe: "L'appel vocal que vous avez lancé continue.",
-    captionsOffHint: "Les sous-titres et l'interprétation sont coupés. Appuyez sur Start en bas pour les activer.",
+    interpretOnState: 'Interprète activé',
+    interpretOffState: 'Interprète coupé',
+    interpretHint: "Activez l'interprète pour lire et entendre les autres dans votre langue. Il utilise des Hash tant qu'il est activé.",
     messageStartedByMe: 'Vous avez lancé un appel vocal.',
     messageJoin: 'Rejoindre',
     joined: "Dans l'appel",
@@ -275,7 +290,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} hat einen Sprachanruf gestartet.`,
     startedBySomeone: 'Ein Sprachanruf hat begonnen.',
     startedByMe: 'Dein Sprachanruf läuft noch.',
-    captionsOffHint: 'Untertitel und Dolmetschen sind aus. Tippe unten auf Start, um sie einzuschalten.',
+    interpretOnState: 'Dolmetschen an',
+    interpretOffState: 'Dolmetschen aus',
+    interpretHint: 'Schalte Dolmetschen ein, um die anderen in deiner Sprache zu lesen und zu hören. Solange es an ist, verbraucht es Hash.',
     messageStartedByMe: 'Du hast einen Sprachanruf gestartet.',
     messageJoin: 'Beitreten',
     joined: 'Im Anruf',
@@ -308,7 +325,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} inició una llamada de voz.`,
     startedBySomeone: 'Empezó una llamada de voz.',
     startedByMe: 'La llamada de voz que iniciaste sigue activa.',
-    captionsOffHint: 'Los subtítulos y la interpretación están desactivados. Pulsa Start abajo para activarlos.',
+    interpretOnState: 'Intérprete activado',
+    interpretOffState: 'Intérprete apagado',
+    interpretHint: 'Activa el intérprete para leer y oír a los demás en tu idioma. Usa Hash mientras está activado.',
     messageStartedByMe: 'Iniciaste una llamada de voz.',
     messageJoin: 'Unirse',
     joined: 'En la llamada',
@@ -341,7 +360,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} iniciou uma chamada de voz.`,
     startedBySomeone: 'Uma chamada de voz começou.',
     startedByMe: 'A chamada de voz que você iniciou continua.',
-    captionsOffHint: 'Legendas e interpretação estão desligadas. Toque em Start abaixo para ligá-las.',
+    interpretOnState: 'Intérprete ligado',
+    interpretOffState: 'Intérprete desligado',
+    interpretHint: 'Ligue o intérprete para ler e ouvir os outros no seu idioma. Ele usa Hash enquanto está ligado.',
     messageStartedByMe: 'Você iniciou uma chamada de voz.',
     messageJoin: 'Entrar',
     joined: 'Na chamada',
@@ -374,7 +395,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} ha avviato una chiamata vocale.`,
     startedBySomeone: 'È iniziata una chiamata vocale.',
     startedByMe: 'La chiamata vocale che hai avviato è ancora attiva.',
-    captionsOffHint: "Sottotitoli e interpretazione sono spenti. Tocca Start qui sotto per attivarli.",
+    interpretOnState: 'Interprete attivo',
+    interpretOffState: 'Interprete spento',
+    interpretHint: 'Attiva l’interprete per leggere e sentire gli altri nella tua lingua. Usa Hash finché è attivo.',
     messageStartedByMe: 'Hai avviato una chiamata vocale.',
     messageJoin: 'Partecipa',
     joined: 'In chiamata',
@@ -407,7 +430,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} начал(а) голосовой звонок.`,
     startedBySomeone: 'Начался голосовой звонок.',
     startedByMe: 'Ваш голосовой звонок ещё идёт.',
-    captionsOffHint: 'Субтитры и перевод выключены. Нажмите Start внизу, чтобы включить их.',
+    interpretOnState: 'Перевод вкл.',
+    interpretOffState: 'Перевод выкл.',
+    interpretHint: 'Включите перевод, чтобы читать и слышать собеседников на своём языке. Пока он включён, расходуются Hash.',
     messageStartedByMe: 'Вы начали голосовой звонок.',
     messageJoin: 'Присоединиться',
     joined: 'В звонке',
@@ -440,7 +465,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `بدأ ${name} مكالمة صوتية.`,
     startedBySomeone: 'بدأت مكالمة صوتية.',
     startedByMe: 'المكالمة الصوتية التي بدأتها ما زالت جارية.',
-    captionsOffHint: 'الترجمة النصية والفورية متوقفتان. اضغط Start بالأسفل لتشغيلهما.',
+    interpretOnState: 'الترجمة مفعّلة',
+    interpretOffState: 'الترجمة متوقفة',
+    interpretHint: 'فعّل الترجمة لتقرأ وتسمع كلام الآخرين بلغتك. تُستهلك Hash ما دامت مفعّلة.',
     messageStartedByMe: 'بدأت مكالمة صوتية.',
     messageJoin: 'انضمام',
     joined: 'في المكالمة',
@@ -473,7 +500,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} ने वॉइस कॉल शुरू की।`,
     startedBySomeone: 'वॉइस कॉल शुरू हो गई है।',
     startedByMe: 'आपकी शुरू की हुई वॉइस कॉल अभी चल रही है।',
-    captionsOffHint: 'कैप्शन और अनुवाद बंद हैं। चालू करने के लिए नीचे Start दबाएँ।',
+    interpretOnState: 'अनुवाद चालू',
+    interpretOffState: 'अनुवाद बंद',
+    interpretHint: 'दूसरों की बात अपनी भाषा में पढ़ने और सुनने के लिए अनुवाद चालू करें। चालू रहने तक Hash खर्च होता है।',
     messageStartedByMe: 'आपने वॉइस कॉल शुरू की।',
     messageJoin: 'जुड़ें',
     joined: 'कॉल में',
@@ -506,7 +535,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} เริ่มโทรด้วยเสียง`,
     startedBySomeone: 'การโทรด้วยเสียงเริ่มแล้ว',
     startedByMe: 'การโทรที่คุณเริ่มยังดำเนินอยู่',
-    captionsOffHint: 'คำบรรยายและการแปลปิดอยู่ กด Start ด้านล่างเพื่อเปิด',
+    interpretOnState: 'ล่าม เปิด',
+    interpretOffState: 'ล่าม ปิด',
+    interpretHint: 'เปิดล่ามเพื่ออ่านและฟังสิ่งที่คนอื่นพูดเป็นภาษาของคุณ ระหว่างที่เปิดจะใช้ Hash',
     messageStartedByMe: 'คุณเริ่มโทรด้วยเสียง',
     messageJoin: 'เข้าร่วม',
     joined: 'อยู่ในสาย',
@@ -539,7 +570,9 @@ const copy: Record<LegalDocumentLocale, VoiceTalkCopy> = {
     startedBy: (name) => `${name} đã bắt đầu cuộc gọi thoại.`,
     startedBySomeone: 'Một cuộc gọi thoại đã bắt đầu.',
     startedByMe: 'Cuộc gọi thoại bạn bắt đầu vẫn đang diễn ra.',
-    captionsOffHint: 'Phụ đề và phiên dịch đang tắt. Nhấn Start bên dưới để bật.',
+    interpretOnState: 'Phiên dịch bật',
+    interpretOffState: 'Phiên dịch tắt',
+    interpretHint: 'Bật phiên dịch để đọc và nghe người khác nói bằng ngôn ngữ của bạn. Trong lúc bật sẽ dùng Hash.',
     messageStartedByMe: 'Bạn đã bắt đầu cuộc gọi thoại.',
     messageJoin: 'Tham gia',
     joined: 'Đang trong cuộc gọi',

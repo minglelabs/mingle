@@ -7,6 +7,9 @@ import {
   leaveVoiceCall,
   reconcileLiveCall,
   RECONCILE_GRACE_MS,
+  setVoiceInterpret,
+  voiceCaptionPayer,
+  voiceCaptionViewers,
   VoiceRoomFullError,
 } from "@/server/voice/voice-calls";
 
@@ -148,3 +151,35 @@ describe("LiveKit webhook events", () => {
     expect(await applyLiveKitWebhookEvent(store, { event: "room_finished", room: { name: "voice-x-1" } })).toEqual({ handled: false });
   });
 });
+
+describe('interpretation in a call', () => {
+  const people = (flags: Record<string, boolean>) => ({
+    participants: Object.entries(flags).map(([userId, interpretOn]) => ({ userId, interpretOn })),
+  })
+
+  it('names the readers: everyone with interpretation on', () => {
+    expect(voiceCaptionViewers(people({ a: true, b: false, c: true }))).toEqual(['a', 'c'])
+    expect(voiceCaptionViewers(people({ a: false }))).toEqual([])
+    expect(voiceCaptionViewers(null)).toEqual([])
+  })
+
+  it('charges the speaker when they read too, else the first other reader, else nobody', () => {
+    expect(voiceCaptionPayer(people({ a: true, b: true }), 'a')).toBe('a')
+    expect(voiceCaptionPayer(people({ a: false, b: true, c: true }), 'a')).toBe('b')
+    expect(voiceCaptionPayer(people({ a: true, b: false }), 'a')).toBeNull()
+    expect(voiceCaptionPayer(people({ a: false, b: false }), 'a')).toBeNull()
+    expect(voiceCaptionPayer(people({ b: true }), 'a')).toBeNull()
+  })
+
+  it('turns one person\'s switch on and off, only inside a live call they are in', async () => {
+    const store = createMemoryVoiceStore()
+    expect(await setVoiceInterpret(store, { channelId: 'ch', userId: 'a', on: true })).toBeNull()
+    await joinVoiceCall(store, { channelId: 'ch', userId: 'a', lang: 'ko', interpretOn: false })
+    await joinVoiceCall(store, { channelId: 'ch', userId: 'b', lang: 'en', interpretOn: false })
+    expect(await setVoiceInterpret(store, { channelId: 'ch', userId: 'zz', on: true })).toBeNull()
+    const on = await setVoiceInterpret(store, { channelId: 'ch', userId: 'b', on: true })
+    expect(voiceCaptionViewers(on)).toEqual(['b'])
+    const off = await setVoiceInterpret(store, { channelId: 'ch', userId: 'b', on: false })
+    expect(voiceCaptionViewers(off)).toEqual([])
+  })
+})

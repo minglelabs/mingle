@@ -5,7 +5,7 @@ import { voiceTalkCopy, type VoiceTalkCopy } from './voice-talk-copy'
 describe('voiceTalkCopy', () => {
   it('translates every word in all 15 primary UI locales', () => {
     const keys = Object.keys(voiceTalkCopy('en')) as Array<keyof VoiceTalkCopy>
-    for (const key of ['leave', 'me', 'empty', 'micOnState', 'live', 'messageJoin', 'startTitle'] as const) {
+    for (const key of ['leave', 'me', 'empty', 'micOnState', 'interpretOnState', 'interpretHint', 'live', 'messageJoin', 'startTitle'] as const) {
       const values = new Set<string>()
       for (const locale of PRIMARY_UI_LOCALES) {
         const value = voiceTalkCopy(locale)[key]
@@ -32,7 +32,10 @@ describe('voiceTalkCopy', () => {
     expect(voiceTalkCopy('ko-KR').micOnState).toBe('내 목소리 켜짐')
   })
 
-  it('names the room speech-to-text button the way it reads, "Start", in every language', () => {
-    for (const locale of PRIMARY_UI_LOCALES) expect(voiceTalkCopy(locale).captionsOffHint, locale).toContain('Start')
+  it('has both states of the interpret button in every language', () => {
+    for (const locale of PRIMARY_UI_LOCALES) {
+      const copy = voiceTalkCopy(locale)
+      expect(copy.interpretOnState, locale).not.toBe(copy.interpretOffState)
+    }
   })
 })

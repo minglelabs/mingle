@@ -81,10 +81,12 @@ describe('volume mix', () => {
   it('same language speaker = full original', () => {
     expect(originalVolume(sameLang, base)).toBe(1);
   });
-  it('static mode uses origVol', () => {
-    expect(originalVolume(other, base)).toBe(DUCK_ORIG_STATIC);
+  it('interpret ON keeps the other voices full while nothing is read aloud', () => {
+    expect(originalVolume(other, base)).toBe(1);
+    expect(originalVolume(other, { ...base, readingAloud: true })).toBe(DUCK_ORIG_STATIC);
+    expect(originalVolume(sameLang, { ...base, readingAloud: true })).toBe(1);
   });
-  it('dynamic mode ducks only while lane playing', () => {
+  it('an interpreter lane ducks only while it plays', () => {
     expect(originalVolume(other, { ...base, mode: 'dynamic', lanePlaying: false })).toBe(1);
     expect(originalVolume(other, { ...base, mode: 'dynamic', lanePlaying: true })).toBe(DUCK_ORIG_DYNAMIC_LOW);
   });

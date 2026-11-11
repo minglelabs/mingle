@@ -267,3 +267,52 @@ export async function applyLiveKitWebhookEvent(
     }
   });
 }
+
+// ---------- interpretation (captions and the interpreted voice) ----------
+//
+// A person in a call turns interpretation on to read and hear what the others
+// say. While anyone has it on, every phone in the call writes down its own
+// speech (its room speech-to-text), and those lines reach only the people
+// who had it on at that moment, plus the one who said them.
+
+/** Turns this person's interpretation on or off in the room's live call. Null when they are not in one. */
+export async function setVoiceInterpret(
+  store: VoiceStore,
+  input: { channelId: string; userId: string; on: boolean },
+): Promise<VoiceCallView | null> {
+  return store.withChannelLock(input.channelId, async (tx) => {
+    const call = await tx.findLiveCall(input.channelId);
+    if (!call) return null;
+    const self = (await tx.listActiveParticipants(call.id)).find((participant) => participant.userId === input.userId);
+    if (!self) return null;
+    if (self.interpretOn !== input.on) {
+      await tx.upsertActiveParticipant({
+        callId: call.id,
+        userId: input.userId,
+        interpretOn: input.on,
+        speechLanguage: self.speechLanguage,
+      });
+    }
+    return toCallView(call, await tx.listActiveParticipants(call.id));
+  });
+}
+
+/** Who reads a line said in the call right now: everyone with interpretation on. */
+export function voiceCaptionViewers(call: { participants: ReadonlyArray<{ userId: string; interpretOn: boolean }> } | null): string[] {
+  return (call?.participants ?? []).filter((participant) => participant.interpretOn).map((participant) => participant.userId);
+}
+
+/**
+ * Who pays for writing down `speakerUserId`'s speech: the speaker when they
+ * have interpretation on themselves, else the first other person who has it
+ * on (in joining order). Null when nobody else reads it, so it is not written
+ * down at all.
+ */
+export function voiceCaptionPayer(call: { participants: ReadonlyArray<{ userId: string; interpretOn: boolean }> } | null, speakerUserId: string): string | null {
+  const participants = call?.participants ?? [];
+  if (!participants.some((participant) => participant.userId === speakerUserId)) return null;
+  const others = participants.filter((participant) => participant.interpretOn && participant.userId !== speakerUserId);
+  if (others.length === 0) return null;
+  const self = participants.find((participant) => participant.userId === speakerUserId);
+  return self?.interpretOn ? speakerUserId : others[0].userId;
+}

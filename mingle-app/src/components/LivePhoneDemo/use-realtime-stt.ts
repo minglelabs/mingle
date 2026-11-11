@@ -1117,6 +1117,7 @@ export function normalizeConversationHydrationUtterances(
         ...(normalizeConversationMessageImage(record.image) ? { image: normalizeConversationMessageImage(record.image) } : {}),
         ...(normalizeVoiceCallMessage(record.voiceCall) ? { voiceCall: normalizeVoiceCallMessage(record.voiceCall)! } : {}),
         ...(normalizeHashRushMessage(record.hashRush) ? { hashRush: normalizeHashRushMessage(record.hashRush)! } : {}),
+        ...(record.voiceCaption === true ? { voiceCaption: true as const } : {}),
         originalText: typeof record.originalText === 'string' ? record.originalText : '',
         ...(typeof record.originalDisplayText === 'string' && record.originalDisplayText.trim()
           && record.originalDisplayText !== record.originalText
@@ -1570,6 +1571,12 @@ interface UseRealtimeSTTOptions {
   onTtsCanceled?: (utteranceId: string) => void
   enableTts?: boolean
   enableAec?: boolean
+  /**
+   * In a voice talk: what this phone says is a call caption, read only by
+   * some people in the call. Its live drafts are not sent on the room's
+   * channel, which everyone watching the room receives.
+   */
+  suppressLivePreview?: boolean
   // What a native session transcribes. Fixed when the session starts.
   captureSource?: SttCaptureSource
   sonioxManualFinalizeSilenceMs?: number
@@ -3157,6 +3164,7 @@ export default function useRealtimeSTT({
   onTtsCanceled,
   enableTts,
   enableAec = false,
+  suppressLivePreview = false,
   captureSource = 'microphone',
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
   sonioxEndpointMaxDelayMs = DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
@@ -3232,6 +3240,8 @@ export default function useRealtimeSTT({
   const finalizationApiNamespace = resolveRuntimeApiNamespace()
   const realtimeScope = JSON.stringify([clientMessageOutboxOwnerIdentity, finalizationApiNamespace, conversationId])
   const livePreviewSender = useMemo(() => { void realtimeScope; return new LivePreviewSender() }, [realtimeScope])
+  const suppressLivePreviewRef = useRef(suppressLivePreview)
+  useEffect(() => { suppressLivePreviewRef.current = suppressLivePreview }, [suppressLivePreview])
   const remotePreviews = useMemo(() => { void realtimeScope; return new RemotePreviews() }, [realtimeScope])
   const [remotePreviewVersion, setRemotePreviewVersion] = useState(0)
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
@@ -4345,6 +4355,8 @@ export default function useRealtimeSTT({
     const liveTimer = window.setInterval(() => {
       if (cancelled) return
       livePreviewSender.flush(frame => {
+        // Dropped, not kept for later: a caption's draft never goes out.
+        if (suppressLivePreviewRef.current) return true
         if (!writerToken || socket?.readyState !== WebSocket.OPEN || socket.bufferedAmount > 256_000) return false
         const orderReceipt = getVoiceOrderReceipt({ ownerIdentity: clientMessageOutboxOwnerIdentity,
           apiNamespace: finalizationApiNamespace, sessionKey: socketSessionKey, clientMessageId: String(frame.id) })

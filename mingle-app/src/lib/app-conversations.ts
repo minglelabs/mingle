@@ -3,6 +3,7 @@ import { normalizeMessageReplyReference, toRecalledMessageReplyReference, type M
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image';
 import { normalizeVoiceCallMessage, type VoiceCallMessage } from '@/lib/voice-call-message';
 import { normalizeHashRushMessage, type HashRushMessage } from '@/lib/hash-rush-message';
+import { readVoiceCaptionTag } from '@/lib/voice-caption';
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
@@ -116,6 +117,9 @@ export type ConversationHydrationUtterance = {
   voiceCall?: VoiceCallMessage;
   // This message announces a Hash Rush game that started (see hash-rush-message.ts).
   hashRush?: HashRushMessage;
+  // Said in a voice talk, shown only to this viewer and the others who had
+  // interpretation on (see voice-caption.ts).
+  voiceCaption?: true;
   serverCreatedAtMs?: number;
   serverMessageId?: string;
   // When the server stored the row (server clock). Read receipts compare
@@ -300,6 +304,15 @@ function buildVisibleMessageWhere(): Prisma.AppMessageWhereInput {
       { isDeleted: null },
     ],
   };
+}
+
+// A call caption (`metadata.voiceCaption`, see @/lib/voice-caption) is read
+// only by the people listed on it. With no viewer, captions are left out
+// altogether (room previews, counts, exports, public snapshots).
+function buildVoiceCaptionVisibleWhere(viewerUserId?: string | null): Prisma.AppMessageWhereInput {
+  const notCaption: Prisma.AppMessageWhereInput = { metadata: { path: ["voiceCaption"], equals: Prisma.AnyNull } };
+  if (!viewerUserId) return notCaption;
+  return { OR: [notCaption, { metadata: { path: ["voiceCaption", "viewers"], array_contains: [viewerUserId] } }] };
 }
 
 // A recalled message stays soft-deleted for every other reader; only a
@@ -1076,6 +1089,7 @@ async function listLatestVisibleMessagesBySessionKey(
       FROM app.app_messages AS m
       WHERE m.session_key = k.session_key
         AND (m.is_deleted = false OR m.is_deleted IS NULL)
+        AND (m.metadata -> 'voiceCaption') IS NULL
       ORDER BY m.created_at DESC, m.id DESC
       LIMIT 1
     ) AS latest
@@ -1218,6 +1232,7 @@ async function listVisibleMessageCountsBySessionKey(
         in: sessionKeys,
       },
       ...buildVisibleMessageWhere(),
+      AND: [buildVoiceCaptionVisibleWhere()],
     },
     _count: {
       _all: true,
@@ -1255,6 +1270,7 @@ async function listUnreadMessageCountsByChannelId(
     LEFT JOIN app.app_messages AS message
       ON message.session_key = channel.session_key
       AND (message.is_deleted = false OR message.is_deleted IS NULL)
+      AND (message.metadata -> 'voiceCaption') IS NULL
       AND message.user_id IS NOT NULL
       AND message.user_id <> member.user_id
       AND (member.last_read_at IS NULL OR message.created_at > member.last_read_at)
@@ -2830,7 +2846,7 @@ export async function getConversationExportTranscriptForUser(args: {
       metadata: Prisma.JsonValue;
       contents: Array<{ contentType: string; language: string; text: string }>;
     }> = await prisma.appMessage.findMany({
-      where: { sessionKey: conversationRecord.sessionKey, ...buildVisibleMessageWhere() },
+      where: { sessionKey: conversationRecord.sessionKey, ...buildVisibleMessageWhere(), AND: [buildVoiceCaptionVisibleWhere()] },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: Math.min(CONVERSATION_EXPORT_PAGE_SIZE, CONVERSATION_EXPORT_MESSAGE_LIMIT - messages.length),
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
@@ -3151,6 +3167,9 @@ async function getConversationHydrationStateForRecord(args: {
   const upperBoundWhere: Prisma.AppMessageWhereInput = args.upperBoundCreatedAt
     ? { createdAt: { lte: args.upperBoundCreatedAt } }
     : {};
+  // Call captions: a member reads the ones addressed to them; a public
+  // snapshot has none.
+  const captionVisibleWhere = buildVoiceCaptionVisibleWhere(args.upperBoundCreatedAt ? null : args.viewerUserId);
   const messageWhere: Prisma.AppMessageWhereInput = {
     sessionKey: conversationRecord.sessionKey,
     // A public share snapshot shows no trace of an unsent message.
@@ -3192,10 +3211,11 @@ async function getConversationHydrationStateForRecord(args: {
         sessionKey: conversationRecord.sessionKey,
         ...buildVisibleMessageWhere(),
         ...upperBoundWhere,
+        AND: [captionVisibleWhere],
       },
     }),
     prisma.appMessage.findMany({
-      where: messageWhere,
+      where: { AND: [messageWhere, captionVisibleWhere] },
       orderBy: [
         { createdAt: "desc" },
         { id: "desc" },
@@ -3371,6 +3391,7 @@ async function getConversationHydrationStateForRecord(args: {
       ...(image ? { image } : {}),
       ...(voiceCall ? { voiceCall } : {}),
       ...(hashRush ? { hashRush } : {}),
+      ...(!recalled && readVoiceCaptionTag(metadata) ? { voiceCaption: true as const } : {}),
       originalText,
       ...(normalizedContent.sourceDisplayText ? { originalDisplayText: normalizedContent.sourceDisplayText } : {}),
       originalLang: normalizedContent.sourceLanguage || "unknown",

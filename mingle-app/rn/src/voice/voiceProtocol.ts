@@ -125,12 +125,13 @@ export function originalVolume(participant: VoiceParticipantView, state: VolumeS
   // This speaker already speaks my language: full original.
   if (participantLang(participant) === state.myLang) return VOLUME_FULL;
   // The call carries original voices only; the room reads translations
-  // aloud on the phone. Keep the other voices quiet while it reads.
-  if (!state.interpretOn) return state.readingAloud ? DUCK_ORIG_STATIC : VOLUME_FULL;
-  if (state.mode === 'dynamic') {
-    return state.lanePlaying ? (state.duckLow ?? DUCK_ORIG_DYNAMIC_LOW) : VOLUME_FULL;
-  }
-  return state.origVol;
+  // aloud on the phone. Keep the other voices quiet while it reads, with
+  // interpretation on or off: a voice is never held down while nothing is
+  // being read.
+  if (state.readingAloud) return DUCK_ORIG_STATIC;
+  // An interpreter lane (older servers) playing for my language.
+  if (state.interpretOn && state.lanePlaying) return state.duckLow ?? DUCK_ORIG_DYNAMIC_LOW;
+  return VOLUME_FULL;
 }
 
 /** Volume for any audio track, dispatching interpreter vs. human. */
