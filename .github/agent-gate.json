@@ -1,0 +1,4 @@
+{
+  "auto_lanes": ["L0", "L1"],
+  "note": "Lanes an agent may merge on its own once the gate is green. Nam decides changes here (this file is L3). L3 is ignored even if listed. Check `node scripts/agent-gate.mjs --rollback-stats --days 30` before adding L2."
+}
