@@ -15,7 +15,7 @@ export function GET() {
             // belongs here: /p/ shared profiles and /s/ shared conversation
             // snapshots. A path missing from this list still renders the web
             // page, which is exactly the bug /s/ had.
-            paths: ["/p/*", "/s/*"],
+            paths: ["/p/*", "/s/*", "/i/*"],
             components: [
               {
                 "/": "/p/*",
@@ -24,6 +24,10 @@ export function GET() {
               {
                 "/": "/s/*",
                 comment: "HashChat shared conversation links",
+              },
+              {
+                "/": "/i/*",
+                comment: "HashChat invite ticket links",
               },
             ],
           },

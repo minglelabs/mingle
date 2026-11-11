@@ -20,6 +20,14 @@ export type MingleClientEvent =
   | "mingle_connect_search_completed"
   | "mingle_connect_follow_clicked"
   | "mingle_connect_follow_completed"
+  // Invite tickets: made (copied or shared), landing page opened, install
+  // button pressed, invite reached the app, room opened through it. The
+  // server adds mingle_invite_accepted / _first_chat / _rechat_7d.
+  | "mingle_invite_ticket_created"
+  | "mingle_invite_link_opened"
+  | "mingle_invite_install_clicked"
+  | "mingle_invite_received"
+  | "mingle_invite_room_opened"
   // First run and the questions asked later; the `step` property names the moment.
   | "mingle_first_run_step"
   | "mingle_profile_basics_step"

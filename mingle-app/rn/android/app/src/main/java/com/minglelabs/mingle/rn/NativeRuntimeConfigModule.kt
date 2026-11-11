@@ -3,6 +3,8 @@ package com.minglelabs.mingle.rn
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import com.android.installreferrer.api.InstallReferrerClient
+import com.android.installreferrer.api.InstallReferrerStateListener
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -97,6 +99,63 @@ class NativeRuntimeConfigModule(
       }
     } catch (_: Exception) {
       null
+    }
+  }
+
+  /**
+   * The Play install referrer string, once: the first call after install
+   * resolves it, every later call resolves null. Invite tickets put
+   * "invite={code}" there (see rn/src/inviteLink.ts).
+   */
+  @ReactMethod
+  fun consumeInstallReferrer(promise: Promise) {
+    if (restorePrefs.getBoolean(INSTALL_REFERRER_CONSUMED_KEY, false)) {
+      promise.resolve(null)
+      return
+    }
+    val client = try {
+      InstallReferrerClient.newBuilder(reactApplicationContext).build()
+    } catch (_: Throwable) {
+      promise.resolve(null)
+      return
+    }
+    var settled = false
+    fun settle(referrer: String?, consumed: Boolean) {
+      if (settled) return
+      settled = true
+      if (consumed) restorePrefs.edit().putBoolean(INSTALL_REFERRER_CONSUMED_KEY, true).apply()
+      try {
+        client.endConnection()
+      } catch (_: Throwable) {
+        // Already closed.
+      }
+      promise.resolve(referrer)
+    }
+    try {
+      client.startConnection(object : InstallReferrerStateListener {
+        override fun onInstallReferrerSetupFinished(responseCode: Int) {
+          when (responseCode) {
+            InstallReferrerClient.InstallReferrerResponse.OK -> {
+              val referrer = try {
+                client.installReferrer.installReferrer
+              } catch (_: Throwable) {
+                null
+              }
+              settle(referrer, true)
+            }
+            // This store or device will never answer: stop asking.
+            InstallReferrerClient.InstallReferrerResponse.FEATURE_NOT_SUPPORTED -> settle(null, true)
+            // Play Store busy or updating: ask again on the next launch.
+            else -> settle(null, false)
+          }
+        }
+
+        override fun onInstallReferrerServiceDisconnected() {
+          settle(null, false)
+        }
+      })
+    } catch (_: Throwable) {
+      settle(null, false)
     }
   }
 
@@ -462,6 +521,7 @@ class NativeRuntimeConfigModule(
     const val PENDING_PROFILE_LINK_SEQUENCE_KEY = "profile_link_sequence"
     const val LOCATION_PERMISSION_REQUESTED_KEY = "location_permission_requested"
     const val REQUEST_LOCATION_PERMISSION = 4107
+    const val INSTALL_REFERRER_CONSUMED_KEY = "install_referrer_consumed"
     const val LOCATION_REQUEST_TIMEOUT_MS = 12_000L
     const val LOCATION_UPDATE_INTERVAL_MS = 1_000L
     const val MAX_LAST_KNOWN_AGE_MS = 10 * 60 * 1_000L

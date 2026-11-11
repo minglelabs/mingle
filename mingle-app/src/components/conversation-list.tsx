@@ -37,8 +37,11 @@ import {
   persistLanguageOnboardingChoice,
 } from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bell, Check, Loader2, LogOut, Mic, PencilLine, Search, Settings, Share2, Trash2, UserRound } from "lucide-react";
+import { ArrowRight, Bell, Check, Loader2, LogOut, Mic, PencilLine, Search, Settings, Share2, Trash2, UserRound, Ticket } from "lucide-react";
 import { toast } from "sonner";
+import { requestContactSyncPromptCheck } from "@/lib/native-contacts";
+import { useHasPendingInvite, openInviteTicket } from "@/lib/native-invite";
+import { resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { getConversationEventsWsUrl } from "@/components/LivePhoneDemo/use-realtime-stt";
@@ -255,6 +258,9 @@ let recentSearchesSnapshotRaw = "__initial__";
 type ConversationOverlayExitMode = "animate" | "instant";
 type ConversationOverlayEnterMode = "animate" | "instant";
 type SearchOverlayTransitionMode = "animate" | "instant";
+// The invite-ticket banner shows above the list up to this many rooms.
+const INVITE_TICKET_BANNER_MAX_CONVERSATIONS = 3;
+
 type LanguageOnboardingPhase = "resolving" | "selection" | "locale-switching" | "ready";
 const DISCOVERY_PROMPT_STEPS: readonly OnboardingStep[] = ["discovery-source"];
 let resolvedLanguageOnboardingPhase: Exclude<LanguageOnboardingPhase, "resolving" | "locale-switching"> | null = null;
@@ -2115,6 +2121,8 @@ export default function ConversationList({
     resolvedLanguageOnboardingPhase ?? "resolving"
   ));
   const languageOnboardingModalOpen = languageOnboardingPhase === "selection";
+  const inviteTicketLabel = resolveInviteTicketCopy(locale).sendTicket;
+  const inviteOnboarding = useHasPendingInvite();
   // First run on this device: until the first translation, the list leads
   // with a "say something" card and every room is ready to show the speech
   // length choice. Read from storage after mount, so the server render matches.
@@ -5473,8 +5481,15 @@ export default function ConversationList({
     }
 
     markLanguageOnboardingConfirmed();
-    markFirstSpeakPending();
-    setFirstSpeakPending(true);
+    // Signup is finished: the contact-sync screen may now open once by itself.
+    requestContactSyncPromptCheck();
+    // An invitee is taken straight into the inviter's room, and where they
+    // heard of the app is already known ("friend"): no "say something" card
+    // and no question about it afterwards.
+    if (!discoverySource) {
+      markFirstSpeakPending();
+      setFirstSpeakPending(true);
+    }
     captureMingleClientEvent("mingle_first_run_step", { step: "language_confirmed" });
 
     defaultConversationLanguagesSyncVersionRef.current += 1;
@@ -5852,9 +5867,33 @@ export default function ConversationList({
               <p className="mt-1 text-[13px] text-gray-400">
                 {copy.emptyDescription}
               </p>
+              <button
+                type="button"
+                onClick={openInviteTicket}
+                data-testid="conversation-list-invite-ticket"
+                className="mt-6 flex h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-6 text-[15px] font-bold text-white shadow-[0_12px_26px_rgba(37,99,235,0.28)] transition active:bg-blue-700"
+              >
+                <Ticket size={18} strokeWidth={2.2} aria-hidden="true" />
+                {inviteTicketLabel}
+              </button>
             </div>
           ) : (
             <div className="border-t border-gray-100">
+              {/* Someone with only a room or two has nobody to talk to yet:
+                  the way to bring a friend in sits right on top of the list. */}
+              {conversationItems.length <= INVITE_TICKET_BANNER_MAX_CONVERSATIONS ? (
+                <div className="border-b border-gray-100 px-4 py-3">
+                  <button
+                  type="button"
+                  onClick={openInviteTicket}
+                  data-testid="conversation-list-invite-ticket"
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-50 text-[14.5px] font-bold text-blue-700 transition active:bg-blue-100"
+                >
+                  <Ticket size={18} strokeWidth={2.2} aria-hidden="true" />
+                  {inviteTicketLabel}
+                </button>
+                </div>
+              ) : null}
               {conversationItems.map((item) => (
                 <div key={item.id}>
                   <ConversationRow
@@ -6326,6 +6365,7 @@ export default function ConversationList({
           dismissible={false}
           initialLanguage={languageOnboardingDefaultLanguage}
           uiLocale={locale}
+          invite={inviteOnboarding}
           onConfirm={handleLanguageOnboardingConfirm}
         />
       ) : null}

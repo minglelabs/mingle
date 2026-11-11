@@ -78,12 +78,19 @@ interface LanguageOnboardingModalProps {
    * `["discovery-source"]` or `["gender", "birth-date"]`.
    */
   steps?: readonly OnboardingStep[];
+  /**
+   * The person came through a friend's invite ticket: only the language and
+   * the birth date (age check) are asked, whatever `steps` says. The purpose
+   * is set to "social" and the discovery source to "friend".
+   */
+  invite?: boolean;
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
 export type OnboardingStep = "language" | "interest-language" | "usage-purpose" | "discovery-source" | "gender" | "birth-date";
 
 export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language"];
+export const INVITE_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "birth-date"];
 
 // Long enough to see the tapped gender light up before the next screen slides in.
 const GENDER_AUTO_ADVANCE_MS = 220;
@@ -96,9 +103,11 @@ export default function LanguageOnboardingModal({
   initialLanguage,
   initialBirthDate = DEFAULT_ONBOARDING_BIRTH_DATE,
   uiLocale,
-  steps = FIRST_RUN_ONBOARDING_STEPS,
+  steps: requestedSteps = FIRST_RUN_ONBOARDING_STEPS,
+  invite = false,
   onConfirm,
 }: LanguageOnboardingModalProps) {
+  const steps = invite ? INVITE_ONBOARDING_STEPS : requestedSteps;
   // Mounted only while onboarding is on screen: no native ad banner at any
   // step, whatever zone the screen underneath asked for.
   useNativeBannerSuppression();
@@ -292,11 +301,11 @@ export default function LanguageOnboardingModal({
           : null,
         birthDate: asked("birth-date") ? birthDate : null,
         gender: asked("gender") ? gender : null,
-        usagePurpose: asked("usage-purpose") ? usagePurpose : null,
+        usagePurpose: invite ? "social" : asked("usage-purpose") ? usagePurpose : null,
         usagePurposeNote: asked("usage-purpose") && usagePurpose === "other"
           ? normalizeUsagePurposeNote(usagePurposeNote)
           : null,
-        discoverySource: asked("discovery-source") ? discoverySource : null,
+        discoverySource: invite ? "friend" : asked("discovery-source") ? discoverySource : null,
       });
     } finally {
       setIsConfirming(false);

@@ -9,7 +9,9 @@ import SlideSurface from "@/components/slide-surface";
 import AccountBadge from "@/components/posts/account-badge";
 import IdentityRow from "@/components/posts/identity-row";
 import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
-import { Check, ChevronLeft, Loader2, Search, UserRound, X } from "lucide-react";
+import { Check, ChevronLeft, Contact, Loader2, Search, UserRound, X } from "lucide-react";
+import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
+import { openContactSync } from "@/lib/native-contacts";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
 import {
@@ -79,6 +81,7 @@ export default function FollowListScreen({
   const [pendingFollowIds, setPendingFollowIds] = useState<Set<string>>(() => new Set());
   const [followErrorId, setFollowErrorId] = useState<string | null>(null);
 
+  const contactSyncLabel = resolveContactSyncCopy(locale).title;
   const labels = useMemo(() => ({
     followers: dictionary.profile.followersLabel ?? (locale === "ko" ? "팔로워" : "Followers"),
     following: dictionary.profile.followingLabel ?? (locale === "ko" ? "팔로잉" : "Following"),
@@ -294,7 +297,15 @@ export default function FollowListScreen({
             <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
           </button>
           <h1 className="truncate text-center text-[17px] font-bold">{activeLabel}</h1>
-          <div aria-hidden="true" />
+          <button
+            type="button"
+            onClick={openContactSync}
+            className="flex h-10 w-10 items-center justify-center justify-self-end rounded-full transition active:bg-gray-100"
+            aria-label={contactSyncLabel}
+            data-testid="follow-list-contact-sync"
+          >
+            <Contact size={22} strokeWidth={2} aria-hidden="true" />
+          </button>
         </header>
 
         <div data-restore-scroll="follow-list" className="min-h-0 flex-1 overflow-y-auto pb-8">
