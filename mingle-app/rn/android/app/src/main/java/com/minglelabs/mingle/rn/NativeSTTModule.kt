@@ -1316,6 +1316,30 @@ class NativeSTTModule(
     ).start()
   }
 
+  /**
+   * A voice talk call is live (or just ended). The call's microphone must keep
+   * working with the app in the background, which on Android needs a
+   * foreground service, also while speech-to-text is off.
+   */
+  @ReactMethod
+  fun setVoiceCallActive(active: Boolean) {
+    if (active) {
+      // A microphone foreground service may only start once the microphone
+      // is allowed (Android 14 refuses it otherwise). Without it the call
+      // still works while the app is open.
+      val micGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+        reactApplicationContext,
+        android.Manifest.permission.RECORD_AUDIO,
+      ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+      if (!micGranted) return
+      runCatching {
+        NativeSTTForegroundService.start(reactApplicationContext, holder = NativeSTTForegroundService.HOLDER_VOICE_CALL)
+      }.onFailure { error -> Log.w(TAG, "voice call foreground service failed: ${error.message}") }
+    } else {
+      NativeSTTForegroundService.stop(reactApplicationContext, holder = NativeSTTForegroundService.HOLDER_VOICE_CALL)
+    }
+  }
+
   private fun setForegroundServiceEnabled(enabled: Boolean) {
     if (enabled) {
       if (!foregroundServiceActive) {

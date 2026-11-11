@@ -58,14 +58,15 @@ describe('voice talk and STT are separate switches', () => {
   })
 
   it('does not start or stop STT when a call connects or ends', () => {
-    const block = between(liveDemoSource, 'const voiceTalkConnected = voiceTalkState.connected', 'const confirmScreenCaptureNotice')
+    const block = between(liveDemoSource, '// Voice talk and speech-to-text are separate features with separate switches.', 'const confirmScreenCaptureNotice')
     expect(block).not.toContain('handleStartRecording')
     expect(block).not.toContain('handleStopRecording')
   })
 
-  it('drives the call mic from the listen-only switch alone', () => {
-    const block = between(liveDemoSource, 'const voiceTalkConnected = voiceTalkState.connected', 'const confirmScreenCaptureNotice')
-    expect(block).toContain('setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly: voiceTalkListenOnly }))')
+  it('drives the call mic from the listen-only switch alone, only when it is pressed', () => {
+    const block = between(liveDemoSource, '// Voice talk and speech-to-text are separate features with separate switches.', 'const confirmScreenCaptureNotice')
+    expect(block).toContain('setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly }))')
+    expect(block).not.toContain('useEffect(() => {\n    if (!voiceTalkConnected) return')
   })
 })
 

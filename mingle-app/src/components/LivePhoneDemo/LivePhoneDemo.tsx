@@ -6259,12 +6259,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // - The call's own mic is the panel's mic button (listen only when off).
   // - Captions and the interpreted voice come only from speech-to-text, so a
   //   viewer in a call with it off is told so in the panel.
-  const voiceTalkConnected = voiceTalkState.connected
-  useEffect(() => {
-    if (!voiceTalkConnected) return
-    setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly: voiceTalkListenOnly }))
-  }, [voiceTalkConnected, voiceTalkListenOnly])
-  // A new call starts with the mic on.
+  // - The app owns the call and its mic: they go on while the room screen is
+  //   closed and in the background, until the app quits. This screen only
+  //   switches the mic when the viewer presses the button, and otherwise
+  //   shows what the app reports, so coming back to the room never turns a
+  //   muted mic back on.
+  const handleVoiceTalkListenOnlyChange = useCallback((listenOnly: boolean) => {
+    setVoiceTalkListenOnly(listenOnly)
+    setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly }))
+  }, [])
+  // A new call starts with the mic on (the app turns it on when it connects).
   useEffect(() => {
     if (!voiceTalkState.joined) setVoiceTalkListenOnly(false)
   }, [voiceTalkState.joined])
@@ -8099,7 +8103,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             openSignal={voiceTalkOpenSignal}
             leaveSignal={voiceTalkLeaveSignal}
             listenOnly={voiceTalkListenOnly}
-            onListenOnlyChange={setVoiceTalkListenOnly}
+            onListenOnlyChange={handleVoiceTalkListenOnlyChange}
+            onListenOnlySync={setVoiceTalkListenOnly}
             captionsOn={isSttSessionRunning || isPreparingStart}
             onOpenProfile={handleOpenProfileForBubble}
             viewerUserId={viewerUserId}

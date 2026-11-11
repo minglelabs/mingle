@@ -214,6 +214,8 @@ export type VoiceTalkPanelProps = {
   /** Listen only: in a seat, sending no voice. Owned by the room (it drives the mic). */
   listenOnly?: boolean
   onListenOnlyChange?: (listenOnly: boolean) => void
+  /** The app reported its mic (on returning to the room): show it, switch nothing. */
+  onListenOnlySync?: (listenOnly: boolean) => void
   /** The room's speech-to-text is running. Off in a call means voice only: the panel says so. */
   captionsOn?: boolean
   /** Opens a member's profile when their seat is tapped. */
@@ -241,6 +243,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const joined = phase === 'connecting' || phase === 'connected'
   // The phase as the event handler below needs it (it outlives a render).
   const phaseRef = useRef<Phase>('idle')
+  const onListenOnlySyncRef = useRef(props.onListenOnlySync)
+  useEffect(() => { onListenOnlySyncRef.current = props.onListenOnlySync }, [props.onListenOnlySync])
 
   useEffect(() => {
     if (!conversationId || !bridge()) return
@@ -259,7 +263,12 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
           return
         }
         setCall(detail.call)
-      } else if (detail.type === 'room') setRoom(detail.snapshot)
+      } else if (detail.type === 'room') {
+        setRoom(detail.snapshot)
+        // The app's mic is the truth: a muted call stays muted however often
+        // this screen is closed and opened.
+        if (detail.snapshot && typeof detail.snapshot.micOn === 'boolean') onListenOnlySyncRef.current?.(!detail.snapshot.micOn)
+      }
       else if (detail.type === 'state') {
         phaseRef.current = detail.phase
         if (detail.phase === 'left') writeJoinedCallMarker(conversationId, null)

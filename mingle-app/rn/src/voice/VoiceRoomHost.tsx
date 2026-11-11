@@ -138,6 +138,9 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
         void controller
           .connect(args.conversationId)
           .then(() => {
+            // Again once connected: the microphone may only have been allowed
+            // during the connect (Android starts the background service then).
+            setNativeSttVoiceCallActive(true);
             emitPhase('connected', args.conversationId);
             sendRoom();
             // The server now lists this phone as in the call.

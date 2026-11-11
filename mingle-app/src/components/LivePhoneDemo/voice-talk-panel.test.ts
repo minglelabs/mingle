@@ -45,8 +45,7 @@ describe('a call and speech-to-text are separate', () => {
   })
 
   it('moves the call mic only by the listen-only switch', () => {
-    expect(block).toContain('setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly: voiceTalkListenOnly }))')
-    expect(block).toContain('}, [voiceTalkConnected, voiceTalkListenOnly])')
+    expect(block).toContain('setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly }))')
   })
 
   it('tells a viewer in a call that captions and interpretation are off', () => {
@@ -285,5 +284,19 @@ describe('both voice talk entry points', () => {
     expect(handler).toContain('setVoiceTalkOpenSignal((n) => n + 1)')
     expect(liveDemoSource).toContain('onSelect: handleVoiceTalkPress,')
     expect(liveDemoSource).toContain('onPress={handleVoiceTalkPress}')
+  })
+})
+
+describe('the call mic outlives the room screen', () => {
+  it('is switched only by the button, never when the room screen opens', () => {
+    expect(liveDemoSource).not.toContain('setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly: voiceTalkListenOnly }))')
+    const handler = liveDemoSource.slice(liveDemoSource.indexOf('const handleVoiceTalkListenOnlyChange = useCallback'), liveDemoSource.indexOf('// A new call starts with the mic on'))
+    expect(handler).toContain('setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly }))')
+    expect(liveDemoSource).toContain('onListenOnlyChange={handleVoiceTalkListenOnlyChange}')
+  })
+
+  it('shows what the app reports when the room opens again (a muted call stays muted)', () => {
+    expect(liveDemoSource).toContain('onListenOnlySync={setVoiceTalkListenOnly}')
+    expect(panelSource).toContain("if (detail.snapshot && typeof detail.snapshot.micOn === 'boolean') onListenOnlySyncRef.current?.(!detail.snapshot.micOn)")
   })
 })
