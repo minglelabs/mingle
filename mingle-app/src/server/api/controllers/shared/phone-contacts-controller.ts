@@ -5,6 +5,7 @@ import { ContactMatchFailure, matchContactHashes, type ContactMatchError } from 
 import {
   PhoneVerificationFailure,
   confirmPhoneVerification,
+  isPhoneVerificationAvailable,
   readVerifiedPhone,
   removeVerifiedPhone,
   startPhoneVerification,
@@ -44,11 +45,11 @@ async function readJsonBody(request: NextRequest): Promise<Record<string, unknow
   }
 }
 
-/** GET /phone — the account's verified number, or null. */
+/** GET /phone — the account's verified number (or null), and whether numbers can be verified here. */
 export async function readPhone() {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
-  return json({ phoneE164: await readVerifiedPhone(userId) })
+  return json({ phoneE164: await readVerifiedPhone(userId), available: isPhoneVerificationAvailable() })
 }
 
 /** DELETE /phone — stop being findable by phone number. */

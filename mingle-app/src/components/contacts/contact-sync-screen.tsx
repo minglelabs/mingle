@@ -163,8 +163,11 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
       try {
         const response = await fetch(buildClientApiPath("/phone"), { cache: "no-store" });
         if (!response.ok) return;
-        const body = await response.json() as { phoneE164?: unknown };
-        if (!cancelled) setOwnPhone(typeof body.phoneE164 === "string" ? body.phoneE164 : null);
+        const body = await response.json() as { phoneE164?: unknown; available?: unknown };
+        if (cancelled) return;
+        if (typeof body.phoneE164 === "string") setOwnPhone(body.phoneE164);
+        // No SMS provider on this server: leave the friend-finding part out.
+        else if (body.available !== false) setOwnPhone(null);
       } catch {
         // No friend matching this time; inviting still works.
       }

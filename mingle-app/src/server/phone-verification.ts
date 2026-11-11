@@ -138,6 +138,15 @@ export async function confirmPhoneVerification(userId: string, rawPhone: unknown
   return { phoneE164: phone }
 }
 
+/**
+ * Whether this server can verify numbers at all: Twilio is set up, or it is
+ * a non-production server that takes the dev code. When false the app hides
+ * the whole "find friends by number" part instead of offering a dead button.
+ */
+export function isPhoneVerificationAvailable(): boolean {
+  return readTwilioConfig() !== null || devCodesAllowed()
+}
+
 /** The account's verified number, if any. */
 export async function readVerifiedPhone(userId: string): Promise<string | null> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { phoneE164: true, phoneVerifiedAt: true } })
