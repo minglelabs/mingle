@@ -69,4 +69,22 @@ describe('ChatBubble with a voice talk announcement', () => {
     expect(html).not.toContain('📞 Voice talk')
     expect(html).not.toContain('data-speaker-avatar-flag')
   })
+
+  it('reads as my own start when the server says I sent it, even without the account id on the row', () => {
+    const html = renderToStaticMarkup(createElement(
+      VoiceTalkRoomContext.Provider,
+      { value: { liveCallId: 'c1', joined: true, join: () => {} } },
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'voice-call-c1', originalText: '📞 Voice talk', originalLang: 'en', targetLanguages: ['ko', 'en'],
+          translations: {}, voiceCall: { callId: 'c1' }, speakerName: 'pp74', sentByViewer: true,
+        },
+        uiLocale: 'ko', preferredDisplayLanguage: 'ko', defaultDisplayLanguage: 'ko', bubbleDisplayMode: 'collapsed',
+        viewerUserId: 'me',
+      }),
+    ))
+    expect(html).toContain('보이스톡을 시작했습니다.')
+    expect(html).not.toContain('pp74님이')
+    expect(html).toContain('참여 중')
+  })
 })

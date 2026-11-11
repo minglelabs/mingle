@@ -261,7 +261,11 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   // The native ad banner draws above the page: a dialog's dark veil cannot
   // cover it, and a card low on the screen would sit half under it. It is
   // hidden while any of the three (start/join, leave, incoming call) is up.
-  const dialogOpen = startPrompt || confirmLeave || (live && !joined && call?.id !== declinedCallId)
+  // A call this account is already in (it started it, or joined on another
+  // phone) is never offered to it as someone else's.
+  const viewerInCall = !!viewerUserId && !!call?.participants.some((p) => p.userId === viewerUserId)
+  const incomingOffered = live && !joined && !viewerInCall && call?.id !== declinedCallId
+  const dialogOpen = startPrompt || confirmLeave || incomingOffered
   useNativeBannerSuppression(dialogOpen)
 
   // Decline the call that just started: it is not offered again by itself.
@@ -411,7 +415,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   // Someone started a call while this phone has the room open: a card low on
   // the screen offers it once. Declining (or closing) leaves the call's
   // message in the room, whose button still joins.
-  const incoming = live && !joined && !startPrompt && call?.id !== declinedCallId
+  const incoming = incomingOffered && !startPrompt
   const starterName = (call?.participants[0]?.name || '').trim()
   const incomingCard = incoming ? (
     <div

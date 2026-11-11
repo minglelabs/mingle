@@ -94,7 +94,10 @@ describe('starting and joining a voice talk', () => {
     expect(panelSource).toContain('data-qa="voice-talk-incoming"')
     expect(panelSource).toContain('data-qa="voice-talk-incoming-decline"')
     expect(panelSource).toContain('data-qa="voice-talk-incoming-join"')
-    expect(panelSource).toContain('const incoming = live && !joined && !startPrompt && call?.id !== declinedCallId')
+    expect(panelSource).toContain('const incomingOffered = live && !joined && !viewerInCall && call?.id !== declinedCallId')
+    expect(panelSource).toContain('const incoming = incomingOffered && !startPrompt')
+    // The account that started it (or is in it on another phone) is not offered its own call.
+    expect(panelSource).toContain('const viewerInCall = !!viewerUserId && !!call?.participants.some((p) => p.userId === viewerUserId)')
     expect(panelSource).toContain('if (call) setDeclinedCallId(call.id)')
   })
 

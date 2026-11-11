@@ -3354,7 +3354,7 @@ async function getConversationHydrationStateForRecord(args: {
     // invitee actually materializes into a real member.
     const isMultiMemberAtMessage = countActiveRealMembersAt(realMembers, message.createdAt.getTime()) >= 2;
     // Same gate as speakerName below: the badge labels the sender's name.
-    const speakerBadge = (isMultiMemberAtMessage || image) && message.userId
+    const speakerBadge = (isMultiMemberAtMessage || image || voiceCall) && message.userId
       ? badgeByUserId.get(message.userId) ?? null
       : null;
 
@@ -3384,7 +3384,7 @@ async function getConversationHydrationStateForRecord(args: {
         readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
       speakerAvatarIndex:
         readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
-      speakerName: (isMultiMemberAtMessage || image) && message.userId
+      speakerName: (isMultiMemberAtMessage || image || voiceCall) && message.userId
         ? (nameByUserId.get(message.userId) ?? null)
         : null,
       // Gated the same way as speakerImage: a solo session's diarized
@@ -3393,13 +3393,13 @@ async function getConversationHydrationStateForRecord(args: {
       // every bubble compare equal to the viewer and force a right-aligned
       // "own message" layout onto what is actually a left/right speaker
       // distinction unrelated to account identity.
-      speakerUserId: (isMultiMemberAtMessage || image) ? message.userId : null,
+      speakerUserId: (isMultiMemberAtMessage || image || voiceCall) ? message.userId : null,
       // Also nulled for the blocked counterpart's own messages (past and
       // future) — keeps speakerUserId intact so bubble left/right alignment
       // stays correct, but ChatBubble's existing "shared-room member with no
       // photo" fallback renders a neutral placeholder avatar instead of
       // their real one.
-      speakerImage: (isMultiMemberAtMessage || image) && message.userId && message.userId !== blockedCounterpartUserId
+      speakerImage: (isMultiMemberAtMessage || image || voiceCall) && message.userId && message.userId !== blockedCounterpartUserId
         ? (imageByUserId.get(message.userId) ?? null)
         : null,
       ...(speakerBadge ? { speakerBadge } : {}),

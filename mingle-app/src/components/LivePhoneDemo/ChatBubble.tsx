@@ -1264,7 +1264,13 @@ function ChatBubble({
       {messageRecallCopy(uiLocale).placeholder}
     </div>
   ) : voiceCallMessage ? (
-    <VoiceCallStartedBubble message={voiceCallMessage} speakerName={speakerName} isOwnMessage={isOwnMessage} locale={uiLocale} />
+    <VoiceCallStartedBubble
+      message={voiceCallMessage}
+      speakerName={speakerName}
+      // `sentByViewer` is the server's word; the account id alone is withheld in some rooms.
+      isOwnMessage={isOwnMessage || utterance.sentByViewer === true}
+      locale={uiLocale}
+    />
   ) : messageImage ? <ConversationImageBubble image={messageImage} locale={uiLocale} /> : (
     <AnimatePresence initial={false} mode="popLayout">
       {isBubbleExpanded ? (
