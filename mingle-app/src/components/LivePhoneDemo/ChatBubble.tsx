@@ -230,6 +230,12 @@ interface ChatBubbleProps {
    */
   onOpenProfile?: (userId: string) => void
   bubbleDisplayMode?: LivePhoneDemoBubbleDisplayMode
+  /**
+   * The previous row is a message from the same speaker, so this bubble
+   * continues their run: no name or photo again, just the bubble under the
+   * first one (an empty column keeps it aligned).
+   */
+  isGroupContinuation?: boolean
 }
 
 function normalizeLanguageCode(rawLanguage: string): string {
@@ -871,6 +877,7 @@ function ChatBubble({
   viewerUserId,
   onOpenProfile,
   bubbleDisplayMode = DEFAULT_BUBBLE_DISPLAY_MODE,
+  isGroupContinuation = false,
 }: ChatBubbleProps) {
   const isRecalled = utterance.recalled === true
   const messageImage = isRecalled ? null : normalizeConversationMessageImage(utterance.image)
@@ -1141,25 +1148,28 @@ function ChatBubble({
     ? [...firstCollapsedHeaderLanguageOptions.slice(0, 4), originalHeaderLanguage]
     : firstCollapsedHeaderLanguageOptions
   const shouldShowCollapsedHeaderLanguages = !messageImage && !isRecalled && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
+  // A continued run hides the name and badge; the header stays only for the language buttons.
+  const headerSpeakerName = isGroupContinuation ? '' : speakerName
+  const headerSpeakerBadge = isGroupContinuation ? null : speakerBadge
   const shouldShowSpeakerHeader = !isOwnMessage
     && isSharedRoomMember
-    && (Boolean(speakerName) || Boolean(speakerBadge) || shouldShowCollapsedHeaderLanguages)
+    && (Boolean(headerSpeakerName) || Boolean(headerSpeakerBadge) || shouldShowCollapsedHeaderLanguages)
   const speakerHeader = shouldShowSpeakerHeader ? (
     <div
       data-chat-speaker-header
       className="flex h-5 min-h-5 w-max min-w-0 max-w-full items-center gap-0.5 overflow-visible px-0.5"
     >
-      {speakerName && (
+      {headerSpeakerName && (
         <span
           data-chat-speaker-name
           className="h-5 min-w-0 max-w-[12rem] shrink-0 truncate text-sm font-medium leading-5 text-gray-500"
         >
-          {speakerName}
+          {headerSpeakerName}
         </span>
       )}
-      {speakerBadge && (
+      {headerSpeakerBadge && (
         <span data-chat-speaker-badge className="ml-0.5 mr-0.5 inline-flex shrink-0 items-center">
-          <ChatAccountBadge kind={speakerBadge} locale={uiLocale} tone="dark" />
+          <ChatAccountBadge kind={headerSpeakerBadge} locale={uiLocale} tone="dark" />
         </span>
       )}
       {shouldShowCollapsedHeaderLanguages && (
@@ -1218,7 +1228,9 @@ function ChatBubble({
     />
   )
 
-  const avatarColumn = (
+  const avatarColumn = isGroupContinuation ? (
+    <div key="avatar" data-speaker-avatar-column data-speaker-avatar-hidden aria-hidden="true" className="w-10 shrink-0" />
+  ) : (
     <div key="avatar" data-speaker-avatar-column className="mt-0.5 flex w-10 shrink-0 flex-col items-center gap-1">
       <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
         {canOpenSpeakerProfile && utterance.speakerUserId ? (
@@ -1462,6 +1474,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.viewerUserId !== next.viewerUserId) return false
   if (prev.onOpenProfile !== next.onOpenProfile) return false
   if (prev.bubbleDisplayMode !== next.bubbleDisplayMode) return false
+  if (prev.isGroupContinuation !== next.isGroupContinuation) return false
 
   if (prev.utterance !== next.utterance) {
     const pu = prev.utterance
