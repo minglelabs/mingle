@@ -267,6 +267,7 @@ import {
 import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
 import VoiceTalkPanel, {
+  type VoiceTalkCaptionLine,
   VoiceTalkButton,
   isVoiceTalkAvailable,
   joinVoiceTalk,
@@ -289,6 +290,7 @@ import HashRushMenuPage from '@/features/hash-rush/HashRushMenuPage'
 import HashRushHowToPage from '@/features/hash-rush/HashRushHowToPage'
 import HashRushRankingPage from '@/features/hash-rush/HashRushRankingPage'
 import { HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/config'
+import { buildVoiceCaptionClientMessageId } from '@/lib/voice-caption'
 import { liveRoomsCopy } from '@/i18n/live-rooms-copy'
 import { formatRoomCode } from '@/lib/room-code'
 import { buildHashRushChatEntries } from './hash-rush-room-chat'
@@ -2088,6 +2090,36 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [voiceTalkState, setVoiceTalkState] = useState<{ live: boolean, joined: boolean, connected: boolean, callId: string | null }>(
     { live: false, joined: false, connected: false, callId: null },
   )
+  // The interpreter's lines while they are being said (or just were), drawn
+  // as live bubbles for this viewer while interpretation is on.
+  const [voiceTalkCaptionLines, setVoiceTalkCaptionLines] = useState<VoiceTalkCaptionLine[]>([])
+  const voiceTalkCaptionFirstSeenRef = useRef(new Map<string, number>())
+  const voiceTalkCaptionDrafts = useMemo<Utterance[]>(() => {
+    if (!voiceTalkState.joined || !voiceTalkInterpretOn) return []
+    const firstSeen = voiceTalkCaptionFirstSeenRef.current
+    const now = Date.now()
+    const drafts: Utterance[] = []
+    for (const line of voiceTalkCaptionLines) {
+      if (line.isEcho || !line.speaker || !line.original.trim()) continue
+      const id = buildVoiceCaptionClientMessageId(line.id)
+      if (!firstSeen.has(id)) firstSeen.set(id, now)
+      // A finished line stays a moment, until its saved message replaces it.
+      if (!line.isPartial && now - (firstSeen.get(id) ?? now) > 60_000) continue
+      drafts.push({
+        id,
+        originalText: line.original,
+        originalLang: line.lang || 'unknown',
+        translations: {},
+        targetLanguages: [],
+        speakerUserId: line.speaker,
+        speakerName: line.speakerName,
+        createdAtMs: firstSeen.get(id),
+        voiceCaption: true,
+      })
+    }
+    if (firstSeen.size > 200) firstSeen.clear()
+    return drafts
+  }, [voiceTalkCaptionLines, voiceTalkInterpretOn, voiceTalkState.joined])
   const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean, connected: boolean, callId: string | null }) => {
     setVoiceTalkState((prev) => (
       prev.live === next.live && prev.joined === next.joined && prev.connected === next.connected && prev.callId === next.callId ? prev : next
@@ -5073,6 +5105,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableAec: aecEnabled || speakerModeAecEnabled || voiceTalkState.joined,
     // What is said in a call is a caption for some people in the call only.
     suppressLivePreview: voiceTalkState.joined,
+    externalPreviews: voiceTalkCaptionDrafts,
     captureSource: sttCaptureSource,
     sonioxManualFinalizeSilenceMs,
     sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
@@ -6328,17 +6361,30 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setVoiceTalkListenOn(true)
   }, [voiceTalkState.joined])
 
+  // A press shows at once, and the app's next reports are not allowed to flip
+  // it back while the app is still applying it (the reports run ahead of the
+  // press: the button flashed off and on, as Start once did). A report that
+  // agrees, or one after a few seconds, is the truth again.
+  const voiceTalkPressedRef = useRef<{ interpretOn?: { value: boolean, until: number }, listenOn?: { value: boolean, until: number } }>({})
   const handleVoiceTalkInterpretSync = useCallback((state: { interpretOn: boolean, listenOn: boolean }) => {
-    setVoiceTalkInterpretOn(state.interpretOn)
-    setVoiceTalkListenOn(state.listenOn)
+    const pressed = voiceTalkPressedRef.current
+    const now = Date.now()
+    for (const key of ['interpretOn', 'listenOn'] as const) {
+      const press = pressed[key]
+      if (press && (press.value === state[key] || now > press.until)) delete pressed[key]
+    }
+    if (!pressed.interpretOn) setVoiceTalkInterpretOn(state.interpretOn)
+    if (!pressed.listenOn) setVoiceTalkListenOn(state.listenOn)
   }, [])
 
   const handleVoiceTalkListenChange = useCallback((on: boolean) => {
+    voiceTalkPressedRef.current.listenOn = { value: on, until: Date.now() + 3000 }
     setVoiceTalkListenOn(on)
     setVoiceTalkListen(on)
   }, [])
 
   const handleVoiceTalkInterpretChange = useCallback((on: boolean) => {
+    voiceTalkPressedRef.current.interpretOn = { value: on, until: Date.now() + 3000 }
     setVoiceTalkInterpretOn(on)
     if (conversationId) void setVoiceTalkInterpret(conversationId, on)
   }, [conversationId])
@@ -8239,6 +8285,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             listenOn={voiceTalkListenOn}
             onListenChange={handleVoiceTalkListenChange}
             onInterpretSync={handleVoiceTalkInterpretSync}
+            onCaptions={setVoiceTalkCaptionLines}
             earphonesConnected={nativeAudioRoute.earphonesConnected}
             onOpenProfile={handleOpenProfileForBubble}
             viewerUserId={viewerUserId}

@@ -38,3 +38,8 @@ export function canViewMessageWithMetadata(metadata: unknown, viewerUserId: stri
 export function buildVoiceCaptionTag(input: { callId: string, speakerUserId: string, viewers: readonly string[] }): VoiceCaptionTag {
   return { callId: input.callId, viewers: [...new Set([...input.viewers, input.speakerUserId])] }
 }
+
+/** The room message of the interpreter's line `lineId`, and of its live bubble before it is saved. */
+export function buildVoiceCaptionClientMessageId(lineId: string): string {
+  return `voice-caption-${lineId}`.slice(0, 190)
+}

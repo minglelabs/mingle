@@ -989,10 +989,11 @@ function ChatBubble({
     ? `${bubbleTextClassName} text-gray-400`
     : `${bubbleTextClassName} ${isOriginalLanguageSelected ? 'text-gray-900' : activeTranslationEntry?.state === 'interim' ? 'text-gray-400' : 'text-gray-700'}`
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
-  // A call caption is tinted and dashed: it is not a message the whole room has.
+  // A call caption is the same bubble in another color: it is not a message
+  // the whole room has.
   const isVoiceCaption = utterance.voiceCaption === true && !isRecalled
   const bubbleBackgroundClassName = isVoiceCaption
-    ? 'bg-sky-50/80 !border-dashed !border-sky-200'
+    ? 'bg-sky-50'
     : isOwnMessage ? 'bg-amber-50/80' : 'bg-white'
   const bubbleCornerClassName = isOwnMessage ? 'rounded-tl-2xl' : 'rounded-tl-none'
   const expandedBubblePaddingClassName = isCounterpartMessage ? 'px-2 pt-0.5 pb-1' : 'px-2 py-1'

@@ -26,6 +26,8 @@ export type CaptionReport = {
     text: string;
     translations: Record<string, string>;
     durationMs: number;
+    /** When the line was started (ms since epoch): its place among the room's messages. */
+    startedAt: number;
 };
 
 export type PlaybackReport = {

@@ -45,6 +45,20 @@ type RoomSnapshot = {
   interpretOn: boolean
   /** Builds from 2026-11-11 on. */
   listenOn?: boolean
+  /** The interpreter's lines, newest first (partial while being said). */
+  captions?: VoiceTalkCaptionLine[]
+}
+
+/** One line the call's interpreter is writing down (or just wrote down). */
+export type VoiceTalkCaptionLine = {
+  id: string
+  /** The speaker's user id; builds from 2026-11-12 on. */
+  speaker?: string
+  speakerName: string
+  lang: string
+  original: string
+  isPartial: boolean
+  isEcho: boolean
 }
 type Phase = 'idle' | 'connecting' | 'connected' | 'left' | 'error'
 
@@ -128,17 +142,19 @@ export function setVoiceTalkMic(on: boolean) {
 }
 
 /**
- * Turns this viewer's interpretation on or off: the server first (it decides
- * who reads each caption), then the call (the interpreter joins for it, and
- * this phone listens to its language's track).
+ * Turns this viewer's interpretation on or off: in the call (the interpreter
+ * joins for it, and this phone listens to its language's track) and on the
+ * server (it decides who reads each caption).
  */
 export async function setVoiceTalkInterpret(conversationId: string, on: boolean): Promise<void> {
+  // The call at once (its reports then agree with the button), the server
+  // right after.
+  post({ type: 'native_voice_set', payload: { interpret: on } })
   await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/interpret`), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ on }),
   }).catch(() => undefined)
-  post({ type: 'native_voice_set', payload: { interpret: on } })
 }
 
 /** Turns the translations read aloud on or off; interpretation (captions) stays as it is. */
@@ -188,6 +204,8 @@ export type VoiceTalkPanelProps = {
   onListenChange?: (on: boolean) => void
   /** The app reported interpretation and read-aloud (on returning to the room): show them, switch nothing. */
   onInterpretSync?: (state: { interpretOn: boolean; listenOn: boolean }) => void
+  /** The interpreter's lines as the app has them, on every room update. */
+  onCaptions?: (lines: VoiceTalkCaptionLine[]) => void
   /** Earphones are in: the read-aloud button shows them instead of the speaker. */
   earphonesConnected?: boolean
   /** Opens a member's profile when their seat is tapped. */
@@ -222,6 +240,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   useEffect(() => { onListenOnlySyncRef.current = props.onListenOnlySync }, [props.onListenOnlySync])
   const onInterpretSyncRef = useRef(props.onInterpretSync)
   useEffect(() => { onInterpretSyncRef.current = props.onInterpretSync }, [props.onInterpretSync])
+  const onCaptionsRef = useRef(props.onCaptions)
+  useEffect(() => { onCaptionsRef.current = props.onCaptions }, [props.onCaptions])
 
   useEffect(() => {
     if (!conversationId || !bridge()) return
@@ -245,6 +265,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         // The app's mic is the truth: a muted call stays muted however often
         // this screen is closed and opened.
         if (detail.snapshot && typeof detail.snapshot.micOn === 'boolean') onListenOnlySyncRef.current?.(!detail.snapshot.micOn)
+        onCaptionsRef.current?.(Array.isArray(detail.snapshot?.captions) ? detail.snapshot.captions : [])
         // Interpretation and read-aloud too: they go on with the room closed.
         if (detail.snapshot && typeof detail.snapshot.interpretOn === 'boolean') {
           onInterpretSyncRef.current?.({ interpretOn: detail.snapshot.interpretOn, listenOn: detail.snapshot.listenOn !== false })

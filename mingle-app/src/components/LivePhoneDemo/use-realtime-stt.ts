@@ -1577,6 +1577,12 @@ interface UseRealtimeSTTOptions {
    * channel, which everyone watching the room receives.
    */
   suppressLivePreview?: boolean
+  /**
+   * Live lines from elsewhere, drawn like the room's own live bubbles until a
+   * message with the same id lands (a voice talk's interpreter, for the
+   * people with interpretation on).
+   */
+  externalPreviews?: readonly Utterance[]
   // What a native session transcribes. Fixed when the session starts.
   captureSource?: SttCaptureSource
   sonioxManualFinalizeSilenceMs?: number
@@ -3165,6 +3171,7 @@ export default function useRealtimeSTT({
   enableTts,
   enableAec = false,
   suppressLivePreview = false,
+  externalPreviews,
   captureSource = 'microphone',
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
   sonioxEndpointMaxDelayMs = DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
@@ -7486,8 +7493,14 @@ export default function useRealtimeSTT({
       const time = remotePreviews.orderFor(viewerUserId, u.id)
       return time ? { ...u, serverCreatedAtMs: time } : u
     })
-    return [...own, ...remotePreviews.visible(utterances, viewerUserId)].sort(compareUtteranceOrder)
-  }, [localLiveUtterances, remotePreviews, remotePreviewVersion, utterances, viewerUserId])
+    const external = (externalPreviews ?? []).filter((u) => (
+      u.speakerUserId !== viewerUserId && !utterances.some((committed) => committed.id === u.id)
+    )).map((u) => {
+      const knownSpeaker = utterances.find((committed) => committed.speakerUserId === u.speakerUserId)
+      return knownSpeaker?.speakerImage && !u.speakerImage ? { ...u, speakerImage: knownSpeaker.speakerImage } : u
+    })
+    return [...own, ...remotePreviews.visible(utterances, viewerUserId), ...external].sort(compareUtteranceOrder)
+  }, [externalPreviews, localLiveUtterances, remotePreviews, remotePreviewVersion, utterances, viewerUserId])
   const liveUtterance = useMemo(() => buildLiveUtterance({
     pendingTurn: activePendingTurn,
     partialTranscript: activePendingTurn?.text || partialTranscript,

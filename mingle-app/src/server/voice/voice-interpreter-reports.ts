@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { buildVoiceCaptionTag } from "@/lib/voice-caption";
+import { buildVoiceCaptionClientMessageId, buildVoiceCaptionTag } from "@/lib/voice-caption";
 import { chargeCoinUsageSafely } from "@/server/coins/wallet";
 import { notifyConversationMessage } from "@/server/conversation-realtime";
 import { voiceCaptionPayer } from "@/server/voice/voice-calls";
@@ -35,6 +35,8 @@ export type VoiceCaptionReport = {
   text: string;
   translations: Record<string, string>;
   durationMs: number;
+  /** When the line started (ms since epoch), 0 when not said. */
+  startedAt: number;
 };
 
 export function parseVoiceCaptionReport(body: unknown): VoiceCaptionReport | null {
@@ -56,7 +58,10 @@ export function parseVoiceCaptionReport(body: unknown): VoiceCaptionReport | nul
   const durationMs = typeof record.durationMs === "number" && Number.isFinite(record.durationMs)
     ? Math.max(0, Math.min(10 * 60_000, Math.round(record.durationMs)))
     : 0;
-  return { room, id, speaker, lang, text, translations, durationMs };
+  const startedAt = typeof record.startedAt === "number" && Number.isFinite(record.startedAt) && record.startedAt > 0
+    ? Math.round(record.startedAt)
+    : 0;
+  return { room, id, speaker, lang, text, translations, durationMs, startedAt };
 }
 
 export type VoicePlaybackReport = { room: string; id: string; lang: string; listeners: string[]; audioMs: number };
@@ -106,14 +111,30 @@ export async function recordVoiceCaption(report: VoiceCaptionReport): Promise<"s
     viewers: call.participants.filter((participant) => participant.interpretOn).map((participant) => participant.userId),
   });
   const sessionKey = call.channel.sessionKey;
-  const clientMessageId = `voice-caption-${report.id}`.slice(0, 190);
+  const clientMessageId = buildVoiceCaptionClientMessageId(report.id);
   const targetLanguages = Object.keys(report.translations);
+  // The same fields a spoken message has (log-client-event), so it is drawn
+  // the same; only `voiceCaption` differs. Ordered by when the line started,
+  // where its live bubble already stood (a time from the future is ignored).
+  const startedAt = report.startedAt > 0 && report.startedAt <= Date.now() + 5_000 ? report.startedAt : Date.now();
   const metadata: Prisma.JsonObject = {
     clientMessageId,
     sourceLanguage: report.lang,
     provider: "voice-interpreter",
+    model: null,
+    infrastructureProvider: null,
     translationLanguages: targetLanguages,
     translationTargetLanguages: targetLanguages,
+    orderStartedAtMs: startedAt,
+    clientMetadata: {
+      reason: "voice_interpreter",
+      singleLanguageMode: false,
+      skipTranslation: false,
+      hasInlineTts: false,
+      speaker: null,
+      speakerAvatarSeed: null,
+      speakerAvatarIndex: null,
+    },
     voiceCaption: tag,
   };
   const message = await prisma.appMessage.upsert({

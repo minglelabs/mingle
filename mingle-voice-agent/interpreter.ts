@@ -55,6 +55,8 @@ type Speaker = {
     stream: AudioStream;
     recent: Recent[];
     partialSeq: number;
+    /** The line being said: one id from its first partial to the saved room message. */
+    lineId: string | null;
     lastPartialAt: number;
     stopped: boolean;
 };
@@ -190,6 +192,7 @@ export class Interpreter {
             stream,
             recent: [],
             partialSeq: 0,
+            lineId: null,
             lastPartialAt: 0,
             stopped: false,
         };
@@ -259,9 +262,12 @@ export class Interpreter {
         const now = Date.now();
         if (now - speaker.lastPartialAt < PARTIAL_THROTTLE_MS) return;
         speaker.lastPartialAt = now;
+        // The same id as the line's room message (app-report.ts), so a reader's
+        // live bubble turns into the saved one in its place.
+        if (!speaker.lineId) speaker.lineId = newLineId(this.roomName);
         this.send({
             type: 'partial',
-            id: `${speaker.identity}#${speaker.partialSeq}`,
+            id: speaker.lineId,
             speaker: speaker.identity,
             speakerName: speaker.name,
             lang: normalizeLang(partial.lang) || speaker.lang,
@@ -270,9 +276,11 @@ export class Interpreter {
     }
 
     private onSegment(speaker: Speaker, segment: SttSegment): void {
-        const partialId = `${speaker.identity}#${speaker.partialSeq++}`;
+        speaker.partialSeq++;
         ++this.segmentSeq;
-        const id = newLineId(this.roomName);
+        const id = speaker.lineId ?? newLineId(this.roomName);
+        const partialId = id;
+        speaker.lineId = null;
         // Written down only for someone else who reads it: a line nobody else
         // has interpretation on for is dropped (not saved, not paid).
         const readers = readersOf({
@@ -319,6 +327,7 @@ export class Interpreter {
             text: segment.text,
             translations: Object.fromEntries(pairs.filter(([, text]) => !!text)),
             durationMs: segment.durationMs,
+            startedAt: segment.speechEndAt - segment.durationMs,
         }));
     }
 

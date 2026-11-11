@@ -320,6 +320,8 @@ export function decodeUtf8(bytes: Uint8Array): string {
 
 export type CaptionLine = {
   id: string;
+  /** The speaker's identity (their user id), when the interpreter says it. */
+  speaker?: string;
   speakerName: string;
   lang: string;
   /** Original transcript (partial while streaming, final once settled). */
@@ -377,6 +379,7 @@ export function applyCaption(
       const line = ensureLine(store, msg.id);
       line.original = msg.text;
       line.isPartial = true;
+      if (msg.speaker) line.speaker = msg.speaker;
       if (msg.speakerName) line.speakerName = msg.speakerName;
       if (msg.lang) line.lang = msg.lang;
       return msg.id;
@@ -394,6 +397,7 @@ export function applyCaption(
       const line = ensureLine(store, msg.id);
       line.original = msg.text;
       line.isPartial = false;
+      if (msg.speaker) line.speaker = msg.speaker;
       if (msg.speakerName) line.speakerName = msg.speakerName;
       if (msg.lang) line.lang = msg.lang;
       if (msg.type === 'echo') line.isEcho = true;

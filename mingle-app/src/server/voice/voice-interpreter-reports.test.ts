@@ -17,8 +17,8 @@ describe("voice interpreter reports", () => {
   it("reads a caption and drops bad languages and the source's own translation", () => {
     expect(parseVoiceCaptionReport({
       room: "voice-c-1", id: "l1", speaker: "u1", lang: "ko", text: " 안녕 ",
-      translations: { en: "Hi", ko: "안녕", "x!": "?", ja: "" }, durationMs: 1234.4,
-    })).toEqual({ room: "voice-c-1", id: "l1", speaker: "u1", lang: "ko", text: "안녕", translations: { en: "Hi" }, durationMs: 1234 });
+      translations: { en: "Hi", ko: "안녕", "x!": "?", ja: "" }, durationMs: 1234.4, startedAt: 1700000000000.4,
+    })).toEqual({ room: "voice-c-1", id: "l1", speaker: "u1", lang: "ko", text: "안녕", translations: { en: "Hi" }, durationMs: 1234, startedAt: 1700000000000 });
     expect(parseVoiceCaptionReport({ room: "r", id: "i", speaker: "u", lang: "ko" })).toBeNull();
     expect(parseVoiceCaptionReport(null)).toBeNull();
   });

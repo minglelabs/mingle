@@ -52,7 +52,9 @@ describe('voice talk and STT are separate switches', () => {
   it('keeps the call panel free of its own text; its mic button is the listen-only switch', () => {
     // No caption list of its own (what people say is the room's messages); it only says when captions are off.
     expect(panelSource).not.toContain('captions.map')
-    expect(panelSource).not.toContain('snapshot.captions')
+    // The panel draws no captions: it hands the interpreter's lines to the room, which draws them as live bubbles.
+    expect(panelSource).not.toContain('snapshot.captions.map')
+    expect(panelSource).toContain('onCaptionsRef.current?.(')
     expect(panelSource).not.toContain('toggleMic')
     expect(panelSource).toContain('export function setVoiceTalkMic(on: boolean)')
     expect(panelSource).toContain('data-qa="voice-talk-mic-toggle"')
