@@ -6,13 +6,13 @@ Source for the App Store and Google Play screenshot set: 8 slides in 15 language
 |---|---|---|
 | 01 | Full-bleed photo of friends from many countries | `hero/group.jpg` (drawn with the ChatGPT app bridge, `scripts/chatgpt-image-bridge.mjs`; sky extended to the slide height from `group-original.png`) |
 | 02 | 1:1 chat with a friend abroad, each in their own language | drawn from `dm.json` (`dm`) with the app's bubble layout |
-| 03 | The same room while speaking (voice mode) | drawn from `dm.json` (`voice`). Replace with the voice call screen once calls ship |
-| 04 | Group chat in three languages (meetings, travel) | drawn from `chat.json` (a real room needs real members) |
+| 03 | The same room while speaking (voice mode) | drawn from `dm.json` (`voice`). Placeholder: to be replaced with the voice call screen |
+| 04 | A booking call on speaker, interpreted | drawn from `dm.json` (`booking`). Placeholder: to be replaced with a composed slide (travel photo, tilted phone on the call screen, the booking lines floating beside it) |
 | 05 | A post written in another language, read in yours | app (`/{locale}/feed?postId=…`) |
-| 06 | A booking call on speaker, interpreted | drawn from `dm.json` (`booking`) |
+| 06 | Comments, translated | app (comment sheet) |
 | 07–08 | Hash Rush (meadow, beach) | live site, `?lang=` (ko/ja/zh get their own text, others English) |
 
-The comment sheet (`comments.png`) and search (`search.png`) captures are still taken but no slide uses them: Google Play takes at most 8 phone screenshots.
+The group chat (`chat.png`) and search (`search.png`) captures are still taken but no slide uses them: Google Play takes at most 8 phone screenshots.
 
 Files:
 - `capture.mjs`: loads each screen in headless Chrome at iPhone size (390x797 pt @3x, the area under the status bar) and writes `captures/<lang>/<screen>.png`.

@@ -64,24 +64,24 @@
       }
     },
     {
-      "id": "04-group-chat",
-      "capture": "captures/{lang}/chat.png",
+      "id": "04-booking",
+      "capture": "captures/{lang}/booking.png",
       "caption": {
-        "ko": "회의도 여행도\n실시간 통역",
-        "en": "Meetings or travel,\ninterpreted live",
-        "ja": "会議も旅行も\nリアルタイム通訳",
-        "zh-cn": "会议和旅行\n实时口译",
-        "zh-tw": "會議和旅行\n即時口譯",
-        "ar": "في الاجتماعات والسفر\nترجمة فورية مباشرة",
-        "de": "Meetings und Reisen,\nlive gedolmetscht",
-        "es": "Reuniones o viajes,\ninterpretación en vivo",
-        "fr": "Réunions ou voyages,\ninterprétés en direct",
-        "hi": "मीटिंग हो या सफ़र,\nलाइव अनुवाद",
-        "it": "Riunioni o viaggi,\ninterpretati dal vivo",
-        "pt": "Reuniões ou viagens,\ninterpretação ao vivo",
-        "ru": "Встречи и поездки —\nперевод в реальном времени",
-        "th": "ประชุมหรือเที่ยว\nก็แปลสดได้",
-        "vi": "Họp hay du lịch,\nphiên dịch trực tiếp"
+        "ko": "해외 미용실·식당\n예약 전화도 통역",
+        "en": "Booking calls abroad,\ninterpreted too",
+        "ja": "韓国の美容室やお店の\n予約電話も通訳",
+        "zh-cn": "海外预约电话\n也能翻译",
+        "zh-tw": "海外預約電話\n也能翻譯",
+        "ar": "مكالمات الحجز في الخارج\nمترجمة أيضًا",
+        "de": "Auch Buchungsanrufe\nim Ausland gedolmetscht",
+        "es": "Llamadas para reservar\nen el extranjero, interpretadas",
+        "fr": "Vos appels de réservation\nà l’étranger, interprétés",
+        "hi": "विदेश में बुकिंग कॉल\nभी अनुवादित",
+        "it": "Anche le chiamate\nper prenotare all’estero",
+        "pt": "Ligações para reservar\nno exterior, interpretadas",
+        "ru": "Звонки для записи\nза границей — с переводом",
+        "th": "โทรจองร้านในต่างประเทศ\nก็แปลให้",
+        "vi": "Gọi đặt chỗ ở nước ngoài\ncũng được phiên dịch"
       }
     },
     {
@@ -106,24 +106,24 @@
       }
     },
     {
-      "id": "06-booking",
-      "capture": "captures/{lang}/booking.png",
+      "id": "06-comments",
+      "capture": "captures/{lang}/comments.png",
       "caption": {
-        "ko": "해외 미용실·식당\n예약 전화도 통역",
-        "en": "Booking calls abroad,\ninterpreted too",
-        "ja": "韓国の美容室やお店の\n予約電話も通訳",
-        "zh-cn": "海外预约电话\n也能翻译",
-        "zh-tw": "海外預約電話\n也能翻譯",
-        "ar": "مكالمات الحجز في الخارج\nمترجمة أيضًا",
-        "de": "Auch Buchungsanrufe\nim Ausland gedolmetscht",
-        "es": "Llamadas para reservar\nen el extranjero, interpretadas",
-        "fr": "Vos appels de réservation\nà l’étranger, interprétés",
-        "hi": "विदेश में बुकिंग कॉल\nभी अनुवादित",
-        "it": "Anche le chiamate\nper prenotare all’estero",
-        "pt": "Ligações para reservar\nno exterior, interpretadas",
-        "ru": "Звонки для записи\nза границей — с переводом",
-        "th": "โทรจองร้านในต่างประเทศ\nก็แปลให้",
-        "vi": "Gọi đặt chỗ ở nước ngoài\ncũng được phiên dịch"
+        "ko": "모든 글과 댓글이\n자동으로 번역돼요",
+        "en": "Every post and comment,\ntranslated automatically",
+        "ja": "すべての投稿とコメントが\n自動で翻訳",
+        "zh-cn": "所有帖子和评论\n自动翻译",
+        "zh-tw": "所有貼文和留言\n自動翻譯",
+        "ar": "كل المنشورات والتعليقات\nتُترجم تلقائيًا",
+        "de": "Alle Beiträge und Kommentare\nautomatisch übersetzt",
+        "es": "Todas las publicaciones y comentarios\nse traducen solos",
+        "fr": "Publications et commentaires\ntraduits automatiquement",
+        "hi": "हर पोस्ट और टिप्पणी\nअपने-आप अनुवादित",
+        "it": "Tutti i post e i commenti\ntradotti in automatico",
+        "pt": "Todos os posts e comentários\ntraduzidos automaticamente",
+        "ru": "Все посты и комментарии\nпереводятся автоматически",
+        "th": "ทุกโพสต์และคอมเมนต์\nแปลให้อัตโนมัติ",
+        "vi": "Mọi bài đăng và bình luận\nđược dịch tự động"
       }
     },
     {
