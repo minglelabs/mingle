@@ -1,4 +1,0 @@
-<resources>
-    <!-- The launcher label on a phone set to Korean; the launcher's own search matches it. -->
-    <string name="app_name">해시챗</string>
-</resources>

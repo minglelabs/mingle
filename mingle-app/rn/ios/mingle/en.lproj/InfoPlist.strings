@@ -1,3 +1,0 @@
-/* The app's name in every language without a file of its own. */
-"CFBundleDisplayName" = "HashChat";
-"CFBundleName" = "HashChat";

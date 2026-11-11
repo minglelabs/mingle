@@ -75,9 +75,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   // The phone's own search (Spotlight) matches an app by its display name
   // only. One hidden item carries every other word people type to find the
   // app, so each of them surfaces HashChat; tapping it just opens the app.
-  // - Korean spellings of the name and of its two halves: the display name on
-  //   a Korean phone is "해시챗", but people also type 해쉬 / 해씨 / 해쒸, the
-  //   halves alone (해시, 챗) and 쳇 / 채팅.
+  // - Korean spellings of the name and of its two halves: the display name is
+  //   "HashChat" in every language, but on a Korean keyboard people type
+  //   해시챗 / 해쉬 / 해씨 / 해쒸, the halves alone (해시, 챗) and 쳇 / 채팅.
   // - The old name (the app was renamed Mingle -> HashChat), which nothing in
   //   the UI shows any more.
   private func indexSearchKeywordsForSpotlight() {

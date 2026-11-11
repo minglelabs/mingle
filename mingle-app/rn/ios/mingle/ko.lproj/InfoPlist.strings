@@ -1,4 +1,0 @@
-/* The app's name on a phone set to Korean: the home screen label, and the
-   name the phone's own search matches. */
-"CFBundleDisplayName" = "해시챗";
-"CFBundleName" = "해시챗";
