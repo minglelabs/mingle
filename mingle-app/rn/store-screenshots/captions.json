@@ -41,10 +41,7 @@
         "th": "ไม่รู้ภาษาก็แชต\nกับเพื่อนต่างชาติได้",
         "vi": "Chat với bạn nước ngoài\nbằng tiếng của bạn"
       },
-      "photo": [
-        "scenes/dm-cafe.jpg",
-        "scenes/dm-street.jpg"
-      ]
+      "photo": "scenes/backdrop-02.jpg"
     },
     {
       "id": "03-voice",
@@ -66,10 +63,7 @@
         "th": "โทรเสียงพร้อมล่ามสด\nต่างคนต่างพูดภาษาตัวเอง",
         "vi": "Gọi thoại phiên dịch trực tiếp\nMỗi người nói tiếng mình"
       },
-      "photo": [
-        "scenes/voice-tokyo.jpg",
-        "scenes/voice-seoul.jpg"
-      ]
+      "photo": "scenes/backdrop-03.jpg"
     },
     {
       "id": "04-booking",
