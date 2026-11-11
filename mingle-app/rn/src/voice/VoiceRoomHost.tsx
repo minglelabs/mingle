@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 
+import { Platform } from 'react-native';
 import { createVoiceController, type VoiceController } from '../nativeVoice';
+import { defaultCallVolume } from './voiceProtocol';
 import { setNativeSttVoiceCallActive } from '../nativeStt';
 import { createVoiceApi, type VoiceApi, type VoiceCall } from './voiceApi';
 import { createLiveKitRoom } from './createLiveKitRoom';
@@ -128,6 +130,9 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
           myLang: props.config.myLang,
           localUserId: props.localUserId,
         });
+        // Android plays the call much louder than iOS, even at the lowest
+        // system volume, so its voices start turned down.
+        controller.setCallVol(defaultCallVolume(Platform.OS));
         controllerRef.current = controller;
         conversationRef.current = args.conversationId;
         unsubscribeRef.current = controller.subscribe(scheduleRoom);

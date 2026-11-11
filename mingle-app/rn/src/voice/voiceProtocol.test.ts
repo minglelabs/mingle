@@ -1,4 +1,5 @@
 import {
+  defaultCallVolume,
   DUCK_ORIG_DYNAMIC_LOW,
   DUCK_ORIG_STATIC,
   applyCaption,
@@ -186,5 +187,10 @@ describe('call volume', () => {
     expect(volumeForTrack(speaker, { ...base, callVol: 0.4, readingAloud: true })).toBeCloseTo(0.1);
     expect(volumeForTrack(speaker, { ...base, callVol: 0 })).toBe(0);
     expect(volumeForTrack(speaker, { ...base, callVol: 3 })).toBe(1);
+  });
+
+  it('starts Android turned down and leaves iOS at full', () => {
+    expect(defaultCallVolume('android')).toBeLessThan(0.6);
+    expect(defaultCallVolume('ios')).toBe(1);
   });
 });

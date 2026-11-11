@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ChevronUp, Mic, MicOff, PhoneOff, Phone, Volume1, Volume2 } from 'lucide-react'
+import { ChevronUp, Mic, MicOff, PhoneOff, Phone } from 'lucide-react'
 import LanguageFlag from '@/components/language-flag'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { useRoomPresence } from '@/lib/room-presence'
@@ -63,7 +63,6 @@ const COPY = {
     error: '연결하지 못했어요',
     fold: '접기',
     open: '펼치기',
-    callVolume: '통화 음량',
     micOnState: '마이크 켜짐',
     micOffState: '마이크 꺼짐',
     micMuted: '음소거',
@@ -93,7 +92,6 @@ const COPY = {
     error: 'Could not connect',
     fold: 'Fold',
     open: 'Open',
-    callVolume: 'Call volume',
     micOnState: 'Mic on',
     micOffState: 'Mic off',
     micMuted: 'Muted',
@@ -160,36 +158,6 @@ export function isAbandonedJoinedCall(input: {
   if (input.joinedNow || !input.call || !input.rememberedCallId || !input.viewerUserId) return false
   return input.rememberedCallId === input.call.id
     && input.call.participants.some((participant) => participant.userId === input.viewerUserId)
-}
-
-// The viewer's own volume for every voice in the call, kept on this device.
-// The phone's lowest system volume during a call is still loud on the
-// speaker, so this goes below it. Starts lower than full.
-const CALL_VOLUME_STORAGE_KEY = 'mingle_voice_call_volume'
-export const DEFAULT_CALL_VOLUME = 0.6
-
-export function readCallVolume(): number {
-  try {
-    const raw = Number(window.localStorage.getItem(CALL_VOLUME_STORAGE_KEY))
-    return window.localStorage.getItem(CALL_VOLUME_STORAGE_KEY) !== null && Number.isFinite(raw)
-      ? Math.max(0, Math.min(1, raw))
-      : DEFAULT_CALL_VOLUME
-  } catch {
-    return DEFAULT_CALL_VOLUME
-  }
-}
-
-function writeCallVolume(volume: number): void {
-  try {
-    window.localStorage.setItem(CALL_VOLUME_STORAGE_KEY, String(volume))
-  } catch {
-    // No storage: the volume lasts for this page only.
-  }
-}
-
-/** Sets the volume of every voice this phone hears in the call (0..1). */
-export function setVoiceTalkVolume(volume: number) {
-  post({ type: 'native_voice_set', payload: { volume: Math.max(0, Math.min(1, volume)) } })
 }
 
 export function isVoiceTalkAvailable(): boolean {
@@ -329,17 +297,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const live = !!call && call.participants.length > 0
   const connected = phase === 'connected'
   const liveCallId = live ? call?.id ?? null : null
-  // The call volume: this device's choice, applied each time a call connects.
-  const [callVolume, setCallVolume] = useState(DEFAULT_CALL_VOLUME)
-  useEffect(() => { setCallVolume(readCallVolume()) }, [])
-  useEffect(() => {
-    if (connected) setVoiceTalkVolume(readCallVolume())
-  }, [connected])
-  const changeCallVolume = useCallback((volume: number) => {
-    setCallVolume(volume)
-    writeCallVolume(volume)
-    setVoiceTalkVolume(volume)
-  }, [])
   // Remember the call this phone is in, for the restart case above.
   useEffect(() => {
     if (connected && liveCallId) writeJoinedCallMarker(conversationId, liveCallId)
@@ -675,23 +632,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
 
               {error ? <p className="px-3 pb-2 text-[0.8rem] text-rose-600">{error}</p> : null}
 
-              {joined ? (
-                <label data-qa="voice-talk-volume" className="flex items-center gap-2.5 px-3 pb-2">
-                  <Volume1 size={16} className="shrink-0 text-gray-500" aria-hidden="true" />
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={5}
-                    value={Math.round(callVolume * 100)}
-                    onChange={(event) => changeCallVolume(Number(event.target.value) / 100)}
-                    aria-label={copy.callVolume}
-                    className="h-6 min-w-0 flex-1 accent-slate-700"
-                  />
-                  <Volume2 size={16} className="shrink-0 text-gray-500" aria-hidden="true" />
-                </label>
-              ) : null}
-
               {bystanders.length > 0 ? (
                 // Everyone in the room who is not in the call: a small plain
                 // circle each, dimmed while they do not have the room open.
@@ -728,7 +668,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                     aria-pressed={!listenOnly}
                     onClick={() => onListenOnlyChange?.(!listenOnly)}
                     className={`inline-flex h-11 min-w-[124px] items-center justify-center gap-1.5 rounded-full px-5 text-[0.86rem] font-semibold transition-colors ${
-                      listenOnly ? 'bg-gray-800 text-white active:bg-gray-700' : 'bg-gray-100 text-gray-800 active:bg-gray-200'
+                      listenOnly ? 'bg-gray-100 text-gray-400 active:bg-gray-200' : 'bg-red-500 text-white shadow-sm active:bg-red-600'
                     }`}
                   >
                     {listenOnly ? <><MicOff size={17} /> {copy.micOffState}</> : <><Mic size={17} /> {copy.micOnState}</>}
