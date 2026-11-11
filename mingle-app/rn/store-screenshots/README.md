@@ -1,18 +1,22 @@
 # Store screenshots
 
-Source for the App Store and Google Play screenshot set: 7 slides in 15 languages. Every language gets its own screens, with the app UI and the post/comment translations in that language.
+Source for the App Store and Google Play screenshot set: 8 slides in 15 languages. Every language gets its own screens, with the app UI and the post/comment translations in that language.
 
 | # | Screen | Source |
 |---|---|---|
 | 01 | Full-bleed photo of friends from many countries | `hero/group.jpg` (drawn with the ChatGPT app bridge, `scripts/chatgpt-image-bridge.mjs`; sky extended to the slide height from `group-original.png`) |
-| 02 | A post written in another language, read in yours | app (`/{locale}/feed?postId=…`) |
-| 03 | Comments, translated | app (comment sheet) |
-| 04 | Group chat in three languages | drawn from `chat.json` with the app's bubble layout (a real room needs real members) |
-| 05 | Search: people and posts | app (`/{locale}/connect`, query "ki") |
-| 06–07 | Hash Rush (meadow, beach) | live site, `?lang=` (ko/ja/zh get their own text, others English) |
+| 02 | 1:1 chat with a friend abroad, each in their own language | drawn from `dm.json` (`dm`) with the app's bubble layout |
+| 03 | The same room while speaking (voice mode) | drawn from `dm.json` (`voice`). Replace with the voice call screen once calls ship |
+| 04 | Group chat in three languages (meetings, travel) | drawn from `chat.json` (a real room needs real members) |
+| 05 | A post written in another language, read in yours | app (`/{locale}/feed?postId=…`) |
+| 06 | A booking call on speaker, interpreted | drawn from `dm.json` (`booking`) |
+| 07–08 | Hash Rush (meadow, beach) | live site, `?lang=` (ko/ja/zh get their own text, others English) |
+
+The comment sheet (`comments.png`) and search (`search.png`) captures are still taken but no slide uses them: Google Play takes at most 8 phone screenshots.
 
 Files:
 - `capture.mjs`: loads each screen in headless Chrome at iPhone size (390x797 pt @3x, the area under the status bar) and writes `captures/<lang>/<screen>.png`.
+- `dm.json`: the lines of the three 1:1 slides in all languages (chat, voice mode, booking call), the friend's name per partner language and the booking room title. `node capture.mjs --screens dm,voice,booking` draws them with no server.
 - `chat.json`: the four chat lines in all languages, partner languages per viewer, room title and the "collapse" label.
 - `captions.json`: headline per slide and language, and which language each upload locale folder gets.
 - `previews/<nn>-<lang>.jpg`: one sheet per language with its 7 slides, for review.
