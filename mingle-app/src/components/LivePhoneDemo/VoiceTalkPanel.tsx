@@ -5,9 +5,10 @@
 // top bar with up to 8 seats; drag it up (or tap the handle) to fold it into a
 // slim bar.
 //
-// The panel has no text of its own and no mic button. Voice talk and the room's
-// speech-to-text are one mic: the room's Start/Stop button owns it, the call
-// only adds sending the voice. What people say shows as the room's messages.
+// Voice talk and the room's speech-to-text are one mic: the room's Start/Stop
+// button owns it, the call only adds sending the voice. What people say shows
+// as the room's messages. The panel's mic button keeps a seat while sending
+// no voice (listen only); speech-to-text goes on as the room has it.
 //
 // The call itself runs in the native app (LiveKit audio). This panel only
 // draws it and sends button presses over the RN bridge (see
@@ -15,7 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ChevronUp, PhoneOff, Phone } from 'lucide-react'
+import { ChevronUp, Mic, MicOff, PhoneOff, Phone } from 'lucide-react'
 
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = 8
@@ -55,6 +56,11 @@ const COPY = {
     error: '연결하지 못했어요',
     fold: '접기',
     open: '펼치기',
+    micOff: '마이크 끄기',
+    micOn: '마이크 켜기',
+    listenOnly: '듣기만 하는 중',
+    leaveTitle: '보이스톡에서 나갈까요?',
+    cancel: '취소',
   },
   en: {
     start: 'Voice talk',
@@ -71,6 +77,11 @@ const COPY = {
     error: 'Could not connect',
     fold: 'Fold',
     open: 'Open',
+    micOff: 'Mute mic',
+    micOn: 'Unmute mic',
+    listenOnly: 'Listening only',
+    leaveTitle: 'Leave voice talk?',
+    cancel: 'Cancel',
   },
 }
 
@@ -100,6 +111,16 @@ export function setVoiceTalkMic(on: boolean) {
   post({ type: 'native_voice_set', payload: { mic: on } })
 }
 
+/** The call's mic: on while the room's speech-to-text runs, unless the viewer only listens. */
+export function resolveVoiceTalkMic(input: { sttBusy: boolean; listenOnly: boolean }): boolean {
+  return input.sttBusy && !input.listenOnly
+}
+
+/** What a press on the room's voice talk button does: open the panel, or ask to leave a call this phone is in. */
+export function resolveVoiceTalkButtonPress(state: { joined: boolean }): 'open' | 'confirm_leave' {
+  return state.joined ? 'confirm_leave' : 'open'
+}
+
 export type VoiceTalkPanelProps = {
   conversationId: string
   conversationTitle?: string
@@ -112,10 +133,16 @@ export type VoiceTalkPanelProps = {
   onAvailabilityChange?: (state: { live: boolean; joined: boolean; connected: boolean }) => void
   /** Bumped by the room's voice talk button: shows the panel (joining is the panel's Join button). */
   openSignal?: number
+  /** Bumped by the room's voice talk button during a call: asks whether to leave. */
+  leaveSignal?: number
+  /** Listen only: in a seat, sending no voice. Owned by the room (it drives the mic). */
+  listenOnly?: boolean
+  onListenOnlyChange?: (listenOnly: boolean) => void
 }
 
 export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
-  const { conversationId, conversationTitle, myLang, openSignal, onAvailabilityChange } = props
+  const { conversationId, conversationTitle, myLang, openSignal, leaveSignal, onAvailabilityChange, onListenOnlyChange } = props
+  const listenOnly = props.listenOnly === true
   const copy = (props.uiLocale || '').toLowerCase().startsWith('ko') ? COPY.ko : COPY.en
   const [call, setCall] = useState<StatusCall>(null)
   const [phase, setPhase] = useState<Phase>('idle')
@@ -182,6 +209,15 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     }
   }
 
+  // The button pressed during a call: a confirmation, never a silent leave.
+  const [confirmLeave, setConfirmLeave] = useState(false)
+  const [seenLeaveSignal, setSeenLeaveSignal] = useState(leaveSignal ?? 0)
+  if ((leaveSignal ?? 0) !== seenLeaveSignal) {
+    setSeenLeaveSignal(leaveSignal ?? 0)
+    if (leaveSignal && joined) setConfirmLeave(true)
+  }
+  if (confirmLeave && !joined) setConfirmLeave(false)
+
   // Decline an incoming call, or close the panel opened by the button.
   const dismiss = useCallback(() => {
     setOpened(false)
@@ -190,8 +226,10 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
 
   const leave = useCallback(() => {
     setOpened(false)
+    setConfirmLeave(false)
+    onListenOnlyChange?.(false)
     post({ type: 'native_voice_close' })
-  }, [])
+  }, [onListenOnlyChange])
 
   // Seats: who is in the call (live LiveKit view when joined, else the API's).
   const seats = useMemo(() => {
@@ -209,9 +247,47 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const incoming = live && call?.id !== declinedCallId
   if (!joined && !error && !opened && !incoming) return null
 
+  const leaveDialog = confirmLeave ? (
+    <div
+      className="pointer-events-auto fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-8"
+      data-qa="voice-talk-leave-confirm"
+      onClick={() => setConfirmLeave(false)}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={copy.leaveTitle}
+        className="w-full max-w-[300px] rounded-2xl bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.22)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <p className="text-center text-[1.02rem] font-semibold text-gray-900">{copy.leaveTitle}</p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            data-qa="voice-talk-leave-cancel"
+            onClick={() => setConfirmLeave(false)}
+            className="h-11 rounded-xl bg-gray-100 text-[0.92rem] font-semibold text-gray-700 active:bg-gray-200"
+          >
+            {copy.cancel}
+          </button>
+          <button
+            type="button"
+            data-qa="voice-talk-leave-confirm-button"
+            onClick={leave}
+            className="h-11 rounded-xl bg-rose-500 text-[0.92rem] font-semibold text-white active:bg-rose-600"
+          >
+            {copy.leave}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
   const count = joined && room ? room.members.length : call?.participants.length ?? 0
 
   return (
+    <>
+    {leaveDialog}
     <div className="pointer-events-none absolute inset-x-0 z-30 px-2" style={{ top: props.topOffset }}>
       <motion.div
         layout
@@ -232,6 +308,11 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
           <span className="min-w-0 flex-1 truncate text-[0.88rem] font-semibold text-gray-900">
             {phase === 'connecting' ? copy.connecting : (live || joined ? copy.live(count) : copy.idle)}
           </span>
+          {joined && listenOnly ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[0.72rem] font-semibold text-gray-600">
+              <MicOff size={12} strokeWidth={2.4} /> {copy.listenOnly}
+            </span>
+          ) : null}
           {folded ? (
             <div className="flex -space-x-2">
               {seats.slice(0, 4).map((s) => (
@@ -284,7 +365,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
             >
               <div className="grid grid-cols-4 gap-x-2 gap-y-2.5 px-3 pb-2 pt-1">
                 {Array.from({ length: MAX_SEATS }, (_, i) => seats[i] ?? null).map((s, i) => (
-                  <div key={s?.key ?? `empty-${i}`} className="flex min-w-0 flex-col items-center gap-1">
+                  <div key={s?.key ?? `empty-${i}`} className="relative flex min-w-0 flex-col items-center gap-1">
                     <span
                       className={`relative inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full text-[0.95rem] font-bold transition-shadow duration-150 ${
                         s ? 'bg-amber-100 text-amber-800' : 'border border-dashed border-gray-300 bg-gray-50 text-gray-300'
@@ -293,6 +374,15 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       {s ? (s.image ? <img src={s.image} alt="" className="h-full w-full object-cover" /> : initial(s.name)) : ''}
                     </span>
+                    {s?.isLocal && listenOnly ? (
+                      <span
+                        aria-hidden="true"
+                        data-qa="voice-talk-own-mic-off"
+                        className="absolute left-1/2 top-[30px] ml-[10px] inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-white ring-2 ring-white"
+                      >
+                        <MicOff size={11} strokeWidth={2.6} />
+                      </span>
+                    ) : null}
                     <span className="w-full truncate text-center text-[0.7rem] font-medium text-gray-600">
                       {s ? (s.isLocal ? copy.me : s.name) : copy.empty}
                     </span>
@@ -304,7 +394,18 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
 
               {joined ? (
                 <div className="flex items-center justify-center gap-2 border-t border-gray-100 px-3 py-2">
-                  <button type="button" onClick={leave} className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1.5 text-[0.8rem] font-semibold text-rose-600">
+                  <button
+                    type="button"
+                    data-qa="voice-talk-mic-toggle"
+                    aria-pressed={listenOnly}
+                    onClick={() => onListenOnlyChange?.(!listenOnly)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8rem] font-semibold ${
+                      listenOnly ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {listenOnly ? <><Mic size={15} /> {copy.micOn}</> : <><MicOff size={15} /> {copy.micOff}</>}
+                  </button>
+                  <button type="button" onClick={() => setConfirmLeave(true)} className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1.5 text-[0.8rem] font-semibold text-rose-600">
                     <PhoneOff size={15} /> {copy.leave}
                   </button>
                 </div>
@@ -314,6 +415,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         </AnimatePresence>
       </motion.div>
     </div>
+    </>
   )
 }
 
@@ -334,6 +436,9 @@ export function VoiceTalkButton(props: { uiLocale: string; active: boolean; onPr
       } ${props.className ?? ''}`}
       style={{ width: `${sizePx}px`, height: `${sizePx}px` }}
     >
+      {/* Invisible tap area beyond the drawn button: toward the screen edge,
+          above and below, never over the button on its right. */}
+      <span aria-hidden="true" data-qa="voice-talk-button-hit-area" className="absolute -bottom-3 -left-4 -top-3 right-0" />
       <Phone size={18} strokeWidth={2.15} />
       {props.active ? (
         <span aria-hidden="true" className="pointer-events-none absolute right-[10px] top-[10px] h-[7px] w-[7px] rounded-full bg-emerald-500 ring-2 ring-white" />

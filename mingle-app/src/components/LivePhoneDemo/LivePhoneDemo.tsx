@@ -266,7 +266,13 @@ import {
 } from '@/components/native-app-update-card'
 import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
-import VoiceTalkPanel, { VoiceTalkButton, isVoiceTalkAvailable, setVoiceTalkMic } from './VoiceTalkPanel'
+import VoiceTalkPanel, {
+  VoiceTalkButton,
+  isVoiceTalkAvailable,
+  resolveVoiceTalkButtonPress,
+  resolveVoiceTalkMic,
+  setVoiceTalkMic,
+} from './VoiceTalkPanel'
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
 import { HashRushQuickChatBar } from '@/features/hash-rush/QuickChatBar'
 import type { HashRushChatEntry, HashRushRoomChat } from '@/features/hash-rush/room-chat'
@@ -2054,6 +2060,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [voiceTalkAvailable, setVoiceTalkAvailable] = useState(false)
   useEffect(() => setVoiceTalkAvailable(isVoiceTalkAvailable()), [])
   const [voiceTalkOpenSignal, setVoiceTalkOpenSignal] = useState(0)
+  const [voiceTalkLeaveSignal, setVoiceTalkLeaveSignal] = useState(0)
+  // Listen only: a seat in the call that sends no voice (speech-to-text as the room has it).
+  const [voiceTalkListenOnly, setVoiceTalkListenOnly] = useState(false)
   const [voiceTalkState, setVoiceTalkState] = useState({ live: false, joined: false, connected: false })
   const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean, connected: boolean }) => {
     setVoiceTalkState((prev) => (
@@ -6248,8 +6257,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     if (!voiceTalkConnected) return
     // The ref covers the moment between asking STT to start and its state.
-    setVoiceTalkMic(isSttSessionRunning || isPreparingStart || startPreparationInFlightRef.current)
-  }, [isPreparingStart, isSttSessionRunning, voiceTalkConnected])
+    setVoiceTalkMic(resolveVoiceTalkMic({
+      sttBusy: isSttSessionRunning || isPreparingStart || startPreparationInFlightRef.current,
+      listenOnly: voiceTalkListenOnly,
+    }))
+  }, [isPreparingStart, isSttSessionRunning, voiceTalkConnected, voiceTalkListenOnly])
+  // A new call starts with the mic on.
+  useEffect(() => {
+    if (!voiceTalkState.joined) setVoiceTalkListenOnly(false)
+  }, [voiceTalkState.joined])
   // Stopping STT by hand during a call: the call no longer owns that session.
   const voiceTalkSttWasBusyRef = useRef(false)
   useEffect(() => {
@@ -8077,6 +8093,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             topOffset="calc(54px + env(safe-area-inset-top, 0px))"
             onAvailabilityChange={handleVoiceTalkAvailability}
             openSignal={voiceTalkOpenSignal}
+            leaveSignal={voiceTalkLeaveSignal}
+            listenOnly={voiceTalkListenOnly}
+            onListenOnlyChange={setVoiceTalkListenOnly}
           />
         ) : null}
 
@@ -10289,7 +10308,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <VoiceTalkButton
                         uiLocale={uiLocale}
                         active={voiceTalkState.live || voiceTalkState.joined}
-                        onPress={() => setVoiceTalkOpenSignal((n) => n + 1)}
+                        onPress={() => {
+                          // During a call the button asks to leave; otherwise it shows the panel.
+                          if (resolveVoiceTalkButtonPress(voiceTalkState) === 'confirm_leave') {
+                            setVoiceTalkLeaveSignal((n) => n + 1)
+                          } else {
+                            setVoiceTalkOpenSignal((n) => n + 1)
+                          }
+                        }}
                         sizePx={VOICE_MODE_SIDE_BUTTON_SIZE_PX}
                       />
                     ) : null}

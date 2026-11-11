@@ -19,6 +19,7 @@ describe('voice talk button in the bottom bar', () => {
     expect(voiceBar).toContain('<VoiceTalkButton')
     expect(voiceBar).toContain("headerMode === 'conversation' && conversationId && voiceTalkAvailable")
     expect(voiceBar).toContain('setVoiceTalkOpenSignal((n) => n + 1)')
+    expect(voiceBar).toContain('setVoiceTalkLeaveSignal((n) => n + 1)')
     expect(voiceBar).not.toContain('storedMessageCountLabel')
     expect(voiceBar).not.toContain('formatLivePhoneDemoUsageDuration')
   })
@@ -60,9 +61,10 @@ describe('voice talk and STT share one mic', () => {
     expect(block).toContain('if (voiceTalkStartedSttRef.current && isSttSessionRunning) void handleStopRecording()')
   })
 
-  it('drives the call mic from the STT session state', () => {
+  it('drives the call mic from the STT session state and the listen-only switch', () => {
     const block = between(liveDemoSource, 'const voiceTalkConnected = voiceTalkState.connected', 'const confirmScreenCaptureNotice')
-    expect(block).toContain('setVoiceTalkMic(isSttSessionRunning || isPreparingStart || startPreparationInFlightRef.current)')
+    expect(block).toContain('sttBusy: isSttSessionRunning || isPreparingStart || startPreparationInFlightRef.current,')
+    expect(block).toContain('listenOnly: voiceTalkListenOnly,')
   })
 })
 
