@@ -100,8 +100,8 @@ describe('voice controller LiveKit wiring', () => {
     expect(trJa.isSubscribed).toBe(true);
     expect(trEn.isSubscribed).toBe(false);
 
-    // Volume: ko human ducked to static 0.25, agent lane at 1.0.
-    expect(humanPub.track!.setVolume).toHaveBeenCalledWith(0.25);
+    // Volume: the ko human stays full while nothing is read aloud, agent lane at 1.0.
+    expect(humanPub.track!.setVolume).toHaveBeenCalledWith(1);
     expect(trJa.track!.setVolume).toHaveBeenCalledWith(1);
 
     const snap = controller.getSnapshot();
