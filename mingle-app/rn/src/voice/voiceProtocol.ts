@@ -140,7 +140,7 @@ export function volumeForTrack(participant: VoiceParticipantView, state: VolumeS
 }
 
 /** Android's call audio is much louder than iOS's at the same system volume. */
-export const ANDROID_CALL_VOLUME = 0.45;
+export const ANDROID_CALL_VOLUME = 0.2;
 
 /** The call volume a phone starts at, before the system volume buttons. */
 export function defaultCallVolume(os: string): number {

@@ -190,7 +190,7 @@ describe('call volume', () => {
   });
 
   it('starts Android turned down and leaves iOS at full', () => {
-    expect(defaultCallVolume('android')).toBeLessThan(0.6);
+    expect(defaultCallVolume('android')).toBeLessThan(0.3);
     expect(defaultCallVolume('ios')).toBe(1);
   });
 });
