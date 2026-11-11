@@ -47,6 +47,8 @@ export type VoiceSetCommand = {
     interpret?: boolean;
     mode?: 'static' | 'dynamic';
     origVol?: number;
+    /** The viewer's volume for the whole call (0..1). */
+    volume?: number;
   };
 };
 
@@ -102,6 +104,9 @@ export function parseVoiceBridgeCommand(parsed: unknown): VoiceBridgeCommand | n
     if (payload.mode === 'static' || payload.mode === 'dynamic') out.mode = payload.mode;
     if (typeof payload.origVol === 'number' && Number.isFinite(payload.origVol)) {
       out.origVol = Math.max(0, Math.min(1, payload.origVol));
+    }
+    if (typeof payload.volume === 'number' && Number.isFinite(payload.volume)) {
+      out.volume = Math.max(0, Math.min(1, payload.volume));
     }
     if (Object.keys(out).length === 0) return null;
     return { type: 'native_voice_set', payload: out };

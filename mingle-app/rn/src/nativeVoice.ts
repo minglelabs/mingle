@@ -157,6 +157,7 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     mode: 'static' as InterpretVolumeMode,
     origVol: DUCK_ORIG_STATIC,
     trVol: 1,
+    callVol: 1,
     lanePlaying: false,
     maxParticipants: DEFAULT_MAX,
     apiParticipants: [] as VoiceParticipant[],
@@ -180,6 +181,7 @@ export function createVoiceController(deps: VoiceControllerDeps) {
       trVol: state.trVol,
       lanePlaying: state.lanePlaying,
       readingAloud: state.readingAloud,
+      callVol: state.callVol,
     };
   }
 
@@ -336,6 +338,13 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     emit();
   }
 
+  /** The viewer's own volume for every voice in the call (0..1). */
+  function setCallVol(fraction: number): void {
+    state.callVol = clampVolumeFraction(fraction);
+    applyVolumes();
+    emit();
+  }
+
   function setOrigVol(fraction: number): void {
     state.origVol = clampVolumeFraction(fraction);
     applyVolumes();
@@ -438,6 +447,7 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     setMicOn,
     setMode,
     setOrigVol,
+    setCallVol,
     setTrVol,
     setReadingAloud,
     getSnapshot,

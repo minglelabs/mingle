@@ -176,3 +176,15 @@ describe('caption store', () => {
     expect(lines.map((l) => l.id)).toEqual(['f4', 'f3', 'f2']);
   });
 });
+
+describe('call volume', () => {
+  it('scales every voice by the viewer\'s call volume, down to silence', () => {
+    const speaker = { identity: 'u1', attributes: { lang: 'ko' } };
+    const base = { interpretOn: false, myLang: 'ja', mode: 'static' as const, origVol: 0.25, trVol: 1, lanePlaying: false };
+    expect(volumeForTrack(speaker, base)).toBe(1);
+    expect(volumeForTrack(speaker, { ...base, callVol: 0.4 })).toBeCloseTo(0.4);
+    expect(volumeForTrack(speaker, { ...base, callVol: 0.4, readingAloud: true })).toBeCloseTo(0.1);
+    expect(volumeForTrack(speaker, { ...base, callVol: 0 })).toBe(0);
+    expect(volumeForTrack(speaker, { ...base, callVol: 3 })).toBe(1);
+  });
+});

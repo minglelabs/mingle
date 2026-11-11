@@ -112,6 +112,12 @@ export type VolumeState = {
   duckLow?: number;
   /** The room's speaker / earphone mode is reading a translation aloud. */
   readingAloud?: boolean;
+  /**
+   * The viewer's own volume for the call (0..1, default 1), on top of
+   * everything else: the phone's lowest system volume in a call is still
+   * loud on the speaker.
+   */
+  callVol?: number;
 };
 
 /** Volume for a HUMAN speaker's original-audio track. */
@@ -129,7 +135,8 @@ export function originalVolume(participant: VoiceParticipantView, state: VolumeS
 
 /** Volume for any audio track, dispatching interpreter vs. human. */
 export function volumeForTrack(participant: VoiceParticipantView, state: VolumeState): number {
-  return isInterpreterParticipant(participant) ? state.trVol : originalVolume(participant, state);
+  const base = isInterpreterParticipant(participant) ? state.trVol : originalVolume(participant, state);
+  return base * clampVolumeFraction(state.callVol ?? 1);
 }
 
 export function clampVolumeFraction(raw: number): number {
