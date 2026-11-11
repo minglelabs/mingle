@@ -20,6 +20,10 @@ import ProfileLanguageLevels from "@/components/profile-language-levels";
 import { sanitizeInterestLanguages } from "@/lib/interest-languages";
 import ProfileShareScreen from "@/components/profile-share-screen";
 import SlideSurface from "@/components/slide-surface";
+import CoinGiftSheet from "@/components/coins/coin-gift-sheet";
+import HashSeedIcon from "@/components/coins/hash-seed-icon";
+import { getCoinCopy } from "@/i18n/coin-copy";
+import { isCoinBillingActive, useCoinWallet } from "@/lib/coin-wallet-client";
 import ProfileLocation from "@/components/profile-location";
 import ProfilePostGrid from "@/components/search/profile-post-grid";
 import AccountBadge from "@/components/posts/account-badge";
@@ -234,6 +238,9 @@ export default function PublicUserProfileScreen({
   const [reportDuplicate, setReportDuplicate] = useState(false);
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
   const [showProfileShare, setShowProfileShare] = useState(false);
+  const [giftOpen, setGiftOpen] = useState(false);
+  // Hash UI exists only while billing is enforced for the viewer.
+  const coinBillingActive = isCoinBillingActive(useCoinWallet().wallet);
   const [existingConversation, setExistingConversation] = useState<ConversationChannelSummary | null>(null);
   const copy = useMemo(() => getCopy(dictionary, locale), [dictionary, locale]);
   const conversationCopy = useMemo(() => getConversationDictionary(locale, dictionary), [dictionary, locale]);
@@ -699,6 +706,16 @@ export default function PublicUserProfileScreen({
                 </button>
               </div>
 
+              {!isOwnProfile && coinBillingActive && !profile.isBlocked ? (
+                <button
+                  type="button"
+                  onClick={() => setGiftOpen(true)}
+                  className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 text-[13px] font-semibold text-amber-800 transition active:bg-amber-100"
+                >
+                  <HashSeedIcon size={17} />
+                  {getCoinCopy(locale).gift}
+                </button>
+              ) : null}
               {!isOwnProfile ? (
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button
@@ -829,6 +846,15 @@ export default function PublicUserProfileScreen({
         />
       ) : null}
       </SlideSurface>
+      {profile && !isOwnProfile ? (
+        <CoinGiftSheet
+          open={open && giftOpen}
+          onClose={() => setGiftOpen(false)}
+          recipientId={profile.id}
+          recipientName={name}
+          locale={locale}
+        />
+      ) : null}
       <ProfileShareScreen
         dictionary={dictionary}
         locale={locale}

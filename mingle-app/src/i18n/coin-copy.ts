@@ -4,7 +4,7 @@ import { resolvePrimaryUiLocale, type PrimaryUiLocale } from "@/i18n/mingle-loca
 // Copy for coins, shown to users as "Hash" (Korean "해씨", other languages
 // the word "hash" in their own script): balance chip, store, "out of coins" sheet, banners and the
 // usage screen (docs/coin-iap-spec.md 9). Placeholders: {free} {paid} {cap}
-// {time} {minutes} {coins} {stt} {tts}.
+// {time} {minutes} {coins} {stt} {tts} {name} {fee}.
 export type CoinCopy = {
   coin: string;
   storeTitle: string;
@@ -54,6 +54,18 @@ export type CoinCopy = {
   // Room participants list: Hash each member has spent in this room.
   roomUsageTitle: string;
   roomUsed: string;
+  // Gifting purchased Hash from another user's profile.
+  gift: string;
+  giftTitle: string;
+  giftAmountLabel: string;
+  giftAvailable: string;
+  giftRule: string;
+  giftFeeNotice: string;
+  giftNotEnough: string;
+  giftSuccess: string;
+  giftFailed: string;
+  sourceGiftReceived: string;
+  sourceGiftSent: string;
 };
 
 const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
@@ -72,6 +84,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "내역", sourceDailyFree: "무료 충전", sourcePurchase: "구매", sourceAdmin: "운영자 지급", sourceBonus: "보너스",
     sourceRefund: "환불", sourceExpired: "만료", conversationFallback: "대화", noHistory: "아직 내역이 없어요", loadMore: "더 보기",
     roomUsageTitle: "이 대화방에서 쓴 해씨", roomUsed: "{coins} 사용",
+    gift: "선물하기", giftTitle: "{name}님에게 해씨 선물하기", giftAmountLabel: "선물할 해씨", giftAvailable: "선물 가능 {coins}", giftRule: "구매한 해씨만 선물할 수 있어요. 무료로 받은 해씨는 선물할 수 없어요.",
+    giftFeeNotice: "수수료 {fee}%를 뺀 {coins}해씨가 전달돼요", giftNotEnough: "선물할 수 있는 해씨가 부족해요", giftSuccess: "{name}님에게 해씨 {coins}개를 선물했어요", giftFailed: "선물을 보내지 못했어요", sourceGiftReceived: "선물 받음", sourceGiftSent: "선물 보냄",
   },
   en: {
     coin: "Hash", storeTitle: "Hash Store", balanceLabel: "Your Hash", freePaid: "Free {free} · Purchased {paid}",
@@ -88,6 +102,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "History", sourceDailyFree: "Free top-up", sourcePurchase: "Purchase", sourceAdmin: "From HashChat", sourceBonus: "Bonus",
     sourceRefund: "Refund", sourceExpired: "Expired", conversationFallback: "Conversation", noHistory: "No history yet", loadMore: "Show more",
     roomUsageTitle: "Hash used in this chat", roomUsed: "{coins} used",
+    gift: "Send a gift", giftTitle: "Gift Hash to {name}", giftAmountLabel: "Hash to gift", giftAvailable: "Giftable: {coins}", giftRule: "Only Hash you purchased can be gifted. Free Hash cannot be gifted.",
+    giftFeeNotice: "After a {fee}% fee, {coins} Hash will be delivered", giftNotEnough: "You don't have enough giftable Hash", giftSuccess: "You gifted {coins} Hash to {name}", giftFailed: "The gift could not be sent", sourceGiftReceived: "Gift received", sourceGiftSent: "Gift sent",
   },
   ja: {
     coin: "ハッシュ", storeTitle: "ハッシュストア", balanceLabel: "保有ハッシュ", freePaid: "無料 {free} · 購入 {paid}",
@@ -104,6 +120,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "履歴", sourceDailyFree: "無料チャージ", sourcePurchase: "購入", sourceAdmin: "運営からの付与", sourceBonus: "ボーナス",
     sourceRefund: "返金", sourceExpired: "期限切れ", conversationFallback: "会話", noHistory: "履歴はまだありません", loadMore: "もっと見る",
     roomUsageTitle: "このトークで使ったハッシュ", roomUsed: "{coins} 使用",
+    gift: "ギフトを贈る", giftTitle: "{name}さんにハッシュを贈る", giftAmountLabel: "贈るハッシュ", giftAvailable: "贈れるハッシュ {coins}", giftRule: "購入したハッシュのみ贈れます。無料でもらったハッシュは贈れません。",
+    giftFeeNotice: "手数料{fee}%を差し引いた{coins}ハッシュが届きます", giftNotEnough: "贈れるハッシュが足りません", giftSuccess: "{name}さんにハッシュを{coins}個贈りました", giftFailed: "ギフトを送信できませんでした", sourceGiftReceived: "ギフト受け取り", sourceGiftSent: "ギフト送信",
   },
   "zh-CN": {
     coin: "哈希", storeTitle: "哈希商店", balanceLabel: "持有哈希", freePaid: "免费 {free} · 充值 {paid}",
@@ -120,6 +138,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "记录", sourceDailyFree: "免费补充", sourcePurchase: "购买", sourceAdmin: "官方赠送", sourceBonus: "奖励",
     sourceRefund: "退款", sourceExpired: "已过期", conversationFallback: "对话", noHistory: "暂无记录", loadMore: "查看更多",
     roomUsageTitle: "本聊天已用哈希", roomUsed: "已用 {coins}",
+    gift: "赠送", giftTitle: "向{name}赠送哈希", giftAmountLabel: "赠送数量", giftAvailable: "可赠送 {coins}", giftRule: "只能赠送购买的哈希，免费获得的哈希无法赠送。",
+    giftFeeNotice: "扣除 {fee}% 手续费后，对方将收到 {coins} 哈希", giftNotEnough: "可赠送的哈希不足", giftSuccess: "已向{name}赠送 {coins} 哈希", giftFailed: "赠送失败", sourceGiftReceived: "收到赠送", sourceGiftSent: "已赠送",
   },
   "zh-TW": {
     coin: "哈希", storeTitle: "哈希商店", balanceLabel: "持有哈希", freePaid: "免費 {free} · 儲值 {paid}",
@@ -136,6 +156,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "紀錄", sourceDailyFree: "免費補充", sourcePurchase: "購買", sourceAdmin: "官方贈送", sourceBonus: "獎勵",
     sourceRefund: "退款", sourceExpired: "已過期", conversationFallback: "對話", noHistory: "尚無紀錄", loadMore: "查看更多",
     roomUsageTitle: "本聊天已用哈希", roomUsed: "已用 {coins}",
+    gift: "贈送", giftTitle: "向{name}贈送哈希", giftAmountLabel: "贈送數量", giftAvailable: "可贈送 {coins}", giftRule: "只能贈送購買的哈希，免費獲得的哈希無法贈送。",
+    giftFeeNotice: "扣除 {fee}% 手續費後，對方將收到 {coins} 哈希", giftNotEnough: "可贈送的哈希不足", giftSuccess: "已向{name}贈送 {coins} 哈希", giftFailed: "贈送失敗", sourceGiftReceived: "收到贈送", sourceGiftSent: "已贈送",
   },
   fr: {
     coin: "Hash", storeTitle: "Boutique Hash", balanceLabel: "Vos Hash", freePaid: "Gratuits {free} · Achetés {paid}",
@@ -152,6 +174,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Historique", sourceDailyFree: "Recharge gratuite", sourcePurchase: "Achat", sourceAdmin: "Offert par HashChat", sourceBonus: "Bonus",
     sourceRefund: "Remboursement", sourceExpired: "Expiré", conversationFallback: "Conversation", noHistory: "Aucun historique", loadMore: "Voir plus",
     roomUsageTitle: "Hash utilisés dans cette discussion", roomUsed: "{coins} utilisés",
+    gift: "Offrir", giftTitle: "Offrir des Hash à {name}", giftAmountLabel: "Hash à offrir", giftAvailable: "Offrables : {coins}", giftRule: "Seuls les Hash achetés peuvent être offerts. Les Hash gratuits ne peuvent pas l'être.",
+    giftFeeNotice: "Après {fee} % de frais, {coins} Hash seront remis", giftNotEnough: "Vous n'avez pas assez de Hash offrables", giftSuccess: "Vous avez offert {coins} Hash à {name}", giftFailed: "Le cadeau n'a pas pu être envoyé", sourceGiftReceived: "Cadeau reçu", sourceGiftSent: "Cadeau envoyé",
   },
   de: {
     coin: "Hash", storeTitle: "Hash-Shop", balanceLabel: "Deine Hash", freePaid: "Gratis {free} · Gekauft {paid}",
@@ -168,6 +192,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Verlauf", sourceDailyFree: "Gratis-Auffüllung", sourcePurchase: "Kauf", sourceAdmin: "Von HashChat", sourceBonus: "Bonus",
     sourceRefund: "Erstattung", sourceExpired: "Abgelaufen", conversationFallback: "Unterhaltung", noHistory: "Noch kein Verlauf", loadMore: "Mehr anzeigen",
     roomUsageTitle: "In diesem Chat verbrauchte Hash", roomUsed: "{coins} verbraucht",
+    gift: "Verschenken", giftTitle: "Hash an {name} verschenken", giftAmountLabel: "Hash zum Verschenken", giftAvailable: "Verschenkbar: {coins}", giftRule: "Nur gekaufte Hash können verschenkt werden. Kostenlose Hash nicht.",
+    giftFeeNotice: "Nach {fee} % Gebühr kommen {coins} Hash an", giftNotEnough: "Du hast nicht genug verschenkbare Hash", giftSuccess: "Du hast {name} {coins} Hash geschenkt", giftFailed: "Das Geschenk konnte nicht gesendet werden", sourceGiftReceived: "Geschenk erhalten", sourceGiftSent: "Geschenk gesendet",
   },
   es: {
     coin: "Hash", storeTitle: "Tienda de Hash", balanceLabel: "Tus Hash", freePaid: "Gratis {free} · Comprados {paid}",
@@ -184,6 +210,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Historial", sourceDailyFree: "Recarga gratis", sourcePurchase: "Compra", sourceAdmin: "Regalo de HashChat", sourceBonus: "Bono",
     sourceRefund: "Reembolso", sourceExpired: "Caducado", conversationFallback: "Conversación", noHistory: "Aún no hay historial", loadMore: "Ver más",
     roomUsageTitle: "Hash usados en este chat", roomUsed: "{coins} usados",
+    gift: "Regalar", giftTitle: "Regalar Hash a {name}", giftAmountLabel: "Hash para regalar", giftAvailable: "Regalables: {coins}", giftRule: "Solo puedes regalar Hash comprados. Los Hash gratuitos no se pueden regalar.",
+    giftFeeNotice: "Tras una comisión del {fee} %, se entregarán {coins} Hash", giftNotEnough: "No tienes suficientes Hash regalables", giftSuccess: "Regalaste {coins} Hash a {name}", giftFailed: "No se pudo enviar el regalo", sourceGiftReceived: "Regalo recibido", sourceGiftSent: "Regalo enviado",
   },
   pt: {
     coin: "Hash", storeTitle: "Loja de Hash", balanceLabel: "Seus Hash", freePaid: "Grátis {free} · Comprados {paid}",
@@ -200,6 +228,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Histórico", sourceDailyFree: "Recarga grátis", sourcePurchase: "Compra", sourceAdmin: "Presente do HashChat", sourceBonus: "Bônus",
     sourceRefund: "Reembolso", sourceExpired: "Expirado", conversationFallback: "Conversa", noHistory: "Ainda não há histórico", loadMore: "Ver mais",
     roomUsageTitle: "Hash usados nesta conversa", roomUsed: "{coins} usados",
+    gift: "Presentear", giftTitle: "Presentear {name} com Hash", giftAmountLabel: "Hash para presentear", giftAvailable: "Disponível para presente: {coins}", giftRule: "Só é possível presentear Hash comprados. Hash gratuitos não podem ser presenteados.",
+    giftFeeNotice: "Após a taxa de {fee}%, {coins} Hash serão entregues", giftNotEnough: "Você não tem Hash suficientes para presentear", giftSuccess: "Você presenteou {name} com {coins} Hash", giftFailed: "Não foi possível enviar o presente", sourceGiftReceived: "Presente recebido", sourceGiftSent: "Presente enviado",
   },
   it: {
     coin: "Hash", storeTitle: "Negozio Hash", balanceLabel: "I tuoi Hash", freePaid: "Gratis {free} · Acquistati {paid}",
@@ -216,6 +246,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Cronologia", sourceDailyFree: "Ricarica gratis", sourcePurchase: "Acquisto", sourceAdmin: "Regalo di HashChat", sourceBonus: "Bonus",
     sourceRefund: "Rimborso", sourceExpired: "Scaduto", conversationFallback: "Conversazione", noHistory: "Nessuna cronologia", loadMore: "Mostra altro",
     roomUsageTitle: "Hash usati in questa chat", roomUsed: "{coins} usati",
+    gift: "Regala", giftTitle: "Regala Hash a {name}", giftAmountLabel: "Hash da regalare", giftAvailable: "Regalabili: {coins}", giftRule: "Puoi regalare solo gli Hash acquistati. Gli Hash gratuiti non si possono regalare.",
+    giftFeeNotice: "Dopo una commissione del {fee}%, verranno consegnati {coins} Hash", giftNotEnough: "Non hai abbastanza Hash regalabili", giftSuccess: "Hai regalato {coins} Hash a {name}", giftFailed: "Impossibile inviare il regalo", sourceGiftReceived: "Regalo ricevuto", sourceGiftSent: "Regalo inviato",
   },
   ru: {
     coin: "Хэш", storeTitle: "Магазин Хэш", balanceLabel: "Ваш Хэш", freePaid: "Бесплатно {free} · Куплено {paid}",
@@ -232,6 +264,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "История", sourceDailyFree: "Бесплатное пополнение", sourcePurchase: "Покупка", sourceAdmin: "Подарок от HashChat", sourceBonus: "Бонус",
     sourceRefund: "Возврат", sourceExpired: "Истекло", conversationFallback: "Разговор", noHistory: "Истории пока нет", loadMore: "Показать ещё",
     roomUsageTitle: "Хэш, потраченный в этом чате", roomUsed: "Потрачено {coins}",
+    gift: "Подарить", giftTitle: "Подарить Хэш: {name}", giftAmountLabel: "Сколько подарить", giftAvailable: "Доступно для подарка: {coins}", giftRule: "Дарить можно только купленный Хэш. Бесплатный Хэш подарить нельзя.",
+    giftFeeNotice: "За вычетом комиссии {fee}% будет доставлено {coins} Хэш", giftNotEnough: "Недостаточно Хэша для подарка", giftSuccess: "Вы подарили {coins} Хэш: {name}", giftFailed: "Не удалось отправить подарок", sourceGiftReceived: "Получен подарок", sourceGiftSent: "Отправлен подарок",
   },
   ar: {
     coin: "هاش", storeTitle: "متجر هاش", balanceLabel: "رصيدك من هاش", freePaid: "مجاني {free} · مشترى {paid}",
@@ -248,6 +282,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "السجل", sourceDailyFree: "تعبئة مجانية", sourcePurchase: "شراء", sourceAdmin: "هدية من HashChat", sourceBonus: "مكافأة",
     sourceRefund: "استرداد", sourceExpired: "منتهية", conversationFallback: "محادثة", noHistory: "لا يوجد سجل بعد", loadMore: "عرض المزيد",
     roomUsageTitle: "هاش المستخدم في هذه المحادثة", roomUsed: "استخدم {coins}",
+    gift: "إهداء", giftTitle: "إهداء هاش إلى {name}", giftAmountLabel: "الهاش المراد إهداؤه", giftAvailable: "المتاح للإهداء: {coins}", giftRule: "يمكن إهداء الهاش الذي اشتريته فقط. لا يمكن إهداء الهاش المجاني.",
+    giftFeeNotice: "بعد خصم رسوم {fee}٪ سيصل {coins} هاش", giftNotEnough: "ليس لديك هاش كافٍ للإهداء", giftSuccess: "أهديت {coins} هاش إلى {name}", giftFailed: "تعذر إرسال الهدية", sourceGiftReceived: "هدية مستلمة", sourceGiftSent: "هدية مرسلة",
   },
   hi: {
     coin: "हैश", storeTitle: "हैश स्टोर", balanceLabel: "आपके हैश", freePaid: "मुफ़्त {free} · खरीदे गए {paid}",
@@ -264,6 +300,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "इतिहास", sourceDailyFree: "मुफ़्त रीफ़िल", sourcePurchase: "खरीदारी", sourceAdmin: "HashChat की ओर से", sourceBonus: "बोनस",
     sourceRefund: "रिफ़ंड", sourceExpired: "समाप्त", conversationFallback: "बातचीत", noHistory: "अभी कोई इतिहास नहीं", loadMore: "और देखें",
     roomUsageTitle: "इस चैट में इस्तेमाल हुए हैश", roomUsed: "{coins} इस्तेमाल",
+    gift: "उपहार दें", giftTitle: "{name} को हैश उपहार दें", giftAmountLabel: "उपहार में देने वाले हैश", giftAvailable: "उपहार योग्य: {coins}", giftRule: "केवल खरीदे गए हैश उपहार में दिए जा सकते हैं। मुफ़्त हैश उपहार में नहीं दिए जा सकते।",
+    giftFeeNotice: "{fee}% शुल्क के बाद {coins} हैश पहुँचेंगे", giftNotEnough: "उपहार देने के लिए पर्याप्त हैश नहीं हैं", giftSuccess: "आपने {name} को {coins} हैश उपहार में दिए", giftFailed: "उपहार नहीं भेजा जा सका", sourceGiftReceived: "उपहार मिला", sourceGiftSent: "उपहार भेजा",
   },
   th: {
     coin: "แฮช", storeTitle: "ร้านแฮช", balanceLabel: "แฮชของคุณ", freePaid: "ฟรี {free} · ซื้อ {paid}",
@@ -280,6 +318,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "ประวัติ", sourceDailyFree: "เติมฟรี", sourcePurchase: "ซื้อ", sourceAdmin: "จาก HashChat", sourceBonus: "โบนัส",
     sourceRefund: "คืนเงิน", sourceExpired: "หมดอายุ", conversationFallback: "การสนทนา", noHistory: "ยังไม่มีประวัติ", loadMore: "ดูเพิ่มเติม",
     roomUsageTitle: "แฮชที่ใช้ในแชทนี้", roomUsed: "ใช้ไป {coins}",
+    gift: "ส่งของขวัญ", giftTitle: "ส่งแฮชเป็นของขวัญให้ {name}", giftAmountLabel: "จำนวนแฮชที่จะส่ง", giftAvailable: "ส่งเป็นของขวัญได้ {coins}", giftRule: "ส่งเป็นของขวัญได้เฉพาะแฮชที่ซื้อเท่านั้น แฮชที่ได้รับฟรีส่งไม่ได้",
+    giftFeeNotice: "หลังหักค่าธรรมเนียม {fee}% ผู้รับจะได้ {coins} แฮช", giftNotEnough: "แฮชที่ส่งเป็นของขวัญได้มีไม่พอ", giftSuccess: "คุณส่ง {coins} แฮชให้ {name} แล้ว", giftFailed: "ส่งของขวัญไม่สำเร็จ", sourceGiftReceived: "ได้รับของขวัญ", sourceGiftSent: "ส่งของขวัญ",
   },
   vi: {
     coin: "Hash", storeTitle: "Cửa hàng Hash", balanceLabel: "Hash của bạn", freePaid: "Miễn phí {free} · Đã mua {paid}",
@@ -296,6 +336,8 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Lịch sử", sourceDailyFree: "Nạp miễn phí", sourcePurchase: "Mua", sourceAdmin: "HashChat tặng", sourceBonus: "Thưởng",
     sourceRefund: "Hoàn tiền", sourceExpired: "Hết hạn", conversationFallback: "Cuộc trò chuyện", noHistory: "Chưa có lịch sử", loadMore: "Xem thêm",
     roomUsageTitle: "Hash đã dùng trong cuộc trò chuyện này", roomUsed: "Đã dùng {coins}",
+    gift: "Tặng quà", giftTitle: "Tặng Hash cho {name}", giftAmountLabel: "Số Hash muốn tặng", giftAvailable: "Có thể tặng: {coins}", giftRule: "Chỉ có thể tặng Hash đã mua. Hash miễn phí không thể tặng.",
+    giftFeeNotice: "Sau khi trừ phí {fee}%, {coins} Hash sẽ được gửi đi", giftNotEnough: "Bạn không đủ Hash có thể tặng", giftSuccess: "Bạn đã tặng {coins} Hash cho {name}", giftFailed: "Không gửi được quà", sourceGiftReceived: "Nhận quà", sourceGiftSent: "Đã tặng quà",
   },
 };
 

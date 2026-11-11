@@ -25,6 +25,7 @@ import { getCoinHistory, getCoinUsageSummary, getConversationCoinUsage, normaliz
 import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingToken } from '@/server/coins/stt-token'
 import { canSpendCoins, chargeCoinUsage, disabledCoinWallet, getCoinWallet } from '@/server/coins/wallet'
 import { resolveCoinBillingMode, resolveUserCoinBillingMode } from '@/server/coins/config'
+import { CoinGiftError, getCoinGiftInfo, sendCoinGift } from '@/server/coins/gifts'
 import { prisma } from '@/lib/prisma'
 import { parseApiNamespaceVersion } from '@/lib/api-namespace-version'
 
@@ -141,6 +142,43 @@ export async function createCoinPurchase(request: NextRequest) {
     }
     console.error('[coins] purchase failed', error instanceof Error ? error.message : 'unknown')
     return json({ error: 'purchase_failed' }, 500)
+  }
+}
+
+/** GET /users/:id/gift — how much the caller can gift (purchased Hash only) and the fee. */
+export async function readCoinGiftInfo() {
+  const userId = await readSessionUserId()
+  if (!userId) return json({ error: 'unauthorized' }, 401)
+  if (resolveUserCoinBillingMode(userId) !== 'enforce') return json({ error: 'gift_unavailable' }, 400)
+  return json(await getCoinGiftInfo(userId))
+}
+
+const GIFT_ERROR_STATUS: Record<CoinGiftError['code'], number> = {
+  gift_invalid_amount: 400,
+  gift_self: 400,
+  gift_recipient_unavailable: 404,
+  gift_insufficient_paid_balance: 409,
+}
+
+/** POST /users/:id/gift { coins, idempotencyKey } — gifts purchased Hash; the fee comes out of the amount. */
+export async function createCoinGift(request: NextRequest, recipientId: string) {
+  const userId = await readSessionUserId()
+  if (!userId) return json({ error: 'unauthorized' }, 401)
+  if (resolveUserCoinBillingMode(userId) !== 'enforce') return json({ error: 'gift_unavailable' }, 400)
+  const body = await request.json().catch((): Record<string, unknown> => ({}))
+  try {
+    return json(await sendCoinGift({
+      senderId: userId,
+      recipientId: recipientId.trim(),
+      coins: typeof body.coins === 'number' ? body.coins : Number.NaN,
+      idempotencyKey: typeof body.idempotencyKey === 'string' ? body.idempotencyKey.trim().slice(0, 100) : '',
+    }))
+  } catch (error) {
+    if (error instanceof CoinGiftError) {
+      return json({ error: error.code, ...(error.giftableCoins === undefined ? {} : { giftableCoins: error.giftableCoins }) }, GIFT_ERROR_STATUS[error.code])
+    }
+    console.error('[coins] gift failed', error instanceof Error ? error.message : 'unknown')
+    return json({ error: 'gift_failed' }, 500)
   }
 }
 
