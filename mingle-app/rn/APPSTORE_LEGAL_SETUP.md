@@ -21,19 +21,19 @@ Files:
 
 Use your production domain:
 
-- `https://translator.minglelabs.app`
+- `https://hashchat.minglelabs.app`
 
 Recommended values:
 
-- Privacy Policy URL: `https://translator.minglelabs.app/legal/privacy-policy.html`
-- Terms of Use URL: `https://translator.minglelabs.app/legal/terms-of-use.html`
-- Support URL (if same site): `https://translator.minglelabs.app/`
+- Privacy Policy URL: `https://hashchat.minglelabs.app/legal/privacy-policy.html`
+- Terms of Use URL: `https://hashchat.minglelabs.app/legal/terms-of-use.html`
+- Support URL (if same site): `https://hashchat.minglelabs.app/`
 
 Locale examples:
 
-- Korean Privacy: `https://translator.minglelabs.app/legal/ko/privacy-policy.html`
-- Japanese Terms: `https://translator.minglelabs.app/legal/ja/terms-of-use.html`
-- Simplified Chinese Privacy: `https://translator.minglelabs.app/legal/zh-cn/privacy-policy.html`
+- Korean Privacy: `https://hashchat.minglelabs.app/legal/ko/privacy-policy.html`
+- Japanese Terms: `https://hashchat.minglelabs.app/legal/ja/terms-of-use.html`
+- Simplified Chinese Privacy: `https://hashchat.minglelabs.app/legal/zh-cn/privacy-policy.html`
 
 ## 3) App Store Connect input mapping
 
