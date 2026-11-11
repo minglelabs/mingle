@@ -83,7 +83,7 @@ export default function InviteTicketSheet({ open, onClose, locale }: InviteTicke
   const message = useMemo(() => {
     if (!ticket || typeof window === "undefined") return "";
     const link = buildInviteLinkUrl(window.location.origin, ticket.code);
-    return link ? buildInviteTicketMessage(locale, link) : "";
+    return link ? buildInviteTicketMessage(locale, link, ticket.code) : "";
   }, [locale, ticket]);
 
   const handleCopy = useCallback(async () => {

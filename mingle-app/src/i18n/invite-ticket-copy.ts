@@ -27,6 +27,10 @@ export type InviteTicketCopy = {
   userFallback: string;
   /** What the sender pastes into a messenger, written in the first person. The link is added after it. */
   message: string;
+  /** Pasted under the link: the code, for typing in if the link does not carry it. */
+  codeLine: string;
+  /** Pasted under the link: a link tapped before install is lost, so tap it again after. */
+  reopenHint: string;
 };
 
 const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = {
@@ -42,6 +46,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "사용할 수 없는 초대권이에요", invalidBody: "링크를 다시 확인하거나 친구에게 새 초대권을 부탁해 보세요.",
     joinedToast: "{name}님의 초대권으로 들어왔어요", userFallback: "HashChat 친구",
     message: "HashChat에서 같이 얘기하자! 🎟️ 내 초대권이야. 각자 자기 말로 써도 바로 번역돼.",
+    codeLine: "초대 코드 {code}",
+    reopenHint: "앱을 설치한 뒤 이 링크를 한 번 더 눌러 주세요",
   },
   en: {
     sendTicket: "Send a friend an invite ticket", ticketTitle: "HashChat invite ticket", ticketFrom: "An invite ticket from {name}",
@@ -55,6 +61,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "This invite ticket can't be used", invalidBody: "Check the link again or ask your friend for a new ticket.",
     joinedToast: "You joined with {name}'s invite ticket", userFallback: "A HashChat friend",
     message: "Let's talk on HashChat! 🎟️ Here's my invite ticket. We each write in our own language and it's translated right away.",
+    codeLine: "Invite code {code}",
+    reopenHint: "After installing the app, tap this link once more",
   },
   ja: {
     sendTicket: "友だちに招待券を送る", ticketTitle: "HashChat 招待券", ticketFrom: "{name}さんからの招待券",
@@ -68,6 +76,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "この招待券は使えません", invalidBody: "リンクをもう一度確認するか、友だちに新しい招待券を送ってもらってください。",
     joinedToast: "{name}さんの招待券で参加しました", userFallback: "HashChatの友だち",
     message: "HashChatで話そう!🎟️ 招待券を送るね。お互い自分の言葉で書いてもすぐ翻訳されるよ。",
+    codeLine: "招待コード {code}",
+    reopenHint: "アプリをインストールしたら、このリンクをもう一度タップしてね",
   },
   "zh-CN": {
     sendTicket: "给好友发送邀请券", ticketTitle: "HashChat 邀请券", ticketFrom: "来自 {name} 的邀请券",
@@ -81,6 +91,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "此邀请券无法使用", invalidBody: "请再次确认链接，或请好友重新发送邀请券。",
     joinedToast: "已通过 {name} 的邀请券加入", userFallback: "HashChat 好友",
     message: "来 HashChat 聊天吧！🎟️ 这是我的邀请券。各自用自己的语言写，也会马上翻译。",
+    codeLine: "邀请码 {code}",
+    reopenHint: "安装应用后，请再点一次这个链接",
   },
   "zh-TW": {
     sendTicket: "傳送邀請券給好友", ticketTitle: "HashChat 邀請券", ticketFrom: "來自 {name} 的邀請券",
@@ -94,6 +106,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "這張邀請券無法使用", invalidBody: "請再確認連結，或請好友重新傳送邀請券。",
     joinedToast: "已透過 {name} 的邀請券加入", userFallback: "HashChat 好友",
     message: "來 HashChat 聊天吧！🎟️ 這是我的邀請券。各自用自己的語言寫，也會馬上翻譯。",
+    codeLine: "邀請碼 {code}",
+    reopenHint: "安裝 App 後，請再點一次這個連結",
   },
   fr: {
     sendTicket: "Envoyer un ticket d'invitation à un ami", ticketTitle: "Ticket d'invitation HashChat", ticketFrom: "Un ticket d'invitation de {name}",
@@ -107,6 +121,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "Ce ticket d'invitation est inutilisable", invalidBody: "Vérifiez le lien ou demandez un nouveau ticket à votre ami.",
     joinedToast: "Vous avez rejoint avec le ticket de {name}", userFallback: "Un ami HashChat",
     message: "On discute sur HashChat ? 🎟️ Voici mon ticket d'invitation. Chacun écrit dans sa langue et c'est traduit aussitôt.",
+    codeLine: "Code d'invitation {code}",
+    reopenHint: "Après avoir installé l'appli, touche ce lien encore une fois",
   },
   de: {
     sendTicket: "Einladungsticket an einen Freund senden", ticketTitle: "HashChat-Einladungsticket", ticketFrom: "Ein Einladungsticket von {name}",
@@ -120,6 +136,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "Dieses Einladungsticket ist nicht nutzbar", invalidBody: "Prüfe den Link oder bitte deinen Freund um ein neues Ticket.",
     joinedToast: "Du bist mit dem Ticket von {name} beigetreten", userFallback: "Ein HashChat-Freund",
     message: "Lass uns auf HashChat reden! 🎟️ Hier ist mein Einladungsticket. Jeder schreibt in seiner Sprache und es wird sofort übersetzt.",
+    codeLine: "Einladungscode {code}",
+    reopenHint: "Tippe nach der Installation noch einmal auf diesen Link",
   },
   es: {
     sendTicket: "Enviar un ticket de invitación a un amigo", ticketTitle: "Ticket de invitación de HashChat", ticketFrom: "Un ticket de invitación de {name}",
@@ -133,6 +151,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "Este ticket de invitación no se puede usar", invalidBody: "Revisa el enlace o pide a tu amigo un ticket nuevo.",
     joinedToast: "Has entrado con el ticket de {name}", userFallback: "Un amigo de HashChat",
     message: "¡Hablemos en HashChat! 🎟️ Aquí tienes mi ticket de invitación. Cada uno escribe en su idioma y se traduce al momento.",
+    codeLine: "Código de invitación {code}",
+    reopenHint: "Después de instalar la app, vuelve a tocar este enlace",
   },
   pt: {
     sendTicket: "Enviar um ingresso de convite a um amigo", ticketTitle: "Ingresso de convite do HashChat", ticketFrom: "Um ingresso de convite de {name}",
@@ -146,6 +166,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "Este ingresso de convite não pode ser usado", invalidBody: "Confira o link ou peça um novo ingresso ao seu amigo.",
     joinedToast: "Você entrou com o ingresso de {name}", userFallback: "Um amigo do HashChat",
     message: "Vamos conversar no HashChat! 🎟️ Aqui está meu ingresso de convite. Cada um escreve no seu idioma e é traduzido na hora.",
+    codeLine: "Código de convite {code}",
+    reopenHint: "Depois de instalar o app, toque neste link de novo",
   },
   it: {
     sendTicket: "Invia un biglietto d'invito a un amico", ticketTitle: "Biglietto d'invito HashChat", ticketFrom: "Un biglietto d'invito da {name}",
@@ -159,6 +181,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "Questo biglietto d'invito non è utilizzabile", invalidBody: "Controlla il link o chiedi al tuo amico un nuovo biglietto.",
     joinedToast: "Sei entrato con il biglietto di {name}", userFallback: "Un amico di HashChat",
     message: "Parliamo su HashChat! 🎟️ Ecco il mio biglietto d'invito. Ognuno scrive nella propria lingua e viene tradotto subito.",
+    codeLine: "Codice invito {code}",
+    reopenHint: "Dopo aver installato l'app, tocca di nuovo questo link",
   },
   ru: {
     sendTicket: "Отправить другу пригласительный билет", ticketTitle: "Пригласительный билет HashChat", ticketFrom: "Пригласительный билет от {name}",
@@ -172,6 +196,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "Этот пригласительный билет недействителен", invalidBody: "Проверьте ссылку или попросите у друга новый билет.",
     joinedToast: "Вы вошли по билету от {name}", userFallback: "Друг из HashChat",
     message: "Давай общаться в HashChat! 🎟️ Вот мой пригласительный билет. Каждый пишет на своём языке, и всё сразу переводится.",
+    codeLine: "Код приглашения {code}",
+    reopenHint: "После установки приложения нажми на эту ссылку ещё раз",
   },
   ar: {
     sendTicket: "أرسل تذكرة دعوة إلى صديق", ticketTitle: "تذكرة دعوة HashChat", ticketFrom: "تذكرة دعوة من {name}",
@@ -185,6 +211,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "لا يمكن استخدام تذكرة الدعوة هذه", invalidBody: "تحقق من الرابط أو اطلب من صديقك تذكرة جديدة.",
     joinedToast: "انضممت بتذكرة دعوة {name}", userFallback: "صديق على HashChat",
     message: "لنتحدث على HashChat! 🎟️ هذه تذكرة دعوتي. يكتب كلٌّ منا بلغته وتُترجم الرسائل فورًا.",
+    codeLine: "رمز الدعوة {code}",
+    reopenHint: "بعد تثبيت التطبيق، اضغط على هذا الرابط مرة أخرى",
   },
   hi: {
     sendTicket: "दोस्त को आमंत्रण टिकट भेजें", ticketTitle: "HashChat आमंत्रण टिकट", ticketFrom: "{name} की ओर से आमंत्रण टिकट",
@@ -198,6 +226,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "यह आमंत्रण टिकट इस्तेमाल नहीं हो सकता", invalidBody: "लिंक दोबारा जाँचें या अपने दोस्त से नया टिकट माँगें।",
     joinedToast: "आप {name} के आमंत्रण टिकट से जुड़े", userFallback: "HashChat दोस्त",
     message: "चलो HashChat पर बात करें! 🎟️ यह रहा मेरा आमंत्रण टिकट। दोनों अपनी भाषा में लिखें, तुरंत अनुवाद हो जाता है।",
+    codeLine: "आमंत्रण कोड {code}",
+    reopenHint: "ऐप इंस्टॉल करने के बाद इस लिंक पर एक बार फिर टैप करें",
   },
   th: {
     sendTicket: "ส่งบัตรเชิญให้เพื่อน", ticketTitle: "บัตรเชิญ HashChat", ticketFrom: "บัตรเชิญจาก {name}",
@@ -211,6 +241,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "บัตรเชิญนี้ใช้ไม่ได้", invalidBody: "ตรวจสอบลิงก์อีกครั้ง หรือขอบัตรเชิญใหม่จากเพื่อน",
     joinedToast: "คุณเข้าร่วมด้วยบัตรเชิญของ {name}", userFallback: "เพื่อนใน HashChat",
     message: "มาคุยกันใน HashChat นะ! 🎟️ นี่บัตรเชิญของฉัน ต่างคนต่างพิมพ์ภาษาตัวเองก็แปลให้ทันที",
+    codeLine: "รหัสเชิญ {code}",
+    reopenHint: "ติดตั้งแอปแล้ว แตะลิงก์นี้อีกครั้งนะ",
   },
   vi: {
     sendTicket: "Gửi vé mời cho bạn bè", ticketTitle: "Vé mời HashChat", ticketFrom: "Vé mời từ {name}",
@@ -224,6 +256,8 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     invalidTitle: "Không dùng được vé mời này", invalidBody: "Hãy kiểm tra lại liên kết hoặc nhờ bạn gửi vé mời mới.",
     joinedToast: "Bạn đã tham gia bằng vé mời của {name}", userFallback: "Một người bạn HashChat",
     message: "Nói chuyện trên HashChat nhé! 🎟️ Đây là vé mời của mình. Mỗi người viết tiếng của mình và được dịch ngay.",
+    codeLine: "Mã mời {code}",
+    reopenHint: "Cài ứng dụng xong, hãy bấm lại vào liên kết này",
   },
 };
 
@@ -252,12 +286,32 @@ export function resolveInviteTicketMessageLocales(rawLocale: string): PrimaryUiL
   return locale === "en" ? ["en"] : [locale, "en"];
 }
 
-/** The text copied for a messenger: one short line per language, then the link. */
-export function buildInviteTicketMessage(rawLocale: string, link: string): string {
+/**
+ * The lines pasted under any invite link (ticket, profile, room): the
+ * sender's invite code and a note to tap the link again once the app is
+ * installed, since a link tapped before install does not survive the store.
+ * Written in the same languages as the ticket message.
+ */
+export function buildInviteLinkFooter(rawLocale: string, code: string | null | undefined): string[] {
+  const normalized = (code ?? "").trim();
+  return resolveInviteTicketMessageLocales(rawLocale).map((locale) => {
+    const copy = INVITE_TICKET_COPY_BY_LOCALE[locale];
+    return normalized ? `${copy.codeLine.replaceAll("{code}", normalized)} · ${copy.reopenHint}` : copy.reopenHint;
+  });
+}
+
+/** The text copied for a messenger: one short line per language, the link, then the code and the reopen note. */
+export function buildInviteTicketMessage(rawLocale: string, link: string, code?: string | null): string {
   return [
     ...resolveInviteTicketMessageLocales(rawLocale).map((locale) => INVITE_TICKET_COPY_BY_LOCALE[locale].message),
     link,
+    ...buildInviteLinkFooter(rawLocale, code),
   ].join("\n");
+}
+
+/** A shared profile or room link, with the sender's invite code and the reopen note under it. */
+export function buildInviteSharedLinkMessage(rawLocale: string, link: string, code: string | null | undefined): string {
+  return [link, ...buildInviteLinkFooter(rawLocale, code)].join("\n");
 }
 
 /** Landing-page language from Accept-Language; Japanese when the browser names none we support. */

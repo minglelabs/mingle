@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import SlideSurface from "@/components/slide-surface";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
+import { resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { refreshCoinWallet } from "@/lib/coin-wallet-client";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
@@ -101,13 +102,15 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
 
   const inviteMessage = useMemo(() => {
     if (!referral?.code || typeof window === "undefined") return "";
-    return fillReferralInviteMessage(copy.inviteMessage, {
+    const message = fillReferralInviteMessage(copy.inviteMessage, {
       name: senderName,
       code: referral.code,
       link: buildInviteLinkUrl(window.location.origin, referral.code) || window.location.origin,
       coins: rewardCoins,
     });
-  }, [copy.inviteMessage, referral?.code, rewardCoins, senderName]);
+    // A link tapped before install is lost in the store, so say to tap it again.
+    return `${message}\n${resolveInviteTicketCopy(locale).reopenHint}`;
+  }, [copy.inviteMessage, locale, referral?.code, rewardCoins, senderName]);
 
   const loadContacts = useCallback(() => {
     requestSequenceRef.current += 1;

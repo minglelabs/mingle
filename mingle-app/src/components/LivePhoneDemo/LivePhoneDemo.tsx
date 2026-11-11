@@ -90,6 +90,8 @@ import SlideSurface from '@/components/slide-surface'
 import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
 import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
+import { buildInviteSharedLinkMessage } from '@/i18n/invite-ticket-copy'
+import { useOwnInviteCode } from '@/lib/own-invite-code'
 import { RETRANSLATE_TIP_SHOWN_STORAGE_KEY, messageRetranslateCopy } from '@/lib/message-retranslate'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -2178,6 +2180,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [isRenamingConversation, setIsRenamingConversation] = useState(false)
   const [displayConversationTitle, setDisplayConversationTitle] = useState(conversationTitle ?? '')
   const [shareUrl, setShareUrl] = useState<string | null>(null)
+  // Pasted under the room link, so a friend who installs first can still type it in.
+  const ownInviteCode = useOwnInviteCode(Boolean(shareUrl))
   const [shareEnabled, setShareEnabled] = useState(false)
   const [isTogglingSharing, setIsTogglingSharing] = useState(false)
   const [isRefreshingShareLink, setIsRefreshingShareLink] = useState(false)
@@ -5557,6 +5561,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleCopyShareLink = useCallback(async () => {
     if (!shareUrl) return
+    const shareText = buildInviteSharedLinkMessage(uiLocale, shareUrl, ownInviteCode)
     try {
       // navigator.clipboard only exists in a secure context (HTTPS or
       // localhost) — a LAN dev server reached over plain http:// (see
@@ -5564,10 +5569,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       // all, so this falls back to the older execCommand copy instead of
       // silently doing nothing.
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl)
+        await navigator.clipboard.writeText(shareText)
       } else {
         const textarea = document.createElement('textarea')
-        textarea.value = shareUrl
+        textarea.value = shareText
         textarea.style.position = 'fixed'
         textarea.style.opacity = '0'
         document.body.appendChild(textarea)
@@ -5580,7 +5585,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       toast.error(roomManagementCopy.shareErrorToastLabel)
     }
-  }, [roomManagementCopy.shareErrorToastLabel, roomManagementCopy.shareLinkCopiedToastLabel, shareUrl])
+  }, [ownInviteCode, roomManagementCopy.shareErrorToastLabel, roomManagementCopy.shareLinkCopiedToastLabel, shareUrl, uiLocale])
 
   // Stop current playback when sound is disabled.
   useEffect(() => {

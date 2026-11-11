@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PRIMARY_UI_LOCALES } from "@/i18n/mingle-locales";
 import {
   INVITE_TICKET_COPY_LOCALES,
+  buildInviteSharedLinkMessage,
   buildInviteTicketMessage,
   fillInviteTicketCopy,
   resolveInviteLandingLocale,
@@ -30,14 +31,27 @@ describe("invite-ticket-copy", () => {
   });
 
   it("writes the pasted message for the Korean-Japanese pair in both languages, partner first", () => {
-    const fromKorean = buildInviteTicketMessage("ko", "https://x.test/i/ab3de").split("\n");
-    expect(fromKorean).toHaveLength(3);
+    const fromKorean = buildInviteTicketMessage("ko", "https://x.test/i/ab3de", "ab3de").split("\n");
+    expect(fromKorean).toHaveLength(5);
     expect(fromKorean[0]).toContain("招待券");
     expect(fromKorean[1]).toContain("초대권");
     expect(fromKorean[2]).toBe("https://x.test/i/ab3de");
+    expect(fromKorean[3]).toBe("招待コード ab3de · アプリをインストールしたら、このリンクをもう一度タップしてね");
+    expect(fromKorean[4]).toBe("초대 코드 ab3de · 앱을 설치한 뒤 이 링크를 한 번 더 눌러 주세요");
     expect(buildInviteTicketMessage("ja", "L").split("\n")[0]).toContain("초대권");
-    expect(buildInviteTicketMessage("en", "L").split("\n")).toHaveLength(2);
-    expect(buildInviteTicketMessage("fr", "L").split("\n")).toHaveLength(3);
+    expect(buildInviteTicketMessage("en", "L", "ab3de").split("\n")).toHaveLength(3);
+    expect(buildInviteTicketMessage("fr", "L", "ab3de").split("\n")).toHaveLength(5);
+  });
+
+  it("puts the code and the reopen note under every shared link, in every locale", () => {
+    for (const locale of PRIMARY_UI_LOCALES) {
+      expect(resolveInviteTicketCopy(locale).codeLine, locale).toContain("{code}");
+      const lines = buildInviteSharedLinkMessage(locale, "https://x.test/u/1", "ab3de").split("\n");
+      expect(lines[0]).toBe("https://x.test/u/1");
+      expect(lines.slice(1).every((line) => line.includes("ab3de")), locale).toBe(true);
+    }
+    // Without a code (signed out, offline) only the reopen note is added.
+    expect(buildInviteSharedLinkMessage("en", "L", null)).toBe("L\nAfter installing the app, tap this link once more");
   });
 
   it("picks the landing language from the browser, Japanese when unknown", () => {
