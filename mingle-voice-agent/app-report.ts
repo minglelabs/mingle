@@ -87,7 +87,11 @@ export async function requestTranslate(input: {
     text: string;
     sourceLanguage: string;
     isFinal: boolean;
-    bubbleTail?: TailState;
+    bubbleTail?: TailState & { previousSource?: string; previousSourceLanguage?: string; previousTranslations?: Record<string, string> };
+    currentTurnPreviousState?: { sourceLanguage: string; sourceText: string; translations: Record<string, string> };
+    recentTurns?: unknown[];
+    sttLanguages?: string[];
+    translationModel?: string;
 }): Promise<TranslateReply | null> {
     if (!appReportsEnabled()) return null;
     try {
@@ -115,7 +119,7 @@ export async function requestTranslate(input: {
 }
 
 /** How one speaker's speech is split into lines: their own setting in the app (mingle-stt's modes). */
-export type SpeakerStt = { mode: 'end' | 'fin'; tuningStep: number; maxDelayMs: number; silenceMs: number };
+export type SpeakerStt = { mode: 'end' | 'fin'; tuningStep: number; maxDelayMs: number; silenceMs: number; translationModel?: string };
 
 /** POST /api/internal/voice/speaker-stt; null when the app could not be asked. */
 export async function requestSpeakerStt(room: string, speaker: string): Promise<SpeakerStt | null> {
@@ -135,6 +139,7 @@ export async function requestSpeakerStt(room: string, speaker: string): Promise<
             tuningStep: Number(data.tuningStep ?? 2),
             maxDelayMs: Number(data.maxDelayMs ?? 3000),
             silenceMs: Number(data.silenceMs ?? 1000),
+            ...(typeof data.translationModel === 'string' && data.translationModel ? { translationModel: data.translationModel } : {}),
         };
     } catch {
         return null;

@@ -54,3 +54,87 @@ export function unspokenRest(full: string, spoken: string): string {
     if (!said) return text;
     return text.startsWith(said) ? text.slice(said.length).trim() : '';
 }
+
+// ===== Context sent with each translation (mingle-app use-realtime-stt) =====
+// The same context a phone sends with its own speech: the lines of the last
+// 10 s (buildRecentTurnContextPayload) and, while the line has nothing fixed
+// yet, the previous line's last piece (buildPreviousBubblePiece).
+
+export const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000;
+export const PREVIOUS_BUBBLE_PIECE_WINDOW_MS = 10_000;
+
+export type HistoryLine = {
+    id: string;
+    lang: string;
+    text: string;
+    translations: Record<string, string>;
+    startedAt: number;
+    endedAt: number;
+    tail: { translatedSource: string; translations: Record<string, string>; contextSource?: string; contextTranslations?: Record<string, string> } | null;
+};
+
+export type RecentTurn = {
+    sourceLanguage: string;
+    sourceText: string;
+    translations: Record<string, string>;
+    occurredAtMs: number;
+    ageMs: number;
+    isFinalized: boolean;
+};
+
+const withoutSource = (translations: Record<string, string>, lang: string) =>
+    Object.fromEntries(Object.entries(translations).filter(([key, text]) => key !== lang && !!text));
+
+export function buildRecentTurns(history: readonly HistoryLine[], now: number, excludeId?: string): RecentTurn[] {
+    const turns: RecentTurn[] = [];
+    for (const line of history) {
+        if (line.id === excludeId || !line.text.trim()) continue;
+        if (line.startedAt < now - RECENT_TURN_CONTEXT_WINDOW_MS || line.startedAt > now) continue;
+        const translations = withoutSource(line.translations, line.lang || 'unknown');
+        turns.push({
+            sourceLanguage: line.lang || 'unknown',
+            sourceText: line.text.trim(),
+            translations,
+            occurredAtMs: line.startedAt,
+            ageMs: Math.max(0, now - line.startedAt),
+            isFinalized: Object.keys(translations).length > 0,
+        });
+    }
+    return turns.sort((a, b) => a.occurredAtMs - b.occurredAtMs);
+}
+
+export function buildPreviousPiece(history: readonly HistoryLine[], now: number, excludeId: string):
+    { previousSource: string; previousSourceLanguage?: string; previousTranslations: Record<string, string> } | null {
+    let previous: HistoryLine | null = null;
+    for (const line of history) {
+        if (line.id === excludeId || !line.text.trim()) continue;
+        if (now - line.endedAt > PREVIOUS_BUBBLE_PIECE_WINDOW_MS || line.endedAt > now) continue;
+        previous = line;
+    }
+    if (!previous) return null;
+    const sourceLanguage = (previous.lang || '').trim();
+    const sourceText = previous.text.trim();
+    const translations = withoutSource(previous.translations, sourceLanguage || 'unknown');
+    const tail = previous.tail;
+    let pieceSource = sourceText;
+    let pieceTranslations: Record<string, string> = translations;
+    if (tail?.translatedSource && sourceText.startsWith(tail.translatedSource)) {
+        const rest = sourceText.slice(tail.translatedSource.length).trim();
+        if (rest) {
+            pieceSource = rest;
+            pieceTranslations = {};
+            for (const [language, text] of Object.entries(translations)) {
+                const fixed = tail.translations[language] || '';
+                if (fixed && text.startsWith(fixed) && text.slice(fixed.length).trim()) pieceTranslations[language] = text.slice(fixed.length).trim();
+            }
+        } else if (tail.contextSource) {
+            pieceSource = tail.contextSource;
+            pieceTranslations = tail.contextTranslations || {};
+        }
+    }
+    return {
+        previousSource: pieceSource,
+        ...(sourceLanguage ? { previousSourceLanguage: sourceLanguage } : {}),
+        previousTranslations: pieceTranslations,
+    };
+}

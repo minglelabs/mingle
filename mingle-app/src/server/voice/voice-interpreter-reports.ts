@@ -210,6 +210,8 @@ export type VoiceSpeakerStt = {
   tuningStep: number;
   maxDelayMs: number;
   silenceMs: number;
+  /** The translation model they chose (null: the app's default), as their own speech uses. */
+  translationModel: string | null;
 };
 
 const clampInt = (value: number | null | undefined, min: number, max: number, fallback: number) =>
@@ -225,13 +227,14 @@ export async function readVoiceSpeakerStt(room: string, userId: string): Promise
   if (!call || !call.participants.some((participant) => participant.userId === userId)) return null;
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { sttSegmentationMode: true, demoEndpointTuningStep: true, demoEndpointMaxDelayMs: true, demoSilenceFinalizeMs: true },
+    select: { sttSegmentationMode: true, demoEndpointTuningStep: true, demoEndpointMaxDelayMs: true, demoSilenceFinalizeMs: true, translationModel: true },
   });
   return {
     mode: user?.sttSegmentationMode === "fin" ? "fin" : "end",
     tuningStep: clampInt(user?.demoEndpointTuningStep, 0, 4, 2),
     maxDelayMs: clampInt(user?.demoEndpointMaxDelayMs, 500, 3000, 3000),
     silenceMs: clampInt(user?.demoSilenceFinalizeMs, 500, 5000, 1000),
+    translationModel: user?.translationModel?.trim() || null,
   };
 }
 

@@ -53,6 +53,14 @@ export async function postVoiceTranslateResponse(request: NextRequest) {
       targetLanguages,
       isFinal: body.isFinal === true,
       ...(body.bubbleTail ? { bubbleTail: body.bubbleTail } : {}),
+      // The context a phone sends with its own speech, so the prompt is the same.
+      ...(body.currentTurnPreviousState ? { currentTurnPreviousState: body.currentTurnPreviousState } : {}),
+      ...(Array.isArray(body.recentTurns) && body.recentTurns.length ? {
+        recentTurns: body.recentTurns,
+        immediatePreviousTurn: body.recentTurns[body.recentTurns.length - 1],
+      } : {}),
+      ...(Array.isArray(body.sttLanguages) && body.sttLanguages.length ? { sttLanguages: body.sttLanguages } : {}),
+      ...(typeof body.translationModel === "string" && body.translationModel ? { translationModel: body.translationModel } : {}),
       // Spoken, not typed: no per-message translation charge.
       sttDurationMs: 1,
       sessionKey: `voice-interpreter:${room}`.slice(0, 200),

@@ -2,6 +2,15 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-12 — 보이스톡 자막: 폰 STT와 같은 번역 문맥, 같은 문장 분리
+
+- Id: `2026-11-12-voice-caption-same-context`
+- Caption lines were cut too often, and translations were worse than a phone's. The interpreter could not read the speaker's split setting: the route was new, and the running dev server had not picked it up, so it fell back to its own default (1.5 s). It also sent each clause without the context a phone sends.
+- Each request now carries what a phone's own speech carries: the lines of the last 10 seconds and the one right before; the line's previous translation; the previous line's last piece while nothing is fixed; the languages Soniox labeled in the line; and the speaker's translation model.
+- When the setting cannot be read, the fallback is the phone's default (auto-detect step 3, 3000 ms).
+- Lines are cut only where Soniox ends them, as on the phone. Clauses only feed the translation and read-aloud inside one bubble.
+- Physical-device verification pending.
+
 ## 2026-11-12 — 보이스톡 자막: 켠 사람만 보고, 말한 사람 본인 설정으로 문장 분리
 
 - Id: `2026-11-12-voice-caption-viewers-and-split`

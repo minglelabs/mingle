@@ -24,6 +24,8 @@ export type SttSegment = {
     finalizedAt: number;
     // Length of the spoken words (first to last), for billing.
     durationMs: number;
+    // Every language Soniox labeled in the line (the phone's sttLanguages).
+    languages: string[];
 };
 
 export type SttPartial = { text: string; lang: string | null };
@@ -77,7 +79,8 @@ export class SonioxStream extends EventEmitter {
     private nonFinalText = '';
     private textChangedAt = 0;
     private finalizeSentAt = 0;
-    private segmentation: SttSegmentation = { mode: 'end', tuningStep: 2, maxDelayMs: env.sonioxMaxEndpointDelayMs, silenceMs: 1000 };
+    // The phone's default when the speaker's own setting cannot be read (3단계, 3000 ms).
+    private segmentation: SttSegmentation = { mode: 'end', tuningStep: 2, maxDelayMs: 3000, silenceMs: 1000 };
 
     constructor(private readonly languageHint: string, private readonly label: string) {
         super();
@@ -228,6 +231,7 @@ export class SonioxStream extends EventEmitter {
         this.nonFinalText = '';
         const text = this.finalText.trim();
         const lang = this.dominantLang();
+        const languages = [...this.finalLangs.keys()];
         const speechEndAt = this.audioStartedAt > 0 && this.lastFinalEndMs > 0
             ? this.audioStartedAt + this.lastFinalEndMs
             : finalizedAt;
@@ -238,6 +242,6 @@ export class SonioxStream extends EventEmitter {
         this.finalLangs.clear();
         this.firstFinalStartMs = -1;
         if (!text) return;
-        this.emit('segment', { text, lang, speechEndAt, finalizedAt, durationMs } satisfies SttSegment);
+        this.emit('segment', { text, lang, speechEndAt, finalizedAt, durationMs, languages } satisfies SttSegment);
     }
 }

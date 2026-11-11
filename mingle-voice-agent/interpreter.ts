@@ -20,7 +20,7 @@ import { synthesizeStream, TTS_SAMPLE_RATE } from './tts';
 import { createJoinToken, INTERPRETER_ROLE } from './token';
 import { addUsage, readersOf, type InterpreterUsage } from './service-logic';
 import { appReportsEnabled, newLineId, reportCaption, reportPlayback, requestSpeakerStt, requestTranslate, type TailState } from './app-report';
-import { shouldRequestInterimFill, unspokenRest } from './tail-fill';
+import { buildPreviousPiece, buildRecentTurns, shouldRequestInterimFill, unspokenRest, type HistoryLine } from './tail-fill';
 
 const LANE_SAMPLE_RATE = TTS_SAMPLE_RATE;
 const FRAME_MS = 20;
@@ -53,6 +53,8 @@ type Speaker = {
     name: string;
     lang: string;
     stt: SonioxStream;
+    /** Their chosen translation model (the app's default when unset). */
+    translationModel?: string;
     stream: AudioStream;
     recent: Recent[];
     partialSeq: number;
@@ -113,6 +115,8 @@ export class Interpreter {
     private lanes = new Map<string, Lane>();
     private speakers = new Map<string, Speaker>();
     private turns: TranslateTurn[] = [];
+    /** The call's finished lines, for the context each translation is sent with. */
+    private history: HistoryLine[] = [];
     private segmentSeq = 0;
     private idleTimer: NodeJS.Timeout | null = null;
     private closed = false;
@@ -221,6 +225,7 @@ export class Interpreter {
         // step or silence); audio heard meanwhile waits in the stream.
         void requestSpeakerStt(this.roomName, participant.identity).then((settings) => {
             if (settings) stt.configure(settings);
+            if (settings?.translationModel) speaker.translationModel = settings.translationModel;
             stt.start();
             console.log(`[interpreter:${this.roomName}] listening to ${speaker.name} (${lang}) split=${settings ? `${settings.mode} step=${settings.tuningStep} delay=${settings.maxDelayMs} silence=${settings.silenceMs}` : 'default'}`);
         });
@@ -329,8 +334,9 @@ export class Interpreter {
         if (line.inflight || !shouldRequestInterimFill(text, line.lastRequestedText)) return;
         // The call's own audio picked up by this mic: its final is dropped too.
         if (this.findEcho(speaker, text, sourceLang)) return;
+        const previousState = this.previousStateOf(line, sourceLang);
         line.lastRequestedText = text;
-        line.inflight = requestTranslate({ room: this.roomName, text, sourceLanguage: sourceLang, isFinal: false, bubbleTail: line.tail })
+        line.inflight = requestTranslate({ room: this.roomName, ...this.contextFor(speaker, line), text, sourceLanguage: sourceLang, isFinal: false, ...(previousState ? { currentTurnPreviousState: previousState } : {}) })
             .then((reply) => {
                 if (!reply?.tailFill) return;
                 line.tail = reply.tailFill;
@@ -343,6 +349,24 @@ export class Interpreter {
                 }
             })
             .finally(() => { line.inflight = null; });
+    }
+
+    /** The context a phone sends with an interim request: its tail (or the previous line's last piece), recent lines, model. */
+    private contextFor(speaker: Speaker, line: Line) {
+        const now = Date.now();
+        const previous = line.tail.translatedSource ? null : buildPreviousPiece(this.history, now, line.id);
+        return {
+            bubbleTail: previous ? { ...line.tail, ...previous } : line.tail,
+            recentTurns: buildRecentTurns(this.history, now, line.id),
+            ...(speaker.translationModel ? { translationModel: speaker.translationModel } : {}),
+        };
+    }
+
+    /** The line's translation as last shown (the phone's currentTurnPreviousState). */
+    private previousStateOf(line: Line, sourceLang: string) {
+        const translations = Object.fromEntries(Object.entries(line.shown).filter(([lang]) => lang !== sourceLang));
+        if (!line.lastRequestedText || Object.keys(translations).length === 0) return null;
+        return { sourceLanguage: sourceLang, sourceText: line.lastRequestedText, translations };
     }
 
     private showTranslations(line: Line, translations: Record<string, string>, provider?: string): void {
@@ -395,12 +419,19 @@ export class Interpreter {
         void (async () => {
             // The last clause request finishes first: the final keeps what it fixed.
             await line.inflight?.catch(() => undefined);
+            const context = this.contextFor(speaker, line);
+            const previousState = this.previousStateOf(line, sourceLang);
             const reply = await requestTranslate({
                 room: this.roomName,
                 text: segment.text,
                 sourceLanguage: sourceLang,
                 isFinal: true,
+                // As a phone's final: the tail only once something is fixed.
                 ...(line.tail.translatedSource ? { bubbleTail: line.tail } : {}),
+                recentTurns: context.recentTurns,
+                ...(previousState ? { currentTurnPreviousState: previousState } : {}),
+                ...(segment.languages.length ? { sttLanguages: segment.languages } : {}),
+                ...(context.translationModel ? { translationModel: context.translationModel } : {}),
             });
             const translations = reply ? reply.translations : await this.translateDirect(segment, sourceLang, recentTurns);
             this.showTranslations(line, translations, reply?.provider);
@@ -409,6 +440,11 @@ export class Interpreter {
                 const rest = unspokenRest(translations[lang] || '', line.spoken[lang] || '');
                 if (rest) this.speak(id, lang, rest, segment);
             }
+            this.history.push({
+                id, lang: sourceLang, text: segment.text, translations,
+                startedAt: segment.speechEndAt - segment.durationMs, endedAt: Date.now(), tail: line.tail,
+            });
+            if (this.history.length > 30) this.history.shift();
             await reportCaption({
                 room: this.roomName,
                 id,
