@@ -1142,7 +1142,9 @@ function ChatBubble({
           event.stopPropagation()
           setIsBubbleExpanded((expanded) => !expanded)
         }}
-        className="inline-flex h-5 min-w-0 touch-manipulation items-center justify-center whitespace-nowrap rounded-md px-0 text-[10px] font-medium leading-5 text-black/[0.34] transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-95"
+        // 14px tall so the column fits beside a one-line bubble; the tap area
+        // reaches past it (after:).
+        className="relative inline-flex h-3.5 min-w-0 touch-manipulation items-center justify-center whitespace-nowrap rounded-md px-0 text-[10px] font-medium leading-3.5 text-black/[0.34] transition after:absolute after:-inset-x-2 after:-inset-y-2.5 after:content-[''] hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-95"
       >
         {isBubbleExpanded ? bubbleDisplayCopy.collapseBubbleLabel : bubbleDisplayCopy.expandBubbleLabel}
       </button>
@@ -1413,12 +1415,13 @@ function ChatBubble({
     <div
       data-chat-bubble-own-meta={isOwnMessage || undefined}
       data-chat-bubble-other-meta={isOwnMessage ? undefined : true}
-      className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
+      className={`flex shrink-0 flex-col gap-0 self-end pb-1 ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
-      {/* Read mark and time on one line, in one size: with the fold button
-          the column is two lines, no taller than a one-line bubble. Both
-          lines line up on the bubble's side. */}
-      <div data-chat-bubble-meta-line className="flex min-h-5 items-center gap-1">
+      {/* Read mark and time on one line, in one size, the fold button under
+          them: 14 + 14 px and 4 px off the bottom, inside a one-line
+          bubble's height (about 32 px), so neither line rides above it.
+          Both lines line up on the bubble's side. */}
+      <div data-chat-bubble-meta-line className="flex min-h-3.5 items-center gap-1">
         {isOwnMessage ? <>{bubbleTimestamp}{bubbleReadReceipt}</> : <>{bubbleReadReceipt}{bubbleTimestamp}</>}
       </div>
       {/* One language row has nothing to fold. */}
