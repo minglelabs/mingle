@@ -131,7 +131,7 @@
       <article>
         <nav class="lang-nav"><a href="/legal/en/privacy-policy.html">English</a><a href="/legal/ko/privacy-policy.html">Korean</a><a href="/legal/ja/privacy-policy.html" aria-current="page">Japanese</a><a href="/legal/zh-cn/privacy-policy.html">Chinese (Simplified)</a><a href="/legal/zh-tw/privacy-policy.html">Chinese (Traditional)</a><a href="/legal/fr/privacy-policy.html">French</a><a href="/legal/de/privacy-policy.html">German</a><a href="/legal/es/privacy-policy.html">Spanish</a><a href="/legal/pt/privacy-policy.html">Portuguese</a><a href="/legal/it/privacy-policy.html">Italian</a><a href="/legal/ru/privacy-policy.html">Russian</a><a href="/legal/ar/privacy-policy.html">Arabic</a><a href="/legal/hi/privacy-policy.html">Hindi</a><a href="/legal/th/privacy-policy.html">Thai</a><a href="/legal/vi/privacy-policy.html">Vietnamese</a></nav>
         <h1>HashChatのプライバシーポリシー</h1>
-        <p class="meta"><strong>最終更新日:</strong> November 11, 2026</p>
+        <p class="meta"><strong>最終更新日:</strong> November 13, 2026</p>
         <p>このプライバシー ポリシーでは、Mingle Labs, Inc. (「HashChat」、「当社」、「当社」、または「当社」) が、お客様が HashChat モバイル アプリ、Web サイト、および関連サービス (総称して「サービス」) を使用する際に、個人データをどのように収集、使用、共有、保護するかについて説明します。</p>
         <h2>1. 範囲</h2>
 <p>このポリシーは、消費者のHashChatアカウントおよび使用のために処理される情報に適用されます。これは、別の契約に基づいて企業顧客に代わって当社が処理するデータには適用されません。</p>
@@ -150,6 +150,11 @@
 <p>会話で写真を送信すると、HashChat は Cloudflare が提供する非公開クラウド画像ストレージに写真をメッセージとともに保存します。写真内テキストの翻訳機能が有効な場合、HashChat は写真内の文字、言語、位置、見た目のスタイルを認識するため、写真を Google Gemini に送信します。</p>
 <p>HashChat は認識した文字とその言語情報を Google Gemini に送信し、会話で指定された言語に翻訳します。Google は、Gemini に送信された写真とテキストを、適用されるサービス規約とプライバシー情報に従って処理します。</p>
 <p>写真上に翻訳を表示するため、HashChat は認識したテキストブロック、検出した位置と見た目の情報、および生成した翻訳を写真メッセージに関連付けて保存します。これらの記録は、以下の説明に従ってメッセージとともに保持されます。</p>
+
+<h3>連絡先と電話番号</h3>
+<p>連絡先へのアクセスを許可すると、HashChatはSMSで友だちを招待できるよう、端末上でアドレス帳の名前と電話番号を読み取ります。HashChatはアドレス帳をアップロードまたは保存しません。</p>
+<p>HashChatを使っている友だちを見つけるために、ご自身の電話番号を認証できます（任意）。Twilioを通じてSMSでワンタイム認証コードを送信し、コードを入力すると電話番号とその一方向ハッシュ（SHA-256）をアカウントに保存します。電話番号は他のユーザーには表示されません。</p>
+<p>番号を認証すると、アプリは端末上で連絡先の電話番号を同じ方式のハッシュに変換し、そのハッシュのみをHashChatに送信して、どの番号がHashChatアカウントかを確認します。受け取ったハッシュは保存せず、一致したアカウントの公開プロフィール情報（名前、ハンドル、写真）のみを表示します。電話番号の削除はいつでも依頼でき（下記のお問い合わせ先を参照）、削除後は他の人がその番号であなたを見つけることはできません。</p>
 
 <h2>3. 音声処理と非保持</h2>
 <p>HashChat はマイク音声をリアルタイムで処理して、音声認識と翻訳を提供します。未処理の音声は処理のためにストリーミングされ、リクエストの完了後に HashChat によって保存されることはありません。</p>
@@ -180,6 +185,7 @@
   <li>Inworld: 音声生成機能と合成音声配信に必要なテキストと言語コンテキスト。</li>
   <li>Google: アカウント認証とテキストベースのサービス操作 (使用される場合)。 HashChat は、音声処理のために生の音声を Google に送信しません。</li>
   <li>Anthropic: Claude モデルで翻訳を生成するために必要な、翻訳のために送信されたテキストおよび言語コンテキスト。</li>
+  <li>Twilio：SMSでワンタイム認証コードを送信・確認するための電話番号。</li>
   <li>アプリストア（Apple App Store、Google Play）：購入の検証と返金リクエストの処理に必要な取引情報、および購入したハッシュの使用の有無と使用割合。</li>
   <li>法的/安全性の要求: 法律で義務付けられている場合、または権利、安全、およびセキュリティを保護するために必要な場合。</li>
   <li>企業取引: 合併、資金調達、買収、破産、資産譲渡に関連するもの。</li>

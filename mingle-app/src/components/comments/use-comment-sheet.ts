@@ -1,5 +1,6 @@
 "use client";
 
+import { requestProfileBasics } from "@/lib/profile-basics";
 import { feedEvents, trackFeedEvent } from "@/lib/feed-analytics";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -244,6 +245,8 @@ export function useCommentSheet(args: UseCommentSheetArgs) {
         onRequireLogin();
         return "skipped";
       }
+      // Gender and birth date are asked before the first comment.
+      if (!(await requestProfileBasics())) return "skipped";
       setNotice(null);
       setSending(true);
 

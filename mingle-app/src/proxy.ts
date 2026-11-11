@@ -35,7 +35,8 @@ export function shouldBypassLocaleRedirect(pathname: string): boolean {
   // conversation-share-link.ts) — same locale-less shape as "p" (profile
   // links): its own page resolves locale itself from the accept-language
   // header instead of a URL segment.
-  return first === "admin" || first === "p" || first === "s" || first === ".well-known";
+  // "i" is the invite ticket link (/i/{code}), locale-less the same way.
+  return first === "admin" || first === "p" || first === "s" || first === "i" || first === ".well-known";
 }
 
 export function proxy(request: NextRequest) {
