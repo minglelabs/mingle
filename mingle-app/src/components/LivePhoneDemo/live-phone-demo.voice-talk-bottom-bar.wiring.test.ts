@@ -70,21 +70,32 @@ describe('voice talk and STT are separate switches', () => {
   })
 })
 
-describe('voice talk panel opens before joining', () => {
+describe('starting and joining a voice talk', () => {
   const panelSource = readFileSync(new URL('./VoiceTalkPanel.tsx', import.meta.url), 'utf8')
   const composerSource = readFileSync(new URL('./ConversationImageComposer.tsx', import.meta.url), 'utf8')
 
-  it('only shows the panel on the button; joining is the panel Join button', () => {
+  it('asks before starting or joining, low on the screen, and has no Join / Close row in the panel', () => {
     expect(panelSource).toContain('openSignal?: number')
-    expect(panelSource).not.toContain('startSignal')
-    expect(panelSource).toContain('data-qa="voice-talk-join"')
-    expect(panelSource).toContain('onClick={join}')
+    expect(panelSource).toContain('if (openSignal && !joined) setStartPrompt(true)')
+    expect(panelSource).toContain('data-qa="voice-talk-start-confirm"')
+    expect(panelSource).toContain("startTitle: '대화방에 보이스톡을 시작하시겠습니까?'")
+    const dialog = panelSource.slice(panelSource.indexOf('const startDialog ='), panelSource.indexOf('const incoming ='))
+    expect(dialog).toContain('items-end')
+    expect(dialog).toContain('onClick={join}')
+    expect(panelSource).not.toContain('data-qa="voice-talk-join"')
+    expect(panelSource).not.toContain('data-qa="voice-talk-dismiss"')
   })
 
-  it('offers Decline for an incoming call and hides that call until a new one', () => {
-    expect(panelSource).toContain('data-qa="voice-talk-dismiss"')
-    expect(panelSource).toContain('{live ? copy.decline : copy.close}')
-    expect(panelSource).toContain('const incoming = live && call?.id !== declinedCallId')
+  it('shows the panel only for a call this phone is in', () => {
+    expect(panelSource).toContain('if (!joined && !error) {\n    return <>{startDialog}{incomingCard}</>')
+  })
+
+  it('offers a call someone else started once, with Decline, and not again after declining', () => {
+    expect(panelSource).toContain('data-qa="voice-talk-incoming"')
+    expect(panelSource).toContain('data-qa="voice-talk-incoming-decline"')
+    expect(panelSource).toContain('data-qa="voice-talk-incoming-join"')
+    expect(panelSource).toContain('const incoming = live && !joined && !startPrompt && call?.id !== declinedCallId')
+    expect(panelSource).toContain('if (call) setDeclinedCallId(call.id)')
   })
 
   it('puts a voice talk row in the keyboard-mode + menu', () => {

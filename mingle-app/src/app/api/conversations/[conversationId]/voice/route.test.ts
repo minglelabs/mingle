@@ -24,7 +24,8 @@ vi.mock("@/server/voice/prisma-voice-store", () => ({ prismaVoiceStore: {} }));
 import { GET } from "@/app/api/conversations/[conversationId]/voice/route";
 import { POST as TOKEN } from "@/app/api/conversations/[conversationId]/voice/token/route";
 import { POST as LEAVE } from "@/app/api/conversations/[conversationId]/voice/leave/route";
-import { setVoiceStoreForTests } from "@/server/api/controllers/shared/voice-call-controller";
+import { setVoiceCallAnnouncerForTests, setVoiceStoreForTests } from "@/server/api/controllers/shared/voice-call-controller";
+import { after } from "next/server";
 import { createMemoryVoiceStore } from "@/server/voice/memory-voice-store";
 import { verifyHs256 } from "@/server/voice/livekit-auth";
 
@@ -77,6 +78,32 @@ describe("/api/conversations/[conversationId]/voice routes", () => {
 
     const status = await (await GET(new NextRequest("http://localhost/x"), params)).json();
     expect(status.call.id).toBe(body.call.id);
+  });
+
+  it("leaves one 'started a voice talk' message in the room when a call starts, none when someone joins it", async () => {
+    const announce = vi.fn().mockResolvedValue(undefined);
+    setVoiceCallAnnouncerForTests(announce);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Runs what the route scheduled for after the response (the list refresh
+    // and the push fail quietly here; only the announcement is checked).
+    const runScheduled = async () => {
+      const scheduled = vi.mocked(after).mock.calls.map(([task]) => task as () => Promise<void>);
+      vi.mocked(after).mockClear();
+      for (const task of scheduled) await task().catch(() => undefined);
+    };
+
+    const started = await (await TOKEN(tokenRequest({ lang: "ko" }), params)).json();
+    await runScheduled();
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith({ sessionKey: "session-a", callId: started.call.id, starterUserId: "user-1" });
+
+    asUser("user-2");
+    const joinedBody = await (await TOKEN(tokenRequest({ lang: "en" }), params)).json();
+    await runScheduled();
+    // The same call: one call per room, and no second announcement.
+    expect(joinedBody.call.id).toBe(started.call.id);
+    expect(announce).toHaveBeenCalledTimes(1);
   });
 
   it("returns 403 to someone who is not in the chat room", async () => {

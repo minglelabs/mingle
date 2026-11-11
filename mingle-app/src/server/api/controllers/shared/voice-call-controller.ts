@@ -8,6 +8,7 @@ import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { prisma } from "@/lib/prisma";
 import { listRoomIdentities, mintVoiceJoinToken, readLiveKitConfig, verifyLiveKitWebhook } from "@/server/voice/livekit-auth";
 import { prismaVoiceStore } from "@/server/voice/prisma-voice-store";
+import { VOICE_CALL_MESSAGE_TEXT, buildVoiceCallMessageClientId } from "@/lib/voice-call-message";
 import {
   applyLiveKitWebhookEvent,
   getLiveCallView,
@@ -55,6 +56,32 @@ function refreshMemberLists(sessionKey: string) {
       console.warn("[voice] list_refresh_failed", error instanceof Error ? error.name : "unknown");
     }
   });
+}
+
+// A call that starts leaves a message in the room ("<name> started a voice
+// talk", with a Join button): members who were not looking see it when they
+// open the room, and can join from it as long as the call is live. One per
+// call: a retried start finds the message already there.
+let announceCallStarted = async (input: { sessionKey: string; callId: string; starterUserId: string }) => {
+  const clientMessageId = buildVoiceCallMessageClientId(input.callId);
+  await prisma.appMessage.upsert({
+    where: { sessionKey_clientMessageId: { sessionKey: input.sessionKey, clientMessageId } },
+    update: {},
+    create: {
+      userId: input.starterUserId,
+      sessionKey: input.sessionKey,
+      clientMessageId,
+      sourceLanguage: "en",
+      metadata: { voiceCall: { callId: input.callId } },
+      contents: { create: { contentType: "SOURCE", language: "en", text: VOICE_CALL_MESSAGE_TEXT } },
+    },
+  });
+  // Open rooms load the new message; lists show it as the latest.
+  const memberUserIds = await listChannelMemberUserIdsBySessionKey(input.sessionKey);
+  await notifyConversationMessage(input.sessionKey, memberUserIds, undefined, { timeoutMs: 3000 });
+};
+export function setVoiceCallAnnouncerForTests(next: typeof announceCallStarted | null) {
+  if (next) announceCallStarted = next;
 }
 
 export async function getVoiceCallResponse(request: NextRequest, conversationId: string) {
@@ -114,6 +141,11 @@ export async function postVoiceCallTokenResponse(request: NextRequest, conversat
     const sessionKey = member.sessionKey;
     const starterUserId = member.userId;
     after(async () => {
+      try {
+        await announceCallStarted({ sessionKey, callId: call.id, starterUserId });
+      } catch (error) {
+        console.error("[voice] start_message_failed", error instanceof Error ? error.name : "unknown");
+      }
       try {
         const memberUserIds = await listChannelMemberUserIdsBySessionKey(sessionKey);
         await sendPushNotificationForVoiceCallStarted({ channelId: conversationId, callId: call.id, starterUserId, memberUserIds });

@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { normalizeMessageReplyReference, toRecalledMessageReplyReference, type MessageReplyReference } from "@/lib/message-reply";
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image';
+import { normalizeVoiceCallMessage, type VoiceCallMessage } from '@/lib/voice-call-message';
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
@@ -110,6 +111,8 @@ export type ConversationHydrationUtterance = {
   // turns sent while the room was still solo, whoever is reading them now.
   sentByViewer?: true;
   image?: ConversationMessageImage;
+  // This message announces a voice talk that started (see voice-call-message.ts).
+  voiceCall?: VoiceCallMessage;
   serverCreatedAtMs?: number;
   serverMessageId?: string;
   // When the server stored the row (server clock). Read receipts compare
@@ -3341,6 +3344,7 @@ async function getConversationHydrationStateForRecord(args: {
     const targetLanguages = normalizedContent.targetLanguages;
     const storedImage = readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null);
     const image = recalled ? null : normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
+    const voiceCall = recalled ? null : normalizeVoiceCallMessage(metadata?.voiceCall);
     // Point-in-time, not the room's current membership — see
     // countActiveRealMembersAt's doc comment. Also intentionally excludes
     // pending invitees (real members only): inviting someone shouldn't, by
@@ -3359,6 +3363,7 @@ async function getConversationHydrationStateForRecord(args: {
       ...(recalled ? { recalled: true as const } : {}),
       ...(message.userId && message.userId === args.viewerUserId ? { sentByViewer: true as const } : {}),
       ...(image ? { image } : {}),
+      ...(voiceCall ? { voiceCall } : {}),
       originalText,
       ...(normalizedContent.sourceDisplayText ? { originalDisplayText: normalizedContent.sourceDisplayText } : {}),
       originalLang: normalizedContent.sourceLanguage || "unknown",

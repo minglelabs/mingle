@@ -20,6 +20,8 @@ import {
 import ChatBubbleTimestamp from './ChatBubbleTimestamp'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
 import ConversationImageBubble from './ConversationImageBubble'
+import VoiceCallStartedBubble from './VoiceCallStartedBubble'
+import { normalizeVoiceCallMessage, type VoiceCallMessage } from '@/lib/voice-call-message'
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
 import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
 import { MessageRecallScope } from './MessageRecall'
@@ -140,6 +142,9 @@ export interface Utterance {
   // speakerUserId it is also set for turns sent while the room was solo.
   sentByViewer?: boolean
   image?: ConversationMessageImage
+  // This message announces a voice talk that started: it renders as a card
+  // with a Join button instead of text.
+  voiceCall?: VoiceCallMessage
   id: string
   speaker?: string
   speakerAvatarSeed?: string
@@ -874,6 +879,7 @@ function ChatBubble({
 }: ChatBubbleProps) {
   const isRecalled = utterance.recalled === true
   const messageImage = isRecalled ? null : normalizeConversationMessageImage(utterance.image)
+  const voiceCallMessage = isRecalled ? null : normalizeVoiceCallMessage(utterance.voiceCall)
   const isOwnMessage = Boolean(
     viewerUserId && utterance.speakerUserId && utterance.speakerUserId === viewerUserId,
   )
@@ -1140,7 +1146,7 @@ function ChatBubble({
     ))
     ? [...firstCollapsedHeaderLanguageOptions.slice(0, 4), originalHeaderLanguage]
     : firstCollapsedHeaderLanguageOptions
-  const shouldShowCollapsedHeaderLanguages = !messageImage && !isRecalled && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
+  const shouldShowCollapsedHeaderLanguages = !messageImage && !voiceCallMessage && !isRecalled && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
   const shouldShowSpeakerHeader = !isOwnMessage
     && isSharedRoomMember
     && (Boolean(speakerName) || Boolean(speakerBadge) || shouldShowCollapsedHeaderLanguages)
@@ -1238,7 +1244,7 @@ function ChatBubble({
         ) : (
           avatarImage
         )}
-        {originalDisplayLanguage && flag !== '🌐' ? (
+        {originalDisplayLanguage && flag !== '🌐' && !voiceCallMessage ? (
           // The language this message was spoken in, small at the avatar's bottom-left.
           // A language without a flag of its own shows none.
           <span
@@ -1257,6 +1263,8 @@ function ChatBubble({
     <div data-chat-bubble-recalled className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[13px] italic text-slate-400">
       {messageRecallCopy(uiLocale).placeholder}
     </div>
+  ) : voiceCallMessage ? (
+    <VoiceCallStartedBubble message={voiceCallMessage} speakerName={speakerName} isOwnMessage={isOwnMessage} locale={uiLocale} />
   ) : messageImage ? <ConversationImageBubble image={messageImage} locale={uiLocale} /> : (
     <AnimatePresence initial={false} mode="popLayout">
       {isBubbleExpanded ? (
@@ -1383,7 +1391,7 @@ function ChatBubble({
         />
       )}
       {bubbleTimestamp}
-      {!messageImage && !isRecalled && bubbleControls}
+      {!messageImage && !voiceCallMessage && !isRecalled && bubbleControls}
     </div>
   )
 
@@ -1427,7 +1435,7 @@ function ChatBubble({
   // A solo-era turn carries no speakerUserId (see isOwnMessage), whoever sent it, so the server's own flag decides there.
   const canRecall = !isDraft && !isRecalled && (utterance.sentByViewer === true || isOwnMessage)
   // Photos carry no text of their own to translate again.
-  const canRetranslate = !isDraft && !isRecalled && !messageImage
+  const canRetranslate = !isDraft && !isRecalled && !messageImage && !voiceCallMessage
   const replyReference = isDraft || isRecalled ? null : buildMessageReplyReference(utterance)
   const reactiveContent = <MessageReactionScope id={isDraft || isRecalled ? undefined : utterance.id} locale={uiLocale}>
     <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>

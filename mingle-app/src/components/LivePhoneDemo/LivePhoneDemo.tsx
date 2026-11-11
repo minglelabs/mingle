@@ -269,11 +269,13 @@ import { fetchConversationExport, shareConversationExport } from './conversation
 import VoiceTalkPanel, {
   VoiceTalkButton,
   isVoiceTalkAvailable,
+  joinVoiceTalk,
   resolveVoiceTalkButtonPress,
   resolveVoiceTalkMic,
   setVoiceTalkMic,
 } from './VoiceTalkPanel'
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
+import { VoiceTalkRoomContext, type VoiceTalkRoomState } from './voice-talk-room-context'
 import { HashRushQuickChatBar } from '@/features/hash-rush/QuickChatBar'
 import type { HashRushChatEntry, HashRushRoomChat } from '@/features/hash-rush/room-chat'
 import { isHashRushGameConfigured } from '@/features/hash-rush/config'
@@ -2063,10 +2065,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [voiceTalkLeaveSignal, setVoiceTalkLeaveSignal] = useState(0)
   // Listen only: a seat in the call that sends no voice (speech-to-text as the room has it).
   const [voiceTalkListenOnly, setVoiceTalkListenOnly] = useState(false)
-  const [voiceTalkState, setVoiceTalkState] = useState({ live: false, joined: false, connected: false })
-  const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean, connected: boolean }) => {
+  const [voiceTalkState, setVoiceTalkState] = useState<{ live: boolean, joined: boolean, connected: boolean, callId: string | null }>(
+    { live: false, joined: false, connected: false, callId: null },
+  )
+  const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean, connected: boolean, callId: string | null }) => {
     setVoiceTalkState((prev) => (
-      prev.live === next.live && prev.joined === next.joined && prev.connected === next.connected ? prev : next
+      prev.live === next.live && prev.joined === next.joined && prev.connected === next.connected && prev.callId === next.callId ? prev : next
     ))
   }, [])
   // The native game (src/features/hash-rush): `hashRushGameActive` keeps it
@@ -6235,6 +6239,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     void handleStartRecording()
   }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning, sttCaptureSource])
 
+  // The language this viewer speaks in a call, and the call as a message
+  // bubble needs it (the "started a voice talk" message's Join button).
+  const voiceTalkLang = ((speechLanguages[0] || ownSelectedLanguages[0] || uiLocale || 'en').split('-')[0] || 'en').toLowerCase()
+  const voiceTalkRoom = useMemo<VoiceTalkRoomState | null>(() => (
+    headerMode === 'conversation' && conversationId && voiceTalkAvailable
+      ? {
+          liveCallId: voiceTalkState.callId,
+          joined: voiceTalkState.joined,
+          join: () => joinVoiceTalk({ conversationId, title: displayConversationTitle || undefined, lang: voiceTalkLang }),
+        }
+      : null
+  ), [conversationId, displayConversationTitle, headerMode, voiceTalkAvailable, voiceTalkLang, voiceTalkState.callId, voiceTalkState.joined])
+
   // Voice talk and speech-to-text are separate features with separate switches.
   // - Joining or leaving a call never starts or stops speech-to-text, and
   //   never touches speaker / earphone mode. The Start/Stop button and the
@@ -8045,6 +8062,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   return (
     <PhoneFrame>
       <MessageReplyProvider value={replyRoomContext}>
+      <VoiceTalkRoomContext.Provider value={voiceTalkRoom}>
       <div
         ref={liveDemoRootRef}
         data-qa="live-demo-root"
@@ -8067,7 +8085,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             conversationId={conversationId}
             conversationTitle={displayConversationTitle || undefined}
             uiLocale={uiLocale}
-            myLang={((speechLanguages[0] || ownSelectedLanguages[0] || uiLocale || 'en').split('-')[0] || 'en').toLowerCase()}
+            myLang={voiceTalkLang}
             topOffset="calc(54px + env(safe-area-inset-top, 0px))"
             onAvailabilityChange={handleVoiceTalkAvailability}
             openSignal={voiceTalkOpenSignal}
@@ -10290,7 +10308,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         uiLocale={uiLocale}
                         active={voiceTalkState.live || voiceTalkState.joined}
                         onPress={() => {
-                          // During a call the button asks to leave; otherwise it shows the panel.
+                          // During a call the button asks to leave; otherwise it asks to start (or join) one.
                           if (resolveVoiceTalkButtonPress(voiceTalkState) === 'confirm_leave') {
                             setVoiceTalkLeaveSignal((n) => n + 1)
                           } else {
@@ -10510,6 +10528,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           )}
         </div>
       </div>
+      </VoiceTalkRoomContext.Provider>
       </MessageReplyProvider>
     </PhoneFrame>
   )

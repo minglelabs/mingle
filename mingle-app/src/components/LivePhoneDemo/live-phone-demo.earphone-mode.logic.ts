@@ -451,6 +451,8 @@ export function classifyEarphoneModeUtterance(input: {
 }): EarphoneModeUtteranceState {
   const { utterance } = input
   if (normalizeConversationMessageImage(utterance.image)) return { state: 'unreadable', reason: 'image' }
+  // A voice talk announcement is a card with a button, not something said.
+  if (utterance.voiceCall) return { state: 'unreadable', reason: 'empty' }
   if (
     !(input.readOwnMessages ?? EARPHONE_MODE_READ_OWN_MESSAGES)
     && isOwnEarphoneModeUtterance(utterance, input.viewerUserId)

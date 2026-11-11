@@ -60,9 +60,10 @@ describe('a call and speech-to-text are separate', () => {
 })
 
 describe('voice talk button', () => {
-  it('opens the panel before joining and asks to leave during a call', () => {
-    expect(resolveVoiceTalkButtonPress({ joined: false })).toBe('open')
-    expect(resolveVoiceTalkButtonPress({ joined: true })).toBe('confirm_leave')
+  it('asks to start, to join, or to leave, depending on the room\'s call', () => {
+    expect(resolveVoiceTalkButtonPress({ joined: false })).toBe('confirm_start')
+    expect(resolveVoiceTalkButtonPress({ joined: false, live: true })).toBe('confirm_join')
+    expect(resolveVoiceTalkButtonPress({ joined: true, live: true })).toBe('confirm_leave')
     expect(liveDemoSource).toContain('setVoiceTalkLeaveSignal((n) => n + 1)')
     expect(liveDemoSource).toContain('leaveSignal={voiceTalkLeaveSignal}')
   })
@@ -78,8 +79,12 @@ describe('voice talk button', () => {
 })
 
 describe('voice talk panel', () => {
-  it('leaves only through the confirmation (panel button and room button alike)', () => {
-    expect(panelSource).toContain('onClick={() => setConfirmLeave(true)}')
+  it('leaves at once from the panel\'s own button; only the room\'s phone button asks first', () => {
+    const panelLeave = panelSource.slice(panelSource.indexOf('data-qa="voice-talk-leave"'), panelSource.indexOf('data-qa="voice-talk-leave"') + 300)
+    expect(panelLeave).toContain('onClick={leave}')
+    expect(panelSource).not.toContain('onClick={() => setConfirmLeave(true)}')
+    expect(panelSource).toContain('if (leaveSignal && joined) setConfirmLeave(true)')
+    expect(panelSource).toContain("leaveTitle: '보이스톡에서 나가시겠습니까?'")
     expect(panelSource).toContain('data-qa="voice-talk-leave-confirm-button"')
     expect(panelSource.split("post({ type: 'native_voice_close' })").length - 1).toBe(1)
   })

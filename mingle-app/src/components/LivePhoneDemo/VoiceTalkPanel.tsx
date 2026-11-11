@@ -65,8 +65,13 @@ const COPY = {
     micOffState: '마이크 꺼짐',
     micMuted: '음소거',
     listenOnly: '듣기만 하는 중',
-    leaveTitle: '보이스톡에서 나갈까요?',
+    leaveTitle: '보이스톡에서 나가시겠습니까?',
     cancel: '취소',
+    startTitle: '대화방에 보이스톡을 시작하시겠습니까?',
+    startConfirm: '시작',
+    joinTitle: '진행 중인 보이스톡에 참여하시겠습니까?',
+    startedBy: (name: string) => `${name}님이 보이스톡을 시작했습니다.`,
+    startedBySomeone: '보이스톡이 시작됐습니다.',
     captionsOffHint: '자막·통역은 꺼져 있어요. 켜려면 아래 시작 버튼을 누르세요.',
   },
   en: {
@@ -90,6 +95,11 @@ const COPY = {
     listenOnly: 'Listening only',
     leaveTitle: 'Leave voice talk?',
     cancel: 'Cancel',
+    startTitle: 'Start a voice talk in this room?',
+    startConfirm: 'Start',
+    joinTitle: 'Join the voice talk in progress?',
+    startedBy: (name: string) => `${name} started a voice talk.`,
+    startedBySomeone: 'A voice talk has started.',
     captionsOffHint: 'Captions and interpretation are off. Press Start below to turn them on.',
   },
 }
@@ -115,6 +125,14 @@ function initial(name: string | null | undefined): string {
   return trimmed ? Array.from(trimmed)[0].toUpperCase() : '?'
 }
 
+/** Joins the room's call, starting it when none is live (one call per room, kept by the server). */
+export function joinVoiceTalk(input: { conversationId: string; title?: string; lang: string }) {
+  post({
+    type: 'native_voice_open',
+    payload: { conversationId: input.conversationId, title: input.title, lang: input.lang, interpret: false },
+  })
+}
+
 /** Switches the voice this phone sends into the call. */
 export function setVoiceTalkMic(on: boolean) {
   post({ type: 'native_voice_set', payload: { mic: on } })
@@ -125,9 +143,14 @@ export function resolveVoiceTalkMic(input: { listenOnly: boolean }): boolean {
   return !input.listenOnly
 }
 
-/** What a press on the room's voice talk button does: open the panel, or ask to leave a call this phone is in. */
-export function resolveVoiceTalkButtonPress(state: { joined: boolean }): 'open' | 'confirm_leave' {
-  return state.joined ? 'confirm_leave' : 'open'
+/**
+ * What a press on the room's voice talk button does. Every answer is a
+ * question first: start a call, join the one in progress, or leave the one
+ * this phone is in.
+ */
+export function resolveVoiceTalkButtonPress(state: { joined: boolean; live?: boolean }): 'confirm_start' | 'confirm_join' | 'confirm_leave' {
+  if (state.joined) return 'confirm_leave'
+  return state.live ? 'confirm_join' : 'confirm_start'
 }
 
 export type VoiceTalkPanelProps = {
@@ -138,9 +161,9 @@ export type VoiceTalkPanelProps = {
   myLang: string
   /** Pixels from the top of the room screen to the bottom of the top bar. */
   topOffset: string
-  /** Lets the room header show a start button; `connected` is a call this phone is in. */
-  onAvailabilityChange?: (state: { live: boolean; joined: boolean; connected: boolean }) => void
-  /** Bumped by the room's voice talk button: shows the panel (joining is the panel's Join button). */
+  /** The room's call as this phone sees it; `connected` is a call this phone is in, `callId` the live call. */
+  onAvailabilityChange?: (state: { live: boolean; joined: boolean; connected: boolean; callId: string | null }) => void
+  /** Bumped by the room's voice talk button outside a call: asks whether to start (or join) one. */
   openSignal?: number
   /** Bumped by the room's voice talk button during a call: asks whether to leave. */
   leaveSignal?: number
@@ -165,9 +188,10 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [room, setRoom] = useState<RoomSnapshot | null>(null)
   const [folded, setFolded] = useState(false)
-  // Shown by the voice talk button before joining.
-  const [opened, setOpened] = useState(false)
-  // A call this phone declined stays hidden until a new call starts.
+  // The voice talk button outside a call: "start a voice talk?" (or "join?").
+  const [startPrompt, setStartPrompt] = useState(false)
+  // A call this phone declined is not offered again by itself; its message in
+  // the room still joins it.
   const [declinedCallId, setDeclinedCallId] = useState<string | null>(null)
 
   const joined = phase === 'connecting' || phase === 'connected'
@@ -204,26 +228,25 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
 
   const live = !!call && call.participants.length > 0
   const connected = phase === 'connected'
+  const liveCallId = live ? call?.id ?? null : null
   useEffect(() => {
-    onAvailabilityChange?.({ live, joined, connected })
-  }, [live, joined, connected, onAvailabilityChange])
+    onAvailabilityChange?.({ live, joined, connected, callId: liveCallId })
+  }, [live, joined, connected, liveCallId, onAvailabilityChange])
 
   const join = useCallback(() => {
+    setStartPrompt(false)
     setFolded(false)
-    post({ type: 'native_voice_open', payload: { conversationId, title: conversationTitle, lang: myLang, interpret: false } })
+    joinVoiceTalk({ conversationId, title: conversationTitle, lang: myLang })
   }, [conversationId, conversationTitle, myLang])
 
-  // The button only shows the panel; `openSignal` is a counter, so this runs
-  // once per press (adjusting state while rendering, not in an effect).
+  // `openSignal` is a counter, so this runs once per press (adjusting state
+  // while rendering, not in an effect).
   const [seenOpenSignal, setSeenOpenSignal] = useState(openSignal ?? 0)
   if ((openSignal ?? 0) !== seenOpenSignal) {
     setSeenOpenSignal(openSignal ?? 0)
-    if (openSignal) {
-      setOpened(true)
-      setFolded(false)
-      setDeclinedCallId(null)
-    }
+    if (openSignal && !joined) setStartPrompt(true)
   }
+  if (startPrompt && joined) setStartPrompt(false)
 
   // The button pressed during a call: a confirmation, never a silent leave.
   const [confirmLeave, setConfirmLeave] = useState(false)
@@ -234,14 +257,12 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   }
   if (confirmLeave && !joined) setConfirmLeave(false)
 
-  // Decline an incoming call, or close the panel opened by the button.
-  const dismiss = useCallback(() => {
-    setOpened(false)
+  // Decline the call that just started: it is not offered again by itself.
+  const decline = useCallback(() => {
     if (call) setDeclinedCallId(call.id)
   }, [call])
 
   const leave = useCallback(() => {
-    setOpened(false)
     setConfirmLeave(false)
     onListenOnlyChange?.(false)
     // The panel goes away now, not when the app and the server have caught
@@ -286,7 +307,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   // Room members who are not in the call, shown small under the seats.
   const presence = useRoomPresence(conversationId)
   const [roomMembers, setRoomMembers] = useState<RoomMemberSummary[]>([])
-  const panelShown = joined || !!error || opened || (live && call?.id !== declinedCallId)
+  const panelShown = joined || !!error
   useEffect(() => {
     if (!panelShown || !conversationId) return
     let cancelled = false
@@ -305,9 +326,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     if (info.offset.y < -24 || info.velocity.y < -300) setFolded(true)
     else if (info.offset.y > 24 || info.velocity.y > 300) setFolded(false)
   }, [])
-
-  const incoming = live && call?.id !== declinedCallId
-  if (!joined && !error && !opened && !incoming) return null
 
   const leaveDialog = confirmLeave ? (
     <div
@@ -345,11 +363,103 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     </div>
   ) : null
 
+  // Asked low on the screen, where the thumb already is (the button that
+  // opened it sits at the bottom-left).
+  const startDialog = startPrompt && !joined ? (
+    <div
+      className="pointer-events-auto fixed inset-0 z-[60] flex items-end justify-center bg-black/35 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+96px)]"
+      data-qa="voice-talk-start-confirm"
+      onClick={() => setStartPrompt(false)}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={live ? copy.joinTitle : copy.startTitle}
+        className="w-full max-w-[340px] rounded-2xl bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.22)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <p className="text-center text-[1.02rem] font-semibold text-gray-900">{live ? copy.joinTitle : copy.startTitle}</p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            data-qa="voice-talk-start-cancel"
+            onClick={() => setStartPrompt(false)}
+            className="h-12 rounded-xl bg-gray-100 text-[0.95rem] font-semibold text-gray-700 active:bg-gray-200"
+          >
+            {copy.cancel}
+          </button>
+          <button
+            type="button"
+            data-qa="voice-talk-start-confirm-button"
+            onClick={join}
+            className="inline-flex h-12 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 text-[0.95rem] font-semibold text-white active:bg-emerald-600"
+          >
+            <Phone size={17} strokeWidth={2.3} /> {live ? copy.join : copy.startConfirm}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
+  // Someone started a call while this phone has the room open: a card low on
+  // the screen offers it once. Declining (or closing) leaves the call's
+  // message in the room, whose button still joins.
+  const incoming = live && !joined && !startPrompt && call?.id !== declinedCallId
+  const starterName = (call?.participants[0]?.name || '').trim()
+  const incomingCard = incoming ? (
+    <div
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom,0px)+96px)] z-[55] flex justify-center px-5"
+      data-qa="voice-talk-incoming"
+    >
+      <div
+        role="dialog"
+        aria-label={starterName ? copy.startedBy(starterName) : copy.startedBySomeone}
+        className="pointer-events-auto w-full max-w-[340px] rounded-2xl border border-emerald-100 bg-white p-4 shadow-[0_18px_48px_rgba(15,23,42,0.22)]"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+            <span aria-hidden="true" className="absolute inset-0 animate-ping rounded-full bg-emerald-400 opacity-40" />
+            <Phone size={17} strokeWidth={2.3} className="relative" />
+          </span>
+          <p className="min-w-0 flex-1 text-[0.95rem] font-semibold leading-snug text-gray-900">
+            {starterName ? copy.startedBy(starterName) : copy.startedBySomeone}
+          </p>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            data-qa="voice-talk-incoming-decline"
+            onClick={decline}
+            className="h-12 rounded-xl bg-gray-100 text-[0.95rem] font-semibold text-gray-700 active:bg-gray-200"
+          >
+            {copy.decline}
+          </button>
+          <button
+            type="button"
+            data-qa="voice-talk-incoming-join"
+            onClick={join}
+            className="h-12 rounded-xl bg-emerald-500 text-[0.95rem] font-semibold text-white active:bg-emerald-600"
+          >
+            {copy.join}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
+  // The panel is the call this phone is in. Before joining there is nothing
+  // to show under the top bar: starting and joining are the dialogs above.
+  if (!joined && !error) {
+    return <>{startDialog}{incomingCard}</>
+  }
+
   const count = joined && room ? room.members.length : call?.participants.length ?? 0
 
   return (
     <>
     {leaveDialog}
+    {startDialog}
+    {incomingCard}
     <div className="pointer-events-none absolute inset-x-0 z-30 px-2" style={{ top: props.topOffset }}>
       <motion.div
         layout
@@ -384,26 +494,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                 </span>
               ))}
             </div>
-          ) : null}
-          {!joined ? (
-            <>
-              <button
-                type="button"
-                data-qa="voice-talk-dismiss"
-                onClick={dismiss}
-                className="rounded-full bg-gray-100 px-3 py-1 text-[0.8rem] font-semibold text-gray-700 active:bg-gray-200"
-              >
-                {live ? copy.decline : copy.close}
-              </button>
-              <button
-                type="button"
-                data-qa="voice-talk-join"
-                onClick={join}
-                className="rounded-full bg-emerald-500 px-3 py-1 text-[0.8rem] font-semibold text-white active:bg-emerald-600"
-              >
-                {copy.join}
-              </button>
-            </>
           ) : null}
           <button
             type="button"
@@ -483,7 +573,9 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                   <button
                     type="button"
                     data-qa="voice-talk-leave"
-                    onClick={() => setConfirmLeave(true)}
+                    // Inside the panel the button is unmistakable: it leaves at
+                    // once. Only the room's phone button asks first.
+                    onClick={leave}
                     className="inline-flex h-11 min-w-[124px] items-center justify-center gap-1.5 rounded-full bg-rose-50 px-5 text-[0.86rem] font-semibold text-rose-600 active:bg-rose-100"
                   >
                     <PhoneOff size={17} /> {copy.leave}
