@@ -3,9 +3,22 @@ export type TranslationEngineProvider = 'gemini' | 'openai' | 'claude'
 export type TranslationInfrastructureProvider = 'google' | 'openai' | 'anthropic'
 
 export type UserSelectableTranslationModel =
-  | 'gemini-2.5-flash-lite'
   | 'gpt-6-luna'
   | 'claude-haiku-5-5'
+
+/**
+ * Models users could pick before; they are no longer offered and run on GPT-6 Luna.
+ * Kept so the admin dashboard can still count the messages they translated.
+ */
+export const RETIRED_TRANSLATION_MODELS = ['gemini-2.5-flash-lite'] as const
+export type RetiredTranslationModel = typeof RETIRED_TRANSLATION_MODELS[number]
+
+/** A recorded translation_model value that names a retired model, else null. */
+export function normalizeRetiredTranslationModel(value: unknown): RetiredTranslationModel | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  return RETIRED_TRANSLATION_MODELS.find((model) => model === normalized) ?? null
+}
 
 export type TranslationModelBadge = 'Best' | 'Slow'
 
@@ -30,10 +43,6 @@ export const NEW_REGISTERED_USER_TRANSLATION_MODEL: UserSelectableTranslationMod
 
 export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
   {
-    value: 'gemini-2.5-flash-lite',
-    label: 'gemini-2.5-flash-lite',
-  },
-  {
     value: 'gpt-6-luna',
     label: 'gpt-6-luna',
     badge: 'Best',
@@ -45,12 +54,6 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
 ]
 
 const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, TranslationRuntimeSelection> = {
-  'gemini-2.5-flash-lite': {
-    value: 'gemini-2.5-flash-lite',
-    engineProvider: 'gemini',
-    infrastructureProvider: 'google',
-    runtimeModel: 'gemini-2.5-flash-lite',
-  },
   'gpt-6-luna': {
     value: 'gpt-6-luna',
     engineProvider: 'openai',
@@ -70,10 +73,10 @@ function canonicalizeTranslationModel(rawValue: string): UserSelectableTranslati
   const normalized = rawValue.trim().toLowerCase()
   if (!normalized) return null
 
-  if (normalized === 'gemini-2.5-flash-lite') return 'gemini-2.5-flash-lite'
-
   if (
     normalized === 'gpt-6-luna'
+    // Retired option: accounts that stored it now run on GPT-6 Luna.
+    || normalized === 'gemini-2.5-flash-lite'
     || normalized === 'gpt 6 luna'
     || normalized === 'models/gpt-6-luna'
     || normalized === 'openai/gpt-6-luna'

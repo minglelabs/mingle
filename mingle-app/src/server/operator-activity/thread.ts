@@ -16,7 +16,7 @@ import { checkOperatorForPosting } from '@/server/operator-posts/operator-check'
 import { createComment } from '@/server/posts/comment-service'
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
-import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import {
   resolveDefaultPostTranslationLanguages,
   translateCommentBodySettled,
@@ -360,14 +360,17 @@ export async function commentAsOperator(ctx: AdminContext, input: {
   if (!text) throw new OperatorCommentError('conversion_failed')
   if (text.length > OPERATOR_COMMENT_MAX_LENGTH) throw new OperatorCommentError('text_too_long')
 
-  const detected = await detectSourceLanguage({ text, clientHint: conversion.language, provider: operatorTextProvider() })
+  const verdict = await detectSourceLanguageVerdict({ text, clientHint: conversion.language, provider: operatorTextProvider() })
+  const detected = verdict.language
+  const mixed = Boolean(detected) && verdict.mixed
   const translationRows = detected && detected.trim()
     ? (
         await translateCommentBodySettled({
           sourceText: text,
           sourceLanguage: detected,
-          targetLanguages: resolveDefaultPostTranslationLanguages(detected),
+          targetLanguages: resolveDefaultPostTranslationLanguages(detected, null, mixed),
           provider: operatorTextProvider(),
+          sourceLanguagesMixed: mixed,
         })
       ).map((row) => ({ language: row.language, status: row.status, text: row.text }))
     : []
@@ -379,6 +382,7 @@ export async function commentAsOperator(ctx: AdminContext, input: {
       authorId: operatorUserId,
       sourceText: text,
       sourceLanguage: detected,
+      sourceLanguagesMixed: mixed,
       parentId: input.parentId ?? null,
       replyToUserId: input.replyToUserId ?? null,
       translationRows,

@@ -5,21 +5,21 @@
 - App Store: https://apps.apple.com/app/id6759795134
 - Google Play: https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn
 - Company: https://minglelabs.app/
-- The old site at translator.minglelabs.xyz has moved to translator.minglelabs.app.
+- The old site at translator.minglelabs.xyz has moved to hashchat.minglelabs.app.
 
 ## Pages
 
-- [HashChat home](https://translator.minglelabs.app/): what HashChat does and who it is for
-- [Exploring Business Opportunities for AI Wrapper Software](https://translator.minglelabs.app/blogs/ai-wrapper-business): Mingle Labs talk (Nov 5, 2026) with case studies of AI wrapper businesses and a strategy for what comes next; Korean at ?lang=ko
-- [The AI Wrapper Business: Surfers Cohort 3 Edition](https://translator.minglelabs.app/blogs/ai-wrapper-business-surfers-3rd): the first, longer version of the AI wrapper talk (Aug 12, 2026)
-- [HashChat Pitch Deck](https://translator.minglelabs.app/blogs/hashchat-pitch-deck): why HashChat exists, early users, and the path from live interpreter to AI-native social network
-- [HashChat Pitch Deck: The Short Version](https://translator.minglelabs.app/blogs/hashchat-pitch-deck-short): the chicken-and-egg problem of language exchange and how live interpretation removes it
-- [Virtually deck](https://translator.minglelabs.app/blogs/virtually-deck): VTuber live streaming powered by generative AI
-- [HashChat: the social network without language barriers](https://translator.minglelabs.app/blogs/hashchat-social-network): how Mingle grew from a live voice translator into HashChat, a social network with a translated feed, language-aware profiles, and chats with a live interpreter; compared with LINE, WeChat, WhatsApp, HelloTalk, Tandem, Instagram, and Discord
-- [AI Translators Comparison](https://translator.minglelabs.app/blogs/ai-translators-comparison): HashChat compared with Felo Translator, Transync, Google Translate, Apple Translate, Microsoft Translator, Papago, and DeepL for live spoken conversations
-- [HashChat Blog](https://translator.minglelabs.app/blogs): all posts
+- [HashChat home](https://hashchat.minglelabs.app/): what HashChat does and who it is for
+- [Exploring Business Opportunities for AI Wrapper Software](https://hashchat.minglelabs.app/blogs/ai-wrapper-business): Mingle Labs talk (Nov 5, 2026) with case studies of AI wrapper businesses and a strategy for what comes next; Korean at ?lang=ko
+- [The AI Wrapper Business: Surfers Cohort 3 Edition](https://hashchat.minglelabs.app/blogs/ai-wrapper-business-surfers-3rd): the first, longer version of the AI wrapper talk (Aug 12, 2026)
+- [HashChat Pitch Deck](https://hashchat.minglelabs.app/blogs/hashchat-pitch-deck): why HashChat exists, early users, and the path from live interpreter to AI-native social network
+- [HashChat Pitch Deck: The Short Version](https://hashchat.minglelabs.app/blogs/hashchat-pitch-deck-short): the chicken-and-egg problem of language exchange and how live interpretation removes it
+- [Virtually deck](https://hashchat.minglelabs.app/blogs/virtually-deck): VTuber live streaming powered by generative AI
+- [HashChat: the social network without language barriers](https://hashchat.minglelabs.app/blogs/hashchat-social-network): how Mingle grew from a live voice translator into HashChat, a social network with a translated feed, language-aware profiles, and chats with a live interpreter; compared with LINE, WeChat, WhatsApp, HelloTalk, Tandem, Instagram, and Discord
+- [AI Translators Comparison](https://hashchat.minglelabs.app/blogs/ai-translators-comparison): HashChat compared with Felo Translator, Transync, Google Translate, Apple Translate, Microsoft Translator, Papago, and DeepL for live spoken conversations
+- [HashChat Blog](https://hashchat.minglelabs.app/blogs): all posts
 
 ## Legal
 
-- [Privacy Policy](https://translator.minglelabs.app/privacy-policy)
-- [Terms of Use](https://translator.minglelabs.app/terms-of-use)
+- [Privacy Policy](https://hashchat.minglelabs.app/privacy-policy)
+- [Terms of Use](https://hashchat.minglelabs.app/terms-of-use)

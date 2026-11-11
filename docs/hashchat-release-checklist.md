@@ -76,7 +76,7 @@
 - [ ] App Store / Play 스토어 페이지에서 이름 "HashChat", 아이콘, 스크린샷이 언어별로 바뀌었는지
 - [ ] "Mingle"로 검색해도 나오는지(부제·키워드·설명에 Mingle을 남겨 둠)
 - [ ] 앱 첫 실행: 스플래시, 로그인 화면 "HashChat", 권한 안내 문구
-- [ ] 웹: `translator.minglelabs.app` 탭 제목·파비콘·링크 미리보기(og-image)
+- [ ] 웹: `hashchat.minglelabs.app` 탭 제목·파비콘·링크 미리보기(og-image)
 - [ ] 푸시 알림 제목/채널 이름(Android "HashChat notifications")
 
 ## 바꾸지 않는 것 (실수로 바꾸지 말 것)

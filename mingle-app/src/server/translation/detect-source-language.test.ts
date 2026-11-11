@@ -6,7 +6,7 @@ vi.mock('./translate-texts', () => ({
   translateTexts: mockTranslateTexts,
 }))
 
-import { detectSourceLanguage, isUndetectableText } from './detect-source-language'
+import { DETECTION_SAMPLE_CHARS, detectSourceLanguage, detectSourceLanguageVerdict, isUndetectableText } from './detect-source-language'
 
 describe('isUndetectableText', () => {
   it('is true for empty / whitespace / emoji / punctuation / digits only', () => {
@@ -41,6 +41,23 @@ describe('detectSourceLanguage', () => {
     expect(mockTranslateTexts).toHaveBeenCalledWith(
       expect.objectContaining({ redetectSourceLanguage: true, isFinal: true }),
     )
+  })
+
+  it('asks for the language only: one answer key, no translation targets', async () => {
+    mockTranslateTexts.mockResolvedValue({ detectedSourceLanguage: 'ko', translations: { en: '-' } })
+    await detectSourceLanguage({ text: '안녕하세요', clientHint: 'ko' })
+    const input = mockTranslateTexts.mock.calls[0]?.[0]
+    expect(input.targetLanguages).toEqual(['en'])
+    expect(input.systemPromptOverride).toContain('You do NOT translate')
+    expect(input.userPromptOverride).toBe('language_hints=en, zh-CN, ja, ko\nsourceLanguage=ko\ntext="안녕하세요"')
+  })
+
+  it('sends only the start of a long body', async () => {
+    mockTranslateTexts.mockResolvedValue({ detectedSourceLanguage: 'en', translations: { en: '-' } })
+    await detectSourceLanguage({ text: 'word '.repeat(1_000) })
+    const input = mockTranslateTexts.mock.calls[0]?.[0]
+    expect(input.text.length).toBe(DETECTION_SAMPLE_CHARS)
+    expect(input.userPromptOverride.length).toBeLessThan(DETECTION_SAMPLE_CHARS + 100)
   })
 
   it('falls back to a valid client hint when detection yields nothing', async () => {
@@ -122,5 +139,24 @@ describe('detectSourceLanguage — Chinese is always zh-CN or zh-TW', () => {
     expect(await detectSourceLanguage({ text: '料理ができた', clientHint: 'zh-TW' })).toBe('ja')
     detects('ko')
     expect(await detectSourceLanguage({ text: '안녕하세요', clientHint: 'zh' })).toBe('ko')
+  })
+})
+
+describe('detectSourceLanguageVerdict', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('passes on the model saying the text mixes languages', async () => {
+    mockTranslateTexts.mockResolvedValue({ detectedSourceLanguage: 'ko', sourceLanguagesMixed: true, translations: { en: '-' } })
+    await expect(detectSourceLanguageVerdict({ text: '오늘 meeting 진짜 long했어' })).resolves.toEqual({ language: 'ko', mixed: true })
+  })
+
+  it('is not mixed when the model does not say so, or on any fallback', async () => {
+    mockTranslateTexts.mockResolvedValueOnce({ detectedSourceLanguage: 'ko', translations: { en: '-' } })
+    await expect(detectSourceLanguageVerdict({ text: '안녕하세요' })).resolves.toEqual({ language: 'ko', mixed: false })
+
+    mockTranslateTexts.mockRejectedValueOnce(new Error('down'))
+    await expect(detectSourceLanguageVerdict({ text: 'hello there', clientHint: 'en' })).resolves.toEqual({ language: 'en', mixed: false })
+
+    await expect(detectSourceLanguageVerdict({ text: '🎉' })).resolves.toEqual({ language: null, mixed: false })
   })
 })

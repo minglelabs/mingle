@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI, type ResponseSchema } from '@google/generative-ai'
 import { chatgptPoolChat, chatgptPoolKey } from '@/server/chatgpt-pool/client'
+import { isOpenAITextModel, OPENAI_TEXT_MODEL, OpenAIChatError, openaiChat } from '@/server/llm/openai-chat'
 
 /**
  * One bounded Gemini call that must answer with JSON matching `responseSchema`
@@ -12,8 +13,11 @@ import { chatgptPoolChat, chatgptPoolKey } from '@/server/chatgpt-pool/client'
  * - Nothing about the input or output is logged; errors carry a code only.
  */
 
-/** Same model as the profile-bio translator. */
-export const DEFAULT_GEMINI_JSON_MODEL = 'gemini-2.5-flash-lite'
+/**
+ * Default model: GPT-6 Luna on OpenAI's standard tier, like the profile-bio translator.
+ * A gemini-* id from the caller still runs on Gemini.
+ */
+export const DEFAULT_JSON_MODEL = OPENAI_TEXT_MODEL
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const MIN_TIMEOUT_MS = 1_000
@@ -42,7 +46,7 @@ export type GenerateJsonRequest<T> = {
   responseSchema: ResponseSchema
   /** Returns the checked value or throws; a throw becomes `llm_invalid_response`. */
   validate: (value: unknown) => T
-  /** Defaults to `DEFAULT_GEMINI_JSON_MODEL`. */
+  /** Defaults to `DEFAULT_JSON_MODEL`; a gpt-* id runs on OpenAI, anything else on Gemini. */
   model?: string
   /** Defaults to 0. */
   temperature?: number
@@ -57,15 +61,15 @@ function clampTimeout(value: number | undefined): number {
   return Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, Math.round(value)))
 }
 
-export function resolveGeminiJsonModel(model: string | null | undefined): string {
-  return model?.trim() || DEFAULT_GEMINI_JSON_MODEL
+export function resolveJsonModel(model: string | null | undefined): string {
+  return model?.trim() || DEFAULT_JSON_MODEL
 }
 
 /**
  * Where generateJson runs: the ChatGPT pool on the home PC when the server has
  * CHATGPT_POOL_KEY (staff decided 2026-10-31 that every operator text is
- * written there, not on a paid API), else Gemini. LLM_JSON_PROVIDER=gemini
- * forces Gemini.
+ * written there, not on a paid API), else the model's own API (OpenAI for
+ * gpt-*, Gemini otherwise). LLM_JSON_PROVIDER=gemini forces the direct API.
  */
 export function resolveJsonProvider(env: NodeJS.ProcessEnv = process.env): 'chatgpt-pool' | 'gemini' {
   if (env.LLM_JSON_PROVIDER?.trim() === 'gemini') return 'gemini'
@@ -114,8 +118,51 @@ async function generateJsonWithPool<T>(request: GenerateJsonRequest<T>): Promise
   }
 }
 
+function parseAndValidate<T>(raw: string, validate: (value: unknown) => T): T {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (error) {
+    throw new LlmError('llm_invalid_response', { cause: error })
+  }
+  try {
+    return validate(parsed)
+  } catch (error) {
+    throw new LlmError('llm_invalid_response', { cause: error })
+  }
+}
+
+async function generateJsonWithOpenAI<T>(request: GenerateJsonRequest<T>, model: string): Promise<T> {
+  let raw: string
+  try {
+    raw = await openaiChat({
+      model,
+      system: [
+        request.instructions.trim(),
+        DATA_RULE,
+        `Answer with one JSON value only, matching this JSON schema:\n${JSON.stringify(request.responseSchema)}`,
+      ].join('\n\n'),
+      user: JSON.stringify(request.input ?? null),
+      json: true,
+      temperature: request.temperature ?? 0,
+      maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      timeoutMs: clampTimeout(request.timeoutMs),
+      signal: request.signal,
+    })
+  } catch (error) {
+    const code = error instanceof OpenAIChatError ? error.code : 'openai_request_failed'
+    if (code === 'openai_unavailable') throw new LlmError('llm_unavailable', { cause: error })
+    if (code === 'openai_timeout') throw new LlmError('llm_timeout', { cause: error })
+    if (code === 'openai_empty_response') throw new LlmError('llm_invalid_response', { cause: error })
+    throw new LlmError('llm_request_failed', { cause: error })
+  }
+  return parseAndValidate(raw, request.validate)
+}
+
 export async function generateJson<T>(request: GenerateJsonRequest<T>): Promise<T> {
   if (resolveJsonProvider() === 'chatgpt-pool') return generateJsonWithPool(request)
+  const modelId = resolveJsonModel(request.model)
+  if (isOpenAITextModel(modelId)) return generateJsonWithOpenAI(request, modelId)
   const apiKey = process.env.GEMINI_API_KEY?.trim()
   if (!apiKey) throw new LlmError('llm_unavailable')
 
@@ -125,7 +172,7 @@ export async function generateJson<T>(request: GenerateJsonRequest<T>): Promise<
     : AbortSignal.timeout(timeoutMs)
 
   const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-    model: resolveGeminiJsonModel(request.model),
+    model: modelId,
     systemInstruction: `${request.instructions.trim()}\n\n${DATA_RULE}`,
     generationConfig: {
       temperature: request.temperature ?? 0,

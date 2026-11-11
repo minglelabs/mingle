@@ -71,11 +71,12 @@ vi.mock('@/lib/app-analytics', () => {
   }
 })
 
-// These cases exercise the Gemini path through the no-preference fallback, so pin that
-// fallback to Gemini here; the real default is asserted in translation-models.test.ts.
+// Gemini is no longer a selectable model, but the engine still runs it when TRANSLATE_PROVIDER=gemini
+// and no model is selected. These cases exercise that engine path, so the no-preference fallback
+// returns no model here; the real default (GPT-6 Luna) is asserted in translation-models.test.ts.
 vi.mock('@/lib/translation-models', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/translation-models')>()),
-  resolveDefaultSelectableTranslationModel: () => 'gemini-2.5-flash-lite',
+  resolveDefaultSelectableTranslationModel: () => null,
 }))
 
 vi.mock('@google/generative-ai', () => {
@@ -378,6 +379,71 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
     expect(json.translations).toEqual({ en: 'Hi. How are you?' })
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
+  it('adds the own-language row to a fixed bubble that mixes languages', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"en","sourceLanguagesMixed":true,"sourceTextHasForeignScript":true,"en":"It is interesting. It is like my life."}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'It is interesting. 내 목숨 같은데.',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko', 'en'],
+      sttLanguages: ['en', 'ko'],
+      isFinal: true,
+      bubbleTail: { translatedSource: 'It is interesting. 내 목숨 같은데.', translations: { ko: '흥미롭네. 내 목숨 같은데.' } },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ ko: '흥미롭네. 내 목숨 같은데.', en: 'It is interesting. It is like my life.' })
+    expect(json.sourceLanguagesMixed).toBe(true)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    expect(readGeminiUserPrompt(0)).toContain('내 목숨 같은데')
+  })
+
+  it('drops the own-language row when the model finds no mix', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"en","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"en":"Hello there."}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'Hello there.',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko', 'en'],
+      sttLanguages: ['en', 'es'],
+      isFinal: true,
+      bubbleTail: { translatedSource: 'Hello there.', translations: { ko: '안녕하세요.' } },
+    }) as never)
+    const json = await res.json()
+
+    expect(json.translations).toEqual({ ko: '안녕하세요.' })
+    expect(json.sourceLanguagesMixed).toBeUndefined()
+  })
+
+  it('asks nothing more for a fixed bubble in one language and one script', async () => {
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'Hello there.',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko', 'en'],
+      sttLanguages: ['en'],
+      isFinal: true,
+      bubbleTail: { translatedSource: 'Hello there.', translations: { ko: '안녕하세요.' } },
+    }) as never)
+
+    expect((await res.json()).translations).toEqual({ ko: '안녕하세요.' })
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
@@ -735,7 +801,6 @@ describe('/api/translate/finalize route', () => {
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
       isFinal: true,
-      translationModel: 'gemini-2.5-flash-lite',
     }) as never)
     const json = await res.json()
 
@@ -853,36 +918,20 @@ describe('/api/translate/finalize route', () => {
     }
   })
 
-  it('uses the request translation model before falling back to the DB preference lookup', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
-    mockGenerateContent.mockResolvedValue({
-      response: {
-        text: () => '{"ko":"안녕하세요"}',
-        usageMetadata: {},
-      },
-    })
+  it('runs the retired gemini-2.5-flash-lite request model on GPT-6 Luna without the DB preference lookup', async () => {
+    setAuthenticatedTranslationModel('claude-haiku-5-5')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: '{"ko":"안녕하세요"}',
-              },
-              finish_reason: 'stop',
-            },
-          ],
+          choices: [{ message: { content: '{"ko":"안녕하세요"}' }, finish_reason: 'stop' }],
           usage: {},
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ))
 
     vi.stubGlobal('fetch', fetchMock)
-    vi.resetModules()
-    setGeminiTranslateEnv()
-    process.env.OPENROUTER_API_KEY = 'test-openrouter-key'
-
-    const { POST } = await import('@/app/api/translate/finalize/route')
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
 
     const res = await POST(makeJsonRequest({
       text: 'hello',
@@ -894,35 +943,28 @@ describe('/api/translate/finalize route', () => {
     const json = await res.json()
 
     expect(res.status).toBe(200)
-    expect(json.provider).toBe('gemini')
-    expect(json.infrastructureProvider).toBe('google')
-    expect(json.model).toBe('gemini-2.5-flash-lite')
+    expect(json.provider).toBe('openai')
+    expect(json.model).toBe('gpt-6-luna')
     expect(mockGetServerSession).not.toHaveBeenCalled()
     expect(mockUserFindUnique).not.toHaveBeenCalled()
-    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('uses the authenticated user gemini translation model from DB even when env prefers qwen', async () => {
+  it('runs a stored retired gemini-2.5-flash-lite preference on GPT-6 Luna in Fast mode', async () => {
     setAuthenticatedTranslationModel('gemini-2.5-flash-lite')
-    mockGenerateContent.mockResolvedValue({
-      response: {
-        text: () => '{"ko":"안녕하세요"}',
-        usageMetadata: {},
-      },
-    })
-
     const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    vi.resetModules()
-    setQwenTranslateEnv({
-      baseUrl: 'https://openrouter.ai/api/v1',
-      apiKey: 'test-qwen-key',
-      model: 'qwen/qwen3.5-9b',
-    })
-    process.env.GEMINI_API_KEY = 'test-gemini-key'
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [{ message: { content: '{"ko":"안녕하세요"}' }, finish_reason: 'stop' }],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
 
-    const { POST } = await import('@/app/api/translate/finalize/route')
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
 
     const res = await POST(makeJsonRequest({
       text: 'hello',
@@ -933,15 +975,13 @@ describe('/api/translate/finalize route', () => {
     const json = await res.json()
 
     expect(res.status).toBe(200)
-    expect(json.provider).toBe('gemini')
-    expect(json.infrastructureProvider).toBe('google')
-    expect(json.model).toBe('gemini-2.5-flash-lite')
-    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-    expect(fetchMock).not.toHaveBeenCalled()
-    const request = mockGenerateContent.mock.calls[0]?.[0] as { serviceTier?: string, contents?: unknown[] }
-    expect(request.serviceTier).toBe('priority')
-    expect(request.contents).toHaveLength(1)
-    expect(readGeminiUserPrompt(0).length).toBeGreaterThan(0)
+    expect(json.provider).toBe('openai')
+    expect(json.model).toBe('gpt-6-luna')
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+    const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))
+    expect(payload.model).toBe('gpt-6-luna')
+    // Live translation always runs on the fast tier.
+    expect(payload.service_tier).toBe('priority')
   })
 
   it('uses the tracking user translation model from DB for non-final requests without an auth session', async () => {
@@ -1265,23 +1305,30 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back from GPT-6 Luna to Gemini when OpenAI rejects the request', async () => {
+  it('falls back from GPT-6 Luna to Claude Haiku when OpenAI rejects the request', async () => {
     setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
         { status: 401, headers: { 'Content-Type': 'application/json' } },
       ))
-    mockGenerateContent.mockResolvedValueOnce({
-      response: {
-        text: () => '{"ko":"안녕하세요"}',
-        usageMetadata: {},
-      },
-    })
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-haiku-5-5',
+          content: [{ type: 'text', text: '{"ko":"안녕하세요"}' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
 
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithEnv()
     process.env.OPENAI_API_KEY = 'test-openai-key'
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
 
     const res = await POST(makeJsonRequest({
       text: 'hello',
@@ -1292,29 +1339,36 @@ describe('/api/translate/finalize route', () => {
     const json = await res.json()
 
     expect(res.status).toBe(200)
-    expect(json.provider).toBe('gemini')
-    expect(json.model).toBe('gemini-2.5-flash-lite')
+    expect(json.provider).toBe('claude')
     expect(json.translations).toEqual({ ko: '안녕하세요' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    // Gemini is no longer a fallback.
+    expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
-  it('falls back from a timed-out final GPT-6 Luna request to Gemini without retrying OpenAI', async () => {
+  it('falls back from a timed-out final GPT-6 Luna request to Claude Haiku without retrying OpenAI', async () => {
     setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
-      .mockRejectedValue(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
-    mockGenerateContent.mockResolvedValueOnce({
-      response: {
-        text: () => '{"ko":"오."}',
-        usageMetadata: {},
-      },
-    })
+      .mockRejectedValueOnce(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-haiku-5-5',
+          content: [{ type: 'text', text: '{"ko":"안녕하세요"}' }],
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
     const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
 
     vi.stubGlobal('fetch', fetchMock)
     try {
       const POST = await importRouteWithEnv()
       process.env.OPENAI_API_KEY = 'test-openai-key'
+      process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
 
       const res = await POST(makeJsonRequest({
         text: 'Oh.',
@@ -1325,17 +1379,18 @@ describe('/api/translate/finalize route', () => {
       const json = await res.json()
 
       expect(res.status).toBe(200)
-      expect(json.provider).toBe('gemini')
-      expect(json.translations).toEqual({ ko: '오.' })
+      expect(json.provider).toBe('claude')
       expect(timeoutSpy).toHaveBeenCalledWith(8_000)
-      expect(fetchMock).toHaveBeenCalledTimes(1)
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(String(fetchMock.mock.calls[0]?.[0])).toContain('api.openai.com')
+      expect(String(fetchMock.mock.calls[1]?.[0])).toContain('api.anthropic.com')
+      expect(mockGenerateContent).not.toHaveBeenCalled()
     } finally {
       timeoutSpy.mockRestore()
     }
   })
 
-  it('falls back to Claude Haiku when both GPT-6 Luna and Gemini fail', async () => {
+  it('falls back to Claude Haiku when GPT-6 Luna fails, skipping Gemini', async () => {
     setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
@@ -1375,10 +1430,11 @@ describe('/api/translate/finalize route', () => {
     expect(json.provider).toBe('claude')
     expect(json.translations).toEqual({ ko: '안녕하세요' })
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('api.anthropic.com')
+    expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
   it('returns 502 after every fallback provider fails', async () => {
-    setAuthenticatedTranslationModel('gemini-2.5-flash-lite')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValue(new Response(
         JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
@@ -1391,6 +1447,7 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithEnv()
     process.env.OPENAI_API_KEY = 'test-openai-key'
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
 
     const res = await POST(makeJsonRequest({
       text: 'hello',
@@ -1401,10 +1458,11 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(502)
     expect(await res.json()).toEqual({ error: 'empty_translation_response' })
-    // Gemini first (selected), then GPT-6 Luna; Haiku has no key here.
-    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    // GPT-6 Luna (selected), then Claude Haiku; Gemini is not a fallback.
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('api.openai.com')
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('api.anthropic.com')
   })
 
   it('falls back to the default model when the user has no stored translation model', async () => {
@@ -1437,7 +1495,7 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
     expect(json.provider).toBe('gemini')
-    expect(json.model).toBe('gemini-2.5-flash-lite')
+    expect(json.model).toBe('gemini-3.5-flash-lite')
     expect(mockGenerateContent).toHaveBeenCalledTimes(1)
     expect(fetchMock).not.toHaveBeenCalled()
     const request = mockGenerateContent.mock.calls[0]?.[0] as { serviceTier?: string, contents?: unknown[] }
@@ -1827,6 +1885,102 @@ describe('/api/translate/finalize route', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  it('does not ask for the utterance\'s own language when the recognizer labelled one language', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ja":"今日はいい天気ですね","en":"Nice weather today"}',
+        usageMetadata: {},
+      },
+    })
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    const { POST } = await import('@/server/api/controllers/ios/v1.0.4/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_4 }))
+
+    const res = await POST(makeJsonRequest({
+      text: '오늘 날씨 좋네요',
+      sourceLanguage: 'ko',
+      sttLanguages: ['ko'],
+      targetLanguages: ['ko', 'ja', 'en'],
+      isFinal: true,
+    }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    const prompt = JSON.stringify(mockGenerateContent.mock.calls[0])
+    // Every room language stays a hint; only ja and en are asked for.
+    expect(prompt).toContain('language_hints=ko, ja, en')
+    const schema = JSON.stringify(mockGetGenerativeModel.mock.calls.at(-1))
+    expect(schema).not.toContain('"required":["sourceLanguage","sourceLanguagesMixed","sourceTextHasForeignScript","ko"')
+    expect(json.sourceLanguage).toBe('ko')
+    expect(json.translations).toEqual({
+      ko: '오늘 날씨 좋네요',
+      ja: '今日はいい天気ですね',
+      en: 'Nice weather today',
+    })
+  })
+
+  it('asks again for every language when the model says a single-label utterance is mixed', async () => {
+    mockGenerateContent
+      .mockResolvedValueOnce({
+        response: {
+          text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":true,"sourceTextHasForeignScript":false,"ja":"lean","en":"lean"}',
+          usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 10, totalTokenCount: 110 },
+        },
+      })
+      .mockResolvedValueOnce({
+        response: {
+          text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":true,"sourceTextHasForeignScript":false,"ko":"정말 답답해서 죽겠다고","ja":"本当にもどかしくて死にそうだって","en":"I am so frustrated I could die"}',
+          usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 30, totalTokenCount: 150 },
+        },
+      })
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    const { POST } = await import('@/server/api/controllers/ios/v1.0.4/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_4 }))
+
+    const res = await POST(makeJsonRequest({
+      text: '손나 답답해서 죽겠다고',
+      sourceLanguage: 'ko',
+      sttLanguages: ['ko'],
+      targetLanguages: ['ko', 'ja', 'en'],
+      isFinal: true,
+    }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(2)
+    expect(json.sourceLanguagesMixed).toBe(true)
+    expect(json.translations).toEqual({
+      ko: '정말 답답해서 죽겠다고',
+      ja: '本当にもどかしくて死にそうだって',
+      en: 'I am so frustrated I could die',
+    })
+  })
+
+  it('asks for every language when the recognizer labelled two languages', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ko":"오늘 날씨 좋네요","ja":"今日はいい天気ですね","en":"Nice weather today"}',
+        usageMetadata: {},
+      },
+    })
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    const { POST } = await import('@/server/api/controllers/ios/v1.0.4/translate-finalize-controller').then((m) => ({ POST: m.postTranslateFinalizeForIosV1_0_4 }))
+
+    const res = await POST(makeJsonRequest({
+      text: '오늘 날씨 좋네요',
+      sourceLanguage: 'ko',
+      sttLanguages: ['en', 'ko'],
+      targetLanguages: ['ko', 'ja', 'en'],
+      isFinal: true,
+    }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+
+    expect(res.status).toBe(200)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(mockGetGenerativeModel.mock.calls.at(-1))).toContain('"ko"')
   })
 
   it('keeps translations when the redetected source language is outside the selectable list', async () => {

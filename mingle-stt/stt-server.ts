@@ -39,6 +39,7 @@ import {
     normalizeDetectedLang,
     normalizeSpeaker,
     shouldUseTokenLanguageForCurrentTurn,
+    mergeTurnLanguages,
 } from './soniox-language';
 import {
     parseMingleSttReleaseVariant,
@@ -724,6 +725,10 @@ function handleSttConnection(
                 lastProgressAtMs: number;
                 lastConsumedEndMs: number;
                 detectedLang: string;
+                // Every language Soniox labelled a token of this turn with:
+                // final tokens add up, non-final ones follow the latest frame.
+                finalLanguages: Set<string>;
+                nonFinalLanguages: Set<string>;
             };
             type SonioxFinSpeakerState = SonioxCommonSpeakerState & {
                 mode: 'fin';
@@ -755,6 +760,8 @@ function handleSttConnection(
                 maxFinalTokenEndMs: number;
                 maxSeenTokenEndMs: number;
                 lastDetectedLang: string | null;
+                finalLanguages: Set<string>;
+                nonFinalLanguages: Set<string>;
                 hasProgressTokenBeyondWatermark: boolean;
                 hasTimestampedProgressBeyondWatermark: boolean;
             };
@@ -1020,6 +1027,10 @@ function handleSttConnection(
                 scheduleGlobalFinalizeCheck(wait);
             };
 
+            const listTurnLanguages = (state: SonioxSpeakerState): string[] => (
+                mergeTurnLanguages(state.finalLanguages, state.nonFinalLanguages)
+            );
+
             const emitTranscript = (
                 text: string,
                 language: string,
@@ -1027,6 +1038,7 @@ function handleSttConnection(
                 speaker?: string,
                 options?: {
                     finalizeSource?: MingleSttFinalizeSource;
+                    languages?: string[];
                 },
             ): MingleSttFinalTurnPayload => {
                 const cleanedText = text.trim();
@@ -1045,6 +1057,9 @@ function handleSttConnection(
                                 text: cleanedText,
                                 language: cleanedLang,
                                 speaker: cleanedSpeaker,
+                                ...(isFinal && options?.languages && options.languages.length > 0
+                                    ? { languages: options.languages }
+                                    : {}),
                             },
                         },
                     }));
@@ -1071,6 +1086,8 @@ function handleSttConnection(
                 state.currentSnapshotEndMs = -1;
                 state.lastProgressAtMs = 0;
                 state.detectedLang = 'unknown';
+                state.finalLanguages = new Set<string>();
+                state.nonFinalLanguages = new Set<string>();
                 if (isFinSpeakerState(state)) {
                     state.carry.reset();
                 }
@@ -1093,7 +1110,7 @@ function handleSttConnection(
                     state.detectedLang,
                     true,
                     state.speaker,
-                    { finalizeSource },
+                    { finalizeSource, languages: listTurnLanguages(state) },
                 );
                 if (state.currentSnapshotEndMs > state.lastConsumedEndMs) {
                     state.lastConsumedEndMs = state.currentSnapshotEndMs;
@@ -1118,9 +1135,13 @@ function handleSttConnection(
                 finalizedDetectedLang: string,
                 carryText: string,
                 carryEndMs: number,
+                finalizedLanguages: string[],
             ) => {
                 if (!carryText.trim()) return;
                 state.detectedLang = getNextTurnDetectedLang(finalizedDetectedLang, carryText);
+                // The carried words were labelled in the finished turn; which
+                // labels were theirs is not kept, so the new turn starts with all.
+                state.nonFinalLanguages = new Set(finalizedLanguages);
                 state.latestNonFinalText = carryText;
                 state.currentSnapshotText = composeTurnText('', carryText);
                 state.currentSnapshotEndMs = carryEndMs;
@@ -1150,6 +1171,7 @@ function handleSttConnection(
                         state.latestNonFinalText,
                     );
                     const finalizedDetectedLang = requestSpeaker.detectedLang || state.detectedLang;
+                    const finalizedLanguages = listTurnLanguages(state);
                     const finalizedText = stripEndpointMarkers(requestSpeaker.snapshotText).trim();
                     const carryEndMs = state.currentSnapshotEndMs;
                     const carryText = stripEndpointMarkers(
@@ -1162,7 +1184,7 @@ function handleSttConnection(
                             finalizedDetectedLang,
                             true,
                             state.speaker,
-                            { finalizeSource },
+                            { finalizeSource, languages: finalizedLanguages },
                         )
                         : null;
                     if (payload) {
@@ -1172,7 +1194,7 @@ function handleSttConnection(
                         state.lastConsumedEndMs = requestSpeaker.snapshotEndMs;
                     }
                     resetSpeakerTurn(state);
-                    restoreFinCarry(state, finalizedDetectedLang, carryText, carryEndMs);
+                    restoreFinCarry(state, finalizedDetectedLang, carryText, carryEndMs, finalizedLanguages);
                 }
                 return lastPayload;
             };
@@ -1192,6 +1214,8 @@ function handleSttConnection(
                     lastProgressAtMs: 0,
                     lastConsumedEndMs: -1,
                     detectedLang: 'unknown',
+                    finalLanguages: new Set<string>(),
+                    nonFinalLanguages: new Set<string>(),
                 };
                 let state: SonioxSpeakerState;
                 if (segmentationRuntime.effective === 'fin') {
@@ -1337,6 +1361,8 @@ function handleSttConnection(
                         maxFinalTokenEndMs: -1,
                         maxSeenTokenEndMs: -1,
                         lastDetectedLang: null,
+                        finalLanguages: new Set<string>(),
+                        nonFinalLanguages: new Set<string>(),
                         hasProgressTokenBeyondWatermark: false,
                         hasTimestampedProgressBeyondWatermark: false,
                     };
@@ -1382,6 +1408,7 @@ function handleSttConnection(
                         );
                         if (includeByProviderFinalizedWatermark) {
                             frameUpdate.finalDeltaText += tokenText;
+                            if (tokenLanguage !== 'unknown') frameUpdate.finalLanguages.add(tokenLanguage);
                             tokenCanUpdateDetectedLang = shouldUseTokenLanguageForCurrentTurn({
                                 includeByTurnWatermark: includeByWatermark,
                                 isFinalToken: true,
@@ -1393,6 +1420,7 @@ function handleSttConnection(
                         }
                     } else {
                         frameUpdate.nonFinalText += tokenText;
+                        if (tokenLanguage !== 'unknown') frameUpdate.nonFinalLanguages.add(tokenLanguage);
                         tokenCanUpdateDetectedLang = shouldUseTokenLanguageForCurrentTurn({
                             includeByTurnWatermark: includeByWatermark,
                             isFinalToken: false,
@@ -1455,6 +1483,8 @@ function handleSttConnection(
                             maxFinalTokenEndMs: -1,
                             maxSeenTokenEndMs: state.currentSnapshotEndMs,
                             lastDetectedLang: null,
+                            finalLanguages: new Set<string>(),
+                            nonFinalLanguages: new Set<string>(),
                             hasProgressTokenBeyondWatermark: false,
                             hasTimestampedProgressBeyondWatermark: false,
                         });
@@ -1497,6 +1527,9 @@ function handleSttConnection(
                     if (frameUpdate.finalDeltaText) {
                         speakerState.providerFinalizedText = `${speakerState.providerFinalizedText}${frameUpdate.finalDeltaText}`;
                     }
+                    for (const language of frameUpdate.finalLanguages) {
+                        speakerState.finalLanguages.add(language);
+                    }
                     if (frameUpdate.maxFinalTokenEndMs > speakerState.providerFinalizedEndMs) {
                         speakerState.providerFinalizedEndMs = frameUpdate.maxFinalTokenEndMs;
                     }
@@ -1511,8 +1544,10 @@ function handleSttConnection(
                             }
                         }
                         speakerState.latestNonFinalText = frameUpdate.nonFinalText;
+                        speakerState.nonFinalLanguages = frameUpdate.nonFinalLanguages;
                     } else if (!isFinSpeakerState(speakerState) || !speakerState.carry.isProvisional) {
                         speakerState.latestNonFinalText = '';
+                        speakerState.nonFinalLanguages = new Set<string>();
                     }
                     speakerState.currentSnapshotText = composeTurnText(
                         speakerState.providerFinalizedText,
@@ -1545,7 +1580,7 @@ function handleSttConnection(
                                 speakerState.detectedLang,
                                 true,
                                 speakerState.speaker,
-                                { finalizeSource: 'soniox_endpoint' },
+                                { finalizeSource: 'soniox_endpoint', languages: listTurnLanguages(speakerState) },
                             );
                             if (payload) {
                                 lastFinalizedPayloadForBatch = payload;
@@ -1566,13 +1601,14 @@ function handleSttConnection(
                         });
                         if (decision.action === 'finalize') {
                             const finalizedDetectedLang = requestSpeaker.detectedLang || speakerState.detectedLang;
+                            const finalizedLanguages = listTurnLanguages(speakerState);
                             const carryEndMs = speakerState.currentSnapshotEndMs;
                             const payload = emitTranscript(
                                 decision.finalText,
                                 finalizedDetectedLang,
                                 true,
                                 speakerState.speaker,
-                                { finalizeSource: 'soniox_manual' },
+                                { finalizeSource: 'soniox_manual', languages: finalizedLanguages },
                             );
                             if (payload) {
                                 lastFinalizedPayloadForBatch = payload;
@@ -1586,6 +1622,7 @@ function handleSttConnection(
                                 finalizedDetectedLang,
                                 decision.carryText,
                                 carryEndMs,
+                                finalizedLanguages,
                             );
                             continue;
                         }
@@ -1600,7 +1637,7 @@ function handleSttConnection(
                                 requestSpeaker?.detectedLang || speakerState.detectedLang,
                                 true,
                                 speakerState.speaker,
-                                { finalizeSource: 'soniox_manual' },
+                                { finalizeSource: 'soniox_manual', languages: listTurnLanguages(speakerState) },
                             );
                             if (payload) {
                                 lastFinalizedPayloadForBatch = payload;

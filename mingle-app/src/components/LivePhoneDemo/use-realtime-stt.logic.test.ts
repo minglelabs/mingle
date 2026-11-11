@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  withBubbleTailFixedTranslations,
   buildLanguageSelectionSignature,
   buildSonioxLanguageHints,
   appendFinalizedUtteranceToStoreState,
@@ -2773,5 +2775,28 @@ describe('Chinese variant resolution in the client pipeline', () => {
     })
     expect(live('这是中文')?.originalDisplayText).toBe('這是中文')
     expect(live('这是中文吧')).not.toHaveProperty('originalDisplayText')
+  })
+})
+
+describe('withBubbleTailFixedTranslations', () => {
+  const row = { id: 'u1', originalText: 'one. two. three', originalLang: 'en', translations: { ko: '하나. 둘. 셋' } }
+
+  it('keeps the fixed translations on the committed row', () => {
+    expect(withBubbleTailFixedTranslations(row, { translatedSource: 'one. two.', translations: { ko: '하나. 둘.' } }).translationFixed)
+      .toEqual({ ko: '하나. 둘.' })
+  })
+
+  it('leaves a row with nothing fixed as it is', () => {
+    expect(withBubbleTailFixedTranslations(row, undefined)).toBe(row)
+    expect(withBubbleTailFixedTranslations(row, { translatedSource: '', translations: {} })).toBe(row)
+  })
+})
+
+describe('committed rows keep the fixed tail', () => {
+  const source = readFileSync(new URL('./use-realtime-stt.ts', import.meta.url), 'utf8')
+
+  it('on a stop and on the server final alike', () => {
+    expect(source).toContain('localPayload.utterance = withBubbleTailFixedTranslations(')
+    expect(source).toContain('finalizedPayload.utterance = withBubbleTailFixedTranslations(')
   })
 })

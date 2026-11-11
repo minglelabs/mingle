@@ -36,10 +36,11 @@ afterEach(() => {
 describe("resolveTranslationModelColor", () => {
   it("gives every selectable model its own fixed colour and 기타 the neutral gray", () => {
     expect(TRANSLATION_MODEL_OPTIONS.map((option) => resolveTranslationModelColor(option.value))).toEqual([
-      "#2a78d6",
       "#8b5cf6",
       "#e0457b",
     ]);
+    // Retired model keeps its colour for past messages.
+    expect(resolveTranslationModelColor("gemini-2.5-flash-lite")).toBe("#2a78d6");
     expect(resolveTranslationModelColor("other")).toBe("#898781");
   });
 });

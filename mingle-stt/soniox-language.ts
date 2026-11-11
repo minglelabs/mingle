@@ -50,6 +50,21 @@ export function mergeDetectedLang(currentDetectedLang: string, nextDetectedLang:
     return normalizeDetectedLang(currentDetectedLang);
 }
 
+/**
+ * Every language a turn's tokens were labelled with, without 'unknown',
+ * sorted so the same turn always reports the same list.
+ */
+export function mergeTurnLanguages(...groups: Iterable<string>[]): string[] {
+    const languages = new Set<string>();
+    for (const group of groups) {
+        for (const language of group) {
+            const normalized = normalizeDetectedLang(language);
+            if (normalized !== 'unknown') languages.add(normalized);
+        }
+    }
+    return [...languages].sort();
+}
+
 export function getNextTurnDetectedLang(previousDetectedLang: string, carryText: string): string {
     if (!carryText.trim()) {
         return 'unknown';

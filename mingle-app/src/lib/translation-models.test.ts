@@ -3,6 +3,7 @@ import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   NEW_REGISTERED_USER_TRANSLATION_MODEL,
   TRANSLATION_MODEL_OPTIONS,
+  normalizeRetiredTranslationModel,
   normalizeSelectableTranslationModel,
   resolveTranslationRuntimeSelection,
 } from './translation-models'
@@ -14,11 +15,7 @@ describe('translation model catalog', () => {
   })
 
   it('keeps closed-state labels compact while exposing open-menu badges as metadata', () => {
-    expect(TRANSLATION_MODEL_OPTIONS).toEqual(expect.arrayContaining([
-      {
-        value: 'gemini-2.5-flash-lite',
-        label: 'gemini-2.5-flash-lite',
-      },
+    expect(TRANSLATION_MODEL_OPTIONS).toEqual([
       {
         value: 'gpt-6-luna',
         label: 'gpt-6-luna',
@@ -28,7 +25,17 @@ describe('translation model catalog', () => {
         value: 'claude-haiku-5-5',
         label: 'claude-haiku-5-5',
       },
-    ]))
+    ])
+  })
+
+  it('runs the retired gemini-2.5-flash-lite on GPT-6 Luna and keeps it countable', () => {
+    expect(normalizeSelectableTranslationModel('gemini-2.5-flash-lite')).toBe('gpt-6-luna')
+    expect(resolveTranslationRuntimeSelection(' Gemini-2.5-Flash-Lite ')).toMatchObject({
+      engineProvider: 'openai',
+      runtimeModel: 'gpt-6-luna',
+    })
+    expect(normalizeRetiredTranslationModel('gemini-2.5-flash-lite')).toBe('gemini-2.5-flash-lite')
+    expect(normalizeRetiredTranslationModel('gpt-6-luna')).toBeNull()
   })
 
   it('rejects the removed Qwen aliases', () => {

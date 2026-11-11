@@ -30,6 +30,17 @@
   ],
   "redirects": [
     {
+      "source": "/:path((?!app-ads\\.txt$).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "translator.minglelabs.app"
+        }
+      ],
+      "destination": "https://hashchat.minglelabs.app/:path",
+      "permanent": true
+    },
+    {
       "source": "/:page(privacy-policy|terms-of-use).html",
       "destination": "/:page",
       "permanent": true

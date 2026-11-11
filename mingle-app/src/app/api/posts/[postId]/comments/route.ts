@@ -7,7 +7,7 @@ import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
 import { visibleCommentsWhere } from '@/server/posts/comment-visibility'
 import { createComment } from '@/server/posts/comment-service'
 import { createPostNotification } from '@/server/notifications/create-post-notification'
-import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import {
   resolveDefaultPostTranslationLanguages,
   translateCommentBodySettled,
@@ -168,8 +168,10 @@ export async function GET(request: NextRequest, context: Ctx) {
 
     if (!isDeleted) {
       const canonicalSource = c.sourceLanguage ? canonicalizeTranslationLanguageCode(c.sourceLanguage) : ''
-      // A photo-only comment has no body to translate.
-      if (!canonicalDisplay || !c.sourceText.trim() || (canonicalSource && canonicalSource === canonicalDisplay)) {
+      // A photo-only comment has no body to translate. A comment that mixes
+      // languages is translated even into its own language.
+      const sameLanguage = !c.sourceLanguagesMixed && Boolean(canonicalSource) && canonicalSource === canonicalDisplay
+      if (!canonicalDisplay || !c.sourceText.trim() || sameLanguage) {
         translationState = 'same_language'
         displayText = c.sourceText
         displayLang = c.sourceLanguage
@@ -300,14 +302,18 @@ export async function POST(request: NextRequest, context: Ctx) {
   // them settle BEFORE the comment is committed (settle-then-commit) so the
   // comment and its translations become visible together.
   // A photo-only comment has no body to detect or translate.
-  const detected = hasText ? await detectSourceLanguage({ text, clientHint: lang }) : null
+  const verdict = hasText ? await detectSourceLanguageVerdict({ text, clientHint: lang }) : null
+  const detected = verdict?.language ?? null
+  // A mixed body is translated into its own language too.
+  const mixed = Boolean(detected) && verdict?.mixed === true
   const settledRows =
     detected && detected.trim().length > 0
       ? (
           await translateCommentBodySettled({
             sourceText: text,
             sourceLanguage: detected,
-            targetLanguages: resolveDefaultPostTranslationLanguages(detected),
+            targetLanguages: resolveDefaultPostTranslationLanguages(detected, null, mixed),
+            sourceLanguagesMixed: mixed,
           })
         ).map((r) => ({ language: r.language, status: r.status, text: r.text }))
       : []
@@ -319,6 +325,7 @@ export async function POST(request: NextRequest, context: Ctx) {
       authorId: userId,
       sourceText: text,
       sourceLanguage: detected,
+      sourceLanguagesMixed: mixed,
       parentId: pId,
       replyToUserId: rUserId,
       translationRows: settledRows,

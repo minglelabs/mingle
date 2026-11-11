@@ -27,6 +27,13 @@ vi.mock('@/lib/prisma', () => ({
 }))
 vi.mock('@/server/translation/detect-source-language', () => ({
   detectSourceLanguage: mockDetectSourceLanguage,
+  // Callers read the verdict; `mixed` is false unless a test returns an object.
+  detectSourceLanguageVerdict: async (args: unknown) => {
+    const result: unknown = await mockDetectSourceLanguage(args)
+    return result && typeof result === 'object'
+      ? result
+      : { language: (result as string | null | undefined) ?? null, mixed: false }
+  },
 }))
 vi.mock('@/server/translation/post-translation-service', () => ({
   translatePostBodySettled: mockTranslatePostBodySettled,
@@ -69,6 +76,21 @@ describe('publishPost', () => {
     )
   })
 
+  it('translates a mixed-language post into its own language too and stores the flag', async () => {
+    mockDetectSourceLanguage.mockResolvedValueOnce({ language: 'ko', mixed: true })
+    mockResolveDefaultPostTranslationLanguages.mockReturnValueOnce(['en', 'zh-CN', 'ja', 'ko'])
+
+    await publishPost({ authorId: 'user-1', text: '오늘 meeting 진짜 long했어', imageObjectKey: null, clientPostId: CLIENT_ID })
+
+    expect(mockResolveDefaultPostTranslationLanguages).toHaveBeenCalledWith('ko', null, true)
+    expect(mockTranslatePostBodySettled).toHaveBeenCalledWith(expect.objectContaining({
+      sourceLanguage: 'ko',
+      targetLanguages: ['en', 'zh-CN', 'ja', 'ko'],
+      sourceLanguagesMixed: true,
+    }))
+    expect(mockPostCreate.mock.calls[0][0].data).toMatchObject({ sourceLanguage: 'ko', sourceLanguagesMixed: true })
+  })
+
   it('publishes a text post atomically with detected language and settled translations', async () => {
     const result = await publishPost({
       authorId: 'user-1',
@@ -83,6 +105,8 @@ describe('publishPost', () => {
       sourceText: 'hello',
       sourceLanguage: 'en',
       targetLanguages: ['ko', 'ja'],
+      provider: undefined,
+      sourceLanguagesMixed: false,
     })
     expect(mockTransaction).toHaveBeenCalledTimes(1)
     const data = mockPostCreate.mock.calls[0][0].data

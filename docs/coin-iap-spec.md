@@ -120,6 +120,16 @@ main에 PR을 합쳐 보면 텍스트 충돌은 3개 파일뿐이다: `admin/pag
 
 ---
 
+### 3.6 선물 (2026-11-11 추가)
+
+- 다른 사용자 프로필의 "선물하기" 버튼으로 해씨를 보낸다. `POST /users/:id/gift { coins, idempotencyKey }`, 조회는 `GET /users/:id/gift`.
+- 선물할 수 있는 것은 **직접 구매한 해씨(lot source = `purchase`)뿐**이다. 무료 해씨(일일 충전, 가입 보너스), 운영자 지급분, 선물로 받은 해씨는 선물할 수 없다.
+- 수량 제한은 없다(1개 이상 정수, 구매분 잔액 이내). 보낸 수량의 10%(`GIFT_FEE_BPS`)를 수수료로 떼고 나머지가 받는 사람에게 간다. 수수료는 소각된다.
+- 받는 사람에게는 만료 없는 유료 해씨(lot source = `gift`, `is_free = false`)로 들어간다. 받는 것은 방문이 아니므로 받는 사람의 일일 충전·가입 보너스 주기는 시작되지 않는다.
+- 보낸 쪽 원장은 `gift_sent`(음수) 한 줄, 받는 쪽은 `grant` 한 줄. 두 지갑을 user id 순서로 잠근 한 트랜잭션에서 처리한다. 전부 되거나 전부 안 된다.
+- 차단 관계(어느 방향이든)이거나 비활성 계정이면 거절한다. 과금이 enforce인 사용자에게만 버튼이 보인다.
+- 환불: 구매를 환불하면 그 구매분에서 선물로 나간 해씨도 받는 사람 지갑에서 회수한다(`refund_clawback`). 받는 사람이 아직 안 쓴 만큼만 회수하고, 이미 쓴 것은 청구하지 않는다(6.4와 동일). 선물이 여러 구매분에 걸쳐 있으면 환불된 구매분의 비율만큼만 회수한다. 수수료는 돌려주지 않는다. 환불 알림이 다시 와도 한 번만 회수된다.
+
 ## 4. 사용량 과금
 
 ### 4.1 원칙
@@ -288,6 +298,9 @@ main에 PR을 합쳐 보면 텍스트 충돌은 3개 파일뿐이다: `admin/pag
 
 ### 6.4 환불·취소
 - iOS App Store Server Notifications V2(`REFUND`, `REVOKE`), Android 실시간 개발자 알림 + Voided Purchases API를 받는 웹훅을 만든다. 원문은 `app_iap_store_events`에 저장.
+- 정책(2026-11-11): 구매 패키지를 1해씨라도 사용하거나 선물하면 그 패키지는 환불 불가. 약관 5조, 상점 하단 문구, 선물 시트에 고지한다. 스토어 환불은 우리가 막을 수 없으므로 아래 회수가 안전망이다.
+- Apple `CONSUMPTION_REQUEST`(사용자가 Apple에 환불 요청): Send Consumption Information v2로 응답한다(`apple-consumption.ts`). 사용 비율(lot에서 빠져나간 몫, 선물 포함)을 보내고, 1해씨라도 썼으면 `refundPreference: DECLINE`, 안 썼으면 `GRANT_FULL`. 최종 결정은 Apple. 12시간 안에 응답해야 하며 실패하면 웹훅이 5xx를 돌려 재전송받는다. `APPLE_IAP_ISSUER_ID`·`APPLE_IAP_KEY_ID`·`APPLE_IAP_PRIVATE_KEY`가 없으면 응답하지 않는다. `customerConsented: true`의 근거는 약관 5조의 동의 문구.
+- Google Play에는 같은 API가 없다(구매 후 48시간 안에는 Google이 직접 환불). 웹(Polar)은 판매자가 우리이므로 사용·선물한 주문은 환불하지 않는다.
 - 환불 시: 해당 lot의 남은 수량만 회수한다(`refund_clawback`). 잔액은 음수가 되지 않으므로, 이미 써 버린 만큼은 회수하지 못하고 `iap_purchases.meta`에 미회수 금액으로 기록한다. 반복 환불 유저는 어드민에 표시.
 - 서명 검증, 재전송(중복 알림) 멱등 처리 필수.
 

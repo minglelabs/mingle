@@ -22,6 +22,13 @@ import {
 } from '@/app/api/translate/finalize/utils'
 import { shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import {
+  findOwnSelectedLanguage,
+  isLikelyMixedUtterance,
+  parseSttLanguageLabels,
+  resolveSingleLabelTargetLanguages,
+  singleLabelResultDisagrees,
+} from '@/lib/stt-language-labels'
+import {
   extendFixedSource,
   isSafeInterimCut,
   joinTailTranslations,
@@ -255,7 +262,6 @@ async function resolveSelectedTranslationModel(
 // next of these (skipping the selected one and any whose API key is missing).
 const TRANSLATION_FALLBACK_MODELS: UserSelectableTranslationModel[] = [
   'gpt-6-luna',
-  'gemini-2.5-flash-lite',
   'claude-haiku-5-5',
 ]
 
@@ -264,6 +270,16 @@ function resolveFallbackProviderConfigs(selectedModel: UserSelectableTranslation
     .filter((model) => model !== selectedModel)
     .map((model) => resolveTranslationProviderConfig(model))
     .flatMap((resolution) => resolution.ok ? [resolution.config] : [])
+}
+
+function sumTranslationUsage(first: TranslationUsage, second: TranslationUsage | undefined): TranslationUsage {
+  const add = (a?: number, b?: number) => (a === undefined && b === undefined ? undefined : (a || 0) + (b || 0))
+  const summed: TranslationUsage = {}
+  for (const key of ['promptTokens', 'completionTokens', 'reasoningTokens', 'totalTokens'] as const) {
+    const value = add(first[key], second?.[key])
+    if (value !== undefined) summed[key] = value
+  }
+  return summed
 }
 
 function hasUsableTranslationResult(result: TranslationEngineResult | null, isFinal: boolean): boolean {
@@ -440,6 +456,19 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     ? normalizeSelectedLanguages(targetLanguagesRaw)
     : normalizeTargetLanguages(targetLanguagesRaw, sourceLanguage)
 
+  // Speech recognizer labels of this utterance: one label that matches the
+  // source language means the model need not write the utterance again in its
+  // own language. It still checks the language, and a disagreement reruns the
+  // request with every language (see lib/stt-language-labels).
+  const sttLanguages = parseSttLanguageLabels(body.sttLanguages)
+  const singleLabelTargetLanguages = shouldRedetectSourceLanguage
+    ? resolveSingleLabelTargetLanguages({ sttLanguages, sourceLanguage, targetLanguages, text })
+    : null
+  const singleLabelSourceTargets = singleLabelTargetLanguages
+    ? targetLanguages.filter((language) => !singleLabelTargetLanguages.includes(language))
+    : []
+  let singleLabelOutcome: 'skipped_own_language' | 'recheck_disagreed' | 'recheck_empty' | null = null
+
   if (!text) {
     const response = NextResponse.json({ error: 'text is required' }, { status: 400 })
     ensureTrackingContext(request, response, { sessionKeyHint })
@@ -478,6 +507,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     immediatePreviousTurn,
     currentTurnPreviousState,
     isFinal,
+    // Live conversation translation: always on the fast tier.
+    fast: true,
     requestMeta,
     ...(bubbleTailPlan ? {
       bubbleTail: {
@@ -566,6 +597,12 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
           })
         }
       }
+      if (isFinal && bubbleTailPlan) {
+        const own = await addOwnLanguageRow(translations)
+        translations = own.translations
+        if (own.mixed) meta = { ...meta, sourceLanguagesMixed: true }
+        if (own.usage) meta = { ...meta, usage: meta.usage ? sumTranslationUsage(meta.usage, own.usage) : own.usage }
+      }
       const responsePayload: Record<string, unknown> = {
         translations,
         ...(tailFill ? { tailFill } : {}),
@@ -625,6 +662,51 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       return response
     }
 
+    // A bubble translated piece by piece skips language redetection, so its
+    // own-language row (the foreign parts rendered in the bubble's language)
+    // is never asked for. When the finished bubble likely mixes languages, ask
+    // for that row alone, alongside the rest; it is kept only when the model
+    // confirms the mix.
+    const ownSelectedLanguage = isFinal && bubbleTailPlan && !testFaultMode
+      ? findOwnSelectedLanguage(normalizeSelectedLanguages(targetLanguagesRaw), sourceLanguage)
+      : null
+    const ownLanguageRowRequest = ownSelectedLanguage
+      && isLikelyMixedUtterance({ sttLanguages, sourceLanguage, text })
+      ? (() => {
+        const { bubbleTail: _bubbleTail, ...plainCtx } = ctx
+        return requestTranslationFromProvider({
+          ...plainCtx,
+          text,
+          targetLanguages: [ownSelectedLanguage],
+          shouldRedetectSourceLanguage: true,
+        }, providerConfig).catch((error: unknown) => {
+          logTranslateFinalizeWarning('bubble_tail_own_language_failed', {
+            ...buildTranslateFinalizeLogContext(ctx),
+            error: summarizeUnknownError(error),
+          })
+          return null
+        })
+      })()
+      : null
+    const addOwnLanguageRow = async (
+      translations: Record<string, string>,
+    ): Promise<{ translations: Record<string, string>, mixed: boolean, usage?: TranslationUsage }> => {
+      if (!ownLanguageRowRequest || !ownSelectedLanguage) return { translations, mixed: false }
+      const result = await ownLanguageRowRequest
+      const ownText = result?.translations[ownSelectedLanguage]?.trim()
+      const confirmed = Boolean(ownText)
+        && (result?.sourceLanguagesMixed === true || result?.sourceTextHasForeignScript === true)
+      logTranslateFinalizeInfo('bubble_tail_own_language', {
+        ...buildTranslateFinalizeLogContext(ctx),
+        sttLanguages,
+        confirmed,
+        sourceLanguagesMixed: result?.sourceLanguagesMixed ?? null,
+        sourceTextHasForeignScript: result?.sourceTextHasForeignScript ?? null,
+      })
+      if (!confirmed || !ownText) return { translations, mixed: false, usage: result?.usage }
+      return { translations: { ...translations, [ownSelectedLanguage]: ownText }, mixed: true, usage: result?.usage }
+    }
+
     if (bubbleTailPlan && !bubbleTailPlan.remainingSource) {
       // Nothing after the fixed part: nothing to ask the model.
       return await buildResponseWithOptionalTts({ ...bubbleTailPlan.fixedTranslations }, {
@@ -679,7 +761,42 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         } else if (testFaultMode === 'provider_error') {
           throw new Error('forced_provider_error_for_e2e')
         } else {
-          selectedResult = await requestTranslationFromProvider(ctx, providerConfig)
+          const leanResult = singleLabelTargetLanguages
+            ? await requestTranslationFromProvider({
+              ...ctx,
+              targetLanguages: singleLabelTargetLanguages,
+              languageHints: targetLanguages,
+            }, providerConfig)
+            : null
+          if (leanResult
+            && hasUsableTranslationResult(leanResult, ctx.isFinal)
+            && !singleLabelResultDisagrees(leanResult, sourceLanguage)) {
+            // One language, as labelled: the utterance is its own rendering.
+            singleLabelOutcome = 'skipped_own_language'
+            selectedResult = {
+              ...leanResult,
+              translations: {
+                ...leanResult.translations,
+                ...Object.fromEntries(singleLabelSourceTargets.map((language) => [language, ctx.text])),
+              },
+            }
+          } else {
+            if (singleLabelTargetLanguages) {
+              singleLabelOutcome = leanResult ? 'recheck_disagreed' : 'recheck_empty'
+              logTranslateFinalizeInfo('single_label_recheck', {
+                ...buildTranslateFinalizeLogContext(ctx),
+                sttLanguages,
+                reason: singleLabelOutcome,
+                detectedSourceLanguage: leanResult?.sourceLanguage || null,
+                sourceLanguagesMixed: leanResult?.sourceLanguagesMixed ?? null,
+                sourceTextHasForeignScript: leanResult?.sourceTextHasForeignScript ?? null,
+              })
+            }
+            const fullResult = await requestTranslationFromProvider(ctx, providerConfig)
+            selectedResult = fullResult && leanResult?.usage
+              ? { ...fullResult, usage: sumTranslationUsage(leanResult.usage, fullResult.usage) }
+              : fullResult
+          }
         }
       } catch (error) {
         providerRequestFailureReason = 'provider_error'
@@ -767,6 +884,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       sourceTextHasForeignScript: selectedResult.sourceTextHasForeignScript ?? null,
       targetLanguages,
       isFinal,
+      ...(sttLanguages.length ? { sttLanguages, singleLabel: singleLabelOutcome } : {}),
       inputTokens: selectedResult.usage?.promptTokens ?? 'unknown',
       outputTokens: selectedResult.usage?.completionTokens ?? 'unknown',
       totalTokens: selectedResult.usage?.totalTokens ?? 'unknown',

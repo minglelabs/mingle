@@ -40,6 +40,7 @@ import type { ConversationHydrationCursor, ConversationHydrationUtterance } from
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { classifyChineseLanguage, resolveChineseVariant } from '@/lib/chinese-variant'
 import { pickSourceLanguageBubbleFlags } from '@/lib/source-language-bubble-flags'
+import { parseSttLanguageLabels } from '@/lib/stt-language-labels'
 import { canonicalizeSonioxLanguageHintCode } from '@/lib/stt-languages'
 import {
   resolveDefaultMingleClientReleaseVariant,
@@ -1428,6 +1429,8 @@ export interface ParsedSttTranscriptMessage {
   isFinal: boolean
   speaker: string
   finalizeSource?: string
+  /** Final transcripts only: every language the recognizer labelled this turn's words with. */
+  languages?: string[]
 }
 
 export function parseSttTranscriptMessage(
@@ -1457,6 +1460,7 @@ export function parseSttTranscriptMessage(
   const speaker = typeof utterance.speaker === 'string' && utterance.speaker.trim()
     ? utterance.speaker.trim()
     : 'unknown'
+  const sttLanguageLabels = parseSttLanguageLabels(utterance.languages)
 
   return {
     rawText,
@@ -1465,6 +1469,7 @@ export function parseSttTranscriptMessage(
     isFinal,
     speaker,
     ...(finalizeSource ? { finalizeSource } : {}),
+    ...(isFinal && sttLanguageLabels.length ? { languages: sttLanguageLabels } : {}),
   }
 }
 
@@ -1798,6 +1803,19 @@ export function buildLiveUtterance(input: {
       : {}),
     createdAtMs: input.pendingTurn.createdAtMs,
   }
+}
+
+/**
+ * A committed row keeps its tail state's fixed translations (the part that
+ * will not change any more) until the final translation lands, so earphone
+ * auto-read can go on reading the pieces already fixed.
+ */
+export function withBubbleTailFixedTranslations(
+  utterance: Utterance,
+  tail: Pick<BubbleTailState, 'translatedSource' | 'translations'> | null | undefined,
+): Utterance {
+  if (!tail?.translatedSource || Object.keys(tail.translations).length === 0) return utterance
+  return { ...utterance, translationFixed: { ...tail.translations } }
 }
 
 export function buildLiveUtterances(input: {
@@ -5172,10 +5190,10 @@ export default function useRealtimeSTT({
     })
     if (!localPayload) return null
     if (options?.replyTo) localPayload.utterance = { ...localPayload.utterance, replyTo: options.replyTo }
-    const fixedTail = bubbleTailByUtteranceIdRef.current[localPayload.utteranceId]
-    if (fixedTail?.translatedSource && Object.keys(fixedTail.translations).length > 0) {
-      localPayload.utterance = { ...localPayload.utterance, translationFixed: { ...fixedTail.translations } }
-    }
+    localPayload.utterance = withBubbleTailFixedTranslations(
+      localPayload.utterance,
+      bubbleTailByUtteranceIdRef.current[localPayload.utteranceId],
+    )
     localPayload.utterance = remotePreviews.applyOrder(localPayload.utterance)
     if (isDuplicateTimedSignature({
       previousSig: stopFinalizeDedupRef.current.utteranceId,
@@ -5270,6 +5288,8 @@ export default function useRealtimeSTT({
       speaker?: string
       speakerAvatarSeed?: string
       speakerAvatarIndex?: number
+      /** Recognizer labels of this turn, when the STT server sent its own final. */
+      sttLanguages?: string[]
     },
   ) => {
     const { utteranceId, text, lang, currentTurnPreviousState, utterance } = localFinalizeResult
@@ -5295,6 +5315,7 @@ export default function useRealtimeSTT({
       sessionKey, clientContext, clientMessageId: utteranceId,
       sttDurationMs: options?.sttDurationMs,
       currentTurnPreviousState,
+      ...(options?.sttLanguages?.length ? { sttLanguages: options.sttLanguages } : {}),
       ...(bubbleTail?.translatedSource ? { bubbleTail } : {}),
       clientBundleRev: LIVE_TRANSLATE_CLIENT_BUNDLE_REV,
       ...(translationModel ? { translationModel } : {}),
@@ -6047,7 +6068,7 @@ export default function useRealtimeSTT({
 
     const transcript = parseSttTranscriptMessage(message, getCurrentTargetLanguages())
     if (transcript) {
-      const { rawText, text, language: lang, isFinal, speaker, finalizeSource } = transcript
+      const { rawText, text, language: lang, isFinal, speaker, finalizeSource, languages: sttLanguages } = transcript
       logSttDebug('transcript.received', {
         speaker,
         isFinal,
@@ -6113,6 +6134,12 @@ export default function useRealtimeSTT({
         if (!finalizedPayload) {
           return
         }
+        // Like a stop: the committed row keeps the part already fixed (and read
+        // aloud piece by piece) until its final translation lands.
+        finalizedPayload.utterance = withBubbleTailFixedTranslations(
+          finalizedPayload.utterance,
+          bubbleTailByUtteranceIdRef.current[finalizedPayload.utteranceId],
+        )
         const finalizedAvatar = getSpeakerAvatar(
           finalizedPayload.utterance.speaker,
           finalizedPayload.utterance.speakerAvatarSeed,
@@ -6241,6 +6268,7 @@ export default function useRealtimeSTT({
           {
             sttDurationMs,
             reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
+            ...(sttLanguages ? { sttLanguages } : {}),
             speaker: reconciledSpeaker,
             ...resolveReconciledSpeakerAvatar({
               reusedSpeakerAvatarSeed,

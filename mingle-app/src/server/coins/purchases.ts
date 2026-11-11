@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { microToDisplayCoins } from '@/lib/coin-units'
 import { IapVerificationError, verifyAppleTransactionJws, type VerifiedStorePurchase } from './iap-apple'
 import { consumeGooglePlayPurchase, verifyGooglePlayPurchase } from './iap-google'
+import { clawBackGiftsOfRefundedPurchase } from './gifts'
 import { grantLot, takeFromLots, withLockedWallet } from './ledger'
 import {
   createPolarCheckout,
@@ -151,7 +152,8 @@ export type RefundResult = 'refunded' | 'already_refunded' | 'purchase_not_found
 /**
  * Refund or revocation (spec 6.4): takes back what is left of the purchase's
  * lot. Coins already spent are not owed; the unrecovered amount is recorded on
- * the purchase.
+ * the purchase. Hash gifted out of the lot is taken back from the recipient as
+ * far as it is still unspent.
  */
 export async function refundPurchase(
   storeTransactionId: string,
@@ -163,12 +165,12 @@ export async function refundPurchase(
   })
   if (!purchase) return 'purchase_not_found'
 
-  return withLockedWallet(purchase.userId, async (ctx) => {
+  const refund = await withLockedWallet(purchase.userId, async (ctx) => {
     const current = await ctx.tx.appIapPurchase.findUniqueOrThrow({
       where: { id: purchase.id },
       select: { status: true, lotId: true, meta: true },
     })
-    if (current.status === 'refunded' || current.status === 'revoked') return 'already_refunded' as const
+    if (current.status === 'refunded' || current.status === 'revoked') return { result: 'already_refunded' as const, lotId: current.lotId }
     const lot = current.lotId
       ? await ctx.tx.appCoinLot.findUnique({ where: { id: current.lotId }, select: { grantedMicro: true, remainingMicro: true } })
       : null
@@ -194,8 +196,10 @@ export async function refundPurchase(
         },
       },
     })
-    return 'refunded' as const
-  }, { skipDailyGrant: true })
+    return { result: 'refunded' as const, lotId: current.lotId }
+  }, { skipDailyGrant: true })  // Also on a repeated notification: finishes a clawback an earlier attempt did not complete.
+  if (refund.lotId) await clawBackGiftsOfRefundedPurchase({ purchaseId: purchase.id, lotId: refund.lotId })
+  return refund.result
 }
 
 /** Starts a Polar checkout for a web pack and returns the hosted checkout URL. */

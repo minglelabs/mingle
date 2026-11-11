@@ -9,17 +9,18 @@ import {
   buildSharedScaleChartGeometries,
 } from "@/lib/admin-dashboard-metrics";
 import { loadTranslationModelMessageSeries } from "@/lib/admin-dashboard-query";
-import type { UserSelectableTranslationModel } from "@/lib/translation-models";
+import type { RetiredTranslationModel, UserSelectableTranslationModel } from "@/lib/translation-models";
 import { MultiLineChartCard, MultiLineChartCardPlaceholder } from "./multi-line-chart-card";
 
 const CHART_LABEL = "번역 모델별 메시지수";
 
 /** Keyed by model, so a new selectable model without a colour is a type error rather than
  * a silently reused colour. */
-const TRANSLATION_MODEL_COLORS: Record<UserSelectableTranslationModel, string> = {
-  "gemini-2.5-flash-lite": "#2a78d6",
+const TRANSLATION_MODEL_COLORS: Record<UserSelectableTranslationModel | RetiredTranslationModel, string> = {
   "gpt-6-luna": "#8b5cf6",
   "claude-haiku-5-5": "#e0457b",
+  // Retired; still shown for the messages it translated.
+  "gemini-2.5-flash-lite": "#2a78d6",
 };
 const OTHER_TRANSLATION_MODEL_COLOR = "#898781";
 

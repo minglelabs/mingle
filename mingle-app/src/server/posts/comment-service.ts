@@ -18,6 +18,8 @@ export type CreateCommentArgs = {
   authorId: string
   sourceText: string
   sourceLanguage: string | null
+  /** The body mixes languages (detection verdict): translated into its own language too. */
+  sourceLanguagesMixed?: boolean
   /** The comment being replied to (a root, or a reply that is hoisted to its root). */
   parentId?: string | null
   /**
@@ -40,6 +42,8 @@ export type UpdateCommentArgs = {
   actorId: string
   sourceText: string
   sourceLanguage: string | null
+  /** The new body mixes languages (detection verdict). */
+  sourceLanguagesMixed?: boolean
   /**
    * Settled translations for the NEW body version, written atomically with the
    * body swap. The previous body + translations stay visible until commit.
@@ -162,6 +166,7 @@ export async function createComment(args: CreateCommentArgs) {
         authorId: args.authorId,
         sourceText: args.sourceText,
         sourceLanguage: args.sourceLanguage,
+        sourceLanguagesMixed: args.sourceLanguagesMixed ?? false,
         parentId: resolvedParentId,
         replyToUserId: resolvedReplyToUserId,
         bodyVersion: 1,
@@ -237,6 +242,7 @@ export async function updateComment(args: UpdateCommentArgs) {
       data: {
         sourceText: args.sourceText,
         sourceLanguage: args.sourceLanguage,
+        sourceLanguagesMixed: args.sourceLanguagesMixed ?? false,
         bodyVersion: newBodyVersion,
       },
     })

@@ -156,9 +156,11 @@ Translation/TTS behavior:
 
 Default configuration:
 
-- `TRANSLATE_PROVIDER=gemini`
-- `GEMINI_API_KEY=...`
-- optional `TRANSLATE_MODEL=gemini-2.5-flash-lite`
+- `TRANSLATE_PROVIDER=openai` (GPT-6 Luna, the default)
+- `OPENAI_API_KEY=...`
+- Fast mode (`service_tier=priority`) runs only for live conversation translation;
+  posts, comments, language detection, retranslation, profile bios and titles use the standard tier.
+- `gemini-2.5-flash-lite` is retired: accounts that stored it run on GPT-6 Luna.
 
 GPT-6 Luna is also available in the translation model selector. Set
 `OPENAI_API_KEY` on the server to enable it. Requests use the OpenAI API with

@@ -9,7 +9,7 @@ import { checkOperatorForPosting } from '@/server/operator-posts/operator-check'
 import { createComment } from '@/server/posts/comment-service'
 import { visibleCommentsWhere, visibleSingleCommentWhere } from '@/server/posts/comment-visibility'
 import { visibleSinglePostWhere } from '@/server/posts/post-visibility'
-import { detectSourceLanguage } from '@/server/translation/detect-source-language'
+import { detectSourceLanguageVerdict } from '@/server/translation/detect-source-language'
 import { resolveDefaultPostTranslationLanguages, translateCommentBodySettled } from '@/server/translation/post-translation-service'
 import { generateOperatorComment } from './generate'
 import { operatorTextProvider } from '@/server/translation/translate-texts'
@@ -41,18 +41,21 @@ function commenterPersona(id: string, row: CommenterRow, language: string, now: 
 
 /** Language detection and the default translations, as the app does for any comment. */
 async function settleCommentText(text: string, hint: string) {
-  const detected = await detectSourceLanguage({ text, clientHint: hint, provider: operatorTextProvider() })
+  const verdict = await detectSourceLanguageVerdict({ text, clientHint: hint, provider: operatorTextProvider() })
+  const detected = verdict.language
+  const mixed = Boolean(detected) && verdict.mixed
   const translationRows = detected && detected.trim()
     ? (
         await translateCommentBodySettled({
           sourceText: text,
           sourceLanguage: detected,
-          targetLanguages: resolveDefaultPostTranslationLanguages(detected),
+          targetLanguages: resolveDefaultPostTranslationLanguages(detected, null, mixed),
           provider: operatorTextProvider(),
+          sourceLanguagesMixed: mixed,
         })
       ).map((row) => ({ language: row.language, status: row.status, text: row.text }))
     : []
-  return { detected, translationRows }
+  return { detected, mixed, translationRows }
 }
 
 /**
@@ -101,12 +104,13 @@ export async function commentOnPostAsOperator(
     })
     if (!generated) return { ok: false, error: 'generation_failed' }
 
-    const { detected, translationRows } = await settleCommentText(generated.text, generated.language)
+    const { detected, mixed, translationRows } = await settleCommentText(generated.text, generated.language)
     const comment = await createComment({
       postId: post.id,
       authorId: operatorUserId,
       sourceText: generated.text,
       sourceLanguage: detected,
+      sourceLanguagesMixed: mixed,
       translationRows,
     })
     // Never throws: a failed notification cannot fail the comment.
@@ -181,12 +185,13 @@ export async function replyToCommentAsOperator(
     })
     if (!generated) return { ok: false, error: 'generation_failed' }
 
-    const { detected, translationRows } = await settleCommentText(generated.text, generated.language)
+    const { detected, mixed, translationRows } = await settleCommentText(generated.text, generated.language)
     const reply = await createComment({
       postId: post.id,
       authorId: operatorUserId,
       sourceText: generated.text,
       sourceLanguage: detected,
+      sourceLanguagesMixed: mixed,
       parentId: root.id,
       replyToUserId: root.authorId,
       translationRows,

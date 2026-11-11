@@ -87,14 +87,41 @@ describe('translate-texts', () => {
         text: 'Hello',
         sourceLanguage: 'en',
         targetLanguages: ['ko', 'ja'],
-        modelSelection: 'gemini-2.5-flash-lite',
       })
 
       expect(result.translations).toEqual({ ko: '안녕하세요', ja: 'こんにちは' })
       expect(result.provider).toBe('gemini')
-      expect(result.model).toBe('gemini-2.5-flash-lite')
+      expect(result.model).toBe('gemini-3.5-flash-lite')
       expect(result.usage?.promptTokens).toBe(10)
       expect(result.usage?.completionTokens).toBe(20)
+      // Not live translation: no Priority tier.
+      const request = mockGenerateContent.mock.calls[0]?.[0] as { serviceTier?: string }
+      expect(request.serviceTier).toBeUndefined()
+    })
+
+    it('runs GPT-6 Luna on the standard tier (no Fast mode) outside live translation', async () => {
+      clearTranslationEnv()
+      process.env.OPENAI_API_KEY = 'test-openai-key'
+      const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
+        JSON.stringify({ choices: [{ message: { content: '{"ko":"안녕하세요"}' }, finish_reason: 'stop' }], usage: {} }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+      vi.stubGlobal('fetch', fetchMock)
+      try {
+        const { translateTexts } = await import('./translate-texts')
+        const result = await translateTexts({
+          text: 'Hello',
+          sourceLanguage: 'en',
+          targetLanguages: ['ko'],
+          modelSelection: 'gpt-6-luna',
+        })
+        expect(result.translations).toEqual({ ko: '안녕하세요' })
+        const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))
+        expect(payload.model).toBe('gpt-6-luna')
+        expect(payload.service_tier).toBeUndefined()
+      } finally {
+        vi.unstubAllGlobals()
+      }
     })
 
     it('returns empty translations for empty targetLanguages', async () => {
@@ -103,7 +130,6 @@ describe('translate-texts', () => {
         text: 'Hello',
         sourceLanguage: 'en',
         targetLanguages: [],
-        modelSelection: 'gemini-2.5-flash-lite',
       })
 
       expect(result.translations).toEqual({})
@@ -124,7 +150,6 @@ describe('translate-texts', () => {
         text: 'Hello',
         sourceLanguage: 'en',
         targetLanguages: ['ko'],
-        modelSelection: 'gemini-2.5-flash-lite',
       })).rejects.toThrow()
     })
 
@@ -142,7 +167,6 @@ describe('translate-texts', () => {
         text: 'Hello',
         sourceLanguage: 'en',
         targetLanguages: ['ko'],
-        modelSelection: 'gemini-2.5-flash-lite',
         isFinal: false,
       })
 
@@ -170,7 +194,6 @@ describe('translate-texts', () => {
         text: '안녕하세요',
         sourceLanguage: 'ko',
         targetLanguages: ['en', 'ja'],
-        modelSelection: 'gemini-2.5-flash-lite',
         redetectSourceLanguage: true,
       })
 
@@ -181,13 +204,26 @@ describe('translate-texts', () => {
   })
 
   describe('resolveTranslationProviderConfig()', () => {
-    it('resolves gemini provider from model selection', async () => {
+    it('maps the retired gemini-2.5-flash-lite selection to GPT-6 Luna', async () => {
+      process.env.OPENAI_API_KEY = 'test-openai-key'
       const { resolveTranslationProviderConfig } = await import('./translate-texts')
       const result = resolveTranslationProviderConfig('gemini-2.5-flash-lite')
       expect(result.ok).toBe(true)
       if (result.ok) {
-        expect(result.config.provider).toBe('gemini')
-        expect(result.config.model).toBe('gemini-2.5-flash-lite')
+        expect(result.config.provider).toBe('openai')
+        expect(result.config.model).toBe('gpt-6-luna')
+      }
+    })
+
+    it('defaults to GPT-6 Luna when TRANSLATE_PROVIDER is unset', async () => {
+      clearTranslationEnv()
+      process.env.OPENAI_API_KEY = 'test-openai-key'
+      const { resolveTranslationProviderConfig } = await import('./translate-texts')
+      const result = resolveTranslationProviderConfig()
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.config.provider).toBe('openai')
+        expect(result.config.model).toBe('gpt-6-luna')
       }
     })
 
