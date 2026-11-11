@@ -5481,8 +5481,6 @@ export default function ConversationList({
     }
 
     markLanguageOnboardingConfirmed();
-    // Signup is finished: the contact-sync screen may now open once by itself.
-    requestContactSyncPromptCheck();
     // An invitee is taken straight into the inviter's room, and where they
     // heard of the app is already known ("friend"): no "say something" card
     // and no question about it afterwards.
@@ -5490,6 +5488,9 @@ export default function ConversationList({
       markFirstSpeakPending();
       setFirstSpeakPending(true);
     }
+    // Signup is finished: a pending invite is accepted now. The contact-sync
+    // screen holds back while the first run is pending (set just above).
+    requestContactSyncPromptCheck();
     captureMingleClientEvent("mingle_first_run_step", { step: "language_confirmed" });
 
     defaultConversationLanguagesSyncVersionRef.current += 1;
@@ -5526,9 +5527,24 @@ export default function ConversationList({
   }, [handleCreateConversation]);
 
   // Back on the list after the first room: ask where they heard of the app.
+  // One thing at a time: leaving the first room is when the contact-sync
+  // screen may open (it was held back so it would not cover the "say
+  // something" card), and the question about where they heard of the app
+  // waits for the next launch.
   const hasActiveConversation = activeConversation !== null;
+  const wasInConversationRef = useRef(false);
   useEffect(() => {
-    if (hasActiveConversation || !isDiscoveryPromptDue()) return;
+    if (hasActiveConversation) {
+      wasInConversationRef.current = true;
+      return;
+    }
+    const leftARoom = wasInConversationRef.current;
+    wasInConversationRef.current = false;
+    if (!isDiscoveryPromptDue()) return;
+    if (leftARoom) {
+      requestContactSyncPromptCheck();
+      return;
+    }
     setDiscoveryPromptOpen(true);
     captureMingleClientEvent("mingle_first_run_step", { step: "discovery_shown" });
   }, [hasActiveConversation]);
@@ -5930,7 +5946,15 @@ export default function ConversationList({
       >
         <button
           type="button"
-          onClick={() => setIsCreateChoiceModalOpen(true)}
+          onClick={() => {
+            // Until the first bubble there is nobody to choose yet: open a room
+            // and listen, the same as the "say something" card.
+            if (firstSpeakPending) {
+              handleFirstSpeakRequested();
+              return;
+            }
+            setIsCreateChoiceModalOpen(true);
+          }}
           disabled={actionDisabled}
           className="relative flex w-full items-center justify-center px-5 pt-4 text-[1rem] font-semibold text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
           aria-label={copy.newConversationButtonLabel}

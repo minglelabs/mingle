@@ -10,6 +10,7 @@ import { hasConfirmedLanguageOnboarding } from "@/components/LivePhoneDemo/langu
 import { DEFAULT_LOCALE, resolveSupportedLocaleTag, type AppLocale } from "@/i18n/config";
 import { fillInviteTicketCopy, resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
 import { runAfterStartup } from "@/lib/after-startup";
+import { isFirstSpeakPending } from "@/lib/first-run";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { refreshCoinWallet } from "@/lib/coin-wallet-client";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
@@ -100,6 +101,10 @@ export default function ContactSyncHost() {
       if (await acceptPendingInvite()) return;
       // The contact-sync prompt is for the app only; a browser has no contacts to offer.
       if (promptSettledRef.current || !isNativeAppShell()) return;
+      // A new user is first asked to say something (the first-run card on the
+      // conversation list). This screen would cover that card, so it waits
+      // until they have left their first room, which asks again.
+      if (isFirstSpeakPending()) return;
       const response = await fetch(buildClientApiPath("/referral"), { cache: "no-store" });
       if (!response.ok) return;
       const body = await response.json() as { shouldPromptContactSync?: unknown };

@@ -1,5 +1,6 @@
 "use client";
 
+import { requestProfileBasics } from "@/lib/profile-basics";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -309,6 +310,9 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
   // target room, so it's a straight invite-and-return.
   const handleStartConversation = useCallback(async () => {
     if (isStarting || selectedUsers.length === 0) return;
+    // Gender and birth date are asked before starting a room with other
+    // people (or adding them to one); closing the question keeps the picks.
+    if (!(await requestProfileBasics())) return;
     setIsStarting(true);
     setStartError(null);
     try {

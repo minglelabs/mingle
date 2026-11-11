@@ -1,12 +1,11 @@
 import { resolvePrimaryUiLocaleTag, type PrimaryUiLocale } from "@/i18n/mingle-locales";
-import type { SpeechLengthOption } from "@/lib/speech-length";
 
 /**
  * Copy for a new user's first run: the "say something" card on the
  * conversation list and the speech length choice shown after the first
  * translation. Wording avoids the settings' terms (automatic detection,
- * silence, steps); the card only asks how long a sentence should be kept
- * together.
+ * silence); the card and the room settings show one scale from 1 (short) to
+ * 6 (long).
  */
 export type FirstRunCopy = {
   speakTitle: string;
@@ -16,7 +15,13 @@ export type FirstRunCopy = {
   lengthHint: string;
   lengthApplied: string;
   lengthClose: string;
-  lengthOptions: Record<SpeechLengthOption, { label: string; hint: string | null }>;
+  /** The two ends of the 1-6 scale, and what each end suits. */
+  lengthShort: string;
+  lengthLong: string;
+  lengthShortHint: string;
+  lengthLongHint: string;
+  /** Name of the same scale in the room settings. */
+  lengthMenuLabel: string;
 };
 
 const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
@@ -28,12 +33,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "고르면 바로 바뀌어요. 설정에서 언제든 다시 바꿀 수 있어요.",
     lengthApplied: "바꿨어요. 다시 말해 보세요.",
     lengthClose: "닫기",
-    lengthOptions: {
-      auto3: { label: "짧게", hint: "수다에 좋아요" },
-      auto5: { label: "보통", hint: null },
-      silence2s: { label: "길게", hint: null },
-      silence3s: { label: "아주 길게", hint: "회의·통역에 좋아요" },
-    },
+    lengthShort: "짧게",
+    lengthLong: "길게",
+    lengthShortHint: "수다에 좋아요",
+    lengthLongHint: "회의·통역에 좋아요",
+    lengthMenuLabel: "문장 길이",
   },
   en: {
     speakTitle: "Speak, and it's interpreted right away",
@@ -43,12 +47,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "It changes as soon as you pick. You can change it again in settings.",
     lengthApplied: "Changed. Try speaking again.",
     lengthClose: "Close",
-    lengthOptions: {
-      auto3: { label: "Short", hint: "Good for chatting" },
-      auto5: { label: "Medium", hint: null },
-      silence2s: { label: "Long", hint: null },
-      silence3s: { label: "Very long", hint: "Good for meetings and interpreting" },
-    },
+    lengthShort: "Short",
+    lengthLong: "Long",
+    lengthShortHint: "Good for chatting",
+    lengthLongHint: "Good for meetings and interpreting",
+    lengthMenuLabel: "Sentence length",
   },
   ja: {
     speakTitle: "話すとすぐに通訳されます",
@@ -58,12 +61,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "選ぶとすぐに変わります。設定でいつでも変更できます。",
     lengthApplied: "変更しました。もう一度話してみてください。",
     lengthClose: "閉じる",
-    lengthOptions: {
-      auto3: { label: "短め", hint: "おしゃべり向き" },
-      auto5: { label: "ふつう", hint: null },
-      silence2s: { label: "長め", hint: null },
-      silence3s: { label: "とても長め", hint: "会議・通訳向き" },
-    },
+    lengthShort: "短め",
+    lengthLong: "長め",
+    lengthShortHint: "おしゃべり向き",
+    lengthLongHint: "会議・通訳向き",
+    lengthMenuLabel: "文の長さ",
   },
   "zh-CN": {
     speakTitle: "一开口，立即翻译",
@@ -73,12 +75,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "选择后立即生效。之后可以在设置里随时更改。",
     lengthApplied: "已更改。请再说一次试试。",
     lengthClose: "关闭",
-    lengthOptions: {
-      auto3: { label: "短", hint: "适合闲聊" },
-      auto5: { label: "适中", hint: null },
-      silence2s: { label: "长", hint: null },
-      silence3s: { label: "很长", hint: "适合会议和口译" },
-    },
+    lengthShort: "短",
+    lengthLong: "长",
+    lengthShortHint: "适合闲聊",
+    lengthLongHint: "适合会议和口译",
+    lengthMenuLabel: "句子长度",
   },
   "zh-TW": {
     speakTitle: "一開口，立即翻譯",
@@ -88,12 +89,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "選擇後立即生效。之後可以在設定裡隨時更改。",
     lengthApplied: "已更改。請再說一次試試。",
     lengthClose: "關閉",
-    lengthOptions: {
-      auto3: { label: "短", hint: "適合閒聊" },
-      auto5: { label: "適中", hint: null },
-      silence2s: { label: "長", hint: null },
-      silence3s: { label: "很長", hint: "適合會議和口譯" },
-    },
+    lengthShort: "短",
+    lengthLong: "長",
+    lengthShortHint: "適合閒聊",
+    lengthLongHint: "適合會議和口譯",
+    lengthMenuLabel: "句子長度",
   },
   fr: {
     speakTitle: "Parlez, c’est interprété aussitôt",
@@ -103,12 +103,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "Le changement est immédiat. Vous pouvez le modifier dans les réglages.",
     lengthApplied: "C’est changé. Essayez de parler à nouveau.",
     lengthClose: "Fermer",
-    lengthOptions: {
-      auto3: { label: "Courte", hint: "Idéal pour bavarder" },
-      auto5: { label: "Moyenne", hint: null },
-      silence2s: { label: "Longue", hint: null },
-      silence3s: { label: "Très longue", hint: "Idéal pour les réunions et l’interprétation" },
-    },
+    lengthShort: "Courte",
+    lengthLong: "Longue",
+    lengthShortHint: "Idéal pour bavarder",
+    lengthLongHint: "Idéal pour les réunions et l’interprétation",
+    lengthMenuLabel: "Longueur des phrases",
   },
   de: {
     speakTitle: "Sprich, und es wird sofort gedolmetscht",
@@ -118,12 +117,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "Die Auswahl gilt sofort. Du kannst sie in den Einstellungen ändern.",
     lengthApplied: "Geändert. Sprich noch einmal.",
     lengthClose: "Schließen",
-    lengthOptions: {
-      auto3: { label: "Kurz", hint: "Gut zum Plaudern" },
-      auto5: { label: "Mittel", hint: null },
-      silence2s: { label: "Lang", hint: null },
-      silence3s: { label: "Sehr lang", hint: "Gut für Meetings und Dolmetschen" },
-    },
+    lengthShort: "Kurz",
+    lengthLong: "Lang",
+    lengthShortHint: "Gut zum Plaudern",
+    lengthLongHint: "Gut für Meetings und Dolmetschen",
+    lengthMenuLabel: "Satzlänge",
   },
   es: {
     speakTitle: "Habla y se interpreta al instante",
@@ -133,12 +131,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "Cambia en cuanto eliges. Puedes modificarlo en los ajustes.",
     lengthApplied: "Cambiado. Prueba a hablar de nuevo.",
     lengthClose: "Cerrar",
-    lengthOptions: {
-      auto3: { label: "Corta", hint: "Ideal para charlar" },
-      auto5: { label: "Media", hint: null },
-      silence2s: { label: "Larga", hint: null },
-      silence3s: { label: "Muy larga", hint: "Ideal para reuniones e interpretación" },
-    },
+    lengthShort: "Corta",
+    lengthLong: "Larga",
+    lengthShortHint: "Ideal para charlar",
+    lengthLongHint: "Ideal para reuniones e interpretación",
+    lengthMenuLabel: "Longitud de las frases",
   },
   pt: {
     speakTitle: "Fale e a interpretação sai na hora",
@@ -148,12 +145,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "Muda assim que você escolhe. Dá para alterar nos ajustes.",
     lengthApplied: "Alterado. Tente falar de novo.",
     lengthClose: "Fechar",
-    lengthOptions: {
-      auto3: { label: "Curta", hint: "Boa para bater papo" },
-      auto5: { label: "Média", hint: null },
-      silence2s: { label: "Longa", hint: null },
-      silence3s: { label: "Muito longa", hint: "Boa para reuniões e interpretação" },
-    },
+    lengthShort: "Curta",
+    lengthLong: "Longa",
+    lengthShortHint: "Boa para bater papo",
+    lengthLongHint: "Boa para reuniões e interpretação",
+    lengthMenuLabel: "Tamanho das frases",
   },
   it: {
     speakTitle: "Parla e viene interpretato subito",
@@ -163,12 +159,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "Cambia appena scegli. Puoi modificarlo nelle impostazioni.",
     lengthApplied: "Modificato. Prova a parlare di nuovo.",
     lengthClose: "Chiudi",
-    lengthOptions: {
-      auto3: { label: "Corta", hint: "Ideale per chiacchierare" },
-      auto5: { label: "Media", hint: null },
-      silence2s: { label: "Lunga", hint: null },
-      silence3s: { label: "Molto lunga", hint: "Ideale per riunioni e interpretariato" },
-    },
+    lengthShort: "Corta",
+    lengthLong: "Lunga",
+    lengthShortHint: "Ideale per chiacchierare",
+    lengthLongHint: "Ideale per riunioni e interpretariato",
+    lengthMenuLabel: "Lunghezza delle frasi",
   },
   ru: {
     speakTitle: "Говорите — перевод появится сразу",
@@ -178,12 +173,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "Изменится сразу после выбора. Позже можно поменять в настройках.",
     lengthApplied: "Изменено. Попробуйте сказать ещё раз.",
     lengthClose: "Закрыть",
-    lengthOptions: {
-      auto3: { label: "Короткая", hint: "Для болтовни" },
-      auto5: { label: "Средняя", hint: null },
-      silence2s: { label: "Длинная", hint: null },
-      silence3s: { label: "Очень длинная", hint: "Для встреч и перевода" },
-    },
+    lengthShort: "Короткая",
+    lengthLong: "Длинная",
+    lengthShortHint: "Для болтовни",
+    lengthLongHint: "Для встреч и перевода",
+    lengthMenuLabel: "Длина фразы",
   },
   ar: {
     speakTitle: "تحدّث وستُترجم فورًا",
@@ -193,12 +187,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "يتغيّر فور الاختيار. يمكنك تغييره لاحقًا من الإعدادات.",
     lengthApplied: "تم التغيير. جرّب التحدّث مرة أخرى.",
     lengthClose: "إغلاق",
-    lengthOptions: {
-      auto3: { label: "قصيرة", hint: "مناسبة للدردشة" },
-      auto5: { label: "متوسطة", hint: null },
-      silence2s: { label: "طويلة", hint: null },
-      silence3s: { label: "طويلة جدًا", hint: "مناسبة للاجتماعات والترجمة الفورية" },
-    },
+    lengthShort: "قصيرة",
+    lengthLong: "طويلة",
+    lengthShortHint: "مناسبة للدردشة",
+    lengthLongHint: "مناسبة للاجتماعات والترجمة الفورية",
+    lengthMenuLabel: "طول الجملة",
   },
   hi: {
     speakTitle: "बोलिए, तुरंत अनुवाद हो जाएगा",
@@ -208,12 +201,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "चुनते ही बदल जाता है। सेटिंग्स में कभी भी बदल सकते हैं।",
     lengthApplied: "बदल दिया। फिर से बोलकर देखें।",
     lengthClose: "बंद करें",
-    lengthOptions: {
-      auto3: { label: "छोटा", hint: "गपशप के लिए अच्छा" },
-      auto5: { label: "मध्यम", hint: null },
-      silence2s: { label: "लंबा", hint: null },
-      silence3s: { label: "बहुत लंबा", hint: "मीटिंग और अनुवाद के लिए अच्छा" },
-    },
+    lengthShort: "छोटा",
+    lengthLong: "लंबा",
+    lengthShortHint: "गपशप के लिए अच्छा",
+    lengthLongHint: "मीटिंग और अनुवाद के लिए अच्छा",
+    lengthMenuLabel: "वाक्य की लंबाई",
   },
   th: {
     speakTitle: "พูดแล้วแปลให้ทันที",
@@ -223,12 +215,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "เลือกแล้วเปลี่ยนทันที เปลี่ยนได้อีกในการตั้งค่า",
     lengthApplied: "เปลี่ยนแล้ว ลองพูดอีกครั้ง",
     lengthClose: "ปิด",
-    lengthOptions: {
-      auto3: { label: "สั้น", hint: "เหมาะกับการคุยเล่น" },
-      auto5: { label: "ปานกลาง", hint: null },
-      silence2s: { label: "ยาว", hint: null },
-      silence3s: { label: "ยาวมาก", hint: "เหมาะกับการประชุมและล่าม" },
-    },
+    lengthShort: "สั้น",
+    lengthLong: "ยาว",
+    lengthShortHint: "เหมาะกับการคุยเล่น",
+    lengthLongHint: "เหมาะกับการประชุมและล่าม",
+    lengthMenuLabel: "ความยาวประโยค",
   },
   vi: {
     speakTitle: "Nói là được phiên dịch ngay",
@@ -238,12 +229,11 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthHint: "Chọn là đổi ngay. Bạn có thể đổi lại trong phần cài đặt.",
     lengthApplied: "Đã đổi. Hãy thử nói lại.",
     lengthClose: "Đóng",
-    lengthOptions: {
-      auto3: { label: "Ngắn", hint: "Hợp để trò chuyện" },
-      auto5: { label: "Vừa", hint: null },
-      silence2s: { label: "Dài", hint: null },
-      silence3s: { label: "Rất dài", hint: "Hợp cho họp và phiên dịch" },
-    },
+    lengthShort: "Ngắn",
+    lengthLong: "Dài",
+    lengthShortHint: "Hợp để trò chuyện",
+    lengthLongHint: "Hợp cho họp và phiên dịch",
+    lengthMenuLabel: "Độ dài câu",
   },
 };
 
