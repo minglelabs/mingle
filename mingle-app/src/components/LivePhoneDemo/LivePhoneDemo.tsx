@@ -2093,18 +2093,41 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // The interpreter's lines while they are being said (or just were), drawn
   // as live bubbles for this viewer while interpretation is on.
   const [voiceTalkCaptionLines, setVoiceTalkCaptionLines] = useState<VoiceTalkCaptionLine[]>([])
-  const voiceTalkCaptionFirstSeenRef = useRef(new Map<string, number>())
+  const voiceTalkCaptionSeenRef = useRef(new Map<string, { firstAt: number, text: string, changedAt: number }>())
+  // Live lines age out even when the call sends nothing new (the interpreter
+  // may leave mid-line), so the list is looked at again every second.
+  const [voiceTalkCaptionClock, setVoiceTalkCaptionClock] = useState(0)
+  const voiceTalkCaptionsLive = voiceTalkState.joined && voiceTalkInterpretOn && voiceTalkCaptionLines.length > 0
+  useEffect(() => {
+    if (!voiceTalkCaptionsLive) return
+    const timer = window.setInterval(() => setVoiceTalkCaptionClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [voiceTalkCaptionsLive])
   const voiceTalkCaptionDrafts = useMemo<Utterance[]>(() => {
     if (!voiceTalkState.joined || !voiceTalkInterpretOn) return []
-    const firstSeen = voiceTalkCaptionFirstSeenRef.current
-    const now = Date.now()
+    const seen = voiceTalkCaptionSeenRef.current
+    const now = Math.max(Date.now(), voiceTalkCaptionClock)
     const drafts: Utterance[] = []
+    const speakingNow = new Set<string>()
+    // Newest first: a person says one line at a time, so only their newest
+    // unfinished line is live; an older unfinished one was cut off.
     for (const line of voiceTalkCaptionLines) {
       if (line.isEcho || !line.speaker || !line.original.trim()) continue
       const id = buildVoiceCaptionClientMessageId(line.id)
-      if (!firstSeen.has(id)) firstSeen.set(id, now)
-      // A finished line stays a moment, until its saved message replaces it.
-      if (!line.isPartial && now - (firstSeen.get(id) ?? now) > 60_000) continue
+      const known = seen.get(id)
+      const entry = !known
+        ? { firstAt: now, text: line.original, changedAt: now }
+        : known.text === line.original ? known : { ...known, text: line.original, changedAt: now }
+      seen.set(id, entry)
+      if (line.isPartial) {
+        if (speakingNow.has(line.speaker)) continue
+        speakingNow.add(line.speaker)
+        // Words that stopped coming: the line was cut off (its saved message never comes).
+        if (now - entry.changedAt > 6_000) continue
+      } else if (now - entry.changedAt > 15_000) {
+        // Finished: its saved message replaces it within a moment, or it was not saved.
+        continue
+      }
       drafts.push({
         id,
         originalText: line.original,
@@ -2113,13 +2136,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         targetLanguages: [],
         speakerUserId: line.speaker,
         speakerName: line.speakerName,
-        createdAtMs: firstSeen.get(id),
+        createdAtMs: entry.firstAt,
         voiceCaption: true,
       })
     }
-    if (firstSeen.size > 200) firstSeen.clear()
+    if (seen.size > 300) seen.clear()
     return drafts
-  }, [voiceTalkCaptionLines, voiceTalkInterpretOn, voiceTalkState.joined])
+  }, [voiceTalkCaptionClock, voiceTalkCaptionLines, voiceTalkInterpretOn, voiceTalkState.joined])
   const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean, connected: boolean, callId: string | null }) => {
     setVoiceTalkState((prev) => (
       prev.live === next.live && prev.joined === next.joined && prev.connected === next.connected && prev.callId === next.callId ? prev : next

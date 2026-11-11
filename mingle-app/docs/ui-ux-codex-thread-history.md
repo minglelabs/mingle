@@ -2,6 +2,11 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-12 — 보이스톡 자막: 끊긴 줄이 화면에 남던 문제
+
+- Id: `2026-11-12-voice-talk-caption-drafts-age-out`
+- In a call with `통역` on, unfinished caption bubbles piled up in the room ("I don't kn", "So I was", each with a cursor) and never turned into messages. The interpreter had left mid-sentence (its idle leave, then joined again), so those lines never finished, and the phone kept every unfinished line as a live bubble. Now only a person's newest unfinished line is live, an unfinished line whose words stop for 6 s goes away, and a finished one that is not replaced by its saved message within 15 s goes away too. The interpreter no longer posts its old per-room usage report (it always got a 404; billing goes line by line). Web and interpreter only. Physical-device verification pending.
+
 ## 2026-11-12 — 보이스톡 자막: 일반 버블과 같은 모양, 실시간 스트리밍, 버튼 깜빡임 제거
 
 - Id: `2026-11-12-voice-talk-caption-bubbles-stream-no-flicker`
