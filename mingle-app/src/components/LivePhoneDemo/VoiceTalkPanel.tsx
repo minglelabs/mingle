@@ -26,6 +26,10 @@ import { useRoomPresence } from '@/lib/room-presence'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import { VOICE_TALK_MAX_SEATS, voiceTalkCopy } from '@/i18n/voice-talk-copy'
 import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
+import { DEFAULT_LOCALE } from '@/i18n'
+import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
+import { getCoinDetailCopy } from '@/i18n/coin-detail-copy'
+import { isCoinBillingActive, useCoinWallet } from '@/lib/coin-wallet-client'
 
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = VOICE_TALK_MAX_SEATS
@@ -225,6 +229,23 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const listenOn = props.listenOn !== false
   const viewerUserId = props.viewerUserId ?? null
   const copy = voiceTalkCopy(props.uiLocale)
+  const coinDetailCopy = getCoinDetailCopy(resolveAppSupportedLocaleTag(props.uiLocale) ?? DEFAULT_LOCALE)
+  const coinWallet = useCoinWallet().wallet
+  const [costTip, setCostTip] = useState<string | null>(null)
+  useEffect(() => {
+    if (!costTip) return
+    const timer = window.setTimeout(() => setCostTip(null), 10_000)
+    return () => window.clearTimeout(timer)
+  }, [costTip])
+  // The first time a paid switch is turned on, say what it costs.
+  const offerCostTip = useCallback((kind: 'interpret' | 'listen', listenOnNow: boolean) => {
+    if (!isCoinBillingActive(coinWallet) || costTipSeen(kind)) return
+    const tip = voiceTalkCostTip({ kind, listenOn: listenOnNow, rates: coinWallet.rates, copy: coinDetailCopy })
+    if (!tip) return
+    markCostTipSeen(kind)
+    if (kind === 'interpret' && listenOnNow) markCostTipSeen('listen')
+    setCostTip(tip)
+  }, [coinDetailCopy, coinWallet])
   const [call, setCall] = useState<StatusCall>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -695,7 +716,10 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                     aria-pressed={interpretOn}
                     aria-label={interpretOn ? copy.interpretOnState : copy.interpretOffState}
                     title={interpretOn ? copy.interpretOnState : copy.interpretOffState}
-                    onClick={() => onInterpretChange?.(!interpretOn)}
+                    onClick={() => {
+                      if (!interpretOn) offerCostTip('interpret', listenOn)
+                      onInterpretChange?.(!interpretOn)
+                    }}
                     className={`inline-flex h-12 w-16 items-center justify-center rounded-full transition-colors ${
                       interpretOn ? 'bg-emerald-500 text-white shadow-sm active:bg-emerald-600' : 'bg-gray-100 text-gray-400 active:bg-gray-200'
                     }`}
@@ -710,7 +734,10 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                     aria-label={listenOn ? copy.listenOnState : copy.listenOffState}
                     title={listenOn ? copy.listenOnState : copy.listenOffState}
                     disabled={!interpretOn}
-                    onClick={() => onListenChange?.(!listenOn)}
+                    onClick={() => {
+                      if (!listenOn) offerCostTip('listen', true)
+                      onListenChange?.(!listenOn)
+                    }}
                     className={`inline-flex h-12 w-16 items-center justify-center rounded-full transition-colors disabled:opacity-40 ${
                       interpretOn && listenOn ? 'bg-amber-400 text-white shadow-sm active:bg-amber-500' : 'bg-gray-100 text-gray-400 active:bg-gray-200'
                     }`}
@@ -734,6 +761,22 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                   </button>
                 </div>
               ) : null}
+              {joined && costTip ? (
+                <div
+                  data-qa="voice-talk-cost-tip"
+                  role="status"
+                  className="mx-3 mb-3 flex items-start gap-2 rounded-2xl bg-amber-50 px-3 py-2.5 text-[12.5px] leading-snug text-amber-900 ring-1 ring-amber-200"
+                >
+                  <span className="min-w-0 flex-1">{costTip}</span>
+                  <button
+                    type="button"
+                    onClick={() => setCostTip(null)}
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[12px] font-semibold text-amber-700 active:bg-amber-100"
+                  >
+                    {coinDetailCopy.gotIt}
+                  </button>
+                </div>
+              ) : null}
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -741,6 +784,36 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     </div>
     </>
   )
+}
+
+const COST_TIP_SEEN_KEY = 'mingle_voice_talk_cost_tip_seen:'
+
+function costTipSeen(kind: 'interpret' | 'listen'): boolean {
+  try { return window.localStorage.getItem(COST_TIP_SEEN_KEY + kind) === '1' } catch { return false }
+}
+
+function markCostTipSeen(kind: 'interpret' | 'listen'): void {
+  try { window.localStorage.setItem(COST_TIP_SEEN_KEY + kind, '1') } catch { /* private mode: shown again next time */ }
+}
+
+/**
+ * What a switch costs, the first time it is turned on (once per device per
+ * switch), while Hash are being charged. Null when there is nothing to say.
+ */
+export function voiceTalkCostTip(input: {
+  kind: 'interpret' | 'listen'
+  listenOn: boolean
+  rates: { sttCoinsPerMinute: number; ttsCoinsPerAudioMinute?: number } | null | undefined
+  copy: { interpretTip: string; listenTip: string }
+}): string | null {
+  const stt = Math.ceil(input.rates?.sttCoinsPerMinute ?? 0)
+  const tts = Math.ceil(input.rates?.ttsCoinsPerAudioMinute ?? 0)
+  const listen = tts > 0 ? input.copy.listenTip.replace('{coins}', String(tts)) : ''
+  if (input.kind === 'listen') return listen || null
+  if (stt <= 0) return null
+  const interpret = input.copy.interpretTip.replace('{coins}', String(stt))
+  // Read-aloud is on by default, so its cost comes with the first tip.
+  return input.listenOn && listen ? `${interpret} ${listen}` : interpret
 }
 
 /** The seats to draw: everyone in the call, then one open seat while the call is not full. */

@@ -80,6 +80,8 @@ export async function readCoinWallet() {
     rates: {
       sttCoinsPerMinute: voicePerMinute,
       voiceWithTtsCoinsPerMinute: voicePerMinute + playbackPerMinute,
+      // One minute of translation read aloud (voice talk's interpretation audio).
+      ttsCoinsPerAudioMinute: coinsFor(quoteCoinUsage(rates, { kind: 'tts', units: { second: 60 }, at: now })),
     },
   })
 }

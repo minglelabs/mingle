@@ -128,6 +128,10 @@ export type CoinHistoryItem =
       conversationTitle: string | null
       sttSeconds: number
       breakdown: Partial<Record<CoinUsageKind, number>>
+      /** Per feature: what it was, how long or how many, and what it cost. */
+      details: CoinUsageDetail[]
+      /** First and last charge of the group. */
+      firstAt: string
     }
   | {
       id: string
@@ -142,7 +146,32 @@ export type CoinHistoryItem =
 
 const HISTORY_PAGE_SIZE = 100
 
-type UsageGroup = Extract<CoinHistoryItem, { type: 'usage' }> & { micro: bigint; breakdownMicro: Map<string, bigint> }
+/**
+ * What a charge paid for, finer than its kind: voice talk captions and
+ * read-aloud, the room's own speech recognition and read-aloud, typed
+ * messages, other translation, photos.
+ */
+export type CoinUsageFeature = 'voice_caption' | 'voice_listen' | 'speech' | 'read_aloud' | 'typed' | 'translation' | 'photo'
+export const COIN_USAGE_FEATURE_ORDER: readonly CoinUsageFeature[] = ['voice_caption', 'voice_listen', 'speech', 'read_aloud', 'typed', 'translation', 'photo']
+
+export type CoinUsageDetail = { feature: CoinUsageFeature; coins: number; seconds: number; count: number }
+
+export function coinUsageFeatureOf(charge: { kind: string; idempotencyKey?: string | null; units?: unknown } | undefined): CoinUsageFeature {
+  const key = charge?.idempotencyKey ?? ''
+  if (key.startsWith('voice-caption-stt:')) return 'voice_caption'
+  if (key.startsWith('voice-playback-tts:')) return 'voice_listen'
+  if (charge?.kind === 'stt') return 'speech'
+  if (charge?.kind === 'tts') return 'read_aloud'
+  if (charge?.kind === 'image_text') return 'photo'
+  const message = (charge?.units as { message?: unknown } | null)?.message
+  return typeof message === 'number' && message > 0 ? 'typed' : 'translation'
+}
+
+type UsageGroup = Extract<CoinHistoryItem, { type: 'usage' }> & {
+  micro: bigint
+  breakdownMicro: Map<string, bigint>
+  featureTotals: Map<CoinUsageFeature, { micro: bigint; seconds: number; count: number }>
+}
 
 /**
  * Ledger history, newest first. Spend rows are folded into one item per
@@ -165,7 +194,7 @@ export async function getCoinHistory(userId: string, cursor: string | null): Pro
   const charges = chargeIds.length
     ? await prisma.appCoinUsageCharge.findMany({
         where: { id: { in: chargeIds } },
-        select: { id: true, kind: true, units: true, sessionKey: true },
+        select: { id: true, kind: true, units: true, sessionKey: true, idempotencyKey: true },
       })
     : []
   const chargeById = new Map(charges.map(charge => [charge.id, charge]))
@@ -227,8 +256,11 @@ export async function getCoinHistory(userId: string, cursor: string | null): Pro
         conversationTitle: titleBySessionKey.get(sessionKey) ?? null,
         sttSeconds: 0,
         breakdown: {},
+        details: [],
+        firstAt: at,
         micro: 0n,
         breakdownMicro: new Map(),
+        featureTotals: new Map(),
       }
       usageGroups.set(groupKey, group)
       items.push(group)
@@ -239,16 +271,28 @@ export async function getCoinHistory(userId: string, cursor: string | null): Pro
     group.breakdownMicro.set(kind, (group.breakdownMicro.get(kind) ?? 0n) + spent)
     const seconds = (charge?.units as { second?: unknown } | null)?.second
     if (kind === 'stt' && typeof seconds === 'number') group.sttSeconds += seconds
+    // Newest first: each older row moves the group's start back.
+    group.firstAt = at
+    const feature = coinUsageFeatureOf(charge)
+    const total = group.featureTotals.get(feature) ?? { micro: 0n, seconds: 0, count: 0 }
+    total.micro += spent
+    total.seconds += typeof seconds === 'number' ? seconds : 0
+    total.count += 1
+    group.featureTotals.set(feature, total)
   }
 
   return {
     items: items.map((item) => {
       if (!('breakdownMicro' in item)) return item
-      const { micro, breakdownMicro, ...usage } = item
+      const { micro, breakdownMicro, featureTotals, ...usage } = item
       return {
         ...usage,
         coins: microToSpentCoins(micro),
         breakdown: Object.fromEntries([...breakdownMicro].map(([kind, value]) => [kind, microToSpentCoins(value)])),
+        details: COIN_USAGE_FEATURE_ORDER.filter((feature) => featureTotals.has(feature)).map((feature) => {
+          const total = featureTotals.get(feature)!
+          return { feature, coins: microToSpentCoins(total.micro), seconds: Math.round(total.seconds), count: total.count }
+        }),
       }
     }),
     nextCursor: rows.length === HISTORY_PAGE_SIZE ? rows[rows.length - 1].id.toString() : null,

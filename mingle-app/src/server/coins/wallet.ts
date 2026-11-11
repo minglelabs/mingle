@@ -1,3 +1,4 @@
+import { MICRO_PER_COIN } from '@/lib/coin-units'
 import type { Prisma } from '@prisma/client/index'
 import { prisma } from '@/lib/prisma'
 import {
@@ -140,6 +141,10 @@ function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002'
 }
 
+export function roundUpToWholeCoin(micro: bigint): bigint {
+  return micro <= 0n ? 0n : ((micro + MICRO_PER_COIN - 1n) / MICRO_PER_COIN) * MICRO_PER_COIN
+}
+
 /**
  * Charges one unit of usage (spec 5.2). Idempotent on idempotencyKey. In enforce
  * mode the wallet is debited free-lots-first; if the lots cannot cover the
@@ -159,12 +164,15 @@ export async function chargeCoinUsage(input: CoinChargeInput): Promise<CoinCharg
   if (mode === 'off' || !input.userId || !input.idempotencyKey) return skipped
 
   const now = input.now ?? new Date()
-  const quote = quoteCoinUsage(await loadCoinPricingRates(prisma, now), {
+  const exactQuote = quoteCoinUsage(await loadCoinPricingRates(prisma, now), {
     kind: input.kind,
     model: input.model,
     units: input.units,
     at: now,
   })
+  // Every charge takes a whole number of Hash, rounded up (a line worth 0.2
+  // Hash costs 1); the price list keeps showing the exact rates.
+  const quote = { ...exactQuote, chargedMicro: roundUpToWholeCoin(exactQuote.chargedMicro) }
 
   if (mode === 'shadow') {
     try {

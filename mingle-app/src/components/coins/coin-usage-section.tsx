@@ -6,6 +6,7 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import type { AppLocale } from "@/i18n";
 import { resolveLegalDocumentLocale } from "@/i18n/config";
 import { getCoinCopy, type CoinCopy } from "@/i18n/coin-copy";
+import { getCoinDetailCopy, type CoinUsageFeatureKey } from "@/i18n/coin-detail-copy";
 
 // "How much did I use" (docs/coin-iap-spec.md 9.3): a range summary, a bar per
 // kind, a daily bar chart, and a history where usage is folded per conversation.
@@ -30,6 +31,9 @@ type HistoryItem =
       conversationTitle: string | null;
       sttSeconds: number;
       breakdown: Partial<Record<UsageKind, number>>;
+      /** Older servers send none: the breakdown by kind is shown instead. */
+      details?: { feature: CoinUsageFeatureKey; coins: number; seconds: number; count: number }[];
+      firstAt?: string;
     }
   | { id: string; type: "removal"; reason: string; coins: number; at: string; counterpart?: string | null };
 
@@ -65,6 +69,16 @@ function formatCoins(value: number, locale: string): string {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: value < 10 ? 2 : 0 }).format(value);
 }
 
+/** "1 min 23 sec", "45 sec": time used by one feature. */
+function formatDuration(seconds: number, locale: string): string {
+  const total = Math.max(1, Math.round(seconds));
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  const unit = (value: number, kind: "minute" | "second") => new Intl.NumberFormat(locale, { style: "unit", unit: kind, unitDisplay: "short" }).format(value);
+  if (minutes === 0) return unit(rest, "second");
+  return rest ? `${unit(minutes, "minute")} ${unit(rest, "second")}` : unit(minutes, "minute");
+}
+
 function formatMinutes(seconds: number, locale: string): string {
   return new Intl.NumberFormat(locale, { style: "unit", unit: "minute", unitDisplay: "short", maximumFractionDigits: 0 })
     .format(Math.max(1, Math.round(seconds / 60)));
@@ -72,7 +86,9 @@ function formatMinutes(seconds: number, locale: string): string {
 
 export default function CoinUsageSection({ locale }: { locale: AppLocale }) {
   const copy = getCoinCopy(locale);
+  const detailCopy = getCoinDetailCopy(locale);
   const displayLocale = resolveLegalDocumentLocale(locale);
+  const timeFormatter = new Intl.DateTimeFormat(displayLocale, { hour: "numeric", minute: "2-digit" });
   const [range, setRange] = useState<UsageRange>("7d");
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -235,7 +251,31 @@ export default function CoinUsageSection({ locale }: { locale: AppLocale }) {
                     <span className="shrink-0 text-[14px] font-bold tabular-nums text-slate-900">−{formatCoins(item.coins, displayLocale)}</span>
                     <ChevronDown size={16} className={`shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
                   </button>
-                  {open ? (
+                  {open && item.details?.length ? (
+                    <div data-qa="coin-history-details" className="bg-gray-50 px-4 py-2.5 text-[13px]">
+                      {item.firstAt && item.firstAt !== item.at ? (
+                        <p className="pb-1.5 text-[12px] text-gray-500">
+                          {timeFormatter.format(new Date(item.firstAt))} – {timeFormatter.format(new Date(item.at))}
+                        </p>
+                      ) : null}
+                      <ul className="space-y-1.5">
+                        {item.details.map((detail) => (
+                          <li key={detail.feature} className="flex items-start justify-between gap-3">
+                            <span className="min-w-0">
+                              <span className="block text-gray-700">{detailCopy.features[detail.feature] ?? detail.feature}</span>
+                              <span className="block text-[12px] text-gray-500">
+                                {[
+                                  detail.seconds > 0 ? formatDuration(detail.seconds, displayLocale) : null,
+                                  detailCopy.count.replace("{count}", new Intl.NumberFormat(displayLocale).format(detail.count)),
+                                ].filter(Boolean).join(" · ")}
+                              </span>
+                            </span>
+                            <span className="shrink-0 tabular-nums text-slate-800">−{formatCoins(detail.coins, displayLocale)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : open ? (
                     <ul className="space-y-1 bg-gray-50 px-4 py-2.5 text-[13px]">
                       {KIND_ORDER.filter((kind) => item.breakdown[kind]).map((kind) => (
                         <li key={kind} className="flex justify-between">
