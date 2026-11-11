@@ -666,6 +666,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
         bonkLeft && styles.bonkLeft,
         cardUp && styles.resultUp,
         watcher && styles.watcher,
+        view.kind !== 'round' && styles.offRound,
         boardShown && styles.boardUp,
         chat?.canWrite && styles.hasChat,
         chatOpen && styles.chatting,

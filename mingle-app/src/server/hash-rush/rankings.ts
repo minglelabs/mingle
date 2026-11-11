@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { isHashRushGuestId } from "./invite";
 
 // Hash Rush rankings: the game server reports each finished round (its
 // `result()`, server/room.js in hash-rush) and the app server keeps one row per
@@ -38,7 +39,8 @@ export function parseHashRushRoundReport(body: unknown): HashRushRoundReport | n
     const p = raw as Record<string, unknown>;
     const userId = typeof p.userId === "string" ? p.userId.trim() : "";
     // Only people with a mingle account (an app ticket); computers have none.
-    if (!userId || p.kind !== "remote" || seen.has(userId)) continue;
+    // Guests from an invite link are not accounts: they are not ranked.
+    if (!userId || p.kind !== "remote" || seen.has(userId) || isHashRushGuestId(userId)) continue;
     seen.add(userId);
     players.push({ userId, won: Number.isInteger(p.id) && winners.has(p.id as number), seeds: count(p.seeds), bonks: count(p.kills), bonked: count(p.deaths) });
   }

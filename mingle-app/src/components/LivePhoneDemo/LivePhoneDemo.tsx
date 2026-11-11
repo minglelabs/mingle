@@ -288,8 +288,7 @@ import { hashRushInviteCopy } from '@/features/hash-rush/invite-copy'
 import HashRushMenuPage from '@/features/hash-rush/HashRushMenuPage'
 import HashRushHowToPage from '@/features/hash-rush/HashRushHowToPage'
 import HashRushRankingPage from '@/features/hash-rush/HashRushRankingPage'
-import { buildHashRushPcLink, HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/config'
-import { requestHashRushTicket } from '@/features/hash-rush/ticket'
+import { HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/config'
 import { liveRoomsCopy } from '@/i18n/live-rooms-copy'
 import { formatRoomCode } from '@/lib/room-code'
 import { buildHashRushChatEntries } from './hash-rush-room-chat'
@@ -5888,12 +5887,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [liveRoomCopy.roomNumberCopied, roomCode, roomManagementCopy.shareErrorToastLabel])
 
-  // Copies a link that opens this room's Hash Rush game in a computer browser, as this member.
+  // Copies the room's Hash Rush invite link: anyone who opens it plays, on a
+  // computer or a phone browser, for as long as this chat room exists.
   const handleCopyHashRushPcLink = useCallback(async () => {
     if (!conversationId || !HASH_RUSH_PAGE_URL || !HASH_RUSH_SERVER) return
     try {
-      const grant = await requestHashRushTicket({ conversationId, viewerKey: `pc|${viewerUserId ?? ''}`, fresh: true })
-      const link = buildHashRushPcLink({ pageUrl: HASH_RUSH_PAGE_URL, server: HASH_RUSH_SERVER, room: grant.room, ticket: grant.ticket, lang: uiLocale })
+      const response = await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/hash-rush/invite`), { credentials: 'include', cache: 'no-store' })
+      if (!response.ok) throw new Error(String(response.status))
+      const { url } = await response.json() as { url?: string }
+      if (!url) throw new Error('no_url')
+      const link = `${url}?lang=${encodeURIComponent(uiLocale)}`
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(link)
       } else {
@@ -5911,7 +5914,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       toast.error(liveRoomCopy.hashRushPcLinkFailed)
     }
-  }, [conversationId, liveRoomCopy.hashRushPcLinkCopied, liveRoomCopy.hashRushPcLinkFailed, uiLocale, viewerUserId])
+  }, [conversationId, liveRoomCopy.hashRushPcLinkCopied, liveRoomCopy.hashRushPcLinkFailed, uiLocale])
 
   const handleCopyShareLink = useCallback(async () => {
     if (!shareUrl) return

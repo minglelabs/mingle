@@ -8,6 +8,8 @@ import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { prisma } from "@/lib/prisma";
 import { notifyConversationMessage } from "@/server/conversation-realtime";
 import { hashRushRoomId, issueHashRushTicket } from "@/server/hash-rush/ticket";
+import { newHashRushGuest, signHashRushInvite, verifyHashRushInvite } from "@/server/hash-rush/invite";
+import { buildHashRushPcLink, HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from "@/features/hash-rush/config";
 import { listHashRushRankings, parseHashRushRoundReport, recordHashRushRound } from "@/server/hash-rush/rankings";
 import { isHashRushGameLive, joinHashRushGame, prismaHashRushGameStore, type HashRushGameStore } from "@/server/hash-rush/room-game";
 
@@ -112,6 +114,66 @@ export async function postHashRushJoinResponse(request: NextRequest, conversatio
     });
   }
   return NextResponse.json({ game: await describeGame(result.sessionId, result.startedByUserId), started: result.started });
+}
+
+// ---------- invite link ----------
+
+function siteOrigin(request: NextRequest): string {
+  const configured = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "").trim().replace(/\/+$/, "");
+  return /^https?:\/\//i.test(configured) ? configured : new URL(request.url).origin;
+}
+
+/** GET: the room's invite link (members only). It works until the chat room is deleted. */
+export async function getHashRushInviteResponse(request: NextRequest, conversationId: string) {
+  const secret = (process.env.HASH_RUSH_TICKET_SECRET || "").trim();
+  if (!secret || !HASH_RUSH_PAGE_URL || !HASH_RUSH_SERVER) return NextResponse.json({ error: "hash_rush_unavailable" }, { status: 503 });
+  const member = await requireChannelMember(request, conversationId);
+  if ("response" in member) return member.response;
+  const code = signHashRushInvite(conversationId, secret);
+  return NextResponse.json({ url: `${siteOrigin(request)}/api/hash-rush/invite/${encodeURIComponent(code)}` });
+}
+
+const INVITE_GONE_HTML = (lang: string) => {
+  const ko = lang.toLowerCase().startsWith("ko");
+  const text = ko ? "이 게임 링크는 더 이상 쓸 수 없어요. 대화방이 없어졌어요." : "This game link no longer works: its chat room is gone.";
+  return `<!doctype html><html lang="${ko ? "ko" : "en"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hash Rush</title></head>`
+    + `<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#fff8e7;color:#3a2a1a;font:600 17px/1.5 system-ui,sans-serif;padding:24px;text-align:center">${text}</body></html>`;
+};
+
+/**
+ * GET /api/hash-rush/invite/<code>: opens the room's game in the browser. A
+ * member of the chat room plays under their name, anyone else as a guest.
+ * Each visit gets a fresh ticket, so the link itself never runs out.
+ */
+export async function getHashRushInviteRedirect(request: NextRequest, code: string) {
+  const secret = (process.env.HASH_RUSH_TICKET_SECRET || "").trim();
+  const lang = (new URL(request.url).searchParams.get("lang") || request.headers.get("accept-language") || "en").split(",")[0].trim().slice(0, 12);
+  if (!secret || !HASH_RUSH_PAGE_URL || !HASH_RUSH_SERVER) return NextResponse.json({ error: "hash_rush_unavailable" }, { status: 503 });
+  const channelId = verifyHashRushInvite(code, secret);
+  const channel = channelId
+    ? await prisma.appConversationChannel.findFirst({ where: { id: channelId, OR: [{ isDeleted: false }, { isDeleted: null }] }, select: { id: true } })
+    : null;
+  if (!channel) {
+    return new NextResponse(INVITE_GONE_HTML(lang), { status: 410, headers: { "content-type": "text/html; charset=utf-8" } });
+  }
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({ request, session }).catch(() => ({ userId: null as string | null }));
+  const memberKey = resolvedUser.userId
+    ? await getConversationSessionKeyForMember({ conversationId: channel.id, userId: resolvedUser.userId })
+    : null;
+  let player: { userId: string; name: string };
+  if (resolvedUser.userId && memberKey) {
+    const user = await prisma.user.findUnique({ where: { id: resolvedUser.userId }, select: { name: true } });
+    player = { userId: resolvedUser.userId, name: (user?.name || "").trim().slice(0, 8) };
+  } else {
+    player = newHashRushGuest();
+  }
+  const room = hashRushRoomId(channel.id);
+  const { ticket } = issueHashRushTicket({ room, ...player }, secret);
+  const target = new URL(buildHashRushPcLink({ pageUrl: HASH_RUSH_PAGE_URL, server: HASH_RUSH_SERVER, room, ticket, lang }));
+  // The app's rooms are hosted ones: the page joins as a guest of the host.
+  target.searchParams.set("host", "1");
+  return NextResponse.redirect(target.toString(), { status: 302, headers: { "cache-control": "no-store" } });
 }
 
 // ---------- rankings ----------

@@ -21,6 +21,9 @@
   right: 0;
   bottom: 0;
   display: grid;
+  /* One row the cover's height: the card's max-height is measured against
+     it, so a tall card scrolls inside instead of running off the screen. */
+  grid-template-rows: minmax(0, 1fr);
   place-items: center;
   padding: 14px 8px max(14px, env(safe-area-inset-bottom, 0px));
   color: var(--ink);

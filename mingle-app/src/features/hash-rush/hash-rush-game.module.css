@@ -883,6 +883,16 @@
   display: none;
 }
 
+/* Outside a round (the lobby, connecting) there is nothing to steer: the pad,
+   the bonk and the throw buttons come up only once the round starts, and do
+   not cover the lobby card. */
+.offRound .pad,
+.offRound .bonk,
+.offRound .throw,
+.offRound .hintTouch {
+  display: none;
+}
+
 /* Watching a round: there is no hamster to steer, so there are no controls to
    wonder about; the strip holds the way into the next round instead. */
 .watcher .pad,

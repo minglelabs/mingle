@@ -40,8 +40,9 @@ const EXCLUDED_TOP_LEVEL_SEGMENTS = new Set(["auth", "native-auth", "well-known"
 // `coins/web-checkout` is web-only (Polar): store apps must not link out to an
 // outside payment, so the namespaces deliberately leave it out.
 // `hash-rush/results` is the game server's (server to server, behind a shared
-// secret): no app ever calls it.
-const EXCLUDED_ROUTES = new Set(["translate", "messages", "account/delete", "coins/web-checkout", "hash-rush/results"]);
+// secret): no app ever calls it. `hash-rush/invite/[code]` is the invite
+// link itself, opened in a browser, never through a namespace.
+const EXCLUDED_ROUTES = new Set(["translate", "messages", "account/delete", "coins/web-checkout", "hash-rush/results", "hash-rush/invite/[code]"]);
 
 function listRouteFiles(dir: string): string[] {
   const out: string[] = [];
