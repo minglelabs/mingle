@@ -1,0 +1,99 @@
+{
+ "ui": {
+  "nav": {
+   "how": "So funktioniert es",
+   "features": "Funktionen",
+   "translate": "Übersetzung",
+   "uses": "Anwendungsfälle",
+   "blog": "Blog",
+   "legal": "Legal"
+  },
+  "footerCopy": "© Mingle Labs.",
+  "footerRenamed": "HashChat hieß früher Mingle.",
+  "privacy": "Datenschutz",
+  "terms": "Nutzungsbedingungen",
+  "blogEyebrow": "HashChat-Blog",
+  "blogTitle": "Einblicke in die KI-Echtzeitübersetzung.",
+  "blogLede": "Produktideen, Vergleiche, Vorträge und Erfahrungsberichte für alle, die sprachübergreifende Gespräche ermöglichen. HashChat hieß früher Mingle.",
+  "latestEyebrow": "Neueste Beiträge",
+  "latestTitle": "Vorträge, Präsentationen und Produktgeschichten.",
+  "latestLede": "Präsentationsfolien aus unseren Vorträgen und Pitches sowie die Geschichte, wie aus Mingle HashChat wurde, und ein Live-Vergleich von KI-Übersetzern.",
+  "indexMetaTitle": "HashChat-Blog – KI-Übersetzung für Live-Gespräche",
+  "indexMetaDescription": "Entdecke die Einblicke von HashChat (ehemals Mingle) in KI-Übersetzung, Live-Sprachuntertitel, mehrsprachige Gesprächsprodukte und unsere Vorträge.",
+  "by": "Von",
+  "fullscreen": "Im Vollbild anzeigen",
+  "keyHint": "Klicke auf die Folien und verwende anschließend die Pfeiltasten, das Mausrad oder Wischgesten. Füge #Nummer zum Vollbild-Link hinzu, um direkt zu einer Folie zu springen.",
+  "readDeck": "Folien ansehen",
+  "activate": "Klicken, um die Folien zu verwenden",
+  "deckLabel": "Folien",
+  "backToBlog": "Alle Beiträge",
+  "deckLanguageNote": "Die Folien selbst sind auf Englisch."
+ },
+ "author": "Hyeongkeol Nam, Mingle Labs",
+ "decks": {
+  "ai-wrapper-business": {
+   "kind": "Vortrag",
+   "dateLabel": "5. November 2026",
+   "title": "Geschäftliche Chancen für KI-Wrapper-Software entdecken",
+   "description": "Fallstudien zu KI-Wrapper-Unternehmen und Strategien für die nächsten Schritte.",
+   "body": [
+    "Die Folien eines Vortrags über KI-Wrapper-Software: Produkte, die bereits bestehende Nutzererlebnisse mithilfe von KI automatisieren. Die 94 Folien behandeln Vibe Coding und KI-Agenten, Character-Chats, Notiz-Apps, KI-gestütztes Ernährungstracking, Aggregatoren, Lernhilfen und vieles mehr. Dabei geht es um die Frage, welche Wrapper sich gegenüber Big Tech behaupten konnten und welche vom Markt verdrängt wurden.",
+    "Im letzten Teil geht es um die vielversprechendsten Geschäftsmöglichkeiten: fünf Ideen, nachhaltige Wettbewerbsvorteile für Softwareunternehmen und die Frage, wie ein Wrapper mehr sein kann als nur ein Wrapper."
+   ]
+  },
+  "ai-wrapper-business-surfers-3rd": {
+   "kind": "Vortrag",
+   "dateLabel": "12. August 2026",
+   "title": "Das KI-Wrapper-Geschäft: Ausgabe für Surfers Cohort 3",
+   "description": "Die erste, ausführlichere Version unseres Vortrags über KI-Wrapper, gehalten vor Surfers Cohort 3.",
+   "body": [
+    "Die erste Version unseres Vortrags über KI-Wrapper, gehalten vor Surfers Cohort 3. Die 165 Folien gehen ausführlicher auf die einzelnen Bereiche ein: Vibe Coding, Character-Chats und ihre drei Entwicklungsphasen, Notiz-Apps, KI-gestütztes Ernährungstracking, Aggregatoren wie OpenRouter und KI-Lernhilfen.",
+    "Die Präsentation wurde auf Koreanisch erstellt und wird hier standardmäßig auf Englisch angezeigt. Wechsle zu Koreanisch, um das Original anzusehen."
+   ]
+  },
+  "hashchat-pitch-deck": {
+   "kind": "Pitch Deck",
+   "dateLabel": "Aktualisiert am 1. September 2026",
+   "title": "HashChat-Pitch-Deck: Ein Sprachmessenger ohne Sprachbarrieren",
+   "description": "Warum wir HashChat entwickeln, für wen es gedacht ist und wie aus einem Live-Dolmetscher ein KI-natives soziales Netzwerk wird.",
+   "body": [
+    "Unser vollständiges Pitch Deck. Es beginnt mit einem einfachen Problem: Menschen möchten im Ausland Freundschaften schließen, doch Sprachbarrieren stehen ihnen im Weg. Die heutigen Übersetzungstools wurden nie für soziale Gespräche entwickelt.",
+    "Es behandelt erste Nutzerreaktionen auf HelloTalk, unsere dreistufige Strategie – vom eigenständigen Live-Übersetzer über einen Sprachmessenger bis hin zu einer sozialen Plattform – sowie die Zielbranchen im Anhang."
+   ]
+  },
+  "hashchat-pitch-deck-short": {
+   "kind": "Pitch Deck",
+   "dateLabel": "Aktualisiert am 1. September 2026",
+   "title": "HashChat-Pitch-Deck: Die Kurzversion",
+   "description": "Das Henne-Ei-Problem beim Sprachaustausch und wie Live-Dolmetschen eine der beiden Hürden beseitigt.",
+   "body": [
+    "Eine kürzere Version unseres Pitch Decks. Sprachlern-Apps stecken in einem Henne-Ei-Problem fest: Man möchte Freunde im Ausland finden und gleichzeitig ihre Sprache lernen. HashChat beseitigt eine dieser Hürden durch Live-Dolmetschen, sodass Gespräche auch ohne gemeinsame Sprache möglich sind.",
+    "Außerdem geht es um die zusätzliche Nachfrage nach Untertiteln und persönlichem Dolmetschen, die wir festgestellt haben, sowie um unser erstes Ziel: K-Friends-Nutzer für uns zu gewinnen."
+   ]
+  },
+  "virtually-deck": {
+   "kind": "Pitch Deck",
+   "dateLabel": "13. September 2026",
+   "title": "Virtually: VTuber-Livestreams mit generativer KI",
+   "description": "Von einem einzelnen Bild zu einer interaktiven Live-Übertragung.",
+   "body": [
+    "Das Pitch Deck für Virtually, unser generatives KI-Tool für VTuber. Es zeigt, wie aus einem einzigen Charakterbild eine interaktive Live-Übertragung wird und welche Rolle Virtually im VTuber-Ökosystem spielt.",
+    "Die Präsentation ist außerdem auf Japanisch und Chinesisch verfügbar. Du kannst die Sprache über die Schaltflächen in der linken unteren Ecke der Folien wechseln."
+   ]
+  }
+ },
+ "articles": {
+  "hashchat-social-network": {
+   "meta": "Produktgeschichte – 2. November 2026",
+   "title": "HashChat: das soziale Netzwerk ohne Sprachbarrieren",
+   "description": "Wie aus Mingle HashChat wurde: ein übersetzter Feed, Profile, die zeigen, wen du kennenlernen möchtest, und Chats mit integriertem Live-Dolmetscher – im Vergleich zu LINE, WeChat, WhatsApp, HelloTalk und weiteren Plattformen.",
+   "link": "Geschichte lesen"
+  },
+  "ai-translators-comparison": {
+   "meta": "Vergleich – Aktualisiert am 20. April 2026",
+   "title": "KI-Übersetzer im Vergleich",
+   "description": "Ein praxisorientierter Leitfaden mit übersichtlichen Tabellen zu Preisen, Plattformunterstützung, Sprachabdeckung, Live-Untertiteln, Transkripten, automatischem Sprachwechsel, Hintergrundübersetzung und Audioaufnahme aus externen Apps.",
+   "link": "Vergleich ansehen"
+  }
+ }
+}

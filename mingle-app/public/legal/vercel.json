@@ -103,21 +103,21 @@
         {
           "type": "query",
           "key": "lang",
-          "value": "ko"
+          "value": "(?<lang>ko|ja|zh-cn|zh-tw|fr|de|es|pt|it|ru|ar|hi|th|vi)"
         }
       ],
-      "destination": "/blogs/ko"
+      "destination": "/blogs/:lang"
     },
     {
-      "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|virtually-deck)",
+      "source": "/blogs/:slug(ai-wrapper-business|ai-wrapper-business-surfers-3rd|hashchat-pitch-deck|hashchat-pitch-deck-short|virtually-deck|hashchat-social-network|ai-translators-comparison)",
       "has": [
         {
           "type": "query",
           "key": "lang",
-          "value": "ko"
+          "value": "(?<lang>ko|ja|zh-cn|zh-tw|fr|de|es|pt|it|ru|ar|hi|th|vi)"
         }
       ],
-      "destination": "/blogs/ko/:slug"
+      "destination": "/blogs/:lang/:slug"
     },
     {
       "source": "/blogs",

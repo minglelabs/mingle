@@ -1,28 +1,36 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="referrer" content="strict-origin-when-cross-origin" />
-    <title>AI Translators Comparison</title>
-    <meta
-      name="description"
-      content="Compare HashChat, Felo Translator, Transync, Google Translate, Apple Translate, Microsoft Translator, Papago, and DeepL for live AI voice translation, captions, transcripts, background translation, and external app audio."
-    />
-    <link rel="canonical" href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison" />
-    <meta
-      property="og:title"
-      content="AI Translators Comparison"
-    />
-    <meta
-      property="og:description"
-      content="A table-first guide to live AI translation features for real conversations."
-    />
-    <meta property="og:type" content="article" />
-    <meta property="og:url" content="https://hashchat.minglelabs.app/blogs/ai-translators-comparison" />
-    <meta property="og:image" content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <script type="application/ld+json">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="strict-origin-when-cross-origin" name="referrer"/>
+<title>AI Translators Comparison</title>
+<meta content="Compare HashChat, Felo Translator, Transync, Google Translate, Apple Translate, Microsoft Translator, Papago, and DeepL for live AI voice translation, captions, transcripts, background translation, and external app audio." name="description"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison" rel="canonical"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison" hreflang="en" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ko" hreflang="ko" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ja" hreflang="ja" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=zh-cn" hreflang="zh-cn" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=zh-tw" hreflang="zh-tw" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=fr" hreflang="fr" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=de" hreflang="de" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=es" hreflang="es" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=pt" hreflang="pt" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=it" hreflang="it" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ru" hreflang="ru" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ar" hreflang="ar" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=hi" hreflang="hi" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=th" hreflang="th" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=vi" hreflang="vi" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison" hreflang="x-default" rel="alternate"/>
+<meta content="AI Translators Comparison" property="og:title"/>
+<meta content="A table-first guide to live AI translation features for real conversations." property="og:description"/>
+<meta content="article" property="og:type"/>
+<meta content="https://hashchat.minglelabs.app/blogs/ai-translators-comparison" property="og:url"/>
+<meta content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" property="og:image"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "BlogPosting",
@@ -37,7 +45,7 @@
         "about": {"@type": "MobileApplication", "@id": "https://hashchat.minglelabs.app/#app", "name": "HashChat", "alternateName": ["Mingle", "Mingle: Global Hangout"], "description": "HashChat (formerly Mingle) is a real-time voice translation app for foreign friends, global communities, and conversations while traveling. The app was renamed from Mingle to HashChat in October 2026; it is the same app, account, and store listing.", "applicationCategory": "SocialNetworkingApplication", "operatingSystem": "iOS, Android", "url": "https://hashchat.minglelabs.app/", "sameAs": ["https://apps.apple.com/app/id6759795134", "https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"], "publisher": {"@id": "https://minglelabs.app/#organization"}}
       }
     </script>
-    <style>
+<style>
       :root {
         color-scheme: light;
         --paper: #fbf7ee;
@@ -666,428 +674,430 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="/assets/site-header.css" />
-  </head>
-  <body>
-    <header class="site-header">
-      <nav class="nav" aria-label="HashChat site navigation">
-        <a class="brand" href="/" aria-label="HashChat home">
-          <img src="/assets/mingle-icon.png" alt="" />
-          <span>HashChat</span>
-        </a>
-        <div class="nav-actions">
-          <div class="nav-links">
-            <a href="/#problem">Problem</a>
-            <a href="/#product">Product</a>
-            <a href="/#proof">Proof</a>
-            <a href="/#vision">Vision</a>
-            <a class="nav-legal is-current" aria-current="page" href="/blogs">Blog</a>
-            <a class="nav-legal" href="/legal">Legal</a>
-          </div>
-          <label class="language-picker">
-            <span aria-hidden="true">🌐</span>
-            <select id="blog-language" aria-label="Language">
-              <option value="en" selected>🇺🇸 English</option>
-              <option value="ko">🇰🇷 한국어</option>
-            </select>
-          </label>
-        </div>
-      </nav>
-    </header>
-
-    <main>
-      <article>
-        <header class="article-hero">
-          <div class="article-inner">
-            <p class="eyebrow">AI translator comparison</p>
-            <h1>AI Translators Comparison</h1>
-            <p class="article-meta">Updated April 20, 2026 - Mingle Labs</p>
-            <p class="lede">
+<link href="/assets/site-header.css" rel="stylesheet"/>
+</head>
+<body>
+<header class="site-header">
+<nav aria-label="HashChat site navigation" class="nav">
+<a aria-label="HashChat home" class="brand" href="/">
+<img alt="" src="/assets/site/hashchat-icon.png"/>
+<span>HashChat</span>
+</a>
+<div class="nav-actions">
+<div class="nav-links">
+<a href="/#how">How it works</a>
+<a href="/#features">Features</a>
+<a href="/#translate">Translation</a>
+<a href="/#uses">Use cases</a>
+<a aria-current="page" class="nav-legal is-current" href="/blogs">Blog</a>
+<a class="nav-legal" href="/legal">Legal</a>
+</div>
+<label class="language-picker">
+<span aria-hidden="true">🌐</span>
+<select aria-label="Language" id="blog-language">
+<option selected="" value="en">🇺🇸 English</option>
+<option value="ko">🇰🇷 한국어</option>
+<option value="ja">🇯🇵 日本語</option>
+<option value="zh-cn">🇨🇳 简体中文</option>
+<option value="zh-tw">🇹🇼 繁體中文</option>
+<option value="fr">🇫🇷 Français</option>
+<option value="de">🇩🇪 Deutsch</option>
+<option value="es">🇪🇸 Español</option>
+<option value="pt">🇧🇷 Português</option>
+<option value="it">🇮🇹 Italiano</option>
+<option value="ru">🇷🇺 Русский</option>
+<option value="ar">🇸🇦 العربية</option>
+<option value="hi">🇮🇳 हिन्दी</option>
+<option value="th">🇹🇭 ไทย</option>
+<option value="vi">🇻🇳 Tiếng Việt</option>
+</select>
+</label>
+</div>
+</nav>
+</header>
+<main>
+<article>
+<header class="article-hero">
+<div class="article-inner">
+<p class="eyebrow">AI translator comparison</p>
+<h1>AI Translators Comparison</h1>
+<p class="article-meta">Updated April 20, 2026 - Mingle Labs</p>
+<p class="lede">
               Most translation apps can translate a sentence. Fewer can keep up when people are speaking continuously,
               switching languages, using voice rooms, or trying to preserve a transcript. This comparison focuses on
               live spoken conversations rather than document translation alone.
             </p>
-            <p class="lede">
+<p class="lede">
               Across 12 criteria including price, platforms, language coverage, live captions, transcripts, background
               translation, and external app audio capture, HashChat comes out as the best mobile app overall for continuous
               multilingual conversation translation.
             </p>
-            <p class="lede">
+<p class="lede">
               HashChat was formerly called Mingle. It is the same app with the same App Store and Google Play listings,
               renamed in October 2026.
             </p>
-          </div>
-        </header>
-
-        <section class="article-section article-section--surface" id="comparison">
-          <div class="article-inner">
-            <div class="section-heading">
-              <p class="eyebrow">Comparison table</p>
-              <h2>Start with the live conversation features.</h2>
-              <p>
+</div>
+</header>
+<section class="article-section article-section--surface" id="comparison">
+<div class="article-inner">
+<div class="section-heading">
+<p class="eyebrow">Comparison table</p>
+<h2>Start with the live conversation features.</h2>
+<p>
                 Prices and language availability can change by country, platform, and feature. The table below uses
                 public product pages, platform listings, app listings, and current HashChat app catalogs checked on April 20, 2026.
               </p>
-            </div>
-
-            <div class="comparison-shell" tabindex="0" aria-label="AI translator comparison table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Translator</th>
-                    <th>Price</th>
-                    <th>Platforms</th>
-                    <th>Supported languages</th>
-                    <th>AI performance</th>
-                    <th>Continuous note-style translation</th>
-                    <th>Live captions + transcript</th>
-                    <th>Messenger-like sentence turns</th>
-                    <th>Realtime speaker diarization</th>
-                    <th>Messenger + voice chat app</th>
-                    <th>3+ languages at once</th>
-                    <th>Auto detect + switching</th>
-                    <th>Background translation</th>
-                    <th>External app audio capture</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr class="is-featured">
-                    <td class="tool-cell">
-                      <div class="tool-name"><img src="/assets/mingle-icon.png" alt="" />HashChat</div>
-                    </td>
-                    <td>Free consumer app.</td>
-                    <td>iOS, Android, and Web.</td>
-                    <td>62 translation languages and 61 selectable speech languages in the current app catalog.</td>
-                    <td><span class="status status-yes">Good.</span> Strong live speech AI for continuous multilingual rooms, speaker turns, and auto-switching.</td>
-                    <td><span class="status status-yes">Yes.</span> Designed for uninterrupted long-form conversation flow.</td>
-                    <td><span class="status status-yes">Yes.</span> Shows live captions and keeps translated transcripts.</td>
-                    <td><span class="status status-yes">Yes.</span> Speech is split into conversation turns in a room-style timeline.</td>
-                    <td><span class="status status-yes">Yes.</span> Separates speakers and keeps live turns readable in real time.</td>
-                    <td><span class="status status-yes">Yes.</span> Can be used directly as a messenger and voice chat app.</td>
-                    <td><span class="status status-yes">Yes.</span> Built for all-direction translation across 3+ languages.</td>
-                    <td><span class="status status-yes">Yes.</span> Detects the spoken language and switches without manual speaker changes.</td>
-                    <td><span class="status status-yes">Yes.</span> Keeps translating during app switches or lock screen sessions.</td>
-                    <td><span class="status status-yes">Yes.</span> Captures other app audio played through speaker while HashChat is listening.</td>
-                  </tr>
-                  <tr>
-                    <td class="tool-cell">
-                      <div class="tool-name"><img src="/assets/logo-google-translate.jpg" alt="" />Google Translate</div>
-                    </td>
-                    <td>Free consumer app.</td>
-                    <td>iOS, Android, and Web.</td>
-                    <td>108 typed text languages, 70 conversation languages, and 8 transcribe languages on the Google Play listing.</td>
-                    <td><span class="status status-yes">Good.</span> Strong general-purpose translation AI across text, camera, speech, and detection workflows.</td>
-                    <td><span class="status status-partial">Partial.</span> Transcribe supports near real-time continuous translation in fewer languages.</td>
-                    <td><span class="status status-partial">Partial.</span> Transcribe is useful, but feature coverage is narrower than text translation.</td>
-                    <td><span class="status status-partial">Partial.</span> Conversation and transcribe views show chunks, not a persistent messenger room.</td>
-                    <td><span class="status status-no">No.</span> The consumer Translate app is not a real-time speaker diarization tool.</td>
-                    <td><span class="status status-no">No.</span> It is a translation utility, not a messenger or voice chat app.</td>
-                    <td><span class="status status-no">No.</span> Conversation mode is built around bilingual conversations.</td>
-                    <td><span class="status status-yes">Yes.</span> Strong automatic detection for text and bilingual conversation flows.</td>
-                    <td><span class="status status-no">No.</span> It is mainly an active foreground translation experience.</td>
-                    <td><span class="status status-no">No.</span> It does not operate as a general external app audio capture layer.</td>
-                  </tr>
-                  <tr>
-                    <td class="tool-cell">
-                      <div class="tool-name"><img src="/assets/logo-apple-translate.jpg" alt="" />Apple Translate</div>
-                    </td>
-                    <td>Free, built into iOS and iPadOS.</td>
-                    <td>iOS, iPadOS, and macOS. No Android or standalone web app.</td>
-                    <td>21 Translate app language entries; Apple Intelligence Live Translation has a narrower language list.</td>
-                    <td><span class="status status-partial">Standard.</span> Useful inside supported Apple surfaces, but coverage and flexibility are narrower.</td>
-                    <td><span class="status status-no">No.</span> Not a general continuous note-style translator.</td>
-                    <td><span class="status status-partial">Partial.</span> Phone and FaceTime can show translated captions on supported devices and languages.</td>
-                    <td><span class="status status-partial">Partial.</span> Translate and Messages feel conversation-like, but mostly inside Apple surfaces.</td>
-                    <td><span class="status status-no">No.</span> Not a standalone real-time speaker diarization workflow.</td>
-                    <td><span class="status status-no">No.</span> Translation runs inside Apple surfaces; the translator is not its own messenger or voice chat app.</td>
-                    <td><span class="status status-no">No.</span> Live Translation is positioned for one-to-one messages, calls, and nearby conversations.</td>
-                    <td><span class="status status-partial">Partial.</span> Works well after languages are selected or inside supported Apple apps.</td>
-                    <td><span class="status status-partial">Partial.</span> Supported inside Phone, FaceTime, Messages, and AirPods flows, not as a universal background translator.</td>
-                    <td><span class="status status-no">No.</span> No general-purpose capture of audio from arbitrary third-party apps.</td>
-                  </tr>
-                  <tr>
-                    <td class="tool-cell">
-                      <div class="tool-name"><img src="/assets/logo-microsoft-translator.png" alt="" />Microsoft Translator</div>
-                    </td>
-                    <td>Free consumer app.</td>
-                    <td>iOS, Android, and Web conversation site.</td>
-                    <td>Over 100 languages in the app listing; feature support varies by text, speech, image, and conversation.</td>
-                    <td><span class="status status-partial">Standard.</span> Reliable hosted-session translation, but the consumer AI flow is less flexible for passive listening.</td>
-                    <td><span class="status status-partial">Partial.</span> Strong for hosted group sessions, but not a passive note-style listener for every app.</td>
-                    <td><span class="status status-yes">Yes.</span> Group conversations include transcripts and captions.</td>
-                    <td><span class="status status-yes">Yes.</span> Group conversations include transcripts and navigation aids.</td>
-                    <td><span class="status status-partial">Partial.</span> Participants are separated when each joins a hosted conversation from their own device.</td>
-                    <td><span class="status status-no">No.</span> It hosts translation sessions, but is not a general messenger or voice chat app.</td>
-                    <td><span class="status status-yes">Yes.</span> Multi-device conversations can support multilingual groups.</td>
-                    <td><span class="status status-partial">Partial.</span> Participants choose their language; comments translate into each user's language.</td>
-                    <td><span class="status status-no">No.</span> The app is not designed as a persistent background microphone translator.</td>
-                    <td><span class="status status-no">No.</span> Microsoft states external media sources and files are not supported.</td>
-                  </tr>
-                  <tr>
-                    <td class="tool-cell">
-                      <div class="tool-name"><img src="/assets/logo-papago.jpg" alt="" />Papago</div>
-                    </td>
-                    <td>Free consumer app; NAVER Cloud Papago APIs are paid for business use.</td>
-                    <td>iOS, Android, and Web.</td>
-                    <td>13 core text translation languages in NAVER Cloud docs; app and detection features have different coverage.</td>
-                    <td><span class="status status-partial">Standard.</span> Practical Korean-centered translation, but live AI conversation depth is narrower.</td>
-                    <td><span class="status status-no">No.</span> Conversation translation is not built as a continuous transcript notebook.</td>
-                    <td><span class="status status-no">No.</span> Voice and conversation output exists, but not a live caption transcript workflow.</td>
-                    <td><span class="status status-partial">Partial.</span> One-on-one conversation mode is turn-based.</td>
-                    <td><span class="status status-no">No.</span> Not built for live speaker diarization across multiple speakers.</td>
-                    <td><span class="status status-no">No.</span> It is not a messenger or voice chat app.</td>
-                    <td><span class="status status-no">No.</span> Best suited to two-language travel and Korean-centered use cases.</td>
-                    <td><span class="status status-partial">Partial.</span> Auto language detection exists for text, but not broad speaker auto-switching.</td>
-                    <td><span class="status status-no">No.</span> It is primarily used in the foreground.</td>
-                    <td><span class="status status-no">No.</span> No general external app audio capture workflow.</td>
-                  </tr>
-                  <tr>
-                    <td class="tool-cell">
-                      <div class="tool-name"><img src="/assets/logo-deepl.png" alt="" />DeepL</div>
-                    </td>
-                    <td>Free tier; Pro, API, and Voice plans are paid and vary by region and plan.</td>
-                    <td>iOS, Android, Web, desktop apps, and browser extensions.</td>
-                    <td>30 core Translator languages plus additional next-generation languages; Voice language coverage is narrower.</td>
-                    <td><span class="status status-yes">Good.</span> Strong translation quality for written content and dedicated Voice meeting products.</td>
-                    <td><span class="status status-partial">Partial.</span> DeepL Voice can follow meetings, but it is a separate product path.</td>
-                    <td><span class="status status-partial">Partial.</span> DeepL Voice provides translated captions for meetings and conversations.</td>
-                    <td><span class="status status-partial">Partial.</span> DeepL Voice supports meeting captions; the main Translator is not a messenger timeline.</td>
-                    <td><span class="status status-partial">Partial.</span> Meeting products are speaker-session oriented; the mobile Translator is not a live diarization app.</td>
-                    <td><span class="status status-no">No.</span> DeepL is not a messenger or voice chat app.</td>
-                    <td><span class="status status-partial">Partial.</span> Available in meeting/conversation products, not the standard mobile translator flow.</td>
-                    <td><span class="status status-partial">Partial.</span> Strong text detection; live speech workflows depend on DeepL Voice setup.</td>
-                    <td><span class="status status-no">No.</span> Not a general mobile background translator.</td>
-                    <td><span class="status status-no">No.</span> Not designed to capture arbitrary third-party app audio from a phone.</td>
-                  </tr>
-                  <tr>
-                    <td class="tool-cell">
-                      <div class="tool-name"><img src="/assets/logo-felo.jpg" alt="" />Felo Translator</div>
-                    </td>
-                    <td>About $2/hour; public web pricing lists 120 minutes at $3.90.</td>
-                    <td>iOS and Android, with web account and pricing pages.</td>
-                    <td>15 voice translation languages on the public product page.</td>
-                    <td><span class="status status-partial">Standard.</span> Capable real-time voice AI, but narrower public language and workflow coverage.</td>
-                    <td><span class="status status-partial">Partial.</span> Built for real-time recording, transcription, translation, and saved history, but not a room-style notebook.</td>
-                    <td><span class="status status-yes">Yes.</span> Provides real-time speech-to-text translation and subtitles as you speak.</td>
-                    <td><span class="status status-yes">Yes.</span> Speech output is separated into sentence-level transcript turns.</td>
-                    <td><span class="status status-no">No.</span> Public materials emphasize transcription and translation, not speaker identity diarization.</td>
-                    <td><span class="status status-no">No.</span> It is not a messenger or voice chat app.</td>
-                    <td><span class="status status-partial">Partial.</span> Voice translation supports multiple languages, but not all-direction 3+ live rooms.</td>
-                    <td><span class="status status-yes">Yes.</span> The app listing says it automatically detects the languages spoken by both parties.</td>
-                    <td><span class="status status-no">No.</span> Best treated as a foreground recording and translation workflow.</td>
-                    <td><span class="status status-no">No.</span> Not positioned as an external app audio capture layer.</td>
-                  </tr>
-                  <tr>
-                    <td class="tool-cell">
-                      <div class="tool-name"><img src="/assets/logo-transync.jpg" alt="" />Transync</div>
-                    </td>
-                    <td>Free 40-minute trial; Personal Premium is $8.99/month for 10 hours, with time cards from $0.70/hour.</td>
-                    <td>iOS, Android, Web, Windows, and macOS.</td>
-                    <td>60+ translation languages.</td>
-                    <td><span class="status status-yes">Good.</span> Strong meeting-focused speech AI for live captions, notes, and language distinction.</td>
-                    <td><span class="status status-yes">Yes.</span> Built for continuous real-time meeting and speech translation.</td>
-                    <td><span class="status status-yes">Yes.</span> Provides real-time translated subtitles and AI-generated meeting minutes.</td>
-                    <td><span class="status status-no">No.</span> Shows live transcript and caption output, not messenger-like sentence turns.</td>
-                    <td><span class="status status-no">No.</span> Public docs emphasize automatic language distinction, not speaker identity diarization.</td>
-                    <td><span class="status status-no">No.</span> It integrates with meeting tools, but is not its own messenger or voice chat app.</td>
-                    <td><span class="status status-yes">Yes.</span> Designed for multilingual meetings and real-time interpretation workflows.</td>
-                    <td><span class="status status-yes">Yes.</span> Automatically distinguishes the speaker's language without button switching.</td>
-                    <td><span class="status status-partial">Partial.</span> Desktop and meeting workflows can run alongside meeting apps, but it is not a general mobile background translator.</td>
-                    <td><span class="status status-no">No.</span> Meeting integrations exist, but it is not an external app audio capture layer.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p class="table-note">
+</div>
+<div aria-label="AI translator comparison table" class="comparison-shell" tabindex="0">
+<table>
+<thead>
+<tr>
+<th>Translator</th>
+<th>Price</th>
+<th>Platforms</th>
+<th>Supported languages</th>
+<th>AI performance</th>
+<th>Continuous note-style translation</th>
+<th>Live captions + transcript</th>
+<th>Messenger-like sentence turns</th>
+<th>Realtime speaker diarization</th>
+<th>Messenger + voice chat app</th>
+<th>3+ languages at once</th>
+<th>Auto detect + switching</th>
+<th>Background translation</th>
+<th>External app audio capture</th>
+</tr>
+</thead>
+<tbody>
+<tr class="is-featured">
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/mingle-icon.png"/>HashChat</div>
+</td>
+<td>Free consumer app.</td>
+<td>iOS, Android, and Web.</td>
+<td>62 translation languages and 61 selectable speech languages in the current app catalog.</td>
+<td><span class="status status-yes">Good.</span> Strong live speech AI for continuous multilingual rooms, speaker turns, and auto-switching.</td>
+<td><span class="status status-yes">Yes.</span> Designed for uninterrupted long-form conversation flow.</td>
+<td><span class="status status-yes">Yes.</span> Shows live captions and keeps translated transcripts.</td>
+<td><span class="status status-yes">Yes.</span> Speech is split into conversation turns in a room-style timeline.</td>
+<td><span class="status status-yes">Yes.</span> Separates speakers and keeps live turns readable in real time.</td>
+<td><span class="status status-yes">Yes.</span> Can be used directly as a messenger and voice chat app.</td>
+<td><span class="status status-yes">Yes.</span> Built for all-direction translation across 3+ languages.</td>
+<td><span class="status status-yes">Yes.</span> Detects the spoken language and switches without manual speaker changes.</td>
+<td><span class="status status-yes">Yes.</span> Keeps translating during app switches or lock screen sessions.</td>
+<td><span class="status status-yes">Yes.</span> Captures other app audio played through speaker while HashChat is listening.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-google-translate.jpg"/>Google Translate</div>
+</td>
+<td>Free consumer app.</td>
+<td>iOS, Android, and Web.</td>
+<td>108 typed text languages, 70 conversation languages, and 8 transcribe languages on the Google Play listing.</td>
+<td><span class="status status-yes">Good.</span> Strong general-purpose translation AI across text, camera, speech, and detection workflows.</td>
+<td><span class="status status-partial">Partial.</span> Transcribe supports near real-time continuous translation in fewer languages.</td>
+<td><span class="status status-partial">Partial.</span> Transcribe is useful, but feature coverage is narrower than text translation.</td>
+<td><span class="status status-partial">Partial.</span> Conversation and transcribe views show chunks, not a persistent messenger room.</td>
+<td><span class="status status-no">No.</span> The consumer Translate app is not a real-time speaker diarization tool.</td>
+<td><span class="status status-no">No.</span> It is a translation utility, not a messenger or voice chat app.</td>
+<td><span class="status status-no">No.</span> Conversation mode is built around bilingual conversations.</td>
+<td><span class="status status-yes">Yes.</span> Strong automatic detection for text and bilingual conversation flows.</td>
+<td><span class="status status-no">No.</span> It is mainly an active foreground translation experience.</td>
+<td><span class="status status-no">No.</span> It does not operate as a general external app audio capture layer.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-apple-translate.jpg"/>Apple Translate</div>
+</td>
+<td>Free, built into iOS and iPadOS.</td>
+<td>iOS, iPadOS, and macOS. No Android or standalone web app.</td>
+<td>21 Translate app language entries; Apple Intelligence Live Translation has a narrower language list.</td>
+<td><span class="status status-partial">Standard.</span> Useful inside supported Apple surfaces, but coverage and flexibility are narrower.</td>
+<td><span class="status status-no">No.</span> Not a general continuous note-style translator.</td>
+<td><span class="status status-partial">Partial.</span> Phone and FaceTime can show translated captions on supported devices and languages.</td>
+<td><span class="status status-partial">Partial.</span> Translate and Messages feel conversation-like, but mostly inside Apple surfaces.</td>
+<td><span class="status status-no">No.</span> Not a standalone real-time speaker diarization workflow.</td>
+<td><span class="status status-no">No.</span> Translation runs inside Apple surfaces; the translator is not its own messenger or voice chat app.</td>
+<td><span class="status status-no">No.</span> Live Translation is positioned for one-to-one messages, calls, and nearby conversations.</td>
+<td><span class="status status-partial">Partial.</span> Works well after languages are selected or inside supported Apple apps.</td>
+<td><span class="status status-partial">Partial.</span> Supported inside Phone, FaceTime, Messages, and AirPods flows, not as a universal background translator.</td>
+<td><span class="status status-no">No.</span> No general-purpose capture of audio from arbitrary third-party apps.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-microsoft-translator.png"/>Microsoft Translator</div>
+</td>
+<td>Free consumer app.</td>
+<td>iOS, Android, and Web conversation site.</td>
+<td>Over 100 languages in the app listing; feature support varies by text, speech, image, and conversation.</td>
+<td><span class="status status-partial">Standard.</span> Reliable hosted-session translation, but the consumer AI flow is less flexible for passive listening.</td>
+<td><span class="status status-partial">Partial.</span> Strong for hosted group sessions, but not a passive note-style listener for every app.</td>
+<td><span class="status status-yes">Yes.</span> Group conversations include transcripts and captions.</td>
+<td><span class="status status-yes">Yes.</span> Group conversations include transcripts and navigation aids.</td>
+<td><span class="status status-partial">Partial.</span> Participants are separated when each joins a hosted conversation from their own device.</td>
+<td><span class="status status-no">No.</span> It hosts translation sessions, but is not a general messenger or voice chat app.</td>
+<td><span class="status status-yes">Yes.</span> Multi-device conversations can support multilingual groups.</td>
+<td><span class="status status-partial">Partial.</span> Participants choose their language; comments translate into each user's language.</td>
+<td><span class="status status-no">No.</span> The app is not designed as a persistent background microphone translator.</td>
+<td><span class="status status-no">No.</span> Microsoft states external media sources and files are not supported.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-papago.jpg"/>Papago</div>
+</td>
+<td>Free consumer app; NAVER Cloud Papago APIs are paid for business use.</td>
+<td>iOS, Android, and Web.</td>
+<td>13 core text translation languages in NAVER Cloud docs; app and detection features have different coverage.</td>
+<td><span class="status status-partial">Standard.</span> Practical Korean-centered translation, but live AI conversation depth is narrower.</td>
+<td><span class="status status-no">No.</span> Conversation translation is not built as a continuous transcript notebook.</td>
+<td><span class="status status-no">No.</span> Voice and conversation output exists, but not a live caption transcript workflow.</td>
+<td><span class="status status-partial">Partial.</span> One-on-one conversation mode is turn-based.</td>
+<td><span class="status status-no">No.</span> Not built for live speaker diarization across multiple speakers.</td>
+<td><span class="status status-no">No.</span> It is not a messenger or voice chat app.</td>
+<td><span class="status status-no">No.</span> Best suited to two-language travel and Korean-centered use cases.</td>
+<td><span class="status status-partial">Partial.</span> Auto language detection exists for text, but not broad speaker auto-switching.</td>
+<td><span class="status status-no">No.</span> It is primarily used in the foreground.</td>
+<td><span class="status status-no">No.</span> No general external app audio capture workflow.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-deepl.png"/>DeepL</div>
+</td>
+<td>Free tier; Pro, API, and Voice plans are paid and vary by region and plan.</td>
+<td>iOS, Android, Web, desktop apps, and browser extensions.</td>
+<td>30 core Translator languages plus additional next-generation languages; Voice language coverage is narrower.</td>
+<td><span class="status status-yes">Good.</span> Strong translation quality for written content and dedicated Voice meeting products.</td>
+<td><span class="status status-partial">Partial.</span> DeepL Voice can follow meetings, but it is a separate product path.</td>
+<td><span class="status status-partial">Partial.</span> DeepL Voice provides translated captions for meetings and conversations.</td>
+<td><span class="status status-partial">Partial.</span> DeepL Voice supports meeting captions; the main Translator is not a messenger timeline.</td>
+<td><span class="status status-partial">Partial.</span> Meeting products are speaker-session oriented; the mobile Translator is not a live diarization app.</td>
+<td><span class="status status-no">No.</span> DeepL is not a messenger or voice chat app.</td>
+<td><span class="status status-partial">Partial.</span> Available in meeting/conversation products, not the standard mobile translator flow.</td>
+<td><span class="status status-partial">Partial.</span> Strong text detection; live speech workflows depend on DeepL Voice setup.</td>
+<td><span class="status status-no">No.</span> Not a general mobile background translator.</td>
+<td><span class="status status-no">No.</span> Not designed to capture arbitrary third-party app audio from a phone.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-felo.jpg"/>Felo Translator</div>
+</td>
+<td>About $2/hour; public web pricing lists 120 minutes at $3.90.</td>
+<td>iOS and Android, with web account and pricing pages.</td>
+<td>15 voice translation languages on the public product page.</td>
+<td><span class="status status-partial">Standard.</span> Capable real-time voice AI, but narrower public language and workflow coverage.</td>
+<td><span class="status status-partial">Partial.</span> Built for real-time recording, transcription, translation, and saved history, but not a room-style notebook.</td>
+<td><span class="status status-yes">Yes.</span> Provides real-time speech-to-text translation and subtitles as you speak.</td>
+<td><span class="status status-yes">Yes.</span> Speech output is separated into sentence-level transcript turns.</td>
+<td><span class="status status-no">No.</span> Public materials emphasize transcription and translation, not speaker identity diarization.</td>
+<td><span class="status status-no">No.</span> It is not a messenger or voice chat app.</td>
+<td><span class="status status-partial">Partial.</span> Voice translation supports multiple languages, but not all-direction 3+ live rooms.</td>
+<td><span class="status status-yes">Yes.</span> The app listing says it automatically detects the languages spoken by both parties.</td>
+<td><span class="status status-no">No.</span> Best treated as a foreground recording and translation workflow.</td>
+<td><span class="status status-no">No.</span> Not positioned as an external app audio capture layer.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-transync.jpg"/>Transync</div>
+</td>
+<td>Free 40-minute trial; Personal Premium is $8.99/month for 10 hours, with time cards from $0.70/hour.</td>
+<td>iOS, Android, Web, Windows, and macOS.</td>
+<td>60+ translation languages.</td>
+<td><span class="status status-yes">Good.</span> Strong meeting-focused speech AI for live captions, notes, and language distinction.</td>
+<td><span class="status status-yes">Yes.</span> Built for continuous real-time meeting and speech translation.</td>
+<td><span class="status status-yes">Yes.</span> Provides real-time translated subtitles and AI-generated meeting minutes.</td>
+<td><span class="status status-no">No.</span> Shows live transcript and caption output, not messenger-like sentence turns.</td>
+<td><span class="status status-no">No.</span> Public docs emphasize automatic language distinction, not speaker identity diarization.</td>
+<td><span class="status status-no">No.</span> It integrates with meeting tools, but is not its own messenger or voice chat app.</td>
+<td><span class="status status-yes">Yes.</span> Designed for multilingual meetings and real-time interpretation workflows.</td>
+<td><span class="status status-yes">Yes.</span> Automatically distinguishes the speaker's language without button switching.</td>
+<td><span class="status status-partial">Partial.</span> Desktop and meeting workflows can run alongside meeting apps, but it is not a general mobile background translator.</td>
+<td><span class="status status-no">No.</span> Meeting integrations exist, but it is not an external app audio capture layer.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="table-note">
               For voice products, "supported languages" is less useful than feature-specific coverage. A translator may
               support many text languages while live captions, conversation mode, or transcription covers a smaller set.
             </p>
-          </div>
-        </section>
-
-        <section class="article-section">
-          <div class="article-inner">
-            <div class="content-grid">
-              <div class="prose">
-                <h2>What this comparison is really measuring</h2>
-                <p>
+</div>
+</section>
+<section class="article-section">
+<div class="article-inner">
+<div class="content-grid">
+<div class="prose">
+<h2>What this comparison is really measuring</h2>
+<p>
                   A travel phrase translator, a document translator, a meeting caption product, and a social voice
                   translator all solve different problems. For live conversation, the hard part is not only translation
                   quality. The product has to listen continuously, keep context, separate turns, detect language changes,
                   and stay usable while people are already talking.
                 </p>
-                <p>
+<p>
                   That is why the first section starts with the table. If you need one person to translate a sign or ask
                   a quick travel question, Google Translate, Apple Translate, Papago, and DeepL can be excellent. If you
                   need a long multilingual voice room, a running transcript, or translation while another app is playing
                   audio, the requirements are different.
                 </p>
-
-                <div class="callout">
-                  <p>
+<div class="callout">
+<p>
                     HashChat is built around continuous speech translation first. The important distinction is the
                     conversation surface: a live transcript that behaves more like a room than a one-off phrase box.
                   </p>
-                </div>
-
-                <h2>Where HashChat (formerly Mingle) is different</h2>
-                <p>
+</div>
+<h2>Where HashChat (formerly Mingle) is different</h2>
+<p>
                   HashChat treats translation as a live conversation layer. It can listen for long sessions, split speech
                   into turns, translate into more than two selected languages, and keep working when a session moves to
                   the background. That matters when the user is in a HelloTalk voice room, a Discord call on speaker, a
                   hostel conversation, or a multilingual meetup where the topic keeps moving.
                 </p>
-                <p>
+<p>
                   The product direction is closer to a voice messenger with translation built in than a dictionary or
                   phrase translator. Users are not only asking "what did that sentence mean?" They are trying to keep a
                   relationship-forming conversation alive without stopping every few seconds.
                 </p>
-
-                <h2>Where the other translators are strong</h2>
-                <p>
+<h2>Where the other translators are strong</h2>
+<p>
                   Google Translate has unmatched broad utility: text, camera, offline packs, conversation, and transcribe
                   all live in one familiar app. Microsoft Translator is strong for hosted group conversations because
                   participants can join from their own devices and read the conversation in their own language. Apple
                   Translate is compelling for people already inside Apple's Phone, FaceTime, Messages, and AirPods
                   experiences.
                 </p>
-                <p>
+<p>
                   Papago remains especially practical for Korean, Japanese, Chinese, and travel use cases in Asia. DeepL
                   is a strong choice for written translation quality, documents, terminology, and business workflows; its
                   DeepL Voice products address meetings, but that is separate from the everyday mobile translator use
                   case.
                 </p>
-
-                <h2>How to choose</h2>
-                <ul>
-                  <li>Choose HashChat when the conversation is continuous, multilingual, or happening alongside another voice app.</li>
-                  <li>Choose Google Translate when you need the broadest general-purpose travel translator.</li>
-                  <li>Choose Microsoft Translator when each participant can join the same hosted multilingual session.</li>
-                  <li>Choose Apple Translate when everyone is inside supported Apple Intelligence, Phone, FaceTime, Messages, or AirPods flows.</li>
-                  <li>Choose Papago when Korean-centered travel or phrase translation is the main job.</li>
-                  <li>Choose DeepL when written translation quality, documents, or business terminology are more important than passive mobile audio capture.</li>
-                </ul>
-              </div>
-
-              <aside class="aside" aria-label="Article notes">
-                <div class="aside-box">
-                  <h3>Best fit for HashChat</h3>
-                  <p>
+<h2>How to choose</h2>
+<ul>
+<li>Choose HashChat when the conversation is continuous, multilingual, or happening alongside another voice app.</li>
+<li>Choose Google Translate when you need the broadest general-purpose travel translator.</li>
+<li>Choose Microsoft Translator when each participant can join the same hosted multilingual session.</li>
+<li>Choose Apple Translate when everyone is inside supported Apple Intelligence, Phone, FaceTime, Messages, or AirPods flows.</li>
+<li>Choose Papago when Korean-centered travel or phrase translation is the main job.</li>
+<li>Choose DeepL when written translation quality, documents, or business terminology are more important than passive mobile audio capture.</li>
+</ul>
+</div>
+<aside aria-label="Article notes" class="aside">
+<div class="aside-box">
+<h3>Best fit for HashChat</h3>
+<p>
                     Continuous multilingual conversations, voice rooms, live subtitles, running transcripts, and other app
                     audio played through speaker.
                   </p>
-                </div>
-                <div class="aside-box">
-                  <h3>Feature caveat</h3>
-                  <p>
+</div>
+<div class="aside-box">
+<h3>Feature caveat</h3>
+<p>
                     Public translator apps update often. Check the source links below before making a purchase,
                     enterprise rollout, or accessibility decision.
                   </p>
-                </div>
-              </aside>
-            </div>
-          </div>
-        </section>
-
-        <section class="article-section article-section--deep" aria-labelledby="recommendations-title">
-          <div class="article-inner">
-            <div class="section-heading">
-              <p class="eyebrow">Practical recommendations</p>
-              <h2 id="recommendations-title">Match the translator to the conversation shape.</h2>
-              <p>
+</div>
+</aside>
+</div>
+</div>
+</section>
+<section aria-labelledby="recommendations-title" class="article-section article-section--deep">
+<div class="article-inner">
+<div class="section-heading">
+<p class="eyebrow">Practical recommendations</p>
+<h2 id="recommendations-title">Match the translator to the conversation shape.</h2>
+<p>
                 The best translator is usually the one whose interface fits the moment, not the one with the largest raw
                 language count.
               </p>
-            </div>
-            <div class="recommendation-grid">
-              <div class="recommendation">
-                <strong>Long voice rooms</strong>
-                <span>Use HashChat when you need continuous captions, automatic language switching, and a room-like transcript.</span>
-              </div>
-              <div class="recommendation">
-                <strong>Hosted classes or events</strong>
-                <span>Use Microsoft Translator when every participant can join a shared conversation session from their own device.</span>
-              </div>
-              <div class="recommendation">
-                <strong>Travel utility</strong>
-                <span>Use Google Translate or Papago for signs, menus, quick phrases, and camera translation in the foreground.</span>
-              </div>
-              <div class="recommendation">
-                <strong>Apple-only calls</strong>
-                <span>Use Apple Live Translation when the call or message already happens in a supported Apple app and language.</span>
-              </div>
-              <div class="recommendation">
-                <strong>Business writing</strong>
-                <span>Use DeepL when written translation quality, terminology, and documents matter more than mobile live audio.</span>
-              </div>
-              <div class="recommendation">
-                <strong>External app audio</strong>
-                <span>Use HashChat when the audio source is another app on speaker and the goal is live captioning plus translation.</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="article-section" aria-labelledby="sources-title">
-          <div class="article-inner">
-            <div class="section-heading">
-              <p class="eyebrow">Source notes</p>
-              <h2 id="sources-title">Public references checked for this article.</h2>
-              <p>
+</div>
+<div class="recommendation-grid">
+<div class="recommendation">
+<strong>Long voice rooms</strong>
+<span>Use HashChat when you need continuous captions, automatic language switching, and a room-like transcript.</span>
+</div>
+<div class="recommendation">
+<strong>Hosted classes or events</strong>
+<span>Use Microsoft Translator when every participant can join a shared conversation session from their own device.</span>
+</div>
+<div class="recommendation">
+<strong>Travel utility</strong>
+<span>Use Google Translate or Papago for signs, menus, quick phrases, and camera translation in the foreground.</span>
+</div>
+<div class="recommendation">
+<strong>Apple-only calls</strong>
+<span>Use Apple Live Translation when the call or message already happens in a supported Apple app and language.</span>
+</div>
+<div class="recommendation">
+<strong>Business writing</strong>
+<span>Use DeepL when written translation quality, terminology, and documents matter more than mobile live audio.</span>
+</div>
+<div class="recommendation">
+<strong>External app audio</strong>
+<span>Use HashChat when the audio source is another app on speaker and the goal is live captioning plus translation.</span>
+</div>
+</div>
+</div>
+</section>
+<section aria-labelledby="sources-title" class="article-section">
+<div class="article-inner">
+<div class="section-heading">
+<p class="eyebrow">Source notes</p>
+<h2 id="sources-title">Public references checked for this article.</h2>
+<p>
                 These links were used to verify public pricing signals, platform availability, language availability, and feature descriptions.
               </p>
-            </div>
-            <ul class="sources">
-              <li><a href="https://apps.apple.com/us/app/mingle-global-hangout/id6759795134">HashChat: Global Hangout on the App Store</a></li>
-              <li><a href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn">HashChat: Global Hangout on Google Play</a></li>
-              <li><a href="https://felo.me/en/translator">Felo Translator product page</a></li>
-              <li><a href="https://felo.me/download">Felo Translator download page</a></li>
-              <li><a href="https://felo.me/pricing">Felo Translator pricing</a></li>
-              <li><a href="https://apps.apple.com/us/app/felo-translator/id6447256759">Felo Translator on the App Store</a></li>
-              <li><a href="https://www.transyncai.com/pricing/">Transync AI pricing</a></li>
-              <li><a href="https://translate.google.com/about/">Google Translate product page</a></li>
-              <li><a href="https://play.google.com/store/apps/details?id=com.google.android.apps.translate&amp;hl=en_US">Google Translate on Google Play</a></li>
-              <li><a href="https://www.apple.com/ios/feature-availability/">Apple iOS and iPadOS Feature Availability</a></li>
-              <li><a href="https://support.apple.com/guide/iphone/translate-messages-calls-and-conversations-iph22b72984d/26/ios/26">Apple Live Translation guide</a></li>
-              <li><a href="https://www.microsoft.com/en-us/translator/apps/">Microsoft Translator apps page</a></li>
-              <li><a href="https://apps.apple.com/us/app/microsoft-translator/id1018949559">Microsoft Translator on the App Store</a></li>
-              <li><a href="https://www.microsoft.com/en-us/translator/help/multi-device-conversation/">Microsoft Translator multi-device conversation FAQ</a></li>
-              <li><a href="https://api.ncloud-docs.com/docs/en/ai-naver-papagonmt-translation">NAVER Cloud Papago Text Translation docs</a></li>
-              <li><a href="https://apps.apple.com/us/app/naver-papago-ai-translator/id1147874819">Naver Papago on the App Store</a></li>
-              <li><a href="https://play.google.com/store/apps/details?id=com.naver.labs.translator">Naver Papago on Google Play</a></li>
-              <li><a href="https://www.deepl.com/en/translator">DeepL Translator product page</a></li>
-              <li><a href="https://support.deepl.com/hc/en-us/articles/360019925219-DeepL-Translator-languages">DeepL Translator languages</a></li>
-              <li><a href="https://support.deepl.com/hc/en-us/articles/26625846174364-DeepL-Voice-languages">DeepL Voice languages</a></li>
-            </ul>
-            <div class="reference-cta">
-              <a class="reference-button" href="https://hashchat.minglelabs.app/landing/">View HashChat landing page</a>
-            </div>
-          </div>
-        </section>
-      </article>
-    </main>
-
-    <footer class="footer">
-      <div class="footer-inner">
-        <span>&copy; Mingle Labs. Built for conversations across languages.</span>
-        <div class="footer-links">
-          <a href="/blogs">Blog</a>
-          <a href="/privacy-policy">Privacy</a>
-          <a href="/terms-of-use">Terms</a>
-        </div>
-      </div>
-    </footer>
-      <script>
+</div>
+<ul class="sources">
+<li><a href="https://apps.apple.com/us/app/mingle-global-hangout/id6759795134">HashChat: Global Hangout on the App Store</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn">HashChat: Global Hangout on Google Play</a></li>
+<li><a href="https://felo.me/en/translator">Felo Translator product page</a></li>
+<li><a href="https://felo.me/download">Felo Translator download page</a></li>
+<li><a href="https://felo.me/pricing">Felo Translator pricing</a></li>
+<li><a href="https://apps.apple.com/us/app/felo-translator/id6447256759">Felo Translator on the App Store</a></li>
+<li><a href="https://www.transyncai.com/pricing/">Transync AI pricing</a></li>
+<li><a href="https://translate.google.com/about/">Google Translate product page</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=com.google.android.apps.translate&amp;hl=en_US">Google Translate on Google Play</a></li>
+<li><a href="https://www.apple.com/ios/feature-availability/">Apple iOS and iPadOS Feature Availability</a></li>
+<li><a href="https://support.apple.com/guide/iphone/translate-messages-calls-and-conversations-iph22b72984d/26/ios/26">Apple Live Translation guide</a></li>
+<li><a href="https://www.microsoft.com/en-us/translator/apps/">Microsoft Translator apps page</a></li>
+<li><a href="https://apps.apple.com/us/app/microsoft-translator/id1018949559">Microsoft Translator on the App Store</a></li>
+<li><a href="https://www.microsoft.com/en-us/translator/help/multi-device-conversation/">Microsoft Translator multi-device conversation FAQ</a></li>
+<li><a href="https://api.ncloud-docs.com/docs/en/ai-naver-papagonmt-translation">NAVER Cloud Papago Text Translation docs</a></li>
+<li><a href="https://apps.apple.com/us/app/naver-papago-ai-translator/id1147874819">Naver Papago on the App Store</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=com.naver.labs.translator">Naver Papago on Google Play</a></li>
+<li><a href="https://www.deepl.com/en/translator">DeepL Translator product page</a></li>
+<li><a href="https://support.deepl.com/hc/en-us/articles/360019925219-DeepL-Translator-languages">DeepL Translator languages</a></li>
+<li><a href="https://support.deepl.com/hc/en-us/articles/26625846174364-DeepL-Voice-languages">DeepL Voice languages</a></li>
+</ul>
+<div class="reference-cta">
+<a class="reference-button" href="https://hashchat.minglelabs.app/landing/">View HashChat landing page</a>
+</div>
+</div>
+</section>
+</article>
+</main>
+<footer class="footer">
+<div class="footer-inner">
+<span>© Mingle Labs. HashChat was formerly called Mingle.</span>
+<div class="footer-links">
+<a href="/blogs">Blog</a>
+<a href="/privacy-policy">Privacy</a>
+<a href="/terms-of-use">Terms</a>
+<a href="/legal">Legal</a>
+</div>
+</div>
+</footer>
+<script>
       (function () {
         var select = document.getElementById("blog-language");
         if (!select) return;
         select.addEventListener("change", function () {
           var url = new URL(window.location.href);
-          if (select.value === "ko") url.searchParams.set("lang", "ko");
-          else url.searchParams.delete("lang");
+          if (select.value === "en") url.searchParams.delete("lang");
+          else url.searchParams.set("lang", select.value);
           window.location.href = url.toString();
         });
       })();
     </script>
-  </body>
+</body>
 </html>

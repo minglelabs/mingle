@@ -1,0 +1,99 @@
+{
+ "ui": {
+  "nav": {
+   "how": "Come funziona",
+   "features": "Funzionalità",
+   "translate": "Traduzione",
+   "uses": "Casi d'uso",
+   "blog": "Blog",
+   "legal": "Legal"
+  },
+  "footerCopy": "© Mingle Labs.",
+  "footerRenamed": "HashChat si chiamava in precedenza Mingle.",
+  "privacy": "Privacy",
+  "terms": "Termini e condizioni",
+  "blogEyebrow": "Blog di HashChat",
+  "blogTitle": "Riflessioni sulla traduzione AI in tempo reale.",
+  "blogLede": "Idee sul prodotto, confronti, interventi e appunti dal campo per chi crea conversazioni tra lingue diverse. HashChat si chiamava in precedenza Mingle.",
+  "latestEyebrow": "Ultime novità",
+  "latestTitle": "Interventi, presentazioni e storie di prodotto.",
+  "latestLede": "Presentazioni dei nostri interventi e pitch, insieme alla storia di come Mingle è diventato HashChat e a un confronto in tempo reale tra traduttori AI.",
+  "indexMetaTitle": "Blog di HashChat - Traduzione AI per conversazioni in tempo reale",
+  "indexMetaDescription": "Leggi gli approfondimenti di HashChat (precedentemente Mingle) sulla traduzione AI, i sottotitoli vocali in tempo reale, i prodotti per conversazioni multilingue e i nostri interventi.",
+  "by": "Di",
+  "fullscreen": "Visualizza a schermo intero",
+  "keyHint": "Fai clic sulle diapositive, poi usa i tasti freccia, la rotellina del mouse o scorri con il dito. Aggiungi #numero al link a schermo intero per passare direttamente a una diapositiva.",
+  "readDeck": "Visualizza le diapositive",
+  "activate": "Fai clic per utilizzare le diapositive",
+  "deckLabel": "Diapositive",
+  "backToBlog": "Tutti gli articoli",
+  "deckLanguageNote": "Le diapositive sono in inglese."
+ },
+ "author": "Hyeongkeol Nam, Mingle Labs",
+ "decks": {
+  "ai-wrapper-business": {
+   "kind": "Intervento",
+   "dateLabel": "5 novembre 2026",
+   "title": "Esplorare le opportunità di business per i software AI wrapper",
+   "description": "Casi di studio di aziende basate su AI wrapper e strategie per il futuro.",
+   "body": [
+    "Le diapositive di un intervento sui software AI wrapper: prodotti che utilizzano l'intelligenza artificiale per automatizzare esperienze utente già esistenti. Le 94 diapositive analizzano il vibe coding e gli agenti AI, le chat con personaggi virtuali, la presa di appunti, il monitoraggio dell'alimentazione tramite AI, gli aggregatori, gli strumenti di supporto allo studio e molto altro, esaminando quali AI wrapper hanno resistito alla concorrenza dei giganti tecnologici e quali sono stati spazzati via.",
+    "La parte finale individua le opportunità su cui vale la pena puntare: cinque idee, i vantaggi competitivi che un'azienda software può costruire e come un AI wrapper può evolversi oltre i propri limiti iniziali."
+   ]
+  },
+  "ai-wrapper-business-surfers-3rd": {
+   "kind": "Intervento",
+   "dateLabel": "12 agosto 2026",
+   "title": "Il business degli AI wrapper: edizione Surfers Cohort 3",
+   "description": "La prima versione, più approfondita, del nostro intervento sugli AI wrapper, presentata a Surfers Cohort 3.",
+   "body": [
+    "La prima versione del nostro intervento sugli AI wrapper, presentata a Surfers Cohort 3. Le sue 165 diapositive approfondiscono ogni settore: vibe coding, chat con personaggi virtuali e le sue tre fasi evolutive, presa di appunti, monitoraggio dell'alimentazione tramite AI, aggregatori come OpenRouter e strumenti AI per lo studio.",
+    "La presentazione è stata realizzata in coreano e viene mostrata qui in inglese per impostazione predefinita. Passa al coreano per visualizzare l'originale."
+   ]
+  },
+  "hashchat-pitch-deck": {
+   "kind": "Presentazione per investitori",
+   "dateLabel": "Aggiornata il 1° settembre 2026",
+   "title": "Presentazione di HashChat: un messenger vocale senza barriere linguistiche",
+   "description": "Perché stiamo creando HashChat, a chi si rivolge e come un interprete in tempo reale può evolversi in un social network nativo dell'AI.",
+   "body": [
+    "La nostra presentazione completa per gli investitori. Parte da un problema semplice: le persone vogliono fare amicizia all'estero, ma la lingua rappresenta un ostacolo e gli strumenti di traduzione di oggi non sono mai stati progettati per le conversazioni informali.",
+    "Include le prime reazioni degli utenti su HelloTalk, la nostra strategia in tre fasi — da un interprete individuale in tempo reale a un messenger vocale e infine a una piattaforma social — e i settori di riferimento illustrati nell'appendice."
+   ]
+  },
+  "hashchat-pitch-deck-short": {
+   "kind": "Presentazione per investitori",
+   "dateLabel": "Aggiornata il 1° settembre 2026",
+   "title": "Presentazione di HashChat: versione breve",
+   "description": "Il problema dell'uovo e della gallina negli scambi linguistici e come l'interpretazione in tempo reale elimina uno dei due ostacoli.",
+   "body": [
+    "Una versione più breve della nostra presentazione per gli investitori. Le app per gli scambi linguistici sono bloccate in un circolo vizioso: vuoi fare amicizia all'estero e vuoi imparare la loro lingua. HashChat elimina uno di questi ostacoli grazie all'interpretazione in tempo reale, permettendoti di conversare senza conoscere una lingua in comune.",
+    "La presentazione illustra anche la domanda che abbiamo riscontrato per i sottotitoli aggiuntivi e l'interpretazione di persona, oltre al nostro primo obiettivo: conquistare gli utenti di K-Friends."
+   ]
+  },
+  "virtually-deck": {
+   "kind": "Presentazione per investitori",
+   "dateLabel": "13 settembre 2026",
+   "title": "Virtually: streaming live VTuber basato sull'intelligenza artificiale generativa",
+   "description": "Da una singola immagine a una trasmissione interattiva in diretta.",
+   "body": [
+    "La presentazione di Virtually, il nostro strumento di intelligenza artificiale generativa per VTuber. Mostra come una singola immagine di un personaggio possa trasformarsi in una trasmissione in diretta e interattiva, e quale ruolo occupa Virtually nell'ecosistema VTuber.",
+    "La presentazione è disponibile anche in giapponese e cinese: puoi selezionare la lingua tramite i pulsanti nell'angolo in basso a sinistra delle diapositive."
+   ]
+  }
+ },
+ "articles": {
+  "hashchat-social-network": {
+   "meta": "Storia del prodotto - 2 novembre 2026",
+   "title": "HashChat: il social network senza barriere linguistiche",
+   "description": "Come Mingle è diventato HashChat: un feed tradotto, profili che mostrano chi desideri conoscere e chat con un interprete in tempo reale integrato, a confronto con LINE, WeChat, WhatsApp, HelloTalk e altri.",
+   "link": "Leggi l'articolo"
+  },
+  "ai-translators-comparison": {
+   "meta": "Confronto - Aggiornato il 20 aprile 2026",
+   "title": "Confronto tra traduttori AI",
+   "description": "Una guida pratica, organizzata in tabelle, che confronta prezzi, compatibilità con le piattaforme, lingue supportate, sottotitoli in tempo reale, trascrizioni, cambio automatico della lingua, traduzione in background e acquisizione dell'audio da app esterne.",
+   "link": "Leggi il confronto"
+  }
+ }
+}

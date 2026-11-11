@@ -1,0 +1,99 @@
+{
+ "ui": {
+  "nav": {
+   "how": "工作原理",
+   "features": "功能特色",
+   "translate": "翻译",
+   "uses": "使用场景",
+   "blog": "博客",
+   "legal": "Legal"
+  },
+  "footerCopy": "© Mingle Labs。",
+  "footerRenamed": "HashChat 的前身名为 Mingle。",
+  "privacy": "隐私政策",
+  "terms": "服务条款",
+  "blogEyebrow": "HashChat 博客",
+  "blogTitle": "关于实时 AI 翻译的思考。",
+  "blogLede": "为跨语言交流产品的开发者带来产品思考、功能对比、演讲分享与实践记录。HashChat 的前身名为 Mingle。",
+  "latestEyebrow": "最新内容",
+  "latestTitle": "演讲、演示文稿与产品故事。",
+  "latestLede": "我们演讲与路演所使用的幻灯片，以及 Mingle 如何发展为 HashChat 的故事，还有一份 AI 翻译工具的实时对比。",
+  "indexMetaTitle": "HashChat 博客 - 面向实时交流的 AI 翻译",
+  "indexMetaDescription": "阅读 HashChat（原名 Mingle）关于 AI 翻译、实时语音字幕、多语言交流产品及演讲分享的文章。",
+  "by": "作者：",
+  "fullscreen": "全屏查看",
+  "keyHint": "点击幻灯片，然后使用方向键、滚轮或滑动手势进行浏览。在全屏链接后添加 #数字，即可直接跳转到指定幻灯片。",
+  "readDeck": "查看幻灯片",
+  "activate": "点击以浏览幻灯片",
+  "deckLabel": "幻灯片",
+  "backToBlog": "所有文章",
+  "deckLanguageNote": "幻灯片内容为英文。"
+ },
+ "author": "Hyeongkeol Nam，Mingle Labs",
+ "decks": {
+  "ai-wrapper-business": {
+   "kind": "演讲",
+   "dateLabel": "2026年11月5日",
+   "title": "探索 AI 套壳软件的商业机遇",
+   "description": "AI 套壳企业案例研究，以及下一步发展战略。",
+   "body": [
+    "这是一场关于 AI 套壳软件的演讲幻灯片：通过 AI 将原本已经存在的用户体验实现自动化的产品。这套共 94 页的幻灯片介绍了氛围编程与智能体、角色聊天、笔记工具、AI 饮食追踪、聚合平台、学习辅助工具等领域，并探讨哪些套壳产品经受住了大型科技公司的竞争，哪些则逐渐被市场淘汰。",
+    "最后一部分聚焦值得投入的商业机遇：五个创意、软件企业能够建立的竞争壁垒，以及如何让套壳产品不再止步于简单的套壳。"
+   ]
+  },
+  "ai-wrapper-business-surfers-3rd": {
+   "kind": "演讲",
+   "dateLabel": "2026年8月12日",
+   "title": "AI 套壳软件的商业模式：Surfers 第三期专场",
+   "description": "我们首次推出的 AI 套壳主题演讲，也是内容更完整的长篇版本，面向 Surfers 第三期学员分享。",
+   "body": [
+    "这是我们首次推出的 AI 套壳主题演讲，面向 Surfers 第三期学员分享。这套共 165 页的幻灯片深入介绍了各个领域，包括氛围编程、角色聊天及其三个发展阶段、笔记工具、AI 饮食追踪、OpenRouter 等聚合平台，以及 AI 学习辅助工具。",
+    "这套幻灯片最初以韩语撰写，此处默认显示英文版本。切换至韩语即可查看原版。"
+   ]
+  },
+  "hashchat-pitch-deck": {
+   "kind": "路演演示文稿",
+   "dateLabel": "更新于2026年9月1日",
+   "title": "HashChat 路演演示：打破语言障碍的语音即时通讯应用",
+   "description": "我们为什么打造 HashChat、目标用户是谁，以及如何将实时口译工具发展为原生 AI 社交网络。",
+   "body": [
+    "这是我们的完整路演演示文稿。故事始于一个简单的问题：人们想在海外结交朋友，却常常受到语言障碍的限制，而如今的翻译工具从一开始就不是为社交交流而设计的。",
+    "内容涵盖 HelloTalk 上的早期用户反馈、从独立实时翻译工具到语音即时通讯应用，再到社交平台的三阶段发展战略，以及附录中的目标垂直领域。"
+   ]
+  },
+  "hashchat-pitch-deck-short": {
+   "kind": "路演演示文稿",
+   "dateLabel": "更新于2026年9月1日",
+   "title": "HashChat 路演演示：精简版",
+   "description": "语言交换平台面临的冷启动难题，以及实时口译如何解决其中一端的问题。",
+   "body": [
+    "这是我们路演演示文稿的精简版。语言交换应用一直面临着一个两难的冷启动问题：你既想结交海外朋友，又想学习对方的语言。HashChat 通过实时口译解决其中一个难题，让你即使不懂对方的语言，也能畅所欲言。",
+    "内容还介绍了我们发现的字幕辅助和面对面口译需求，以及我们的首要目标：赢得 K-Friends 用户的青睐。"
+   ]
+  },
+  "virtually-deck": {
+   "kind": "路演演示文稿",
+   "dateLabel": "2026年9月13日",
+   "title": "Virtually：由生成式 AI 驱动的 VTuber 直播",
+   "description": "从一张静态图片到实时互动直播。",
+   "body": [
+    "这是为 Virtually 制作的演示文稿。Virtually 是我们专为 VTuber 打造的生成式 AI 工具。内容展示了如何将一张角色图片转变为实时互动直播，以及 Virtually 在 VTuber 生态系统中的定位。",
+    "你也可以通过幻灯片左下角的语言切换按钮查看日语和中文版本。"
+   ]
+  }
+ },
+ "articles": {
+  "hashchat-social-network": {
+   "meta": "产品故事 - 2026年11月2日",
+   "title": "HashChat：一个没有语言障碍的社交网络",
+   "description": "Mingle 如何发展为 HashChat：支持自动翻译的动态信息流、展示交友意向的个人资料，以及内置实时口译功能的聊天体验。并与 LINE、WeChat、WhatsApp、HelloTalk 等平台进行对比。",
+   "link": "阅读完整故事"
+  },
+  "ai-translators-comparison": {
+   "meta": "产品对比 - 更新于2026年4月20日",
+   "title": "AI 翻译工具对比",
+   "description": "一份以实用对比表为核心的指南，全面比较价格、平台支持范围、语言覆盖、实时字幕、文字记录、自动语言切换、后台翻译，以及外部应用音频采集功能。",
+   "link": "阅读完整对比"
+  }
+ }
+}
