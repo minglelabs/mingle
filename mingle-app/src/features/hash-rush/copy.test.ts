@@ -26,7 +26,7 @@ describe('hash rush app copy', () => {
     for (const copy of Object.values(HASH_RUSH_GAME_COPIES)) {
       for (const [key, value] of Object.entries(copy)) {
         if (hostKeys.has(key)) continue
-        const line = typeof value === 'function' ? String(value(1)) : String(value)
+        const line = typeof value === 'function' ? String((value as (n: number) => unknown)(1)) : String(value)
         expect(line, key).not.toMatch(/방장|host|ホスト/i)
       }
     }

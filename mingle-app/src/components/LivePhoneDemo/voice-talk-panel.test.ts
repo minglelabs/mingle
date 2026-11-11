@@ -6,11 +6,13 @@ import {
   VoiceTalkButton,
   VoiceTalkSeatView,
   isAbandonedJoinedCall,
+  visibleVoiceTalkSeats,
   parseRoomMemberSummaries,
   resolveVoiceTalkBystanders,
   resolveVoiceTalkButtonPress,
   resolveVoiceTalkMic,
 } from './VoiceTalkPanel'
+const copySource = readFileSync(new URL('../../i18n/voice-talk-copy.ts', import.meta.url), 'utf8')
 
 const panelSource = readFileSync(new URL('./VoiceTalkPanel.tsx', import.meta.url), 'utf8')
 const liveDemoSource = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
@@ -51,7 +53,7 @@ describe('a call and speech-to-text are separate', () => {
   it('tells a viewer in a call that captions and interpretation are off', () => {
     expect(liveDemoSource).toContain('captionsOn={isSttSessionRunning || isPreparingStart}')
     expect(panelSource).toContain('{joined && props.captionsOn === false ? (')
-    expect(panelSource).toContain("captionsOffHint: '자막·통역은 꺼져 있어요. 켜려면 아래 시작 버튼을 누르세요.'")
+    expect(copySource).toContain("captionsOffHint: '자막·통역은 꺼져 있어요. 켜려면 아래 Start 버튼을 누르세요.'")
   })
 
   it('runs the echo canceller while in a call, so the other voices are not transcribed as mine', () => {
@@ -84,20 +86,20 @@ describe('voice talk panel', () => {
     expect(panelLeave).toContain('onClick={leave}')
     expect(panelSource).not.toContain('onClick={() => setConfirmLeave(true)}')
     expect(panelSource).toContain('if (leaveSignal && joined) setConfirmLeave(true)')
-    expect(panelSource).toContain("leaveTitle: '보이스톡에서 나가시겠습니까?'")
+    expect(copySource).toContain("leaveTitle: '보이스톡에서 나가시겠습니까?'")
     expect(panelSource).toContain('data-qa="voice-talk-leave-confirm-button"')
     expect(panelSource.split("post({ type: 'native_voice_close' })").length - 1).toBe(1)
   })
 
   it('has a mic switch for listening only, in both languages', () => {
     expect(panelSource).toContain('data-qa="voice-talk-mic-toggle"')
-    expect(panelSource).toContain("listenOnly: '듣기만 하는 중'")
-    expect(panelSource).toContain("listenOnly: 'Listening only'")
+    expect(copySource).toContain("listenOnly: '듣기만 하는 중'")
+    expect(copySource).toContain("listenOnly: 'Listening only'")
   })
 
   it('labels the mic button with its state, not with the action', () => {
-    expect(panelSource).toContain("micOnState: '마이크 켜짐'")
-    expect(panelSource).toContain("micOffState: '마이크 꺼짐'")
+    expect(copySource).toContain("micOnState: '내 목소리 켜짐'")
+    expect(copySource).toContain("micOffState: '내 목소리 꺼짐'")
     expect(panelSource).not.toContain('마이크 끄기')
     expect(panelSource).not.toContain('마이크 켜기')
     expect(panelSource).toContain('{listenOnly ? <><MicOff size={17} /> {copy.micOffState}</> : <><Mic size={17} /> {copy.micOnState}</>}')
@@ -263,7 +265,7 @@ describe('who started the call, on the incoming card', () => {
 
   it('says it is my own call when I started it', () => {
     expect(panelSource).toContain('const startedByViewer = !!viewerUserId && call?.startedBy?.userId === viewerUserId')
-    expect(panelSource).toContain("startedByMe: '내가 시작한 보이스톡이 진행 중입니다.'")
+    expect(copySource).toContain("startedByMe: '내가 시작한 보이스톡이 진행 중입니다.'")
     expect(panelSource).toContain('const incomingTitle = startedByViewer ? copy.startedByMe')
   })
 })
@@ -298,5 +300,21 @@ describe('the call mic outlives the room screen', () => {
   it('shows what the app reports when the room opens again (a muted call stays muted)', () => {
     expect(liveDemoSource).toContain('onListenOnlySync={setVoiceTalkListenOnly}')
     expect(panelSource).toContain("if (detail.snapshot && typeof detail.snapshot.micOn === 'boolean') onListenOnlySyncRef.current?.(!detail.snapshot.micOn)")
+  })
+})
+
+describe('seats shown', () => {
+  it('draws the people in the call and one open seat, not every empty seat', () => {
+    expect(visibleVoiceTalkSeats(['a', 'b'], 8)).toEqual(['a', 'b', null])
+    expect(visibleVoiceTalkSeats([], 8)).toEqual([null])
+    expect(visibleVoiceTalkSeats(['1', '2', '3', '4', '5', '6', '7', '8'], 8)).toHaveLength(8)
+    expect(visibleVoiceTalkSeats(['1', '2', '3', '4', '5', '6', '7', '8'], 8)).not.toContain(null)
+    expect(panelSource).not.toContain('Array.from({ length: MAX_SEATS }')
+  })
+
+  it('keeps the leave button gray, so the red mic-on is the only red', () => {
+    const leaveButton = panelSource.slice(panelSource.indexOf('data-qa="voice-talk-leave"'), panelSource.indexOf('{copy.leave}', panelSource.indexOf('data-qa="voice-talk-leave"')))
+    expect(leaveButton).toContain('bg-gray-100')
+    expect(leaveButton).not.toContain('rose')
   })
 })

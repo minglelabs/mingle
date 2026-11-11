@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { resolveLivePhoneDemoRoomManagementCopy } from './live-phone-demo.room-management-copy'
+const voiceCopySource = readFileSync(new URL('../../i18n/voice-talk-copy.ts', import.meta.url), 'utf8')
 
 const liveDemoSource = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
 const copySource = readFileSync(new URL('./live-phone-demo.room-management-copy.ts', import.meta.url), 'utf8')
@@ -80,7 +81,7 @@ describe('starting and joining a voice talk', () => {
     expect(panelSource).toContain('if (openSignal && !joined && !incomingOffered) setStartPrompt(true)')
     expect(panelSource.indexOf('const incomingOffered =')).toBeLessThan(panelSource.indexOf('if (openSignal && !joined && !incomingOffered)'))
     expect(panelSource).toContain('data-qa="voice-talk-start-confirm"')
-    expect(panelSource).toContain("startTitle: '대화방에 보이스톡을 시작하시겠습니까?'")
+    expect(voiceCopySource).toContain("startTitle: '대화방에 보이스톡을 시작하시겠습니까?'")
     const dialog = panelSource.slice(panelSource.indexOf('const startDialog ='), panelSource.indexOf('const incoming ='))
     expect(dialog).toContain('items-end')
     expect(dialog).toContain('onClick={join}')

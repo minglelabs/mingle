@@ -3,25 +3,7 @@
 import { Phone, PhoneOff } from 'lucide-react'
 import { resolveVoiceCallMessageState, type VoiceCallMessage } from '@/lib/voice-call-message'
 import { useVoiceTalkRoom } from './voice-talk-room-context'
-
-const COPY = {
-  ko: {
-    startedBy: (name: string) => `${name}님이 보이스톡을 시작했습니다.`,
-    startedByMe: '보이스톡을 시작했습니다.',
-    startedBySomeone: '보이스톡이 시작됐습니다.',
-    join: '참여하기',
-    joined: '참여 중',
-    ended: '종료된 보이스톡',
-  },
-  en: {
-    startedBy: (name: string) => `${name} started a voice talk.`,
-    startedByMe: 'You started a voice talk.',
-    startedBySomeone: 'A voice talk has started.',
-    join: 'Join',
-    joined: 'In the call',
-    ended: 'Voice talk ended',
-  },
-}
+import { voiceTalkCopy } from '@/i18n/voice-talk-copy'
 
 /**
  * The message a voice talk leaves when it starts: who started it, and a Join
@@ -34,13 +16,13 @@ export default function VoiceCallStartedBubble(props: {
   isOwnMessage: boolean
   locale: string
 }) {
-  const copy = (props.locale || '').toLowerCase().startsWith('ko') ? COPY.ko : COPY.en
+  const copy = voiceTalkCopy(props.locale)
   const room = useVoiceTalkRoom()
   const state = room
     ? resolveVoiceCallMessageState({ message: props.message, liveCallId: room.liveCallId, joined: room.joined })
     : 'ended'
   const name = props.speakerName.trim()
-  const title = props.isOwnMessage ? copy.startedByMe : name ? copy.startedBy(name) : copy.startedBySomeone
+  const title = props.isOwnMessage ? copy.messageStartedByMe : name ? copy.startedBy(name) : copy.startedBySomeone
   const live = state !== 'ended'
 
   return (
@@ -70,7 +52,7 @@ export default function VoiceCallStartedBubble(props: {
           onClick={() => room?.join()}
           className="mt-2.5 flex h-11 w-full items-center justify-center rounded-xl bg-emerald-500 text-[0.92rem] font-semibold text-white active:bg-emerald-600"
         >
-          {copy.join}
+          {copy.messageJoin}
         </button>
       ) : (
         <p

@@ -2,7 +2,7 @@
 
 // Group voice talk inside the chat room (KakaoTalk style: the room stays the
 // same room, voice is switched on and off). A panel slides down from under the
-// top bar with up to 8 seats; drag it up (or tap the handle) to fold it into a
+// top bar with the people in the call (up to 8); drag it up (or tap the handle) to fold it into a
 // slim bar.
 //
 // Voice talk and the room's speech-to-text are separate features: a call
@@ -17,14 +17,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ChevronUp, Mic, MicOff, PhoneOff, Phone } from 'lucide-react'
+import { ChevronUp, Mic, MicOff, PhoneOff, Phone, Plus } from 'lucide-react'
 import LanguageFlag from '@/components/language-flag'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { useRoomPresence } from '@/lib/room-presence'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
+import { VOICE_TALK_MAX_SEATS, voiceTalkCopy } from '@/i18n/voice-talk-copy'
 
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
-const MAX_SEATS = 8
+const MAX_SEATS = VOICE_TALK_MAX_SEATS
 
 type CallParticipant = { userId: string; name: string | null; image: string | null; speechLanguage?: string | null }
 // `startedBy` comes from servers that send it.
@@ -46,67 +47,6 @@ type VoiceEvent =
   | { type: 'state'; phase: Phase; conversationId: string | null; errorKind?: string }
   | { type: 'status'; conversationId: string; call: StatusCall }
   | { type: 'room'; conversationId: string; snapshot: RoomSnapshot }
-
-const COPY = {
-  ko: {
-    start: '보이스톡',
-    join: '참여',
-    decline: '거절',
-    close: '닫기',
-    idle: '보이스톡 · 아무도 없어요',
-    live: (n: number) => `보이스톡 · ${n}/${MAX_SEATS}`,
-    connecting: '연결 중…',
-    leave: '나가기',
-    me: '나',
-    empty: '빈 자리',
-    full: '자리가 다 찼어요 (최대 8명)',
-    error: '연결하지 못했어요',
-    fold: '접기',
-    open: '펼치기',
-    micOnState: '마이크 켜짐',
-    micOffState: '마이크 꺼짐',
-    micMuted: '음소거',
-    listenOnly: '듣기만 하는 중',
-    leaveTitle: '보이스톡에서 나가시겠습니까?',
-    cancel: '취소',
-    startTitle: '대화방에 보이스톡을 시작하시겠습니까?',
-    startConfirm: '시작',
-    joinTitle: '진행 중인 보이스톡에 참여하시겠습니까?',
-    startedBy: (name: string) => `${name}님이 보이스톡을 시작했습니다.`,
-    startedBySomeone: '보이스톡이 시작됐습니다.',
-    startedByMe: '내가 시작한 보이스톡이 진행 중입니다.',
-    captionsOffHint: '자막·통역은 꺼져 있어요. 켜려면 아래 시작 버튼을 누르세요.',
-  },
-  en: {
-    start: 'Voice talk',
-    join: 'Join',
-    decline: 'Decline',
-    close: 'Close',
-    idle: 'Voice talk · nobody yet',
-    live: (n: number) => `Voice talk · ${n}/${MAX_SEATS}`,
-    connecting: 'Connecting…',
-    leave: 'Leave',
-    me: 'Me',
-    empty: 'Empty',
-    full: 'The room is full (max 8)',
-    error: 'Could not connect',
-    fold: 'Fold',
-    open: 'Open',
-    micOnState: 'Mic on',
-    micOffState: 'Mic off',
-    micMuted: 'Muted',
-    listenOnly: 'Listening only',
-    leaveTitle: 'Leave voice talk?',
-    cancel: 'Cancel',
-    startTitle: 'Start a voice talk in this room?',
-    startConfirm: 'Start',
-    joinTitle: 'Join the voice talk in progress?',
-    startedBy: (name: string) => `${name} started a voice talk.`,
-    startedBySomeone: 'A voice talk has started.',
-    startedByMe: 'The voice talk you started is still going.',
-    captionsOffHint: 'Captions and interpretation are off. Press Start below to turn them on.',
-  },
-}
 
 type NativeBridge = { postMessage: (data: string) => void }
 
@@ -228,7 +168,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const { conversationId, conversationTitle, myLang, openSignal, leaveSignal, onAvailabilityChange, onListenOnlyChange, onOpenProfile } = props
   const listenOnly = props.listenOnly === true
   const viewerUserId = props.viewerUserId ?? null
-  const copy = (props.uiLocale || '').toLowerCase().startsWith('ko') ? COPY.ko : COPY.en
+  const copy = voiceTalkCopy(props.uiLocale)
   const [call, setCall] = useState<StatusCall>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -618,15 +558,19 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               className="overflow-hidden"
             >
-              <div className="grid grid-cols-4 gap-x-2 gap-y-2.5 px-3 pb-2 pt-1">
-                {Array.from({ length: MAX_SEATS }, (_, i) => seats[i] ?? null).map((s, i) => (
-                  <VoiceTalkSeatView
-                    key={s?.key ?? `empty-${i}`}
-                    seat={s}
-                    label={s ? (s.isLocal ? copy.me : s.name) : copy.empty}
-                    mutedLabel={copy.micMuted}
-                    onOpenProfile={onOpenProfile}
-                  />
+              {/* The people in the call, then one open seat while there is
+                  room: a 1:1 call is two faces, not two faces and six blanks.
+                  The top row already says how many fit. */}
+              <div className="flex flex-wrap justify-center gap-x-2 gap-y-2.5 px-3 pb-2 pt-1">
+                {visibleVoiceTalkSeats(seats, MAX_SEATS).map((s, i) => (
+                  <div key={s?.key ?? `empty-${i}`} className="w-[calc(25%-6px)]">
+                    <VoiceTalkSeatView
+                      seat={s}
+                      label={s ? (s.isLocal ? copy.me : s.name) : copy.empty}
+                      mutedLabel={copy.micMuted}
+                      onOpenProfile={onOpenProfile}
+                    />
+                  </div>
                 ))}
               </div>
 
@@ -679,7 +623,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                     // Inside the panel the button is unmistakable: it leaves at
                     // once. Only the room's phone button asks first.
                     onClick={leave}
-                    className="inline-flex h-11 min-w-[124px] items-center justify-center gap-1.5 rounded-full bg-rose-50 px-5 text-[0.86rem] font-semibold text-rose-600 active:bg-rose-100"
+                    // Plain gray: red is the mic's "on", and two red buttons both read as warnings.
+                    className="inline-flex h-11 min-w-[124px] items-center justify-center gap-1.5 rounded-full bg-gray-100 px-5 text-[0.86rem] font-semibold text-gray-700 active:bg-gray-200"
                   >
                     <PhoneOff size={17} /> {copy.leave}
                   </button>
@@ -692,6 +637,12 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     </div>
     </>
   )
+}
+
+/** The seats to draw: everyone in the call, then one open seat while the call is not full. */
+export function visibleVoiceTalkSeats<T>(seats: readonly T[], maxSeats: number): Array<T | null> {
+  const people = seats.slice(0, maxSeats)
+  return people.length < maxSeats ? [...people, null] : people
 }
 
 export type RoomMemberSummary = { id: string; name: string | null; image: string | null }
@@ -747,7 +698,7 @@ type VoiceTalkSeat = {
 }
 
 /**
- * One of the 8 seats: a round avatar with the member's language flag at its
+ * One seat (the open one is a dashed circle with a plus): a round avatar with the member's language flag at its
  * bottom-left, a mute icon over its middle while their mic is off, and a
  * soft ripple around it while they speak. Tapping it opens their profile.
  */
@@ -766,7 +717,7 @@ export function VoiceTalkSeatView(props: {
       }`}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {seat ? (seat.image ? <img src={seat.image} alt="" className="h-full w-full object-cover" /> : initial(seat.name)) : ''}
+      {seat ? (seat.image ? <img src={seat.image} alt="" className="h-full w-full object-cover" /> : initial(seat.name)) : <Plus size={18} strokeWidth={2.2} aria-hidden="true" />}
       {seat && !seat.micOn ? (
         <span
           data-qa="voice-talk-seat-muted"
@@ -819,7 +770,7 @@ export function VoiceTalkSeatView(props: {
 }
 
 export function VoiceTalkButton(props: { uiLocale: string; active: boolean; onPress: () => void; sizePx?: number; className?: string }) {
-  const copy = (props.uiLocale || '').toLowerCase().startsWith('ko') ? COPY.ko : COPY.en
+  const copy = voiceTalkCopy(props.uiLocale)
   const sizePx = props.sizePx ?? 44
   return (
     <button
