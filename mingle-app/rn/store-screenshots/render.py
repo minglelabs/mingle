@@ -82,12 +82,14 @@ while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
 </script></body></html>"""
 
 
-# 04: a composed scene. The places people book abroad fill the slide: a salon
-# above, a restaurant below, blending into each other (photos with no words in
-# them, so every language shares them), the phone leans in on the booking
-# call (the voice talk screen from capture.mjs), and the call's four lines float
-# beside it as the app's bubbles: each speaker's own words, then the other's
-# language under them. Mine are tinted like the app's own bubbles.
+# 02, 03, 04: composed scenes. Two photos fill the slide, one above, one below,
+# blending into each other (photos with no words in them, so every language
+# shares them): the two friends in their own cities for 02 (chat) and 03 (voice
+# talk), the places people book abroad for 04. The phone leans in on its screen
+# from capture.mjs, and the conversation's lines float beside it as the app's
+# bubbles: each speaker's own words, then the other's language under them. Mine
+# are tinted like the app's own bubbles. "lines" names the list in dm.json;
+# "cardsTop" keeps the cards under the call panel on the voice talk screens.
 BOOKING_PAGE = """<!doctype html>
 <html lang="{lang}" dir="{dir}"><head><meta charset="utf-8"><style>
 html,body{{margin:0;width:{W}px;height:{H}px;overflow:hidden}}
@@ -131,17 +133,17 @@ while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
 // the four cards stack down the slide; long lines shrink until they fit their band
 const cards=[...document.querySelectorAll('.card')];
 // under the phone's call panel, so its seats and buttons stay in view
-const top0=1290, band=370, gap=26;
+const top0={top0}, band={band}, gap=26;
 cards.forEach((c,i)=>{{let fs=40;c.style.setProperty('--fs',fs+'px');
   while(c.offsetHeight>band-gap&&fs>26){{fs-=2;c.style.setProperty('--fs',fs+'px');}}
   c.style.top=(top0+i*band)+'px';}});
 </script></body></html>"""
 
 
-def booking_cards(lang: str, dm: dict, chat: dict) -> str:
+def scene_cards(lang: str, lines: list, chat: dict) -> str:
     partner = chat["partners"][lang][0]
     out = []
-    for i, line in enumerate(dm["booking"]):
+    for i, line in enumerate(lines):
         mine = line["by"] == "me"
         order = [lang, partner] if mine else [partner, lang]
         rows = []
@@ -211,15 +213,19 @@ def main() -> None:
                     continue
                 capture = HERE / shot["capture"].format(lang=lang)
                 bar, ink = status_bar_colors(capture)
-                if shot.get("scene") == "booking":
+                if shot.get("scene"):
+                    scene = shot["scene"]
+                    lines = dm[scene["lines"]][: scene.get("count", 4)]
+                    band = scene.get("band", 370)
                     render(BOOKING_PAGE.format(
                         bar=bar, ink=ink, lang=lang, dir="rtl" if lang == "ar" else "ltr", W=W, H=H,
                         font=FONT.get(lang, '"SF Pro Display"'),
                         caption=html.escape(shot["caption"][lang]),
-                        bg=(HERE / shot["background"][0]).as_uri(),
-                        bg2=(HERE / shot["background"][1]).as_uri(),
+                        bg=(HERE / scene["background"][0]).as_uri(),
+                        bg2=(HERE / scene["background"][1]).as_uri(),
                         img=capture.as_uri(),
-                        cards=booking_cards(lang, dm, chat),
+                        cards=scene_cards(lang, lines, chat),
+                        top0=scene.get("cardsTop", 1290), band=band,
                     ), out, work)
                     rendered[(lang, shot["id"])] = out
                     continue

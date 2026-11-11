@@ -40,27 +40,46 @@
         "ru": "Общайтесь с друзьями из-за рубежа\nна своём языке",
         "th": "ไม่รู้ภาษาก็แชต\nกับเพื่อนต่างชาติได้",
         "vi": "Chat với bạn nước ngoài\nbằng tiếng của bạn"
+      },
+      "scene": {
+        "lines": "dm",
+        "count": 4,
+        "cardsTop": 1080,
+        "background": [
+          "scenes/dm-cafe.jpg",
+          "scenes/dm-street.jpg"
+        ]
       }
     },
     {
       "id": "03-voice",
       "capture": "captures/{lang}/voice.png",
       "caption": {
-        "ko": "말로 하면\n바로 통역돼요",
-        "en": "Just speak,\nit's interpreted instantly",
-        "ja": "話すだけで\nすぐに通訳",
-        "zh-cn": "开口说话\n即时翻译",
-        "zh-tw": "開口說話\n即時翻譯",
-        "ar": "تحدّث فقط\nوالترجمة فورية",
-        "de": "Einfach sprechen,\nsofort gedolmetscht",
-        "es": "Solo habla,\nse interpreta al instante",
-        "fr": "Parlez,\nc’est interprété aussitôt",
-        "hi": "बस बोलिए,\nतुरंत अनुवाद",
-        "it": "Parla e basta,\ninterpretato all’istante",
-        "pt": "É só falar,\ninterpretação na hora",
-        "ru": "Просто говорите —\nперевод мгновенно",
-        "th": "แค่พูด\nก็แปลให้ทันที",
-        "vi": "Chỉ cần nói,\nphiên dịch tức thì"
+        "ko": "보이스톡 동시통역\n각자 자기 말로 통화해요",
+        "ja": "ボイストークを同時通訳\nそれぞれの言葉で通話",
+        "en": "Voice calls, interpreted live\nTalk in your own language",
+        "zh-cn": "语音通话同声传译\n各说各的语言",
+        "zh-tw": "語音通話同步口譯\n各說各的語言",
+        "ar": "مكالمات صوتية بترجمة فورية\nتحدّث بلغتك",
+        "de": "Sprachanrufe live gedolmetscht\nJeder spricht seine Sprache",
+        "es": "Llamadas interpretadas en vivo\nHabla en tu idioma",
+        "fr": "Appels interprétés en direct\nParlez votre langue",
+        "hi": "वॉइस कॉल में लाइव अनुवाद\nअपनी भाषा में बात करें",
+        "it": "Chiamate tradotte dal vivo\nParla nella tua lingua",
+        "pt": "Chamadas traduzidas ao vivo\nFale no seu idioma",
+        "ru": "Голосовые звонки с переводом\nКаждый на своём языке",
+        "th": "โทรเสียงพร้อมล่ามสด\nต่างคนต่างพูดภาษาตัวเอง",
+        "vi": "Gọi thoại phiên dịch trực tiếp\nMỗi người nói tiếng mình"
+      },
+      "scene": {
+        "lines": "voice",
+        "count": 3,
+        "cardsTop": 1290,
+        "band": 440,
+        "background": [
+          "scenes/voice-tokyo.jpg",
+          "scenes/voice-seoul.jpg"
+        ]
       }
     },
     {
@@ -83,11 +102,14 @@
         "th": "โทรจองร้านในต่างประเทศ\nก็แปลให้",
         "vi": "Gọi đặt chỗ ở nước ngoài\ncũng được phiên dịch"
       },
-      "scene": "booking",
-      "background": [
-        "booking/salon.jpg",
-        "booking/restaurant.jpg"
-      ]
+      "scene": {
+        "lines": "booking",
+        "count": 4,
+        "background": [
+          "booking/salon.jpg",
+          "booking/restaurant.jpg"
+        ]
+      }
     },
     {
       "id": "05-feed",
