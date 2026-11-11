@@ -1395,7 +1395,9 @@ function ChatBubble({
     <ChatBubbleTimestamp
       createdAtMs={utterance.createdAtMs}
       uiLocale={uiLocale}
-      align={isOwnMessage ? 'right' : 'left'}
+      // After the read count on one line: the time hugs it, so there is no
+      // gap between the two while the time ticks.
+      align="left"
       minWidth="2.5rem"
       className="text-[10px] font-medium leading-5 text-black/[0.34]"
     />
@@ -1407,20 +1409,26 @@ function ChatBubble({
       data-chat-bubble-other-meta={isOwnMessage ? undefined : true}
       className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
-      {!isDraft && !isRecalled && (
-        <MessageReadReceipt
-          senderUserId={utterance.speakerUserId}
-          // Not yet stored → nobody can have read it; createdAtMs (device
-          // clock) is only a stand-in until the server time arrives.
-          createdAtMs={utterance.serverPersistedAtMs ?? utterance.createdAtMs}
-          locale={uiLocale}
-          align={isOwnMessage ? 'right' : 'left'}
-        />
-      )}
-      {bubbleTimestamp}
-      {/* One language row has nothing to fold; without the button the column
-          (read count, time) is no taller than a one-row bubble, so the bubble
-          stays right under the name. */}
+      {/* Read count and time share one line: with the fold button the column
+          is two lines, no taller than a one-line bubble, so the bubble stays
+          right under the name. */}
+      <div
+        data-chat-bubble-meta-line
+        className="flex items-center gap-1"
+      >
+        {!isDraft && !isRecalled && (
+          <MessageReadReceipt
+            senderUserId={utterance.speakerUserId}
+            // Not yet stored → nobody can have read it; createdAtMs (device
+            // clock) is only a stand-in until the server time arrives.
+            createdAtMs={utterance.serverPersistedAtMs ?? utterance.createdAtMs}
+            locale={uiLocale}
+            align={isOwnMessage ? 'right' : 'left'}
+          />
+        )}
+        {bubbleTimestamp}
+      </div>
+      {/* One language row has nothing to fold. */}
       {!messageImage && !announcementCard && !isRecalled && expandedBubbleEntries.length > 1 && bubbleControls}
     </div>
   )
