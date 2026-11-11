@@ -1338,6 +1338,12 @@ type LivePhoneDemoPanelHeaderProps = {
   className?: string
 }
 
+
+// Live caption lines this app has seen (by id), kept across room screens so a
+// line seen once never comes back as new; see voiceTalkCaptionDrafts.
+const VOICE_TALK_CAPTION_SEEN = new Map<string, { firstAt: number, text: string, changedAt: number }>()
+const voiceTalkCaptionBaseline = { taken: false }
+
 function LivePhoneDemoPanelHeader({
   title,
   backLabel,
@@ -2094,7 +2100,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // The interpreter's lines while they are being said (or just were), drawn
   // as live bubbles for this viewer while interpretation is on.
   const [voiceTalkCaptionLines, setVoiceTalkCaptionLines] = useState<VoiceTalkCaptionLine[]>([])
-  const voiceTalkCaptionSeenRef = useRef(new Map<string, { firstAt: number, text: string, changedAt: number }>())
   // Live lines age out even when the call sends nothing new (the interpreter
   // may leave mid-line), so the list is looked at again every second.
   const [voiceTalkCaptionClock, setVoiceTalkCaptionClock] = useState(0)
@@ -2105,9 +2110,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => window.clearInterval(timer)
   }, [voiceTalkCaptionsLive])
   const voiceTalkCaptionDrafts = useMemo<Utterance[]>(() => {
-    if (!voiceTalkState.joined || !voiceTalkInterpretOn) return []
-    const seen = voiceTalkCaptionSeenRef.current
+    const seen = VOICE_TALK_CAPTION_SEEN
     const now = Math.max(Date.now(), voiceTalkCaptionClock)
+    // The call keeps its recent lines, and they come back whole when the room
+    // reopens or interpretation is turned on: a line is live only while its
+    // words keep changing in front of this viewer. So every line is noted,
+    // even while interpretation is off, and the lines already there the first
+    // time this app sees the call count as old (their time is unknown).
+    const baseline = !voiceTalkCaptionBaseline.taken && voiceTalkCaptionLines.length > 0
+    if (baseline) voiceTalkCaptionBaseline.taken = true
+    for (const line of voiceTalkCaptionLines) {
+      const id = buildVoiceCaptionClientMessageId(line.id)
+      const known = seen.get(id)
+      if (!known) seen.set(id, { firstAt: now, text: line.original, changedAt: baseline ? 0 : now })
+      else if (known.text !== line.original) seen.set(id, { ...known, text: line.original, changedAt: now })
+    }
+    if (seen.size > 300) {
+      for (const [id, entry] of seen) if (now - entry.changedAt > 60_000) seen.delete(id)
+    }
+    if (!voiceTalkState.joined || !voiceTalkInterpretOn) return []
     const drafts: Utterance[] = []
     const speakingNow = new Set<string>()
     // Newest first: a person says one line at a time, so only their newest
@@ -2115,11 +2136,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     for (const line of voiceTalkCaptionLines) {
       if (line.isEcho || !line.speaker || !line.original.trim()) continue
       const id = buildVoiceCaptionClientMessageId(line.id)
-      const known = seen.get(id)
-      const entry = !known
-        ? { firstAt: now, text: line.original, changedAt: now }
-        : known.text === line.original ? known : { ...known, text: line.original, changedAt: now }
-      seen.set(id, entry)
+      const entry = seen.get(id)
+      if (!entry) continue
       if (line.isPartial) {
         if (speakingNow.has(line.speaker)) continue
         speakingNow.add(line.speaker)
@@ -2143,7 +2161,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         voiceCaption: true,
       })
     }
-    if (seen.size > 300) seen.clear()
     return drafts
   }, [voiceTalkCaptionClock, voiceTalkCaptionLines, voiceTalkInterpretOn, voiceTalkState.joined])
   const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean, connected: boolean, callId: string | null }) => {

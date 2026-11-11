@@ -64,6 +64,8 @@ up` starts it; `GET :<web port + 40>/health` answers `ok`). Without it, the scen
 9. In a room whose languages include one nobody in the call speaks (e.g. ko/en with two Korean speakers), a caption
    still carries that language's translation. Say a long line with a few clauses: the live bubble's translation grows
    clause by clause, and with read-aloud on, each clause is heard before the line ends, with no clause read twice.
+10. Leave the room screen and come back, and turn interpretation off and on again: no old unfinished line shows up as a
+    live bubble.
 
 ## Oracle (pass when)
 

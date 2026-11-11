@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-12 — 보이스톡 유령 자막, 한 줄 버블과 이름 사이 빈칸
+
+- Id: `2026-11-12-voice-caption-ghosts-one-row-bubble`
+- Ghost captions: the call keeps its recent lines and hands them back whole whenever the room reopens or interpretation is turned on. The room aged each line from the moment it first saw it, so an old unfinished line came back as live for a few seconds. Lines are now noted for the whole app session, even while interpretation is off. The lines already there the first time the app sees the call count as old, so only a line whose words change in front of the viewer is drawn live.
+- Gap under the name on a one-language bubble: the column beside the bubble (read count, time, fold button) was taller than a one-row bubble, which pushed the bubble down. A bubble with one language row has nothing to fold, so it no longer shows the fold button, and the column fits.
+- Physical-device verification pending.
+
 ## 2026-11-12 — 보이스톡 자막: 대화방 언어 전부로, 절 단위 번역·읽어 주기
 
 - Id: `2026-11-12-voice-caption-room-languages-clauses`

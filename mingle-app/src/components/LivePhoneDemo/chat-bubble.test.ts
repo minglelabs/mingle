@@ -39,7 +39,7 @@ describe('ChatBubble', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders one unified message bubble with language badges and a timestamp above the expand/collapse button', () => {
+  it('renders one unified message bubble with language badges and a timestamp (no fold button for one language)', () => {
     vi.spyOn(Date, 'now').mockReturnValue(
       new Date('2026-03-11T13:06:10+09:00').getTime(),
     )
@@ -67,7 +67,8 @@ describe('ChatBubble', () => {
     expect(html).toContain('height="32"')
     expect(html).toContain('data-chat-message-bubble')
     expect(html).toContain('data-chat-bubble-language-badges')
-    expect(html).toContain('aria-label="Expand"')
+    // One language row: nothing to fold (see the one-row test below).
+    expect(html).not.toContain('aria-label="Expand"')
     expect(html).toContain('data-original-language-quote-badge')
     expect(html).toContain('data-original-language-quote-icon')
     expect(html).toContain('text-black')
@@ -96,9 +97,7 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-chat-message-bubble-stack')).toBeLessThan(
       html.indexOf('data-original-bubble-timestamp'),
     )
-    expect(html.indexOf('data-original-bubble-timestamp')).toBeLessThan(
-      html.indexOf('data-chat-bubble-controls'),
-    )
+    expect(html).not.toContain('data-chat-bubble-controls')
     expect(html).toContain('data-chat-bubble-other-meta="true"')
     expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 flex-col gap-0 self-end items-start"')
     expect(html).toContain('items-start self-start text-left')
@@ -122,6 +121,19 @@ describe('ChatBubble', () => {
       html.indexOf('data-copyable-bubble'),
     )
     expect(html).toContain('class="align-middle"')
+  })
+
+  it('shows no fold button on a bubble with one language row, so its meta column fits a one-row bubble', () => {
+    const one = renderToStaticMarkup(createElement(ChatBubble, {
+      utterance: { id: 'u-one', originalText: '안녕', originalLang: 'ko', targetLanguages: [], translations: {} },
+      uiLocale: 'ko',
+    }))
+    expect(one).not.toContain('data-chat-bubble-toggle')
+    const two = renderToStaticMarkup(createElement(ChatBubble, {
+      utterance: { id: 'u-two', originalText: '안녕', originalLang: 'ko', targetLanguages: ['en'], translations: { en: 'Hi' } },
+      uiLocale: 'ko',
+    }))
+    expect(two).toContain('data-chat-bubble-toggle')
   })
 
   it('renders expanded original and translation rows as copyable surfaces without persistent copy buttons', () => {
@@ -184,7 +196,8 @@ describe('ChatBubble', () => {
           id: `u-toggle-${speakerUserId}`,
           originalText: 'Short message',
           originalLang: 'en',
-          translations: {},
+          targetLanguages: ['ko'],
+          translations: { ko: '번역' },
           speakerUserId,
         },
         uiLocale: 'en',
@@ -588,7 +601,8 @@ describe('ChatBubble', () => {
           id: 'u-own',
           originalText: 'My own message',
           originalLang: 'en',
-          translations: {},
+          targetLanguages: ['ko'],
+          translations: { ko: '번역' },
           speakerUserId: 'user-a',
           createdAtMs: new Date('2026-03-11T12:58:00+09:00').getTime(),
         },

@@ -1418,7 +1418,10 @@ function ChatBubble({
         />
       )}
       {bubbleTimestamp}
-      {!messageImage && !announcementCard && !isRecalled && bubbleControls}
+      {/* One language row has nothing to fold; without the button the column
+          (read count, time) is no taller than a one-row bubble, so the bubble
+          stays right under the name. */}
+      {!messageImage && !announcementCard && !isRecalled && expandedBubbleEntries.length > 1 && bubbleControls}
     </div>
   )
 
