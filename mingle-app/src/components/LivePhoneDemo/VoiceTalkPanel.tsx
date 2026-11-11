@@ -21,6 +21,7 @@ import { ChevronUp, Mic, MicOff, PhoneOff, Phone } from 'lucide-react'
 import LanguageFlag from '@/components/language-flag'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { useRoomPresence } from '@/lib/room-presence'
+import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = 8
@@ -256,6 +257,12 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     if (leaveSignal && joined) setConfirmLeave(true)
   }
   if (confirmLeave && !joined) setConfirmLeave(false)
+
+  // The native ad banner draws above the page: a dialog's dark veil cannot
+  // cover it, and a card low on the screen would sit half under it. It is
+  // hidden while any of the three (start/join, leave, incoming call) is up.
+  const dialogOpen = startPrompt || confirmLeave || (live && !joined && call?.id !== declinedCallId)
+  useNativeBannerSuppression(dialogOpen)
 
   // Decline the call that just started: it is not offered again by itself.
   const decline = useCallback(() => {

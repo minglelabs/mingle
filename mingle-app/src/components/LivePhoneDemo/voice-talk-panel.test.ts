@@ -208,3 +208,12 @@ describe('room members not in the call', () => {
     expect(markup).not.toContain('LanguageFlag')
   })
 })
+
+describe('voice talk dialogs and the ad banner', () => {
+  it('hides the native banner while the start/join dialog, the leave dialog or the incoming card is up', () => {
+    expect(panelSource).toContain('const dialogOpen = startPrompt || confirmLeave || (live && !joined && call?.id !== declinedCallId)')
+    expect(panelSource).toContain('useNativeBannerSuppression(dialogOpen)')
+    // Before the early return, so it also holds while the panel itself is not shown.
+    expect(panelSource.indexOf('useNativeBannerSuppression(dialogOpen)')).toBeLessThan(panelSource.indexOf('if (!joined && !error) {'))
+  })
+})
