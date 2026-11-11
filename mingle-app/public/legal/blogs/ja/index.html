@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>HashChatブログ - リアルタイム会話のためのAI翻訳</title>
+    <meta name="description" content="HashChat（旧Mingle）のAI翻訳、リアルタイム音声字幕、多言語コミュニケーション製品、講演に関する記事をご覧いただけます。" />
+    <link rel="canonical" href="https://hashchat.minglelabs.app/blogs?lang=ja" />
+    <link rel="alternate" hreflang="en" href="https://hashchat.minglelabs.app/blogs" />
+    <link rel="alternate" hreflang="ko" href="https://hashchat.minglelabs.app/blogs?lang=ko" />
+    <link rel="alternate" hreflang="ja" href="https://hashchat.minglelabs.app/blogs?lang=ja" />
+    <link rel="alternate" hreflang="zh-cn" href="https://hashchat.minglelabs.app/blogs?lang=zh-cn" />
+    <link rel="alternate" hreflang="zh-tw" href="https://hashchat.minglelabs.app/blogs?lang=zh-tw" />
+    <link rel="alternate" hreflang="fr" href="https://hashchat.minglelabs.app/blogs?lang=fr" />
+    <link rel="alternate" hreflang="de" href="https://hashchat.minglelabs.app/blogs?lang=de" />
+    <link rel="alternate" hreflang="es" href="https://hashchat.minglelabs.app/blogs?lang=es" />
+    <link rel="alternate" hreflang="pt" href="https://hashchat.minglelabs.app/blogs?lang=pt" />
+    <link rel="alternate" hreflang="it" href="https://hashchat.minglelabs.app/blogs?lang=it" />
+    <link rel="alternate" hreflang="ru" href="https://hashchat.minglelabs.app/blogs?lang=ru" />
+    <link rel="alternate" hreflang="ar" href="https://hashchat.minglelabs.app/blogs?lang=ar" />
+    <link rel="alternate" hreflang="hi" href="https://hashchat.minglelabs.app/blogs?lang=hi" />
+    <link rel="alternate" hreflang="th" href="https://hashchat.minglelabs.app/blogs?lang=th" />
+    <link rel="alternate" hreflang="vi" href="https://hashchat.minglelabs.app/blogs?lang=vi" />
+    <link rel="alternate" hreflang="x-default" href="https://hashchat.minglelabs.app/blogs" />
+    <meta property="og:site_name" content="HashChat" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://hashchat.minglelabs.app/blogs?lang=ja" />
+    <meta property="og:title" content="HashChatブログ - リアルタイム会話のためのAI翻訳" />
+    <meta property="og:description" content="HashChat（旧Mingle）のAI翻訳、リアルタイム音声字幕、多言語コミュニケーション製品、講演に関する記事をご覧いただけます。" />
+    <meta property="og:image" content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="HashChatブログ - リアルタイム会話のためのAI翻訳" />
+    <meta name="twitter:description" content="HashChat（旧Mingle）のAI翻訳、リアルタイム音声字幕、多言語コミュニケーション製品、講演に関する記事をご覧いただけます。" />
+    <meta name="twitter:image" content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" />
+    <link rel="icon" href="/assets/site/hashchat-icon.png" />
+    <link rel="stylesheet" href="/assets/blog.css" />
+    <link rel="stylesheet" href="/assets/site-header.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="HashChat site navigation">
+        <a class="brand" href="/?lang=ja" aria-label="HashChat home">
+          <img src="/assets/site/hashchat-icon.png" alt="" />
+          <span>HashChat</span>
+        </a>
+        <div class="nav-actions">
+          <div class="nav-links">
+            <a href="/?lang=ja#how">使い方</a>
+            <a href="/?lang=ja#features">機能</a>
+            <a href="/?lang=ja#translate">翻訳</a>
+            <a href="/?lang=ja#uses">活用シーン</a>
+            <a class="nav-legal is-current" aria-current="page" href="/blogs?lang=ja">ブログ</a>
+            <a class="nav-legal" href="/legal?lang=ja">Legal</a>
+          </div>
+          <label class="language-picker">
+            <span aria-hidden="true">🌐</span>
+            <select id="blog-language" aria-label="Language">
+              <option value="en">🇺🇸 English</option>
+              <option value="ko">🇰🇷 한국어</option>
+              <option value="ja" selected>🇯🇵 日本語</option>
+              <option value="zh-cn">🇨🇳 简体中文</option>
+              <option value="zh-tw">🇹🇼 繁體中文</option>
+              <option value="fr">🇫🇷 Français</option>
+              <option value="de">🇩🇪 Deutsch</option>
+              <option value="es">🇪🇸 Español</option>
+              <option value="pt">🇧🇷 Português</option>
+              <option value="it">🇮🇹 Italiano</option>
+              <option value="ru">🇷🇺 Русский</option>
+              <option value="ar">🇸🇦 العربية</option>
+              <option value="hi">🇮🇳 हिन्दी</option>
+              <option value="th">🇹🇭 ไทย</option>
+              <option value="vi">🇻🇳 Tiếng Việt</option>
+            </select>
+          </label>
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="blog-title">
+        <div class="section-inner">
+          <p class="eyebrow">HashChatブログ</p>
+          <h1 id="blog-title">リアルタイムAI翻訳について。</h1>
+          <p>言語の壁を越えた会話を実現する人々に向けて、プロダクト戦略、比較、講演、現場で得た知見をお届けします。HashChatは以前、Mingleという名称でした。</p>
+        </div>
+      </section>
+      <section class="section" aria-labelledby="latest-posts">
+        <div class="section-inner">
+          <div class="section-heading">
+            <p class="eyebrow">最新記事</p>
+            <h2 id="latest-posts">講演資料、プレゼン資料、プロダクトストーリー。</h2>
+            <p>講演やピッチで使用したスライド資料に加え、MingleがHashChatへと生まれ変わった経緯や、AI翻訳ツールのリアルタイム比較をご紹介します。</p>
+          </div>
+          <div class="post-list">
+            <a class="post-card" href="/blogs/ai-wrapper-business?lang=ja">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/presentations/assets/ai-beyond-wrapper-og-en.png?v=3" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">講演 - 2026年11月5日</p>
+                <h3>AIラッパーソフトウェアのビジネスチャンスを探る</h3>
+                <p>AIラッパービジネスの事例研究と、次に取り組むべき戦略。</p>
+                <span class="post-link">スライドを見る</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-social-network?lang=ja">
+              <div class="post-visual" aria-hidden="true">
+                <div class="logo-cloud">
+                  <span><img src="/assets/logo-mingle.png" alt="" /></span>
+                  <span><img src="/assets/logo-line.png" alt="" /></span>
+                  <span><img src="/assets/logo-wechat.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-hellotalk.png" alt="" /></span>
+                  <span><img src="/assets/logo-instagram.png" alt="" /></span>
+                  <span><img src="/assets/logo-discord.png" alt="" /></span>
+                </div>
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">プロダクトストーリー - 2026年11月2日</p>
+                <h3>HashChat：言語の壁を越えるソーシャルネットワーク</h3>
+                <p>MingleからHashChatへの進化を解説。翻訳付きフィード、出会いたい相手がひと目でわかるプロフィール、リアルタイム通訳を内蔵したチャット機能を、LINE、WeChat、WhatsApp、HelloTalkなどと比較します。</p>
+                <span class="post-link">詳しく読む</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/virtually-deck?lang=ja">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/virtually-vtuber-cover.png" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">ピッチ資料 - 2026年9月13日</p>
+                <h3>Virtually：生成AIが実現するVTuberライブ配信</h3>
+                <p>1枚の画像から、リアルタイムで交流できるライブ配信へ。</p>
+                <span class="post-link">スライドを見る</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-pitch-deck-short?lang=ja">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/og-image.png?v=20260416-2" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">ピッチ資料 - 2026年9月1日更新</p>
+                <h3>HashChatピッチ資料：ショートバージョン</h3>
+                <p>言語交換サービスが抱える「鶏と卵」の問題を、リアルタイム通訳でどう解決するか。</p>
+                <span class="post-link">スライドを見る</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-pitch-deck?lang=ja">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/og-image.png?v=20260416-2" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">ピッチ資料 - 2026年9月1日更新</p>
+                <h3>HashChatピッチ資料：言語の壁をなくす音声メッセンジャー</h3>
+                <p>HashChatを開発する理由、対象ユーザー、そしてリアルタイム通訳からAIネイティブなソーシャルネットワークへと進化する構想をご紹介します。</p>
+                <span class="post-link">スライドを見る</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/ai-wrapper-business-surfers-3rd?lang=ja">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/presentations/assets/surfers-logo.png" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">講演 - 2026年8月12日</p>
+                <h3>AIラッパービジネス：Surfers Cohort 3版</h3>
+                <p>Surfers Cohort 3で行った、AIラッパーに関する初回のロングバージョン講演。</p>
+                <span class="post-link">スライドを見る</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/ai-translators-comparison?lang=ja">
+              <div class="post-visual" aria-hidden="true">
+                <div class="logo-cloud">
+                  <span><img src="/assets/logo-mingle.png" alt="" /></span>
+                  <span><img src="/assets/logo-google-translate.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-apple-translate.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-microsoft-translator.png" alt="" /></span>
+                  <span><img src="/assets/logo-papago.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-deepl.png" alt="" /></span>
+                </div>
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">比較 - 2026年4月20日更新</p>
+                <h3>AI翻訳ツール比較</h3>
+                <p>料金、対応プラットフォーム、対応言語、リアルタイム字幕、文字起こし、自動言語切り替え、バックグラウンド翻訳、外部アプリの音声取り込み機能を、一覧表を中心に実用的な視点から比較します。</p>
+                <span class="post-link">比較記事を読む</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="footer">
+      <div class="footer-inner">
+        <span>© Mingle Labs. HashChatは以前、Mingleという名称でした。</span>
+        <div class="footer-links">
+          <a href="/blogs?lang=ja">ブログ</a>
+          <a href="/privacy-policy">プライバシーポリシー</a>
+          <a href="/terms-of-use">利用規約</a>
+          <a href="/legal">Legal</a>
+        </div>
+      </div>
+    </footer>
+    <script>
+      (function () {
+        var select = document.getElementById("blog-language");
+        if (!select) return;
+        select.addEventListener("change", function () {
+          var url = new URL(window.location.href);
+          if (select.value === "en") url.searchParams.delete("lang");
+          else url.searchParams.set("lang", select.value);
+          window.location.href = url.toString();
+        });
+      })();
+    </script>
+  </body>
+</html>

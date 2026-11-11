@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="strict-origin-when-cross-origin" name="referrer"/>
+<title>HashChat: شبكة التواصل الاجتماعي بلا حواجز لغوية</title>
+<meta content="تطوّر HashChat (المعروف سابقًا باسم Mingle) من مترجم صوتي فوري إلى شبكة تواصل اجتماعي متكاملة، تضم موجزًا مترجمًا، وملفات شخصية تراعي اللغات، ومحادثات مع مترجم فوري مباشر. مقارنةً بـ LINE وWeChat وWhatsApp وHelloTalk وTandem وInstagram وDiscord." name="description"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=ar" rel="canonical"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network" hreflang="en" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=ko" hreflang="ko" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=ja" hreflang="ja" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=zh-cn" hreflang="zh-cn" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=zh-tw" hreflang="zh-tw" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=fr" hreflang="fr" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=de" hreflang="de" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=es" hreflang="es" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=pt" hreflang="pt" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=it" hreflang="it" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=ru" hreflang="ru" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=ar" hreflang="ar" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=hi" hreflang="hi" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=th" hreflang="th" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=vi" hreflang="vi" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/hashchat-social-network" hreflang="x-default" rel="alternate"/>
+<meta content="HashChat: شبكة التواصل الاجتماعي بلا حواجز لغوية" property="og:title"/>
+<meta content="تطوّر HashChat (المعروف سابقًا باسم Mingle) من مترجم صوتي فوري إلى شبكة تواصل اجتماعي متكاملة، تضم موجزًا مترجمًا، وملفات شخصية تراعي اللغات، ومحادثات مع مترجم فوري مباشر. مقارنةً بـ LINE وWeChat وWhatsApp وHelloTalk وTandem وInstagram وDiscord." property="og:description"/>
+<meta content="article" property="og:type"/>
+<meta content="https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=ar" property="og:url"/>
+<meta content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" property="og:image"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<script type="application/ld+json">
+      {"@context": "https://schema.org", "@type": "BlogPosting", "headline": "HashChat: شبكة التواصل الاجتماعي بلا حواجز لغوية", "description": "تطوّر HashChat (المعروف سابقًا باسم Mingle) من مترجم صوتي فوري إلى شبكة تواصل اجتماعي متكاملة، تضم موجزًا مترجمًا، وملفات شخصية تراعي اللغات، ومحادثات مع مترجم فوري مباشر. مقارنةً بـ LINE وWeChat وWhatsApp وHelloTalk وTandem وInstagram وDiscord.", "datePublished": "2026-11-02", "dateModified": "2026-11-02", "author": {"@type": "Organization", "name": "Mingle Labs"}, "publisher": {"@type": "Organization", "name": "Mingle Labs"}, "mainEntityOfPage": "https://hashchat.minglelabs.app/blogs/hashchat-social-network?lang=ar", "image": "https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1", "about": {"@type": "MobileApplication", "@id": "https://hashchat.minglelabs.app/#app", "name": "HashChat", "alternateName": ["Mingle", "Mingle: Global Hangout"], "description": "HashChat (formerly Mingle) is a real-time voice translation app for foreign friends, global communities, and conversations while traveling. The app was renamed from Mingle to HashChat in October 2026; it is the same app, account, and store listing.", "applicationCategory": "SocialNetworkingApplication", "operatingSystem": "iOS, Android", "url": "https://hashchat.minglelabs.app/", "sameAs": ["https://apps.apple.com/app/id6759795134", "https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"], "publisher": {"@id": "https://minglelabs.app/#organization"}}, "inLanguage": "ar"}
+    </script>
+<style>
+      :root {
+        color-scheme: light;
+        --paper: #fbf7ee;
+        --paper-deep: #f0eadf;
+        --surface: #fffdf8;
+        --ink: #1d211d;
+        --muted: #626a61;
+        --line: rgba(29, 33, 29, 0.13);
+        --green: #19695a;
+        --green-deep: #0f4339;
+        --amber: #e6a72a;
+        --blue: #2f68d8;
+        --rose: #a34436;
+        --shadow: 0 20px 60px rgba(29, 33, 29, 0.13);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--paper);
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Segoe UI",
+          sans-serif;
+        letter-spacing: 0;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+      }
+
+      ::selection {
+        background: rgba(230, 167, 42, 0.34);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      img {
+        max-width: 100%;
+      }
+
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        border-bottom: 1px solid var(--line);
+        background: rgba(251, 247, 238, 0.86);
+        backdrop-filter: blur(18px);
+      }
+
+      .nav,
+      .article-inner,
+      .footer-inner {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .nav {
+        min-height: 68px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        font-weight: 800;
+      }
+
+      .brand img {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        box-shadow: 0 8px 20px rgba(25, 105, 90, 0.2);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        color: rgba(29, 33, 29, 0.72);
+        font-size: 0.93rem;
+        font-weight: 650;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+      }
+
+      .nav-links a:hover,
+      .nav-links a:focus-visible {
+        color: var(--green);
+        outline: none;
+      }
+
+      .article-hero {
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-height: 540px;
+        overflow: hidden;
+        padding: 118px 0 112px;
+        background:
+          linear-gradient(90deg, rgba(251, 247, 238, 0.98) 0%, rgba(251, 247, 238, 0.9) 52%, rgba(251, 247, 238, 0.56) 100%),
+          linear-gradient(135deg, #fbf7ee 0%, #fffaf0 46%, #e8f0eb 100%);
+      }
+
+      .article-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: url("/assets/mingle.png");
+        background-position: right 8% center;
+        background-repeat: no-repeat;
+        background-size: min(320px, 24vw) auto;
+        opacity: 0.28;
+        filter: drop-shadow(0 28px 70px rgba(25, 105, 90, 0.24));
+      }
+
+      .article-hero .article-inner {
+        position: relative;
+      }
+
+      .eyebrow {
+        margin: 0 0 18px;
+        color: var(--green);
+        font-size: 0.9rem;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p,
+      ul,
+      ol {
+        margin: 0;
+      }
+
+      h1 {
+        max-width: 920px;
+        font-size: 4rem;
+        line-height: 1.02;
+        font-weight: 900;
+        letter-spacing: 0;
+      }
+
+      .article-meta {
+        margin-top: 26px;
+        color: rgba(29, 33, 29, 0.62);
+        font-size: 0.98rem;
+        font-weight: 680;
+      }
+
+      .lede {
+        max-width: 760px;
+        margin-top: 24px;
+        color: rgba(29, 33, 29, 0.74);
+        font-size: 1.2rem;
+        line-height: 1.76;
+        font-weight: 520;
+      }
+
+      .article-section {
+        padding: 80px 0;
+      }
+
+      .article-section--surface {
+        background: var(--surface);
+      }
+
+      .article-section--deep {
+        background: var(--green-deep);
+        color: #fffdf8;
+      }
+
+      .section-heading {
+        display: grid;
+        gap: 16px;
+        max-width: 850px;
+        margin-bottom: 34px;
+      }
+
+      .section-heading h2 {
+        font-size: 2.75rem;
+        line-height: 1.1;
+        font-weight: 880;
+        letter-spacing: 0;
+      }
+
+      .section-heading p {
+        color: var(--muted);
+        font-size: 1.06rem;
+        line-height: 1.78;
+      }
+
+      .article-section--deep .section-heading p,
+      .article-section--deep .eyebrow {
+        color: rgba(255, 253, 248, 0.72);
+      }
+
+      .comparison-shell {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      table {
+        width: 100%;
+        min-width: 2620px;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        border-right: 1px solid var(--line);
+        min-width: 180px;
+        padding: 20px 24px;
+        text-align: left;
+        vertical-align: top;
+        line-height: 1.55;
+      }
+
+      th:nth-child(1),
+      td:nth-child(1) {
+        width: 170px;
+        min-width: 170px;
+      }
+
+      th:nth-child(2),
+      td:nth-child(2) {
+        width: 145px;
+        min-width: 145px;
+      }
+
+      th:nth-child(3),
+      td:nth-child(3) {
+        width: 170px;
+        min-width: 170px;
+      }
+
+      th:last-child,
+      td:last-child {
+        border-right: 0;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #f7f0e4;
+        color: rgba(29, 33, 29, 0.82);
+        font-size: 0.78rem;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      td {
+        color: rgba(29, 33, 29, 0.77);
+        font-size: 0.94rem;
+        background: rgba(255, 253, 248, 0.96);
+      }
+
+      tbody tr.is-featured td {
+        background: rgba(25, 105, 90, 0.07);
+      }
+
+      .tool-cell {
+        min-width: 170px;
+      }
+
+      .tool-name {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        color: var(--ink);
+        font-weight: 850;
+      }
+
+      .tool-name img {
+        width: 34px;
+        height: 34px;
+        object-fit: contain;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(29, 33, 29, 0.1);
+      }
+
+      .tool-mark {
+        display: inline-grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 850;
+        box-shadow: 0 4px 14px rgba(29, 33, 29, 0.1);
+      }
+
+      .status {
+        font-weight: 820;
+      }
+
+      .status-yes {
+        color: var(--green);
+      }
+
+      .status-partial {
+        color: var(--blue);
+      }
+
+      .status-no {
+        color: var(--rose);
+      }
+
+      .table-note {
+        margin-top: 16px;
+        color: rgba(29, 33, 29, 0.58);
+        font-size: 0.92rem;
+        line-height: 1.7;
+      }
+
+      .content-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.78fr) minmax(280px, 0.36fr);
+        gap: 54px;
+        align-items: start;
+      }
+
+      .prose {
+        display: grid;
+        gap: 24px;
+      }
+
+      .prose h2 {
+        margin-top: 22px;
+        font-size: 2.25rem;
+        line-height: 1.14;
+        font-weight: 880;
+      }
+
+      .prose h3 {
+        font-size: 1.3rem;
+        line-height: 1.36;
+        font-weight: 850;
+      }
+
+      .prose p,
+      .prose li {
+        color: rgba(29, 33, 29, 0.74);
+        font-size: 1.06rem;
+        line-height: 1.86;
+      }
+
+      .prose ul {
+        padding-left: 1.2rem;
+        display: grid;
+        gap: 12px;
+      }
+
+      .callout {
+        border-left: 5px solid var(--amber);
+        border-radius: 8px;
+        background: rgba(230, 167, 42, 0.1);
+        padding: 22px;
+      }
+
+      .callout p {
+        color: rgba(29, 33, 29, 0.78);
+      }
+
+      .aside {
+        position: sticky;
+        top: 96px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .aside-box {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 22px;
+      }
+
+      .aside-box h3 {
+        color: var(--green);
+        font-size: 1.02rem;
+        line-height: 1.4;
+      }
+
+      .aside-box p,
+      .aside-box li {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.72;
+      }
+
+      .aside-box ul {
+        padding-left: 1.1rem;
+      }
+
+      .recommendation-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .recommendation {
+        min-height: 205px;
+        border: 1px solid rgba(255, 253, 248, 0.17);
+        border-radius: 8px;
+        padding: 22px;
+        background: rgba(255, 253, 248, 0.08);
+      }
+
+      .recommendation strong {
+        display: block;
+        color: #fff7d7;
+        font-size: 1.06rem;
+        line-height: 1.45;
+      }
+
+      .recommendation span {
+        display: block;
+        margin-top: 12px;
+        color: rgba(255, 253, 248, 0.74);
+        font-size: 0.98rem;
+        line-height: 1.72;
+      }
+
+      .sources {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        padding: 0;
+        list-style: none;
+      }
+
+      .sources a {
+        display: block;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 253, 248, 0.74);
+        padding: 15px;
+        color: rgba(29, 33, 29, 0.78);
+        font-size: 0.94rem;
+        line-height: 1.55;
+        text-decoration: none;
+      }
+
+      .sources a:hover,
+      .sources a:focus-visible {
+        border-color: rgba(25, 105, 90, 0.38);
+        color: var(--green);
+        outline: none;
+      }
+
+      .reference-cta {
+        display: flex;
+        justify-content: center;
+        margin-top: 34px;
+      }
+
+      .reference-button {
+        display: inline-flex;
+        min-height: 48px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(25, 105, 90, 0.28);
+        border-radius: 8px;
+        background: var(--green);
+        padding: 0 22px;
+        color: #fffdf8;
+        font-size: 0.96rem;
+        font-weight: 800;
+        line-height: 1.2;
+        text-decoration: none;
+        box-shadow: 0 16px 34px rgba(15, 67, 57, 0.18);
+      }
+
+      .reference-button:hover,
+      .reference-button:focus-visible {
+        background: var(--green-deep);
+        outline: none;
+      }
+
+      .footer {
+        border-top: 1px solid var(--line);
+        background: #151914;
+        color: rgba(255, 253, 248, 0.74);
+        padding: 36px 0;
+      }
+
+      .footer-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        font-size: 0.92rem;
+      }
+
+      .footer-links {
+        display: flex;
+        gap: 16px;
+      }
+
+      .footer-links a {
+        color: rgba(255, 253, 248, 0.76);
+        text-decoration: none;
+      }
+
+      .footer-links a:hover,
+      .footer-links a:focus-visible {
+        color: #fffdf8;
+        outline: none;
+      }
+
+      @media (max-width: 980px) {
+        .nav,
+        .article-inner,
+        .footer-inner {
+          width: min(100% - 28px, 900px);
+        }
+
+        .nav-links {
+          gap: 14px;
+        }
+
+        .article-hero {
+          min-height: 500px;
+          padding: 90px 0 82px;
+        }
+
+        .article-hero::before {
+          background-position: right -70px center;
+          background-size: 240px auto;
+          opacity: 0.18;
+        }
+
+        h1 {
+          font-size: 3.15rem;
+        }
+
+        .content-grid,
+        .recommendation-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .aside {
+          position: static;
+        }
+      }
+
+      @media (max-width: 680px) {
+        body {
+          word-break: normal;
+        }
+
+        .site-header {
+          position: static;
+        }
+
+        .nav {
+          min-height: 62px;
+        }
+
+        .nav-links a:nth-child(2) {
+          display: none;
+        }
+
+        .brand img {
+          width: 31px;
+          height: 31px;
+        }
+
+        h1 {
+          font-size: 2.35rem;
+          line-height: 1.08;
+        }
+
+        .lede,
+        .section-heading p,
+        .prose p,
+        .prose li {
+          font-size: 1rem;
+          line-height: 1.78;
+        }
+
+        .article-section {
+          padding: 64px 0;
+        }
+
+        .section-heading {
+          margin-bottom: 26px;
+        }
+
+        .section-heading h2,
+        .prose h2 {
+          font-size: 1.92rem;
+          line-height: 1.16;
+        }
+
+        th,
+        td {
+          padding: 14px 12px;
+        }
+
+        .sources {
+          grid-template-columns: 1fr;
+        }
+
+        .footer-inner {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    </style>
+<link href="/assets/site-header.css" rel="stylesheet"/>
+</head>
+<body>
+<header class="site-header">
+<nav aria-label="HashChat site navigation" class="nav">
+<a aria-label="HashChat home" class="brand" href="/?lang=ar">
+<img alt="" src="/assets/site/hashchat-icon.png"/>
+<span>HashChat</span>
+</a>
+<div class="nav-actions">
+<div class="nav-links">
+<a href="/?lang=ar#how">كيف يعمل</a>
+<a href="/?lang=ar#features">الميزات</a>
+<a href="/?lang=ar#translate">الترجمة</a>
+<a href="/?lang=ar#uses">حالات الاستخدام</a>
+<a aria-current="page" class="nav-legal is-current" href="/blogs?lang=ar">المدونة</a>
+<a class="nav-legal" href="/legal?lang=ar">Legal</a>
+</div>
+<label class="language-picker">
+<span aria-hidden="true">🌐</span>
+<select aria-label="Language" id="blog-language">
+<option value="en">🇺🇸 English</option>
+<option value="ko">🇰🇷 한국어</option>
+<option value="ja">🇯🇵 日本語</option>
+<option value="zh-cn">🇨🇳 简体中文</option>
+<option value="zh-tw">🇹🇼 繁體中文</option>
+<option value="fr">🇫🇷 Français</option>
+<option value="de">🇩🇪 Deutsch</option>
+<option value="es">🇪🇸 Español</option>
+<option value="pt">🇧🇷 Português</option>
+<option value="it">🇮🇹 Italiano</option>
+<option value="ru">🇷🇺 Русский</option>
+<option selected="" value="ar">🇸🇦 العربية</option>
+<option value="hi">🇮🇳 हिन्दी</option>
+<option value="th">🇹🇭 ไทย</option>
+<option value="vi">🇻🇳 Tiếng Việt</option>
+</select>
+</label>
+</div>
+</nav>
+</header>
+<main>
+<article>
+<header class="article-hero">
+<div class="article-inner">
+<p class="eyebrow">قصة المنتج</p>
+<h1>HashChat: شبكة اجتماعية بلا حواجز لغوية</h1>
+<p class="article-meta">2 نوفمبر 2026 - Mingle Labs</p>
+<p class="lede">بدأت HashChat رحلتها باسم Mingle، وهو تطبيق للترجمة الصوتية المباشرة. استخدمه الناس في غرف المحادثة الصوتية على HelloTalk، ومكالمات Discord، وبيوت الشباب، واللقاءات الاجتماعية، وكان الأمر نفسه يتكرر باستمرار: بمجرد زوال حاجز اللغة، كانوا يرغبون في البقاء على تواصل مع الشخص الموجود على الطرف الآخر. لكن تطبيق الترجمة لم يكن كافيًا لتحقيق ذلك.</p>
+<p class="lede">وهكذا تطورت Mingle لتصبح HashChat (المعروفة سابقًا باسم Mingle): شبكة اجتماعية يمكنك فيها نشر المنشورات ومتابعة الأشخاص والتعليق والتحدث مع أشخاص من بلدان أخرى، مع إمكانية فهم كل منشور وتعليق ومحادثة ودردشة صوتية بلغتك الخاصة. لم تعد الترجمة أداة تحتاج إلى فتحها، بل أصبحت الأساس الذي تقوم عليه المنصة بأكملها.</p>
+</div>
+</header>
+<section class="article-section article-section--surface" id="what-changed">
+<div class="article-inner">
+<div class="content-grid">
+<div class="prose">
+<h2>من تطبيق ترجمة إلى شبكة اجتماعية</h2>
+<p>كانت Mingle تجيب عن سؤال واحد ببراعة: «ماذا يقول هذا الشخص؟». فقد كانت تترجم الكلام المتواصل في الوقت الفعلي، بثلاث لغات أو أكثر في آنٍ واحد، حتى عندما يأتي الصوت من تطبيق آخر. ولا يزال هذا الجوهر موجودًا داخل HashChat. ما تغير هو كل ما يحيط به.</p>
+<ul>
+<li><strong>خلاصة تجمع أشخاصًا من كل أنحاء العالم.</strong> تصفّح قسمي «لك» و«المتابَعون»، وشاهد ترجمات المنشورات المكتوبة بالكورية أو اليابانية أو الإسبانية أو الفيتنامية بلمسة واحدة.</li>
+<li><strong>تعليقات تتجاوز حواجز اللغات.</strong> اكتب ردودك بلغتك، وسيتمكن الآخرون من قراءتها بلغاتهم.</li>
+<li><strong>ملفات شخصية مصممة للتواصل مع العالم.</strong> يعرض كل ملف شخصي اللغات التي يتحدثها صاحبه، واللغات التي يرغب أن يتحدث بها الأشخاص الذين يود التعرف إليهم، ومستواه في كل لغة، لتعرف من يبحث عن شخص مثلك.</li>
+<li><strong>استكشف وتابع.</strong> ابحث عن الأشخاص والمنشورات، وتابع من يعجبك، وتلقَّ إشعارات عندما ينشرون شيئًا أو يردّون على الآخرين.</li>
+<li><strong>محادثات كتابية وصوتية مع مترجم فوري مدمج.</strong> غرف محادثة فردية وجماعية، ما عليك سوى التحدث وستتولى HashChat الترجمة الفورية أثناء المحادثة.</li>
+</ul>
+<div class="callout">
+<p>تطلب منك تطبيقات تبادل اللغات تعلّم اللغة قبل أن تبدأ الصداقة. أما تطبيقات التواصل الاجتماعي العالمية فتفترض أنك تتحدث بالفعل لغة مشتركة مع الآخرين. HashChat تتيح للصداقة أن تبدأ أولًا.</p>
+</div>
+</div>
+<aside aria-label="Article notes" class="aside">
+<div class="aside-box">
+<h3>المعروفة سابقًا باسم Mingle</h3>
+<p>كان اسم HashChat هو Mingle حتى أكتوبر 2026. إنه التطبيق نفسه، بالحسابات نفسها، وبصفحات التطبيق نفسها على App Store وGoogle Play.</p>
+</div>
+<div class="aside-box">
+<h3>ولا تزال تطبيقًا رائعًا للترجمة</h3>
+<p>لا تزال جميع الميزات المذكورة في
+                    <a href="/blogs/ai-translators-comparison?lang=ar">مقارنة تطبيقات الترجمة بالذكاء الاصطناعي</a>
+                    متوفرة: الترجمة الفورية المستمرة، ودعم 3 لغات أو أكثر، والترجمة في الخلفية، وترجمة الصوت الصادر من التطبيقات الأخرى.</p>
+</div>
+</aside>
+</div>
+</div>
+</section>
+<section class="article-section" id="comparison">
+<div class="article-inner">
+<div class="section-heading">
+<p class="eyebrow">جدول المقارنة</p>
+<h2>مقارنة HashChat بتطبيقات المراسلة والتواصل الاجتماعي.</h2>
+<p>صُممت LINE وWeChat وWhatsApp للتواصل مع أشخاص تعرفهم بالفعل. أما HelloTalk وTandem فصُمما لتبادل اللغات، وInstagram لمشاركة المحتوى، وDiscord للمجتمعات. HashChat هو التطبيق الوحيد المصمم حول فكرة تكوين صداقات عبر اللغات دون الحاجة إلى لغة مشتركة. تمت مراجعة الميزات بالاستناد إلى صفحات التطبيقات العامة وإعلانات المنتجات في
+                نوفمبر 2026.</p>
+</div>
+<div aria-label="Social app comparison table" class="comparison-shell" tabindex="0">
+<table>
+<thead>
+<tr>
+<th>التطبيق</th>
+<th>مصمم من أجل</th>
+<th>خلاصة اجتماعية + متابعة الحسابات</th>
+<th>ترجمة المنشورات والتعليقات</th>
+<th>الملفات الشخصية تعرض اللغات ومستويات إتقانها</th>
+<th>محادثات صوتية مع ترجمة فورية</th>
+<th>ترجمة فورية سلسة</th>
+<th>ترجمة الصوت الصادر من التطبيقات الأخرى</th>
+</tr>
+</thead>
+<tbody>
+<tr class="is-featured">
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/mingle-icon.png"/>HashChat</div></td>
+<td>تكوين صداقات عبر اللغات المختلفة، دون الحاجة إلى لغة مشتركة.</td>
+<td><span class="status status-yes">نعم.</span> خلاصتا «لك» و«المتابَعون»، والمتابعات، والإعجابات، والتعليقات، والإشعارات.</td>
+<td><span class="status status-yes">نعم.</span> بلمسة واحدة على أي منشور أو تعليق، يمكنك عرضه بلغتك.</td>
+<td><span class="status status-yes">نعم.</span> اللغات التي تتحدثها، واللغات التي ترغب في تعلمها، ومستوى إتقان من 5 درجات لكل لغة.</td>
+<td><span class="status status-yes">نعم.</span> محادثات صوتية فردية وجماعية، مع ترجمة فورية أثناء التحدث.</td>
+<td><span class="status status-yes">نعم.</span> تحدث فحسب. يتعرف HashChat تلقائيًا على المتحدث واللغة التي يتحدث بها، دون الحاجة إلى الضغط على أي أزرار.</td>
+<td><span class="status status-yes">نعم.</span> تتم ترجمة المكالمات ومحادثات Discord ومقاطع الفيديو التي تُشغّل عبر مكبر الصوت مباشرةً.</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-line.png"/>LINE</div></td>
+<td>تطبيق مراسلة يومي شائع في اليابان وتايوان وتايلاند.</td>
+<td><span class="status status-yes">نعم.</span> LINE VOOM.</td>
+<td><span class="status status-partial">جزئيًا.</span> من خلال حسابات روبوت الترجمة التي تتم إضافتها إلى المحادثة.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-partial">جزئيًا.</span> مكالمات صوتية مجانية، ولكن دون ترجمة فورية.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-no">لا.</span></td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-wechat.jpg"/>WeChat</div></td>
+<td>منصة للمراسلة والمدفوعات والخدمات، تتركز شعبيتها في الصين.</td>
+<td><span class="status status-partial">جزئيًا.</span> ميزة Moments، وهي مخصصة للمشاركة مع الأصدقاء فقط.</td>
+<td><span class="status status-partial">جزئيًا.</span> يمكن ترجمة رسائل الدردشة، ولكن لا يمكن ترجمة منشورات Moments.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-partial">جزئيًا.</span> لا تتوفر ترجمة فورية للمكالمات الصوتية، ولكن يمكن نسخ بعض الرسائل الصوتية إلى نص وترجمتها.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-no">لا.</span></td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><span class="tool-mark" style="background:#25d366">W</span>WhatsApp</div></td>
+<td>مراسلة خاصة مع جهات الاتصال لديك.</td>
+<td><span class="status status-partial">جزئيًا.</span> تتوفر ميزتا الحالة والقنوات، ولكن لا توجد خلاصة تعرض أشخاصًا لمتابعتهم.</td>
+<td><span class="status status-partial">جزئيًا.</span> تتوفر ترجمة الرسائل منذ عام 2025، ولكنها تقتصر على مجموعة محدودة من اللغات.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-partial">جزئيًا.</span> مكالمات صوتية، ولكن دون ترجمة فورية.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-no">لا.</span></td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-hellotalk.png"/>HelloTalk</div></td>
+<td>تبادل اللغات وممارستها.</td>
+<td><span class="status status-yes">نعم.</span> خلاصة Moments.</td>
+<td><span class="status status-yes">نعم.</span> ترجمة وتصحيحات مدمجة.</td>
+<td><span class="status status-yes">نعم.</span> اللغات الأم واللغات التي تتعلمها، مع تحديد مستويات الإتقان.</td>
+<td><span class="status status-partial">جزئيًا.</span> مكالمات وغرف صوتية (Voicerooms)، لممارسة اللغة نفسها.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-no">لا.</span></td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-market-tandem.jpg"/>Tandem</div></td>
+<td>العثور على شريك لتبادل اللغات.</td>
+<td><span class="status status-partial">جزئيًا.</span> نوادي اللغة والحفلات، مع التركيز على مطابقة المستخدمين مع شركاء مناسبين.</td>
+<td><span class="status status-partial">جزئيًا.</span> ترجمة النصوص داخل المحادثات؛ استخدام غير محدود مع Pro فقط.</td>
+<td><span class="status status-yes">نعم.</span> اللغات الأم واللغات التي تتعلمها.</td>
+<td><span class="status status-partial">جزئيًا.</span> مكالمات صوتية ومرئية، ولكن دون ترجمة فورية.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-no">لا.</span></td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-instagram.png"/>Instagram</div></td>
+<td>مشاركة الصور ومقاطع الفيديو، في الغالب مع أشخاص تعرفهم.</td>
+<td><span class="status status-yes">نعم.</span></td>
+<td><span class="status status-yes">نعم.</span> عرض ترجمة التسميات التوضيحية والتعليقات؛ وترجمة الرسائل المباشرة منذ عام 2025.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-partial">جزئيًا.</span> مكالمات صوتية ومرئية، ولكن دون ترجمة فورية.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-no">لا.</span></td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-discord.png"/>Discord</div></td>
+<td>مجتمعات ومحادثات صوتية جماعية.</td>
+<td><span class="status status-partial">جزئيًا.</span> يعتمد على الخوادم والقنوات بدلًا من صفحة شخصية للمحتوى.</td>
+<td><span class="status status-no">لا.</span> يتطلب استخدام روبوتات خارجية.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-partial">جزئيًا.</span> قنوات صوتية، ولكن دون ترجمة فورية.</td>
+<td><span class="status status-no">لا.</span></td>
+<td><span class="status status-no">لا.</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="table-note">تعني كلمة «جزئيًا» أن الميزة متاحة بشكل محدود، أو من خلال إضافات، أو ضمن باقة مدفوعة. يجري طرح ميزة المحادثات الصوتية في HashChat تدريجيًا خلال نوفمبر 2026. تتلقى التطبيقات تحديثات متكررة؛ لذا يُرجى مراجعة روابط المصادر أدناه للاطلاع على أحدث المعلومات.</p>
+</div>
+</section>
+<section class="article-section article-section--surface">
+<div class="article-inner">
+<div class="content-grid">
+<div class="prose">
+<h2>لماذا كان على تطبيق ترجمة أن يتحول إلى شبكة اجتماعية؟</h2>
+<p>معظم الأشخاص الذين يرغبون في تكوين صداقات من دول أخرى لا يبحثون عن دروس لتعلّم اللغات. إنهم يريدون التحدث عن الطعام، أو كرة القدم، أو مسلسل انتهوا للتو من مشاهدته، أو رحلة مشي قاموا بها في عطلة نهاية الأسبوع الماضية. تجعل تطبيقات تبادل اللغات اللغة نفسها محور الحديث، بينما تفترض تطبيقات التواصل الاجتماعي العالمية ضمنيًا أن الجميع يتحدثون الإنجليزية. وفي كلتا الحالتين، لا يتمكن كثير من الأشخاص من تجاوز الرسائل الأولى.</p>
+<p>يزيل HashChat هذا الحاجز أينما يمكن أن تدور المحادثات: في المنشور الذي تتصفحه، والتعليق الذي تكتبه، والمحادثة التي تبدأها، والمكالمة الصوتية التي تليها. يمكنك النشر بلغتك الخاصة، وسيظل الآخرون قادرين على فهمك في سيول أو طوكيو أو هانوي أو ساو باولو.</p>
+<h2>ما الذي يميز HashChat؟</h2>
+<ul>
+<li><strong>محادثات صوتية تعمل بسلاسة بين مختلف اللغات.</strong> لا يوجد تطبيق مراسلة أو تواصل اجتماعي آخر يوفّر ترجمة فورية للمحادثات الصوتية المباشرة. تحدث بطبيعتك، وسيتولى HashChat الباقي.</li>
+<li><strong>ملفات شخصية توضّح الأشخاص الذين ترغب في التعرف إليهم.</strong> تساعد اللغات التي تهتم بها ومستويات إتقانك لها الآخرين على معرفة ما إذا كانوا يبحثون عن شخص مثلك.</li>
+<li><strong>ترجمة مباشرة لتطبيقاتك الصوتية المعتادة.</strong> واصل استخدام غرفة صوتية على HelloTalk أو إجراء مكالمة على Discord عبر مكبر الصوت، وسيترجم HashChat المحادثة فورًا.</li>
+</ul>
+</div>
+<aside aria-label="Who HashChat is for" class="aside">
+<div class="aside-box">
+<h3>لمن يناسب HashChat؟</h3>
+<ul>
+<li>الأشخاص الذين يرغبون في تكوين صداقات من دول أخرى دون الحاجة إلى الدراسة أولًا.</li>
+<li>متعلمو اللغات الذين يرغبون في خوض محادثات حقيقية إلى جانب ممارسة اللغة.</li>
+<li>المسافرون الذين يرغبون في مواصلة التواصل مع الآخرين بعد انتهاء رحلتهم.</li>
+<li>المجموعات متعددة اللغات، والغرف الصوتية، والمجتمعات.</li>
+</ul>
+</div>
+</aside>
+</div>
+</div>
+</section>
+<section aria-labelledby="sources-title" class="article-section">
+<div class="article-inner">
+<div class="section-heading">
+<p class="eyebrow">ملاحظات حول المصادر</p>
+<h2 id="sources-title">المراجع العامة التي تمت مراجعتها لإعداد هذا المقال.</h2>
+<p>استُخدمت هذه الروابط للتحقق من الميزات المذكورة لكل تطبيق.</p>
+</div>
+<ul class="sources">
+<li><a href="https://apps.apple.com/app/id6759795134">HashChat على App Store</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn">HashChat على Google Play</a></li>
+<li><a href="https://www.talkdrill.com/blog/compare/hellotalk-vs-tandem/">مقارنة بين HelloTalk وTandem (TalkDrill، 2026)</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=net.tandem">Tandem على Google Play</a></li>
+<li><a href="https://apps.apple.com/app/tandem-learn-languages/id959001619">Tandem على App Store</a></li>
+<li><a href="https://blog.whatsapp.com/introducing-message-translations?lang=en">تعرّف على ميزة ترجمة الرسائل (WhatsApp، 2025)</a></li>
+<li><a href="https://blog.wechat.com/2025/05">مدونة WeChat: ترجمة الرسائل (2025)</a></li>
+<li><a href="https://www.producthunt.com/products/line-autotranslate">روبوت LINE AutoTranslate (Product Hunt)</a></li>
+<li><a href="https://techcrunch.com/2025/02/19/instagram-upgrades-dms-with-music-sharing-message-scheduling-translation-and-more/">Instagram يضيف ميزة ترجمة الرسائل المباشرة (TechCrunch، 2025)</a></li>
+</ul>
+<div class="reference-cta"><a class="reference-button" href="/?lang=ar">احصل على HashChat</a></div>
+</div>
+</section>
+</article>
+</main>
+<footer class="footer">
+<div class="footer-inner">
+<span>© Mingle Labs. كان HashChat يُعرف سابقًا باسم Mingle.</span>
+<div class="footer-links">
+<a href="/blogs?lang=ar">المدونة</a>
+<a href="/privacy-policy">الخصوصية</a>
+<a href="/terms-of-use">الشروط</a>
+<a href="/legal">Legal</a>
+</div>
+</div>
+</footer>
+<script>
+      (function () {
+        var select = document.getElementById("blog-language");
+        if (!select) return;
+        select.addEventListener("change", function () {
+          var url = new URL(window.location.href);
+          if (select.value === "en") url.searchParams.delete("lang");
+          else url.searchParams.set("lang", select.value);
+          window.location.href = url.toString();
+        });
+      })();
+    </script>
+</body>
+</html>

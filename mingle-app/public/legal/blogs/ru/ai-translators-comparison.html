@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="strict-origin-when-cross-origin" name="referrer"/>
+<title>Сравнение ИИ-переводчиков</title>
+<meta content="Сравните HashChat, Felo Translator, Transync, Google Translate, Apple Translate, Microsoft Translator, Papago и DeepL по возможностям синхронного голосового перевода с помощью ИИ, отображения субтитров, создания расшифровок, фонового перевода и перевода аудио из внешних приложений." name="description"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ru" rel="canonical"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison" hreflang="en" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ko" hreflang="ko" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ja" hreflang="ja" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=zh-cn" hreflang="zh-cn" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=zh-tw" hreflang="zh-tw" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=fr" hreflang="fr" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=de" hreflang="de" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=es" hreflang="es" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=pt" hreflang="pt" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=it" hreflang="it" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ru" hreflang="ru" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ar" hreflang="ar" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=hi" hreflang="hi" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=th" hreflang="th" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=vi" hreflang="vi" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison" hreflang="x-default" rel="alternate"/>
+<meta content="Сравнение ИИ-переводчиков" property="og:title"/>
+<meta content="Практическое руководство с таблицей для сравнения возможностей ИИ-перевода в реальных разговорах в режиме реального времени." property="og:description"/>
+<meta content="article" property="og:type"/>
+<meta content="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ru" property="og:url"/>
+<meta content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" property="og:image"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<script type="application/ld+json">
+      {"@context": "https://schema.org", "@type": "BlogPosting", "headline": "Сравнение ИИ-переводчиков", "description": "Сравните HashChat, Felo Translator, Transync, Google Translate, Apple Translate, Microsoft Translator, Papago и DeepL по возможностям синхронного голосового перевода с помощью ИИ, отображения субтитров, создания расшифровок, фонового перевода и перевода аудио из внешних приложений.", "datePublished": "2026-04-20", "dateModified": "2026-11-02", "author": {"@type": "Organization", "name": "Mingle Labs"}, "publisher": {"@type": "Organization", "name": "Mingle Labs"}, "mainEntityOfPage": "https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ru", "image": "https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1", "about": {"@type": "MobileApplication", "@id": "https://hashchat.minglelabs.app/#app", "name": "HashChat", "alternateName": ["Mingle", "Mingle: Global Hangout"], "description": "HashChat (formerly Mingle) is a real-time voice translation app for foreign friends, global communities, and conversations while traveling. The app was renamed from Mingle to HashChat in October 2026; it is the same app, account, and store listing.", "applicationCategory": "SocialNetworkingApplication", "operatingSystem": "iOS, Android", "url": "https://hashchat.minglelabs.app/", "sameAs": ["https://apps.apple.com/app/id6759795134", "https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"], "publisher": {"@id": "https://minglelabs.app/#organization"}}, "inLanguage": "ru"}
+    </script>
+<style>
+      :root {
+        color-scheme: light;
+        --paper: #fbf7ee;
+        --paper-deep: #f0eadf;
+        --surface: #fffdf8;
+        --ink: #1d211d;
+        --muted: #626a61;
+        --line: rgba(29, 33, 29, 0.13);
+        --green: #19695a;
+        --green-deep: #0f4339;
+        --amber: #e6a72a;
+        --blue: #2f68d8;
+        --rose: #a34436;
+        --shadow: 0 20px 60px rgba(29, 33, 29, 0.13);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--paper);
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Segoe UI",
+          sans-serif;
+        letter-spacing: 0;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+      }
+
+      ::selection {
+        background: rgba(230, 167, 42, 0.34);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      img {
+        max-width: 100%;
+      }
+
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        border-bottom: 1px solid var(--line);
+        background: rgba(251, 247, 238, 0.86);
+        backdrop-filter: blur(18px);
+      }
+
+      .nav,
+      .article-inner,
+      .footer-inner {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .nav {
+        min-height: 68px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        font-weight: 800;
+      }
+
+      .brand img {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        box-shadow: 0 8px 20px rgba(25, 105, 90, 0.2);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        color: rgba(29, 33, 29, 0.72);
+        font-size: 0.93rem;
+        font-weight: 650;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+      }
+
+      .nav-links a:hover,
+      .nav-links a:focus-visible {
+        color: var(--green);
+        outline: none;
+      }
+
+      .article-hero {
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-height: 540px;
+        overflow: hidden;
+        padding: 118px 0 112px;
+        background:
+          linear-gradient(90deg, rgba(251, 247, 238, 0.98) 0%, rgba(251, 247, 238, 0.9) 52%, rgba(251, 247, 238, 0.56) 100%),
+          linear-gradient(135deg, #fbf7ee 0%, #fffaf0 46%, #e8f0eb 100%);
+      }
+
+      .article-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: url("/assets/mingle.png");
+        background-position: right 8% center;
+        background-repeat: no-repeat;
+        background-size: min(320px, 24vw) auto;
+        opacity: 0.28;
+        filter: drop-shadow(0 28px 70px rgba(25, 105, 90, 0.24));
+      }
+
+      .article-hero .article-inner {
+        position: relative;
+      }
+
+      .eyebrow {
+        margin: 0 0 18px;
+        color: var(--green);
+        font-size: 0.9rem;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p,
+      ul,
+      ol {
+        margin: 0;
+      }
+
+      h1 {
+        max-width: 920px;
+        font-size: 4rem;
+        line-height: 1.02;
+        font-weight: 900;
+        letter-spacing: 0;
+      }
+
+      .article-meta {
+        margin-top: 26px;
+        color: rgba(29, 33, 29, 0.62);
+        font-size: 0.98rem;
+        font-weight: 680;
+      }
+
+      .lede {
+        max-width: 760px;
+        margin-top: 24px;
+        color: rgba(29, 33, 29, 0.74);
+        font-size: 1.2rem;
+        line-height: 1.76;
+        font-weight: 520;
+      }
+
+      .article-section {
+        padding: 80px 0;
+      }
+
+      .article-section--surface {
+        background: var(--surface);
+      }
+
+      .article-section--deep {
+        background: var(--green-deep);
+        color: #fffdf8;
+      }
+
+      .section-heading {
+        display: grid;
+        gap: 16px;
+        max-width: 850px;
+        margin-bottom: 34px;
+      }
+
+      .section-heading h2 {
+        font-size: 2.75rem;
+        line-height: 1.1;
+        font-weight: 880;
+        letter-spacing: 0;
+      }
+
+      .section-heading p {
+        color: var(--muted);
+        font-size: 1.06rem;
+        line-height: 1.78;
+      }
+
+      .article-section--deep .section-heading p,
+      .article-section--deep .eyebrow {
+        color: rgba(255, 253, 248, 0.72);
+      }
+
+      .comparison-shell {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      table {
+        width: 100%;
+        min-width: 2620px;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        border-right: 1px solid var(--line);
+        min-width: 180px;
+        padding: 20px 24px;
+        text-align: left;
+        vertical-align: top;
+        line-height: 1.55;
+      }
+
+      th:nth-child(1),
+      td:nth-child(1) {
+        width: 170px;
+        min-width: 170px;
+      }
+
+      th:nth-child(2),
+      td:nth-child(2) {
+        width: 145px;
+        min-width: 145px;
+      }
+
+      th:nth-child(3),
+      td:nth-child(3) {
+        width: 170px;
+        min-width: 170px;
+      }
+
+      th:last-child,
+      td:last-child {
+        border-right: 0;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #f7f0e4;
+        color: rgba(29, 33, 29, 0.82);
+        font-size: 0.78rem;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      td {
+        color: rgba(29, 33, 29, 0.77);
+        font-size: 0.94rem;
+        background: rgba(255, 253, 248, 0.96);
+      }
+
+      tbody tr.is-featured td {
+        background: rgba(25, 105, 90, 0.07);
+      }
+
+      .tool-cell {
+        min-width: 170px;
+      }
+
+      .tool-name {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        color: var(--ink);
+        font-weight: 850;
+      }
+
+      .tool-name img {
+        width: 34px;
+        height: 34px;
+        object-fit: contain;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(29, 33, 29, 0.1);
+      }
+
+      .status {
+        font-weight: 820;
+      }
+
+      .status-yes {
+        color: var(--green);
+      }
+
+      .status-partial {
+        color: var(--blue);
+      }
+
+      .status-no {
+        color: var(--rose);
+      }
+
+      .table-note {
+        margin-top: 16px;
+        color: rgba(29, 33, 29, 0.58);
+        font-size: 0.92rem;
+        line-height: 1.7;
+      }
+
+      .content-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.78fr) minmax(280px, 0.36fr);
+        gap: 54px;
+        align-items: start;
+      }
+
+      .prose {
+        display: grid;
+        gap: 24px;
+      }
+
+      .prose h2 {
+        margin-top: 22px;
+        font-size: 2.25rem;
+        line-height: 1.14;
+        font-weight: 880;
+      }
+
+      .prose h3 {
+        font-size: 1.3rem;
+        line-height: 1.36;
+        font-weight: 850;
+      }
+
+      .prose p,
+      .prose li {
+        color: rgba(29, 33, 29, 0.74);
+        font-size: 1.06rem;
+        line-height: 1.86;
+      }
+
+      .prose ul {
+        padding-left: 1.2rem;
+        display: grid;
+        gap: 12px;
+      }
+
+      .callout {
+        border-left: 5px solid var(--amber);
+        border-radius: 8px;
+        background: rgba(230, 167, 42, 0.1);
+        padding: 22px;
+      }
+
+      .callout p {
+        color: rgba(29, 33, 29, 0.78);
+      }
+
+      .aside {
+        position: sticky;
+        top: 96px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .aside-box {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 22px;
+      }
+
+      .aside-box h3 {
+        color: var(--green);
+        font-size: 1.02rem;
+        line-height: 1.4;
+      }
+
+      .aside-box p,
+      .aside-box li {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.72;
+      }
+
+      .aside-box ul {
+        padding-left: 1.1rem;
+      }
+
+      .recommendation-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .recommendation {
+        min-height: 205px;
+        border: 1px solid rgba(255, 253, 248, 0.17);
+        border-radius: 8px;
+        padding: 22px;
+        background: rgba(255, 253, 248, 0.08);
+      }
+
+      .recommendation strong {
+        display: block;
+        color: #fff7d7;
+        font-size: 1.06rem;
+        line-height: 1.45;
+      }
+
+      .recommendation span {
+        display: block;
+        margin-top: 12px;
+        color: rgba(255, 253, 248, 0.74);
+        font-size: 0.98rem;
+        line-height: 1.72;
+      }
+
+      .sources {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        padding: 0;
+        list-style: none;
+      }
+
+      .sources a {
+        display: block;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 253, 248, 0.74);
+        padding: 15px;
+        color: rgba(29, 33, 29, 0.78);
+        font-size: 0.94rem;
+        line-height: 1.55;
+        text-decoration: none;
+      }
+
+      .sources a:hover,
+      .sources a:focus-visible {
+        border-color: rgba(25, 105, 90, 0.38);
+        color: var(--green);
+        outline: none;
+      }
+
+      .reference-cta {
+        display: flex;
+        justify-content: center;
+        margin-top: 34px;
+      }
+
+      .reference-button {
+        display: inline-flex;
+        min-height: 48px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(25, 105, 90, 0.28);
+        border-radius: 8px;
+        background: var(--green);
+        padding: 0 22px;
+        color: #fffdf8;
+        font-size: 0.96rem;
+        font-weight: 800;
+        line-height: 1.2;
+        text-decoration: none;
+        box-shadow: 0 16px 34px rgba(15, 67, 57, 0.18);
+      }
+
+      .reference-button:hover,
+      .reference-button:focus-visible {
+        background: var(--green-deep);
+        outline: none;
+      }
+
+      .footer {
+        border-top: 1px solid var(--line);
+        background: #151914;
+        color: rgba(255, 253, 248, 0.74);
+        padding: 36px 0;
+      }
+
+      .footer-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        font-size: 0.92rem;
+      }
+
+      .footer-links {
+        display: flex;
+        gap: 16px;
+      }
+
+      .footer-links a {
+        color: rgba(255, 253, 248, 0.76);
+        text-decoration: none;
+      }
+
+      .footer-links a:hover,
+      .footer-links a:focus-visible {
+        color: #fffdf8;
+        outline: none;
+      }
+
+      @media (max-width: 980px) {
+        .nav,
+        .article-inner,
+        .footer-inner {
+          width: min(100% - 28px, 900px);
+        }
+
+        .nav-links {
+          gap: 14px;
+        }
+
+        .article-hero {
+          min-height: 500px;
+          padding: 90px 0 82px;
+        }
+
+        .article-hero::before {
+          background-position: right -70px center;
+          background-size: 240px auto;
+          opacity: 0.18;
+        }
+
+        h1 {
+          font-size: 3.15rem;
+        }
+
+        .content-grid,
+        .recommendation-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .aside {
+          position: static;
+        }
+      }
+
+      @media (max-width: 680px) {
+        body {
+          word-break: normal;
+        }
+
+        .site-header {
+          position: static;
+        }
+
+        .nav {
+          min-height: 62px;
+        }
+
+        .nav-links a:nth-child(2) {
+          display: none;
+        }
+
+        .brand img {
+          width: 31px;
+          height: 31px;
+        }
+
+        h1 {
+          font-size: 2.35rem;
+          line-height: 1.08;
+        }
+
+        .lede,
+        .section-heading p,
+        .prose p,
+        .prose li {
+          font-size: 1rem;
+          line-height: 1.78;
+        }
+
+        .article-section {
+          padding: 64px 0;
+        }
+
+        .section-heading {
+          margin-bottom: 26px;
+        }
+
+        .section-heading h2,
+        .prose h2 {
+          font-size: 1.92rem;
+          line-height: 1.16;
+        }
+
+        th,
+        td {
+          padding: 14px 12px;
+        }
+
+        .sources {
+          grid-template-columns: 1fr;
+        }
+
+        .footer-inner {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    </style>
+<link href="/assets/site-header.css" rel="stylesheet"/>
+</head>
+<body>
+<header class="site-header">
+<nav aria-label="HashChat site navigation" class="nav">
+<a aria-label="HashChat home" class="brand" href="/?lang=ru">
+<img alt="" src="/assets/site/hashchat-icon.png"/>
+<span>HashChat</span>
+</a>
+<div class="nav-actions">
+<div class="nav-links">
+<a href="/?lang=ru#how">Как это работает</a>
+<a href="/?lang=ru#features">Возможности</a>
+<a href="/?lang=ru#translate">Перевод</a>
+<a href="/?lang=ru#uses">Сценарии использования</a>
+<a aria-current="page" class="nav-legal is-current" href="/blogs?lang=ru">Блог</a>
+<a class="nav-legal" href="/legal?lang=ru">Legal</a>
+</div>
+<label class="language-picker">
+<span aria-hidden="true">🌐</span>
+<select aria-label="Language" id="blog-language">
+<option value="en">🇺🇸 English</option>
+<option value="ko">🇰🇷 한국어</option>
+<option value="ja">🇯🇵 日本語</option>
+<option value="zh-cn">🇨🇳 简体中文</option>
+<option value="zh-tw">🇹🇼 繁體中文</option>
+<option value="fr">🇫🇷 Français</option>
+<option value="de">🇩🇪 Deutsch</option>
+<option value="es">🇪🇸 Español</option>
+<option value="pt">🇧🇷 Português</option>
+<option value="it">🇮🇹 Italiano</option>
+<option selected="" value="ru">🇷🇺 Русский</option>
+<option value="ar">🇸🇦 العربية</option>
+<option value="hi">🇮🇳 हिन्दी</option>
+<option value="th">🇹🇭 ไทย</option>
+<option value="vi">🇻🇳 Tiếng Việt</option>
+</select>
+</label>
+</div>
+</nav>
+</header>
+<main>
+<article>
+<header class="article-hero">
+<div class="article-inner">
+<p class="eyebrow">Сравнение ИИ-переводчиков</p>
+<h1>Сравнение ИИ-переводчиков</h1>
+<p class="article-meta">Обновлено 20 апреля 2026 г. — Mingle Labs</p>
+<p class="lede">Большинство приложений для перевода умеют переводить отдельные предложения. Но гораздо меньше приложений справляются с непрерывной речью, переключением между языками, голосовыми комнатами и сохранением стенограммы разговора. В этом сравнении основное внимание уделяется переводу устных разговоров в реальном времени, а не только переводу документов.</p>
+<p class="lede">По 12 критериям, включая цену, поддерживаемые платформы и языки, субтитры в реальном времени, расшифровки разговоров, фоновый перевод и захват звука из других приложений, HashChat становится лучшим мобильным приложением в целом для непрерывного перевода многоязычных разговоров.</p>
+<p class="lede">Ранее HashChat назывался Mingle. Это то же самое приложение с прежними страницами в App Store и Google Play, переименованное в октябре 2026 года.</p>
+</div>
+</header>
+<section class="article-section article-section--surface" id="comparison">
+<div class="article-inner">
+<div class="section-heading">
+<p class="eyebrow">Сравнительная таблица</p>
+<h2>Начнём с функций перевода разговоров в реальном времени.</h2>
+<p>Цены и доступность языков могут различаться в зависимости от страны, платформы и функции. Для приведённой ниже таблицы использованы общедоступные страницы продуктов, сведения о платформах, страницы приложений и актуальные каталоги приложения HashChat, проверенные 20 апреля 2026 года.</p>
+</div>
+<div aria-label="AI translator comparison table" class="comparison-shell" tabindex="0">
+<table>
+<thead>
+<tr>
+<th>Переводчик</th>
+<th>Цена</th>
+<th>Платформы</th>
+<th>Поддерживаемые языки</th>
+<th>Качество ИИ-перевода</th>
+<th>Непрерывный перевод в формате заметок</th>
+<th>Субтитры в реальном времени + расшифровка</th>
+<th>Реплики в формате мессенджера</th>
+<th>Распознавание говорящих в реальном времени</th>
+<th>Мессенджер + приложение для голосового общения</th>
+<th>Одновременно 3 и более языков</th>
+<th>Автоопределение языка + переключение</th>
+<th>Фоновый перевод</th>
+<th>Захват звука из других приложений</th>
+</tr>
+</thead>
+<tbody>
+<tr class="is-featured">
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/mingle-icon.png"/>HashChat</div></td>
+<td>Бесплатное приложение для пользователей.</td>
+<td>iOS, Android и Web.</td>
+<td>62 языка перевода и 61 язык речи для выбора согласно текущему каталогу приложения.</td>
+<td><span class="status status-yes">Хорошо.</span> Мощный ИИ-перевод речи в реальном времени, подходящий для продолжительных многоязычных разговоров, смены говорящих и автоматического переключения языков.</td>
+<td><span class="status status-yes">Да.</span> Разработано для непрерывного перевода длительных разговоров.</td>
+<td><span class="status status-yes">Да.</span> Отображает субтитры в реальном времени и сохраняет расшифровки переведённых разговоров.</td>
+<td><span class="status status-yes">Да.</span> Речь разделяется на отдельные реплики в хронологической ленте, как в голосовой комнате.</td>
+<td><span class="status status-yes">Да.</span> Различает говорящих и отображает их реплики в реальном времени, сохраняя удобство чтения.</td>
+<td><span class="status status-yes">Да.</span> Можно использовать непосредственно как мессенджер и приложение для голосового общения.</td>
+<td><span class="status status-yes">Да.</span> Предназначено для перевода между тремя и более языками во всех направлениях.</td>
+<td><span class="status status-yes">Да.</span> Автоматически определяет язык речи и переключается на него без необходимости вручную менять настройки говорящего.</td>
+<td><span class="status status-yes">Да.</span> Продолжает перевод даже при переключении между приложениями или во время использования заблокированного экрана.</td>
+<td><span class="status status-yes">Да.</span> Захватывает звук из других приложений, воспроизводимый через динамик, пока HashChat находится в режиме прослушивания.</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-google-translate.jpg"/>Google Translate</div></td>
+<td>Бесплатное приложение для пользователей.</td>
+<td>iOS, Android и Web.</td>
+<td>108 языков для перевода введённого текста, 70 языков для разговоров и 8 языков для расшифровки речи согласно странице приложения в Google Play.</td>
+<td><span class="status status-yes">Хорошо.</span> Мощный универсальный ИИ-переводчик для работы с текстом, камерой, речью и автоматическим определением языка.</td>
+<td><span class="status status-partial">Частично.</span> Функция Transcribe поддерживает непрерывный перевод почти в реальном времени, но лишь для ограниченного числа языков.</td>
+<td><span class="status status-partial">Частично.</span> Transcribe полезна для расшифровки речи, однако поддерживает меньше языков и функций, чем перевод текста.</td>
+<td><span class="status status-partial">Частично.</span> В режимах просмотра переписки и транскрипции отображаются отдельные фрагменты, а не постоянная комната для общения в мессенджере.</td>
+<td><span class="status status-no">Нет.</span> Потребительское приложение Translate не предназначено для распознавания и разделения речи по говорящим в реальном времени.</td>
+<td><span class="status status-no">Нет.</span> Это инструмент для перевода, а не мессенджер или приложение для голосового общения.</td>
+<td><span class="status status-no">Нет.</span> Режим разговора предназначен для общения на двух языках.</td>
+<td><span class="status status-yes">Да.</span> Эффективно автоматически определяет язык при переводе текста и в двуязычных диалогах.</td>
+<td><span class="status status-no">Нет.</span> В основном работает как переводчик, активный на переднем плане.</td>
+<td><span class="status status-no">Нет.</span> Не работает как универсальный слой для захвата звука из сторонних приложений.</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-apple-translate.jpg"/>Apple Translate</div></td>
+<td>Бесплатно, встроен в iOS и iPadOS.</td>
+<td>iOS, iPadOS и macOS. Нет версии для Android или отдельного веб-приложения.</td>
+<td>21 язык в приложении Translate; функция Live Translation на базе Apple Intelligence поддерживает более ограниченный список языков.</td>
+<td><span class="status status-partial">Стандартный уровень.</span> Удобен в поддерживаемых экосистемой Apple приложениях и сервисах, но охват и гибкость ограничены.</td>
+<td><span class="status status-no">Нет.</span> Не предназначен для непрерывного перевода в формате заметок.</td>
+<td><span class="status status-partial">Частично.</span> На поддерживаемых устройствах и языках в Phone и FaceTime могут отображаться переведённые субтитры.</td>
+<td><span class="status status-partial">Частично.</span> Translate и Messages напоминают инструменты для общения, но работают преимущественно внутри экосистемы Apple.</td>
+<td><span class="status status-no">Нет.</span> Не поддерживает самостоятельный процесс распознавания и разделения речи по говорящим в реальном времени.</td>
+<td><span class="status status-no">Нет.</span> Перевод выполняется внутри сервисов Apple; сам переводчик не является отдельным мессенджером или приложением для голосового общения.</td>
+<td><span class="status status-no">Нет.</span> Live Translation ориентирован на личную переписку, звонки и разговоры с людьми поблизости.</td>
+<td><span class="status status-partial">Частично.</span> Хорошо работает после выбора языков или непосредственно в поддерживаемых приложениях Apple.</td>
+<td><span class="status status-partial">Частично.</span> Поддерживается в Phone, FaceTime, Messages и при использовании AirPods, но не работает как универсальный фоновый переводчик.</td>
+<td><span class="status status-no">Нет.</span> Не поддерживает универсальный захват звука из произвольных сторонних приложений.</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-microsoft-translator.png"/>Microsoft Translator</div></td>
+<td>Бесплатное приложение для обычных пользователей.</td>
+<td>iOS, Android и веб-сервис для разговоров.</td>
+<td>Более 100 языков согласно описанию приложения; поддержка зависит от типа перевода — текста, речи, изображений или диалогов.</td>
+<td><span class="status status-partial">Стандартный уровень.</span> Надёжный перевод в организованных сеансах общения, но потребительский сценарий с ИИ менее гибок для пассивного прослушивания.</td>
+<td><span class="status status-partial">Частично.</span> Хорошо подходит для организованных групповых сеансов, но не работает как пассивный слушатель с ведением заметок во всех приложениях.</td>
+<td><span class="status status-yes">Да.</span> В групповых разговорах доступны расшифровки и субтитры.</td>
+<td><span class="status status-yes">Да.</span> В групповых разговорах доступны расшифровки и инструменты навигации.</td>
+<td><span class="status status-partial">Частично.</span> Участники разделяются, если каждый подключается к организованному разговору со своего устройства.</td>
+<td><span class="status status-no">Нет.</span> Приложение позволяет проводить сеансы перевода, но не является универсальным мессенджером или приложением для голосового общения.</td>
+<td><span class="status status-yes">Да.</span> Общение с нескольких устройств позволяет создавать многоязычные групповые беседы.</td>
+<td><span class="status status-partial">Частично.</span> Участники выбирают свой язык, а комментарии переводятся на язык каждого пользователя.</td>
+<td><span class="status status-no">Нет.</span> Приложение не предназначено для непрерывного перевода через микрофон в фоновом режиме.</td>
+<td><span class="status status-no">Нет.</span> Согласно информации Microsoft, внешние источники аудио и файлы не поддерживаются.</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-papago.jpg"/>Papago</div></td>
+<td>Бесплатное потребительское приложение; API NAVER Cloud Papago платные и предназначены для коммерческого использования.</td>
+<td>iOS, Android и Web.</td>
+<td>13 основных языков текстового перевода согласно документации NAVER Cloud; приложение и функции определения языка поддерживают разное количество языков.</td>
+<td><span class="status status-partial">Стандартный.</span> Практичный перевод с акцентом на корейский язык, но возможности ИИ для общения в реальном времени более ограничены.</td>
+<td><span class="status status-no">Нет.</span> Перевод диалогов не реализован в формате постоянного блокнота с расшифровками.</td>
+<td><span class="status status-no">Нет.</span> Голосовой вывод и перевод диалогов доступны, но рабочего процесса с субтитрами и расшифровкой в реальном времени нет.</td>
+<td><span class="status status-partial">Частично.</span> Режим диалога один на один работает поочерёдно.</td>
+<td><span class="status status-no">Нет.</span> Приложение не предназначено для определения говорящих в режиме реального времени при участии нескольких человек.</td>
+<td><span class="status status-no">Нет.</span> Это не мессенджер и не приложение для голосового общения.</td>
+<td><span class="status status-no">Нет.</span> Лучше всего подходит для путешествий и сценариев общения на двух языках с акцентом на корейский.</td>
+<td><span class="status status-partial">Частично.</span> Автоматическое определение языка доступно для текста, но широких возможностей автоматического переключения языка в зависимости от говорящего нет.</td>
+<td><span class="status status-no">Нет.</span> В основном используется в активном режиме, когда приложение открыто на экране.</td>
+<td><span class="status status-no">Нет.</span> Общего механизма захвата аудио из внешних приложений нет.</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-deepl.png"/>DeepL</div></td>
+<td>Бесплатный тариф; планы Pro, API и Voice платные, условия зависят от региона и выбранного тарифа.</td>
+<td>iOS, Android, Web, настольные приложения и расширения для браузеров.</td>
+<td>30 основных языков Translator и дополнительные языки нового поколения; поддержка языков в Voice более ограничена.</td>
+<td><span class="status status-yes">Хорошо.</span> Высокое качество перевода письменного контента и специализированные продукты Voice для встреч.</td>
+<td><span class="status status-partial">Частично.</span> DeepL Voice может сопровождать встречи, но это отдельный продукт и сценарий использования.</td>
+<td><span class="status status-partial">Частично.</span> DeepL Voice предоставляет переведённые субтитры для встреч и разговоров.</td>
+<td><span class="status status-partial">Частично.</span> DeepL Voice поддерживает субтитры для встреч, но основной Translator не предоставляет ленту переписки в формате мессенджера.</td>
+<td><span class="status status-partial">Частично.</span> Продукты для встреч ориентированы на отдельные сессии с участием говорящих; мобильный Translator не является приложением для определения говорящих в реальном времени.</td>
+<td><span class="status status-no">Нет.</span> DeepL не является мессенджером или приложением для голосового общения.</td>
+<td><span class="status status-partial">Частично.</span> Доступно в продуктах для встреч и разговоров, но не в стандартном сценарии использования мобильного переводчика.</td>
+<td><span class="status status-partial">Частично.</span> Надёжное определение языка текста; возможности перевода речи в реальном времени зависят от настройки DeepL Voice.</td>
+<td><span class="status status-no">Нет.</span> Это не универсальный фоновый переводчик для мобильных устройств.</td>
+<td><span class="status status-no">Нет.</span> Не предназначен для захвата произвольного аудио из сторонних приложений на телефоне.</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-felo.jpg"/>Felo Translator</div></td>
+<td>Около $2 в час; согласно открытым тарифам на сайте, 120 минут стоят $3.90.</td>
+<td>iOS и Android, а также веб-страницы для управления аккаунтом и тарифами.</td>
+<td>15 языков голосового перевода на официальной странице продукта.</td>
+<td><span class="status status-partial">Стандартный уровень.</span> Полноценный ИИ для голосового перевода в реальном времени, но публично заявленная поддержка языков и сценариев использования более ограничена.</td>
+<td><span class="status status-partial">Частично.</span> Предназначен для записи, транскрибации и перевода в реальном времени с сохранением истории, но не для блокнотов в формате комнат.</td>
+<td><span class="status status-yes">Да.</span> Обеспечивает перевод речи в текст и отображение субтитров в реальном времени прямо во время разговора.</td>
+<td><span class="status status-yes">Да.</span> Результат распознавания речи разделяется на отдельные реплики по предложениям.</td>
+<td><span class="status status-no">Нет.</span> В публичных материалах основной акцент сделан на транскрибации и переводе, а не на идентификации говорящих.</td>
+<td><span class="status status-no">Нет.</span> Это не мессенджер и не приложение для голосовых чатов.</td>
+<td><span class="status status-partial">Частично.</span> Голосовой перевод поддерживает несколько языков, но не обеспечивает одновременную работу в многоязычных комнатах с тремя и более участниками.</td>
+<td><span class="status status-yes">Да.</span> Согласно описанию приложения, оно автоматически определяет языки, на которых говорят оба собеседника.</td>
+<td><span class="status status-no">Нет.</span> Лучше рассматривать его как инструмент для записи и перевода при открытом приложении.</td>
+<td><span class="status status-no">Нет.</span> Не позиционируется как инструмент для захвата аудио из сторонних приложений.</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-transync.jpg"/>Transync</div></td>
+<td>Бесплатный пробный период на 40 минут; Personal Premium стоит $8.99 в месяц и включает 10 часов, а дополнительные пакеты времени доступны от $0.70 в час.</td>
+<td>iOS, Android, Web, Windows и macOS.</td>
+<td>Более 60 языков перевода.</td>
+<td><span class="status status-yes">Хорошо.</span> Мощный ИИ для рабочих встреч: поддерживает субтитры в реальном времени, заметки и распознавание языков.</td>
+<td><span class="status status-yes">Да.</span> Разработан для непрерывного перевода встреч и устной речи в реальном времени.</td>
+<td><span class="status status-yes">Да.</span> Предоставляет переведённые субтитры в реальном времени и автоматически формирует протоколы встреч с помощью ИИ.</td>
+<td><span class="status status-no">Нет.</span> Отображает текущую расшифровку речи и субтитры, но не разделяет сообщения на реплики, как в мессенджере.</td>
+<td><span class="status status-no">Нет.</span> В публичной документации говорится об автоматическом определении языка, а не об идентификации говорящих.</td>
+<td><span class="status status-no">Нет.</span> Интегрируется с инструментами для проведения встреч, но не является самостоятельным мессенджером или приложением для голосовых чатов.</td>
+<td><span class="status status-yes">Да.</span> Разработан для многоязычных встреч и синхронного перевода в реальном времени.</td>
+<td><span class="status status-yes">Да.</span> Автоматически определяет язык говорящего, без необходимости переключать его вручную.</td>
+<td><span class="status status-partial">Частично.</span> Может работать параллельно с приложениями для встреч на компьютере, но не является универсальным фоновым переводчиком для мобильных устройств.</td>
+<td><span class="status status-no">Нет.</span> Интеграции с сервисами для встреч есть, но захват аудио из сторонних приложений не поддерживается.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="table-note">При сравнении голосовых продуктов показатель «поддерживаемые языки» менее информативен, чем охват конкретных функций. Переводчик может поддерживать множество языков для текстового перевода, но лишь ограниченный набор для субтитров в реальном времени, режима диалога или транскрибации.</p>
+</div>
+</section>
+<section class="article-section">
+<div class="article-inner">
+<div class="content-grid">
+<div class="prose">
+<h2>Что именно сравнивается в этом обзоре</h2>
+<p>Переводчик туристических фраз, переводчик документов, сервис субтитров для встреч и голосовой переводчик для общения решают разные задачи. При живом общении сложность заключается не только в качестве перевода. Приложение должно непрерывно слушать, учитывать контекст, разделять реплики собеседников, распознавать смену языка и оставаться удобным в использовании, пока люди продолжают разговаривать.</p>
+<p>Именно поэтому первая часть начинается с таблицы. Если вам нужно перевести надпись или быстро задать вопрос во время путешествия, Google Translate, Apple Translate, Papago и DeepL могут отлично справиться с этой задачей. Но если вам нужна продолжительная многоязычная голосовая беседа, непрерывная расшифровка разговора или перевод одновременно с воспроизведением аудио в другом приложении, требования будут совсем другими.</p>
+<div class="callout">
+<p>HashChat изначально создавался с упором на непрерывный перевод устной речи. Его главное отличие — формат общения: живая расшифровка разговора, которая больше напоминает полноценную комнату для общения, чем обычное поле для перевода отдельных фраз.</p>
+</div>
+<h2>Чем отличается HashChat (ранее Mingle)</h2>
+<p>HashChat рассматривает перевод как дополнительный уровень живого общения. Приложение может непрерывно слушать во время длительных разговоров, разделять речь на отдельные реплики, переводить на несколько выбранных языков и продолжать работу, даже когда приложение переходит в фоновый режим. Это особенно важно, когда пользователь общается в голосовой комнате HelloTalk, участвует в звонке Discord через громкую связь, разговаривает с кем-то в хостеле или посещает многоязычную встречу, где темы разговора постоянно меняются.</p>
+<p>По своей концепции продукт ближе к голосовому мессенджеру со встроенным переводчиком, чем к словарю или переводчику отдельных фраз. Пользователи хотят не просто узнать, «что означает эта фраза». Они хотят поддерживать живое общение и выстраивать отношения, не прерывая разговор каждые несколько секунд.</p>
+<h2>В чём сильны другие переводчики</h2>
+<p>Google Translate предлагает исключительно широкий набор возможностей: перевод текста, перевод с помощью камеры, офлайн-пакеты, режим диалога и расшифровку речи — всё в одном привычном приложении. Microsoft Translator отлично подходит для организованных групповых бесед: участники могут подключаться со своих устройств и читать сообщения на собственном языке. Apple Translate особенно удобен для тех, кто уже пользуется экосистемой Apple, включая Apple Intelligence, Phone, FaceTime, Messages и AirPods.</p>
+<p>Papago по-прежнему особенно удобен для перевода с корейского, японского и китайского языков, а также в поездках по Азии. DeepL — отличный выбор для качественного письменного перевода, работы с документами, терминологией и бизнес-процессами. Продукты DeepL Voice предназначены для перевода на встречах, однако это отдельный сценарий использования, не связанный с повседневным мобильным переводом.</p>
+<h2>Как выбрать подходящий переводчик</h2>
+<ul>
+<li>Выбирайте HashChat, если вам нужен непрерывный многоязычный перевод во время общения или одновременно с использованием другого голосового приложения.</li>
+<li>Выбирайте Google Translate, если вам нужен универсальный переводчик для самых разных ситуаций во время путешествий.</li>
+<li>Выбирайте Microsoft Translator, если все участники могут подключиться к одной общей многоязычной сессии.</li>
+<li>Выбирайте Apple Translate, если все участники используют поддерживаемые функции Apple Intelligence, Phone, FaceTime, Messages или AirPods.</li>
+<li>Выбирайте Papago, если основная задача — перевод с корейского языка или перевод фраз во время путешествий.</li>
+<li>Выбирайте DeepL, если качество письменного перевода, работа с документами или бизнес-терминология важнее фонового захвата аудио на мобильном устройстве.</li>
+</ul>
+</div>
+<aside aria-label="Article notes" class="aside">
+<div class="aside-box">
+<h3>Лучше всего подходит для HashChat</h3>
+<p>Непрерывные многоязычные разговоры, голосовые комнаты, субтитры в реальном времени, текущие текстовые расшифровки и звук из других приложений, воспроизводимый через динамик.</p>
+</div>
+<div class="aside-box">
+<h3>Важный нюанс</h3>
+<p>Публичные приложения-переводчики часто обновляются. Прежде чем совершать покупку, внедрять решение в компании или принимать решение о доступности, проверьте ссылки на источники ниже.</p>
+</div>
+</aside>
+</div>
+</div>
+</section>
+<section aria-labelledby="recommendations-title" class="article-section article-section--deep">
+<div class="article-inner">
+<div class="section-heading">
+<p class="eyebrow">Практические рекомендации</p>
+<h2 id="recommendations-title">Выбирайте переводчик с учётом формата общения.</h2>
+<p>Лучший переводчик — обычно тот, чей интерфейс подходит для конкретной ситуации, а не тот, у которого просто больше всего языков в списке.</p>
+</div>
+<div class="recommendation-grid"><div class="recommendation">
+<strong>Длительные голосовые комнаты</strong>
+<span>Используйте HashChat, если вам нужны непрерывные субтитры, автоматическое переключение языков и текстовая расшифровка в формате голосовой комнаты.</span>
+</div>
+<div class="recommendation">
+<strong>Лекции и мероприятия с ведущим</strong>
+<span>Используйте Microsoft Translator, если каждый участник может подключиться к общей сессии разговора со своего устройства.</span>
+</div>
+<div class="recommendation">
+<strong>Для путешествий</strong>
+<span>Используйте Google Translate или Papago для перевода вывесок, меню, коротких фраз и текста с помощью камеры непосредственно в приложении.</span>
+</div>
+<div class="recommendation">
+<strong>Звонки в экосистеме Apple</strong>
+<span>Используйте Apple Live Translation, если звонок или переписка уже происходят в поддерживаемом приложении Apple и на поддерживаемом языке.</span>
+</div>
+<div class="recommendation">
+<strong>Деловая переписка</strong>
+<span>Используйте DeepL, если качество письменного перевода, терминология и работа с документами важнее перевода аудио в реальном времени на мобильном устройстве.</span>
+</div>
+<div class="recommendation">
+<strong>Звук из сторонних приложений</strong>
+<span>Используйте HashChat, если звук воспроизводится через динамик из другого приложения, а вам нужны субтитры и перевод в реальном времени.</span>
+</div></div>
+</div>
+</section>
+<section aria-labelledby="sources-title" class="article-section">
+<div class="article-inner">
+<div class="section-heading">
+<p class="eyebrow">Источники</p>
+<h2 id="sources-title">Открытые источники, использованные при подготовке этой статьи.</h2>
+<p>Эти ссылки использовались для проверки общедоступной информации о ценах, доступности на платформах, поддерживаемых языках и описаниях функций.</p>
+</div>
+<ul class="sources">
+<li><a href="https://apps.apple.com/us/app/mingle-global-hangout/id6759795134">HashChat: Global Hangout в App Store</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn">HashChat: Global Hangout в Google Play</a></li>
+<li><a href="https://felo.me/en/translator">Страница продукта Felo Translator</a></li>
+<li><a href="https://felo.me/download">Страница загрузки Felo Translator</a></li>
+<li><a href="https://felo.me/pricing">Цены на Felo Translator</a></li>
+<li><a href="https://apps.apple.com/us/app/felo-translator/id6447256759">Felo Translator в App Store</a></li>
+<li><a href="https://www.transyncai.com/pricing/">Цены на Transync AI</a></li>
+<li><a href="https://translate.google.com/about/">Страница продукта Google Translate</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=com.google.android.apps.translate&amp;hl=en_US">Google Translate в Google Play</a></li>
+<li><a href="https://www.apple.com/ios/feature-availability/">Доступность функций Apple iOS и iPadOS</a></li>
+<li><a href="https://support.apple.com/guide/iphone/translate-messages-calls-and-conversations-iph22b72984d/26/ios/26">Руководство по Apple Live Translation</a></li>
+<li><a href="https://www.microsoft.com/en-us/translator/apps/">Страница приложений Microsoft Translator</a></li>
+<li><a href="https://apps.apple.com/us/app/microsoft-translator/id1018949559">Microsoft Translator в App Store</a></li>
+<li><a href="https://www.microsoft.com/en-us/translator/help/multi-device-conversation/">Часто задаваемые вопросы о многоустройственных беседах в Microsoft Translator</a></li>
+<li><a href="https://api.ncloud-docs.com/docs/en/ai-naver-papagonmt-translation">Документация NAVER Cloud по переводу текста с помощью Papago</a></li>
+<li><a href="https://apps.apple.com/us/app/naver-papago-ai-translator/id1147874819">Naver Papago в App Store</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=com.naver.labs.translator">Naver Papago в Google Play</a></li>
+<li><a href="https://www.deepl.com/en/translator">Страница продукта DeepL Translator</a></li>
+<li><a href="https://support.deepl.com/hc/en-us/articles/360019925219-DeepL-Translator-languages">Языки, поддерживаемые DeepL Translator</a></li>
+<li><a href="https://support.deepl.com/hc/en-us/articles/26625846174364-DeepL-Voice-languages">Языки, поддерживаемые DeepL Voice</a></li>
+</ul>
+<div class="reference-cta"><a class="reference-button" href="https://hashchat.minglelabs.app/landing/">Посмотреть главную страницу HashChat</a></div>
+</div>
+</section>
+</article>
+</main>
+<footer class="footer">
+<div class="footer-inner">
+<span>© Mingle Labs. Ранее HashChat назывался Mingle.</span>
+<div class="footer-links">
+<a href="/blogs?lang=ru">Блог</a>
+<a href="/privacy-policy">Конфиденциальность</a>
+<a href="/terms-of-use">Условия использования</a>
+<a href="/legal">Legal</a>
+</div>
+</div>
+</footer>
+<script>
+      (function () {
+        var select = document.getElementById("blog-language");
+        if (!select) return;
+        select.addEventListener("change", function () {
+          var url = new URL(window.location.href);
+          if (select.value === "en") url.searchParams.delete("lang");
+          else url.searchParams.set("lang", select.value);
+          window.location.href = url.toString();
+        });
+      })();
+    </script>
+</body>
+</html>

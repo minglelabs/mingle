@@ -1,0 +1,99 @@
+{
+ "ui": {
+  "nav": {
+   "how": "Cómo funciona",
+   "features": "Características",
+   "translate": "Traducción",
+   "uses": "Casos de uso",
+   "blog": "Blog",
+   "legal": "Legal"
+  },
+  "footerCopy": "© Mingle Labs.",
+  "footerRenamed": "HashChat se llamaba anteriormente Mingle.",
+  "privacy": "Privacidad",
+  "terms": "Términos y condiciones",
+  "blogEyebrow": "Blog de HashChat",
+  "blogTitle": "Reflexiones sobre la traducción con IA en tiempo real.",
+  "blogLede": "Ideas sobre productos, comparativas, charlas y experiencias prácticas para quienes crean conversaciones entre distintos idiomas. HashChat se llamaba anteriormente Mingle.",
+  "latestEyebrow": "Lo más reciente",
+  "latestTitle": "Charlas, presentaciones e historias de producto.",
+  "latestLede": "Presentaciones de nuestras charlas y propuestas, además de la historia de cómo Mingle se convirtió en HashChat y una comparativa en directo de traductores con IA.",
+  "indexMetaTitle": "Blog de HashChat - Traducción con IA para conversaciones en directo",
+  "indexMetaDescription": "Descubre las reflexiones de HashChat (antes Mingle) sobre la traducción con IA, los subtítulos de voz en tiempo real, los productos para conversaciones multilingües y nuestras charlas.",
+  "by": "Por",
+  "fullscreen": "Ver a pantalla completa",
+  "keyHint": "Haz clic en las diapositivas y, después, utiliza las teclas de dirección, la rueda del ratón o desliza el dedo. Añade #número al enlace de pantalla completa para ir directamente a una diapositiva.",
+  "readDeck": "Ver las diapositivas",
+  "activate": "Haz clic para utilizar las diapositivas",
+  "deckLabel": "Diapositivas",
+  "backToBlog": "Todas las publicaciones",
+  "deckLanguageNote": "Las diapositivas originales están en inglés."
+ },
+ "author": "Hyeongkeol Nam, Mingle Labs",
+ "decks": {
+  "ai-wrapper-business": {
+   "kind": "Charla",
+   "dateLabel": "5 de noviembre de 2026",
+   "title": "Explorando oportunidades de negocio para el software basado en IA",
+   "description": "Casos prácticos de empresas de software basado en IA y una estrategia para lo que viene.",
+   "body": [
+    "Diapositivas de una charla sobre software basado en IA: productos que toman una experiencia de usuario ya existente y la automatizan mediante inteligencia artificial. Las 94 diapositivas analizan la programación por intuición (vibe coding) y los agentes, los chats con personajes, la toma de notas, el seguimiento de dietas con IA, los agregadores, las herramientas de apoyo al estudio y mucho más. También examinan qué productos basados en IA lograron resistir la competencia de las grandes tecnológicas y cuáles acabaron desapareciendo.",
+    "La última parte identifica las oportunidades que merece la pena aprovechar: cinco ideas, las ventajas competitivas que puede construir una empresa de software y cómo un producto basado en IA puede llegar a ser mucho más que una simple capa sobre otra tecnología."
+   ]
+  },
+  "ai-wrapper-business-surfers-3rd": {
+   "kind": "Charla",
+   "dateLabel": "12 de agosto de 2026",
+   "title": "El negocio del software basado en IA: edición Surfers Cohort 3",
+   "description": "La primera versión, más extensa, de nuestra charla sobre software basado en IA, presentada ante Surfers Cohort 3.",
+   "body": [
+    "La primera versión de nuestra charla sobre software basado en IA, presentada ante Surfers Cohort 3. Sus 165 diapositivas profundizan en cada ámbito: programación por intuición (vibe coding), chats con personajes y sus tres etapas, toma de notas, seguimiento de dietas con IA, agregadores como OpenRouter y herramientas de estudio basadas en IA.",
+    "La presentación se creó originalmente en coreano y aquí se muestra en inglés de forma predeterminada. Cambia al coreano para consultar la versión original."
+   ]
+  },
+  "hashchat-pitch-deck": {
+   "kind": "Presentación para inversores",
+   "dateLabel": "Actualizada el 1 de septiembre de 2026",
+   "title": "Presentación de HashChat: un mensajero de voz sin barreras lingüísticas",
+   "description": "Por qué estamos creando HashChat, a quién va dirigido y cómo un intérprete en directo evoluciona hasta convertirse en una red social nativa de IA.",
+   "body": [
+    "Nuestra presentación completa para inversores. Parte de un problema sencillo: muchas personas quieren hacer amigos en otros países, pero el idioma se interpone, y los traductores actuales nunca se diseñaron pensando en las conversaciones sociales.",
+    "Incluye las primeras reacciones de usuarios en HelloTalk, nuestra estrategia en tres etapas —desde un traductor individual en directo hasta un mensajero de voz y, finalmente, una plataforma social— y los sectores objetivo en el apéndice."
+   ]
+  },
+  "hashchat-pitch-deck-short": {
+   "kind": "Presentación para inversores",
+   "dateLabel": "Actualizada el 1 de septiembre de 2026",
+   "title": "Presentación de HashChat: versión resumida",
+   "description": "El problema del huevo y la gallina en el intercambio de idiomas y cómo la interpretación en directo elimina uno de sus obstáculos.",
+   "body": [
+    "Una versión más breve de nuestra presentación para inversores. Las aplicaciones de intercambio de idiomas están atrapadas en un problema del huevo y la gallina: quieres hacer amigos en otros países y, al mismo tiempo, aprender su idioma. HashChat elimina uno de esos obstáculos mediante la interpretación en directo, para que puedas conversar sin necesidad de compartir un idioma.",
+    "También incluye la demanda que detectamos de subtítulos adicionales e interpretación presencial, así como nuestro primer objetivo: conseguir que los usuarios de K-Friends se pasen a HashChat."
+   ]
+  },
+  "virtually-deck": {
+   "kind": "Presentación para inversores",
+   "dateLabel": "13 de septiembre de 2026",
+   "title": "Virtually: retransmisiones en directo de VTubers impulsadas por IA generativa",
+   "description": "De una sola imagen a una retransmisión interactiva en directo.",
+   "body": [
+    "La presentación de Virtually, nuestra herramienta de IA generativa para VTubers. Muestra cómo una sola imagen de un personaje puede convertirse en una retransmisión en directo e interactiva, y qué lugar ocupa Virtually dentro del ecosistema VTuber.",
+    "La presentación también está disponible en japonés y chino. Puedes cambiar de idioma mediante los botones situados en la esquina inferior izquierda de las diapositivas."
+   ]
+  }
+ },
+ "articles": {
+  "hashchat-social-network": {
+   "meta": "Historia del producto - 2 de noviembre de 2026",
+   "title": "HashChat: la red social sin barreras lingüísticas",
+   "description": "Cómo Mingle se convirtió en HashChat: un feed traducido, perfiles que muestran a quién quieres conocer y chats con un intérprete en directo integrado. Una comparativa con LINE, WeChat, WhatsApp, HelloTalk y otras plataformas.",
+   "link": "Leer la historia"
+  },
+  "ai-translators-comparison": {
+   "meta": "Comparativa - Actualizada el 20 de abril de 2026",
+   "title": "Comparativa de traductores con IA",
+   "description": "Una guía práctica, organizada en tablas, que compara precios, compatibilidad con plataformas, idiomas disponibles, subtítulos en directo, transcripciones, cambio automático de idioma, traducción en segundo plano y captura de audio de aplicaciones externas.",
+   "link": "Leer la comparativa"
+  }
+ }
+}

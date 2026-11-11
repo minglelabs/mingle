@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>Blog HashChat - Dịch thuật AI cho các cuộc trò chuyện trực tiếp</title>
+    <meta name="description" content="Khám phá những chia sẻ của HashChat (trước đây là Mingle) về dịch thuật AI, phụ đề giọng nói theo thời gian thực, sản phẩm trò chuyện đa ngôn ngữ và các buổi thuyết trình của chúng tôi." />
+    <link rel="canonical" href="https://hashchat.minglelabs.app/blogs?lang=vi" />
+    <link rel="alternate" hreflang="en" href="https://hashchat.minglelabs.app/blogs" />
+    <link rel="alternate" hreflang="ko" href="https://hashchat.minglelabs.app/blogs?lang=ko" />
+    <link rel="alternate" hreflang="ja" href="https://hashchat.minglelabs.app/blogs?lang=ja" />
+    <link rel="alternate" hreflang="zh-cn" href="https://hashchat.minglelabs.app/blogs?lang=zh-cn" />
+    <link rel="alternate" hreflang="zh-tw" href="https://hashchat.minglelabs.app/blogs?lang=zh-tw" />
+    <link rel="alternate" hreflang="fr" href="https://hashchat.minglelabs.app/blogs?lang=fr" />
+    <link rel="alternate" hreflang="de" href="https://hashchat.minglelabs.app/blogs?lang=de" />
+    <link rel="alternate" hreflang="es" href="https://hashchat.minglelabs.app/blogs?lang=es" />
+    <link rel="alternate" hreflang="pt" href="https://hashchat.minglelabs.app/blogs?lang=pt" />
+    <link rel="alternate" hreflang="it" href="https://hashchat.minglelabs.app/blogs?lang=it" />
+    <link rel="alternate" hreflang="ru" href="https://hashchat.minglelabs.app/blogs?lang=ru" />
+    <link rel="alternate" hreflang="ar" href="https://hashchat.minglelabs.app/blogs?lang=ar" />
+    <link rel="alternate" hreflang="hi" href="https://hashchat.minglelabs.app/blogs?lang=hi" />
+    <link rel="alternate" hreflang="th" href="https://hashchat.minglelabs.app/blogs?lang=th" />
+    <link rel="alternate" hreflang="vi" href="https://hashchat.minglelabs.app/blogs?lang=vi" />
+    <link rel="alternate" hreflang="x-default" href="https://hashchat.minglelabs.app/blogs" />
+    <meta property="og:site_name" content="HashChat" />
+    <meta property="og:locale" content="vi_VN" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://hashchat.minglelabs.app/blogs?lang=vi" />
+    <meta property="og:title" content="Blog HashChat - Dịch thuật AI cho các cuộc trò chuyện trực tiếp" />
+    <meta property="og:description" content="Khám phá những chia sẻ của HashChat (trước đây là Mingle) về dịch thuật AI, phụ đề giọng nói theo thời gian thực, sản phẩm trò chuyện đa ngôn ngữ và các buổi thuyết trình của chúng tôi." />
+    <meta property="og:image" content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Blog HashChat - Dịch thuật AI cho các cuộc trò chuyện trực tiếp" />
+    <meta name="twitter:description" content="Khám phá những chia sẻ của HashChat (trước đây là Mingle) về dịch thuật AI, phụ đề giọng nói theo thời gian thực, sản phẩm trò chuyện đa ngôn ngữ và các buổi thuyết trình của chúng tôi." />
+    <meta name="twitter:image" content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" />
+    <link rel="icon" href="/assets/site/hashchat-icon.png" />
+    <link rel="stylesheet" href="/assets/blog.css" />
+    <link rel="stylesheet" href="/assets/site-header.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="HashChat site navigation">
+        <a class="brand" href="/?lang=vi" aria-label="HashChat home">
+          <img src="/assets/site/hashchat-icon.png" alt="" />
+          <span>HashChat</span>
+        </a>
+        <div class="nav-actions">
+          <div class="nav-links">
+            <a href="/?lang=vi#how">Cách thức hoạt động</a>
+            <a href="/?lang=vi#features">Tính năng</a>
+            <a href="/?lang=vi#translate">Dịch thuật</a>
+            <a href="/?lang=vi#uses">Trường hợp sử dụng</a>
+            <a class="nav-legal is-current" aria-current="page" href="/blogs?lang=vi">Blog</a>
+            <a class="nav-legal" href="/legal?lang=vi">Legal</a>
+          </div>
+          <label class="language-picker">
+            <span aria-hidden="true">🌐</span>
+            <select id="blog-language" aria-label="Language">
+              <option value="en">🇺🇸 English</option>
+              <option value="ko">🇰🇷 한국어</option>
+              <option value="ja">🇯🇵 日本語</option>
+              <option value="zh-cn">🇨🇳 简体中文</option>
+              <option value="zh-tw">🇹🇼 繁體中文</option>
+              <option value="fr">🇫🇷 Français</option>
+              <option value="de">🇩🇪 Deutsch</option>
+              <option value="es">🇪🇸 Español</option>
+              <option value="pt">🇧🇷 Português</option>
+              <option value="it">🇮🇹 Italiano</option>
+              <option value="ru">🇷🇺 Русский</option>
+              <option value="ar">🇸🇦 العربية</option>
+              <option value="hi">🇮🇳 हिन्दी</option>
+              <option value="th">🇹🇭 ไทย</option>
+              <option value="vi" selected>🇻🇳 Tiếng Việt</option>
+            </select>
+          </label>
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="blog-title">
+        <div class="section-inner">
+          <p class="eyebrow">Blog HashChat</p>
+          <h1 id="blog-title">Góc nhìn về dịch thuật AI theo thời gian thực.</h1>
+          <p>Những suy nghĩ về sản phẩm, bài so sánh, bài thuyết trình và ghi chép thực tế dành cho những người xây dựng trải nghiệm trò chuyện xuyên ngôn ngữ. HashChat trước đây có tên là Mingle.</p>
+        </div>
+      </section>
+      <section class="section" aria-labelledby="latest-posts">
+        <div class="section-inner">
+          <div class="section-heading">
+            <p class="eyebrow">Mới nhất</p>
+            <h2 id="latest-posts">Bài thuyết trình, slide và câu chuyện về sản phẩm.</h2>
+            <p>Các bộ slide từ những buổi thuyết trình và gọi vốn của chúng tôi, cùng câu chuyện Mingle trở thành HashChat và bài so sánh trực tiếp các công cụ dịch AI.</p>
+          </div>
+          <div class="post-list">
+            <a class="post-card" href="/blogs/ai-wrapper-business?lang=vi">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/presentations/assets/ai-beyond-wrapper-og-en.png?v=3" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">Bài thuyết trình - 5 tháng 11, 2026</p>
+                <h3>Khám phá cơ hội kinh doanh trong lĩnh vực phần mềm AI Wrapper</h3>
+                <p>Các nghiên cứu điển hình về doanh nghiệp AI Wrapper và chiến lược cho những bước tiếp theo.</p>
+                <span class="post-link">Xem slide</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-social-network?lang=vi">
+              <div class="post-visual" aria-hidden="true">
+                <div class="logo-cloud">
+                  <span><img src="/assets/logo-mingle.png" alt="" /></span>
+                  <span><img src="/assets/logo-line.png" alt="" /></span>
+                  <span><img src="/assets/logo-wechat.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-hellotalk.png" alt="" /></span>
+                  <span><img src="/assets/logo-instagram.png" alt="" /></span>
+                  <span><img src="/assets/logo-discord.png" alt="" /></span>
+                </div>
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">Câu chuyện sản phẩm - 2 tháng 11, 2026</p>
+                <h3>HashChat: Mạng xã hội không còn rào cản ngôn ngữ</h3>
+                <p>Hành trình Mingle trở thành HashChat: bảng tin được dịch tự động, hồ sơ cá nhân giúp bạn tìm đúng người muốn kết nối và tính năng trò chuyện tích hợp phiên dịch trực tiếp. So sánh với LINE, WeChat, WhatsApp, HelloTalk và nhiều nền tảng khác.</p>
+                <span class="post-link">Đọc bài viết</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/virtually-deck?lang=vi">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/virtually-vtuber-cover.png" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">Slide gọi vốn - 13 tháng 9, 2026</p>
+                <h3>Virtually: Phát trực tiếp VTuber với sức mạnh của AI tạo sinh</h3>
+                <p>Biến một hình ảnh đơn lẻ thành buổi phát sóng tương tác trực tiếp.</p>
+                <span class="post-link">Xem slide</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-pitch-deck-short?lang=vi">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/og-image.png?v=20260416-2" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">Slide gọi vốn - Cập nhật ngày 1 tháng 9, 2026</p>
+                <h3>Slide gọi vốn HashChat: Bản rút gọn</h3>
+                <p>Bài toán con gà và quả trứng của việc trao đổi ngôn ngữ và cách phiên dịch trực tiếp giải quyết một nửa vấn đề.</p>
+                <span class="post-link">Xem slide</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-pitch-deck?lang=vi">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/og-image.png?v=20260416-2" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">Slide gọi vốn - Cập nhật ngày 1 tháng 9, 2026</p>
+                <h3>Slide gọi vốn HashChat: Ứng dụng nhắn tin bằng giọng nói không còn rào cản ngôn ngữ</h3>
+                <p>Lý do chúng tôi xây dựng HashChat, đối tượng người dùng mục tiêu và cách một công cụ phiên dịch trực tiếp phát triển thành mạng xã hội được xây dựng trên nền tảng AI.</p>
+                <span class="post-link">Xem slide</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/ai-wrapper-business-surfers-3rd?lang=vi">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/presentations/assets/surfers-logo.png" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">Bài thuyết trình - 12 tháng 8, 2026</p>
+                <h3>Kinh doanh với AI Wrapper: Phiên bản Surfers Cohort 3</h3>
+                <p>Phiên bản đầu tiên, dài hơn của bài thuyết trình về AI Wrapper, được trình bày tại Surfers Cohort 3.</p>
+                <span class="post-link">Xem slide</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/ai-translators-comparison?lang=vi">
+              <div class="post-visual" aria-hidden="true">
+                <div class="logo-cloud">
+                  <span><img src="/assets/logo-mingle.png" alt="" /></span>
+                  <span><img src="/assets/logo-google-translate.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-apple-translate.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-microsoft-translator.png" alt="" /></span>
+                  <span><img src="/assets/logo-papago.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-deepl.png" alt="" /></span>
+                </div>
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">Bài so sánh - Cập nhật ngày 20 tháng 4, 2026</p>
+                <h3>So sánh các công cụ dịch AI</h3>
+                <p>Hướng dẫn thực tế với bảng so sánh chi tiết về giá cả, nền tảng hỗ trợ, phạm vi ngôn ngữ, phụ đề trực tiếp, bản ghi hội thoại, chuyển đổi ngôn ngữ tự động, dịch thuật nền và khả năng thu âm thanh từ ứng dụng bên ngoài.</p>
+                <span class="post-link">Đọc bài so sánh</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="footer">
+      <div class="footer-inner">
+        <span>© Mingle Labs. HashChat trước đây có tên là Mingle.</span>
+        <div class="footer-links">
+          <a href="/blogs?lang=vi">Blog</a>
+          <a href="/privacy-policy">Quyền riêng tư</a>
+          <a href="/terms-of-use">Điều khoản</a>
+          <a href="/legal">Legal</a>
+        </div>
+      </div>
+    </footer>
+    <script>
+      (function () {
+        var select = document.getElementById("blog-language");
+        if (!select) return;
+        select.addEventListener("change", function () {
+          var url = new URL(window.location.href);
+          if (select.value === "en") url.searchParams.delete("lang");
+          else url.searchParams.set("lang", select.value);
+          window.location.href = url.toString();
+        });
+      })();
+    </script>
+  </body>
+</html>

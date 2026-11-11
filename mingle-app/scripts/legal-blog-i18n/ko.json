@@ -1,0 +1,98 @@
+{
+ "ui": {
+  "nav": {
+   "how": "사용법",
+   "features": "기능",
+   "translate": "통번역",
+   "uses": "활용",
+   "blog": "블로그",
+   "legal": "Legal"
+  },
+  "footerCopy": "© Mingle Labs.",
+  "footerRenamed": "HashChat의 이전 이름은 Mingle입니다.",
+  "privacy": "개인정보 처리방침",
+  "terms": "이용약관",
+  "blogEyebrow": "HashChat 블로그",
+  "blogTitle": "실시간 AI 통번역 이야기.",
+  "blogLede": "언어가 다른 사람들의 대화를 만드는 팀의 제품 생각, 비교 글, 발표 자료와 현장 기록입니다. HashChat의 이전 이름은 Mingle입니다.",
+  "latestEyebrow": "최신 글",
+  "latestTitle": "발표 자료와 제품 이야기.",
+  "latestLede": "발표와 피칭에 쓴 슬라이드, Mingle이 HashChat이 된 이야기, AI 번역기 비교 글을 모았습니다.",
+  "indexMetaTitle": "HashChat 블로그 - 실시간 대화를 위한 AI 통번역",
+  "indexMetaDescription": "HashChat(구 Mingle)의 AI 통번역, 실시간 음성 자막, 다국어 대화 제품에 관한 글과 발표 자료를 읽어보세요.",
+  "by": "작성",
+  "fullscreen": "전체 화면으로 보기",
+  "keyHint": "슬라이드를 클릭한 뒤 방향키·휠·스와이프로 넘기세요. 전체 화면 주소 끝에 #번호를 붙이면 해당 장으로 바로 갑니다.",
+  "readDeck": "슬라이드 보기",
+  "activate": "클릭해서 슬라이드 넘기기",
+  "deckLabel": "발표 자료",
+  "backToBlog": "전체 글",
+  "deckLanguageNote": ""
+ },
+ "author": "밍글랩스 남형걸",
+ "decks": {
+  "ai-wrapper-business": {
+   "kind": "발표",
+   "dateLabel": "2026년 11월 5일",
+   "title": "AI Wrapper SW 사업 기회 탐색",
+   "description": "AI 래퍼의 사례를 소개하고, 미래 전략을 제안합니다.",
+   "body": [
+    "이미 존재하던 유저 경험을 AI로 자동화하는 AI 래퍼 SW 산업을 살펴본 발표 자료입니다. 바이브 코딩과 에이전트, 캐릭터 챗, 노트테이킹, AI 식단 관리, 애그리게이터, 학습 도우미 등 94장에 걸쳐 어떤 래퍼가 빅테크의 쓰나미를 버텼고 어떤 곳이 쓸려 갔는지 정리했습니다.",
+    "마지막에는 진입해볼 만한 아이템 다섯 가지와 SW 사업이 가질 수 있는 해자, AI 래퍼가 래퍼로만 남지 않기 위한 전략을 다룹니다."
+   ]
+  },
+  "ai-wrapper-business-surfers-3rd": {
+   "kind": "발표",
+   "dateLabel": "2026년 8월 12일",
+   "title": "AI 래퍼 SW 산업 현황 살펴보기 (Surfers 3기)",
+   "description": "Surfers 3기에서 발표한 AI 래퍼 발표의 첫 번째, 확장판입니다.",
+   "body": [
+    "Surfers 3기에서 발표한 AI 래퍼 발표의 첫 버전입니다. 165장에 걸쳐 바이브 코딩, 캐릭터 챗과 세 단계의 변화, 노트테이킹, AI 식단 관리, OpenRouter 같은 애그리게이터, AI 학습 도우미를 더 자세히 다룹니다."
+   ]
+  },
+  "hashchat-pitch-deck": {
+   "kind": "피치덱",
+   "dateLabel": "2026년 9월 1일 업데이트",
+   "title": "HashChat 피치덱: 언어 장벽 없는 음성 메신저",
+   "description": "HashChat을 왜 만드는지, 누구를 위한 것인지, 실시간 통번역이 어떻게 AI 네이티브 SNS로 성장하는지 담았습니다.",
+   "body": [
+    "HashChat의 전체 피치덱입니다. 외국인과 친해지고 싶지만 언어 장벽을 넘기 힘들고, 기존 통번역 서비스는 소셜링에 쓰기 어렵다는 문제에서 출발합니다.",
+    "헬로톡 유저들의 초기 반응, 혼자 쓰는 실시간 번역기에서 음성 메신저와 소셜 플랫폼으로 가는 세 단계 전략, 부록의 타겟 버티컬까지 담았습니다."
+   ]
+  },
+  "hashchat-pitch-deck-short": {
+   "kind": "피치덱",
+   "dateLabel": "2026년 9월 1일 업데이트",
+   "title": "HashChat 피치덱 (요약본)",
+   "description": "언어교환 서비스의 닭과 달걀 문제, 그리고 실시간 통번역으로 그중 하나를 없애는 방법.",
+   "body": [
+    "HashChat 피치덱의 요약본입니다. 언어교환 서비스는 외국인 친구를 사귀고 싶은 마음과 외국어를 배우고 싶은 마음 사이의 닭과 달걀 문제에 갇혀 있습니다. HashChat은 실시간 통번역으로 그중 하나를 아예 해소해, 외국어를 못해도 대화가 통하게 만듭니다.",
+    "애드온 자막과 오프라인 통번역 수요, 그리고 첫 번째 목표인 K프렌즈 유저 흡수까지 담았습니다."
+   ]
+  },
+  "virtually-deck": {
+   "kind": "피치덱",
+   "dateLabel": "2026년 9월 13일",
+   "title": "Virtually: 버튜버 라이브를 AI로 쉽고 간단하게",
+   "description": "이미지 한 장으로 시작하는 인터랙티브 라이브 방송.",
+   "body": [
+    "생성형 AI로 버튜버 라이브를 쉽게 만드는 Virtually의 발표 자료입니다. 캐릭터 이미지 한 장이 어떻게 실시간 인터랙티브 방송이 되는지, 그리고 버튜버 생태계에서 Virtually가 어디에 서 있는지 보여줍니다.",
+    "슬라이드 왼쪽 아래 언어 버튼으로 일본어와 중국어로도 볼 수 있습니다."
+   ]
+  }
+ },
+ "articles": {
+  "hashchat-social-network": {
+   "meta": "제품 이야기 - 2026년 11월 2일",
+   "title": "HashChat: 언어 장벽 없는 소셜 네트워크",
+   "description": "Mingle이 HashChat으로 거듭난 과정: 자동 번역 피드, 만나고 싶은 사람을 보여주는 프로필, 실시간 통역 기능이 내장된 채팅을 LINE, WeChat, WhatsApp, HelloTalk 등과 비교해 알아보세요.",
+   "link": "글 읽기"
+  },
+  "ai-translators-comparison": {
+   "meta": "비교 - 2026년 4월 20일 업데이트",
+   "title": "AI 번역기 비교",
+   "description": "가격, 플랫폼 지원 범위, 언어 지원 범위, 실시간 자막, 텍스트 변환, 자동 전환, 백그라운드 번역, 외부 앱 오디오 캡처 기능을 표 중심으로 실용적으로 비교한 가이드입니다.",
+   "link": "비교 글 읽기"
+  }
+ }
+}
