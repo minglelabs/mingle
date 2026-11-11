@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-12 — 보이스톡 자막: 켠 사람만 보고, 말한 사람 본인 설정으로 문장 분리
+
+- Id: `2026-11-12-voice-caption-viewers-and-split`
+- A caption was saved for the readers and for the speaker, so a speaker who never turned interpretation on still found their own lines in the room. Now only the people with interpretation on read a line; the speaker reads their own only when they have it on themselves.
+- The interpreter cut lines with its own fixed rule (1.5 s). It now asks the app for the speaker's own setting (`/api/internal/voice/speaker-stt`): the auto-detect step, mapped to Soniox endpoint latency/sensitivity and max delay as mingle-stt does, or the silence threshold, where a finalize request is sent after that silence. Lines in a call are cut the way the same person's phone cuts them.
+- Physical-device verification pending.
+
 ## 2026-11-12 — 보이스톡 유령 자막, 한 줄 버블과 이름 사이 빈칸
 
 - Id: `2026-11-12-voice-caption-ghosts-one-row-bubble`

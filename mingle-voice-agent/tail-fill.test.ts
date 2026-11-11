@@ -15,3 +15,11 @@ test('the final reads aloud only what the clauses did not', () => {
     // The model rewrote the start: nothing more is read rather than repeating it.
     assert.equal(unspokenRest('Hi, nice to meet you.', 'Hello,'), '');
 });
+
+test("a speaker's own split setting becomes the Soniox config, as on their phone", async () => {
+    const { sonioxSegmentationConfig } = await import('./soniox-stream');
+    assert.deepEqual(sonioxSegmentationConfig({ mode: 'end', tuningStep: 4, maxDelayMs: 3000, silenceMs: 1000 }), {
+        enable_endpoint_detection: true, endpoint_latency_adjustment_level: 0, endpoint_sensitivity: -1, max_endpoint_delay_ms: 3000,
+    });
+    assert.deepEqual(sonioxSegmentationConfig({ mode: 'fin', tuningStep: 2, maxDelayMs: 3000, silenceMs: 3000 }), { enable_endpoint_detection: false });
+});

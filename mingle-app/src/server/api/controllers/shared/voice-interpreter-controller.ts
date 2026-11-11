@@ -4,6 +4,7 @@ import {
   parseVoiceCaptionReport,
   parseVoicePlaybackReport,
   readVoiceRoomLanguages,
+  readVoiceSpeakerStt,
   recordVoiceCaption,
   recordVoicePlayback,
 } from "@/server/voice/voice-interpreter-reports";
@@ -60,6 +61,20 @@ export async function postVoiceTranslateResponse(request: NextRequest) {
   const response = await handleTranslateFinalizeV1(forwarded);
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   return NextResponse.json({ ...payload, targetLanguages }, { status: response.status });
+}
+
+/** POST from the voice interpreter: how to split one speaker's speech into lines (their own setting). */
+export async function postVoiceSpeakerSttResponse(request: NextRequest) {
+  if (!isVoiceInternalRequestAuthorized(request.headers.get("x-voice-internal-secret"))) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  const room = typeof body?.room === "string" ? body.room.trim().slice(0, 200) : "";
+  const speaker = typeof body?.speaker === "string" ? body.speaker.trim().slice(0, 100) : "";
+  if (!room || !speaker) return NextResponse.json({ error: "invalid_speaker" }, { status: 400 });
+  const settings = await readVoiceSpeakerStt(room, speaker);
+  if (!settings) return NextResponse.json({ error: "no_call" }, { status: 404 });
+  return NextResponse.json(settings);
 }
 
 /** POST from the voice interpreter: a translation it read aloud on a language lane. */

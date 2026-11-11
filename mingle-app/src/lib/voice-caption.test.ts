@@ -24,8 +24,8 @@ describe('voice caption tag', () => {
     expect(canViewMessageWithMetadata(null, null)).toBe(true)
   })
 
-  it('always lets the speaker read their own line', () => {
-    expect(buildVoiceCaptionTag({ callId: 'c1', speakerUserId: 's', viewers: ['a'] })).toEqual({ callId: 'c1', viewers: ['a', 's'] })
+  it('lets only the people with interpretation on read a line, the speaker only when they have it on', () => {
+    expect(buildVoiceCaptionTag({ callId: 'c1', speakerUserId: 's', viewers: ['a'] })).toEqual({ callId: 'c1', viewers: ['a'] })
     expect(buildVoiceCaptionTag({ callId: 'c1', speakerUserId: 'a', viewers: ['a'] }).viewers).toEqual(['a'])
   })
 })

@@ -28,6 +28,36 @@ export type SttSegment = {
 
 export type SttPartial = { text: string; lang: string | null };
 
+/**
+ * How lines are cut, as the speaker set it in the app (mingle-stt
+ * `segmentation-strategy.ts`): "end" lets Soniox find the end of a line with
+ * the auto-detect step's latency/sensitivity; "fin" asks Soniox to finalize
+ * after a set silence.
+ */
+export type SttSegmentation = { mode: 'end' | 'fin'; tuningStep: number; maxDelayMs: number; silenceMs: number };
+
+// mingle-stt SONIOX_ENDPOINT_TUNING_PROFILES: step -> (latency level, sensitivity).
+const TUNING_PROFILES: ReadonlyArray<{ level: number; sensitivity: number }> = [
+    { level: 3, sensitivity: 1.0 },
+    { level: 2, sensitivity: 0.8 },
+    { level: 1, sensitivity: 0.5 },
+    { level: 0, sensitivity: 0.0 },
+    { level: 0, sensitivity: -1.0 },
+];
+const FIN_CHECK_MS = 100;
+const FIN_RESPONSE_TIMEOUT_MS = 2_500;
+
+export function sonioxSegmentationConfig(segmentation: SttSegmentation): Record<string, unknown> {
+    if (segmentation.mode === 'fin') return { enable_endpoint_detection: false };
+    const profile = TUNING_PROFILES[Math.max(0, Math.min(4, Math.floor(segmentation.tuningStep)))] || TUNING_PROFILES[2];
+    return {
+        enable_endpoint_detection: true,
+        endpoint_latency_adjustment_level: profile.level,
+        endpoint_sensitivity: profile.sensitivity,
+        max_endpoint_delay_ms: Math.max(500, Math.min(3000, Math.floor(segmentation.maxDelayMs))),
+    };
+}
+
 // One Soniox realtime session per speaker. Endpoint detection (`<end>`) closes
 // a segment; the speaker's language is only a hint, Soniox still identifies it.
 export class SonioxStream extends EventEmitter {
@@ -43,14 +73,26 @@ export class SonioxStream extends EventEmitter {
     private sentMs = 0;
     private lastSendAt = 0;
     private keepalive: NodeJS.Timeout | null = null;
+    private finTimer: NodeJS.Timeout | null = null;
+    private nonFinalText = '';
+    private textChangedAt = 0;
+    private finalizeSentAt = 0;
+    private segmentation: SttSegmentation = { mode: 'end', tuningStep: 2, maxDelayMs: env.sonioxMaxEndpointDelayMs, silenceMs: 1000 };
 
     constructor(private readonly languageHint: string, private readonly label: string) {
         super();
     }
 
+    /** The speaker's own way of cutting lines; call before start(). */
+    configure(segmentation: SttSegmentation): void {
+        this.segmentation = segmentation;
+    }
+
     start(): void {
         if (!env.sonioxApiKey) throw new Error('SONIOX_API_KEY is missing');
+        if (this.stopped) return;
         this.connect();
+        if (this.segmentation.mode === 'fin') this.finTimer = setInterval(() => this.checkSilence(), FIN_CHECK_MS);
         this.keepalive = setInterval(() => {
             if (this.ws && this.ready && Date.now() - this.lastSendAt > KEEPALIVE_IDLE_MS) {
                 this.ws.send(JSON.stringify({ type: 'keepalive' }));
@@ -75,6 +117,7 @@ export class SonioxStream extends EventEmitter {
     stop(): void {
         this.stopped = true;
         if (this.keepalive) clearInterval(this.keepalive);
+        if (this.finTimer) clearInterval(this.finTimer);
         this.ws?.close();
         this.ws = null;
     }
@@ -95,8 +138,7 @@ export class SonioxStream extends EventEmitter {
                 num_channels: 1,
                 language_hints: [this.languageHint],
                 enable_language_identification: true,
-                enable_endpoint_detection: true,
-                max_endpoint_delay_ms: env.sonioxMaxEndpointDelayMs,
+                ...sonioxSegmentationConfig(this.segmentation),
             }));
             this.ready = true;
             for (const chunk of this.pending.splice(0)) ws.send(chunk);
@@ -143,8 +185,30 @@ export class SonioxStream extends EventEmitter {
                 nonFinalLang = token.language || nonFinalLang;
             }
         }
+        if (nonFinal !== this.nonFinalText || (message.tokens || []).some((token) => token.is_final && token.text && !/^<\/?(end|fin)>$/.test(token.text))) {
+            this.textChangedAt = Date.now();
+        }
+        this.nonFinalText = nonFinal;
         const preview = (this.finalText + nonFinal).trim();
         if (preview) this.emit('partial', { text: preview, lang: this.dominantLang() || nonFinalLang } satisfies SttPartial);
+    }
+
+    // Silence mode: once the words stop for the speaker's silence, Soniox is
+    // asked to finalize; its <fin> closes the line (or a timeout does).
+    private checkSilence(): void {
+        if (!this.ws || !this.ready) return;
+        const pending = (this.finalText + this.nonFinalText).trim();
+        const now = Date.now();
+        if (this.finalizeSentAt) {
+            if (now - this.finalizeSentAt > FIN_RESPONSE_TIMEOUT_MS) {
+                this.finalizeSentAt = 0;
+                this.flushSegment(now);
+            }
+            return;
+        }
+        if (!pending || now - this.textChangedAt < this.segmentation.silenceMs) return;
+        this.finalizeSentAt = now;
+        this.ws.send(JSON.stringify({ type: 'finalize' }));
     }
 
     private dominantLang(): string | null {
@@ -160,6 +224,8 @@ export class SonioxStream extends EventEmitter {
     }
 
     private flushSegment(finalizedAt: number): void {
+        this.finalizeSentAt = 0;
+        this.nonFinalText = '';
         const text = this.finalText.trim();
         const lang = this.dominantLang();
         const speechEndAt = this.audioStartedAt > 0 && this.lastFinalEndMs > 0

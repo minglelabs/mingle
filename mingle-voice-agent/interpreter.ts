@@ -19,7 +19,7 @@ import { translateUtterance, type TranslateTurn } from './translate';
 import { synthesizeStream, TTS_SAMPLE_RATE } from './tts';
 import { createJoinToken, INTERPRETER_ROLE } from './token';
 import { addUsage, readersOf, type InterpreterUsage } from './service-logic';
-import { appReportsEnabled, newLineId, reportCaption, reportPlayback, requestTranslate, type TailState } from './app-report';
+import { appReportsEnabled, newLineId, reportCaption, reportPlayback, requestSpeakerStt, requestTranslate, type TailState } from './app-report';
 import { shouldRequestInterimFill, unspokenRest } from './tail-fill';
 
 const LANE_SAMPLE_RATE = TTS_SAMPLE_RATE;
@@ -217,8 +217,13 @@ export class Interpreter {
         this.speakers.set(participant.identity, speaker);
         stt.on('partial', (partial: SttPartial) => this.onPartial(speaker, partial));
         stt.on('segment', (segment: SttSegment) => this.onSegment(speaker, segment));
-        stt.start();
-        console.log(`[interpreter:${this.roomName}] listening to ${speaker.name} (${lang})`);
+        // Lines are cut the way this speaker set it in the app (auto-detect
+        // step or silence); audio heard meanwhile waits in the stream.
+        void requestSpeakerStt(this.roomName, participant.identity).then((settings) => {
+            if (settings) stt.configure(settings);
+            stt.start();
+            console.log(`[interpreter:${this.roomName}] listening to ${speaker.name} (${lang}) split=${settings ? `${settings.mode} step=${settings.tuningStep} delay=${settings.maxDelayMs} silence=${settings.silenceMs}` : 'default'}`);
+        });
         void (async () => {
             try {
                 // Breaking out releases the reader and cancels the stream.

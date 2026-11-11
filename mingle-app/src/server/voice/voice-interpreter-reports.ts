@@ -203,6 +203,38 @@ export async function readVoiceRoomLanguages(room: string): Promise<string[] | n
   return call ? roomLanguagesOf(call.channel) : null;
 }
 
+export type VoiceSpeakerStt = {
+  /** "end": Soniox finds where a line ends (auto-detect step); "fin": a set silence ends it. */
+  mode: "end" | "fin";
+  /** Auto-detect step 0-4 (the app shows it as 1-5). */
+  tuningStep: number;
+  maxDelayMs: number;
+  silenceMs: number;
+};
+
+const clampInt = (value: number | null | undefined, min: number, max: number, fallback: number) =>
+  typeof value === "number" && Number.isFinite(value) ? Math.max(min, Math.min(max, Math.floor(value))) : fallback;
+
+/**
+ * How a speaker's speech is split into lines: their own setting, the same
+ * one their phone's speech-to-text uses (mingle-stt's segmentation defaults
+ * when they never chose). Null when they are not in the room's live call.
+ */
+export async function readVoiceSpeakerStt(room: string, userId: string): Promise<VoiceSpeakerStt | null> {
+  const call = await findLiveCallByRoom(room);
+  if (!call || !call.participants.some((participant) => participant.userId === userId)) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { sttSegmentationMode: true, demoEndpointTuningStep: true, demoEndpointMaxDelayMs: true, demoSilenceFinalizeMs: true },
+  });
+  return {
+    mode: user?.sttSegmentationMode === "fin" ? "fin" : "end",
+    tuningStep: clampInt(user?.demoEndpointTuningStep, 0, 4, 2),
+    maxDelayMs: clampInt(user?.demoEndpointMaxDelayMs, 500, 3000, 3000),
+    silenceMs: clampInt(user?.demoSilenceFinalizeMs, 500, 5000, 1000),
+  };
+}
+
 /** Charges each listener of a translation read aloud, when they are in the call. */
 export async function recordVoicePlayback(report: VoicePlaybackReport): Promise<number> {
   if (report.audioMs <= 0 || report.listeners.length === 0) return 0;

@@ -114,6 +114,33 @@ export async function requestTranslate(input: {
     }
 }
 
+/** How one speaker's speech is split into lines: their own setting in the app (mingle-stt's modes). */
+export type SpeakerStt = { mode: 'end' | 'fin'; tuningStep: number; maxDelayMs: number; silenceMs: number };
+
+/** POST /api/internal/voice/speaker-stt; null when the app could not be asked. */
+export async function requestSpeakerStt(room: string, speaker: string): Promise<SpeakerStt | null> {
+    if (!appReportsEnabled()) return null;
+    try {
+        const response = await fetch(`${APP_INTERNAL_URL}/api/internal/voice/speaker-stt`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-voice-internal-secret': VOICE_INTERNAL_SECRET },
+            body: JSON.stringify({ room, speaker }),
+            signal: AbortSignal.timeout(4_000),
+        });
+        if (!response.ok) return null;
+        const data = await response.json() as Partial<SpeakerStt>;
+        if (data.mode !== 'end' && data.mode !== 'fin') return null;
+        return {
+            mode: data.mode,
+            tuningStep: Number(data.tuningStep ?? 2),
+            maxDelayMs: Number(data.maxDelayMs ?? 3000),
+            silenceMs: Number(data.silenceMs ?? 1000),
+        };
+    } catch {
+        return null;
+    }
+}
+
 /** A line id that stays unique across interpreter restarts in the same room. */
 export function newLineId(room: string): string {
     return `${room}-${randomUUID()}`;
