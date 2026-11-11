@@ -61,12 +61,16 @@ up` starts it; `GET :<web port + 40>/health` answers `ok`). Without it, the scen
    them, no push, and the room list preview does not change.
 8. Leave and come back to the room screen while still in the call: the interpret and read-aloud buttons show what the
    app has (no reset to off).
+9. In a room whose languages include one nobody in the call speaks (e.g. ko/en with two Korean speakers), a caption
+   still carries that language's translation. Say a long line with a few clauses: the live bubble's translation grows
+   clause by clause, and with read-aloud on, each clause is heard before the line ends, with no clause read twice.
 
 ## Oracle (pass when)
 
 - One press of 통역 or read-aloud shows once and stays (no flash) (T5).
 - Captions stream for readers and settle in place with the translation; one bubble per line (T3, T4, T13).
 - A caption bubble is the ordinary bubble in another color, with no gap under the name even without a translation row (T15, T19).
+- Captions are translated into every room language, clause by clause while said; read-aloud follows the clauses (step 9).
 - Read-aloud plays only while its switch is on, is not heard back by the speaker, and leaves no echo (T23).
 - People not reading (interpret off, or not in the call) never see the lines anywhere (list, unread, push).
 

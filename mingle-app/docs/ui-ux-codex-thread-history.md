@@ -2,6 +2,11 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-12 — 보이스톡 자막: 대화방 언어 전부로, 절 단위 번역·읽어 주기
+
+- Id: `2026-11-12-voice-caption-room-languages-clauses`
+- A caption was translated only into the readers' languages. So a Korean speaker in a Korean/English room got a caption with no translation row, and the bubble sat apart from the name. The interpreter now asks the app (`/api/internal/voice/translate`) for the room's own translation. That covers all the room's languages (the language picker's union), using the same clause-by-clause tail fill a phone uses for its own speech (`/translate/finalize`, `bubbleTail`). Each clause is read aloud as soon as it is fixed, and the final reads only the rest. Live caption bubbles show the translations as they arrive. Physical-device verification pending.
+
 ## 2026-11-12 — 초대 카드: 끝난 게임은 안 뜨고, 거절은 앱을 다시 켜도 유지
 
 - Id: `2026-11-12-invite-cards-ended-and-declined`
