@@ -12,6 +12,7 @@ import {
 import { normalizeConversationMessageImage } from '@/lib/conversation-image'
 import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
 import { MESSAGE_READ_RECEIPTS_REFRESH_EVENT } from '@/lib/message-read-receipts'
+import { publishRoomPresence } from '@/lib/room-presence'
 import { normalizeMessageReplyReference, type MessageReplyReference } from '@/lib/message-reply'
 import { MESSAGE_RECALLED_EVENT, normalizeRecalledMessageIds, type MessageRecalledEventDetail } from '@/lib/message-recall'
 import { MESSAGE_RETRANSLATED_EVENT, applyRetranslationToUtterance, type MessageRetranslatedEventDetail } from '@/lib/message-retranslate'
@@ -4281,6 +4282,11 @@ export default function useRealtimeSTT({
             if (socketSessionKey && frame.sessionKey !== socketSessionKey) return
             if (frame.type === 'read_receipt') {
               window.dispatchEvent(new CustomEvent(MESSAGE_READ_RECEIPTS_REFRESH_EVENT, { detail: conversationId }))
+              return
+            }
+            if (frame.type === 'presence') {
+              // Who has the room open right now (the voice talk panel shows it).
+              if (conversationId) publishRoomPresence(conversationId, frame.userIds)
               return
             }
             if (frame.type === 'utterance_preview') {

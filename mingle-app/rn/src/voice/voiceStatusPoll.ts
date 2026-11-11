@@ -7,7 +7,7 @@ import type { VoiceApi, VoiceCall } from './voiceApi';
 export type VoiceStatusPollOptions = {
   api: VoiceApi;
   conversationId: string;
-  intervalMs?: number; // default 10s
+  intervalMs?: number; // default 3s
   onUpdate: (call: VoiceCall | null) => void;
   onError?: (error: unknown) => void;
   setInterval?: (cb: () => void, ms: number) => unknown;
@@ -21,7 +21,9 @@ export type VoiceStatusPoll = {
   refresh: () => Promise<void>;
 };
 
-const DEFAULT_INTERVAL_MS = 10_000;
+// Short enough that someone joining or leaving shows within a few seconds on
+// a phone that is only looking at the panel (one small GET per tick).
+const DEFAULT_INTERVAL_MS = 3_000;
 
 export function createVoiceStatusPoll(options: VoiceStatusPollOptions): VoiceStatusPoll {
   const intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;

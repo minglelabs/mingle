@@ -61,12 +61,20 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
       [emitToWeb],
     );
 
+    const memberCountRef = useRef(-1);
     const sendRoom = useCallback(() => {
       const controller = controllerRef.current;
       const convId = conversationRef.current;
       if (!controller || !convId) return;
       throttleRef.current.lastAt = Date.now();
-      emitToWeb({ type: 'room', conversationId: convId, snapshot: controller.getSnapshot() });
+      const snapshot = controller.getSnapshot();
+      emitToWeb({ type: 'room', conversationId: convId, snapshot });
+      // Someone joined or left: fetch the server's list now (names, photos)
+      // instead of waiting for the next tick.
+      if (snapshot.members.length !== memberCountRef.current) {
+        memberCountRef.current = snapshot.members.length;
+        void pollRef.current?.refresh();
+      }
     }, [emitToWeb]);
 
     const scheduleRoom = useCallback(() => {
@@ -93,11 +101,15 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
       detach();
       conversationRef.current = null;
       if (controller) {
+        // The web hides its panel on this, so it goes out before the
+        // disconnect and the server call, which can take seconds.
+        emitPhase('left', convId);
         void controller.leave().finally(() => {
           // After the call let go of the audio session, so STT (if it is
           // still on) takes the session back instead of losing it.
           setNativeSttVoiceCallActive(false);
-          emitPhase('left', convId);
+          // The server now lists this phone as gone: show that at once.
+          void pollRef.current?.refresh();
         });
       }
     }, [detach, emitPhase]);
@@ -128,6 +140,8 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
           .then(() => {
             emitPhase('connected', args.conversationId);
             sendRoom();
+            // The server now lists this phone as in the call.
+            void pollRef.current?.refresh();
           })
           .catch((error: unknown) => {
             emitPhase('error', args.conversationId, (error as { kind?: string })?.kind);

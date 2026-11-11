@@ -19,6 +19,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
 import { ChevronUp, Mic, MicOff, PhoneOff, Phone } from 'lucide-react'
 import LanguageFlag from '@/components/language-flag'
+import { buildClientApiPath } from '@/lib/api-contract'
+import { useRoomPresence } from '@/lib/room-presence'
 
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = 8
@@ -149,11 +151,14 @@ export type VoiceTalkPanelProps = {
   captionsOn?: boolean
   /** Opens a member's profile when their seat is tapped. */
   onOpenProfile?: (userId: string) => void
+  /** This viewer's account id: always counted as having the room open. */
+  viewerUserId?: string | null
 }
 
 export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const { conversationId, conversationTitle, myLang, openSignal, leaveSignal, onAvailabilityChange, onListenOnlyChange, onOpenProfile } = props
   const listenOnly = props.listenOnly === true
+  const viewerUserId = props.viewerUserId ?? null
   const copy = (props.uiLocale || '').toLowerCase().startsWith('ko') ? COPY.ko : COPY.en
   const [call, setCall] = useState<StatusCall>(null)
   const [phase, setPhase] = useState<Phase>('idle')
@@ -239,8 +244,17 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     setOpened(false)
     setConfirmLeave(false)
     onListenOnlyChange?.(false)
+    // The panel goes away now, not when the app and the server have caught
+    // up: this phone is out of the call, and out of its seat, at once.
+    setPhase('left')
+    setRoom(null)
+    if (call) {
+      setDeclinedCallId(call.id)
+      const localId = viewerUserId ?? room?.members.find((member) => member.isLocal)?.userId ?? null
+      if (localId) setCall({ ...call, participants: call.participants.filter((p) => p.userId !== localId) })
+    }
     post({ type: 'native_voice_close' })
-  }, [onListenOnlyChange])
+  }, [call, onListenOnlyChange, room, viewerUserId])
 
   // Seats: who is in the call (live LiveKit view when joined, else the API's).
   const seats = useMemo(() => {
@@ -268,6 +282,24 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         }))
     return people.slice(0, MAX_SEATS)
   }, [call, joined, listenOnly, myLang, room])
+
+  // Room members who are not in the call, shown small under the seats.
+  const presence = useRoomPresence(conversationId)
+  const [roomMembers, setRoomMembers] = useState<RoomMemberSummary[]>([])
+  const panelShown = joined || !!error || opened || (live && call?.id !== declinedCallId)
+  useEffect(() => {
+    if (!panelShown || !conversationId) return
+    let cancelled = false
+    void fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/members`), { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => { if (!cancelled) setRoomMembers(parseRoomMemberSummaries(body)) })
+      .catch(() => undefined)
+    return () => { cancelled = true }
+  }, [conversationId, panelShown])
+  const bystanders = useMemo(
+    () => resolveVoiceTalkBystanders({ members: roomMembers, seatUserIds: seats.map((seat) => seat.userId), presence, viewerUserId }),
+    [presence, roomMembers, seats, viewerUserId],
+  )
 
   const onDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (info.offset.y < -24 || info.velocity.y < -300) setFolded(true)
@@ -407,6 +439,27 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
 
               {error ? <p className="px-3 pb-2 text-[0.8rem] text-rose-600">{error}</p> : null}
 
+              {bystanders.length > 0 ? (
+                // Everyone in the room who is not in the call: a small plain
+                // circle each, dimmed while they do not have the room open.
+                <div data-qa="voice-talk-bystanders" className="flex items-center gap-1.5 overflow-x-auto px-3 pb-2">
+                  {bystanders.map((member) => (
+                    <span
+                      key={member.id}
+                      title={member.name || undefined}
+                      data-qa="voice-talk-bystander"
+                      data-viewing={member.viewing ? 'true' : 'false'}
+                      className={`inline-flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-100 text-[0.6rem] font-bold text-amber-800 transition-opacity duration-300 ${
+                        member.viewing ? '' : 'opacity-35'
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {member.image ? <img src={member.image} alt="" className="h-full w-full object-cover" /> : initial(member.name)}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
               {joined && props.captionsOn === false ? (
                 <p data-qa="voice-talk-captions-off-hint" className="px-3 pb-2 text-center text-[0.76rem] text-gray-500">
                   {copy.captionsOffHint}
@@ -444,6 +497,45 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     </div>
     </>
   )
+}
+
+export type RoomMemberSummary = { id: string; name: string | null; image: string | null }
+
+/** The room's members from the members API (`{ members: [{ id, name, image }] }`). */
+export function parseRoomMemberSummaries(body: unknown): RoomMemberSummary[] {
+  const list = (body as { members?: unknown } | null)?.members
+  if (!Array.isArray(list)) return []
+  const out: RoomMemberSummary[] = []
+  for (const raw of list) {
+    const record = raw as { id?: unknown; name?: unknown; image?: unknown } | null
+    if (!record || typeof record.id !== 'string' || !record.id) continue
+    out.push({
+      id: record.id,
+      name: typeof record.name === 'string' && record.name.trim() ? record.name.trim() : null,
+      image: typeof record.image === 'string' && record.image ? record.image : null,
+    })
+  }
+  return out
+}
+
+/**
+ * Room members who are not in the call, those with the room open first.
+ * `viewing` is whether they have the room open right now: the viewer always
+ * does, and while the server has not reported yet (presence null) nobody is
+ * shown as away.
+ */
+export function resolveVoiceTalkBystanders(input: {
+  members: readonly RoomMemberSummary[]
+  seatUserIds: readonly string[]
+  presence: readonly string[] | null
+  viewerUserId: string | null
+}): Array<RoomMemberSummary & { viewing: boolean }> {
+  const seated = new Set(input.seatUserIds)
+  const here = input.presence ? new Set(input.presence) : null
+  return input.members
+    .filter((member) => !seated.has(member.id))
+    .map((member) => ({ ...member, viewing: member.id === input.viewerUserId || !here || here.has(member.id) }))
+    .sort((left, right) => Number(right.viewing) - Number(left.viewing))
 }
 
 type VoiceTalkSeat = {

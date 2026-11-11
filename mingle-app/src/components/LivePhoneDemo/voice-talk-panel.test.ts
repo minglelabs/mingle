@@ -2,7 +2,14 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { VoiceTalkButton, VoiceTalkSeatView, resolveVoiceTalkButtonPress, resolveVoiceTalkMic } from './VoiceTalkPanel'
+import {
+  VoiceTalkButton,
+  VoiceTalkSeatView,
+  parseRoomMemberSummaries,
+  resolveVoiceTalkBystanders,
+  resolveVoiceTalkButtonPress,
+  resolveVoiceTalkMic,
+} from './VoiceTalkPanel'
 
 const panelSource = readFileSync(new URL('./VoiceTalkPanel.tsx', import.meta.url), 'utf8')
 const liveDemoSource = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
@@ -142,5 +149,57 @@ describe('voice talk seat', () => {
     expect(html).toContain('border-dashed')
     expect(html).not.toContain('data-qa="voice-talk-seat-flag"')
     expect(html).not.toContain('data-qa="voice-talk-seat-profile"')
+  })
+})
+
+describe('leaving a call', () => {
+  it('hides the panel and empties this phone\'s seat at once, before the app answers', () => {
+    const leave = panelSource.slice(panelSource.indexOf('const leave = useCallback(() => {'), panelSource.indexOf('// Seats: who is in the call'))
+    expect(leave.indexOf("setPhase('left')")).toBeGreaterThan(0)
+    expect(leave.indexOf("setPhase('left')")).toBeLessThan(leave.indexOf("post({ type: 'native_voice_close' })"))
+    expect(leave).toContain('setDeclinedCallId(call.id)')
+    expect(leave).toContain('participants: call.participants.filter((p) => p.userId !== localId)')
+  })
+})
+
+describe('room members not in the call', () => {
+  const members = [
+    { id: 'me', name: 'Me', image: null },
+    { id: 'in-call', name: 'Talker', image: null },
+    { id: 'here', name: 'Here', image: 'https://example.com/a.jpg' },
+    { id: 'away', name: 'Away', image: null },
+  ]
+
+  it('leaves out who is in the call and puts those with the room open first', () => {
+    const result = resolveVoiceTalkBystanders({ members, seatUserIds: ['in-call'], presence: ['here', 'me'], viewerUserId: 'me' })
+    expect(result.map((member) => [member.id, member.viewing])).toEqual([['me', true], ['here', true], ['away', false]])
+  })
+
+  it('always counts the viewer as having the room open', () => {
+    const result = resolveVoiceTalkBystanders({ members, seatUserIds: [], presence: [], viewerUserId: 'me' })
+    expect(result.find((member) => member.id === 'me')?.viewing).toBe(true)
+    expect(result.find((member) => member.id === 'here')?.viewing).toBe(false)
+  })
+
+  it('shows nobody as away while the server has not reported who is here', () => {
+    const result = resolveVoiceTalkBystanders({ members, seatUserIds: [], presence: null, viewerUserId: 'me' })
+    expect(result.every((member) => member.viewing)).toBe(true)
+  })
+
+  it('reads the members API and drops rows without an id', () => {
+    expect(parseRoomMemberSummaries({ members: [{ id: 'a', name: ' Mina ', image: '' }, { name: 'no id' }, null] }))
+      .toEqual([{ id: 'a', name: 'Mina', image: null }])
+    expect(parseRoomMemberSummaries(null)).toEqual([])
+    expect(parseRoomMemberSummaries({ members: 'x' })).toEqual([])
+  })
+
+  it('draws them as small plain circles above the buttons, dimmed while away', () => {
+    const row = panelSource.indexOf('data-qa="voice-talk-bystanders"')
+    expect(row).toBeGreaterThan(0)
+    expect(row).toBeLessThan(panelSource.indexOf('data-qa="voice-talk-mic-toggle"'))
+    const markup = panelSource.slice(row, row + 1200)
+    expect(markup).toContain('h-6 w-6')
+    expect(markup).toContain("member.viewing ? '' : 'opacity-35'")
+    expect(markup).not.toContain('LanguageFlag')
   })
 })
