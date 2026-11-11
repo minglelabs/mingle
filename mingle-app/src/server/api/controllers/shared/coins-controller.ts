@@ -25,6 +25,7 @@ import { getCoinHistory, getCoinUsageSummary, getConversationCoinUsage, normaliz
 import { isInternalCoinRequestAuthorized, mintSttBillingToken, verifySttBillingToken } from '@/server/coins/stt-token'
 import { canSpendCoins, chargeCoinUsage, disabledCoinWallet, getCoinWallet } from '@/server/coins/wallet'
 import { resolveCoinBillingMode, resolveUserCoinBillingMode } from '@/server/coins/config'
+import { AppleConsumptionRetryableError, respondToAppleConsumptionRequest } from '@/server/coins/apple-consumption'
 import { CoinGiftError, getCoinGiftInfo, sendCoinGift } from '@/server/coins/gifts'
 import { prisma } from '@/lib/prisma'
 import { parseApiNamespaceVersion } from '@/lib/api-namespace-version'
@@ -399,6 +400,16 @@ export async function handleAppStoreWebhook(request: NextRequest) {
   let result = 'ignored'
   if (transactionId && (notification.notificationType === 'REFUND' || notification.notificationType === 'REVOKE')) {
     result = await refundPurchase(transactionId, notification.notificationType === 'REVOKE' ? 'revoked' : 'refunded')
+  } else if (transactionId && notification.transaction && notification.notificationType === 'CONSUMPTION_REQUEST') {
+    // A customer asked Apple for a refund: report how much of the pack was used.
+    const environment = String(notification.transaction.environment || '').toLowerCase() === 'production' ? 'production' : 'sandbox'
+    try {
+      result = await respondToAppleConsumptionRequest({ transactionId, environment })
+    } catch (error) {
+      // Left unprocessed: the 5xx makes Apple redeliver, and the redelivery is processed again.
+      if (error instanceof AppleConsumptionRetryableError) console.error('[coins] apple consumption request failed', error.message)
+      throw error
+    }
   } else if (notification.transaction && notification.notificationType === 'ONE_TIME_CHARGE') {
     // Informational: the grant itself happens when the app posts the transaction.
     try {

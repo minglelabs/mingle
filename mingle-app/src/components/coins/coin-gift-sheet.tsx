@@ -124,6 +124,7 @@ function CoinGiftSheetBody({ onClose, recipientId, recipientName, locale }: Coin
           <>
             <h2 className="mt-3 text-center text-[19px] font-bold">{fillCoinCopy(copy.giftTitle, { name: recipientName })}</h2>
             <p className="mt-1.5 text-center text-[13px] leading-relaxed text-gray-600">{copy.giftRule}</p>
+            <p className="mt-1 text-center text-[12px] leading-relaxed text-gray-500">{copy.giftRefundNotice}</p>
 
             <label className="mt-4 block">
               <span className="flex items-baseline justify-between text-[13px] font-semibold text-gray-600">

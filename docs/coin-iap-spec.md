@@ -298,6 +298,9 @@ main에 PR을 합쳐 보면 텍스트 충돌은 3개 파일뿐이다: `admin/pag
 
 ### 6.4 환불·취소
 - iOS App Store Server Notifications V2(`REFUND`, `REVOKE`), Android 실시간 개발자 알림 + Voided Purchases API를 받는 웹훅을 만든다. 원문은 `app_iap_store_events`에 저장.
+- 정책(2026-11-11): 구매 패키지를 1해씨라도 사용하거나 선물하면 그 패키지는 환불 불가. 약관 5조, 상점 하단 문구, 선물 시트에 고지한다. 스토어 환불은 우리가 막을 수 없으므로 아래 회수가 안전망이다.
+- Apple `CONSUMPTION_REQUEST`(사용자가 Apple에 환불 요청): Send Consumption Information v2로 응답한다(`apple-consumption.ts`). 사용 비율(lot에서 빠져나간 몫, 선물 포함)을 보내고, 1해씨라도 썼으면 `refundPreference: DECLINE`, 안 썼으면 `GRANT_FULL`. 최종 결정은 Apple. 12시간 안에 응답해야 하며 실패하면 웹훅이 5xx를 돌려 재전송받는다. `APPLE_IAP_ISSUER_ID`·`APPLE_IAP_KEY_ID`·`APPLE_IAP_PRIVATE_KEY`가 없으면 응답하지 않는다. `customerConsented: true`의 근거는 약관 5조의 동의 문구.
+- Google Play에는 같은 API가 없다(구매 후 48시간 안에는 Google이 직접 환불). 웹(Polar)은 판매자가 우리이므로 사용·선물한 주문은 환불하지 않는다.
 - 환불 시: 해당 lot의 남은 수량만 회수한다(`refund_clawback`). 잔액은 음수가 되지 않으므로, 이미 써 버린 만큼은 회수하지 못하고 `iap_purchases.meta`에 미회수 금액으로 기록한다. 반복 환불 유저는 어드민에 표시.
 - 서명 검증, 재전송(중복 알림) 멱등 처리 필수.
 
