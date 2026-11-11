@@ -40,6 +40,7 @@ const SOURCE_LABELS: Record<string, string> = {
   admin_grant: "어드민 충전",
   signup_bonus: "가입 보너스",
   refund_reversal: "환불 보정",
+  referral: "친구 초대",
 };
 const LEDGER_LABELS: Record<string, string> = {
   grant: "충전",

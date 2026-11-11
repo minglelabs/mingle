@@ -68,6 +68,13 @@ import {
   type NativeShellCapabilities,
 } from './src/nativeCapabilities';
 import {
+  NATIVE_CONTACTS_EVENT,
+  createNativeContactsBridge,
+  isNativeContactsAvailable,
+  type NativeContactsBridge,
+  type NativeContactsEvent,
+} from './src/nativeContacts';
+import {
   NATIVE_IAP_EVENT,
   createNativeIapBridge,
   sanitizeIapProductIds,
@@ -820,6 +827,11 @@ type NativeLocationCommand = {
   };
 };
 
+// Contact sync (see src/nativeContacts.ts).
+type NativeContactsCommand =
+  | { type: 'native_contacts_check' | 'native_contacts_request'; payload?: { requestId?: string } }
+  | { type: 'native_sms_compose'; payload?: { recipients?: unknown; body?: unknown } };
+
 type NativeAuthStartCommand = {
   type: 'native_auth_start';
   payload: {
@@ -976,6 +988,7 @@ type WebViewCommand =
   | NativeAudioRouteRequestCommand
   | NativeOpenAppSettingsCommand
   | NativeLocationCommand
+  | NativeContactsCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
@@ -3070,6 +3083,19 @@ function AppInner(): React.JSX.Element {
     }
   }, [emitLocationToWeb, getNativeLocationModule]);
 
+  const emitContactsToWeb = useCallback((payload: NativeContactsEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) return;
+
+    const serialized = JSON.stringify(payload);
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_CONTACTS_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+  const nativeContactsBridgeRef = useRef<NativeContactsBridge | null>(null);
+  const getNativeContactsBridge = useCallback(() => {
+    nativeContactsBridgeRef.current ??= createNativeContactsBridge({ emit: emitContactsToWeb });
+    return nativeContactsBridgeRef.current;
+  }, [emitContactsToWeb]);
+
   const emitQrSaveToWeb = useCallback((payload: NativeQrSaveEvent) => {
     if (!isPageReadyRef.current || !webViewRef.current) return;
 
@@ -4342,6 +4368,21 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_contacts_check') {
+      void getNativeContactsBridge().check(parsed.payload?.requestId);
+      return;
+    }
+
+    if (parsed.type === 'native_contacts_request') {
+      void getNativeContactsBridge().request(parsed.payload?.requestId);
+      return;
+    }
+
+    if (parsed.type === 'native_sms_compose') {
+      void getNativeContactsBridge().composeSms(parsed.payload?.recipients, parsed.payload?.body);
+      return;
+    }
+
     if (parsed.type === 'native_push_register') {
       void requestNativePushRegistration();
       return;
@@ -4667,6 +4708,7 @@ function AppInner(): React.JSX.Element {
     hideLastScreenSnapshot,
     resetWebRestoreState,
     handleNativeAuthStart,
+    getNativeContactsBridge,
     handleNativeLocationCheck,
     handleNativeLocationRequest,
     handleNativeQrSave,
@@ -5095,6 +5137,7 @@ function AppInner(): React.JSX.Element {
       audioRoute: nativeAudioRouteAvailable,
       deviceAudioCapture: nativeDeviceAudioCaptureAvailable,
       nativeTts: isNativeTtsAvailable(),
+      contacts: isNativeContactsAvailable(),
     }));
     // Earphone mode (contract A.2a): the latest route follows the capabilities
     // message on every load end.

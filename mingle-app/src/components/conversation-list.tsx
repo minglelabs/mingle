@@ -39,6 +39,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Bell, Check, Loader2, LogOut, PencilLine, Search, Settings, Share2, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
+import { requestContactSyncPromptCheck } from "@/lib/native-contacts";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { getConversationEventsWsUrl } from "@/components/LivePhoneDemo/use-realtime-stt";
@@ -5454,6 +5455,8 @@ export default function ConversationList({
     }
 
     markLanguageOnboardingConfirmed();
+    // Signup is finished: the contact-sync screen may now open once by itself.
+    requestContactSyncPromptCheck();
 
     defaultConversationLanguagesSyncVersionRef.current += 1;
     setPreferredDisplayLanguages(savedPrimaryLanguages);
