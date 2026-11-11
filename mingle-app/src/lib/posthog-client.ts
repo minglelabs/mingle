@@ -20,6 +20,9 @@ export type MingleClientEvent =
   | "mingle_connect_search_completed"
   | "mingle_connect_follow_clicked"
   | "mingle_connect_follow_completed"
+  // First run and the questions asked later; the `step` property names the moment.
+  | "mingle_first_run_step"
+  | "mingle_profile_basics_step"
   // Posting-feed events; names and allowed properties live in `@/lib/feed-analytics`.
   | FeedEventName;
 

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { usePostingFeedGuard } from "@/components/feed/use-posting-feed-guard";
+import { useFirstRunHome } from "@/components/feed/use-first-run-home";
 
 type PostingFeedRouteGuardProps = {
   locale: string;
@@ -9,6 +10,21 @@ type PostingFeedRouteGuardProps = {
   /** Placeholder background while the client namespace resolves. */
   placeholderClassName?: string;
 };
+
+/**
+ * The feed as the app's first screen: a device still in its first run is sent
+ * to the conversation list (see `useFirstRunHome`), and the feed is not
+ * rendered meanwhile, so nothing of it flashes and no feed request fires.
+ */
+export function FirstRunHomeGuard({ locale, children, placeholderClassName = "bg-slate-100" }: PostingFeedRouteGuardProps) {
+  const status = useFirstRunHome(locale);
+
+  if (status !== "feed") {
+    return <div aria-hidden className={`h-full w-full ${placeholderClassName}`} />;
+  }
+
+  return <>{children}</>;
+}
 
 /**
  * Client wrapper that renders a posting screen only for a client whose
