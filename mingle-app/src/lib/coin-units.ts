@@ -30,3 +30,15 @@ export function microToSpentCoins(micro: bigint): number {
   const hundredths = (positive + MICRO_PER_COIN / 100n - 1n) / (MICRO_PER_COIN / 100n)
   return Number(hundredths) / 100
 }
+
+/**
+ * Whole coins one ledger row moved the shown balance by (always >= 0). The
+ * shown balance is rounded down, so spending 0.1 from 1000 shows as 1 (999),
+ * and the next spends show as 0 until 999.0 is crossed: the history adds up
+ * to exactly what the user saw leave their balance.
+ */
+export function shownCoinsDelta(amountMicro: bigint, balanceAfterMicro: bigint): number {
+  const floor = (micro: bigint) => (micro <= 0n ? 0n : micro / MICRO_PER_COIN)
+  const delta = floor(balanceAfterMicro) - floor(balanceAfterMicro - amountMicro)
+  return Number(delta < 0n ? -delta : delta)
+}

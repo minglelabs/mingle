@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { roundUpToWholeCoin } from '@/server/coins/wallet'
+import { shownCoinsDelta } from '@/lib/coin-units'
 import { coinUsageFeatureOf } from '@/server/coins/queries'
 import { voiceTalkCostTip } from '@/components/LivePhoneDemo/VoiceTalkPanel'
 
-describe('whole-Hash charges and usage detail', () => {
-  it('rounds every charge up to a whole Hash', () => {
-    expect(roundUpToWholeCoin(0n)).toBe(0n)
-    expect(roundUpToWholeCoin(200_000n)).toBe(1_000_000n)
-    expect(roundUpToWholeCoin(1_000_000n)).toBe(1_000_000n)
-    expect(roundUpToWholeCoin(1_000_001n)).toBe(2_000_000n)
+describe('Hash shown in whole units and usage detail', () => {
+  it('counts a spend as the whole Hash it took off the shown balance: 1 up front, then 0 until it is used up', () => {
+    const M = 1_000_000n
+    // 1000.0 -> 999.9 (shown 1000 -> 999): one Hash taken up front.
+    expect(shownCoinsDelta(-M / 10n, 999n * M + 9n * M / 10n)).toBe(1)
+    // 999.9 -> 999.8: still 999 shown, nothing taken.
+    expect(shownCoinsDelta(-M / 10n, 999n * M + 8n * M / 10n)).toBe(0)
+    // 999.05 -> 998.95: crosses 999, the next Hash.
+    expect(shownCoinsDelta(-M / 10n, 998n * M + 95n * M / 100n)).toBe(1)
+    // A grant of 1000 onto 0.5 shows +1000.
+    expect(shownCoinsDelta(1000n * M, 1000n * M + M / 2n)).toBe(1000)
   })
 
   it('names what each charge paid for', () => {

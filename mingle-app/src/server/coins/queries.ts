@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client/index'
 import { prisma } from '@/lib/prisma'
 import { listConversationReadReceipts } from '@/lib/app-conversations'
-import { microToSpentCoins } from '@/lib/coin-units'
+import { shownCoinsDelta } from '@/lib/coin-units'
 import { COIN_USAGE_KINDS, type CoinUsageKind } from './pricing'
 
 // Read models for the usage screen (spec 9.3). Only real (non-shadow) charges count.
@@ -56,55 +56,57 @@ export async function getCoinUsageSummary(
   const since = new Date(firstLocalDay - offsetMs)
   const offsetInterval = `${Math.round(offsetMs / 1000)} seconds`
 
+  // Each spend counted as the whole Hash it took off the shown balance
+  // (shownCoinsDelta), so the totals match what left the balance.
   const rows = await prisma.$queryRaw<Array<{
     kind: string
     day: Date
-    charged: bigint | null
+    amount: bigint
+    after: bigint
     seconds: number | null
-    count: bigint
   }>>(Prisma.sql`
     SELECT
-      kind,
-      date_trunc('day', created_at + ${offsetInterval}::interval) AS day,
-      SUM(charged_micro)::bigint AS charged,
-      SUM(COALESCE((units->>'second')::float8, 0))::float8 AS seconds,
-      COUNT(*)::bigint AS count
-    FROM app.app_coin_usage_charges
-    WHERE user_id = ${userId}
-      AND shadow = false
-      AND created_at >= ${utcTimestampLiteral(since)}::timestamp
-    GROUP BY kind, day`)
+      c.kind,
+      date_trunc('day', l.created_at + ${offsetInterval}::interval) AS day,
+      l.amount_micro AS amount,
+      l.balance_after_micro AS after,
+      COALESCE((c.units->>'second')::float8, 0)::float8 AS seconds
+    FROM app.app_coin_ledger l
+    JOIN app.app_coin_usage_charges c ON c.id = l.usage_charge_id
+    WHERE l.user_id = ${userId}
+      AND l.type = 'spend'
+      AND l.created_at >= ${utcTimestampLiteral(since)}::timestamp`)
 
-  const byKind = new Map<string, { micro: bigint; seconds: number; count: number }>()
-  const byDay = new Map<string, bigint>()
-  let totalMicro = 0n
+  const byKind = new Map<string, { coins: number; seconds: number; count: number }>()
+  const byDay = new Map<string, number>()
+  let totalCoins = 0
   for (const row of rows) {
-    const micro = row.charged ?? 0n
-    totalMicro += micro
-    const kind = byKind.get(row.kind) ?? { micro: 0n, seconds: 0, count: 0 }
-    kind.micro += micro
+    const coins = shownCoinsDelta(BigInt(row.amount), BigInt(row.after))
+    totalCoins += coins
+    const kind = byKind.get(row.kind) ?? { coins: 0, seconds: 0, count: 0 }
+    kind.coins += coins
     kind.seconds += row.seconds ?? 0
-    kind.count += Number(row.count)
+    kind.count += 1
     byKind.set(row.kind, kind)
     const date = row.day.toISOString().slice(0, 10)
-    byDay.set(date, (byDay.get(date) ?? 0n) + micro)
+    byDay.set(date, (byDay.get(date) ?? 0) + coins)
   }
 
   return {
     range,
-    totalCoins: microToSpentCoins(totalMicro),
+    totalCoins,
     kinds: COIN_USAGE_KINDS.map((kind) => {
       const entry = byKind.get(kind)
       return {
         kind,
-        coins: microToSpentCoins(entry?.micro ?? 0n),
+        coins: entry?.coins ?? 0,
         seconds: Math.round(entry?.seconds ?? 0),
         count: entry?.count ?? 0,
       }
     }),
     days: Array.from({ length: dayCount }, (_, index) => {
       const date = new Date(firstLocalDay + index * 86_400_000).toISOString().slice(0, 10)
-      return { date, coins: microToSpentCoins(byDay.get(date) ?? 0n) }
+      return { date, coins: byDay.get(date) ?? 0 }
     }),
   }
 }
@@ -168,9 +170,8 @@ export function coinUsageFeatureOf(charge: { kind: string; idempotencyKey?: stri
 }
 
 type UsageGroup = Extract<CoinHistoryItem, { type: 'usage' }> & {
-  micro: bigint
-  breakdownMicro: Map<string, bigint>
-  featureTotals: Map<CoinUsageFeature, { micro: bigint; seconds: number; count: number }>
+  breakdownCoins: Map<string, number>
+  featureTotals: Map<CoinUsageFeature, { coins: number; seconds: number; count: number }>
 }
 
 /**
@@ -187,7 +188,7 @@ export async function getCoinHistory(userId: string, cursor: string | null): Pro
     where: { userId, ...(cursorId === null ? {} : { id: { lt: cursorId } }) },
     orderBy: { id: 'desc' },
     take: HISTORY_PAGE_SIZE,
-    select: { id: true, type: true, amountMicro: true, usageChargeId: true, meta: true, createdAt: true },
+    select: { id: true, type: true, amountMicro: true, balanceAfterMicro: true, usageChargeId: true, meta: true, createdAt: true },
   })
 
   const chargeIds = rows.map(row => row.usageChargeId).filter((id): id is string => Boolean(id))
@@ -233,14 +234,14 @@ export async function getCoinHistory(userId: string, cursor: string | null): Pro
         id: row.id.toString(),
         type: 'grant',
         source: typeof meta?.source === 'string' ? meta.source : 'admin_grant',
-        coins: microToSpentCoins(row.amountMicro),
+        coins: shownCoinsDelta(row.amountMicro, row.balanceAfterMicro),
         at,
         ...counterpartOf(row.meta),
       })
       continue
     }
     if (row.type !== 'spend') {
-      items.push({ id: row.id.toString(), type: 'removal', reason: row.type, coins: microToSpentCoins(row.amountMicro), at, ...counterpartOf(row.meta) })
+      items.push({ id: row.id.toString(), type: 'removal', reason: row.type, coins: shownCoinsDelta(row.amountMicro, row.balanceAfterMicro), at, ...counterpartOf(row.meta) })
       continue
     }
     const charge = row.usageChargeId ? chargeById.get(row.usageChargeId) : undefined
@@ -258,24 +259,24 @@ export async function getCoinHistory(userId: string, cursor: string | null): Pro
         breakdown: {},
         details: [],
         firstAt: at,
-        micro: 0n,
-        breakdownMicro: new Map(),
+        breakdownCoins: new Map(),
         featureTotals: new Map(),
       }
       usageGroups.set(groupKey, group)
       items.push(group)
     }
-    const spent = -row.amountMicro
-    group.micro += spent
+    // Whole Hash this spend took off the shown balance (often 0 after a 1).
+    const spent = shownCoinsDelta(row.amountMicro, row.balanceAfterMicro)
+    group.coins += spent
     const kind = charge?.kind ?? 'translation'
-    group.breakdownMicro.set(kind, (group.breakdownMicro.get(kind) ?? 0n) + spent)
+    group.breakdownCoins.set(kind, (group.breakdownCoins.get(kind) ?? 0) + spent)
     const seconds = (charge?.units as { second?: unknown } | null)?.second
     if (kind === 'stt' && typeof seconds === 'number') group.sttSeconds += seconds
     // Newest first: each older row moves the group's start back.
     group.firstAt = at
     const feature = coinUsageFeatureOf(charge)
-    const total = group.featureTotals.get(feature) ?? { micro: 0n, seconds: 0, count: 0 }
-    total.micro += spent
+    const total = group.featureTotals.get(feature) ?? { coins: 0, seconds: 0, count: 0 }
+    total.coins += spent
     total.seconds += typeof seconds === 'number' ? seconds : 0
     total.count += 1
     group.featureTotals.set(feature, total)
@@ -283,15 +284,14 @@ export async function getCoinHistory(userId: string, cursor: string | null): Pro
 
   return {
     items: items.map((item) => {
-      if (!('breakdownMicro' in item)) return item
-      const { micro, breakdownMicro, featureTotals, ...usage } = item
+      if (!('breakdownCoins' in item)) return item
+      const { breakdownCoins, featureTotals, ...usage } = item
       return {
         ...usage,
-        coins: microToSpentCoins(micro),
-        breakdown: Object.fromEntries([...breakdownMicro].map(([kind, value]) => [kind, microToSpentCoins(value)])),
+        breakdown: Object.fromEntries(breakdownCoins),
         details: COIN_USAGE_FEATURE_ORDER.filter((feature) => featureTotals.has(feature)).map((feature) => {
           const total = featureTotals.get(feature)!
-          return { feature, coins: microToSpentCoins(total.micro), seconds: Math.round(total.seconds), count: total.count }
+          return { feature, coins: total.coins, seconds: Math.round(total.seconds), count: total.count }
         }),
       }
     }),
@@ -314,17 +314,24 @@ export async function getConversationCoinUsage(conversationId: string, viewerId:
   const room = await listConversationReadReceipts({ conversationId, userId: viewerId })
   if (!room) return null
   const memberIds = room.members.map(member => member.userId)
-  const sums = memberIds.length
-    ? await prisma.appCoinUsageCharge.groupBy({
-        by: ['userId'],
-        where: { sessionKey: room.sessionKey, shadow: false, userId: { in: memberIds } },
-        _sum: { chargedMicro: true },
-      })
+  // The whole Hash each spend took off its payer's shown balance (shownCoinsDelta).
+  const rows = memberIds.length
+    ? await prisma.$queryRaw<Array<{ userId: string; amount: bigint; after: bigint }>>(Prisma.sql`
+        SELECT l.user_id AS "userId", l.amount_micro AS amount, l.balance_after_micro AS after
+        FROM app.app_coin_ledger l
+        JOIN app.app_coin_usage_charges c ON c.id = l.usage_charge_id
+        WHERE l.type = 'spend'
+          AND c.session_key = ${room.sessionKey}
+          AND c.shadow = false
+          AND l.user_id IN (${Prisma.join(memberIds)})`)
     : []
-  const microByUser = new Map(sums.map(row => [row.userId, row._sum.chargedMicro ?? 0n]))
-  const members = memberIds.map(userId => ({ userId, coins: microToSpentCoins(microByUser.get(userId) ?? 0n) }))
+  const coinsByUser = new Map<string, number>()
+  for (const row of rows) {
+    coinsByUser.set(row.userId, (coinsByUser.get(row.userId) ?? 0) + shownCoinsDelta(BigInt(row.amount), BigInt(row.after)))
+  }
+  const members = memberIds.map(userId => ({ userId, coins: coinsByUser.get(userId) ?? 0 }))
   return {
     members,
-    totalCoins: microToSpentCoins([...microByUser.values()].reduce((sum, micro) => sum + micro, 0n)),
+    totalCoins: [...coinsByUser.values()].reduce((sum, coins) => sum + coins, 0),
   }
 }

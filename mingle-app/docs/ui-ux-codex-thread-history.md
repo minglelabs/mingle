@@ -2,12 +2,12 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
-## 2026-11-12 — 해씨: 1해씨 단위 올림, 자세한 사용 내역, 통역 첫 사용 비용 안내
+## 2026-11-12 — 해씨: 1해씨 단위로 빠지게, 자세한 사용 내역, 통역 첫 사용 비용 안내
 
 - Id: `2026-11-12-hash-whole-coins-detail-tip`
-- Every charge now takes a whole number of Hash, rounded up: a short voice talk line worth 0.2 Hash costs 1. The store's price list still shows the exact rates.
+- Hash leave in whole units, without overcharging. Charges stay exact. The shown balance is rounded down, so the first 0.1 spent takes a whole Hash off it, and the next spends change nothing until that Hash is used up. The history, the usage summary and the room's per-member usage now count each spend the same way: the whole Hash it took off the shown balance (`shownCoinsDelta`), so they add up to what left the balance. (A first try rounded every charge up to 1 Hash; that overcharged short lines and was dropped.)
 - In the Hash history, opening a room's day now shows, per feature, the time used, the count and the Hash. The features are: voice talk captions, voice talk interpretation audio, speech recognition, translation read aloud, typed message translation, other translation, and photo. The group's first and last time are shown too.
-- In a voice talk, the first time interpretation or its read-aloud is turned on (once per device per switch, only while Hash are charged), a tip under the buttons says about how many Hash a minute costs and that each line is rounded up. It closes on 알겠어요 or after 10 seconds. Copy is in 15 languages (`src/i18n/coin-detail-copy.ts`).
+- In a voice talk, the first time interpretation or its read-aloud is turned on (once per device per switch, only while Hash are charged), a tip under the buttons says about how many Hash a minute costs. It closes on 알겠어요 or after 10 seconds. Copy is in 15 languages (`src/i18n/coin-detail-copy.ts`).
 - Physical-device verification pending.
 
 ## 2026-11-12 — 보이스톡 자막: 폰 STT와 같은 번역 문맥, 같은 문장 분리
