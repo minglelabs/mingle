@@ -93,3 +93,27 @@ export function singleLabelResultDisagrees(
   const detectedBase = languageBase(result.sourceLanguage || '')
   return Boolean(detectedBase) && detectedBase !== languageBase(sourceLanguage)
 }
+
+/**
+ * A bubble translated piece by piece is never asked for its own-language row.
+ * True when it likely mixes languages, so that row is worth one more request:
+ * the labels name another language too, or the text uses another script.
+ * Without labels (typed text, a local stop) only the script can tell.
+ */
+export function isLikelyMixedUtterance(input: {
+  sttLanguages: readonly string[]
+  sourceLanguage: string
+  text: string
+}): boolean {
+  const sourceBase = languageBase(input.sourceLanguage)
+  if (!sourceBase || sourceBase === 'unknown') return false
+  if (input.sttLanguages.some((label) => label !== sourceBase)) return true
+  return !usesSingleScript(input.text, sourceBase) && listTextScripts(input.text).length > 0
+}
+
+/** The selected language that is the utterance's own (same base), or null. */
+export function findOwnSelectedLanguage(selectedLanguages: readonly string[], sourceLanguage: string): string | null {
+  const sourceBase = languageBase(sourceLanguage)
+  if (!sourceBase) return null
+  return selectedLanguages.find((language) => languageBase(language) === sourceBase) ?? null
+}

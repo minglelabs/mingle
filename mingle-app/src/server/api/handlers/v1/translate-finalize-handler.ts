@@ -23,6 +23,8 @@ import {
 } from '@/app/api/translate/finalize/utils'
 import { shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import {
+  findOwnSelectedLanguage,
+  isLikelyMixedUtterance,
   parseSttLanguageLabels,
   resolveSingleLabelTargetLanguages,
   singleLabelResultDisagrees,
@@ -627,6 +629,12 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
           })
         }
       }
+      if (isFinal && bubbleTailPlan) {
+        const own = await addOwnLanguageRow(translations)
+        translations = own.translations
+        if (own.mixed) meta = { ...meta, sourceLanguagesMixed: true }
+        if (own.usage) meta = { ...meta, usage: meta.usage ? sumTranslationUsage(meta.usage, own.usage) : own.usage }
+      }
       const responsePayload: Record<string, unknown> = {
         translations,
         ...(tailFill ? { tailFill } : {}),
@@ -716,6 +724,51 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       const response = NextResponse.json(responsePayload)
       ensureTrackingContext(request, response, { sessionKeyHint })
       return response
+    }
+
+    // A bubble translated piece by piece skips language redetection, so its
+    // own-language row (the foreign parts rendered in the bubble's language)
+    // is never asked for. When the finished bubble likely mixes languages, ask
+    // for that row alone, alongside the rest; it is kept only when the model
+    // confirms the mix.
+    const ownSelectedLanguage = isFinal && bubbleTailPlan && !testFaultMode
+      ? findOwnSelectedLanguage(normalizeSelectedLanguages(targetLanguagesRaw), sourceLanguage)
+      : null
+    const ownLanguageRowRequest = ownSelectedLanguage
+      && isLikelyMixedUtterance({ sttLanguages, sourceLanguage, text })
+      ? (() => {
+        const { bubbleTail: _bubbleTail, ...plainCtx } = ctx
+        return requestTranslationFromProvider({
+          ...plainCtx,
+          text,
+          targetLanguages: [ownSelectedLanguage],
+          shouldRedetectSourceLanguage: true,
+        }, providerConfig).catch((error: unknown) => {
+          logTranslateFinalizeWarning('bubble_tail_own_language_failed', {
+            ...buildTranslateFinalizeLogContext(ctx),
+            error: summarizeUnknownError(error),
+          })
+          return null
+        })
+      })()
+      : null
+    const addOwnLanguageRow = async (
+      translations: Record<string, string>,
+    ): Promise<{ translations: Record<string, string>, mixed: boolean, usage?: TranslationUsage }> => {
+      if (!ownLanguageRowRequest || !ownSelectedLanguage) return { translations, mixed: false }
+      const result = await ownLanguageRowRequest
+      const ownText = result?.translations[ownSelectedLanguage]?.trim()
+      const confirmed = Boolean(ownText)
+        && (result?.sourceLanguagesMixed === true || result?.sourceTextHasForeignScript === true)
+      logTranslateFinalizeInfo('bubble_tail_own_language', {
+        ...buildTranslateFinalizeLogContext(ctx),
+        sttLanguages,
+        confirmed,
+        sourceLanguagesMixed: result?.sourceLanguagesMixed ?? null,
+        sourceTextHasForeignScript: result?.sourceTextHasForeignScript ?? null,
+      })
+      if (!confirmed || !ownText) return { translations, mixed: false, usage: result?.usage }
+      return { translations: { ...translations, [ownSelectedLanguage]: ownText }, mixed: true, usage: result?.usage }
     }
 
     if (bubbleTailPlan && !bubbleTailPlan.remainingSource) {

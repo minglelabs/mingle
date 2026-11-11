@@ -392,6 +392,71 @@ describe('/api/translate/finalize route', () => {
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
+  it('adds the own-language row to a fixed bubble that mixes languages', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"en","sourceLanguagesMixed":true,"sourceTextHasForeignScript":true,"en":"It is interesting. It is like my life."}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'It is interesting. 내 목숨 같은데.',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko', 'en'],
+      sttLanguages: ['en', 'ko'],
+      isFinal: true,
+      bubbleTail: { translatedSource: 'It is interesting. 내 목숨 같은데.', translations: { ko: '흥미롭네. 내 목숨 같은데.' } },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ ko: '흥미롭네. 내 목숨 같은데.', en: 'It is interesting. It is like my life.' })
+    expect(json.sourceLanguagesMixed).toBe(true)
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    expect(readGeminiUserPrompt(0)).toContain('내 목숨 같은데')
+  })
+
+  it('drops the own-language row when the model finds no mix', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"en","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"en":"Hello there."}',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
+      },
+    })
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'Hello there.',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko', 'en'],
+      sttLanguages: ['en', 'es'],
+      isFinal: true,
+      bubbleTail: { translatedSource: 'Hello there.', translations: { ko: '안녕하세요.' } },
+    }) as never)
+    const json = await res.json()
+
+    expect(json.translations).toEqual({ ko: '안녕하세요.' })
+    expect(json.sourceLanguagesMixed).toBeUndefined()
+  })
+
+  it('asks nothing more for a fixed bubble in one language and one script', async () => {
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'Hello there.',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko', 'en'],
+      sttLanguages: ['en'],
+      isFinal: true,
+      bubbleTail: { translatedSource: 'Hello there.', translations: { ko: '안녕하세요.' } },
+    }) as never)
+
+    expect((await res.json()).translations).toEqual({ ko: '안녕하세요.' })
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
   it('returns translations and inline Inworld TTS audio when finalize succeeds', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
