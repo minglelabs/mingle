@@ -112,6 +112,19 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
   const botLevel = mine.bots ?? hosting?.botLevel
   const fill = mine.fill ?? hosting?.fill ?? 0
   const myTeam = mine.team ?? hosting?.myTeam
+  // A hosted room shows every seat: the people, the computers the host put in
+  // (the round's hamster count, `fill`, above the people), and the open ones.
+  const amHost = !!hosting?.amHost
+  const humans = view.seats.length
+  const computers = hosting ? Math.max(0, Math.min(fill - humans, view.open)) : 0
+  const openRows = hosting ? Math.max(0, view.open - computers) : 0
+  const botLabel = hosting?.botLevels.find((level) => level.id === botLevel)?.label ?? ''
+  const setFill = (next: number) => {
+    if (!hosting) return
+    setup({ fill: Math.max(hosting.fillMin, Math.min(hosting.fillMax, next)) })
+  }
+  const canAddComputer = !!hosting && humans + computers < Math.min(hosting.fillMax, humans + view.open)
+  const canRemoveComputer = !!hosting && computers > 0 && humans + computers - 1 >= hosting.fillMin
   return (
     <div className={cx(styles.cover, styles.coverLobby)} data-qa="hash-rush-lobby">
       <div className={cx(styles.card, styles.lobbyCard)}>
@@ -155,7 +168,30 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
               )}
             </li>
           ))}
-          {view.open > 0 ? <li className={cx(styles.seat, styles.seatOpen)}>{copy.openSeats(view.open)}</li> : null}
+          {hosting ? (
+            <>
+              {Array.from({ length: computers }, (_, index) => (
+                <li key={`bot-${index}`} className={cx(styles.seat, styles.seatBot)} data-qa="hash-rush-seat-bot">
+                  <span className={styles.botFace} aria-hidden="true">🤖</span>
+                  <span className={styles.seatName}><b>{copy.computer}</b>{botLabel ? <i className={styles.meTag}>{botLabel}</i> : null}</span>
+                  {amHost ? (
+                    <button type="button" className={styles.handHost} disabled={!canRemoveComputer} onClick={() => setFill(humans + computers - 1)} data-qa="hash-rush-remove-bot">
+                      {copy.removeComputer}
+                    </button>
+                  ) : <span />}
+                </li>
+              ))}
+              {Array.from({ length: openRows }, (_, index) => (
+                <li key={`open-${index}`} className={cx(styles.seat, styles.seatOpen)} data-qa="hash-rush-seat-open">
+                  {amHost ? (
+                    <button type="button" className={styles.addBot} disabled={!canAddComputer} onClick={() => setFill(Math.max(fill, humans) + 1)} data-qa="hash-rush-add-bot">
+                      {copy.addComputer}
+                    </button>
+                  ) : copy.emptySeat}
+                </li>
+              ))}
+            </>
+          ) : view.open > 0 ? <li className={cx(styles.seat, styles.seatOpen)}>{copy.openSeats(view.open)}</li> : null}
         </ul>
         {handSeat && onHandHost ? (
           <div className={styles.confirmRow} data-qa="hash-rush-hand-host-confirm">
@@ -188,14 +224,15 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
           </div>
         ) : null}
 
-        {hosting?.amHost && onSetup ? (
-          <div className={styles.setup} data-qa="hash-rush-host-setup">
+        {/* The room's settings, for everyone to see; only the host changes them. */}
+        {hosting ? (
+          <div className={cx(styles.setup, !amHost && styles.setupLocked)} data-qa="hash-rush-host-setup">
             <div className={styles.setupRow}>
               <div className={styles.options}>
-                <button type="button" aria-pressed={!teams} className={cx(styles.option, !teams && styles.optionOn)} onClick={() => setup({ teams: false })} data-qa="hash-rush-setup-solo">
+                <button type="button" aria-pressed={!teams} className={cx(styles.option, !teams && styles.optionOn)} disabled={!amHost} onClick={() => setup({ teams: false })} data-qa="hash-rush-setup-solo">
                   {hosting.words.solo}
                 </button>
-                <button type="button" aria-pressed={teams} className={cx(styles.option, teams && styles.optionOn)} onClick={() => setup({ teams: true })} data-qa="hash-rush-setup-team">
+                <button type="button" aria-pressed={teams} className={cx(styles.option, teams && styles.optionOn)} disabled={!amHost} onClick={() => setup({ teams: true })} data-qa="hash-rush-setup-team">
                   {hosting.words.team}
                 </button>
               </div>
@@ -204,7 +241,7 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
               <span className={styles.setupLabel}>{hosting.words.map}</span>
               <div className={styles.options}>
                 {hosting.maps.map((option) => (
-                  <button key={option.id} type="button" aria-pressed={map === option.id} className={cx(styles.option, map === option.id && styles.optionOn)} onClick={() => setup({ map: option.id })}>
+                  <button key={option.id} type="button" aria-pressed={map === option.id} className={cx(styles.option, map === option.id && styles.optionOn)} disabled={!amHost} onClick={() => setup({ map: option.id })}>
                     {option.label}
                   </button>
                 ))}
@@ -214,22 +251,15 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
               <span className={styles.setupLabel}>{copy.botLevel}</span>
               <div className={styles.options}>
                 {hosting.botLevels.map((level) => (
-                  <button key={level.id} type="button" aria-pressed={botLevel === level.id} className={cx(styles.option, botLevel === level.id && styles.optionOn)} onClick={() => setup({ bots: level.id })}>
+                  <button key={level.id} type="button" aria-pressed={botLevel === level.id} className={cx(styles.option, botLevel === level.id && styles.optionOn)} disabled={!amHost} onClick={() => setup({ bots: level.id })}>
                     {level.label}
                   </button>
                 ))}
               </div>
             </div>
-            <div className={styles.setupRow}>
-              <span className={styles.setupLabel}>{copy.hamsters}</span>
-              <div className={styles.stepper}>
-                <button type="button" aria-label="−" disabled={fill <= hosting.fillMin} onClick={() => setup({ fill: fill - 1 })}>−</button>
-                <b data-qa="hash-rush-setup-fill">{fill}</b>
-                <button type="button" aria-label="+" disabled={fill >= hosting.fillMax} onClick={() => setup({ fill: fill + 1 })}>+</button>
-              </div>
-            </div>
+            {!amHost ? <p className={styles.note} data-qa="hash-rush-host-only">{copy.hostOnly}</p> : null}
             {hosting.notice ? <p className={styles.notice} data-qa="hash-rush-start-notice">{hosting.notice}</p> : null}
-            {onGo ? (
+            {amHost && onGo ? (
               <button type="button" className={cx(styles.button, styles.primary, styles.startButton)} onClick={onGo} data-qa="hash-rush-start">
                 {hosting.words.start}
               </button>
@@ -254,7 +284,7 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
         ) : null}
         <p className={styles.note}>
           {hosting ? '' : copy.autoStart}
-          {view.bots > 0 ? `${hosting ? '' : ' · '}${copy.botsFill(view.bots)}` : ''}
+          {view.bots > 0 && !hosting ? ` · ${copy.botsFill(view.bots)}` : ''}
         </p>
         {view.lastTitle ? <p className={styles.note}>{copy.lastTitle} {view.lastTitle}</p> : null}
       </div>

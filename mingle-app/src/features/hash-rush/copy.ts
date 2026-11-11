@@ -54,6 +54,13 @@ export type HashRushGameCopy = {
   handHostTo: (name: string) => string
   botLevel: string
   hamsters: string
+  /** A computer in a seat (the lobby), and the host's buttons for it. */
+  computer: string
+  addComputer: string
+  removeComputer: string
+  emptySeat: string
+  /** Under the room's settings, for everyone but the host. */
+  hostOnly: string
   howTo: string
   waitingHostNamed: (name: string) => string
   pickTeam: string
@@ -102,6 +109,11 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     handHostTo: (name) => `${name}님에게 방장을 넘길까요?`,
     botLevel: '컴퓨터',
     hamsters: '햄스터 수',
+    computer: '컴퓨터',
+    addComputer: '+ 컴퓨터 넣기',
+    removeComputer: '빼기',
+    emptySeat: '빈자리',
+    hostOnly: '방장만 바꿀 수 있어요',
     howTo: '게임 방법',
     waitingHostNamed: (name) => `방장 ${name}님이 시작하기를 기다리는 중…`,
     pickTeam: '내 팀',
@@ -148,6 +160,11 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     handHostTo: (name) => `Make ${name} the host?`,
     botLevel: 'Computers',
     hamsters: 'Hamsters',
+    computer: 'Computer',
+    addComputer: '+ Add a computer',
+    removeComputer: 'Remove',
+    emptySeat: 'Open seat',
+    hostOnly: 'Only the host can change these',
     howTo: 'How to play',
     waitingHostNamed: (name) => `Waiting for the host, ${name}, to start…`,
     pickTeam: 'My team',
@@ -194,6 +211,11 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     handHostTo: (name) => `${name}さんにホストを渡しますか？`,
     botLevel: 'コンピューター',
     hamsters: 'ハムスターの数',
+    computer: 'コンピューター',
+    addComputer: '+ コンピューターを入れる',
+    removeComputer: '外す',
+    emptySeat: '空き席',
+    hostOnly: 'ホストだけが変えられます',
     howTo: 'あそびかた',
     waitingHostNamed: (name) => `ホストの${name}さんが始めるのを待っています…`,
     pickTeam: '自分のチーム',

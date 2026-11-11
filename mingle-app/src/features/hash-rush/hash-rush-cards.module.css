@@ -963,6 +963,48 @@ td.wins {
   cursor: pointer;
 }
 
+/* A computer in a seat, and the host's "+ computer" in an open one. */
+.seatBot {
+  background: #f4efe3;
+}
+
+.botFace {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 22px;
+}
+
+.addBot {
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: #8a5a12;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.addBot:disabled,
+.handHost:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Everyone sees the room's settings; only the host can press them. */
+.setupLocked .option:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.setupLocked .option.optionOn:disabled {
+  opacity: 0.9;
+}
+
 /* Pressed: it gives way under the finger at once. */
 .option:active,
 .stepper button:active {

@@ -22,7 +22,7 @@ describe('hash rush app copy', () => {
   })
 
   it('words the room as the server runs it: only the hosted lobby speaks of a host', () => {
-    const hostKeys = new Set(['host', 'handHost', 'handHostTo', 'waitingHostNamed', 'hostReady', 'handHostConfirm'])
+    const hostKeys = new Set(['host', 'handHost', 'handHostTo', 'waitingHostNamed', 'hostReady', 'handHostConfirm', 'hostOnly'])
     for (const copy of Object.values(HASH_RUSH_GAME_COPIES)) {
       for (const [key, value] of Object.entries(copy)) {
         if (hostKeys.has(key)) continue
