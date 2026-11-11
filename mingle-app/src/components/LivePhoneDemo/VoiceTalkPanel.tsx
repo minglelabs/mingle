@@ -240,12 +240,18 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     joinVoiceTalk({ conversationId, title: conversationTitle, lang: myLang })
   }, [conversationId, conversationTitle, myLang])
 
+  // A call this account is already in (it started it, or joined on another
+  // phone) is never offered to it as someone else's.
+  const viewerInCall = !!viewerUserId && !!call?.participants.some((p) => p.userId === viewerUserId)
+  const incomingOffered = live && !joined && !viewerInCall && call?.id !== declinedCallId
+
   // `openSignal` is a counter, so this runs once per press (adjusting state
-  // while rendering, not in an effect).
+  // while rendering, not in an effect). While the incoming card is up it is
+  // already asking whether to join: the button does not ask a second time.
   const [seenOpenSignal, setSeenOpenSignal] = useState(openSignal ?? 0)
   if ((openSignal ?? 0) !== seenOpenSignal) {
     setSeenOpenSignal(openSignal ?? 0)
-    if (openSignal && !joined) setStartPrompt(true)
+    if (openSignal && !joined && !incomingOffered) setStartPrompt(true)
   }
   if (startPrompt && joined) setStartPrompt(false)
 
@@ -261,10 +267,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   // The native ad banner draws above the page: a dialog's dark veil cannot
   // cover it, and a card low on the screen would sit half under it. It is
   // hidden while any of the three (start/join, leave, incoming call) is up.
-  // A call this account is already in (it started it, or joined on another
-  // phone) is never offered to it as someone else's.
-  const viewerInCall = !!viewerUserId && !!call?.participants.some((p) => p.userId === viewerUserId)
-  const incomingOffered = live && !joined && !viewerInCall && call?.id !== declinedCallId
   const dialogOpen = startPrompt || confirmLeave || incomingOffered
   useNativeBannerSuppression(dialogOpen)
 

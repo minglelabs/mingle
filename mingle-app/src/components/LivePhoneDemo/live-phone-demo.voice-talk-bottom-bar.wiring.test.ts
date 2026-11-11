@@ -76,7 +76,9 @@ describe('starting and joining a voice talk', () => {
 
   it('asks before starting or joining, low on the screen, and has no Join / Close row in the panel', () => {
     expect(panelSource).toContain('openSignal?: number')
-    expect(panelSource).toContain('if (openSignal && !joined) setStartPrompt(true)')
+    // Not while the incoming card is up: that card is already the question.
+    expect(panelSource).toContain('if (openSignal && !joined && !incomingOffered) setStartPrompt(true)')
+    expect(panelSource.indexOf('const incomingOffered =')).toBeLessThan(panelSource.indexOf('if (openSignal && !joined && !incomingOffered)'))
     expect(panelSource).toContain('data-qa="voice-talk-start-confirm"')
     expect(panelSource).toContain("startTitle: '대화방에 보이스톡을 시작하시겠습니까?'")
     const dialog = panelSource.slice(panelSource.indexOf('const startDialog ='), panelSource.indexOf('const incoming ='))
