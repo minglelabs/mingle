@@ -12,6 +12,7 @@ paths:
   - mingle-app/src/components/LivePhoneDemo/live-phone-demo.room-management-copy.ts
   - mingle-app/src/components/LivePhoneDemo/live-phone-demo.usage-format.ts
 history:
+  - 2026-11-11 — 보이스톡 패널: 사람 있는 자리만, 15개 언어
   - 2026-11-10 — 보이스톡: 패널 먼저, 참여는 패널에서 / 키보드 + 메뉴 / 시작 알림 / 목록 표시
   - 2026-11-10 — 보이스톡 버튼을 하단 바 왼쪽으로, 사용량은 메뉴로
   - 2026-10-31 — 그룹 보이스톡 UI를 채팅방 안 판으로 변경, Hash Rush 채팅방 시트
@@ -33,10 +34,12 @@ Bottom bar (voice mode):
    `live-demo-mic-button`, the photo button and `live-demo-keyboard-open` from the accessibility tree.
 2. Check that the room header has no phone button (only back, title, languages, PiP, menu).
 3. Tap `live-demo-voice-talk-button` once. Screenshot every ~300 ms for 1.5 s.
-4. Check the panel (`voice-talk-panel`): title "보이스톡 · 아무도 없어요" (or the English copy), 8 empty seats, and two
-   buttons, `voice-talk-dismiss` ("닫기") and `voice-talk-join` ("참여"). Confirm with the voice API that no call was
-   created and with a QA snapshot that STT did not start.
-5. Fold the panel by dragging it up, unfold it with the chevron, then tap `voice-talk-dismiss`. The panel goes away.
+4. A question comes up low on the screen (`voice-talk-start-confirm`): "대화방에 보이스톡을 시작하시겠습니까?" with
+   `voice-talk-start-cancel` ("취소") and `voice-talk-start-confirm-button` ("시작"). Confirm with the voice API that
+   no call was created and with a QA snapshot that STT did not start. Tap 취소: it goes away.
+5. Tap the button again and 시작. Once in the call, check the panel: people only plus one open seat (a dashed
+   circle with `+`), not eight seats; drag it up to fold it, tap the folded bar to unfold. Leave with
+   `voice-talk-leave`.
 
 Keyboard mode:
 6. Tap `live-demo-keyboard-open`, type `voice test`, tap `+` (`live-demo-attachment-open`). Screenshot the menu.
@@ -48,8 +51,8 @@ Keyboard mode:
 Menu usage row:
 9. Open the room menu (`live-demo-menu-button`). Find `live-demo-menu-usage` ("사용량") and read it: STT time and
    message count, separated by `·`. Compare the count with the room's messages.
-10. Switch the app language to English and to Japanese (or use the locale sweep's method) and repeat steps 4, 7 and
-    9 once each for the labels.
+10. Switch the app language to English, Japanese and Arabic (or use the locale sweep's method) and repeat steps 4,
+    7 and 9 once each: the question, the panel title and the seat labels are in that language, not English (T17).
 
 ## Oracle (pass when)
 
@@ -57,7 +60,7 @@ Menu usage row:
   earphone) mirrors the right pair (photo, keyboard): the outer buttons are the same distance from their screen
   edges and the inner gaps match, within 2 pt (T19, T21). No usage text is left in the bar.
 - No phone button in the header.
-- One tap shows the panel at once, without joining, starting a call or starting STT (T5, T8). Nothing else moves.
+- One tap asks first; nothing joins, starts a call or starts STT until 시작 is pressed (T5, T8, T22). Nothing else moves.
 - The panel sits under the top bar and does not cover the bottom bar or the newest message once folded (T10).
 - Keyboard mode: the voice talk row is in the `+` menu in the stated order, and choosing it keeps the keyboard and
   the typed text (T1 via T19: same pattern as the photo row).
