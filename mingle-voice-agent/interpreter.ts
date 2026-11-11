@@ -19,7 +19,8 @@ import { translateUtterance, type TranslateTurn } from './translate';
 import { synthesizeStream, TTS_SAMPLE_RATE } from './tts';
 import { createJoinToken, INTERPRETER_ROLE } from './token';
 import { addUsage, readersOf, type InterpreterUsage } from './service-logic';
-import { newLineId, reportCaption, reportPlayback } from './app-report';
+import { appReportsEnabled, newLineId, reportCaption, reportPlayback, requestTranslate, type TailState } from './app-report';
+import { shouldRequestInterimFill, unspokenRest } from './tail-fill';
 
 const LANE_SAMPLE_RATE = TTS_SAMPLE_RATE;
 const FRAME_MS = 20;
@@ -57,11 +58,27 @@ type Speaker = {
     partialSeq: number;
     /** The line being said: one id from its first partial to the saved room message. */
     lineId: string | null;
+    /** Its clause-by-clause translation so far. */
+    line: Line | null;
     lastPartialAt: number;
     stopped: boolean;
 };
 
-export type InterpreterStats = { segments: number; interpreted: number; echoSuppressed: number; errors: number };
+// A line while it is being said: like a phone's own speech, its translation
+// grows clause by clause (the app's tail fill) and each new clause is read
+// aloud as soon as it is fixed.
+type Line = {
+    id: string;
+    tail: TailState;
+    lastRequestedText: string;
+    inflight: Promise<void> | null;
+    /** Per language, the translation already queued to be read aloud. */
+    spoken: Record<string, string>;
+    /** Per language, what readers were last sent. */
+    shown: Record<string, string>;
+};
+
+export type InterpreterStats ={ segments: number; interpreted: number; echoSuppressed: number; errors: number };
 
 
 
@@ -193,6 +210,7 @@ export class Interpreter {
             recent: [],
             partialSeq: 0,
             lineId: null,
+            line: null,
             lastPartialAt: 0,
             stopped: false,
         };
@@ -265,14 +283,69 @@ export class Interpreter {
         // The same id as the line's room message (app-report.ts), so a reader's
         // live bubble turns into the saved one in its place.
         if (!speaker.lineId) speaker.lineId = newLineId(this.roomName);
+        const lang = normalizeLang(partial.lang) || speaker.lang;
         this.send({
             type: 'partial',
             id: speaker.lineId,
             speaker: speaker.identity,
             speakerName: speaker.name,
-            lang: normalizeLang(partial.lang) || speaker.lang,
+            lang,
             text: partial.text,
         }, false);
+        this.maybeFillLine(speaker, partial.text, lang);
+    }
+
+    private hasReaders(speaker: Speaker): boolean {
+        return readersOf({
+            speaker: speaker.identity,
+            interpreting: this.humans().filter(isInterpreting).map((participant) => participant.identity),
+        }).length > 0;
+    }
+
+    /** Languages a line is read aloud in: those someone other than its speaker listens in. */
+    private spokenLanguages(speaker: Speaker, sourceLang: string): string[] {
+        const langs = new Set<string>();
+        for (const participant of this.humans()) {
+            if (participant.identity === speaker.identity || !isListening(participant)) continue;
+            const lang = normalizeLang(participant.attributes.lang);
+            if (lang && lang !== sourceLang) langs.add(lang);
+        }
+        return [...langs];
+    }
+
+    // While the line is said: ask for the next clause when a phone would (a new
+    // punctuation mark, or a long stretch of new words), one request at a time.
+    private maybeFillLine(speaker: Speaker, text: string, sourceLang: string): void {
+        if (!appReportsEnabled() || !speaker.lineId || !this.hasReaders(speaker)) return;
+        if (!speaker.line || speaker.line.id !== speaker.lineId) {
+            speaker.line = { id: speaker.lineId, tail: { translatedSource: '', translations: {} }, lastRequestedText: '', inflight: null, spoken: {}, shown: {} };
+        }
+        const line = speaker.line;
+        if (line.inflight || !shouldRequestInterimFill(text, line.lastRequestedText)) return;
+        // The call's own audio picked up by this mic: its final is dropped too.
+        if (this.findEcho(speaker, text, sourceLang)) return;
+        line.lastRequestedText = text;
+        line.inflight = requestTranslate({ room: this.roomName, text, sourceLanguage: sourceLang, isFinal: false, bubbleTail: line.tail })
+            .then((reply) => {
+                if (!reply?.tailFill) return;
+                line.tail = reply.tailFill;
+                this.showTranslations(line, reply.tailFill.translations, reply.provider);
+                for (const lang of this.spokenLanguages(speaker, sourceLang)) {
+                    const piece = (reply.tailFill.contextTranslations[lang] || '').trim();
+                    if (!piece) continue;
+                    line.spoken[lang] = reply.tailFill.translations[lang] || piece;
+                    this.speak(line.id, lang, piece);
+                }
+            })
+            .finally(() => { line.inflight = null; });
+    }
+
+    private showTranslations(line: Line, translations: Record<string, string>, provider?: string): void {
+        for (const [lang, text] of Object.entries(translations)) {
+            if (!text || line.shown[lang] === text) continue;
+            line.shown[lang] = text;
+            this.send({ type: 'translation', id: line.id, lang, text, provider });
+        }
     }
 
     private onSegment(speaker: Speaker, segment: SttSegment): void {
@@ -280,14 +353,14 @@ export class Interpreter {
         ++this.segmentSeq;
         const id = speaker.lineId ?? newLineId(this.roomName);
         const partialId = id;
+        const line: Line = speaker.line && speaker.line.id === id
+            ? speaker.line
+            : { id, tail: { translatedSource: '', translations: {} }, lastRequestedText: '', inflight: null, spoken: {}, shown: {} };
         speaker.lineId = null;
+        speaker.line = null;
         // Written down only for someone else who reads it: a line nobody else
         // has interpretation on for is dropped (not saved, not paid).
-        const readers = readersOf({
-            speaker: speaker.identity,
-            interpreting: this.humans().filter(isInterpreting).map((participant) => participant.identity),
-        });
-        if (readers.length === 0) return;
+        if (!this.hasReaders(speaker)) return;
         const sourceLang = normalizeLang(segment.lang) || speaker.lang;
         this.stats.segments++;
         const echo = this.findEcho(speaker, segment.text, sourceLang);
@@ -301,8 +374,7 @@ export class Interpreter {
         const recentTurns = this.turns.slice(-RECENT_TURNS);
         this.turns.push({ text: segment.text, lang: sourceLang });
         if (this.turns.length > 20) this.turns.shift();
-        const targets = this.targetsFor(speaker.identity, sourceLang);
-        console.log(`[interpreter:${this.roomName}] ${speaker.name} [${sourceLang}] "${segment.text}" -> ${targets.join(',') || '(no listeners)'} endpoint=${segment.finalizedAt - segment.speechEndAt}ms`);
+        console.log(`[interpreter:${this.roomName}] ${speaker.name} [${sourceLang}] "${segment.text}" fixed=${line.tail.translatedSource.length}ch endpoint=${segment.finalizedAt - segment.speechEndAt}ms`);
         this.send({
             type: 'final',
             id,
@@ -311,55 +383,67 @@ export class Interpreter {
             speakerName: speaker.name,
             lang: sourceLang,
             text: segment.text,
-            targets,
+            targets: this.targetsFor(speaker.identity, sourceLang),
             speechEndAt: segment.speechEndAt,
             finalizedAt: segment.finalizedAt,
         });
-        const translated = targets.map((target) => this.interpret(id, segment, sourceLang, target, recentTurns)
-            .then((text) => [target, text] as const));
-        // The room message waits for the translations (they run in parallel,
-        // ahead of the read-aloud), so a reader's bubble has their language.
-        void Promise.all(translated).then((pairs) => reportCaption({
-            room: this.roomName,
-            id,
-            speaker: speaker.identity,
-            lang: sourceLang,
-            text: segment.text,
-            translations: Object.fromEntries(pairs.filter(([, text]) => !!text)),
-            durationMs: segment.durationMs,
-            startedAt: segment.speechEndAt - segment.durationMs,
-        }));
+        void (async () => {
+            // The last clause request finishes first: the final keeps what it fixed.
+            await line.inflight?.catch(() => undefined);
+            const reply = await requestTranslate({
+                room: this.roomName,
+                text: segment.text,
+                sourceLanguage: sourceLang,
+                isFinal: true,
+                ...(line.tail.translatedSource ? { bubbleTail: line.tail } : {}),
+            });
+            const translations = reply ? reply.translations : await this.translateDirect(segment, sourceLang, recentTurns);
+            this.showTranslations(line, translations, reply?.provider);
+            // The rest after the clauses already read aloud.
+            for (const lang of this.spokenLanguages(speaker, sourceLang)) {
+                const rest = unspokenRest(translations[lang] || '', line.spoken[lang] || '');
+                if (rest) this.speak(id, lang, rest, segment);
+            }
+            await reportCaption({
+                room: this.roomName,
+                id,
+                speaker: speaker.identity,
+                lang: sourceLang,
+                text: segment.text,
+                translations: Object.fromEntries(Object.entries(translations).filter(([lang, text]) => !!text && lang !== sourceLang)),
+                durationMs: segment.durationMs,
+                startedAt: segment.speechEndAt - segment.durationMs,
+            });
+        })().catch((error) => {
+            this.stats.errors++;
+            console.warn(`[interpreter:${this.roomName}] ${id} failed: ${error instanceof Error ? error.message : String(error)}`);
+        });
     }
 
-    /** Translates and queues the line on its lane; resolves with the translation ('' when it failed). */
-    private interpret(id: string, segment: SttSegment, sourceLang: string, targetLang: string, recentTurns: TranslateTurn[]): Promise<string> {
-        let resolveTranslation: (text: string) => void = () => undefined;
-        const translation = new Promise<string>((resolve) => { resolveTranslation = resolve; });
-        const lane = this.ensureLane(targetLang);
-        // Translation and TTS start now, in parallel with whatever the lane is
-        // still playing; audio is buffered until this line's turn.
-        const audio = new ChunkQueue<Int16Array>();
-        const meta = { translation: '', provider: '', translatedAt: 0, firstAudioAt: 0 };
-        void (async () => {
-            const result = await translateUtterance({ text: segment.text, sourceLang, targetLang, recentTurns });
-            resolveTranslation(result.text);
-            meta.translation = result.text;
-            meta.provider = result.provider;
-            meta.translatedAt = Date.now();
-            this.send({ type: 'translation', id, lang: targetLang, text: result.text, provider: result.provider });
-            // Read aloud only when someone in that language listens (captions only otherwise).
-            if (!result.text || this.listenersFor(targetLang).length === 0) return audio.end();
-            await synthesizeStream(result.text, targetLang, (samples) => {
-                if (!meta.firstAudioAt) meta.firstAudioAt = Date.now();
-                audio.push(samples);
-            });
-            audio.end();
-        })().catch((error) => {
-            resolveTranslation('');
-            audio.fail(error);
-        });
+    /** Without the app (no APP_INTERNAL_URL): the line alone, into the readers' languages. */
+    private async translateDirect(segment: SttSegment, sourceLang: string, recentTurns: TranslateTurn[]): Promise<Record<string, string>> {
+        const targets = this.targetsFor('', sourceLang);
+        const pairs = await Promise.all(targets.map(async (targetLang) => {
+            const result = await translateUtterance({ text: segment.text, sourceLang, targetLang, recentTurns }).catch(() => ({ text: '' }));
+            return [targetLang, result.text] as const;
+        }));
+        return Object.fromEntries(pairs.filter(([, text]) => !!text));
+    }
 
-        // Keep the lane's chain non-rejecting; failures are reported per line.
+    /** Reads a piece of a line aloud on its language's lane, after what the lane already has queued. */
+    private speak(id: string, targetLang: string, text: string, segment?: SttSegment): void {
+        const lane = this.ensureLane(targetLang);
+        // TTS starts now, in parallel with whatever the lane is still playing;
+        // audio is buffered until this piece's turn.
+        const audio = new ChunkQueue<Int16Array>();
+        const queuedAt = Date.now();
+        let firstAudioAt = 0;
+        synthesizeStream(text, targetLang, (samples) => {
+            if (!firstAudioAt) firstAudioAt = Date.now();
+            audio.push(samples);
+        }).then(() => audio.end(), (error) => audio.fail(error));
+
+        // Keep the lane's chain non-rejecting; failures are reported per piece.
         lane.chain = lane.chain.then(async () => {
             let playAt = 0;
             let played = 0;
@@ -368,17 +452,14 @@ export class Interpreter {
                     if (!playAt) {
                         playAt = Date.now();
                         const metrics = {
-                            endpointMs: segment.finalizedAt - segment.speechEndAt,
-                            translateMs: meta.translatedAt - segment.finalizedAt,
-                            ttsFirstAudioMs: meta.firstAudioAt - meta.translatedAt,
-                            queueMs: playAt - meta.firstAudioAt,
-                            speechEndToPlayMs: playAt - segment.speechEndAt,
-                            translator: meta.provider,
+                            ttsFirstAudioMs: firstAudioAt - queuedAt,
+                            queueMs: playAt - firstAudioAt,
+                            ...(segment ? { speechEndToPlayMs: playAt - segment.speechEndAt } : {}),
                         };
                         this.stats.interpreted++;
-                        lane.recent.push({ text: meta.translation, at: playAt });
-                        console.log(`[interpreter:${this.roomName}] ${id} -> ${targetLang} "${meta.translation}" ${JSON.stringify(metrics)}`);
-                        this.send({ type: 'play', id, lang: targetLang, text: meta.translation, playAt, metrics });
+                        lane.recent.push({ text, at: playAt });
+                        console.log(`[interpreter:${this.roomName}] ${id} -> ${targetLang} "${text}" ${JSON.stringify(metrics)}`);
+                        this.send({ type: 'play', id, lang: targetLang, text, playAt, metrics });
                         this.send({ type: 'lane', lang: targetLang, playing: true });
                     }
                     played += await this.capture(lane, samples);
@@ -398,11 +479,11 @@ export class Interpreter {
                     const listeners = this.listenersFor(targetLang);
                     addUsage(this.usage, targetLang, listeners, audioMs);
                     this.send({ type: 'lane', lang: targetLang, playing: false, audioMs });
-                    void reportPlayback({ room: this.roomName, id, lang: targetLang, listeners, audioMs });
+                    // One charge per piece: the id carries the piece's start.
+                    void reportPlayback({ room: this.roomName, id: `${id}:${queuedAt}`, lang: targetLang, listeners, audioMs });
                 }
             }
         });
-        return translation;
     }
 
     private carry = new Map<Lane, Int16Array>();

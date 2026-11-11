@@ -2129,12 +2129,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         // Finished: its saved message replaces it within a moment, or it was not saved.
         continue
       }
+      const translations = Object.fromEntries(Object.entries(line.translations ?? {})
+        .filter(([language, text]) => language !== line.lang && typeof text === 'string' && text.trim()))
       drafts.push({
         id,
         originalText: line.original,
         originalLang: line.lang || 'unknown',
-        translations: {},
-        targetLanguages: [],
+        translations,
+        targetLanguages: Object.keys(translations),
         speakerUserId: line.speaker,
         speakerName: line.speakerName,
         createdAtMs: entry.firstAt,

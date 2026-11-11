@@ -58,6 +58,8 @@ export type VoiceTalkCaptionLine = {
   speakerName: string
   lang: string
   original: string
+  /** Per-language translations so far (clause by clause while it is said). */
+  translations?: Record<string, string>
   isPartial: boolean
   isEcho: boolean
 }

@@ -173,6 +173,36 @@ export async function recordVoiceCaption(report: VoiceCaptionReport): Promise<"s
   return "saved";
 }
 
+/**
+ * The room's languages, as its language picker shows them: the union of the
+ * active members' own picks in a shared room, the channel's list otherwise.
+ */
+export function roomLanguagesOf(channel: {
+  selectedLanguages: string[];
+  members: ReadonlyArray<{ selectedLanguages: string[] }>;
+}): string[] {
+  const picks = channel.members.length >= 2
+    ? channel.members.flatMap((member) => member.selectedLanguages)
+    : channel.selectedLanguages;
+  return [...new Set(picks.map((language) => language.trim()).filter((language) => LANG.test(language)))];
+}
+
+/** The languages a line said in this call is translated into (all of the room's but its own). */
+export async function readVoiceRoomLanguages(room: string): Promise<string[] | null> {
+  const call = await prisma.appVoiceCall.findFirst({
+    where: { livekitRoom: room, status: "live" },
+    select: {
+      channel: {
+        select: {
+          selectedLanguages: true,
+          members: { where: { leftAt: null }, select: { selectedLanguages: true } },
+        },
+      },
+    },
+  });
+  return call ? roomLanguagesOf(call.channel) : null;
+}
+
 /** Charges each listener of a translation read aloud, when they are in the call. */
 export async function recordVoicePlayback(report: VoicePlaybackReport): Promise<number> {
   if (report.audioMs <= 0 || report.listeners.length === 0) return 0;

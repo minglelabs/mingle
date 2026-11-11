@@ -3,6 +3,7 @@ import {
   isVoiceInternalRequestAuthorized,
   parseVoiceCaptionReport,
   parseVoicePlaybackReport,
+  roomLanguagesOf,
 } from "@/server/voice/voice-interpreter-reports";
 
 describe("voice interpreter reports", () => {
@@ -27,5 +28,11 @@ describe("voice interpreter reports", () => {
     expect(parseVoicePlaybackReport({ room: "r", id: "i", lang: "en", listeners: ["a", "a", "", 3, "b"], audioMs: 800 }))
       .toEqual({ room: "r", id: "i", lang: "en", listeners: ["a", "b"], audioMs: 800 });
     expect(parseVoicePlaybackReport({ room: "r", id: "i", lang: "en", audioMs: -5 })?.audioMs).toBe(0);
+  });
+
+  it("translates captions into the room's languages: the members' picks in a shared room, the channel's alone", () => {
+    expect(roomLanguagesOf({ selectedLanguages: ["ko"], members: [{ selectedLanguages: ["ko", "en"] }, { selectedLanguages: ["en", "ja"] }] }))
+      .toEqual(["ko", "en", "ja"]);
+    expect(roomLanguagesOf({ selectedLanguages: ["ko", "en"], members: [{ selectedLanguages: ["ja"] }] })).toEqual(["ko", "en"]);
   });
 });

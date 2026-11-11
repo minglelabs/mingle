@@ -61,6 +61,59 @@ export function reportPlayback(report: PlaybackReport): Promise<void> {
     return post('/api/internal/voice/playback', report);
 }
 
+/** What is already translated of a line said in the call (mingle-app `bubble-tail.ts`). */
+export type TailState = {
+    translatedSource: string;
+    translations: Record<string, string>;
+    contextSource?: string;
+    contextTranslations?: Record<string, string>;
+};
+
+export type TranslateReply = {
+    translations: Record<string, string>;
+    /** Interim only: the line's translated part grew; `contextTranslations` is the piece just added. */
+    tailFill?: Required<TailState>;
+    targetLanguages: string[];
+    provider?: string;
+};
+
+/**
+ * POST /api/internal/voice/translate: the room's own translation (the request
+ * a phone sends for its speech), into all of the room's languages. Null when
+ * the app could not be asked.
+ */
+export async function requestTranslate(input: {
+    room: string;
+    text: string;
+    sourceLanguage: string;
+    isFinal: boolean;
+    bubbleTail?: TailState;
+}): Promise<TranslateReply | null> {
+    if (!appReportsEnabled()) return null;
+    try {
+        const response = await fetch(`${APP_INTERNAL_URL}/api/internal/voice/translate`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-voice-internal-secret': VOICE_INTERNAL_SECRET },
+            body: JSON.stringify(input),
+            signal: AbortSignal.timeout(input.isFinal ? 15_000 : 8_000),
+        });
+        if (!response.ok) {
+            console.warn(`[app] /api/internal/voice/translate -> HTTP ${response.status}`);
+            return null;
+        }
+        const data = await response.json() as Partial<TranslateReply>;
+        return {
+            translations: data.translations && typeof data.translations === 'object' ? data.translations : {},
+            ...(data.tailFill ? { tailFill: data.tailFill } : {}),
+            targetLanguages: Array.isArray(data.targetLanguages) ? data.targetLanguages : [],
+            provider: typeof data.provider === 'string' ? data.provider : undefined,
+        };
+    } catch (error) {
+        console.warn(`[app] /api/internal/voice/translate failed: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+    }
+}
+
 /** A line id that stays unique across interpreter restarts in the same room. */
 export function newLineId(room: string): string {
     return `${room}-${randomUUID()}`;

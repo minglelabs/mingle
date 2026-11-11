@@ -11,7 +11,7 @@
     "server": "node ./node_modules/ts-node/dist/bin.js --transpile-only poc-server.ts",
     "agent": "node ./node_modules/ts-node/dist/bin.js --transpile-only agent.ts",
     "bench": "node ./node_modules/ts-node/dist/bin.js --transpile-only scripts/bench.ts",
-    "test": "node --test --require ./node_modules/ts-node/register/transpile-only service-logic.test.ts",
+    "test": "node --test --require ./node_modules/ts-node/register/transpile-only service-logic.test.ts tail-fill.test.ts",
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
