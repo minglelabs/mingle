@@ -243,12 +243,23 @@ describe('a call left behind by an app restart', () => {
     expect(isAbandonedJoinedCall({ rememberedCallId: 'c1', call: null, viewerUserId: 'me', joinedNow: false })).toBe(false)
   })
 
-  it('is left on the server and emptied from its seat as soon as the room opens', () => {
+  it('is left on the server and emptied from its seat once the app has had time to say it is still in it', () => {
     const handler = panelSource.slice(panelSource.indexOf("if (detail.type === 'status') {"), panelSource.indexOf("} else if (detail.type === 'room')"))
     expect(handler).toContain('/voice/leave')
     expect(handler).toContain("method: 'POST'")
     expect(handler).toContain('writeJoinedCallMarker(conversationId, null)')
-    expect(handler).toContain('participants: detail.call.participants.filter((p) => p.userId !== viewerUserId)')
+    expect(handler).toContain('participants: current.participants.filter((p) => p.userId !== viewerUserId)')
+    // Not on the first status: a reloaded page can get one from the app's old
+    // poll before the app's "still connected", and leaving then drops a live call's seat.
+    expect(handler).toContain('ABANDONED_CALL_CONFIRM_MS')
+    expect(handler).toContain("if (phaseRef.current === 'connecting' || phaseRef.current === 'connected') return")
+  })
+
+  it('takes its seat again when the server has it as left while the phone is in the call', () => {
+    const handler = panelSource.slice(panelSource.indexOf("if (detail.type === 'status') {"), panelSource.indexOf("} else if (detail.type === 'room')"))
+    expect(handler).toContain("phaseRef.current === 'connected' && detail.call && viewerUserId")
+    expect(handler).toContain('`${base}/token`')
+    expect(handler).toContain('`${base}/interpret`')
   })
 
   it('remembers a call once connected and forgets it on leaving', () => {

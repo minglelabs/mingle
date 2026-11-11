@@ -126,6 +126,10 @@ export function isAbandonedJoinedCall(input: {
     && input.call.participants.some((participant) => participant.userId === input.viewerUserId)
 }
 
+/** How long "this phone left the call it remembers" must hold before its seat is given up. */
+const ABANDONED_CALL_CONFIRM_MS = 2_500
+const RESEAT_MIN_GAP_MS = 15_000
+
 export function isVoiceTalkAvailable(): boolean {
   return bridge() !== null
 }
@@ -268,6 +272,12 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const joined = phase === 'connecting' || phase === 'connected'
   // The phase as the event handler below needs it (it outlives a render).
   const phaseRef = useRef<Phase>('idle')
+  const abandonTimerRef = useRef<number | null>(null)
+  const reseatAtRef = useRef(0)
+  const myLangRef = useRef(myLang)
+  useEffect(() => { myLangRef.current = myLang }, [myLang])
+  const interpretOnRef = useRef(interpretOn)
+  useEffect(() => { interpretOnRef.current = interpretOn }, [interpretOn])
   const onListenOnlySyncRef = useRef(props.onListenOnlySync)
   useEffect(() => { onListenOnlySyncRef.current = props.onListenOnlySync }, [props.onListenOnlySync])
   const onInterpretSyncRef = useRef(props.onInterpretSync)
@@ -281,15 +291,36 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
       const detail = (event as CustomEvent<VoiceEvent>).detail
       if (!detail || ('conversationId' in detail && detail.conversationId && detail.conversationId !== conversationId)) return
       if (detail.type === 'status') {
-        // The app reports a call it is in before the first status arrives, so
-        // "not joined" here is real. A call remembered from before a restart
-        // is left now, and this viewer leaves its seat at once.
+        // A call remembered from before a restart, which the app is not in
+        // now, is left: this viewer gives up its seat.
         const joinedNow = phaseRef.current === 'connecting' || phaseRef.current === 'connected'
         if (isAbandonedJoinedCall({ rememberedCallId: readJoinedCallMarker(conversationId), call: detail.call, viewerUserId, joinedNow }) && detail.call) {
-          writeJoinedCallMarker(conversationId, null)
-          void fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/leave`), { method: 'POST' }).catch(() => undefined)
-          setCall({ ...detail.call, participants: detail.call.participants.filter((p) => p.userId !== viewerUserId) })
-          return
+          // Not at once: after the page reloads, a status from the app's old
+          // poll can arrive before the app says it is still in the call.
+          if (abandonTimerRef.current === null) {
+            abandonTimerRef.current = window.setTimeout(() => {
+              abandonTimerRef.current = null
+              if (phaseRef.current === 'connecting' || phaseRef.current === 'connected') return
+              writeJoinedCallMarker(conversationId, null)
+              void fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/leave`), { method: 'POST' }).catch(() => undefined)
+              setCall((current) => current ? { ...current, participants: current.participants.filter((p) => p.userId !== viewerUserId) } : current)
+            }, ABANDONED_CALL_CONFIRM_MS)
+          }
+        }
+        // In the call, but the server has this viewer's seat as left: take it
+        // again (and say again that interpretation is on), or nobody reads
+        // the captions and their lines are never saved.
+        if (phaseRef.current === 'connected' && detail.call && viewerUserId
+          && !detail.call.participants.some((p) => p.userId === viewerUserId)
+          && Date.now() - reseatAtRef.current > RESEAT_MIN_GAP_MS) {
+          reseatAtRef.current = Date.now()
+          const base = buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice`)
+          const json = { method: 'POST', headers: { 'content-type': 'application/json' } }
+          void fetch(`${base}/token`, { ...json, body: JSON.stringify({ lang: myLangRef.current }) })
+            .then((response) => (response.ok && interpretOnRef.current
+              ? fetch(`${base}/interpret`, { ...json, body: JSON.stringify({ on: true }) })
+              : undefined))
+            .catch(() => undefined)
         }
         setCall(detail.call)
       } else if (detail.type === 'room') {
@@ -305,6 +336,10 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
       }
       else if (detail.type === 'state') {
         phaseRef.current = detail.phase
+        if ((detail.phase === 'connecting' || detail.phase === 'connected') && abandonTimerRef.current !== null) {
+          window.clearTimeout(abandonTimerRef.current)
+          abandonTimerRef.current = null
+        }
         if (detail.phase === 'left') writeJoinedCallMarker(conversationId, null)
         setPhase(detail.phase)
         if (detail.phase === 'error') setError(detail.errorKind === 'voice_room_full' ? copy.full : copy.error)
@@ -316,6 +351,10 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     post({ type: 'native_voice_status_request', payload: { conversationId } })
     return () => {
       window.removeEventListener(NATIVE_VOICE_EVENT, onEvent)
+      if (abandonTimerRef.current !== null) {
+        window.clearTimeout(abandonTimerRef.current)
+        abandonTimerRef.current = null
+      }
       // Leaving the room screen stops the polling; a joined call keeps running.
       post({ type: 'native_voice_status_stop' })
     }
