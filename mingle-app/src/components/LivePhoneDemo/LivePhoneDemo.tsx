@@ -7324,16 +7324,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const earphoneModeControlLabel = earphoneModeGate.waitingForEarphones
     ? `${earphoneModeCopy.label}, ${earphoneModeCopy.waitingLabel}`
     : earphoneModeCopy.label
-  // Keyboard mode "+" menu: the same voice talk panel as the voice-mode phone button.
+  // The voice-mode phone button and the keyboard-mode "+" menu item do the
+  // same: during a call ask to leave, otherwise ask to start (or join) one.
+  const handleVoiceTalkPress = useCallback(() => {
+    if (resolveVoiceTalkButtonPress(voiceTalkState) === 'confirm_leave') {
+      setVoiceTalkLeaveSignal((n) => n + 1)
+    } else {
+      setVoiceTalkOpenSignal((n) => n + 1)
+    }
+  }, [voiceTalkState])
   const voiceTalkMenuItem = useMemo<ConversationImageComposerVoiceTalk | undefined>(() => (
     headerMode === 'conversation' && conversationId && voiceTalkAvailable
       ? {
           label: roomManagementCopy.voiceTalkMenuItemLabel,
           active: voiceTalkState.live || voiceTalkState.joined,
-          onSelect: () => setVoiceTalkOpenSignal((n) => n + 1),
+          onSelect: handleVoiceTalkPress,
         }
       : undefined
-  ), [conversationId, headerMode, roomManagementCopy.voiceTalkMenuItemLabel, voiceTalkAvailable, voiceTalkState.joined, voiceTalkState.live])
+  ), [conversationId, handleVoiceTalkPress, headerMode, roomManagementCopy.voiceTalkMenuItemLabel, voiceTalkAvailable, voiceTalkState.joined, voiceTalkState.live])
   const earphoneModeMenuItem = useMemo<ConversationImageComposerEarphoneMode | undefined>(() => (
     earphoneModeGate.controlVisible
       ? {
@@ -10307,14 +10315,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <VoiceTalkButton
                         uiLocale={uiLocale}
                         active={voiceTalkState.live || voiceTalkState.joined}
-                        onPress={() => {
-                          // During a call the button asks to leave; otherwise it asks to start (or join) one.
-                          if (resolveVoiceTalkButtonPress(voiceTalkState) === 'confirm_leave') {
-                            setVoiceTalkLeaveSignal((n) => n + 1)
-                          } else {
-                            setVoiceTalkOpenSignal((n) => n + 1)
-                          }
-                        }}
+                        onPress={handleVoiceTalkPress}
                         sizePx={VOICE_MODE_SIDE_BUTTON_SIZE_PX}
                       />
                     ) : null}

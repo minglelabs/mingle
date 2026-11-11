@@ -276,3 +276,14 @@ describe('folded panel', () => {
     expect(chevron).toContain('event.stopPropagation()')
   })
 })
+
+describe('both voice talk entry points', () => {
+  it('the phone button and the keyboard-mode + menu item share one handler: leave during a call, start or join otherwise', () => {
+    const handler = liveDemoSource.slice(liveDemoSource.indexOf('const handleVoiceTalkPress = useCallback'), liveDemoSource.indexOf('const voiceTalkMenuItem = useMemo'))
+    expect(handler).toContain("resolveVoiceTalkButtonPress(voiceTalkState) === 'confirm_leave'")
+    expect(handler).toContain('setVoiceTalkLeaveSignal((n) => n + 1)')
+    expect(handler).toContain('setVoiceTalkOpenSignal((n) => n + 1)')
+    expect(liveDemoSource).toContain('onSelect: handleVoiceTalkPress,')
+    expect(liveDemoSource).toContain('onPress={handleVoiceTalkPress}')
+  })
+})
