@@ -24,6 +24,7 @@ import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import HashRushGame from './HashRushGame'
 import { hashRushGameCopy } from './copy'
 import { hashRushInviteCopy } from './invite-copy'
+import HashRushHowToPage from './HashRushHowToPage'
 import type { HashRushRoomChat } from './room-chat'
 
 // Android back lowers the game before the room's own layers (composer and
@@ -67,7 +68,9 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
   const copy = hashRushGameCopy(uiLocale)
   const inviteCopy = hashRushInviteCopy(uiLocale)
   const [confirmQuit, setConfirmQuit] = useState(false)
+  const [howTo, setHowTo] = useState(false)
   if (confirmQuit && !open) setConfirmQuit(false)
+  if (howTo && !open) setHowTo(false)
   const chatOpen = !!chat?.open
   const closeChat = chat?.onClose
 
@@ -82,12 +85,13 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
   useEffect(() => {
     if (!open) return
     return registerNativeBackHandler(() => {
-      if (confirmQuit) setConfirmQuit(false)
+      if (howTo) setHowTo(false)
+      else if (confirmQuit) setConfirmQuit(false)
       else if (chatOpen && closeChat) closeChat()
       else onClose()
       return true
     }, NATIVE_BACK_PRIORITY)
-  }, [chatOpen, closeChat, confirmQuit, onClose, open])
+  }, [chatOpen, closeChat, confirmQuit, howTo, onClose, open])
 
   useEffect(() => {
     if (!open) return
@@ -123,7 +127,20 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
         chat={chat}
         onBack={onClose}
         onQuit={onQuit ? () => setConfirmQuit(true) : undefined}
+        onHowTo={() => setHowTo(true)}
       />
+      {howTo ? (
+        <div className="absolute inset-0 z-[10] flex flex-col bg-white" data-qa="hash-rush-howto-sheet" role="dialog" aria-modal="true" aria-label={inviteCopy.howTo}>
+          <div className="flex shrink-0 items-center border-b border-gray-200 px-4" style={{ paddingTop: 'env(safe-area-inset-top, 0px)', height: 'calc(55px + env(safe-area-inset-top, 0px))' }}>
+            <span className="w-10" aria-hidden="true" />
+            <p className="flex-1 text-center text-[1rem] font-semibold text-gray-950">{inviteCopy.howTo}</p>
+            <button type="button" onClick={() => setHowTo(false)} aria-label={copy.close} className="inline-flex h-[38px] w-10 items-center justify-center text-[1.4rem] text-gray-700">×</button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+            <HashRushHowToPage uiLocale={uiLocale} />
+          </div>
+        </div>
+      ) : null}
       {confirmQuit && onQuit ? (
         <div
           className="absolute inset-0 z-[10] flex items-end justify-center bg-black/40 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+96px)]"

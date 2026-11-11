@@ -7,14 +7,22 @@
 //                  { t: 'i', n, mx, my, ax, ay, seq, th, sk }   inputs, numbered
 //                  { t: 'sit' }   a spectator takes a free seat
 //                  { t: 'stand' }   a player gives up the seat to watch (not mid-round)
+//                  { t: 'team', team }   a player picks a side (team play)
+//   host only      { t: 'setup', teams?, map?, bots?, fill? }   between rounds
+//                  { t: 'go' }   starts the round
+//                  { t: 'host', seat }   hands the room to the person in that seat
 //   server -> app  { t: 'lobby', slots, spect, teams, map, you, wins, tot, rd, hist, nx, fill, title }
 //                  { t: 'start', g, map, players, you, wins, tot, rd, ... }   a round
 //                  { t: 's', g, k, ak, st, ph, cd, tm, hx, nb, w, ws, to, p, hz, ev }
 //                  { t: 'over', g, wins, tot, rd, champ, nx, title }   right after a round's last snapshot
 //                  { t: 'lobbyscreen' }   the round is over, back to the lobby
+//                  { t: 'nope', why }   the host's `go` was turned down ('needTeams', 'nobody')
 // (`chat`, `rename` and pings are the line's business or not the app's.)
 //
-// Nobody is the host of a server room: it starts every round by itself. `nx`
+// The app's rooms are hosted (joined with host=1): the first one in hosts it,
+// sets it up and starts every round; the lobby then also carries `hosted`,
+// `host` (the host's seat, -1 watching), `hostName`, `bots` and `me` (this
+// viewer hosts). A room that is not hosted starts every round by itself. `nx`
 // says how long until the next one starts (ms, -1 when none is coming), `fill`
 // how many hamsters a round has at least (computers take the empty seats) and
 // `title` the race to the title. A server from before these (no `over`, no
@@ -64,6 +72,40 @@ export type HashRushLobby = {
   fill: number
   title: HashRushTitleRule | null
   seasons: HashRushSeason[]
+  /** A host runs the room: nothing starts until they say so. */
+  hosted: boolean
+  /** The host's seat, -1 when the host watches (or there is none). */
+  hostSeat: number
+  hostName: string
+  /** This viewer hosts the room. */
+  amHost: boolean
+  /** The computers' level. */
+  botLevel: string
+}
+
+export const HASH_RUSH_BOT_LEVELS = ['easy', 'normal', 'hard', 'ace'] as const
+export const HASH_RUSH_FILL_MIN = 2
+export const HASH_RUSH_FILL_MAX = 8
+/** Sides a player can pick in team play (the server takes 0-3). */
+export const HASH_RUSH_TEAMS = 4
+
+export type HashRushSetup = { teams?: boolean, map?: string, bots?: string, fill?: number }
+
+export function setupMessage(patch: HashRushSetup) {
+  return { t: 'setup' as const, ...patch }
+}
+export const GO_MESSAGE = { t: 'go' as const }
+export function handHostMessage(seat: number) {
+  return { t: 'host' as const, seat }
+}
+export function teamMessage(team: number) {
+  return { t: 'team' as const, team }
+}
+
+/** Why the host's start was turned down, or null when the message is not that. */
+export function readNope(message: unknown): string | null {
+  const m = record(message)
+  return m && m.t === 'nope' ? (typeof m.why === 'string' ? m.why.slice(0, 24) : 'unknown') : null
 }
 
 export type HashRushSwing = { phase: string, t: number, dx: number, dy: number }
@@ -330,6 +372,11 @@ export function readLobby(message: unknown): HashRushLobby | null {
     fill: Math.max(0, Math.floor(num(m.fill))),
     title: readTitleRule(m.title),
     seasons: readSeasons(m.hist),
+    hosted: m.hosted === true,
+    hostSeat: Number.isInteger(m.host) ? m.host as number : -1,
+    hostName: text(m.hostName),
+    amHost: m.me === true,
+    botLevel: typeof m.bots === 'string' && (HASH_RUSH_BOT_LEVELS as readonly string[]).includes(m.bots) ? m.bots : 'hard',
   }
 }
 

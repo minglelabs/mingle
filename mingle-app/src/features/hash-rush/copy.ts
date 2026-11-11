@@ -48,6 +48,17 @@ export type HashRushGameCopy = {
   lastTitle: string
   close: string
   scoreboard: string
+  /** A hosted room's lobby. */
+  host: string
+  handHost: string
+  handHostTo: (name: string) => string
+  botLevel: string
+  hamsters: string
+  howTo: string
+  waitingHostNamed: (name: string) => string
+  pickTeam: string
+  hostReady: string
+  handHostConfirm: string
 }
 
 const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
@@ -86,6 +97,16 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     lastTitle: '지난 우승',
     close: '닫기',
     scoreboard: '점수표',
+    host: '방장',
+    handHost: '방장 넘기기',
+    handHostTo: (name) => `${name}님에게 방장을 넘길까요?`,
+    botLevel: '컴퓨터',
+    hamsters: '햄스터 수',
+    howTo: '게임 방법',
+    waitingHostNamed: (name) => `방장 ${name}님이 시작하기를 기다리는 중…`,
+    pickTeam: '내 팀',
+    hostReady: '준비되면 시작을 눌러요',
+    handHostConfirm: '넘기기',
   },
   en: {
     menuLabel: '🌻 Play Hash Rush together',
@@ -122,6 +143,16 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     lastTitle: 'Last title',
     close: 'Close',
     scoreboard: 'Scores',
+    host: 'Host',
+    handHost: 'Make host',
+    handHostTo: (name) => `Make ${name} the host?`,
+    botLevel: 'Computers',
+    hamsters: 'Hamsters',
+    howTo: 'How to play',
+    waitingHostNamed: (name) => `Waiting for the host, ${name}, to start…`,
+    pickTeam: 'My team',
+    hostReady: "Press Start when everyone's ready",
+    handHostConfirm: 'Hand over',
   },
   ja: {
     menuLabel: '🌻 Hash Rushを一緒に遊ぶ',
@@ -158,6 +189,16 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     lastTitle: '前回の優勝',
     close: '閉じる',
     scoreboard: 'スコア表',
+    host: 'ホスト',
+    handHost: 'ホストを渡す',
+    handHostTo: (name) => `${name}さんにホストを渡しますか？`,
+    botLevel: 'コンピューター',
+    hamsters: 'ハムスターの数',
+    howTo: 'あそびかた',
+    waitingHostNamed: (name) => `ホストの${name}さんが始めるのを待っています…`,
+    pickTeam: '自分のチーム',
+    hostReady: '準備ができたらスタートを押してね',
+    handHostConfirm: '渡す',
   },
 }
 

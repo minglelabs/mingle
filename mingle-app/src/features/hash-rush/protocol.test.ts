@@ -18,6 +18,11 @@ import {
   phaseOf,
   readCareer,
   readLobby,
+  readNope,
+  setupMessage,
+  handHostMessage,
+  teamMessage,
+  GO_MESSAGE,
   readOver,
   readPlayerRow,
   readStart,
@@ -202,12 +207,29 @@ describe('hash rush protocol: server to app', () => {
       fill: 4,
       title: { wins: 10, lead: 2 },
       seasons: [{ games: 18, stopped: false, rows: [{ name: 'Cloud', look: 1, wins: 10, champ: true }, { name: 'Mia', look: 0, wins: 6, champ: false }] }],
+      hosted: false,
+      hostSeat: -1,
+      hostName: '',
+      amHost: false,
+      botLevel: 'hard',
     })
     expect(shouldTakeSeat(lobby)).toBe(true)
     expect(shouldTakeSeat({ ...lobby!, you: 0 })).toBe(false)
     expect(shouldTakeSeat({ ...lobby!, seats: [lobby!.seats[0]] })).toBe(false)
     expect(readLobby({ t: 'start' })).toBeNull()
     expect(readLobby({ t: 'lobby', slots: [], map: 'nowhere' })?.map).toBe('meadow')
+  })
+
+  it('reads a hosted lobby: who hosts, whether this viewer does, the computers, and a start turned down', () => {
+    const lobby = readLobby({ t: 'lobby', slots: [{ kind: 'remote', name: 'Mia', team: 0 }], you: 0, hosted: true, host: 0, hostName: 'Mia', me: true, bots: 'easy', fill: 6 })
+    expect(lobby).toMatchObject({ hosted: true, hostSeat: 0, hostName: 'Mia', amHost: true, botLevel: 'easy', fill: 6 })
+    expect(readLobby({ t: 'lobby', slots: [], bots: 'godlike' })?.botLevel).toBe('hard')
+    expect(readNope({ t: 'nope', why: 'needTeams' })).toBe('needTeams')
+    expect(readNope({ t: 'lobby' })).toBeNull()
+    expect(setupMessage({ teams: true, fill: 3 })).toEqual({ t: 'setup', teams: true, fill: 3 })
+    expect(handHostMessage(2)).toEqual({ t: 'host', seat: 2 })
+    expect(teamMessage(1)).toEqual({ t: 'team', team: 1 })
+    expect(GO_MESSAGE).toEqual({ t: 'go' })
   })
 
   it('leaves somebody who chose to watch where they are', () => {

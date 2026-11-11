@@ -3,7 +3,6 @@ import {
   buildHashRushMessageClientId,
   normalizeHashRushMessage,
   parseHashRushRoomGame,
-  resolveHashRushMenuAction,
   resolveHashRushMessageState,
   shouldOfferHashRushInvite,
 } from './hash-rush-message'
@@ -22,12 +21,6 @@ describe('hash rush room message', () => {
     expect(resolveHashRushMessageState({ message, liveSessionId: 's1', joined: true })).toBe('joined')
     expect(resolveHashRushMessageState({ message, liveSessionId: 's2', joined: false })).toBe('ended')
     expect(resolveHashRushMessageState({ message, liveSessionId: null, joined: false })).toBe('ended')
-  })
-
-  it('the menu opens the game this phone is in, else asks to join the running one or start one', () => {
-    expect(resolveHashRushMenuAction({ playing: true, liveSessionId: 's1' })).toBe('open')
-    expect(resolveHashRushMenuAction({ playing: false, liveSessionId: 's1' })).toBe('confirm_join')
-    expect(resolveHashRushMenuAction({ playing: false, liveSessionId: null })).toBe('confirm_start')
   })
 
   it('offers someone else\'s game once: never the starter\'s own, a declined or quit one, or while playing', () => {

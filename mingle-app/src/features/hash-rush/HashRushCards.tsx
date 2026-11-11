@@ -17,6 +17,7 @@ import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from
 import styles from './hash-rush-cards.module.css'
 import type { HashRushGameCopy } from './copy'
 import type { HashRushArt, HashRushLobbyView } from './client'
+import type { HashRushSetup } from './protocol'
 import type { HashRushScoreboard, HashRushScoreHead, HashRushTitleWords, HashRushVerdict } from './score'
 
 export type HashRushScoreView = 'round' | 'total'
@@ -72,25 +73,40 @@ type LobbyProps = {
   art: HashRushArt | null
   onSit: () => void
   onStand: () => void
+  /** A hosted room (the app's): the host's controls, a side to pick, how to play. */
+  onSetup?: (patch: HashRushSetup) => void
+  onGo?: () => void
+  onHandHost?: (seat: number) => void
+  onPickTeam?: (team: number) => void
+  onHowTo?: () => void
 }
 
-/** Between rounds: the map and mode, the countdown, who is in, and the way to watch or join. */
-export function HashRushLobbyCard({ view, copy, art, onSit, onStand }: LobbyProps) {
+export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, onGo, onHandHost, onPickTeam, onHowTo }: LobbyProps) {
   const seconds = useSecondsLeft(view.nextAt)
+  const [handTo, setHandTo] = useState<number | null>(null)
+  const hosting = view.hosting
   const seated = view.you >= 0
   const nobody = view.seats.length === 0
-  const heading = nobody ? copy.nobodySeated : seated ? copy.waitingRound : view.words.spectating
+  const heading = hosting
+    ? hosting.amHost ? copy.hostReady : copy.waitingHostNamed(hosting.hostName || copy.host)
+    : nobody ? copy.nobodySeated : seated ? copy.waitingRound : view.words.spectating
   const total = view.seats.length + view.open
+  const handSeat = handTo == null ? null : view.seats.find((seat) => seat.seat === handTo) ?? null
   return (
     <div className={cx(styles.cover, styles.coverLobby)} data-qa="hash-rush-lobby">
       <div className={cx(styles.card, styles.lobbyCard)}>
         <div className={styles.lobbyChips}>
           <span className={styles.chip} data-qa="hash-rush-mode">{view.mode}</span>
           {view.race ? <span className={cx(styles.chip, styles.chipRace, view.deuce && styles.chipDeuce)}>{view.race}</span> : null}
+          {onHowTo ? (
+            <button type="button" className={cx(styles.chip, styles.chipButton)} onClick={onHowTo} data-qa="hash-rush-lobby-howto">
+              ? {copy.howTo}
+            </button>
+          ) : null}
         </div>
         <h2 className={styles.lobbyTitle}>
           <span>{heading}</span>
-          {seconds != null && !nobody ? (
+          {seconds != null && !nobody && !hosting ? (
             <span className={styles.countdown} data-qa="hash-rush-countdown">{copy.startsIn(seconds)}</span>
           ) : null}
         </h2>
@@ -106,14 +122,101 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand }: LobbyProp
               <Face art={art} seat={seat.seat} team={seat.team} size={40} className={styles.face} />
               <span className={styles.seatName}>
                 <b>{seat.name}</b>
+                {seat.host ? <i className={styles.hostTag} data-qa="hash-rush-host-tag">👑 {copy.host}</i> : null}
                 {seat.me ? <i className={styles.meTag}>{view.words.me}</i> : null}
                 {seat.team >= 0 ? <i className={styles.teamDot} style={{ '--t': seat.color } as CSSProperties} /> : null}
               </span>
-              <span className={styles.winsCell}>{seat.winsText}</span>
+              {hosting?.amHost && !seat.me && onHandHost ? (
+                <button type="button" className={styles.handHost} onClick={() => setHandTo(seat.seat)} data-qa="hash-rush-hand-host">
+                  {copy.handHost}
+                </button>
+              ) : (
+                <span className={styles.winsCell}>{seat.winsText}</span>
+              )}
             </li>
           ))}
           {view.open > 0 ? <li className={cx(styles.seat, styles.seatOpen)}>{copy.openSeats(view.open)}</li> : null}
         </ul>
+        {handSeat && onHandHost ? (
+          <div className={styles.confirmRow} data-qa="hash-rush-hand-host-confirm">
+            <p>{copy.handHostTo(handSeat.name)}</p>
+            <div>
+              <button type="button" className={styles.button} onClick={() => setHandTo(null)}>{copy.close}</button>
+              <button type="button" className={cx(styles.button, styles.primary)} onClick={() => { onHandHost(handSeat.seat); setHandTo(null) }}>
+                {copy.handHostConfirm}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {hosting?.teams && seated && onPickTeam ? (
+          <div className={styles.setupRow} data-qa="hash-rush-pick-team">
+            <span className={styles.setupLabel}>{copy.pickTeam}</span>
+            <div className={styles.options}>
+              {hosting.teamChoices.map((choice) => (
+                <button
+                  key={choice.team}
+                  type="button"
+                  aria-pressed={hosting.myTeam === choice.team}
+                  className={cx(styles.option, hosting.myTeam === choice.team && styles.optionOn)}
+                  onClick={() => onPickTeam(choice.team)}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {hosting?.amHost && onSetup ? (
+          <div className={styles.setup} data-qa="hash-rush-host-setup">
+            <div className={styles.setupRow}>
+              <div className={styles.options}>
+                <button type="button" aria-pressed={!hosting.teams} className={cx(styles.option, !hosting.teams && styles.optionOn)} onClick={() => onSetup({ teams: false })} data-qa="hash-rush-setup-solo">
+                  {hosting.words.solo}
+                </button>
+                <button type="button" aria-pressed={hosting.teams} className={cx(styles.option, hosting.teams && styles.optionOn)} onClick={() => onSetup({ teams: true })} data-qa="hash-rush-setup-team">
+                  {hosting.words.team}
+                </button>
+              </div>
+            </div>
+            <div className={styles.setupRow}>
+              <span className={styles.setupLabel}>{hosting.words.map}</span>
+              <div className={styles.options}>
+                {hosting.maps.map((map) => (
+                  <button key={map.id} type="button" aria-pressed={hosting.map === map.id} className={cx(styles.option, hosting.map === map.id && styles.optionOn)} onClick={() => onSetup({ map: map.id })}>
+                    {map.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={styles.setupRow}>
+              <span className={styles.setupLabel}>{copy.botLevel}</span>
+              <div className={styles.options}>
+                {hosting.botLevels.map((level) => (
+                  <button key={level.id} type="button" aria-pressed={hosting.botLevel === level.id} className={cx(styles.option, hosting.botLevel === level.id && styles.optionOn)} onClick={() => onSetup({ bots: level.id })}>
+                    {level.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={styles.setupRow}>
+              <span className={styles.setupLabel}>{copy.hamsters}</span>
+              <div className={styles.stepper}>
+                <button type="button" aria-label="−" disabled={hosting.fill <= hosting.fillMin} onClick={() => onSetup({ fill: hosting.fill - 1 })}>−</button>
+                <b data-qa="hash-rush-setup-fill">{hosting.fill}</b>
+                <button type="button" aria-label="+" disabled={hosting.fill >= hosting.fillMax} onClick={() => onSetup({ fill: hosting.fill + 1 })}>+</button>
+              </div>
+            </div>
+            {hosting.notice ? <p className={styles.notice} data-qa="hash-rush-start-notice">{hosting.notice}</p> : null}
+            {onGo ? (
+              <button type="button" className={cx(styles.button, styles.primary, styles.startButton)} onClick={onGo} data-qa="hash-rush-start">
+                {hosting.words.start}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
         {view.spectators ? <p className={styles.note}>{view.spectators}</p> : null}
         {!seated && !view.canSit ? <p className={styles.note}>{copy.seatsFull}</p> : null}
         {view.canStand || (!seated && view.canSit) ? (
@@ -130,8 +233,8 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand }: LobbyProp
           </div>
         ) : null}
         <p className={styles.note}>
-          {copy.autoStart}
-          {view.bots > 0 ? ` · ${copy.botsFill(view.bots)}` : ''}
+          {hosting ? '' : copy.autoStart}
+          {view.bots > 0 ? `${hosting ? '' : ' · '}${copy.botsFill(view.bots)}` : ''}
         </p>
         {view.lastTitle ? <p className={styles.note}>{copy.lastTitle} {view.lastTitle}</p> : null}
       </div>

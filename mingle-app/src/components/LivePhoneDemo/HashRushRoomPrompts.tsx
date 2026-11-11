@@ -1,10 +1,10 @@
 'use client'
 
 // A room's Hash Rush game around the game itself, the same way as a voice
-// talk (VoiceTalkPanel): the room asks before starting or joining, a game that
-// someone else started is offered once in a card low on the screen (Decline /
-// Join), and its room message keeps a Join button while it runs. One game per
-// room: the menu joins the running one instead of starting another.
+// talk (VoiceTalkPanel): a game that someone else started is offered once in a
+// card low on the screen (Decline / Join), and its room message keeps a Join
+// button while it runs. One game per room: the menu's Hash Rush page joins the
+// running one instead of starting another.
 //
 // The app server knows a game runs while its players say so every 15 s
 // (src/server/hash-rush/room-game.ts).
@@ -111,60 +111,16 @@ export function useHashRushRoomGame(input: {
   return { game, join, refresh }
 }
 
-export type HashRushPrompt = 'start' | 'join' | null
-
-/** The start / join dialog and the invite card, low on the screen where the thumb is. */
+/** The invite card, low on the screen where the thumb is: someone else's game, once. */
 export function HashRushRoomPrompts(props: {
   uiLocale: string
-  prompt: HashRushPrompt
   /** Someone else's game to offer in a card, or null. */
   invite: HashRushRoomGame | null
   onConfirm: () => void
-  onCancel: () => void
   onDecline: () => void
 }) {
   const copy = hashRushInviteCopy(props.uiLocale)
-  const dialogOpen = props.prompt !== null || props.invite !== null
-  useNativeBannerSuppression(dialogOpen)
-
-  if (props.prompt) {
-    const title = props.prompt === 'join' ? copy.joinTitle : copy.startTitle
-    return (
-      <div
-        className="pointer-events-auto fixed inset-0 z-[60] flex items-end justify-center bg-black/35 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+96px)]"
-        data-qa="hash-rush-start-confirm"
-        onClick={props.onCancel}
-      >
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={title}
-          className="w-full max-w-[340px] rounded-2xl bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.22)]"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <p className="text-center text-[1.02rem] font-semibold text-gray-900">{title}</p>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              data-qa="hash-rush-start-cancel"
-              onClick={props.onCancel}
-              className="h-12 rounded-xl bg-gray-100 text-[0.95rem] font-semibold text-gray-700 active:bg-gray-200"
-            >
-              {copy.cancel}
-            </button>
-            <button
-              type="button"
-              data-qa="hash-rush-start-confirm-button"
-              onClick={props.onConfirm}
-              className="inline-flex h-12 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 text-[0.95rem] font-semibold text-white active:bg-emerald-600"
-            >
-              <Gamepad2 size={18} strokeWidth={2.3} /> {props.prompt === 'join' ? copy.join : copy.startConfirm}
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  useNativeBannerSuppression(props.invite !== null)
 
   if (!props.invite) return null
   const starterName = (props.invite.startedBy?.name ?? '').trim()

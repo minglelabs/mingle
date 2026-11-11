@@ -55,8 +55,8 @@ describe('public room switch and Hash Rush computer link', () => {
     expect(link.searchParams.has('embed')).toBe(false)
   })
 
-  it('offers the link in the room menu', () => {
-    expect(liveDemoSource).toContain('data-qa="live-demo-hash-rush-pc-link"')
+  it('offers the link on the room menu\'s Hash Rush page', () => {
+    expect(liveDemoSource).toContain('onCopyPcLink={HASH_RUSH_PAGE_URL ? () => void handleCopyHashRushPcLink() : undefined}')
     expect(liveDemoSource).toContain('fresh: true')
   })
 })

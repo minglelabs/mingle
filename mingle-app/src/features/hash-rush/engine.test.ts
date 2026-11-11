@@ -142,5 +142,7 @@ describe('hash rush engine: the game server address', () => {
   it('joins /rooms/<room> with the entry ticket', () => {
     expect(roomUrl('wss://game.example/', 'mingle-abc', 'a.b+c')).toBe('wss://game.example/rooms/mingle-abc?ticket=a.b%2Bc')
     expect(roomUrl('ws://127.0.0.1:8090', 'mingle-abc')).toBe('ws://127.0.0.1:8090/rooms/mingle-abc')
+    // The app's rooms have a host: the server makes the room so on its first join.
+    expect(roomUrl('wss://game.example', 'mingle-abc', 't.k', true)).toBe('wss://game.example/rooms/mingle-abc?ticket=t.k&host=1')
   })
 })

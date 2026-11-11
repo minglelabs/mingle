@@ -26,9 +26,19 @@ import { drawAvatar, drawTrophy } from './engine/client/cards.js'
 import { setLanguage, t } from './engine/client/i18n.js'
 import { joinServerRoom } from './engine/client/net.js'
 import {
+  GO_MESSAGE,
+  HASH_RUSH_BOT_LEVELS,
+  HASH_RUSH_FILL_MAX,
+  HASH_RUSH_FILL_MIN,
+  HASH_RUSH_TEAMS,
   IDLE_INPUT_READ,
   SIT_MESSAGE,
   STAND_MESSAGE,
+  handHostMessage,
+  readNope,
+  setupMessage,
+  teamMessage,
+  type HashRushSetup,
   applySnapshot,
   createOthersSmoother,
   helloMessage,
@@ -113,6 +123,29 @@ export type HashRushLobbySeat = {
   winsText: string
   /** Just came in: the row glows for a moment (UIUX-ISSUES #141). */
   fresh: boolean
+  /** This seat hosts the room. */
+  host: boolean
+}
+
+/** A hosted room's lobby: who hosts, how it is set up, and what this viewer may change. */
+export type HashRushLobbyHosting = {
+  amHost: boolean
+  hostName: string
+  teams: boolean
+  map: string
+  maps: { id: string, label: string }[]
+  botLevel: string
+  botLevels: { id: string, label: string }[]
+  fill: number
+  fillMin: number
+  fillMax: number
+  /** The sides to pick from in team play, with this viewer's. */
+  teamChoices: { team: number, label: string, color: string }[]
+  myTeam: number
+  /** Why the last start was turned down, '' when it was not. */
+  notice: string
+  /** The game's own words for these (its i18n); the app's are in copy.ts. */
+  words: { start: string, waitingHost: string, solo: string, team: string, map: string }
 }
 
 /** Between rounds: who is in, what is next, and the way to watch or join. */
@@ -140,6 +173,8 @@ export type HashRushLobbyView = {
   /** The last title won in the room, '' before the first. */
   lastTitle: string
   words: { sitIn: string, standUp: string, me: string, spectating: string }
+  /** Set in a hosted room (the app's). */
+  hosting: HashRushLobbyHosting | null
 }
 
 /** What the component shows over the game. */
@@ -211,6 +246,14 @@ export type HashRushGameClient = {
   sit(): void
   /** Gives the seat up to watch (not mid-round). No seat is taken for them until they sit again. */
   stand(): void
+  /** The host sets the room up between rounds. */
+  setup(patch: HashRushSetup): void
+  /** The host starts the round. */
+  go(): void
+  /** The host hands the room to the person in `seat`. */
+  handHost(seat: number): void
+  /** Picks this viewer's side in team play. */
+  pickTeam(team: number): void
   /** The score table of the round on screen, null between rounds. */
   scoreboard(): HashRushScoreboard | null
   /**
@@ -326,6 +369,8 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
   let nextAt = 0
   // Chose to watch: no seat is taken for this viewer until they sit again.
   let watchWanted = false
+  // Why the host's last start was turned down, shown until the lobby changes.
+  let nope = ''
   // The card up after a round, and when it first came up.
   let card: 'none' | 'result' | 'title' = 'none'
   let cardAt = 0
@@ -381,7 +426,8 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       return
     }
     try {
-      const joined = await joinServerRoom(options.server, grant.room, { data: hear, close: lost }, { ticket: grant.ticket })
+      // The app's rooms have a host (the server makes the room so on its first join).
+      const joined = await joinServerRoom(options.server, grant.room, { data: hear, close: lost }, { ticket: grant.ticket, hosted: true })
       connecting = false
       if (destroyed) {
         joined.close()
@@ -430,6 +476,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       if (!next) return
       markFresh(lobby, next)
       lobby = next
+      nope = ''
       // Mid-round the round on screen is not in these yet; after it, it is.
       takeRecord(next)
       if (next.title) rule = next.title
@@ -474,6 +521,10 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
     } else if (type === 'lobbyscreen') {
       toLobby()
       showLobby()
+    } else if (type === 'nope') {
+      const why = readNope(message)
+      nope = why === 'needTeams' ? String(t('needTeams')) : why ? String(t('needOpponent')) : ''
+      if (!game) showLobby()
     }
     // 'chat' and 'rename' are the game's own talk: in the app the talk is the room's.
   }
@@ -539,6 +590,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
         me: index === you,
         winsText: String(t('tally', wins[index] || 0)),
         fresh: (freshUntil.get(index) ?? 0) > now,
+        host: !!at?.hosted && at.hostSeat === index,
       }))
     const open = seats.filter((seat) => seat.kind === 'open').length
     const map = at?.map ?? 'meadow'
@@ -567,7 +619,36 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       deuce,
       lastTitle: champs.length ? `🏆 ${champs.map((row) => row.name).join(', ')} · ${t('tally', champs[0].wins)}` : '',
       words: { sitIn: String(t('sitIn')), standUp: String(t('standUp')), me: String(t('meTag')), spectating: String(t('spectating')) },
+      hosting: at?.hosted ? hostingOf(at) : null,
     })
+  }
+
+  function hostingOf(at: HashRushLobby): HashRushLobbyHosting {
+    const mapNames = t('mapNames') as Record<string, string>
+    const levels = t('botLevels') as Record<string, string>
+    const teamNames = t('teamNames') as string[]
+    return {
+      amHost: at.amHost,
+      hostName: at.hostName,
+      teams: at.teams,
+      map: at.map,
+      maps: Object.keys(MAP_ICONS).map((id) => ({ id, label: `${MAP_ICONS[id]} ${mapNames[id] ?? id}` })),
+      botLevel: at.botLevel,
+      botLevels: HASH_RUSH_BOT_LEVELS.map((id) => ({ id, label: levels[id] ?? id })),
+      fill: at.fill || HASH_RUSH_FILL_MIN,
+      fillMin: HASH_RUSH_FILL_MIN,
+      fillMax: HASH_RUSH_FILL_MAX,
+      teamChoices: Array.from({ length: HASH_RUSH_TEAMS }, (_, team) => ({ team, label: teamNames[team] ?? String(team + 1), color: seatColor(true, team, team) })),
+      myTeam: at.you >= 0 ? at.seats[at.you]?.team ?? -1 : -1,
+      notice: nope,
+      words: {
+        start: String(t('start')),
+        waitingHost: String(t('waitingHost')),
+        solo: String(t('modeSolo')),
+        team: String(t('modeTeam')),
+        map: String(t('mapLabel')),
+      },
+    }
   }
 
   function showRound() {
@@ -1022,6 +1103,23 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       if (destroyed || !line || (game && game.phase !== 'over')) return
       watchWanted = true
       line.send(STAND_MESSAGE)
+    },
+    setup(patch) {
+      if (destroyed || !line || game || !lobby?.amHost) return
+      line.send(setupMessage(patch))
+    },
+    go() {
+      if (destroyed || !line || game || !lobby?.amHost) return
+      nope = ''
+      line.send(GO_MESSAGE)
+    },
+    handHost(seat) {
+      if (destroyed || !line || !lobby?.amHost || seat === lobby.you) return
+      line.send(handHostMessage(seat))
+    },
+    pickTeam(team) {
+      if (destroyed || !line || game || !lobby?.teams || lobby.you < 0) return
+      line.send(teamMessage(team))
     },
     scoreboard() {
       return game ? buildScoreboard(game, meId, record()) : null

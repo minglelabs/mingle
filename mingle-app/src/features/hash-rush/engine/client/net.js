@@ -17,8 +17,14 @@ export function gameServer(raw) {
 }
 
 // The address of room `room` on `server`, with the app's entry `ticket`.
-export function roomUrl(server, room, ticket = '') {
-  return `${server.replace(/\/+$/, '')}/rooms/${encodeURIComponent(room)}${ticket ? `?ticket=${encodeURIComponent(ticket)}` : ''}`;
+// `hosted`: the room is one with a host (created so on its first join; the
+// server ignores it for a room that is already running).
+export function roomUrl(server, room, ticket = '', hosted = false) {
+  const query = new URLSearchParams();
+  if (ticket) query.set('ticket', ticket);
+  if (hosted) query.set('host', '1');
+  const search = query.toString();
+  return `${server.replace(/\/+$/, '')}/rooms/${encodeURIComponent(room)}${search ? `?${search}` : ''}`;
 }
 
 // Joins a room run by the game server. `on.data(msg)` hears the server and
@@ -26,8 +32,8 @@ export function roomUrl(server, room, ticket = '') {
 // close } once connected: `fast` is for what the next message makes worthless,
 // `route` for how good the line is. Rejects when the server cannot be reached
 // (or turns the ticket down) within 15 seconds.
-export async function joinServerRoom(server, room, on, { ticket = '' } = {}) {
-  const ws = new WebSocket(roomUrl(server, room, ticket));
+export async function joinServerRoom(server, room, on, { ticket = '', hosted = false } = {}) {
+  const ws = new WebSocket(roomUrl(server, room, ticket, hosted));
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       ws.onopen = ws.onerror = null;

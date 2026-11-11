@@ -55,14 +55,6 @@ export function resolveHashRushMessageState(input: {
   return input.joined ? 'joined' : 'joinable'
 }
 
-/** What the room's Hash Rush menu item does. */
-export type HashRushMenuAction = 'open' | 'confirm_join' | 'confirm_start'
-
-export function resolveHashRushMenuAction(input: { playing: boolean, liveSessionId: string | null }): HashRushMenuAction {
-  if (input.playing) return 'open'
-  return input.liveSessionId ? 'confirm_join' : 'confirm_start'
-}
-
 /**
  * The invite card: someone else's game is running, this phone is not in it,
  * and this viewer has not turned this game down.

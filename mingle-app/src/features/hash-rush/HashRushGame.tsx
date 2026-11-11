@@ -56,6 +56,7 @@ import {
 } from './HashRushCards'
 import type { HashRushArt, HashRushGameClient, HashRushGameClasses, HashRushGameElements, HashRushGameView } from './client'
 import type { HashRushScoreboard } from './score'
+import type { HashRushSetup } from './protocol'
 
 // The same key the web game keeps the side in.
 const BONK_SIDE_STORE = 'hash-rush-bonk-left'
@@ -119,6 +120,8 @@ type Props = {
   onBack: () => void
   /** Quit: asks, then ends the game for this phone. */
   onQuit?: () => void
+  /** How to play, from the lobby. */
+  onHowTo?: () => void
 }
 
 /** Where the map is, kept only when it moved. */
@@ -134,7 +137,7 @@ const typing = () => {
   return node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || (node instanceof HTMLElement && node.isContentEditable)
 }
 
-export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive, chat, onBack, onQuit }: Props) {
+export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive, chat, onBack, onQuit, onHowTo }: Props) {
   const copy = hashRushGameCopy(uiLocale)
   const inviteCopy = hashRushInviteCopy(uiLocale)
   const chatOpen = !!chat?.open
@@ -631,6 +634,10 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
 
   const sit = useCallback(() => clientRef.current?.sit(), [])
   const stand = useCallback(() => clientRef.current?.stand(), [])
+  const setup = useCallback((patch: HashRushSetup) => clientRef.current?.setup(patch), [])
+  const go = useCallback(() => clientRef.current?.go(), [])
+  const handHost = useCallback((seat: number) => clientRef.current?.handHost(seat), [])
+  const pickTeam = useCallback((team: number) => clientRef.current?.pickTeam(team), [])
   const hideCard = useCallback(() => setHiddenCard(cardKeyOf(viewRef.current)), [])
 
   const fieldStyle = field
@@ -784,7 +791,20 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
       ) : null}
 
       {view.kind === 'connecting' || view.kind === 'failed' ? <HashRushGameCover view={view} uiLocale={uiLocale} onRetry={retry} /> : null}
-      {view.kind === 'lobby' ? <HashRushLobbyCard view={view} copy={copy} art={art} onSit={sit} onStand={stand} /> : null}
+      {view.kind === 'lobby' ? (
+        <HashRushLobbyCard
+          view={view}
+          copy={copy}
+          art={art}
+          onSit={sit}
+          onStand={stand}
+          onSetup={setup}
+          onGo={go}
+          onHandHost={handHost}
+          onPickTeam={pickTeam}
+          onHowTo={onHowTo}
+        />
+      ) : null}
       {view.kind === 'result' && cardUp ? (
         <HashRushResultCard
           verdict={view.verdict}

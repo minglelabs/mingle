@@ -17,10 +17,9 @@ describe('hash rush started from the room, like a voice talk', () => {
     expect(liveDemo).toContain('<HashRushRoomContext.Provider value={hashRushRoom}>')
   })
 
-  it('asks before starting or joining, offers someone else\'s game in a card, hides the ad banner meanwhile', () => {
-    expect(prompts).toContain('data-qa="hash-rush-start-confirm"')
+  it('offers someone else\'s game in a card, hiding the ad banner meanwhile', () => {
     expect(prompts).toContain('data-qa="hash-rush-incoming-decline"')
-    expect(prompts).toContain('useNativeBannerSuppression(dialogOpen)')
+    expect(prompts).toContain('useNativeBannerSuppression(props.invite !== null)')
     expect(liveDemo).toContain('onDecline={() => setDeclinedHashRushSessionId(hashRushLiveSessionId)}')
   })
 

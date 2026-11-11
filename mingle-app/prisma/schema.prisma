@@ -1488,3 +1488,26 @@ model AppConversationJoinRequest {
   @@index([channelId, status])
   @@map("app_conversation_join_requests")
 }
+
+// One person's part in one Hash Rush round, as the game server reported it
+// (POST /api/hash-rush/results). Computers are not kept. The rankings add these
+// up per person: everyone's, or one chat room's.
+model AppHashRushRoundPlayer {
+  id        String   @id @default(cuid())
+  matchId   String   @map("match_id")
+  channelId String?  @map("channel_id")
+  userId    String   @map("user_id")
+  won       Boolean
+  seeds     Int      @default(0)
+  bonks     Int      @default(0)
+  bonked    Int      @default(0)
+  teams     Boolean  @default(false)
+  map       String?
+  playedAt  DateTime @map("played_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([matchId, userId])
+  @@index([userId])
+  @@index([channelId, userId])
+  @@map("app_hash_rush_round_players")
+}

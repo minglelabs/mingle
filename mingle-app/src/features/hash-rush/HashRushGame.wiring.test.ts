@@ -29,19 +29,20 @@ function rule(selector: string): string {
 
 describe('hash rush native game wiring', () => {
   it('opens from the room menu, after closing the menu through its history', () => {
+    // One menu item opens the room's Hash Rush page; its button goes in,
+    // closing the menu through its history entries first.
     const menuItem = between(liveDemoSource, 'data-qa="live-demo-hash-rush-menu-item"', '</button>')
-    expect(menuItem).toContain('requestCloseMenuPanel()')
+    expect(menuItem).toContain('onClick={handleHashRushPageOpen}')
     expect(menuItem).not.toContain('setMenuOpen(false)')
-    // Asks first (start, or join the room's running game); a game this phone is in just comes up.
-    expect(menuItem).toContain('handleHashRushMenuPress()')
-    const press = between(liveDemoSource, 'const handleHashRushMenuPress = useCallback(() => {', '}, [')
-    expect(press).toContain("if (action === 'open') setHashRushGameOpen(true)")
-    expect(press).toContain("setHashRushPrompt(action === 'confirm_join' ? 'join' : 'start')")
+    const page = between(liveDemoSource, 'const handleHashRushPageEnter = useCallback(() => {', '}, [')
+    expect(page).toContain('requestCloseMenuPanel()')
+    expect(page).toContain('if (hashRushGameActive) setHashRushGameOpen(true)')
+    expect(page).toContain('else enterHashRushGame()')
     const enter = between(liveDemoSource, 'const enterHashRushGame = useCallback(() => {', '}, [')
     expect(enter).toContain('setHashRushGameActive(true)')
     expect(enter).toContain('setHashRushGameOpen(true)')
     expect(enter).toContain('void joinHashRushRoomGame()')
-    expect(menuItem).toContain('{hashRushGameMenuLabel(uiLocale)}')
+    expect(menuItem).toContain('{hashRushInviteCopy(uiLocale).menuItem}')
     expect(liveDemoSource).toContain('{conversationId && isHashRushGameConfigured() ? (')
   })
 
@@ -144,7 +145,8 @@ describe('hash rush native game wiring', () => {
     expect(clientSource).toContain('if (message && line) line.fast(message)')
     expect(clientSource).toContain('if (message) predictor.sent(at, message)')
     expect(clientSource).toContain('predictor.heard(now, snap.k, result.ack)')
-    expect(clientSource).toContain('{ ticket: grant.ticket }')
+    // The app's rooms have a host.
+    expect(clientSource).toContain('{ ticket: grant.ticket, hosted: true }')
   })
 
   it('keeps the UIUX-ISSUES control and layout rules', () => {
@@ -177,7 +179,7 @@ function cardRule(selector: string): string {
 
 describe('hash rush between rounds (stage 2)', () => {
   it('shows a card for each moment between rounds, the controls away under a result', () => {
-    expect(gameSource).toContain("{view.kind === 'lobby' ? <HashRushLobbyCard")
+    expect(gameSource).toContain("{view.kind === 'lobby' ? (\n        <HashRushLobbyCard")
     expect(gameSource).toContain("{view.kind === 'result' && cardUp ? (")
     expect(gameSource).toContain("{view.kind === 'title' && cardUp ? (")
     expect(gameSource).toContain("{view.kind === 'connecting' || view.kind === 'failed' ? <HashRushGameCover")
@@ -228,11 +230,15 @@ describe('hash rush between rounds (stage 2)', () => {
     expect(css).toContain('.scoreButton[hidden] {')
   })
 
-  it('words the room as the server runs it: no host, rounds start by themselves', () => {
-    // None of the page's host words: waiting for the host, asking the host, the host's rematch.
+  it('words the room as the server runs it: a host starts each round, nobody asks for a rematch', () => {
+    // None of the page's rematch words: the host simply starts the next round from the lobby.
     for (const source of [clientSource, cardsSource, gameSource]) {
-      expect(source).not.toMatch(/waitingHost|waitingRematch|askAgain|askedAgain|hostWatch|'again'/)
+      expect(source).not.toMatch(/waitingRematch|askAgain|askedAgain|hostWatch|'again'/)
     }
+    // A hosted room's lobby: the host's controls and the start, the others wait for the host.
+    expect(cardsSource).toContain('data-qa="hash-rush-host-setup"')
+    expect(cardsSource).toContain('data-qa="hash-rush-start"')
+    expect(cardsSource).toContain('copy.waitingHostNamed(hosting.hostName || copy.host)')
     expect(cardsSource).toContain('copy.nextRoundIn(seconds)')
     expect(cardsSource).toContain('copy.startsIn(seconds)')
     expect(cardsSource).toContain('copy.autoStart')

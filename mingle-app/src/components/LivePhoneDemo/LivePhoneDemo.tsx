@@ -277,12 +277,15 @@ import VoiceTalkPanel, {
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
 import { VoiceTalkRoomContext, type VoiceTalkRoomState } from './voice-talk-room-context'
 import { HashRushRoomContext, type HashRushRoomState } from './hash-rush-room-context'
-import { HashRushRoomPrompts, useHashRushRoomGame, type HashRushPrompt } from './HashRushRoomPrompts'
-import { resolveHashRushMenuAction, shouldOfferHashRushInvite } from '@/lib/hash-rush-message'
+import { HashRushRoomPrompts, useHashRushRoomGame } from './HashRushRoomPrompts'
+import { shouldOfferHashRushInvite } from '@/lib/hash-rush-message'
 import { HashRushQuickChatBar } from '@/features/hash-rush/QuickChatBar'
 import type { HashRushChatEntry, HashRushRoomChat } from '@/features/hash-rush/room-chat'
 import { isHashRushGameConfigured } from '@/features/hash-rush/config'
-import { hashRushGameMenuLabel } from '@/features/hash-rush/copy'
+import { hashRushInviteCopy } from '@/features/hash-rush/invite-copy'
+import HashRushMenuPage from '@/features/hash-rush/HashRushMenuPage'
+import HashRushHowToPage from '@/features/hash-rush/HashRushHowToPage'
+import HashRushRankingPage from '@/features/hash-rush/HashRushRankingPage'
 import { buildHashRushPcLink, HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/config'
 import { requestHashRushTicket } from '@/features/hash-rush/ticket'
 import { liveRoomsCopy } from '@/i18n/live-rooms-copy'
@@ -1301,6 +1304,8 @@ type FeedbackHistoryResponse = {
 }
 
 type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite'
+  // The room's Hash Rush page (depth 2) and the two pages it opens (depth 3).
+  | 'hash-rush' | 'hash-rush-ranking' | 'hash-rush-howto'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 
@@ -1366,6 +1371,9 @@ function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuSc
     || value === 'participants'
     || value === 'display-language'
     || value === 'invite'
+    || value === 'hash-rush'
+    || value === 'hash-rush-ranking'
+    || value === 'hash-rush-howto'
 }
 
 function resolveMenuScreenForDepth(
@@ -1374,12 +1382,15 @@ function resolveMenuScreenForDepth(
 ): LivePhoneDemoMenuScreen {
   if (depth <= 1) return 'root'
   if (depth >= 3) {
+    if (preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return preferredScreen
+    if (preferredScreen === 'hash-rush') return 'hash-rush'
     if (preferredScreen === 'display-language') return 'display-language'
     if (preferredScreen === 'invite') return 'invite'
     if (preferredScreen === 'participants') return 'participants'
     return 'conversation-management'
   }
   if (preferredScreen === 'display-language') return 'display-language'
+  if (preferredScreen === 'hash-rush' || preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return 'hash-rush'
   if (preferredScreen === 'conversation-management') return 'conversation-management'
   if (preferredScreen === 'participants') return 'participants'
   return 'feedback'
@@ -3828,6 +3839,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!menuOpen || menuScreen === 'display-language' || !conversationId) return
     pushMenuHistoryEntry(2, 'display-language')
   }, [conversationId, menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  // The room's Hash Rush page, and its rankings and how-to pages over it.
+  const handleHashRushPageOpen = useCallback(() => {
+    if (!menuOpen || menuScreen === 'hash-rush' || !conversationId) return
+    pushMenuHistoryEntry(2, 'hash-rush')
+  }, [conversationId, menuOpen, menuScreen, pushMenuHistoryEntry])
+  const handleHashRushRankingOpen = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'hash-rush') return
+    pushMenuHistoryEntry(3, 'hash-rush-ranking')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+  const handleHashRushHowToOpen = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'hash-rush') return
+    pushMenuHistoryEntry(3, 'hash-rush-howto')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
   const handleDefaultDisplayLanguageSelect = useCallback((nextLanguage: string) => {
     const normalizedLanguage = canonicalizeSttLanguageCode(nextLanguage)
@@ -7159,10 +7184,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     latestAnnouncedSessionId: latestAnnouncedHashRushSessionId,
   })
   const hashRushLiveSessionId = hashRushRoomGame?.sessionId ?? null
-  const [hashRushPrompt, setHashRushPrompt] = useState<HashRushPrompt>(null)
   const [declinedHashRushSessionId, setDeclinedHashRushSessionId] = useState<string | null>(null)
   const enterHashRushGame = useCallback(() => {
-    setHashRushPrompt(null)
     setHashRushGameActive(true)
     setHashRushGameOpen(true)
     void joinHashRushRoomGame()
@@ -7175,12 +7198,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setHashRushGameActive(false)
     setHashRushGameChatMode(null)
   }, [hashRushLiveSessionId])
-  const handleHashRushMenuPress = useCallback(() => {
-    const action = resolveHashRushMenuAction({ playing: hashRushGameActive, liveSessionId: hashRushLiveSessionId })
-    if (action === 'open') setHashRushGameOpen(true)
-    else setHashRushPrompt(action === 'confirm_join' ? 'join' : 'start')
-  }, [hashRushGameActive, hashRushLiveSessionId])
-  const hashRushInvite = hashRushRoomEnabled && hashRushPrompt === null && shouldOfferHashRushInvite({
+  // The Hash Rush page's main button: it was pressed on purpose, so no second question.
+  const handleHashRushPageEnter = useCallback(() => {
+    requestCloseMenuPanel()
+    if (hashRushGameActive) setHashRushGameOpen(true)
+    else enterHashRushGame()
+  }, [enterHashRushGame, hashRushGameActive, requestCloseMenuPanel])
+  const hashRushInvite = hashRushRoomEnabled && shouldOfferHashRushInvite({
     game: hashRushRoomGame,
     playing: hashRushGameActive,
     viewerUserId,
@@ -8184,10 +8208,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         {hashRushRoomEnabled ? (
           <HashRushRoomPrompts
             uiLocale={uiLocale}
-            prompt={hashRushPrompt}
             invite={hashRushInvite}
             onConfirm={enterHashRushGame}
-            onCancel={() => setHashRushPrompt(null)}
             onDecline={() => setDeclinedHashRushSessionId(hashRushLiveSessionId)}
           />
         ) : null}
@@ -9043,32 +9065,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             <button
                               type="button"
                               data-qa="live-demo-hash-rush-menu-item"
-                              onClick={() => {
-                                // Close the menu through its history entries, so no stale
-                                // entry is left for a later back step to land on.
-                                requestCloseMenuPanel()
-                                handleHashRushMenuPress()
-                              }}
+                              // One item; its page holds the game, the computer link,
+                              // the rankings and how to play.
+                              onClick={handleHashRushPageOpen}
                               className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
                             >
-                              <span className="min-w-0 flex-1">{hashRushGameMenuLabel(uiLocale)}</span>
+                              <span className="min-w-0 flex-1">{hashRushInviteCopy(uiLocale).menuItem}</span>
                               <span className="shrink-0 text-gray-500">
                                 <ChevronRight size={18} strokeWidth={2.4} />
                               </span>
                             </button>
-                            {HASH_RUSH_PAGE_URL ? (
-                              <button
-                                type="button"
-                                data-qa="live-demo-hash-rush-pc-link"
-                                onClick={() => void handleCopyHashRushPcLink()}
-                                className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                              >
-                                <span className="min-w-0 flex-1">{liveRoomCopy.hashRushPcLink}</span>
-                                <span className="shrink-0 text-gray-500">
-                                  <Share size={17} strokeWidth={2.3} />
-                                </span>
-                              </button>
-                            ) : null}
                           </div>
                         ) : null}
 
@@ -9690,6 +9696,84 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         </div>
                       </div>
                     </SlideSurface>
+
+                    {conversationId && isHashRushGameConfigured() ? (
+                      <>
+                        <SlideSurface
+                          open={menuOpen && (menuScreen === 'hash-rush' || menuScreen === 'hash-rush-ranking' || menuScreen === 'hash-rush-howto')}
+                          onClose={requestMenuBackStep}
+                          onRequestClose={handleMenuSurfaceRequestClose}
+                          ariaLabel={hashRushInviteCopy(uiLocale).pageTitle}
+                          nativeBackPriority={30}
+                          className="absolute inset-0 z-[70] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                          style={{ touchAction: 'pan-y' }}
+                          stopPropagation
+                        >
+                          <LivePhoneDemoPanelHeader
+                            title={hashRushInviteCopy(uiLocale).pageTitle}
+                            backLabel={roomManagementCopy.backButtonLabel}
+                            onBack={requestMenuBackStep}
+                          />
+                          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+                            <HashRushMenuPage
+                              uiLocale={uiLocale}
+                              game={hashRushRoomGame}
+                              playing={hashRushGameActive}
+                              viewerUserId={viewerUserId}
+                              onEnter={handleHashRushPageEnter}
+                              onCopyPcLink={HASH_RUSH_PAGE_URL ? () => void handleCopyHashRushPcLink() : undefined}
+                              onOpenRanking={handleHashRushRankingOpen}
+                              onOpenHowTo={handleHashRushHowToOpen}
+                            />
+                          </div>
+                        </SlideSurface>
+
+                        <SlideSurface
+                          open={menuOpen && menuScreen === 'hash-rush-ranking'}
+                          onClose={requestMenuBackStep}
+                          onRequestClose={handleMenuSurfaceRequestClose}
+                          ariaLabel={hashRushInviteCopy(uiLocale).ranking}
+                          nativeBackPriority={40}
+                          className="absolute inset-0 z-[80] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                          style={{ touchAction: 'pan-y' }}
+                          stopPropagation
+                        >
+                          <LivePhoneDemoPanelHeader
+                            title={hashRushInviteCopy(uiLocale).ranking}
+                            backLabel={roomManagementCopy.backButtonLabel}
+                            onBack={requestMenuBackStep}
+                          />
+                          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+                            <HashRushRankingPage
+                              uiLocale={uiLocale}
+                              conversationId={conversationId}
+                              viewerUserId={viewerUserId}
+                              active={menuOpen && menuScreen === 'hash-rush-ranking'}
+                            />
+                          </div>
+                        </SlideSurface>
+
+                        <SlideSurface
+                          open={menuOpen && menuScreen === 'hash-rush-howto'}
+                          onClose={requestMenuBackStep}
+                          onRequestClose={handleMenuSurfaceRequestClose}
+                          ariaLabel={hashRushInviteCopy(uiLocale).howTo}
+                          nativeBackPriority={40}
+                          className="absolute inset-0 z-[80] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                          style={{ touchAction: 'pan-y' }}
+                          stopPropagation
+                        >
+                          <LivePhoneDemoPanelHeader
+                            title={hashRushInviteCopy(uiLocale).howTo}
+                            backLabel={roomManagementCopy.backButtonLabel}
+                            onBack={requestMenuBackStep}
+                          />
+                          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+                            <HashRushHowToPage uiLocale={uiLocale} />
+                          </div>
+                        </SlideSurface>
+                      </>
+                    ) : null}
                       </div>
                     </SlideSurface>
           </div>

@@ -17,6 +17,29 @@ export type HashRushInviteCopy = {
   quit: string
   quitTitle: string
   quitBody: string
+  /** The room menu's Hash Rush page. */
+  menuItem: string
+  pageTitle: string
+  statusNone: string
+  statusLive: (name: string) => string
+  statusLiveSomeone: string
+  statusPlaying: string
+  create: string
+  backToGame: string
+  pcLink: string
+  pcLinkHint: string
+  ranking: string
+  howTo: string
+  /** The rankings page. */
+  rankingAll: string
+  rankingRoom: string
+  rankingEmpty: string
+  rankingWins: string
+  rankingRounds: string
+  rankingSeeds: string
+  rankingBonks: string
+  rankingLoadFailed: string
+  rankingMe: string
 }
 
 const COPY: Record<'ko' | 'en' | 'ja', HashRushInviteCopy> = {
@@ -35,6 +58,27 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushInviteCopy> = {
     quit: '나가기',
     quitTitle: '해시러시에서 나가시겠습니까?',
     quitBody: '게임을 종료하고 채팅으로 돌아가요.',
+    menuItem: '🌻 Hash Rush',
+    pageTitle: 'Hash Rush',
+    statusNone: '지금 진행 중인 게임이 없어요',
+    statusLive: (name) => `${name}님의 게임이 진행 중이에요`,
+    statusLiveSomeone: '게임이 진행 중이에요',
+    statusPlaying: '게임에 참여 중이에요',
+    create: '게임 만들기',
+    backToGame: '게임으로 돌아가기',
+    pcLink: 'PC에서 하기 링크 복사',
+    pcLinkHint: '컴퓨터 브라우저에서 이 대화방 게임에 들어가요',
+    ranking: '랭킹',
+    howTo: '게임 방법',
+    rankingAll: '전체',
+    rankingRoom: '이 대화방',
+    rankingEmpty: '아직 기록이 없어요. 한 판 해보세요!',
+    rankingWins: '승',
+    rankingRounds: '판',
+    rankingSeeds: '해씨',
+    rankingBonks: '꿀밤',
+    rankingLoadFailed: '랭킹을 불러오지 못했어요',
+    rankingMe: '나',
   },
   en: {
     startedBy: (name) => `${name} started Hash Rush.`,
@@ -51,6 +95,27 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushInviteCopy> = {
     quit: 'Quit',
     quitTitle: 'Quit Hash Rush?',
     quitBody: 'The game ends for you and you go back to the chat.',
+    menuItem: '🌻 Hash Rush',
+    pageTitle: 'Hash Rush',
+    statusNone: 'No game is running right now',
+    statusLive: (name) => `${name}'s game is running`,
+    statusLiveSomeone: 'A game is running',
+    statusPlaying: "You're in the game",
+    create: 'Create a game',
+    backToGame: 'Back to the game',
+    pcLink: 'Copy link to play on a computer',
+    pcLinkHint: "Opens this chat's game in a computer browser",
+    ranking: 'Rankings',
+    howTo: 'How to play',
+    rankingAll: 'Everyone',
+    rankingRoom: 'This chat',
+    rankingEmpty: 'No games yet. Play one!',
+    rankingWins: 'W',
+    rankingRounds: 'Rounds',
+    rankingSeeds: 'Seeds',
+    rankingBonks: 'Bonks',
+    rankingLoadFailed: "Couldn't load the rankings",
+    rankingMe: 'Me',
   },
   ja: {
     startedBy: (name) => `${name}さんがHash Rushを始めました。`,
@@ -67,6 +132,27 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushInviteCopy> = {
     quit: '退出',
     quitTitle: 'Hash Rushから退出しますか？',
     quitBody: 'ゲームを終了してチャットに戻ります。',
+    menuItem: '🌻 Hash Rush',
+    pageTitle: 'Hash Rush',
+    statusNone: 'いま進行中のゲームはありません',
+    statusLive: (name) => `${name}さんのゲームが進行中です`,
+    statusLiveSomeone: 'ゲームが進行中です',
+    statusPlaying: 'ゲームに参加中です',
+    create: 'ゲームを作る',
+    backToGame: 'ゲームに戻る',
+    pcLink: 'PCで遊ぶリンクをコピー',
+    pcLinkHint: 'パソコンのブラウザでこのチャットのゲームに入ります',
+    ranking: 'ランキング',
+    howTo: 'あそびかた',
+    rankingAll: '全体',
+    rankingRoom: 'このチャット',
+    rankingEmpty: 'まだ記録がありません。一戦どうぞ！',
+    rankingWins: '勝',
+    rankingRounds: '戦',
+    rankingSeeds: '種',
+    rankingBonks: 'げんこつ',
+    rankingLoadFailed: 'ランキングを読み込めませんでした',
+    rankingMe: '自分',
   },
 }
 

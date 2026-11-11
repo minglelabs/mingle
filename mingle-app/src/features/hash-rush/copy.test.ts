@@ -21,9 +21,14 @@ describe('hash rush app copy', () => {
     expect(hashRushGameCopy('ja')).toBe(HASH_RUSH_GAME_COPIES.ja)
   })
 
-  it('words the room as the server runs it: nobody hosts it, and rounds start by themselves', () => {
+  it('words the room as the server runs it: only the hosted lobby speaks of a host', () => {
+    const hostKeys = new Set(['host', 'handHost', 'handHostTo', 'waitingHostNamed', 'hostReady', 'handHostConfirm'])
     for (const copy of Object.values(HASH_RUSH_GAME_COPIES)) {
-      for (const line of words(copy)) expect(line).not.toMatch(/방장|host|ホスト/i)
+      for (const [key, value] of Object.entries(copy)) {
+        if (hostKeys.has(key)) continue
+        const line = typeof value === 'function' ? String(value(1)) : String(value)
+        expect(line, key).not.toMatch(/방장|host|ホスト/i)
+      }
     }
     expect(HASH_RUSH_GAME_COPIES.ko.nextRoundIn(15)).toBe('다음 판은 15초 뒤 자동으로 시작해요')
     expect(HASH_RUSH_GAME_COPIES.ko.startsIn(8)).toBe('⏱ 8초 뒤 시작')

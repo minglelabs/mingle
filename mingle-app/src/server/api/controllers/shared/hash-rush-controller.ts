@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { after, NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
@@ -7,6 +8,7 @@ import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { prisma } from "@/lib/prisma";
 import { notifyConversationMessage } from "@/server/conversation-realtime";
 import { hashRushRoomId, issueHashRushTicket } from "@/server/hash-rush/ticket";
+import { listHashRushRankings, parseHashRushRoundReport, recordHashRushRound } from "@/server/hash-rush/rankings";
 import { isHashRushGameLive, joinHashRushGame, prismaHashRushGameStore, type HashRushGameStore } from "@/server/hash-rush/room-game";
 
 export const runtime = "nodejs";
@@ -110,4 +112,43 @@ export async function postHashRushJoinResponse(request: NextRequest, conversatio
     });
   }
   return NextResponse.json({ game: await describeGame(result.sessionId, result.startedByUserId), started: result.started });
+}
+
+// ---------- rankings ----------
+
+function sameSecret(given: string, expected: string): boolean {
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * POST from the game server after each round (its RESULTS_URL), with
+ * `x-hash-rush-secret: HASH_RUSH_RESULTS_SECRET`. Keeps the people in it.
+ */
+export async function postHashRushResultsResponse(request: NextRequest) {
+  const secret = (process.env.HASH_RUSH_RESULTS_SECRET || "").trim();
+  if (!secret) return NextResponse.json({ error: "hash_rush_results_unavailable" }, { status: 503 });
+  if (!sameSecret(request.headers.get("x-hash-rush-secret") || "", secret)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const report = parseHashRushRoundReport(await request.json().catch(() => null));
+  if (!report) return NextResponse.json({ error: "invalid_result" }, { status: 400 });
+  const kept = await recordHashRushRound(report);
+  return NextResponse.json({ kept });
+}
+
+/** GET: everyone's ranking, with the viewer's own row. */
+export async function getHashRushRankingsResponse(request: NextRequest) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({ request, session });
+  if (!resolvedUser.userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  return NextResponse.json(await listHashRushRankings({ viewerUserId: resolvedUser.userId }));
+}
+
+/** GET: one chat room's ranking, for its members. */
+export async function getHashRushRoomRankingsResponse(request: NextRequest, conversationId: string) {
+  const member = await requireChannelMember(request, conversationId);
+  if ("response" in member) return member.response;
+  return NextResponse.json(await listHashRushRankings({ channelId: conversationId, viewerUserId: member.userId }));
 }
