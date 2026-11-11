@@ -115,7 +115,13 @@ export async function getVoiceCallResponse(request: NextRequest, conversationId:
   const member = await requireChannelMember(request, conversationId);
   if ("response" in member) return member.response;
   await reconcileOnRead(conversationId);
-  return NextResponse.json({ call: await getLiveCallView(store, conversationId) });
+  const call = await getLiveCallView(store, conversationId);
+  // The starter may have left the call; their name still says who started it.
+  if (call?.startedBy && call.startedBy.name === null) {
+    const starter = await prisma.user.findUnique({ where: { id: call.startedBy.userId }, select: { name: true } }).catch(() => null);
+    call.startedBy = { ...call.startedBy, name: starter?.name ?? null };
+  }
+  return NextResponse.json({ call });
 }
 
 function readLang(value: unknown): string | null {

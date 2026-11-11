@@ -12,6 +12,8 @@ export type VoiceCallRecord = {
   status: string;
   startedAt: Date;
   maxParticipants: number;
+  /** Who started the call (stores that predate it may leave it out). */
+  startedByUserId?: string;
 };
 
 export type VoiceParticipantRecord = {
@@ -58,6 +60,11 @@ export type VoiceCallView = {
   room: string;
   startedAt: string;
   maxParticipants: number;
+  /**
+   * Who started the call. `name` is null when they are no longer in it and
+   * the caller has not looked it up (the controller does).
+   */
+  startedBy: { userId: string; name: string | null } | null;
   participants: Array<{
     userId: string;
     name: string | null;
@@ -90,6 +97,12 @@ export function toCallView(call: VoiceCallRecord, participants: VoiceParticipant
     room: call.livekitRoom,
     startedAt: call.startedAt.toISOString(),
     maxParticipants: call.maxParticipants,
+    startedBy: call.startedByUserId
+      ? {
+          userId: call.startedByUserId,
+          name: participants.find((participant) => participant.userId === call.startedByUserId)?.name ?? null,
+        }
+      : null,
     participants: participants.map((participant) => ({
       userId: participant.userId,
       name: participant.name,

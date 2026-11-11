@@ -27,7 +27,8 @@ export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = 8
 
 type CallParticipant = { userId: string; name: string | null; image: string | null; speechLanguage?: string | null }
-type StatusCall = { id: string; participants: CallParticipant[]; maxParticipants: number } | null
+// `startedBy` comes from servers that send it.
+type StatusCall = { id: string; participants: CallParticipant[]; maxParticipants: number; startedBy?: { userId: string; name: string | null } | null } | null
 // `lang` and `micOn` come from app builds that share them; older builds send neither.
 type RoomMember = { identity: string; userId: string; name: string; isLocal: boolean; isSpeaking: boolean; lang?: string; micOn?: boolean }
 type RoomSnapshot = {
@@ -73,6 +74,7 @@ const COPY = {
     joinTitle: '진행 중인 보이스톡에 참여하시겠습니까?',
     startedBy: (name: string) => `${name}님이 보이스톡을 시작했습니다.`,
     startedBySomeone: '보이스톡이 시작됐습니다.',
+    startedByMe: '내가 시작한 보이스톡이 진행 중입니다.',
     captionsOffHint: '자막·통역은 꺼져 있어요. 켜려면 아래 시작 버튼을 누르세요.',
   },
   en: {
@@ -101,6 +103,7 @@ const COPY = {
     joinTitle: 'Join the voice talk in progress?',
     startedBy: (name: string) => `${name} started a voice talk.`,
     startedBySomeone: 'A voice talk has started.',
+    startedByMe: 'The voice talk you started is still going.',
     captionsOffHint: 'Captions and interpretation are off. Press Start below to turn them on.',
   },
 }
@@ -479,7 +482,15 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   // the screen offers it once. Declining (or closing) leaves the call's
   // message in the room, whose button still joins.
   const incoming = incomingOffered && !startPrompt
-  const starterName = (call?.participants[0]?.name || '').trim()
+  // Who started it, never just whoever happens to be first in the list: the
+  // starter may have dropped out, and may be this viewer (back after a restart).
+  const startedByViewer = !!viewerUserId && call?.startedBy?.userId === viewerUserId
+  const starterName = (
+    call?.startedBy
+      ? call.startedBy.name ?? call.participants.find((p) => p.userId === call.startedBy?.userId)?.name ?? ''
+      : call?.participants[0]?.name ?? ''
+  ).trim()
+  const incomingTitle = startedByViewer ? copy.startedByMe : starterName ? copy.startedBy(starterName) : copy.startedBySomeone
   const incomingCard = incoming ? (
     <div
       className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom,0px)+96px)] z-[55] flex justify-center px-5"
@@ -487,7 +498,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     >
       <div
         role="dialog"
-        aria-label={starterName ? copy.startedBy(starterName) : copy.startedBySomeone}
+        aria-label={incomingTitle}
         className="pointer-events-auto w-full max-w-[340px] rounded-2xl border border-emerald-100 bg-white p-4 shadow-[0_18px_48px_rgba(15,23,42,0.22)]"
       >
         <div className="flex items-center gap-2.5">
@@ -496,7 +507,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
             <Phone size={17} strokeWidth={2.3} className="relative" />
           </span>
           <p className="min-w-0 flex-1 text-[0.95rem] font-semibold leading-snug text-gray-900">
-            {starterName ? copy.startedBy(starterName) : copy.startedBySomeone}
+            {incomingTitle}
           </p>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3">
@@ -545,8 +556,13 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         className="pointer-events-auto mt-1 overflow-hidden rounded-2xl border border-gray-100 bg-white/95 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-sm"
         data-qa="voice-talk-panel"
       >
-        {/* Top row: always visible; the folded state is only this row. */}
-        <div className="flex items-center gap-2 px-3 py-2">
+        {/* Top row: always visible; the folded state is only this row, and a
+            tap anywhere on it unfolds the panel (not only on the chevron). */}
+        <div
+          data-qa="voice-talk-top-row"
+          className={`flex items-center gap-2 px-3 py-2 ${folded ? 'cursor-pointer' : ''}`}
+          onClick={folded ? () => setFolded(false) : undefined}
+        >
           <span className="relative inline-flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -571,7 +587,11 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
           ) : null}
           <button
             type="button"
-            onClick={() => setFolded((f) => !f)}
+            onClick={(event) => {
+              // The row also unfolds on a tap: the chevron must not toggle twice.
+              event.stopPropagation()
+              setFolded((f) => !f)
+            }}
             aria-label={folded ? copy.open : copy.fold}
             className="inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
           >

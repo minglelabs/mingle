@@ -135,6 +135,24 @@ describe("/api/conversations/[conversationId]/voice routes", () => {
     }
   });
 
+  it("says who started the call, also after they left it", async () => {
+    const started = await (await TOKEN(tokenRequest({ lang: "ko" }), params)).json();
+    expect(started.call.startedBy).toMatchObject({ userId: "user-1" });
+
+    asUser("user-2");
+    mockFindUser.mockResolvedValue({ name: "Bo" });
+    await TOKEN(tokenRequest({ lang: "en" }), params);
+    asUser("user-1");
+    await LEAVE(new NextRequest("http://localhost/api/conversations/chan-1/voice/leave", { method: "POST" }), params);
+
+    // The starter is gone; their name is looked up rather than taking whoever is first now.
+    mockFindUser.mockResolvedValue({ name: "Mia" });
+    asUser("user-2");
+    const read = await (await GET(new NextRequest("http://localhost/api/conversations/chan-1/voice"), params)).json();
+    expect(read.call.participants.map((p: { userId: string }) => p.userId)).toEqual(["user-2"]);
+    expect(read.call.startedBy).toEqual({ userId: "user-1", name: "Mia" });
+  });
+
   it("returns 403 to someone who is not in the chat room", async () => {
     asUser("stranger");
     expect((await TOKEN(tokenRequest({ lang: "ko" }), params)).status).toBe(403);

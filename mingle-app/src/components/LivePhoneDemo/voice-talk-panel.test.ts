@@ -254,3 +254,25 @@ describe('a call left behind by an app restart', () => {
     expect(panelSource).toContain("if (detail.phase === 'left') writeJoinedCallMarker(conversationId, null)")
   })
 })
+
+describe('who started the call, on the incoming card', () => {
+  it('is the starter the server names, not the first person in the list', () => {
+    expect(panelSource).toContain('call?.startedBy')
+    expect(panelSource).toContain('call.startedBy.name ?? call.participants.find((p) => p.userId === call.startedBy?.userId)?.name')
+    expect(panelSource).not.toContain("const starterName = (call?.participants[0]?.name || '').trim()")
+  })
+
+  it('says it is my own call when I started it', () => {
+    expect(panelSource).toContain('const startedByViewer = !!viewerUserId && call?.startedBy?.userId === viewerUserId')
+    expect(panelSource).toContain("startedByMe: '내가 시작한 보이스톡이 진행 중입니다.'")
+    expect(panelSource).toContain('const incomingTitle = startedByViewer ? copy.startedByMe')
+  })
+})
+
+describe('folded panel', () => {
+  it('unfolds on a tap anywhere on its row, and the chevron does not toggle it twice', () => {
+    expect(panelSource).toContain("onClick={folded ? () => setFolded(false) : undefined}")
+    const chevron = panelSource.slice(panelSource.indexOf('aria-label={folded ? copy.open : copy.fold}') - 300, panelSource.indexOf('aria-label={folded ? copy.open : copy.fold}'))
+    expect(chevron).toContain('event.stopPropagation()')
+  })
+})

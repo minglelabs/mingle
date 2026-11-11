@@ -47,6 +47,7 @@ export function createMemoryVoiceStore(): MemoryVoiceStore {
         status: "live",
         startedAt: new Date(Date.UTC(2026, 9, 31, 12, 0, 0)),
         maxParticipants: 8,
+        startedByUserId: input.startedByUserId,
         endedAt: null,
         durationSec: null,
       };

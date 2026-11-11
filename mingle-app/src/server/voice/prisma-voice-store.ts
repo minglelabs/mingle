@@ -12,6 +12,7 @@ const callSelect = {
   status: true,
   startedAt: true,
   maxParticipants: true,
+  startedByUserId: true,
 } as const;
 
 type PrismaTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
