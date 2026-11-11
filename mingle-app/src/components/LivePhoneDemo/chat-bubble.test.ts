@@ -102,6 +102,15 @@ describe('ChatBubble', () => {
     expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 flex-col gap-0 self-end pb-1 items-start"')
     // Read count and time on one line: with the fold button the column is two lines.
     expect(html).toContain('data-chat-bubble-meta-line')
+    if (html.includes('data-chat-speaker-header')) {
+      // With a name line, the time sits on it, beside the name and flags.
+      const header = html.indexOf('data-chat-speaker-header')
+      const meta = html.indexOf('data-chat-bubble-other-meta')
+      const time = html.indexOf('data-original-bubble-timestamp')
+      expect(time).toBeGreaterThan(header)
+      expect(time).toBeLessThan(meta)
+      expect(html.slice(meta)).not.toContain('data-original-bubble-timestamp')
+    }
     // The time sits centered on the read mark's line, in the same 10px size.
     expect(html).toContain('items-start text-left self-center text-[10px] font-medium')
     expect(html).toContain('items-start text-left self-center')

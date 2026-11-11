@@ -1210,6 +1210,17 @@ function ChatBubble({
           })}
         </span>
       )}
+      {/* The time beside the name (and the flags, when folded): the column
+          next to the bubble keeps only the read mark and the fold button. */}
+      {hasTimestamp && (
+        <ChatBubbleTimestamp
+          createdAtMs={utterance.createdAtMs}
+          uiLocale={uiLocale}
+          align="left"
+          minWidth="0"
+          className="ml-1 flex-row gap-1 self-center text-[11px] font-medium leading-5 text-black/[0.34]"
+        />
+      )}
     </div>
   ) : null
 
@@ -1422,7 +1433,9 @@ function ChatBubble({
           bubble's height (about 32 px), so neither line rides above it.
           Both lines line up on the bubble's side. */}
       <div data-chat-bubble-meta-line className="flex min-h-3.5 items-center gap-1">
-        {isOwnMessage ? <>{bubbleTimestamp}{bubbleReadReceipt}</> : <>{bubbleReadReceipt}{bubbleTimestamp}</>}
+        {isOwnMessage
+          ? <>{bubbleTimestamp}{bubbleReadReceipt}</>
+          : <>{bubbleReadReceipt}{shouldShowSpeakerHeader ? null : bubbleTimestamp}</>}
       </div>
       {/* One language row has nothing to fold. */}
       {!messageImage && !announcementCard && !isRecalled && expandedBubbleEntries.length > 1 && bubbleControls}
