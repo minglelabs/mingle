@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  findOwnSelectedLanguage,
+  isLikelyMixedUtterance,
   listTextScripts,
   parseSttLanguageLabels,
   resolveSingleLabelTargetLanguages,
@@ -63,5 +65,26 @@ describe('singleLabelResultDisagrees', () => {
     expect(singleLabelResultDisagrees({ sourceLanguage: 'ko', sourceLanguagesMixed: true }, 'ko')).toBe(true)
     expect(singleLabelResultDisagrees({ sourceLanguage: 'ko', sourceTextHasForeignScript: true }, 'ko')).toBe(true)
     expect(singleLabelResultDisagrees({ sourceLanguage: 'ja' }, 'ko')).toBe(true)
+  })
+})
+
+describe('isLikelyMixedUtterance', () => {
+  it('is true when the labels name another language or the text uses another script', () => {
+    expect(isLikelyMixedUtterance({ sttLanguages: ['en', 'ko'], sourceLanguage: 'en', text: 'Hello there' })).toBe(true)
+    expect(isLikelyMixedUtterance({ sttLanguages: [], sourceLanguage: 'en', text: 'Hello 내 목숨' })).toBe(true)
+    expect(isLikelyMixedUtterance({ sttLanguages: ['es'], sourceLanguage: 'en', text: 'Hola amigo' })).toBe(true)
+  })
+
+  it('is false for one language in one script', () => {
+    expect(isLikelyMixedUtterance({ sttLanguages: ['en'], sourceLanguage: 'en', text: 'Hello there' })).toBe(false)
+    expect(isLikelyMixedUtterance({ sttLanguages: [], sourceLanguage: 'ja', text: '今日は天気がいい' })).toBe(false)
+    expect(isLikelyMixedUtterance({ sttLanguages: ['ko'], sourceLanguage: 'unknown', text: '안녕 hello' })).toBe(false)
+  })
+})
+
+describe('findOwnSelectedLanguage', () => {
+  it('finds the selected language with the source base', () => {
+    expect(findOwnSelectedLanguage(['ko', 'en'], 'en-US')).toBe('en')
+    expect(findOwnSelectedLanguage(['ko', 'ja'], 'en')).toBeNull()
   })
 })
