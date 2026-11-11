@@ -92,6 +92,26 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
     : nobody ? copy.nobodySeated : seated ? copy.waitingRound : view.words.spectating
   const total = view.seats.length + view.open
   const handSeat = handTo == null ? null : view.seats.find((seat) => seat.seat === handTo) ?? null
+  // A press shows at once: the choice is drawn as made while the game server's
+  // answer is on its way (a moment, more over a slow line), then the lobby it
+  // sends is the truth again. Dropped after a few seconds if it never came.
+  const [mine, setMine] = useState<HashRushSetup & { team?: number }>({})
+  const mineTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(mineTimer.current), [])
+  const choose = (patch: HashRushSetup & { team?: number }) => {
+    setMine((current) => ({ ...current, ...patch }))
+    window.clearTimeout(mineTimer.current)
+    mineTimer.current = window.setTimeout(() => setMine({}), 4000)
+  }
+  const setup = (patch: HashRushSetup) => {
+    choose(patch)
+    onSetup?.(patch)
+  }
+  const teams = mine.teams ?? hosting?.teams ?? false
+  const map = mine.map ?? hosting?.map
+  const botLevel = mine.bots ?? hosting?.botLevel
+  const fill = mine.fill ?? hosting?.fill ?? 0
+  const myTeam = mine.team ?? hosting?.myTeam
   return (
     <div className={cx(styles.cover, styles.coverLobby)} data-qa="hash-rush-lobby">
       <div className={cx(styles.card, styles.lobbyCard)}>
@@ -149,7 +169,7 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
           </div>
         ) : null}
 
-        {hosting?.teams && seated && onPickTeam ? (
+        {teams && hosting && seated && onPickTeam ? (
           <div className={styles.setupRow} data-qa="hash-rush-pick-team">
             <span className={styles.setupLabel}>{copy.pickTeam}</span>
             <div className={styles.options}>
@@ -157,9 +177,9 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
                 <button
                   key={choice.team}
                   type="button"
-                  aria-pressed={hosting.myTeam === choice.team}
-                  className={cx(styles.option, hosting.myTeam === choice.team && styles.optionOn)}
-                  onClick={() => onPickTeam(choice.team)}
+                  aria-pressed={myTeam === choice.team}
+                  className={cx(styles.option, myTeam === choice.team && styles.optionOn)}
+                  onClick={() => { choose({ team: choice.team }); onPickTeam(choice.team) }}
                 >
                   {choice.label}
                 </button>
@@ -172,10 +192,10 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
           <div className={styles.setup} data-qa="hash-rush-host-setup">
             <div className={styles.setupRow}>
               <div className={styles.options}>
-                <button type="button" aria-pressed={!hosting.teams} className={cx(styles.option, !hosting.teams && styles.optionOn)} onClick={() => onSetup({ teams: false })} data-qa="hash-rush-setup-solo">
+                <button type="button" aria-pressed={!teams} className={cx(styles.option, !teams && styles.optionOn)} onClick={() => setup({ teams: false })} data-qa="hash-rush-setup-solo">
                   {hosting.words.solo}
                 </button>
-                <button type="button" aria-pressed={hosting.teams} className={cx(styles.option, hosting.teams && styles.optionOn)} onClick={() => onSetup({ teams: true })} data-qa="hash-rush-setup-team">
+                <button type="button" aria-pressed={teams} className={cx(styles.option, teams && styles.optionOn)} onClick={() => setup({ teams: true })} data-qa="hash-rush-setup-team">
                   {hosting.words.team}
                 </button>
               </div>
@@ -183,9 +203,9 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
             <div className={styles.setupRow}>
               <span className={styles.setupLabel}>{hosting.words.map}</span>
               <div className={styles.options}>
-                {hosting.maps.map((map) => (
-                  <button key={map.id} type="button" aria-pressed={hosting.map === map.id} className={cx(styles.option, hosting.map === map.id && styles.optionOn)} onClick={() => onSetup({ map: map.id })}>
-                    {map.label}
+                {hosting.maps.map((option) => (
+                  <button key={option.id} type="button" aria-pressed={map === option.id} className={cx(styles.option, map === option.id && styles.optionOn)} onClick={() => setup({ map: option.id })}>
+                    {option.label}
                   </button>
                 ))}
               </div>
@@ -194,7 +214,7 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
               <span className={styles.setupLabel}>{copy.botLevel}</span>
               <div className={styles.options}>
                 {hosting.botLevels.map((level) => (
-                  <button key={level.id} type="button" aria-pressed={hosting.botLevel === level.id} className={cx(styles.option, hosting.botLevel === level.id && styles.optionOn)} onClick={() => onSetup({ bots: level.id })}>
+                  <button key={level.id} type="button" aria-pressed={botLevel === level.id} className={cx(styles.option, botLevel === level.id && styles.optionOn)} onClick={() => setup({ bots: level.id })}>
                     {level.label}
                   </button>
                 ))}
@@ -203,9 +223,9 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
             <div className={styles.setupRow}>
               <span className={styles.setupLabel}>{copy.hamsters}</span>
               <div className={styles.stepper}>
-                <button type="button" aria-label="−" disabled={hosting.fill <= hosting.fillMin} onClick={() => onSetup({ fill: hosting.fill - 1 })}>−</button>
-                <b data-qa="hash-rush-setup-fill">{hosting.fill}</b>
-                <button type="button" aria-label="+" disabled={hosting.fill >= hosting.fillMax} onClick={() => onSetup({ fill: hosting.fill + 1 })}>+</button>
+                <button type="button" aria-label="−" disabled={fill <= hosting.fillMin} onClick={() => setup({ fill: fill - 1 })}>−</button>
+                <b data-qa="hash-rush-setup-fill">{fill}</b>
+                <button type="button" aria-label="+" disabled={fill >= hosting.fillMax} onClick={() => setup({ fill: fill + 1 })}>+</button>
               </div>
             </div>
             {hosting.notice ? <p className={styles.notice} data-qa="hash-rush-start-notice">{hosting.notice}</p> : null}

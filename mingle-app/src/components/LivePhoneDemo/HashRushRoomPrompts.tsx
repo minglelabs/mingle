@@ -10,6 +10,7 @@
 // (src/server/hash-rush/room-game.ts).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Gamepad2 } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { parseHashRushRoomGame, type HashRushRoomGame } from '@/lib/hash-rush-message'
@@ -122,12 +123,15 @@ export function HashRushRoomPrompts(props: {
   const copy = hashRushInviteCopy(props.uiLocale)
   useNativeBannerSuppression(props.invite !== null)
 
-  if (!props.invite) return null
+  if (!props.invite || typeof document === 'undefined') return null
   const starterName = (props.invite.startedBy?.name ?? '').trim()
   const title = starterName ? copy.startedBy(starterName) : copy.startedBySomeone
-  return (
+  // On the page itself, not inside the room screen: the room slides in
+  // (a transform), and iOS WebKit draws a fixed card inside a transformed
+  // layer but can miss its taps (the buttons did nothing on an iPhone 11).
+  return createPortal(
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom,0px)+96px)] z-[55] flex justify-center px-5"
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom,0px)+96px)] z-[1000] flex justify-center px-5"
       data-qa="hash-rush-incoming"
     >
       <div
@@ -147,7 +151,7 @@ export function HashRushRoomPrompts(props: {
             type="button"
             data-qa="hash-rush-incoming-decline"
             onClick={props.onDecline}
-            className="h-12 rounded-xl bg-gray-100 text-[0.95rem] font-semibold text-gray-700 active:bg-gray-200"
+            className="h-12 touch-manipulation rounded-xl bg-gray-100 text-[0.95rem] font-semibold text-gray-700 active:bg-gray-200"
           >
             {copy.decline}
           </button>
@@ -155,12 +159,13 @@ export function HashRushRoomPrompts(props: {
             type="button"
             data-qa="hash-rush-incoming-join"
             onClick={props.onConfirm}
-            className="h-12 rounded-xl bg-emerald-500 text-[0.95rem] font-semibold text-white active:bg-emerald-600"
+            className="h-12 touch-manipulation rounded-xl bg-emerald-500 text-[0.95rem] font-semibold text-white active:bg-emerald-600"
           >
             {copy.join}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

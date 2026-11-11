@@ -5,7 +5,7 @@
 //   - in the bubble over the speaker's hamster, in this viewer's language
 //     (hash-rush embed.js createChatBubbles, ported here);
 //   - as the room's own bubbles floating over the map, crisp for five seconds,
-//     faint for five more (hash-rush chatbar.js floatLine), and as the whole
+//     faint for two more (hash-rush chatbar.js floatLine), and as the whole
 //     recent conversation while the composer is up or while it is read back;
 //   - the room's composer itself, raised over the game (LivePhoneDemo).
 // No DOM here, so it can be tested on its own.
@@ -194,16 +194,17 @@ export function createChatBubbles(bubbles: Map<number, HashRushBubble>, life = l
 // ---------------------------------------------------------------------------
 // Floating over the map
 //
-// A new line floats up crisp for five seconds, three at most at a time, then
+// A new line floats up crisp for two seconds, three at most at a time, then
 // lingers faint as long again: still there to be touched, to read the whole
 // conversation back without the keyboard, and soon out of the way of what it
 // covers (UIUX-ISSUES #188, #196, #198). New words for a line (its
 // translation) give it its crisp seconds again. When the composer goes down,
-// or the game comes back into sight, the last three float up again.
+// or the game comes back into sight, the last three float up again. A tap
+// anywhere else while they float puts them away at once.
 // ---------------------------------------------------------------------------
 
-export const FLOAT_CRISP_MS = 5000
-export const FLOAT_FAINT_MS = 5000
+export const FLOAT_CRISP_MS = 2000
+export const FLOAT_FAINT_MS = 2000
 export const FLOAT_CRISP_MAX = 3
 export const FLOAT_MAX = 8
 

@@ -963,6 +963,18 @@ td.wins {
   cursor: pointer;
 }
 
+/* Pressed: it gives way under the finger at once. */
+.option:active,
+.stepper button:active {
+  transform: scale(0.94);
+}
+
+.option,
+.stepper button {
+  transition: transform 0.08s;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .optionOn {
   background: var(--ink);
   border-color: var(--ink);

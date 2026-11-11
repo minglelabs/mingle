@@ -471,6 +471,19 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
 
   useEffect(() => () => window.clearTimeout(browseTimerRef.current), [])
 
+  // Lines floating over the map: a tap anywhere but on them puts them away at
+  // once (a tap on one opens the conversation instead).
+  const floatingUp = floating.length > 0 && !(chat && (chatOpen || browsing))
+  useEffect(() => {
+    if (!floatingUp) return
+    const away = (event: PointerEvent) => {
+      if ((event.target as Element | null)?.closest?.('[data-qa="hash-rush-talk-line"]')) return
+      setFloating([])
+    }
+    window.addEventListener('pointerdown', away, true)
+    return () => window.removeEventListener('pointerdown', away, true)
+  }, [floatingUp])
+
   // On the conversation a tap folds it (or, over the composer, puts the
   // composer away: #188); a slide scrolls it, a long press opens a bubble's
   // own menu, and a bubble's own buttons keep their taps.
