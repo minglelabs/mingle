@@ -2,6 +2,18 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-13 — Invites and first run: friends on HashChat, mutual follow, length preview
+
+- Surface: Contact-sync screen (`contacts/contact-sync-screen.tsx`, new `phone-verify-sheet.tsx`), invite messages (`i18n/invite-ticket-copy.ts`, profile and room link copy), the first-run sentence length card (`LivePhoneDemo/SpeechLengthCard.tsx`), opening a room from the list (`conversation-list.tsx`).
+- Issue (contacts): Contact sync only offered invites; friends already on HashChat looked the same as everyone else, and nothing linked an invited pair once they joined.
+- Resolution (contacts): After verifying their own number by SMS code, the user sees "Friends on HashChat" above the invite list: each row shows the contact's name, the HashChat name and handle, a green ✓ on the avatar and a Follow button. Matched contacts are no longer offered an invite. Contact numbers leave the device only as sha256 hashes and are not stored. Accepting an invite (link, install referrer or code) makes the pair follow each other.
+- Issue (invite messages): A link tapped before install is lost in the store, and the pasted message gave no code to fall back on.
+- Resolution (invite messages): Every pasted invite (ticket, contact SMS, copied profile or room link) ends with the sender's invite code and a note to tap the link again after installing.
+- Issue (length card): Picking a number changed the setting at once with no way to see what it meant.
+- Resolution (length card): The card shows an example monologue as bubbles that merge or split as the level changes (six at 1, one at 6); Apply changes the setting and restarts listening if the room was listening.
+- Change (profile basics): Opening a room with other members from the list now asks gender and birth date first, like a follow or a comment.
+- Verification: Web unit tests (480 files, 5,061 tests), `tsc`, lint on the changed files. Not tried on a device; the SMS path needs Twilio Verify set up (without it a non-production server accepts 000000).
+
 ## 2026-11-12 — 채팅 버블: 더블탭으로 펼치기/접기, 옆 칸은 읽음 표시 위·시간 아래
 
 - 화면: 대화방 채팅 버블 (`ChatBubble.tsx`, `CopyableBubbleSurface.tsx`, `MessageReadReceipts.tsx`). `feat/voicetalk-windows-livekit-mvp`의 버블 옆 칸 작업 최종 결과를 옮김(중간 단계인 이름 줄 시간 표시는 제외).

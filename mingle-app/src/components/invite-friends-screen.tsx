@@ -1,5 +1,6 @@
 "use client";
 
+import { requestProfileBasics } from "@/lib/profile-basics";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -13,7 +14,9 @@ import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression"
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
 import { showRouteTransitionCurtain } from "@/lib/route-transition-curtain";
 import { buildNativeAwareTabPath } from "@/lib/tab-navigation";
-import { Check, ChevronLeft, Loader2, Search, UserRound, X } from "lucide-react";
+import { Check, ChevronLeft, Loader2, Search, Ticket, UserRound, X } from "lucide-react";
+import { resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
+import { openInviteTicket } from "@/lib/native-invite";
 import { motion, useAnimationControls } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -109,6 +112,7 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
   const [existingMemberIds, setExistingMemberIds] = useState<Set<string>>(new Set());
 
   const copy = useMemo(() => getConversationDictionary(locale, dictionary), [dictionary, locale]);
+  const inviteTicketLabel = resolveInviteTicketCopy(locale).sendTicket;
   const labels = useMemo(() => ({
     followers: dictionary.profile.followersLabel ?? (locale === "ko" ? "팔로워" : "Followers"),
     following: dictionary.profile.followingLabel ?? (locale === "ko" ? "팔로잉" : "Following"),
@@ -306,6 +310,9 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
   // target room, so it's a straight invite-and-return.
   const handleStartConversation = useCallback(async () => {
     if (isStarting || selectedUsers.length === 0) return;
+    // Gender and birth date are asked before starting a room with other
+    // people (or adding them to one); closing the question keeps the picks.
+    if (!(await requestProfileBasics())) return;
     setIsStarting(true);
     setStartError(null);
     try {
@@ -483,6 +490,19 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-8">
+          {/* A new user's follower lists are empty: the friend they want is
+              not on HashChat yet, so the way to bring them in comes first. */}
+          <div className="px-4 pt-3">
+            <button
+              type="button"
+              onClick={openInviteTicket}
+              data-testid="invite-friends-invite-ticket"
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-[15px] font-bold text-white transition active:bg-blue-700"
+            >
+              <Ticket size={18} strokeWidth={2.2} aria-hidden="true" />
+              {inviteTicketLabel}
+            </button>
+          </div>
           <div className="border-b border-gray-100 px-4 pt-3">
             <div className="flex rounded-xl bg-gray-50 p-1" role="tablist" aria-label={`${labels.followers} / ${labels.following}`}>
               {(["followers", "following"] as const).map((tab) => (

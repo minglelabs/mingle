@@ -1,5 +1,6 @@
 'use client'
 
+import { requestProfileBasics } from '@/lib/profile-basics'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
@@ -498,6 +499,9 @@ export default function ComposeScreen({
     if (!publishable || publishing.current) return
     publishing.current = true
     try {
+      // Gender and birth date are asked before the first post; closing the
+      // question leaves the post on screen, unpublished.
+      if (!(await requestProfileBasics())) return
       if (isPublishRunning()) {
         // One post uploads at a time. Never drop this one silently: keep it on
         // screen, save it as a draft now, and tell the author to post it after.

@@ -1,5 +1,6 @@
 "use client";
 
+import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -45,7 +46,8 @@ function kindLabel(kind: UsageKind, copy: CoinCopy): string {
   return kind === "stt" ? copy.kindStt : kind === "translation" ? copy.kindTranslation : kind === "tts" ? copy.kindTts : copy.kindImageText;
 }
 
-function grantLabel(source: string, copy: CoinCopy): string {
+function grantLabel(source: string, copy: CoinCopy, referralLabel: string): string {
+  if (source === "referral") return referralLabel;
   if (source === "daily_free") return copy.sourceDailyFree;
   if (source === "purchase") return copy.sourcePurchase;
   if (source === "signup_bonus") return copy.sourceBonus;
@@ -72,6 +74,7 @@ function formatMinutes(seconds: number, locale: string): string {
 
 export default function CoinUsageSection({ locale }: { locale: AppLocale }) {
   const copy = getCoinCopy(locale);
+  const referralLabel = resolveContactSyncCopy(locale).coinSource;
   const displayLocale = resolveLegalDocumentLocale(locale);
   const [range, setRange] = useState<UsageRange>("7d");
   const [summary, setSummary] = useState<UsageSummary | null>(null);
@@ -205,7 +208,7 @@ export default function CoinUsageSection({ locale }: { locale: AppLocale }) {
                   <li key={item.id} className={`flex items-center gap-3 px-4 py-3 ${border}`}>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-semibold text-slate-900">
-                        {positive ? grantLabel(item.source, copy) : removalLabel(item.reason, copy)}
+                        {positive ? grantLabel(item.source, copy, referralLabel) : removalLabel(item.reason, copy)}
                         {item.counterpart ? ` · ${item.counterpart}` : ""}
                       </p>
                       <p className="text-[12px] text-gray-500">{when}</p>

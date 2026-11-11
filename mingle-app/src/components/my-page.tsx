@@ -109,7 +109,9 @@ import CoinBalanceChip, { formatCoinCount } from "@/components/coins/coin-balanc
 import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
-import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
+import { openContactSync } from "@/lib/native-contacts";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
 import { feedCopy } from "@/i18n/feed-copy";
@@ -434,6 +436,7 @@ function ProfileSettingsPanel({
   const managementCopy = useMemo(() => resolveProfileManagementCopy(locale), [locale]);
   const postsRouter = useRouter();
   const postsMenu = useMemo(() => composeCopy(locale), [locale]);
+  const contactSyncCopy = useMemo(() => resolveContactSyncCopy(locale), [locale]);
   const goToMyPosts = useCallback(
     (section: "archived" | "trash" | "hidden") => {
       onClose();
@@ -923,6 +926,17 @@ function ProfileSettingsPanel({
                 <ChevronRight size={19} strokeWidth={2} className="text-amber-500" aria-hidden="true" />
               </button>
             ) : null}
+            <button
+              type="button"
+              onClick={openContactSync}
+              data-testid="menu-contact-sync"
+              className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 text-left transition active:bg-gray-50"
+            >
+              <Contact size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+              <span className="min-w-0 flex-1 text-[15px] font-semibold">{contactSyncCopy.title}</span>
+              <span className="truncate text-[13px] text-gray-400">{contactSyncCopy.headline}</span>
+              <ChevronRight size={19} strokeWidth={2} className="shrink-0 text-gray-400" aria-hidden="true" />
+            </button>
             {postingFeedSupported !== false ? (
             <div className="mb-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <button

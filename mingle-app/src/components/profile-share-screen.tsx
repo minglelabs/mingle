@@ -17,6 +17,8 @@ import { buildProfileLinkUrl, parseMingleProfileLink } from "@/lib/profile-link"
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import SlideSurface from "@/components/slide-surface";
+import { buildInviteSharedLinkMessage } from "@/i18n/invite-ticket-copy";
+import { useOwnInviteCode } from "@/lib/own-invite-code";
 import { postNativeAndroidBackCapability } from "@/lib/native-back-handler";
 
 type ProfileShareScreenProps = {
@@ -114,6 +116,8 @@ export default function ProfileShareScreen({
     return buildProfileLinkUrl(profileOrigin, profileUserId) ?? "";
   }, [profileOrigin, profileUserId]);
   const qrDataUrl = qrData?.profileUrl === profileUrl ? qrData.dataUrl : null;
+  // Pasted under the profile link, so a friend who installs first can still type it in.
+  const ownInviteCode = useOwnInviteCode(open && session?.user?.id != null);
   const shell = appShellCopy(locale);
   const cameraCopy = {
     permissionTitle: shell.cameraPermissionTitle,
@@ -232,12 +236,12 @@ export default function ProfileShareScreen({
       return;
     }
     try {
-      await copyTextToClipboard(profileUrl);
+      await copyTextToClipboard(buildInviteSharedLinkMessage(locale, profileUrl, ownInviteCode));
       showStatus(copy.copied);
     } catch {
       showStatus(copy.copyFailed);
     }
-  }, [copy.copyFailed, copy.copied, copy.qrUnavailable, profileUrl, showStatus]);
+  }, [copy.copyFailed, copy.copied, copy.qrUnavailable, locale, ownInviteCode, profileUrl, showStatus]);
 
   const handleOpenQrScanner = useCallback(() => {
     if (typeof window === "undefined") return;
