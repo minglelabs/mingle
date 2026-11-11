@@ -14,6 +14,7 @@ import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
 import { MESSAGE_READ_RECEIPTS_REFRESH_EVENT } from '@/lib/message-read-receipts'
 import { publishRoomPresence } from '@/lib/room-presence'
 import { normalizeVoiceCallMessage } from '@/lib/voice-call-message'
+import { normalizeHashRushMessage } from '@/lib/hash-rush-message'
 import { normalizeMessageReplyReference, type MessageReplyReference } from '@/lib/message-reply'
 import { MESSAGE_RECALLED_EVENT, normalizeRecalledMessageIds, type MessageRecalledEventDetail } from '@/lib/message-recall'
 import { MESSAGE_RETRANSLATED_EVENT, applyRetranslationToUtterance, type MessageRetranslatedEventDetail } from '@/lib/message-retranslate'
@@ -1115,6 +1116,7 @@ export function normalizeConversationHydrationUtterances(
         ...(record.sentByViewer === true ? { sentByViewer: true } : {}),
         ...(normalizeConversationMessageImage(record.image) ? { image: normalizeConversationMessageImage(record.image) } : {}),
         ...(normalizeVoiceCallMessage(record.voiceCall) ? { voiceCall: normalizeVoiceCallMessage(record.voiceCall)! } : {}),
+        ...(normalizeHashRushMessage(record.hashRush) ? { hashRush: normalizeHashRushMessage(record.hashRush)! } : {}),
         originalText: typeof record.originalText === 'string' ? record.originalText : '',
         ...(typeof record.originalDisplayText === 'string' && record.originalDisplayText.trim()
           && record.originalDisplayText !== record.originalText

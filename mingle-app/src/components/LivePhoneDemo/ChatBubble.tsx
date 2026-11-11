@@ -21,6 +21,8 @@ import ChatBubbleTimestamp from './ChatBubbleTimestamp'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
 import ConversationImageBubble from './ConversationImageBubble'
 import VoiceCallStartedBubble from './VoiceCallStartedBubble'
+import HashRushStartedBubble from './HashRushStartedBubble'
+import { normalizeHashRushMessage, type HashRushMessage } from '@/lib/hash-rush-message'
 import { normalizeVoiceCallMessage, type VoiceCallMessage } from '@/lib/voice-call-message'
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
 import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
@@ -145,6 +147,8 @@ export interface Utterance {
   // This message announces a voice talk that started: it renders as a card
   // with a Join button instead of text.
   voiceCall?: VoiceCallMessage
+  // A Hash Rush game that started: the same kind of card.
+  hashRush?: HashRushMessage
   id: string
   speaker?: string
   speakerAvatarSeed?: string
@@ -880,6 +884,9 @@ function ChatBubble({
   const isRecalled = utterance.recalled === true
   const messageImage = isRecalled ? null : normalizeConversationMessageImage(utterance.image)
   const voiceCallMessage = isRecalled ? null : normalizeVoiceCallMessage(utterance.voiceCall)
+  const hashRushMessage = isRecalled ? null : normalizeHashRushMessage(utterance.hashRush)
+  // A card (a call or a game that started), not text: no language row, no controls.
+  const announcementCard = !!voiceCallMessage || !!hashRushMessage
   const isOwnMessage = Boolean(
     viewerUserId && utterance.speakerUserId && utterance.speakerUserId === viewerUserId,
   )
@@ -1146,7 +1153,7 @@ function ChatBubble({
     ))
     ? [...firstCollapsedHeaderLanguageOptions.slice(0, 4), originalHeaderLanguage]
     : firstCollapsedHeaderLanguageOptions
-  const shouldShowCollapsedHeaderLanguages = !messageImage && !voiceCallMessage && !isRecalled && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
+  const shouldShowCollapsedHeaderLanguages = !messageImage && !announcementCard && !isRecalled && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
   const shouldShowSpeakerHeader = !isOwnMessage
     && isSharedRoomMember
     && (Boolean(speakerName) || Boolean(speakerBadge) || shouldShowCollapsedHeaderLanguages)
@@ -1244,7 +1251,7 @@ function ChatBubble({
         ) : (
           avatarImage
         )}
-        {originalDisplayLanguage && flag !== '🌐' && !voiceCallMessage ? (
+        {originalDisplayLanguage && flag !== '🌐' && !announcementCard ? (
           // The language this message was spoken in, small at the avatar's bottom-left.
           // A language without a flag of its own shows none.
           <span
@@ -1268,6 +1275,13 @@ function ChatBubble({
       message={voiceCallMessage}
       speakerName={speakerName}
       // `sentByViewer` is the server's word; the account id alone is withheld in some rooms.
+      isOwnMessage={isOwnMessage || utterance.sentByViewer === true}
+      locale={uiLocale}
+    />
+  ) : hashRushMessage ? (
+    <HashRushStartedBubble
+      message={hashRushMessage}
+      speakerName={speakerName}
       isOwnMessage={isOwnMessage || utterance.sentByViewer === true}
       locale={uiLocale}
     />
@@ -1397,7 +1411,7 @@ function ChatBubble({
         />
       )}
       {bubbleTimestamp}
-      {!messageImage && !voiceCallMessage && !isRecalled && bubbleControls}
+      {!messageImage && !announcementCard && !isRecalled && bubbleControls}
     </div>
   )
 
@@ -1441,7 +1455,7 @@ function ChatBubble({
   // A solo-era turn carries no speakerUserId (see isOwnMessage), whoever sent it, so the server's own flag decides there.
   const canRecall = !isDraft && !isRecalled && (utterance.sentByViewer === true || isOwnMessage)
   // Photos carry no text of their own to translate again.
-  const canRetranslate = !isDraft && !isRecalled && !messageImage && !voiceCallMessage
+  const canRetranslate = !isDraft && !isRecalled && !messageImage && !announcementCard
   const replyReference = isDraft || isRecalled ? null : buildMessageReplyReference(utterance)
   const reactiveContent = <MessageReactionScope id={isDraft || isRecalled ? undefined : utterance.id} locale={uiLocale}>
     <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>

@@ -26,10 +26,11 @@
 // its size; a tap on the game puts it away again (#181, #183, #188).
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
-import { ChevronLeft, Loader2 } from 'lucide-react'
+import { ChevronLeft, Loader2, LogOut } from 'lucide-react'
 import styles from './hash-rush-game.module.css'
 import { HASH_RUSH_SERVER } from './config'
 import { hashRushGameCopy } from './copy'
+import { hashRushInviteCopy } from './invite-copy'
 import { resolveHashRushField, type HashRushFieldLayout } from './layout'
 import {
   advanceHashRushChatFeed,
@@ -116,6 +117,8 @@ type Props = {
   chat?: HashRushRoomChat
   /** Back to the chat: lowers the game. */
   onBack: () => void
+  /** Quit: asks, then ends the game for this phone. */
+  onQuit?: () => void
 }
 
 /** Where the map is, kept only when it moved. */
@@ -131,13 +134,15 @@ const typing = () => {
   return node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || (node instanceof HTMLElement && node.isContentEditable)
 }
 
-export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive, chat, onBack }: Props) {
+export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive, chat, onBack, onQuit }: Props) {
   const copy = hashRushGameCopy(uiLocale)
+  const inviteCopy = hashRushInviteCopy(uiLocale)
   const chatOpen = !!chat?.open
   const chatEntries = chat?.entries
   const stageRef = useRef<HTMLDivElement | null>(null)
   const arenaRef = useRef<HTMLDivElement | null>(null)
   const backRef = useRef<HTMLButtonElement | null>(null)
+  const quitRef = useRef<HTMLButtonElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const padRef = useRef<HTMLDivElement | null>(null)
   const bonkRef = useRef<HTMLButtonElement | null>(null)
@@ -287,6 +292,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
     if (Object.values(parts).some((node) => !node) || !toolsMore || !back || !scoreButton) return
     const elements = { ...parts, overMap: [] } as unknown as HashRushGameElements
     elements.overMap = [elements.pad, elements.bonk, elements.throwButton, toolsMore, back, scoreButton]
+    if (quitRef.current) elements.overMap.push(quitRef.current)
     // On a wide screen the chat button lies over the map as well.
     if (chatButton) elements.overMap.push(chatButton)
     let cancelled = false
@@ -834,7 +840,8 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
         </div>
       ) : null}
 
-      {/* The way back to the chat, over the map's top left corner and over every card. */}
+      {/* The way back to the chat, over the map's top left corner and over every card; then Quit. */}
+      <div className={styles.topLeft}>
       <button
         ref={backRef}
         type="button"
@@ -850,6 +857,21 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
           <i role="img" aria-label={copy.voiceOn} title={copy.voiceOn} className={styles.voiceDot} data-qa="hash-rush-voice-dot" />
         ) : null}
       </button>
+      {onQuit ? (
+        <button
+          ref={quitRef}
+          type="button"
+          onClick={onQuit}
+          className={styles.quit}
+          aria-label={inviteCopy.quit}
+          title={inviteCopy.quit}
+          data-qa="hash-rush-game-quit"
+        >
+          <LogOut size={16} strokeWidth={2.6} aria-hidden="true" />
+          <span>{inviteCopy.quit}</span>
+        </button>
+      ) : null}
+      </div>
     </div>
   )
 }

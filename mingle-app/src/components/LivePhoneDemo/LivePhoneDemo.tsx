@@ -276,6 +276,9 @@ import VoiceTalkPanel, {
 } from './VoiceTalkPanel'
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
 import { VoiceTalkRoomContext, type VoiceTalkRoomState } from './voice-talk-room-context'
+import { HashRushRoomContext, type HashRushRoomState } from './hash-rush-room-context'
+import { HashRushRoomPrompts, useHashRushRoomGame, type HashRushPrompt } from './HashRushRoomPrompts'
+import { resolveHashRushMenuAction, shouldOfferHashRushInvite } from '@/lib/hash-rush-message'
 import { HashRushQuickChatBar } from '@/features/hash-rush/QuickChatBar'
 import type { HashRushChatEntry, HashRushRoomChat } from '@/features/hash-rush/room-chat'
 import { isHashRushGameConfigured } from '@/features/hash-rush/config'
@@ -7138,6 +7141,55 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   ])
   // The room's talk as the Hash Rush game hears it, in the language the
   // room's one-bubble view shows this viewer. Only while the game is here.
+  // The room's Hash Rush game around the game itself, like a voice talk:
+  // ask before starting or joining, offer someone else's game once, one game
+  // per room (HashRushRoomPrompts.tsx, src/server/hash-rush/room-game.ts).
+  const hashRushRoomEnabled = headerMode === 'conversation' && Boolean(conversationId) && isHashRushGameConfigured() && !isBlockedCounterpart && isVisible
+  const latestAnnouncedHashRushSessionId = useMemo(() => {
+    for (let index = displayUtterances.length - 1; index >= 0; index -= 1) {
+      const sessionId = displayUtterances[index]?.hashRush?.sessionId
+      if (sessionId) return sessionId
+    }
+    return null
+  }, [displayUtterances])
+  const { game: hashRushRoomGame, join: joinHashRushRoomGame } = useHashRushRoomGame({
+    conversationId: conversationId ?? null,
+    enabled: hashRushRoomEnabled,
+    playing: hashRushGameActive,
+    latestAnnouncedSessionId: latestAnnouncedHashRushSessionId,
+  })
+  const hashRushLiveSessionId = hashRushRoomGame?.sessionId ?? null
+  const [hashRushPrompt, setHashRushPrompt] = useState<HashRushPrompt>(null)
+  const [declinedHashRushSessionId, setDeclinedHashRushSessionId] = useState<string | null>(null)
+  const enterHashRushGame = useCallback(() => {
+    setHashRushPrompt(null)
+    setHashRushGameActive(true)
+    setHashRushGameOpen(true)
+    void joinHashRushRoomGame()
+  }, [joinHashRushRoomGame])
+  // Quit: the game ends for this phone (not lowered), back to the chat. The
+  // same game is not offered to this viewer again; its message still joins.
+  const quitHashRushGame = useCallback(() => {
+    setDeclinedHashRushSessionId(hashRushLiveSessionId)
+    setHashRushGameOpen(false)
+    setHashRushGameActive(false)
+    setHashRushGameChatMode(null)
+  }, [hashRushLiveSessionId])
+  const handleHashRushMenuPress = useCallback(() => {
+    const action = resolveHashRushMenuAction({ playing: hashRushGameActive, liveSessionId: hashRushLiveSessionId })
+    if (action === 'open') setHashRushGameOpen(true)
+    else setHashRushPrompt(action === 'confirm_join' ? 'join' : 'start')
+  }, [hashRushGameActive, hashRushLiveSessionId])
+  const hashRushInvite = hashRushRoomEnabled && hashRushPrompt === null && shouldOfferHashRushInvite({
+    game: hashRushRoomGame,
+    playing: hashRushGameActive,
+    viewerUserId,
+    declinedSessionId: declinedHashRushSessionId,
+  }) ? hashRushRoomGame : null
+  const hashRushRoom = useMemo<HashRushRoomState | null>(() => (
+    hashRushRoomEnabled ? { liveSessionId: hashRushLiveSessionId, joined: hashRushGameActive, join: enterHashRushGame } : null
+  ), [enterHashRushGame, hashRushGameActive, hashRushLiveSessionId, hashRushRoomEnabled])
+
   const hashRushChatEntries = useMemo(() => (
     hashRushGameActive
       ? buildHashRushChatEntries({
@@ -8075,6 +8127,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     <PhoneFrame>
       <MessageReplyProvider value={replyRoomContext}>
       <VoiceTalkRoomContext.Provider value={voiceTalkRoom}>
+      <HashRushRoomContext.Provider value={hashRushRoom}>
       <div
         ref={liveDemoRootRef}
         data-qa="live-demo-root"
@@ -8124,6 +8177,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             voiceActive={voiceTalkState.connected}
             chat={hashRushGameChat}
             onClose={closeHashRushGame}
+            onQuit={quitHashRushGame}
+          />
+        ) : null}
+
+        {hashRushRoomEnabled ? (
+          <HashRushRoomPrompts
+            uiLocale={uiLocale}
+            prompt={hashRushPrompt}
+            invite={hashRushInvite}
+            onConfirm={enterHashRushGame}
+            onCancel={() => setHashRushPrompt(null)}
+            onDecline={() => setDeclinedHashRushSessionId(hashRushLiveSessionId)}
           />
         ) : null}
 
@@ -8982,8 +9047,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 // Close the menu through its history entries, so no stale
                                 // entry is left for a later back step to land on.
                                 requestCloseMenuPanel()
-                                setHashRushGameActive(true)
-                                setHashRushGameOpen(true)
+                                handleHashRushMenuPress()
                               }}
                               className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
                             >
@@ -10534,6 +10598,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           )}
         </div>
       </div>
+      </HashRushRoomContext.Provider>
       </VoiceTalkRoomContext.Provider>
       </MessageReplyProvider>
     </PhoneFrame>

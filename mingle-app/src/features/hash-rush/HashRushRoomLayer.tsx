@@ -16,13 +16,14 @@
 //   raises them above it) when the game's 💬 asks; Android back puts them
 //   away before it lowers the game.
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { registerNativeEdgeSwipeSuppression } from '@/components/slide-surface'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import HashRushGame from './HashRushGame'
 import { hashRushGameCopy } from './copy'
+import { hashRushInviteCopy } from './invite-copy'
 import type { HashRushRoomChat } from './room-chat'
 
 // Android back lowers the game before the room's own layers (composer and
@@ -58,10 +59,15 @@ type Props = {
   /** The room's talk and composer in the game (room-chat.ts). */
   chat?: HashRushRoomChat
   onClose: () => void
+  /** Quit, once confirmed: the game ends for this phone and the layer goes. */
+  onQuit?: () => void
 }
 
-export default function HashRushRoomLayer({ open, conversationId, viewerKey, playerName, uiLocale, voiceActive, chat, onClose }: Props) {
+export default function HashRushRoomLayer({ open, conversationId, viewerKey, playerName, uiLocale, voiceActive, chat, onClose, onQuit }: Props) {
   const copy = hashRushGameCopy(uiLocale)
+  const inviteCopy = hashRushInviteCopy(uiLocale)
+  const [confirmQuit, setConfirmQuit] = useState(false)
+  if (confirmQuit && !open) setConfirmQuit(false)
   const chatOpen = !!chat?.open
   const closeChat = chat?.onClose
 
@@ -76,11 +82,12 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
   useEffect(() => {
     if (!open) return
     return registerNativeBackHandler(() => {
-      if (chatOpen && closeChat) closeChat()
+      if (confirmQuit) setConfirmQuit(false)
+      else if (chatOpen && closeChat) closeChat()
       else onClose()
       return true
     }, NATIVE_BACK_PRIORITY)
-  }, [chatOpen, closeChat, onClose, open])
+  }, [chatOpen, closeChat, confirmQuit, onClose, open])
 
   useEffect(() => {
     if (!open) return
@@ -115,7 +122,44 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
         voiceActive={voiceActive}
         chat={chat}
         onBack={onClose}
+        onQuit={onQuit ? () => setConfirmQuit(true) : undefined}
       />
+      {confirmQuit && onQuit ? (
+        <div
+          className="absolute inset-0 z-[10] flex items-end justify-center bg-black/40 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+96px)]"
+          data-qa="hash-rush-quit-confirm"
+          onClick={() => setConfirmQuit(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={inviteCopy.quitTitle}
+            className="w-full max-w-[340px] rounded-2xl bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="text-center text-[1.02rem] font-semibold text-gray-900">{inviteCopy.quitTitle}</p>
+            <p className="mt-1.5 text-center text-[0.86rem] text-gray-500">{inviteCopy.quitBody}</p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                data-qa="hash-rush-quit-cancel"
+                onClick={() => setConfirmQuit(false)}
+                className="h-12 rounded-xl bg-gray-100 text-[0.95rem] font-semibold text-gray-700 active:bg-gray-200"
+              >
+                {inviteCopy.cancel}
+              </button>
+              <button
+                type="button"
+                data-qa="hash-rush-quit-confirm-button"
+                onClick={() => { setConfirmQuit(false); onQuit() }}
+                className="h-12 rounded-xl bg-rose-500 text-[0.95rem] font-semibold text-white active:bg-rose-600"
+              >
+                {inviteCopy.quit}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </motion.div>
   )
 }

@@ -261,11 +261,20 @@
    It lies over every card as well (the lobby, the result, the title), so the
    way out is always in the same place. */
 
-.back {
+/* Back to the chat, then Quit, side by side. */
+.topLeft {
   position: absolute;
   top: calc(var(--hr-field-y, env(safe-area-inset-top, 0px)) + 5px);
   left: calc(var(--hr-field-x, 0px) + 6px);
   z-index: 5;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.back,
+.quit {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 1px;
@@ -286,16 +295,25 @@
 }
 
 /* A thumb's worth all round, past the pill's own edge. */
-.back::before {
+.back::before,
+.quit::before {
   content: '';
   position: absolute;
   inset: -5px -4px;
   border-radius: 999px;
 }
 
-.back:active {
+.back:active,
+.quit:active {
   background: #fff;
   transform: scale(0.96);
+}
+
+/* Quit: the game ends for this phone; it is not just put away. */
+.quit {
+  gap: 4px;
+  padding: 0 12px 0 9px;
+  color: #c2410c;
 }
 
 /* The result put away: when the next round starts, under the clock. */
@@ -852,7 +870,8 @@
 .ended .bonk,
 .ended .throw,
 .ended .toolButton,
-.ended .back {
+.ended .back,
+.ended .quit {
   filter: none;
 }
 

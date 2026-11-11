@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { normalizeMessageReplyReference, toRecalledMessageReplyReference, type MessageReplyReference } from "@/lib/message-reply";
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image';
 import { normalizeVoiceCallMessage, type VoiceCallMessage } from '@/lib/voice-call-message';
+import { normalizeHashRushMessage, type HashRushMessage } from '@/lib/hash-rush-message';
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
@@ -113,6 +114,8 @@ export type ConversationHydrationUtterance = {
   image?: ConversationMessageImage;
   // This message announces a voice talk that started (see voice-call-message.ts).
   voiceCall?: VoiceCallMessage;
+  // This message announces a Hash Rush game that started (see hash-rush-message.ts).
+  hashRush?: HashRushMessage;
   serverCreatedAtMs?: number;
   serverMessageId?: string;
   // When the server stored the row (server clock). Read receipts compare
@@ -3345,6 +3348,9 @@ async function getConversationHydrationStateForRecord(args: {
     const storedImage = readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null);
     const image = recalled ? null : normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
     const voiceCall = recalled ? null : normalizeVoiceCallMessage(metadata?.voiceCall);
+    const hashRush = recalled ? null : normalizeHashRushMessage(metadata?.hashRush);
+    // Announcements name who started the call or the game, in any room.
+    const announcement = voiceCall || hashRush;
     // Point-in-time, not the room's current membership — see
     // countActiveRealMembersAt's doc comment. Also intentionally excludes
     // pending invitees (real members only): inviting someone shouldn't, by
@@ -3354,7 +3360,7 @@ async function getConversationHydrationStateForRecord(args: {
     // invitee actually materializes into a real member.
     const isMultiMemberAtMessage = countActiveRealMembersAt(realMembers, message.createdAt.getTime()) >= 2;
     // Same gate as speakerName below: the badge labels the sender's name.
-    const speakerBadge = (isMultiMemberAtMessage || image || voiceCall) && message.userId
+    const speakerBadge = (isMultiMemberAtMessage || image || announcement) && message.userId
       ? badgeByUserId.get(message.userId) ?? null
       : null;
 
@@ -3364,6 +3370,7 @@ async function getConversationHydrationStateForRecord(args: {
       ...(message.userId && message.userId === args.viewerUserId ? { sentByViewer: true as const } : {}),
       ...(image ? { image } : {}),
       ...(voiceCall ? { voiceCall } : {}),
+      ...(hashRush ? { hashRush } : {}),
       originalText,
       ...(normalizedContent.sourceDisplayText ? { originalDisplayText: normalizedContent.sourceDisplayText } : {}),
       originalLang: normalizedContent.sourceLanguage || "unknown",
@@ -3384,7 +3391,7 @@ async function getConversationHydrationStateForRecord(args: {
         readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
       speakerAvatarIndex:
         readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
-      speakerName: (isMultiMemberAtMessage || image || voiceCall) && message.userId
+      speakerName: (isMultiMemberAtMessage || image || announcement) && message.userId
         ? (nameByUserId.get(message.userId) ?? null)
         : null,
       // Gated the same way as speakerImage: a solo session's diarized
@@ -3393,13 +3400,13 @@ async function getConversationHydrationStateForRecord(args: {
       // every bubble compare equal to the viewer and force a right-aligned
       // "own message" layout onto what is actually a left/right speaker
       // distinction unrelated to account identity.
-      speakerUserId: (isMultiMemberAtMessage || image || voiceCall) ? message.userId : null,
+      speakerUserId: (isMultiMemberAtMessage || image || announcement) ? message.userId : null,
       // Also nulled for the blocked counterpart's own messages (past and
       // future) — keeps speakerUserId intact so bubble left/right alignment
       // stays correct, but ChatBubble's existing "shared-room member with no
       // photo" fallback renders a neutral placeholder avatar instead of
       // their real one.
-      speakerImage: (isMultiMemberAtMessage || image || voiceCall) && message.userId && message.userId !== blockedCounterpartUserId
+      speakerImage: (isMultiMemberAtMessage || image || announcement) && message.userId && message.userId !== blockedCounterpartUserId
         ? (imageByUserId.get(message.userId) ?? null)
         : null,
       ...(speakerBadge ? { speakerBadge } : {}),
@@ -3964,8 +3971,12 @@ export async function leaveConversationChannel(args: {
 // Public rooms and the search tab's live rooms
 // ---------------------------------------------------------------------------
 
-/** A Hash Rush game counts as running for this long after its last ticket. */
-export const HASH_RUSH_ACTIVE_WINDOW_MS = 15 * 60 * 1000;
+/**
+ * A Hash Rush game counts as running for this long after a player last said
+ * they are in (every 15 s). Same as HASH_RUSH_LIVE_WINDOW_MS in
+ * src/server/hash-rush/room-game.ts.
+ */
+export const HASH_RUSH_ACTIVE_WINDOW_MS = 45_000;
 const LIVE_ROOMS_LIMIT = 30;
 
 /** A member turns the room public (listed and joinable by anyone) or private (join requests only). */
@@ -3982,14 +3993,6 @@ export async function setConversationPublic(args: {
     select: conversationChannelSelect,
   });
   return serializeConversationChannelWithPreview(record, args.userId);
-}
-
-/** A room member entered the room's Hash Rush game (a ticket was issued). */
-export async function markConversationHashRushActive(conversationId: string, at: Date = new Date()): Promise<void> {
-  await prisma.appConversationChannel.update({
-    where: { id: conversationId },
-    data: { hashRushActiveAt: at },
-  }).catch(() => undefined);
 }
 
 export type LiveRoomActivity = {

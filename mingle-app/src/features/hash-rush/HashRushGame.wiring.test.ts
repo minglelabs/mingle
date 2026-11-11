@@ -32,8 +32,15 @@ describe('hash rush native game wiring', () => {
     const menuItem = between(liveDemoSource, 'data-qa="live-demo-hash-rush-menu-item"', '</button>')
     expect(menuItem).toContain('requestCloseMenuPanel()')
     expect(menuItem).not.toContain('setMenuOpen(false)')
-    expect(menuItem).toContain('setHashRushGameActive(true)')
-    expect(menuItem).toContain('setHashRushGameOpen(true)')
+    // Asks first (start, or join the room's running game); a game this phone is in just comes up.
+    expect(menuItem).toContain('handleHashRushMenuPress()')
+    const press = between(liveDemoSource, 'const handleHashRushMenuPress = useCallback(() => {', '}, [')
+    expect(press).toContain("if (action === 'open') setHashRushGameOpen(true)")
+    expect(press).toContain("setHashRushPrompt(action === 'confirm_join' ? 'join' : 'start')")
+    const enter = between(liveDemoSource, 'const enterHashRushGame = useCallback(() => {', '}, [')
+    expect(enter).toContain('setHashRushGameActive(true)')
+    expect(enter).toContain('setHashRushGameOpen(true)')
+    expect(enter).toContain('void joinHashRushRoomGame()')
     expect(menuItem).toContain('{hashRushGameMenuLabel(uiLocale)}')
     expect(liveDemoSource).toContain('{conversationId && isHashRushGameConfigured() ? (')
   })
@@ -67,11 +74,11 @@ describe('hash rush native game wiring', () => {
     expect(pill).toContain('{voiceActive ? (')
     expect(pill).toContain('className={styles.voiceDot}')
     // Over the map's top left corner, under the status bar: the arena starts below the safe area.
-    expect(rule('.back')).toContain('top: calc(var(--hr-field-y, env(safe-area-inset-top, 0px)) + 5px);')
-    expect(rule('.back')).toContain('left: calc(var(--hr-field-x, 0px) + 6px);')
+    expect(rule('.topLeft')).toContain('top: calc(var(--hr-field-y, env(safe-area-inset-top, 0px)) + 5px);')
+    expect(rule('.topLeft')).toContain('left: calc(var(--hr-field-x, 0px) + 6px);')
     expect(rule('.tall .arena')).toContain('top: env(safe-area-inset-top, 0px);')
     // ...and over every card: the way out is always in the same place.
-    expect(rule('.back')).toContain('z-index: 5;')
+    expect(rule('.topLeft')).toContain('z-index: 5;')
     expect(gameSource.indexOf('ref={backRef}')).toBeGreaterThan(gameSource.indexOf('<HashRushTitleCard'))
     expect(gameSource.indexOf('ref={backRef}')).toBeGreaterThan(gameSource.indexOf('<HashRushLobbyCard'))
     // Behind the status bar a pale strip, so its dark text still reads.

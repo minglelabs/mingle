@@ -413,6 +413,11 @@ model AppConversationChannel {
   // Last time a member got a Hash Rush ticket for this room's game; the search
   // tab treats the game as running for a while after it.
   hashRushActiveAt           DateTime? @map("hash_rush_active_at")
+  // The room's Hash Rush game, while someone plays it: which game (the room
+  // message that announced it names it) and who started it. Players keep
+  // hashRushActiveAt fresh; the game is over once it goes stale.
+  hashRushSessionId          String?   @map("hash_rush_session_id")
+  hashRushStartedByUserId    String?   @map("hash_rush_started_by_user_id")
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 

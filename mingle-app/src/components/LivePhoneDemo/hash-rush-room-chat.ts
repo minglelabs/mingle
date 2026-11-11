@@ -72,7 +72,7 @@ export function buildHashRushChatEntries(input: {
   const entries: HashRushChatEntry[] = []
   for (const utterance of input.utterances.slice(-HASH_RUSH_CHAT_SOURCE_WINDOW)) {
     // A deleted message or a photo has nothing to say over a hamster.
-    if (utterance.recalled === true || normalizeConversationMessageImage(utterance.image) || utterance.voiceCall) continue
+    if (utterance.recalled === true || normalizeConversationMessageImage(utterance.image) || utterance.voiceCall || utterance.hashRush) continue
     const userId = resolveHashRushChatSenderId(utterance, input.viewerUserId, input.isSharedRoom)
     if (!userId && !input.keepUnknownSenders) continue
     const pending = input.draftIds.has(utterance.id)
