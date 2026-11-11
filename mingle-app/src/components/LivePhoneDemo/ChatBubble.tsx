@@ -1385,21 +1385,27 @@ function ChatBubble({
     </AnimatePresence>
   )
 
-  // Own and other/animal bubbles share the same "time stacked above the
-  // expand/collapse button" meta column — previously only own bubbles got
-  // this, while other bubbles got a timestamp under the avatar instead.
-  // Own messages sit at the right edge of the screen, so their meta column
-  // right-aligns; other/animal messages sit next to a left-anchored bubble,
-  // so their meta column hugs the bubble on the left instead.
+  // Own and other/animal bubbles share one meta column (read mark and time,
+  // the fold button under them). Own messages sit at the right edge, so the
+  // column hugs the bubble on its right; others hug it on the left.
   const bubbleTimestamp = hasTimestamp ? (
     <ChatBubbleTimestamp
       createdAtMs={utterance.createdAtMs}
       uiLocale={uiLocale}
-      // After the read count on one line: the time hugs it, so there is no
-      // gap between the two while the time ticks.
-      align="left"
-      minWidth="2.5rem"
-      className="text-[10px] font-medium leading-5 text-black/[0.34]"
+      // A time on two lines (older messages) lines up on the bubble's side.
+      align={isOwnMessage ? 'right' : 'left'}
+      minWidth="0"
+      className="self-center text-[10px] font-medium text-black/[0.34]"
+    />
+  ) : null
+  // Read mark (a check, or how many have not read it) right by the bubble.
+  const bubbleReadReceipt = !isDraft && !isRecalled ? (
+    <MessageReadReceipt
+      senderUserId={utterance.speakerUserId}
+      // Not yet stored → nobody can have read it; createdAtMs (device
+      // clock) is only a stand-in until the server time arrives.
+      createdAtMs={utterance.serverPersistedAtMs ?? utterance.createdAtMs}
+      locale={uiLocale}
     />
   ) : null
 
@@ -1409,24 +1415,11 @@ function ChatBubble({
       data-chat-bubble-other-meta={isOwnMessage ? undefined : true}
       className={`flex shrink-0 flex-col gap-0 self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
-      {/* Read count and time share one line: with the fold button the column
-          is two lines, no taller than a one-line bubble, so the bubble stays
-          right under the name. */}
-      <div
-        data-chat-bubble-meta-line
-        className="flex items-center gap-1"
-      >
-        {!isDraft && !isRecalled && (
-          <MessageReadReceipt
-            senderUserId={utterance.speakerUserId}
-            // Not yet stored → nobody can have read it; createdAtMs (device
-            // clock) is only a stand-in until the server time arrives.
-            createdAtMs={utterance.serverPersistedAtMs ?? utterance.createdAtMs}
-            locale={uiLocale}
-            align={isOwnMessage ? 'right' : 'left'}
-          />
-        )}
-        {bubbleTimestamp}
+      {/* Read mark and time on one line, in one size: with the fold button
+          the column is two lines, no taller than a one-line bubble. Both
+          lines line up on the bubble's side. */}
+      <div data-chat-bubble-meta-line className="flex min-h-5 items-center gap-1">
+        {isOwnMessage ? <>{bubbleTimestamp}{bubbleReadReceipt}</> : <>{bubbleReadReceipt}{bubbleTimestamp}</>}
       </div>
       {/* One language row has nothing to fold. */}
       {!messageImage && !announcementCard && !isRecalled && expandedBubbleEntries.length > 1 && bubbleControls}
