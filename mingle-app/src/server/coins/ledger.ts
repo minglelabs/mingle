@@ -9,8 +9,8 @@ import { computeDailyFreeGrant, planLotSpend, type LotAllocation } from './lot-p
 // lots need no lock of their own. app_coin_ledger is append-only: this module
 // only ever inserts into it.
 
-export type CoinLotSource = 'daily_free' | 'purchase' | 'admin_grant' | 'signup_bonus' | 'refund_reversal' | 'referral'
-export type CoinLedgerType = 'grant' | 'spend' | 'expire' | 'refund_clawback' | 'admin_revoke' | 'adjust'
+export type CoinLotSource = 'daily_free' | 'purchase' | 'admin_grant' | 'signup_bonus' | 'refund_reversal' | 'gift' | 'referral'
+export type CoinLedgerType = 'grant' | 'spend' | 'expire' | 'refund_clawback' | 'admin_revoke' | 'adjust' | 'gift_sent'
 
 type WalletState = {
   userId: string
@@ -141,7 +141,7 @@ export async function takeFromLots(
     type: Exclude<CoinLedgerType, 'grant'>
     amountMicro: bigint
     idempotencyKey: string
-    filter?: { isFree?: boolean; lotId?: string }
+    filter?: { isFree?: boolean; lotId?: string; sources?: readonly CoinLotSource[] }
   },
 ): Promise<{ spentMicro: bigint; shortfallMicro: bigint; allocations: LotAllocation[] }> {
   const lots = await ctx.tx.appCoinLot.findMany({
@@ -150,6 +150,7 @@ export async function takeFromLots(
       remainingMicro: { gt: 0 },
       ...(input.filter?.isFree === undefined ? {} : { isFree: input.filter.isFree }),
       ...(input.filter?.lotId ? { id: input.filter.lotId } : {}),
+      ...(input.filter?.sources ? { source: { in: [...input.filter.sources] } } : {}),
     },
     select: { id: true, isFree: true, remainingMicro: true, expiresAt: true, createdAt: true },
   })
@@ -258,6 +259,81 @@ function isRetryableTransactionError(error: unknown): boolean {
   return error.code === 'P2034' || error.code === 'P2028'
 }
 
+type WalletOptions = { now?: Date; skipDailyGrant?: boolean }
+
+/** Locks one wallet row inside tx, then writes off expired lots and pays the daily refill. */
+async function openLockedWallet(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  now: Date,
+  skipDailyGrant: boolean,
+): Promise<{ ctx: LockedWallet; loaded: string }> {
+  await tx.$executeRaw`
+    INSERT INTO app.app_coin_wallets (user_id, updated_at)
+    VALUES (${userId}, CURRENT_TIMESTAMP)
+    ON CONFLICT (user_id) DO NOTHING`
+  await tx.$queryRaw`SELECT user_id FROM app.app_coin_wallets WHERE user_id = ${userId} FOR UPDATE`
+  const row = await tx.appCoinWallet.findUniqueOrThrow({ where: { userId } })
+  const ctx: LockedWallet = {
+    tx,
+    now,
+    wallet: {
+      userId,
+      balanceMicro: row.balanceMicro,
+      freeBalanceMicro: row.freeBalanceMicro,
+      paidBalanceMicro: row.paidBalanceMicro,
+      lastDailyGrantAt: row.lastDailyGrantAt,
+      dailyGrantSeq: row.dailyGrantSeq,
+      lifetimePurchasedMicro: row.lifetimePurchasedMicro,
+      lifetimeSpentMicro: row.lifetimeSpentMicro,
+    },
+  }
+  const loaded = walletFingerprint(ctx.wallet)
+  const isNewWallet = row.dailyGrantSeq === 0 && !row.lastDailyGrantAt
+  await expireLots(ctx)
+  if (!skipDailyGrant) {
+    await applyDailyFreeGrant(ctx)
+    if (isNewWallet) await applySignupBonus(ctx)
+  }
+  return { ctx, loaded }
+}
+
+/** Checks the invariants and saves the snapshot columns when anything changed. */
+async function saveLockedWallet(ctx: LockedWallet, loaded: string) {
+  if (ctx.wallet.balanceMicro < 0n
+    || ctx.wallet.balanceMicro !== ctx.wallet.freeBalanceMicro + ctx.wallet.paidBalanceMicro) {
+    throw new Error('coin_wallet_invariant_violated')
+  }
+  // Plain reads (no refill, no expiry) leave the row untouched.
+  if (walletFingerprint(ctx.wallet) === loaded) return
+  await ctx.tx.appCoinWallet.update({
+    where: { userId: ctx.wallet.userId },
+    data: {
+      balanceMicro: ctx.wallet.balanceMicro,
+      freeBalanceMicro: ctx.wallet.freeBalanceMicro,
+      paidBalanceMicro: ctx.wallet.paidBalanceMicro,
+      lastDailyGrantAt: ctx.wallet.lastDailyGrantAt,
+      dailyGrantSeq: ctx.wallet.dailyGrantSeq,
+      lifetimePurchasedMicro: ctx.wallet.lifetimePurchasedMicro,
+      lifetimeSpentMicro: ctx.wallet.lifetimeSpentMicro,
+      version: { increment: 1 },
+    },
+  })
+}
+
+async function runWalletTransaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= WALLET_TRANSACTION_ATTEMPTS; attempt += 1) {
+    try {
+      return await prisma.$transaction(fn, { maxWait: 10_000, timeout: 20_000 })
+    } catch (error) {
+      lastError = error
+      if (attempt === WALLET_TRANSACTION_ATTEMPTS || !isRetryableTransactionError(error)) throw error
+    }
+  }
+  throw lastError
+}
+
 /**
  * Runs fn with the user's wallet row locked. Before fn: expired lots are
  * written off and the daily free refill is applied. After fn: the snapshot
@@ -266,67 +342,46 @@ function isRetryableTransactionError(error: unknown): boolean {
 export async function withLockedWallet<T>(
   userId: string,
   fn: (ctx: LockedWallet) => Promise<T>,
-  options: { now?: Date; skipDailyGrant?: boolean } = {},
+  options: WalletOptions = {},
 ): Promise<T> {
   if (!userId) throw new Error('coin_wallet_user_required')
-  let lastError: unknown
-  for (let attempt = 1; attempt <= WALLET_TRANSACTION_ATTEMPTS; attempt += 1) {
-    try {
-      return await prisma.$transaction(async (tx) => {
-        const now = options.now ?? new Date()
-        await tx.$executeRaw`
-          INSERT INTO app.app_coin_wallets (user_id, updated_at)
-          VALUES (${userId}, CURRENT_TIMESTAMP)
-          ON CONFLICT (user_id) DO NOTHING`
-        await tx.$queryRaw`SELECT user_id FROM app.app_coin_wallets WHERE user_id = ${userId} FOR UPDATE`
-        const row = await tx.appCoinWallet.findUniqueOrThrow({ where: { userId } })
-        const ctx: LockedWallet = {
-          tx,
-          now,
-          wallet: {
-            userId,
-            balanceMicro: row.balanceMicro,
-            freeBalanceMicro: row.freeBalanceMicro,
-            paidBalanceMicro: row.paidBalanceMicro,
-            lastDailyGrantAt: row.lastDailyGrantAt,
-            dailyGrantSeq: row.dailyGrantSeq,
-            lifetimePurchasedMicro: row.lifetimePurchasedMicro,
-            lifetimeSpentMicro: row.lifetimeSpentMicro,
-          },
-        }
-        const loaded = walletFingerprint(ctx.wallet)
-        const isNewWallet = row.dailyGrantSeq === 0 && !row.lastDailyGrantAt
-        await expireLots(ctx)
-        if (!options.skipDailyGrant) {
-          await applyDailyFreeGrant(ctx)
-          if (isNewWallet) await applySignupBonus(ctx)
-        }
-        const result = await fn(ctx)
-        if (ctx.wallet.balanceMicro < 0n
-          || ctx.wallet.balanceMicro !== ctx.wallet.freeBalanceMicro + ctx.wallet.paidBalanceMicro) {
-          throw new Error('coin_wallet_invariant_violated')
-        }
-        // Plain reads (no refill, no expiry) leave the row untouched.
-        if (walletFingerprint(ctx.wallet) === loaded) return result
-        await tx.appCoinWallet.update({
-          where: { userId },
-          data: {
-            balanceMicro: ctx.wallet.balanceMicro,
-            freeBalanceMicro: ctx.wallet.freeBalanceMicro,
-            paidBalanceMicro: ctx.wallet.paidBalanceMicro,
-            lastDailyGrantAt: ctx.wallet.lastDailyGrantAt,
-            dailyGrantSeq: ctx.wallet.dailyGrantSeq,
-            lifetimePurchasedMicro: ctx.wallet.lifetimePurchasedMicro,
-            lifetimeSpentMicro: ctx.wallet.lifetimeSpentMicro,
-            version: { increment: 1 },
-          },
-        })
-        return result
-      }, { maxWait: 10_000, timeout: 20_000 })
-    } catch (error) {
-      lastError = error
-      if (attempt === WALLET_TRANSACTION_ATTEMPTS || !isRetryableTransactionError(error)) throw error
+  return runWalletTransaction(async (tx) => {
+    const { ctx, loaded } = await openLockedWallet(tx, userId, options.now ?? new Date(), options.skipDailyGrant === true)
+    const result = await fn(ctx)
+    await saveLockedWallet(ctx, loaded)
+    return result
+  })
+}
+
+/**
+ * Two wallets locked in one transaction, for moving coins between users. Rows
+ * are locked in user-id order, so two opposite transfers cannot deadlock.
+ * `second` is not treated as a visit by that user: no daily refill, no sign-up bonus.
+ */
+export async function withLockedWalletPair<T>(
+  firstUserId: string,
+  secondUserId: string,
+  fn: (first: LockedWallet, second: LockedWallet) => Promise<T>,
+  options: { now?: Date } = {},
+): Promise<T> {
+  if (!firstUserId || !secondUserId) throw new Error('coin_wallet_user_required')
+  if (firstUserId === secondUserId) throw new Error('coin_wallet_pair_must_differ')
+  return runWalletTransaction(async (tx) => {
+    const now = options.now ?? new Date()
+    const openFirst = () => openLockedWallet(tx, firstUserId, now, false)
+    const openSecond = () => openLockedWallet(tx, secondUserId, now, true)
+    let first: Awaited<ReturnType<typeof openLockedWallet>>
+    let second: Awaited<ReturnType<typeof openLockedWallet>>
+    if (firstUserId < secondUserId) {
+      first = await openFirst()
+      second = await openSecond()
+    } else {
+      second = await openSecond()
+      first = await openFirst()
     }
-  }
-  throw lastError
+    const result = await fn(first.ctx, second.ctx)
+    await saveLockedWallet(first.ctx, first.loaded)
+    await saveLockedWallet(second.ctx, second.loaded)
+    return result
+  })
 }

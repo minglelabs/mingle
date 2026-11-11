@@ -22,7 +22,7 @@ type UsageSummary = {
 };
 
 type HistoryItem =
-  | { id: string; type: "grant"; source: string; coins: number; at: string }
+  | { id: string; type: "grant"; source: string; coins: number; at: string; counterpart?: string | null }
   | {
       id: string;
       type: "usage";
@@ -32,7 +32,7 @@ type HistoryItem =
       sttSeconds: number;
       breakdown: Partial<Record<UsageKind, number>>;
     }
-  | { id: string; type: "removal"; reason: string; coins: number; at: string };
+  | { id: string; type: "removal"; reason: string; coins: number; at: string; counterpart?: string | null };
 
 const KIND_ORDER: UsageKind[] = ["stt", "translation", "tts", "image_text"];
 const KIND_COLORS: Record<UsageKind, string> = {
@@ -52,12 +52,14 @@ function grantLabel(source: string, copy: CoinCopy, referralLabel: string): stri
   if (source === "purchase") return copy.sourcePurchase;
   if (source === "signup_bonus") return copy.sourceBonus;
   if (source === "refund_reversal") return copy.sourceRefund;
+  if (source === "gift") return copy.sourceGiftReceived;
   return copy.sourceAdmin;
 }
 
 function removalLabel(reason: string, copy: CoinCopy): string {
   if (reason === "expire") return copy.sourceExpired;
   if (reason === "refund_clawback") return copy.sourceRefund;
+  if (reason === "gift_sent") return copy.sourceGiftSent;
   return copy.sourceAdmin;
 }
 
@@ -207,6 +209,7 @@ export default function CoinUsageSection({ locale }: { locale: AppLocale }) {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-semibold text-slate-900">
                         {positive ? grantLabel(item.source, copy, referralLabel) : removalLabel(item.reason, copy)}
+                        {item.counterpart ? ` · ${item.counterpart}` : ""}
                       </p>
                       <p className="text-[12px] text-gray-500">{when}</p>
                     </div>

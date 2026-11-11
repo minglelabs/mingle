@@ -31,7 +31,7 @@ export type CoinWalletSnapshot = {
   exhausted: boolean
 }
 
-function snapshotFromContext(ctx: LockedWallet): CoinWalletSnapshot {
+export function snapshotFromContext(ctx: LockedWallet): CoinWalletSnapshot {
   const { wallet } = ctx
   const lastGrant = wallet.lastDailyGrantAt ?? ctx.now
   return {
