@@ -18,7 +18,8 @@ import { SonioxStream, type SttPartial, type SttSegment } from './soniox-stream'
 import { translateUtterance, type TranslateTurn } from './translate';
 import { synthesizeStream, TTS_SAMPLE_RATE } from './tts';
 import { createJoinToken, INTERPRETER_ROLE } from './token';
-import { addUsage, type InterpreterUsage } from './service-logic';
+import { addUsage, readersOf, type InterpreterUsage } from './service-logic';
+import { newLineId, reportCaption, reportPlayback } from './app-report';
 
 const LANE_SAMPLE_RATE = TTS_SAMPLE_RATE;
 const FRAME_MS = 20;
@@ -69,6 +70,11 @@ export function normalizeLang(value: string | null | undefined): string | null {
 
 function isInterpreter(participant: RemoteParticipant): boolean {
     return participant.attributes.role === INTERPRETER_ROLE;
+}
+
+/** The app sets `interpret` to "on" only for a person who turned interpretation on. */
+function isInterpreting(participant: RemoteParticipant): boolean {
+    return participant.attributes.interpret === 'on';
 }
 
 function pruneRecent(list: Recent[], now: number): void {
@@ -135,15 +141,17 @@ export class Interpreter {
 
     // Lanes are published as soon as a language is present, so the first
     // translated line doesn't wait for a track negotiation.
+    // Only the languages someone listens in get a lane; the interpreter
+    // leaves a while after the last person turned interpretation off.
     private refreshParticipants(): void {
-        const humans = this.humans();
-        for (const participant of humans) {
+        const readers = this.humans().filter(isInterpreting);
+        for (const participant of readers) {
             const lang = normalizeLang(participant.attributes.lang);
             if (lang) void this.ensureLane(lang);
         }
-        if (humans.length === 0 && !this.idleTimer) {
+        if (readers.length === 0 && !this.idleTimer) {
             this.idleTimer = setTimeout(() => void this.close(), IDLE_LEAVE_MS);
-        } else if (humans.length > 0 && this.idleTimer) {
+        } else if (readers.length > 0 && this.idleTimer) {
             clearTimeout(this.idleTimer);
             this.idleTimer = null;
         }
@@ -210,7 +218,7 @@ export class Interpreter {
         const targets = new Set<string>();
         for (const participant of this.humans()) {
             if (participant.identity === speakerIdentity) continue;
-            if (participant.attributes.interpret === 'off') continue;
+            if (!isInterpreting(participant)) continue;
             const lang = normalizeLang(participant.attributes.lang);
             if (lang && lang !== sourceLang) targets.add(lang);
         }
@@ -219,7 +227,7 @@ export class Interpreter {
 
     private listenersFor(lang: string): string[] {
         return this.humans()
-            .filter((participant) => participant.attributes.interpret !== 'off' && normalizeLang(participant.attributes.lang) === lang)
+            .filter((participant) => isInterpreting(participant) && normalizeLang(participant.attributes.lang) === lang)
             .map((participant) => participant.identity);
     }
 
@@ -258,7 +266,15 @@ export class Interpreter {
 
     private onSegment(speaker: Speaker, segment: SttSegment): void {
         const partialId = `${speaker.identity}#${speaker.partialSeq++}`;
-        const id = `${this.roomName}-${++this.segmentSeq}`;
+        ++this.segmentSeq;
+        const id = newLineId(this.roomName);
+        // Written down only for someone else who reads it: a line nobody else
+        // has interpretation on for is dropped (not saved, not paid).
+        const readers = readersOf({
+            speaker: speaker.identity,
+            interpreting: this.humans().filter(isInterpreting).map((participant) => participant.identity),
+        });
+        if (readers.length === 0) return;
         const sourceLang = normalizeLang(segment.lang) || speaker.lang;
         this.stats.segments++;
         const echo = this.findEcho(speaker, segment.text, sourceLang);
@@ -286,10 +302,25 @@ export class Interpreter {
             speechEndAt: segment.speechEndAt,
             finalizedAt: segment.finalizedAt,
         });
-        for (const target of targets) this.interpret(id, segment, sourceLang, target, recentTurns);
+        const translated = targets.map((target) => this.interpret(id, segment, sourceLang, target, recentTurns)
+            .then((text) => [target, text] as const));
+        // The room message waits for the translations (they run in parallel,
+        // ahead of the read-aloud), so a reader's bubble has their language.
+        void Promise.all(translated).then((pairs) => reportCaption({
+            room: this.roomName,
+            id,
+            speaker: speaker.identity,
+            lang: sourceLang,
+            text: segment.text,
+            translations: Object.fromEntries(pairs.filter(([, text]) => !!text)),
+            durationMs: segment.durationMs,
+        }));
     }
 
-    private interpret(id: string, segment: SttSegment, sourceLang: string, targetLang: string, recentTurns: TranslateTurn[]): void {
+    /** Translates and queues the line on its lane; resolves with the translation ('' when it failed). */
+    private interpret(id: string, segment: SttSegment, sourceLang: string, targetLang: string, recentTurns: TranslateTurn[]): Promise<string> {
+        let resolveTranslation: (text: string) => void = () => undefined;
+        const translation = new Promise<string>((resolve) => { resolveTranslation = resolve; });
         const lane = this.ensureLane(targetLang);
         // Translation and TTS start now, in parallel with whatever the lane is
         // still playing; audio is buffered until this line's turn.
@@ -297,6 +328,7 @@ export class Interpreter {
         const meta = { translation: '', provider: '', translatedAt: 0, firstAudioAt: 0 };
         void (async () => {
             const result = await translateUtterance({ text: segment.text, sourceLang, targetLang, recentTurns });
+            resolveTranslation(result.text);
             meta.translation = result.text;
             meta.provider = result.provider;
             meta.translatedAt = Date.now();
@@ -307,7 +339,10 @@ export class Interpreter {
                 audio.push(samples);
             });
             audio.end();
-        })().catch((error) => audio.fail(error));
+        })().catch((error) => {
+            resolveTranslation('');
+            audio.fail(error);
+        });
 
         // Keep the lane's chain non-rejecting; failures are reported per line.
         lane.chain = lane.chain.then(async () => {
@@ -345,11 +380,14 @@ export class Interpreter {
             } finally {
                 if (playAt) {
                     const audioMs = Math.round((played / LANE_SAMPLE_RATE) * 1000);
-                    addUsage(this.usage, targetLang, this.listenersFor(targetLang), audioMs);
+                    const listeners = this.listenersFor(targetLang);
+                    addUsage(this.usage, targetLang, listeners, audioMs);
                     this.send({ type: 'lane', lang: targetLang, playing: false, audioMs });
+                    void reportPlayback({ room: this.roomName, id, lang: targetLang, listeners, audioMs });
                 }
             }
         });
+        return translation;
     }
 
     private carry = new Map<Lane, Int16Array>();

@@ -58,11 +58,12 @@ describe('voice talk and STT are separate switches', () => {
     expect(panelSource).toContain('data-qa="voice-talk-mic-toggle"')
   })
 
-  it('locks Start/Stop and the speaker button in a call, and writes speech down only for readers', () => {
+  it('locks Start/Stop and the speaker button in a call, and runs no speech-to-text of its own there', () => {
     expect(liveDemoSource).toContain('if (voiceTalkState.joined) return\n')
     expect(liveDemoSource).toContain('disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}')
     expect(liveDemoSource).toContain('disabled={voiceTalkState.joined}')
-    expect(liveDemoSource).toContain('shouldTranscribeForVoiceTalk({')
+    expect(liveDemoSource).toContain('if (voiceTalkState.joined && isSttSessionRunning) void handleStopRecording()')
+    expect(liveDemoSource).not.toContain('shouldTranscribeForVoiceTalk')
     expect(liveDemoSource).toContain('suppressLivePreview: voiceTalkState.joined,')
   })
 

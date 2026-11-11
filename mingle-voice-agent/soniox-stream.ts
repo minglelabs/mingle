@@ -22,6 +22,8 @@ export type SttSegment = {
     speechEndAt: number;
     // Wall-clock time the endpoint token arrived.
     finalizedAt: number;
+    // Length of the spoken words (first to last), for billing.
+    durationMs: number;
 };
 
 export type SttPartial = { text: string; lang: string | null };
@@ -36,6 +38,7 @@ export class SonioxStream extends EventEmitter {
     private finalText = '';
     private finalLangs = new Map<string, number>();
     private lastFinalEndMs = 0;
+    private firstFinalStartMs = -1;
     private audioStartedAt = 0;
     private sentMs = 0;
     private lastSendAt = 0;
@@ -86,7 +89,7 @@ export class SonioxStream extends EventEmitter {
         ws.on('open', () => {
             ws.send(JSON.stringify({
                 api_key: env.sonioxApiKey,
-                model: 'stt-rt-v5',
+                model: 'stt-rt-v6',
                 audio_format: 'pcm_s16le',
                 sample_rate: SAMPLE_RATE,
                 num_channels: 1,
@@ -134,6 +137,7 @@ export class SonioxStream extends EventEmitter {
                 this.finalText += text;
                 if (token.language) this.finalLangs.set(token.language, (this.finalLangs.get(token.language) || 0) + text.length);
                 if (typeof token.end_ms === 'number') this.lastFinalEndMs = Math.max(this.lastFinalEndMs, token.end_ms);
+                if (typeof token.start_ms === 'number' && (this.firstFinalStartMs < 0 || token.start_ms < this.firstFinalStartMs)) this.firstFinalStartMs = token.start_ms;
             } else {
                 nonFinal += text;
                 nonFinalLang = token.language || nonFinalLang;
@@ -161,9 +165,13 @@ export class SonioxStream extends EventEmitter {
         const speechEndAt = this.audioStartedAt > 0 && this.lastFinalEndMs > 0
             ? this.audioStartedAt + this.lastFinalEndMs
             : finalizedAt;
+        const durationMs = this.firstFinalStartMs >= 0 && this.lastFinalEndMs > this.firstFinalStartMs
+            ? this.lastFinalEndMs - this.firstFinalStartMs
+            : 0;
         this.finalText = '';
         this.finalLangs.clear();
+        this.firstFinalStartMs = -1;
         if (!text) return;
-        this.emit('segment', { text, lang, speechEndAt, finalizedAt } satisfies SttSegment);
+        this.emit('segment', { text, lang, speechEndAt, finalizedAt, durationMs } satisfies SttSegment);
     }
 }

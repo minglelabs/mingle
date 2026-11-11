@@ -2,11 +2,16 @@
 
 ## Production service (group voice rooms)
 
-> **Retired 2026-11-11.** The app no longer uses the interpreter: a voice
-> talk carries original voices only, and the room's own STT messages plus the
-> speaker / earphone mode give the translation. `service.ts` starts no
-> interpreter unless `VOICE_AGENT_INTERPRETER=on`; there is no need to run
-> this service. The rest of this section describes the old behaviour.
+> **Back in use 2026-11-11 (evening).** In a voice talk the room's own STT
+> and speaker mode are locked; a person turns interpretation on in the call
+> panel. The interpreter joins a room only while a human there has the
+> `interpret` attribute `on`, leaves 30 s after the last one turns it off,
+> writes each speaker down once from the call audio (Soniox `stt-rt-v6`),
+> drops a line nobody else reads, and reports each line and each read-aloud
+> translation to the app (`app-report.ts`). In production it runs inside the
+> app's single Railway service (`railway/start-single-service.mjs`); locally
+> `scripts/devbox up` starts it. `VOICE_AGENT_INTERPRETER=off` keeps it out
+> of every room.
 
 `service.ts` is the production entry (`pnpm start`). It does not serve the POC
 page. Every 3 s it lists rooms on the LiveKit server. For each app voice room
@@ -32,7 +37,21 @@ outbound connections, so it runs fine on Railway without UDP ingress.
 | `VOICE_AGENT_POLL_MS` | no | room poll interval, default 3000 |
 | `APP_INTERNAL_URL` + `VOICE_INTERNAL_SECRET` | no | where to send usage; both unset = log only |
 
-### Usage report (for coin billing)
+### Reports to the app
+
+With `APP_INTERNAL_URL` and `VOICE_INTERNAL_SECRET` (in the single service:
+this container's app and, when unset, `MINGLE_REALTIME_SECRET`), header
+`x-voice-internal-secret`:
+
+- `POST /api/internal/voice/caption` `{ room, id, speaker, lang, text, translations, durationMs }`
+  after a line's translations are done. The app saves it as a room message
+  from the speaker that only the people in the call with interpretation on
+  (and the speaker) read, and charges its speech-to-text (`durationMs`) to
+  the speaker when they have interpretation on, else to the first other reader.
+- `POST /api/internal/voice/playback` `{ room, id, lang, listeners, audioMs }`
+  after a translation was read on a lane. The app charges each listener.
+
+### Usage report (logged when an interpreter leaves)
 
 When an interpreter leaves a room it POSTs to
 `${APP_INTERNAL_URL}/api/internal/voice/usage` with header

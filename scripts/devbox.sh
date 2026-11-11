@@ -1320,9 +1320,15 @@ ensure_workspace_dependencies() {
     log "installing dependencies: mingle-messaging"
     pnpm --dir "$messaging_dir" install --frozen-lockfile
   fi
+  local voice_agent_dir="$ROOT_DIR/mingle-voice-agent"
+  if [[ -d "$voice_agent_dir" ]] && workspace_dependencies_need_install "$voice_agent_dir" "$voice_agent_dir/node_modules/.bin/ts-node"; then
+    log "installing dependencies: mingle-voice-agent"
+    pnpm --dir "$voice_agent_dir" install --frozen-lockfile
+  fi
   write_workspace_dependency_install_marker "$app_dir"
   write_workspace_dependency_install_marker "$stt_dir"
   write_workspace_dependency_install_marker "$messaging_dir"
+  [[ -d "$voice_agent_dir" ]] && write_workspace_dependency_install_marker "$voice_agent_dir"
 
   ensure_mingle_app_prisma_client
 }
@@ -5927,6 +5933,29 @@ $(ngrok_plan_capacity_hint)"
   ) &
   pids+=("$!")
 
+  # The voice interpreter: joins a voice talk while someone in it has
+  # interpretation on, and reports each line to this devbox's app. Its keys
+  # (LiveKit, Soniox, Gemini, OpenAI) come from the runtime env and the main
+  # checkout's root .env.local. DEVBOX_VOICE_AGENT=off leaves it out.
+  if [[ -d "$ROOT_DIR/mingle-voice-agent" && "${DEVBOX_VOICE_AGENT:-on}" != "off" ]]; then
+    log "starting mingle-voice-agent(health port=${DEVBOX_VOICE_AGENT_PORT:-$((DEVBOX_WEB_PORT + 40))})"
+    (
+      cd "$ROOT_DIR/mingle-voice-agent"
+      if [[ -s "$runtime_env_file" ]]; then
+        set -a
+        # shellcheck disable=SC1090
+        . "$runtime_env_file"
+        set +a
+      fi
+      VOICE_POC_ENV_FILE="$(main_worktree_env_file root || true)" \
+      APP_INTERNAL_URL="http://127.0.0.1:$DEVBOX_WEB_PORT" \
+      VOICE_INTERNAL_SECRET="$runtime_realtime_secret" \
+      PORT="${DEVBOX_VOICE_AGENT_PORT:-$((DEVBOX_WEB_PORT + 40))}" \
+      pnpm service
+    ) &
+    pids+=("$!")
+  fi
+
   (
     cd "$ROOT_DIR/mingle-app"
     best_effort_raise_nofile_limit
@@ -6051,11 +6080,14 @@ cmd_down() {
   stop_processes_by_pattern "mingle-app next dev" "$ROOT_DIR/mingle-app.*next dev --port"
   stop_processes_by_pattern "mingle-stt dev server" "$ROOT_DIR/mingle-stt.*stt-server.ts"
   stop_processes_by_pattern "mingle-messaging dev server" "$ROOT_DIR/mingle-messaging.*messaging-server.ts"
+  stop_processes_by_pattern "mingle-voice-agent" "$ROOT_DIR/mingle-voice-agent.*service.ts"
   stop_processes_by_pattern "metro" "$ROOT_DIR/mingle-app.*pnpm --dir rn start --port"
 
   stop_listeners_by_port "mingle-app next dev" "$DEVBOX_WEB_PORT"
   stop_listeners_by_port "mingle-stt dev server" "$DEVBOX_STT_PORT"
   stop_listeners_by_port "mingle-messaging dev server" "$DEVBOX_MESSAGING_PORT"
+  # Its command line names no path, so its health port finds it.
+  stop_listeners_by_port "mingle-voice-agent" "${DEVBOX_VOICE_AGENT_PORT:-$((DEVBOX_WEB_PORT + 40))}"
   stop_listeners_by_port "metro" "$DEVBOX_METRO_PORT"
   stop_existing_ngrok_by_inspector_port "$DEVBOX_NGROK_API_PORT"
   stop_existing_cloudflared_by_local_port "$DEVBOX_WEB_PORT"

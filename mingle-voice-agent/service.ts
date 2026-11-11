@@ -3,20 +3,23 @@ import { RoomServiceClient } from 'livekit-server-sdk';
 import { env, missingProviderKeys } from './env';
 import { closeAllInterpreters, ensureInterpreter, onInterpreterClosed, runningRoomNames } from './interpreter';
 import { buildUsageReport, roomsNeedingInterpreter, toHttpUrl, type RoomSnapshot } from './service-logic';
+import { appReportsEnabled } from './app-report';
 
 // Production entry. Watches the LiveKit server for app voice rooms
 // ("voice-*") and keeps one hidden interpreter in each room that has a human.
 // The interpreter leaves by itself 30 s after the last human (IDLE_LEAVE_MS).
 // No POC page is served here; only /health for Railway.
 //
-// Retired (2026-11-11): the app no longer uses the interpreter. A voice talk
-// carries original voices only; each phone's STT posts room messages and the
-// room's speaker / earphone mode reads translations aloud. Running both did
-// the STT, translation and TTS twice and read a line twice. The service now
-// starts no interpreter unless VOICE_AGENT_INTERPRETER=on.
+// Back in use (2026-11-11, evening): in a voice talk the room's own
+// speech-to-text and speaker mode are locked, and a person turns
+// interpretation on in the call panel. The interpreter joins a room only
+// while someone there has it on, writes down each speaker from the call
+// audio once, reads translations on per-language lanes that only those
+// listeners subscribe to, and reports each line to the app (app-report.ts).
+// VOICE_AGENT_INTERPRETER=off stops it from joining any room.
 
 const POLL_MS = Math.max(1000, Number(process.env.VOICE_AGENT_POLL_MS) || 3000);
-const INTERPRETER_ENABLED = (process.env.VOICE_AGENT_INTERPRETER || '').trim().toLowerCase() === 'on';
+const INTERPRETER_ENABLED = (process.env.VOICE_AGENT_INTERPRETER || '').trim().toLowerCase() !== 'off';
 const PORT = Number(process.env.PORT) || 8080;
 const APP_INTERNAL_URL = (process.env.APP_INTERNAL_URL || '').trim().replace(/\/$/, '');
 const VOICE_INTERNAL_SECRET = (process.env.VOICE_INTERNAL_SECRET || '').trim();
@@ -30,10 +33,16 @@ let pollTimer: NodeJS.Timeout | null = null;
 async function snapshot(): Promise<RoomSnapshot[]> {
     const list = await rooms.listRooms();
     const voiceRooms = list.filter((room) => room.name.startsWith('voice-') && room.numParticipants > 0);
-    return Promise.all(voiceRooms.map(async (room) => ({
-        name: room.name,
-        participantIdentities: (await rooms.listParticipants(room.name)).map((participant) => participant.identity),
-    })));
+    return Promise.all(voiceRooms.map(async (room) => {
+        const participants = await rooms.listParticipants(room.name);
+        return {
+            name: room.name,
+            participantIdentities: participants.map((participant) => participant.identity),
+            interpretingIdentities: participants
+                .filter((participant) => participant.attributes?.interpret === 'on')
+                .map((participant) => participant.identity),
+        };
+    }));
 }
 
 async function poll(): Promise<void> {
@@ -106,6 +115,7 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[service] watching ${env.livekitUrl} every ${POLL_MS} ms, health on :${PORT}/health`
-        + (INTERPRETER_ENABLED ? '' : ' (interpreter off: VOICE_AGENT_INTERPRETER is not "on")'));
+        + (INTERPRETER_ENABLED ? '' : ' (interpreter off: VOICE_AGENT_INTERPRETER=off)')
+        + (appReportsEnabled() ? '' : ' (no app reports: APP_INTERNAL_URL / VOICE_INTERNAL_SECRET unset)'));
     void poll();
 });

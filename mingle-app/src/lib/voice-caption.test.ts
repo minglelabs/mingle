@@ -4,8 +4,6 @@ import {
   canViewMessageWithMetadata,
   normalizeVoiceCaptionTag,
   readVoiceCaptionTag,
-  resolveVoiceCaptionPayer,
-  shouldTranscribeForVoiceTalk,
 } from './voice-caption'
 
 describe('voice caption tag', () => {
@@ -29,24 +27,5 @@ describe('voice caption tag', () => {
   it('always lets the speaker read their own line', () => {
     expect(buildVoiceCaptionTag({ callId: 'c1', speakerUserId: 's', viewers: ['a'] })).toEqual({ callId: 'c1', viewers: ['a', 's'] })
     expect(buildVoiceCaptionTag({ callId: 'c1', speakerUserId: 'a', viewers: ['a'] }).viewers).toEqual(['a'])
-  })
-})
-
-describe('writing down speech in a call', () => {
-  it('runs only when someone else has interpretation on, with the mic on', () => {
-    const base = { connected: true, micOn: true, selfUserId: 'me' }
-    expect(shouldTranscribeForVoiceTalk({ ...base, viewers: [] })).toBe(false)
-    expect(shouldTranscribeForVoiceTalk({ ...base, viewers: ['me'] })).toBe(false)
-    expect(shouldTranscribeForVoiceTalk({ ...base, viewers: ['you'] })).toBe(true)
-    expect(shouldTranscribeForVoiceTalk({ ...base, viewers: ['me', 'you'] })).toBe(true)
-    expect(shouldTranscribeForVoiceTalk({ ...base, micOn: false, viewers: ['you'] })).toBe(false)
-    expect(shouldTranscribeForVoiceTalk({ ...base, connected: false, viewers: ['you'] })).toBe(false)
-  })
-
-  it('charges the speaker when they have it on, else the first other reader', () => {
-    expect(resolveVoiceCaptionPayer({ selfUserId: 'me', viewers: ['me', 'you'] })).toBe('me')
-    expect(resolveVoiceCaptionPayer({ selfUserId: 'me', viewers: ['you', 'them'] })).toBe('you')
-    expect(resolveVoiceCaptionPayer({ selfUserId: 'me', viewers: ['me'] })).toBeNull()
-    expect(resolveVoiceCaptionPayer({ selfUserId: 'me', viewers: [] })).toBeNull()
   })
 })

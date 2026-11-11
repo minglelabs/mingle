@@ -1,16 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { addUsage, buildUsageReport, roomsNeedingInterpreter, toHttpUrl, type InterpreterUsage } from './service-logic';
+import { addUsage, buildUsageReport, readersOf, roomsNeedingInterpreter, toHttpUrl, type InterpreterUsage } from './service-logic';
 
-test('only voice rooms with a human get an interpreter', () => {
+test('only voice rooms where a human has interpretation on get an interpreter', () => {
     const picked = roomsNeedingInterpreter([
-        { name: 'voice-chan-1-abc', participantIdentities: ['user-1'] },
-        { name: 'voice-chan-2-abc', participantIdentities: ['interpreter-voice-chan-2-abc'] },
-        { name: 'voice-chan-3-abc', participantIdentities: [] },
-        { name: 'poc', participantIdentities: ['user-2'] },
-        { name: 'voice-chan-4-abc', participantIdentities: ['interpreter-voice-chan-4-abc', 'user-4'] },
+        { name: 'voice-chan-1-abc', participantIdentities: ['user-1'], interpretingIdentities: ['user-1'] },
+        { name: 'voice-chan-2-abc', participantIdentities: ['interpreter-voice-chan-2-abc'], interpretingIdentities: ['interpreter-voice-chan-2-abc'] },
+        { name: 'voice-chan-3-abc', participantIdentities: ['user-3'], interpretingIdentities: [] },
+        { name: 'poc', participantIdentities: ['user-2'], interpretingIdentities: ['user-2'] },
+        { name: 'voice-chan-4-abc', participantIdentities: ['interpreter-voice-chan-4-abc', 'user-4'], interpretingIdentities: ['user-4'] },
+        { name: 'voice-chan-5-abc', participantIdentities: ['user-5'] },
     ]);
     assert.deepEqual(picked, ['voice-chan-1-abc', 'voice-chan-4-abc']);
+});
+
+test('a line is read by the humans with interpretation on, never by the one who said it', () => {
+    assert.deepEqual(readersOf({ speaker: 'a', interpreting: ['a', 'b', 'interpreter-x'] }), ['b']);
+    assert.deepEqual(readersOf({ speaker: 'a', interpreting: ['a'] }), []);
 });
 
 test('usage adds per language and per listener, and ignores empty plays', () => {

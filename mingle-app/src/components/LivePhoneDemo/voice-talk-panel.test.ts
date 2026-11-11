@@ -34,11 +34,10 @@ describe('a call takes over speech-to-text', () => {
     liveDemoSource.indexOf('const confirmScreenCaptureNotice = useCallback'),
   )
 
-  it('starts and stops speech-to-text by itself, for the call', () => {
+  it('stops the room speech-to-text on joining and never starts it in a call (the server interprets)', () => {
     expect(block.length).toBeGreaterThan(0)
-    expect(block).toContain('handleStartRecording()')
+    expect(block).not.toContain('handleStartRecording')
     expect(block).toContain('handleStopRecording()')
-    expect(block).toContain('setSttBillingOverride(')
   })
 
   it('moves the call mic only by the listen-only switch', () => {
@@ -47,13 +46,12 @@ describe('a call takes over speech-to-text', () => {
 
   it('has an interpret button that the room reads, and a hint while it is off', () => {
     expect(liveDemoSource).toContain('onInterpretChange={handleVoiceTalkInterpretChange}')
-    expect(liveDemoSource).toContain('onInterpretViewersChange={setVoiceTalkViewers}')
     expect(panelSource).toContain('data-qa="voice-talk-interpret-toggle"')
     expect(panelSource).toContain('{joined && !interpretOn ? (')
   })
 
-  it('reads translations aloud only while interpretation is on in a call', () => {
-    expect(liveDemoSource).toContain('const earphoneModeEnabled = voiceTalkState.joined ? voiceTalkInterpretOn : earphoneModePreference')
+  it('keeps the room speaker mode off in a call: the interpreter reads on the call itself', () => {
+    expect(liveDemoSource).toContain('const earphoneModeEnabled = voiceTalkState.joined ? false : earphoneModePreference')
   })
 
   it('runs the echo canceller while in a call, so the other voices are not transcribed as mine', () => {

@@ -19,18 +19,29 @@ export function addUsage(usage: InterpreterUsage, lang: string, listeners: strin
     for (const listener of listeners) usage.byListener[listener] = (usage.byListener[listener] || 0) + audioMs;
 }
 
-export type RoomSnapshot = { name: string; participantIdentities: string[] };
+export type RoomSnapshot = {
+    name: string;
+    participantIdentities: string[];
+    /** Identities with interpretation on (attribute `interpret` = "on"). Left out by older callers. */
+    interpretingIdentities?: string[];
+};
 
 export function isHumanIdentity(identity: string): boolean {
     return !!identity && !identity.startsWith(INTERPRETER_IDENTITY_PREFIX);
 }
 
-// Rooms that need an interpreter: app voice rooms with at least one human.
+// Rooms that need an interpreter: app voice rooms where a human has
+// interpretation on. Nobody reading means nothing is written down or paid.
 export function roomsNeedingInterpreter(rooms: RoomSnapshot[]): string[] {
     return rooms
         .filter((room) => room.name.startsWith(VOICE_ROOM_PREFIX))
-        .filter((room) => room.participantIdentities.some(isHumanIdentity))
+        .filter((room) => (room.interpretingIdentities ?? []).some(isHumanIdentity))
         .map((room) => room.name);
+}
+
+/** Readers of a line: the humans with interpretation on, other than the one who said it. */
+export function readersOf(input: { speaker: string; interpreting: string[] }): string[] {
+    return input.interpreting.filter((identity) => isHumanIdentity(identity) && identity !== input.speaker);
 }
 
 export type UsageReport = {

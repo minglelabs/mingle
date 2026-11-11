@@ -77,8 +77,7 @@ import {
   type TtsDeliveryMode,
 } from '@/lib/tts-delivery-mode'
 import { TtsAgentTextScheduler } from './tts-agent-text'
-import { applyCoinBalance, applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, setSttBillingOverride, useCoinWallet } from '@/lib/coin-wallet-client'
-import { resolveVoiceCaptionPayer, shouldTranscribeForVoiceTalk } from '@/lib/voice-caption'
+import { applyCoinBalance, applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
 import CoinBalanceChip, { formatCoinCount } from '@/components/coins/coin-balance-chip'
 import HashSeedIcon from '@/components/coins/hash-seed-icon'
@@ -272,7 +271,6 @@ import VoiceTalkPanel, {
   isVoiceTalkAvailable,
   joinVoiceTalk,
   resolveVoiceTalkButtonPress,
-  fetchVoiceTalkSttBilling,
   resolveVoiceTalkMic,
   setVoiceTalkInterpret,
   setVoiceTalkMic,
@@ -2083,9 +2081,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Listen only: a seat in the call that sends no voice (speech-to-text as the room has it).
   const [voiceTalkListenOnly, setVoiceTalkListenOnly] = useState(false)
   // Interpretation in the call: captions and the interpreted voice of what
-  // the others say, for this viewer. And who in the call has it on.
+  // the others say, for this viewer.
   const [voiceTalkInterpretOn, setVoiceTalkInterpretOn] = useState(false)
-  const [voiceTalkViewers, setVoiceTalkViewers] = useState<string[]>([])
   const [voiceTalkState, setVoiceTalkState] = useState<{ live: boolean, joined: boolean, connected: boolean, callId: string | null }>(
     { live: false, joined: false, connected: false, callId: null },
   )
@@ -2414,10 +2411,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     getEarphoneModePreferenceSnapshot,
     getEarphoneModePreferenceServerSnapshot,
   )
-  // In a voice talk the room's speaker button is locked and the panel's
-  // interpret button decides whether translations are read aloud. The kept
-  // preference is untouched and applies again after the call.
-  const earphoneModeEnabled = voiceTalkState.joined ? voiceTalkInterpretOn : earphoneModePreference
+  // In a voice talk the room's speaker button is locked and off: the
+  // interpreter reads translations on the call itself. The kept preference
+  // is untouched and applies again after the call.
+  const earphoneModeEnabled = voiceTalkState.joined ? false : earphoneModePreference
   const nativeAudioRoute = useSyncExternalStore(
     subscribeNativeAudioRoute,
     getNativeAudioRouteSnapshot,
@@ -6301,15 +6298,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   //   button are locked. Speech-to-text that was running stops on joining.
   // - The panel has the two switches: the mic (the voice sent into the call)
   //   and interpret (captions and the interpreted voice of the others).
-  // - While someone else in the call has interpretation on and this phone's
-  //   mic is on, this phone writes down its own speech (the same
-  //   speech-to-text, started and stopped here). Those lines are call
-  //   captions: the server shows them only to the people who had
-  //   interpretation on, and to whoever said them (src/lib/voice-caption.ts).
-  // - The speech-to-text is paid by a reader, not by the one who is written
-  //   down, unless they have interpretation on themselves: the server names
-  //   the payer, and the session carries that identity.
-  // - With interpretation on, translations are read aloud as in speaker mode.
+  // - Interpretation runs on the server (mingle-voice-agent): while someone
+  //   in the call has it on, the interpreter writes each speaker down from
+  //   the call audio, saves each line as a caption only the people with it
+  //   on read (src/lib/voice-caption.ts), and reads translations on a
+  //   language track of the call that only they listen to. No phone runs
+  //   speech-to-text for the call, and a translation read aloud is call
+  //   audio, so the echo canceller keeps it out of the microphone.
   // - The app owns the call and its mic: they go on while the room screen is
   //   closed and in the background, until the app quits. This screen only
   //   switches the mic when the viewer presses the button, and otherwise
@@ -6324,65 +6319,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (voiceTalkState.joined) return
     setVoiceTalkListenOnly(false)
     setVoiceTalkInterpretOn(false)
-    setVoiceTalkViewers([])
   }, [voiceTalkState.joined])
 
   const handleVoiceTalkInterpretChange = useCallback((on: boolean) => {
     setVoiceTalkInterpretOn(on)
     if (conversationId) void setVoiceTalkInterpret(conversationId, on)
-    if (on && !(isNativeApp() && isLikelyIOSPlatform())) {
-      // A user gesture: unlock the audio element for the clips read later.
-      void primeAudioPlayback(true)
-    }
-  }, [conversationId, primeAudioPlayback])
+  }, [conversationId])
 
-  // Writing down this phone's speech for the call. The key names the state
-  // one speech-to-text session serves: the call and who pays for it. It is
-  // empty while nobody else reads, the mic is off, or outside a call.
-  const voiceTalkTranscribeKey = voiceTalkState.joined && shouldTranscribeForVoiceTalk({
-    connected: voiceTalkState.connected,
-    micOn: !voiceTalkListenOnly,
-    selfUserId: viewerUserId,
-    viewers: voiceTalkViewers,
-  })
-    ? `${voiceTalkState.callId ?? ''}|${resolveVoiceCaptionPayer({ selfUserId: viewerUserId, viewers: voiceTalkViewers }) ?? ''}`
-    : ''
-  const voiceTalkAppliedTranscribeKeyRef = useRef('')
+  // The room's own speech-to-text does not run in a call: one that was on
+  // stops on joining (and Start stays locked until the call ends).
   const voiceTalkJoinedRef = useRef(false)
   useEffect(() => {
-    if (!voiceTalkState.joined) {
-      if (!voiceTalkJoinedRef.current) return
-      // The call ended for this phone: its speech-to-text ends with it.
-      voiceTalkJoinedRef.current = false
-      voiceTalkAppliedTranscribeKeyRef.current = ''
-      setSttBillingOverride(null)
-      if (isSttSessionRunning) void handleStopRecording()
-      return
-    }
-    voiceTalkJoinedRef.current = true
-    if (!voiceTalkTranscribeKey) {
-      voiceTalkAppliedTranscribeKeyRef.current = ''
-      if (isSttSessionRunning) void handleStopRecording()
-      return
-    }
-    // One attempt per state: a start that fails is not retried in a loop.
-    if (voiceTalkAppliedTranscribeKeyRef.current === voiceTalkTranscribeKey) return
-    if (isSttSessionRunning) {
-      // The payer changed (or a session from before the call): end it, and
-      // this runs again once it has stopped.
-      void handleStopRecording()
-      return
-    }
-    if (isPreparingStart || !conversationId) return
-    const key = voiceTalkTranscribeKey
-    voiceTalkAppliedTranscribeKeyRef.current = key
-    void (async () => {
-      const billing = await fetchVoiceTalkSttBilling(conversationId)
-      if (voiceTalkAppliedTranscribeKeyRef.current !== key) return
-      setSttBillingOverride(billing ?? { token: null })
-      await handleStartRecording()
-    })()
-  }, [conversationId, handleStartRecording, handleStopRecording, isPreparingStart, isSttSessionRunning, voiceTalkState.joined, voiceTalkTranscribeKey])
+    voiceTalkJoinedRef.current = voiceTalkState.joined
+    if (voiceTalkState.joined && isSttSessionRunning) void handleStopRecording()
+  }, [handleStopRecording, isSttSessionRunning, voiceTalkState.joined])
 
   const confirmScreenCaptureNotice = useCallback(() => {
     screenCaptureNoticeAcknowledgedRef.current = true
@@ -8269,7 +8219,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             onListenOnlySync={setVoiceTalkListenOnly}
             interpretOn={voiceTalkInterpretOn}
             onInterpretChange={handleVoiceTalkInterpretChange}
-            onInterpretViewersChange={setVoiceTalkViewers}
             onOpenProfile={handleOpenProfileForBubble}
             viewerUserId={viewerUserId}
           />

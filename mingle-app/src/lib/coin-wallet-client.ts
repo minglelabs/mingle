@@ -38,16 +38,6 @@ const MIN_REFRESH_INTERVAL_MS = 3_000;
 
 let state: CoinWalletState = { status: "idle", wallet: null };
 let sttBillingToken: string | null = null;
-// In a voice talk this phone writes down its own speech for the people who
-// turned interpretation on, and one of them pays: the server names who (see
-// the voice interpret API) and that identity replaces this phone's own for
-// the speech-to-text sessions started meanwhile.
-let sttBillingOverride: { token: string | null } | null = null;
-
-/** Sets (or, with null, clears) whose billing identity the next speech-to-text sessions carry. */
-export function setSttBillingOverride(next: { token: string | null } | null): void {
-  sttBillingOverride = next;
-}
 let inFlight: Promise<void> | null = null;
 let lastLoadedAt = 0;
 // Whether the most recent wallet read reached the server.
@@ -223,11 +213,10 @@ export async function ensureCoinBillingIdentity(): Promise<void> {
 
 /** Adds the billing identity to the STT socket URL (read by mingle-stt). */
 export function appendCoinBillingToWsUrl(wsUrl: string, sessionKey: string): string {
-  const token = sttBillingOverride ? sttBillingOverride.token : sttBillingToken;
-  if (!token) return wsUrl;
+  if (!sttBillingToken) return wsUrl;
   try {
     const url = new URL(wsUrl);
-    url.searchParams.set("coin_token", token);
+    url.searchParams.set("coin_token", sttBillingToken);
     if (sessionKey) url.searchParams.set("coin_session", sessionKey);
     return url.toString();
   } catch {

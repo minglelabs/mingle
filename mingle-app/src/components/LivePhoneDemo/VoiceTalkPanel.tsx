@@ -8,10 +8,10 @@
 // In a call the room's own Start/Stop and speaker buttons are locked, and the
 // panel has the two switches that matter: the mic button owns the voice sent
 // into the call, and the interpret button turns on captions and the
-// interpreted voice of what the others say. While anyone in the call has
-// interpretation on, every phone writes down its own speech; those lines are
-// call captions, read only by the people who had it on (and whoever said
-// them), never by the rest of the room. See src/lib/voice-caption.ts.
+// interpreted voice of what the others say. The server's interpreter writes
+// down the call while anyone has it on; those lines are call captions, read
+// only by the people who had it on (and whoever said them), never by the rest
+// of the room. See src/lib/voice-caption.ts.
 //
 // The call itself runs in the native app (LiveKit audio). This panel only
 // draws it and sends button presses over the RN bridge (see
@@ -127,8 +127,8 @@ export function setVoiceTalkMic(on: boolean) {
 
 /**
  * Turns this viewer's interpretation on or off: the server first (it decides
- * who reads each caption), then the call, so the others' phones start writing
- * down only once the server knows who reads it.
+ * who reads each caption), then the call (the interpreter joins for it, and
+ * this phone listens to its language's track).
  */
 export async function setVoiceTalkInterpret(conversationId: string, on: boolean): Promise<void> {
   await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/interpret`), {
@@ -137,35 +137,6 @@ export async function setVoiceTalkInterpret(conversationId: string, on: boolean)
     body: JSON.stringify({ on }),
   }).catch(() => undefined)
   post({ type: 'native_voice_set', payload: { interpret: on } })
-}
-
-/**
- * Whose billing identity this phone's speech-to-text carries while it writes
- * down its own speech for the call. `null`: could not ask.
- */
-export async function fetchVoiceTalkSttBilling(conversationId: string): Promise<{ token: string | null } | null> {
-  try {
-    const response = await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/interpret`), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-    })
-    if (!response.ok) return null
-    const body = await response.json() as { sttBillingToken?: unknown }
-    return { token: typeof body.sttBillingToken === 'string' ? body.sttBillingToken : null }
-  } catch {
-    return null
-  }
-}
-
-/** Who in the call has interpretation on (user ids), this phone's own switch included. */
-export function resolveVoiceTalkInterpretViewers(input: {
-  members: ReadonlyArray<{ userId: string; isLocal: boolean; interpretOff?: boolean }>
-  interpretOn: boolean
-}): string[] {
-  return input.members
-    .filter((member) => (member.isLocal ? input.interpretOn : member.interpretOff === false))
-    .map((member) => member.userId)
 }
 
 /** The call's mic: on unless the viewer only listens. The room's speech-to-text does not move it. */
@@ -205,8 +176,6 @@ export type VoiceTalkPanelProps = {
   /** Interpretation (captions and the interpreted voice of the others) is on for this viewer. Owned by the room. */
   interpretOn?: boolean
   onInterpretChange?: (on: boolean) => void
-  /** Who in the call has interpretation on, as it changes (user ids). */
-  onInterpretViewersChange?: (viewers: string[]) => void
   /** Opens a member's profile when their seat is tapped. */
   onOpenProfile?: (userId: string) => void
   /** This viewer's account id: always counted as having the room open. */
@@ -217,7 +186,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   const { conversationId, conversationTitle, myLang, openSignal, leaveSignal, onAvailabilityChange, onListenOnlyChange, onOpenProfile } = props
   const listenOnly = props.listenOnly === true
   const interpretOn = props.interpretOn === true
-  const { onInterpretChange, onInterpretViewersChange } = props
+  const { onInterpretChange } = props
   const viewerUserId = props.viewerUserId ?? null
   const copy = voiceTalkCopy(props.uiLocale)
   const [call, setCall] = useState<StatusCall>(null)
@@ -380,14 +349,6 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         }))
     return people.slice(0, MAX_SEATS)
   }, [call, joined, listenOnly, myLang, room])
-
-  // Who reads what is said: the room starts and stops writing down on this.
-  const interpretViewersKey = joined && room
-    ? resolveVoiceTalkInterpretViewers({ members: room.members, interpretOn }).join('|')
-    : ''
-  useEffect(() => {
-    onInterpretViewersChange?.(interpretViewersKey ? interpretViewersKey.split('|') : [])
-  }, [interpretViewersKey, onInterpretViewersChange])
 
   // Room members who are not in the call, shown small under the seats.
   const presence = useRoomPresence(conversationId)
