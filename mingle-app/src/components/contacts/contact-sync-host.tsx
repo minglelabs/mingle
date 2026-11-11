@@ -14,7 +14,11 @@ import { isFirstSpeakPending } from "@/lib/first-run";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { refreshCoinWallet } from "@/lib/coin-wallet-client";
 import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
-import { CONTACT_SYNC_OPEN_EVENT, CONTACT_SYNC_PROMPT_CHECK_EVENT } from "@/lib/native-contacts";
+import {
+  CONTACT_SYNC_OPEN_EVENT,
+  CONTACT_SYNC_PROMPT_CHECK_EVENT,
+  isNativeContactsSupported,
+} from "@/lib/native-contacts";
 import {
   INVITE_TICKET_OPEN_EVENT,
   NATIVE_INVITE_EVENT,
@@ -28,11 +32,6 @@ import { captureMingleClientEvent } from "@/lib/posthog-client";
 
 const ContactSyncScreen = dynamic(() => import("@/components/contacts/contact-sync-screen"), { ssr: false });
 const InviteTicketSheet = dynamic(() => import("@/components/contacts/invite-ticket-sheet"), { ssr: false });
-
-function isNativeAppShell(): boolean {
-  return typeof window !== "undefined"
-    && typeof (window as { ReactNativeWebView?: { postMessage?: unknown } }).ReactNativeWebView?.postMessage === "function";
-}
 
 /**
  * Mounted once in the root layout. Owns three things around invites:
@@ -99,8 +98,10 @@ export default function ContactSyncHost() {
     busyRef.current = true;
     try {
       if (await acceptPendingInvite()) return;
-      // The contact-sync prompt is for the app only; a browser has no contacts to offer.
-      if (promptSettledRef.current || !isNativeAppShell()) return;
+      // Only an app that can read contacts gets the prompt: a browser has none
+      // to offer, and an older app shell (before the contacts module) would
+      // show a dead screen and use up the one-time prompt before an update.
+      if (promptSettledRef.current || !isNativeContactsSupported()) return;
       // A new user is first asked to say something (the first-run card on the
       // conversation list). This screen would cover that card, so it waits
       // until they have left their first room, which asks again.
