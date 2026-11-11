@@ -18,13 +18,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
 import { ChevronUp, Mic, MicOff, PhoneOff, Phone } from 'lucide-react'
+import LanguageFlag from '@/components/language-flag'
 
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = 8
 
-type CallParticipant = { userId: string; name: string | null; image: string | null }
+type CallParticipant = { userId: string; name: string | null; image: string | null; speechLanguage?: string | null }
 type StatusCall = { id: string; participants: CallParticipant[]; maxParticipants: number } | null
-type RoomMember = { identity: string; userId: string; name: string; isLocal: boolean; isSpeaking: boolean }
+// `lang` and `micOn` come from app builds that share them; older builds send neither.
+type RoomMember = { identity: string; userId: string; name: string; isLocal: boolean; isSpeaking: boolean; lang?: string; micOn?: boolean }
 type RoomSnapshot = {
   status: string
   /** Language the app joined with; its translation lane is the one we hear. */
@@ -57,8 +59,9 @@ const COPY = {
     error: '연결하지 못했어요',
     fold: '접기',
     open: '펼치기',
-    micOff: '마이크 끄기',
-    micOn: '마이크 켜기',
+    micOnState: '마이크 켜짐',
+    micOffState: '마이크 꺼짐',
+    micMuted: '음소거',
     listenOnly: '듣기만 하는 중',
     leaveTitle: '보이스톡에서 나갈까요?',
     cancel: '취소',
@@ -79,8 +82,9 @@ const COPY = {
     error: 'Could not connect',
     fold: 'Fold',
     open: 'Open',
-    micOff: 'Mute mic',
-    micOn: 'Unmute mic',
+    micOnState: 'Mic on',
+    micOffState: 'Mic off',
+    micMuted: 'Muted',
     listenOnly: 'Listening only',
     leaveTitle: 'Leave voice talk?',
     cancel: 'Cancel',
@@ -143,10 +147,12 @@ export type VoiceTalkPanelProps = {
   onListenOnlyChange?: (listenOnly: boolean) => void
   /** The room's speech-to-text is running. Off in a call means voice only: the panel says so. */
   captionsOn?: boolean
+  /** Opens a member's profile when their seat is tapped. */
+  onOpenProfile?: (userId: string) => void
 }
 
 export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
-  const { conversationId, conversationTitle, myLang, openSignal, leaveSignal, onAvailabilityChange, onListenOnlyChange } = props
+  const { conversationId, conversationTitle, myLang, openSignal, leaveSignal, onAvailabilityChange, onListenOnlyChange, onOpenProfile } = props
   const listenOnly = props.listenOnly === true
   const copy = (props.uiLocale || '').toLowerCase().startsWith('ko') ? COPY.ko : COPY.en
   const [call, setCall] = useState<StatusCall>(null)
@@ -238,11 +244,30 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
 
   // Seats: who is in the call (live LiveKit view when joined, else the API's).
   const seats = useMemo(() => {
-    const people: Array<{ key: string; name: string; isLocal: boolean; isSpeaking: boolean; image: string | null }> = joined && room
-      ? room.members.map((m) => ({ key: m.identity, name: m.name, isLocal: m.isLocal, isSpeaking: m.isSpeaking, image: call?.participants.find((p) => p.userId === m.userId)?.image ?? null }))
-      : (call?.participants ?? []).map((p) => ({ key: p.userId, name: p.name || '', isLocal: false, isSpeaking: false, image: p.image }))
+    const people: VoiceTalkSeat[] = joined && room
+      ? room.members.map((m) => ({
+          key: m.identity,
+          userId: m.userId,
+          name: m.name,
+          isLocal: m.isLocal,
+          isSpeaking: m.isSpeaking,
+          image: call?.participants.find((p) => p.userId === m.userId)?.image ?? null,
+          lang: m.lang || (m.isLocal ? myLang : '') || call?.participants.find((p) => p.userId === m.userId)?.speechLanguage || '',
+          // My own switch shows at once; the others' comes from the call.
+          micOn: m.isLocal ? !listenOnly : m.micOn !== false,
+        }))
+      : (call?.participants ?? []).map((p) => ({
+          key: p.userId,
+          userId: p.userId,
+          name: p.name || '',
+          isLocal: false,
+          isSpeaking: false,
+          image: p.image,
+          lang: p.speechLanguage || '',
+          micOn: true,
+        }))
     return people.slice(0, MAX_SEATS)
-  }, [call, joined, room])
+  }, [call, joined, listenOnly, myLang, room])
 
   const onDragEnd = useCallback((_: unknown, info: PanInfo) => {
     if (info.offset.y < -24 || info.velocity.y < -300) setFolded(true)
@@ -370,28 +395,13 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
             >
               <div className="grid grid-cols-4 gap-x-2 gap-y-2.5 px-3 pb-2 pt-1">
                 {Array.from({ length: MAX_SEATS }, (_, i) => seats[i] ?? null).map((s, i) => (
-                  <div key={s?.key ?? `empty-${i}`} className="relative flex min-w-0 flex-col items-center gap-1">
-                    <span
-                      className={`relative inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full text-[0.95rem] font-bold transition-shadow duration-150 ${
-                        s ? 'bg-amber-100 text-amber-800' : 'border border-dashed border-gray-300 bg-gray-50 text-gray-300'
-                      } ${s?.isSpeaking ? 'ring-[3px] ring-amber-400 ring-offset-2 ring-offset-white' : ''}`}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      {s ? (s.image ? <img src={s.image} alt="" className="h-full w-full object-cover" /> : initial(s.name)) : ''}
-                    </span>
-                    {s?.isLocal && listenOnly ? (
-                      <span
-                        aria-hidden="true"
-                        data-qa="voice-talk-own-mic-off"
-                        className="absolute left-1/2 top-[30px] ml-[10px] inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-white ring-2 ring-white"
-                      >
-                        <MicOff size={11} strokeWidth={2.6} />
-                      </span>
-                    ) : null}
-                    <span className="w-full truncate text-center text-[0.7rem] font-medium text-gray-600">
-                      {s ? (s.isLocal ? copy.me : s.name) : copy.empty}
-                    </span>
-                  </div>
+                  <VoiceTalkSeatView
+                    key={s?.key ?? `empty-${i}`}
+                    seat={s}
+                    label={s ? (s.isLocal ? copy.me : s.name) : copy.empty}
+                    mutedLabel={copy.micMuted}
+                    onOpenProfile={onOpenProfile}
+                  />
                 ))}
               </div>
 
@@ -404,20 +414,26 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
               ) : null}
 
               {joined ? (
-                <div className="flex items-center justify-center gap-2 border-t border-gray-100 px-3 py-2">
+                <div className="flex items-center justify-center gap-4 border-t border-gray-100 px-3 py-2.5">
+                  {/* Shows the mic's state; pressing it switches. */}
                   <button
                     type="button"
                     data-qa="voice-talk-mic-toggle"
-                    aria-pressed={listenOnly}
+                    aria-pressed={!listenOnly}
                     onClick={() => onListenOnlyChange?.(!listenOnly)}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8rem] font-semibold ${
-                      listenOnly ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
+                    className={`inline-flex h-11 min-w-[124px] items-center justify-center gap-1.5 rounded-full px-5 text-[0.86rem] font-semibold transition-colors ${
+                      listenOnly ? 'bg-gray-800 text-white active:bg-gray-700' : 'bg-gray-100 text-gray-800 active:bg-gray-200'
                     }`}
                   >
-                    {listenOnly ? <><Mic size={15} /> {copy.micOn}</> : <><MicOff size={15} /> {copy.micOff}</>}
+                    {listenOnly ? <><MicOff size={17} /> {copy.micOffState}</> : <><Mic size={17} /> {copy.micOnState}</>}
                   </button>
-                  <button type="button" onClick={() => setConfirmLeave(true)} className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1.5 text-[0.8rem] font-semibold text-rose-600">
-                    <PhoneOff size={15} /> {copy.leave}
+                  <button
+                    type="button"
+                    data-qa="voice-talk-leave"
+                    onClick={() => setConfirmLeave(true)}
+                    className="inline-flex h-11 min-w-[124px] items-center justify-center gap-1.5 rounded-full bg-rose-50 px-5 text-[0.86rem] font-semibold text-rose-600 active:bg-rose-100"
+                  >
+                    <PhoneOff size={17} /> {copy.leave}
                   </button>
                 </div>
               ) : null}
@@ -427,6 +443,90 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
       </motion.div>
     </div>
     </>
+  )
+}
+
+type VoiceTalkSeat = {
+  key: string
+  userId: string
+  name: string
+  isLocal: boolean
+  isSpeaking: boolean
+  image: string | null
+  /** Speech language, for the flag. Empty = no flag. */
+  lang: string
+  /** False = listen only: a mute icon covers the avatar. */
+  micOn: boolean
+}
+
+/**
+ * One of the 8 seats: a round avatar with the member's language flag at its
+ * bottom-left, a mute icon over its middle while their mic is off, and a
+ * soft ripple around it while they speak. Tapping it opens their profile.
+ */
+export function VoiceTalkSeatView(props: {
+  seat: VoiceTalkSeat | null
+  label: string
+  mutedLabel: string
+  onOpenProfile?: (userId: string) => void
+}) {
+  const { seat, label, mutedLabel, onOpenProfile } = props
+  const speaking = !!seat && seat.isSpeaking && seat.micOn
+  const face = (
+    <span
+      className={`relative inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full text-[0.95rem] font-bold ${
+        seat ? 'bg-amber-100 text-amber-800' : 'border border-dashed border-gray-300 bg-gray-50 text-gray-300'
+      }`}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {seat ? (seat.image ? <img src={seat.image} alt="" className="h-full w-full object-cover" /> : initial(seat.name)) : ''}
+      {seat && !seat.micOn ? (
+        <span
+          data-qa="voice-talk-seat-muted"
+          aria-label={mutedLabel}
+          className="absolute inset-0 flex items-center justify-center bg-black/40 text-white"
+        >
+          <MicOff size={20} strokeWidth={2.4} />
+        </span>
+      ) : null}
+    </span>
+  )
+  return (
+    <div className="flex min-w-0 flex-col items-center gap-1" data-qa="voice-talk-seat">
+      <span className="relative inline-flex h-12 w-12 items-center justify-center">
+        {speaking ? (
+          <>
+            {/* Two translucent rings spreading out in turn, over a faint steady glow. */}
+            <span aria-hidden="true" data-qa="voice-talk-seat-speaking" className="mingle-voice-ripple pointer-events-none absolute inset-0 rounded-full bg-amber-300/30" />
+            <span aria-hidden="true" className="mingle-voice-ripple mingle-voice-ripple-late pointer-events-none absolute inset-0 rounded-full bg-amber-300/30" />
+            <span aria-hidden="true" className="pointer-events-none absolute -inset-[3px] rounded-full bg-amber-200/35" />
+          </>
+        ) : null}
+        {seat && onOpenProfile ? (
+          <button
+            type="button"
+            data-qa="voice-talk-seat-profile"
+            aria-label={label}
+            onClick={() => onOpenProfile(seat.userId)}
+            className="relative rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+          >
+            {face}
+          </button>
+        ) : (
+          <span className="relative">{face}</span>
+        )}
+        {seat?.lang ? (
+          <span
+            aria-hidden="true"
+            data-qa="voice-talk-seat-flag"
+            className="pointer-events-none absolute -bottom-[2px] -left-[2px] flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-white px-[2px] ring-1 ring-gray-200"
+          >
+            <LanguageFlag language={seat.lang} className="text-[11px] leading-none" />
+          </span>
+        ) : null}
+      </span>
+      <span className="w-full truncate text-center text-[0.7rem] font-medium text-gray-600">{label}</span>
+    </div>
   )
 }
 

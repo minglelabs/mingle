@@ -183,6 +183,28 @@ describe('voice controller LiveKit wiring', () => {
     expect(controller.getSnapshot().captions).toHaveLength(0);
   });
 
+  it('shows who has their call mic off, and tells the others when mine goes off', async () => {
+    const listening = participant('u_ko', { lang: 'ko', mic: 'off' }, [pub({ trackName: 'mic' })]);
+    const talking = participant('u_en', { lang: 'en' }, [pub({ trackName: 'mic' })]);
+    const { room } = makeFakeRoom([listening, talking]);
+    room.localParticipant.setAttributes = jest.fn().mockResolvedValue(undefined);
+    const controller = createVoiceController({ api: fakeApi(), createRoom: () => room, myLang: 'ja', localUserId: 'me' });
+    await controller.connect('c1');
+
+    const byId = () => Object.fromEntries(controller.getSnapshot().members.map((m) => [m.identity, m.micOn]));
+    expect(byId().u_ko).toBe(false);
+    expect(byId().u_en).toBe(true);
+    const me = controller.getSnapshot().members.find((m) => m.isLocal)!;
+    expect(me.micOn).toBe(true);
+
+    await controller.setMicOn(false);
+    expect(controller.getSnapshot().members.find((m) => m.isLocal)!.micOn).toBe(false);
+    expect(room.localParticipant.setAttributes).toHaveBeenLastCalledWith({ mic: 'off' });
+
+    await controller.setMicOn(true);
+    expect(room.localParticipant.setAttributes).toHaveBeenLastCalledWith({ mic: 'on' });
+  });
+
   it('falls back to listener-only when the mic is denied', async () => {
     const { room } = makeFakeRoom([]);
     (room.localParticipant.setMicrophoneEnabled as jest.Mock).mockRejectedValueOnce(new Error('denied'));

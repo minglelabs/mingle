@@ -1220,7 +1220,7 @@ function ChatBubble({
 
   const avatarColumn = (
     <div key="avatar" data-speaker-avatar-column className="mt-0.5 flex w-10 shrink-0 flex-col items-center gap-1">
-      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+      <div className="relative rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
         {canOpenSpeakerProfile && utterance.speakerUserId ? (
           <button
             type="button"
@@ -1238,6 +1238,17 @@ function ChatBubble({
         ) : (
           avatarImage
         )}
+        {originalDisplayLanguage && flag !== '🌐' ? (
+          // The language this message was spoken in, small at the avatar's bottom-left.
+          // A language without a flag of its own shows none.
+          <span
+            aria-hidden="true"
+            data-speaker-avatar-flag={originalDisplayLanguage}
+            className="pointer-events-none absolute -bottom-[3px] -left-[3px] flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-white px-[1px] ring-1 ring-gray-200"
+          >
+            <LanguageFlag language={originalDisplayLanguage} className="text-[9px] leading-none" />
+          </span>
+        ) : null}
       </div>
     </div>
   )

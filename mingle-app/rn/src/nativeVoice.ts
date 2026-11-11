@@ -31,6 +31,7 @@ import {
   decodeCaptionPayload,
   isInterpreterParticipant,
   participantInterpretOff,
+  participantMicOff,
   participantLang,
   shouldSubscribe,
   volumeForTrack,
@@ -103,6 +104,8 @@ export type VoiceGridMember = {
   isSpeaking: boolean;
   lang: string;
   interpretOff: boolean;
+  /** The member's call mic is on. False = listen only (still in their seat). */
+  micOn: boolean;
 };
 
 export type VoiceSnapshot = {
@@ -323,6 +326,8 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     state.micOn = on;
     emit();
     await room?.localParticipant.setMicrophoneEnabled?.(on).catch(() => undefined);
+    // Tell the others, so their panel shows this seat as muted.
+    await room?.localParticipant.setAttributes?.({ mic: on ? 'on' : 'off' }).catch(() => undefined);
   }
 
   function setMode(mode: InterpretVolumeMode): void {
@@ -380,6 +385,8 @@ export function createVoiceController(deps: VoiceControllerDeps) {
         isSpeaking: state.speakingIdentities.has(p.identity),
         lang: participantLang(toView(p)) || api?.speechLanguage || '',
         interpretOff: participantInterpretOff(toView(p)),
+        // Mine is what this phone set; the others say theirs in an attribute.
+        micOn: isLocal ? state.micOn : !participantMicOff(toView(p)),
       });
     };
     if (room) {
@@ -396,6 +403,7 @@ export function createVoiceController(deps: VoiceControllerDeps) {
           isSpeaking: false,
           lang: api.speechLanguage || '',
           interpretOff: !api.interpretOn,
+          micOn: true,
         });
       }
     }

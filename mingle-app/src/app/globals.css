@@ -278,3 +278,31 @@ html[data-hash-rush-open="true"] [data-sonner-toaster] {
     border: 0;
   }
 }
+
+/* Voice talk: a soft ripple spreading out from the avatar of whoever is
+   speaking. Compositor-only (transform + opacity). */
+@keyframes mingle-voice-ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.mingle-voice-ripple {
+  animation: mingle-voice-ripple 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.mingle-voice-ripple-late {
+  animation-delay: 0.8s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mingle-voice-ripple {
+    animation: none;
+    opacity: 0.35;
+  }
+}

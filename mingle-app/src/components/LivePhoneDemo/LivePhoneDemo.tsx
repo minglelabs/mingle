@@ -8075,6 +8075,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             listenOnly={voiceTalkListenOnly}
             onListenOnlyChange={setVoiceTalkListenOnly}
             captionsOn={isSttSessionRunning || isPreparingStart}
+            onOpenProfile={handleOpenProfileForBubble}
           />
         ) : null}
 

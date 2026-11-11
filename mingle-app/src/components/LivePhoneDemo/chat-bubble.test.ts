@@ -24,6 +24,17 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('번역 대기')
     expect(html).not.toContain('data-translation-pending-label')
   })
+  it('shows the spoken language as a small flag at the bottom-left of the avatar', () => {
+    const render = (originalLang: string) => renderToStaticMarkup(createElement(ChatBubble, {
+      utterance: { id: 'flagged', originalText: 'こんにちは', originalLang, targetLanguages: ['ja', 'ko'], translations: {} },
+      uiLocale: 'ko', preferredDisplayLanguage: 'ko', defaultDisplayLanguage: 'ko', bubbleDisplayMode: 'collapsed',
+    }))
+    const html = render('ja')
+    expect(html).toContain('data-speaker-avatar-flag="ja"')
+    expect(html).toMatch(/data-speaker-avatar-flag="ja"[^>]*-bottom-\[3px\] -left-\[3px\]/)
+    // A language without a flag of its own shows none.
+    expect(render('unknown')).not.toContain('data-speaker-avatar-flag')
+  })
   afterEach(() => {
     vi.restoreAllMocks()
   })

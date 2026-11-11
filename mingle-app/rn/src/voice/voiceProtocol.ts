@@ -28,6 +28,8 @@ export type InterpretVolumeMode = 'static' | 'dynamic';
 export type ParticipantAttributes = {
   lang?: string;
   interpret?: 'on' | 'off' | string;
+  /** The call mic: 'off' = listen only. Absent = on. */
+  mic?: 'on' | 'off' | string;
   role?: 'interpreter' | string;
 };
 
@@ -49,6 +51,14 @@ export function participantLang(p: VoiceParticipantView | null | undefined): str
 
 export function participantInterpretOff(p: VoiceParticipantView | null | undefined): boolean {
   return Boolean(p && p.attributes && p.attributes.interpret === 'off');
+}
+
+/**
+ * Whether a participant has switched their call mic off (listen only). They
+ * say so in the `mic` attribute; a participant who says nothing has it on.
+ */
+export function participantMicOff(p: VoiceParticipantView | null | undefined): boolean {
+  return Boolean(p && p.attributes && p.attributes.mic === 'off');
 }
 
 // ---------------------------------------------------------------------------

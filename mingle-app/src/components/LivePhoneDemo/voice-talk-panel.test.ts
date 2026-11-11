@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { VoiceTalkButton, resolveVoiceTalkButtonPress, resolveVoiceTalkMic } from './VoiceTalkPanel'
+import { VoiceTalkButton, VoiceTalkSeatView, resolveVoiceTalkButtonPress, resolveVoiceTalkMic } from './VoiceTalkPanel'
 
 const panelSource = readFileSync(new URL('./VoiceTalkPanel.tsx', import.meta.url), 'utf8')
 const liveDemoSource = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
@@ -81,5 +81,66 @@ describe('voice talk panel', () => {
     expect(panelSource).toContain('data-qa="voice-talk-mic-toggle"')
     expect(panelSource).toContain("listenOnly: '듣기만 하는 중'")
     expect(panelSource).toContain("listenOnly: 'Listening only'")
+  })
+
+  it('labels the mic button with its state, not with the action', () => {
+    expect(panelSource).toContain("micOnState: '마이크 켜짐'")
+    expect(panelSource).toContain("micOffState: '마이크 꺼짐'")
+    expect(panelSource).not.toContain('마이크 끄기')
+    expect(panelSource).not.toContain('마이크 켜기')
+    expect(panelSource).toContain('{listenOnly ? <><MicOff size={17} /> {copy.micOffState}</> : <><Mic size={17} /> {copy.micOnState}</>}')
+  })
+
+  it('gives the mic and leave buttons a full-height tap target and space between them', () => {
+    const row = panelSource.slice(panelSource.indexOf('data-qa="voice-talk-mic-toggle"') - 400, panelSource.indexOf('data-qa="voice-talk-leave"') + 400)
+    expect(row).toContain('gap-4')
+    expect(row.split('h-11').length - 1).toBe(2)
+  })
+
+  it('shows my own mic switch at once and the others\' from the call', () => {
+    expect(panelSource).toContain('micOn: m.isLocal ? !listenOnly : m.micOn !== false,')
+    expect(liveDemoSource).toContain('onOpenProfile={handleOpenProfileForBubble}')
+  })
+})
+
+describe('voice talk seat', () => {
+  const seat = { key: 'u1', userId: 'u1', name: 'Mina', isLocal: false, isSpeaking: false, image: null, lang: 'ko', micOn: true }
+  const render = (overrides: Partial<typeof seat>, onOpenProfile?: (userId: string) => void) => renderToStaticMarkup(
+    createElement(VoiceTalkSeatView, { seat: { ...seat, ...overrides }, label: 'Mina', mutedLabel: '음소거', onOpenProfile }),
+  )
+
+  it('shows the language flag at the bottom-left of the avatar', () => {
+    const html = render({})
+    expect(html).toContain('data-qa="voice-talk-seat-flag"')
+    expect(html).toMatch(/-bottom-\[2px\] -left-\[2px\]/)
+    expect(render({ lang: '' })).not.toContain('data-qa="voice-talk-seat-flag"')
+  })
+
+  it('covers the middle of the avatar with a mute icon while the mic is off', () => {
+    expect(render({})).not.toContain('data-qa="voice-talk-seat-muted"')
+    const muted = render({ micOn: false })
+    expect(muted).toContain('data-qa="voice-talk-seat-muted"')
+    expect(muted).toContain('absolute inset-0 flex items-center justify-center')
+  })
+
+  it('ripples softly while the member speaks, never while muted', () => {
+    expect(render({})).not.toContain('mingle-voice-ripple')
+    const speaking = render({ isSpeaking: true })
+    expect(speaking.split('mingle-voice-ripple ').length - 1).toBe(2)
+    expect(speaking).toContain('bg-amber-300/30')
+    expect(speaking).not.toContain('ring-amber-400')
+    expect(render({ isSpeaking: true, micOn: false })).not.toContain('mingle-voice-ripple')
+  })
+
+  it('opens the profile when tapped, when the room can open one', () => {
+    expect(render({}, () => {})).toContain('data-qa="voice-talk-seat-profile"')
+    expect(render({})).not.toContain('data-qa="voice-talk-seat-profile"')
+  })
+
+  it('draws an empty seat with none of that', () => {
+    const html = renderToStaticMarkup(createElement(VoiceTalkSeatView, { seat: null, label: '빈 자리', mutedLabel: '음소거' }))
+    expect(html).toContain('border-dashed')
+    expect(html).not.toContain('data-qa="voice-talk-seat-flag"')
+    expect(html).not.toContain('data-qa="voice-talk-seat-profile"')
   })
 })
