@@ -23,6 +23,8 @@
 		B9C8D7E6F5A4B3C2D1E0F9A8 /* MingleBackgroundAudioPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B8C7D6E5F4A3B2C1D0E9F8 /* MingleBackgroundAudioPolicy.swift */; };
 		B7C8D9E0F1A2B3C4D5E6F708 /* NativeQrImageModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */; };
 		C8D9E0F1A2B3C4D5E6F70819 /* NativeQrImageModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */; };
+		C0A1AC75000000000000B001 /* NativeContactsModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A1AC75000000000000A001 /* NativeContactsModule.swift */; };
+		C0A1AC75000000000000B002 /* NativeContactsModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = C0A1AC75000000000000A002 /* NativeContactsModuleBridge.m */; };
 		B1E2C3D44F5A6B7091CD23E4 /* NativeSTTModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = D2E3F4A55B6C7D8091EF34A5 /* NativeSTTModuleBridge.m */; };
 		B2C3D4E56F708192A3B4C5D6 /* NativeAuthModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6708192A3B4C5D6E7F8 /* NativeAuthModuleBridge.m */; };
 		B7C8D9E0F1A2B3C4D5E6F708 /* NativeQrImageModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */; };
@@ -88,6 +90,8 @@
 		E6F708192A3B4C5D6E7F8091 /* NativePictureInPictureModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativePictureInPictureModule.swift; path = mingle/NativePictureInPictureModule.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeQrImageModuleBridge.m; path = mingle/NativeQrImageModuleBridge.m; sourceTree = "<group>"; };
+		C0A1AC75000000000000A001 /* NativeContactsModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeContactsModule.swift; path = mingle/NativeContactsModule.swift; sourceTree = "<group>"; };
+		C0A1AC75000000000000A002 /* NativeContactsModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeContactsModuleBridge.m; path = mingle/NativeContactsModuleBridge.m; sourceTree = "<group>"; };
 		F4B5C6D73B5D8E9192EF45F7 /* NativeTTSModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeTTSModule.swift; path = mingle/NativeTTSModule.swift; sourceTree = "<group>"; };
 		F708192A3B4C5D6E7F8091A2 /* NativePictureInPictureModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativePictureInPictureModuleBridge.m; path = mingle/NativePictureInPictureModuleBridge.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -121,6 +125,8 @@
 				D4E5F6708192A3B4C5D6E7F8 /* NativeAuthModuleBridge.m */,
 				E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */,
 				F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */,
+				C0A1AC75000000000000A001 /* NativeContactsModule.swift */,
+				C0A1AC75000000000000A002 /* NativeContactsModuleBridge.m */,
 				C7D9E1F32A4B6C8091DE45F6 /* NativeSTTModule.swift */,
 				D2E3F4A55B6C7D8091EF34A5 /* NativeSTTModuleBridge.m */,
 				A9B8C7D6E5F4A3B2C1D0E9F8 /* MingleBackgroundAudioPolicy.swift */,
@@ -425,6 +431,8 @@
 				B2C3D4E56F708192A3B4C5D6 /* NativeAuthModuleBridge.m in Sources */,
 				B7C8D9E0F1A2B3C4D5E6F708 /* NativeQrImageModule.swift in Sources */,
 				C8D9E0F1A2B3C4D5E6F70819 /* NativeQrImageModuleBridge.m in Sources */,
+				C0A1AC75000000000000B001 /* NativeContactsModule.swift in Sources */,
+				C0A1AC75000000000000B002 /* NativeContactsModuleBridge.m in Sources */,
 				A8F1C3B52D4E6A7091BC23D4 /* NativeSTTModule.swift in Sources */,
 				B1E2C3D44F5A6B7091CD23E4 /* NativeSTTModuleBridge.m in Sources */,
 				B9C8D7E6F5A4B3C2D1E0F9A8 /* MingleBackgroundAudioPolicy.swift in Sources */,

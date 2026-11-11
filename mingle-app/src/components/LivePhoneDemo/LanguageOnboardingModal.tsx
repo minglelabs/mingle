@@ -49,16 +49,21 @@ const DEFAULT_ONBOARDING_BIRTH_DATE: BirthDateParts = {
   day: 1,
 };
 
+/**
+ * What the screens collected. A field is null when its step was not among the
+ * `steps` shown: the first run asks only for the language, and the other
+ * questions come later, each when it is needed.
+ */
 export type LanguageOnboardingConfirmPayload = {
   language: string;
   /** 관심 언어: the language of the people the user mostly wants to talk with. */
   interestLanguage: InterestLanguage | null;
-  birthDate: BirthDateParts;
-  gender: ProfileGender;
-  usagePurpose: UsagePurpose;
+  birthDate: BirthDateParts | null;
+  gender: ProfileGender | null;
+  usagePurpose: UsagePurpose | null;
   /** Optional free-text reason, only for "other". */
   usagePurposeNote: string | null;
-  discoverySource: DiscoverySource;
+  discoverySource: DiscoverySource | null;
 };
 
 interface LanguageOnboardingModalProps {
@@ -67,10 +72,25 @@ interface LanguageOnboardingModalProps {
   initialLanguage: string;
   initialBirthDate?: BirthDateParts;
   uiLocale: string;
+  /**
+   * The screens to show, in order. Defaults to the language alone (the first
+   * run). Later questions reuse this modal with their own steps, e.g.
+   * `["discovery-source"]` or `["gender", "birth-date"]`.
+   */
+  steps?: readonly OnboardingStep[];
+  /**
+   * The person came through a friend's invite ticket: only the language and
+   * the birth date (age check) are asked, whatever `steps` says. The purpose
+   * is set to "social" and the discovery source to "friend".
+   */
+  invite?: boolean;
   onConfirm: (payload: LanguageOnboardingConfirmPayload) => void | Promise<void>;
 }
 
-type OnboardingStep = "language" | "interest-language" | "usage-purpose" | "discovery-source" | "gender" | "birth-date";
+export type OnboardingStep = "language" | "interest-language" | "usage-purpose" | "discovery-source" | "gender" | "birth-date";
+
+export const FIRST_RUN_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language"];
+export const INVITE_ONBOARDING_STEPS: readonly OnboardingStep[] = ["language", "birth-date"];
 
 // Long enough to see the tapped gender light up before the next screen slides in.
 const GENDER_AUTO_ADVANCE_MS = 220;
@@ -83,13 +103,20 @@ export default function LanguageOnboardingModal({
   initialLanguage,
   initialBirthDate = DEFAULT_ONBOARDING_BIRTH_DATE,
   uiLocale,
+  steps: requestedSteps = FIRST_RUN_ONBOARDING_STEPS,
+  invite = false,
   onConfirm,
 }: LanguageOnboardingModalProps) {
+  const steps = invite ? INVITE_ONBOARDING_STEPS : requestedSteps;
   // Mounted only while onboarding is on screen: no native ad banner at any
   // step, whatever zone the screen underneath asked for.
   useNativeBannerSuppression();
   const titleId = useId();
-  const [step, setStep] = useState<OnboardingStep>("language");
+  const firstStep = steps[0] ?? "language";
+  const [step, setStep] = useState<OnboardingStep>(firstStep);
+  const stepIndex = Math.max(0, steps.indexOf(step));
+  const isFirstStep = stepIndex === 0;
+  const isLastStep = stepIndex >= steps.length - 1;
   const [query, setQuery] = useState("");
   const [language, setLanguage] = useState(initialLanguage);
   const [interestQuery, setInterestQuery] = useState("");
@@ -191,21 +218,15 @@ export default function LanguageOnboardingModal({
 
   const handleStepBack = useCallback(() => {
     if (isConfirming) return;
-    setStep((currentStep) => (
-      currentStep === "birth-date" ? "gender"
-        : currentStep === "gender" ? "discovery-source"
-        : currentStep === "discovery-source" ? "usage-purpose"
-        : currentStep === "usage-purpose" ? "interest-language"
-          : "language"
-    ));
-  }, [isConfirming]);
+    setStep((currentStep) => steps[Math.max(0, steps.indexOf(currentStep) - 1)] ?? firstStep);
+  }, [firstStep, isConfirming, steps]);
 
   useEffect(() => registerNativeBackHandler(() => {
     if (isConfirming) return true;
-    if (step === "language") return true;
+    if (isFirstStep) return true;
     handleStepBack();
     return true;
-  }, 30), [handleStepBack, isConfirming, step]);
+  }, 30), [handleStepBack, isConfirming, isFirstStep]);
 
   // The native WKWebView edge-swipe would navigate the page underneath, so the
   // modal owns the gesture and maps it to the same step-back as the chevron.
@@ -247,11 +268,11 @@ export default function LanguageOnboardingModal({
     const start = edgeSwipeStartRef.current;
     edgeSwipeStartRef.current = null;
     const touch = event.changedTouches[0];
-    if (!start || !touch || step === "language") return;
+    if (!start || !touch || isFirstStep) return;
     if (isLeftEdgeSwipeBack(start, { x: touch.clientX, y: touch.clientY }, window.innerWidth)) {
       handleStepBack();
     }
-  }, [handleStepBack, step]);
+  }, [handleStepBack, isFirstStep]);
 
   const handleEdgeSwipeCancel = useCallback(() => {
     edgeSwipeStartRef.current = null;
@@ -259,24 +280,50 @@ export default function LanguageOnboardingModal({
 
   if (typeof document === "undefined") return null;
 
-  const handleLanguageStepNext = () => {
-    if (interestCode && canonicalizeSttLanguageCode(interestCode) === ownLanguageCode) setInterestCode(null);
-    setStep("interest-language");
+  const isStepAnswered = (target: OnboardingStep): boolean => (
+    target === "language" ? true
+      : target === "interest-language" ? Boolean(interestCode)
+      : target === "usage-purpose" ? Boolean(usagePurpose)
+      : target === "discovery-source" ? Boolean(discoverySource)
+      : target === "gender" ? Boolean(gender)
+        : isEligibleAge
+  );
+
+  const handleFinalConfirm = async () => {
+    if (isConfirming || !steps.every(isStepAnswered)) return;
+    const asked = (target: OnboardingStep) => steps.includes(target);
+    setIsConfirming(true);
+    try {
+      await onConfirm({
+        language,
+        interestLanguage: asked("interest-language") && interestCode
+          ? { code: interestCode as InterestLanguage["code"], level: interestLevel }
+          : null,
+        birthDate: asked("birth-date") ? birthDate : null,
+        gender: asked("gender") ? gender : null,
+        usagePurpose: invite ? "social" : asked("usage-purpose") ? usagePurpose : null,
+        usagePurposeNote: asked("usage-purpose") && usagePurpose === "other"
+          ? normalizeUsagePurposeNote(usagePurposeNote)
+          : null,
+        discoverySource: invite ? "friend" : asked("discovery-source") ? discoverySource : null,
+      });
+    } finally {
+      setIsConfirming(false);
+    }
   };
 
-  const handleInterestStepNext = () => {
-    if (!interestCode) return;
-    setStep("usage-purpose");
-  };
-
-  const handleUsagePurposeStepNext = () => {
-    if (!usagePurpose) return;
-    setStep("discovery-source");
-  };
-
-  const handleDiscoverySourceStepNext = () => {
-    if (!discoverySource) return;
-    setStep("gender");
+  // The footer button: on to the next screen, or finish on the last one.
+  const handleStepNext = () => {
+    if (isConfirming || !isStepAnswered(step)) return;
+    if (step === "language" && interestCode && canonicalizeSttLanguageCode(interestCode) === ownLanguageCode) {
+      setInterestCode(null);
+    }
+    if (step === "gender") clearGenderAdvance();
+    if (isLastStep) {
+      void handleFinalConfirm();
+      return;
+    }
+    setStep(steps[stepIndex + 1]);
   };
 
   // One tap picks the gender and moves on; the footer button stays for
@@ -285,34 +332,12 @@ export default function LanguageOnboardingModal({
     if (isConfirming) return;
     setGender(nextGender);
     clearGenderAdvance();
+    // The last screen waits for the footer button instead of finishing on a tap.
+    if (isLastStep) return;
     genderAdvanceTimerRef.current = window.setTimeout(() => {
       genderAdvanceTimerRef.current = null;
-      setStep("birth-date");
+      setStep(steps[stepIndex + 1]);
     }, GENDER_AUTO_ADVANCE_MS);
-  };
-
-  const handleGenderStepNext = () => {
-    if (!gender) return;
-    clearGenderAdvance();
-    setStep("birth-date");
-  };
-
-  const handleFinalConfirm = async () => {
-    if (isConfirming || !isEligibleAge || !gender || !usagePurpose || !discoverySource) return;
-    setIsConfirming(true);
-    try {
-      await onConfirm({
-        language,
-        interestLanguage: interestCode ? { code: interestCode as InterestLanguage["code"], level: interestLevel } : null,
-        birthDate,
-        gender,
-        usagePurpose,
-        usagePurposeNote: usagePurpose === "other" ? normalizeUsagePurposeNote(usagePurposeNote) : null,
-        discoverySource,
-      });
-    } finally {
-      setIsConfirming(false);
-    }
   };
 
   // Row layout matches LanguageSelector.tsx (the in-room language picker) so the
@@ -426,7 +451,7 @@ export default function LanguageOnboardingModal({
         <header className="shrink-0 border-b border-gray-100 bg-[#fcfbf8]">
           <div aria-hidden="true" style={{ height: "env(safe-area-inset-top, 0px)" }} />
           <div className="flex h-12 items-center justify-between px-2">
-            {step !== "language" ? (
+            {!isFirstStep ? (
               <button
                 type="button"
                 onClick={handleStepBack}
@@ -802,67 +827,18 @@ export default function LanguageOnboardingModal({
           style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom, 0px))" }}
         >
           {step === "language" ? (
-            <>
-              <p className="pb-3 text-center text-[0.78rem] text-slate-500">{copy.laterHintLabel}</p>
-              <button
-                type="button"
-                onClick={handleLanguageStepNext}
-                disabled={isConfirming}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {signupCopy.continueAction}
-              </button>
-            </>
-          ) : step === "interest-language" ? (
-            <>
-              <button
-                type="button"
-                onClick={handleInterestStepNext}
-                disabled={isConfirming || !interestCode}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
-              >
-                {signupCopy.continueAction}
-              </button>
-            </>
-          ) : step === "usage-purpose" ? (
-            <button
-              type="button"
-              onClick={handleUsagePurposeStepNext}
-              disabled={isConfirming || !usagePurpose}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
-            >
-              {signupCopy.continueAction}
-            </button>
-          ) : step === "discovery-source" ? (
-            <button
-              type="button"
-              onClick={handleDiscoverySourceStepNext}
-              disabled={isConfirming || !discoverySource}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
-            >
-              {signupCopy.continueAction}
-            </button>
-          ) : step === "gender" ? (
-            <button
-              type="button"
-              onClick={handleGenderStepNext}
-              disabled={isConfirming || !gender}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
-            >
-              {signupCopy.continueAction}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleFinalConfirm}
-              disabled={isConfirming || !isEligibleAge || !gender}
-              aria-busy={isConfirming}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
-            >
-              {isConfirming ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
-              {copy.confirmButtonLabel}
-            </button>
-          )}
+            <p className="pb-3 text-center text-[0.78rem] text-slate-500">{copy.laterHintLabel}</p>
+          ) : null}
+          <button
+            type="button"
+            onClick={handleStepNext}
+            disabled={isConfirming || !isStepAnswered(step)}
+            aria-busy={isConfirming}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none"
+          >
+            {isConfirming ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
+            {isLastStep && step === "language" ? copy.confirmButtonLabel : signupCopy.continueAction}
+          </button>
         </footer>
       </div>
     </div>

@@ -82,6 +82,9 @@ type MingleHomeProps = {
   initialDefaultDisplayLanguage?: string | null;
   autoStartOnMount?: boolean;
   onAutoStartHandled?: () => void;
+  /** First run on this device: the room offers the speech length choice after its first translation. */
+  speechLengthIntro?: boolean;
+  onFirstSpeakCompleted?: () => void;
   isVisible?: boolean;
   /** Render only the existing authentication surface without mounting a room. */
   authOnly?: boolean;
@@ -1081,7 +1084,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     const primaryLanguages = pendingPrimaryLanguages.length > 0
       ? pendingPrimaryLanguages
       : deriveDefaultSttLanguagesForLocale(props.locale).slice(0, 1);
-    const pendingBirthDate = readPendingBirthDate() ?? "2000-01-01";
+    // Asked later (before the first follow, comment, post or message to a
+    // stranger), so a sign-up right after the short onboarding has none yet.
+    const pendingBirthDate = readPendingBirthDate();
     const pendingGender = readPendingGender();
 
     try {
@@ -1093,7 +1098,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           name,
           password,
           primaryLanguages,
-          birthDate: pendingBirthDate,
+          birthDate: pendingBirthDate ?? null,
           ...(pendingGender ? { gender: pendingGender } : {}),
         }),
       });
@@ -2049,6 +2054,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           initialTranslationLanguagesLinked={props.initialTranslationLanguagesLinked}
           initialDefaultDisplayLanguage={props.initialDefaultDisplayLanguage}
           isVisible={props.isVisible}
+          speechLengthIntro={props.speechLengthIntro}
+          onFirstSpeakCompleted={props.onFirstSpeakCompleted}
           enableNativeBannerBridge={props.enableNativeBannerBridge}
           onStartRecordingRequested={props.onStartRecordingRequested}
           onSttSessionRunningChange={props.onSttSessionRunningChange}

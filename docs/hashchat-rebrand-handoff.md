@@ -78,7 +78,7 @@ npm i --no-save playwright && npx playwright install chromium && node gen.mjs
 ### 바꾸지 않는 것 (권장)
 
 - 번들 ID / 패키지 `com.minglelabs.mingle.rn` — 바꾸면 스토어상 다른 앱이 되어 기존 사용자·리뷰·다운로드가 끊김
-- 도메인 `minglelabs.app`, `translator.minglelabs.app` — 회사명이라 유지
+- 도메인 `minglelabs.app`은 회사명이라 유지. 앱 사이트는 2026-11-11에 `hashchat.minglelabs.app`으로 옮겼고, `translator.minglelabs.app`은 같은 경로로 308 리다이렉트(app-ads.txt만 예외)
 - 폴더명(`mingle-app` 등), npm 패키지명, DB 스키마/테이블, 환경변수, Kotlin 패키지·클래스명(`MingleFirebaseMessagingService`) — 사용자에게 안 보이고 깨질 위험만 큼
 
 ## 남은 것 3: 스토어 메타데이터

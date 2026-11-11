@@ -144,7 +144,7 @@ const privacyDoc = {
       paragraphs: [
         "Mingle Labs, Inc. (Republic of Korea)",
         "Email: legal@minglelabs.app",
-        "Website: https://translator.minglelabs.app",
+        "Website: https://hashchat.minglelabs.app",
       ],
     },
   ],
@@ -255,7 +255,7 @@ const termsDoc = {
       paragraphs: [
         "Mingle Labs, Inc. (Republic of Korea)",
         "Email: legal@minglelabs.app",
-        "Website: https://translator.minglelabs.app",
+        "Website: https://hashchat.minglelabs.app",
       ],
     },
   ],
@@ -315,8 +315,8 @@ function linkify(value) {
     '<a href="mailto:legal@minglelabs.app">legal@minglelabs.app</a>',
   );
   escaped = escaped.replaceAll(
-    "https://translator.minglelabs.app",
-    '<a href="https://translator.minglelabs.app">https://translator.minglelabs.app</a>',
+    "https://hashchat.minglelabs.app",
+    '<a href="https://hashchat.minglelabs.app">https://hashchat.minglelabs.app</a>',
   );
   escaped = escaped.replaceAll(
     "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",

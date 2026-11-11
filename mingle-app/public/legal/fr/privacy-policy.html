@@ -131,7 +131,7 @@
       <article>
         <nav class="lang-nav"><a href="/legal/en/privacy-policy.html">English</a><a href="/legal/ko/privacy-policy.html">Korean</a><a href="/legal/ja/privacy-policy.html">Japanese</a><a href="/legal/zh-cn/privacy-policy.html">Chinese (Simplified)</a><a href="/legal/zh-tw/privacy-policy.html">Chinese (Traditional)</a><a href="/legal/fr/privacy-policy.html" aria-current="page">French</a><a href="/legal/de/privacy-policy.html">German</a><a href="/legal/es/privacy-policy.html">Spanish</a><a href="/legal/pt/privacy-policy.html">Portuguese</a><a href="/legal/it/privacy-policy.html">Italian</a><a href="/legal/ru/privacy-policy.html">Russian</a><a href="/legal/ar/privacy-policy.html">Arabic</a><a href="/legal/hi/privacy-policy.html">Hindi</a><a href="/legal/th/privacy-policy.html">Thai</a><a href="/legal/vi/privacy-policy.html">Vietnamese</a></nav>
         <h1>Politique de confidentialité de HashChat</h1>
-        <p class="meta"><strong>Dernière mise à jour :</strong> November 11, 2026</p>
+        <p class="meta"><strong>Dernière mise à jour :</strong> November 13, 2026</p>
         <p>Cette politique de confidentialité explique comment Mingle Labs, Inc. (« HashChat », « nous », « notre » ou « nos ») collecte, utilise, partage et protège les données personnelles lorsque vous utilisez l'application mobile, le site Web et les services associés HashChat (collectivement, le « Service »).</p>
         <h2>1. Portée</h2>
 <p>Cette politique s'applique aux informations traitées pour les comptes et l'utilisation des consommateurs HashChat. Cela ne s'applique pas aux données que nous traitons uniquement pour le compte d'entreprises clientes dans le cadre de contrats distincts.</p>
@@ -150,6 +150,11 @@
 <p>Lorsque vous envoyez une photo dans une conversation, HashChat la stocke avec le message dans un espace privé de stockage cloud fourni par Cloudflare. Lorsque la traduction du texte des photos est activée, HashChat envoie la photo à Google Gemini afin d’identifier le texte visible, sa langue, sa position et son style visuel.</p>
 <p>HashChat envoie le texte reconnu et les informations sur sa langue à Google Gemini pour les traduire dans les langues demandées pour la conversation. Google traite les photos et les textes envoyés à Gemini conformément à ses conditions de service et informations de confidentialité applicables.</p>
 <p>Pour afficher la traduction sur la photo, HashChat stocke les blocs de texte reconnus, leurs positions et indications de style détectées, ainsi que les traductions générées, dans des enregistrements associés au message photo. Google traite les photos et textes envoyés à Gemini, et Cloudflare fournit le stockage des images. Leur traitement est soumis aux conditions de service et informations de confidentialité applicables. Ces données sont conservées avec le message selon les modalités décrites ci-dessous.</p>
+
+<h3>Contacts et numéro de téléphone</h3>
+<p>Si vous autorisez l'accès à vos contacts, HashChat lit sur votre appareil les noms et numéros de votre carnet d'adresses pour vous permettre d'inviter des amis par SMS. HashChat ne téléverse ni ne conserve votre carnet d'adresses.</p>
+<p>Vous pouvez choisir de vérifier votre propre numéro de téléphone pour trouver des amis qui utilisent HashChat. Nous envoyons un code à usage unique par SMS via Twilio ; une fois le code saisi, nous enregistrons votre numéro et une empreinte à sens unique (SHA-256) de celui-ci avec votre compte. Votre numéro n'est pas montré aux autres utilisateurs.</p>
+<p>Après la vérification, l'application transforme sur votre appareil les numéros de vos contacts en empreintes du même type et n'envoie que ces empreintes à HashChat pour savoir lesquelles correspondent à des comptes HashChat. Nous ne conservons pas les empreintes reçues et ne vous montrons que les informations de profil publiques des comptes correspondants (nom, identifiant et photo). Vous pouvez nous demander à tout moment de supprimer votre numéro (voir Contact ci-dessous) ; ensuite, personne ne pourra plus vous trouver grâce à lui.</p>
 
 <h2>3. Traitement audio et non-rétention</h2>
 <p>HashChat traite l'audio du microphone en temps réel pour fournir une reconnaissance vocale et une traduction. L'audio brut est diffusé pour traitement et n'est pas stocké par HashChat une fois la demande terminée.</p>
@@ -180,6 +185,7 @@
   <li>Inworld : contexte de texte et de langue nécessaire aux fonctionnalités de génération vocale et à la diffusion audio synthétisée.</li>
   <li>Google : authentification du compte et opérations de service basées sur du texte, le cas échéant. HashChat n'envoie pas de son vocal brut à Google pour le traitement de la parole.</li>
   <li>Anthropic : le texte que vous soumettez pour traduction et le contexte linguistique nécessaire pour générer des traductions avec les modèles Claude.</li>
+  <li>Twilio : votre numéro de téléphone, pour envoyer et vérifier le code de vérification à usage unique par SMS.</li>
   <li>Boutiques d’applications (Apple App Store, Google Play) : informations de transaction nécessaires pour vérifier les achats et traiter les demandes de remboursement, ainsi que l’utilisation éventuelle et la part utilisée des Hash achetés.</li>
   <li>Demandes juridiques/de sécurité : lorsque cela est requis par la loi ou nécessaire pour protéger les droits, la sûreté et la sécurité.</li>
   <li>Transactions d'entreprise : dans le cadre d'une fusion, d'un financement, d'une acquisition, d'une faillite ou d'un transfert d'actifs.</li>
@@ -225,7 +231,7 @@
 <h2>14. Contacter</h2>
 <p>Mingle Labs, Inc. (République de Corée)</p>
 <p>E-mail : <a href="mailto:legal@minglelabs.app">legal@minglelabs.app</a></p>
-<p>Site Web : <a href="https://translator.minglelabs.app">https://translator.minglelabs.app</a></p>
+<p>Site Web : <a href="https://hashchat.minglelabs.app">https://hashchat.minglelabs.app</a></p>
 
 
         <p class="legal-links">

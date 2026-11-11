@@ -131,7 +131,7 @@
       <article>
         <nav class="lang-nav"><a href="/legal/en/privacy-policy.html">English</a><a href="/legal/ko/privacy-policy.html" aria-current="page">Korean</a><a href="/legal/ja/privacy-policy.html">Japanese</a><a href="/legal/zh-cn/privacy-policy.html">Chinese (Simplified)</a><a href="/legal/zh-tw/privacy-policy.html">Chinese (Traditional)</a><a href="/legal/fr/privacy-policy.html">French</a><a href="/legal/de/privacy-policy.html">German</a><a href="/legal/es/privacy-policy.html">Spanish</a><a href="/legal/pt/privacy-policy.html">Portuguese</a><a href="/legal/it/privacy-policy.html">Italian</a><a href="/legal/ru/privacy-policy.html">Russian</a><a href="/legal/ar/privacy-policy.html">Arabic</a><a href="/legal/hi/privacy-policy.html">Hindi</a><a href="/legal/th/privacy-policy.html">Thai</a><a href="/legal/vi/privacy-policy.html">Vietnamese</a></nav>
         <h1>HashChat 개인정보 보호정책</h1>
-        <p class="meta"><strong>마지막 업데이트:</strong> November 11, 2026</p>
+        <p class="meta"><strong>마지막 업데이트:</strong> November 13, 2026</p>
         <p>본 개인정보 보호정책은 귀하가 HashChat 모바일 앱, 웹사이트 및 관련 서비스(통칭하여 "서비스")를 사용할 때 Mingle Labs, Inc.("HashChat", "당사" 또는 "당사의")가 개인 데이터를 수집, 사용, 공유 및 보호하는 방법을 설명합니다.</p>
         <h2>1. 범위</h2>
 <p>본 정책은 소비자 HashChat 계정 및 사용을 위해 처리되는 정보에 적용됩니다. 별도의 계약에 따라 기업 고객을 대신하여 당사가 단독으로 처리하는 데이터에는 적용되지 않습니다.</p>
@@ -150,6 +150,11 @@
 <p>대화에서 사진을 보내면 HashChat은 Cloudflare가 제공하는 비공개 클라우드 이미지 저장소에 사진을 메시지와 함께 저장합니다. 사진 텍스트 번역 기능이 활성화된 경우, HashChat은 사진에서 보이는 텍스트와 언어, 위치 및 시각적 스타일을 인식하기 위해 사진을 Google Gemini에 전송합니다.</p>
 <p>HashChat은 인식된 텍스트와 언어 정보를 Google Gemini에 보내 대화에 요청된 언어로 번역합니다. Google은 Gemini로 전송된 사진과 텍스트를 해당 서비스 약관 및 개인정보 안내에 따라 처리합니다.</p>
 <p>사진 위에 번역을 표시하기 위해 HashChat은 인식된 텍스트 블록, 감지된 위치와 시각적 스타일 정보, 생성된 번역을 사진 메시지에 연결된 기록으로 저장합니다. 이 기록은 아래 설명처럼 메시지와 함께 보유됩니다.</p>
+
+<h3>연락처와 휴대폰 번호</h3>
+<p>연락처 접근을 허용하면 HashChat은 문자 메시지로 친구를 초대할 수 있도록 기기에서 주소록의 이름과 전화번호를 읽습니다. HashChat은 주소록을 업로드하거나 저장하지 않습니다.</p>
+<p>HashChat을 쓰는 친구를 찾기 위해 본인 휴대폰 번호를 인증할 수 있습니다(선택). Twilio를 통해 문자로 일회용 인증번호를 보내며, 인증번호를 입력하면 휴대폰 번호와 그 단방향 해시(SHA-256)를 계정에 저장합니다. 휴대폰 번호는 다른 사용자에게 표시되지 않습니다.</p>
+<p>번호를 인증하면 앱이 기기에서 연락처의 전화번호를 같은 방식의 해시로 바꾸고, 이 해시만 HashChat에 보내 어떤 번호가 HashChat 계정인지 확인합니다. 받은 해시는 저장하지 않으며, 일치하는 계정의 공개 프로필 정보(이름, 핸들, 사진)만 보여 줍니다. 언제든지 휴대폰 번호 삭제를 요청할 수 있으며(아래 문의처 참고), 삭제 후에는 다른 사람이 그 번호로 회원님을 찾을 수 없습니다.</p>
 
 <h2>3. 오디오 처리 및 비보존</h2>
 <p>HashChat은 마이크 오디오를 실시간으로 처리하여 음성 인식 및 번역을 제공합니다. 원시 오디오는 처리를 위해 스트리밍되며 요청이 완료된 후에는 HashChat에 저장되지 않습니다.</p>
@@ -180,6 +185,7 @@
   <li>Inworld: 음성 생성 기능 및 합성 오디오 전달에 필요한 텍스트 및 언어 컨텍스트입니다.</li>
   <li>Google: 계정 인증 및 텍스트 기반 서비스 운영이 사용되는 경우. HashChat은 음성 처리를 위해 원본 음성 오디오를 Google에 전송하지 않습니다.</li>
   <li>Anthropic: Claude 모델로 번역을 생성하는 데 필요한, 번역을 위해 제출한 텍스트 및 언어 컨텍스트입니다.</li>
+  <li>Twilio: 문자로 일회용 인증번호를 보내고 확인하기 위한 휴대폰 번호입니다.</li>
   <li>앱 스토어(Apple App Store, Google Play): 구매 검증과 환불 요청 처리에 필요한 거래 정보, 그리고 구매한 해씨의 사용 여부와 사용 비율.</li>
   <li>법적/안전 요청: 법률에 의해 요구되거나 권리, 안전 및 보안을 보호하기 위해 필요한 경우.</li>
   <li>기업 거래: 합병, 자금 조달, 인수, 파산 또는 자산 양도와 관련됩니다.</li>
@@ -233,7 +239,7 @@
 <h2>14. 연락처</h2>
 <p>밍글랩스(주) (대한민국)</p>
 <p>이메일: <a href="mailto:legal@minglelabs.app">legal@minglelabs.app</a></p>
-<p>웹사이트: <a href="https://translator.minglelabs.app">https://translator.minglelabs.app</a></p>
+<p>웹사이트: <a href="https://hashchat.minglelabs.app">https://hashchat.minglelabs.app</a></p>
 
 
         <p class="legal-links">

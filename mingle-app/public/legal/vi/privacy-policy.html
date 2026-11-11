@@ -131,7 +131,7 @@
       <article>
         <nav class="lang-nav"><a href="/legal/en/privacy-policy.html">English</a><a href="/legal/ko/privacy-policy.html">Korean</a><a href="/legal/ja/privacy-policy.html">Japanese</a><a href="/legal/zh-cn/privacy-policy.html">Chinese (Simplified)</a><a href="/legal/zh-tw/privacy-policy.html">Chinese (Traditional)</a><a href="/legal/fr/privacy-policy.html">French</a><a href="/legal/de/privacy-policy.html">German</a><a href="/legal/es/privacy-policy.html">Spanish</a><a href="/legal/pt/privacy-policy.html">Portuguese</a><a href="/legal/it/privacy-policy.html">Italian</a><a href="/legal/ru/privacy-policy.html">Russian</a><a href="/legal/ar/privacy-policy.html">Arabic</a><a href="/legal/hi/privacy-policy.html">Hindi</a><a href="/legal/th/privacy-policy.html">Thai</a><a href="/legal/vi/privacy-policy.html" aria-current="page">Vietnamese</a></nav>
         <h1>Chính sách quyền riêng tư của HashChat</h1>
-        <p class="meta"><strong>Cập nhật lần cuối:</strong> November 11, 2026</p>
+        <p class="meta"><strong>Cập nhật lần cuối:</strong> November 13, 2026</p>
         <p>Chính sách quyền riêng tư này giải thích cách Mingle Labs, Inc. ("HashChat", "chúng tôi" hoặc "của chúng tôi") thu thập, sử dụng, chia sẻ và bảo vệ dữ liệu cá nhân khi bạn sử dụng ứng dụng di động HashChat, trang web và các dịch vụ liên quan (gọi chung là "Dịch vụ").</p>
         <h2>1. Phạm vi</h2>
 <p>Chính sách này áp dụng cho thông tin được xử lý cho tài khoản HashChat của người tiêu dùng và việc sử dụng. Nó không áp dụng cho dữ liệu chúng tôi xử lý chỉ thay mặt cho khách hàng doanh nghiệp theo các hợp đồng riêng.</p>
@@ -150,6 +150,11 @@
 <p>Khi bạn gửi ảnh trong cuộc trò chuyện, HashChat lưu ảnh cùng tin nhắn trong kho lưu trữ ảnh đám mây riêng tư do Cloudflare cung cấp. Khi bật tính năng dịch văn bản trong ảnh, HashChat gửi ảnh đến Google Gemini để nhận diện văn bản hiển thị, ngôn ngữ, vị trí và kiểu trình bày.</p>
 <p>HashChat gửi văn bản đã nhận diện và thông tin ngôn ngữ đến Google Gemini để dịch sang các ngôn ngữ được yêu cầu cho cuộc trò chuyện. Google xử lý ảnh và văn bản được gửi đến Gemini theo điều khoản dịch vụ và thông tin quyền riêng tư áp dụng.</p>
 <p>Để hiển thị bản dịch trên ảnh, HashChat lưu các khối văn bản đã nhận diện, vị trí và chi tiết kiểu trình bày được phát hiện cùng các bản dịch được tạo trong hồ sơ liên kết với tin nhắn ảnh. Google xử lý ảnh và văn bản được gửi đến Gemini; Cloudflare cung cấp dịch vụ lưu trữ ảnh. Việc xử lý của họ tuân theo điều khoản dịch vụ và thông tin quyền riêng tư áp dụng. Các hồ sơ này được lưu cùng tin nhắn như mô tả dưới đây.</p>
+
+<h3>Danh bạ và số điện thoại</h3>
+<p>Nếu bạn cho phép truy cập danh bạ, HashChat đọc tên và số điện thoại trong danh bạ trên thiết bị của bạn để bạn có thể mời bạn bè qua tin nhắn SMS. HashChat không tải lên hay lưu danh bạ của bạn.</p>
+<p>Bạn có thể chọn xác minh số điện thoại của mình để tìm bạn bè đang dùng HashChat. Chúng tôi gửi mã dùng một lần qua SMS thông qua Twilio; sau khi bạn nhập mã, chúng tôi lưu số điện thoại của bạn và một giá trị băm một chiều (SHA-256) của số đó cùng với tài khoản. Số điện thoại của bạn không hiển thị cho người dùng khác.</p>
+<p>Sau khi bạn xác minh số, ứng dụng chuyển các số điện thoại trong danh bạ của bạn thành giá trị băm cùng loại ngay trên thiết bị và chỉ gửi các giá trị băm này tới HashChat để kiểm tra số nào thuộc tài khoản HashChat. Chúng tôi không lưu các giá trị băm nhận được và chỉ hiển thị cho bạn thông tin hồ sơ công khai của các tài khoản trùng khớp (tên, tên người dùng và ảnh). Bạn có thể yêu cầu chúng tôi xóa số điện thoại bất cứ lúc nào (xem phần Liên hệ bên dưới); sau đó không ai có thể tìm thấy bạn bằng số đó nữa.</p>
 
 <h2>3. Xử lý và không lưu giữ âm thanh</h2>
 <p>HashChat xử lý âm thanh micrô trong thời gian thực để cung cấp khả năng nhận dạng và dịch giọng nói. Âm thanh thô được truyền trực tuyến để xử lý và không được HashChat lưu trữ sau khi yêu cầu hoàn tất.</p>
@@ -180,6 +185,7 @@
   <li>Inworld: ngữ cảnh văn bản và ngôn ngữ cần thiết cho các tính năng tạo giọng nói và phân phối âm thanh tổng hợp.</li>
   <li>Google: xác thực tài khoản và hoạt động dịch vụ dựa trên văn bản nếu được sử dụng. HashChat không gửi âm thanh giọng nói thô tới Google để xử lý giọng nói.</li>
   <li>Anthropic: văn bản bạn gửi để dịch và ngữ cảnh ngôn ngữ cần thiết để tạo bản dịch bằng các mô hình Claude.</li>
+  <li>Twilio: số điện thoại của bạn, để gửi và kiểm tra mã xác minh dùng một lần qua SMS.</li>
   <li>Cửa hàng ứng dụng (Apple App Store, Google Play): thông tin giao dịch cần thiết để xác minh giao dịch mua và xử lý yêu cầu hoàn tiền, cùng việc Hash đã mua có được sử dụng hay không và tỷ lệ đã sử dụng.</li>
   <li>Yêu cầu pháp lý/an toàn: khi pháp luật yêu cầu hoặc cần thiết để bảo vệ quyền lợi, sự an toàn và an ninh.</li>
   <li>Giao dịch doanh nghiệp: liên quan đến sáp nhập, cấp vốn, mua lại, phá sản hoặc chuyển nhượng tài sản.</li>
@@ -225,7 +231,7 @@
 <h2>14. Liên hệ</h2>
 <p>Mingle Labs, Inc. (Hàn Quốc)</p>
 <p>Email: <a href="mailto:legal@minglelabs.app">legal@minglelabs.app</a></p>
-<p>Trang web: <a href="https://translator.minglelabs.app">https://translator.minglelabs.app</a></p>
+<p>Trang web: <a href="https://hashchat.minglelabs.app">https://hashchat.minglelabs.app</a></p>
 
 
         <p class="legal-links">

@@ -1,5 +1,6 @@
 "use client";
 
+import { requestProfileBasics } from "@/lib/profile-basics";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { UserRound } from "lucide-react";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
@@ -52,6 +53,8 @@ export function usePeopleFollow(
     if (followInFlightIds.has(user.id)) return;
 
     const nextIsFollowing = !user.isFollowing;
+    // Gender and birth date are asked before the first follow.
+    if (nextIsFollowing && !(await requestProfileBasics())) return;
     const searchContext = getSearchContext();
     const followStartedAt = performance.now();
 
