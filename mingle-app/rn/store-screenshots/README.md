@@ -6,8 +6,8 @@ Source for the App Store and Google Play screenshot set: 8 slides in 15 language
 |---|---|---|
 | 01 | Full-bleed photo of friends from many countries | `hero/group.jpg` (drawn with the ChatGPT app bridge, `scripts/chatgpt-image-bridge.mjs`; sky extended to the slide height from `group-original.png`) |
 | 02 | 1:1 chat with a friend abroad, each in their own language | drawn from `dm.json` (`dm`) with the app's bubble layout |
-| 03 | The same room while speaking (voice mode) | drawn from `dm.json` (`voice`). Placeholder: to be replaced with the voice call screen |
-| 04 | A booking call on speaker, interpreted | drawn from `dm.json` (`booking`). Placeholder: to be replaced with a composed slide (travel photo, tilted phone on the call screen, the booking lines floating beside it) |
+| 03 | A voice talk (the app's voice call) with the friend, interpreted | drawn from `dm.json` (`voice`): the room with the voice talk panel open, laid out as `VoiceTalkPanel.tsx` on the voice talk branch (`feat/voicetalk-windows-livekit-mvp`) shows it. The panel's words exist in Korean and English only there, so other languages read the English, as the app does |
+| 04 | A booking call, interpreted | composed by `render.py` (`"scene": "booking"`): `booking/salon.jpg` above `booking/restaurant.jpg` (drawn with the ChatGPT pool, no words or logos in them), a tilted phone on the booking call (`captures/<lang>/booking.png`, the same voice talk layout), and the four `dm.json` `booking` lines floating beside it as the app's bubbles |
 | 05 | A post written in another language, read in yours | app (`/{locale}/feed?postId=…`) |
 | 06 | Comments, translated | app (comment sheet) |
 | 07–08 | Hash Rush (meadow, beach) | live site, `?lang=` (ko/ja/zh get their own text, others English) |
@@ -19,7 +19,7 @@ Files:
 - `dm.json`: the lines of the three 1:1 slides in all languages (chat, voice mode, booking call), the friend's name per partner language and the booking room title. `node capture.mjs --screens dm,voice,booking` draws them with no server.
 - `chat.json`: the four chat lines in all languages, partner languages per viewer, room title and the "collapse" label.
 - `captions.json`: headline per slide and language, and which language each upload locale folder gets.
-- `previews/<nn>-<lang>.jpg`: one sheet per language with its 7 slides, for review.
+- `previews/<nn>-<lang>.jpg`: one sheet per language with its 8 slides, for review (the uploaded PNGs side by side).
 - `render.py`: draws each slide (headline, phone frame, iOS status bar, capture) with headless Chrome at 1290x2796, compresses it with pngquant and replaces the PNGs in `../appstore-connect-info/upload/<locale>/` and `../google-play-console-info/upload/<locale>/`.
 
 ## Run

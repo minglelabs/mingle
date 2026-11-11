@@ -82,6 +82,80 @@ while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
 </script></body></html>"""
 
 
+# 04: a composed scene. The places people book abroad fill the slide: a salon
+# above, a restaurant below, blending into each other (photos with no words in
+# them, so every language shares them), the phone leans in on the booking
+# call (the voice talk screen from capture.mjs), and the call's four lines float
+# beside it as the app's bubbles: each speaker's own words, then the other's
+# language under them. Mine are tinted like the app's own bubbles.
+BOOKING_PAGE = """<!doctype html>
+<html lang="{lang}" dir="{dir}"><head><meta charset="utf-8"><style>
+html,body{{margin:0;width:{W}px;height:{H}px;overflow:hidden}}
+body{{background:#2A1A0C url("{bg}") center top/{W}px auto no-repeat;font-family:{font},-apple-system,"SF Pro Display","Helvetica Neue",sans-serif;perspective:2600px}}
+.below{{position:absolute;left:0;right:0;bottom:0;height:1500px;background:url("{bg2}") center/cover no-repeat;
+  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 420px);mask-image:linear-gradient(180deg,transparent 0,#000 420px);z-index:0}}
+body::before{{content:"";position:absolute;inset:0;z-index:1;background:
+  linear-gradient(180deg,rgba(24,14,4,.62) 0%,rgba(24,14,4,.30) 24%,rgba(24,14,4,0) 40%,rgba(24,14,4,0) 70%,rgba(24,14,4,.38) 100%)}}
+h1{{position:absolute;top:170px;left:60px;right:60px;margin:0;text-align:center;font-size:118px;line-height:1.16;font-weight:800;
+  letter-spacing:-1px;color:#fff;white-space:pre;text-shadow:0 6px 30px rgba(0,0,0,.45);z-index:4}}
+.phone{{position:absolute;left:250px;top:610px;width:1122px;height:2440px;border-radius:150px;background:#1F2430;
+  transform-origin:0 0;transform:scale(.66) rotateY(-14deg) rotateZ(5deg);
+  box-shadow:-40px 60px 120px rgba(0,0,0,.45),inset 0 0 0 6px #343A48;z-index:2}}
+.screen{{position:absolute;left:36px;top:36px;width:1050px;height:2272px;border-radius:118px;overflow:hidden;background:#000}}
+.bar{{height:126px;background:{bar};color:{ink};position:relative;font-family:-apple-system,"SF Pro Text",sans-serif}}
+.bar .time{{position:absolute;left:110px;top:40px;font-size:46px;font-weight:600}}
+.screen img{{width:100%;height:2146px;display:block}}
+.island{{position:absolute;left:50%;top:30px;width:290px;height:84px;margin-left:-145px;border-radius:42px;background:#000}}
+.cards{{position:absolute;inset:0;z-index:3}}
+.card{{position:absolute;width:680px;box-sizing:border-box;padding:26px 32px;border-radius:40px;background:rgba(255,255,255,.97);
+  border:2px solid #ECE7DD;box-shadow:0 34px 70px rgba(30,18,4,.38),0 6px 16px rgba(30,18,4,.16)}}
+.card.me{{background:rgba(255,248,230,.98);border-color:#F6E3B0}}
+.card.l{{left:40px;transform:rotateY(10deg) rotateZ(-2.5deg)}}
+.card.r{{right:40px;transform:rotateY(-10deg) rotateZ(2deg)}}
+.row{{display:flex;gap:22px;align-items:flex-start}}
+.row + .row{{margin-top:16px;padding-top:16px;border-top:2px solid rgba(0,0,0,.07)}}
+.flag{{position:relative;flex:none;font-size:40px;line-height:1.15}}
+.flag i{{position:absolute;right:-14px;top:-14px;font-style:normal;font-weight:900;font-size:36px;color:#111}}
+.flag.mine{{border-bottom:6px solid #F5A400}}
+.text{{flex:1;min-width:0;font-size:var(--fs,46px);line-height:1.32;color:#111;font-weight:600}}
+.tr .text{{font-size:calc(var(--fs,46px) * .86);font-weight:500;color:#444}}
+</style></head><body>
+<div class="below"></div>
+<h1 id="t">{caption}</h1>
+<div class="phone"><div class="screen"><div class="bar" dir="ltr"><span class="time">9:41</span></div>
+<img src="{img}"><div class="island"></div></div></div>
+<div class="cards">{cards}</div>
+<script>
+const t=document.getElementById('t');let s=118;
+while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
+// the four cards stack down the slide; long lines shrink until they fit their band
+const cards=[...document.querySelectorAll('.card')];
+// under the phone's call panel, so its seats and buttons stay in view
+const top0=1290, band=370, gap=26;
+cards.forEach((c,i)=>{{let fs=40;c.style.setProperty('--fs',fs+'px');
+  while(c.offsetHeight>band-gap&&fs>26){{fs-=2;c.style.setProperty('--fs',fs+'px');}}
+  c.style.top=(top0+i*band)+'px';}});
+</script></body></html>"""
+
+
+def booking_cards(lang: str, dm: dict, chat: dict) -> str:
+    partner = chat["partners"][lang][0]
+    out = []
+    for i, line in enumerate(dm["booking"]):
+        mine = line["by"] == "me"
+        order = [lang, partner] if mine else [partner, lang]
+        rows = []
+        for k, code in enumerate(order):
+            flag_class = "flag mine" if code == lang else "flag"
+            quote = "<i>”</i>" if k == 0 else ""
+            rows.append(f'<div class="row{" tr" if k else ""}"><span class="{flag_class}">{chat["flags"][code]}{quote}</span>'
+                        f'<span class="text" dir="auto">{html.escape(line["text"][code])}</span></div>')
+        # mine on the right, the shop's on the left (mirrored for Arabic)
+        side = ("r" if mine else "l") if lang != "ar" else ("l" if mine else "r")
+        out.append(f'<div class="card {side}{" me" if mine else ""}">{"".join(rows)}</div>')
+    return "".join(out)
+
+
 def status_bar_colors(capture: Path) -> tuple[str, str]:
     """Bar background continues the page's top edge; ink is black or white for contrast."""
     im = Image.open(capture).convert("RGB")
@@ -119,6 +193,8 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
         rendered = {}
+        dm = json.loads((HERE / "dm.json").read_text(encoding="utf-8"))
+        chat = json.loads((HERE / "chat.json").read_text(encoding="utf-8"))
         for lang in langs:
             if only and lang not in only:
                 continue
@@ -135,6 +211,18 @@ def main() -> None:
                     continue
                 capture = HERE / shot["capture"].format(lang=lang)
                 bar, ink = status_bar_colors(capture)
+                if shot.get("scene") == "booking":
+                    render(BOOKING_PAGE.format(
+                        bar=bar, ink=ink, lang=lang, dir="rtl" if lang == "ar" else "ltr", W=W, H=H,
+                        font=FONT.get(lang, '"SF Pro Display"'),
+                        caption=html.escape(shot["caption"][lang]),
+                        bg=(HERE / shot["background"][0]).as_uri(),
+                        bg2=(HERE / shot["background"][1]).as_uri(),
+                        img=capture.as_uri(),
+                        cards=booking_cards(lang, dm, chat),
+                    ), out, work)
+                    rendered[(lang, shot["id"])] = out
+                    continue
                 render(PAGE.format(
                     bar=bar, ink=ink,
                     lang=lang, dir="rtl" if lang == "ar" else "ltr", W=W, H=H,

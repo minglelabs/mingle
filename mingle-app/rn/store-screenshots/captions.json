@@ -82,7 +82,12 @@
         "ru": "Звонки для записи\nза границей — с переводом",
         "th": "โทรจองร้านในต่างประเทศ\nก็แปลให้",
         "vi": "Gọi đặt chỗ ở nước ngoài\ncũng được phiên dịch"
-      }
+      },
+      "scene": "booking",
+      "background": [
+        "booking/salon.jpg",
+        "booking/restaurant.jpg"
+      ]
     },
     {
       "id": "05-feed",

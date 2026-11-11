@@ -189,13 +189,88 @@ function chatHtml(lang) {
 //   dm      - typed chat with a friend
 //   voice   - the same room while speaking: the last line is still being heard
 //   booking - a booking call on speaker, the shop on the other side
-function dmHtml(lang, kind) {
+// `call`: the same room during a voice talk (the app's voice call), drawn the
+// way the voice talk build shows it (src/components/LivePhoneDemo/VoiceTalkPanel.tsx
+// on feat/voicetalk-windows-livekit-mvp): the call panel under the top bar with
+// the 8 seats (the speaker's avatar ringed by the soft gray ripple, each seat's
+// language flag at its bottom left), "Mic on" in red and "Leave"; the room's
+// talk under it, every line in both languages; the phone button bottom left in
+// green with its dot. The panel's words exist in Korean and English only in
+// that build, so every other language reads the English, as the app does.
+const VOICE_TALK_COPY = {
+  ko: { live: (n) => `보이스톡 · ${n}/8`, me: '나', empty: '빈 자리', micOn: '마이크 켜짐', leave: '나가기' },
+  en: { live: (n) => `Voice talk · ${n}/8`, me: 'Me', empty: 'Empty', micOn: 'Mic on', leave: 'Leave' },
+};
+function voiceTalkPanel(lang, { partner, partnerName, partnerAvatar, meAvatar, speaking }) {
+  const copy = lang === 'ko' ? VOICE_TALK_COPY.ko : VOICE_TALK_COPY.en;
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const seat = (who) => `
+    <div class="vt-seat">
+      <span class="vt-ring">
+        ${who.speaking ? '<span class="vt-ripple r1"></span><span class="vt-ripple r2"></span><span class="vt-glow"></span>' : ''}
+        <span class="vt-face"><img src="${pathToFileURL(path.join(AVATARS, who.avatar))}"></span>
+        <span class="vt-flag">${chat.flags[who.lang]}</span>
+      </span>
+      <span class="vt-label">${esc(who.label)}</span>
+    </div>`;
+  const empty = `<div class="vt-seat"><span class="vt-ring"><span class="vt-face vt-empty"></span></span><span class="vt-label">${copy.empty}</span></div>`;
+  const seats = [
+    seat({ avatar: meAvatar, lang, label: copy.me, speaking: speaking === 'me' }),
+    seat({ avatar: partnerAvatar, lang: partner, label: partnerName, speaking: speaking === 'friend' }),
+    ...Array.from({ length: 6 }, () => empty),
+  ].join('');
+  const mic = '<svg viewBox="0 0 24 24" style="width:17px;height:17px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+  const phoneOff = '<svg viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 4.2 2 2 0 0 1 5.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8.9 9.7"/><path d="M22 2 2 22"/></svg>';
+  return `
+  <div class="vt-panel">
+    <div class="vt-top"><span class="vt-dot"><i></i><b></b></span><span class="vt-title">${copy.live(2)}</span>
+      <svg viewBox="0 0 24 24" class="vt-chev"><path d="m18 15-6-6-6 6"/></svg></div>
+    <div class="vt-grid">${seats}</div>
+    <div class="vt-buttons" dir="ltr"><span class="vt-mic">${mic}${copy.micOn}</span><span class="vt-leave">${phoneOff}${copy.leave}</span></div>
+  </div>`;
+}
+const VOICE_TALK_CSS = `
+  .vt-panel{position:absolute;left:8px;right:8px;top:56px;z-index:5;background:rgba(255,255,255,.96);border:1px solid #F3F4F6;border-radius:16px;
+    box-shadow:0 10px 28px rgba(15,23,42,.12);overflow:hidden}
+  .vt-top{display:flex;align-items:center;gap:8px;padding:8px 12px}
+  .vt-dot{position:relative;width:8px;height:8px;flex:none}
+  .vt-dot i{position:absolute;inset:-3px;border-radius:50%;background:rgba(52,211,153,.35)}
+  .vt-dot b{position:absolute;inset:0;border-radius:50%;background:#10B981}
+  .vt-title{flex:1;font-size:14px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vt-chev{width:18px;height:18px;color:#6B7280;stroke-width:2.4}
+  .vt-grid{display:grid;grid-template-columns:repeat(4,1fr);column-gap:8px;row-gap:10px;padding:4px 12px 8px}
+  .vt-seat{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+  .vt-ring{position:relative;width:48px;height:48px;display:inline-flex}
+  .vt-ripple{position:absolute;inset:0;border-radius:50%;background:rgba(148,163,184,.25)}
+  .vt-ripple.r1{transform:scale(1.32);opacity:.55}
+  .vt-ripple.r2{transform:scale(1.58);opacity:.3}
+  .vt-glow{position:absolute;inset:-3px;border-radius:50%;background:rgba(203,213,225,.3)}
+  .vt-face{position:relative;width:48px;height:48px;border-radius:50%;background:#FEF3C7;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .vt-face img{width:40px;height:40px}
+  .vt-empty{background:#F9FAFB;border:1px dashed #D1D5DB}
+  .vt-flag{position:absolute;left:-2px;bottom:-2px;min-width:18px;height:18px;padding:0 2px;border-radius:9px;background:#fff;box-shadow:0 0 0 1px #E5E7EB;
+    display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1}
+  .vt-label{width:100%;text-align:center;font-size:11.2px;font-weight:500;color:#4B5563;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vt-buttons{display:flex;justify-content:center;gap:16px;border-top:1px solid #F3F4F6;padding:10px 12px}
+  .vt-mic,.vt-leave{height:44px;min-width:124px;padding:0 20px;border-radius:22px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    font-size:13.8px;font-weight:600;white-space:nowrap}
+  .vt-mic{background:#EF4444;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .vt-leave{background:#FFF1F2;color:#E11D48}
+  .vt-phone{position:relative;color:#10B981;margin-top:4px}
+  .vt-phone i{position:absolute;right:-3px;top:-2px;width:7px;height:7px;border-radius:50%;background:#10B981;box-shadow:0 0 0 2px #fff}
+`;
+
+function dmHtml(lang, kind, { call = false } = {}) {
   const partner = chat.partners[lang][0];
   const lines = dm[kind];
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const title = kind === 'booking' ? dm.bookingTitle[lang] : dm.friendName[partner];
   const avatar = kind === 'booking' ? 'squirrel.svg' : 'rabbit.svg';
   const listening = kind !== 'dm';
+  const meAvatar = 'fox.svg';
+  // In a call the last line is the one being spoken.
+  const speaking = lines[lines.length - 1]?.by === 'me' ? 'me' : 'friend';
+  const partnerName = kind === 'booking' ? dm.bookingTitle[lang] : dm.friendName[partner];
   const bubbles = lines.map((line) => {
     const mine = line.by === 'me';
     const order = mine ? [lang, partner] : [partner, lang];
@@ -244,13 +319,17 @@ function dmHtml(lang, kind) {
   .start{margin:0 auto;background:linear-gradient(90deg,#FFB400,#FF7A00);color:#fff;border-radius:24px;height:46px;width:112px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:17px;font-weight:600;box-shadow:0 6px 14px rgba(255,140,0,.3)}
   .start.live{background:#1F2430;box-shadow:0 6px 14px rgba(31,36,48,.25)}
   svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  ${call ? `${VOICE_TALK_CSS} main{padding-top:274px}` : ''}
   </style></head><body>
   <header><span class="back">‹</span><span class="title">${esc(title)}</span>
     <span class="pill">${[lang, partner].map((l) => chat.flags[l]).join('')}<b>⌄</b></span>
     <span class="icons"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><rect x="11" y="11" width="8" height="6" rx="1.5"/></svg>
     <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></header>
+  ${call ? voiceTalkPanel(lang, { partner, partnerName, partnerAvatar: avatar, meAvatar, speaking }) : ''}
   <main>${bubbles}</main>
-  <footer><div class="stat">${listening ? '0m 42s' : '3m 10s'}<br>${lines.length} msgs</div>
+  <footer>${call
+    ? '<span class="vt-phone"><svg viewBox="0 0 24 24" style="width:20px;height:20px"><path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 4.2 2 2 0 0 1 5.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L9 9.6a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg><i></i></span>'
+    : `<div class="stat">${listening ? '0m 42s' : '3m 10s'}<br>${lines.length} msgs</div>`}
     <svg viewBox="0 0 24 24" style="margin-top:8px"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg>
     <div class="start${listening ? ' live' : ''}">${listening ? `${stopIcon}Stop` : `${micIcon}Start`}</div>
     <svg viewBox="0 0 24 24" style="margin-top:8px"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>
@@ -311,7 +390,8 @@ for (const lang of Object.keys(LANGS)) {
   await capture(lang, dir, 'chat', pathToFileURL(tmp).href);
   for (const kind of ['dm', 'voice', 'booking']) {
     const page = path.join(os.tmpdir(), `hashchat-${kind}-${lang}.html`);
-    await fs.writeFile(page, dmHtml(lang, kind));
+    // 03: the voice talk call itself; 04 puts the booking call on a phone in its scene.
+    await fs.writeFile(page, dmHtml(lang, kind, { call: kind !== 'dm' }));
     await capture(lang, dir, kind, pathToFileURL(page).href);
   }
 
