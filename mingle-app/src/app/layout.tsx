@@ -9,6 +9,7 @@ import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import CoinHost from "@/components/coins/coin-host";
 import ContactSyncHost from "@/components/contacts/contact-sync-host";
 import ProfileBasicsGate from "@/components/profile-basics-gate";
+import LastSignInMethodRecorder from "@/components/last-sign-in-method-recorder";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
 import NativeBannerRouteGuard from "@/components/native-banner-route-guard";
@@ -123,6 +124,7 @@ export default async function RootLayout({
                 <CoinHost />
                 <ContactSyncHost />
                 <ProfileBasicsGate />
+                <LastSignInMethodRecorder />
                 <NativePushTapReceiver />
                 <NativeBannerRouteGuard />
                 <UiDiagnosticsProbe />

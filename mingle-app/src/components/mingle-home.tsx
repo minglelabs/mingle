@@ -1,5 +1,12 @@
 "use client";
 
+import { resolveLastUsedSignInCopy } from "@/i18n/last-sign-in-method-copy";
+import {
+  markPendingSignInMethod,
+  readLastSignInMethod,
+  saveLastSignInMethod,
+  type SignInMethod,
+} from "@/lib/last-sign-in-method";
 import { resolveSignInFailedCopy } from "@/i18n/sign-in-failed-copy";
 import { ArrowLeft, Check, Loader2, Mail, X } from "lucide-react";
 import {
@@ -345,6 +352,17 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   // window.alert: the failure often arrives while the app's browser sheet is still
   // closing, and an alert presented then disappears with the sheet.
   const [socialSignInFailed, setSocialSignInFailed] = useState(false);
+  // Read after mount so the first paint matches the server render.
+  const [lastSignInMethod, setLastSignInMethod] = useState<SignInMethod | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setLastSignInMethod(readLastSignInMethod());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [signingInProvider, setSigningInProvider] =
     useState<NativeAuthProvider | null>(null);
   const [authPanelStep, setAuthPanelStep] = useState<AuthPanelStep>("provider");
@@ -839,6 +857,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       // the native browser is already completing.
       if (pendingNativeProviderRef.current) return;
       setSocialSignInFailed(false);
+      markPendingSignInMethod(provider);
       setIsSigningIn(true);
       setSigningInProvider(provider);
       const nativeBridgeEnabled =
@@ -1043,6 +1062,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         return;
       }
 
+      saveLastSignInMethod("email");
       const nextUrl = typeof result.url === "string" && result.url
         ? result.url
         : callbackUrl;
@@ -1129,6 +1149,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         return;
       }
 
+      saveLastSignInMethod("email");
       const nextUrl = typeof signInResponse.url === "string" && signInResponse.url
         ? signInResponse.url
         : callbackUrl;
@@ -1356,6 +1377,11 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   if (shouldShowAuthGate) {
     const { isLoading, disabled, emailSheetDisabled, hasAgreedAllRequiredTerms } =
       authGateVisualState;
+    const lastUsedBadge = (
+      <span className="pointer-events-none absolute -top-2.5 right-3 rounded-full bg-[#FF7A00] px-2 py-0.5 text-[0.68rem] font-bold leading-4 text-white shadow-sm">
+        {resolveLastUsedSignInCopy(props.locale)}
+      </span>
+    );
 
     return (
       // 1) Use a full-background gradient so the outer edges never flash white.
@@ -1444,7 +1470,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                 }`}
               >
                 <div className="w-1/2 shrink-0">
-                  <div className="space-y-3">
+                  {/* The "last used" badge sits on a button's top edge; room for it on the first one. */}
+                  <div className={`space-y-3 ${lastSignInMethod ? "pt-2.5" : ""}`}>
                     <button
                       type="button"
                       aria-label={
@@ -1460,6 +1487,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                         <AppleMark />
                       </span>
                       {props.dictionary.profile.loginApple}
+                      {lastSignInMethod === "apple" ? lastUsedBadge : null}
                     </button>
 
                     <button
@@ -1477,6 +1505,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                         <GoogleMark />
                       </span>
                       {props.dictionary.profile.loginGoogle}
+                      {lastSignInMethod === "google" ? lastUsedBadge : null}
                     </button>
 
                     <button
@@ -1490,6 +1519,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                         <Mail className="h-5 w-5" aria-hidden />
                       </span>
                       {props.dictionary.profile.loginEmail}
+                      {lastSignInMethod === "email" ? lastUsedBadge : null}
                     </button>
 
                     {!props.appleOAuthEnabled ? (
