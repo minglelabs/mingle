@@ -1442,6 +1442,7 @@ function ChatBubble({
       // A time on two lines (older messages) lines up on the bubble's side.
       align={isOwnMessage ? 'right' : 'left'}
       minWidth="0"
+      lineHeight={1}
       className="text-[10px] font-medium text-black/[0.34]"
     />
   ) : null
@@ -1453,6 +1454,7 @@ function ChatBubble({
       // clock) is only a stand-in until the server time arrives.
       createdAtMs={utterance.serverPersistedAtMs ?? utterance.createdAtMs}
       locale={uiLocale}
+      className="h-[9px]"
     />
   ) : null
 
@@ -1461,12 +1463,10 @@ function ChatBubble({
     <div
       data-chat-bubble-own-meta={isOwnMessage || undefined}
       data-chat-bubble-other-meta={isOwnMessage ? undefined : true}
-      // Sits on the bubble's bottom edge and never grows taller than a
-      // one-line bubble: a time with a date line (two lines) takes the read
-      // mark on its first line instead of a third line above.
-      className={`flex shrink-0 gap-0.5 self-end pb-px ${hasDatedTimestamp
-        ? (isOwnMessage ? 'flex-row items-start justify-end' : 'flex-row items-start')
-        : `flex-col ${isOwnMessage ? 'items-end' : 'items-start'}`}`}
+      // Read mark over the time, on the bubble's bottom edge. Packed tight
+      // (9px mark line, 10px time lines, no gaps) so even read mark, date and
+      // time (three lines, 29px) stay within a one-line bubble.
+      className={`flex shrink-0 flex-col self-end ${isOwnMessage ? 'items-end' : 'items-start'}`}
     >
       {bubbleReadReceipt}
       {hasTimestamp && !hasDatedTimestamp ? (

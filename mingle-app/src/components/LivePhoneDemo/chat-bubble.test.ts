@@ -88,7 +88,7 @@ describe('ChatBubble', () => {
     )
     expect(html).not.toContain('data-chat-bubble-controls')
     expect(html).toContain('data-chat-bubble-other-meta="true"')
-    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 gap-0.5 self-end pb-px flex-col items-start"')
+    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 flex-col self-end items-start"')
     // The time sits in the column by the bubble, 10px, lined up on the bubble's side.
     expect(html.indexOf('data-chat-bubble-other-meta')).toBeLessThan(html.indexOf('data-original-bubble-timestamp'))
     expect(html).toContain('items-start self-start text-left text-[10px] font-medium')
@@ -816,18 +816,19 @@ describe('ChatBubble', () => {
   it('takes the double tap on the whole bubble and keeps a recent time in a column on the bottom edge', () => {
     const html = renderToStaticMarkup(createElement(ChatBubble, counterpartProps({})))
     expect(html).toContain('data-chat-bubble-double-tap="toggle"')
-    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 gap-0.5 self-end pb-px flex-col items-start"')
+    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 flex-col self-end items-start"')
     // Flags in a row: 36px wide with a taller touch area.
     expect(html).toContain('h-5 w-9')
     expect(html).toContain('before:-inset-y-2')
   })
 
-  it('puts the read mark on the date line of an older message so the side column stays two lines', () => {
+  it('stacks read mark, date and time of an older message in one tight column', () => {
     const old = counterpartProps({})
     const html = renderToStaticMarkup(createElement(ChatBubble, {
       ...old,
       utterance: { ...old.utterance, createdAtMs: Date.now() - 3 * 24 * 60 * 60 * 1000 },
     }))
-    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 gap-0.5 self-end pb-px flex-row items-start"')
+    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 flex-col self-end items-start"')
+    expect(html).toContain('line-height:1;min-width:0')
   })
 })
