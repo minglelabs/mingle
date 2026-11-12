@@ -826,23 +826,45 @@ const ANIME_SUBJECTS: readonly Option[] = [
   ['landscape', 0.9, 'landscape'],
 ]
 
-/** The drawing style: the largest lever on how alike the pictures look. */
+/**
+ * The drawing style: the largest lever on how alike the pictures look. Each
+ * line says what the whole picture looks like, because the image model falls
+ * back to one polished, detailed modern anime look whatever style is named
+ * (staff, 2026-11-12: twelve drawings in twelve "styles" looked the same).
+ */
 const ANIME_STYLES: readonly Option[] = [
-  ['soft_pastel', 2, 'soft pastel colors with delicate thin line art and a dreamy glow, like a modern shoujo illustration'],
-  ['cel_modern', 2.5, 'crisp cel shading with clean bold lines and vivid colors, like a recent TV anime key visual'],
-  ['retro_90s', 1.8, 'a 1990s anime look: slightly grainy film texture, a muted warm palette, hand-drawn cels and big glossy eyes'],
-  ['watercolor', 1.6, 'a loose watercolor anime illustration with paper texture and softly bleeding edges'],
-  ['painted', 1.6, 'a softly painted storybook anime look, gouache-like shading and a hand-painted background'],
-  ['manga_ink', 1.2, 'a black-and-white manga ink drawing with screentone shading and a single accent color'],
-  ['chibi', 1.4, 'cute chibi proportions, a big head and a tiny body, rounded simple shapes'],
-  ['flat_vector', 1.4, 'a flat, minimal vector-style anime icon: simple shapes, no outlines, a limited palette'],
-  ['lofi', 1.6, 'a lo-fi anime aesthetic: cozy, slightly desaturated, grainy, with a soft glow'],
-  ['neon', 1, 'a neon-lit anime look with colored rim light and glowing signs'],
-  ['pencil', 1.2, 'a colored-pencil and crayon anime drawing with visible hand-drawn texture'],
-  ['sketchy', 1, 'a rough sketchy line drawing with loose blocks of color, like an artist\'s quick colored doodle'],
-  ['pop', 0.9, 'bold pop-art colors with thick outlines and halftone dots'],
-  ['cinematic', 1.4, 'a cinematic anime film still with dramatic light and a shallow depth of field'],
-  ['sparkle', 0.8, 'a sparkly, glittery anime look with star highlights and a light bloom'],
+  ['soft_pastel', 1.3, 'a soft shoujo illustration: very thin delicate line art, pale pastel colors, airy and dreamy with a soft glow'],
+  ['cel_modern', 1.2, 'a crisp TV-anime cel: clean bold outlines, two-tone hard shading, flat bright colors'],
+  ['retro_90s', 1.6, 'a 1990s anime cel: grainy film texture, faded warm colors, sharp angular faces and big glossy eyes, like a frame from an old VHS tape'],
+  ['watercolor', 1.5, 'a loose watercolor painting on rough paper: bleeding edges, washes of color, few lines, lots of white paper showing'],
+  ['painted', 1, 'a gouache storybook painting: visible brush strokes, soft painted shapes, no hard outlines'],
+  ['manga_ink', 1.3, 'a black-and-white manga panel: ink lines and screentone dots, only one accent color'],
+  ['chibi', 1.4, 'a chibi doodle: a huge head on a tiny body, dot-like eyes, very simple rounded shapes and thick soft outlines'],
+  ['flat_vector', 1.4, 'a flat vector icon: simple geometric shapes, no outlines, no shading or texture, only three to five flat colors'],
+  ['lofi', 1.1, 'a lo-fi illustration: desaturated cozy colors, film grain and a soft hazy glow'],
+  ['neon', 0.9, 'a synthwave neon look: a dark picture lit only by pink and cyan neon rim light'],
+  ['pencil', 1.3, 'a colored-pencil drawing on paper: visible pencil strokes and paper grain, unfinished edges'],
+  ['sketchy', 1.2, 'a quick rough sketch: messy loose lines and a few blocks of color that miss the lines, like a doodle in a sketchbook'],
+  ['pop', 0.9, 'pop art: thick black outlines, bold flat primary colors and halftone dots'],
+  ['cinematic', 0.8, 'an anime film still: dramatic light, strong shadows and a blurred background'],
+  ['pixel', 1.2, 'pixel art: a low-resolution sprite with big visible square pixels and a small palette'],
+  ['line_art', 1, 'clean single-color line art on a plain background: only lines, no fill or shading'],
+  ['webtoon', 1.3, 'a Korean webtoon panel: clean digital lines, soft airbrushed shading, glossy hair highlights'],
+  ['crayon', 0.9, 'a crayon and marker drawing with a childlike wobbly line and bright scribbled color'],
+  ['clay_3d', 0.9, 'a cute 3D render like a vinyl toy or clay figure: rounded shapes, soft studio light, no line art'],
+  ['risograph', 0.9, 'a risograph print: two or three ink colors, grainy texture and slightly misaligned color layers'],
+  ['paper_cut', 0.7, 'a paper cut-out collage: layered colored paper shapes with small drop shadows'],
+  ['thick_paint', 0.8, 'a thick oil-paint look: chunky impasto brush strokes and bold color blocks, no lines'],
+  ['sparkle', 0.6, 'a sparkly idol-poster look: glitter, star highlights and a light bloom'],
+]
+
+/** Styles drawn on a simple background, so the picture does not turn into a detailed anime scene. */
+const ANIME_SIMPLE_STYLES = new Set(['chibi', 'flat_vector', 'pop', 'pixel', 'line_art', 'crayon', 'clay_3d', 'risograph', 'paper_cut', 'manga_ink', 'sketchy'])
+
+const ANIME_SIMPLE_BACKGROUNDS: readonly Option[] = [
+  ['plain_color', 3, 'a plain solid color background'], ['gradient', 1.5, 'a soft two-color gradient'], ['geometry', 1.5, 'a few big flat shapes in two colors'],
+  ['wallpaper', 1.2, 'a simple repeating pattern of small shapes'], ['circle', 1.5, 'a single big colored circle behind the subject'], ['white', 1.2, 'a plain white background'],
+  ['stripes', 0.8, 'broad diagonal stripes'], ['dots', 0.8, 'big polka dots'],
 ]
 
 const ANIME_PALETTES: readonly Option[] = [
@@ -866,11 +888,13 @@ const ANIME_BACKGROUNDS: readonly Option[] = [
 ]
 
 const ANIME_FRAMINGS: readonly Option[] = [
-  ['front', 2.5, 'head and shoulders, facing the viewer'], ['three_quarter', 3, 'a three-quarter view from the chest up'], ['profile', 1.2, 'a side profile'],
+  ['front', 1.8, 'head and shoulders, facing the viewer'], ['three_quarter', 1.8, 'a three-quarter view from the chest up'], ['profile', 1.2, 'a side profile'],
   ['over_shoulder', 1.2, 'looking back over the shoulder'], ['closeup', 1.5, 'an extreme close-up of the face and eyes'], ['hand_face', 1, 'one hand near the face, the face half covered by the hand or hair'],
   ['tilt', 1.5, 'the head tilted, a casual upper-body shot'], ['from_above', 1.2, 'seen from slightly above, looking up at the viewer'], ['from_below', 0.8, 'seen from slightly below against the sky'],
   ['sitting_small', 0.6, 'sitting somewhere, small in a wide frame'], ['desk', 1, 'resting the head on folded arms on a desk'], ['walking', 1.2, 'caught mid-stride, the hair and clothes moving'],
   ['back', 0.3, 'seen from behind, looking out at the background'], ['lying', 0.7, 'lying down, seen from above'],
+  ['full_body', 1.3, 'the whole body from head to feet, standing in a relaxed pose'], ['cropped', 1, 'cropped tight so the top of the head is cut off by the frame'],
+  ['squat', 0.8, 'crouching down, the whole figure in frame'], ['far_tilt', 0.8, 'a dutch-angle shot, the camera tilted'],
 ]
 
 const ANIME_ACTIONS: readonly Option[] = [
@@ -1103,6 +1127,7 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
       take('animeSubject', ANIME_SUBJECTS)
       const subject = attributes.animeSubject
       lines.push(`Art style: ${take('animeStyle', ANIME_STYLES)}. Colors: ${take('animePalette', ANIME_PALETTES)}.`)
+      lines.push('The art style decides how the whole picture looks: follow it strictly even when it is unusual, and do not fall back to a typical polished, detailed anime illustration.')
       if (subject === 'person') {
         const table = gender ?? (random() < 0.5 ? 'female' : 'male')
         const color = take('animeHairColor', ANIME_HAIR_COLORS)
@@ -1126,7 +1151,7 @@ export function pickAvatarSpec(persona: AvatarPersona, random: Random = Math.ran
       } else {
         lines.push(`It shows a scene with no people: ${take('animeScene', ANIME_SCENES)}, framed like a profile icon.`)
       }
-      if (subject !== 'landscape') lines.push(`Background: ${take('animeBackground', ANIME_BACKGROUNDS)}.`)
+      if (subject !== 'landscape') lines.push(`Background: ${take('animeBackground', ANIME_SIMPLE_STYLES.has(attributes.animeStyle) ? ANIME_SIMPLE_BACKGROUNDS : ANIME_BACKGROUNDS)}.`)
     }
     if (LETTER_SUBTYPES.has(subtype.key)) lines.push('The words are the subject: spelled correctly, something a young person there would really write, and nothing else is written anywhere.')
   }
