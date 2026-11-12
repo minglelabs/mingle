@@ -57,9 +57,9 @@ const DECKS = [
   { slug: "ai-wrapper-business-surfers-3rd", deck: "/presentations/surfers-3rd-ai-wrapper", date: "2026-08-12",
     og: { en: "/presentations/assets/surfers-logo.png", ko: "/presentations/assets/surfers-logo.png" } },
   { slug: "hashchat-pitch-deck", deck: "/xr", date: "2026-09-01",
-    og: { en: "/assets/og-image.png?v=20260416-2", ko: "/assets/og-image.png?v=20260416-2" } },
+    og: { en: "/assets/og-hashchat.png?v=20261112", ko: "/assets/og-hashchat.png?v=20261112" } },
   { slug: "hashchat-pitch-deck-short", deck: "/xr-short", date: "2026-09-02",
-    og: { en: "/assets/og-image.png?v=20260416-2", ko: "/assets/og-image.png?v=20260416-2" } },
+    og: { en: "/assets/og-hashchat.png?v=20261112", ko: "/assets/og-hashchat.png?v=20261112" } },
   { slug: "virtually-deck", deck: "/xr-virtually", date: "2026-09-13",
     og: { en: "/assets/virtually-vtuber-cover.png", ko: "/assets/virtually-vtuber-cover.png" } },
 ];
@@ -364,7 +364,7 @@ ${a.logos.map((logo) => `                  <span><img src="/assets/${logo}" alt=
     .sort((a, b) => b.date.localeCompare(a.date))
     .map((card) => card.html)
     .join("\n");
-  return `${head({ lang, title: t.indexMetaTitle, description: t.indexMetaDescription, path: "/blogs", image: "/assets/og-image.png?v=20260420-1" })}
+  return `${head({ lang, title: t.indexMetaTitle, description: t.indexMetaDescription, path: "/blogs", image: "/assets/og-hashchat.png?v=20261112" })}
   <body>
 ${siteHeader(lang, "blog")}
 
