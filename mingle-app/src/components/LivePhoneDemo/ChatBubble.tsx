@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { AnimatePresence, motion } from 'framer-motion'
 import { UserRound } from 'lucide-react'
@@ -36,6 +36,7 @@ import {
   DEFAULT_BUBBLE_DISPLAY_MODE,
   type LivePhoneDemoBubbleDisplayMode,
 } from './live-phone-demo.bubble-display'
+import { useMonotonicBubbleWidth } from './live-phone-demo.bubble-width'
 import ChatAccountBadge from './ChatAccountBadge'
 import { readAccountBadgeKind } from './chat-account-badge.logic'
 import type { AccountBadgeKind } from '@/lib/account-badge'
@@ -916,6 +917,14 @@ function ChatBubble({
   useEffect(() => {
     setIsBubbleExpanded(bubbleDisplayMode === 'expanded')
   }, [bubbleDisplayMode])
+  // The two layouts are separate elements that overlap while they cross-fade.
+  const expandedBubbleRef = useRef<HTMLDivElement | null>(null)
+  const collapsedBubbleRef = useRef<HTMLDivElement | null>(null)
+  useMonotonicBubbleWidth(
+    utterance.id,
+    bubbleTextClassName,
+    isBubbleExpanded ? expandedBubbleRef : collapsedBubbleRef,
+  )
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
   const targetLangs = buildTargetLanguagesForUtterance(
@@ -1262,6 +1271,7 @@ function ChatBubble({
             className="min-w-0 w-fit"
           >
             <div
+              ref={expandedBubbleRef}
               data-chat-message-bubble
               data-expanded-bubble-container
               data-display-language={originalDisplayLanguage}
@@ -1316,6 +1326,7 @@ function ChatBubble({
             className="min-w-0 w-fit"
           >
             <div
+              ref={collapsedBubbleRef}
               data-chat-message-bubble
               data-display-language={activeLanguage}
               data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
