@@ -2,6 +2,14 @@ import NextAuth from "next-auth/next";
 import type { NextRequest } from "next/server";
 import type { NextAuthOptions } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
+import {
+  NATIVE_AUTH_OAUTH_FAILED_MESSAGE,
+  NATIVE_AUTH_RETURN_COOKIE,
+  appendNativeAuthError,
+  buildAppAuthRedirectUrl,
+  renderReturnToAppResponse,
+  resolveNativeAuthCompletePath,
+} from "@/lib/native-auth-return";
 
 type AppRouteContext = {
   params: Promise<{
@@ -141,6 +149,60 @@ function logNextAuthResponse(response: Response, method: string, action: string,
   );
 }
 
+/**
+ * A failed OAuth sign-in that the native app started must go back to the app,
+ * not to NextAuth's built-in sign-in page: inside the app's browser sheet that
+ * page signs the user in to the website instead of the app.
+ */
+function resolveNativeAuthFailureResponse(
+  request: NextRequest,
+  nextauth: string[] | undefined,
+): Response | null {
+  const action = resolveAction(nextauth);
+  const isErrorPage = action === "error" || (action === "signin" && !nextauth?.[1]);
+  if (!isErrorPage) return null;
+  const errorCode = (request.nextUrl.searchParams.get("error") || "").trim();
+  if (!errorCode) return null;
+
+  const cookies = request.cookies?.getAll() ?? [];
+  const cookieValue = (name: string) => cookies.find((cookie) => cookie.name === name)?.value;
+  const completePath =
+    resolveNativeAuthCompletePath(cookieValue(NATIVE_AUTH_RETURN_COOKIE))
+    ?? resolveNativeAuthCompletePath(cookieValue("__Secure-next-auth.callback-url"))
+    ?? resolveNativeAuthCompletePath(cookieValue("next-auth.callback-url"));
+  if (completePath) {
+    console.warn(`[nextauth] native sign-in failed error=${summarizeText(errorCode, 64)}; returning to app`);
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: appendNativeAuthError(completePath, errorCode),
+        "cache-control": "no-store",
+      },
+    });
+  }
+
+  // The browser sheet can come back from the provider without any of the
+  // cookies set before it left ("State cookie was missing"). A website sign-in
+  // always carries at least the CSRF cookie, so a phone browser with no auth
+  // cookies at all is the app's sheet: hand it back to the app without a
+  // request id. The app treats that as a failed sign-in and closes the sheet.
+  const hasAuthCookie = cookies.some(
+    ({ name }) => name.includes("next-auth.") || name === NATIVE_AUTH_RETURN_COOKIE,
+  );
+  const userAgent = request.headers?.get("user-agent") || "";
+  if (!hasAuthCookie && /iPhone|iPad|iPod|Android/i.test(userAgent)) {
+    console.warn(
+      `[nextauth] sign-in failed without cookies on a phone browser error=${summarizeText(errorCode, 64)}; returning to app`,
+    );
+    return renderReturnToAppResponse(buildAppAuthRedirectUrl({
+      status: "error",
+      provider: "google",
+      message: NATIVE_AUTH_OAUTH_FAILED_MESSAGE,
+    }));
+  }
+  return null;
+}
+
 export async function GET(request: NextRequest, context: AppRouteContext) {
   const params = await context.params;
   const action = resolveAction(params?.nextauth);
@@ -151,6 +213,8 @@ export async function GET(request: NextRequest, context: AppRouteContext) {
   console.info(
     `[nextauth] method=GET action=${action || "-"} provider=${provider} callback=${callbackUrl} error=${error}${summarizeOAuthCookieState(request, action)}`,
   );
+  const nativeFailureResponse = resolveNativeAuthFailureResponse(request, params?.nextauth);
+  if (nativeFailureResponse) return nativeFailureResponse;
   const response = await NextAuth(
     request,
     { params },
