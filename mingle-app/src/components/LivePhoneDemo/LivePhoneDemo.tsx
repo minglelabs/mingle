@@ -213,6 +213,7 @@ import { unreadDividerLabel } from '@/i18n/unread-divider-copy'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   INITIAL_SCROLL_METRICS,
+  LIVE_GROWTH_FOLLOW_MODE,
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET,
   LIVE_DEMO_SCROLL_MEASUREMENT_STORAGE_KEY,
@@ -227,6 +228,7 @@ import {
   readLivePhoneDemoScrollHandlerMeasurement,
   recordLivePhoneDemoScrollHandlerMeasurement,
   resolveLateMessageHeightChangeAnchorScrollTop,
+  resolveLiveGrowthRollScrollTop,
   resolveLivePhoneDemoScrollMeasurementCounter,
   resolveNewMessageAutoScrollTargetTop,
   resolveScrollViewportAnchorSnapshot,
@@ -6220,6 +6222,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const shouldAutoScroll = useRef(true)
   const suppressAutoScrollRef = useRef(false)
   const userScrollIntentUntilRef = useRef(0)
+  const lastChatScrollTopRef = useRef(0)
   const hasInitialBottomAnchorRef = useRef(false)
   const bottomAnchorConversationRef = useRef(conversationId)
   const allowAutoTopPaginationRef = useRef(false)
@@ -6550,6 +6553,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         prevScrollTopRef.current = scrollTop
       }
     }
+    if (node) {
+      // The user's own move up wins at once: the derived state below is only
+      // computed a frame later, and a line landing in between must not pull
+      // the view back down.
+      if (isUserScrollIntentActive() && node.scrollTop < lastChatScrollTopRef.current - 1) {
+        suppressAutoScrollRef.current = true
+        shouldAutoScroll.current = false
+      }
+      lastChatScrollTopRef.current = node.scrollTop
+    }
     scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })
     if (measurementStartMs !== null) {
       recordScrollHandlerMeasurement(readBrowserPerformanceNowMs() - measurementStartMs)
@@ -6604,6 +6617,56 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => resolveNativeAppUpdateCardContent(nativeAppUpdate, nativeAppUpdateCopy),
     [nativeAppUpdate, nativeAppUpdateCopy],
   )
+
+  // Follows a bubble that grew a line. Declared before the layout effects
+  // below on purpose: they re-read the distance to the bottom, and a bubble
+  // that grew past the near-bottom band in one update would otherwise read as
+  // "the user scrolled away" before this had the chance to follow it.
+  const liveGrowthRollFrameRef = useRef<number | null>(null)
+  const cancelLiveGrowthRoll = useCallback(() => {
+    if (liveGrowthRollFrameRef.current === null) return
+    window.cancelAnimationFrame(liveGrowthRollFrameRef.current)
+    liveGrowthRollFrameRef.current = null
+  }, [])
+  useEffect(() => cancelLiveGrowthRoll, [cancelLiveGrowthRoll])
+  useLayoutEffect(() => {
+    if (LIVE_GROWTH_FOLLOW_MODE === 'throttled') return
+    const node = chatRef.current
+    const isFollowing = () => (
+      hasInitialBottomAnchorRef.current
+      && shouldAutoScroll.current
+      && !suppressAutoScrollRef.current
+      && !isUserScrollIntentActive()
+      && !isPaginatingRef.current
+      && !isLoadingOlderRef.current
+    )
+    if (!node || !isFollowing()) return
+    if (node.scrollHeight - node.clientHeight - node.scrollTop <= 1) return
+
+    if (LIVE_GROWTH_FOLLOW_MODE === 'instant') {
+      node.scrollTop = node.scrollHeight - node.clientHeight
+      return
+    }
+
+    // A line added mid-roll restarts the roll from where the view is now.
+    cancelLiveGrowthRoll()
+    const startScrollTop = node.scrollTop
+    const startedAtMs = performance.now()
+    const step = (nowMs: number) => {
+      liveGrowthRollFrameRef.current = null
+      if (!isFollowing()) return
+      const targetScrollTop = node.scrollHeight - node.clientHeight
+      node.scrollTop = resolveLiveGrowthRollScrollTop({
+        startScrollTop,
+        targetScrollTop,
+        elapsedMs: nowMs - startedAtMs,
+      })
+      if (targetScrollTop - node.scrollTop > 1) {
+        liveGrowthRollFrameRef.current = window.requestAnimationFrame(step)
+      }
+    }
+    liveGrowthRollFrameRef.current = window.requestAnimationFrame(step)
+  }, [cancelLiveGrowthRoll, demoTypingText, isConnecting, isUserScrollIntentActive, liveUtterances, utterances])
 
   useLayoutEffect(() => {
     const nextCounts: ChatScrollMessageCountSnapshot = {
@@ -6780,6 +6843,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useEffect(() => {
     updateScrollDerivedState()
+    if (LIVE_GROWTH_FOLLOW_MODE !== 'throttled') return
     autoScrollSchedulerRef.current.update({
       shouldAutoScroll: () => (
         !!chatRef.current
