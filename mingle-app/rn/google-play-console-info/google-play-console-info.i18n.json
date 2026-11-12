@@ -21,11 +21,11 @@
   },
   "googlePlay": {
     "release": {
-      "version": "2.4.0",
+      "version": "2.5.0",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "completed",
       "changesNotSentForReview": false,
-      "releaseName": "2.4.0 (109)",
+      "releaseName": "2.5.0 (112)",
       "releaseNotes": {
         "en-US": "What's New in Version 2.4.0:\n• Find friends from your contacts, invite them by text, and you both follow each other\n• A simpler first run: pick your language and just start talking\n• Stability and performance improvements",
         "ar": "الجديد في الإصدار 2.4.0:\n• اعثر على أصدقائك من جهات الاتصال وادعهم برسالة، وستتابعان بعضكما تلقائيًا\n• بداية أبسط: اختر لغتك وابدأ الكلام مباشرة\n• تحسينات في الثبات والأداء",
