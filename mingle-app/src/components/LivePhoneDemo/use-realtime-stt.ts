@@ -1,5 +1,6 @@
 'use client'
 
+import { isTranslateStreamResponse, readTranslateStream, TRANSLATE_STREAM_CONTENT_TYPE } from './translate-stream.client'
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-errors'
 import {
   appendCoinBillingToWsUrl,
@@ -196,6 +197,9 @@ const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
 const PREVIOUS_BUBBLE_PIECE_WINDOW_MS = 10_000
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
+// Listeners see a streamed translation grow in steps this short. Unchanged
+// previews still go out once a second (LivePreviewSender).
+const LIVE_PREVIEW_FLUSH_INTERVAL_MS = 100
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
 let activeNativeSttOwnerKey: string | null = null
 let activeNativeSttOwnerLeaseId: string | null = null
@@ -1899,6 +1903,8 @@ interface PendingTurnTranslationRuntime {
   lastRequestedText: string
   lastRequestedAtMs: number
   controller: AbortController | null
+  /** The in-flight request whose streamed pieces the bubble already shows. */
+  streamingController: AbortController | null
 }
 
 interface TranslationApplyFallbackMatch {
@@ -3465,6 +3471,7 @@ export default function useRealtimeSTT({
       lastRequestedText: '',
       lastRequestedAtMs: 0,
       controller: null,
+      streamingController: null,
     }
     pendingTurnTranslationRuntimeRef.current[utteranceId] = runtime
     return runtime
@@ -4390,7 +4397,7 @@ export default function useRealtimeSTT({
       })
       // Also expires abandoned drafts if a sender disconnects mid-sentence.
       if (remotePreviews.expire()) setRemotePreviewVersion(v => v + 1)
-    }, 250)
+    }, LIVE_PREVIEW_FLUSH_INTERVAL_MS)
     const renewTimer = window.setInterval(() => {
       if (renewing || socket?.readyState !== WebSocket.OPEN) return
       renewing = true
@@ -4739,6 +4746,8 @@ export default function useRealtimeSTT({
       sttDurationMs?: number
       totalDurationMs?: number
       bubbleTail?: BubbleTailState
+      /** Interim only: streams the answer and gets the translations so far (display only). */
+      onPartialTranslations?: (translations: Record<string, string>) => void
     },
   ): Promise<TranslateApiResult> => {
     const apiPath = buildClientApiPath('/translate/finalize')
@@ -4783,21 +4792,36 @@ export default function useRealtimeSTT({
         body.translationModel = translationModel
       }
       // Speech is never requested here: a translation must not wait for it.
+      const onPartialTranslations = options?.isFinal === true ? undefined : options?.onPartialTranslations
+      if (onPartialTranslations) body.stream = true
       const res = await fetch(buildClientApiPath('/translate/finalize'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-mingle-user-id': getOrCreateTrackingUserId(),
+          ...(onPartialTranslations ? { Accept: `${TRANSLATE_STREAM_CONTENT_TYPE}, application/json` } : {}),
         },
         body: JSON.stringify(body),
         signal: options?.signal,
       })
-      if (!res.ok) {
+      let status = res.status
+      let data: Record<string, unknown>
+      if (onPartialTranslations && res.ok && isTranslateStreamResponse(res)) {
+        const final = await readTranslateStream(res, (partial) => {
+          if (options?.signal?.aborted) return
+          onPartialTranslations(canonicalizeTranslationKeys(partial, { candidates: targetLanguages, sourceLanguage }))
+        })
+        if (!final) return { translations: {} }
+        status = final.status
+        data = final.body
+      } else {
+        data = res.ok ? await res.json() as Record<string, unknown> : {}
+      }
+      if (status < 200 || status >= 300) {
         // 402: the sender has no coins, so the message goes out untranslated.
-        if (res.status === 402) notifyCoinsExhausted()
+        if (status === 402) notifyCoinsExhausted()
         return { translations: {} }
       }
-      const data = await res.json()
       if (typeof data.coinBalance === 'number') applyCoinBalance(data.coinBalance)
       if (data.coinExhausted === true) notifyCoinsExhausted()
       const responseSourceLanguage = typeof data.sourceLanguage === 'string'
@@ -7270,6 +7294,10 @@ export default function useRealtimeSTT({
       }
 
       const runtime = getPendingTurnTranslationRuntime(pendingTurn.utteranceId)
+      // A request already streaming into the bubble finishes first: aborting it
+      // would pull back the words just shown. Its answer re-runs this effect.
+      if (runtime.streamingController && runtime.streamingController === runtime.controller
+        && !runtime.streamingController.signal.aborted) continue
       const isInitialPartialRequest = !runtime.hasFiredInitialRequest
       const targetLanguagesChanged = runtime.lastTargetSignature !== targetLanguageSignature
       const scheduleDecision = shouldTriggerPartialTranslate({
@@ -7320,8 +7348,65 @@ export default function useRealtimeSTT({
       const controller = new AbortController()
       runtime.controller = controller
 
+      const isCurrentRequest = () => {
+        const latestRuntime = pendingTurnTranslationRuntimeRef.current[pendingTurn.utteranceId]
+        return Boolean(latestRuntime) && latestRuntime?.latestRequestSeq === requestSeq && !controller.signal.aborted
+      }
+      // Writes translations into the bubble, per language, when this request outranks what it shows.
+      const applyTranslationsToPendingTurn = (
+        translations: Record<string, string>,
+        update?: (turn: PendingSpeakerTurn) => Partial<PendingSpeakerTurn>,
+      ) => {
+        const latestPendingTurn = findPendingTurnByUtteranceId(pendingTurn.utteranceId)
+        if (!latestPendingTurn) return
+        const latestTargetLanguages = buildTurnTargetLanguagesSnapshot(targetLanguages, currentLang)
+        const filteredExisting = filterTranslationsToTargetLanguages(
+          stripSourceLanguageFromTranslations(latestPendingTurn.partialTranslations, currentLang),
+          latestTargetLanguages,
+        )
+        const filteredNew = filterTranslationsToTargetLanguages(
+          stripSourceLanguageFromTranslations(translations, currentLang),
+          latestTargetLanguages,
+        )
+        const nextTranslations = { ...filteredExisting }
+        const nextPriorities = new Map(latestPendingTurn.partialTranslationPriorities)
+        for (const [language, translatedText] of Object.entries(filteredNew)) {
+          const currentPriority = nextPriorities.get(language)
+          // Streamed pieces and the finished answer of one request replace each other.
+          const sameRequest = currentPriority?.kind === requestPriority.kind && currentPriority.seq === requestPriority.seq
+          if (!sameRequest && !shouldOverrideTranslationByPriority(currentPriority, requestPriority)) continue
+          nextTranslations[language] = translatedText
+          nextPriorities.set(language, requestPriority)
+        }
+
+        const updatedPendingTurn: PendingSpeakerTurn = {
+          ...latestPendingTurn,
+          ...(update ? update(latestPendingTurn) : {}),
+          partialTranslations: nextTranslations,
+          partialTranslationPriorities: nextPriorities,
+          currentTurnPreviousState: buildCurrentTurnPreviousStatePayload(
+            currentLang,
+            trimmed,
+            nextTranslations,
+          ),
+        }
+        pendingTurnsBySpeakerRef.current[latestPendingTurn.speaker] = updatedPendingTurn
+        if (activePartialSpeakerRef.current === latestPendingTurn.speaker) {
+          partialTranslationsRef.current = nextTranslations
+          setPartialTranslations(nextTranslations)
+        }
+        bumpPendingTurnRenderVersion()
+      }
+
       translateViaApi(trimmed, currentLang, targetLanguages, {
         signal: controller.signal,
+        // Each piece shows as the model writes it; the finished answer replaces it.
+        onPartialTranslations: (translations) => {
+          if (!isCurrentRequest()) return
+          const latestRuntime = pendingTurnTranslationRuntimeRef.current[pendingTurn.utteranceId]
+          if (latestRuntime) latestRuntime.streamingController = controller
+          applyTranslationsToPendingTurn(translations)
+        },
         currentTurnPreviousState: pendingTurn.currentTurnPreviousState,
         // Tail fill: keep what is already translated, add only finished sentences.
         bubbleTail: (() => {
@@ -7336,6 +7421,9 @@ export default function useRealtimeSTT({
         const latestRuntime = pendingTurnTranslationRuntimeRef.current[pendingTurn.utteranceId]
         if (latestRuntime?.controller === controller) {
           latestRuntime.controller = null
+        }
+        if (latestRuntime?.streamingController === controller) {
+          latestRuntime.streamingController = null
         }
         if (!latestPendingTurn) return
         if (!latestRuntime) return
@@ -7359,46 +7447,14 @@ export default function useRealtimeSTT({
           return
         }
 
-        const latestTargetLanguages = buildTurnTargetLanguagesSnapshot(targetLanguages, currentLang)
-        const filteredExisting = filterTranslationsToTargetLanguages(
-          stripSourceLanguageFromTranslations(latestPendingTurn.partialTranslations, currentLang),
-          latestTargetLanguages,
-        )
         if (result.tailFill) {
           bubbleTailByUtteranceIdRef.current[pendingTurn.utteranceId] = result.tailFill
         }
-        const filteredNew = filterTranslationsToTargetLanguages(
-          stripSourceLanguageFromTranslations(result.tailFill?.translations ?? result.translations, currentLang),
-          latestTargetLanguages,
-        )
-        const nextTranslations = { ...filteredExisting }
-        const nextPriorities = new Map(latestPendingTurn.partialTranslationPriorities)
-        for (const [language, translatedText] of Object.entries(filteredNew)) {
-          const currentPriority = nextPriorities.get(language)
-          if (!shouldOverrideTranslationByPriority(currentPriority, requestPriority)) continue
-          nextTranslations[language] = translatedText
-          nextPriorities.set(language, requestPriority)
-        }
-
-        const updatedPendingTurn: PendingSpeakerTurn = {
-          ...latestPendingTurn,
+        applyTranslationsToPendingTurn(result.tailFill?.translations ?? result.translations, () => ({
           originalDisplayText: result.sourceDisplayText
             ? { source: trimmed, text: result.sourceDisplayText }
             : undefined,
-          partialTranslations: nextTranslations,
-          partialTranslationPriorities: nextPriorities,
-          currentTurnPreviousState: buildCurrentTurnPreviousStatePayload(
-            currentLang,
-            trimmed,
-            nextTranslations,
-          ),
-        }
-        pendingTurnsBySpeakerRef.current[latestPendingTurn.speaker] = updatedPendingTurn
-        if (activePartialSpeakerRef.current === latestPendingTurn.speaker) {
-          partialTranslationsRef.current = nextTranslations
-          setPartialTranslations(nextTranslations)
-        }
-        bumpPendingTurnRenderVersion()
+        }))
       })
     }
   }, [

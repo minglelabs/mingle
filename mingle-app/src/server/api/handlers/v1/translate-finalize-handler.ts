@@ -29,10 +29,11 @@ import {
   singleLabelResultDisagrees,
 } from '@/lib/stt-language-labels'
 import {
+  buildInterimTailPartialTranslations,
   extendFixedSource,
   isSafeInterimCut,
   joinTailTranslations,
-  matchTranslatedTailLength,
+  matchTailCutAfter,
   parseBubbleTail,
   planBubbleTail,
   type BubbleTailPlan,
@@ -53,7 +54,9 @@ import {
   rememberProviderRateLimitCooldown,
   requestTranslationFromProvider,
   normalizeTranslationProvider,
+  TAIL_CUT_AFTER_KEY,
 } from '@/server/translation/translate-texts'
+import { readPartialJsonStrings } from '@/lib/partial-json-strings'
 
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
 import { coinKeyDigest, resolveCoinBillingUserId } from '@/server/coins/request-billing'
@@ -392,6 +395,64 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     return NextResponse.json({ error: 'account_changed' }, { status: 401 })
   }
   const body = await request.json().catch((): Record<string, unknown> => ({}))
+  // Live interim requests can stream: the bubble shows each piece as it is written.
+  if (body.stream === true && body.isFinal !== true) return streamTranslateFinalize(request, body)
+  return await runTranslateFinalize(request, body)
+}
+
+type PartialTranslationsListener = (translations: Record<string, string>) => void
+
+/**
+ * NDJSON answer: `{"type":"partial","translations":{...}}` lines while the
+ * model writes (display only), then one `{"type":"final","status":N,"body":{...}}`
+ * line holding exactly what the plain JSON answer would. Coins and TTS run
+ * once, for the finished answer, as they do without streaming.
+ */
+function streamTranslateFinalize(request: NextRequest, body: Record<string, unknown>): NextResponse {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let open = true
+      const write = (line: Record<string, unknown>) => {
+        if (!open) return
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`))
+        } catch {
+          open = false
+        }
+      }
+      try {
+        const response = await runTranslateFinalize(request, body, (translations) => {
+          write({ type: 'partial', translations })
+        })
+        const payload = await response.json().catch(() => ({}))
+        write({ type: 'final', status: response.status, body: payload })
+      } catch (error) {
+        logTranslateFinalizeError('stream_failed', { error: summarizeUnknownError(error) })
+        write({ type: 'final', status: 500, body: { error: 'finalize_translation_failed' } })
+      }
+      if (open) {
+        try { controller.close() } catch { /* The client went away. */ }
+      }
+    },
+  })
+  const response = new NextResponse(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-store, no-transform',
+      'X-Accel-Buffering': 'no',
+    },
+  })
+  const sessionKeyHint = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : null
+  ensureTrackingContext(request, response, { sessionKeyHint })
+  return response
+}
+
+async function runTranslateFinalize(
+  request: NextRequest,
+  body: Record<string, unknown>,
+  onPartialTranslations?: PartialTranslationsListener,
+): Promise<NextResponse> {
   const text = typeof body.text === 'string' ? body.text.trim() : ''
   const targetLanguagesRaw: unknown[] = Array.isArray(body.targetLanguages) ? body.targetLanguages : []
   // `body.tts` from older clients is ignored: a translation response never
@@ -521,6 +582,27 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       },
     } : {}),
   }
+  if (onPartialTranslations && bubbleTailPlan && !isFinal) {
+    const plan = bubbleTailPlan
+    let lastSent = ''
+    ctx.onPartialContent = (content) => {
+      const joined = buildInterimTailPartialTranslations(
+        plan, readPartialJsonStrings(content), targetLanguages, TAIL_CUT_AFTER_KEY,
+      )
+      if (!joined) return
+      const translations = normalizeChineseContent({
+        sourceLanguage,
+        sourceText: ctx.text,
+        translations: joined,
+        targetLanguages,
+        candidates: targetLanguages,
+      }).translations
+      const signature = JSON.stringify(translations)
+      if (signature === lastSent) return
+      lastSent = signature
+      onPartialTranslations(translations)
+    }
+  }
   logTranslateFinalizeInfo('request', {
     provider: providerConfig.provider,
     sourceLanguage,
@@ -558,7 +640,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         sourceLanguagesMixed?: boolean
         sourceTextHasForeignScript?: boolean
         usedFallbackFromPreviousState?: boolean
-        tailTranslatedSource?: string
+        tailCutAfter?: string
       },
     ): Promise<NextResponse> => {
       // Tail mode: the provider filled only the blank. An interim answer covers
@@ -573,7 +655,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       if (bubbleTailPlan && !meta.usedFallbackFromPreviousState) {
         const coveredLength = isFinal
           ? bubbleTailPlan.remainingSource.length
-          : matchTranslatedTailLength(bubbleTailPlan.remainingSource, meta.tailTranslatedSource || '')
+          : matchTailCutAfter(bubbleTailPlan.remainingSource, meta.tailCutAfter || '')
         const safeCut = isFinal || isSafeInterimCut(bubbleTailPlan.remainingSource, coveredLength)
         const hasFill = safeCut && coveredLength > 0 && Object.keys(rawTranslations).length > 0
         translations = hasFill
@@ -593,7 +675,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         if (!isFinal && !hasFill && Object.keys(rawTranslations).length > 0) {
           logTranslateFinalizeWarning('bubble_tail_unmatched_source', {
             ...buildTranslateFinalizeLogContext(ctx),
-            tailTranslatedSource: meta.tailTranslatedSource || '',
+            tailCutAfter: meta.tailCutAfter || '',
           })
         }
       }
@@ -1023,7 +1105,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       sourceDisplayText,
       sourceLanguagesMixed: selectedResult.sourceLanguagesMixed,
       sourceTextHasForeignScript: selectedResult.sourceTextHasForeignScript,
-      tailTranslatedSource: selectedResult.tailTranslatedSource,
+      tailCutAfter: selectedResult.tailCutAfter,
     })
   } catch (error) {
     logTranslateFinalizeError('unexpected_handler_error', {

@@ -1,0 +1,99 @@
+{
+ "ui": {
+  "nav": {
+   "how": "How it works",
+   "features": "Features",
+   "translate": "Translation",
+   "uses": "Use cases",
+   "blog": "Blog",
+   "legal": "Legal"
+  },
+  "footerCopy": "© Mingle Labs.",
+  "footerRenamed": "HashChat was formerly called Mingle.",
+  "privacy": "Privacy",
+  "terms": "Terms",
+  "blogEyebrow": "HashChat Blog",
+  "blogTitle": "Notes on real-time AI translation.",
+  "blogLede": "Product thinking, comparisons, talks and field notes for people building conversations across languages. HashChat was formerly called Mingle.",
+  "latestEyebrow": "Latest",
+  "latestTitle": "Talks, decks and product stories.",
+  "latestLede": "Slide decks from our talks and pitches, plus the story of how Mingle became HashChat and a live comparison of AI translators.",
+  "indexMetaTitle": "HashChat Blog - AI translation for live conversations",
+  "indexMetaDescription": "Read HashChat's (formerly Mingle) notes on AI translation, real-time voice captions, multilingual conversation products, and our talks.",
+  "by": "By",
+  "fullscreen": "View full screen",
+  "keyHint": "Click the slides, then use the arrow keys, wheel or swipe. Add #number to the full-screen link to jump to a slide.",
+  "readDeck": "View the slides",
+  "activate": "Click to use the slides",
+  "deckLabel": "Slides",
+  "backToBlog": "All posts",
+  "deckLanguageNote": "The slides themselves are in English."
+ },
+ "author": "Hyeongkeol Nam, Mingle Labs",
+ "decks": {
+  "ai-wrapper-business": {
+   "kind": "Talk",
+   "dateLabel": "November 5, 2026",
+   "title": "Exploring Business Opportunities for AI Wrapper Software",
+   "description": "Case studies of AI wrapper businesses, and a strategy for what comes next.",
+   "body": [
+    "Slides from a talk on AI wrapper software: products that take a user experience that already existed and automate it with AI. The 94 slides walk through vibe coding and agents, character chat, note-taking, AI diet tracking, aggregators, study helpers and more, asking which wrappers held up against Big Tech and which were swept away.",
+    "The last part picks the opportunities worth pursuing: five ideas, the moats a software business can build, and how a wrapper avoids staying just a wrapper."
+   ]
+  },
+  "ai-wrapper-business-surfers-3rd": {
+   "kind": "Talk",
+   "dateLabel": "August 12, 2026",
+   "title": "The AI Wrapper Business: Surfers Cohort 3 Edition",
+   "description": "The first, longer version of our AI wrapper talk, given to Surfers Cohort 3.",
+   "body": [
+    "The first version of our AI wrapper talk, given to Surfers Cohort 3. Its 165 slides go deeper into each field: vibe coding, character chat and its three phases, note-taking, AI diet tracking, aggregators such as OpenRouter, and AI study helpers.",
+    "The deck was written in Korean and is shown here in English by default. Switch to Korean for the original."
+   ]
+  },
+  "hashchat-pitch-deck": {
+   "kind": "Pitch deck",
+   "dateLabel": "Updated September 1, 2026",
+   "title": "HashChat Pitch Deck: A Voice Messenger Without Language Barriers",
+   "description": "Why we are building HashChat, who it is for, and how a live interpreter grows into an AI-native social network.",
+   "body": [
+    "Our full pitch deck. It starts from a simple problem: people want to make friends abroad, but the language gets in the way, and today's translators were never built for social conversation.",
+    "It covers early user reactions on HelloTalk, our three-stage strategy from a solo live translator to a voice messenger and then a social platform, and the target verticals in the appendix."
+   ]
+  },
+  "hashchat-pitch-deck-short": {
+   "kind": "Pitch deck",
+   "dateLabel": "Updated September 1, 2026",
+   "title": "HashChat Pitch Deck: The Short Version",
+   "description": "The chicken-and-egg problem of language exchange, and how live interpretation removes one side of it.",
+   "body": [
+    "A shorter version of our pitch deck. Language exchange apps are stuck on a chicken-and-egg problem: you want friends abroad, and you want to learn their language. HashChat removes one side of it with live interpretation, so you can talk without a shared language.",
+    "It also covers the add-on caption and in-person interpretation demand we found, and our first goal: winning over K-Friends users."
+   ]
+  },
+  "virtually-deck": {
+   "kind": "Pitch deck",
+   "dateLabel": "September 13, 2026",
+   "title": "Virtually: VTuber Live Streaming, Powered by Generative AI",
+   "description": "From a single image to a live interactive broadcast.",
+   "body": [
+    "The deck for Virtually, our generative AI tool for VTubers. It shows how a single character image can become a live, interactive broadcast, and where Virtually fits in the VTuber ecosystem.",
+    "The deck is also available in Japanese and Chinese from the language buttons in the bottom-left corner of the slides."
+   ]
+  }
+ },
+ "articles": {
+  "hashchat-social-network": {
+   "meta": "Product story - November 2, 2026",
+   "title": "HashChat: the social network without language barriers",
+   "description": "How Mingle became HashChat: a translated feed, profiles that show who you want to meet, and chats with a live interpreter built in, compared with LINE, WeChat, WhatsApp, HelloTalk, and more.",
+   "link": "Read the story"
+  },
+  "ai-translators-comparison": {
+   "meta": "Comparison - Updated April 20, 2026",
+   "title": "AI Translators Comparison",
+   "description": "A practical table-first guide to price, platform coverage, language coverage, live captions, transcripts, automatic switching, background translation, and external app audio capture.",
+   "link": "Read the comparison"
+  }
+ }
+}

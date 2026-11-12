@@ -149,21 +149,25 @@ export function extendFixedSource(plan: BubbleTailPlan, coveredLength: number): 
 }
 
 /**
- * Length of the leading part of `remaining` that the model says it translated.
- * Whitespace is ignored when matching; -1 when the model's text is not a prefix.
+ * Length of the leading part of `remaining` that the model translated, found
+ * from `cutAfter`: the last few source words it translated. Whitespace is
+ * ignored. 0 when `cutAfter` is empty; -1 when those words are not in
+ * `remaining` or appear more than once (the cut would be a guess).
  */
-export function matchTranslatedTailLength(remaining: string, translatedPart: string): number {
-  const target = translatedPart.replace(/\s+/g, '')
+export function matchTailCutAfter(remaining: string, cutAfter: string): number {
+  const target = cutAfter.replace(/\s+/g, '')
   if (!target) return 0
-  let matched = 0
+  let compact = ''
+  const ends: number[] = []
   for (let index = 0; index < remaining.length; index += 1) {
     const char = remaining[index] as string
     if (/\s/.test(char)) continue
-    if (char !== target[matched]) return -1
-    matched += 1
-    if (matched === target.length) return index + 1
+    compact += char
+    ends.push(index + 1)
   }
-  return -1
+  const first = compact.indexOf(target)
+  if (first < 0 || compact.indexOf(target, first + 1) >= 0) return -1
+  return ends[first + target.length - 1] as number
 }
 
 const CUT_PUNCTUATION = /[.,!?;:…。、，！？；：」』”"')\]]$/
@@ -255,4 +259,33 @@ export function shouldRequestInterimFill(currentText: string, lastRequestedText:
   const minChars = fallbackChars / INTERIM_FILL_MIN_CHARS_DIVISOR
   if (grown >= minChars && countInterimCutCandidates(current) > countInterimCutCandidates(last)) return true
   return grown >= fallbackChars
+}
+
+// ===== Streamed interim fills =====
+
+const PARTIAL_MARKER = /<\/?(?:end|fin)>/gi
+
+/**
+ * What an interim tail answer still being streamed lets the bubble show:
+ * the fixed translations plus the fill so far, per language. Null until the
+ * answer has named where it cuts and that cut is one the finished
+ * answer would keep (the same checks as the finished answer), so nothing
+ * shows that the final answer would throw away.
+ */
+export function buildInterimTailPartialTranslations(
+  plan: BubbleTailPlan,
+  fields: { values: Record<string, string>, complete: Set<string> },
+  targetLanguages: readonly string[],
+  cutAfterKey: string,
+): Record<string, string> | null {
+  if (!fields.complete.has(cutAfterKey)) return null
+  const coveredLength = matchTailCutAfter(plan.remainingSource, fields.values[cutAfterKey] || '')
+  if (coveredLength <= 0 || !isSafeInterimCut(plan.remainingSource, coveredLength)) return null
+  const fills: Record<string, string> = {}
+  for (const language of targetLanguages) {
+    const fill = (fields.values[language] || '').replace(PARTIAL_MARKER, '').trim()
+    if (fill) fills[language] = fill
+  }
+  if (Object.keys(fills).length === 0) return null
+  return joinTailTranslations(plan, fills, targetLanguages)
 }

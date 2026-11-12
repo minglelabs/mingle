@@ -77,9 +77,12 @@ export async function POST(request: Request) {
     if (!isOldEnoughForSignup(birthDateParts)) {
       return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
     }
-  } else {
+  } else if (payload?.birthDate === undefined) {
+    // Older screens that never asked sent nothing; they keep the old default.
     birthDate = parseBirthDate("2000-01-01");
   }
+  // An explicit null is the short onboarding: the birth date is asked later,
+  // so the account starts without one and shows no age.
 
   // Picked in onboarding before the account exists; older app builds send none.
   if (payload?.gender !== undefined && payload?.gender !== null && !isProfileGender(payload.gender)) {

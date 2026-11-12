@@ -13,6 +13,9 @@
  * `nativeTtsStream` is true when the shell also plays clips that arrive in
  * pieces (`native_tts_stream_start` / `_chunk` / `_end`); absent or false
  * means whole clips only.
+ * `contacts` is true when the shell can read the address book and open a
+ * written text message (`native_contacts_request`, `native_sms_compose`);
+ * absent or false means the contact-sync screen offers neither.
  */
 export type NativeShellCapabilities = {
   type: 'capabilities';
@@ -21,6 +24,7 @@ export type NativeShellCapabilities = {
   deviceAudioCapture: boolean;
   nativeTts: boolean;
   nativeTtsStream: boolean;
+  contacts: boolean;
 };
 
 // The capabilities message is sent once per load end and a room usually mounts
@@ -32,6 +36,7 @@ export function buildNativeShellCapabilities(options: {
   deviceAudioCapture?: boolean;
   nativeTts?: boolean;
   nativeTtsStream?: boolean;
+  contacts?: boolean;
 }): NativeShellCapabilities {
   return {
     type: 'capabilities',
@@ -40,5 +45,6 @@ export function buildNativeShellCapabilities(options: {
     deviceAudioCapture: options.deviceAudioCapture === true,
     nativeTts: options.nativeTts === true,
     nativeTtsStream: options.nativeTtsStream === true,
+    contacts: options.contacts === true,
   };
 }

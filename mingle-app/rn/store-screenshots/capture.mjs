@@ -12,7 +12,8 @@
 //   cd mingle-app/rn/store-screenshots && npm install
 //   node capture.mjs [--base http://localhost:8538] [--only ko,en]
 //
-// Output: captures/<lang>/{translation,comments,chat,search,hash-rush,hash-rush-maps}.png
+// Output: captures/<lang>/{translation,comments,chat,dm,voice,booking,search,hash-rush,hash-rush-maps}.png
+// `--screens dm,voice,booking` (or chat) draws from JSON alone: no server, no sign-in.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -44,6 +45,10 @@ const COMMENT_POST = 'rs-cmuwrn9lq0019sh9afs6cpgkt'; // photo: tteokbokki, 3 com
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const chat = JSON.parse(await fs.readFile(path.join(HERE, 'chat.json'), 'utf8'));
+const dm = JSON.parse(await fs.readFile(path.join(HERE, 'dm.json'), 'utf8'));
+// Screens drawn from JSON here; they need no devbox server and no sign-in.
+const DRAWN_SCREENS = ['chat', 'dm', 'voice', 'booking'];
+const NEEDS_SERVER = !SCREENS || SCREENS.some((name) => !DRAWN_SCREENS.includes(name) && !name.startsWith('hash-rush'));
 
 const browser = await puppeteer.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -66,7 +71,7 @@ async function signIn() {
   await p.close();
   console.log('sign-in:', status);
 }
-await signIn();
+if (NEEDS_SERVER) await signIn();
 
 async function newPage(lang) {
   const p = await browser.newPage();
@@ -97,7 +102,7 @@ async function capture(lang, dir, name, url, after, { translatePost = false } = 
   const p = await newPage(LANGS[lang]);
   // networkidle can wait forever on a busy dev server; load the DOM and give the feed time to fill
   await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 180000 });
-  await sleep(9000);
+  await sleep(url.startsWith('file:') ? 600 : 9000);
   if (translatePost) await showViewerTranslation(p);
   if (after) await after(p);
   await p.screenshot({ path: path.join(dir, `${name}.png`) });
@@ -178,6 +183,175 @@ function chatHtml(lang) {
   </footer></body></html>`;
 }
 
+// A room with one other person, as the viewer sees it: their lines on the left
+// (their language, then the viewer's), the viewer's own on the right in the
+// app's own-bubble tint (viewer's language, then theirs). `kind`:
+//   dm      - typed chat with a friend
+//   voice   - the same room while speaking: the last line is still being heard
+//   booking - a booking call on speaker, the shop on the other side
+// `call`: the same room during a voice talk (the app's voice call), drawn the
+// way the voice talk build shows it (src/components/LivePhoneDemo/VoiceTalkPanel.tsx
+// on feat/voicetalk-windows-livekit-mvp): the call panel under the top bar with
+// the people in the call and one open seat (the speaker's avatar ringed by the
+// soft gray ripple, each seat's language flag at its bottom left), "My voice on"
+// in red and a gray "Leave"; the room's talk under it, every line in both
+// languages; the phone button bottom left in green with its dot. The words are
+// the app's own (src/i18n/voice-talk-copy.ts there), in every language.
+const VOICE_TALK_COPY = {
+  ko: { name: '보이스톡', me: '나', empty: '빈 자리', micOn: '내 목소리 켜짐', leave: '나가기' },
+  en: { name: 'Voice talk', me: 'Me', empty: 'Open seat', micOn: 'My voice on', leave: 'Leave' },
+  ja: { name: 'ボイストーク', me: '自分', empty: '空き席', micOn: '自分の声 オン', leave: '退出' },
+  'zh-cn': { name: '语音通话', me: '我', empty: '空位', micOn: '我的声音 开', leave: '退出' },
+  'zh-tw': { name: '語音通話', me: '我', empty: '空位', micOn: '我的聲音 開', leave: '離開' },
+  fr: { name: 'Appel vocal', me: 'Moi', empty: 'Place libre', micOn: 'Ma voix activée', leave: 'Quitter' },
+  de: { name: 'Sprachanruf', me: 'Ich', empty: 'Freier Platz', micOn: 'Meine Stimme an', leave: 'Verlassen' },
+  es: { name: 'Llamada de voz', me: 'Yo', empty: 'Lugar libre', micOn: 'Mi voz activada', leave: 'Salir' },
+  pt: { name: 'Chamada de voz', me: 'Eu', empty: 'Lugar livre', micOn: 'Minha voz ligada', leave: 'Sair' },
+  it: { name: 'Chiamata vocale', me: 'Io', empty: 'Posto libero', micOn: 'La mia voce attiva', leave: 'Esci' },
+  ru: { name: 'Голосовой звонок', me: 'Я', empty: 'Свободно', micOn: 'Мой голос вкл.', leave: 'Выйти' },
+  ar: { name: 'مكالمة صوتية', me: 'أنا', empty: 'مقعد فارغ', micOn: 'صوتي مفعّل', leave: 'مغادرة' },
+  hi: { name: 'वॉइस कॉल', me: 'मैं', empty: 'खाली जगह', micOn: 'मेरी आवाज़ चालू', leave: 'छोड़ें' },
+  th: { name: 'โทรด้วยเสียง', me: 'ฉัน', empty: 'ที่ว่าง', micOn: 'เสียงของฉัน เปิด', leave: 'ออก' },
+  vi: { name: 'Gọi thoại', me: 'Tôi', empty: 'Chỗ trống', micOn: 'Giọng tôi bật', leave: 'Rời đi' },
+};
+function voiceTalkPanel(lang, { partner, partnerName, partnerAvatar, meAvatar, speaking }) {
+  const copy = VOICE_TALK_COPY[lang] || VOICE_TALK_COPY.en;
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const seat = (who) => `
+    <div class="vt-seat">
+      <span class="vt-ring">
+        ${who.speaking ? '<span class="vt-ripple r1"></span><span class="vt-ripple r2"></span><span class="vt-glow"></span>' : ''}
+        <span class="vt-face"><img src="${pathToFileURL(path.join(AVATARS, who.avatar))}"></span>
+        <span class="vt-flag">${chat.flags[who.lang]}</span>
+      </span>
+      <span class="vt-label">${esc(who.label)}</span>
+    </div>`;
+  const empty = `<div class="vt-seat"><span class="vt-ring"><span class="vt-face vt-empty"><svg viewBox="0 0 24 24" class="vt-plus"><path d="M12 5v14M5 12h14"/></svg></span></span><span class="vt-label">${copy.empty}</span></div>`;
+  const seats = [
+    seat({ avatar: meAvatar, lang, label: copy.me, speaking: speaking === 'me' }),
+    seat({ avatar: partnerAvatar, lang: partner, label: partnerName, speaking: speaking === 'friend' }),
+    empty,
+  ].join('');
+  const mic = '<svg viewBox="0 0 24 24" style="width:17px;height:17px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+  const phoneOff = '<svg viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 4.2 2 2 0 0 1 5.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8.9 9.7"/><path d="M22 2 2 22"/></svg>';
+  return `
+  <div class="vt-panel">
+    <div class="vt-top"><span class="vt-dot"><i></i><b></b></span><span class="vt-title">${copy.name} · 2/8</span>
+      <svg viewBox="0 0 24 24" class="vt-chev"><path d="m18 15-6-6-6 6"/></svg></div>
+    <div class="vt-grid">${seats}</div>
+    <div class="vt-buttons" dir="ltr"><span class="vt-mic">${mic}${copy.micOn}</span><span class="vt-leave">${phoneOff}${copy.leave}</span></div>
+  </div>`;
+}
+const VOICE_TALK_CSS = `
+  .vt-panel{position:absolute;left:8px;right:8px;top:56px;z-index:5;background:rgba(255,255,255,.96);border:1px solid #F3F4F6;border-radius:16px;
+    box-shadow:0 10px 28px rgba(15,23,42,.12);overflow:hidden}
+  .vt-top{display:flex;align-items:center;gap:8px;padding:8px 12px}
+  .vt-dot{position:relative;width:8px;height:8px;flex:none}
+  .vt-dot i{position:absolute;inset:-3px;border-radius:50%;background:rgba(52,211,153,.35)}
+  .vt-dot b{position:absolute;inset:0;border-radius:50%;background:#10B981}
+  .vt-title{flex:1;font-size:14px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vt-chev{width:18px;height:18px;color:#6B7280;stroke-width:2.4}
+  .vt-grid{display:flex;flex-wrap:wrap;justify-content:center;column-gap:8px;row-gap:10px;padding:4px 12px 8px}
+  .vt-grid .vt-seat{width:calc(25% - 6px)}
+  .vt-seat{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+  .vt-ring{position:relative;width:48px;height:48px;display:inline-flex}
+  .vt-ripple{position:absolute;inset:0;border-radius:50%;background:rgba(148,163,184,.25)}
+  .vt-ripple.r1{transform:scale(1.32);opacity:.55}
+  .vt-ripple.r2{transform:scale(1.58);opacity:.3}
+  .vt-glow{position:absolute;inset:-3px;border-radius:50%;background:rgba(203,213,225,.3)}
+  .vt-face{position:relative;width:48px;height:48px;border-radius:50%;background:#FEF3C7;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .vt-face img{width:40px;height:40px}
+  .vt-empty{background:#F9FAFB;border:1px dashed #D1D5DB}
+  .vt-plus{width:18px;height:18px;fill:none;stroke:#D1D5DB;stroke-width:2.2;stroke-linecap:round}
+  .vt-flag{position:absolute;left:-2px;bottom:-2px;min-width:18px;height:18px;padding:0 2px;border-radius:9px;background:#fff;box-shadow:0 0 0 1px #E5E7EB;
+    display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1}
+  .vt-label{width:100%;text-align:center;font-size:11.2px;font-weight:500;color:#4B5563;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vt-buttons{display:flex;justify-content:center;gap:16px;border-top:1px solid #F3F4F6;padding:10px 12px}
+  .vt-mic,.vt-leave{height:44px;min-width:124px;padding:0 20px;border-radius:22px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    font-size:13.8px;font-weight:600;white-space:nowrap}
+  .vt-mic{background:#EF4444;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .vt-leave{background:#F3F4F6;color:#374151}
+  .vt-phone{position:relative;color:#10B981;margin-top:4px}
+  .vt-phone i{position:absolute;right:-3px;top:-2px;width:7px;height:7px;border-radius:50%;background:#10B981;box-shadow:0 0 0 2px #fff}
+`;
+
+function dmHtml(lang, kind, { call = false } = {}) {
+  const partner = chat.partners[lang][0];
+  const lines = dm[kind];
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const title = kind === 'booking' ? dm.bookingTitle[lang] : dm.friendName[partner];
+  const avatar = kind === 'booking' ? 'squirrel.svg' : 'rabbit.svg';
+  const listening = kind !== 'dm';
+  const meAvatar = 'fox.svg';
+  // In a call the last line is the one being spoken.
+  const speaking = lines[lines.length - 1]?.by === 'me' ? 'me' : 'friend';
+  const partnerName = kind === 'booking' ? dm.bookingTitle[lang] : dm.friendName[partner];
+  const bubbles = lines.map((line) => {
+    const mine = line.by === 'me';
+    const order = mine ? [lang, partner] : [partner, lang];
+    const shown = line.live ? order.slice(0, 1) : order;
+    const rows = shown.map((l, k) => `
+      <div class="row${k === 0 ? ' original' : ''}">
+        <span class="flag${l === lang ? ' mine' : ''}">${chat.flags[l]}${k === 0 ? '<i>”</i>' : ''}</span>
+        <span class="text" dir="auto">${esc(line.text[l])}${line.live ? '<b class="caret"></b>' : ''}</span>
+      </div>`).join('');
+    const pending = line.live ? '<div class="row"><span class="dots"><b></b><b></b><b></b></span></div>' : '';
+    return mine
+      ? `<div class="msg own"><div class="bubble">${rows}${pending}</div></div>`
+      : `<div class="msg"><img class="avatar" src="${pathToFileURL(path.join(AVATARS, avatar))}"><div class="bubble">${rows}</div></div>`;
+  }).join('');
+  const micIcon = '<svg viewBox="0 0 24 24" style="width:20px;height:20px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+  const stopIcon = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>';
+  return `<!doctype html><html lang="${LANGS[lang]}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+  *{box-sizing:border-box}
+  html,body{margin:0;width:390px;height:797px;overflow:hidden;background:#F7F7F8;
+    font-family:-apple-system,"SF Pro Text","Apple SD Gothic Neo","Hiragino Sans","PingFang SC","Geeza Pro","Kohinoor Devanagari","Thonburi",sans-serif;color:#111}
+  header{height:52px;background:#fff;border-bottom:1px solid #EEE;display:flex;align-items:center;padding:0 14px;gap:10px}
+  .back{font-size:26px;color:#333;width:22px}
+  .title{font-size:16px;font-weight:600;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pill{margin-left:6px;border:1px solid #E5E5E5;border-radius:14px;padding:6px 10px;display:flex;gap:10px;align-items:center;font-size:19px}
+  .pill b{font-size:12px;color:#444}
+  .icons{margin-left:auto;display:flex;gap:18px;color:#333}
+  main{padding:18px 12px 0 12px;display:flex;flex-direction:column;gap:14px;height:647px;overflow:hidden}
+  .msg{display:flex;align-items:flex-start;gap:8px}
+  .msg.own{justify-content:flex-end}
+  .avatar{width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #EEE;padding:3px;flex:none}
+  .bubble{background:#fff;border:1px solid #E8E8E8;border-radius:0 16px 16px 16px;padding:2px 12px;max-width:272px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .own .bubble{background:#FFF8E6;border-color:#F6E3B0;border-radius:16px}
+  .row{display:flex;gap:9px;padding:9px 0;font-size:15.5px;line-height:1.38;border-top:1px solid #EFEFEF}
+  .own .row{border-top-color:#F3E4BC}
+  .row:first-child{border-top:0}
+  .row.original .text{color:#111}
+  .text{color:#333}
+  .flag{position:relative;font-size:17px;line-height:1.1;flex:none;height:21px}
+  .flag i{position:absolute;right:-6px;top:-6px;font-style:normal;font-weight:900;font-size:15px;color:#111}
+  .flag.mine{border-bottom:2.5px solid #F5A400}
+  .caret{display:inline-block;width:3px;height:15px;margin-left:3px;border-radius:2px;background:#F5A400;vertical-align:-2px}
+  .dots{display:flex;gap:4px;padding:5px 0 3px 30px}
+  .dots b{width:5px;height:5px;border-radius:50%;background:#F5A400}
+  footer{position:absolute;bottom:0;left:0;right:0;height:96px;background:#fff;border-top:1px solid #EEE;display:flex;align-items:flex-start;padding:16px 22px 0;gap:18px;color:#555}
+  .stat{font-size:12px;color:#8E8E8E;line-height:1.4;width:58px}
+  .start{margin:0 auto;background:linear-gradient(90deg,#FFB400,#FF7A00);color:#fff;border-radius:24px;height:46px;width:112px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:17px;font-weight:600;box-shadow:0 6px 14px rgba(255,140,0,.3)}
+  .start.live{background:#1F2430;box-shadow:0 6px 14px rgba(31,36,48,.25)}
+  svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  ${call ? `${VOICE_TALK_CSS} main{padding-top:200px}` : ''}
+  </style></head><body>
+  <header><span class="back">‹</span><span class="title">${esc(title)}</span>
+    <span class="pill">${[lang, partner].map((l) => chat.flags[l]).join('')}<b>⌄</b></span>
+    <span class="icons"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><rect x="11" y="11" width="8" height="6" rx="1.5"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></header>
+  ${call ? voiceTalkPanel(lang, { partner, partnerName, partnerAvatar: avatar, meAvatar, speaking }) : ''}
+  <main>${bubbles}</main>
+  <footer>${call
+    ? '<span class="vt-phone"><svg viewBox="0 0 24 24" style="width:20px;height:20px"><path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 4.2 2 2 0 0 1 5.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L9 9.6a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg><i></i></span>'
+    : `<div class="stat">${listening ? '0m 42s' : '3m 10s'}<br>${lines.length} msgs</div>`}
+    <svg viewBox="0 0 24 24" style="margin-top:8px"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg>
+    <div class="start${listening ? ' live' : ''}">${listening ? `${stopIcon}Stop` : `${micIcon}Start`}</div>
+    <svg viewBox="0 0 24 24" style="margin-top:8px"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>
+    <svg viewBox="0 0 24 24" style="margin-top:8px"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
+  </footer></body></html>`;
+}
+
 async function hashRush(lang, dir, name, map) {
   if (SCREENS && !SCREENS.includes(name)) return;
   const p = await newPage(LANGS[lang]);
@@ -229,6 +403,12 @@ for (const lang of Object.keys(LANGS)) {
   const tmp = path.join(os.tmpdir(), `hashchat-chat-${lang}.html`);
   await fs.writeFile(tmp, chatHtml(lang));
   await capture(lang, dir, 'chat', pathToFileURL(tmp).href);
+  for (const kind of ['dm', 'voice', 'booking']) {
+    const page = path.join(os.tmpdir(), `hashchat-${kind}-${lang}.html`);
+    // 03: the voice talk call itself; 04 puts the booking call on a phone in its scene.
+    await fs.writeFile(page, dmHtml(lang, kind, { call: kind !== 'dm' }));
+    await capture(lang, dir, kind, pathToFileURL(page).href);
+  }
 
   await hashRush(lang, dir, 'hash-rush', 'meadow');
   await hashRush(lang, dir, 'hash-rush-maps', 'beach');

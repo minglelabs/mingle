@@ -1,0 +1,99 @@
+{
+ "ui": {
+  "nav": {
+   "how": "Cách thức hoạt động",
+   "features": "Tính năng",
+   "translate": "Dịch thuật",
+   "uses": "Trường hợp sử dụng",
+   "blog": "Blog",
+   "legal": "Legal"
+  },
+  "footerCopy": "© Mingle Labs.",
+  "footerRenamed": "HashChat trước đây có tên là Mingle.",
+  "privacy": "Quyền riêng tư",
+  "terms": "Điều khoản",
+  "blogEyebrow": "Blog HashChat",
+  "blogTitle": "Góc nhìn về dịch thuật AI theo thời gian thực.",
+  "blogLede": "Những suy nghĩ về sản phẩm, bài so sánh, bài thuyết trình và ghi chép thực tế dành cho những người xây dựng trải nghiệm trò chuyện xuyên ngôn ngữ. HashChat trước đây có tên là Mingle.",
+  "latestEyebrow": "Mới nhất",
+  "latestTitle": "Bài thuyết trình, slide và câu chuyện về sản phẩm.",
+  "latestLede": "Các bộ slide từ những buổi thuyết trình và gọi vốn của chúng tôi, cùng câu chuyện Mingle trở thành HashChat và bài so sánh trực tiếp các công cụ dịch AI.",
+  "indexMetaTitle": "Blog HashChat - Dịch thuật AI cho các cuộc trò chuyện trực tiếp",
+  "indexMetaDescription": "Khám phá những chia sẻ của HashChat (trước đây là Mingle) về dịch thuật AI, phụ đề giọng nói theo thời gian thực, sản phẩm trò chuyện đa ngôn ngữ và các buổi thuyết trình của chúng tôi.",
+  "by": "Tác giả",
+  "fullscreen": "Xem toàn màn hình",
+  "keyHint": "Nhấp vào slide, sau đó sử dụng các phím mũi tên, con lăn chuột hoặc thao tác vuốt để điều hướng. Thêm #number vào liên kết toàn màn hình để chuyển đến một slide cụ thể.",
+  "readDeck": "Xem slide",
+  "activate": "Nhấp để sử dụng slide",
+  "deckLabel": "Slide",
+  "backToBlog": "Tất cả bài viết",
+  "deckLanguageNote": "Nội dung slide được trình bày bằng tiếng Anh."
+ },
+ "author": "Hyeongkeol Nam, Mingle Labs",
+ "decks": {
+  "ai-wrapper-business": {
+   "kind": "Bài thuyết trình",
+   "dateLabel": "5 tháng 11, 2026",
+   "title": "Khám phá cơ hội kinh doanh trong lĩnh vực phần mềm AI Wrapper",
+   "description": "Các nghiên cứu điển hình về doanh nghiệp AI Wrapper và chiến lược cho những bước tiếp theo.",
+   "body": [
+    "Slide từ buổi thuyết trình về phần mềm AI Wrapper: những sản phẩm sử dụng AI để tự động hóa các trải nghiệm vốn đã tồn tại. Bộ slide gồm 94 trang, lần lượt khám phá vibe coding và các AI agent, trò chuyện với nhân vật ảo, ghi chú, theo dõi chế độ ăn bằng AI, nền tảng tổng hợp, công cụ hỗ trợ học tập và nhiều lĩnh vực khác. Qua đó, bài thuyết trình phân tích những sản phẩm AI Wrapper nào có thể đứng vững trước các ông lớn công nghệ và những sản phẩm nào đã bị bỏ lại phía sau.",
+    "Phần cuối tập trung vào những cơ hội đáng để theo đuổi: năm ý tưởng, các lợi thế cạnh tranh bền vững mà một doanh nghiệp phần mềm có thể xây dựng và cách để một sản phẩm Wrapper phát triển vượt ra ngoài khuôn khổ Wrapper đơn thuần."
+   ]
+  },
+  "ai-wrapper-business-surfers-3rd": {
+   "kind": "Bài thuyết trình",
+   "dateLabel": "12 tháng 8, 2026",
+   "title": "Kinh doanh với AI Wrapper: Phiên bản Surfers Cohort 3",
+   "description": "Phiên bản đầu tiên, dài hơn của bài thuyết trình về AI Wrapper, được trình bày tại Surfers Cohort 3.",
+   "body": [
+    "Phiên bản đầu tiên của bài thuyết trình về AI Wrapper, được trình bày tại Surfers Cohort 3. Bộ slide gồm 165 trang đi sâu vào từng lĩnh vực: vibe coding, trò chuyện với nhân vật ảo và ba giai đoạn phát triển của lĩnh vực này, ghi chú, theo dõi chế độ ăn bằng AI, các nền tảng tổng hợp như OpenRouter và công cụ hỗ trợ học tập bằng AI.",
+    "Bộ slide được biên soạn bằng tiếng Hàn và mặc định hiển thị bằng tiếng Anh tại đây. Hãy chuyển sang tiếng Hàn để xem bản gốc."
+   ]
+  },
+  "hashchat-pitch-deck": {
+   "kind": "Slide gọi vốn",
+   "dateLabel": "Cập nhật ngày 1 tháng 9, 2026",
+   "title": "Slide gọi vốn HashChat: Ứng dụng nhắn tin bằng giọng nói không còn rào cản ngôn ngữ",
+   "description": "Lý do chúng tôi xây dựng HashChat, đối tượng người dùng mục tiêu và cách một công cụ phiên dịch trực tiếp phát triển thành mạng xã hội được xây dựng trên nền tảng AI.",
+   "body": [
+    "Bộ slide gọi vốn đầy đủ của chúng tôi. Mọi thứ bắt đầu từ một vấn đề đơn giản: mọi người muốn kết bạn ở nước ngoài, nhưng rào cản ngôn ngữ khiến điều đó trở nên khó khăn. Trong khi đó, các công cụ dịch thuật hiện nay chưa bao giờ được thiết kế dành cho những cuộc trò chuyện xã hội.",
+    "Nội dung bao gồm phản hồi ban đầu của người dùng trên HelloTalk, chiến lược ba giai đoạn từ công cụ dịch trực tiếp cá nhân sang ứng dụng nhắn tin bằng giọng nói rồi đến nền tảng mạng xã hội, cùng các lĩnh vực mục tiêu trong phần phụ lục."
+   ]
+  },
+  "hashchat-pitch-deck-short": {
+   "kind": "Slide gọi vốn",
+   "dateLabel": "Cập nhật ngày 1 tháng 9, 2026",
+   "title": "Slide gọi vốn HashChat: Bản rút gọn",
+   "description": "Bài toán con gà và quả trứng của việc trao đổi ngôn ngữ và cách phiên dịch trực tiếp giải quyết một nửa vấn đề.",
+   "body": [
+    "Phiên bản rút gọn của bộ slide gọi vốn. Các ứng dụng trao đổi ngôn ngữ đang mắc kẹt trong bài toán con gà và quả trứng: bạn muốn kết bạn ở nước ngoài, đồng thời muốn học ngôn ngữ của họ. HashChat giải quyết một nửa vấn đề bằng tính năng phiên dịch trực tiếp, giúp bạn trò chuyện mà không cần dùng chung một ngôn ngữ.",
+    "Bộ slide cũng đề cập đến nhu cầu sử dụng phụ đề bổ sung và phiên dịch trực tiếp khi gặp mặt mà chúng tôi đã phát hiện, cùng mục tiêu đầu tiên: chinh phục người dùng K-Friends."
+   ]
+  },
+  "virtually-deck": {
+   "kind": "Slide gọi vốn",
+   "dateLabel": "13 tháng 9, 2026",
+   "title": "Virtually: Phát trực tiếp VTuber với sức mạnh của AI tạo sinh",
+   "description": "Biến một hình ảnh đơn lẻ thành buổi phát sóng tương tác trực tiếp.",
+   "body": [
+    "Bộ slide giới thiệu Virtually, công cụ AI tạo sinh dành cho VTuber của chúng tôi. Nội dung cho thấy cách biến một hình ảnh nhân vật duy nhất thành buổi phát sóng trực tiếp có tính tương tác và vị trí của Virtually trong hệ sinh thái VTuber.",
+    "Bộ slide cũng có phiên bản tiếng Nhật và tiếng Trung. Bạn có thể chọn ngôn ngữ tương ứng bằng các nút ở góc dưới bên trái của slide."
+   ]
+  }
+ },
+ "articles": {
+  "hashchat-social-network": {
+   "meta": "Câu chuyện sản phẩm - 2 tháng 11, 2026",
+   "title": "HashChat: Mạng xã hội không còn rào cản ngôn ngữ",
+   "description": "Hành trình Mingle trở thành HashChat: bảng tin được dịch tự động, hồ sơ cá nhân giúp bạn tìm đúng người muốn kết nối và tính năng trò chuyện tích hợp phiên dịch trực tiếp. So sánh với LINE, WeChat, WhatsApp, HelloTalk và nhiều nền tảng khác.",
+   "link": "Đọc bài viết"
+  },
+  "ai-translators-comparison": {
+   "meta": "Bài so sánh - Cập nhật ngày 20 tháng 4, 2026",
+   "title": "So sánh các công cụ dịch AI",
+   "description": "Hướng dẫn thực tế với bảng so sánh chi tiết về giá cả, nền tảng hỗ trợ, phạm vi ngôn ngữ, phụ đề trực tiếp, bản ghi hội thoại, chuyển đổi ngôn ngữ tự động, dịch thuật nền và khả năng thu âm thanh từ ứng dụng bên ngoài.",
+   "link": "Đọc bài so sánh"
+  }
+ }
+}

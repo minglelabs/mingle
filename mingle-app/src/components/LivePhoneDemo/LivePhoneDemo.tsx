@@ -9,6 +9,17 @@ import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
 import { resolveFirstUnreadUtteranceId, shouldAnchorConversationEntry } from './live-phone-demo.scroll.logic'
 import { resolveAccessibilityCopy } from '@/i18n/accessibility-copy'
 import { MessageReplyComposerBar, MessageReplyProvider } from './MessageReply'
+import SpeechLengthCard from '@/components/LivePhoneDemo/SpeechLengthCard'
+import { resolveFirstRunCopy } from '@/i18n/first-run-copy'
+import { captureMingleClientEvent } from '@/lib/posthog-client'
+import SpeechLengthScale from '@/components/LivePhoneDemo/SpeechLengthScale'
+import {
+  DEFAULT_SPEECH_LENGTH_LEVEL,
+  isExactSpeechLengthLevel,
+  matchSpeechLengthLevel,
+  resolveSpeechLengthPreferences,
+  type SpeechLengthLevel,
+} from '@/lib/speech-length'
 import type { MessageReplyReference } from '@/lib/message-reply'
 import {
   arePlaybackKeyListsEqual,
@@ -95,6 +106,8 @@ import SlideSurface from '@/components/slide-surface'
 import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
 import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
+import { buildInviteSharedLinkMessage } from '@/i18n/invite-ticket-copy'
+import { useOwnInviteCode } from '@/lib/own-invite-code'
 import { RETRANSLATE_TIP_SHOWN_STORAGE_KEY, messageRetranslateCopy } from '@/lib/message-retranslate'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -153,20 +166,16 @@ import {
   DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
-  MAX_SONIOX_SILENCE_MS,
   LS_KEY_AD_BANNER_POSITION,
   LS_KEY_INPUT_MODE,
   LS_KEY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
-  MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoInputMode,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
-  shouldShowEndpointTuningControl,
-  shouldShowManualSilenceControl,
   type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
@@ -197,7 +206,10 @@ import {
   type LivePhoneDemoBubbleDisplayMode,
 } from './live-phone-demo.bubble-display'
 import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-display-copy'
-import { resolveLivePhoneDemoMessageSpacingClass } from './live-phone-demo.message-spacing'
+import {
+  isLivePhoneDemoMessageGroupContinuation,
+  resolveLivePhoneDemoMessageSpacingClass,
+} from './live-phone-demo.message-spacing'
 import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   TRANSLATION_MODEL_OPTIONS,
@@ -1267,21 +1279,6 @@ function findTopVisibleUtteranceDateLabel(
   return formatScrollDateLabel(anchor.createdAtMs, locale)
 }
 
-function deriveRangeValueFromPointer(
-  event: ReactPointerEvent<HTMLInputElement>,
-  min: number,
-  max: number,
-  step: number,
-): number {
-  const rect = event.currentTarget.getBoundingClientRect()
-  if (rect.width <= 0) return min
-  const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
-  const raw = min + ((max - min) * ratio)
-  const stepped = min + (Math.round((raw - min) / step) * step)
-  const bounded = Math.max(min, Math.min(max, stepped))
-  return Number.isFinite(bounded) ? bounded : min
-}
-
 function isValidFeedbackEmailAddress(value: string): boolean {
   const normalized = value.trim()
   if (!normalized) return false
@@ -1546,6 +1543,11 @@ interface LivePhoneDemoProps {
   initialDefaultDisplayLanguage?: string | null
   autoStartOnMount?: boolean
   onAutoStartHandled?: () => void
+  // First run on this device (see @/lib/first-run): the room starts a new
+  // user on the default sentence length and, right after its first finished
+  // bubble, offers the 1-6 length scale.
+  speechLengthIntro?: boolean
+  onFirstSpeakCompleted?: () => void
   isVisible?: boolean
   enableNativeBannerBridge?: boolean
   onStartRecordingRequested?: () => Promise<LivePhoneDemoStartRecordingPreparation | void> | LivePhoneDemoStartRecordingPreparation | void
@@ -1759,6 +1761,7 @@ type LivePhoneDemoChatMessageRowProps = {
   viewerUserId?: string | null
   onOpenProfile?: (userId: string) => void
   bubbleDisplayMode: LivePhoneDemoBubbleDisplayMode
+  isGroupContinuation: boolean
 }
 
 function resolveUtteranceCreatedAtDataAttribute(utterance: Utterance): string {
@@ -1785,6 +1788,7 @@ function LivePhoneDemoChatMessageRow({
   viewerUserId,
   onOpenProfile,
   bubbleDisplayMode,
+  isGroupContinuation,
 }: LivePhoneDemoChatMessageRowProps) {
   return (
     <div
@@ -1810,6 +1814,7 @@ function LivePhoneDemoChatMessageRow({
         viewerUserId={viewerUserId}
         onOpenProfile={onOpenProfile}
         bubbleDisplayMode={bubbleDisplayMode}
+        isGroupContinuation={isGroupContinuation}
       />
     </div>
   )
@@ -1833,6 +1838,7 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
     if (prev.viewerUserId !== next.viewerUserId) return false
     if (prev.onOpenProfile !== next.onOpenProfile) return false
     if (prev.bubbleDisplayMode !== next.bubbleDisplayMode) return false
+    if (prev.isGroupContinuation !== next.isGroupContinuation) return false
     if (prev.playingPlaybackKey !== next.playingPlaybackKey) return false
     if (!arePlaybackKeyListsEqual(prev.pendingPlaybackKeys, next.pendingPlaybackKeys)) return false
 
@@ -2018,13 +2024,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   connectionFailedLabel,
   switchLiveRoomToastLabel,
   textSizeLabel,
-  silenceFinalizeLabel,
-  sttSegmentationModeLabel,
-  sttSegmentationModeEndLabel,
-  sttSegmentationModeFinLabel,
-  endpointTuningLabel,
-  endpointTuningShortLabel,
-  endpointTuningLongLabel,
   translationModelLabel,
   adBannerPositionLabel,
   adBannerPositionTopLabel,
@@ -2064,6 +2063,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   initialTranslationLanguagesLinked,
   initialDefaultDisplayLanguage,
   isVisible = true,
+  speechLengthIntro = false,
+  onFirstSpeakCompleted,
   enableNativeBannerBridge = true,
   onStartRecordingRequested,
   onSttSessionRunningChange,
@@ -2375,6 +2376,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [isRenamingConversation, setIsRenamingConversation] = useState(false)
   const [displayConversationTitle, setDisplayConversationTitle] = useState(conversationTitle ?? '')
   const [shareUrl, setShareUrl] = useState<string | null>(null)
+  // Pasted under the room link, so a friend who installs first can still type it in.
+  const ownInviteCode = useOwnInviteCode(Boolean(shareUrl))
   const [shareEnabled, setShareEnabled] = useState(false)
   // Public: listed with its name in the search tab and joinable by anyone.
   const [isPublicRoom, setIsPublicRoom] = useState(false)
@@ -4101,20 +4104,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [adBannerPosition, enableNativeBannerBridge, isVisible, nativeBannerPositionFromQuery, sessionAdBannerPositionOverride])
 
-  const flushAccountPreferencesSync = useCallback(() => {
-    if (!shouldScheduleAccountPreferencesSync({
-      allowSync: enableAccountPreferencesSync,
-      hydratedGeneration: accountPreferencesHydratedGeneration,
-      requestedHydrationGeneration: accountPreferencesHydrationGenerationRef.current,
-      currentPreferences: latestAccountPreferencesRef.current,
-      lastSyncedStateKey: accountPreferencesLastSyncedStateKeyRef.current,
-    })) {
-      return
-    }
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferences()
-  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, syncAccountPreferences])
-
   useEffect(() => {
     if (!shouldScheduleAccountPreferencesSync({
       allowSync: enableAccountPreferencesSync,
@@ -5197,35 +5186,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
     toast.message(messageRetranslateCopy(uiLocale).tip, { duration: 6000 })
   }, [conversationId, isStorageHydrated, isVisible, uiLocale, utterances])
-  const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
-  const selectedSttSegmentationMode: SttSegmentationMode = sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE
-  const handleSttSegmentationModeSelect = useCallback((nextMode: SttSegmentationMode) => {
-    if (isSttSessionRunning) return
-    if (latestAccountPreferencesRef.current.sttSegmentationMode === nextMode) return
-    const nextPreferences = commitLocalAccountPreferences({
-      ...latestAccountPreferencesRef.current,
-      sttSegmentationMode: nextMode,
-    })
-    setSttSegmentationMode(nextMode)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride(nextPreferences)
-  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, isSttSessionRunning, syncAccountPreferencesOverride])
-  const handleSonioxManualFinalizeSilenceChange = useCallback((next: number) => {
-    commitLocalAccountPreferences({
-      ...latestAccountPreferencesRef.current,
-      sonioxManualFinalizeSilenceMs: next,
-    })
-    setSonioxManualFinalizeSilenceMs(next)
-  }, [commitLocalAccountPreferences])
-  const handleSonioxEndpointTuningStepChange = useCallback((next: number) => {
-    const nextPreferences = commitLocalAccountPreferences({
-      ...latestAccountPreferencesRef.current,
-      sonioxEndpointTuningStep: next,
-    })
-    setSonioxEndpointTuningStep(next)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride(nextPreferences)
-  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
   const onSttSessionRunningChangeRef = useRef(onSttSessionRunningChange)
 
   useEffect(() => {
@@ -5420,17 +5380,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizePreviewLanguage = effectiveTranslationLanguages[0] || fallbackLanguages[0] || DEFAULT_STT_LANGUAGES[0] || 'en'
   const textSizePreviewBadgeLabel = textSizePreviewLanguage.trim().replace('_', '-').split('-')[0]?.toUpperCase() || 'EN'
   const textSizePreviewLabel = `Level ${textSizeLevel}`
-  const sliderClassName = [
-    // Keep the visible thumb compact while giving the native thumb a 44px touch target.
-    // Mask the track ends by the same 22px inset so the visible range still reaches both ends.
-    'h-12 w-full cursor-pointer touch-none appearance-none bg-transparent py-1.5',
-    'accent-[#0A84FF]',
-    '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:appearance-none [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white [&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,_white_0_22px,_#d1d1d6_22px_calc(100%_-_22px),_white_calc(100%_-_22px)_100%)]',
-    '[&::-webkit-slider-thumb]:-mt-[19px] [&::-webkit-slider-thumb]:h-11 [&::-webkit-slider-thumb]:w-11 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-0 [&::-webkit-slider-thumb]:bg-transparent [&::-webkit-slider-thumb]:bg-[radial-gradient(circle,_#fff_0_9px,_#c7c7cc_9px_10px,_transparent_10px)] [&::-webkit-slider-thumb]:shadow-none',
-    '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:appearance-none [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white [&::-moz-range-track]:bg-[linear-gradient(to_right,_white_0_22px,_#d1d1d6_22px_calc(100%_-_22px),_white_calc(100%_-_22px)_100%)]',
-    '[&::-moz-range-thumb]:h-11 [&::-moz-range-thumb]:w-11 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent [&::-moz-range-thumb]:bg-[radial-gradient(circle,_#fff_0_9px,_#c7c7cc_9px_10px,_transparent_10px)] [&::-moz-range-thumb]:shadow-none',
-  ].join(' ')
-
   // Boost TTS volume while STT is active to compensate for iOS
   // .playAndRecord audio session reducing speaker output.
   useEffect(() => {
@@ -5994,6 +5943,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleCopyShareLink = useCallback(async () => {
     if (!shareUrl) return
+    const shareText = buildInviteSharedLinkMessage(uiLocale, shareUrl, ownInviteCode)
     try {
       // navigator.clipboard only exists in a secure context (HTTPS or
       // localhost) — a LAN dev server reached over plain http:// (see
@@ -6001,10 +5951,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       // all, so this falls back to the older execCommand copy instead of
       // silently doing nothing.
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl)
+        await navigator.clipboard.writeText(shareText)
       } else {
         const textarea = document.createElement('textarea')
-        textarea.value = shareUrl
+        textarea.value = shareText
         textarea.style.position = 'fixed'
         textarea.style.opacity = '0'
         document.body.appendChild(textarea)
@@ -6017,7 +5967,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       toast.error(roomManagementCopy.shareErrorToastLabel)
     }
-  }, [roomManagementCopy.shareErrorToastLabel, roomManagementCopy.shareLinkCopiedToastLabel, shareUrl])
+  }, [ownInviteCode, roomManagementCopy.shareErrorToastLabel, roomManagementCopy.shareLinkCopiedToastLabel, shareUrl, uiLocale])
 
   // Stop current playback when sound is disabled.
   useEffect(() => {
@@ -6336,6 +6286,127 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     appliedSttCaptureSourceRef.current = sttCaptureSource
     if (isSttSessionRunning) void handleStopRecording()
   }, [handleStopRecording, isSttSessionRunning, sttCaptureSource])
+
+  // ── Sentence length ───────────────────────────────────────────────────
+  // One 1-6 scale (see @/lib/speech-length) stands for the two speech split
+  // settings, in the room settings and on the first-run card. A new user (no
+  // split ever chosen) starts on the default level before the room first
+  // listens, then sees the scale right after their first finished bubble.
+  // Both settings are fixed when a session starts, so a level picked while
+  // listening ends the session and starts a new one.
+  const firstRunCopy = useMemo(() => resolveFirstRunCopy(uiLocale), [uiLocale])
+  const [speechLengthCardOpen, setSpeechLengthCardOpen] = useState(false)
+  const [isApplyingSpeechLength, setIsApplyingSpeechLength] = useState(false)
+  const speechLengthRestartPendingRef = useRef(false)
+  const speechLengthIntroDoneRef = useRef(false)
+  const speechLengthDefaultAppliedRef = useRef(false)
+  const onFirstSpeakCompletedRef = useRef(onFirstSpeakCompleted)
+  onFirstSpeakCompletedRef.current = onFirstSpeakCompleted
+
+  const applySpeechLengthPreferences = useCallback((level: SpeechLengthLevel) => {
+    const preferences = resolveSpeechLengthPreferences(level)
+    const nextPreferences = commitLocalAccountPreferences({
+      ...latestAccountPreferencesRef.current,
+      ...preferences,
+    })
+    setSttSegmentationMode(preferences.sttSegmentationMode)
+    if (preferences.sttSegmentationMode === 'end') {
+      setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
+    } else {
+      setSonioxManualFinalizeSilenceMs(preferences.sonioxManualFinalizeSilenceMs)
+    }
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride(nextPreferences)
+  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
+
+  useEffect(() => {
+    if (!speechLengthIntro || speechLengthDefaultAppliedRef.current) return
+    // Wait for the account's saved settings: an existing account signing in
+    // on a new device has a speech split this device has not loaded yet.
+    if (!isStorageHydrated || accountPreferencesHydratedGeneration === 0) return
+    speechLengthDefaultAppliedRef.current = true
+    // Someone who already chose a speech split keeps it.
+    if (sttSegmentationMode !== null) return
+    applySpeechLengthPreferences(DEFAULT_SPEECH_LENGTH_LEVEL)
+  }, [accountPreferencesHydratedGeneration, applySpeechLengthPreferences, isStorageHydrated, speechLengthIntro, sttSegmentationMode])
+
+  // Bubbles already in the room when it first listens (a welcome message, an
+  // earlier conversation) do not count as the first one. A bubble still being
+  // spoken is not in `utterances` yet, so a new id here is a finished bubble;
+  // its translation may still be on the way.
+  const speechLengthBaselineIdsRef = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    if (!speechLengthIntro || speechLengthIntroDoneRef.current || !isVisible) return
+    const bubbleIds = utterances
+      .filter((utterance) => !utterance.recalled && !utterance.image && Boolean(utterance.originalText?.trim()))
+      .map((utterance) => utterance.id)
+    if (speechLengthBaselineIdsRef.current === null) {
+      if (isSttSessionRunning) speechLengthBaselineIdsRef.current = new Set(bubbleIds)
+      return
+    }
+    const baseline = speechLengthBaselineIdsRef.current
+    if (!bubbleIds.some((id) => !baseline.has(id))) return
+    speechLengthIntroDoneRef.current = true
+    setSpeechLengthCardOpen(true)
+    captureMingleClientEvent('mingle_first_run_step', { step: 'length_shown' })
+    onFirstSpeakCompletedRef.current?.()
+  }, [isSttSessionRunning, isVisible, speechLengthIntro, utterances])
+
+  const speechLengthSettings = {
+    sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
+    sonioxEndpointTuningStep,
+    sonioxManualFinalizeSilenceMs,
+  }
+  const selectedSpeechLengthLevel = matchSpeechLengthLevel(speechLengthSettings)
+  // A setting from before the scale sits near a level without being it; picking
+  // that level then still has something to apply.
+  const isSpeechLengthLevelExact = isExactSpeechLengthLevel(selectedSpeechLengthLevel, speechLengthSettings)
+
+  const handleSpeechLengthClose = useCallback(() => {
+    setSpeechLengthCardOpen(false)
+    captureMingleClientEvent('mingle_first_run_step', { step: 'length_closed' })
+  }, [])
+
+  const handleSpeechLengthSelect = useCallback(async (level: SpeechLengthLevel, source: 'card' | 'settings') => {
+    if (isApplyingSpeechLength) return
+    captureMingleClientEvent('mingle_first_run_step', {
+      step: source === 'card' ? 'length_chosen' : 'length_changed_in_settings',
+      level,
+    })
+    if (source === 'card') setSpeechLengthCardOpen(false)
+    if (level === selectedSpeechLengthLevel && isSpeechLengthLevelExact) return
+    setIsApplyingSpeechLength(true)
+    try {
+      const wasRunning = isSttSessionRunning
+      if (wasRunning) await handleStopRecording()
+      applySpeechLengthPreferences(level)
+      speechLengthRestartPendingRef.current = wasRunning
+      if (source === 'card') showFloatingToast(firstRunCopy.lengthApplied)
+    } finally {
+      setIsApplyingSpeechLength(false)
+    }
+  }, [
+    applySpeechLengthPreferences,
+    firstRunCopy.lengthApplied,
+    handleStopRecording,
+    isApplyingSpeechLength,
+    isSpeechLengthLevelExact,
+    isSttSessionRunning,
+    selectedSpeechLengthLevel,
+    showFloatingToast,
+  ])
+
+  // Listen again once the stopped session is gone and the new setting is in.
+  useEffect(() => {
+    if (!speechLengthRestartPendingRef.current || isApplyingSpeechLength) return
+    if (isSttSessionRunning || isConnecting || isPreparingStart) return
+    speechLengthRestartPendingRef.current = false
+    void handleStartRecording()
+  }, [handleStartRecording, isApplyingSpeechLength, isConnecting, isPreparingStart, isSttSessionRunning, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode])
+
+  useEffect(() => {
+    if (!isVisible) setSpeechLengthCardOpen(false)
+  }, [isVisible])
 
   const performMicAction = useCallback((source: SttStopSource) => {
     // Locked in a voice talk: the call starts and stops speech-to-text itself.
@@ -7946,6 +8017,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         viewerUserId={viewerUserId}
         onOpenProfile={handleOpenProfileForBubble}
         bubbleDisplayMode="collapsed"
+        isGroupContinuation={false}
       />
     )
   }, [
@@ -8710,189 +8782,31 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </div>
 
                             <div className="block">
-                              <div className="mb-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{sttSegmentationModeLabel}</div>
-                              <div role="radiogroup" aria-label={sttSegmentationModeLabel} className="space-y-2">
-                                {([
-                                  { value: 'end' as const, label: sttSegmentationModeEndLabel },
-                                  { value: 'fin' as const, label: sttSegmentationModeFinLabel },
-                                ]).map((option) => {
-                                  const isSelected = selectedSttSegmentationMode === option.value
-                                  return (
-                                    <div
-                                      key={option.value}
-                                      className={`overflow-hidden rounded-[1.25rem] border transition ${
-                                        isSelected
-                                          ? 'border-amber-300 bg-amber-50/60 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
-                                          : 'border-gray-200 bg-gray-50'
-                                      }`}
-                                    >
-                                      <button
-                                        type="button"
-                                        role="radio"
-                                        aria-checked={isSelected}
-                                        disabled={isSttSessionRunning}
-                                        onClick={() => handleSttSegmentationModeSelect(option.value)}
-                                        className="flex min-h-11 w-full items-center gap-3 px-3.5 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        <span
-                                          aria-hidden="true"
-                                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 bg-white transition ${
-                                            isSelected ? 'border-amber-500' : 'border-gray-300'
-                                          }`}
-                                        >
-                                          {isSelected && <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />}
-                                        </span>
-                                        <span className={`text-[0.9rem] font-semibold leading-tight ${isSelected ? 'text-amber-900' : 'text-gray-500'}`}>
-                                          {option.label}
-                                        </span>
-                                      </button>
-                                      {isSelected && shouldShowManualSilenceControl(option.value) && (
-                                      <div className="px-3.5 pb-3">
-                                        <label className="block">
-                                          <div
-                                            className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
-                                              isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
-                                            }`}
-                                          >
-                                            <span className={`min-w-0 flex-1 whitespace-normal break-words pl-1 text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
-                                              {silenceFinalizeLabel}
-                                            </span>
-                                            <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
-                                          </div>
-                                          <div className="relative">
-                                            <input
-                                              type="range"
-                                              min={MIN_SONIOX_SILENCE_MS}
-                                              max={MAX_SONIOX_SILENCE_MS}
-                                              step={100}
-                                              value={sonioxManualFinalizeSilenceMs}
-                                              disabled={isSilenceFinalizeSliderDisabled}
-                                              onPointerDown={(event) => {
-                                                if (isSilenceFinalizeSliderDisabled) return
-                                                event.currentTarget.setPointerCapture(event.pointerId)
-                                                const next = deriveRangeValueFromPointer(
-                                                  event,
-                                                  MIN_SONIOX_SILENCE_MS,
-                                                  MAX_SONIOX_SILENCE_MS,
-                                                  100,
-                                                )
-                                                handleSonioxManualFinalizeSilenceChange(next)
-                                              }}
-                                              onPointerMove={(event) => {
-                                                if (isSilenceFinalizeSliderDisabled) return
-                                                if (event.buttons !== 1) return
-                                                const next = deriveRangeValueFromPointer(
-                                                  event,
-                                                  MIN_SONIOX_SILENCE_MS,
-                                                  MAX_SONIOX_SILENCE_MS,
-                                                  100,
-                                                )
-                                                handleSonioxManualFinalizeSilenceChange(next)
-                                              }}
-                                              onPointerUp={(event) => {
-                                                if (isSilenceFinalizeSliderDisabled) return
-                                                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                                                  event.currentTarget.releasePointerCapture(event.pointerId)
-                                                }
-                                                flushAccountPreferencesSync()
-                                              }}
-                                              onChange={(event) => {
-                                                if (isSilenceFinalizeSliderDisabled) return
-                                                const next = Math.max(
-                                                  MIN_SONIOX_SILENCE_MS,
-                                                  Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
-                                                )
-                                                handleSonioxManualFinalizeSilenceChange(next)
-                                              }}
-                                              className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
-                                              aria-label={`${silenceFinalizeLabel} milliseconds`}
-                                            />
-                                            {isSilenceFinalizeSliderLocked && (
-                                              <>
-                                                <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
-                                                  {silenceFinalizeLockedMessage}
-                                                </span>
-                                                <button
-                                                  type="button"
-                                                  aria-label={silenceFinalizeLockedButtonLabel}
-                                                  aria-describedby={silenceFinalizeLockedDescriptionId}
-                                                  onFocus={handleSilenceFinalizeLockedInteraction}
-                                                  onClick={handleSilenceFinalizeLockedInteraction}
-                                                  className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                                                />
-                                              </>
-                                            )}
-                                          </div>
-                                        </label>
-                                      </div>
-                                      )}
-                                      {isSelected && shouldShowEndpointTuningControl(option.value) && (
-                                      <div className="px-3.5 pb-3">
-                                        <label className="block">
-                                          <div
-                                            className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
-                                              isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
-                                            }`}
-                                          >
-                                            <span className={`min-w-0 flex-1 whitespace-normal break-words pl-1 text-[0.98rem] font-medium leading-[1.1] ${isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-900'}`}>
-                                              {endpointTuningLabel}
-                                            </span>
-                                            <span className="shrink-0 whitespace-nowrap pr-1">{sonioxEndpointTuningStep + 1}/5</span>
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                            <span
-                                              className={`shrink-0 text-[0.6875rem] font-medium ${
-                                                isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
-                                              }`}
-                                            >
-                                              {endpointTuningShortLabel}
-                                            </span>
-                                            <div className="relative min-w-0 flex-1">
-                                              <input
-                                                type="range"
-                                                min={0}
-                                                max={4}
-                                                step={1}
-                                                value={sonioxEndpointTuningStep}
-                                                disabled={isSilenceFinalizeSliderDisabled}
-                                                onChange={(event) => {
-                                                  if (isSilenceFinalizeSliderDisabled) return
-                                                  const next = Math.max(0, Math.min(4, Math.round(Number(event.target.value))))
-                                                  handleSonioxEndpointTuningStepChange(next)
-                                                }}
-                                                className={`${sliderClassName} -mt-1 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
-                                                aria-label={endpointTuningLabel}
-                                              />
-                                              {isSilenceFinalizeSliderLocked && (
-                                                <>
-                                                  <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
-                                                    {silenceFinalizeLockedMessage}
-                                                  </span>
-                                                  <button
-                                                    type="button"
-                                                    aria-label={silenceFinalizeLockedButtonLabel}
-                                                    aria-describedby={silenceFinalizeLockedDescriptionId}
-                                                    onFocus={handleSilenceFinalizeLockedInteraction}
-                                                    onClick={handleSilenceFinalizeLockedInteraction}
-                                                    className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                                                  />
-                                                </>
-                                              )}
-                                            </div>
-                                            <span
-                                              className={`shrink-0 text-[0.6875rem] font-medium ${
-                                                isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-600'
-                                              }`}
-                                            >
-                                              {endpointTuningLongLabel}
-                                            </span>
-                                          </div>
-                                        </label>
-                                      </div>
-                                      )}
-                                    </div>
-                                  )
-                                })}
+                              {/* One 1-6 scale instead of the two speech split settings
+                                  (automatic detection steps, silence time). */}
+                              <div className="mb-2 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{firstRunCopy.lengthMenuLabel}</div>
+                              <div className="relative">
+                                <SpeechLengthScale
+                                  copy={firstRunCopy}
+                                  selected={selectedSpeechLengthLevel}
+                                  disabled={isApplyingSpeechLength}
+                                  onSelect={(level) => { void handleSpeechLengthSelect(level, 'settings') }}
+                                />
+                                {isSilenceFinalizeSliderLocked && (
+                                  <>
+                                    <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
+                                      {silenceFinalizeLockedMessage}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      aria-label={silenceFinalizeLockedButtonLabel}
+                                      aria-describedby={silenceFinalizeLockedDescriptionId}
+                                      onFocus={handleSilenceFinalizeLockedInteraction}
+                                      onClick={handleSilenceFinalizeLockedInteraction}
+                                      className="absolute inset-0 z-10 cursor-not-allowed rounded-xl bg-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                    />
+                                  </>
+                                )}
                               </div>
                             </div>
 
@@ -9990,6 +9904,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 const bubbleTtsIndicator = item.kind === 'message'
                   ? bubbleTtsIndicatorsByUtteranceId.get(item.utterance.id)
                   : undefined
+                // The unread divider sits above this row, so the run restarts under it.
+                const isGroupContinuation = item.kind === 'message'
+                  && previousItem?.kind === 'message'
+                  && item.utterance.id !== unreadDividerUtteranceId
+                  && isLivePhoneDemoMessageGroupContinuation(previousItem.utterance, item.utterance)
 
                 return (
                   <div
@@ -10040,6 +9959,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         viewerUserId={viewerUserId}
                         onOpenProfile={handleOpenProfileForBubble}
                         bubbleDisplayMode={bubbleDisplayMode}
+                        isGroupContinuation={isGroupContinuation}
                       />
                     )}
                   </div>
@@ -10199,6 +10119,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </motion.div>
               )}
             </AnimatePresence>
+            {speechLengthCardOpen ? (
+              <div
+                className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3"
+                style={{ bottom: copyToastBottomOffsetPx }}
+              >
+                <SpeechLengthCard
+                  copy={firstRunCopy}
+                  selected={selectedSpeechLengthLevel}
+                  disabled={isApplyingSpeechLength}
+                  onApply={(level) => { void handleSpeechLengthSelect(level, 'card') }}
+                  onClose={handleSpeechLengthClose}
+                />
+              </div>
+            ) : null}
             {showEmptyState && (
               <ConversationEmptyState uiLocale={uiLocale} />
             )}

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GET } from "./route";
 
@@ -65,5 +65,26 @@ describe("apple-app-site-association", () => {
     expect(Object.keys(shareComponent ?? {}).sort()).toEqual(
       Object.keys(profileComponent ?? {}).sort(),
     );
+  });
+
+  describe("invite links", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    // Older App Store builds ignore /i/ links, so claiming them would drop the invite.
+    it("leaves /i/ to the web page until the flag is on", async () => {
+      vi.stubEnv("IOS_INVITE_UNIVERSAL_LINKS", "");
+      const [detail] = (await readAssociation()).applinks.details;
+      expect(detail.paths).not.toContain("/i/*");
+      expect(detail.components.map((component) => component["/"])).not.toContain("/i/*");
+    });
+
+    it("opens /i/ in the app once the flag is on", async () => {
+      vi.stubEnv("IOS_INVITE_UNIVERSAL_LINKS", "1");
+      const [detail] = (await readAssociation()).applinks.details;
+      expect(detail.paths).toContain("/i/*");
+      expect(detail.components.map((component) => component["/"])).toContain("/i/*");
+    });
   });
 });

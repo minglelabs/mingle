@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Appearance,
   AppState,
   BackHandler,
   Image,
@@ -73,6 +72,19 @@ import {
   type NativeShellCapabilities,
 } from './src/nativeCapabilities';
 import {
+  buildNativeInviteEventScript,
+  parseInstallReferrerInvite,
+  parseNativeInviteLink,
+  type NativeInvite,
+} from './src/inviteLink';
+import {
+  NATIVE_CONTACTS_EVENT,
+  createNativeContactsBridge,
+  isNativeContactsAvailable,
+  type NativeContactsBridge,
+  type NativeContactsEvent,
+} from './src/nativeContacts';
+import {
   NATIVE_IAP_EVENT,
   createNativeIapBridge,
   sanitizeIapProductIds,
@@ -134,11 +146,9 @@ import {
 import {
   buildWebRestoreWebUrl,
   classifyConversationWebUrl,
-  readNativeLastScreenSnapshot,
   readNativeWebRestorePayload,
   resolveConversationRestorePayloadFromUrl,
   resolveWebRestorePayloadFromUrl,
-  type NativeLastScreenSnapshot,
   type NativeWebRestorePayload,
 } from './src/webViewRestore';
 import {
@@ -851,6 +861,11 @@ type NativeLocationCommand = {
   };
 };
 
+// Contact sync (see src/nativeContacts.ts).
+type NativeContactsCommand =
+  | { type: 'native_contacts_check' | 'native_contacts_request'; payload?: { requestId?: string } }
+  | { type: 'native_sms_compose'; payload?: { recipients?: unknown; body?: unknown } };
+
 type NativeAuthStartCommand = {
   type: 'native_auth_start';
   payload: {
@@ -1007,6 +1022,7 @@ type WebViewCommand =
   | NativeAudioRouteRequestCommand
   | NativeOpenAppSettingsCommand
   | NativeLocationCommand
+  | NativeContactsCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
@@ -1679,7 +1695,7 @@ function AppInner(): React.JSX.Element {
   // once the overlay state setters it clears on success exist.
   const loadAttemptTrackerRef = useRef<WebViewLoadAttemptTracker | null>(null);
   const latestNativePipEventRef = useRef<NativePipEvent | null>(null);
-  const { width: windowWidthPx, height: windowHeightPx } = useWindowDimensions();
+  const { width: windowWidthPx } = useWindowDimensions();
   const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
     createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion, RUNTIME_INSTALL_SOURCE),
   );
@@ -2233,6 +2249,45 @@ function AppInner(): React.JSX.Element {
     }
     return handled;
   }, [handleIncomingConversationShareLink]);
+  // Invite tickets (src/inviteLink.ts). The page keeps the code itself until
+  // the person is signed in, so the shell only has to deliver it once the page
+  // can listen; an invite that arrives earlier waits for the next load end.
+  const pendingInviteRef = useRef<NativeInvite | null>(null);
+  const flushPendingInviteToWeb = useCallback(() => {
+    const invite = pendingInviteRef.current;
+    if (!invite || !isPageReadyRef.current || !webViewRef.current) return;
+    pendingInviteRef.current = null;
+    webViewRef.current.injectJavaScript(buildNativeInviteEventScript(invite));
+  }, []);
+  const deliverInviteToWeb = useCallback((invite: NativeInvite) => {
+    pendingInviteRef.current = invite;
+    flushPendingInviteToWeb();
+  }, [flushPendingInviteToWeb]);
+  const handleIncomingInviteLink = useCallback((rawUrl: string) => {
+    const invite = parseNativeInviteLink(rawUrl, WEB_APP_BASE_URL);
+    if (!invite) return false;
+    deliverInviteToWeb(invite);
+    return true;
+  }, [deliverInviteToWeb]);
+  // Android, once after a fresh install: the Play Store hands back the
+  // referrer the invite landing page put on its install link.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const runtimeConfigModule = (NativeModules as {
+      NativeRuntimeConfigModule?: { consumeInstallReferrer?: () => Promise<string | null> };
+    }).NativeRuntimeConfigModule;
+    if (!runtimeConfigModule?.consumeInstallReferrer) return;
+    let cancelled = false;
+    void runtimeConfigModule.consumeInstallReferrer().then((referrer) => {
+      const invite = parseInstallReferrerInvite(referrer);
+      if (!cancelled && invite) deliverInviteToWeb(invite);
+    }).catch(() => {
+      // No Play Store on this device, or the referrer is gone: nothing to carry over.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [deliverInviteToWeb]);
   const consumePendingProfileLink = useCallback(async () => {
     const getPendingProfileLink = NATIVE_CONVERSATION_RESTORE_STORAGE.getPendingProfileLink;
     if (!getPendingProfileLink) return;
@@ -2278,12 +2333,15 @@ function AppInner(): React.JSX.Element {
     if (rawUrl && handleIncomingConversationShareLinkOnce(rawUrl)) {
       return false;
     }
+    if (rawUrl && handleIncomingInviteLink(rawUrl)) {
+      return false;
+    }
     if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {
       openNativeExternalUrl(rawUrl);
       return false;
     }
     return true;
-  }, [handleIncomingConversationShareLinkOnce, handleIncomingProfileLinkOnce]);
+  }, [handleIncomingConversationShareLinkOnce, handleIncomingInviteLink, handleIncomingProfileLinkOnce]);
   // A "successful" injectJavaScript call only proves the script was handed
   // to the WebView, not that the page's own JS has hydrated enough to have
   // NativeProfileLinkOverlay's event listener (or even its window-global
@@ -2355,7 +2413,8 @@ function AppInner(): React.JSX.Element {
       if (!mounted || typeof rawUrl !== 'string') return;
       recordProfileLinkTrace('react_native_linking_event');
       if (handleIncomingProfileLinkOnce(rawUrl)) return;
-      handleIncomingConversationShareLinkOnce(rawUrl);
+      if (handleIncomingConversationShareLinkOnce(rawUrl)) return;
+      handleIncomingInviteLink(rawUrl);
     };
 
     void Linking.getInitialURL().then(handleUrl).catch(() => {
@@ -2380,7 +2439,7 @@ function AppInner(): React.JSX.Element {
       pendingPushTapRouteRetryTimersRef.current = [];
       clearPendingConversationShareRouteRetries();
     };
-  }, [clearPendingConversationShareRouteRetries, clearPendingProfileRouteRetries, handleIncomingConversationShareLinkOnce, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption, schedulePendingPushTapConsumption]);
+  }, [clearPendingConversationShareRouteRetries, clearPendingProfileRouteRetries, handleIncomingConversationShareLinkOnce, handleIncomingInviteLink, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption, schedulePendingPushTapConsumption]);
   useEffect(() => {
     let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -2466,33 +2525,29 @@ function AppInner(): React.JSX.Element {
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // On a cold start that restores the previous screen, cover the loading
-  // WebView with a capture of that screen instead of the splash, until the
-  // page reports that its saved state is back.
-  const [lastScreenSnapshot, setLastScreenSnapshot] = useState<NativeLastScreenSnapshot | null>(() => {
-    if (Platform.OS !== 'ios' || !webUrl || !initialRestoreUrlRef.current) return null;
-    return readNativeLastScreenSnapshot(NATIVE_RUNTIME_CONFIG, {
-      width: windowWidthPx,
-      height: windowHeightPx,
-      colorScheme: Appearance.getColorScheme(),
-    });
-  });
+  // On a cold start that restores the previous screen, keep the splash over
+  // the loading WebView until the page reports that its saved state is back.
+  // It used to show a capture of the last screen instead; that picture looked
+  // like a working app while every tap went to a page still loading, so the
+  // app read as frozen. The splash makes the wait plain.
+  const [lastScreenSnapshotVisible, setLastScreenSnapshotVisible] = useState(
+    () => Platform.OS === 'ios' && Boolean(webUrl) && Boolean(initialRestoreUrlRef.current),
+  );
   const lastScreenSnapshotOpacity = useRef(new Animated.Value(1)).current;
   const lastScreenSnapshotHidingRef = useRef(false);
   const hideLastScreenSnapshot = useCallback((animated = true) => {
     if (lastScreenSnapshotHidingRef.current) return;
     lastScreenSnapshotHidingRef.current = true;
     if (!animated) {
-      setLastScreenSnapshot(null);
+      setLastScreenSnapshotVisible(false);
       return;
     }
     Animated.timing(lastScreenSnapshotOpacity, {
       toValue: 0,
       duration: LAST_SCREEN_SNAPSHOT_FADE_MS,
       useNativeDriver: true,
-    }).start(() => setLastScreenSnapshot(null));
+    }).start(() => setLastScreenSnapshotVisible(false));
   }, [lastScreenSnapshotOpacity]);
-  const lastScreenSnapshotVisible = lastScreenSnapshot !== null;
   useEffect(() => {
     if (!lastScreenSnapshotVisible) return;
     const timer = setTimeout(() => hideLastScreenSnapshot(), LAST_SCREEN_SNAPSHOT_MAX_MS);
@@ -2509,16 +2564,13 @@ function AppInner(): React.JSX.Element {
     const timer = setTimeout(() => hideLastScreenSnapshot(), LAST_SCREEN_SNAPSHOT_AFTER_LOAD_MAX_MS);
     return () => clearTimeout(timer);
   }, [hideLastScreenSnapshot, lastScreenSnapshotVisible, startupSplashVisible]);
-  // Let the native side capture the window on resign-active only while it
-  // shows a settled, restorable screen of this account.
+  // The native side no longer captures the window on resign-active: no build
+  // shows the capture any more. Keep telling it so, and drop a capture an
+  // older build left behind.
   const lastScreenSnapshotCaptureEnabledRef = useRef<boolean | null>(null);
   const syncLastScreenSnapshotCapture = useCallback(() => {
     if (Platform.OS !== 'ios') return;
-    const enabled = currentWebRestorableRef.current
-      && initialLoadSettledRef.current
-      && !startupSplashVisible
-      && !lastScreenSnapshotVisible
-      && !loadError;
+    const enabled = false;
     if (lastScreenSnapshotCaptureEnabledRef.current === enabled) return;
     lastScreenSnapshotCaptureEnabledRef.current = enabled;
     try {
@@ -2526,9 +2578,15 @@ function AppInner(): React.JSX.Element {
     } catch {
       // Older native builds have no capture support.
     }
-  }, [lastScreenSnapshotVisible, loadError, startupSplashVisible]);
+  }, []);
   useEffect(() => {
     syncLastScreenSnapshotCapture();
+    if (Platform.OS !== 'ios') return;
+    try {
+      void NATIVE_CONVERSATION_RESTORE_STORAGE.clearLastScreenSnapshot?.();
+    } catch {
+      // Ignore native persistence failures.
+    }
   }, [syncLastScreenSnapshotCapture]);
   const resetWebRestoreState = useCallback(() => {
     clearWebRestoreUrl();
@@ -3116,6 +3174,19 @@ function AppInner(): React.JSX.Element {
       emitLocationToWeb({ type: 'error', code: 'location_failed', ...(requestId ? { requestId } : {}) });
     }
   }, [emitLocationToWeb, getNativeLocationModule]);
+
+  const emitContactsToWeb = useCallback((payload: NativeContactsEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) return;
+
+    const serialized = JSON.stringify(payload);
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_CONTACTS_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+  const nativeContactsBridgeRef = useRef<NativeContactsBridge | null>(null);
+  const getNativeContactsBridge = useCallback(() => {
+    nativeContactsBridgeRef.current ??= createNativeContactsBridge({ emit: emitContactsToWeb });
+    return nativeContactsBridgeRef.current;
+  }, [emitContactsToWeb]);
 
   const emitQrSaveToWeb = useCallback((payload: NativeQrSaveEvent) => {
     if (!isPageReadyRef.current || !webViewRef.current) return;
@@ -4395,6 +4466,21 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_contacts_check') {
+      void getNativeContactsBridge().check(parsed.payload?.requestId);
+      return;
+    }
+
+    if (parsed.type === 'native_contacts_request') {
+      void getNativeContactsBridge().request(parsed.payload?.requestId);
+      return;
+    }
+
+    if (parsed.type === 'native_sms_compose') {
+      void getNativeContactsBridge().composeSms(parsed.payload?.recipients, parsed.payload?.body);
+      return;
+    }
+
     if (parsed.type === 'native_push_register') {
       void requestNativePushRegistration();
       return;
@@ -4789,6 +4875,7 @@ function AppInner(): React.JSX.Element {
     hideLastScreenSnapshot,
     resetWebRestoreState,
     handleNativeAuthStart,
+    getNativeContactsBridge,
     handleNativeLocationCheck,
     handleNativeLocationRequest,
     handleNativeQrSave,
@@ -5213,11 +5300,13 @@ function AppInner(): React.JSX.Element {
       schedulePendingPushTapFlush(true);
     }
     flushPendingConversationShareToWeb();
+    flushPendingInviteToWeb();
     emitToWeb(buildNativeShellCapabilities({
       audioRoute: nativeAudioRouteAvailable,
       deviceAudioCapture: nativeDeviceAudioCaptureAvailable,
       nativeTts: isNativeTtsAvailable(),
       nativeTtsStream: isNativeTtsStreamAvailable(),
+      contacts: isNativeContactsAvailable(),
     }));
     // Earphone mode (contract A.2a): the latest route follows the capabilities
     // message on every load end.
@@ -5283,7 +5372,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingInviteToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     // Record the failure before anything else: react-native-webview calls
@@ -5384,18 +5473,8 @@ function AppInner(): React.JSX.Element {
     webViewRef.current.clearCache(true);
   }, [shouldUseAggressiveWebViewCacheBypass, webViewMountToken]);
 
-  // The last-screen capture never takes a touch: it is a picture of buttons,
-  // so swallowing taps on it reads as a frozen app. The first touch drops it
-  // at once. Once the page has loaded the touch reaches the real screen;
-  // before that, dropping it shows the splash, so the wait is visible
-  // instead of a real-looking screen that ignores every tap.
-  const handleRootTouchStart = lastScreenSnapshotVisible ? () => hideLastScreenSnapshot(false) : undefined;
-
   return (
-    <View
-      style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}
-      onTouchStart={handleRootTouchStart}
-    >
+    <View style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}>
       {shouldRenderTopSafeAreaFill ? (
         <View
           pointerEvents="none"
@@ -5565,18 +5644,14 @@ function AppInner(): React.JSX.Element {
           />
         </View>
       ) : null}
-      {lastScreenSnapshot ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.lastScreenSnapshotOverlay, { opacity: lastScreenSnapshotOpacity }]}
-        >
+      {lastScreenSnapshotVisible && !startupSplashVisible ? (
+        <Animated.View style={[styles.startupSplashOverlay, { opacity: lastScreenSnapshotOpacity }]}>
           <Image
             alt=""
-            source={{ uri: lastScreenSnapshot.uri, cache: 'reload' }}
-            resizeMode="cover"
+            source={STARTUP_SPLASH_LOGO}
+            resizeMode="contain"
             fadeDuration={0}
-            style={styles.lastScreenSnapshotImage}
-            onError={() => hideLastScreenSnapshot(false)}
+            style={styles.startupSplashLogo}
           />
         </Animated.View>
       ) : null}
@@ -5670,15 +5745,6 @@ const styles = StyleSheet.create({
   startupSplashLogo: {
     width: 180,
     height: 180,
-  },
-  lastScreenSnapshotOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#ffffff',
-    zIndex: 31,
-  },
-  lastScreenSnapshotImage: {
-    width: '100%',
-    height: '100%',
   },
   errorOverlay: {
     position: 'absolute',

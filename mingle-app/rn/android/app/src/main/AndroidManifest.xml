@@ -3,6 +3,7 @@
 
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.CAMERA" />
+  <uses-permission android:name="android.permission.READ_CONTACTS" />
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
   <uses-permission
@@ -82,6 +83,19 @@
                 android:scheme="https"
                 android:host="mingle-2-0-0-production.up.railway.app"
                 android:pathPrefix="/s/" />
+            <!-- /i/ invite ticket links. -->
+            <data
+                android:scheme="https"
+                android:host="mingle-2-0-0-production.up.railway.app"
+                android:pathPrefix="/i/" />
+        </intent-filter>
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data
+                android:scheme="mingle"
+                android:host="invite" />
         </intent-filter>
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />

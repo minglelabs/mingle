@@ -37,8 +37,11 @@ import {
   persistLanguageOnboardingChoice,
 } from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bell, Check, Loader2, LogOut, Mic, PencilLine, Phone, Search, Settings, Share2, Trash2, UserRound } from "lucide-react";
+import { ArrowRight, Bell, Check, Loader2, LogOut, Mic, PencilLine, Phone, Search, Settings, Share2, Trash2, UserRound, Ticket } from "lucide-react";
 import { toast } from "sonner";
+import { requestContactSyncPromptCheck } from "@/lib/native-contacts";
+import { useHasPendingInvite, openInviteTicket } from "@/lib/native-invite";
+import { resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import { getConversationEventsWsUrl } from "@/components/LivePhoneDemo/use-realtime-stt";
@@ -77,7 +80,17 @@ import {
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import LanguageOnboardingModal, {
   type LanguageOnboardingConfirmPayload,
+  type OnboardingStep,
 } from "@/components/LivePhoneDemo/LanguageOnboardingModal";
+import {
+  clearDiscoveryPromptDue,
+  completeFirstSpeak,
+  isDiscoveryPromptDue,
+  isFirstSpeakPending,
+  markFirstSpeakPending,
+} from "@/lib/first-run";
+import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
+import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
   resolveLanguageSelectorOwnSelectedLanguages,
   resolveLanguageSelectorUnionAfterOwnLanguagesChange,
@@ -209,6 +222,7 @@ import AppTopHeader from "@/components/app-top-header";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { useUnreadNotifications } from "@/components/notifications/use-unread-notifications";
 import { feedHref } from "@/lib/feed-routes";
+import { requestProfileBasics } from "@/lib/profile-basics";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
@@ -245,7 +259,11 @@ let recentSearchesSnapshotRaw = "__initial__";
 type ConversationOverlayExitMode = "animate" | "instant";
 type ConversationOverlayEnterMode = "animate" | "instant";
 type SearchOverlayTransitionMode = "animate" | "instant";
+// The invite-ticket banner shows above the list up to this many rooms.
+const INVITE_TICKET_BANNER_MAX_CONVERSATIONS = 3;
+
 type LanguageOnboardingPhase = "resolving" | "selection" | "locale-switching" | "ready";
+const DISCOVERY_PROMPT_STEPS: readonly OnboardingStep[] = ["discovery-source"];
 let resolvedLanguageOnboardingPhase: Exclude<LanguageOnboardingPhase, "resolving" | "locale-switching"> | null = null;
 type ConversationHistoryPopStateTarget = {
   conversationId: string | null;
@@ -2134,6 +2152,15 @@ export default function ConversationList({
     resolvedLanguageOnboardingPhase ?? "resolving"
   ));
   const languageOnboardingModalOpen = languageOnboardingPhase === "selection";
+  const inviteTicketLabel = resolveInviteTicketCopy(locale).sendTicket;
+  const inviteOnboarding = useHasPendingInvite();
+  // First run on this device: until the first translation, the list leads
+  // with a "say something" card and every room is ready to show the speech
+  // length choice. Read from storage after mount, so the server render matches.
+  const [firstSpeakPending, setFirstSpeakPending] = useState(false);
+  // Where the user heard of the app, asked once when they leave their first room.
+  const [discoveryPromptOpen, setDiscoveryPromptOpen] = useState(false);
+  const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
   // A mount that starts with a conversation already active (SSR props, a
   // deep link, or a client-side remount after a real route round trip like
@@ -3660,6 +3687,7 @@ export default function ConversationList({
       : "ready";
     resolvedLanguageOnboardingPhase = nextLanguageOnboardingPhase;
     setLanguageOnboardingPhase(nextLanguageOnboardingPhase);
+    setFirstSpeakPending(isFirstSpeakPending());
   }, []);
 
   useEffect(() => {
@@ -4774,6 +4802,11 @@ export default function ConversationList({
       return;
     }
 
+    // Reading what other people wrote puts the user in front of them, so a
+    // room with other members asks for gender and birth date first, like a
+    // follow or a comment. Closing the question leaves the room unopened.
+    if (matchedConversation.isMultiMember && !(await requestProfileBasics())) return;
+
     try {
       await openConversationSummary(matchedConversation);
     } catch (error) {
@@ -5485,6 +5518,17 @@ export default function ConversationList({
     }
 
     markLanguageOnboardingConfirmed();
+    // An invitee is taken straight into the inviter's room, and where they
+    // heard of the app is already known ("friend"): no "say something" card
+    // and no question about it afterwards.
+    if (!discoverySource) {
+      markFirstSpeakPending();
+      setFirstSpeakPending(true);
+    }
+    // Signup is finished: a pending invite is accepted now. The contact-sync
+    // screen holds back while the first run is pending (set just above).
+    requestContactSyncPromptCheck();
+    captureMingleClientEvent("mingle_first_run_step", { step: "language_confirmed" });
 
     defaultConversationLanguagesSyncVersionRef.current += 1;
     setPreferredDisplayLanguages(savedPrimaryLanguages);
@@ -5506,6 +5550,63 @@ export default function ConversationList({
     resolvedLanguageOnboardingPhase = "ready";
     setLanguageOnboardingPhase("ready");
   }, [locale, sessionStatus]);
+
+  // The first translation in any room ends the first run.
+  const handleFirstSpeakCompleted = useCallback(() => {
+    if (!completeFirstSpeak()) return;
+    setFirstSpeakPending(false);
+    captureMingleClientEvent("mingle_first_run_step", { step: "first_translation" });
+  }, []);
+
+  const handleFirstSpeakRequested = useCallback(() => {
+    captureMingleClientEvent("mingle_first_run_step", { step: "speak_tapped" });
+    void handleCreateConversation();
+  }, [handleCreateConversation]);
+
+  // Back on the list after the first room: ask where they heard of the app.
+  // One thing at a time: leaving the first room is when the contact-sync
+  // screen may open (it was held back so it would not cover the "say
+  // something" card), and the question about where they heard of the app
+  // waits for the next launch.
+  const hasActiveConversation = activeConversation !== null;
+  const wasInConversationRef = useRef(false);
+  useEffect(() => {
+    if (hasActiveConversation) {
+      wasInConversationRef.current = true;
+      return;
+    }
+    const leftARoom = wasInConversationRef.current;
+    wasInConversationRef.current = false;
+    if (!isDiscoveryPromptDue()) return;
+    if (leftARoom) {
+      requestContactSyncPromptCheck();
+      return;
+    }
+    setDiscoveryPromptOpen(true);
+    captureMingleClientEvent("mingle_first_run_step", { step: "discovery_shown" });
+  }, [hasActiveConversation]);
+
+  const handleDiscoveryPromptClose = useCallback(() => {
+    clearDiscoveryPromptDue();
+    setDiscoveryPromptOpen(false);
+    captureMingleClientEvent("mingle_first_run_step", { step: "discovery_closed" });
+  }, []);
+
+  const handleDiscoveryPromptConfirm = useCallback(async (payload: LanguageOnboardingConfirmPayload) => {
+    clearDiscoveryPromptDue();
+    setDiscoveryPromptOpen(false);
+    if (!payload.discoverySource) return;
+    captureMingleClientEvent("mingle_first_run_step", { step: "discovery_answered" });
+    try {
+      await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discoverySource: payload.discoverySource }),
+      });
+    } catch {
+      // The answer is only for our own reporting; a failed save is not shown.
+    }
+  }, []);
 
   const languageOnboardingDefaultLanguage = useMemo(() => {
     const fallbackLanguages = deriveDefaultSttLanguagesForLocale(locale);
@@ -5775,6 +5876,32 @@ export default function ConversationList({
               : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
+          {firstSpeakPending && sessionStatus === "authenticated" ? (
+            <div className="px-4 pb-4 pt-3">
+              <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50/90 px-5 pb-5 pt-6 text-center shadow-[0_16px_36px_rgba(245,158,11,0.12)]">
+                <p className="text-[1.35rem] font-extrabold leading-snug tracking-[-0.02em] text-slate-950">
+                  {firstRunCopy.speakTitle}
+                </p>
+                <p className="mt-1.5 text-[0.9rem] leading-snug text-slate-600">
+                  {firstRunCopy.speakHint}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleFirstSpeakRequested}
+                  disabled={actionDisabled}
+                  className="mt-4 flex h-14 w-full items-center justify-center gap-2.5 rounded-full text-[1.05rem] font-bold text-white shadow-[0_16px_32px_rgba(245,158,11,0.3)] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}
+                >
+                  {isCreatingConversation ? (
+                    <Loader2 size={20} className="animate-spin" strokeWidth={2.25} aria-hidden />
+                  ) : (
+                    <Mic size={20} strokeWidth={2.4} aria-hidden />
+                  )}
+                  <span>{firstRunCopy.speakButton}</span>
+                </button>
+              </div>
+            </div>
+          ) : null}
           {isHydratingConversations ? (
             <div className="flex flex-col items-center py-16 text-gray-400">
               <Loader2 size={28} className="animate-spin" />
@@ -5793,9 +5920,33 @@ export default function ConversationList({
               <p className="mt-1 text-[13px] text-gray-400">
                 {copy.emptyDescription}
               </p>
+              <button
+                type="button"
+                onClick={openInviteTicket}
+                data-testid="conversation-list-invite-ticket"
+                className="mt-6 flex h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-6 text-[15px] font-bold text-white shadow-[0_12px_26px_rgba(37,99,235,0.28)] transition active:bg-blue-700"
+              >
+                <Ticket size={18} strokeWidth={2.2} aria-hidden="true" />
+                {inviteTicketLabel}
+              </button>
             </div>
           ) : (
             <div className="border-t border-gray-100">
+              {/* Someone with only a room or two has nobody to talk to yet:
+                  the way to bring a friend in sits right on top of the list. */}
+              {conversationItems.length <= INVITE_TICKET_BANNER_MAX_CONVERSATIONS ? (
+                <div className="border-b border-gray-100 px-4 py-3">
+                  <button
+                  type="button"
+                  onClick={openInviteTicket}
+                  data-testid="conversation-list-invite-ticket"
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-50 text-[14.5px] font-bold text-blue-700 transition active:bg-blue-100"
+                >
+                  <Ticket size={18} strokeWidth={2.2} aria-hidden="true" />
+                  {inviteTicketLabel}
+                </button>
+                </div>
+              ) : null}
               {conversationItems.map((item) => (
                 <div key={item.id}>
                   <ConversationRow
@@ -5832,7 +5983,15 @@ export default function ConversationList({
       >
         <button
           type="button"
-          onClick={() => setIsCreateChoiceModalOpen(true)}
+          onClick={() => {
+            // Until the first bubble there is nobody to choose yet: open a room
+            // and listen, the same as the "say something" card.
+            if (firstSpeakPending) {
+              handleFirstSpeakRequested();
+              return;
+            }
+            setIsCreateChoiceModalOpen(true);
+          }}
           disabled={actionDisabled}
           className="relative flex w-full items-center justify-center px-5 pt-4 text-[1rem] font-semibold text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
           aria-label={copy.newConversationButtonLabel}
@@ -6004,6 +6163,8 @@ export default function ConversationList({
                         initialSpeechLanguages={conversation.speechLanguages}
                         initialTranslationLanguagesLinked={conversation.translationLanguagesLinked !== false}
                         initialDefaultDisplayLanguage={conversation.defaultDisplayLanguage ?? null}
+                        speechLengthIntro={firstSpeakPending}
+                        onFirstSpeakCompleted={handleFirstSpeakCompleted}
                         autoStartOnMount={conversation.id === autoStartConversationId}
                         onAutoStartHandled={() => {
                           setAutoStartConversationId((current) => (
@@ -6265,7 +6426,18 @@ export default function ConversationList({
           dismissible={false}
           initialLanguage={languageOnboardingDefaultLanguage}
           uiLocale={locale}
+          invite={inviteOnboarding}
           onConfirm={handleLanguageOnboardingConfirm}
+        />
+      ) : null}
+      {discoveryPromptOpen && !languageOnboardingModalOpen ? (
+        <LanguageOnboardingModal
+          dismissible
+          onClose={handleDiscoveryPromptClose}
+          initialLanguage={locale}
+          uiLocale={locale}
+          steps={DISCOVERY_PROMPT_STEPS}
+          onConfirm={handleDiscoveryPromptConfirm}
         />
       ) : null}
     </main>

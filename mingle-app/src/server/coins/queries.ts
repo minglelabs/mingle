@@ -115,7 +115,7 @@ export type CoinHistoryItem =
   | {
       id: string
       type: 'grant'
-      // daily_free | purchase | admin_grant | signup_bonus | refund_reversal | gift
+      // daily_free | purchase | admin_grant | signup_bonus | refund_reversal | gift | referral
       source: string
       coins: number
       at: string

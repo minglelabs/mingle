@@ -2,6 +2,35 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-13 — Invites and first run: friends on HashChat, mutual follow, length preview
+
+- Surface: Contact-sync screen (`contacts/contact-sync-screen.tsx`, new `phone-verify-sheet.tsx`), invite messages (`i18n/invite-ticket-copy.ts`, profile and room link copy), the first-run sentence length card (`LivePhoneDemo/SpeechLengthCard.tsx`), opening a room from the list (`conversation-list.tsx`).
+- Issue (contacts): Contact sync only offered invites; friends already on HashChat looked the same as everyone else, and nothing linked an invited pair once they joined.
+- Resolution (contacts): After verifying their own number by SMS code, the user sees "Friends on HashChat" above the invite list: each row shows the contact's name, the HashChat name and handle, a green ✓ on the avatar and a Follow button. Matched contacts are no longer offered an invite. Contact numbers leave the device only as sha256 hashes and are not stored. Accepting an invite (link, install referrer or code) makes the pair follow each other.
+- Issue (invite messages): A link tapped before install is lost in the store, and the pasted message gave no code to fall back on.
+- Resolution (invite messages): Every pasted invite (ticket, contact SMS, copied profile or room link) ends with the sender's invite code and a note to tap the link again after installing.
+- Issue (length card): Picking a number changed the setting at once with no way to see what it meant.
+- Resolution (length card): The card shows an example monologue as bubbles that merge or split as the level changes (six at 1, one at 6); Apply changes the setting and restarts listening if the room was listening.
+- Change (profile basics): Opening a room with other members from the list now asks gender and birth date first, like a follow or a comment.
+- Verification: Web unit tests (480 files, 5,061 tests), `tsc`, lint on the changed files. Not tried on a device; the SMS path needs Twilio Verify set up (without it a non-production server accepts 000000).
+
+## 2026-11-12 — iOS restoring cold start keeps the splash instead of the last-screen capture
+
+- Surface: The cold-start cover in `rn/App.tsx`, shown on an iOS launch that restores the previous screen (the app was killed in the background).
+- Issue: The cover was a capture of the last screen. The 2026-10-30 fix let touches through it, so they reached a page that was still loading and restoring: the buttons looked ready but did nothing, and the first touch dropped the capture onto that half-loaded page. The app read as frozen.
+- Resolution: A restoring cold start keeps the yellow splash (same logo as the launch splash) until the page sends `native_web_restore_ready`, at most 3 s after the page loads and 10 s in all. Touches stay on the splash meanwhile. The native side is told never to capture the window again, and a capture left by an older build is deleted on launch.
+- QA: `qa/agent/scenarios/cold-start-restore-splash.md`.
+- Verification: RN jest (27 suites, 197 tests). Not tried on a device yet.
+
+## 2026-11-12 — 채팅 버블: 더블탭으로 펼치기/접기, 옆 칸은 읽음 표시 위·시간 아래
+
+- 화면: 대화방 채팅 버블 (`ChatBubble.tsx`, `CopyableBubbleSurface.tsx`, `MessageReadReceipts.tsx`). `feat/voicetalk-windows-livekit-mvp`의 버블 옆 칸 작업 최종 결과를 옮김(중간 단계인 이름 줄 시간 표시는 제외).
+- 펼치기/접기: 버튼(`data-chat-bubble-toggle`)을 없애고, 언어가 둘 이상인 버블은 더블탭으로 펼치거나 접는다(접힌 버블, 펼친 각 줄 모두). `CopyableBubbleSurface`에 `onDoubleTap`을 추가했고, 있으면 더블탭이 읽어주기·복사 대신 그것을 실행한다(`data-copyable-bubble-double-tap-action="toggle"`). 언어가 하나뿐인 버블은 전처럼 더블탭하면 읽어준다. 읽어주기는 길게 누르기 메뉴에 그대로 있다.
+- 옆 칸: 내 메시지와 상대 메시지 모두 위에 읽음 표시, 아래에 시간(둘 다 10px)을 두 줄로, 버블 아래쪽에 붙여 버블 쪽으로 정렬한다. 이름 줄에는 시간을 넣지 않는다.
+- 읽음 표시: 모두 읽으면 "읽음" 글자 대신 체크, 안 읽은 사람이 있으면 그 수(amber). 10px·medium·tabular-nums.
+- 그대로: 연속 메시지에서 이름·사진을 첫 버블에만 보이는 동작.
+- 확인: `chat-bubble.test.ts`(펼치기 버튼 없음, 언어 둘 이상이면 toggle, 하나면 toggle 없음, 옆 칸에 시간), 타입 체크, lint. 실기기에서는 아직 확인하지 않았다.
+
 ## 2026-11-12 채팅 버블: 더블탭으로 펼치기/접기, 펼치기 버튼 제거
 
 - 요청: 펼치기/접기를 더블탭으로 하고 버튼을 없앰. 시간은 다시 버블 옆으로, 읽음 표시와 두 줄로.

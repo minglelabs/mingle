@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-cn">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>HashChat 博客 - 面向实时交流的 AI 翻译</title>
+    <meta name="description" content="阅读 HashChat（原名 Mingle）关于 AI 翻译、实时语音字幕、多语言交流产品及演讲分享的文章。" />
+    <link rel="canonical" href="https://hashchat.minglelabs.app/blogs?lang=zh-cn" />
+    <link rel="alternate" hreflang="en" href="https://hashchat.minglelabs.app/blogs" />
+    <link rel="alternate" hreflang="ko" href="https://hashchat.minglelabs.app/blogs?lang=ko" />
+    <link rel="alternate" hreflang="ja" href="https://hashchat.minglelabs.app/blogs?lang=ja" />
+    <link rel="alternate" hreflang="zh-cn" href="https://hashchat.minglelabs.app/blogs?lang=zh-cn" />
+    <link rel="alternate" hreflang="zh-tw" href="https://hashchat.minglelabs.app/blogs?lang=zh-tw" />
+    <link rel="alternate" hreflang="fr" href="https://hashchat.minglelabs.app/blogs?lang=fr" />
+    <link rel="alternate" hreflang="de" href="https://hashchat.minglelabs.app/blogs?lang=de" />
+    <link rel="alternate" hreflang="es" href="https://hashchat.minglelabs.app/blogs?lang=es" />
+    <link rel="alternate" hreflang="pt" href="https://hashchat.minglelabs.app/blogs?lang=pt" />
+    <link rel="alternate" hreflang="it" href="https://hashchat.minglelabs.app/blogs?lang=it" />
+    <link rel="alternate" hreflang="ru" href="https://hashchat.minglelabs.app/blogs?lang=ru" />
+    <link rel="alternate" hreflang="ar" href="https://hashchat.minglelabs.app/blogs?lang=ar" />
+    <link rel="alternate" hreflang="hi" href="https://hashchat.minglelabs.app/blogs?lang=hi" />
+    <link rel="alternate" hreflang="th" href="https://hashchat.minglelabs.app/blogs?lang=th" />
+    <link rel="alternate" hreflang="vi" href="https://hashchat.minglelabs.app/blogs?lang=vi" />
+    <link rel="alternate" hreflang="x-default" href="https://hashchat.minglelabs.app/blogs" />
+    <meta property="og:site_name" content="HashChat" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://hashchat.minglelabs.app/blogs?lang=zh-cn" />
+    <meta property="og:title" content="HashChat 博客 - 面向实时交流的 AI 翻译" />
+    <meta property="og:description" content="阅读 HashChat（原名 Mingle）关于 AI 翻译、实时语音字幕、多语言交流产品及演讲分享的文章。" />
+    <meta property="og:image" content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="HashChat 博客 - 面向实时交流的 AI 翻译" />
+    <meta name="twitter:description" content="阅读 HashChat（原名 Mingle）关于 AI 翻译、实时语音字幕、多语言交流产品及演讲分享的文章。" />
+    <meta name="twitter:image" content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" />
+    <link rel="icon" href="/assets/site/hashchat-icon.png" />
+    <link rel="stylesheet" href="/assets/blog.css" />
+    <link rel="stylesheet" href="/assets/site-header.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="HashChat site navigation">
+        <a class="brand" href="/?lang=zh-cn" aria-label="HashChat home">
+          <img src="/assets/site/hashchat-icon.png" alt="" />
+          <span>HashChat</span>
+        </a>
+        <div class="nav-actions">
+          <div class="nav-links">
+            <a href="/?lang=zh-cn#how">工作原理</a>
+            <a href="/?lang=zh-cn#features">功能特色</a>
+            <a href="/?lang=zh-cn#translate">翻译</a>
+            <a href="/?lang=zh-cn#uses">使用场景</a>
+            <a class="nav-legal is-current" aria-current="page" href="/blogs?lang=zh-cn">博客</a>
+            <a class="nav-legal" href="/legal?lang=zh-cn">Legal</a>
+          </div>
+          <label class="language-picker">
+            <span aria-hidden="true">🌐</span>
+            <select id="blog-language" aria-label="Language">
+              <option value="en">🇺🇸 English</option>
+              <option value="ko">🇰🇷 한국어</option>
+              <option value="ja">🇯🇵 日本語</option>
+              <option value="zh-cn" selected>🇨🇳 简体中文</option>
+              <option value="zh-tw">🇹🇼 繁體中文</option>
+              <option value="fr">🇫🇷 Français</option>
+              <option value="de">🇩🇪 Deutsch</option>
+              <option value="es">🇪🇸 Español</option>
+              <option value="pt">🇧🇷 Português</option>
+              <option value="it">🇮🇹 Italiano</option>
+              <option value="ru">🇷🇺 Русский</option>
+              <option value="ar">🇸🇦 العربية</option>
+              <option value="hi">🇮🇳 हिन्दी</option>
+              <option value="th">🇹🇭 ไทย</option>
+              <option value="vi">🇻🇳 Tiếng Việt</option>
+            </select>
+          </label>
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="blog-title">
+        <div class="section-inner">
+          <p class="eyebrow">HashChat 博客</p>
+          <h1 id="blog-title">关于实时 AI 翻译的思考。</h1>
+          <p>为跨语言交流产品的开发者带来产品思考、功能对比、演讲分享与实践记录。HashChat 的前身名为 Mingle。</p>
+        </div>
+      </section>
+      <section class="section" aria-labelledby="latest-posts">
+        <div class="section-inner">
+          <div class="section-heading">
+            <p class="eyebrow">最新内容</p>
+            <h2 id="latest-posts">演讲、演示文稿与产品故事。</h2>
+            <p>我们演讲与路演所使用的幻灯片，以及 Mingle 如何发展为 HashChat 的故事，还有一份 AI 翻译工具的实时对比。</p>
+          </div>
+          <div class="post-list">
+            <a class="post-card" href="/blogs/ai-wrapper-business?lang=zh-cn">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/presentations/assets/ai-beyond-wrapper-og-en.png?v=3" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">演讲 - 2026年11月5日</p>
+                <h3>探索 AI 套壳软件的商业机遇</h3>
+                <p>AI 套壳企业案例研究，以及下一步发展战略。</p>
+                <span class="post-link">查看幻灯片</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-social-network?lang=zh-cn">
+              <div class="post-visual" aria-hidden="true">
+                <div class="logo-cloud">
+                  <span><img src="/assets/logo-mingle.png" alt="" /></span>
+                  <span><img src="/assets/logo-line.png" alt="" /></span>
+                  <span><img src="/assets/logo-wechat.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-hellotalk.png" alt="" /></span>
+                  <span><img src="/assets/logo-instagram.png" alt="" /></span>
+                  <span><img src="/assets/logo-discord.png" alt="" /></span>
+                </div>
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">产品故事 - 2026年11月2日</p>
+                <h3>HashChat：一个没有语言障碍的社交网络</h3>
+                <p>Mingle 如何发展为 HashChat：支持自动翻译的动态信息流、展示交友意向的个人资料，以及内置实时口译功能的聊天体验。并与 LINE、WeChat、WhatsApp、HelloTalk 等平台进行对比。</p>
+                <span class="post-link">阅读完整故事</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/virtually-deck?lang=zh-cn">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/virtually-vtuber-cover.png" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">路演演示文稿 - 2026年9月13日</p>
+                <h3>Virtually：由生成式 AI 驱动的 VTuber 直播</h3>
+                <p>从一张静态图片到实时互动直播。</p>
+                <span class="post-link">查看幻灯片</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-pitch-deck-short?lang=zh-cn">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/og-image.png?v=20260416-2" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">路演演示文稿 - 更新于2026年9月1日</p>
+                <h3>HashChat 路演演示：精简版</h3>
+                <p>语言交换平台面临的冷启动难题，以及实时口译如何解决其中一端的问题。</p>
+                <span class="post-link">查看幻灯片</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-pitch-deck?lang=zh-cn">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/og-image.png?v=20260416-2" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">路演演示文稿 - 更新于2026年9月1日</p>
+                <h3>HashChat 路演演示：打破语言障碍的语音即时通讯应用</h3>
+                <p>我们为什么打造 HashChat、目标用户是谁，以及如何将实时口译工具发展为原生 AI 社交网络。</p>
+                <span class="post-link">查看幻灯片</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/ai-wrapper-business-surfers-3rd?lang=zh-cn">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/presentations/assets/surfers-logo.png" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">演讲 - 2026年8月12日</p>
+                <h3>AI 套壳软件的商业模式：Surfers 第三期专场</h3>
+                <p>我们首次推出的 AI 套壳主题演讲，也是内容更完整的长篇版本，面向 Surfers 第三期学员分享。</p>
+                <span class="post-link">查看幻灯片</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/ai-translators-comparison?lang=zh-cn">
+              <div class="post-visual" aria-hidden="true">
+                <div class="logo-cloud">
+                  <span><img src="/assets/logo-mingle.png" alt="" /></span>
+                  <span><img src="/assets/logo-google-translate.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-apple-translate.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-microsoft-translator.png" alt="" /></span>
+                  <span><img src="/assets/logo-papago.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-deepl.png" alt="" /></span>
+                </div>
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">产品对比 - 更新于2026年4月20日</p>
+                <h3>AI 翻译工具对比</h3>
+                <p>一份以实用对比表为核心的指南，全面比较价格、平台支持范围、语言覆盖、实时字幕、文字记录、自动语言切换、后台翻译，以及外部应用音频采集功能。</p>
+                <span class="post-link">阅读完整对比</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="footer">
+      <div class="footer-inner">
+        <span>© Mingle Labs。 HashChat 的前身名为 Mingle。</span>
+        <div class="footer-links">
+          <a href="/blogs?lang=zh-cn">博客</a>
+          <a href="/privacy-policy">隐私政策</a>
+          <a href="/terms-of-use">服务条款</a>
+          <a href="/legal">Legal</a>
+        </div>
+      </div>
+    </footer>
+    <script>
+      (function () {
+        var select = document.getElementById("blog-language");
+        if (!select) return;
+        select.addEventListener("change", function () {
+          var url = new URL(window.location.href);
+          if (select.value === "en") url.searchParams.delete("lang");
+          else url.searchParams.set("lang", select.value);
+          window.location.href = url.toString();
+        });
+      })();
+    </script>
+  </body>
+</html>

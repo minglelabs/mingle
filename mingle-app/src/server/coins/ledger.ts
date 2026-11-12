@@ -9,7 +9,7 @@ import { computeDailyFreeGrant, planLotSpend, type LotAllocation } from './lot-p
 // lots need no lock of their own. app_coin_ledger is append-only: this module
 // only ever inserts into it.
 
-export type CoinLotSource = 'daily_free' | 'purchase' | 'admin_grant' | 'signup_bonus' | 'refund_reversal' | 'gift'
+export type CoinLotSource = 'daily_free' | 'purchase' | 'admin_grant' | 'signup_bonus' | 'refund_reversal' | 'gift' | 'referral'
 export type CoinLedgerType = 'grant' | 'spend' | 'expire' | 'refund_clawback' | 'admin_revoke' | 'adjust' | 'gift_sent'
 
 type WalletState = {
