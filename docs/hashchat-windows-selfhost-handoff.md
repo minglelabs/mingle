@@ -16,7 +16,7 @@ DB는 그대로 prod(싱가포르 슈파베이스)를 쓴다. 즉 **prod 데이�
 - 비밀값(키, 비밀번호, DB 주소, 시크릿)을 화면이나 로그, 커밋에 출력하지 않는다. 있는지만 확인한다.
 - **DB에는 스키마 변경을 하지 않는다.** `prisma migrate`와 `db push` 금지. 마이그레이션은 이미 적용돼 있다.
 - **운영자 워커 4개는 반드시 끈다.** Railway에서 이미 돌고 있어서, 켜면 같은 작업이 두 번 실행된다.
-- LiveKit 설정(`C:\livekit\livekit.yaml`)과 기존 Caddy의 `voice.minglelabs.app` 블록은 건드리지 않는다. 새 사이트 블록만 추가한다.
+- LiveKit 설정(`C:\livekit\livekit.yaml`)과 Caddy는 건드리지 않는다.
 - 디스크: C 드라이브 여유가 9GB 정도뿐이다. 시작 전에 **20GB 이상** 확보한다(임시 파일, 휴지통, 안 쓰는 WSL 배포판, Windows.old 등). 그래도 안 되면 멈추고 보고한다. 지우기 전에 무엇을 지울지 사용자에게 먼저 물어본다.
 - 메모리: ChatGPT 풀용 Chrome이 메모리를 많이 쓴다. `.wslconfig`에 `memory=6GB`를 걸어 WSL 상한을 둔다. Chrome은 사용자와 상의해서 줄인다.
 
@@ -98,18 +98,34 @@ docker run -d --name hashrush --restart unless-stopped \
   --env-file ~/hashchat/hashrush.env -p 127.0.0.1:8090:8090 hashrush-server
 ```
 
-## 5. Caddy와 DNS
+## 5. Cloudflare 터널 (DNS는 이미 연결됨)
 
-1. DNS: Cloudflare에서 `hashchat-win`과 `hashrush-win` A 레코드를 `voice.minglelabs.app`과 같은 공인 IP로 만든다. 프록시는 끄고 DNS only로 한다. 이건 사용자가 한다.
-2. 기존 Caddyfile에 블록 두 개를 추가하고 reload한다.
+Cloudflare 터널 `hashchat-win`(id `8a108abc-b1b9-479e-9402-060569aca570`)이 이미 만들어져 있다. `hashchat-win.minglelabs.app`과 `hashrush-win.minglelabs.app`은 이 터널로 연결돼 있다.
+Caddy, 공유기 포트 개방, A 레코드는 필요 없다. Caddy는 건드리지 않는다.
 
+1. WSL 안에 `cloudflared`를 설치한다.
+2. 터널 토큰은 Railway `hash-rush` 서비스의 `WINDOWS_CLOUDFLARED_TUNNEL_TOKEN`에 있다. 출력하지 말고 파일로만 받는다.
+
+```bash
+railway variables --service hash-rush --kv | grep '^WINDOWS_CLOUDFLARED_TUNNEL_TOKEN=' | cut -d= -f2- > ~/hashchat/tunnel.token
+chmod 600 ~/hashchat/tunnel.token
 ```
-hashchat-win.minglelabs.app {
-    reverse_proxy 127.0.0.1:8080
-}
-hashrush-win.minglelabs.app {
-    reverse_proxy 127.0.0.1:8090
-}
+
+3. `~/hashchat/cloudflared.yml`:
+
+```yaml
+ingress:
+  - hostname: hashchat-win.minglelabs.app
+    service: http://127.0.0.1:8080
+  - hostname: hashrush-win.minglelabs.app
+    service: http://127.0.0.1:8090
+  - service: http_status:404
+```
+
+4. 실행하고, 재부팅해도 자동으로 뜨게 한다(systemd 서비스 또는 작업 스케줄러).
+
+```bash
+cloudflared tunnel --config ~/hashchat/cloudflared.yml run --token "$(cat ~/hashchat/tunnel.token)"
 ```
 
 ## 6. 확인 (모두 밖에서 접속해 확인)
