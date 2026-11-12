@@ -1662,6 +1662,8 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
     expect(json.provider).toBe('claude')
     expect(json.translations).toEqual({ ko: '안녕하세요' })
+    // The app names the failing model to the user.
+    expect(json.unavailableModel).toBe('gpt-6-luna')
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('api.anthropic.com')
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })

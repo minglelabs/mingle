@@ -660,6 +660,9 @@ async function runTranslateFinalize(
         currentTurnPreviousState,
         targetLanguages,
       )
+    // The model the user chose failed (error or rate-limit cooldown) and another
+    // one answered. The response names it so the app can say that model is down.
+    let selectedModelUnavailable = false
     const buildResponseWithOptionalTts = async (
       rawTranslations: Record<string, string>,
       meta: {
@@ -720,6 +723,7 @@ async function runTranslateFinalize(
       const responsePayload: Record<string, unknown> = {
         translations,
         ...(tailFill ? { tailFill } : {}),
+        ...(selectedModelUnavailable ? { unavailableModel: selectedTranslationModel } : {}),
         provider: meta.provider,
         infrastructureProvider: meta.infrastructureProvider,
         model: meta.model,
@@ -883,6 +887,7 @@ async function runTranslateFinalize(
       const activeProviderRateLimitCooldownMs = resolveActiveProviderRateLimitCooldownMs(providerConfig)
       if (activeProviderRateLimitCooldownMs !== null) {
         providerRequestFailureReason = 'provider_rate_limit_cooldown'
+        if (attemptIndex === 0) selectedModelUnavailable = true
         logTranslateFinalizeWarning('provider_rate_limit_cooldown_active', {
           ...buildTranslateFinalizeLogContext(ctx),
           provider: providerConfig.provider,
@@ -946,6 +951,7 @@ async function runTranslateFinalize(
         }
       } catch (error) {
         providerRequestFailureReason = 'provider_error'
+        if (attemptIndex === 0) selectedModelUnavailable = true
         const retryInMs = rememberProviderRateLimitCooldown(providerConfig, error)
         if (retryInMs !== null) {
           logTranslateFinalizeWarning('provider_rate_limit_cooldown_started', {

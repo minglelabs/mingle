@@ -1,6 +1,7 @@
 'use client'
 
 import { isTranslateStreamResponse, readTranslateStream, TRANSLATE_STREAM_CONTENT_TYPE } from './translate-stream.client'
+import { notifyTranslationModelUnavailable } from '@/lib/translation-model-notice'
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-errors'
 import {
   appendCoinBillingToWsUrl,
@@ -4810,6 +4811,7 @@ export default function useRealtimeSTT({
       }
       if (typeof data.coinBalance === 'number') applyCoinBalance(data.coinBalance)
       if (data.coinExhausted === true) notifyCoinsExhausted()
+      if (typeof data.unavailableModel === 'string') notifyTranslationModelUnavailable(data.unavailableModel)
       const ttsAudioBase64 = typeof data.ttsAudioBase64 === 'string' ? data.ttsAudioBase64 : undefined
       const responseSourceLanguage = typeof data.sourceLanguage === 'string'
         ? normalizeIncomingSourceLanguage(data.sourceLanguage, text, { candidates: [sourceLanguage, ...targetLanguages] })
