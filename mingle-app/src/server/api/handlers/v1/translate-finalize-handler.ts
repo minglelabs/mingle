@@ -34,7 +34,7 @@ import {
   extendFixedSource,
   isSafeInterimCut,
   joinTailTranslations,
-  matchTranslatedTailLength,
+  matchTailCutAfter,
   parseBubbleTail,
   planBubbleTail,
   type BubbleTailPlan,
@@ -55,7 +55,7 @@ import {
   rememberProviderRateLimitCooldown,
   requestTranslationFromProvider,
   normalizeTranslationProvider,
-  TAIL_TRANSLATED_SOURCE_KEY,
+  TAIL_CUT_AFTER_KEY,
 } from '@/server/translation/translate-texts'
 import { readPartialJsonStrings } from '@/lib/partial-json-strings'
 
@@ -619,7 +619,7 @@ async function runTranslateFinalize(
     let lastSent = ''
     ctx.onPartialContent = (content) => {
       const joined = buildInterimTailPartialTranslations(
-        plan, readPartialJsonStrings(content), targetLanguages, TAIL_TRANSLATED_SOURCE_KEY,
+        plan, readPartialJsonStrings(content), targetLanguages, TAIL_CUT_AFTER_KEY,
       )
       if (!joined) return
       const translations = normalizeChineseContent({
@@ -672,7 +672,7 @@ async function runTranslateFinalize(
         sourceLanguagesMixed?: boolean
         sourceTextHasForeignScript?: boolean
         usedFallbackFromPreviousState?: boolean
-        tailTranslatedSource?: string
+        tailCutAfter?: string
       },
     ): Promise<NextResponse> => {
       // Tail mode: the provider filled only the blank. An interim answer covers
@@ -687,7 +687,7 @@ async function runTranslateFinalize(
       if (bubbleTailPlan && !meta.usedFallbackFromPreviousState) {
         const coveredLength = isFinal
           ? bubbleTailPlan.remainingSource.length
-          : matchTranslatedTailLength(bubbleTailPlan.remainingSource, meta.tailTranslatedSource || '')
+          : matchTailCutAfter(bubbleTailPlan.remainingSource, meta.tailCutAfter || '')
         const safeCut = isFinal || isSafeInterimCut(bubbleTailPlan.remainingSource, coveredLength)
         const hasFill = safeCut && coveredLength > 0 && Object.keys(rawTranslations).length > 0
         translations = hasFill
@@ -707,7 +707,7 @@ async function runTranslateFinalize(
         if (!isFinal && !hasFill && Object.keys(rawTranslations).length > 0) {
           logTranslateFinalizeWarning('bubble_tail_unmatched_source', {
             ...buildTranslateFinalizeLogContext(ctx),
-            tailTranslatedSource: meta.tailTranslatedSource || '',
+            tailCutAfter: meta.tailCutAfter || '',
           })
         }
       }
@@ -1169,7 +1169,7 @@ async function runTranslateFinalize(
       sourceDisplayText,
       sourceLanguagesMixed: selectedResult.sourceLanguagesMixed,
       sourceTextHasForeignScript: selectedResult.sourceTextHasForeignScript,
-      tailTranslatedSource: selectedResult.tailTranslatedSource,
+      tailCutAfter: selectedResult.tailCutAfter,
     })
   } catch (error) {
     logTranslateFinalizeError('unexpected_handler_error', {

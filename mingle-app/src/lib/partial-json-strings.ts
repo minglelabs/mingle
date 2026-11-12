@@ -1,5 +1,5 @@
 // Reads the string fields of a flat JSON object that is still being streamed,
-// e.g. `{"translatedSource":"Hi.","ko":"안녕` → translatedSource (complete) and
+// e.g. `{"cutAfter":"Hi.","ko":"안녕` → cutAfter (complete) and
 // ko = "안녕" (still growing). Non-string values are skipped. Nested objects and
 // arrays are not expected (translation answers are flat) and stop the read.
 

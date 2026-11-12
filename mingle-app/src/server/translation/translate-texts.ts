@@ -72,8 +72,8 @@ export type TranslationEngineResult = {
   sourceLanguage?: string
   sourceLanguagesMixed?: boolean
   sourceTextHasForeignScript?: boolean
-  /** Tail mode (interim): the leading part of the tail the model translated, copied from the source. */
-  tailTranslatedSource?: string
+  /** Tail mode (interim): the last source words the model translated, which mark where it cut. */
+  tailCutAfter?: string
   provider: TranslationProvider
   infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
@@ -860,9 +860,9 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
   }
 }
 
-export const TAIL_TRANSLATED_SOURCE_KEY = 'translatedSource'
+export const TAIL_CUT_AFTER_KEY = 'cutAfter'
 
-/** Interim tail requests also return which part of the tail they translated. */
+/** Interim tail requests also return where in the tail they cut. */
 function isInterimBubbleTail(ctx: Pick<TranslateContext, 'bubbleTail' | 'isFinal' | 'shouldRedetectSourceLanguage'>): boolean {
   return Boolean(ctx.bubbleTail) && !ctx.isFinal && !ctx.shouldRedetectSourceLanguage
 }
@@ -906,11 +906,11 @@ function buildBubbleTailFillPrompt(
 
   const tailRules = interim
     ? [
-      `Keys: ${TAIL_TRANSLATED_SOURCE_KEY} and the target language codes.`,
+      `Keys: ${TAIL_CUT_AFTER_KEY} and the target language codes.`,
       'The speaker is still talking. Translate the start of the blank up to a safe cut point: the end of a sentence, or the end of a complete clause (its own subject and verb, usually before a comma or a conjunction) whose meaning cannot change with the words that follow. Even a short sentence counts ("Yes.", "네.").',
       'Your translation is final and never revised, and the next part will be appended after it, so it must read correctly and naturally whatever comes next. Never cut inside a phrase, between a verb and its object, or where the target language would need the next words to order the sentence. When unsure, cut earlier or translate nothing.',
       'The last words of the blank were just heard and the next words may change them: never include them unless the blank ends with punctuation.',
-      `${TAIL_TRANSLATED_SOURCE_KEY} = the source you translated, copied word for word from the start of the blank. Nothing to translate yet: "" everywhere.`,
+      `${TAIL_CUT_AFTER_KEY} = the last words of the source you translated, copied exactly from the blank: 2 to 4 words (in a language written without spaces, the last 4 to 8 characters), enough that they appear only once in the blank. Write it before the translations. Nothing to translate yet: "" everywhere.`,
     ]
     : ['Keys: the target language codes. Translate the whole blank.']
   return {
@@ -924,22 +924,22 @@ function buildBubbleTailFillPrompt(
   }
 }
 
-/** The tail's translated source from a tail-mode answer ('' when absent). */
-export function parseTailTranslatedSource(content: string): string {
+/** Where a tail-mode answer cut: its last translated source words ('' when absent). */
+export function parseTailCutAfter(content: string): string {
   try {
     const parsed = JSON.parse(extractJsonText(content)) as unknown
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return ''
-    const value = (parsed as Record<string, unknown>)[TAIL_TRANSLATED_SOURCE_KEY]
+    const value = (parsed as Record<string, unknown>)[TAIL_CUT_AFTER_KEY]
     return typeof value === 'string' ? value.trim() : ''
   } catch {
     return ''
   }
 }
 
-function withoutTailTranslatedSourceKey(translations: Record<string, string>): Record<string, string> {
+function withoutTailCutAfterKey(translations: Record<string, string>): Record<string, string> {
   const output: Record<string, string> = {}
   for (const [key, value] of Object.entries(translations)) {
-    if (key.toLowerCase() === TAIL_TRANSLATED_SOURCE_KEY.toLowerCase()) continue
+    if (key.toLowerCase() === TAIL_CUT_AFTER_KEY.toLowerCase()) continue
     output[key] = value
   }
   return output
@@ -954,11 +954,11 @@ function buildGeminiResponseSchema(targetLanguages: string[], options?: {
   const properties: Record<string, ResponseSchema> = {}
   const required = [...targetLanguages]
   if (options?.interimBubbleTail) {
-    properties[TAIL_TRANSLATED_SOURCE_KEY] = {
+    properties[TAIL_CUT_AFTER_KEY] = {
       type: SchemaType.STRING,
-      description: 'The source text translated in this answer, copied word for word from the start of the blank ("" when none).',
+      description: 'The last 2-4 words (or 4-8 characters without spaces) of the source translated in this answer, copied exactly from the blank and appearing only once in it ("" when none).',
     }
-    required.unshift(TAIL_TRANSLATED_SOURCE_KEY)
+    required.unshift(TAIL_CUT_AFTER_KEY)
   }
 
   if (options?.shouldRedetectSourceLanguage) {
@@ -1115,8 +1115,8 @@ export async function translateWithGemini(
     return null
   }
 
-  const translations = withoutTailTranslatedSourceKey(parseTranslations(content))
-  const tailTranslatedSource = isInterimBubbleTail(ctx) ? parseTailTranslatedSource(content) : ''
+  const translations = withoutTailCutAfterKey(parseTranslations(content))
+  const tailCutAfter = isInterimBubbleTail(ctx) ? parseTailCutAfter(content) : ''
   const declaredSourceLanguage = ctx.shouldRedetectSourceLanguage ? parseDetectedSourceLanguage(content) : ''
   const sourceLanguagesMixed = ctx.shouldRedetectSourceLanguage ? parseSourceLanguagesMixed(content) : false
   const sourceTextHasForeignScript = ctx.shouldRedetectSourceLanguage ? parseSourceTextHasForeignScript(content) : false
@@ -1152,7 +1152,7 @@ export async function translateWithGemini(
     ...(detectedSourceLanguage ? { sourceLanguage: detectedSourceLanguage } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
-    ...(tailTranslatedSource ? { tailTranslatedSource } : {}),
+    ...(tailCutAfter ? { tailCutAfter } : {}),
     provider: config.provider,
     infrastructureProvider: config.infrastructureProvider,
     model: config.model,
@@ -1187,8 +1187,8 @@ function buildTranslationResponseJsonSchema(ctx: TranslateContext): Record<strin
     required.push('sourceLanguage', 'sourceLanguagesMixed', 'sourceTextHasForeignScript')
   }
   if (isInterimBubbleTail(ctx)) {
-    properties[TAIL_TRANSLATED_SOURCE_KEY] = { type: 'string', description: 'The source text translated in this answer, copied word for word from the start of the blank ("" when none).' }
-    required.push(TAIL_TRANSLATED_SOURCE_KEY)
+    properties[TAIL_CUT_AFTER_KEY] = { type: 'string', description: 'The last 2-4 words (or 4-8 characters without spaces) of the source translated in this answer, copied exactly from the blank and appearing only once in it ("" when none).' }
+    required.push(TAIL_CUT_AFTER_KEY)
   }
   for (const language of ctx.targetLanguages) {
     properties[language] = { type: 'string', description: describeOpenAICompatibleTargetLanguage(language) }
@@ -1508,8 +1508,8 @@ export async function translateWithOpenAICompatible(
     return null
   }
 
-  const translations = withoutTailTranslatedSourceKey(parseTranslations(content))
-  const tailTranslatedSource = isInterimBubbleTail(ctx) ? parseTailTranslatedSource(content) : ''
+  const translations = withoutTailCutAfterKey(parseTranslations(content))
+  const tailCutAfter = isInterimBubbleTail(ctx) ? parseTailCutAfter(content) : ''
   const declaredSourceLanguage = ctx.shouldRedetectSourceLanguage ? parseDetectedSourceLanguage(content) : ''
   const sourceLanguagesMixed = ctx.shouldRedetectSourceLanguage ? parseSourceLanguagesMixed(content) : false
   const sourceTextHasForeignScript = ctx.shouldRedetectSourceLanguage ? parseSourceTextHasForeignScript(content) : false
@@ -1546,7 +1546,7 @@ export async function translateWithOpenAICompatible(
     ...(detectedSourceLanguage ? { sourceLanguage: detectedSourceLanguage } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
-    ...(tailTranslatedSource ? { tailTranslatedSource } : {}),
+    ...(tailCutAfter ? { tailCutAfter } : {}),
     provider: config.provider,
     infrastructureProvider: config.infrastructureProvider,
     model: config.model,

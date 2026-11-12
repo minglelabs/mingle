@@ -210,7 +210,7 @@ describe('/api/translate/finalize route', () => {
   it('interim tail fill adds only the finished sentence and keeps the fixed part', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
-        text: () => '{"translatedSource":"그리고 집에 갔어.","en":"And then we went home."}',
+        text: () => '{"cutAfter":"그리고 집에 갔어.","en":"And then we went home."}',
         usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
       },
     })
@@ -244,7 +244,7 @@ describe('/api/translate/finalize route', () => {
 
   it('streams an interim tail fill as NDJSON: pieces first, then the usual answer once', async () => {
     const encoder = new TextEncoder()
-    const content = '{"translatedSource":"그리고 집에 갔어.","en":"And then we went home."}'
+    const content = '{"cutAfter":"그리고 집에 갔어.","en":"And then we went home."}'
     const sse = [
       `data: ${JSON.stringify({ model: 'gpt-6-luna', choices: [{ delta: { content: content.slice(0, 40) } }] })}\n\n`,
       `data: ${JSON.stringify({ choices: [{ delta: { content: content.slice(40, 55) } }] })}\n\n`,
@@ -308,7 +308,7 @@ describe('/api/translate/finalize route', () => {
   it('starts a new bubble from the previous bubble\'s last piece', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
-        text: () => '{"translatedSource":"","ko":""}',
+        text: () => '{"cutAfter":"","ko":""}',
         usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 1, totalTokenCount: 6 },
       },
     })
@@ -337,7 +337,7 @@ describe('/api/translate/finalize route', () => {
   it('shows the model only the last fixed piece as context', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
-        text: () => '{"translatedSource":"","en":""}',
+        text: () => '{"cutAfter":"","en":""}',
         usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 1, totalTokenCount: 6 },
       },
     })
@@ -365,7 +365,7 @@ describe('/api/translate/finalize route', () => {
   it('interim tail fill with no finished sentence keeps the fixed part unchanged', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
-        text: () => '{"translatedSource":"","en":""}',
+        text: () => '{"cutAfter":"","en":""}',
         usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 1, totalTokenCount: 6 },
       },
     })
@@ -391,7 +391,7 @@ describe('/api/translate/finalize route', () => {
   it('ignores an interim fill whose source is not the start of the tail', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
-        text: () => '{"translatedSource":"전혀 다른 말.","en":"Something else."}',
+        text: () => '{"cutAfter":"전혀 다른 말.","en":"Something else."}',
         usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 5, totalTokenCount: 10 },
       },
     })

@@ -354,7 +354,7 @@ describe('streamed OpenAI translation', () => {
     process.env.OPENAI_API_KEY = 'test-openai-key'
     const encoder = new TextEncoder()
     const sse = [
-      'data: {"model":"gpt-6-luna","service_tier":"priority","choices":[{"delta":{"content":"{\\"translatedSource\\":\\"Hi.\\","}}]}\n\n',
+      'data: {"model":"gpt-6-luna","service_tier":"priority","choices":[{"delta":{"content":"{\\"cutAfter\\":\\"Hi.\\","}}]}\n\n',
       'data: {"choices":[{"delta":{"content":"\\"ko\\":\\"안녕"}}]}\n\ndata: {"choices":[{"delta":{"content":".\\"}"},"finish_reason":"stop"}]}\n\n',
       'data: {"choices":[],"usage":{"prompt_tokens":5,"completion_tokens":7,"total_tokens":12}}\n\ndata: [DONE]\n\n',
     ]
@@ -385,10 +385,10 @@ describe('streamed OpenAI translation', () => {
       const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))
       expect(payload.stream).toBe(true)
       expect(payload.stream_options).toEqual({ include_usage: true })
-      expect(partials.at(-1)).toBe('{"translatedSource":"Hi.","ko":"안녕."}')
+      expect(partials.at(-1)).toBe('{"cutAfter":"Hi.","ko":"안녕."}')
       expect(partials.length).toBe(3)
       expect(result?.translations).toEqual({ ko: '안녕.' })
-      expect(result?.tailTranslatedSource).toBe('Hi.')
+      expect(result?.tailCutAfter).toBe('Hi.')
       expect(result?.usage?.totalTokens).toBe(12)
     } finally {
       vi.unstubAllGlobals()
