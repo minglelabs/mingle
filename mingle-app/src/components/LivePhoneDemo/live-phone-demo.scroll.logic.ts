@@ -36,6 +36,23 @@ export function resolveFirstUnreadUtteranceId(input: {
 export const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = AUTO_SCROLL_BOTTOM_THRESHOLD_PX
 export const AUTO_SCROLL_MIN_INTERVAL_MS = 1000
 
+// Once the user scrolls up, following stays off until they are back at the
+// very bottom themselves (or tap the jump-to-latest button). The near-bottom
+// band above only decides whether a viewer who has NOT scrolled up is followed.
+export const USER_DETACH_REATTACH_DISTANCE_PX = 2
+
+export function resolveUserDetachedFromBottom(input: {
+  wasDetached: boolean
+  fromUserScroll: boolean
+  previousScrollTop: number
+  scrollTop: number
+  distanceToBottom: number
+}): boolean {
+  if (input.distanceToBottom <= USER_DETACH_REATTACH_DISTANCE_PX) return false
+  if (input.fromUserScroll && input.scrollTop < input.previousScrollTop - 1) return true
+  return input.wasDetached
+}
+
 // How the transcript follows a bubble that grows while someone is speaking
 // (a new bubble has always been followed at once; this is about added lines).
 // - 'instant': in the same frame as the new line, so the newest line never

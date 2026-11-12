@@ -11,6 +11,7 @@ import {
   LIVE_DEMO_SCROLL_MEASUREMENT_SEARCH_PARAM,
   createAutoScrollScheduler,
   resolveLiveGrowthRollScrollTop,
+  resolveUserDetachedFromBottom,
   deriveAutoScrollClockDelayMs,
   deriveLateMessageHeightChangeEffectAboveViewportAnchor,
   deriveLivePhoneDemoScrollMetrics,
@@ -371,9 +372,10 @@ describe('live-phone-demo scroll/platform logic', () => {
         '  useLayoutEffect(() => {\n    refreshScrollDateLabelAnchors()',
       )
 
-      const earlyReturnIndex = newMessageAutoScrollEffectSource.indexOf(
-        'if (!autoScrollState.shouldAutoScroll || !hasInitialBottomAnchorRef.current || !chatRef.current) return',
-      )
+      const earlyReturnIndex = newMessageAutoScrollEffectSource.indexOf('!autoScrollState.shouldAutoScroll')
+      // A viewer who scrolled up stays put even when a new message lands
+      // while they are still inside the near-bottom band.
+      expect(newMessageAutoScrollEffectSource).toContain('|| userDetachedFromBottomRef.current')
       const clearSuppressIndex = newMessageAutoScrollEffectSource.indexOf('suppressAutoScrollRef.current = false')
       const forceFollowIndex = newMessageAutoScrollEffectSource.indexOf('shouldAutoScroll.current = true')
 
@@ -507,6 +509,28 @@ describe('live-phone-demo scroll/platform logic', () => {
         scrollable: true,
         distanceToBottom: 824,
       })
+    })
+  })
+
+  describe('resolveUserDetachedFromBottom', () => {
+    const base = { wasDetached: false, fromUserScroll: true, previousScrollTop: 500, scrollTop: 500, distanceToBottom: 40 }
+
+    it('detaches the moment the user scrolls up, even inside the near-bottom band', () => {
+      expect(resolveUserDetachedFromBottom({ ...base, scrollTop: 490 })).toBe(true)
+    })
+
+    it('stays detached while the user is still above the bottom', () => {
+      expect(resolveUserDetachedFromBottom({ ...base, wasDetached: true, scrollTop: 520 })).toBe(true)
+      expect(resolveUserDetachedFromBottom({ ...base, wasDetached: true, fromUserScroll: false })).toBe(true)
+    })
+
+    it('reattaches only once the view is back at the very bottom', () => {
+      expect(resolveUserDetachedFromBottom({ ...base, wasDetached: true, distanceToBottom: 2 })).toBe(false)
+      expect(resolveUserDetachedFromBottom({ ...base, scrollTop: 490, distanceToBottom: 0 })).toBe(false)
+    })
+
+    it('ignores a move up that was not the user (content or layout moving the view)', () => {
+      expect(resolveUserDetachedFromBottom({ ...base, fromUserScroll: false, scrollTop: 400 })).toBe(false)
     })
   })
 
