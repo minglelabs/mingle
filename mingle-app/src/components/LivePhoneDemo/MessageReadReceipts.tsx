@@ -66,10 +66,10 @@ function ReadReceiptRoom({ conversationId, active, viewerUserId, children }: {
   return <Room.Provider value={value}>{children}</Room.Provider>
 }
 
-// Sits above the bubble's "5m ago" timestamp: the number of members who
-// haven't read the message yet, or "Read" once everyone has.
-export function MessageReadReceipt({ senderUserId, createdAtMs, locale, align }: {
-  senderUserId?: string | null; createdAtMs?: number; locale: string; align: 'left' | 'right'
+// Next to the bubble's "5m ago", in the same size: the number of members who
+// haven't read the message yet, or a check once everyone has.
+export function MessageReadReceipt({ senderUserId, createdAtMs, locale }: {
+  senderUserId?: string | null; createdAtMs?: number; locale: string
 }) {
   const room = useContext(Room)
   if (!room || !senderUserId || typeof createdAtMs !== 'number' || !Number.isFinite(createdAtMs)) return null
@@ -78,10 +78,15 @@ export function MessageReadReceipt({ senderUserId, createdAtMs, locale, align }:
   return (
     <span
       data-chat-bubble-read-receipt
+      role="img"
       aria-label={unread > 0 ? copy.unreadLabel.replace('{count}', String(unread)) : copy.read}
-      className={`block whitespace-nowrap text-[10px] font-semibold leading-4 ${align === 'right' ? 'text-right' : 'text-left'} ${unread > 0 ? 'text-amber-500' : 'text-black/[0.34]'}`}
+      className={`inline-flex shrink-0 items-center whitespace-nowrap text-[10px] font-medium leading-none tabular-nums ${unread > 0 ? 'text-amber-500' : 'text-black/[0.34]'}`}
     >
-      {unread > 0 ? unread : copy.read}
+      {unread > 0 ? unread : (
+        <svg aria-hidden="true" viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2.2 6.4 4.8 9 9.8 3.2" />
+        </svg>
+      )}
     </span>
   )
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isLivePhoneDemoMessageGroupContinuation,
+  MESSAGE_GROUP_MAX_GAP_MS,
   resolveLivePhoneDemoMessageSpacing,
   resolveLivePhoneDemoMessageSpacingClass,
 } from './live-phone-demo.message-spacing'
@@ -44,5 +46,24 @@ describe('live-phone-demo message spacing', () => {
       { speaker: 'unknown' },
       { speaker: 'unknown' },
     )).toBe('different-speaker')
+  })
+
+  it('continues a run only for back-to-back messages from the same speaker', () => {
+    expect(isLivePhoneDemoMessageGroupContinuation(null, { speakerUserId: 'user-1' })).toBe(false)
+    expect(isLivePhoneDemoMessageGroupContinuation(
+      { speakerUserId: 'user-1', createdAtMs: 1_000 },
+      { speakerUserId: 'user-1', createdAtMs: 60_000 },
+    )).toBe(true)
+    expect(isLivePhoneDemoMessageGroupContinuation(
+      { speakerUserId: 'user-1' },
+      { speakerUserId: 'user-2' },
+    )).toBe(false)
+  })
+
+  it('starts a new run after a long pause', () => {
+    expect(isLivePhoneDemoMessageGroupContinuation(
+      { speakerUserId: 'user-1', createdAtMs: 0 },
+      { speakerUserId: 'user-1', createdAtMs: MESSAGE_GROUP_MAX_GAP_MS + 1 },
+    )).toBe(false)
   })
 })

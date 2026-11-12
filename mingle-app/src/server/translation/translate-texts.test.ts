@@ -348,3 +348,50 @@ describe('translate-texts', () => {
     })
   })
 })
+
+describe('streamed OpenAI translation', () => {
+  it('streams an interim answer, reporting the text so far, and returns the whole answer', async () => {
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+    const encoder = new TextEncoder()
+    const sse = [
+      'data: {"model":"gpt-6-luna","service_tier":"priority","choices":[{"delta":{"content":"{\\"cutAfter\\":\\"Hi.\\","}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"\\"ko\\":\\"안녕"}}]}\n\ndata: {"choices":[{"delta":{"content":".\\"}"},"finish_reason":"stop"}]}\n\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":5,"completion_tokens":7,"total_tokens":12}}\n\ndata: [DONE]\n\n',
+    ]
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of sse) controller.enqueue(encoder.encode(chunk))
+        controller.close()
+      },
+    }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const { resolveTranslationProviderConfig, translateWithOpenAICompatible } = await import('./translate-texts')
+      const resolution = resolveTranslationProviderConfig('gpt-6-luna')
+      if (!resolution.ok || resolution.config.provider !== 'openai') throw new Error('expected openai config')
+      const partials: string[] = []
+      const result = await translateWithOpenAICompatible({
+        text: 'Hi. How',
+        sourceLanguage: 'en',
+        targetLanguages: ['ko'],
+        provider: 'openai',
+        shouldRedetectSourceLanguage: false,
+        immediatePreviousTurn: null,
+        isFinal: false,
+        fast: true,
+        bubbleTail: { fixedSource: '', fixedTranslations: {} },
+        onPartialContent: (content) => partials.push(content),
+      }, resolution.config)
+      const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))
+      expect(payload.stream).toBe(true)
+      expect(payload.stream_options).toEqual({ include_usage: true })
+      expect(partials.at(-1)).toBe('{"cutAfter":"Hi.","ko":"안녕."}')
+      expect(partials.length).toBe(3)
+      expect(result?.translations).toEqual({ ko: '안녕.' })
+      expect(result?.tailCutAfter).toBe('Hi.')
+      expect(result?.usage?.totalTokens).toBe(12)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})

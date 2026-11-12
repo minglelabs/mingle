@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildInterimTailPartialTranslations,
   countInterimCutCandidates,
   extendFixedSource,
   isSafeInterimCut,
   joinTailTranslations,
-  matchTranslatedTailLength,
+  matchTailCutAfter,
   parseBubbleTail,
   planBubbleTail,
   resolveInterimFillFallbackChars,
@@ -27,10 +28,17 @@ describe('bubble tail', () => {
     expect(planBubbleTail({ translatedSource: '안녕.', translations: { en: 'Hi.' } }, '안녕. 잘 지내?', ['en', 'ja'])).toBeNull()
   })
 
-  it('matches the translated part ignoring whitespace', () => {
-    expect(matchTranslatedTailLength('잘 지내? 나는', '잘지내?')).toBe(5)
-    expect(matchTranslatedTailLength('잘 지내? 나는', '나는')).toBe(-1)
-    expect(matchTranslatedTailLength('잘 지내?', '')).toBe(0)
+  it('finds the cut from the last translated words, ignoring whitespace', () => {
+    expect(matchTailCutAfter('잘 지내? 나는', '잘지내?')).toBe(5)
+    expect(matchTailCutAfter('잘 지내? 나는', '지내?')).toBe(5)
+    expect(matchTailCutAfter('I met him. Then we left, and', 'we left,')).toBe(24)
+    expect(matchTailCutAfter('잘 지내? 나는', '너는')).toBe(-1)
+    expect(matchTailCutAfter('잘 지내?', '')).toBe(0)
+  })
+
+  it('rejects last words that appear more than once', () => {
+    expect(matchTailCutAfter('Yes. Yes. Okay so', 'Yes.')).toBe(-1)
+    expect(matchTailCutAfter('Yes. Yes. Okay so', 'Yes. Yes.')).toBe(9)
   })
 
   it('joins unspaced languages without a space', () => {
@@ -102,5 +110,23 @@ describe('interim fill gate', () => {
     const english = 'word '.repeat(12).trim()
     expect(shouldRequestInterimFill(english, 'word')).toBe(false)
     expect(shouldRequestInterimFill('word '.repeat(18).trim(), 'word')).toBe(true)
+  })
+})
+
+describe('buildInterimTailPartialTranslations', () => {
+  const plan = planBubbleTail({ translatedSource: 'Hello.', translations: { ko: '안녕.' } }, 'Hello. Nice to meet you. And', ['ko'])!
+  const key = 'cutAfter'
+
+  it('waits until the answer names a cut the finished answer would keep', () => {
+    expect(buildInterimTailPartialTranslations(plan, { values: { [key]: 'Nice to' }, complete: new Set() }, ['ko'], key)).toBeNull()
+    expect(buildInterimTailPartialTranslations(plan, { values: { [key]: 'Bye.', ko: '잘' }, complete: new Set([key]) }, ['ko'], key)).toBeNull()
+    expect(buildInterimTailPartialTranslations(plan, { values: { [key]: 'meet you.' }, complete: new Set([key]) }, ['ko'], key)).toBeNull()
+  })
+
+  it('shows the fixed part followed by the fill so far', () => {
+    expect(buildInterimTailPartialTranslations(plan, {
+      values: { [key]: 'meet you.', ko: '만나서 반' },
+      complete: new Set([key]),
+    }, ['ko'], key)).toEqual({ ko: '안녕. 만나서 반' })
   })
 })

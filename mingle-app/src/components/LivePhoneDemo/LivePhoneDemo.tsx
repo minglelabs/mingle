@@ -191,7 +191,10 @@ import {
   type LivePhoneDemoBubbleDisplayMode,
 } from './live-phone-demo.bubble-display'
 import { resolveLivePhoneDemoBubbleDisplayCopy } from './live-phone-demo.bubble-display-copy'
-import { resolveLivePhoneDemoMessageSpacingClass } from './live-phone-demo.message-spacing'
+import {
+  isLivePhoneDemoMessageGroupContinuation,
+  resolveLivePhoneDemoMessageSpacingClass,
+} from './live-phone-demo.message-spacing'
 import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   TRANSLATION_MODEL_OPTIONS,
@@ -1668,6 +1671,7 @@ type LivePhoneDemoChatMessageRowProps = {
   viewerUserId?: string | null
   onOpenProfile?: (userId: string) => void
   bubbleDisplayMode: LivePhoneDemoBubbleDisplayMode
+  isGroupContinuation: boolean
 }
 
 function resolveUtteranceCreatedAtDataAttribute(utterance: Utterance): string {
@@ -1694,6 +1698,7 @@ function LivePhoneDemoChatMessageRow({
   viewerUserId,
   onOpenProfile,
   bubbleDisplayMode,
+  isGroupContinuation,
 }: LivePhoneDemoChatMessageRowProps) {
   return (
     <div
@@ -1719,6 +1724,7 @@ function LivePhoneDemoChatMessageRow({
         viewerUserId={viewerUserId}
         onOpenProfile={onOpenProfile}
         bubbleDisplayMode={bubbleDisplayMode}
+        isGroupContinuation={isGroupContinuation}
       />
     </div>
   )
@@ -1742,6 +1748,7 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
     if (prev.viewerUserId !== next.viewerUserId) return false
     if (prev.onOpenProfile !== next.onOpenProfile) return false
     if (prev.bubbleDisplayMode !== next.bubbleDisplayMode) return false
+    if (prev.isGroupContinuation !== next.isGroupContinuation) return false
     if (prev.playingPlaybackKey !== next.playingPlaybackKey) return false
     if (!arePlaybackKeyListsEqual(prev.pendingPlaybackKeys, next.pendingPlaybackKeys)) return false
 
@@ -9039,6 +9046,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 const bubbleTtsIndicator = item.kind === 'message'
                   ? bubbleTtsIndicatorsByUtteranceId.get(item.utterance.id)
                   : undefined
+                // The unread divider sits above this row, so the run restarts under it.
+                const isGroupContinuation = item.kind === 'message'
+                  && previousItem?.kind === 'message'
+                  && item.utterance.id !== unreadDividerUtteranceId
+                  && isLivePhoneDemoMessageGroupContinuation(previousItem.utterance, item.utterance)
 
                 return (
                   <div
@@ -9089,6 +9101,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         viewerUserId={viewerUserId}
                         onOpenProfile={handleOpenProfileForBubble}
                         bubbleDisplayMode={bubbleDisplayMode}
+                        isGroupContinuation={isGroupContinuation}
                       />
                     )}
                   </div>
