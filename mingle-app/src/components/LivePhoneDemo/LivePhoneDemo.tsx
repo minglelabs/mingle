@@ -18,6 +18,7 @@ import {
   isExactSpeechLengthLevel,
   matchSpeechLengthLevel,
   resolveSpeechLengthPreferences,
+  shouldShowSpeechLengthCard,
   type SpeechLengthLevel,
 } from '@/lib/speech-length'
 import type { MessageReplyReference } from '@/lib/message-reply'
@@ -5916,7 +5917,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // One 1-6 scale (see @/lib/speech-length) stands for the two speech split
   // settings, in the room settings and on the first-run card. A new user (no
   // split ever chosen) starts on the default level before the room first
-  // listens, then sees the scale right after their first finished bubble.
+  // listens, then sees the scale after a few finished bubbles
+  // (SPEECH_LENGTH_CARD_AFTER_BUBBLES).
   // Both settings are fixed when a session starts, so a level picked while
   // listening ends the session and starts a new one.
   const firstRunCopy = useMemo(() => resolveFirstRunCopy(uiLocale), [uiLocale])
@@ -5956,12 +5958,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [accountPreferencesHydratedGeneration, applySpeechLengthPreferences, isStorageHydrated, speechLengthIntro, sttSegmentationMode])
 
   // Bubbles already in the room when it first listens (a welcome message, an
-  // earlier conversation) do not count as the first one. A bubble still being
-  // spoken is not in `utterances` yet, so a new id here is a finished bubble;
-  // its translation may still be on the way.
+  // earlier conversation) do not count. A bubble still being spoken is not in
+  // `utterances` yet, so a new id here is a finished bubble; its translation
+  // may still be on the way. The first new bubble completes the first run
+  // (which turns `speechLengthIntro` off upstream); the length card waits for
+  // a few more, so the person has seen some translations before choosing.
   const speechLengthBaselineIdsRef = useRef<Set<string> | null>(null)
+  const speechLengthIntroSeenRef = useRef(false)
+  const firstSpeakReportedRef = useRef(false)
+  if (speechLengthIntro) speechLengthIntroSeenRef.current = true
   useEffect(() => {
-    if (!speechLengthIntro || speechLengthIntroDoneRef.current || !isVisible) return
+    if (!speechLengthIntroSeenRef.current || speechLengthIntroDoneRef.current || !isVisible) return
     const bubbleIds = utterances
       .filter((utterance) => !utterance.recalled && !utterance.image && Boolean(utterance.originalText?.trim()))
       .map((utterance) => utterance.id)
@@ -5970,11 +5977,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
     const baseline = speechLengthBaselineIdsRef.current
-    if (!bubbleIds.some((id) => !baseline.has(id))) return
+    const newBubbles = bubbleIds.filter((id) => !baseline.has(id)).length
+    if (newBubbles === 0) return
+    if (!firstSpeakReportedRef.current) {
+      firstSpeakReportedRef.current = true
+      onFirstSpeakCompletedRef.current?.()
+    }
+    if (!shouldShowSpeechLengthCard(newBubbles)) return
     speechLengthIntroDoneRef.current = true
     setSpeechLengthCardOpen(true)
-    captureMingleClientEvent('mingle_first_run_step', { step: 'length_shown' })
-    onFirstSpeakCompletedRef.current?.()
+    captureMingleClientEvent('mingle_first_run_step', { step: 'length_shown', bubbles: newBubbles })
   }, [isSttSessionRunning, isVisible, speechLengthIntro, utterances])
 
   const speechLengthSettings = {
