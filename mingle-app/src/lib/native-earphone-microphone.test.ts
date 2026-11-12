@@ -82,3 +82,18 @@ describe('earphone microphone notice', () => {
     expect(html).toContain(copy.noticeConfirmLabel)
   })
 })
+
+describe('earphone microphone setting rows', () => {
+  it('names the current pick and sits in the room menu and on my page', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { earphoneMicrophonePickLabel } = await import('@/components/LivePhoneDemo/EarphoneMicrophoneSetting')
+    const copy = resolveLivePhoneDemoEarphoneModeCopy('ko')
+    expect(copy.microphoneMenuLabel).toBe('이어폰 착용 시 마이크')
+    expect(earphoneMicrophonePickLabel(copy, 'phone')).toBe('폰 마이크')
+    expect(earphoneMicrophonePickLabel(copy, 'earphone')).toBe('이어폰 마이크')
+    const room = readFileSync(new URL('../components/LivePhoneDemo/LivePhoneDemo.tsx', import.meta.url), 'utf8')
+    const myPage = readFileSync(new URL('../components/my-page.tsx', import.meta.url), 'utf8')
+    expect(room).toContain('data-qa="live-demo-menu-earphone-microphone"')
+    expect(myPage).toContain('data-testid="menu-earphone-microphone"')
+  })
+})

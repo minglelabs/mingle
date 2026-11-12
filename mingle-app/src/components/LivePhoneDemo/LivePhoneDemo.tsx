@@ -5,6 +5,7 @@ import MessageMediaDialog from './MessageMediaDialog'
 import EarphoneModeNoticeContent from './EarphoneModeNotice'
 import EarphoneMicrophoneNoticeContent from './EarphoneMicrophoneNotice'
 import EarphoneCaptureSourceNoticeContent from './EarphoneCaptureSourceNotice'
+import { EarphoneMicrophoneSettingControl } from './EarphoneMicrophoneSetting'
 import LanguageRadioOption from './LanguageRadioOption'
 
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
@@ -8088,6 +8089,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </span>
                               </button>
                             )}
+                            <EarphoneMicrophoneSettingControl
+                              copy={earphoneModeBaseCopy}
+                              renderRow={({ valueLabel, open }) => (
+                                <button
+                                  type="button"
+                                  data-qa="live-demo-menu-earphone-microphone"
+                                  onClick={open}
+                                  className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-1 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                                >
+                                  <span className="min-w-0 flex-1">{earphoneModeBaseCopy.microphoneMenuLabel}</span>
+                                  <span className="flex shrink-0 items-center gap-1.5 text-gray-500">
+                                    <span className="text-[0.9rem]">{valueLabel}</span>
+                                    <ChevronRight size={18} strokeWidth={2.4} />
+                                  </span>
+                                </button>
+                              )}
+                            />
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
