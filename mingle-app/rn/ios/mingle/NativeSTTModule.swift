@@ -1013,25 +1013,47 @@ class NativeSTTModule: RCTEventEmitter {
 
     private func configureAudioSession(aecEnabled: Bool) throws {
         let audioSession = AVAudioSession.sharedInstance()
+        // With earphones in, record from the phone's microphone and leave the
+        // earphones to play (see MingleBackgroundAudioPolicy.sttMicrophonePlan).
+        // Read before setCategory: the route kind does not depend on it.
+        let routeKind = MingleAudioRouteClassifier.currentSnapshot().routeKind
+        let usePhoneMicrophone =
+            MingleBackgroundAudioPolicy.sttMicrophonePlan(outputRouteKind: routeKind) == .phoneMicrophone
         // .voiceChat → iOS system-level AEC (works with AVAudioPlayer TTS)
         // .default   → no system AEC, full speaker volume, echo allowed
-        let mode: AVAudioSession.Mode = aecEnabled ? .voiceChat : .default
-        NSLog("[NativeSTTModule] configureAudioSession aec=%d mode=%@ category=%@ sampleRate=%.0f",
-              aecEnabled ? 1 : 0, mode.rawValue, audioSession.category.rawValue, audioSession.sampleRate)
-        try audioSession.setCategory(
-            .playAndRecord,
-            mode: mode,
-            options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]
-        )
+        // Earphones leak no echo into the phone's microphone, and .voiceChat
+        // turns the hands-free profile back on by itself, so they get .default.
+        let mode: AVAudioSession.Mode = (aecEnabled && !usePhoneMicrophone) ? .voiceChat : .default
+        // .allowBluetooth is the hands-free profile: it moves both playback and
+        // the microphone to the earphones at 16 kHz. Without it Bluetooth
+        // earphones stay on A2DP and the phone records.
+        var options: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers]
+        if !usePhoneMicrophone {
+            options.insert(.allowBluetooth)
+        }
+        NSLog("[NativeSTTModule] configureAudioSession aec=%d mode=%@ category=%@ sampleRate=%.0f route=%@ phoneMic=%d",
+              aecEnabled ? 1 : 0, mode.rawValue, audioSession.category.rawValue, audioSession.sampleRate,
+              routeKind, usePhoneMicrophone ? 1 : 0)
+        try audioSession.setCategory(.playAndRecord, mode: mode, options: options)
         try? audioSession.setPreferredSampleRate(48_000)
         try? audioSession.setPreferredIOBufferDuration(0.02)
         try audioSession.setActive(true, options: [])
+        // Wired earphones with a microphone: pick the phone's over theirs. nil
+        // hands the choice back to the system on every other route.
+        let phoneMicrophone = usePhoneMicrophone
+            ? audioSession.availableInputs?.first(where: { $0.portType == .builtInMic })
+            : nil
+        do {
+            try audioSession.setPreferredInput(phoneMicrophone)
+        } catch {
+            NSLog("[NativeSTTModule] setPreferredInput failed: %@", error.localizedDescription)
+        }
         // Port types and numeric audio metadata only; never log device names or speech.
         let inputs = audioSession.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
         let outputs = audioSession.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
-        audioDiagnostics.notice("session input=\(inputs, privacy: .public) output=\(outputs, privacy: .public) hardwareRate=\(audioSession.sampleRate) mode=\(mode.rawValue, privacy: .public) aec=\(aecEnabled)")
-        NSLog("[NativeSTTModule] audioSession active mode=%@ sampleRate=%.0f ioBufferDuration=%.4f",
-              mode.rawValue, audioSession.sampleRate, audioSession.ioBufferDuration)
+        audioDiagnostics.notice("session input=\(inputs, privacy: .public) output=\(outputs, privacy: .public) hardwareRate=\(audioSession.sampleRate) mode=\(mode.rawValue, privacy: .public) aec=\(aecEnabled) phoneMic=\(usePhoneMicrophone)")
+        NSLog("[NativeSTTModule] audioSession active mode=%@ sampleRate=%.0f ioBufferDuration=%.4f inputs=[%@] outputs=[%@]",
+              mode.rawValue, audioSession.sampleRate, audioSession.ioBufferDuration, inputs, outputs)
     }
 
     private func installAudioObserversIfNeeded() {

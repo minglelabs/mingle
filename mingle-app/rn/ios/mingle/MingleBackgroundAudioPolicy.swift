@@ -90,6 +90,32 @@ enum MingleBackgroundAudioPolicy {
         return data
     }
 
+    // MARK: - Live STT microphone
+
+    /// Which microphone live STT records from.
+    enum SttMicrophonePlan: String, Equatable {
+        /// Whatever the route gives: the phone's microphone on the speaker or
+        /// receiver, an external USB microphone, a car's.
+        case routeDefault
+        /// The phone's own microphone while the sound plays through earphones.
+        case phoneMicrophone
+    }
+
+    /// An earphone microphone is built to pick up its wearer only: it sits at
+    /// the wearer's ear and filters out other voices, so the person being
+    /// translated (who talks toward the phone) comes in faint or not at all.
+    /// Bluetooth earphones also drop to the 16 kHz hands-free profile to
+    /// record. With earphones in, record from the phone and leave the earphones
+    /// to play. `outputRouteKind` is `MingleAudioRouteClassifier.kind(of:)`.
+    static func sttMicrophonePlan(outputRouteKind: String) -> SttMicrophonePlan {
+        switch outputRouteKind {
+        case "bluetooth", "wired":
+            return .phoneMicrophone
+        default:
+            return .routeDefault
+        }
+    }
+
     // MARK: - Live STT transport
 
     /// mingle-stt closes a stream after 30 s without client audio
