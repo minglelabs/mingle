@@ -65,6 +65,37 @@ const DECKS = [
 ];
 const ogOf = (post, lang) => post.og[lang] ?? post.og.en;
 
+// Every slide's words as plain HTML text under the deck, so readers, search engines and AI
+// assistants get the content without running the deck. Made by scripts/extract-deck-text.mjs.
+const SLIDE_TEXT_TITLE = {
+  en: "Slide text", ko: "슬라이드 내용", ja: "スライドの内容", "zh-cn": "幻灯片内容", "zh-tw": "投影片內容",
+  fr: "Texte des diapositives", de: "Folientext", es: "Texto de las diapositivas", pt: "Texto dos slides",
+  it: "Testo delle slide", ru: "Текст слайдов", ar: "نص الشرائح", hi: "स्लाइड का पाठ", th: "ข้อความในสไลด์",
+  vi: "Nội dung các trang trình bày",
+};
+const deckText = (slug, lang) =>
+  JSON.parse(readFileSync(join(HERE, "legal-blog-i18n", "decks", `${slug}.${DECK_LANGS.has(lang) ? lang : "en"}.json`), "utf8"));
+
+function slideTextSection(post, lang) {
+  const slides = deckText(post.slug, lang);
+  const t = T[lang].ui;
+  const note = DECK_LANGS.has(lang) || !t.deckLanguageNote ? "" : `\n            <p class="deck-transcript-note">${esc(t.deckLanguageNote)}</p>`;
+  const items = slides.map((s, i) => {
+    const lines = s.text ? `\n                <p>${s.text.split("\n").map(esc).join("<br />")}</p>` : "";
+    return `              <li>\n                <h3><span>${i + 1}.</span> ${esc(s.title)}</h3>${lines}\n              </li>`;
+  });
+  return `        <section class="deck-transcript" aria-labelledby="deck-transcript-title">
+          <div class="section-inner">
+            <details>
+              <summary><h2 id="deck-transcript-title">${esc(SLIDE_TEXT_TITLE[lang] ?? SLIDE_TEXT_TITLE.en)}</h2></summary>${note}
+            <ol${DECK_LANGS.has(lang) ? "" : ' lang="en"'}>
+${items.join("\n")}
+            </ol>
+            </details>
+          </div>
+        </section>`;
+}
+
 // Hand-written English articles (blogs/<slug>.html); their translations sit in blogs/<lang>/<slug>.html.
 const ARTICLES = [
   { slug: "hashchat-social-network", date: "2026-11-02",
@@ -229,6 +260,11 @@ ${siteHeader(lang, "blog")}
         <section class="deck-post-body">
           <div class="section-inner">
 ${c.body.map((p) => `            <p>${esc(p)}</p>`).join("\n")}
+          </div>
+        </section>
+${slideTextSection(post, lang)}
+        <section class="deck-post-body">
+          <div class="section-inner">
             <p><a href="${esc(withLang("/blogs", lang))}">← ${esc(t.backToBlog)}</a></p>
           </div>
         </section>
