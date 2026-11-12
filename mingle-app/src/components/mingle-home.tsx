@@ -1,5 +1,6 @@
 "use client";
 
+import { resolveSignInFailedCopy } from "@/i18n/sign-in-failed-copy";
 import { ArrowLeft, Check, Loader2, Mail, X } from "lucide-react";
 import {
   forwardRef,
@@ -340,6 +341,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   );
   const [isLiveDemoMounted, setIsLiveDemoMounted] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  // A failed Apple / Google sign-in is shown on the sign-in screen itself, not in
+  // window.alert: the failure often arrives while the app's browser sheet is still
+  // closing, and an alert presented then disappears with the sheet.
+  const [socialSignInFailed, setSocialSignInFailed] = useState(false);
   const [signingInProvider, setSigningInProvider] =
     useState<NativeAuthProvider | null>(null);
   const [authPanelStep, setAuthPanelStep] = useState<AuthPanelStep>("provider");
@@ -577,7 +582,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         if (normalizedMessage === "native_auth_cancelled") {
           return;
         }
-        window.alert(props.dictionary.profile.nativeSignInFailed);
+        setSocialSignInFailed(true);
         return;
       }
 
@@ -588,7 +593,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       if (!bridgeToken) {
         setIsSigningIn(false);
         setSigningInProvider(null);
-        window.alert(props.dictionary.profile.nativeSignInFailed);
+        setSocialSignInFailed(true);
         return;
       }
       if (bridgeToken === lastHandledBridgeTokenRef.current) {
@@ -608,14 +613,13 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       }).catch(() => {
         setIsSigningIn(false);
         setSigningInProvider(null);
-        window.alert(props.dictionary.profile.nativeSignInFailed);
+        setSocialSignInFailed(true);
       });
     },
     [
       callbackUrl,
       clearNativeAuthPoller,
       clearNativeAuthTimeout,
-      props.dictionary.profile.nativeSignInFailed,
     ],
   );
 
@@ -769,7 +773,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         if (normalizedMessage === "native_auth_cancelled") {
           return;
         }
-        window.alert(props.dictionary.profile.nativeSignInFailed);
+        setSocialSignInFailed(true);
         return;
       }
 
@@ -781,7 +785,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       if (!bridgeToken) {
         setIsSigningIn(false);
         setSigningInProvider(null);
-        window.alert(props.dictionary.profile.nativeSignInFailed);
+        setSocialSignInFailed(true);
         return;
       }
       if (bridgeToken === lastHandledBridgeTokenRef.current) {
@@ -798,7 +802,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       }).catch(() => {
         setIsSigningIn(false);
         setSigningInProvider(null);
-        window.alert(props.dictionary.profile.nativeSignInFailed);
+        setSocialSignInFailed(true);
       });
     };
 
@@ -827,7 +831,6 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     callbackUrl,
     clearNativeAuthPoller,
     clearNativeAuthTimeout,
-    props.dictionary.profile.nativeSignInFailed,
   ]);
 
   const handleSocialSignIn = useCallback(
@@ -835,6 +838,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       // Guard synchronously: a second tap must not replace the request that
       // the native browser is already completing.
       if (pendingNativeProviderRef.current) return;
+      setSocialSignInFailed(false);
       setIsSigningIn(true);
       setSigningInProvider(provider);
       const nativeBridgeEnabled =
@@ -879,7 +883,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
             pendingNativeProviderRef.current = null;
             setIsSigningIn(false);
             setSigningInProvider(null);
-            window.alert(props.dictionary.profile.nativeSignInFailed);
+            setSocialSignInFailed(true);
           }, NATIVE_AUTH_FLOW_TIMEOUT_MS);
           window.ReactNativeWebView?.postMessage(JSON.stringify(command));
           return;
@@ -891,7 +895,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           pendingNativeProviderRef.current = null;
           setIsSigningIn(false);
           setSigningInProvider(null);
-          window.alert(props.dictionary.profile.nativeSignInFailed);
+          setSocialSignInFailed(true);
           return;
         }
       }
@@ -905,7 +909,6 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       callbackUrl,
       clearNativeAuthPoller,
       clearNativeAuthTimeout,
-      props.dictionary.profile.nativeSignInFailed,
       props.locale,
       startNativeAuthPoller,
     ],
@@ -1409,7 +1412,11 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           <span className="text-[2.8rem] font-extrabold leading-[1.08] text-[#2D2A1E]">
             HashChat
           </span>
-          {props.authNotice ? (
+          {socialSignInFailed ? (
+            <p role="alert" className="text-lg font-bold leading-snug text-[#2D2A1E]">
+              {resolveSignInFailedCopy(props.locale)}
+            </p>
+          ) : props.authNotice ? (
             <p className="text-lg font-bold leading-snug text-[#2D2A1E]">{props.authNotice}</p>
           ) : null}
         </div>

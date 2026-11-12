@@ -120,5 +120,21 @@ export async function GET(request: NextRequest) {
     secure: externalOrigin.startsWith("https://"),
     maxAge: NATIVE_AUTH_RETURN_COOKIE_MAX_AGE_SECONDS,
   });
+  // The sheet shares Safari's cookies, so a website session left there (an
+  // earlier sign-in inside the sheet, or in Safari) would ride along to the
+  // OAuth callback. NextAuth then either refuses a different Google account
+  // (OAuthAccountNotLinked) or links a new one to that old user. The app
+  // signs in through the bridge token, never through this cookie, so drop it.
+  for (const { name } of request.cookies.getAll()) {
+    if (name.includes("next-auth.session-token")) {
+      response.cookies.set(name, "", {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: name.startsWith("__Secure-") || externalOrigin.startsWith("https://"),
+        maxAge: 0,
+      });
+    }
+  }
   return response;
 }
