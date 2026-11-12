@@ -2,6 +2,24 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-13 — Sign-in: the button this device last signed in with says "Last used"
+
+- Surface: The app sign-in screen (`mingle-home.tsx`), `lib/last-sign-in-method.ts`, `last-sign-in-method-recorder.tsx` (PR #532).
+- Issue: People with several accounts did not remember whether they had signed in with Apple, Google or email.
+- Resolution: The button of the last successful method carries an orange `최근 사용` / `Last used` badge on its top-right corner (15 locales). Email is saved on success; Apple and Google are marked pending (15 minutes) and saved once the session is authenticated, so a cancelled or failed sign-in does not move the badge. A fresh install shows no badge.
+- Atoms: `2026-11-13-last-sign-in-badge#1` (the badge follows the last successful method only).
+- Verification: `last-sign-in-method.test.ts`; seen on prod in the app. QA: regression suites `*-last-sign-in-method-contracts`, agent scenario `sign-in-error-and-account-switch`.
+
+## 2026-11-13 — Sign-in: a failed Google or Apple sign-in comes back to the app sign-in screen
+
+- Surface: Native Google/Apple sign-in on iOS and Android (`api/auth/[...nextauth]/route.ts`, `api/native-auth/start`, `api/native-auth/complete`, `lib/native-auth-return.ts`, `[locale]/auth/login`, `sign-in-screen.tsx`, `mingle-home.tsx`; PRs #525, #528, #530).
+- Issue 1: When the first Google attempt failed (App Store 2.3.3), the sign-in sheet showed NextAuth's built-in English sign-in page; retrying from there signed the web page in inside the sheet while the app stayed signed out.
+- Issue 2: After reinstalling the app and signing in with a different Google account, the sheet closed and the app returned to its sign-in screen with no message. The Safari cookie jar the sheet shares still held the previous account's web session, so NextAuth answered `OAuthAccountNotLinked`.
+- Issue 3: The failure was shown with `window.alert`, which could fire while the sheet was still closing and be lost.
+- Resolution: Every NextAuth built-in sign-in or error page is replaced: inside a native sign-in the error goes back to the app (`mingleauth://auth?status=error`), on the web to `/{locale}/auth/login` with the app's own sign-in UI. The native start route clears any `next-auth.session-token*` cookie before OAuth begins, so a stale web session cannot capture the new sign-in. The app shows the failure under the logo (`role="alert"`, 15 locales) instead of an alert.
+- Atoms: `2026-11-13-sign-in-error-return#1` (no NextAuth page, the error returns to the app), `#2` (a stale web session cannot block or capture another account), `#3` (the failure is shown on the sign-in screen).
+- Verification: `api/auth/[...nextauth]/route.test.ts`, `api/native-auth/start/route.test.ts`; the owner reproduced issues 1 and 2 on a physical iPhone with two Google accounts; the fixed flow has not been re-run on a device by QA yet. QA: regression suites `*-sign-in-error-return-contracts`, agent scenario `sign-in-error-and-account-switch`.
+
 ## 2026-11-13 — First run: the sentence length card redesigned (coloured drops, sliding scale)
 
 - Surface: `LivePhoneDemo/SpeechLengthCard.tsx`, `SpeechLengthScale.tsx` (also the room settings), the card's scrim in `LivePhoneDemo.tsx`.

@@ -148,6 +148,24 @@ const VITEST_TARGETS = [
     ],
   },
   {
+    id: 'ios-sign-in-error-return-contracts',
+    title: 'Sign-in errors return to the app sign-in screen, never the NextAuth page, and a stale web session cannot block another account',
+    issueAtoms: ['2026-11-13-sign-in-error-return#1', '2026-11-13-sign-in-error-return#2', '2026-11-13-sign-in-error-return#3'],
+    files: [
+      'src/app/api/auth/[...nextauth]/route.test.ts',
+      'src/app/api/native-auth/start/route.test.ts',
+      'src/lib/native-auth-attempt.test.ts',
+    ],
+  },
+  {
+    id: 'ios-last-sign-in-method-contracts',
+    title: 'The sign-in screen marks the method this device last signed in with',
+    issueAtoms: ['2026-11-13-last-sign-in-badge#1'],
+    files: [
+      'src/lib/last-sign-in-method.test.ts',
+    ],
+  },
+  {
     id: 'ios-menu-chrome-contracts',
     title: 'Top-right dropdown cues and drawer chrome stay visually stable',
     issueAtoms: ['019c95e8#4', '019c95e8#5', '019d0514#1', '019d2f95#1', '019d2f95#2', '019d2f95#3', '019d43a3#1'],

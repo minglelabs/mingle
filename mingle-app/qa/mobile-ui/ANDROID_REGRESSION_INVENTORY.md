@@ -28,6 +28,8 @@ This inventory lists the regression targets that are explicitly wired into the c
 | `android-speaker-avatar-contracts` | contract | `019d162b#1` | `speaker-avatar` tests |
 | `android-auth-gate-contracts` | contract | `019ca08b#1`, `019ca08b#2`, `019ca08b#4` | `src/components/mingle-home.auth-contract.test.ts` |
 | `android-native-auth-route-contracts` | contract | `019ca08b#3` | `src/lib/native-auth-bridge.test.ts`, `src/app/[locale]/auth/signin/page.test.ts`, `src/app/[locale]/auth/native/page.test.ts` |
+| `android-sign-in-error-return-contracts` | contract | `2026-11-13-sign-in-error-return#1`, `#2`, `#3` | `src/app/api/auth/[...nextauth]/route.test.ts`, `src/app/api/native-auth/start/route.test.ts`, `src/lib/native-auth-attempt.test.ts` |
+| `android-last-sign-in-method-contracts` | contract | `2026-11-13-last-sign-in-badge#1` | `src/lib/last-sign-in-method.test.ts` |
 | `android-menu-chrome-contracts` | contract | `019c95e8#1`, `019c95e8#4`, `019c95e8#5`, `019d0514#1`, `019d2f95#1`, `019d2f95#2`, `019d2f95#3`, `019d43a3#1` | `src/components/LivePhoneDemo/live-phone-demo.chrome-contract.test.ts` |
 | `android-shared-stt-restore-contracts` | contract | `019c992c#2`, `019d19a3#1`, `019d4cae#50`, `019d4cae#51`, `019d4cae#52`, `019d4cae#53`, `019d4cae#55`, `019d4cae#78`, `019d4eba#1`, `019d4f37#1` | `src/components/LivePhoneDemo/use-realtime-stt.logic.test.ts` |
 | `android-native-stt-reconcile-contracts` | contract | `2026-android-real-device#1`, `019d19a3#1`, `019d4cae#52`, `019d4cae#54`, `019d4cae#55`, `019d4eba#1`, `019d4f37#1` | `src/components/LivePhoneDemo/live-phone-demo.android-stt-reconcile.test.ts` |
