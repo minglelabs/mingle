@@ -6222,6 +6222,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const shouldAutoScroll = useRef(true)
   const suppressAutoScrollRef = useRef(false)
   const userScrollIntentUntilRef = useRef(0)
+  const lastChatScrollTopRef = useRef(0)
   const hasInitialBottomAnchorRef = useRef(false)
   const bottomAnchorConversationRef = useRef(conversationId)
   const allowAutoTopPaginationRef = useRef(false)
@@ -6552,6 +6553,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         prevScrollTopRef.current = scrollTop
       }
     }
+    if (node) {
+      // The user's own move up wins at once: the derived state below is only
+      // computed a frame later, and a line landing in between must not pull
+      // the view back down.
+      if (isUserScrollIntentActive() && node.scrollTop < lastChatScrollTopRef.current - 1) {
+        suppressAutoScrollRef.current = true
+        shouldAutoScroll.current = false
+      }
+      lastChatScrollTopRef.current = node.scrollTop
+    }
     scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })
     if (measurementStartMs !== null) {
       recordScrollHandlerMeasurement(readBrowserPerformanceNowMs() - measurementStartMs)
@@ -6625,6 +6636,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       hasInitialBottomAnchorRef.current
       && shouldAutoScroll.current
       && !suppressAutoScrollRef.current
+      && !isUserScrollIntentActive()
       && !isPaginatingRef.current
       && !isLoadingOlderRef.current
     )
@@ -6654,7 +6666,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
     }
     liveGrowthRollFrameRef.current = window.requestAnimationFrame(step)
-  }, [cancelLiveGrowthRoll, demoTypingText, isConnecting, liveUtterances, utterances])
+  }, [cancelLiveGrowthRoll, demoTypingText, isConnecting, isUserScrollIntentActive, liveUtterances, utterances])
 
   useLayoutEffect(() => {
     const nextCounts: ChatScrollMessageCountSnapshot = {
