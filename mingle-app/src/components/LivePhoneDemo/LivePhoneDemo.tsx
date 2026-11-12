@@ -214,6 +214,7 @@ import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   INITIAL_SCROLL_METRICS,
   LIVE_GROWTH_FOLLOW_MODE,
+  USER_DETACH_REATTACH_DISTANCE_PX,
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET,
   LIVE_DEMO_SCROLL_MEASUREMENT_STORAGE_KEY,
@@ -229,6 +230,7 @@ import {
   recordLivePhoneDemoScrollHandlerMeasurement,
   resolveLateMessageHeightChangeAnchorScrollTop,
   resolveLiveGrowthRollScrollTop,
+  resolveUserDetachedFromBottom,
   resolveLivePhoneDemoScrollMeasurementCounter,
   resolveNewMessageAutoScrollTargetTop,
   resolveScrollViewportAnchorSnapshot,
@@ -6223,6 +6225,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const suppressAutoScrollRef = useRef(false)
   const userScrollIntentUntilRef = useRef(0)
   const lastChatScrollTopRef = useRef(0)
+  const userDetachedFromBottomRef = useRef(false)
   const hasInitialBottomAnchorRef = useRef(false)
   const bottomAnchorConversationRef = useRef(conversationId)
   const allowAutoTopPaginationRef = useRef(false)
@@ -6441,8 +6444,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       isLoadingOlder: isLoadingOlderRef.current,
       nearBottomThresholdPx: AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
     })
-    suppressAutoScrollRef.current = nextScrollState.suppressAutoScroll
-    shouldAutoScroll.current = nextScrollState.shouldAutoScroll
+    if (distanceToBottom <= USER_DETACH_REATTACH_DISTANCE_PX) userDetachedFromBottomRef.current = false
+    const isUserDetached = userDetachedFromBottomRef.current
+    suppressAutoScrollRef.current = isUserDetached || nextScrollState.suppressAutoScroll
+    shouldAutoScroll.current = !isUserDetached && nextScrollState.shouldAutoScroll
 
     const nextScrollMetrics = deriveLivePhoneDemoScrollMetrics({
       scrollTop,
@@ -6554,10 +6559,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
     }
     if (node) {
-      // The user's own move up wins at once: the derived state below is only
-      // computed a frame later, and a line landing in between must not pull
-      // the view back down.
-      if (isUserScrollIntentActive() && node.scrollTop < lastChatScrollTopRef.current - 1) {
+      // The user's own move up wins at once and stays in force: the derived
+      // state below is only computed a frame later, and it must not turn
+      // following back on just because the view is still near the bottom.
+      userDetachedFromBottomRef.current = resolveUserDetachedFromBottom({
+        wasDetached: userDetachedFromBottomRef.current,
+        fromUserScroll: isUserScrollIntentActive(),
+        previousScrollTop: lastChatScrollTopRef.current,
+        scrollTop: node.scrollTop,
+        distanceToBottom: node.scrollHeight - node.scrollTop - node.clientHeight,
+      })
+      if (userDetachedFromBottomRef.current) {
         suppressAutoScrollRef.current = true
         shouldAutoScroll.current = false
       }
@@ -6578,6 +6590,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!chatRef.current) return
     markUserScrollIntent()
     clearPendingAutoScrollTimer()
+    userDetachedFromBottomRef.current = false
     suppressAutoScrollRef.current = false
     shouldAutoScroll.current = true
     chatRef.current.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' })
@@ -6636,7 +6649,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       hasInitialBottomAnchorRef.current
       && shouldAutoScroll.current
       && !suppressAutoScrollRef.current
-      && !isUserScrollIntentActive()
+      && !userDetachedFromBottomRef.current
       && !isPaginatingRef.current
       && !isLoadingOlderRef.current
     )
@@ -6666,7 +6679,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
     }
     liveGrowthRollFrameRef.current = window.requestAnimationFrame(step)
-  }, [cancelLiveGrowthRoll, demoTypingText, isConnecting, isUserScrollIntentActive, liveUtterances, utterances])
+  }, [cancelLiveGrowthRoll, demoTypingText, isConnecting, liveUtterances, utterances])
 
   useLayoutEffect(() => {
     const nextCounts: ChatScrollMessageCountSnapshot = {
@@ -6684,7 +6697,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     renderedMessageCountsRef.current = nextCounts
 
-    if (!autoScrollState.shouldAutoScroll || !hasInitialBottomAnchorRef.current || !chatRef.current) return
+    if (
+      !autoScrollState.shouldAutoScroll
+      || userDetachedFromBottomRef.current
+      || !hasInitialBottomAnchorRef.current
+      || !chatRef.current
+    ) return
 
     const node = chatRef.current
     suppressAutoScrollRef.current = false
@@ -6791,6 +6809,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } else {
       node.scrollTop = node.scrollHeight
       lastDistanceToBottomRef.current = 0
+      userDetachedFromBottomRef.current = false
       shouldAutoScroll.current = true
       suppressAutoScrollRef.current = false
       autoScrollSchedulerRef.current.markPerformed()
