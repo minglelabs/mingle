@@ -30,11 +30,15 @@ const PARSE_ORIGIN = "https://mingle.local";
 export function resolveNativeAuthCompletePath(rawValue: string | null | undefined): string | null {
   const trimmed = (rawValue ?? "").trim();
   if (!trimmed) return null;
+  // Cookie values arrive decoded; only a still-encoded value ("%2F…") is decoded once.
+  // Decoding a decoded value would unescape the nested callbackUrl and drop its parameters.
   let decoded = trimmed;
-  try {
-    decoded = decodeURIComponent(trimmed);
-  } catch {
-    // Keep the raw value.
+  if (trimmed.startsWith("%")) {
+    try {
+      decoded = decodeURIComponent(trimmed);
+    } catch {
+      // Keep the raw value.
+    }
   }
   try {
     const parsed = new URL(decoded, PARSE_ORIGIN);
