@@ -63,7 +63,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('text-black')
     expect(html).not.toContain('“”')
     expect(html).toContain('h-[18px] w-[18px]')
-    expect(html).toContain('h-5 w-7')
+    expect(html).toContain('h-5 w-9')
     expect(html).toContain('mr-1 inline-flex items-center gap-0')
     expect((html.match(/data-chat-language-badge-visual="true"/g) || []).length).toBe(1)
     expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(1)
@@ -88,7 +88,7 @@ describe('ChatBubble', () => {
     )
     expect(html).not.toContain('data-chat-bubble-controls')
     expect(html).toContain('data-chat-bubble-other-meta="true"')
-    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 flex-col gap-0.5 self-end pb-1 items-start"')
+    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 gap-0.5 self-end pb-px flex-col items-start"')
     // The time sits in the column by the bubble, 10px, lined up on the bubble's side.
     expect(html.indexOf('data-chat-bubble-other-meta')).toBeLessThan(html.indexOf('data-original-bubble-timestamp'))
     expect(html).toContain('items-start self-start text-left text-[10px] font-medium')
@@ -540,7 +540,7 @@ describe('ChatBubble', () => {
 
     expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(3)
     expect((html.match(/data-chat-language-badge-visual="true"/g) || []).length).toBe(3)
-    expect((html.match(/h-5 w-7/g) || []).length).toBe(3)
+    expect((html.match(/h-5 w-9/g) || []).length).toBe(3)
     expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(3)
     expect(html).toContain('mr-1 inline-flex items-center gap-0')
   })
@@ -786,5 +786,54 @@ describe('ChatBubble', () => {
     )
 
     expect(html).not.toContain('data-message-tts-button')
+  })
+
+  const counterpartProps = (extra: Record<string, unknown>) => ({
+    utterance: {
+      id: 'u-continued',
+      originalText: '영업했는데',
+      originalLang: 'ko',
+      targetLanguages: ['en', 'ja'],
+      translations: { en: 'I did sales', ja: '営業したけど' },
+      speakerUserId: 'user-b',
+      speakerName: '이지연',
+      createdAtMs: Date.now() - 60_000,
+    },
+    uiLocale: 'ko',
+    viewerUserId: 'user-a',
+    bubbleDisplayMode: 'collapsed' as const,
+    ...extra,
+  })
+
+  it('puts a continued bubble\'s language flags in the avatar column, not on a line above', () => {
+    const html = renderToStaticMarkup(createElement(ChatBubble, counterpartProps({ isGroupContinuation: true })))
+    expect(html).not.toContain('data-chat-speaker-header')
+    expect(html).not.toContain('data-chat-bubble-header-language-badges')
+    expect(html).toContain('data-chat-bubble-side-language-badges="true"')
+    expect(html).toContain('absolute inset-y-0 right-full mr-1.5 flex w-10 flex-col items-center overflow-y-auto')
+    expect((html.match(/data-chat-language-badge-variant="side"/g) || []).length).toBe(3)
+    expect(html).toContain('h-[22px] w-10')
+
+    const first = renderToStaticMarkup(createElement(ChatBubble, counterpartProps({})))
+    expect(first).toContain('data-chat-bubble-header-language-badges="true"')
+    expect(first).not.toContain('data-chat-bubble-side-language-badges')
+  })
+
+  it('takes the double tap on the whole bubble and keeps a recent time in a column on the bottom edge', () => {
+    const html = renderToStaticMarkup(createElement(ChatBubble, counterpartProps({})))
+    expect(html).toContain('data-chat-bubble-double-tap="toggle"')
+    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 gap-0.5 self-end pb-px flex-col items-start"')
+    // Flags in a row: 36px wide with a taller touch area.
+    expect(html).toContain('h-5 w-9')
+    expect(html).toContain('before:-inset-y-2')
+  })
+
+  it('puts the read mark on the date line of an older message so the side column stays two lines', () => {
+    const old = counterpartProps({})
+    const html = renderToStaticMarkup(createElement(ChatBubble, {
+      ...old,
+      utterance: { ...old.utterance, createdAtMs: Date.now() - 3 * 24 * 60 * 60 * 1000 },
+    }))
+    expect(html).toContain('data-chat-bubble-other-meta="true" class="flex shrink-0 gap-0.5 self-end pb-px flex-row items-start"')
   })
 })
