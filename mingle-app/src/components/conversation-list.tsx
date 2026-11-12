@@ -224,7 +224,7 @@ import { useUnreadNotifications } from "@/components/notifications/use-unread-no
 import { feedHref } from "@/lib/feed-routes";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
-import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
+import { clearTopLevelTabSwitch, NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 
@@ -2132,6 +2132,11 @@ export default function ConversationList({
   const [discoveryPromptOpen, setDiscoveryPromptOpen] = useState(false);
   const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
+  useEffect(() => {
+    // Back on the conversations page: a later room unmount is a normal
+    // session boundary again, not a tab switch.
+    clearTopLevelTabSwitch();
+  }, []);
   // A mount that starts with a conversation already active (SSR props, a
   // deep link, or a client-side remount after a real route round trip like
   // returning from add-members) isn't the user "opening" a room — it's the

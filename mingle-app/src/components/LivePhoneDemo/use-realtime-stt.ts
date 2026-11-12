@@ -68,6 +68,7 @@ import type { UserSelectableTranslationModel } from '@/lib/translation-models'
 import type { UserSelectableTtsModel } from '@/lib/tts-models'
 import type { SttCaptureSource } from '@/lib/native-device-audio'
 import { shouldRequestInterimFill } from '@/lib/bubble-tail'
+import { isTopLevelTabSwitchPending } from '@/lib/tab-navigation'
 import {
   REALTIME_FALLBACK_POLL_INTERVAL_MS,
   shouldRunRealtimeFallbackRefresh,
@@ -7481,7 +7482,15 @@ export default function useRealtimeSTT({
   useEffect(() => {
     return () => {
       clearConnectionErrorResetTimer()
-      if (useNativeSttRef.current && isCurrentNativeSttOwner()) {
+      if (useNativeSttRef.current && isCurrentNativeSttOwner() && isTopLevelTabSwitchPending()) {
+        // The whole conversations page is unmounting for a tab switch. Native
+        // STT keeps running; the list re-attaches this room as a hidden
+        // consumer when the conversations tab returns.
+        logSttDebug('native.unmount.keep_for_tab_switch', {
+          conversationId: conversationId || null,
+          connectionStatus: connectionStatusRef.current,
+        })
+      } else if (useNativeSttRef.current && isCurrentNativeSttOwner()) {
         nativeStopRequestedRef.current = true
         logSttDebug('native.unmount.stop', {
           conversationId: conversationId || null,
