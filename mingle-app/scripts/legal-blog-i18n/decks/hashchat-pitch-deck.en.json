@@ -1,0 +1,238 @@
+[
+ {
+  "title": "A voice messenger without language barriers",
+  "text": "Talking with people abroad, made easier than on HelloTalk or Discord.\nLast updated: Sep 1, 2026"
+ },
+ {
+  "title": "1. Overview 2. Customers 3. Strategy 4. Vision 5. Team 6. Appendix",
+  "text": "Contents"
+ },
+ {
+  "title": "1. Overview",
+  "text": ""
+ },
+ {
+  "title": "“ I want to make friends abroad, but the language gets in the way ”",
+  "text": "Problem"
+ },
+ {
+  "title": "“ Build live interpretation made for socializing ”",
+  "text": "Solution"
+ },
+ {
+  "title": "Today's translators don't work for socializing",
+  "text": "Problem"
+ },
+ {
+  "title": "They miss what a social conversation needs",
+  "text": "Why\nYou press a button every turn, so the talk keeps stopping\nNo live translation\nCan't split utterances or speakers\nYou keep switching languages by hand"
+ },
+ {
+  "title": "Price and quality are problems too",
+  "text": "Why"
+ },
+ {
+  "title": "AI progress has made all of this solvable",
+  "text": "Solution\nLive interpretation cost\nUnder $0.40 per hour\nLanguage skill\nPro interpreter level in 60 languages\nFlexible UI/UX\nAuto language detection and speaker split"
+ },
+ {
+  "title": "So we're building a mobile interpreter that solves it all",
+  "text": "HashChat"
+ },
+ {
+  "title": "2. Customers",
+  "text": ""
+ },
+ {
+  "title": "Our first target: HelloTalk users",
+  "text": "Target customers\nA language exchange app with 70M+ users\nFocused on learning languages\nMostly young people looking for friends abroad"
+ },
+ {
+  "title": "On HelloTalk you can talk with anyone in the world",
+  "text": "Target customers"
+ },
+ {
+  "title": "They keep a HelloTalk voice room open and run HashChat to translate",
+  "text": "Target customers"
+ },
+ {
+  "title": "Users who tried HashChat have been positive",
+  "text": "Target customers\n\"A Korean guy understood Arabic and Turkish\nat once. It blew my mind.\"\n\"It never stops to translate.\nIt just plays like subtitles. So easy.\"\n\"I speak Russian, you speak Korean,\nand we still understand each other. Love it.\""
+ },
+ {
+  "title": "Users who tried HashChat have been positive 2",
+  "text": "Target customers\n\"I'm using this on every trip abroad.\"\n\"It understands far better than Apple Translate.\"\n\"I've never seen anything like this.\nYou're going to be rich.\""
+ },
+ {
+  "title": "Some of them already rely on HashChat",
+  "text": "Target customers\nOne Japanese user ran HashChat 2.5 hours a day for two weeks.\nSeveral others always keep HashChat open while on HelloTalk."
+ },
+ {
+  "title": "We'll also go after other verticals one by one",
+  "text": "Target customers\nMultinational meetups\nOffline conversation\nMeeting locals abroad\nOnline matching and chat\nGlobal gaming Discords\nChat between guild members\nTourism business owners\nAnd more..."
+ },
+ {
+  "title": "Pre-launch prototyping 43% tried to download 13% left an email",
+  "text": "Metrics\n44 visited the website\nPitched: meet people abroad, no language barrier\n43% converted\n19 tried to download\nClicked the app download button\n31% converted\n6 submitted an email\nLeft an email to pre-register"
+ },
+ {
+  "title": "First month after launch ~120 downloads ~10 DAU",
+  "text": "Metrics\n~30 from HelloTalk\n~10 friends and family\nNo paid ads\n1 offline\n3 other\nThe rest organic"
+ },
+ {
+  "title": "Price: free Banner ad revenue: $0.03 / hour of use AI inference cost: $0.30 / hour of use",
+  "text": "Metrics"
+ },
+ {
+  "title": "3. Strategy",
+  "text": ""
+ },
+ {
+  "title": "We solve two big problems",
+  "text": "Strategy\nFirst, talking is hard\nThe language barrier\nNothing to talk about\nSecond, meeting people abroad is hard\nMatching and discovery\nMeeting in person"
+ },
+ {
+  "title": "We solve them in three stages",
+  "text": "Strategy\nStage 1: a solo live translator\nUsed in our first verticals\nStage 2: + voice messenger\nReplaces Discord, calls and messengers\nStage 3: + social platform\nReplaces HelloTalk, Tinder and Instagram"
+ },
+ {
+  "title": "First, let people feel the barrier disappear",
+  "text": "Strategy"
+ },
+ {
+  "title": "Then build a messenger, starting with voice rooms",
+  "text": "Strategy"
+ },
+ {
+  "title": "Drive a viral loop to reach the next stage",
+  "text": "Strategy\nStage 1: a solo live translator\nUsed in our first verticals\nUsers invite\nwho they talk to\nStage 2: + voice messenger\nReplaces Discord, calls and messengers\nMore users come\nto meet new people\nStage 3: + social platform\nReplaces HelloTalk, Tinder and Instagram"
+ },
+ {
+  "title": "With enough users, we add discovery",
+  "text": "Strategy\nStage 1: a solo live translator\nUsed in our first verticals\nUsers invite\nwho they talk to\nStage 2: + voice messenger\nReplaces Discord, calls and messengers\nMore users come\nto meet new people\nStage 3: + social platform\nReplaces HelloTalk, Tinder and Instagram"
+ },
+ {
+  "title": "Most language-learning apps lose users fast",
+  "text": "Strategy"
+ },
+ {
+  "title": "HashChat removes the barrier and is only about fun",
+  "text": "Strategy"
+ },
+ {
+  "title": "4. Vision",
+  "text": ""
+ },
+ {
+  "title": "Our end goal is an AI-native social network",
+  "text": "Vision"
+ },
+ {
+  "title": "Interpreter and note-taking apps don't care about socializing",
+  "text": "Competitor 1"
+ },
+ {
+  "title": "We focus on socializing and go all the way to messaging",
+  "text": "Our edge"
+ },
+ {
+  "title": "AI-native companies face a cold-start problem",
+  "text": "Competitor 2\nChatGPT\nClaude\nGemini"
+ },
+ {
+  "title": "We start narrow and sharp to beat the cold start",
+  "text": "Our edge"
+ },
+ {
+  "title": "Messengers and social networks treat translation as minor",
+  "text": "Competitor 3"
+ },
+ {
+  "title": "We need to blitzscale now to stay ahead",
+  "text": "Our edge"
+ },
+ {
+  "title": "5. Team",
+  "text": ""
+ },
+ {
+  "title": "We're hiring",
+  "text": "Product or business, humanities or engineering: your background doesn't matter."
+ },
+ {
+  "title": "Thank you. Q & A",
+  "text": "GitHub\nLinkedIn"
+ },
+ {
+  "title": "6. Appendix",
+  "text": ""
+ },
+ {
+  "title": "X's auto-translation turned the world upside down",
+  "text": "Reference cases\nIf you didn't see the frenzy coming, think again.\nAll it did was turn the 'Show translation' button on by default.\nSo why did people go wild?\nBecause fitting into where people already are matters that much.\nI'm looking forward to X Chat, due April 17, as well.\nAll content auto-translated\nLaunching April 17"
+ },
+ {
+  "title": "Cursor changed software by the same principle",
+  "text": "Reference cases\nAI helped with coding long before Cursor.\nBut true vibe coding began once Cursor launched,\nbecause it built AI right into the editor.\nBefore that, you had to jump between an AI chat and your editor."
+ },
+ {
+  "title": "HashChat adds voice rooms so they settle in naturally",
+  "text": "Target customer 1\nIf we offer voice rooms, messaging and similar features well,\nusers who rely on interpretation have no reason to stay on HelloTalk.\nWe also expect a viral loop as they invite their partners to HashChat."
+ },
+ {
+  "title": "Multinational meetups",
+  "text": "Target customer 2\nTourists and international students in Seoul meet up often.\nMost of them don't speak English or Korean well yet.\nWe give them live interpretation for meeting in person."
+ },
+ {
+  "title": "Meeting locals abroad",
+  "text": "Target customer 3\nHelloTalk, Reddit and Threads are full of 'let's meet on my trip' posts.\nBut they usually fizzle out because talking is hard.\nWeak matching and no identity checks don't help either."
+ },
+ {
+  "title": "Discord communities of global games",
+  "text": "Target customer 4\nGlobal servers are now common, and so is the need to translate.\nBut Discord has no built-in translation, so people use third-party tools.\nExtensions are everywhere, yet they only work on PC."
+ },
+ {
+  "title": "Tourism business owners",
+  "text": "Target customer 5\nSeoul welcomes huge numbers of tourists every year,\nbut service workers still aren't ready to talk in other languages.\nThey need an interpreter that's easy to use.\nTaxi drivers\nHotel and guesthouse owners\nRestaurant owners\nHair salon owners\nAirport desk staff\nCosmetic clinic doctors\nTour guides\nAnd more..."
+ },
+ {
+  "title": "We'll collect real feedback from every one of them, one by one",
+  "text": "Target customers"
+ },
+ {
+  "title": "The UI/UX socializing needs is different in every situation",
+  "text": "Problem\nSo customers don't just need translation.\nThey need \"an unbroken experience, when they need it, in the form they want.\""
+ },
+ {
+  "title": "We build interpretation tailored to each situation",
+  "text": "Solution\nHelloTalk voice room users\nMobile voice chat\nMultinational meetups\nOffline conversation\nMeeting locals abroad\nOnline matching and chat\nGlobal gaming Discords\nChat between guild members\nAnd more..."
+ },
+ {
+  "title": "Users already want to talk on HashChat, not HelloTalk",
+  "text": "Viral target 1\nThe hypothesis to test: if voice chat works well enough in HashChat,\nusers will invite friends they met on HelloTalk and talk on HashChat."
+ },
+ {
+  "title": "Bringing offline connections online as well",
+  "text": "Viral target 2"
+ },
+ {
+  "title": "“ The first app you open to meet people abroad ”",
+  "text": "Vision"
+ },
+ {
+  "title": "Our job is to remove every barrier in connecting with people abroad",
+  "text": "Vision\nWe start narrow, as just a translator.\nOver time we want to solve every problem that comes up\nwhen you meet, talk to and stay close with people abroad."
+ },
+ {
+  "title": "We start with the first one",
+  "text": "Problem\nFirst, talking is hard\nThe language barrier\nNothing to talk about\nSecond, meeting people abroad is hard\nMatching and discovery\nMeeting in person"
+ },
+ {
+  "title": "Then we solve the hard part of connecting",
+  "text": "Problem\nFirst, talking is hard\nThe language barrier\nNothing to talk about\nSecond, meeting people abroad is hard\nMatching and discovery\nMeeting in person"
+ },
+ {
+  "title": "Thank you. Q & A",
+  "text": "GitHub\nLinkedIn"
+ }
+]

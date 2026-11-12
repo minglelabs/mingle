@@ -560,3 +560,73 @@ h1 {
     opacity: 1;
   }
 }
+
+/* Slide text under each deck: the deck's words as plain text. */
+.deck-transcript {
+  padding: 8px 0 0;
+}
+
+.deck-transcript details {
+  max-width: 760px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 18px 0;
+}
+
+.deck-transcript summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.deck-transcript summary::-webkit-details-marker {
+  display: none;
+}
+
+.deck-transcript summary h2 {
+  display: inline;
+  font-size: 1.25rem;
+  font-weight: 860;
+}
+
+.deck-transcript summary::after {
+  content: " ▾";
+  color: var(--muted);
+}
+
+.deck-transcript details[open] summary::after {
+  content: " ▴";
+}
+
+.deck-transcript-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.deck-transcript ol {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deck-transcript li + li {
+  margin-top: 22px;
+}
+
+.deck-transcript h3 {
+  font-size: 1.05rem;
+  line-height: 1.4;
+  font-weight: 820;
+}
+
+.deck-transcript h3 span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.deck-transcript p {
+  margin: 6px 0 0;
+  color: rgba(29, 33, 29, 0.8);
+  font-size: 1rem;
+  line-height: 1.7;
+}
