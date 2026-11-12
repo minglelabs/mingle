@@ -5,7 +5,8 @@
 - App Store: https://apps.apple.com/app/id6759795134
 - Google Play: https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn
 - Company: https://minglelabs.app/
-- The old site at translator.minglelabs.xyz has moved to hashchat.minglelabs.app.
+- The old site at translator.minglelabs.xyz has moved to hashchat.minglelabs.app. The .xyz domain no longer works; links to it should point here.
+- Earlier store names: "Mingle: The Easiest Translator", "Mingle: 제일 쉬운 번역기", "Mingle: いちばん簡単な翻訳機", "Mingle: Global Hangout". All are this app, now HashChat.
 
 ## Pages
 
