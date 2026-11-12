@@ -462,6 +462,18 @@ describe('anime-style profile pictures', () => {
     expect(Math.max(...counts.values()) / people.length).toBeLessThan(0.2)
     for (const spec of people) expect(spec.prompt).not.toMatch(/school uniform/i)
   })
+
+  it('make the model keep the picked style instead of one polished anime look', () => {
+    const female = { ...american, gender: 'female' as const }
+    const anime = Array.from({ length: 3000 }, (_, index) => pickAvatarSpec(female, seededRandom(`anime-style:${index}`)))
+      .filter((spec) => spec.subtype === 'anime_icon' && spec.attributes.animeSubject === 'person')
+    expect(new Set(anime.map((spec) => spec.attributes.animeStyle)).size).toBeGreaterThanOrEqual(20)
+    for (const spec of anime) expect(spec.prompt).toMatch(/follow it strictly/)
+    // Simple styles get a simple background, not a detailed scene.
+    const simple = anime.filter((spec) => ['flat_vector', 'pixel', 'chibi', 'line_art'].includes(spec.attributes.animeStyle))
+    expect(simple.length).toBeGreaterThan(50)
+    for (const spec of simple) expect(['plain_color', 'gradient', 'geometry', 'wallpaper', 'circle', 'white', 'stripes', 'dots']).toContain(spec.attributes.animeBackground)
+  })
 })
 
 describe('good-looking accounts', () => {
