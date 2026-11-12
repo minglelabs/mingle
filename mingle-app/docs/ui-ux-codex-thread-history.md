@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-13 — First run: the sentence length card redesigned (coloured drops, sliding scale)
+
+- Surface: `LivePhoneDemo/SpeechLengthCard.tsx`, `SpeechLengthScale.tsx` (also the room settings), the card's scrim in `LivePhoneDemo.tsx`.
+- Issue: Every example bubble was the same amber, merges were a plain fade, the card changed height as bubbles merged (the numbers moved under the finger), and nothing dimmed the room behind it.
+- Resolution: Each example sentence has its own colour; a merged bubble runs from its first sentence's colour to its last. Bubbles join and drip apart like water drops (SVG goo filter over the bubble layer, text drawn back sharp). The example area has a fixed height, so the scale and Apply stay put. The scale is one track with a sliding thumb; on the card a finger dragged along it picks as it goes. The card slides up over a dimmed room; tapping the dim closes it. Close sits beside the title.
+- Verification: Rendered alone in a browser (card bundled with esbuild): levels 1 to 6, merge and split frames. `tsc`, ESLint. Not tried on a device; the goo filter was not checked in iOS WKWebView.
+
 ## 2026-11-13 — First run: the sentence length card waits for two translations
 
 - Surface: The first room of a new user (`LivePhoneDemo.tsx`, `lib/speech-length.ts`).
