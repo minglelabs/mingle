@@ -2,11 +2,11 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
-## 2026-11-13 — First run: the sentence length card waits for five translations
+## 2026-11-13 — First run: the sentence length card waits for two translations
 
 - Surface: The first room of a new user (`LivePhoneDemo.tsx`, `lib/speech-length.ts`).
 - Issue: The length card opened right after the first finished bubble, before the person had seen what the default length looks like.
-- Resolution: The first new bubble still completes the first run (same moment as before). The card opens once five new bubbles have finished in that room (`SPEECH_LENGTH_CARD_AFTER_BUBBLES`); `length_shown` carries the bubble count. Someone who leaves before five bubbles does not see it; the scale stays in the room settings.
+- Resolution: The first new bubble still completes the first run (same moment as before). The card opens once two new bubbles have finished in that room (first set to five, then two) (`SPEECH_LENGTH_CARD_AFTER_BUBBLES`); `length_shown` carries the bubble count. Someone who leaves before two bubbles does not see it; the scale stays in the room settings.
 - Verification: `speech-length.test.ts`, `tsc`, ESLint on the changed files. Not tried on a device.
 
 ## 2026-11-13 — 채팅 버블: 옆 칸은 읽음 표시·날짜·시간 세 줄, 한 줄 버블 높이 안에
