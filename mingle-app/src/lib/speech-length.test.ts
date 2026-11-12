@@ -12,11 +12,10 @@ import {
 
 describe('first-run sentence length card', () => {
   it('waits for a few finished bubbles before asking', () => {
-    expect(SPEECH_LENGTH_CARD_AFTER_BUBBLES).toBe(5)
+    expect(SPEECH_LENGTH_CARD_AFTER_BUBBLES).toBe(2)
     expect(shouldShowSpeechLengthCard(1)).toBe(false)
-    expect(shouldShowSpeechLengthCard(4)).toBe(false)
+    expect(shouldShowSpeechLengthCard(2)).toBe(true)
     expect(shouldShowSpeechLengthCard(5)).toBe(true)
-    expect(shouldShowSpeechLengthCard(9)).toBe(true)
   })
 })
 
