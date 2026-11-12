@@ -3,6 +3,7 @@ import InviteTicketLandingScreen from "@/components/contacts/invite-ticket-landi
 import { resolveInviteLandingLocale } from "@/i18n/invite-ticket-copy";
 import { buildPlayStoreInviteUrl, normalizeReferralCode } from "@/lib/referral-code";
 import { getInviteTicketInviter, resolveInviteJoinRewardCoins } from "@/server/referral";
+import { shareLinkPreview } from "@/lib/share-og";
 
 const DEFAULT_IOS_APP_STORE_URL = "https://apps.apple.com/app/id6759795134";
 const DEFAULT_ANDROID_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn";
@@ -47,10 +48,16 @@ export default async function InviteTicketPage({ params }: InviteTicketPageProps
   );
 }
 
-export function generateMetadata() {
-  return {
-    title: "HashChat invite ticket",
-    description: "You're invited to talk on HashChat, each in your own language.",
-    robots: { index: false },
-  };
+export async function generateMetadata({ params }: InviteTicketPageProps) {
+  let name: string | null = null;
+  try {
+    name = (await getInviteTicketInviter((await params).code))?.inviter.name?.trim() || null;
+  } catch {
+    // The preview falls back to the generic text.
+  }
+  const title = name ? `${name} invited you to HashChat` : "HashChat invite ticket";
+  const description = name
+    ? `Talk with ${name}, each in your own language. HashChat (formerly Mingle) interprets as you talk.`
+    : "You're invited to talk on HashChat, each in your own language.";
+  return { title, description, robots: { index: false }, ...shareLinkPreview(title, description) };
 }

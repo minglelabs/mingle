@@ -28,6 +28,7 @@ import { resolveDeviceAudioCaptureSwitch } from "@/lib/device-audio-capture-swit
 import { MOBILE_CANVAS_BOOTSTRAP_SCRIPT } from "@/lib/mobile-canvas-bootstrap";
 import { resolvePostHogBrowserConfig } from "@/lib/posthog-browser-config";
 import { DEFAULT_LOCALE } from "@/i18n";
+import { HASHCHAT_OG_DESCRIPTION, HASHCHAT_OG_TITLE, shareLinkPreview } from "@/lib/share-og";
 import "./globals.css";
 
 function toMetadataBaseUrl(raw?: string): URL | undefined {
@@ -68,31 +69,12 @@ function resolveProfileImageOrigin(): string | null {
 
 export const metadata: Metadata = {
   metadataBase,
-  title: "HashChat, Seamless Translator",
-  description: "Just stay in the conversation. HashChat lets you talk without translating sentence by sentence.",
+  title: HASHCHAT_OG_TITLE,
+  description: HASHCHAT_OG_DESCRIPTION,
   icons: {
     icon: "/favicon.ico",
   },
-  openGraph: {
-    title: "HashChat, Seamless Translator",
-    description: "Just stay in the conversation. HashChat lets you talk without translating sentence by sentence.",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "HashChat - Seamless Translator",
-      },
-    ],
-    type: "website",
-    siteName: "HashChat",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "HashChat, Seamless Translator",
-    description: "Just stay in the conversation. HashChat lets you talk without translating sentence by sentence.",
-    images: ["/og-image.png"],
-  },
+  ...shareLinkPreview(HASHCHAT_OG_TITLE, HASHCHAT_OG_DESCRIPTION),
 };
 
 export const viewport: Viewport = {
