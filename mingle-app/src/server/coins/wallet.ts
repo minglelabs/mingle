@@ -159,6 +159,9 @@ export async function chargeCoinUsage(input: CoinChargeInput): Promise<CoinCharg
   if (mode === 'off' || !input.userId || !input.idempotencyKey) return skipped
 
   const now = input.now ?? new Date()
+  // Exact: the balance shown is rounded down (microToDisplayCoins), so the
+  // first 0.1 spent takes a whole Hash off the shown balance and the next ones
+  // change nothing until that Hash is used up.
   const quote = quoteCoinUsage(await loadCoinPricingRates(prisma, now), {
     kind: input.kind,
     model: input.model,

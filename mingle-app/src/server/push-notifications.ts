@@ -22,7 +22,7 @@ type PushTarget = {
 export type PushMessage = {
   notificationId: string;
   /**
-   * conversation_message | follow | comment | comment_reply |
+   * conversation_message | follow | comment | comment_reply | voice_call_started |
    * operator_inbox_message (staff alert, copy from
    * `resolveOperatorInboxPushCopy`). Any other type gets a generic copy.
    */
@@ -176,6 +176,47 @@ const CONVERSATION_MESSAGE_PUSH_COPY: Record<LegalDocumentLocale, { title: strin
   vi: { title: "Tin nhắn mới", separator: ": " },
 };
 
+// `voice_call_started`: someone started voice talk in a room, for all 15
+// primary UI languages. `{name}` is the starter as shown.
+const VOICE_CALL_STARTED_PUSH_COPY: Record<LegalDocumentLocale, { title: string; body: string }> = {
+  ko: { title: "보이스톡", body: "{name}님이 보이스톡을 시작했어요" },
+  en: { title: "Voice talk", body: "{name} started a voice talk" },
+  ja: { title: "ボイストーク", body: "{name}さんがボイストークを始めました" },
+  "zh-CN": { title: "语音通话", body: "{name}发起了语音通话" },
+  "zh-TW": { title: "語音通話", body: "{name}發起了語音通話" },
+  fr: { title: "Appel vocal", body: "{name} a lancé un appel vocal" },
+  de: { title: "Sprachanruf", body: "{name} hat einen Sprachanruf gestartet" },
+  es: { title: "Llamada de voz", body: "{name} inició una llamada de voz" },
+  pt: { title: "Chamada de voz", body: "{name} iniciou uma chamada de voz" },
+  it: { title: "Chiamata vocale", body: "{name} ha avviato una chiamata vocale" },
+  ru: { title: "Голосовой звонок", body: "{name} начал(а) голосовой звонок" },
+  ar: { title: "مكالمة صوتية", body: "بدأ {name} مكالمة صوتية" },
+  hi: { title: "वॉइस कॉल", body: "{name} ने वॉइस कॉल शुरू की" },
+  th: { title: "โทรด้วยเสียง", body: "{name} เริ่มการโทรด้วยเสียง" },
+  vi: { title: "Cuộc gọi thoại", body: "{name} đã bắt đầu cuộc gọi thoại" },
+};
+
+// `conversation_join_request` (to the room's members) and
+// `conversation_join_accepted` (to the person who asked), in the 15 primary UI
+// languages. `{name}` is the person as shown, `{room}` the room's title.
+const JOIN_REQUEST_PUSH_COPY: Record<LegalDocumentLocale, { requestTitle: string; requestBody: string; acceptedTitle: string; acceptedBody: string }> = {
+  ko: { requestTitle: "참여 요청", requestBody: "{name}님이 '{room}' 방에 참여를 요청했어요", acceptedTitle: "참여 수락", acceptedBody: "'{room}' 방에 들어갈 수 있어요" },
+  en: { requestTitle: "Join request", requestBody: "{name} asked to join '{room}'", acceptedTitle: "Request accepted", acceptedBody: "You can now enter '{room}'" },
+  ja: { requestTitle: "参加リクエスト", requestBody: "{name}さんが「{room}」への参加をリクエストしました", acceptedTitle: "参加が承認されました", acceptedBody: "「{room}」に入れます" },
+  "zh-CN": { requestTitle: "加入请求", requestBody: "{name}请求加入“{room}”", acceptedTitle: "请求已通过", acceptedBody: "现在可以进入“{room}”了" },
+  "zh-TW": { requestTitle: "加入請求", requestBody: "{name}請求加入「{room}」", acceptedTitle: "請求已通過", acceptedBody: "現在可以進入「{room}」了" },
+  fr: { requestTitle: "Demande pour rejoindre", requestBody: "{name} demande à rejoindre « {room} »", acceptedTitle: "Demande acceptée", acceptedBody: "Vous pouvez entrer dans « {room} »" },
+  de: { requestTitle: "Beitrittsanfrage", requestBody: "{name} möchte „{room}“ beitreten", acceptedTitle: "Anfrage angenommen", acceptedBody: "Du kannst jetzt „{room}“ betreten" },
+  es: { requestTitle: "Solicitud para unirse", requestBody: "{name} pidió unirse a «{room}»", acceptedTitle: "Solicitud aceptada", acceptedBody: "Ya puedes entrar en «{room}»" },
+  pt: { requestTitle: "Pedido para entrar", requestBody: "{name} pediu para entrar em “{room}”", acceptedTitle: "Pedido aceito", acceptedBody: "Agora você pode entrar em “{room}”" },
+  it: { requestTitle: "Richiesta di accesso", requestBody: "{name} ha chiesto di entrare in «{room}»", acceptedTitle: "Richiesta accettata", acceptedBody: "Ora puoi entrare in «{room}»" },
+  ru: { requestTitle: "Запрос на вход", requestBody: "{name} просит войти в «{room}»", acceptedTitle: "Запрос принят", acceptedBody: "Теперь можно войти в «{room}»" },
+  ar: { requestTitle: "طلب انضمام", requestBody: "طلب {name} الانضمام إلى «{room}»", acceptedTitle: "تم قبول الطلب", acceptedBody: "يمكنك الآن دخول «{room}»" },
+  hi: { requestTitle: "जुड़ने का अनुरोध", requestBody: "{name} ने '{room}' में जुड़ने का अनुरोध किया", acceptedTitle: "अनुरोध स्वीकार", acceptedBody: "अब आप '{room}' में जा सकते हैं" },
+  th: { requestTitle: "คำขอเข้าร่วม", requestBody: "{name} ขอเข้าร่วม '{room}'", acceptedTitle: "คำขอได้รับการยอมรับ", acceptedBody: "ตอนนี้คุณเข้า '{room}' ได้แล้ว" },
+  vi: { requestTitle: "Yêu cầu tham gia", requestBody: "{name} muốn tham gia '{room}'", acceptedTitle: "Yêu cầu được chấp nhận", acceptedBody: "Bạn đã có thể vào '{room}'" },
+};
+
 /** Title and body shown on the device, in the recipient's language (unknown -> English). */
 export function resolvePushCopy(message: PushMessage): { title: string; body: string } {
   const label = message.actorLabel || "Someone";
@@ -197,6 +238,19 @@ export function resolvePushCopy(message: PushMessage): { title: string; body: st
       : (message.messagePreview || "").replace(/\s+/g, " ").trim() || "…";
     const copy = CONVERSATION_MESSAGE_PUSH_COPY[locale];
     return { title: copy.title, body: `${label}${copy.separator}${preview}` };
+  }
+  if (message.type === "conversation_join_request" || message.type === "conversation_join_accepted") {
+    const locale = resolveLegalDocumentLocale(resolveSupportedLocaleTag(message.recipientLanguage.trim()) ?? "en");
+    const copy = JOIN_REQUEST_PUSH_COPY[locale];
+    const room = (message.messagePreview || "").replace(/\s+/g, " ").trim().slice(0, 60) || "…";
+    return message.type === "conversation_join_request"
+      ? { title: copy.requestTitle, body: copy.requestBody.replace("{name}", label).replace("{room}", room) }
+      : { title: copy.acceptedTitle, body: copy.acceptedBody.replace("{room}", room) };
+  }
+  if (message.type === "voice_call_started") {
+    const locale = resolveLegalDocumentLocale(resolveSupportedLocaleTag(message.recipientLanguage.trim()) ?? "en");
+    const copy = VOICE_CALL_STARTED_PUSH_COPY[locale];
+    return { title: copy.title, body: copy.body.replace("{name}", label) };
   }
   if (message.type === "operator_inbox_message") {
     return resolveOperatorInboxPushCopy({
@@ -719,4 +773,77 @@ async function deliverConversationMessagePush(args: {
   }
 
   await settlePushDeliveries(targetEntries);
+}
+
+/**
+ * Someone started voice talk in a room: every other member gets a push that
+ * opens the room (where the call panel offers Join / Decline). One push per
+ * call; a second push for the same call replaces the first on the device.
+ */
+export async function sendPushNotificationForVoiceCallStarted(args: {
+  channelId: string;
+  callId: string;
+  starterUserId: string;
+  memberUserIds: string[];
+}): Promise<void> {
+  if (!readApnsConfig() && !readFcmConfig()) return;
+  const recipientUserIds = args.memberUserIds.filter((userId) => userId.trim() && userId !== args.starterUserId);
+  if (recipientUserIds.length === 0) return;
+  const starter = await prisma.user.findUnique({
+    where: { id: args.starterUserId },
+    select: { name: true, handle: true, isOfficial: true, isOperator: true },
+  });
+  const starterName = starter?.name?.trim() || (starter?.handle ? `@${starter.handle}` : "Someone");
+  const starterBadge = resolveAccountBadge(starter);
+  await sendPushToUsers(recipientUserIds, (recipient) => {
+    const roomLocale = resolveSupportedLocaleTag(recipient.language) ?? "en";
+    return {
+      notificationId: args.callId,
+      type: "voice_call_started",
+      actorId: args.starterUserId,
+      actorLabel: withAccountBadgeLabel(starterName, starterBadge, recipient.language),
+      recipientLanguage: recipient.language,
+      conversationId: args.channelId,
+      navigationUrl: `/${roomLocale}/conversations?conversation=${encodeURIComponent(args.channelId)}`,
+      collapseKey: `voice-call-${args.callId}`,
+    };
+  });
+}
+
+/**
+ * A join request for a private room (to its members) or its acceptance (to the
+ * person who asked). The room title rides in `messagePreview`; the tap opens
+ * the room (members review requests in its management screen).
+ */
+export async function sendPushNotificationForConversationJoinRequest(args: {
+  kind: "request" | "accepted";
+  channelId: string;
+  requestId: string;
+  requesterUserId: string;
+  recipientUserIds: string[];
+  roomTitle: string;
+}): Promise<void> {
+  if (!readApnsConfig() && !readFcmConfig()) return;
+  const recipients = args.recipientUserIds.filter((userId) => userId.trim() && (args.kind === "accepted" || userId !== args.requesterUserId));
+  if (recipients.length === 0) return;
+  const requester = await prisma.user.findUnique({
+    where: { id: args.requesterUserId },
+    select: { name: true, handle: true, isOfficial: true, isOperator: true },
+  });
+  const requesterName = requester?.name?.trim() || (requester?.handle ? `@${requester.handle}` : "Someone");
+  const badge = resolveAccountBadge(requester);
+  await sendPushToUsers(recipients, (recipient) => {
+    const roomLocale = resolveSupportedLocaleTag(recipient.language) ?? "en";
+    return {
+      notificationId: `${args.requestId}:${args.kind}`,
+      type: args.kind === "request" ? "conversation_join_request" : "conversation_join_accepted",
+      actorId: args.requesterUserId,
+      actorLabel: withAccountBadgeLabel(requesterName, badge, recipient.language),
+      recipientLanguage: recipient.language,
+      messagePreview: args.roomTitle,
+      conversationId: args.channelId,
+      navigationUrl: `/${roomLocale}/conversations?conversation=${encodeURIComponent(args.channelId)}`,
+      collapseKey: `join-request-${args.requestId}-${args.kind}`,
+    };
+  });
 }

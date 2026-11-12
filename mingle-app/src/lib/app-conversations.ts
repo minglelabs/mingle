@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import { normalizeMessageReplyReference, toRecalledMessageReplyReference, type MessageReplyReference } from "@/lib/message-reply";
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image';
+import { normalizeVoiceCallMessage, type VoiceCallMessage } from '@/lib/voice-call-message';
+import { normalizeHashRushMessage, type HashRushMessage } from '@/lib/hash-rush-message';
+import { readVoiceCaptionTag } from '@/lib/voice-caption';
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
@@ -84,6 +87,9 @@ export type ConversationChannelSummary = {
   // up to 4 of these KakaoTalk-style. Empty for solo rooms and anonymous
   // callers.
   otherMembers: ConversationChannelOtherMember[];
+  // People in this room's live voice talk right now (0 or absent: no call).
+  // The list shows it apart from a room that only has speech-to-text on.
+  voiceCallParticipantCount?: number;
   createdAt: string;
   updatedAt: string;
   pausedAt: string | null;
@@ -93,6 +99,10 @@ export type ConversationChannelSummary = {
   // but only shows/links it while shareEnabled is true.
   shareToken: string | null;
   shareEnabled: boolean;
+  // Listed with its title in the search tab's live rooms, and joinable by anyone from there.
+  isPublic?: boolean;
+  // The 7-digit number people type in Search to find this room.
+  roomCode?: number;
 };
 
 export type ConversationHydrationUtterance = {
@@ -103,6 +113,13 @@ export type ConversationHydrationUtterance = {
   // turns sent while the room was still solo, whoever is reading them now.
   sentByViewer?: true;
   image?: ConversationMessageImage;
+  // This message announces a voice talk that started (see voice-call-message.ts).
+  voiceCall?: VoiceCallMessage;
+  // This message announces a Hash Rush game that started (see hash-rush-message.ts).
+  hashRush?: HashRushMessage;
+  // Said in a voice talk, shown only to this viewer and the others who had
+  // interpretation on (see voice-caption.ts).
+  voiceCaption?: true;
   serverCreatedAtMs?: number;
   serverMessageId?: string;
   // When the server stored the row (server clock). Read receipts compare
@@ -224,6 +241,8 @@ type ConversationChannelRecord = {
   shareEnabled: boolean;
   sharedAt: Date | null;
   sharedTitle: string | null;
+  isPublic: boolean;
+  roomCode: number;
 };
 
 type ListConversationChannelsForUserOptions = {
@@ -249,6 +268,8 @@ const conversationChannelSelect = {
   shareEnabled: true,
   sharedAt: true,
   sharedTitle: true,
+  isPublic: true,
+  roomCode: true,
 } satisfies Prisma.AppConversationChannelSelect;
 
 // A pending invitee (see AppConversationChannel.pendingInviteeUserIds) has no
@@ -283,6 +304,15 @@ function buildVisibleMessageWhere(): Prisma.AppMessageWhereInput {
       { isDeleted: null },
     ],
   };
+}
+
+// A call caption (`metadata.voiceCaption`, see @/lib/voice-caption) is read
+// only by the people listed on it. With no viewer, captions are left out
+// altogether (room previews, counts, exports, public snapshots).
+function buildVoiceCaptionVisibleWhere(viewerUserId?: string | null): Prisma.AppMessageWhereInput {
+  const notCaption: Prisma.AppMessageWhereInput = { metadata: { path: ["voiceCaption"], equals: Prisma.AnyNull } };
+  if (!viewerUserId) return notCaption;
+  return { OR: [notCaption, { metadata: { path: ["voiceCaption", "viewers"], array_contains: [viewerUserId] } }] };
 }
 
 // A recalled message stays soft-deleted for every other reader; only a
@@ -951,6 +981,8 @@ function serializeConversationChannel(
     pausedAt: (viewerFacingPausedAt !== undefined ? viewerFacingPausedAt : record.pausedAt)?.toISOString() ?? null,
     shareToken: record.shareToken,
     shareEnabled: record.shareEnabled === true,
+    isPublic: record.isPublic === true,
+    roomCode: record.roomCode,
   };
 }
 
@@ -1057,6 +1089,7 @@ async function listLatestVisibleMessagesBySessionKey(
       FROM app.app_messages AS m
       WHERE m.session_key = k.session_key
         AND (m.is_deleted = false OR m.is_deleted IS NULL)
+        AND (m.metadata -> 'voiceCaption') IS NULL
       ORDER BY m.created_at DESC, m.id DESC
       LIMIT 1
     ) AS latest
@@ -1199,6 +1232,7 @@ async function listVisibleMessageCountsBySessionKey(
         in: sessionKeys,
       },
       ...buildVisibleMessageWhere(),
+      AND: [buildVoiceCaptionVisibleWhere()],
     },
     _count: {
       _all: true,
@@ -1236,6 +1270,7 @@ async function listUnreadMessageCountsByChannelId(
     LEFT JOIN app.app_messages AS message
       ON message.session_key = channel.session_key
       AND (message.is_deleted = false OR message.is_deleted IS NULL)
+      AND (message.metadata -> 'voiceCaption') IS NULL
       AND message.user_id IS NOT NULL
       AND message.user_id <> member.user_id
       AND (member.last_read_at IS NULL OR message.created_at > member.last_read_at)
@@ -1377,14 +1412,27 @@ async function listConversationChannelsForMember(
   }
 
   const sessionKeys = [...new Set(records.map((record) => record.sessionKey))];
-  const [latestMessageSummaryBySessionKey, messageCountBySessionKey, unreadMessageCountByChannelId] = await Promise.all([
+  const [latestMessageSummaryBySessionKey, messageCountBySessionKey, unreadMessageCountByChannelId, voiceCallCountByChannelId] = await Promise.all([
     listLatestMessageSummaryBySessionKey(sessionKeys),
     listVisibleMessageCountsBySessionKey(sessionKeys),
     listUnreadMessageCountsByChannelId(records.map((record) => record.id), viewerUserId),
+    listLiveVoiceCallParticipantCountsByChannelId(records.map((record) => record.id)),
   ]);
 
   return records
     .map((record) => {
+      const summary = buildListedChannelSummary(record);
+      const voiceCount = voiceCallCountByChannelId.get(record.id) ?? 0;
+      return voiceCount > 0 ? { ...summary, voiceCallParticipantCount: voiceCount } : summary;
+    })
+    .sort((left, right) => {
+      const leftTimestamp = Date.parse(left.latestMessageAt || left.createdAt) || 0;
+      const rightTimestamp = Date.parse(right.latestMessageAt || right.createdAt) || 0;
+      return rightTimestamp - leftTimestamp;
+    });
+
+  function buildListedChannelSummary(record: ConversationChannelRecord): ConversationChannelSummary {
+    {
       const latestMessage = latestMessageSummaryBySessionKey.get(record.sessionKey);
       const viewerFacingDisplayLanguage = resolveViewerFacingDisplayLanguage(
         record.defaultDisplayLanguage,
@@ -1423,12 +1471,27 @@ async function listConversationChannelsForMember(
           resolvePendingInviteeProfiles(record),
         ),
       );
-    })
-    .sort((left, right) => {
-      const leftTimestamp = Date.parse(left.latestMessageAt || left.createdAt) || 0;
-      const rightTimestamp = Date.parse(right.latestMessageAt || right.createdAt) || 0;
-      return rightTimestamp - leftTimestamp;
+    }
+  }
+}
+
+/** Active (not left) participants of each channel's live voice call. */
+async function listLiveVoiceCallParticipantCountsByChannelId(channelIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (channelIds.length === 0) return counts;
+  try {
+    const calls = await prisma.appVoiceCall.findMany({
+      where: { channelId: { in: channelIds }, status: "live" },
+      select: { channelId: true, _count: { select: { participants: { where: { leftAt: null } } } } },
     });
+    for (const call of calls) {
+      if (call._count.participants > 0) counts.set(call.channelId, call._count.participants);
+    }
+  } catch (error) {
+    // The list must load even where the voice tables are missing.
+    console.warn("[conversations] voice_call_counts_failed", error instanceof Error ? error.name : "unknown");
+  }
+  return counts;
 }
 
 export async function listConversationChannelsForUser(
@@ -2401,14 +2464,14 @@ export async function getConversationSessionKeyForMember(args: {
 export async function getConversationChannelSharing(args: {
   conversationId: string;
   userId: string;
-}): Promise<{ shareToken: string | null; shareEnabled: boolean; sharedAt: Date | null } | null> {
+}): Promise<{ shareToken: string | null; shareEnabled: boolean; sharedAt: Date | null; isPublic: boolean; roomCode: number } | null> {
   const record = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
       ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
-    select: { shareToken: true, shareEnabled: true, sharedAt: true },
+    select: { shareToken: true, shareEnabled: true, sharedAt: true, isPublic: true, roomCode: true },
   });
   return record ?? null;
 }
@@ -2783,7 +2846,7 @@ export async function getConversationExportTranscriptForUser(args: {
       metadata: Prisma.JsonValue;
       contents: Array<{ contentType: string; language: string; text: string }>;
     }> = await prisma.appMessage.findMany({
-      where: { sessionKey: conversationRecord.sessionKey, ...buildVisibleMessageWhere() },
+      where: { sessionKey: conversationRecord.sessionKey, ...buildVisibleMessageWhere(), AND: [buildVoiceCaptionVisibleWhere()] },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: Math.min(CONVERSATION_EXPORT_PAGE_SIZE, CONVERSATION_EXPORT_MESSAGE_LIMIT - messages.length),
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
@@ -2899,10 +2962,28 @@ export async function joinConversationChannelViaShareToken(args: {
   shareToken: string;
   userId: string;
 }): Promise<ConversationChannelSummary | null> {
+  return joinConversationChannel({ by: { shareToken: args.shareToken, shareEnabled: true }, userId: args.userId });
+}
+
+/**
+ * Adds `userId` to a room the caller already decided they may join (a public
+ * room, or a private room whose member accepted their join request). Same
+ * capacity, block and rejoin rules as the share link.
+ */
+export async function joinConversationChannelById(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<ConversationChannelSummary | null> {
+  return joinConversationChannel({ by: { id: args.conversationId }, userId: args.userId });
+}
+
+async function joinConversationChannel(args: {
+  by: { shareToken: string; shareEnabled: true } | { id: string };
+  userId: string;
+}): Promise<ConversationChannelSummary | null> {
   const conversationRecord = await prisma.appConversationChannel.findFirst({
     where: {
-      shareToken: args.shareToken,
-      shareEnabled: true,
+      ...args.by,
       ...buildVisibleConversationWhere(),
     },
     select: { ...conversationChannelSelect, ownerUserId: true },
@@ -2954,9 +3035,8 @@ export async function joinConversationChannelViaShareToken(args: {
 
     const freshChannel = await tx.appConversationChannel.findFirst({
       where: {
+        ...args.by,
         id: conversationRecord.id,
-        shareToken: args.shareToken,
-        shareEnabled: true,
         ...buildVisibleConversationWhere(),
       },
       select: {
@@ -3087,6 +3167,9 @@ async function getConversationHydrationStateForRecord(args: {
   const upperBoundWhere: Prisma.AppMessageWhereInput = args.upperBoundCreatedAt
     ? { createdAt: { lte: args.upperBoundCreatedAt } }
     : {};
+  // Call captions: a member reads the ones addressed to them; a public
+  // snapshot has none.
+  const captionVisibleWhere = buildVoiceCaptionVisibleWhere(args.upperBoundCreatedAt ? null : args.viewerUserId);
   const messageWhere: Prisma.AppMessageWhereInput = {
     sessionKey: conversationRecord.sessionKey,
     // A public share snapshot shows no trace of an unsent message.
@@ -3128,10 +3211,11 @@ async function getConversationHydrationStateForRecord(args: {
         sessionKey: conversationRecord.sessionKey,
         ...buildVisibleMessageWhere(),
         ...upperBoundWhere,
+        AND: [captionVisibleWhere],
       },
     }),
     prisma.appMessage.findMany({
-      where: messageWhere,
+      where: { AND: [messageWhere, captionVisibleWhere] },
       orderBy: [
         { createdAt: "desc" },
         { id: "desc" },
@@ -3283,6 +3367,10 @@ async function getConversationHydrationStateForRecord(args: {
     const targetLanguages = normalizedContent.targetLanguages;
     const storedImage = readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null);
     const image = recalled ? null : normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
+    const voiceCall = recalled ? null : normalizeVoiceCallMessage(metadata?.voiceCall);
+    const hashRush = recalled ? null : normalizeHashRushMessage(metadata?.hashRush);
+    // Announcements name who started the call or the game, in any room.
+    const announcement = voiceCall || hashRush;
     // Point-in-time, not the room's current membership — see
     // countActiveRealMembersAt's doc comment. Also intentionally excludes
     // pending invitees (real members only): inviting someone shouldn't, by
@@ -3292,7 +3380,7 @@ async function getConversationHydrationStateForRecord(args: {
     // invitee actually materializes into a real member.
     const isMultiMemberAtMessage = countActiveRealMembersAt(realMembers, message.createdAt.getTime()) >= 2;
     // Same gate as speakerName below: the badge labels the sender's name.
-    const speakerBadge = (isMultiMemberAtMessage || image) && message.userId
+    const speakerBadge = (isMultiMemberAtMessage || image || announcement) && message.userId
       ? badgeByUserId.get(message.userId) ?? null
       : null;
 
@@ -3301,6 +3389,9 @@ async function getConversationHydrationStateForRecord(args: {
       ...(recalled ? { recalled: true as const } : {}),
       ...(message.userId && message.userId === args.viewerUserId ? { sentByViewer: true as const } : {}),
       ...(image ? { image } : {}),
+      ...(voiceCall ? { voiceCall } : {}),
+      ...(hashRush ? { hashRush } : {}),
+      ...(!recalled && readVoiceCaptionTag(metadata) ? { voiceCaption: true as const } : {}),
       originalText,
       ...(normalizedContent.sourceDisplayText ? { originalDisplayText: normalizedContent.sourceDisplayText } : {}),
       originalLang: normalizedContent.sourceLanguage || "unknown",
@@ -3321,7 +3412,7 @@ async function getConversationHydrationStateForRecord(args: {
         readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
       speakerAvatarIndex:
         readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
-      speakerName: (isMultiMemberAtMessage || image) && message.userId
+      speakerName: (isMultiMemberAtMessage || image || announcement) && message.userId
         ? (nameByUserId.get(message.userId) ?? null)
         : null,
       // Gated the same way as speakerImage: a solo session's diarized
@@ -3330,13 +3421,13 @@ async function getConversationHydrationStateForRecord(args: {
       // every bubble compare equal to the viewer and force a right-aligned
       // "own message" layout onto what is actually a left/right speaker
       // distinction unrelated to account identity.
-      speakerUserId: (isMultiMemberAtMessage || image) ? message.userId : null,
+      speakerUserId: (isMultiMemberAtMessage || image || announcement) ? message.userId : null,
       // Also nulled for the blocked counterpart's own messages (past and
       // future) — keeps speakerUserId intact so bubble left/right alignment
       // stays correct, but ChatBubble's existing "shared-room member with no
       // photo" fallback renders a neutral placeholder avatar instead of
       // their real one.
-      speakerImage: (isMultiMemberAtMessage || image) && message.userId && message.userId !== blockedCounterpartUserId
+      speakerImage: (isMultiMemberAtMessage || image || announcement) && message.userId && message.userId !== blockedCounterpartUserId
         ? (imageByUserId.get(message.userId) ?? null)
         : null,
       ...(speakerBadge ? { speakerBadge } : {}),
@@ -3894,4 +3985,258 @@ export async function leaveConversationChannel(args: {
   }
 
   throw new Error("conversation_channel_leave_conflict");
+}
+
+
+// ---------------------------------------------------------------------------
+// Public rooms and the search tab's live rooms
+// ---------------------------------------------------------------------------
+
+/**
+ * A Hash Rush game counts as running for this long after a player last said
+ * they are in (every 15 s). Same as HASH_RUSH_LIVE_WINDOW_MS in
+ * src/server/hash-rush/room-game.ts.
+ */
+export const HASH_RUSH_ACTIVE_WINDOW_MS = 45_000;
+const LIVE_ROOMS_LIMIT = 30;
+
+/** A member turns the room public (listed and joinable by anyone) or private (join requests only). */
+export async function setConversationPublic(args: {
+  conversationId: string;
+  userId: string;
+  isPublic: boolean;
+}): Promise<ConversationChannelSummary | null> {
+  const sessionKey = await getConversationSessionKeyForMember({ conversationId: args.conversationId, userId: args.userId });
+  if (!sessionKey) return null;
+  const record = await prisma.appConversationChannel.update({
+    where: { id: args.conversationId },
+    data: { isPublic: args.isPublic },
+    select: conversationChannelSelect,
+  });
+  return serializeConversationChannelWithPreview(record, args.userId);
+}
+
+export type LiveRoomActivity = {
+  /** People in the room's live voice talk call (0: none). */
+  voiceCallParticipantCount: number;
+  /** The room's Hash Rush game was entered recently. */
+  hashRushActive: boolean;
+};
+
+/**
+ * One card in the search tab. A private room shows only that it is live and
+ * what is going on (no title, members or languages) and cannot be joined from
+ * here; a public room shows its title, languages and members.
+ */
+export type LiveRoomCard = LiveRoomActivity & {
+  id: string;
+  isPublic: boolean;
+  isMember: boolean;
+  memberCount: number;
+  title: string | null;
+  languages: string[];
+  members: Array<{ userId: string; name: string | null; image: string | null }>;
+};
+
+/** Rooms with a live voice talk call or a running Hash Rush game, public first, busiest first. */
+export async function listLiveRooms(viewerUserId: string | null, now: Date = new Date()): Promise<LiveRoomCard[]> {
+  const [calls, games] = await Promise.all([
+    prisma.appVoiceCall.findMany({
+      where: { status: "live" },
+      select: { channelId: true, _count: { select: { participants: { where: { leftAt: null } } } } },
+    }).catch(() => []),
+    prisma.appConversationChannel.findMany({
+      // A time far ahead of now is not a live game (see room-game.ts).
+      where: { hashRushActiveAt: { gte: new Date(now.getTime() - HASH_RUSH_ACTIVE_WINDOW_MS), lte: new Date(now.getTime() + 60_000) } },
+      select: { id: true },
+    }),
+  ]);
+  const activity = new Map<string, LiveRoomActivity>();
+  for (const call of calls) {
+    if (call._count.participants <= 0) continue;
+    activity.set(call.channelId, { voiceCallParticipantCount: call._count.participants, hashRushActive: false });
+  }
+  for (const game of games) {
+    const entry = activity.get(game.id) ?? { voiceCallParticipantCount: 0, hashRushActive: false };
+    entry.hashRushActive = true;
+    activity.set(game.id, entry);
+  }
+  if (activity.size === 0) return [];
+
+  const records = await prisma.appConversationChannel.findMany({
+    where: { id: { in: [...activity.keys()] }, ...buildVisibleConversationWhere() },
+    select: { id: true, title: true, isPublic: true, selectedLanguages: true },
+  });
+  const membersByChannelId = await listChannelMembersByChannelId(records.map((record) => record.id));
+  const cards: LiveRoomCard[] = records.map((record) => {
+    const members = filterActiveMembers(membersByChannelId.get(record.id) ?? []);
+    const isPublic = record.isPublic === true;
+    return {
+      id: record.id,
+      isPublic,
+      isMember: !!viewerUserId && members.some((member) => member.userId === viewerUserId),
+      memberCount: members.length,
+      title: isPublic ? record.title : null,
+      languages: isPublic ? record.selectedLanguages.slice(0, 5) : [],
+      members: isPublic
+        ? members.slice(0, 4).map((member) => ({ userId: member.userId, name: member.name ?? null, image: member.image ?? null }))
+        : [],
+      ...(activity.get(record.id) as LiveRoomActivity),
+    };
+  });
+  const busy = (card: LiveRoomCard) => card.voiceCallParticipantCount + (card.hashRushActive ? 1 : 0);
+  return cards
+    .sort((left, right) => Number(right.isPublic) - Number(left.isPublic) || busy(right) - busy(left))
+    .slice(0, LIVE_ROOMS_LIMIT);
+}
+
+/** Anyone joins a public room (the same checks as the share link: capacity, blocks). */
+export async function joinPublicConversationChannel(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<ConversationChannelSummary | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: { id: args.conversationId, isPublic: true, ...buildVisibleConversationWhere() },
+    select: { id: true },
+  });
+  if (!record) return null;
+  return joinConversationChannelById({ conversationId: args.conversationId, userId: args.userId });
+}
+
+
+// ---------------------------------------------------------------------------
+// Finding a room by its number, and join requests for private rooms
+// ---------------------------------------------------------------------------
+
+export type RoomCodeLookup = {
+  id: string;
+  roomCode: number;
+  isPublic: boolean;
+  isMember: boolean;
+  memberCount: number;
+  /** Shown for a public room or to a member; a private room stays nameless to others. */
+  title: string | null;
+  languages: string[];
+  /** This viewer's join request for a private room. */
+  request: "none" | "pending" | "declined";
+};
+
+export async function findConversationByRoomCode(code: number, viewerUserId: string): Promise<RoomCodeLookup | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: { roomCode: code, ...buildVisibleConversationWhere() },
+    select: { id: true, roomCode: true, title: true, isPublic: true, selectedLanguages: true },
+  });
+  if (!record) return null;
+  const members = filterActiveMembers((await listChannelMembersByChannelId([record.id])).get(record.id) ?? []);
+  const isMember = members.some((member) => member.userId === viewerUserId);
+  const request = isMember || record.isPublic
+    ? null
+    : await prisma.appConversationJoinRequest.findUnique({
+      where: { channelId_userId: { channelId: record.id, userId: viewerUserId } },
+      select: { status: true },
+    });
+  const visible = record.isPublic || isMember;
+  return {
+    id: record.id,
+    roomCode: record.roomCode,
+    isPublic: record.isPublic,
+    isMember,
+    memberCount: members.length,
+    title: visible ? record.title : null,
+    languages: visible ? record.selectedLanguages.slice(0, 5) : [],
+    request: request?.status === "pending" ? "pending" : request?.status === "declined" ? "declined" : "none",
+  };
+}
+
+export type RoomCodeJoinResult =
+  | { kind: "joined"; conversation: ConversationChannelSummary }
+  | { kind: "requested"; requestId: string; channelId: string; sessionKey: string; created: boolean }
+  | { kind: "not_found" };
+
+/** Public room or a member: in. Private room: a pending join request (asked again after a decline). */
+export async function joinOrRequestByRoomCode(code: number, userId: string): Promise<RoomCodeJoinResult> {
+  const found = await findConversationByRoomCode(code, userId);
+  if (!found) return { kind: "not_found" };
+  if (found.isPublic || found.isMember) {
+    const conversation = await joinConversationChannelById({ conversationId: found.id, userId });
+    return conversation ? { kind: "joined", conversation } : { kind: "not_found" };
+  }
+  const channel = await prisma.appConversationChannel.findUnique({ where: { id: found.id }, select: { sessionKey: true } });
+  const existing = await prisma.appConversationJoinRequest.findUnique({
+    where: { channelId_userId: { channelId: found.id, userId } },
+    select: { id: true, status: true },
+  });
+  if (existing?.status === "pending") {
+    return { kind: "requested", requestId: existing.id, channelId: found.id, sessionKey: channel?.sessionKey ?? "", created: false };
+  }
+  const request = await prisma.appConversationJoinRequest.upsert({
+    where: { channelId_userId: { channelId: found.id, userId } },
+    create: { channelId: found.id, userId },
+    update: { status: "pending", decidedAt: null, decidedByUserId: null, createdAt: new Date() },
+    select: { id: true },
+  });
+  return { kind: "requested", requestId: request.id, channelId: found.id, sessionKey: channel?.sessionKey ?? "", created: true };
+}
+
+export type ConversationJoinRequestView = {
+  id: string;
+  userId: string;
+  name: string | null;
+  image: string | null;
+  createdAt: string;
+};
+
+/** Pending requests of a room, for its members. Null when the caller is not a member. */
+export async function listConversationJoinRequests(args: { conversationId: string; userId: string }): Promise<ConversationJoinRequestView[] | null> {
+  const sessionKey = await getConversationSessionKeyForMember({ conversationId: args.conversationId, userId: args.userId });
+  if (!sessionKey) return null;
+  const requests = await prisma.appConversationJoinRequest.findMany({
+    where: { channelId: args.conversationId, status: "pending" },
+    orderBy: { createdAt: "asc" },
+    take: 50,
+    select: { id: true, userId: true, createdAt: true, user: { select: { name: true, image: true } } },
+  });
+  return requests.map((request) => ({
+    id: request.id,
+    userId: request.userId,
+    name: request.user.name ?? null,
+    image: request.user.image ?? null,
+    createdAt: request.createdAt.toISOString(),
+  }));
+}
+
+export type JoinRequestDecision =
+  | { kind: "accepted"; requesterUserId: string; conversation: ConversationChannelSummary }
+  | { kind: "declined"; requesterUserId: string }
+  | { kind: "not_found" };
+
+/** A member accepts (the requester becomes a member) or declines a pending request. */
+export async function decideConversationJoinRequest(args: {
+  conversationId: string;
+  requestId: string;
+  userId: string;
+  accept: boolean;
+}): Promise<JoinRequestDecision> {
+  const sessionKey = await getConversationSessionKeyForMember({ conversationId: args.conversationId, userId: args.userId });
+  if (!sessionKey) return { kind: "not_found" };
+  const request = await prisma.appConversationJoinRequest.findFirst({
+    where: { id: args.requestId, channelId: args.conversationId, status: "pending" },
+    select: { id: true, userId: true },
+  });
+  if (!request) return { kind: "not_found" };
+  if (args.accept) {
+    // Capacity and block rules apply here; a failure leaves the request pending.
+    const conversation = await joinConversationChannelById({ conversationId: args.conversationId, userId: request.userId });
+    if (!conversation) return { kind: "not_found" };
+    await prisma.appConversationJoinRequest.update({
+      where: { id: request.id },
+      data: { status: "accepted", decidedAt: new Date(), decidedByUserId: args.userId },
+    });
+    return { kind: "accepted", requesterUserId: request.userId, conversation };
+  }
+  await prisma.appConversationJoinRequest.update({
+    where: { id: request.id },
+    data: { status: "declined", decidedAt: new Date(), decidedByUserId: args.userId },
+  });
+  return { kind: "declined", requesterUserId: request.userId };
 }

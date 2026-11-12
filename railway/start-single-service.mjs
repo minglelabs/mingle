@@ -359,6 +359,54 @@ spawnService('mingle-messaging', 'pnpm', ['--dir', '/app/mingle-messaging', 'sta
   PORT: String(messagingPort),
 });
 
+// The voice interpreter: joins a voice talk while someone in it has
+// interpretation on. Only outbound connections (LiveKit, Soniox, the
+// translation and TTS APIs, and this container's app). It is not part of the
+// health check, and when it stops it is started again instead of taking the
+// app down with it. Without LiveKit or its provider keys it does not start.
+const voiceAgentPort = parseInteger(process.env.MINGLE_VOICE_AGENT_PORT, 3003);
+const voiceAgentConfigured = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET', 'SONIOX_API_KEY', 'GEMINI_API_KEY']
+  .every((name) => String(process.env[name] || '').trim());
+const voiceAgentDisabled = String(process.env.VOICE_AGENT_INTERPRETER || '').trim().toLowerCase() === 'off';
+
+function startVoiceAgent(attempt = 0) {
+  if (isShuttingDown) return;
+  const child = spawn('node', ['./node_modules/ts-node/dist/bin.js', '--transpile-only', 'service.ts'], {
+    cwd: '/app/mingle-voice-agent',
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      PORT: String(voiceAgentPort),
+      APP_INTERNAL_URL: process.env.APP_INTERNAL_URL || `http://${targetHost}:${appPort}`,
+      // The app accepts this or, when unset, its realtime secret.
+      VOICE_INTERNAL_SECRET: process.env.VOICE_INTERNAL_SECRET || process.env.MINGLE_REALTIME_SECRET || '',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  children.set('mingle-voice-agent', child);
+  prefixStream(child.stdout, 'mingle-voice-agent', process.stdout);
+  prefixStream(child.stderr, 'mingle-voice-agent', process.stderr);
+  const startedAt = Date.now();
+  const restart = (detail) => {
+    if (isShuttingDown) return;
+    // A run that lasted a while starts the backoff over.
+    const next = Date.now() - startedAt > 60_000 ? 0 : attempt + 1;
+    const delayMs = Math.min(60_000, 2_000 * 2 ** Math.min(next, 5));
+    console.error(`[railway] mingle-voice-agent ${detail}; starting it again in ${delayMs} ms`);
+    setTimeout(() => startVoiceAgent(next), delayMs);
+  };
+  child.on('error', (error) => restart(`failed to start: ${error.message}`));
+  child.on('exit', (code, signal) => restart(`exited with ${signal ? `signal ${signal}` : `code ${code ?? 0}`}`));
+}
+
+if (voiceAgentDisabled) {
+  console.log('[railway] mingle-voice-agent off (VOICE_AGENT_INTERPRETER=off)');
+} else if (!voiceAgentConfigured) {
+  console.log('[railway] mingle-voice-agent not started: LiveKit or provider keys are missing');
+} else {
+  startVoiceAgent();
+}
+
 server.listen(publicPort, bindHost, () => {
   console.log(
     `[railway] listening on ${bindHost}:${publicPort}; app=${targetHost}:${appPort}; `

@@ -174,3 +174,60 @@ describe('timeStretchWsola', () => {
     expect(timeStretchWsola(tiny, SR, 1.4)).toBe(tiny)
   })
 })
+
+describe('StreamingSilenceTrimmer', () => {
+  const rate = 24000
+  function clip(): Buffer {
+    // silence 130 ms, speech 200 ms, pause 250 ms, speech 90 ms, silence 333 ms (not frame aligned).
+    const parts: Array<[number, number]> = [[3120, 0], [4800, 9000], [6000, 0], [2160, 7000], [7999, 0]]
+    const pcm = Buffer.alloc(parts.reduce((sum, [n]) => sum + n, 0) * 2)
+    let at = 0
+    for (const [n, level] of parts) {
+      for (let i = 0; i < n; i++, at++) pcm.writeInt16LE(i % 2 === 0 ? level : -level, at * 2)
+    }
+    return pcm
+  }
+  function wholeTrim(pcm: Buffer): Buffer {
+    const samples = new Int16Array(pcm.length / 2)
+    for (let i = 0; i < samples.length; i++) samples[i] = pcm.readInt16LE(i * 2)
+    return floatToPcm16Buffer(trimSilence(pcm16ToMonoFloat(samples, 1), rate))
+  }
+
+  it.each([1, 7, 480, 481, 1921, 100000])('matches trimSilence when fed %d bytes at a time', async (step) => {
+    const { StreamingSilenceTrimmer } = await import('./audio-dsp')
+    const pcm = clip()
+    const trimmer = new StreamingSilenceTrimmer(rate)
+    const out: Buffer[] = []
+    for (let offset = 0; offset < pcm.length; offset += step) {
+      out.push(trimmer.push(pcm.subarray(offset, Math.min(pcm.length, offset + step))))
+    }
+    out.push(trimmer.end())
+    const streamed = Buffer.concat(out)
+    const expected = wholeTrim(pcm)
+    expect(streamed.length).toBe(expected.length)
+    // floatToPcm16Buffer may round a sample by one step; the streamed path copies bit-exact.
+    for (let i = 0; i < streamed.length; i += 2) {
+      expect(Math.abs(streamed.readInt16LE(i) - expected.readInt16LE(i))).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('plays speech before the stream ends and holds a pause until speech goes on', async () => {
+    const { StreamingSilenceTrimmer } = await import('./audio-dsp')
+    const trimmer = new StreamingSilenceTrimmer(rate)
+    const pcm = clip()
+    expect(trimmer.push(pcm.subarray(0, 3120 * 2)).length).toBe(0)
+    // Speech: out at once, with 80 ms of the silence before it.
+    expect(trimmer.push(pcm.subarray(3120 * 2, 7920 * 2)).length).toBe((1920 + 4800) * 2)
+    // The pause is held back...
+    expect(trimmer.push(pcm.subarray(7920 * 2, 13920 * 2)).length).toBe(0)
+    // ...and comes out whole once speech goes on.
+    expect(trimmer.push(pcm.subarray(13920 * 2, 16080 * 2)).length).toBe((6000 + 2160) * 2)
+  })
+
+  it('returns audio with no loud frame unchanged', async () => {
+    const { StreamingSilenceTrimmer } = await import('./audio-dsp')
+    const trimmer = new StreamingSilenceTrimmer(rate)
+    const quiet = Buffer.alloc(5001 * 2)
+    expect(Buffer.concat([trimmer.push(quiet), trimmer.end()]).equals(quiet)).toBe(true)
+  })
+})

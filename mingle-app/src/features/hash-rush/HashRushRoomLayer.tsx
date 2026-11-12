@@ -1,0 +1,182 @@
+'use client'
+
+// Hash Rush over the chat room: a layer that covers the whole room, all of it
+// the game's. There is no app bar: the way back to the chat is the game's own
+// pill over the map's top left corner (with a green dot while the room's voice
+// talk is connected), under the status bar.
+//
+// - Back (the pill, Android back) lowers the layer. Lowered, the game
+//   keeps running out of sight, silent, and this hamster stands still; opening
+//   it again in the same room shows the same round. The room's owner drops the
+//   layer when the room is left.
+// - While it is up, the room's edge swipe, the iOS swipe-back and the WebView's
+//   back/forward gestures never take a swipe on the game, and the ad banner and
+//   the app's toasts stay hidden (docs/hash-rush-in-app-uiux.md A2-A4).
+// - The room's own composer and quick chat rise over the layer (the room
+//   raises them above it) when the game's 💬 asks; Android back puts them
+//   away before it lowers the game.
+
+import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
+import { registerNativeEdgeSwipeSuppression } from '@/components/slide-surface'
+import { registerNativeBackHandler } from '@/lib/native-back-handler'
+import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
+import HashRushGame from './HashRushGame'
+import { hashRushGameCopy } from './copy'
+import { hashRushInviteCopy } from './invite-copy'
+import HashRushHowToPage from './HashRushHowToPage'
+import type { HashRushRoomChat } from './room-chat'
+
+// Android back lowers the game before the room's own layers (composer and
+// menus at 10, the room at 4-5) and after screens opened over the room (20+).
+const NATIVE_BACK_PRIORITY = 15
+
+// App toasts are portaled above every app layer; the global stylesheet hides
+// them while this flag is on (html[data-hash-rush-open="true"]), so nothing
+// floats over the game.
+let toastHoldCount = 0
+function holdToastsHidden(): () => void {
+  toastHoldCount += 1
+  document.documentElement.dataset.hashRushOpen = 'true'
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    toastHoldCount = Math.max(0, toastHoldCount - 1)
+    if (toastHoldCount === 0) delete document.documentElement.dataset.hashRushOpen
+  }
+}
+
+type Props = {
+  /** Up over the room. Lowered, the game keeps running out of sight. */
+  open: boolean
+  conversationId: string
+  /** Who is playing; entry tickets are kept per viewer and room. */
+  viewerKey: string
+  playerName: string
+  uiLocale: string
+  /** This room's voice talk is connected. */
+  voiceActive: boolean
+  /** The room's talk and composer in the game (room-chat.ts). */
+  chat?: HashRushRoomChat
+  onClose: () => void
+  /** Quit, once confirmed: the game ends for this phone and the layer goes. */
+  onQuit?: () => void
+}
+
+export default function HashRushRoomLayer({ open, conversationId, viewerKey, playerName, uiLocale, voiceActive, chat, onClose, onQuit }: Props) {
+  const copy = hashRushGameCopy(uiLocale)
+  const inviteCopy = hashRushInviteCopy(uiLocale)
+  const [confirmQuit, setConfirmQuit] = useState(false)
+  const [howTo, setHowTo] = useState(false)
+  if (confirmQuit && !open) setConfirmQuit(false)
+  if (howTo && !open) setHowTo(false)
+  const chatOpen = !!chat?.open
+  const closeChat = chat?.onClose
+
+  useNativeBannerSuppression(open)
+
+  useEffect(() => {
+    if (!open) return
+    return registerNativeEdgeSwipeSuppression()
+  }, [open])
+
+  // Back puts the room's composer away first, then lowers the game.
+  useEffect(() => {
+    if (!open) return
+    return registerNativeBackHandler(() => {
+      if (howTo) setHowTo(false)
+      else if (confirmQuit) setConfirmQuit(false)
+      else if (chatOpen && closeChat) closeChat()
+      else onClose()
+      return true
+    }, NATIVE_BACK_PRIORITY)
+  }, [chatOpen, closeChat, confirmQuit, howTo, onClose, open])
+
+  useEffect(() => {
+    if (!open) return
+    return holdToastsHidden()
+  }, [open])
+
+  return (
+    <motion.div
+      initial={{ y: '100%' }}
+      animate={open ? { y: 0, visibility: 'visible' } : { y: '100%', transitionEnd: { visibility: 'hidden' } }}
+      transition={{ type: 'spring', stiffness: 360, damping: 38 }}
+      // Touches on the game are the game's: the room's left-edge swipe (an
+      // ancestor) must not start from here.
+      onPointerDown={(event) => event.stopPropagation()}
+      onTouchStart={(event) => event.stopPropagation()}
+      // Over the whole room: its top bar (40), talk and composer; under the
+      // room's menus and dialogs (50+) and screens opened over the room.
+      className={`absolute inset-0 z-[47] overflow-hidden bg-[#24572f] ${open ? '' : 'pointer-events-none'}`}
+      role="dialog"
+      aria-modal={open}
+      aria-label={copy.title}
+      aria-hidden={!open}
+      inert={!open}
+      data-qa="hash-rush-game-layer"
+    >
+      <HashRushGame
+        conversationId={conversationId}
+        viewerKey={viewerKey}
+        playerName={playerName}
+        uiLocale={uiLocale}
+        visible={open}
+        voiceActive={voiceActive}
+        chat={chat}
+        onBack={onClose}
+        onQuit={onQuit ? () => setConfirmQuit(true) : undefined}
+        onHowTo={() => setHowTo(true)}
+      />
+      {howTo ? (
+        <div className="absolute inset-0 z-[10] flex flex-col bg-white" data-qa="hash-rush-howto-sheet" role="dialog" aria-modal="true" aria-label={inviteCopy.howTo}>
+          <div className="flex shrink-0 items-center border-b border-gray-200 px-4" style={{ paddingTop: 'env(safe-area-inset-top, 0px)', height: 'calc(55px + env(safe-area-inset-top, 0px))' }}>
+            <span className="w-10" aria-hidden="true" />
+            <p className="flex-1 text-center text-[1rem] font-semibold text-gray-950">{inviteCopy.howTo}</p>
+            <button type="button" onClick={() => setHowTo(false)} aria-label={copy.close} className="inline-flex h-[38px] w-10 items-center justify-center text-[1.4rem] text-gray-700">×</button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+            <HashRushHowToPage uiLocale={uiLocale} />
+          </div>
+        </div>
+      ) : null}
+      {confirmQuit && onQuit ? (
+        <div
+          className="absolute inset-0 z-[10] flex items-end justify-center bg-black/40 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+96px)]"
+          data-qa="hash-rush-quit-confirm"
+          onClick={() => setConfirmQuit(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={inviteCopy.quitTitle}
+            className="w-full max-w-[340px] rounded-2xl bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="text-center text-[1.02rem] font-semibold text-gray-900">{inviteCopy.quitTitle}</p>
+            <p className="mt-1.5 text-center text-[0.86rem] text-gray-500">{inviteCopy.quitBody}</p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                data-qa="hash-rush-quit-cancel"
+                onClick={() => setConfirmQuit(false)}
+                className="h-12 rounded-xl bg-gray-100 text-[0.95rem] font-semibold text-gray-700 active:bg-gray-200"
+              >
+                {inviteCopy.cancel}
+              </button>
+              <button
+                type="button"
+                data-qa="hash-rush-quit-confirm-button"
+                onClick={() => { setConfirmQuit(false); onQuit() }}
+                className="h-12 rounded-xl bg-rose-500 text-[0.95rem] font-semibold text-white active:bg-rose-600"
+              >
+                {inviteCopy.quit}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </motion.div>
+  )
+}

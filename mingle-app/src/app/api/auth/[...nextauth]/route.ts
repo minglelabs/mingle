@@ -2,6 +2,7 @@ import NextAuth from "next-auth/next";
 import type { NextRequest } from "next/server";
 import type { NextAuthOptions } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
+import { resolveNativeAuthReplayRedirect } from "@/lib/oauth-callback-replay";
 
 type AppRouteContext = {
   params: Promise<{
@@ -157,7 +158,29 @@ export async function GET(request: NextRequest, context: AppRouteContext) {
     resolveRouteAuthOptions(authOptions, params?.nextauth),
   );
   logNextAuthResponse(response, "GET", action, provider);
+  if (action === "callback") {
+    const replayRedirect = resolveReplayRedirect(request, response);
+    if (replayRedirect) {
+      console.info(`[nextauth] replayed callback provider=${provider}; returning to the app`);
+      return Response.redirect(replayRedirect, 302);
+    }
+  }
   return response;
+}
+
+function resolveReplayRedirect(request: NextRequest, response: Response): string | null {
+  const siteUrl = (process.env.NEXTAUTH_URL || process.env.AUTH_URL || request.nextUrl.origin).trim();
+  const cookieNames = request.cookies.getAll().map(({ name }) => name);
+  const callbackUrlCookie = request.cookies.get("__Secure-next-auth.callback-url")?.value
+    ?? request.cookies.get("next-auth.callback-url")?.value
+    ?? null;
+  return resolveNativeAuthReplayRedirect({
+    responseStatus: response.status,
+    responseLocation: response.headers.get("location"),
+    cookieNames,
+    callbackUrlCookie,
+    siteUrl,
+  });
 }
 
 export async function POST(request: NextRequest, context: AppRouteContext) {

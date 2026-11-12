@@ -19,7 +19,7 @@ export type CoinWallet = {
   exhausted: boolean;
   // Absent while billing is off.
   // Per conversation minute: voice alone, and voice with spoken playback on.
-  rates?: { sttCoinsPerMinute: number; voiceWithTtsCoinsPerMinute: number };
+  rates?: { sttCoinsPerMinute: number; voiceWithTtsCoinsPerMinute: number; ttsCoinsPerAudioMinute?: number };
 };
 
 export type CoinWalletState = {

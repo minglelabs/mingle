@@ -1,5 +1,6 @@
 "use client";
 
+import { parseCoinPriceList, type CoinPriceList } from "@/lib/coin-price-list";
 import { useSyncExternalStore } from "react";
 import { buildClientApiPath, detectRuntimePlatform } from "@/lib/api-contract";
 import { getCoinWalletState, refreshCoinWallet } from "@/lib/coin-wallet-client";
@@ -38,6 +39,8 @@ export type CoinStoreState = {
   status: "idle" | "loading" | "ready" | "error" | "unavailable";
   products: CoinProduct[];
   sttCoinsPerMinute: number;
+  // What each paid feature costs (null until loaded, or from an older server).
+  priceList: CoinPriceList | null;
   // The product whose purchase sheet is open or being verified.
   purchasingProductId: string | null;
   // Paid by a method that still needs approval (e.g. Ask to Buy).
@@ -52,6 +55,7 @@ let state: CoinStoreState = {
   status: "idle",
   products: [],
   sttCoinsPerMinute: 0,
+  priceList: null,
   purchasingProductId: null,
   pendingProductIds: [],
   lastResult: null,
@@ -97,9 +101,12 @@ export async function loadCoinProducts(): Promise<void> {
       platform: string | null;
       products: Omit<CoinProduct, "displayPrice">[];
       sttCoinsPerMinute?: number;
+      priceList?: unknown;
     };
     const products = data.products.map((product) => ({ ...product, displayPrice: null }));
     const sttCoinsPerMinute = typeof data.sttCoinsPerMinute === "number" ? data.sttCoinsPerMinute : 0;
+    // Shown whatever the store's state (also when purchases are unavailable).
+    setState({ priceList: parseCoinPriceList(data.priceList) });
     if (data.platform === "web") {
       // Web prices are our own USD list prices; Polar adds tax at checkout where it applies.
       setState({

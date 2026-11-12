@@ -3,6 +3,7 @@ import {
   isLiveDemoPathname,
   isNativeTabRootUrl,
   shouldEnableIosWebViewBackForwardNavigation,
+  shouldHideIosKeyboardAccessoryView,
 } from '../src/webViewLayout';
 
 describe('appendNativeRuntimeWebViewParams', () => {
@@ -107,5 +108,19 @@ describe('shouldEnableIosWebViewBackForwardNavigation', () => {
 describe('isLiveDemoPathname', () => {
   it('treats the follower/following list as an in-app My Page surface', () => {
     expect(isLiveDemoPathname('/ko/mypage/follows')).toBe(true);
+  });
+});
+
+describe('shouldHideIosKeyboardAccessoryView', () => {
+  // The chat room (and the Hash Rush game iframe inside it, which shares the
+  // WebView's input view) is /{locale}/conversations?conversation=<id>.
+  it('hides the iOS form bar above the keyboard in the chat list and rooms', () => {
+    expect(shouldHideIosKeyboardAccessoryView({ isIosPlatform: true, pathname: '/ko/conversations' })).toBe(true);
+    expect(shouldHideIosKeyboardAccessoryView({ isIosPlatform: true, pathname: '/ja/conversations' })).toBe(true);
+  });
+
+  it('leaves Android and screens outside the app shell alone', () => {
+    expect(shouldHideIosKeyboardAccessoryView({ isIosPlatform: false, pathname: '/ko/conversations' })).toBe(false);
+    expect(shouldHideIosKeyboardAccessoryView({ isIosPlatform: true, pathname: '/ko/conversations/new-group' })).toBe(false);
   });
 });

@@ -38,6 +38,15 @@ export function parseNativeTtsCapability(detail: unknown): boolean {
   return record.type === 'capabilities' && record.nativeTts === true
 }
 
+// Whether the shell also plays clips that arrive in pieces
+// (`native_tts_stream_start` / `_chunk` / `_end`). Shells built before
+// streaming do not report it and get whole clips.
+export function parseNativeTtsStreamCapability(detail: unknown): boolean {
+  if (typeof detail !== 'object' || detail === null || Array.isArray(detail)) return false
+  const record = detail as Record<string, unknown>
+  return record.type === 'capabilities' && record.nativeTtsStream === true
+}
+
 export function shouldPlayTtsViaNativeShell(input: {
   isNativeApp: boolean
   isIOS: boolean
@@ -45,6 +54,16 @@ export function shouldPlayTtsViaNativeShell(input: {
 }): boolean {
   if (!input.isNativeApp) return false
   return input.isIOS || parseNativeTtsCapability(input.capabilities)
+}
+
+// A clip is asked for as a stream only when the shell that will play it can
+// play one: it then starts sounding while the rest is still being generated.
+export function shouldStreamTtsToNativeShell(input: {
+  isNativeApp: boolean
+  isIOS: boolean
+  capabilities: unknown
+}): boolean {
+  return shouldPlayTtsViaNativeShell(input) && parseNativeTtsStreamCapability(input.capabilities)
 }
 
 // The last capabilities message the shell cached on the window (read at play

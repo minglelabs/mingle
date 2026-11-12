@@ -513,6 +513,21 @@ is_truthy() {
   esac
 }
 
+# Swift macro plugins (e.g. @TaskLocal in the openiap pod) run in their own
+# seatbelt sandbox. Inside an already-sandboxed shell (agent harnesses) a
+# nested sandbox fails with EPERM and the build dies with "swift-plugin-server
+# produced malformed response". Detect that and build without the plugin
+# sandbox. DEVBOX_IOS_DISABLE_SWIFT_PLUGIN_SANDBOX=1/0 forces it on/off.
+ios_swift_plugin_sandbox_must_be_disabled() {
+  local forced="${DEVBOX_IOS_DISABLE_SWIFT_PLUGIN_SANDBOX:-}"
+  if [[ -n "$forced" ]]; then
+    is_truthy "$forced"
+    return
+  fi
+  command -v sandbox-exec >/dev/null 2>&1 || return 1
+  ! sandbox-exec -p '(version 1)(allow default)' /usr/bin/true >/dev/null 2>&1
+}
+
 resolve_devbox_qa_bridge_enabled() {
   if is_truthy "${DEVBOX_QA_BRIDGE_ENABLED:-0}"; then
     printf '1'
@@ -1305,9 +1320,15 @@ ensure_workspace_dependencies() {
     log "installing dependencies: mingle-messaging"
     pnpm --dir "$messaging_dir" install --frozen-lockfile
   fi
+  local voice_agent_dir="$ROOT_DIR/mingle-voice-agent"
+  if [[ -d "$voice_agent_dir" ]] && workspace_dependencies_need_install "$voice_agent_dir" "$voice_agent_dir/node_modules/.bin/ts-node"; then
+    log "installing dependencies: mingle-voice-agent"
+    pnpm --dir "$voice_agent_dir" install --frozen-lockfile
+  fi
   write_workspace_dependency_install_marker "$app_dir"
   write_workspace_dependency_install_marker "$stt_dir"
   write_workspace_dependency_install_marker "$messaging_dir"
+  [[ -d "$voice_agent_dir" ]] && write_workspace_dependency_install_marker "$voice_agent_dir"
 
   ensure_mingle_app_prisma_client
 }
@@ -3449,6 +3470,11 @@ run_ios_mobile_install() {
     fi
     trap 'restore_rn_mobile_ads_app_json "$rn_app_json_backup" "$had_original_rn_app_json"' EXIT
     write_rn_mobile_ads_app_json "$runtime_admob_app_id_android" "$runtime_admob_app_id_ios"
+    local -a swift_sandbox_args=()
+    if ios_swift_plugin_sandbox_must_be_disabled; then
+      log "already inside a macOS sandbox; building with Swift macro plugin sandbox off (-disable-sandbox)"
+      swift_sandbox_args=('OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox')
+    fi
     NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE" \
     xcodebuild \
       -allowProvisioningUpdates \
@@ -3458,6 +3484,7 @@ run_ios_mobile_install() {
       -destination "$xcode_destination" \
       -derivedDataPath "$derived_data_path" \
       -xcconfig "$RN_IOS_RUNTIME_XCCONFIG" \
+      ${swift_sandbox_args[@]+"${swift_sandbox_args[@]}"} \
       build
   )
 
@@ -3467,6 +3494,9 @@ run_ios_mobile_install() {
   xcrun devicectl device install app --device "$coredevice_id" "$app_path"
 
   if [[ -n "$bundle_id" ]]; then
+    if defer_mobile_app_launch ios "$coredevice_id" "$bundle_id"; then
+      return 0
+    fi
     log "launching iOS app bundle: $bundle_id"
     xcrun devicectl device process launch --device "$coredevice_id" "$bundle_id" >/dev/null 2>&1 || \
       log "iOS app launch skipped (manual launch may be required)"
@@ -3549,11 +3579,69 @@ run_android_mobile_install() {
       ./gradlew "$gradle_task"
   )
 
+  if [[ -n "$app_id" ]] && defer_mobile_app_launch android "$serial" "$app_id"; then
+    return 0
+  fi
   if [[ -n "$app_id" ]]; then
     log "launching Android app package: $app_id"
     adb -s "$serial" shell monkey -p "$app_id" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || \
       log "Android app launch skipped (manual launch may be required)"
   fi
+}
+
+# `up` installs the phone apps before the web server starts. An app opened
+# then loads a half-served page: the HTML shows but some JS never arrives,
+# so nothing on screen takes a tap until the app is restarted. `up` points
+# DEVBOX_DEFERRED_APP_LAUNCH_FILE at a file; installs write their launch
+# there, and launch_deferred_mobile_apps runs them once the web is ready.
+defer_mobile_app_launch() {
+  local platform="$1"
+  local device_id="$2"
+  local app_id="$3"
+  [[ -n "${DEVBOX_DEFERRED_APP_LAUNCH_FILE:-}" ]] || return 1
+  printf '%s %s %s\n' "$platform" "$device_id" "$app_id" >>"$DEVBOX_DEFERRED_APP_LAUNCH_FILE"
+  log "$platform app installed; it opens once the web server is ready"
+  return 0
+}
+
+launch_deferred_mobile_apps() {
+  local launch_file="$1"
+  local web_port="$2"
+  local timeout_sec="${3:-240}"
+  [[ -s "$launch_file" ]] || { rm -f "$launch_file"; return 0; }
+
+  local waited=0
+  until curl -s -o /dev/null --max-time 5 "http://127.0.0.1:$web_port/api/auth/session"; do
+    if [[ "$waited" -ge "$timeout_sec" ]]; then
+      log "web server not ready after ${timeout_sec}s; opening the apps anyway"
+      break
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+  # Compile the first screens before a phone asks for them.
+  local warm_path
+  for warm_path in /en/conversations /ko/conversations; do
+    curl -s -o /dev/null --max-time 120 "http://127.0.0.1:$web_port$warm_path" || true
+  done
+
+  local platform device_id app_id
+  while read -r platform device_id app_id; do
+    [[ -n "$app_id" ]] || continue
+    case "$platform" in
+      ios)
+        log "launching iOS app bundle: $app_id"
+        xcrun devicectl device process launch --device "$device_id" "$app_id" </dev/null >/dev/null 2>&1 || \
+          log "iOS app launch skipped (manual launch may be required)"
+        ;;
+      android)
+        log "launching Android app package: $app_id"
+        adb -s "$device_id" shell monkey -p "$app_id" -c android.intent.category.LAUNCHER 1 </dev/null >/dev/null 2>&1 || \
+          log "Android app launch skipped (manual launch may be required)"
+        ;;
+    esac
+  done <"$launch_file"
+  rm -f "$launch_file"
 }
 
 run_mobile_install_targets() {
@@ -5495,6 +5583,7 @@ cmd_up() {
   resolve_vault_path "$vault_override"
   log "stateless mode: skipping automatic vault -> .env.local sync (.env.local is user-managed)"
   local runtime_env_file=""
+  local deferred_app_launch_file=""
   local runtime_nextauth_secret=""
   local runtime_realtime_secret=""
   local runtime_admob_app_id_ios=""
@@ -5792,6 +5881,10 @@ $(ngrok_plan_capacity_hint)"
       "$ios_udid" \
       "$effective_ios_site_url"
 
+    if [[ "$profile" != "device" || "$device_app_env" != "prod" ]]; then
+      deferred_app_launch_file="$(mktemp "${TMPDIR:-/tmp}/devbox-app-launch.XXXXXX")"
+    fi
+    DEVBOX_DEFERRED_APP_LAUNCH_FILE="$deferred_app_launch_file" \
     run_mobile_install_targets \
       "$do_rn_ios" \
       "$do_android" \
@@ -5839,6 +5932,29 @@ $(ngrok_plan_capacity_hint)"
     MINGLE_REALTIME_SECRET="$runtime_realtime_secret" PORT="$DEVBOX_MESSAGING_PORT" pnpm dev
   ) &
   pids+=("$!")
+
+  # The voice interpreter: joins a voice talk while someone in it has
+  # interpretation on, and reports each line to this devbox's app. Its keys
+  # (LiveKit, Soniox, Gemini, OpenAI) come from the runtime env and the main
+  # checkout's root .env.local. DEVBOX_VOICE_AGENT=off leaves it out.
+  if [[ -d "$ROOT_DIR/mingle-voice-agent" && "${DEVBOX_VOICE_AGENT:-on}" != "off" ]]; then
+    log "starting mingle-voice-agent(health port=${DEVBOX_VOICE_AGENT_PORT:-$((DEVBOX_WEB_PORT + 40))})"
+    (
+      cd "$ROOT_DIR/mingle-voice-agent"
+      if [[ -s "$runtime_env_file" ]]; then
+        set -a
+        # shellcheck disable=SC1090
+        . "$runtime_env_file"
+        set +a
+      fi
+      VOICE_POC_ENV_FILE="$(main_worktree_env_file root || true)" \
+      APP_INTERNAL_URL="http://127.0.0.1:$DEVBOX_WEB_PORT" \
+      VOICE_INTERNAL_SECRET="$runtime_realtime_secret" \
+      PORT="${DEVBOX_VOICE_AGENT_PORT:-$((DEVBOX_WEB_PORT + 40))}" \
+      pnpm service
+    ) &
+    pids+=("$!")
+  fi
 
   (
     cd "$ROOT_DIR/mingle-app"
@@ -5922,6 +6038,11 @@ $(ngrok_plan_capacity_hint)"
 
   rm -f "$runtime_env_file"
 
+  if [[ -n "$deferred_app_launch_file" ]]; then
+    # Not in pids: wait_for_any_child_exit would stop `up` when it finishes.
+    launch_deferred_mobile_apps "$deferred_app_launch_file" "$DEVBOX_WEB_PORT" &
+  fi
+
   if [[ "$started_tunnel_mode" == "ngrok-inline" ]]; then
     log "ngrok is running with this process group (Ctrl+C to stop all)"
   elif [[ "$started_tunnel_mode" == "ngrok-separate" ]]; then
@@ -5959,11 +6080,14 @@ cmd_down() {
   stop_processes_by_pattern "mingle-app next dev" "$ROOT_DIR/mingle-app.*next dev --port"
   stop_processes_by_pattern "mingle-stt dev server" "$ROOT_DIR/mingle-stt.*stt-server.ts"
   stop_processes_by_pattern "mingle-messaging dev server" "$ROOT_DIR/mingle-messaging.*messaging-server.ts"
+  stop_processes_by_pattern "mingle-voice-agent" "$ROOT_DIR/mingle-voice-agent.*service.ts"
   stop_processes_by_pattern "metro" "$ROOT_DIR/mingle-app.*pnpm --dir rn start --port"
 
   stop_listeners_by_port "mingle-app next dev" "$DEVBOX_WEB_PORT"
   stop_listeners_by_port "mingle-stt dev server" "$DEVBOX_STT_PORT"
   stop_listeners_by_port "mingle-messaging dev server" "$DEVBOX_MESSAGING_PORT"
+  # Its command line names no path, so its health port finds it.
+  stop_listeners_by_port "mingle-voice-agent" "${DEVBOX_VOICE_AGENT_PORT:-$((DEVBOX_WEB_PORT + 40))}"
   stop_listeners_by_port "metro" "$DEVBOX_METRO_PORT"
   stop_existing_ngrok_by_inspector_port "$DEVBOX_NGROK_API_PORT"
   stop_existing_cloudflared_by_local_port "$DEVBOX_WEB_PORT"

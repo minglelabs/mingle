@@ -12,9 +12,35 @@ import { LiveUtterances } from './live-utterances';
 export class ConversationEventBus {
     private readonly subscribers = new Map<string, Set<WebSocket>>();
     private readonly liveSubscribers = new WeakSet<WebSocket>();
+    // Who has the room open right now: the user behind each live socket of a
+    // topic. A user with several sockets (two devices, a reconnect) counts once.
+    private readonly liveViewers = new Map<string, Map<WebSocket, string>>();
     readonly liveUtterances = new LiveUtterances();
 
-    enableLive(socket: WebSocket): void { this.liveSubscribers.add(socket); }
+    /**
+     * Upgrades a socket to live frames. With `viewer` it also counts as that
+     * user having the room open, and everyone in the room is told who is here.
+     */
+    enableLive(socket: WebSocket, viewer?: { sessionKey: string; userId: string }): void {
+        this.liveSubscribers.add(socket);
+        if (!viewer) return;
+        let viewers = this.liveViewers.get(viewer.sessionKey);
+        if (!viewers) {
+            viewers = new Map();
+            this.liveViewers.set(viewer.sessionKey, viewers);
+        }
+        viewers.set(socket, viewer.userId);
+        this.publishPresence(viewer.sessionKey);
+    }
+
+    /** User ids with the room open, each once, sorted. */
+    viewerIds(sessionKey: string): string[] {
+        return [...new Set(this.liveViewers.get(sessionKey)?.values() ?? [])].sort();
+    }
+
+    private publishPresence(sessionKey: string): void {
+        this.publishLive(sessionKey, { type: 'presence', sessionKey, userIds: this.viewerIds(sessionKey) });
+    }
 
     publishLive(sessionKey: string, event: unknown): void {
         const payload = JSON.stringify(event);
@@ -37,6 +63,12 @@ export class ConversationEventBus {
         if (!sockets) return;
         sockets.delete(socket);
         if (sockets.size === 0) this.subscribers.delete(sessionKey);
+        const viewers = this.liveViewers.get(sessionKey);
+        if (viewers?.delete(socket)) {
+            if (viewers.size === 0) this.liveViewers.delete(sessionKey);
+            // Someone closed the room: the others see them go at once.
+            this.publishPresence(sessionKey);
+        }
     }
 
     /** Number of sockets currently watching a topic. Test/debug only. */
@@ -108,7 +140,7 @@ export function handleConversationEventsConnection(
         expiryTimer = setTimeout(() => { bus.unsubscribe(sessionKey, socket); socket.close(4401, 'expired_token'); }, Math.max(1, payload!.exp - Date.now()));
         expiryTimer.unref();
     };
-    if (live) { bus.enableLive(socket); expire(); }
+    if (live) { bus.enableLive(socket, { sessionKey, userId }); expire(); }
     const cleanup = () => { if (expiryTimer) clearTimeout(expiryTimer); bus.unsubscribe(sessionKey, socket); };
     socket.on('close', cleanup);
     socket.on('error', cleanup);

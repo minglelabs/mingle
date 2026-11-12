@@ -45,11 +45,16 @@ import {
 
 import {
   addNativeTtsListener,
+  appendNativeTtsStream,
   buildNativeTtsStoppedEvent,
+  endNativeTtsStream,
   isNativeTtsAvailable,
+  isNativeTtsStreamAvailable,
   playNativeTts,
   resolveNativeTtsPlayRequest,
   resolveNativeTtsStartedEvent,
+  resolveNativeTtsStreamStartRequest,
+  startNativeTtsStream,
   stopNativeTts,
 } from './src/nativeTts';
 import {
@@ -173,6 +178,13 @@ import {
   buildNativeConversationShareEventScript,
   parseNativeConversationShareLink,
 } from './src/conversationShareLink';
+import { VoiceRoomHost, type VoiceRoomHostHandle } from './src/voice/VoiceRoomHost';
+import {
+  buildVoiceEventScript,
+  parseVoiceBridgeCommand,
+  type VoiceBridgeEventDetail,
+} from './src/voice/voiceBridge';
+import { resolveVoiceConfig } from './src/voice/voiceConfig';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string; code?: number; domain?: string } };
@@ -784,6 +796,25 @@ type NativeTtsCommand =
         // Earphone mode (contract A.5): iOS stops this clip when earphones go away.
         stopOnEarphoneDisconnect?: boolean;
       };
+    }
+  | {
+      // A clip whose PCM arrives in pieces; `pcmBase64` is the first piece.
+      type: 'native_tts_stream_start';
+      payload: {
+        utteranceId: string;
+        playbackId?: string;
+        sampleRate?: number;
+        pcmBase64: string;
+        stopOnEarphoneDisconnect?: boolean;
+      };
+    }
+  | {
+      type: 'native_tts_stream_chunk';
+      payload: { playbackId: string; pcmBase64: string };
+    }
+  | {
+      type: 'native_tts_stream_end';
+      payload: { playbackId: string };
     }
   | {
       type: 'native_tts_stop';
@@ -1637,6 +1668,22 @@ export function NativeAdBanner(props: {
 
 function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
+  const voiceHostRef = useRef<VoiceRoomHostHandle>(null);
+  // The group voice call runs natively (LiveKit audio) with no screen of its
+  // own: the web chat page draws the panel and drives it over the bridge. It
+  // reuses the shell's base URL + validated API namespace for its REST calls.
+  const voiceConfig = useMemo(
+    () =>
+      resolveVoiceConfig({
+        webAppBaseUrl: WEB_APP_BASE_URL,
+        validatedApiNamespace: VALIDATED_API_NAMESPACE,
+        deviceLocaleTag: NATIVE_RUNTIME_CONFIG.deviceLocaleTag,
+      }),
+    [],
+  );
+  const emitVoiceEventToWeb = useCallback((detail: VoiceBridgeEventDetail) => {
+    webViewRef.current?.injectJavaScript(buildVoiceEventScript(detail));
+  }, []);
   const isPageReadyRef = useRef(false);
   // Becomes true once the startup load has either shown a page or surfaced an
   // error, after which the startup splash never comes back.
@@ -3664,6 +3711,12 @@ function AppInner(): React.JSX.Element {
   }, [emitCurrentMicPermissionToWeb, nativeAvailable]);
 
   const emitTtsToWeb = useCallback((payload: Record<string, unknown>) => {
+    // A translation read aloud quiets the other voices in a voice talk.
+    if (payload.type === 'tts_started') {
+      voiceHostRef.current?.setReadingAloud(true);
+    } else if (payload.type === 'tts_ended' || payload.type === 'tts_stopped' || payload.type === 'tts_error') {
+      voiceHostRef.current?.setReadingAloud(false);
+    }
     if (!isPageReadyRef.current) return;
     const serialized = JSON.stringify(payload);
     if (__DEV__) {
@@ -4433,6 +4486,28 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    {
+      const voiceCommand = parseVoiceBridgeCommand(parsed);
+      if (voiceCommand) {
+        if (voiceCommand.type === 'native_voice_open') {
+          voiceHostRef.current?.open({
+            conversationId: voiceCommand.payload.conversationId,
+            title: voiceCommand.payload.title,
+            interpret: voiceCommand.payload.interpret,
+          });
+        } else if (voiceCommand.type === 'native_voice_close') {
+          voiceHostRef.current?.close();
+        } else if (voiceCommand.type === 'native_voice_set') {
+          voiceHostRef.current?.set(voiceCommand.payload);
+        } else if (voiceCommand.type === 'native_voice_status_stop') {
+          voiceHostRef.current?.stopStatus();
+        } else {
+          voiceHostRef.current?.requestStatus(voiceCommand.payload.conversationId);
+        }
+        return;
+      }
+    }
+
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
       rememberCurrentWebUrl(url);
@@ -4670,6 +4745,52 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_tts_stream_start') {
+      const request = resolveNativeTtsStreamStartRequest(parsed.payload);
+      const { utteranceId, playbackId } = request;
+      currentTtsPlaybackRef.current = { utteranceId, playbackId };
+      if (__DEV__) {
+        console.log(`[Web→NativeTTS] stream start utteranceId=${utteranceId} playbackId=${playbackId} sampleRate=${request.sampleRate} base64Len=${request.pcmBase64.length} stopOnEarphoneDisconnect=${request.stopOnEarphoneDisconnect}`);
+      }
+      void startNativeTtsStream(request).then((result) => {
+        // Resolves once sound really started, like NativeTTSModule.play.
+        const startedEvent = resolveNativeTtsStartedEvent(result, request, currentTtsPlaybackRef.current);
+        if (startedEvent) {
+          emitTtsToWeb(startedEvent);
+        } else if (__DEV__) {
+          console.log(`[NativeTTS] no tts_started (stream) playbackId=${playbackId} ok=${result.ok} reason=${result.reason ?? ''}`);
+        }
+      }, (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (__DEV__) {
+          console.log(`[NativeTTS] stream start error playbackId=${playbackId}: ${message}`);
+        }
+        if (currentTtsPlaybackRef.current?.playbackId === playbackId) {
+          currentTtsPlaybackRef.current = null;
+        }
+        emitTtsToWeb({ type: 'tts_error', utteranceId, playbackId, message });
+      });
+      return;
+    }
+
+    if (parsed.type === 'native_tts_stream_chunk') {
+      const playbackId = typeof parsed.payload?.playbackId === 'string' ? parsed.payload.playbackId : '';
+      const pcmBase64 = typeof parsed.payload?.pcmBase64 === 'string' ? parsed.payload.pcmBase64 : '';
+      // Pieces of a clip that was stopped or replaced meanwhile are dropped.
+      if (playbackId && pcmBase64 && currentTtsPlaybackRef.current?.playbackId === playbackId) {
+        appendNativeTtsStream(playbackId, pcmBase64);
+      }
+      return;
+    }
+
+    if (parsed.type === 'native_tts_stream_end') {
+      const playbackId = typeof parsed.payload?.playbackId === 'string' ? parsed.payload.playbackId : '';
+      if (playbackId && currentTtsPlaybackRef.current?.playbackId === playbackId) {
+        endNativeTtsStream(playbackId);
+      }
+      return;
+    }
+
     if (parsed.type === 'native_audio_route_request') {
       if (__DEV__) {
         console.log('[Web→NativeAudioRoute] request');
@@ -4735,6 +4856,7 @@ function AppInner(): React.JSX.Element {
         console.log(`[Web→NativeTTS] stop reason=${reason}`);
       }
       currentTtsPlaybackRef.current = null;
+      voiceHostRef.current?.setReadingAloud(false);
       void stopNativeTts();
       return;
     }
@@ -5183,6 +5305,7 @@ function AppInner(): React.JSX.Element {
       audioRoute: nativeAudioRouteAvailable,
       deviceAudioCapture: nativeDeviceAudioCaptureAvailable,
       nativeTts: isNativeTtsAvailable(),
+      nativeTtsStream: isNativeTtsStreamAvailable(),
       contacts: isNativeContactsAvailable(),
     }));
     // Earphone mode (contract A.2a): the latest route follows the capabilities
@@ -5417,6 +5540,14 @@ function AppInner(): React.JSX.Element {
         ) : (
           <View style={[styles.webView, { backgroundColor: safeAreaPalette.webViewColor }]} />
         )}
+        {versionGate.status !== 'force_update' ? (
+          <VoiceRoomHost
+            ref={voiceHostRef}
+            config={voiceConfig}
+            localUserId=""
+            emitToWeb={emitVoiceEventToWeb}
+          />
+        ) : null}
         {versionGate.status === 'force_update' ? (
           <View style={styles.versionOverlay}>
             <Text style={styles.versionTitle}>{versionGate.title}</Text>

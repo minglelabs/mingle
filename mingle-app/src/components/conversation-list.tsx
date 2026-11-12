@@ -37,7 +37,7 @@ import {
   persistLanguageOnboardingChoice,
 } from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bell, Check, Loader2, LogOut, Mic, PencilLine, Search, Settings, Share2, Trash2, UserRound, Ticket } from "lucide-react";
+import { ArrowRight, Bell, Check, Loader2, LogOut, Mic, PencilLine, Phone, Search, Settings, Share2, Trash2, UserRound, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { requestContactSyncPromptCheck } from "@/lib/native-contacts";
 import { useHasPendingInvite, openInviteTicket } from "@/lib/native-invite";
@@ -352,6 +352,11 @@ interface ConversationItem {
   translationLanguagesLinked: boolean;
   languageCodes: string[];
   isInterimPreview: boolean;
+  // Live state shown on the row, voice talk first: a live voice talk call
+  // (people in it), else this phone's speech-to-text running in the room.
+  voiceCallCount: number;
+  voiceCallLabel: string;
+  sttLive: boolean;
 }
 
 type ConversationRowActionMenuState = {
@@ -1057,6 +1062,9 @@ function mapConversationSummaryToItem(
     translationLanguagesLinked,
     languageCodes,
     isInterimPreview: Boolean(normalizedInterimPreview),
+    voiceCallCount: Math.max(0, Math.floor(conversation.voiceCallParticipantCount ?? 0)),
+    voiceCallLabel: resolveLivePhoneDemoRoomManagementCopy(locale).voiceTalkMenuItemLabel,
+    sttLive: false,
   };
 }
 
@@ -1429,6 +1437,7 @@ function ConversationRow({
     item.unreadMessageCount > 0 ? `${item.unreadMessageCount} ${item.unreadMessageLabel}` : null,
     item.timeLabel,
     item.statsLabel,
+    item.voiceCallCount > 0 ? `${item.voiceCallLabel} ${item.voiceCallCount}` : (item.sttLive ? "STT" : null),
     item.status === "active" ? item.statusLabel : null,
   ].filter(Boolean).join(", ");
 
@@ -1493,6 +1502,27 @@ function ConversationRow({
             {item.preview || "\u00A0"}
             {item.isInterimPreview && item.preview ? "…" : null}
           </p>
+          {item.voiceCallCount > 0 ? (
+            <span
+              aria-hidden={hideFromAccessibility || undefined}
+              data-conversation-row-voice-call
+              title={`${item.voiceCallLabel} ${item.voiceCallCount}`}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500 px-2 py-1 text-[10px] font-semibold leading-none text-white"
+            >
+              <Phone size={11} strokeWidth={2.6} />
+              <span className="tabular-nums">{item.voiceCallCount}</span>
+            </span>
+          ) : item.sttLive ? (
+            <span
+              aria-hidden={hideFromAccessibility || undefined}
+              data-conversation-row-stt-live
+              title="STT"
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold leading-none text-amber-700"
+            >
+              <Mic size={11} strokeWidth={2.6} />
+              STT
+            </span>
+          ) : null}
           {item.status === "active" ? (
             <span aria-hidden={hideFromAccessibility || undefined} className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] text-emerald-700">
               {item.statusLabel}
@@ -2420,8 +2450,9 @@ export default function ConversationList({
         conversationLocalStats[conversation.id],
         conversationInterimPreviews[conversation.id],
       )
-    )),
+    )).map((item) => (item.id === liveConversationId ? { ...item, sttLive: true } : item)),
     [
+      liveConversationId,
       conversationInterimPreviews,
       conversationLocalStats,
       conversationSortMode,

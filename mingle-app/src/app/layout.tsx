@@ -13,6 +13,7 @@ import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
 import NativeBannerRouteGuard from "@/components/native-banner-route-guard";
 import UiDiagnosticsProbe from "@/components/ui-diagnostics-probe";
+import HydrationMark from "@/components/hydration-mark";
 import {
   DeferredNativeConversationShareOverlay,
   DeferredNativeProfileLinkOverlay,
@@ -26,6 +27,7 @@ import { TtsSettingsProvider } from "@/context/tts-settings";
 import { getAuthOptions } from "@/lib/auth-options";
 import { resolveDeviceAudioCaptureSwitch } from "@/lib/device-audio-capture-switch";
 import { MOBILE_CANVAS_BOOTSTRAP_SCRIPT } from "@/lib/mobile-canvas-bootstrap";
+import { SCRIPT_LOAD_RECOVERY_SCRIPT } from "@/lib/script-load-recovery";
 import { resolvePostHogBrowserConfig } from "@/lib/posthog-browser-config";
 import { DEFAULT_LOCALE } from "@/i18n";
 import "./globals.css";
@@ -125,6 +127,11 @@ export default async function RootLayout({
           id="mingle-mobile-canvas-bootstrap"
           dangerouslySetInnerHTML={{ __html: MOBILE_CANVAS_BOOTSTRAP_SCRIPT }}
         />
+        <script
+          id="mingle-script-load-recovery"
+          dangerouslySetInnerHTML={{ __html: SCRIPT_LOAD_RECOVERY_SCRIPT }}
+        />
+        <HydrationMark />
         <AppLocalePreferenceSync />
         <TtsSettingsProvider>
           <AuthSessionProvider session={session}>

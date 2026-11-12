@@ -13,6 +13,9 @@ import {
 import { normalizeConversationMessageImage } from '@/lib/conversation-image'
 import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
 import { MESSAGE_READ_RECEIPTS_REFRESH_EVENT } from '@/lib/message-read-receipts'
+import { publishRoomPresence } from '@/lib/room-presence'
+import { normalizeVoiceCallMessage } from '@/lib/voice-call-message'
+import { normalizeHashRushMessage } from '@/lib/hash-rush-message'
 import { normalizeMessageReplyReference, type MessageReplyReference } from '@/lib/message-reply'
 import { MESSAGE_RECALLED_EVENT, normalizeRecalledMessageIds, type MessageRecalledEventDetail } from '@/lib/message-recall'
 import { MESSAGE_RETRANSLATED_EVENT, applyRetranslationToUtterance, type MessageRetranslatedEventDetail } from '@/lib/message-retranslate'
@@ -64,7 +67,6 @@ import {
   getOrCreateTrackingUserId,
 } from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
-import type { UserSelectableTtsModel } from '@/lib/tts-models'
 import type { SttCaptureSource } from '@/lib/native-device-audio'
 import { shouldRequestInterimFill } from '@/lib/bubble-tail'
 import {
@@ -1118,6 +1120,9 @@ export function normalizeConversationHydrationUtterances(
         ...(record.recalled === true ? { recalled: true } : {}),
         ...(record.sentByViewer === true ? { sentByViewer: true } : {}),
         ...(normalizeConversationMessageImage(record.image) ? { image: normalizeConversationMessageImage(record.image) } : {}),
+        ...(normalizeVoiceCallMessage(record.voiceCall) ? { voiceCall: normalizeVoiceCallMessage(record.voiceCall)! } : {}),
+        ...(normalizeHashRushMessage(record.hashRush) ? { hashRush: normalizeHashRushMessage(record.hashRush)! } : {}),
+        ...(record.voiceCaption === true ? { voiceCaption: true as const } : {}),
         originalText: typeof record.originalText === 'string' ? record.originalText : '',
         ...(typeof record.originalDisplayText === 'string' && record.originalDisplayText.trim()
           && record.originalDisplayText !== record.originalText
@@ -1575,6 +1580,18 @@ interface UseRealtimeSTTOptions {
   onTtsCanceled?: (utteranceId: string) => void
   enableTts?: boolean
   enableAec?: boolean
+  /**
+   * In a voice talk: what this phone says is a call caption, read only by
+   * some people in the call. Its live drafts are not sent on the room's
+   * channel, which everyone watching the room receives.
+   */
+  suppressLivePreview?: boolean
+  /**
+   * Live lines from elsewhere, drawn like the room's own live bubbles until a
+   * message with the same id lands (a voice talk's interpreter, for the
+   * people with interpretation on).
+   */
+  externalPreviews?: readonly Utterance[]
   // What a native session transcribes. Fixed when the session starts.
   captureSource?: SttCaptureSource
   sonioxManualFinalizeSilenceMs?: number
@@ -1587,7 +1604,6 @@ interface UseRealtimeSTTOptions {
   storageNamespace?: string
   translationModel?: UserSelectableTranslationModel
   // User-selected TTS model, sent with every TTS request. Undefined -> server default (gemini-3.8-flash-lite-tts).
-  ttsModel?: UserSelectableTtsModel
   // The signed-in viewer's own account id, stamped onto every locally
   // finalized utterance so ChatBubble can tell "mine" from "theirs" once a
   // room has more than one real member. Unused by solo rooms.
@@ -3013,9 +3029,6 @@ interface TranslateApiResult {
   sourceDisplayText?: string
   sourceLanguagesMixed?: boolean
   sourceTextHasForeignScript?: boolean
-  ttsLanguage?: string
-  ttsAudioBase64?: string
-  ttsAudioMime?: string
   provider?: string
   infrastructureProvider?: string
   model?: string
@@ -3181,6 +3194,8 @@ export default function useRealtimeSTT({
   onTtsCanceled,
   enableTts,
   enableAec = false,
+  suppressLivePreview = false,
+  externalPreviews,
   captureSource = 'microphone',
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
   sonioxEndpointMaxDelayMs = DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
@@ -3191,7 +3206,6 @@ export default function useRealtimeSTT({
   sessionKeyOverride,
   storageNamespace,
   translationModel,
-  ttsModel,
   viewerUserId = null,
   viewerImage = null,
   sttSegmentationMode,
@@ -3257,6 +3271,8 @@ export default function useRealtimeSTT({
   const finalizationApiNamespace = resolveRuntimeApiNamespace()
   const realtimeScope = JSON.stringify([clientMessageOutboxOwnerIdentity, finalizationApiNamespace, conversationId])
   const livePreviewSender = useMemo(() => { void realtimeScope; return new LivePreviewSender() }, [realtimeScope])
+  const suppressLivePreviewRef = useRef(suppressLivePreview)
+  useEffect(() => { suppressLivePreviewRef.current = suppressLivePreview }, [suppressLivePreview])
   const remotePreviews = useMemo(() => { void realtimeScope; return new RemotePreviews() }, [realtimeScope])
   const [remotePreviewVersion, setRemotePreviewVersion] = useState(0)
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
@@ -4314,6 +4330,11 @@ export default function useRealtimeSTT({
               window.dispatchEvent(new CustomEvent(MESSAGE_READ_RECEIPTS_REFRESH_EVENT, { detail: conversationId }))
               return
             }
+            if (frame.type === 'presence') {
+              // Who has the room open right now (the voice talk panel shows it).
+              if (conversationId) publishRoomPresence(conversationId, frame.userIds)
+              return
+            }
             if (frame.type === 'utterance_preview') {
               if (frame.utterance?.speakerUserId === viewerUserId && typeof frame.orderReceipt === 'string') {
                 rememberLiveVoiceOrder({ ownerIdentity: clientMessageOutboxOwnerIdentity, apiNamespace: finalizationApiNamespace,
@@ -4366,6 +4387,8 @@ export default function useRealtimeSTT({
     const liveTimer = window.setInterval(() => {
       if (cancelled) return
       livePreviewSender.flush(frame => {
+        // Dropped, not kept for later: a caption's draft never goes out.
+        if (suppressLivePreviewRef.current) return true
         if (!writerToken || socket?.readyState !== WebSocket.OPEN || socket.bufferedAmount > 256_000) return false
         const orderReceipt = getVoiceOrderReceipt({ ownerIdentity: clientMessageOutboxOwnerIdentity,
           apiNamespace: finalizationApiNamespace, sessionKey: socketSessionKey, clientMessageId: String(frame.id) })
@@ -4716,8 +4739,6 @@ export default function useRealtimeSTT({
     targetLanguages: string[],
     options?: {
       signal?: AbortSignal
-      ttsLanguage?: string
-      enableTts?: boolean
       isFinal?: boolean
       clientMessageId?: string
       currentTurnPreviousState?: CurrentTurnPreviousStatePayload | null
@@ -4770,16 +4791,9 @@ export default function useRealtimeSTT({
       if (translationModel) {
         body.translationModel = translationModel
       }
+      // Speech is never requested here: a translation must not wait for it.
       const onPartialTranslations = options?.isFinal === true ? undefined : options?.onPartialTranslations
       if (onPartialTranslations) body.stream = true
-      const normalizedTtsLang = (options?.ttsLanguage || '').trim()
-      if (normalizedTtsLang && options?.isFinal !== true) {
-        body.tts = {
-          language: normalizedTtsLang,
-          enabled: options?.enableTts === true,
-          ...(ttsModel ? { ttsModel } : {}),
-        }
-      }
       const res = await fetch(buildClientApiPath('/translate/finalize'), {
         method: 'POST',
         headers: {
@@ -4810,7 +4824,6 @@ export default function useRealtimeSTT({
       }
       if (typeof data.coinBalance === 'number') applyCoinBalance(data.coinBalance)
       if (data.coinExhausted === true) notifyCoinsExhausted()
-      const ttsAudioBase64 = typeof data.ttsAudioBase64 === 'string' ? data.ttsAudioBase64 : undefined
       const responseSourceLanguage = typeof data.sourceLanguage === 'string'
         ? normalizeIncomingSourceLanguage(data.sourceLanguage, text, { candidates: [sourceLanguage, ...targetLanguages] })
         : undefined
@@ -4856,9 +4869,6 @@ export default function useRealtimeSTT({
           : {}),
         sourceLanguagesMixed: data.sourceLanguagesMixed === true,
         sourceTextHasForeignScript: data.sourceTextHasForeignScript === true,
-        ttsLanguage: typeof data.ttsLanguage === 'string' ? data.ttsLanguage : undefined,
-        ttsAudioBase64,
-        ttsAudioMime: typeof data.ttsAudioMime === 'string' ? data.ttsAudioMime : undefined,
         provider: typeof data.provider === 'string' ? data.provider : undefined,
         infrastructureProvider: typeof data.infrastructureProvider === 'string' ? data.infrastructureProvider : undefined,
         model: typeof data.model === 'string' ? data.model : undefined,
@@ -4869,7 +4879,7 @@ export default function useRealtimeSTT({
     } catch {
       return { translations: {} }
     }
-  }, [buildRecentTurnContextPayload, ensureSessionKey, translationModel, ttsModel, usageSec])
+  }, [buildRecentTurnContextPayload, ensureSessionKey, translationModel, usageSec])
 
   const logClientEvent = useCallback(async (payload: ClientEventLogPayload) => {
     try {
@@ -5034,7 +5044,6 @@ export default function useRealtimeSTT({
           language: normalizedLang,
           sessionKey: ensureSessionKey(),
           clientContext: buildClientContextPayload(usageSec),
-          ...(ttsModel ? { ttsModel } : {}),
         }),
       })
       if (res.status === 402) notifyCoinsExhausted({ userInitiated: true })
@@ -5047,7 +5056,7 @@ export default function useRealtimeSTT({
     } catch {
       return null
     }
-  }, [ensureSessionKey, ttsModel, usageSec])
+  }, [ensureSessionKey, usageSec])
 
   const requestTtsForRenderedTranslation = useCallback((
     utteranceId: string,
@@ -7568,8 +7577,14 @@ export default function useRealtimeSTT({
       const time = remotePreviews.orderFor(viewerUserId, u.id)
       return time ? { ...u, serverCreatedAtMs: time } : u
     })
-    return [...own, ...remotePreviews.visible(utterances, viewerUserId)].sort(compareUtteranceOrder)
-  }, [localLiveUtterances, remotePreviews, remotePreviewVersion, utterances, viewerUserId])
+    const external = (externalPreviews ?? []).filter((u) => (
+      u.speakerUserId !== viewerUserId && !utterances.some((committed) => committed.id === u.id)
+    )).map((u) => {
+      const knownSpeaker = utterances.find((committed) => committed.speakerUserId === u.speakerUserId)
+      return knownSpeaker?.speakerImage && !u.speakerImage ? { ...u, speakerImage: knownSpeaker.speakerImage } : u
+    })
+    return [...own, ...remotePreviews.visible(utterances, viewerUserId), ...external].sort(compareUtteranceOrder)
+  }, [externalPreviews, localLiveUtterances, remotePreviews, remotePreviewVersion, utterances, viewerUserId])
   const liveUtterance = useMemo(() => buildLiveUtterance({
     pendingTurn: activePendingTurn,
     partialTranscript: activePendingTurn?.text || partialTranscript,

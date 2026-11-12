@@ -1,6 +1,6 @@
 'use client'
 
-import ConversationImageComposer, { type ConversationImageComposerEarphoneMode } from './ConversationImageComposer'
+import ConversationImageComposer, { type ConversationImageComposerEarphoneMode, type ConversationImageComposerVoiceTalk } from './ConversationImageComposer'
 import MessageMediaDialog from './MessageMediaDialog'
 import EarphoneModeNoticeContent from './EarphoneModeNotice'
 import LanguageRadioOption from './LanguageRadioOption'
@@ -67,12 +67,28 @@ import {
   resolveNativeDeviceAudioSupported,
   setSttCaptureSourcePick,
   shouldPlayTtsViaNativeShell,
+  shouldStreamTtsToNativeShell,
   subscribeNativeDeviceAudioCapability,
   subscribeSttCaptureSourcePick,
 } from '@/lib/native-device-audio'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
+import {
+  isTtsStreamClip,
+  isTtsStreamResponse,
+  readTtsStreamResponse,
+  type TtsClipAudio,
+  type TtsStreamClip,
+} from '@/lib/tts-stream-clip'
+import type { TtsStreamEnd } from '@/lib/tts-stream-format'
+import {
+  readTtsDeliveryMode,
+  ttsDeliverySplitsSentences,
+  ttsDeliveryStreams,
+  writeTtsDeliveryMode,
+  type TtsDeliveryMode,
+} from '@/lib/tts-delivery-mode'
 import { TtsAgentTextScheduler } from './tts-agent-text'
-import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
+import { applyCoinBalance, applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
 import CoinBalanceChip, { formatCoinCount } from '@/components/coins/coin-balance-chip'
 import HashSeedIcon from '@/components/coins/hash-seed-icon'
@@ -178,7 +194,6 @@ import {
   shouldRetryAccountPreferencesSync,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
-  resolveRequestTtsModel,
   type AccountPreferencesResponse,
   type AccountPreferencesCacheIdentity,
   type LivePhoneDemoAccountPreferences,
@@ -201,11 +216,6 @@ import {
   type TranslationModelBadge,
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
-import {
-  DEFAULT_SELECTABLE_TTS_MODEL,
-  TTS_MODEL_OPTIONS,
-  type UserSelectableTtsModel,
-} from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { requestNativeBannerZone } from '@/lib/native-banner-zone'
 import { reportUiDiagnostic } from '@/lib/ui-diagnostics'
@@ -268,6 +278,35 @@ import {
 } from '@/components/native-app-update-card'
 import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
+import VoiceTalkPanel, {
+  type VoiceTalkCaptionLine,
+  VoiceTalkButton,
+  isVoiceTalkAvailable,
+  joinVoiceTalk,
+  resolveVoiceTalkButtonPress,
+  resolveVoiceTalkMic,
+  setVoiceTalkInterpret,
+  setVoiceTalkListen,
+  setVoiceTalkMic,
+} from './VoiceTalkPanel'
+import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
+import { VoiceTalkRoomContext, type VoiceTalkRoomState } from './voice-talk-room-context'
+import { HashRushRoomContext, type HashRushRoomState } from './hash-rush-room-context'
+import { HashRushRoomPrompts, useHashRushRoomGame } from './HashRushRoomPrompts'
+import { shouldOfferHashRushInvite } from '@/lib/hash-rush-message'
+import { HashRushQuickChatBar } from '@/features/hash-rush/QuickChatBar'
+import type { HashRushChatEntry, HashRushRoomChat } from '@/features/hash-rush/room-chat'
+import { isHashRushGameConfigured } from '@/features/hash-rush/config'
+import { hashRushInviteCopy } from '@/features/hash-rush/invite-copy'
+import HashRushMenuPage from '@/features/hash-rush/HashRushMenuPage'
+import HashRushHowToPage from '@/features/hash-rush/HashRushHowToPage'
+import HashRushRankingPage from '@/features/hash-rush/HashRushRankingPage'
+import { HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/config'
+import { buildVoiceCaptionClientMessageId } from '@/lib/voice-caption'
+import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
+import { liveRoomsCopy } from '@/i18n/live-rooms-copy'
+import { formatRoomCode } from '@/lib/room-code'
+import { buildHashRushChatEntries } from './hash-rush-room-chat'
 import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
@@ -615,6 +654,8 @@ const CHAT_MESSAGE_ROW_STYLE: CSSProperties = {
   contain: 'layout style',
   isolation: 'isolate',
 }
+
+const NO_HASH_RUSH_CHAT_ENTRIES: readonly HashRushChatEntry[] = []
 
 function buildQaSeededUtterances(count: number): Utterance[] {
   const safeCount = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 48
@@ -1094,12 +1135,21 @@ function isSpeakerModeClient(): boolean {
   return namespaceSupportsSpeakerMode(apiNamespace)
 }
 
+// Speaker mode needs no earphone detection: it reads aloud and the
+// microphone path removes that sound. So any shell that has speaker mode
+// shows the button, also Android below 13, which cannot tell where media
+// plays and so reports no audio route. Earphone mode (and device-audio
+// capture) still needs a reported route.
+function isEarphoneModeControlSupported(route: ReturnType<typeof getNativeAudioRouteSnapshot>): boolean {
+  return isNativeAudioRouteSupported(route) || isSpeakerModeClient()
+}
+
 // The earphone-mode gate as the stores report it right now (not as of the last
 // render), for decisions that must not wait for React.
 function isEarphoneAutoReadGateOpenNow(): boolean {
   const route = getNativeAudioRouteSnapshot()
   return resolveEarphoneModeGate({
-    supported: isNativeAudioRouteSupported(route),
+    supported: isEarphoneModeControlSupported(route),
     enabled: getEarphoneModePreferenceSnapshot(),
     earphonesConnected: route.earphonesConnected,
     earphonesRequired: !isSpeakerModeClient(),
@@ -1255,6 +1305,8 @@ type FeedbackHistoryResponse = {
 }
 
 type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite'
+  // The room's Hash Rush page (depth 2) and the two pages it opens (depth 3).
+  | 'hash-rush' | 'hash-rush-ranking' | 'hash-rush-howto'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 
@@ -1282,6 +1334,12 @@ type LivePhoneDemoPanelHeaderProps = {
   onBack: () => void
   className?: string
 }
+
+
+// Live caption lines this app has seen (by id), kept across room screens so a
+// line seen once never comes back as new; see voiceTalkCaptionDrafts.
+const VOICE_TALK_CAPTION_SEEN = new Map<string, { firstAt: number, text: string, changedAt: number }>()
+const voiceTalkCaptionBaseline = { taken: false }
 
 function LivePhoneDemoPanelHeader({
   title,
@@ -1320,6 +1378,9 @@ function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuSc
     || value === 'participants'
     || value === 'display-language'
     || value === 'invite'
+    || value === 'hash-rush'
+    || value === 'hash-rush-ranking'
+    || value === 'hash-rush-howto'
 }
 
 function resolveMenuScreenForDepth(
@@ -1328,12 +1389,15 @@ function resolveMenuScreenForDepth(
 ): LivePhoneDemoMenuScreen {
   if (depth <= 1) return 'root'
   if (depth >= 3) {
+    if (preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return preferredScreen
+    if (preferredScreen === 'hash-rush') return 'hash-rush'
     if (preferredScreen === 'display-language') return 'display-language'
     if (preferredScreen === 'invite') return 'invite'
     if (preferredScreen === 'participants') return 'participants'
     return 'conversation-management'
   }
   if (preferredScreen === 'display-language') return 'display-language'
+  if (preferredScreen === 'hash-rush' || preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return 'hash-rush'
   if (preferredScreen === 'conversation-management') return 'conversation-management'
   if (preferredScreen === 'participants') return 'participants'
   return 'feedback'
@@ -1436,7 +1500,6 @@ interface LivePhoneDemoProps {
   endpointTuningShortLabel: string
   endpointTuningLongLabel: string
   translationModelLabel: string
-  ttsModelLabel: string
   adBannerPositionLabel: string
   adBannerPositionTopLabel: string
   adBannerPositionBottomLabel: string
@@ -1519,6 +1582,32 @@ interface LivePhoneDemoProps {
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
+// Streamed clips: pieces smaller than this are joined before they cross the
+// bridge to the shell, and a clip whose length is not known yet is given this
+// long before the watchdog gives up on it.
+const NATIVE_TTS_STREAM_MIN_PIECE_SECONDS = 0.1
+const NATIVE_TTS_STREAM_OPEN_WATCHDOG_MS = 30_000
+
+// Experiment switch in the room menu; the labels are not translated.
+const TTS_DELIVERY_MODE_LABEL = 'TTS 방식 (실험)'
+const TTS_DELIVERY_MODE_OPTIONS: ReadonlyArray<{ value: TtsDeliveryMode, label: string }> = [
+  { value: 'sentence', label: '문장 단위' },
+  { value: 'stream', label: '스트리밍' },
+  { value: 'sentence_stream', label: '둘 다' },
+]
+
+function shouldRequestTtsStream(): boolean {
+  return ttsDeliveryStreams(readTtsDeliveryMode()) && shouldStreamTtsToNativeShell({
+    isNativeApp: isNativeApp(),
+    isIOS: isLikelyIOSPlatform(),
+    capabilities: readCachedNativeShellCapabilities(),
+  })
+}
+
+function applyCoinBalanceFromTtsStreamEnd(end: TtsStreamEnd) {
+  if (typeof end.coinBalance === 'number') applyCoinBalance(end.coinBalance)
+  if (end.coinExhausted) notifyCoinsExhausted()
+}
 const LIVE_UTTERANCE_PREVIEW_DEBOUNCE_MS = 250
 
 // Mirrors ChatBubble's own display-language resolution (same helpers, same
@@ -1573,7 +1662,8 @@ export function buildLatestUtterancePayload(
 type TtsQueueItem = {
   playbackKey: string
   utteranceId: string
-  audioBlob: Blob | null
+  // A complete clip, or one still arriving that plays as it arrives.
+  audioBlob: TtsClipAudio | null
   language: string
   kind: 'original' | 'translation'
   // 'auto' items come from earphone mode (the legacy slot handlers below are
@@ -1935,7 +2025,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   switchLiveRoomToastLabel,
   textSizeLabel,
   translationModelLabel,
-  ttsModelLabel,
   adBannerPositionLabel,
   adBannerPositionTopLabel,
   adBannerPositionBottomLabel,
@@ -1994,6 +2083,105 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // than one real account — the solo room's own layout never depends on it.
   const { data: session } = useSession()
   const viewerUserId = typeof session?.user?.id === 'string' ? session.user.id : null
+  // Group voice talk runs in the native app; the web only draws its panel.
+  const [voiceTalkAvailable, setVoiceTalkAvailable] = useState(false)
+  useEffect(() => setVoiceTalkAvailable(isVoiceTalkAvailable()), [])
+  const [voiceTalkOpenSignal, setVoiceTalkOpenSignal] = useState(0)
+  const [voiceTalkLeaveSignal, setVoiceTalkLeaveSignal] = useState(0)
+  // Listen only: a seat in the call that sends no voice (speech-to-text as the room has it).
+  const [voiceTalkListenOnly, setVoiceTalkListenOnly] = useState(false)
+  // Interpretation in the call: captions and the interpreted voice of what
+  // the others say, for this viewer.
+  const [voiceTalkInterpretOn, setVoiceTalkInterpretOn] = useState(false)
+  // Translations read aloud while interpreting; a person may want captions only.
+  const [voiceTalkListenOn, setVoiceTalkListenOn] = useState(true)
+  const [voiceTalkState, setVoiceTalkState] = useState<{ live: boolean, joined: boolean, connected: boolean, callId: string | null }>(
+    { live: false, joined: false, connected: false, callId: null },
+  )
+  // The interpreter's lines while they are being said (or just were), drawn
+  // as live bubbles for this viewer while interpretation is on.
+  const [voiceTalkCaptionLines, setVoiceTalkCaptionLines] = useState<VoiceTalkCaptionLine[]>([])
+  // Live lines age out even when the call sends nothing new (the interpreter
+  // may leave mid-line), so the list is looked at again every second.
+  const [voiceTalkCaptionClock, setVoiceTalkCaptionClock] = useState(0)
+  const voiceTalkCaptionsLive = voiceTalkState.joined && voiceTalkInterpretOn && voiceTalkCaptionLines.length > 0
+  useEffect(() => {
+    if (!voiceTalkCaptionsLive) return
+    const timer = window.setInterval(() => setVoiceTalkCaptionClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [voiceTalkCaptionsLive])
+  const voiceTalkCaptionDrafts = useMemo<Utterance[]>(() => {
+    const seen = VOICE_TALK_CAPTION_SEEN
+    const now = Math.max(Date.now(), voiceTalkCaptionClock)
+    // The call keeps its recent lines, and they come back whole when the room
+    // reopens or interpretation is turned on: a line is live only while its
+    // words keep changing in front of this viewer. So every line is noted,
+    // even while interpretation is off, and the lines already there the first
+    // time this app sees the call count as old (their time is unknown).
+    const baseline = !voiceTalkCaptionBaseline.taken && voiceTalkCaptionLines.length > 0
+    if (baseline) voiceTalkCaptionBaseline.taken = true
+    for (const line of voiceTalkCaptionLines) {
+      const id = buildVoiceCaptionClientMessageId(line.id)
+      const known = seen.get(id)
+      if (!known) seen.set(id, { firstAt: now, text: line.original, changedAt: baseline ? 0 : now })
+      else if (known.text !== line.original) seen.set(id, { ...known, text: line.original, changedAt: now })
+    }
+    if (seen.size > 300) {
+      for (const [id, entry] of seen) if (now - entry.changedAt > 60_000) seen.delete(id)
+    }
+    if (!voiceTalkState.joined || !voiceTalkInterpretOn) return []
+    const drafts: Utterance[] = []
+    const speakingNow = new Set<string>()
+    // Newest first: a person says one line at a time, so only their newest
+    // unfinished line is live; an older unfinished one was cut off.
+    for (const line of voiceTalkCaptionLines) {
+      if (line.isEcho || !line.speaker || !line.original.trim()) continue
+      const id = buildVoiceCaptionClientMessageId(line.id)
+      const entry = seen.get(id)
+      if (!entry) continue
+      if (line.isPartial) {
+        if (speakingNow.has(line.speaker)) continue
+        speakingNow.add(line.speaker)
+        // Words that stopped coming: the line was cut off (its saved message never comes).
+        if (now - entry.changedAt > 6_000) continue
+      } else if (now - entry.changedAt > 15_000) {
+        // Finished: its saved message replaces it within a moment, or it was not saved.
+        continue
+      }
+      const translations = Object.fromEntries(Object.entries(line.translations ?? {})
+        .filter(([language, text]) => language !== line.lang && typeof text === 'string' && text.trim()))
+      drafts.push({
+        id,
+        originalText: line.original,
+        originalLang: line.lang || 'unknown',
+        translations,
+        targetLanguages: Object.keys(translations),
+        speakerUserId: line.speaker,
+        speakerName: line.speakerName,
+        createdAtMs: entry.firstAt,
+        voiceCaption: true,
+      })
+    }
+    return drafts
+  }, [voiceTalkCaptionClock, voiceTalkCaptionLines, voiceTalkInterpretOn, voiceTalkState.joined])
+  const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean, connected: boolean, callId: string | null }) => {
+    setVoiceTalkState((prev) => (
+      prev.live === next.live && prev.joined === next.joined && prev.connected === next.connected && prev.callId === next.callId ? prev : next
+    ))
+  }, [])
+  // The native game (src/features/hash-rush): `hashRushGameActive` keeps it
+  // alive in this room, also while lowered; `hashRushGameOpen` is it being up.
+  const [hashRushGameActive, setHashRushGameActive] = useState(false)
+  const [hashRushGameOpen, setHashRushGameOpen] = useState(false)
+  // The room's composer up over the native game (its 💬), in a mode of the
+  // game's own: 'text' with the keyboard, 'voice' with Start. The input mode
+  // the viewer keeps for the room is never written by it.
+  const [hashRushGameChatMode, setHashRushGameChatMode] = useState<'text' | 'voice' | null>(null)
+  const closeHashRushGame = useCallback(() => {
+    setHashRushGameOpen(false)
+    setHashRushGameChatMode(null)
+  }, [])
+  const liveDemoRootRef = useRef<HTMLDivElement | null>(null)
   const viewerImage = typeof session?.user?.image === 'string' ? session.user.image : null
   const accountPreferencesTrackingUserId = useMemo(() => getOrCreateTrackingUserId(), [])
   const initialLanguageSelectorMembers = useMemo<ConversationMemberProfile[]>(() => {
@@ -2147,8 +2335,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const menuContentScreen: LivePhoneDemoMenuScreen = menuScreen
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
-  const [ttsModelMenuOpen, setTtsModelMenuOpen] = useState(false)
   const [bubbleDisplayModeMenuOpen, setBubbleDisplayModeMenuOpen] = useState(false)
+  // Experiment switch (per device): sentence by sentence, streamed, or both.
+  const [ttsDeliveryMode, setTtsDeliveryMode] = useState<TtsDeliveryMode>(() => readTtsDeliveryMode())
+  const handleTtsDeliveryModeSelect = useCallback((mode: TtsDeliveryMode) => {
+    writeTtsDeliveryMode(mode)
+    setTtsDeliveryMode(mode)
+  }, [])
   const [textSizeLevel, setTextSizeLevel] = useState<number>(
     initialCachedAccountPreferences?.textSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
   )
@@ -2166,10 +2359,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(
     initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
-  )
-  // null = never picked; the settings row shows the effective default instead.
-  const [ttsModel, setTtsModel] = useState<UserSelectableTtsModel | null>(
-    initialCachedAccountPreferences?.ttsModel ?? null,
   )
   const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(
     initialCachedAccountPreferences?.bubbleDisplayMode ?? DEFAULT_BUBBLE_DISPLAY_MODE,
@@ -2190,6 +2379,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Pasted under the room link, so a friend who installs first can still type it in.
   const ownInviteCode = useOwnInviteCode(Boolean(shareUrl))
   const [shareEnabled, setShareEnabled] = useState(false)
+  // Public: listed with its name in the search tab and joinable by anyone.
+  const [isPublicRoom, setIsPublicRoom] = useState(false)
+  const [isTogglingPublic, setIsTogglingPublic] = useState(false)
+  // The number people type in Search to find this room.
+  const [roomCode, setRoomCode] = useState<number | null>(null)
+  // Private-room join requests waiting for a member (room management screen).
+  const [joinRequests, setJoinRequests] = useState<Array<{ id: string, userId: string, name: string | null, image: string | null }>>([])
+  const [decidingJoinRequestId, setDecidingJoinRequestId] = useState<string | null>(null)
   const [isTogglingSharing, setIsTogglingSharing] = useState(false)
   const [isRefreshingShareLink, setIsRefreshingShareLink] = useState(false)
   const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>('compose')
@@ -2209,6 +2406,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
+  // The game's composer is up (only while the game is, in a room the viewer can write to).
+  const hashRushGameChatShown = hashRushGameOpen && hashRushGameChatMode !== null && Boolean(conversationId) && !isBlockedCounterpart
+  // What the bottom bar shows: the keyboard composer or voice (Start). Over the
+  // game it is the game's own mode; the room's saved one (isComposerOpen) stays.
+  const composerShown = hashRushGameChatShown ? hashRushGameChatMode === 'text' : isComposerOpen
+  // The composer's text box has focus (its keyboard, not the game's, is up).
+  const [isComposerTextareaFocused, setIsComposerTextareaFocused] = useState(false)
   // The message the next typed send replies to (set from a bubble's menu).
   const [replyTarget, setReplyTarget] = useState<MessageReplyReference | null>(null)
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false)
@@ -2282,23 +2486,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [speakingItem, setSpeakingItem] = useState<SpeakingTtsItem | null>(null)
   const [pendingManualTtsTarget, setPendingManualTtsTarget] = useState<BubbleTtsTarget | null>(null)
   // Earphone mode (auto-read). Separate from the fixed-off TTS setting above.
-  const earphoneModeEnabled = useSyncExternalStore(
+  const earphoneModePreference = useSyncExternalStore(
     subscribeEarphoneModePreference,
     getEarphoneModePreferenceSnapshot,
     getEarphoneModePreferenceServerSnapshot,
   )
+  // In a voice talk the room's speaker button is locked and off: the
+  // interpreter reads translations on the call itself. The kept preference
+  // is untouched and applies again after the call.
+  const earphoneModeEnabled = voiceTalkState.joined ? false : earphoneModePreference
   const nativeAudioRoute = useSyncExternalStore(
     subscribeNativeAudioRoute,
     getNativeAudioRouteSnapshot,
     getNativeAudioRouteServerSnapshot,
   )
-  const earphoneModeSupported = isNativeAudioRouteSupported(nativeAudioRoute)
+  const earphoneModeSupported = isEarphoneModeControlSupported(nativeAudioRoute)
   const speakerMode = isSpeakerModeClient()
   const earphoneModeGate = resolveEarphoneModeGate({
     supported: earphoneModeSupported,
     enabled: earphoneModeEnabled,
     earphonesConnected: nativeAudioRoute.earphonesConnected,
-    earphonesRequired: !speakerMode,
+    earphonesRequired: !speakerMode && !voiceTalkState.joined,
   })
   // Speaker mode is the default name in 2.3.2+; with earphones in, the same
   // mode is earphone mode again (and may also capture other apps' sound).
@@ -2341,7 +2549,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Without earphones, speaker mode listens to the microphone only: no screen
   // broadcast, no capture of other apps' sound.
   const sttCaptureSource = resolveEffectiveSttCaptureSource({
-    supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker,
+    // A call writes down the microphone only, never other apps' sound.
+    supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker && !voiceTalkState.joined,
     earphoneModeEnabled,
     pick: sttCaptureSourcePick,
   })
@@ -2377,6 +2586,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
+  // The clip being played, while its audio is still arriving.
+  const currentTtsStreamClipRef = useRef<TtsStreamClip | null>(null)
   // Soniox v6 agent text: what the playing TTS clip says, sent to STT timed to
   // playback so the echo of our own voice is dropped from the transcript.
   const sendAgentTextRef = useRef<((text: string, endOfSegment: boolean) => void) | null>(null)
@@ -2423,8 +2634,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizeButtonRef = useRef<HTMLButtonElement | null>(null)
   const translationModelDropdownRef = useRef<HTMLDivElement | null>(null)
   const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
-  const ttsModelDropdownRef = useRef<HTMLDivElement | null>(null)
-  const ttsModelButtonRef = useRef<HTMLButtonElement | null>(null)
   const bubbleDisplayModeDropdownRef = useRef<HTMLDivElement | null>(null)
   const bubbleDisplayModeButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuHistoryDepthRef = useRef(readInitialMenuHistoryDepth().depth)
@@ -2463,11 +2672,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const [accountPreferencesSuccessfulHydrationGeneration, setAccountPreferencesSuccessfulHydrationGeneration] = useState(0)
   const [translationModelUserSelectedSinceHydrationStart, setTranslationModelUserSelectedSinceHydrationStart] = useState(false)
-  const [ttsModelUserSelectedSinceHydrationStart, setTtsModelUserSelectedSinceHydrationStart] = useState(false)
   const initialAccountHydrationWithoutCacheRef = useRef(false)
   const accountPreferencesHydratedFromServerRef = useRef(false)
   const translationModelUserSelectedSinceHydrationStartRef = useRef(false)
-  const ttsModelUserSelectedSinceHydrationStartRef = useRef(false)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const accountPreferencesPendingSyncRef = useRef(
     initialCachedAccountPreferencesSnapshot?.pendingSync === true,
@@ -2475,7 +2682,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const silenceFinalizeLockedDescriptionId = useId()
   const textSizeListboxId = useId()
   const translationModelListboxId = useId()
-  const ttsModelListboxId = useId()
   const bubbleDisplayModeListboxId = useId()
   const legacyNativeBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeBannerPosition')
   const nativeConversationBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeConversationBannerPosition')
@@ -2502,7 +2708,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       initialCachedAccountPreferences?.sonioxEndpointTuningStep ?? DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
     translationModel:
       initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
-    ttsModel: initialCachedAccountPreferences?.ttsModel ?? null,
     adBannerPosition: initialCachedAccountPreferences?.adBannerPosition ?? null,
     inputMode: initialCachedAccountPreferences?.inputMode ?? DEFAULT_INPUT_MODE,
     speakerEnabled: initialCachedAccountPreferences?.speakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
@@ -2518,14 +2723,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sonioxEndpointMaxDelayMs,
     sonioxEndpointTuningStep,
     translationModel,
-    ttsModel,
     adBannerPosition,
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
     bubbleDisplayMode,
     sttSegmentationMode,
-  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel, ttsModel])
+  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -2537,12 +2741,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
-  )
-  // What the server will actually use: the explicit choice, else the default.
-  const effectiveTtsModel: UserSelectableTtsModel = ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL
-  const selectedTtsModelOption = useMemo(
-    () => TTS_MODEL_OPTIONS.find((option) => option.value === effectiveTtsModel) || TTS_MODEL_OPTIONS[0],
-    [effectiveTtsModel],
   )
   const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
     return shouldSendTranslationModelPreference({
@@ -2557,22 +2755,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableAccountPreferencesSync,
     translationModel,
     translationModelUserSelectedSinceHydrationStart,
-  ])
-  // Sent on every TTS request (no DB lookup on the TTS path) once the user picked
-  // a model. Undefined -> server default (gemini-3.8-flash-lite-tts).
-  const requestTtsModel = useMemo<UserSelectableTtsModel | undefined>(() => {
-    return resolveRequestTtsModel(ttsModel, {
-      allowSync: enableAccountPreferencesSync,
-      requestedHydrationGeneration: accountPreferencesRequestedHydrationGeneration,
-      successfulHydrationGeneration: accountPreferencesSuccessfulHydrationGeneration,
-      userSelectedSinceHydrationStart: ttsModelUserSelectedSinceHydrationStart,
-    })
-  }, [
-    accountPreferencesRequestedHydrationGeneration,
-    accountPreferencesSuccessfulHydrationGeneration,
-    enableAccountPreferencesSync,
-    ttsModel,
-    ttsModelUserSelectedSinceHydrationStart,
   ])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root' || isAttachmentMenuOpen
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
@@ -2609,7 +2791,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setSonioxEndpointMaxDelayMs(preferences.sonioxEndpointMaxDelayMs)
     setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
     setTranslationModel(preferences.translationModel)
-    setTtsModel(preferences.ttsModel ?? null)
     setBubbleDisplayMode(preferences.bubbleDisplayMode)
     setAdBannerPosition(preferences.adBannerPosition)
   }, [])
@@ -2966,7 +3147,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.clearTimeout(timeout180Id)
       window.clearTimeout(timeout360Id)
     }
-  }, [composerTextareaHeightPx, isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
+  }, [composerTextareaHeightPx, composerShown, keyboardViewportInsetPx, syncNativeBottomBarClearance])
 
   // The native bottom banner only moves when the web reports a new clearance.
   // While the keyboard is up, iOS can move the composer (textarea growing on
@@ -2976,7 +3157,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // catches up; unchanged values are not re-sent.
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (!isComposerOpen || keyboardViewportInsetPx <= 0) return
+    if (!composerShown || keyboardViewportInsetPx <= 0) return
 
     const intervalId = window.setInterval(() => {
       syncNativeBottomBarClearance()
@@ -2985,10 +3166,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
+  }, [composerShown, keyboardViewportInsetPx, syncNativeBottomBarClearance])
 
   useEffect(() => {
-    if (!isComposerOpen) {
+    if (!composerShown) {
       composerFocusRequestedRef.current = false
       return
     }
@@ -3008,7 +3189,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.clearTimeout(timerId)
     }
-  }, [focusComposerTextarea, isComposerOpen, syncComposerTextareaHeight])
+  }, [composerShown, focusComposerTextarea, syncComposerTextareaHeight])
 
   useEffect(() => {
     const textarea = composerTextareaRef.current
@@ -3020,12 +3201,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useLayoutEffect(() => {
     syncComposerTextareaHeight(composerTextareaRef.current)
-  }, [isComposerOpen, syncComposerTextareaHeight])
+  }, [composerShown, syncComposerTextareaHeight])
 
   useEffect(() => {
-    if (isComposerOpen) return
+    if (composerShown) return
     setComposerTextareaHeightPx(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
-  }, [isComposerOpen])
+  }, [composerShown])
 
   // Persist selected languages
   useEffect(() => {
@@ -3116,12 +3297,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       initialAccountHydrationWithoutCacheRef.current = false
       accountPreferencesHydratedFromServerRef.current = false
       translationModelUserSelectedSinceHydrationStartRef.current = false
-      ttsModelUserSelectedSinceHydrationStartRef.current = false
       accountPreferencesLastSyncedStateKeyRef.current = null
       setAccountPreferencesRequestedHydrationGeneration(0)
       setAccountPreferencesSuccessfulHydrationGeneration(0)
       setTranslationModelUserSelectedSinceHydrationStart(false)
-      setTtsModelUserSelectedSinceHydrationStart(false)
       return () => {
         cancelled = true
       }
@@ -3136,10 +3315,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     initialAccountHydrationWithoutCacheRef.current = hydrationStartedSavedAt === null
     accountPreferencesHydratedFromServerRef.current = false
     translationModelUserSelectedSinceHydrationStartRef.current = false
-    ttsModelUserSelectedSinceHydrationStartRef.current = false
     setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
     setTranslationModelUserSelectedSinceHydrationStart(false)
-    setTtsModelUserSelectedSinceHydrationStart(false)
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
@@ -3170,7 +3347,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           startedSavedAt: hydrationStartedSavedAt,
           isLegacyNamespace: isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
           preserveLocalTranslationModel: translationModelUserSelectedSinceHydrationStartRef.current,
-          preserveLocalTtsModel: ttsModelUserSelectedSinceHydrationStartRef.current,
         })
         accountPreferencesPendingSyncRef.current = snapshot.pendingSync
         accountPreferencesLastSyncedStateKeyRef.current = snapshot.pendingSync
@@ -3263,9 +3439,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             includeTranslationModel: !initialAccountHydrationWithoutCacheRef.current
               || accountPreferencesHydratedFromServerRef.current
               || translationModelUserSelectedSinceHydrationStartRef.current,
-            includeTtsModel: !initialAccountHydrationWithoutCacheRef.current
-              || accountPreferencesHydratedFromServerRef.current
-              || ttsModelUserSelectedSinceHydrationStartRef.current,
           })),
         })
         if (!response.ok) throw new Error(`account_preferences_patch_failed:${response.status}`)
@@ -3461,7 +3634,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     menuHistoryDepthRef.current = boundedDepth
     setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
-    setTtsModelMenuOpen(false)
     setBubbleDisplayModeMenuOpen(false)
     setMenuScreenTransitionMode(nextScreenTransitionMode)
     setMenuScreenDirection(nextDirection)
@@ -3623,11 +3795,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return false
     }
 
-    if (ttsModelMenuOpen) {
-      setTtsModelMenuOpen(false)
-      return false
-    }
-
     if (bubbleDisplayModeMenuOpen) {
       setBubbleDisplayModeMenuOpen(false)
       return false
@@ -3648,7 +3815,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
 
     return true
-  }, [bubbleDisplayModeMenuOpen, closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen, ttsModelMenuOpen])
+  }, [bubbleDisplayModeMenuOpen, closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
 
   const requestCloseTopmostOverlay = useCallback(() => (
     !handleMenuSurfaceRequestClose()
@@ -3762,6 +3929,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     pushMenuHistoryEntry(2, 'display-language')
   }, [conversationId, menuOpen, menuScreen, pushMenuHistoryEntry])
 
+  // The room's Hash Rush page, and its rankings and how-to pages over it.
+  const handleHashRushPageOpen = useCallback(() => {
+    if (!menuOpen || menuScreen === 'hash-rush' || !conversationId) return
+    pushMenuHistoryEntry(2, 'hash-rush')
+  }, [conversationId, menuOpen, menuScreen, pushMenuHistoryEntry])
+  const handleHashRushRankingOpen = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'hash-rush') return
+    pushMenuHistoryEntry(3, 'hash-rush-ranking')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+  const handleHashRushHowToOpen = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'hash-rush') return
+    pushMenuHistoryEntry(3, 'hash-rush-howto')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+
   const handleDefaultDisplayLanguageSelect = useCallback((nextLanguage: string) => {
     const normalizedLanguage = canonicalizeSttLanguageCode(nextLanguage)
     if (!normalizedLanguage || !normalizedDisplayLanguageOptions.includes(normalizedLanguage)) return
@@ -3804,26 +3985,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     syncAccountPreferencesOverride(nextPreferences)
   }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
-  // Mirrors handleTranslationModelSelect. Called by the TTS model row in the settings menu.
-  // Any tap is an explicit choice, including the option shown as the default:
-  // null -> value counts as a change, so it is cached with pendingSync and PATCHed.
-  const handleTtsModelSelect = useCallback((nextTtsModel: UserSelectableTtsModel) => {
-    setTtsModelMenuOpen(false)
-    setTtsModelUserSelectedSinceHydrationStart(true)
-    ttsModelUserSelectedSinceHydrationStartRef.current = true
-    const wasAlreadySelected = latestAccountPreferencesRef.current.ttsModel === nextTtsModel
-    const nextPreferences = commitLocalAccountPreferences({
-      ...latestAccountPreferencesRef.current,
-      ttsModel: nextTtsModel,
-    })
-    if (wasAlreadySelected && initialAccountHydrationWithoutCacheRef.current && !accountPreferencesHydratedFromServerRef.current) {
-      writeCachedAccountPreferences(accountPreferencesCacheIdentity, nextPreferences, { pendingSync: true })
-      accountPreferencesPendingSyncRef.current = true
-    }
-    setTtsModel(nextTtsModel)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride(nextPreferences)
-  }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
   const handleBubbleDisplayModeSelect = useCallback((nextBubbleDisplayMode: LivePhoneDemoBubbleDisplayMode) => {
     setBubbleDisplayModeMenuOpen(false)
@@ -3864,6 +4025,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.clearTimeout(timerId)
     }
   }, [closeLanguageSelector, closeMenuPanel, isVisible])
+
+  // Leaving the room (back to the list, or another room on top) ends the game
+  // here; lowering the game inside the room does not.
+  useEffect(() => {
+    if (isVisible) return
+    setHashRushGameOpen(false)
+    setHashRushGameActive(false)
+    setHashRushGameChatMode(null)
+  }, [isVisible])
 
   useEffect(() => {
     if (!enableNativeBannerBridge || !isVisible) return
@@ -4098,15 +4268,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
         return
       }
-      if (ttsModelMenuOpen) {
-        setTtsModelMenuOpen(false)
-        try {
-          ttsModelButtonRef.current?.focus({ preventScroll: true })
-        } catch {
-          ttsModelButtonRef.current?.focus()
-        }
-        return
-      }
       if (bubbleDisplayModeMenuOpen) {
         setBubbleDisplayModeMenuOpen(false)
         try {
@@ -4123,7 +4284,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [bubbleDisplayModeButtonRef, bubbleDisplayModeMenuOpen, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen, ttsModelMenuOpen])
+  }, [bubbleDisplayModeButtonRef, bubbleDisplayModeMenuOpen, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
 
   useEffect(() => {
     if (!textSizeMenuOpen) return
@@ -4163,21 +4324,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('pointerdown', handlePointerDown)
     }
   }, [translationModelMenuOpen])
-
-  useEffect(() => {
-    if (!ttsModelMenuOpen) return
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Node)) return
-      if (ttsModelDropdownRef.current?.contains(event.target)) return
-      setTtsModelMenuOpen(false)
-    }
-
-    window.addEventListener('pointerdown', handlePointerDown)
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown)
-    }
-  }, [ttsModelMenuOpen])
 
   useEffect(() => {
     if (!bubbleDisplayModeMenuOpen) return
@@ -4265,11 +4411,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return true
     }
 
-    if (ttsModelMenuOpen) {
-      setTtsModelMenuOpen(false)
-      return true
-    }
-
     if (bubbleDisplayModeMenuOpen) {
       setBubbleDisplayModeMenuOpen(false)
       return true
@@ -4309,7 +4450,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     requestMenuBackStep,
     textSizeMenuOpen,
     translationModelMenuOpen,
-    ttsModelMenuOpen,
     bubbleDisplayModeMenuOpen,
   ])
 
@@ -4401,6 +4541,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // closed, so this only reports how far an interrupted clip got.
     ttsAgentText.interrupt()
     ttsAgentTextClipRef.current = null
+    // A clip still arriving stops loading (and stops feeding the shell).
+    currentTtsStreamClipRef.current?.cancel()
+    currentTtsStreamClipRef.current = null
     const player = playerAudioRef.current
     if (player) {
       player.pause()
@@ -4556,6 +4699,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const onPlaybackDone = () => {
       if (!isCurrentClip()) return
+      currentTtsStreamClipRef.current?.cancel()
+      currentTtsStreamClipRef.current = null
       clearNativeTtsEventTimer()
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
@@ -4565,8 +4710,90 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       processTtsQueueRef.current()
     }
 
+    // A clip that is still arriving goes to the shell piece by piece: the
+    // first piece starts it, the rest follows as it arrives.
+    const playStreamViaNativeBridge = (clip: TtsStreamClip) => {
+      const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
+      const post = (type: string, payload: Record<string, unknown>) => {
+        window.ReactNativeWebView!.postMessage(JSON.stringify({ type, payload }))
+      }
+      // Until the clip has ended its length is unknown: allow a long clip,
+      // then tighten once the length is known.
+      const armWatchdog = () => {
+        armNativeTtsEventTimeout(playbackId, next.playbackKey, resolveNativeTtsWatchdogTimeoutMs({
+          durationMs: clip.isEnded ? clip.durationMs : NATIVE_TTS_STREAM_OPEN_WATCHDOG_MS,
+          byteLength: clip.byteLength,
+        }))
+      }
+      if (agentTextClip) {
+        // `tts_started` from the shell starts the agent text (see the listener).
+        agentTextClip.durationMs = clip.isEnded ? clip.durationMs : 0
+        ttsAgentTextClipRef.current = agentTextClip
+      }
+      currentTtsStreamClipRef.current = clip
+      let started = false
+      // Small pieces are joined so the bridge carries fewer messages.
+      let pending: Uint8Array[] = []
+      let pendingBytes = 0
+      const flush = () => {
+        if (pendingBytes === 0) return
+        const joined = new Uint8Array(pendingBytes)
+        let offset = 0
+        for (const piece of pending) {
+          joined.set(piece, offset)
+          offset += piece.byteLength
+        }
+        pending = []
+        pendingBytes = 0
+        const pcmBase64 = bytesToBase64(joined)
+        if (!started) {
+          started = true
+          post('native_tts_stream_start', {
+            playbackId,
+            utteranceId: next.playbackKey,
+            sampleRate: clip.sampleRate,
+            pcmBase64,
+            ...(next.mode === 'auto' && !isSpeakerModeClient() ? { stopOnEarphoneDisconnect: true } : {}),
+          })
+        } else {
+          post('native_tts_stream_chunk', { playbackId, pcmBase64 })
+        }
+      }
+      const minBytes = Math.round(clip.sampleRate * 2 * NATIVE_TTS_STREAM_MIN_PIECE_SECONDS)
+      clip.consume({
+        onPcm: (pcm) => {
+          if (!isCurrentClip()) return
+          pending.push(pcm)
+          pendingBytes += pcm.byteLength
+          if (pendingBytes >= minBytes) flush()
+        },
+        onEnd: () => {
+          if (!isCurrentClip()) return
+          flush()
+          if (!started) {
+            onPlaybackDone()
+            return
+          }
+          post('native_tts_stream_end', { playbackId })
+          armWatchdog()
+        },
+      })
+      if (!isCurrentClip()) return
+      // What had already arrived is sent at once, whatever its size.
+      flush()
+      if (!clip.isEnded) armWatchdog()
+      // Shells that report audio routes also report `tts_started`.
+      if (shouldTreatNativeTtsPostAsStart(isNativeAudioRouteSupported(getNativeAudioRouteSnapshot()))) {
+        markPlaybackStarted()
+      }
+    }
+
     const playViaNativeBridge = async () => {
       try {
+        if (isTtsStreamClip(audioBlob)) {
+          playStreamViaNativeBridge(audioBlob)
+          return
+        }
         const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
         const audioBytes = new Uint8Array(await audioBlob.arrayBuffer())
         const contentType = audioBlob.type || 'audio/mpeg'
@@ -4626,7 +4853,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
       }
 
-      const objectUrl = URL.createObjectURL(audioBlob)
+      // The page's own player needs the clip whole.
+      let wholeClip: Blob | null
+      if (isTtsStreamClip(audioBlob)) {
+        currentTtsStreamClipRef.current = audioBlob
+        wholeClip = await audioBlob.toWavBlob()
+        if (!isCurrentClip()) return
+        currentTtsStreamClipRef.current = null
+      } else {
+        wholeClip = audioBlob
+      }
+      if (!wholeClip) {
+        onPlaybackDone()
+        return
+      }
+      const objectUrl = URL.createObjectURL(wholeClip)
       currentAudioUrlRef.current = objectUrl
       audio.src = objectUrl
 
@@ -4804,7 +5045,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     text: string
     language: string
     signal?: AbortSignal
-  }): Promise<Blob | null> => {
+  }): Promise<TtsClipAudio | null> => {
     const text = input.text.trim()
     const language = input.language.trim()
     if (!text || !language) return null
@@ -4829,12 +5070,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           language,
           sessionKey,
           clientMessageId: input.playbackKey,
-          // Same model as auto TTS; omitted while the user has not picked one (server default).
-          ...(requestTtsModel ? { ttsModel: requestTtsModel } : {}),
+          // A shell that plays audio as it arrives gets it as it is generated.
+          ...(shouldRequestTtsStream() ? { stream: true } : {}),
         }),
       })
       if (response.status === 402) notifyCoinsExhausted({ userInitiated: true })
       if (!response.ok) return null
+      if (isTtsStreamResponse(response)) {
+        // Resolves at the first audio; the balance comes in the end frame.
+        return await readTtsStreamResponse(response, { onEnd: applyCoinBalanceFromTtsStreamEnd })
+      }
       applyCoinBalanceFromHeaders(response.headers)
       const arrayBuffer = await response.arrayBuffer()
       if (!arrayBuffer || arrayBuffer.byteLength === 0) return null
@@ -4844,7 +5089,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       return null
     }
-  }, [nativeAppUpdate, requestTtsModel, resolveConversationSessionKey])
+  }, [nativeAppUpdate, resolveConversationSessionKey])
 
   const {
     utterances,
@@ -4887,7 +5132,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTtsAudio: handleTtsAudio,
     onTtsCanceled: handleTtsCanceled,
     enableTts: enableAutoTTS && isSoundEnabled,
-    enableAec: aecEnabled || speakerModeAecEnabled,
+    // In a call the other voices come out of this phone: without the echo
+    // canceller the microphone would transcribe them as this viewer's words.
+    enableAec: aecEnabled || speakerModeAecEnabled || voiceTalkState.joined,
+    // What is said in a call is a caption for some people in the call only.
+    suppressLivePreview: voiceTalkState.joined,
+    externalPreviews: voiceTalkCaptionDrafts,
     captureSource: sttCaptureSource,
     sonioxManualFinalizeSilenceMs,
     sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
@@ -4898,7 +5148,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sessionKeyOverride,
     storageNamespace,
     translationModel: requestTranslationModel,
-    ttsModel: requestTtsModel,
     viewerUserId,
     viewerImage,
   })
@@ -5466,13 +5715,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`conversation_share_status_failed:${response.status}`)
-        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown }>
+        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown; isPublic?: unknown; roomCode?: unknown }>
       })
       .then((body) => {
         if (cancelled) return
         const nextShareToken = typeof body.shareToken === 'string' ? body.shareToken : null
         setShareUrl(nextShareToken ? buildConversationShareUrl(window.location.origin, nextShareToken) : null)
         setShareEnabled(body.shareEnabled === true)
+        setIsPublicRoom(body.isPublic === true)
+        setRoomCode(typeof body.roomCode === 'number' ? body.roomCode : null)
       })
       .catch(() => {
         // Leave whatever was already shown — the toggle below surfaces its
@@ -5566,6 +5817,130 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     roomManagementCopy.shareRefreshedToastLabel,
   ])
 
+  const liveRoomCopy = useMemo(() => liveRoomsCopy(uiLocale), [uiLocale])
+
+  const handleTogglePublicRoom = useCallback(async (nextPublic: boolean) => {
+    if (isTogglingPublic || !conversationId) return
+    setIsTogglingPublic(true)
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}/visibility`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildTrackingRequestHeaders({
+            sessionKey: resolveConversationSessionKey(),
+            trackingUserId: getOrCreateTrackingUserId(),
+            nativeAppUpdate,
+          }),
+        },
+        body: JSON.stringify({ isPublic: nextPublic }),
+      })
+      if (!response.ok) throw new Error(`conversation_visibility_failed:${response.status}`)
+      const body = await response.json() as { isPublic?: unknown; conversation?: { shareToken?: unknown; shareEnabled?: unknown } }
+      setIsPublicRoom(body.isPublic === true)
+      // Going public switches the share link on.
+      const nextShareToken = typeof body.conversation?.shareToken === 'string' ? body.conversation.shareToken : null
+      if (nextShareToken) setShareUrl(buildConversationShareUrl(window.location.origin, nextShareToken))
+      if (body.conversation?.shareEnabled === true) setShareEnabled(true)
+    } catch {
+      toast.error(roomManagementCopy.shareErrorToastLabel)
+    } finally {
+      setIsTogglingPublic(false)
+    }
+  }, [conversationId, isTogglingPublic, nativeAppUpdate, resolveConversationSessionKey, roomManagementCopy.shareErrorToastLabel])
+
+  const loadJoinRequests = useCallback(async () => {
+    if (!conversationId) return
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}/join-requests`), { cache: 'no-store' })
+      if (!response.ok) return
+      const body = await response.json() as { requests?: Array<{ id: string, userId: string, name: string | null, image: string | null }> }
+      setJoinRequests(Array.isArray(body.requests) ? body.requests : [])
+    } catch {
+      // Shown again on the next visit to the screen.
+    }
+  }, [conversationId])
+
+  useEffect(() => {
+    if (menuScreen !== 'conversation-management') return
+    void loadJoinRequests()
+  }, [loadJoinRequests, menuScreen])
+
+  const handleDecideJoinRequest = useCallback(async (requestId: string, accept: boolean) => {
+    if (!conversationId || decidingJoinRequestId) return
+    setDecidingJoinRequestId(requestId)
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}/join-requests/${requestId}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accept }),
+      })
+      const body = await response.json().catch(() => null) as { error?: string } | null
+      if (!response.ok) {
+        toast.error(body?.error === 'room_full' ? liveRoomCopy.roomFull : liveRoomCopy.joinFailed)
+        return
+      }
+      setJoinRequests((current) => current.filter((request) => request.id !== requestId))
+      toast.success(accept ? liveRoomCopy.requestAccepted : liveRoomCopy.requestDeclined)
+    } catch {
+      toast.error(liveRoomCopy.joinFailed)
+    } finally {
+      setDecidingJoinRequestId(null)
+    }
+  }, [conversationId, decidingJoinRequestId, liveRoomCopy.joinFailed, liveRoomCopy.requestAccepted, liveRoomCopy.requestDeclined, liveRoomCopy.roomFull])
+
+  const handleCopyRoomCode = useCallback(async () => {
+    const text = formatRoomCode(roomCode)
+    if (!text) return
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+      toast.success(liveRoomCopy.roomNumberCopied)
+    } catch {
+      toast.error(roomManagementCopy.shareErrorToastLabel)
+    }
+  }, [liveRoomCopy.roomNumberCopied, roomCode, roomManagementCopy.shareErrorToastLabel])
+
+  // Copies the room's Hash Rush invite link: anyone who opens it plays, on a
+  // computer or a phone browser, for as long as this chat room exists.
+  const handleCopyHashRushPcLink = useCallback(async () => {
+    if (!conversationId || !HASH_RUSH_PAGE_URL || !HASH_RUSH_SERVER) return
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/hash-rush/invite`), { credentials: 'include', cache: 'no-store' })
+      if (!response.ok) throw new Error(String(response.status))
+      const { url } = await response.json() as { url?: string }
+      if (!url) throw new Error('no_url')
+      const link = `${url}?lang=${encodeURIComponent(uiLocale)}`
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = link
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+      toast.success(liveRoomCopy.hashRushPcLinkCopied)
+    } catch {
+      toast.error(liveRoomCopy.hashRushPcLinkFailed)
+    }
+  }, [conversationId, liveRoomCopy.hashRushPcLinkCopied, liveRoomCopy.hashRushPcLinkFailed, uiLocale])
+
   const handleCopyShareLink = useCallback(async () => {
     if (!shareUrl) return
     const shareText = buildInviteSharedLinkMessage(uiLocale, shareUrl, ownInviteCode)
@@ -5653,7 +6028,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       text: normalizedText,
       language: target.language,
     })
-    if (manualTtsRequestSeqRef.current !== requestSeq) return
+    if (manualTtsRequestSeqRef.current !== requestSeq) {
+      // Superseded while it loaded: a clip still arriving stops loading.
+      if (isTtsStreamClip(audioBlob)) audioBlob.cancel()
+      return
+    }
 
     manualTtsPendingSeqRef.current = null
     setPendingManualTtsTarget(null)
@@ -6030,6 +6409,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [isVisible])
 
   const performMicAction = useCallback((source: SttStopSource) => {
+    // Locked in a voice talk: the call starts and stops speech-to-text itself.
+    if (voiceTalkState.joined) return
     const shouldStopConnectingSession = isConnecting
       && (!isNativeAppRuntime || isNativeSttSessionOwner)
     if (isSttSessionRunning || shouldStopConnectingSession) {
@@ -6050,7 +6431,85 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
     void handleStartRecording()
-  }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning, sttCaptureSource])
+  }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning, sttCaptureSource, voiceTalkState.joined])
+
+  // The language this viewer speaks in a call, and the call as a message
+  // bubble needs it (the "started a voice talk" message's Join button).
+  const voiceTalkLang = ((speechLanguages[0] || ownSelectedLanguages[0] || uiLocale || 'en').split('-')[0] || 'en').toLowerCase()
+  const voiceTalkRoom = useMemo<VoiceTalkRoomState | null>(() => (
+    headerMode === 'conversation' && conversationId && voiceTalkAvailable
+      ? {
+          liveCallId: voiceTalkState.callId,
+          joined: voiceTalkState.joined,
+          join: () => joinVoiceTalk({ conversationId, title: displayConversationTitle || undefined, lang: voiceTalkLang }),
+        }
+      : null
+  ), [conversationId, displayConversationTitle, headerMode, voiceTalkAvailable, voiceTalkLang, voiceTalkState.callId, voiceTalkState.joined])
+
+  // A voice talk takes over the room's speech-to-text and read-aloud.
+  // - While this phone is in a call, the Start/Stop button and the speaker
+  //   button are locked. Speech-to-text that was running stops on joining.
+  // - The panel has the two switches: the mic (the voice sent into the call)
+  //   and interpret (captions and the interpreted voice of the others).
+  // - Interpretation runs on the server (mingle-voice-agent): while someone
+  //   in the call has it on, the interpreter writes each speaker down from
+  //   the call audio, saves each line as a caption only the people with it
+  //   on read (src/lib/voice-caption.ts), and reads translations on a
+  //   language track of the call that only they listen to. No phone runs
+  //   speech-to-text for the call, and a translation read aloud is call
+  //   audio, so the echo canceller keeps it out of the microphone.
+  // - The app owns the call and its mic: they go on while the room screen is
+  //   closed and in the background, until the app quits. This screen only
+  //   switches the mic when the viewer presses the button, and otherwise
+  //   shows what the app reports, so coming back to the room never turns a
+  //   muted mic back on. Writing down runs while this room screen is open.
+  const handleVoiceTalkListenOnlyChange = useCallback((listenOnly: boolean) => {
+    setVoiceTalkListenOnly(listenOnly)
+    setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly }))
+  }, [])
+  // A new call starts with the mic on (the app turns it on when it connects).
+  useEffect(() => {
+    if (voiceTalkState.joined) return
+    setVoiceTalkListenOnly(false)
+    setVoiceTalkInterpretOn(false)
+    setVoiceTalkListenOn(true)
+  }, [voiceTalkState.joined])
+
+  // A press shows at once, and the app's next reports are not allowed to flip
+  // it back while the app is still applying it (the reports run ahead of the
+  // press: the button flashed off and on, as Start once did). A report that
+  // agrees, or one after a few seconds, is the truth again.
+  const voiceTalkPressedRef = useRef<{ interpretOn?: { value: boolean, until: number }, listenOn?: { value: boolean, until: number } }>({})
+  const handleVoiceTalkInterpretSync = useCallback((state: { interpretOn: boolean, listenOn: boolean }) => {
+    const pressed = voiceTalkPressedRef.current
+    const now = Date.now()
+    for (const key of ['interpretOn', 'listenOn'] as const) {
+      const press = pressed[key]
+      if (press && (press.value === state[key] || now > press.until)) delete pressed[key]
+    }
+    if (!pressed.interpretOn) setVoiceTalkInterpretOn(state.interpretOn)
+    if (!pressed.listenOn) setVoiceTalkListenOn(state.listenOn)
+  }, [])
+
+  const handleVoiceTalkListenChange = useCallback((on: boolean) => {
+    voiceTalkPressedRef.current.listenOn = { value: on, until: Date.now() + 3000 }
+    setVoiceTalkListenOn(on)
+    setVoiceTalkListen(on)
+  }, [])
+
+  const handleVoiceTalkInterpretChange = useCallback((on: boolean) => {
+    voiceTalkPressedRef.current.interpretOn = { value: on, until: Date.now() + 3000 }
+    setVoiceTalkInterpretOn(on)
+    if (conversationId) void setVoiceTalkInterpret(conversationId, on)
+  }, [conversationId])
+
+  // The room's own speech-to-text does not run in a call: one that was on
+  // stops on joining (and Start stays locked until the call ends).
+  const voiceTalkJoinedRef = useRef(false)
+  useEffect(() => {
+    voiceTalkJoinedRef.current = voiceTalkState.joined
+    if (voiceTalkState.joined && isSttSessionRunning) void handleStopRecording()
+  }, [handleStopRecording, isSttSessionRunning, voiceTalkState.joined])
 
   const confirmScreenCaptureNotice = useCallback(() => {
     screenCaptureNoticeAcknowledgedRef.current = true
@@ -6088,6 +6547,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const handleToggleComposer = useCallback(() => {
+    // Over the Hash Rush game the switch is the game's own: keyboard or Start.
+    // The input mode kept for the room stays as it is.
+    if (hashRushGameChatShown) {
+      const nextMode = hashRushGameChatMode === 'text' ? 'voice' : 'text'
+      composerFocusRequestedRef.current = nextMode === 'text'
+      if (nextMode === 'voice') composerTextareaRef.current?.blur()
+      setHashRushGameChatMode(nextMode)
+      return
+    }
     const next = !isComposerOpen
     commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
@@ -6104,7 +6572,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       composerTextareaRef.current?.blur()
     }
     setIsComposerOpen(next)
-  }, [commitLocalAccountPreferences, isComposerOpen])
+  }, [commitLocalAccountPreferences, hashRushGameChatMode, hashRushGameChatShown, isComposerOpen])
+
+  // The game's 💬: the room's composer comes up over the game, in the input
+  // mode the viewer keeps for the room (keyboard or Start) unless one is asked.
+  const openHashRushGameChat = useCallback((mode?: 'text' | 'voice') => {
+    const nextMode = mode ?? (isComposerOpen ? 'text' : 'voice')
+    composerFocusRequestedRef.current = nextMode === 'text'
+    setHashRushGameChatMode(nextMode)
+    // Already drawn under the game: focus it now, inside the tap (iOS only
+    // raises the keyboard from a touch).
+    if (nextMode === 'text' && composerTextareaRef.current) focusComposerTextarea()
+  }, [focusComposerTextarea, isComposerOpen])
+
+  const closeHashRushGameChat = useCallback(() => {
+    composerFocusRequestedRef.current = false
+    composerTextareaRef.current?.blur()
+    setHashRushGameChatMode(null)
+  }, [])
 
   const handleComposerDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextDraft = event.currentTarget.value
@@ -6151,15 +6636,35 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, focusComposerTextarea, replyTarget, submitExternalUtterance, syncComposerTextareaHeight])
 
+  // A quick chat line under Hash Rush goes the same way as typed text: a
+  // normal room message (history, translation, push and coins as always). The
+  // draft and a reply being written stay as they are.
+  const handleHashRushQuickChat = useCallback((text: string) => {
+    submitExternalUtterance({
+      text,
+      sourceLanguage: 'unknown',
+      speaker: composerCopy.manualSpeakerLabel,
+    })
+  }, [composerCopy.manualSpeakerLabel, submitExternalUtterance])
+
+  // Quick chat sits right above the composer while Hash Rush is up, in rooms
+  // the viewer can still write to.
+  const hashRushQuickChatVisible = hashRushGameChatShown && Boolean(conversationId) && !isBlockedCounterpart
+
+  const handleComposerTextareaFocus = useCallback(() => setIsComposerTextareaFocused(true), [])
+  const handleComposerTextareaBlur = useCallback(() => setIsComposerTextareaFocused(false), [])
+
   useEffect(() => {
     setReplyTarget(null)
   }, [conversationId])
 
   const handleReplyToMessage = useCallback((reference: MessageReplyReference) => {
     setReplyTarget(reference)
-    if (isComposerOpen) focusComposerTextarea()
+    // From the talk read back over the game: the game's composer, with the keyboard.
+    if (hashRushGameOpen && hashRushGameChatMode !== 'text') openHashRushGameChat('text')
+    else if (composerShown) focusComposerTextarea()
     else handleToggleComposer()
-  }, [focusComposerTextarea, handleToggleComposer, isComposerOpen])
+  }, [composerShown, focusComposerTextarea, handleToggleComposer, hashRushGameChatMode, hashRushGameOpen, openHashRushGameChat])
 
   const handleCancelReply = useCallback(() => setReplyTarget(null), [])
 
@@ -6869,6 +7374,78 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     preferredDisplayLanguage,
     resolvedDefaultDisplayLanguage,
   ])
+  // The room's talk as the Hash Rush game hears it, in the language the
+  // room's one-bubble view shows this viewer. Only while the game is here.
+  // The room's Hash Rush game around the game itself, like a voice talk:
+  // ask before starting or joining, offer someone else's game once, one game
+  // per room (HashRushRoomPrompts.tsx, src/server/hash-rush/room-game.ts).
+  const hashRushRoomEnabled = headerMode === 'conversation' && Boolean(conversationId) && isHashRushGameConfigured() && !isBlockedCounterpart && isVisible
+  const latestAnnouncedHashRushSessionId = useMemo(() => {
+    for (let index = displayUtterances.length - 1; index >= 0; index -= 1) {
+      const sessionId = displayUtterances[index]?.hashRush?.sessionId
+      if (sessionId) return sessionId
+    }
+    return null
+  }, [displayUtterances])
+  const { game: hashRushRoomGame, join: joinHashRushRoomGame } = useHashRushRoomGame({
+    conversationId: conversationId ?? null,
+    enabled: hashRushRoomEnabled,
+    playing: hashRushGameActive,
+    latestAnnouncedSessionId: latestAnnouncedHashRushSessionId,
+  })
+  const hashRushLiveSessionId = hashRushRoomGame?.sessionId ?? null
+  // The game this viewer turned down in this room: not offered again, also
+  // after the app restarts (kept on the device).
+  const [declinedHashRush, setDeclinedHashRush] = useState<{ conversationId: string | null, sessionId: string | null } | null>(null)
+  const declinedHashRushSessionId = declinedHashRush && declinedHashRush.conversationId === conversationId
+    ? declinedHashRush.sessionId
+    : readDeclinedInvite('hash-rush', conversationId)
+  const setDeclinedHashRushSessionId = useCallback((sessionId: string | null) => {
+    writeDeclinedInvite('hash-rush', conversationId, sessionId)
+    setDeclinedHashRush({ conversationId: conversationId ?? null, sessionId })
+  }, [conversationId])
+  const enterHashRushGame = useCallback(() => {
+    setHashRushGameActive(true)
+    setHashRushGameOpen(true)
+    void joinHashRushRoomGame()
+  }, [joinHashRushRoomGame])
+  // Quit: the game ends for this phone (not lowered), back to the chat. The
+  // same game is not offered to this viewer again; its message still joins.
+  const quitHashRushGame = useCallback(() => {
+    setDeclinedHashRushSessionId(hashRushLiveSessionId)
+    setHashRushGameOpen(false)
+    setHashRushGameActive(false)
+    setHashRushGameChatMode(null)
+  }, [hashRushLiveSessionId, setDeclinedHashRushSessionId])
+  // The Hash Rush page's main button: it was pressed on purpose, so no second question.
+  const handleHashRushPageEnter = useCallback(() => {
+    requestCloseMenuPanel()
+    if (hashRushGameActive) setHashRushGameOpen(true)
+    else enterHashRushGame()
+  }, [enterHashRushGame, hashRushGameActive, requestCloseMenuPanel])
+  const hashRushInvite = hashRushRoomEnabled && shouldOfferHashRushInvite({
+    game: hashRushRoomGame,
+    playing: hashRushGameActive,
+    viewerUserId,
+    declinedSessionId: declinedHashRushSessionId,
+  }) ? hashRushRoomGame : null
+  const hashRushRoom = useMemo<HashRushRoomState | null>(() => (
+    hashRushRoomEnabled ? { liveSessionId: hashRushLiveSessionId, joined: hashRushGameActive, join: enterHashRushGame } : null
+  ), [enterHashRushGame, hashRushGameActive, hashRushLiveSessionId, hashRushRoomEnabled])
+
+  const hashRushChatEntries = useMemo(() => (
+    hashRushGameActive
+      ? buildHashRushChatEntries({
+          utterances: displayUtterances,
+          draftIds: draftUtteranceIds,
+          display: earphoneModeDisplay,
+          viewerUserId,
+          isSharedRoom: isMultiMember,
+          // The native game floats every line over the map, whoever said it.
+          keepUnknownSenders: true,
+        })
+      : NO_HASH_RUSH_CHAT_ENTRIES
+  ), [displayUtterances, draftUtteranceIds, earphoneModeDisplay, hashRushGameActive, isMultiMember, viewerUserId])
   // L: the notice pick for this room while it is still a room language,
   // otherwise the room's display language.
   const earphoneModeReadLanguage = resolveEarphoneModeReadLanguage({
@@ -6912,6 +7489,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       now: () => Date.now(),
       setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
       clearTimer: (handle) => window.clearTimeout(handle as number),
+      splitSentences: () => ttsDeliverySplitsSentences(readTtsDeliveryMode()),
       synthesize: (target, signal) => synthesizeBubbleTtsViaApiRef.current({
         playbackKey: target.playbackKey,
         text: target.text,
@@ -7020,6 +7598,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const handleEarphoneModeToggle = useCallback(() => {
+    // Locked in a voice talk: the panel's interpret button decides.
+    if (voiceTalkJoinedRef.current) return
     const toggle = resolveEarphoneModeToggle(getEarphoneModePreferenceSnapshot())
     writeEarphoneModeEnabled(toggle.nextEnabled)
     if (toggle.requestRoute) requestNativeAudioRoute()
@@ -7045,6 +7625,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const earphoneModeControlLabel = earphoneModeGate.waitingForEarphones
     ? `${earphoneModeCopy.label}, ${earphoneModeCopy.waitingLabel}`
     : earphoneModeCopy.label
+  // The voice-mode phone button and the keyboard-mode "+" menu item do the
+  // same: during a call ask to leave, otherwise ask to start (or join) one.
+  const handleVoiceTalkPress = useCallback(() => {
+    if (resolveVoiceTalkButtonPress(voiceTalkState) === 'confirm_leave') {
+      setVoiceTalkLeaveSignal((n) => n + 1)
+    } else {
+      setVoiceTalkOpenSignal((n) => n + 1)
+    }
+  }, [voiceTalkState])
+  const voiceTalkMenuItem = useMemo<ConversationImageComposerVoiceTalk | undefined>(() => (
+    headerMode === 'conversation' && conversationId && voiceTalkAvailable
+      ? {
+          label: roomManagementCopy.voiceTalkMenuItemLabel,
+          active: voiceTalkState.live || voiceTalkState.joined,
+          onSelect: handleVoiceTalkPress,
+        }
+      : undefined
+  ), [conversationId, handleVoiceTalkPress, headerMode, roomManagementCopy.voiceTalkMenuItemLabel, voiceTalkAvailable, voiceTalkState.joined, voiceTalkState.live])
   const earphoneModeMenuItem = useMemo<ConversationImageComposerEarphoneMode | undefined>(() => (
     earphoneModeGate.controlVisible
       ? {
@@ -7369,7 +7967,93 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     bottomBarClearancePx: nativeBottomBarClearancePx,
     estimatedBottomBannerInsetPx: estimatedNativeBannerInsetPx,
   })
-  const activeKeyboardInsetPx = isComposerOpen ? keyboardViewportInsetPx : 0
+  // While the composer is up over Hash Rush, only its own keyboard lifts it;
+  // a keyboard the game opens is the game's.
+  const activeKeyboardInsetPx = composerShown && (!hashRushGameChatShown || isComposerTextareaFocused) ? keyboardViewportInsetPx : 0
+  // The room's talk and composer inside the native game (room-chat.ts). How
+  // much of the game's foot the quick chat and the composer cover while up
+  // (the keyboard under them included): the game stands its conversation on it.
+  const hashRushQuickChatRef = useRef<HTMLDivElement | null>(null)
+  const [hashRushGameDockHeightPx, setHashRushGameDockHeightPx] = useState(0)
+  useLayoutEffect(() => {
+    if (!hashRushGameChatShown) return
+    const root = liveDemoRootRef.current
+    const quickChat = hashRushQuickChatRef.current
+    const bottomBar = bottomBarRef.current
+    if (!root || !quickChat) return
+    const measure = () => {
+      const height = Math.max(0, Math.round(root.getBoundingClientRect().bottom - quickChat.getBoundingClientRect().top))
+      setHashRushGameDockHeightPx((current) => (current === height ? current : height))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(root)
+    observer.observe(quickChat)
+    if (bottomBar) observer.observe(bottomBar)
+    return () => observer.disconnect()
+  }, [activeKeyboardInsetPx, composerShown, hashRushGameChatShown])
+  const hashRushGameUtterancesById = useMemo(() => (
+    hashRushGameActive ? new Map(displayUtterances.map((utterance) => [utterance.id, utterance])) : null
+  ), [displayUtterances, hashRushGameActive])
+  // One room message the room's own way, always as one bubble in this viewer's language.
+  const renderHashRushGameMessage = useCallback((id: string) => {
+    const utterance = hashRushGameUtterancesById?.get(id)
+    if (!utterance) return null
+    return (
+      <MemoizedLivePhoneDemoChatMessageRow
+        utterance={utterance}
+        uiLocale={uiLocale}
+        preferredDisplayLanguage={preferredDisplayLanguage}
+        preferredDisplayLanguages={normalizedPreferredDisplayLanguages}
+        defaultDisplayLanguage={resolvedDefaultDisplayLanguage}
+        languageOrder={normalizedDisplayLanguageOptions}
+        hiddenLanguages={othersOnlyLanguages}
+        isDraft={false}
+        onPlayOriginal={handlePlayOriginalBubbleTts}
+        onPlayTranslation={handlePlayTranslationBubbleTts}
+        bubbleTextClassName={chatBubbleTextClassName}
+        shouldAnimateEntrance={false}
+        viewerUserId={viewerUserId}
+        onOpenProfile={handleOpenProfileForBubble}
+        bubbleDisplayMode="collapsed"
+        isGroupContinuation={false}
+      />
+    )
+  }, [
+    chatBubbleTextClassName,
+    handleOpenProfileForBubble,
+    handlePlayOriginalBubbleTts,
+    handlePlayTranslationBubbleTts,
+    hashRushGameUtterancesById,
+    normalizedDisplayLanguageOptions,
+    normalizedPreferredDisplayLanguages,
+    othersOnlyLanguages,
+    preferredDisplayLanguage,
+    resolvedDefaultDisplayLanguage,
+    uiLocale,
+    viewerUserId,
+  ])
+  const hashRushGameChat = useMemo<HashRushRoomChat>(() => ({
+    entries: hashRushChatEntries,
+    renderMessage: renderHashRushGameMessage,
+    canWrite: Boolean(conversationId) && !isBlockedCounterpart,
+    open: hashRushGameChatShown,
+    dockHeightPx: hashRushGameDockHeightPx,
+    interpreting: isReady,
+    onOpen: openHashRushGameChat,
+    onClose: closeHashRushGameChat,
+  }), [
+    closeHashRushGameChat,
+    conversationId,
+    hashRushChatEntries,
+    hashRushGameChatShown,
+    hashRushGameDockHeightPx,
+    isBlockedCounterpart,
+    isReady,
+    openHashRushGameChat,
+    renderHashRushGameMessage,
+  ])
   const scrollToBottomButtonBottomPx = resolveScrollToBottomButtonBottomPx({
     baseBottomPx: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX,
     isNativeAppRuntime,
@@ -7408,10 +8092,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     isLimitReached,
     hasComposerDraft: composerHasDraft,
   })
-  const bottomBarTopPaddingPx = isComposerOpen
+  const bottomBarTopPaddingPx = composerShown
     ? COMPOSER_MODE_TOP_MARGIN_PX
     : VOICE_MODE_TOP_MARGIN_PX
-  const bottomBarBottomMarginPx = isComposerOpen
+  const bottomBarBottomMarginPx = composerShown
     ? COMPOSER_MODE_BOTTOM_MARGIN_PX
     : VOICE_MODE_BOTTOM_MARGIN_PX
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
@@ -7688,7 +8372,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   return (
     <PhoneFrame>
       <MessageReplyProvider value={replyRoomContext}>
+      <VoiceTalkRoomContext.Provider value={voiceTalkRoom}>
+      <HashRushRoomContext.Provider value={hashRushRoom}>
       <div
+        ref={liveDemoRootRef}
         data-qa="live-demo-root"
         className="relative flex h-full min-h-0 flex-col overflow-hidden"
       >
@@ -7701,6 +8388,58 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           >
             <CoinRoomBanner locale={coinLocale} />
           </div>
+        ) : null}
+
+        {/* Group voice talk: slides down from under the top bar while a call is live. */}
+        {headerMode === 'conversation' && conversationId && voiceTalkAvailable ? (
+          <VoiceTalkPanel
+            conversationId={conversationId}
+            conversationTitle={displayConversationTitle || undefined}
+            uiLocale={uiLocale}
+            myLang={voiceTalkLang}
+            topOffset="calc(54px + env(safe-area-inset-top, 0px))"
+            onAvailabilityChange={handleVoiceTalkAvailability}
+            openSignal={voiceTalkOpenSignal}
+            leaveSignal={voiceTalkLeaveSignal}
+            listenOnly={voiceTalkListenOnly}
+            onListenOnlyChange={handleVoiceTalkListenOnlyChange}
+            onListenOnlySync={setVoiceTalkListenOnly}
+            interpretOn={voiceTalkInterpretOn}
+            onInterpretChange={handleVoiceTalkInterpretChange}
+            listenOn={voiceTalkListenOn}
+            onListenChange={handleVoiceTalkListenChange}
+            onInterpretSync={handleVoiceTalkInterpretSync}
+            onCaptions={setVoiceTalkCaptionLines}
+            earphonesConnected={nativeAudioRoute.earphonesConnected}
+            onOpenProfile={handleOpenProfileForBubble}
+            viewerUserId={viewerUserId}
+          />
+        ) : null}
+
+        {/* Hash Rush, played natively in this room: a layer over the whole room
+            under its own thin top bar, kept while lowered, dropped on leaving. */}
+        {hashRushGameActive && conversationId ? (
+          <HashRushRoomLayer
+            key={conversationId}
+            open={hashRushGameOpen}
+            conversationId={conversationId}
+            viewerKey={viewerUserId || 'guest'}
+            playerName={(session?.user?.name || '').trim()}
+            uiLocale={uiLocale}
+            voiceActive={voiceTalkState.connected}
+            chat={hashRushGameChat}
+            onClose={closeHashRushGame}
+            onQuit={quitHashRushGame}
+          />
+        ) : null}
+
+        {hashRushRoomEnabled ? (
+          <HashRushRoomPrompts
+            uiLocale={uiLocale}
+            invite={hashRushInvite}
+            onConfirm={enterHashRushGame}
+            onDecline={() => setDeclinedHashRushSessionId(hashRushLiveSessionId)}
+          />
         ) : null}
 
         {/* Header */}
@@ -7900,6 +8639,32 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </button>
                             )}
 
+                            <div
+                              data-qa="live-demo-menu-usage"
+                              className="flex w-full items-center justify-between gap-3 px-1 py-1 text-[0.98rem] font-medium text-gray-900"
+                            >
+                              <span className="min-w-0 flex-1">{roomManagementCopy.usageMenuItemLabel}</span>
+                              <span className="flex shrink-0 items-center gap-2 text-sm font-normal tabular-nums text-gray-500">
+                                {isUsageLimited ? (
+                                  <>
+                                    <span className="h-2 w-20 overflow-hidden rounded-full bg-gray-200">
+                                      <span
+                                        className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                                        style={{ width: `${usagePercent}%` }}
+                                      />
+                                    </span>
+                                    <span className={isLimitReached ? 'font-semibold text-red-400' : ''}>
+                                      {formatLivePhoneDemoUsageDuration(remainingSec)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span>{formatLivePhoneDemoUsageDuration(usageSec)}</span>
+                                )}
+                                <span aria-hidden="true">·</span>
+                                <span>{storedMessageCountLabel}</span>
+                              </span>
+                            </div>
+
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
                                 <span className="min-w-0 flex-1 pl-1 pt-2 text-[0.98rem] font-medium text-gray-900">{textSizeLabel}</span>
@@ -7909,7 +8674,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     type="button"
                                     onClick={() => {
                                       setTranslationModelMenuOpen(false)
-                                      setTtsModelMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen(false)
                                       setTextSizeMenuOpen((open) => !open)
                                     }}
@@ -8056,7 +8820,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     onClick={() => {
                                       setTextSizeMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen(false)
-                                      setTtsModelMenuOpen(false)
                                       setTranslationModelMenuOpen((open) => !open)
                                     }}
                                     aria-label={translationModelLabel}
@@ -8155,110 +8918,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{ttsModelLabel}</span>
-                                <div ref={ttsModelDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
-                                  <button
-                                    ref={ttsModelButtonRef}
-                                    type="button"
-                                    onClick={() => {
-                                      setTextSizeMenuOpen(false)
-                                      setTranslationModelMenuOpen(false)
-                                      setBubbleDisplayModeMenuOpen(false)
-                                      setTtsModelMenuOpen((open) => !open)
-                                    }}
-                                    aria-label={ttsModelLabel}
-                                    aria-haspopup="listbox"
-                                    aria-expanded={ttsModelMenuOpen}
-                                    aria-controls={ttsModelListboxId}
-                                    className="group relative flex h-full w-full items-center overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                                  >
-                                    <div className="min-w-0 flex-1 text-center">
-                                      <div className="truncate text-[0.95rem] font-semibold text-gray-900">
-                                        {selectedTtsModelOption.label}
-                                      </div>
-                                    </div>
-                                    <span
-                                      className={`ml-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
-                                        ttsModelMenuOpen
-                                          ? 'bg-transparent text-amber-700'
-                                          : 'bg-transparent text-gray-500 group-hover:text-amber-600'
-                                      }`}
-                                    >
-                                      <ChevronDown
-                                        size={16}
-                                        strokeWidth={2.3}
-                                        className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                                          ttsModelMenuOpen ? 'rotate-180' : 'rotate-0'
-                                        }`}
-                                      />
-                                    </span>
-                                  </button>
-                                  <AnimatePresence initial={false}>
-                                    {ttsModelMenuOpen && (
-                                      <motion.div
-                                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, y: -6, scale: 0.985 }}
-                                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                                        className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[272px] max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
-                                      >
-                                        <motion.div
-                                          initial={{ opacity: 0, height: 0 }}
-                                          animate={{ opacity: 1, height: 'auto' }}
-                                          exit={{ opacity: 0, height: 0 }}
-                                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                                          className="overflow-hidden"
-                                        >
-                                          <div
-                                            id={ttsModelListboxId}
-                                            role="listbox"
-                                            aria-label={ttsModelLabel}
-                                            className="space-y-1.5 p-2.5"
-                                          >
-                                            {TTS_MODEL_OPTIONS.map((option) => {
-                                              const isSelected = option.value === effectiveTtsModel
-
-                                              return (
-                                                <button
-                                                  key={option.value}
-                                                  type="button"
-                                                  role="option"
-                                                  aria-selected={isSelected}
-                                                  onClick={() => handleTtsModelSelect(option.value)}
-                                                  className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
-                                                    isSelected
-                                                      ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
-                                                      : 'bg-white text-gray-800 hover:bg-gray-50'
-                                                  }`}
-                                                >
-                                                  <div className="min-w-0 flex flex-1 items-center justify-center gap-2.5 text-center">
-                                                    <span className="truncate text-[0.94rem] font-semibold">
-                                                      {option.label}
-                                                    </span>
-                                                  </div>
-                                                  <span
-                                                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
-                                                      isSelected
-                                                        ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
-                                                        : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
-                                                    }`}
-                                                  >
-                                                    <Check size={14} strokeWidth={2.6} />
-                                                  </span>
-                                                </button>
-                                              )
-                                            })}
-                                          </div>
-                                        </motion.div>
-                                      </motion.div>
-                                    )}
-                                  </AnimatePresence>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="block">
-                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
                                 <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{bubbleDisplayCopy.displayModeLabel}</span>
                                 <div ref={bubbleDisplayModeDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
                                   <button
@@ -8268,7 +8927,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     onClick={() => {
                                       setTextSizeMenuOpen(false)
                                       setTranslationModelMenuOpen(false)
-                                      setTtsModelMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen((open) => !open)
                                     }}
                                     aria-label={bubbleDisplayCopy.displayModeLabel}
@@ -8396,6 +9054,34 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </div>
                             )}
 
+                            <div className="block">
+                              <div className="mb-2 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                                <span className="shrink-0 whitespace-nowrap pl-1 text-[0.98rem] font-medium text-gray-900">{TTS_DELIVERY_MODE_LABEL}</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {TTS_DELIVERY_MODE_OPTIONS.map((option) => {
+                                  const isSelected = ttsDeliveryMode === option.value
+
+                                  return (
+                                    <button
+                                      key={option.value}
+                                      data-qa={`live-demo-tts-delivery-${option.value}`}
+                                      type="button"
+                                      aria-pressed={isSelected}
+                                      onClick={() => handleTtsDeliveryModeSelect(option.value)}
+                                      className={`flex h-11 items-center justify-center rounded-2xl border text-[0.92rem] font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${
+                                        isSelected
+                                          ? 'border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
+                                          : 'border-[#E5E7EB] bg-white text-gray-700 hover:border-[#D1D5DB] hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+
                           </div>
                         </div>
 
@@ -8439,6 +9125,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 {isExportingConversation
                                   ? <Loader2 size={18} strokeWidth={2.4} className="animate-spin" />
                                   : <Share size={18} strokeWidth={2.2} />}
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {conversationId && isHashRushGameConfigured() ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              data-qa="live-demo-hash-rush-menu-item"
+                              // One item; its page holds the game, the computer link,
+                              // the rankings and how to play.
+                              onClick={handleHashRushPageOpen}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                            >
+                              <span className="min-w-0 flex-1">{hashRushInviteCopy(uiLocale).menuItem}</span>
+                              <span className="shrink-0 text-gray-500">
+                                <ChevronRight size={18} strokeWidth={2.4} />
                               </span>
                             </button>
                           </div>
@@ -8838,6 +9542,81 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </span>
                           </button>
 
+                          {roomCode ? (
+                            <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-gray-200 px-3.5 py-3" data-qa="live-demo-room-code">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[0.8rem] text-gray-500">{liveRoomCopy.roomNumber}</p>
+                                <p className="text-[1.35rem] font-semibold tabular-nums tracking-wide text-gray-900">{formatRoomCode(roomCode)}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void handleCopyRoomCode()}
+                                className="shrink-0 text-[0.85rem] font-semibold text-amber-600"
+                              >
+                                {roomManagementCopy.shareLinkCopyButtonLabel}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {joinRequests.length > 0 ? (
+                            <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50/60 px-3.5 py-3" data-qa="live-demo-join-requests">
+                              <p className="pb-2 text-[0.98rem] font-medium text-gray-900">{liveRoomCopy.requestsHeading} · {joinRequests.length}</p>
+                              <ul className="space-y-2">
+                                {joinRequests.map((request) => (
+                                  <li key={request.id} className="flex items-center gap-2.5">
+                                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-100 text-[0.8rem] font-bold text-amber-800">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      {request.image ? <img src={request.image} alt="" className="h-full w-full object-cover" /> : (Array.from((request.name || '?').trim())[0] || '?').toUpperCase()}
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-[0.92rem] text-gray-900">{request.name || '?'}</span>
+                                    <button
+                                      type="button"
+                                      data-qa="live-demo-join-request-decline"
+                                      disabled={decidingJoinRequestId === request.id}
+                                      onClick={() => void handleDecideJoinRequest(request.id, false)}
+                                      className="shrink-0 rounded-full bg-white px-3 py-1 text-[0.8rem] font-semibold text-gray-600 ring-1 ring-gray-200 disabled:opacity-60"
+                                    >
+                                      {liveRoomCopy.decline}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      data-qa="live-demo-join-request-accept"
+                                      disabled={decidingJoinRequestId === request.id}
+                                      onClick={() => void handleDecideJoinRequest(request.id, true)}
+                                      className="shrink-0 rounded-full bg-amber-500 px-3 py-1 text-[0.8rem] font-semibold text-white disabled:opacity-60"
+                                    >
+                                      {liveRoomCopy.accept}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+
+                          <div className="mb-3 rounded-2xl border border-gray-200 px-3.5 py-3" data-qa="live-demo-public-room">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[0.98rem] font-medium text-gray-900">{liveRoomCopy.publicMenuLabel}</p>
+                                <p className="mt-0.5 text-[0.8rem] leading-5 text-gray-500">{liveRoomCopy.publicHint}</p>
+                              </div>
+                              <button
+                                type="button"
+                                role="switch"
+                                data-qa="live-demo-public-room-switch"
+                                aria-checked={isPublicRoom}
+                                aria-label={liveRoomCopy.publicMenuLabel}
+                                onClick={() => void handleTogglePublicRoom(!isPublicRoom)}
+                                disabled={!conversationId || isTogglingPublic}
+                                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border-0 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 ${isPublicRoom ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                              >
+                                <span
+                                  className="absolute left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+                                  style={{ transform: isPublicRoom ? 'translateX(20px)' : 'translateX(0px)' }}
+                                />
+                              </button>
+                            </div>
+                          </div>
+
                           <div className="mb-3 rounded-2xl border border-gray-200 px-3.5 py-3">
                             <div className="flex items-center justify-between gap-3">
                               <div className="min-w-0 flex-1">
@@ -8987,6 +9766,84 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         </div>
                       </div>
                     </SlideSurface>
+
+                    {conversationId && isHashRushGameConfigured() ? (
+                      <>
+                        <SlideSurface
+                          open={menuOpen && (menuScreen === 'hash-rush' || menuScreen === 'hash-rush-ranking' || menuScreen === 'hash-rush-howto')}
+                          onClose={requestMenuBackStep}
+                          onRequestClose={handleMenuSurfaceRequestClose}
+                          ariaLabel={hashRushInviteCopy(uiLocale).pageTitle}
+                          nativeBackPriority={30}
+                          className="absolute inset-0 z-[70] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                          style={{ touchAction: 'pan-y' }}
+                          stopPropagation
+                        >
+                          <LivePhoneDemoPanelHeader
+                            title={hashRushInviteCopy(uiLocale).pageTitle}
+                            backLabel={roomManagementCopy.backButtonLabel}
+                            onBack={requestMenuBackStep}
+                          />
+                          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+                            <HashRushMenuPage
+                              uiLocale={uiLocale}
+                              game={hashRushRoomGame}
+                              playing={hashRushGameActive}
+                              viewerUserId={viewerUserId}
+                              onEnter={handleHashRushPageEnter}
+                              onCopyPcLink={HASH_RUSH_PAGE_URL ? () => void handleCopyHashRushPcLink() : undefined}
+                              onOpenRanking={handleHashRushRankingOpen}
+                              onOpenHowTo={handleHashRushHowToOpen}
+                            />
+                          </div>
+                        </SlideSurface>
+
+                        <SlideSurface
+                          open={menuOpen && menuScreen === 'hash-rush-ranking'}
+                          onClose={requestMenuBackStep}
+                          onRequestClose={handleMenuSurfaceRequestClose}
+                          ariaLabel={hashRushInviteCopy(uiLocale).ranking}
+                          nativeBackPriority={40}
+                          className="absolute inset-0 z-[80] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                          style={{ touchAction: 'pan-y' }}
+                          stopPropagation
+                        >
+                          <LivePhoneDemoPanelHeader
+                            title={hashRushInviteCopy(uiLocale).ranking}
+                            backLabel={roomManagementCopy.backButtonLabel}
+                            onBack={requestMenuBackStep}
+                          />
+                          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+                            <HashRushRankingPage
+                              uiLocale={uiLocale}
+                              conversationId={conversationId}
+                              viewerUserId={viewerUserId}
+                              active={menuOpen && menuScreen === 'hash-rush-ranking'}
+                            />
+                          </div>
+                        </SlideSurface>
+
+                        <SlideSurface
+                          open={menuOpen && menuScreen === 'hash-rush-howto'}
+                          onClose={requestMenuBackStep}
+                          onRequestClose={handleMenuSurfaceRequestClose}
+                          ariaLabel={hashRushInviteCopy(uiLocale).howTo}
+                          nativeBackPriority={40}
+                          className="absolute inset-0 z-[80] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                          style={{ touchAction: 'pan-y' }}
+                          stopPropagation
+                        >
+                          <LivePhoneDemoPanelHeader
+                            title={hashRushInviteCopy(uiLocale).howTo}
+                            backLabel={roomManagementCopy.backButtonLabel}
+                            onBack={requestMenuBackStep}
+                          />
+                          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+                            <HashRushHowToPage uiLocale={uiLocale} />
+                          </div>
+                        </SlideSurface>
+                      </>
+                    ) : null}
                       </div>
                     </SlideSurface>
           </div>
@@ -9020,6 +9877,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               className="relative min-h-0 h-full overflow-y-auto no-scrollbar py-2.5"
               style={chatViewportStyle}
             >
+              {/* The ad banner is hidden while Hash Rush is up, so the strip keeps no room for it. */}
               {nativeChatTopSpacerPx > 0 && (
                 <div
                   aria-hidden="true"
@@ -9212,6 +10070,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             </AnimatePresence>
 
             <AnimatePresence>
+              {/* The strip under Hash Rush is too short for it; a new message brings the strip down anyway. */}
               {showScrollToBottom && (
                 <motion.div
                   initial={{ opacity: 0, y: 8, scale: 0.98 }}
@@ -9464,14 +10323,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             )}
           </AnimatePresence>
 
+          {/* Hash Rush's 💬 up: the game's ready-made lines right above the
+              composer, over the game (47), sent as normal room messages. */}
+          {hashRushQuickChatVisible ? (
+            <div ref={hashRushQuickChatRef} className={`relative z-[48] shrink-0 border-t border-gray-100 bg-white`}>
+              <HashRushQuickChatBar uiLocale={uiLocale} onSend={handleHashRushQuickChat} />
+            </div>
+          ) : null}
+
           {/* Bottom Bar with STT / Text Composer Toggle */}
           <motion.div
-            layout={!isComposerOpen}
-            layoutDependency={isComposerOpen}
+            layout={!composerShown}
+            layoutDependency={composerShown}
             onLayoutAnimationComplete={syncNativeBottomBarClearance}
             ref={bottomBarRef}
             data-qa="live-demo-bottom-bar"
-            className="relative shrink-0 border-t border-gray-100 bg-white"
+            // Above the Hash Rush game while its 💬 has the composer up. Quick
+            // chat above it carries the line.
+            className={`relative shrink-0 border-t bg-white ${hashRushGameChatShown ? 'z-[48] ' : ''}${
+              hashRushQuickChatVisible ? 'border-white' : 'border-gray-100'
+            }`}
             transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
             style={{
               paddingTop: `${bottomBarTopPaddingPx}px`,
@@ -9492,11 +10363,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               </div>
             ) : (
             <AnimatePresence initial={false} mode="popLayout">
-              {isComposerOpen ? (
+              {composerShown ? (
                 <motion.div
                   key="composer-bottom-bar"
                   layout={false}
-                  layoutDependency={isComposerOpen}
+                  layoutDependency={composerShown}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
@@ -9571,6 +10442,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           data-qa="live-demo-composer-textarea"
                           defaultValue={composerDraftRef.current}
                           onChange={handleComposerDraftChange}
+                          onFocus={handleComposerTextareaFocus}
+                          onBlur={handleComposerTextareaBlur}
                           onKeyDown={(event) => {
                             // PC keyboard: Enter sends, Shift+Enter is a newline.
                             // Touch keyboard keeps Enter as a newline; IME Enter only commits.
@@ -9595,7 +10468,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
                         onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} /> : earphoneModeMenuItem ? (
+                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} voiceTalk={voiceTalkMenuItem} /> : earphoneModeMenuItem ? (
                       // No sendable conversation: no photo row, but the "+" still
                       // carries the earphone-mode row and the voice-mode switch.
                       <ConversationImageComposer conversationId="" allowPhoto={false} locale={uiLocale}
@@ -9657,7 +10530,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <motion.div
                   key="default-bottom-bar"
                   layout
-                  layoutDependency={isComposerOpen}
+                  layoutDependency={composerShown}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
@@ -9675,40 +10548,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -12 }}
                     transition={{ duration: 0.09, ease: 'easeOut' }}
-                    className={earphoneModeGate.controlVisible
-                      ? 'flex min-w-0 items-end justify-between gap-1 self-end pl-2'
-                      : 'self-end justify-self-start pl-2'}
+                    // Mirrors the right cell (image + keyboard): same gap, no
+                    // extra inset, so both sides sit at equal distances.
+                    className="flex min-w-0 items-center gap-1 self-end justify-self-start"
                   >
-                    <div className={`flex h-[33px] flex-col items-start justify-end gap-0${earphoneModeGate.controlVisible ? ' min-w-0' : ''}`}>
-                      <div className={`flex items-center gap-1.5${earphoneModeGate.controlVisible ? ' min-w-0 max-w-full' : ''}`}>
-                        {isUsageLimited ? (
-                          <>
-                            <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
-                              <div
-                                className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                                style={{ width: `${usagePercent}%` }}
-                              />
-                            </div>
-                            <span className={`text-sm leading-4 tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}${earphoneModeGate.controlVisible ? ' shrink-0' : ''}`}>
-                              {formatLivePhoneDemoUsageDuration(remainingSec)}
-                            </span>
-                          </>
-                        ) : (
-                          <span className={`text-sm leading-4 tabular-nums text-gray-400${earphoneModeGate.controlVisible ? ' min-w-0 truncate' : ''}`}>
-                            {formatLivePhoneDemoUsageDuration(usageSec)}
-                          </span>
-                        )}
-                      </div>
-                      <span className={`text-sm leading-4 tabular-nums text-gray-400${earphoneModeGate.controlVisible ? ' max-w-full truncate' : ''}`}>
-                        {storedMessageCountLabel}
-                      </span>
-                    </div>
+                    {/* Group voice talk lives where the usage counters used to be;
+                        the counters moved into the menu's usage row. */}
+                    {headerMode === 'conversation' && conversationId && voiceTalkAvailable ? (
+                      <VoiceTalkButton
+                        uiLocale={uiLocale}
+                        active={voiceTalkState.live || voiceTalkState.joined}
+                        onPress={handleVoiceTalkPress}
+                        sizePx={VOICE_MODE_SIDE_BUTTON_SIZE_PX}
+                      />
+                    ) : null}
                     {earphoneModeGate.controlVisible && (
                       <button
                         type="button"
                         data-qa="live-demo-earphone-mode-toggle"
                         onPointerDown={(event) => event.preventDefault()}
                         onClick={handleEarphoneModeToggle}
+                        disabled={voiceTalkState.joined}
                         aria-label={earphoneModeControlLabel}
                         aria-pressed={isEarphoneModeOn}
                         className={`relative inline-flex shrink-0 items-center justify-center transition-all duration-200 active:scale-95 ${
@@ -9748,7 +10608,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onPointerUp={handleMicPointerUp}
                       onPointerCancel={handleMicPointerCancel}
                       onClick={handleMicClick}
-                      disabled={isPreparingStart && !isConnecting}
+                      // In a voice talk the call runs speech-to-text itself.
+                      disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}
                       aria-label={isReady || isConnecting ? VOICE_MODE_STOP_LABEL : VOICE_MODE_START_LABEL}
                       className="relative flex items-center justify-center px-[18px] transition-all duration-200 active:scale-95 disabled:opacity-50"
                       style={{
@@ -9913,6 +10774,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           )}
         </div>
       </div>
+      </HashRushRoomContext.Provider>
+      </VoiceTalkRoomContext.Provider>
       </MessageReplyProvider>
     </PhoneFrame>
   )

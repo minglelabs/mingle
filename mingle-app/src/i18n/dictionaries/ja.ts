@@ -15,7 +15,6 @@ export const jaDictionary: BaseAppDictionarySource = {
     endpointTuningShortLabel: "短く",
     endpointTuningLongLabel: "長く",
     translationModelLabel: "翻訳モデル",
-    ttsModelLabel: "TTSモデル",
     adBannerPositionLabel: "広告の位置",
     adBannerPositionTopLabel: "上",
     adBannerPositionBottomLabel: "下",

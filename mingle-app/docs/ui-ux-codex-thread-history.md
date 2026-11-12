@@ -31,6 +31,571 @@ One entry per UI/UX fix, newest first. This is the only copy; add new entries he
 - 그대로: 연속 메시지에서 이름·사진을 첫 버블에만 보이는 동작.
 - 확인: `chat-bubble.test.ts`(펼치기 버튼 없음, 언어 둘 이상이면 toggle, 하나면 toggle 없음, 옆 칸에 시간), 타입 체크, lint. 실기기에서는 아직 확인하지 않았다.
 
+## 2026-11-12 채팅 버블: 더블탭으로 펼치기/접기, 펼치기 버튼 제거
+
+- 요청: 펼치기/접기를 더블탭으로 하고 버튼을 없앰. 시간은 다시 버블 옆으로, 읽음 표시와 두 줄로.
+- 수정: `CopyableBubbleSurface.tsx`에 `onDoubleTap` 추가(있으면 더블탭이 읽어주기·복사 대신 그것을 함). `ChatBubble.tsx` 언어가 둘 이상인 버블은 더블탭으로 펼치기/접기(접힌 버블, 펼친 각 줄 모두). 읽어주기는 길게 누르기 메뉴에 그대로 있음. 펼치기 버튼 삭제. 이름 줄의 시간을 없애고 버블 옆 칸을 체크(안 읽은 수) 위·시간 아래 두 줄(10px)로 되돌림.
+
+## 2026-11-12 채팅 버블: 상대 메시지의 시간을 이름 줄로
+
+- 요청: 시간 표시를 이름 옆(합쳐 볼 때는 국기 옆)에.
+- 수정(`ChatBubble.tsx`): 이름 줄이 있는 상대 메시지는 시간을 이름 줄 끝(이름·배지·국기 다음)에 11px로 표시하고, 버블 옆 칸에는 체크(안 읽은 수)와 펼치기만 남김. 펼쳐 볼 때는 국기가 이름 줄에 없으므로 시간이 이름 바로 옆. 이름 줄이 없는 내 메시지는 그대로 버블 옆에 시간.
+
+## 2026-11-12 채팅 버블: 옆 칸이 한 줄 버블 위로 튀어나오던 것
+
+- 증상: 체크·시간과 펼치기가 버블보다 살짝 위에 있어 보임. 옆 칸이 20px 두 줄(40px)이라 한 줄 버블(약 32px)보다 높아 위로 삐져나옴.
+- 수정(`ChatBubble.tsx`): 두 줄을 각 14px로, 아래 4px 여백. 옆 칸 32px로 버블 높이 안에 들어감. 펼치기의 누르는 영역은 `after:`로 넓게 유지.
+
+## 2026-11-12 채팅 버블: 읽음을 체크로, 읽음·시간 줄 맞춤
+
+- 요청: 읽음·시간·펼치기의 줄과 칸이 어긋나 보임. "읽음"을 체크로 바꾸고, 체크·안 읽은 수(1, 2)·시간을 같은 글씨 크기로.
+- 수정: `MessageReadReceipts.tsx` 모두 읽으면 체크 아이콘, 아니면 숫자를 시간과 같은 10px·medium으로 표시. `ChatBubble.tsx` 체크와 시간을 한 줄 세로 가운데에 맞추고, 버블 쪽에 체크를 둠(내 메시지: 시간·체크, 상대: 체크·시간). 펼치기와 함께 칸 전체를 버블 쪽 끝에 정렬. 두 줄짜리 시간(오래된 메시지)도 버블 쪽으로 정렬.
+
+## 2026-11-12 채팅 버블: 읽음·시간을 한 줄로
+
+- 증상: 언어를 합쳐 볼 때 한 줄짜리 버블 옆 칸이 읽음/시간/펼치기 세 줄이라 버블보다 높아, 버블이 이름 아래로 떨어져 보임.
+- 수정(`ChatBubble.tsx`): 읽음 수와 시간을 한 줄(`data-chat-bubble-meta-line`)에 나란히 두고 펼치기는 그 아래. 옆 칸이 두 줄이 되어 한 줄 버블 높이를 넘지 않음. 시간은 읽음 쪽에 붙게 정렬.
+
+## 2026-11-12 보이스톡: 화면이 다시 열릴 때 통화 자리를 잘못 비우던 문제
+
+- 증상: 통화 중 대화방 언어를 바꾼 뒤 자막 버블이 확정되지 않음(미확정 발화만 뜨고 메시지로 남지 않음).
+- 원인: 방 화면이 다시 로드되면 앱의 이전 상태 조회 응답이 "아직 통화 중" 알림보다 먼저 올 수 있고, 패널이 이를 "재시작으로 버려진 통화"로 보고 서버에 나가기를 보냄. 서버에는 자막을 읽는 사람이 없어져 확정 줄이 저장되지 않음.
+- 수정(`VoiceTalkPanel.tsx`): 버려진 통화 판단을 2.5초 뒤에 다시 확인하고 나가기를 보냄. 통화 중인데 서버 명단에 내가 없으면 자리를 다시 잡고 통역 켬 상태를 다시 알림.
+
+## 2026-11-12 — 해씨: 1해씨 단위로 빠지게, 자세한 사용 내역, 통역 첫 사용 비용 안내
+
+- Id: `2026-11-12-hash-whole-coins-detail-tip`
+- Hash leave in whole units, without overcharging. Charges stay exact. The shown balance is rounded down, so the first 0.1 spent takes a whole Hash off it, and the next spends change nothing until that Hash is used up. The history, the usage summary and the room's per-member usage now count each spend the same way: the whole Hash it took off the shown balance (`shownCoinsDelta`), so they add up to what left the balance. (A first try rounded every charge up to 1 Hash; that overcharged short lines and was dropped.)
+- In the Hash history, opening a room's day now shows, per feature, the time used, the count and the Hash. The features are: voice talk captions, voice talk interpretation audio, speech recognition, translation read aloud, typed message translation, other translation, and photo. The group's first and last time are shown too.
+- In a voice talk, the first time interpretation or its read-aloud is turned on (once per device per switch, only while Hash are charged), a tip under the buttons says about how many Hash a minute costs. It closes on 알겠어요 or after 10 seconds. Copy is in 15 languages (`src/i18n/coin-detail-copy.ts`).
+- Physical-device verification pending.
+
+## 2026-11-12 — 보이스톡 자막: 폰 STT와 같은 번역 문맥, 같은 문장 분리
+
+- Id: `2026-11-12-voice-caption-same-context`
+- Caption lines were cut too often, and translations were worse than a phone's. The interpreter could not read the speaker's split setting: the route was new, and the running dev server had not picked it up, so it fell back to its own default (1.5 s). It also sent each clause without the context a phone sends.
+- Each request now carries what a phone's own speech carries: the lines of the last 10 seconds and the one right before; the line's previous translation; the previous line's last piece while nothing is fixed; the languages Soniox labeled in the line; and the speaker's translation model.
+- When the setting cannot be read, the fallback is the phone's default (auto-detect step 3, 3000 ms).
+- Lines are cut only where Soniox ends them, as on the phone. Clauses only feed the translation and read-aloud inside one bubble.
+- Physical-device verification pending.
+
+## 2026-11-12 — 보이스톡 자막: 켠 사람만 보고, 말한 사람 본인 설정으로 문장 분리
+
+- Id: `2026-11-12-voice-caption-viewers-and-split`
+- A caption was saved for the readers and for the speaker, so a speaker who never turned interpretation on still found their own lines in the room. Now only the people with interpretation on read a line; the speaker reads their own only when they have it on themselves.
+- The interpreter cut lines with its own fixed rule (1.5 s). It now asks the app for the speaker's own setting (`/api/internal/voice/speaker-stt`): the auto-detect step, mapped to Soniox endpoint latency/sensitivity and max delay as mingle-stt does, or the silence threshold, where a finalize request is sent after that silence. Lines in a call are cut the way the same person's phone cuts them.
+- Physical-device verification pending.
+
+## 2026-11-12 — 보이스톡 유령 자막, 한 줄 버블과 이름 사이 빈칸
+
+- Id: `2026-11-12-voice-caption-ghosts-one-row-bubble`
+- Ghost captions: the call keeps its recent lines and hands them back whole whenever the room reopens or interpretation is turned on. The room aged each line from the moment it first saw it, so an old unfinished line came back as live for a few seconds. Lines are now noted for the whole app session, even while interpretation is off. The lines already there the first time the app sees the call count as old, so only a line whose words change in front of the viewer is drawn live.
+- Gap under the name on a one-language bubble: the column beside the bubble (read count, time, fold button) was taller than a one-row bubble, which pushed the bubble down. A bubble with one language row has nothing to fold, so it no longer shows the fold button, and the column fits.
+- Physical-device verification pending.
+
+## 2026-11-12 — 보이스톡 자막: 대화방 언어 전부로, 절 단위 번역·읽어 주기
+
+- Id: `2026-11-12-voice-caption-room-languages-clauses`
+- A caption was translated only into the readers' languages. So a Korean speaker in a Korean/English room got a caption with no translation row, and the bubble sat apart from the name. The interpreter now asks the app (`/api/internal/voice/translate`) for the room's own translation. That covers all the room's languages (the language picker's union), using the same clause-by-clause tail fill a phone uses for its own speech (`/translate/finalize`, `bubbleTail`). Each clause is read aloud as soon as it is fixed, and the final reads only the rest. Live caption bubbles show the translations as they arrive. Physical-device verification pending.
+
+## 2026-11-12 — 초대 카드: 끝난 게임은 안 뜨고, 거절은 앱을 다시 켜도 유지
+
+- Id: `2026-11-12-invite-cards-ended-and-declined`
+- The Hash Rush invite card kept coming back after the game was over: a heartbeat written before the time-zone fix left the room's game "last seen" hours in the future, so it looked live until then. A last-seen time more than a minute ahead of now now counts as over (and a new game may replace it); the live rooms list uses the same rule. A declined invite card, for Hash Rush and for voice talk, is now remembered on the device per room: closing and reopening the app does not bring it back for that game or call. The room's message (`참여하기`) and the room menu still join it; a new game or call offers a card again. Web and server only. Physical-device verification pending.
+
+## 2026-11-12 — 보이스톡 자막: 끊긴 줄이 화면에 남던 문제
+
+- Id: `2026-11-12-voice-talk-caption-drafts-age-out`
+- In a call with `통역` on, unfinished caption bubbles piled up in the room ("I don't kn", "So I was", each with a cursor) and never turned into messages. The interpreter had left mid-sentence (its idle leave, then joined again), so those lines never finished, and the phone kept every unfinished line as a live bubble. Now only a person's newest unfinished line is live, an unfinished line whose words stop for 6 s goes away, and a finished one that is not replaced by its saved message within 15 s goes away too. The interpreter no longer posts its old per-room usage report (it always got a 404; billing goes line by line). Web and interpreter only. Physical-device verification pending.
+
+## 2026-11-12 — 보이스톡 자막: 일반 버블과 같은 모양, 실시간 스트리밍, 버튼 깜빡임 제거
+
+- Id: `2026-11-12-voice-talk-caption-bubbles-stream-no-flicker`
+- Three voice talk fixes. (1) A call caption is the room's ordinary bubble in another color (sky blue), nothing else: the dashed border is gone, and a caption is saved with the same fields a spoken message has (its start time orders it, the same speaker fields), so the name and the bubble sit as they do for any message. (2) Captions now stream like the room's speech-to-text: while someone talks, the people with `통역` on see their words grow in a live bubble, which the saved message (with its translation) replaces in place; the interpreter gives a line one id from its first word to its room message. (3) Pressing `통역` or read-aloud no longer flashes off and on: the call's state reports ran ahead of the press and flipped the button back for a moment (the same as the old Start button); a press now holds until a report agrees, at most 3 s, and the call is switched before the server. Needs the new app build (the speaker on each live line). Physical-device verification pending.
+
+## 2026-11-12 — 해시러시 대기실: 설정은 모두에게, 컴퓨터는 빈자리마다
+
+- Id: `2026-11-12-hash-rush-lobby-settings-for-all-computers-per-seat`
+- In a hosted Hash Rush lobby, everyone now sees the room's settings (solo/team, map, the computers' level), not only the host; for the others they are dimmed and cannot be pressed, under `방장만 바꿀 수 있어요`, and there is no start button. The `햄스터 수` stepper is gone: the seat list shows every seat instead. After the people come the computers the host put in (`🤖 컴퓨터 · <level>`, with `빼기` for the host), then each open seat, where the host has `+ 컴퓨터 넣기` (others see `빈자리`). A room keeps at least two hamsters, so the last computer beside a lone player cannot be removed. The count is the game server's existing round size (`fill`): no server change. The card scrolls when the list gets long (the scroll fix of `2026-11-12-hash-rush-invite-link-lobby-scroll-howto-shots`). Web only. Physical-device verification pending.
+
+## 2026-11-12 — 해시러시 입장 실패: 시간대 버그
+
+- Id: `2026-11-12-hash-rush-join-time-zone`
+- Entering Hash Rush hung on "게임에 들어가는 중" and ended in "게임 서버에 연결하지 못했습니다" (iPhone 11, local DB). The app server refused every join after a game's first 45 s (`hash_rush_join_conflict`). The game's "last seen" column is a timestamp without time zone holding UTC, and the raw SQL that writes and compares it passed plain dates, which the database shifted by its own time zone (Asia/Seoul locally, +9 h): the game read as live while the update's "still live" check never matched. Times now go in as UTC explicitly (also the rankings' `played_at`). Server only. A database in UTC (the Supabase default; not checked for production) never shifted, so it mostly bit the local one. Physical-device verification pending.
+
+## 2026-11-12 — 해시러시: 채팅 입력창 위 대화록 높이
+
+- Id: `2026-11-12-hash-rush-talk-panel-same-height`
+- In the Hash Rush game, the conversation over the room's composer (after the 💬 button) showed fewer lines than the one opened by touching a floating line: it was capped at min(34vh, 230px), the read-back one at min(45vh, 70% of the map). Both are now the read-back height; over the composer it also never reaches past the back pill at the top when the composer and keyboard stand high. Web only. Physical-device verification pending.
+
+## 2026-11-12 — 해시러시: 채팅 2초 페이드, 대기실 버튼 즉시 반응, 초대 카드 터치
+
+- Id: `2026-11-12-hash-rush-chat-fade-lobby-taps-invite-card`
+- Four Hash Rush fixes from phone testing. (1) The room's lines floating over the game now stay crisp 2 s and faint 2 s (was 5 s and 5 s), and a tap anywhere but on a line puts the floating lines away at once (a tap on a line still opens the conversation). (2) The host's lobby choices (solo/team, map, computers' level, hamsters, your team) show at once on a press and give way under the finger; the game server's next lobby is the truth again, and a choice it never answers is dropped after 4 s. Before, every press waited for the server's reply, slow over the dev tunnel. (3) The invite card (`<name>님이 해시러시를 시작했습니다` with `거절` / `참여하기`) did nothing when tapped on an iPhone 11: it was a fixed layer inside the room screen, which slides in with a transform, where iOS WebKit can draw a fixed layer but miss its taps. It is now drawn on the page itself. Web only. Physical-device verification pending, above all the invite card on the iPhone 11.
+
+## 2026-11-12 — 해시러시: 영구 초대 링크, 대기실 스크롤, 게임 방법 스크린샷
+
+- Id: `2026-11-12-hash-rush-invite-link-lobby-scroll-howto-shots`
+- Four Hash Rush changes. (1) The Hash Rush page's `PC에서 하기 링크 복사` is now `초대 링크 복사` ("보내 주면 누구나 PC·폰 브라우저로 들어와요. 대화방이 있는 동안 계속 쓸 수 있어요"). The link (`/api/hash-rush/invite/<code>`) never expires: it is signed for the chat room, and stops working (a plain "this game link no longer works" page) once the room is deleted. Anyone who opens it plays in a browser: a member of the room under their name, anyone else as `Guest123`. Each visit gets a fresh 2-hour ticket. Guests are not ranked. The web page joins the app's room as a guest of the host: it never hosts while an app is in, and the room passes only to someone with host controls (game server `feat/hosted-rooms`). The copied toast says so, in 15 languages. (2) The lobby card did not scroll: it sat in a grid row as tall as its content, so its max height never applied and the bottom was cut off. It now scrolls inside the screen. The open-seat row reads `빈자리 7개 · 친구를 더 부를 수 있어요` (en `7 seats open · invite friends`) instead of a bare `빈자리 7`. (3) The pad, the bonk and throw buttons and the touch hint show only during a round, not over the lobby. (4) `게임 방법` has three phone-size shots of the game between its lines: the map with the sunflower, home, portals and the touch controls (after the controls), a hamster picking up a seed (after the win rule) and the beach map (after the maps line), each with a caption (ko/en/ja; Korean shots for Korean, English shots otherwise). Web, server and the game server; no app rebuild. Physical-device verification pending.
+
+## 2026-11-11 — 보이스톡 패널: 아이콘 버튼 네 개, 읽어 주기 분리
+
+- Id: `2026-11-11-voice-talk-panel-four-icon-buttons`
+- The call panel's bottom row is four round icon buttons (64x48, 16px apart), no words: the mic (red when on, gray with a slashed mic when off), interpret (the languages icon; green when on), read-aloud (a speaker, or headphones when earphones are in; amber when on, a muted speaker when off, dimmed while interpret is off) and leave (gray). Each says its state to screen readers in the 15 languages. Read-aloud is now its own switch: interpret alone gives the captions, and read-aloud (on by default while interpreting) also plays the translations. With it off the phone leaves its language's interpreter track, nothing is ducked for it, and the interpreter neither reads that language aloud nor charges for it when nobody in it listens. The panel no longer shows the "turn on interpret" sentence. Coming back to the room shows interpret and read-aloud as the app has them. Needs the new app build (the read-aloud switch). Physical-device verification pending.
+
+## 2026-11-11 — 보이스톡 통역을 서버 통역봇으로
+
+- Id: `2026-11-11-voice-talk-server-interpreter`
+- Supersedes the phone-side writing down of `2026-11-11-voice-talk-interpret-captions` (same evening, never released): turning `통역` on made the other people's phones start their own speech-to-text, which felt like controlling someone else's phone. Interpretation now runs on the server. The interpreter (`mingle-voice-agent`, retired this morning and back) joins a voice talk while someone in it has `통역` on, listens to each person's call audio and writes it down once (Soniox `stt-rt-v6`), and translates each line into the languages of the people with `통역` on. Each line becomes the same sky-blue dashed caption bubble as before, shown only to them and to the speaker; a line nobody else reads is dropped. The translation is read aloud on a per-language track of the call that only those listeners' phones subscribe to, so it is call audio: the phone's echo canceller keeps it out of the microphone and the other side never hears their own words translated back. The other voices drop while a translation plays. No phone runs speech-to-text in a call: the room's Start/Stop and speaker button stay locked, and a running session stops on joining. Charges: the line's speech-to-text goes to the speaker if they have `통역` on, else the first other reader; each translation read aloud goes to each listener. In production the interpreter runs inside the app's single Railway service as a fourth process (restarted by itself if it stops, not part of the health check, not started without LiveKit/Soniox/Gemini keys); `scripts/devbox up` starts it locally. Needs the app deploy (web, server and the Railway image); the phones need no new build beyond today's. Physical-device verification pending.
+
+## 2026-11-11 — 보이스톡 통역 버튼과 켠 사람만 보는 자막
+
+- Id: `2026-11-11-voice-talk-interpret-captions`
+- Supersedes the rule "a call never starts or stops speech-to-text" (`2026-11-11-voice-talk-keyboard-menu-same-as-button` era). In a voice talk the room's own `Start/Stop` and the speaker button are locked (grayed), so there is one place for translation: the panel. The panel's bottom row is now three buttons: `내 목소리 켜짐/꺼짐` (the voice sent into the call, red when on), `통역 켜짐/꺼짐` (green when on, gray when off; en `Interpret on/off`, 15 languages) and a gray `나가기`. With `통역` on, the viewer reads captions and hears translations read aloud (the speaker mode's reading, while the call runs; the other voices drop to 25% only while a translation is read, as before). While anyone in the call has it on, every phone in the call that has its mic on writes down its own speech with the same speech-to-text as the room's Start does, so each line has one author, one translation and no echo of the other side. Those lines are call captions: the server tags each with the people who had `통역` on at that moment plus the speaker (`metadata.voiceCaption.viewers`, set server-side from the call's participants, never by the phone); only they receive it in history, live updates and unread counts. Everyone else in the room, including a member who is not in the call, never gets it: it is not the room's latest message, not unread, not pushed, not in the title generator or exports, and its live draft is not sent on the room channel. It appears in the same message list as an ordinary bubble in sky blue with a dashed border. Someone who turns `통역` on later sees only what was said after. The speech-to-text is charged to the reader: the speaker when they have `통역` on themselves, else the first other reader (the server names who with `POST /conversations/{id}/voice/interpret`, which also stores each person's switch; the phone sends that billing identity with its speech-to-text session). Nobody else reading means the phone writes nothing down. After the call, Start/Stop and the speaker button return as they were. Android reads translations through the call's own sound path (voice-communication audio) while in a call, so the phone's echo canceller removes them from the microphone and the other side does not hear its own words translated back; iOS already plays through the call's session. Needs the new app build (Android sound path). Physical-device verification pending, above all: the echo of read-aloud translations on speaker, on the Galaxy S9 and an iPhone.
+
+## 2026-11-11 — 보이스톡 패널: 사람 있는 자리만, 15개 언어
+
+- Id: `2026-11-11-voice-talk-seats-words-15-languages`
+- From a review of the voice talk store screenshot. (1) The panel always drew 8 seats, so a 1:1 call was two faces and six `빈 자리` circles. It now draws the people in the call and one open seat after them (a dashed circle with a plus, `빈 자리`), centered; a full call has no open seat. The top row's `보이스톡 · 2/8` still says how many fit. (2) The panel, its start/join/leave dialogs, the incoming card and the room's `보이스톡을 시작했습니다` message were in Korean and English only, so every other language read English. They are now in all 15 languages (`src/i18n/voice-talk-copy.ts`; e.g. ja `ボイストーク`, de `Sprachanruf`, ar `مكالمة صوتية`). The room's speech-to-text button stays `Start` / `Stop` in English everywhere, as decided before, and the captions-off hint names it `Start`. (3) The panel's `나가기` was pale red next to the red mic-on, so both read as warnings: it is now gray. The mic stays red when on. (4) The mic button says what it switches: `내 목소리 켜짐` / `내 목소리 꺼짐` (en `My voice on` / `My voice off`), so it is not mistaken for the speech-to-text Stop under it. Web only. Physical-device verification pending.
+
+## 2026-11-11 — 해시러시 메뉴 페이지, 방장 대기실, 랭킹
+
+- Id: `2026-11-11-hash-rush-menu-page-host-lobby-rankings`
+- Partly supersedes `2026-11-11-hash-rush-room-invite-and-quit`. (1) The room menu has one `🌻 Hash Rush` item, which opens a page from the right like `디폴트 표시 언어`. The page shows the room's game status (`지금 진행 중인 게임이 없어요` / `<name>님의 게임이 진행 중이에요` / `게임에 참여 중이에요`), a main button (`게임 만들기` / `참여하기` / `게임으로 돌아가기`), and rows for `랭킹`, `게임 방법` and `PC에서 하기 링크 복사`. That button is the choice, so the separate start/join confirm modal is gone. The invite card, the room message and its Join button stay. (2) `게임 방법` is its own page with the game's own tagline and rules, from the game's i18n in ko, en, ja, zh-Hans and zh-Hant. It also opens as a sheet over the game from a `? 게임 방법` chip in the lobby. (3) The app's game rooms now have a host (game server `feat/hosted-rooms`; the app joins with `host=1`). The first person in hosts and has a 👑 방장 tag. Nothing starts by itself: the host's lobby has 개인전/팀전, a map, the computers' level, the number of hamsters (2–8) and a big `게임 시작` button. In team play everyone picks their own side under `내 팀`, and a start with only one side says `팀이 둘 이상이어야 해요`. The host can hand the room over with `방장 넘기기` on a row, which asks `<name>님에게 방장을 넘길까요?`. When the host leaves, the room passes to the next person. Everyone else sees `방장 <name>님이 시작하기를 기다리는 중…`. After a round, the result shows and the room goes back to the lobby to wait for the host. With an old game server, the app falls back to the self-running room. (4) Rankings have `이 대화방` and `전체` tabs: most wins, then fewer rounds, then more seeds, with medals for the top three. The viewer's row is marked `나`, and shown under the list when outside the top 50. They are filled from the game server's round reports (`POST /api/hash-rush/results`, secret `HASH_RUSH_RESULTS_SECRET`). There is one row per person per round, and computers are not kept (new table `app_hash_rush_round_players`, migration `20261111170000_add_hash_rush_round_players`). Needs the game server deploy and its `RESULTS_URL`/`RESULTS_SECRET` for the host lobby and rankings. Web and server only; no app rebuild. Physical-device verification pending.
+
+## 2026-11-11 — 해시러시 방 메시지, 초대 카드, 나가기
+
+- Id: `2026-11-11-hash-rush-room-invite-and-quit`
+- Hash Rush now starts in a room the way a voice talk does. The room menu's Hash Rush item asks first, low on the screen: `대화방에서 해시러시를 시작하시겠습니까?` (시작하기 / 취소), or `해시러시에 참여하시겠습니까?` when the room already has a game running. A game this phone is in just comes up again. One game per room: the menu joins the running game instead of starting another. The first player to join leaves a room message, `<name>님이 해시러시를 시작했습니다.`, as a card with a `참여하기` button (it shows `참여 중` while playing and `종료된 해시러시` after). That is the same card as a voice talk's, with a game icon. Everyone else who has the room open gets a card low on the screen once (`거절` / `참여하기`); declining leaves the message's button as the way in. The ad banner hides while a dialog or the card is up. The game now has a `나가기` pill next to the `채팅` back pill. It asks `해시러시에서 나가시겠습니까?` (게임을 종료하고 채팅으로 돌아가요. / 취소 / 나가기). Quitting ends the game for this phone, rather than lowering it like the back pill does, and the same game is not offered to this viewer again. How "running" is known: each phone in the game tells the app server every 15 s. A game nobody has reported for 45 s is over, and the next join starts a new one with a new message. The search tab's "playing Hash Rush" uses the same 45 s, instead of 15 minutes after the last ticket. New columns `hash_rush_session_id` and `hash_rush_started_by_user_id` on `app_conversation_channels` (migration `20261111150000_add_hash_rush_session`, additive). Korean, English and Japanese copy. Web and server only; no app rebuild needed. Physical-device verification pending.
+
+## 2026-11-11 — 보이스톡 Android 음량 20%
+
+- Id: `2026-11-11-voice-talk-android-volume-lower`
+- On the Galaxy S9 a call was still too loud at 45%. Android call voices now start at 20% inside the app (about -14 dB); iOS stays at 100%. Needs the new app build. Physical-device verification pending.
+
+## 2026-11-11 — 보이스톡 음량 슬라이더 제거, 마이크 색
+
+- Id: `2026-11-11-voice-talk-volume-and-mic-colors`
+- The call volume slider is gone: it looked poor, and the user did not want it. Volume is the phone's hardware buttons again. Android plays calls much louder than iOS, even at the lowest system volume, so on Android every call voice now starts at 45% inside the app (iOS stays at 100%). The mic button's two states were hard to tell apart: `마이크 켜짐` is now red with white text, like the recording STT button, and `마이크 꺼짐` is pale gray with gray text. Needs the new app build for the Android volume. Physical-device verification pending.
+
+## 2026-11-11 — 방 번호로 검색해서 들어가기, 비공개방은 참여 요청
+
+- Surface: 검색 탭(`search/unified-search.tsx`, `search/room-code-result.tsx`), 대화방 관리(`LivePhoneDemo.tsx`), 서버(`app-conversations.ts`, `public-room-controller.ts`, `push-notifications.ts`), DB(`room_code`, `app_conversation_join_requests`).
+- 방 번호: 모든 방에 7자리 번호(예: `482 1937`). 순서대로가 아니라 무작위라 옆 번호로 다른 방을 찾을 수 없다. 기존 방에도 모두 채웠다. 대화방 관리 화면 맨 위에 크게 보이고 복사할 수 있다.
+- 검색: 검색창에 7자리 숫자(`4821937`, `482 1937`, `482-1937`)를 넣으면 결과 맨 위에 "방 번호로 찾기" 카드.
+  - 공개방 또는 이미 멤버인 방: 방 이름·인원·언어 + "참여"/"열기". 누르면 바로 들어간다.
+  - 비공개방: 자물쇠 + "비공개 방"(이름·언어는 숨김) + "참여 요청". 보내면 "요청을 보냈어요 · 멤버가 수락하면 들어갈 수 있어요". 거절된 뒤에는 "다시 요청".
+- 참여 요청: 방 멤버 모두에게 푸시 "참여 요청 · {이름}님이 '{방}' 방에 참여를 요청했어요". 대화방 관리 화면에 요청 목록과 수락/거절. 수락하면 요청한 사람이 멤버가 되고 "참여 수락" 푸시를 받는다. 정원·차단 검사는 공유 링크 참여와 같다.
+- 공개 스위치는 이제 공유 링크를 같이 켜지 않는다(공개방 참여가 방 id로 바로 처리되므로).
+- 아직: 방 안에서 요청이 왔다는 표시(메뉴 점 등)는 없다. 푸시와 대화방 관리 화면으로만 본다.
+- Verification: 타입 검사, 단위·배선 테스트, 로컬 DB 마이그레이션. 실기기 확인은 아직.
+
+## 2026-11-11 — 공개방, 검색 탭 "지금 라이브", 해시러시 컴퓨터 링크
+
+- Surface: 검색 탭(`search/unified-search.tsx`, `search/live-rooms.tsx`), 대화방 관리·메뉴(`LivePhoneDemo.tsx`), 서버(`app-conversations.ts`, `public-room-controller.ts`, `hash-rush-controller.ts`), DB(`is_public`, `hash_rush_active_at`).
+- 검색 탭: 검색어가 없을 때 맨 위에 "지금 라이브" 가로 줄. 보이스톡 중이거나 최근 15분 안에 해시러시에 들어간 방이 나온다. 공개방이 먼저, 사람이 많은 방이 먼저. 그 아래는 기존 그대로 사람 검색과 포스팅 정사각형 그리드.
+- 공개방 카드: 방 이름, 언어, 인원, 보이스톡 인원·해시러시 배지, "참여"(멤버면 "열기"). 누르면 바로 멤버가 되고 방이 열린다. 정원·차단 검사는 공유 링크 참여와 같다.
+- 비공개방 카드: 자물쇠 + "비공개 방 · 초대받아야 들어갈 수 있어요"와 보이스톡·해시러시 배지만. 이름·언어·멤버는 보이지 않고 누를 수 없다.
+- 공개 설정: 대화방 관리 화면의 공유 링크 위에 "공개방" 스위치. (켜면 공유 링크도 켜지던 동작은 방 번호 작업에서 뺐다.)
+- 해시러시 컴퓨터 링크: 방 메뉴의 해시러시 아래 "컴퓨터로 해시러시 하기". 그 사람의 입장권(2시간)이 담긴 웹 게임 링크를 복사한다. 컴퓨터 브라우저에서 열면 같은 방 게임에 그 사람으로 들어간다.
+- Verification: 타입 검사, 단위·배선 테스트. 실기기 확인은 아직.
+
+## 2026-11-10 — 보이스톡: 패널 먼저, 참여는 패널에서 / 키보드 + 메뉴 / 시작 알림 / 목록 표시
+
+- Surface: 대화방(`LivePhoneDemo.tsx`), 보이스톡 판(`VoiceTalkPanel.tsx`), 키보드 모드 + 메뉴(`ConversationImageComposer.tsx`), 대화목록(`conversation-list.tsx`), 서버(`voice-call-controller.ts`, `push-notifications.ts`, `app-conversations.ts`).
+- 패널 먼저: 전화 버튼(음성 모드 좌하단, 키보드 모드 + 메뉴의 "보이스톡")은 판만 띄운다. 판의 "참여"를 눌러야 통화에 들어가고, 그때 STT도 같이 켜진다. 아무도 없으면 "보이스톡 · 아무도 없어요" + 닫기/참여.
+- 받는 쪽: 누가 통화를 시작하면 방의 다른 사람에게 푸시 "보이스톡 · {이름}님이 보이스톡을 시작했어요"(15개 언어)가 가고, 누르면 그 방이 열린다. 방에 들어오면 판이 자동으로 떠서 참여 / 거절 / 그냥 보기(접어 두기) 중 고를 수 있다. 거절한 통화는 새 통화가 시작될 때까지 다시 뜨지 않는다(전화 버튼으로 다시 열 수 있음).
+- 키보드 모드: + 메뉴에 "보이스톡" 줄을 이어폰 줄 뒤, 음성 모드 전환 앞에 넣었다. 통화 중이면 초록 아이콘 + 점.
+- 대화목록: 보이스톡 중인 방은 초록 전화 배지 + 인원 수, 이 폰에서 STT만 켠 방은 주황 마이크 "STT" 배지. 서버가 목록에 `voiceCallParticipantCount`를 실어 보내고, 통화 참여·나가기 때 방 사람들의 목록에 새로고침 신호를 보낸다.
+- 아직: iOS 기본 통화 화면(CallKit)식 수신 화면은 없다. 알림은 일반 푸시다.
+- Verification: 타입 검사, 서버·배선 테스트.
+
+## 2026-11-10 — 보이스톡과 STT 통합: 마이크 하나, 글은 대화방 메시지로
+
+- Surface: 대화방(`LivePhoneDemo.tsx`), 보이스톡 판(`VoiceTalkPanel.tsx`), 네이티브(`rn/src/voice/VoiceRoomHost.tsx`, `NativeSTTModule.swift`).
+- Issue: 보이스톡 판에 자막 줄과 마이크 버튼이 따로 있었다. 대화방의 STT(메시지)와 같은 일을 하는 기능이 둘이었다.
+- Resolution: 판에서 자막 줄과 마이크 버튼을 없앴다. 판에는 자리(8명), 통역, 나가기만 남는다. 말한 내용은 대화방 메시지로만 보인다.
+  - 보이스톡에 연결되면 STT도 같이 켠다(이미 켜져 있으면 그대로).
+  - 통화 중에는 Start/Stop 버튼이 마이크 하나를 맡는다: Stop이면 통화 마이크도 꺼지고(듣기만), Start면 다시 켜진다.
+  - 통화에서 나가면, 통화가 켠 STT만 같이 끈다. 먼저 켜 둔 STT는 그대로 둔다.
+- Native (iOS): 통화 중에는 STT가 멈춰도 오디오 세션을 놓지 않는다(`setVoiceCallActive`). 통화 중 STT는 세션을 `.voiceChat`로 유지하고 STT 엔진의 음성 처리는 끈다(통화 쪽 에코 제거와 겹치지 않게). 통화 시작·종료 때 STT 캡처를 다시 건다.
+- Verification: 타입 검사, 배선 테스트. 통화와 STT가 실제로 마이크를 같이 쓰는지는 실기기에서 두 대로 확인이 필요하다.
+
+## 2026-11-10 — 보이스톡 버튼을 하단 바 왼쪽으로, 사용량은 메뉴로
+
+- Surface: 대화방 하단 바·상단 바·햄버거 메뉴(`LivePhoneDemo.tsx`), `VoiceTalkPanel.tsx`.
+- Issue: 보이스톡 버튼이 상단 바에 있어서 대화방 기능으로 잘 보이지 않았다. 하단 바 왼쪽은 사용시간/메시지 수 표시가 차지하고 있었다.
+- Resolution: 상단 바의 전화 버튼을 없애고, 하단 바 왼쪽(사용시간/메시지 수 자리)에 44px 전화 버튼(`VoiceTalkButton`, `data-qa="live-demo-voice-talk-button"`)을 넣었다. 통화 중이면 초록색 + 초록 점. 이어폰 모드 버튼은 그대로 마이크 왼쪽에 있다.
+- Usage: 사용시간/메시지 수는 햄버거 메뉴의 "사용량" 줄(`data-qa="live-demo-menu-usage"`)로 옮겼다. 사용 제한이 있을 때는 진행 막대 + 남은 시간을 같은 줄에 보여준다. 라벨은 15개 언어 모두 추가.
+- Follow-up (실기기): 왼쪽 셀이 `justify-between` + `pl-1`이라 전화·이어폰 버튼이 벌어져 좌우 간격이 달랐다. 오른쪽 셀(사진·키보드)과 똑같이 `gap-1`, 여백 없음으로 맞춰 좌우 대칭으로 만들었다.
+- Verification: 타입 검사, `live-phone-demo.voice-talk-bottom-bar.wiring.test.ts`.
+
+## 2026-11-10 — Hash Rush 네이티브 이식 4단계: iframe 시트와 v2 대화방 배치 코드 삭제
+
+- Surface: 대화방(`LivePhoneDemo.tsx`), 보이스톡 판(`VoiceTalkPanel.tsx`), 옛 시트(`LivePhoneDemo/HashRushSheet*`).
+- Issue: 네이티브 게임(1~3단계)이 들어온 뒤로 iframe 시트는 여는 곳이 없는 죽은 코드였다. 시트용 대화방 배치(시트 자리 슬롯, 100px 대화 띠, 말풍선 한 개 강제, 띠 맨 아래 고정, 보이스톡 판 강제 접기)도 같이 남아 있었다.
+- Resolution: `HashRushSheet.tsx`, `HashRushSheet.logic.ts`, `HashRushSheet.chat.ts`와 그 테스트를 지웠다. 대화방에서 `hashRushOpen`/`hashRushActive` 상태와 위 배치 코드를 모두 걷어냈고, `VoiceTalkPanel`의 `forceFolded`도 없앴다. 화면에 보이는 동작은 바뀌지 않는다(게임은 `src/features/hash-rush/`의 네이티브 층 하나뿐).
+- Kept: 대화방 메시지를 게임에 넘기는 `hash-rush-room-chat.ts`(테스트는 `hash-rush-room-chat.test.ts`로 옮김), 빠른 채팅 테스트(`features/hash-rush/quick-chat.test.ts`), 게임이 떠 있는 동안 토스트를 가리는 `html[data-hash-rush-open]` 규칙.
+- Docs: 저장소 루트에 따로 생겼던 `docs/ui-ux-codex-thread-history.md`(보이스룸·Hash Rush 시트·v2·1~2단계 기록)를 이 파일로 합치고 지웠다. 아래 섹션들이 그 내용이다.
+- Verification: 타입 검사, 단위·배선 테스트 통과. 실기기 확인은 아직.
+
+## 2026-11-01 — Hash Rush 네이티브 이식 1단계 실기기 문제 수정, 2단계: 대기실·점수표·결과·우승 카드
+
+요구사항은 `docs/hash-rush-in-app-uiux.md`의 "네이티브 이식 (2026-11-01)" 절이다. 게임 서버 쪽은 hash-rush `feat/g2-server-rooms` `1e731b8`이다.
+
+### 1단계 실기기 문제 수정
+- **문제 1 (버튼이 집 줄을 덮음)**: 화면을 상태 표시줄 → 맵 → 조작 띠로 나눴다.
+  - 맵은 상태 표시줄과 조작 띠(방향키 148px + 홈 인디케이터 여백) 사이에서 가로를 최대한 채운다.
+  - iPhone 11 Pro 375×812 기준 맵은 356×581(가로 95%)이다. 방향키는 맵 아래 y=630부터 시작해서 집 줄을 덮지 않는다.
+  - 이름표("보이스A"), "나", 해씨 안내는 맵 가장자리에서 안쪽으로 밀어 넣어 잘리지 않게 했다.
+- **문제 2 (알림 띠가 해바라기를 가림)**: 세로 화면에서는 판 소식 띠를 맵 맨 위 가장자리의 작은 반투명 띠(12.5px, 두 줄까지)로 바꿨다.
+  - 뒤로 알약과 시계 사이에 들어간다.
+  - headless 측정: 띠 아래 끝 y=86, 해바라기 위 끝 y=104.
+- **문제 3 (앱 상단 바 50pt)**: 앱 상단 바를 없앴다.
+  - 맵 왼쪽 위에 "‹ 채팅" 알약을 두었다. 보이스톡 중이면 초록 점이 붙는다.
+  - 상태 표시줄 자리만 연한 초록(`#e4f1d8`)으로 칠했다. 앱 상태 표시줄 글자가 어두워서 진한 초록 위에서는 안 보이기 때문이다.
+  - 알약은 대기실·결과·우승 카드 위에도 늘 같은 자리에 있다. 1단계 수정 직후에는 대기 카드가 알약을 덮어 나갈 길이 없었는데, 이번에 고쳤다.
+- ⚙ 설정은 방향키와 꿀밤 사이 틈으로 옮겼다(두 버튼의 넓은 터치 영역 밖).
+
+### 2단계 배경
+- 1단계는 판 사이에 "곧 다음 판이 시작돼요"와 짧은 승패만 보였다. 점수표·결과·우승이 없었다.
+- 서버 방은 방장이 없다. 웹 페이지의 "한 판 더"(방장) / "🙋 한 판 더?! → 방장한테 요청했어요"(게스트)는 서버 방에서는 맞지 않는다.
+- 서버는 승수만 자리별로 세고, 누적 기록·우승·지난 우승은 없었다(`tot`는 판 수만, `hist`는 늘 빈 배열).
+
+### 결정 (바꾼 것)
+- **게임 서버** (hash-rush `server/room.js`, 테스트 20개):
+  - 승수와 누적(꿀밤, 맞음, 해씨, 골인, 슈퍼, 던지기, 저지, 판 수)은 사람을 따라간다. 입장권의 mingle 사용자가 기준이고, 없으면 브라우저 id다. 나갔다 오면 자기 자리, 자기 기록으로 돌아온다. 컴퓨터가 그 자리를 쓰는 동안 기록은 따로 보관한다.
+  - 10승을 먼저 하고 2승 앞서면 우승이다. 같은 팀끼리 같으면 함께, 두 쪽이 같으면 듀스다. 우승 카드는 22초 보이고, 그 뒤 기록이 처음부터 다시 시작된다. 지난 우승은 10개까지 남는다.
+  - 대기실 메시지에 `nx`(다음 판까지 ms), `fill`(컴퓨터가 채우는 기준 4), `title`을 넣었다. 판이 끝나면 마지막 스냅샷 바로 뒤에 `over`를 보낸다(그 판이 들어간 기록, 우승 여부, 다음 판까지 ms).
+  - 자리에 아무도 없으면 카운트다운을 바로 멈춘다.
+  - 웹 페이지도 그대로 동작한다. 모르는 `over`는 무시하고, `tot`가 페이지 자신의 모양이 되어 웹 점수표의 누적도 맞게 나온다.
+- **대기실 카드**:
+  - 맵·방식 칩, "10승 먼저 하면 우승!"(듀스면 빨간 "듀스!"), "⏱ N초 뒤 시작"을 보인다.
+  - 같이 하는 사람마다 얼굴(게임의 햄스터 그림), 이름, 승수를 보인다. 내 줄은 파란 테두리와 "나"(#224), 방금 들어온 사람은 4초간 노란 빛(#141), 빈자리는 얼굴 없는 점선 한 줄(#66)이다.
+  - 관전자 이름과 "👀 관전하기"/"🙋 참가하기"(#217)가 있다.
+  - 아래 줄은 "판은 자동으로 시작돼요 · 빈자리는 컴퓨터 N명이 채워요"와 지난 우승이다.
+- **관전**:
+  - 관전하기를 누르면 앱이 다시 자리를 잡지 않는다. 처음 들어올 때만 빈자리에 자동으로 앉는다.
+  - 판 도중 관전자는 방향키·꿀밤이 없다. 그 자리(맵 아래 띠)에 "👀 관전 중"과 "🙋 다음 판부터 참가하기"가 보인다.
+  - 앉고 나면 "👀 이번 판은 관전 · 다음 판부터 참가해요"가 보인다. 1단계에서는 이 표시가 해바라기 위를 가렸는데, 띠로 옮겼다.
+- **🏆 점수표**:
+  - 방향키와 꿀밤 사이 🏆 버튼으로 연다. PC는 Tab을 누르는 동안 열린다(#39, #46).
+  - 판 도중에는 맵이 비쳐 보이는 반투명 카드다(#82). 열려 있는 동안 조작 안내 문구는 숨긴다(숫자와 겹쳐 읽히지 않았다).
+  - 이번 라운드/누적 두 탭이고 누적이 먼저다(#104, #182). 승 열이 가장 크다. 골인 배지, 패 열(#167), 점수, 맨 오른쪽 MVP(#71, #76), 내 줄 "나"가 있다.
+  - 탭과 MVP 규칙 줄은 카드에 고정하고 표만 옆으로 밀린다(#218, #225). 처음에는 탭과 규칙 줄이 표 안에 있어 카드 밖으로 잘렸다.
+  - 휴대폰 폭에 맞게 칸 여백을 줄이고 골인 배지를 이름 아래로 내렸다. 375px에서 누적 탭의 MVP까지 다 들어간다.
+- **결과 카드**:
+  - "승리!!"/"패배"/"경기 종료", "🏆 승자 - 이름", 시간 초과면 이유(#95), 점수표를 보인다.
+  - "다음 판은 N초 뒤 자동으로 시작해요"를 보인다. 서버 방 문구이고 "한 판 더" 버튼은 없다.
+  - ✕(46px, #142)나 카드 밖 어두운 곳(#144)으로 내리고, 🏆로 다시 연다(#42). 내려가 있으면 시계 아래 "⏱ 다음 판 N초"가 보인다.
+  - 뜬 뒤 0.7초 동안의 터치는 무시한다(#147: 꿀밤을 누르던 엄지가 카드를 바로 닫지 않게).
+- **우승 카드**:
+  - 웹과 같은 금 트로피(햇살, 색종이, 우승 승수)를 쓴다. 그리는 코드는 `main.js`에서 `engine/client/cards.js`로 옮겼다.
+  - "🏆 내가 우승!"/"○○가 우승!"/"공동 우승!", 우승자 얼굴, 누적 탭으로 열린 전체 기록, "N경기 만에 W승 달성!…"을 보이고 팡파르와 환호가 난다.
+- **문구**:
+  - 앱 문구에는 "방장"이 없다(테스트로 막음). 게임 문구 중 방장 관련 키도 쓰지 않는다.
+  - 새 문구는 ko/en/ja 세 언어로 넣었고, 나머지 언어는 영어를 쓴다. 게임 문구(점수표·결과·우승)는 다섯 언어 모두 있는지 테스트한다(#13 "undefined").
+
+### 확인한 것
+- mingle-app: `tsc` 통과, vitest 전체 439파일 4744개 통과(Hash Rush 71개), scripts 16개 통과, 바뀐 파일 eslint 깨끗.
+- hash-rush: 서버 테스트 20개, 저장소 전체 `node --test` 155개 통과.
+- headless Chrome 375×812(터치, 안전 영역 위 44·아래 34)에서 같은 서버 코드를 로컬 인스턴스로 띄우고(입장권 서명), 두 사람이 한 방에 들어가는 흐름과 우승 흐름을 돌렸다. 37개 확인 통과.
+  - 테스트용 서버에만 판을 12초 만에 끝내는 장치를 넣었다(우승 방은 그 판에 우승이 나오게 승수를 맞춤). 끝내는 과정 자체는 게임 규칙 그대로다.
+  - 스크린샷: `.devbox-logs/hr-stage2/` 01-lobby, 02-lobby-watching, 02b-lobby-with-spectator, 03-round, 03b-round-news, 04-board-totals, 05-board-round, 06-result, 07-result-put-away, 08-round-watching, 09-round-seated-next, 10-title, 11-lobby-after-title (확인 결과 `checks.json`).
+
+### 남은 것
+- 실기기(iPhone·Android) 확인: `docs/hash-rush-in-app-uiux.md`의 "실기기 확인 목록 (2단계)".
+- 공유 게임 서버(8090)와 배포된 게임 서버는 새 서버 코드로 다시 띄워야 카운트다운·누적·우승이 나온다. 옛 서버에서도 앱은 돌지만 카운트다운과 우승이 없다.
+- 3단계: 게임 화면 안 대화(햄스터 위 말풍선, 입력).
+- 4단계: iframe 시트(`HashRushSheet*`)와 v2 대화방 배치 코드 삭제.
+
+### 실기기 확인 (iPhone 11 Pro, iOS 18.6, 2단계)
+- 됨: 앱 상단 바 없이 게임이 화면 전체를 쓴다. `‹ 채팅` 알약이 왼쪽 위에 있고, 상태 표시줄 글자가 연한 초록 띠 위에서 읽힌다.
+- 됨: 판이 방향키·꿀밤 줄 위에서 끝나서 집 줄의 내 햄스터가 가려지지 않는다. 🏆와 ⚙는 두 버튼 사이에 있다.
+- 됨: 대기 카드("곧 다음 판이 시작돼요", "N초 뒤 시작", 같이 하는 사람, 빈자리, 관전하기, "판은 자동으로 시작돼요"). "방장" 문구 없음.
+- 됨: 🏆 점수표(이번 라운드/누적, MVP)와 판 끝 결과 카드("패배", "승자 - 초코", "다음 판은 12초 뒤 자동으로 시작해요").
+- 문제 1: 점수표와 결과 카드의 열 제목("꿀밤", "던지기", "저지" 등)이 좁은 열에서 한 글자씩 세로로 꺾인다. → 한 줄로 유지(`white-space: nowrap`)하고 열을 줄이거나 아이콘·짧은 표기로 바꾼다.
+- 문제 2: 판 가운데의 조작 안내 띠("방향키·스와이프로 이동 · …")가 두 줄로 판 가운데를 가린다. → 짧게 한 줄로 줄이고, 첫 입력 뒤 사라지게 한다.
+- 못 본 것: 우승 카드(10승이 필요해서 실기기에서는 아직 못 띄움, headless 스크린샷만 있음).
+
+## 2026-11-01 — Hash Rush 네이티브 이식 1단계: iframe 없이 대화방 안에서 직접 실행
+
+4단계 중 1단계다. 코드는 `mingle-app/src/features/hash-rush/`, 복사한 엔진의 출처와 바꾼 점은 `engine/README.md`에 있다.
+
+### 배경
+- v2 실기기 확인에서 세 가지가 나왔다. 보이스톡 막대가 게임 위쪽을 덮었고(문제 1), 시트가 줄어 맵이 작아졌고(문제 2), 조작 안내가 맵을 가렸다(문제 3).
+- iframe 안의 게임은 앱이 직접 다룰 수 없다. 게임을 mingle-app 안으로 옮겨 같은 페이지에서 돌리기로 했다.
+
+### 결정 (바꾼 것)
+- **엔진**: hash-rush `feat/g2-server-rooms` `7004a49`에서 아래 파일을 `engine/`으로 그대로 복사했다. 이 복사본은 이제 mingle에서 관리한다.
+  - sim 전부, render·deco·looks, input·assist·predict, audio·music·haptics, i18n, net(서버 방 부분만), ai/bot·nav·search
+  - 바꾼 것: 입장권을 인자로 받기, 리스너·오디오 정리, 앱 언어 따르기, `navigator.audioSession`을 건드리지 않기
+- **화면**: 메뉴 "🌻 Hash Rush 같이 하기"를 누르면 대화방 전체를 덮는 층(z-[47])이 아래에서 올라온다.
+  - 맨 위에 얇은 바: 뒤로(‹), "🌻 Hash Rush", 보이스톡이 연결되면 초록 점. 나머지 높이는 전부 게임이다.
+  - v2의 "시트 아래 최근 메시지 줄·빠른 채팅·입력창"은 이 단계에서 쓰지 않는다. 코드는 그대로 두었고 4단계에서 지운다.
+  - 보이스톡 막대도 층 아래로 가려진다(문제 1이 없어짐). 통화 연결 여부는 초록 점으로 본다.
+- **맵**: 가로를 꽉 채우고(세로 화면에서는 90도 돌려서) 위쪽에 붙인다(#134).
+  - iPhone 11 Pro 기준: 게임 영역 375×767 안에 맵 375×612. 남은 아래 155px 띠에 방향키와 꿀밤이 있다(문제 2 해결).
+  - 화면이 짧으면 맵을 높이에 맞춘다. 이때 컨트롤은 맵 아래쪽(집 바닥) 위에 겹친다. 웹과 같다.
+- **조작**: 엔진의 input.js를 그대로 쓴다.
+  - 도넛 방향키(148px, 왼쪽 아래)와 꿀밤(100px, 오른쪽 아래). 꿀밤 버튼에는 다음 꿀밤까지 남은 시간이 시계처럼 표시되고, 집 안에서는 흐려진다. 씨를 물면 꿀밤 위에 던지기 버튼이 나온다.
+  - 맵 스와이프는 16방향, 32px 이상. 톡 = 멈춤. 손가락을 떼지 않으면 방향키가 계속 눌린 상태다.
+  - PC: WASD·방향키, Space·J 꿀밤, F·K 던지기.
+  - 버튼은 평소 또렷하고, 햄스터가 밑에 오면 절반만 흐려진다(#216, #223). 판이 끝나면 다시 또렷해진다.
+  - ⚙ 안에 소리 켜기/끄기와 꿀밤 좌우 바꾸기가 있다.
+- **조작 안내(문제 3 완화)**: 웹 자리(화면 아래에서 162px)가 앱에서는 상단바만큼 올라가 집(둥지) 위가 된다. 그러면 카운트다운 동안 햄스터를 가린다.
+  - 세로 화면에서는 맵 높이 72% 지점으로 옮겼다. 집 위의 미로이고, 카운트다운 숫자보다 아래다.
+  - 첫 터치에 사라지는 것은 그대로다. 결과 카드가 떠 있을 때는 숨긴다.
+- **판 사이(로비·점수판·결과 카드는 2단계)**:
+  - 들어가는 중: "게임에 들어가는 중"
+  - 대기: "곧 다음 판이 시작돼요" 카드와 같이 하는 사람 이름. 내 이름에는 "(나)"를 붙인다.
+  - 판이 끝나면 1.5초 뒤 승리!!/패배와 승자 카드를 띄운다. 서버가 로비로 돌아갈 때까지 보이고, 그동안 컨트롤은 숨긴다.
+  - 자리: 서버가 첫 빈자리에 앉힌다. 관전자로 들어오면 빈자리가 생길 때 자동으로 앉는다.
+  - 판 도중에 들어오면 이번 판은 관전하고 다음 판부터 참가한다.
+- **시트에서 가져온 것**: iOS 가장자리 뒤로 가기와 WebView 제스처 끄기, Android 뒤로 가기 = 게임 내리기, 광고 배너와 토스트 숨김. 층 위의 터치는 대화방 스와이프로 새지 않는다.
+- **내리기**: 뒤로(‹, Android 뒤로)를 누르면 층이 내려간다.
+  - 게임은 계속 돈다. 소리만 꺼지고, 내 햄스터는 그 자리에 선다(입력을 비우고 정지 입력을 바로 보낸다).
+  - 같은 방에서 다시 열면 같은 판이 그대로 보인다. 방을 나가면 게임을 버린다(소켓을 닫으면 서버가 자리를 비운다).
+- **소리**: 앱이 오디오 세션(TTS, 음성 통역, 보이스톡)을 관리하므로 게임은 `navigator.audioSession`을 바꾸지 않는다. 보이스톡 중에는 배경음악만 끄고 효과음은 남긴다.
+- **연결**: 입장권은 같은 방에서 만료 10분 전까지 재사용한다.
+  - 끊기면 "다시 연결하는 중"을 보이고 20초 동안 1.5초마다 다시 붙는다.
+  - 그래도 안 되면 "게임 서버에 연결하지 못했어요"와 "다시 시도"(새 입장권)를 보인다.
+
+### 확인한 것 (headless Chrome, 375×812 터치 화면)
+- 실서버(8090)는 입장권 서명이 필요해서, 같은 서버 코드로 띄운 로컬 인스턴스에 붙였다.
+- 서버 스냅샷으로 확인:
+  - 위로 스와이프하면 154px 이동하고 방향키 위쪽이 켜진다. 톡하면 멈춘다.
+  - 방향키를 누른 손가락이 패드 밖으로 미끄러져도 계속 눌린다. 꿀밤 버튼을 누르면 서버에 swing이 간다.
+- 내리면 숨겨지고 햄스터가 멈춘다. 다시 열면 같은 판이고, 입장권을 다시 받지 않으며, 초록 점이 보인다.
+- 연결을 끊으면 다시 붙고, 서버 인원은 1명이다(유령 햄스터 없음).
+- 4배속 서버로 한 판 끝까지: 패배 카드 → 대기 카드 → 다음 판. 서버가 꺼져 있으면 실패 문구와 다시 시도가 나온다.
+
+### 남은 것
+- 실기기(iPhone·Android) 확인:
+  - 조작감
+  - 소리: 무음 스위치, 보이스톡과 동시에
+  - 진동, 가장자리 스와이프 차단, 홈 인디케이터 여백
+- 2단계: 로비, 🏆 점수판, 결과 카드, 우승.
+- 1단계에서는 방 대화가 게임 화면에 나오지 않는다. 햄스터 위 말풍선과 입력창이 없다.
+- 4단계: iframe 시트(`HashRushSheet*`)와 v2 대화방 배치 코드를 지운다.
+
+### 실기기 확인 (iPhone 11 Pro, iOS 18.6, 1단계)
+- 됨: 메뉴 "🌻 Hash Rush 같이 하기"로 네이티브 게임 층이 열린다(iframe 아님). 배너 광고 없음.
+- 됨: 방향키를 누르고 있으면 이동, 판 위 스와이프로 이동(방향키 오른쪽이 켜짐), 꿀밤 버튼 반응.
+- 됨: ‹로 내리면 대화방으로 돌아오고, 메뉴로 다시 열면 같은 판이 이어진다.
+- 문제 1: 방향키와 꿀밤 버튼이 판 아래쪽 집 줄을 덮는다. 집에 있는 내 햄스터가 버튼 밑에 가려지고, 오른쪽 끝에서는 이름("보이스A")이 잘린다. → 판을 버튼 위로 올리거나 버튼 영역만큼 판 아래 여백을 둔다.
+- 문제 2: 위쪽 알림 띠("연장전!", "구름이 씨를 물었어요!")가 해바라기와 맨 윗줄을 가린다. → 판 밖 상단이나 반투명 작은 띠로.
+- 문제 3: 앱 상단 바("‹ 🌻 Hash Rush")가 약 50pt를 차지한다. 거의 전체 화면 요구에 맞추려면 더 얇게 하거나 게임 HUD 안으로 넣는다.
+- 참고: 핑이 약 280ms로 표시된다(Mac 로컬 서버를 Cloudflare 터널로 거침). Railway 배포 후 다시 본다.
+
+## 2026-11-01 — Hash Rush v2: 게임 중 대화를 해시챗 채팅으로 (시트 아래 입력창·최근 메시지·빠른 채팅)
+
+요구사항은 `docs/hash-rush-in-app-uiux.md`의 "v2 (2026-11-01)" 절이다. 이번에는 앱 쪽만 바꿨다. 게임 쪽(자체 채팅 숨김, `chat` 말풍선, 로비 `userId`)은 hash-rush 저장소 작업이다.
+
+### 배경
+- v1 시트는 상태 표시줄 아래부터 화면 끝까지 덮었다. 게임 중에는 해시챗 입력창과 통번역을 쓸 수 없었고, 대화는 게임 자체 채팅(번역 없음, 기록 안 남음)으로만 됐다.
+- Nam 결정: Hash Rush는 대화방 안의 한 기능이다. 게임 안 대화도 해시챗 채팅 UI와 통번역을 그대로 쓴다.
+
+### 결정 (바꾼 것)
+- **시트 위치**: 대화방 상단바 바로 아래부터 최근 메시지 줄 바로 위까지 덮는다.
+  - 대화방은 시트 자리로 빈 칸(slot)을 남긴다. 시트는 그 칸의 위치·높이를 재서 그대로 덮는다(`useHashRushSheetFrame`). offset으로 재므로 앱 캔버스 배율과 상관없다.
+  - 시트를 내리면 마지막 위치·크기를 그대로 두고 대화방 아래로 내려간다(게임 화면 크기가 바뀌지 않는다).
+- **아래쪽은 원래 대화방**: 위에서부터 시트 → 최근 메시지 줄(100px 고정, 2~3줄) → 빠른 채팅 → 해시챗 입력창(키보드 입력, Start 음성 통역, 사진 등 그대로).
+  - 최근 메시지 줄은 새로 만든 목록이 아니다. 대화방의 기존 메시지 목록을 높이만 줄였다(같은 말풍선, 길게 누르기 메뉴, 반응, 답장).
+  - 새 메시지가 오면 항상 맨 아래로 붙는다. 위로 밀면 이전 메시지를 볼 수 있다.
+  - 시트를 올리거나 내리면 말풍선 모양이 바뀐다. 그동안(약 0.6초) 목록을 맨 아래에 붙잡는다. 손으로 스크롤하면 바로 멈춘다. 내릴 때는 줄이 맨 아래에 있었을 때만 붙잡는다.
+  - 줄이 짧아서 시트가 열린 동안 "맨 아래로" 버튼, 빈 방 안내, 광고 배너 여백은 숨긴다(배너도 이때 숨겨져 있다).
+- **말풍선 표시**: 시트가 열린 동안 그 방 말풍선은 "하나의 말풍선으로 표시"(`collapsed`)로 그린다.
+  그리는 값만 바꾸고 저장된 설정(`bubbleDisplayMode`, 계정 설정 동기화)은 건드리지 않는다. 시트를 내리면 원래 설정대로 그린다.
+- **빠른 채팅**: 게임의 14개 문구를 입력창 바로 위에 가로 스크롤 칩으로 보인다.
+  - 문구는 hash-rush `src/client/i18n.js`의 `quickChat`을 그대로 옮겼다. 언어도 게임과 같은 규칙으로 고른다(한국어·일본어·중국어 간체/번체, 그 외 영어).
+  - 누르면 입력창 전송과 같은 길(`submitExternalUtterance`)로 일반 메시지를 보낸다. 기록·번역·푸시·코인 차감 모두 기존 그대로다. 쓰던 초안과 답장 대상은 그대로 둔다.
+  - 칩을 눌러도 입력창 포커스(키보드)가 유지된다. 칩 줄을 옆으로 밀어도 채팅방 가장자리 스와이프(방 닫기)가 시작되지 않는다.
+  - 차단된 상대 방(입력창 대신 차단 안내)에서는 칩을 보이지 않는다.
+  - 한국어 목록에는 게임과 똑같이 'ㅅㅂ'(영어 목록은 'wtf')가 들어 있다. 빼려면 게임 목록과 함께 바꿔야 한다.
+- **키보드**: 입력창에 포커스가 있을 때만 입력창이 키보드 위로 올라간다. 최근 메시지 줄과 빠른 채팅도 입력창 위에 붙어 함께 올라간다.
+  - 키보드가 있는 동안 시트(게임)는 위치·높이를 그대로 붙잡는다. 올라온 입력창·메시지 줄이 게임 아래쪽을 덮는다(UIUX-ISSUES #181).
+    iOS(화면 높이 그대로, 아래 여백이 늘어남)와 Android(WebView가 줄어듦) 둘 다 같은 규칙이다.
+  - 키보드가 내려가고 칸 크기가 0.35초 동안 안 바뀌면 시트 자리를 다시 잰다. 그 전에 잰 값은 쓰지 않는다(키보드가 내려가는 중간 크기로 게임이 줄었다 커지지 않게).
+  - 게임이 연 키보드(게임 안 입력칸)는 해시챗 입력창을 올리지 않는다. 규격에 `keyboard` 메시지가 남아 있으므로 게임 키보드용 iframe 자르기는 그대로 둔다.
+- **z 순서**: 시트는 z-[45]다.
+  - 시트보다 아래: 대화 목록과 그 위에 떠 있는 것(보이스톡 판 z-30, 코인 배너 z-30). 보이스톡 판은 v1처럼 접힌 채 시트 밑에 가려진다.
+  - 시트보다 위: 시트가 열린 동안의 최근 메시지 줄·빠른 채팅·입력창(z-[46], 불투명), 메뉴(z-50), 이름 바꾸기 등 대화 상자(z-60), 포털로 뜨는 말풍선·사진 메뉴(z-9999).
+  - 시트는 이제 모달이 아니다(아래 입력창을 계속 쓴다). `aria-modal`을 뺐다.
+- **게임에 대화 보내기**: 방 메시지마다 `{ source: 'hashchat', type: 'chat', id, userId, text }`를 보낸다.
+  - `text`: 보는 사람 언어(하나의 말풍선 표시가 이 사람에게 보여 주는 언어)로 번역이 끝났으면 번역, 아니면 원문. 번역이 도착하면 같은 `id`로 다시 보낸다. 번역이 흘러나오는 중간 글은 보내지 않는다.
+  - `userId`: 보낸 사람 계정 id. 입장권의 `userId`(서버가 방 멤버의 user id로 서명)와 같다. 계정 id가 없는 줄은 혼자 쓰는 방이면 보는 사람 것으로, 공유 방이면 서버의 `sentByViewer`가 참일 때만 보는 사람 것으로 본다. 누구 것인지 모르면 보내지 않는다.
+  - 게임이 `ready`를 보내면 최근 3개를 먼저 보낸다. 그 뒤로는 새 메시지만 보낸다. 그때 이미 있던 메시지와 나중에 위로 스크롤해서 불러온 예전 기록은 보내지 않는다. 시계 차이는 10초까지 새 메시지로 본다.
+  - 말하는 중(초안)인 메시지는 메시지가 된 뒤 보낸다. 지운 메시지·사진은 보내지 않는다.
+  - 시트를 내려도(게임은 계속 돈다) 보낸다. 게임 페이지가 새로 열리면(다시 시도) `ready`부터 다시 시작한다.
+
+### 남은 것
+- 게임 쪽(embed=1): 자체 채팅 UI 숨김, 앱의 `chat`을 받아 햄스터 머리 위 말풍선으로, 로비 자리의 `userId`. 게임이 아직 `chat`을 모르면 그냥 무시된다.
+- 실기기 확인(iPhone·Android): 키보드가 올라와도 맵 크기·위치가 그대로인지, 최근 메시지 줄 높이가 글자 크기 단계별로 2~3줄로 보이는지, 칩을 눌렀을 때 키보드가 유지되는지.
+- 게임 화면이 v1보다 작아졌다(상단바, 메시지 줄, 칩, 입력창만큼). 맵이 너무 작지 않은지(#134) 실기기에서 다시 본다.
+- `docs/hash-rush-in-app-uiux.md`의 A1(화면 끝까지 덮기)·A5(채팅 키보드 처리 분리)는 v2 절이 대신한다. 표는 고치지 않았다.
+
+### 2026-11-01 Hash Rush v2 실기기 확인 (iPhone 11 Pro)
+
+- 확인됨: 시트가 상단바 아래부터 입력창 위까지 덮고, 아래에 최근 메시지 줄 + 빠른 채팅 칩 + 해시챗 입력창(Start 포함)이 보인다.
+  칩 `ㅎㅇ`를 누르면 일반 대화방 메시지로 저장되고(1 msg), 최근 메시지 줄에 하나로 합친 말풍선으로 뜨며,
+  게임 안 내 햄스터 머리 위에도 같은 글(이 방 표시 언어 기준 "Hi")이 말풍선으로 뜬다. 게임 자체 채팅 UI는 보이지 않는다.
+- 문제 1: 보이스톡이 켜져 있으면 접힌 보이스톡 막대가 게임 화면 위쪽(점수표·시계 줄)을 덮는다. 시트 위쪽을 막대 아래로 내리거나, 시트가 열린 동안 막대를 상단바 안 초록 점으로만 줄이는 방안 검토.
+- 문제 2: 시트 높이가 줄어서 맵이 세로에 맞춰 작아지고 양옆에 초록 여백이 생긴다(UIUX-ISSUES #134 "맵이 너무 작음"과 같은 계열). 최근 메시지 줄 높이나 칩 줄을 더 줄이는 방안 검토.
+- 문제 3: 게임의 조작 안내 문구("방향키·스와이프로 이동 · 톡: 멈춤 · 꿀밤 꾹…")가 맵 한가운데를 가린다. 앱 안에서는 첫 판 몇 초만 보이게 하는 방안 검토.
+
+## 2026-10-31 — Hash Rush 시트: 광고 배너 가림, 끌기·뒤로 가기로 방에서 나감, 보이스톡 마이크 회색
+
+요구사항 전체는 `docs/hash-rush-in-app-uiux.md`(A1~A10)에 있다. 아래는 iPhone 11 Pro 실기기에서 본 문제와 이번에 바꾼 것.
+
+### 문제
+- **광고 배너가 대기실을 가림**: 시트가 열려 있어도 네이티브 광고 배너가 그대로 떠서 Hash Rush 대기실의 자리 목록을 가렸다.
+  네이티브 배너는 WebView 위에 그려지므로 웹 시트의 z-index로는 덮을 수 없다.
+- **시트 안에서 끌었더니 채팅 목록으로 나감**: 시트만 내려가야 하는데 채팅방까지 닫혔다. 원인 후보:
+  - 메뉴의 "🌻 Hash Rush 같이 하기"가 `setMenuOpen(false)`로 메뉴만 숨기고 메뉴의 history 항목을 남겼다.
+    다음 뒤로 가기(Android 뒤로, iOS 뒤로 제스처)가 남은 항목이나 채팅방 항목에 떨어질 수 있었다.
+  - 시트 머리줄을 화면 왼쪽 끝(32px 안)에서 잡으면 채팅방 `SlideSurface`의 가장자리 스와이프(방 닫기)도 같이 시작됐다.
+    그리고 머리줄만 끌리고 시트 몸통은 따라오지 않았다.
+  - 시트에는 Android 뒤로 처리와 가장자리 스와이프 막기가 없었다.
+- **보이스톡 마이크 버튼이 이유 없이 회색**: iOS 마이크 권한이 거부된 상태면 보이스톡 판의 마이크 버튼이
+  `disabled`(흐린 회색)로만 보이고 왜 못 누르는지, 어디서 켜는지 알려주지 않는다.
+  (`room.micAvailable === false`일 때 `disabled:opacity-40`만 적용됨.) **이번에는 고치지 않고 기록만 한다.**
+
+### 결정 (바꾼 것)
+- **시트 모양(A1)**: 화면 위 safe area 바로 아래부터 끝까지 덮는다. 머리줄은 44px로 얇게: 손잡이, "🌻 Hash Rush",
+  보이스톡이 연결돼 있으면 초록 점, 닫기 버튼. 채팅방 안 다른 떠 있는 것들보다 위(z-[90]).
+- **끌기·뒤로 가기(A2)**:
+  - 끌어 내리기는 머리줄에서만 시작한다(`dragControls`, `dragListener={false}`). 시트 전체가 손가락을 따라 내려간다.
+  - 시트 위에서 시작한 터치는 채팅방의 가장자리 스와이프로 넘어가지 않는다(시트에서 pointerdown/touchstart 전파를 막음).
+    iframe 안 스와이프는 원래 부모 문서로 오지 않으므로 게임 조작은 앱이 가로채지 않는다.
+  - 시트가 열린 동안 iOS 가장자리 뒤로 가기·WebView back/forward 제스처를 끈다(`registerNativeEdgeSwipeSuppression`, 기존 `suppressEdgeSwipe`).
+  - Android 뒤로는 시트를 먼저 닫는다(`registerNativeBackHandler`, 우선순위 15: 입력창·메뉴 10, 채팅방 4~5보다 먼저).
+  - 메뉴 항목은 `requestCloseMenuPanel()`로 메뉴 history를 정리한 뒤 시트를 연다.
+- **광고 배너(A3)**: 시트가 열린 동안 `useNativeBannerSuppression(open)`으로 숨기고, 내리면 원래 zone으로 돌아온다.
+- **z 순서(A4)**: 시트가 열린 동안 앱 토스트(sonner)를 숨긴다(`html[data-hash-rush-open="true"] [data-sonner-toaster]`).
+  보이스톡 판은 시트가 열리면 접힌 막대가 되고(시트 밑에 가려짐), 시트를 내린 뒤에도 접힌 채로 있다.
+- **키보드(A5)**:
+  - 시트가 열린 동안 채팅 입력창의 키보드 여백 처리(`activeKeyboardInsetPx`)를 끈다.
+  - iframe 안의 페이지는 키보드를 볼 수 없다(자기 `visualViewport`가 iframe 크기 그대로). 그래서 게임이 `keyboard: open`을 보내면
+    게임 영역의 아래 끝만 키보드 윗변에 맞춘다. 시트 자체의 크기·위치는 그대로이고, 게임은 타이핑 중 자기 높이를 붙잡아 둔다(맵 크기 유지).
+    WebView가 페이지를 밀어 올리면 맨 위로 되돌린다.
+  - iOS 키보드 위 ⌃⌄✓ 막대는 채팅방 경로(`/{locale}/conversations`)에서 이미 `hideKeyboardAccessoryView`가 켜져 있고,
+    iframe 입력도 같은 WebView 입력 뷰를 쓰므로 함께 숨겨진다. RN 코드는 바꾸지 않고 이 규칙에 테스트만 추가했다.
+- **내려도 유지(A6)**: 시트를 내려도 iframe은 그대로 둔다(같은 채팅방 안). 게임에 `visibility: false/true`를 보낸다.
+  채팅방을 떠나면(목록으로, 다른 방이 위로) iframe을 버린다. 입장권은 사용자·채팅방별로 기억해 두고 만료 10분 전까지 다시 쓴다.
+  서버 응답에 `expiresIn`(초)을 더해 폰 시계와 상관없이 판단한다.
+- **보이스톡(A7)**: 이 방 보이스톡의 연결 상태가 바뀌면 `voice: { active }`를 보낸다. iframe `load`, 게임의 `ready` 때도 현재 값을 다시 보낸다.
+- **소리(A8)**: iframe `allow="autoplay; fullscreen"` 유지.
+- **실패(A9)**: 게임이 `ready`를 보낼 때까지 로딩 표시. 입장권을 못 받으면 "게임에 들어가지 못했어요",
+  20초 안에 `ready`가 없으면 "게임 서버에 연결하지 못했어요" + "다시 시도". 다시 시도는 쓸 수 있는 입장권이면 그대로 쓴다.
+- **문구(A10)**: 한 줄짜리 짧은 문구. 한국어·영어·일본어, 나머지 언어는 영어.
+- 메시지 규격 검사: `event.source === iframe.contentWindow`, `event.origin === 게임 주소의 origin`, `data.source === 'hash-rush'`,
+  표에 있는 type·값만 받는다. 앱이 보낼 때 targetOrigin도 게임 origin으로 고정.
+
+### 남은 것
+- `docs/hash-rush-in-app-uiux.md`의 실기기 확인 목록 전체(시트·스와이프·배너·키보드·소리).
+- 게임 쪽이 아직 `ready`를 보내지 않는 빌드면 20초 뒤 연결 실패 문구가 뜬다. 게임 G4~G7과 함께 확인.
+- 다른 채팅방에서 보이스톡 중에 이 방 게임을 열면 `voice: false`로 간다(웹 판은 자기 방 통화만 안다).
+- 보이스톡 마이크 권한이 거부됐을 때 이유와 설정 방법을 알려주는 안내.
+
+### 2026-11-01 보이스톡 로컬 네트워크 권한 창에 "(null)"이 뜸
+
+- 상황: 새로 설치한 앱에서 처음 보이스톡에 들어가면 iOS가 "'HashChat' 앱이 로컬 네트워크에 있는 기기를 찾도록 허용하겠습니까?" 창을 띄운다. 제목 아래 설명 자리에 `(null)`이 그대로 보였다. iPhone 11 Pro(iOS 18.6)에서 Appium으로 직접 찍어 확인했다.
+- 원인: LiveKit(WebRTC)이 통화 경로를 찾을 때 같은 와이파이 안의 기기도 살펴서 iOS가 로컬 네트워크 권한을 묻는데, `Info.plist`에 `NSLocalNetworkUsageDescription`이 없었다.
+- 조치: `NSLocalNetworkUsageDescription`에 "HashChat uses your local network to connect voice talk calls."를 넣었다. 다음 네이티브 빌드부터 적용된다.
+- 남은 일: 이 문구는 지금 영어 하나뿐이다. 다른 권한 문구도 아직 현지화돼 있지 않다.
+
+## 2026-10-31 — 그룹 보이스톡 UI를 채팅방 안 판으로 변경, Hash Rush 채팅방 시트
+
+### 문제
+- 처음 만든 보이스톡은 클럽하우스식 검은 전체 화면(네이티브 RN)이었다.
+- 기존 채팅방 UI와 모양이 달랐고, 통화 중에는 채팅을 볼 수 없었다.
+- 사용자 지적: "채팅방이 이미 있는데 왜 다른 화면으로 만들었냐."
+
+### 결정
+- 보이스톡은 새 방 종류가 아니다. 기존 채팅방에서 켜고 끄는 기능이다 (카톡 방식).
+- 화면은 웹 채팅방(`LivePhoneDemo`)이 그린다. 상단바 바로 아래에서 판이 내려온다.
+  - 판: 최대 8명 동그라미(4×2), 말하는 사람은 앰버색 링, 빈 자리는 점선.
+  - 위로 끌거나 화살표를 누르면 한 줄 바로 부드럽게 접힌다 (framer-motion spring).
+  - 접힌 바: 초록 점, "보이스톡 · N/8", 얼굴 4개, 참여 버튼.
+  - 말한 내용은 상자 없이 글 한 줄로 뜬다: 이름 + 번역 (원문).
+  - 버튼: 마이크, 통역 ON/OFF, 나가기.
+- 상단바에 전화 아이콘. 누르면 통화를 시작하거나 참여한다. 통화 중이면 초록 점.
+- 소리(LiveKit, 마이크, 에코 제거)는 계속 네이티브가 맡는다. 네이티브 화면은 없앴다.
+  - 브리지: 웹 → `native_voice_open/close/set/status_request`, 네이티브 → `state/status/room`.
+- Hash Rush: 채팅방 메뉴 "🌻 Hash Rush 같이 하기" → 채팅 위로 올라오는 시트(iframe).
+  - 아래로 끌거나 X를 누르면 채팅으로 돌아간다. 보이스톡은 끊기지 않는다.
+  - 앱이 입장권을 준다 → 멤버만, 채팅 이름으로 들어간다. 게임 방 = `mingle-<채팅방 id>`.
+
+### 남은 것
+- 실기기에서 판 애니메이션, 링 반응 속도 확인.
+- 채팅에 대기 카드/결과 카드, 통화 종료 메시지 표시.
+- 판이 메시지 첫 줄을 가리는지 확인 (필요하면 위 여백 추가).
+
+## 2026-10-31 — 그룹 보이스룸 RN UI (Phase 3)
+
+### 배경
+대화방 안에서 돌아가는 실시간 그룹 음성 대화(최대 8명) + 숨은 서버 통역
+에이전트. 아키텍처는 self-host LiveKit SFU(`wss://voice.minglelabs.app`) +
+통역 참가자. 앱의 나머지 화면은 WebView 호스트지만, 보이스룸은 WebRTC의
+백그라운드/잠금화면 오디오·오디오 라우팅·AEC가 필요해서 **앱 최초의 네이티브
+RN 화면**으로 만든다(계획서 §0 확정 사항).
+
+### 화면 구성 (Clubhouse / HelloTalk 스타일)
+- **VoiceRoomScreen**: 상단 헤더(뒤로/최소화, 제목, N/8 카운트), 스피커 그리드,
+  라이브 캡션 리스트, 하단 컨트롤 바.
+  - **스피커 그리드**: 최대 8타일 + 빈 자리 "초대" 타일. 아바타는 채팅과 동일
+    소스(`User.image`). 말하는 사람은 `ActiveSpeakersChanged` 기반으로 아바타
+    둘레에 **애니메이션 발광 링**(`Animated`, scale 1→1.12 / opacity 0→0.9 루프).
+  - **라이브 캡션**: 원문 → 내 언어 번역. 최신순. partial은 흐리게(…) 표시,
+    echo(자기 발화 되돌림)는 반투명.
+  - **컨트롤 바**: 마이크, 스피커 라우트, 통역 ON/OFF, 원음/통역 볼륨 믹스,
+    나가기(붉은색).
+- **VoiceRoomBanner**: 대화방 메시지 리스트 상단 고정 배너. 방이 살아있으면
+  "🎙 보이스톡 · N/8" + 아바타 3개 + [참여]. 없으면 "보이스톡 시작" 진입점.
+- **VoiceMiniBar**: 방에 있으면서 채팅을 둘러볼 때 떠 있는 플로팅 알약(PiP 느낌).
+  탭 = 방 다시 열기, ⎋ = 나가기.
+
+### 설계 결정 (POC 재현)
+- **구독 정책(`shouldSubscribe`)**: 사람 오디오는 항상 구독. 통역 참가자는
+  `interpret ON`일 때만 **내 언어 레인 `tr:<myLang>`** 하나만 구독, 나머지
+  레인은 미구독. OFF면 통역 레인 전부 해제. `autoSubscribe:false`로 연결.
+- **볼륨 믹스(`originalVolume`)**:
+  - 통역 OFF 또는 내 언어와 같은 화자 → 원음 100%.
+  - 고정(static) 모드 → 원음 25%(`origVol` 슬라이더).
+  - 동적(dynamic) 모드 → 레인 재생 중일 때만 15%, 아니면 100%.
+  - 통역 트랙은 항상 `trVol`(기본 100%).
+  - `lane` 데이터 메시지의 playing 값으로 동적 더킹 토글.
+- **통역 토글**: `setAttributes({interpret:'on'|'off'})` + 재구독 + 재믹스,
+  토글 시 `lanePlaying` 리셋.
+- **캡션 프로토콜**: 토픽 `interpreter`, 타입 partial/final/echo/translation/
+  play/lane/error. partial→final 전환 시 partialId→id 리맵으로 늦게 도착한
+  translation도 올바른 줄에 붙도록 보관(`partialToId`). play 메트릭은 **내
+  언어일 때만** 해당 줄에 부착.
+- **마이크 거부 폴백**: 마이크 권한 없으면 리스너로 입장(컨트롤 비활성 + "마이크
+  없음" 표기), 방에서 쫓아내지 않음.
+
+### i18n
+- 한국어 우선. 첫 네이티브 화면이라 웹 i18n 카탈로그를 끌어오지 않고 보이스룸
+  전용 ko+en 문자열 테이블(`voiceStrings.ts`)을 둠. primary locale이 ko*면 한국어,
+  그 외 en 폴백. 추후 언어 확장은 이 테이블에 추가.
+
+### 브리지 / 통합
+- RN↔WebView 브리지 규약: 웹이 `native_voice_open|close|status_request`
+  커맨드로 네이티브 오버레이를 제어, 네이티브는 `mingle:native-voice`
+  CustomEvent로 방 상태(state)와 배너용 status(GET /voice 폴링)를 웹에 전달.
+- 오버레이는 기존 WebView 위에 절대배치. 통역 배너/엔트리는 채팅 UI가 웹이므로
+  웹이 띄우고, "참여/시작" 탭 시 open 커맨드로 현재 conversationId의 네이티브
+  방을 연다.
+- 배너 상태는 채팅 열려 있는 동안 GET /voice를 약 10초 간격 폴링.
+
+### 미해결/후속
+- 실기기 2대 통화·발화 링·배경 오디오는 Mac 빌드에서만 검증 가능(이 호스트는
+  Windows). pod install / 네이티브 빌드 명령은 최종 보고 참조.
+- iOS Live Activity("번역 중")는 MVP에서 CallKit 대신 사용 예정(후속 네이티브 작업).
+- 스피커 라우트 토글은 기존 `nativeAudioRoute` 개념과 연동 예정(현재는 콜백 훅만
+  노출).
+
 ## 2026-11-01 — 관리자 대시보드: 있는 값부터 바로 보이고, 남은 칸만 로딩
 
 - 화면: `/admin/dashboard` 모든 탭 (`page.tsx`, 새 `usage-metrics-section.tsx`·`usage-metrics-view.tsx`·`part-results-store.ts`·`stat-tile.tsx`, `line-chart-card.tsx`, `metrics-table.tsx`, `sns-section.tsx`, `operator-post-stats-section.tsx`, `retention-section.tsx`). 데이터는 `src/lib/admin-dashboard-query.ts`, 새 `src/lib/admin-dashboard-usage.ts`, `admin-dashboard-sns.ts`, `src/server/operator-post-stats/load.ts`.
@@ -5082,6 +5647,7 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - `2026-10-31-ios-translation-both-ears-echo-canceller` | In iPhone microphone + device-audio mode the translation was read in the left earphone only while the video played in both, which felt broken and also made the translation sound quieter than the video. Panning was the original way to keep HashChat's own translation out of the ReplayKit capture (the right channel was transcribed); iOS cannot leave one app out of the broadcast mix, and dropping the device audio while a translation plays was rejected because it loses the video's speech. The translation now plays centered in both ears and is removed from the capture by a reference echo canceller: the TTS module registers each clip exactly as played (16 kHz mono) with its output host time, the broadcast extension stamps each capture frame with its host time (stream header `MGLPCMT1`, framed PCM), a normalized cross-correlation search finds the offset once per clip (±0.5 s on the first clip, ±0.12 s around the last offset after that, holding the capture up to 0.9 s meanwhile), and a 9-tap least-squares filter tracks gain and sub-sample offset. In an offline simulation with a louder overlapping "video" the echo dropped by 17-30 dB and the video passed unchanged. The `번역 음성은 왼쪽 이어폰에서만 들려요` sentence was removed from the iOS hint in all 15 locales. Pending physical checks: residual re-transcription on device, and the alignment log lines (`[EchoCanceller] clip lined up delayMs=...`).
 - `2026-10-31-onboarding-edge-swipe-back` | The first-install onboarding steps (편한 언어, 관심 언어, birth date, discovery source) live inside one portaled modal that switches steps in React state, so the iOS left-edge swipe did nothing and users had to reach the small top-left chevron to go back. The modal now owns a left-edge swipe: a touch starting within 32px of the left edge that travels right at least max(72px, 18% of the viewport) and stays mostly horizontal runs the same step-back as the chevron and the Android back key. It does nothing on the first step and while confirming. While the modal is open it also asks the native shell to suppress the WKWebView back gesture, so the swipe cannot navigate the page underneath. Physical-device verification pending.
 - `2026-10-31-onboarding-interest-level-inline` | On the 관심 언어 step, the `이 언어는 얼마나 할 수 있어요?` level question appeared as small 0.82rem text above the Continue button, far from the tapped language, so users missed it and kept pressing Continue at level 1. Tapping a language now expands that language's own card downward and shows the question there in large bold text (1.25rem) with a larger level picker (44px tap targets, 20px dots, label under the dots); the footer copy was removed. The expanded card scrolls into view when the row sits near the bottom of the list. The shared `LanguageLevelPicker` gained an opt-in `size="large"`; other callers are unchanged. Physical-device verification pending.
+- `2026-11-10-hash-rush-in-game-room-chat` | Inside the native Hash Rush game, players could not talk without lowering the game. The game now carries the room's own conversation rather than a separate chat: the room hands its messages and composer to the game layer. A line appears as a bubble over the speaker's hamster (the words swap in place when the translation lands) and as a floating line over the map (crisp 5s, faint 5s, at most three crisp). A 💬 button raises the room's composer over the game in the room's current input mode, with the 13 quick chips above it and the room's messages (collapsed bubbles) above that; a red dot marks live interpreting. Switching keyboard/voice over the game is a mode of the game's own and never writes the room's saved input mode. While the composer is up, and for 350ms after it closes, the d-pad and bonk ignore touches. Android back puts the composer away before lowering the game. The quick-chat row and bottom bar rise to z-48 over the game layer (47) only while the composer is up. Messages are stored as ordinary room messages. Full rules: `docs/hash-rush-in-app-uiux.md` (stage 3). Physical-device verification pending.
 - `2026-10-31-screen-capture-pre-prompt` | Pressing Start in microphone + device-audio mode opened the system screen broadcast sheet (iOS) or screen-sharing consent (Android) with no warning, which feels alarming to a first-time user. The first Start in that mode now opens a HashChat dialog first: title `화면 기록을 요청할게요` and a body starting `놀라지 마세요!` that explains which system sheet comes next, what to tap, and that the screen is not saved (only the sound is used). `계속` starts the session and the system prompt; `취소` closes the dialog without starting. It appears once per earphone-mode session (reset on every earphone-mode on/off), in all 15 locales, with an iOS and an Android body.
 - `2026-10-31-screen-capture-pre-prompt-shortened` | The screen-capture pre-prompt carried too much text for a quick heads-up. It now shows only two lines, the title `화면 기록을 요청할게요` and `놀라지 마세요!`, with the same `취소` / `계속` buttons; the per-platform explanatory body was removed in all 15 locales.
 - `2026-10-31-screen-capture-pre-prompt-larger-body` | The second line of the screen-capture pre-prompt, `놀라지 마세요!`, was small body text under a large title and read like a footnote. It is now `text-lg` semibold (`text-gray-800`) so both lines read at a glance.
@@ -5099,3 +5665,28 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - `2026-11-07-auto-engagement` | Likes and comments on operator posts only came from a hand-run script, so new posts sat bare. A new automation rule, 좋아요 · 댓글 (자동 반응) in /admin/settings/automation, brings each operator post from the last 4 days up to a plan fixed per post: 1-24 likes and 0-4 comments from other operator accounts spread over the following hours; the post's author answers about half of the comments, another reader sometimes joins a thread, and comments and replies get likes (the author liking comments, the commenter liking the reply to them, a reader or two). Runs every 5 minutes, writes at most 2 AI comments or replies per run, and never touches a real user's comment.
 - `2026-11-09-more-face-avatars` | Too few new operator profile pictures showed a face: a clear face was only about 1 in 6 of the accounts made, and anime drawings (over 40%) outnumbered them. The kind-of-photo weights now lead with the face: about 70% of real photos show a face (whole or partly; East Asian accounts a little less, but still most), anime drawings drop to about 1 in 5 accounts, and when an anime picture shows a person (now about two in three of them) it rarely shows them from behind or small in a wide frame. Bios that mention a cat or a dog still pull the picture toward that pet.
 - `2026-11-09-korean-name-variety` | Korean women accounts were full of 서연 and 서윤: the profile model was told to use common names and kept picking the same few. For Korean accounts the server now picks each given name from a pool of about 130 (female and male) (the common names such as 서연 and 서윤 are in it too, each just one of many, picked evenly), and the model builds the display name on it (full name, given name, nickname or romanized). Existing accounts keep their names.
+- `2026-11-10-reload-when-scripts-do-not-arrive` | After a devbox restart the iPhone showed the conversation list, which scrolled, but no tab or button took a tap until the app was restarted. `devbox up` installed and opened the phone apps before the web server started, so the app loaded a half-served page: the HTML arrived, some JavaScript did not, and React never hydrated. Two fixes. `devbox up` now installs the apps first but opens them only once the web server answers and the conversation screens are compiled (`launch_deferred_mobile_apps`; `devbox mobile` is unchanged). The web app also recovers by itself (dev or production, e.g. right after a deploy): an inline script in the root layout reloads the page when a `/_next/` script fails, when a lazy chunk fails (`ChunkLoadError`), or when the window has loaded but nothing marked the page hydrated within 12 s (`<HydrationMark />`). It reloads at most twice per 2 minutes per tab and never without sessionStorage, so a broken server cannot loop. Physical-device verification pending.
+- `2026-11-10-replayed-google-callback-returns-to-app` | On Android a Google sign-in succeeded, then the phone's browser hit the Google callback a second time (same `state`, a new `code`: the browser tab went back to or reloaded Google's page, which redirects again) and showed NextAuth's sign-in error page (`State cookie was missing`) although the user was signed in. The NextAuth route now catches that case: a callback that fails with `OAuthCallback` from a browser that already holds a session cookie and whose callback-url cookie points at `/api/native-auth/complete` on this site is sent back to that route, which hands the app the existing session and returns to it. Any other failure keeps the error page. The callback-url cookie lives 15 minutes, so a replay after that still shows the error. Physical-device verification pending.
+- `2026-11-11-voice-talk-uses-room-speaker-mode` | The voice talk panel had its own `통역 ON/OFF` button, on by default, which played a server interpreter bot's translated speech into the call (the bot ran its own STT, translation and TTS). Since voice talk and STT were unified, that was the room's speaker mode a second time: double STT/translation/TTS cost, a line read twice when both were on, and translated speech from the call speaker while the room's speaker mode button was off. The panel's interpret button is gone; joining sends `interpret: false`, the server always registers `interpret: "off"`, and the voice agent service starts no interpreter unless `VOICE_AGENT_INTERPRETER=on`. A voice talk now carries the original voices only; the translation is the room's STT messages, and translated speech is the room's speaker / earphone mode button alone. While that mode reads a translation aloud (native TTS started → ended/stopped/error), the phone lowers the call's other-language voices to 25% and restores them after. Separately, the speaker / earphone mode button was hidden on Android below 13 (e.g. a Galaxy S9 on Android 10), because those versions cannot report where media plays and the button was gated on that report. Speaker mode needs no earphone detection, so the button now shows on every shell that has speaker mode; without a route report it is speaker mode (echo canceller on, no device-audio capture). Earphone mode and device-audio capture still need a reported route. The RN parts need an app rebuild. Physical-device verification pending.
+- `2026-11-11-speaker-mode-reads-sentence-by-sentence` | Speaker / earphone mode synthesized a message's whole translation in one TTS request and played nothing until that clip had arrived whole, so a long translation started late. It now reads one sentence at a time: the first clip covers only the first sentence, and the next sentence is synthesized as soon as one starts playing, so it is usually ready when that one ends. A sentence ends at `. ! ? … ؟ ।` followed by a space (so `3.5` and `example.com` stay whole) or at a full-width `。！？`, with closing quotes kept on it. Leading sentences under 10 characters are read together with what follows them (`네. 좋아요, 그럼 내일 봐요.` is one clip), so no clip is a single short word. Playback order is unchanged: a later message still waits until every sentence of the one before it has been read. Web only; no app rebuild needed. Physical-device verification pending.
+- `2026-11-11-one-tts-model-gemini-lite` | The room menu had a `TTS 모델` row with three choices (`inworld-tts-1.5-mini`, `gemini-3.8-flash-tts`, `gemini-3.8-flash-lite-tts`), and a failed Gemini synthesis fell back to Inworld. Both are gone: every synthesis uses `gemini-3.8-flash-lite-tts`, the menu row is removed in all locales, and a failed synthesis plays nothing (the bubble tap shows the existing playback-failed toast; speaker mode skips that sentence). Saved choices are ignored: the account preferences API no longer reads, writes or returns `ttsModel` (the `app_users.tts_model` column stays, unused), and a `ttsModel` or `voiceId` sent by an older client is ignored. The TTS route keeps its `/tts/inworld` path for its callers; its upstream-error body is now `tts_failed`. Separately, a translation response can no longer carry speech: the translate route ignores `tts` in the request and never synthesizes, and the client no longer sends it, so translated text is never held back by TTS. Speech is asked for only after the text is on screen. Inworld server env vars (`INWORLD_*`) are no longer read. Web and server only; no app rebuild needed.
+- `2026-11-11-tts-streams-as-it-is-generated` | A translation read aloud (speaker / earphone mode, and a tap on a bubble's speaker) started only after the whole clip had been synthesized and downloaded. Measured against Gemini 3.8 Flash-Lite TTS: a whole answer took 2.0-3.3 s, while the same request asked as a stream delivered its first audio at 0.6-0.9 s and its last at 1.1-1.8 s. Two changes. (1) The server always asks Gemini for a stream; for clients that need a whole clip it joins the pieces, which alone answers about a second sooner (a long Korean sentence: about 3 s to 1.6-1.9 s). (2) A shell that reports `nativeTtsStream` asks the TTS route for a stream (`stream: true`) and plays it as it arrives: the route sends 24 kHz PCM frames (`application/x-mingle-tts-stream`) with silence trimmed at both ends as before, the web hands each piece to the shell (`native_tts_stream_start` / `_chunk` / `_end`), and the shell plays them with a streaming player (iOS `AVAudioPlayerNode`, 120 ms prebuffer, same +6 dB gain; Android `AudioTrack` in stream mode, same ducking of other apps). Sound starts at the first pieces instead of after the last. Unchanged for the user: playback order, the bubble's `…` then animated bars, stop on a second tap, the earphone guard, and what is charged (per clip, by its length; a clip stopped halfway is charged for what was sent). Whole clips are still used where a stream cannot be played: plain browsers, shells built before this, an iPhone in microphone + device-audio mode (the echo canceller needs the clip whole; the shell collects the stream and plays it at the end), and a server tempo override (`GEMINI_TTS_SPEED`). Needs the new app build for (2); (1) applies to every client at once. Physical-device verification pending (compiles and installs on both phones; sound not yet listened to).
+- `2026-11-11-tts-delivery-mode-switch` | Sentence-by-sentence reading and streamed playback were both always on, so they could not be compared on a phone. The room menu now ends with an experiment row, `TTS 방식 (실험)`, with three buttons: `문장 단위` (one request per sentence, each played once it has arrived whole), `스트리밍` (the whole text in one request, played as it arrives) and `둘 다` (one request per sentence, each played as it arrives; the default). The choice is kept per device in localStorage (`mingle_tts_delivery_mode`), applies from the next clip, and is not translated (Korean labels in every locale). A tap on a bubble's speaker always asks for the whole bubble; the switch only decides whether that clip streams. `스트리밍` streams only on a shell that can play a stream; elsewhere it is one whole clip.
+- `2026-11-11-voice-talk-button-leave-and-listen-only` | Three voice talk changes. (1) The voice talk button in the bottom-left of the room was hard to hit: the drawn button is unchanged (same 18 px phone icon in the same 44 px box), but an invisible tap area now extends 16 px toward the screen edge and 12 px above and below it; it does not extend to the right, where the speaker / earphone mode button sits. (2) Pressing that button during a call this phone is in did nothing useful (it only re-showed the panel). It now asks `보이스톡에서 나갈까요?` with `취소` / `나가기`; the panel's own `나가기` button goes through the same confirmation, so a call is never left by one stray tap. Before joining, the button still opens the panel. (3) Listen only: a joined viewer can switch the call's mic off and stay in their seat (one of the 8). The panel's bottom row has a `마이크 끄기` / `마이크 켜기` button beside `나가기`; while off, the top row shows a `듣기만 하는 중` chip and the viewer's own seat carries a small mic-off badge. Only the voice sent into the call stops: the room's speech-to-text keeps running as the Start/Stop button has it, so what the viewer says still becomes messages. Every new call starts with the mic on. Web only; no app rebuild needed. Physical-device verification pending.
+- `2026-11-11-voice-talk-separate-switches-all-on-at-join` | Voice talk and speech-to-text were one mic (the room's Start/Stop button also drove the call's mic), so stopping speech-to-text silenced the call too. They are now separate switches that a call turns on together. Joining a call turns on three things at once: the call's mic, speech-to-text (as before), and speaker / earphone mode (the interpreted voice). Each can then be switched off by itself: the panel's mic button owns the voice sent into the call, the room's Start/Stop button owns speech-to-text (the messages and their translation), and the speaker button owns the translation read aloud. Stopping speech-to-text no longer mutes the call; muting the call no longer stops speech-to-text. Leaving the call turns off only what the call turned on and the viewer did not touch since (same rule for speech-to-text and for speaker mode). Speaker mode turned on by a call is set to the microphone source and shows no notice, so it never starts screen recording by itself. There is still no interpretation of a speaker whose speech-to-text is off: translation, shown or spoken, comes only from speech-to-text. Separately, while in a call the echo canceller now runs for speech-to-text on every platform (Android previously ran it only while speaker mode was reading aloud), so the other participants' voices coming out of this phone are not transcribed as this viewer's words. Web only; no app rebuild needed. Physical-device verification pending.
+- `2026-11-11-voice-talk-and-stt-fully-separate` | Supersedes `2026-11-11-voice-talk-separate-switches-all-on-at-join`. Joining a call used to turn speech-to-text (and, for a few hours, speaker mode) on with it. A viewer who then pressed Stop would expect everything that came on together to go off together, including the call, and be puzzled to still be in it. Voice talk and speech-to-text are now fully separate: joining or leaving a call never starts or stops speech-to-text and never touches speaker / earphone mode. The Start/Stop button means the same in a call as outside one (speech-to-text: the messages and their translation), the speaker button means the same (the translation read aloud), and the call has its own two controls in its panel: `마이크 끄기` / `마이크 켜기` (listen only, the seat is kept) and `나가기`. Because translation, shown or spoken, comes only from speech-to-text, a viewer who is in a call with speech-to-text off sees one grey line in the panel: `자막·통역은 꺼져 있어요. 켜려면 아래 시작 버튼을 누르세요.` It disappears once Start is pressed. Kept from before: every call starts with the mic on, the leave confirmation, the larger tap area of the room's voice talk button, and the echo canceller running for speech-to-text while in a call. Not shown yet: whether another participant has speech-to-text off (their seat looks the same). Web only; no app rebuild needed. Physical-device verification pending.
+- `2026-11-11-voice-talk-seats-mute-flag-ripple-profile` | Voice talk panel polish. (1) A member whose call mic is off now has a mute icon over the middle of their round avatar (a white mic-off on a 40% dark veil), replacing the small corner badge. (2) Everyone sees it, not only the muted member: the app publishes its mic switch as a `mic` participant attribute and every panel reads it. Needs the new app build on both ends; an older build on the other side shows as mic on. (3) The mic button now states the mic's state, `마이크 켜짐` / `마이크 꺼짐` (dark when off), instead of the action `마이크 끄기` / `마이크 켜기`; pressing it still switches. (4) The mic and `나가기` buttons are 44 px tall and at least 124 px wide with 16 px between them (were about 30 px tall, 8 px apart). (5) The speaking mark is no longer a hard 3 px amber ring: two translucent amber rings (30% opacity) spread out from the avatar in turn every 1.6 s over a faint steady glow, and it is not drawn for a muted member; with reduced motion it is a still glow. (6) Tapping a seat's avatar opens that member's profile (the same handler as a chat bubble's avatar, so a blocked counterpart's profile stays closed). (7) Each seat shows the member's speech-language flag at the avatar's bottom-left; the panel had never drawn one although the call already carried the language. Separately, chat bubble avatars now carry the same small flag at their bottom-left: the language that message was spoken in (none for a language without a flag of its own). The bubble's own language badges are unchanged. Physical-device verification pending.
+- `2026-11-11-voice-talk-instant-leave-and-bystanders` | Two voice talk changes. (1) Leaving and seat changes were slow to show. The panel waited for the app to finish disconnecting and for the next status check (every 10 s) before it believed this phone had left, and a phone only looking at the panel learned of someone else joining or leaving up to 10 s late. Now the panel hides and this phone's seat empties the moment `나가기` is confirmed; the app reports `left` before it disconnects; it re-reads the server's list right after joining, leaving, or any change in who is in the call; and the status check runs every 3 s. A phone in the call still sees others come and go through the call itself, at once. (2) The panel now shows who in the room is not in the call: one row of small plain circles (24 px, profile photo or initial, no flag) under the seats and above the mic / `나가기` buttons, scrolling sideways when long. A member who has the room open right now is drawn normally; one who does not is faded to 35% (whitish on the white panel). Those with the room open come first. "Has the room open" is new: the messaging server now tells every live reader of a room who else is connected to it (`presence` frames on each open and close; a user on two devices counts once), so it follows the room screen being open, not the app being installed or recently used. Until the server has reported, nobody is shown as away. Needs the new app build for the faster leave, and the messaging server restarted (or redeployed) for presence; with an older messaging server the row shows everyone as present. Physical-device verification pending.
+- `2026-11-11-voice-talk-start-dialog-message-and-incoming-card` | Starting a voice talk took two steps in two places: the bottom-left button only opened the panel, and joining was a small `참여` button at the very top of the screen. Now: (1) Pressing the voice talk button outside a call asks `대화방에 보이스톡을 시작하시겠습니까?` (`취소` / `시작`; when a call is already live, `진행 중인 보이스톡에 참여하시겠습니까?` / `참여`) in a dialog near the bottom of the screen, where the thumb already is, with 48 px buttons. Confirming joins at once. (2) A call that starts leaves a message in the room from the starter: a green card `<이름>님이 보이스톡을 시작했습니다.` with a full-width `참여하기` button. It is an ordinary room message (one per call), so it shows in history, in the room list preview (`📞 Voice talk`) and to members who open the room later. Its button joins for as long as that call is live; for someone in the call it reads `참여 중`, and once the call is over the card turns grey with `종료된 보이스톡`. (3) Members who have the room open when a call starts also get a card low on the screen with the same sentence and `거절` / `참여`. Declining hides it for that call; the message in the room still joins. (4) The panel under the top bar is now only the call this phone is in: it is not shown before joining, and its `참여` / `닫기` / `거절` row is gone. (5) Leaving: the panel's `나가기` leaves at once (it was a confirmation since earlier today); the room's voice talk button during a call asks `보이스톡에서 나가시겠습니까?` first. (6) One call per room was already enforced by the server (a second start joins the live call); the announcement test now pins it. The existing voice talk push to the other members is unchanged. Web and server only; no app rebuild needed. Physical-device verification pending.
+- `2026-11-11-voice-talk-dialogs-hide-ad-banner` | The voice talk dialogs (start / join, leave) dim the whole room, but the native ad banner draws above the page: it stayed bright white in the dark screen and covered the lower edge of the dialog, which now sits low on the screen. The banner is hidden while the start/join dialog, the leave dialog or the incoming-call card is up (`useNativeBannerSuppression`, the same mechanism other room overlays use) and comes back when they close. Web only. Physical-device verification pending.
+- `2026-11-11-voice-talk-speaking-ripple-neutral` | The speaking ripple around a seat's avatar was translucent amber, which read as a yellow stain around the photo rather than as sound. It is now neutral gray: the two spreading rings are `slate-400` at 25% and the steady glow `slate-300` at 30%; the timing and shape are unchanged. The folded row's speaking border follows (`slate-400`). The avatar placeholder itself keeps its amber. Web only. Physical-device verification pending.
+- `2026-11-11-voice-talk-own-start-not-offered-back` | The person who started a voice talk could see it presented as someone else's: `<내 이름>님이 보이스톡을 시작했습니다.` Two places could say so. (1) The incoming-call card was offered to anyone not joined on that phone, including the account that started the call (while its own join was still connecting or had failed, and on a second phone signed in to the same account). It is now never offered to an account that is already in the call. (2) The room message decided "mine" from the sender's account id on the row, which the server withholds for messages sent while the room had a single real member; the bubble now also trusts the server's `sentByViewer`, and the server always sends the sender's identity for a voice talk announcement. The starter sees `보이스톡을 시작했습니다.` with `참여 중`. Web and server only. Physical-device verification pending.
+- `2026-11-11-voice-talk-button-does-not-ask-over-incoming-card` | While the incoming-call card (`<이름>님이 보이스톡을 시작했습니다.` with `거절` / `참여`) was on screen, pressing the room's voice talk button opened a second dialog over it asking about a voice talk again. The card is already that question, so the button now opens nothing while the card is up. After the card is declined, the button asks `진행 중인 보이스톡에 참여하시겠습니까?` as before. Web only. Physical-device verification pending.
+- `2026-11-11-voice-talk-seat-freed-after-app-restart` | Closing and reopening the app during a voice talk dropped the connection but left the viewer shown as in the call: the app never got to tell the server, and the server only checked who was really connected when someone joined. Two fixes. (1) The phone remembers the call it is in (per room, in the page's storage). When the room opens again and the app is no longer connected to that call while the server still lists this viewer in it, the phone leaves it on the server and empties its own seat on screen at once. A call the page merely reloaded under (the app still connected) is untouched, and so is a call this account is in on another phone (this phone never remembered it). (2) Reading a room's call now also asks LiveKit who is really connected and frees the seats of apps that were closed without leaving, at most once every 5 s per room (members who joined within the last 45 s are kept, as before). So other members, and a phone that never reopens the room, stop seeing a closed app as in the call once LiveKit has noticed it gone. Web and server only. Physical-device verification pending.
+- `2026-11-11-korean-app-name-and-search-words` | On a phone set to Korean the app could not be found by typing its name in Korean in the phone's own search. Two changes, both in the app binary (a new store release is needed). (1) Korean app name: the home screen label is `해시챗` on a phone whose language is Korean (iOS `ko.lproj/InfoPlist.strings`, Android `values-ko/strings.xml`), and `HashChat` everywhere else. On iOS this also makes the app a Korean-localized app, so system-drawn text inside it (permission alert buttons) follows Korean on a Korean phone. (2) iOS search words: the hidden Spotlight item that already carried the old name (`mingle`, `밍글`, ...) now also carries the spellings people type: `해시챗 해쉬챗 해씨챗 해쒸챗 해시쳇 해쉬쳇`, the halves `해시 해쉬 해씨 해쒸 챗 쳇 채팅`, and `hash`, `chat`, `Hash Chat`. It is registered when the new version is first opened. Android has no way to register extra search words for an app: its launcher search matches the label only, so `해시챗` is found, while `해쉬` / `해씨` / `해쒸` are not; shortcut labels were not used for this because they would fill the icon's long-press menu with meaningless entries. Physical-device verification pending.
+- `2026-11-11-app-name-hashchat-in-every-language` | Supersedes the Korean app name of `2026-11-11-korean-app-name-and-search-words` (reverted the same day, before any release). The home screen label is `HashChat` in every language, Korean included: the localized name files (iOS `ko.lproj` / `en.lproj`, Android `values-ko`) are removed, so the app is not a Korean-localized app either. Finding the app in Korean is left to the iOS Spotlight search words alone (`해시챗 해쉬챗 해씨챗 해쒸챗 해시쳇 해쉬쳇 해시 해쉬 해씨 해쒸 챗 쳇 채팅`, kept). On Android, whose launcher search matches the label only, the app is found by `HashChat` and not by any Korean spelling.
+- `2026-11-11-voice-talk-starter-name-and-folded-tap` | Two voice talk fixes. (1) The incoming-call card named whoever was first in the call's list as its starter (`<that person>님이 보이스톡을 시작했습니다.`). When the real starter had dropped out (here: their app was restarted mid-call), the card told them someone else had started their own call. The server now says who started the call (`startedBy`, looked up by name when they are no longer in it), the card names that person, and to the starter themselves it reads `내가 시작한 보이스톡이 진행 중입니다.` (with `참여` to rejoin). (2) A folded panel (the slim bar after dragging it up) unfolded only from the small chevron at its right end; a tap anywhere on the bar now unfolds it. The chevron still folds an open panel. Web and server only. Physical-device verification pending.
+- `2026-11-11-voice-talk-keyboard-menu-same-as-button` | In keyboard mode the voice talk row of the composer's `+` menu still did what the phone button did before today: it asked to start (or join) a voice talk even during a call this phone is in. Both entry points now share one handler, so the `+` menu row also asks `보이스톡에서 나가시겠습니까?` during a call, and `대화방에 보이스톡을 시작하시겠습니까?` / `진행 중인 보이스톡에 참여하시겠습니까?` otherwise. Web only. Physical-device verification pending.
+- `2026-11-11-hash-store-price-list` | The Hash store showed only packs and an "about N minutes of interpreting" hint, so people could not tell what spends Hash and what is free. A price list card now sits under the packs: speech recognition per minute (captions and translation of what was said included, charged while Start is on), translation read aloud per conversation minute (with the per-audio-minute price in its note), a typed message translation each (re-translating costs the same), photo translation ("depends on how much text"), then what is free (voice talk calls, sending messages and photos, messages that need no translation, reading translations) and who pays. Prices come from the server's live pricing rates (`priceList` on `/coins/products`), so a rate changed in /admin/coins shows without a release. In all 15 store languages. Web and server only. Physical-device verification pending.
+- `2026-11-11-voice-talk-mic-kept-outside-the-room` | Muting the call's mic, going back to the conversation list and opening the room again turned the mic back on: the room screen started each visit with "mic on" and pushed that to the app. The app now owns the call and its mic, and they continue with the room screen closed and with the app in the background, until the app quits. The room screen switches the mic only when the viewer presses `마이크 켜짐 / 꺼짐`, and on every visit shows what the app reports (`micOn` of its call), so a muted call stays muted. Separately, on Android a call's microphone could go silent once the app was in the background while speech-to-text was off, because only speech-to-text started the microphone foreground service. A live call now holds that service too (notification `HashChat voice talk in progress`), shared with speech-to-text so either can stop without cutting the other; it starts only once the microphone is allowed. iOS already keeps audio running in the background. The Android part needs the new app build. Physical-device verification pending.
+- `2026-11-11-voice-talk-call-volume` | On the speaker a voice talk was too loud even at the phone's lowest volume: during a call the system volume does not go below a fairly loud minimum. The call panel now has a `통화 음량` slider (0-100%, in 5% steps) between the seats and the bottom buttons. It scales every voice this phone hears in the call, down to silence, on top of everything else (the other voices still drop to 25% of it while a translation is read aloud). The choice is kept on this device and applied each time a call connects; it starts at 60%. It does not change the translation read aloud, the phone's system volume, or what others hear. Needs the new app build. Physical-device verification pending.

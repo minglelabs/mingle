@@ -112,6 +112,7 @@ describe('capabilities message (contract A.1)', () => {
       audioRoute: true,
       deviceAudioCapture: false,
       nativeTts: false,
+      nativeTtsStream: false,
       contacts: false,
     });
     expect(buildNativeShellCapabilities({ audioRoute: false })).toEqual({
@@ -120,6 +121,7 @@ describe('capabilities message (contract A.1)', () => {
       audioRoute: false,
       deviceAudioCapture: false,
       nativeTts: false,
+      nativeTtsStream: false,
       contacts: false,
     });
   });
@@ -131,17 +133,19 @@ describe('capabilities message (contract A.1)', () => {
       audioRoute: false,
       deviceAudioCapture: true,
       nativeTts: false,
+      nativeTtsStream: false,
       contacts: false,
     });
   });
 
   it('reports native TTS playback only when the shell says it can', () => {
-    expect(buildNativeShellCapabilities({ audioRoute: true, nativeTts: true })).toEqual({
+    expect(buildNativeShellCapabilities({ audioRoute: true, nativeTts: true, nativeTtsStream: false })).toEqual({
       type: 'capabilities',
       openAppSettings: true,
       audioRoute: true,
       deviceAudioCapture: false,
       nativeTts: true,
+      nativeTtsStream: false,
       contacts: false,
     });
   });

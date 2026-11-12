@@ -20,6 +20,10 @@ import {
 import ChatBubbleTimestamp from './ChatBubbleTimestamp'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
 import ConversationImageBubble from './ConversationImageBubble'
+import VoiceCallStartedBubble from './VoiceCallStartedBubble'
+import HashRushStartedBubble from './HashRushStartedBubble'
+import { normalizeHashRushMessage, type HashRushMessage } from '@/lib/hash-rush-message'
+import { normalizeVoiceCallMessage, type VoiceCallMessage } from '@/lib/voice-call-message'
 import { normalizeConversationMessageImage, type ConversationMessageImage } from '@/lib/conversation-image'
 import { MessageReactionScope, MessageReactionBadges } from './MessageReactions'
 import { MessageRecallScope } from './MessageRecall'
@@ -139,6 +143,13 @@ export interface Utterance {
   // speakerUserId it is also set for turns sent while the room was solo.
   sentByViewer?: boolean
   image?: ConversationMessageImage
+  // This message announces a voice talk that started: it renders as a card
+  // with a Join button instead of text.
+  voiceCall?: VoiceCallMessage
+  // A Hash Rush game that started: the same kind of card.
+  hashRush?: HashRushMessage
+  /** Said in a voice talk: only this viewer and the others with interpretation on see it. */
+  voiceCaption?: true
   id: string
   speaker?: string
   speakerAvatarSeed?: string
@@ -884,6 +895,10 @@ function ChatBubble({
 }: ChatBubbleProps) {
   const isRecalled = utterance.recalled === true
   const messageImage = isRecalled ? null : normalizeConversationMessageImage(utterance.image)
+  const voiceCallMessage = isRecalled ? null : normalizeVoiceCallMessage(utterance.voiceCall)
+  const hashRushMessage = isRecalled ? null : normalizeHashRushMessage(utterance.hashRush)
+  // A card (a call or a game that started), not text: no language row, no controls.
+  const announcementCard = !!voiceCallMessage || !!hashRushMessage
   const isOwnMessage = Boolean(
     viewerUserId && utterance.speakerUserId && utterance.speakerUserId === viewerUserId,
   )
@@ -983,7 +998,12 @@ function ChatBubble({
     ? `${bubbleTextClassName} text-gray-400`
     : `${bubbleTextClassName} ${isOriginalLanguageSelected ? 'text-gray-900' : activeTranslationEntry?.state === 'interim' ? 'text-gray-400' : 'text-gray-700'}`
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
-  const bubbleBackgroundClassName = isOwnMessage ? 'bg-amber-50/80' : 'bg-white'
+  // A call caption is the same bubble in another color: it is not a message
+  // the whole room has.
+  const isVoiceCaption = utterance.voiceCaption === true && !isRecalled
+  const bubbleBackgroundClassName = isVoiceCaption
+    ? 'bg-sky-50'
+    : isOwnMessage ? 'bg-amber-50/80' : 'bg-white'
   const bubbleCornerClassName = isOwnMessage ? 'rounded-tl-2xl' : 'rounded-tl-none'
   const expandedBubblePaddingClassName = isCounterpartMessage ? 'px-2 pt-0.5 pb-1' : 'px-2 py-1'
   const collapsedBubblePaddingClassName = isCounterpartMessage ? 'px-2.5 pt-0.5 pb-1' : 'px-2.5 py-1'
@@ -1014,7 +1034,7 @@ function ChatBubble({
 
   // A double tap on the bubble folds or unfolds it (reading aloud stays in
   // the long-press menu). One language row has nothing to fold.
-  const canToggleBubble = !messageImage && !isRecalled && expandedBubbleEntries.length > 1
+  const canToggleBubble = !messageImage && !announcementCard && !isRecalled && expandedBubbleEntries.length > 1
   const toggleBubbleExpanded = canToggleBubble ? () => setIsBubbleExpanded((expanded) => !expanded) : undefined
 
   const activeBubbleText = (
@@ -1131,7 +1151,7 @@ function ChatBubble({
     ))
     ? [...firstCollapsedHeaderLanguageOptions.slice(0, 4), originalHeaderLanguage]
     : firstCollapsedHeaderLanguageOptions
-  const shouldShowCollapsedHeaderLanguages = !messageImage && !isRecalled && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
+  const shouldShowCollapsedHeaderLanguages = !messageImage && !announcementCard && !isRecalled && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
   // A continued run hides the name and badge; the header stays only for the language buttons.
   const headerSpeakerName = isGroupContinuation ? '' : speakerName
   const headerSpeakerBadge = isGroupContinuation ? null : speakerBadge
@@ -1216,7 +1236,7 @@ function ChatBubble({
     <div key="avatar" data-speaker-avatar-column data-speaker-avatar-hidden aria-hidden="true" className="w-10 shrink-0" />
   ) : (
     <div key="avatar" data-speaker-avatar-column className="mt-0.5 flex w-10 shrink-0 flex-col items-center gap-1">
-      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+      <div className="relative rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
         {canOpenSpeakerProfile && utterance.speakerUserId ? (
           <button
             type="button"
@@ -1234,6 +1254,17 @@ function ChatBubble({
         ) : (
           avatarImage
         )}
+        {originalDisplayLanguage && flag !== '🌐' && !announcementCard ? (
+          // The language this message was spoken in, small at the avatar's bottom-left.
+          // A language without a flag of its own shows none.
+          <span
+            aria-hidden="true"
+            data-speaker-avatar-flag={originalDisplayLanguage}
+            className="pointer-events-none absolute -bottom-[3px] -left-[3px] flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-white px-[1px] ring-1 ring-gray-200"
+          >
+            <LanguageFlag language={originalDisplayLanguage} className="text-[9px] leading-none" />
+          </span>
+        ) : null}
       </div>
     </div>
   )
@@ -1242,6 +1273,21 @@ function ChatBubble({
     <div data-chat-bubble-recalled className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-[13px] italic text-slate-400">
       {messageRecallCopy(uiLocale).placeholder}
     </div>
+  ) : voiceCallMessage ? (
+    <VoiceCallStartedBubble
+      message={voiceCallMessage}
+      speakerName={speakerName}
+      // `sentByViewer` is the server's word; the account id alone is withheld in some rooms.
+      isOwnMessage={isOwnMessage || utterance.sentByViewer === true}
+      locale={uiLocale}
+    />
+  ) : hashRushMessage ? (
+    <HashRushStartedBubble
+      message={hashRushMessage}
+      speakerName={speakerName}
+      isOwnMessage={isOwnMessage || utterance.sentByViewer === true}
+      locale={uiLocale}
+    />
   ) : messageImage ? <ConversationImageBubble image={messageImage} locale={uiLocale} /> : (
     <AnimatePresence initial={false} mode="popLayout">
       {isBubbleExpanded ? (
@@ -1412,7 +1458,7 @@ function ChatBubble({
   // A solo-era turn carries no speakerUserId (see isOwnMessage), whoever sent it, so the server's own flag decides there.
   const canRecall = !isDraft && !isRecalled && (utterance.sentByViewer === true || isOwnMessage)
   // Photos carry no text of their own to translate again.
-  const canRetranslate = !isDraft && !isRecalled && !messageImage
+  const canRetranslate = !isDraft && !isRecalled && !messageImage && !announcementCard
   const replyReference = isDraft || isRecalled ? null : buildMessageReplyReference(utterance)
   const reactiveContent = <MessageReactionScope id={isDraft || isRecalled ? undefined : utterance.id} locale={uiLocale}>
     <MessageRecallScope id={canRecall ? utterance.id : undefined} locale={uiLocale}>

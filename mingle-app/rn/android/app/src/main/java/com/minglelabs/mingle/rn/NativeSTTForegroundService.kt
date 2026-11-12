@@ -27,12 +27,13 @@ class NativeSTTForegroundService : Service() {
       ACTION_STOP -> stopForegroundService()
       else -> startForegroundService(
         deviceAudio = intent?.getBooleanExtra(EXTRA_DEVICE_AUDIO, false) == true,
+        voiceCallOnly = intent?.getBooleanExtra(EXTRA_VOICE_CALL_ONLY, false) == true,
       )
     }
     return START_NOT_STICKY
   }
 
-  private fun startForegroundService(deviceAudio: Boolean) {
+  private fun startForegroundService(deviceAudio: Boolean, voiceCallOnly: Boolean = false) {
     val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
     val contentIntent = PendingIntent.getActivity(
       this,
@@ -43,10 +44,19 @@ class NativeSTTForegroundService : Service() {
 
     val notification = Notification.Builder(this, CHANNEL_ID)
       .setSmallIcon(R.mipmap.ic_launcher)
-      .setContentTitle(if (deviceAudio) "HashChat is translating device audio" else "HashChat microphone active")
+      .setContentTitle(
+        when {
+          deviceAudio -> "HashChat is translating device audio"
+          voiceCallOnly -> "HashChat voice talk in progress"
+          else -> "HashChat microphone active"
+        },
+      )
       .setContentText(
-        if (deviceAudio) "Sound played on this device is being captured"
-        else "Speech translation capture is running",
+        when {
+          deviceAudio -> "Sound played on this device is being captured"
+          voiceCallOnly -> "Tap to return to the call"
+          else -> "Speech translation capture is running"
+        },
       )
       .setOngoing(true)
       .setOnlyAlertOnce(true)
@@ -138,21 +148,39 @@ class NativeSTTForegroundService : Service() {
     private const val ACTION_START = "com.minglelabs.mingle.rn.stt.START"
     private const val ACTION_STOP = "com.minglelabs.mingle.rn.stt.STOP"
     private const val EXTRA_DEVICE_AUDIO = "com.minglelabs.mingle.rn.stt.DEVICE_AUDIO"
+    private const val EXTRA_VOICE_CALL_ONLY = "com.minglelabs.mingle.rn.stt.VOICE_CALL_ONLY"
+
+    /** Who keeps the service up: speech-to-text, the voice talk call, or both. */
+    const val HOLDER_STT = "stt"
+    const val HOLDER_VOICE_CALL = "voice_call"
+    private val holders = mutableSetOf<String>()
     private const val TAG = "NativeSTTForeground"
 
     // Told once, on the main thread, whether the device-audio start reached
     // the foreground (null) or why it did not.
     private val pendingStartListener = AtomicReference<((Throwable?) -> Unit)?>(null)
 
+    /**
+     * Keeps the microphone alive in the background for [holder]. The voice
+     * talk call holds it too, so a call keeps sending the user's voice with
+     * the app in the background even while speech-to-text is off.
+     */
     fun start(
       context: Context,
       deviceAudio: Boolean = false,
+      holder: String = HOLDER_STT,
+      // Last, so a trailing lambda lands here.
       onDeviceAudioStarted: ((Throwable?) -> Unit)? = null,
     ) {
+      val voiceCallOnly = synchronized(holders) {
+        holders.add(holder)
+        holders == setOf(HOLDER_VOICE_CALL)
+      }
       pendingStartListener.set(if (deviceAudio) onDeviceAudioStarted else null)
       val intent = Intent(context, NativeSTTForegroundService::class.java).apply {
         action = ACTION_START
         putExtra(EXTRA_DEVICE_AUDIO, deviceAudio)
+        putExtra(EXTRA_VOICE_CALL_ONLY, voiceCallOnly && !deviceAudio)
       }
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         context.startForegroundService(intent)
@@ -161,8 +189,19 @@ class NativeSTTForegroundService : Service() {
       }
     }
 
-    fun stop(context: Context) {
+    /** [holder] is done; the service stops once nobody holds it. */
+    fun stop(context: Context, holder: String = HOLDER_STT) {
       pendingStartListener.set(null)
+      val remaining = synchronized(holders) {
+        holders.remove(holder)
+        holders.toSet()
+      }
+      if (remaining.isNotEmpty()) {
+        // Still held (the call outlives speech-to-text, or the other way
+        // round): restart as a plain microphone service with the right text.
+        runCatching { start(context, holder = remaining.first()) }
+        return
+      }
       val intent = Intent(context, NativeSTTForegroundService::class.java).apply {
         action = ACTION_STOP
       }

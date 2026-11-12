@@ -18,6 +18,7 @@ import {
 import { refreshCoinWallet, useCoinWallet } from "@/lib/coin-wallet-client";
 import { formatCoinCount, useAnimatedCoinCount, useCoinClock } from "./coin-balance-chip";
 import CoinUsageSection from "./coin-usage-section";
+import CoinPriceListSection from "./coin-price-list-section";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -218,6 +219,9 @@ export default function CoinStorePanel({
                 </ul>
               )}
             </section>
+
+            {/* What each feature costs, and what is free: shown whatever the purchase state. */}
+            {store.priceList ? <CoinPriceListSection copy={copy} priceList={store.priceList} locale={locale} /> : null}
 
             <section className="space-y-1 border-t border-gray-100 pt-3">
               <button

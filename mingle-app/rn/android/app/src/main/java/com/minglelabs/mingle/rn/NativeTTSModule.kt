@@ -5,10 +5,13 @@ import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
+import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.util.Base64
 import android.util.Log
@@ -49,6 +52,18 @@ class NativeTTSModule(
   private var currentStopsOnEarphoneDisconnect = false
   private var focusRequest: AudioFocusRequest? = null
   private var deviceCallback: AudioDeviceCallback? = null
+
+  // Streamed clip (`streamStart` / `streamAppend` / `streamEnd`): PCM that
+  // arrives while it is being generated and plays as it arrives. State is
+  // main-thread only; the blocking writes run on `streamWriter`.
+  private var streamTrack: AudioTrack? = null
+  private var streamWriter: Handler? = null
+  private var streamWriterThread: HandlerThread? = null
+  /** Bumped whenever the stream is torn down, so late callbacks are ignored. */
+  private var streamGeneration = 0
+  private var streamEnded = false
+  private var streamCarryByte: Byte? = null
+  private var streamQueuedFrames = 0L
 
   override fun getName(): String = NAME
 
@@ -119,7 +134,7 @@ class NativeTTSModule(
         file.writeBytes(audioBytes)
         clipFile = file
         val nextPlayer = MediaPlayer().apply {
-          setAudioAttributes(PLAYBACK_ATTRIBUTES)
+          setAudioAttributes(playbackAttributesNow())
           setDataSource(file.absolutePath)
           setOnCompletionListener { finished -> onClipFinished(finished) }
           setOnErrorListener { failed, what, extra ->
@@ -142,10 +157,185 @@ class NativeTTSModule(
     }
   }
 
+  // ── Streamed clip ───────────────────────────────────────────────────────
+
+  /**
+   * Starts a clip whose PCM (16-bit little-endian mono at `sampleRate`)
+   * arrives in pieces: `pcmBase64` here is the first piece, the rest comes
+   * through `streamAppend`, and `streamEnd` says no more will come. Resolves
+   * `{ ok: true }` once the track is playing, like `play`. Events are the
+   * same as for a whole clip.
+   */
+  @ReactMethod
+  fun streamStart(options: ReadableMap, promise: Promise) {
+    val rawPlaybackId = optionalString(options, "playbackId")
+    val rawUtteranceId = optionalString(options, "utteranceId")
+    val playbackId = rawPlaybackId ?: rawUtteranceId ?: UUID.randomUUID().toString()
+    val stopsOnEarphoneDisconnect =
+      options.hasKey("stopOnEarphoneDisconnect") && options.getBoolean("stopOnEarphoneDisconnect")
+    val requestedRate = if (options.hasKey("sampleRate")) options.getInt("sampleRate") else DEFAULT_STREAM_SAMPLE_RATE
+    val sampleRate = if (requestedRate in 8000..48000) requestedRate else DEFAULT_STREAM_SAMPLE_RATE
+    val firstPiece = decodePcm(if (options.hasKey("pcmBase64")) options.getString("pcmBase64") else null)
+
+    mainHandler.post {
+      // A new clip replaces the current one without a stopped event, like iOS.
+      releasePlayer()
+      currentPlaybackId = playbackId
+      currentUtteranceId = rawUtteranceId
+      currentStopsOnEarphoneDisconnect = stopsOnEarphoneDisconnect
+
+      // Contract A.5: a flagged clip never starts on a non-earphone output.
+      if (stopsOnEarphoneDisconnect && !earphonesConnected()) {
+        Log.i(TAG, "refused playbackId=$playbackId reason=$EARPHONES_DISCONNECTED_REASON")
+        val stopped = playbackPayload().apply { putString("reason", EARPHONES_DISCONNECTED_REASON) }
+        clearIdentity()
+        emit("ttsPlaybackStopped", stopped)
+        promise.resolve(Arguments.createMap().apply {
+          putBoolean("ok", false)
+          putString("reason", EARPHONES_DISCONNECTED_REASON)
+        })
+        return@post
+      }
+
+      try {
+        val format = AudioFormat.Builder()
+          .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+          .setSampleRate(sampleRate)
+          .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+          .build()
+        val minBufferBytes = AudioTrack.getMinBufferSize(
+          sampleRate,
+          AudioFormat.CHANNEL_OUT_MONO,
+          AudioFormat.ENCODING_PCM_16BIT,
+        )
+        // A stream-mode track starts sounding only once its buffer filled
+        // once, so the buffer stays small: sound starts with the first pieces.
+        val bufferBytes = if (minBufferBytes > 0) minBufferBytes * 2 else sampleRate / 5 * 2
+        val track = AudioTrack.Builder()
+          .setAudioAttributes(playbackAttributesNow())
+          .setAudioFormat(format)
+          .setTransferMode(AudioTrack.MODE_STREAM)
+          .setBufferSizeInBytes(bufferBytes)
+          .build()
+        val thread = HandlerThread("native-tts-stream").apply { start() }
+        streamTrack = track
+        streamWriterThread = thread
+        streamWriter = Handler(thread.looper)
+        streamEnded = false
+        streamCarryByte = null
+        streamQueuedFrames = 0L
+        requestDuckingFocus()
+        track.play()
+        Log.i(TAG, "stream playing playbackId=$playbackId sampleRate=$sampleRate bufferBytes=$bufferBytes")
+        appendStreamPcm(firstPiece)
+        promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
+      } catch (error: Throwable) {
+        Log.w(TAG, "streamStart failed playbackId=$playbackId", error)
+        releasePlayer()
+        clearIdentity()
+        promise.reject("playback_error", "Failed to start stream: ${error.message ?: "unknown"}", error)
+      }
+    }
+  }
+
+  @ReactMethod
+  fun streamAppend(playbackId: String, pcmBase64: String) {
+    val piece = decodePcm(pcmBase64)
+    if (piece.isEmpty()) return
+    mainHandler.post {
+      if (streamTrack == null || currentPlaybackId != playbackId || streamEnded) return@post
+      appendStreamPcm(piece)
+    }
+  }
+
+  @ReactMethod
+  fun streamEnd(playbackId: String) {
+    mainHandler.post {
+      val track = streamTrack ?: return@post
+      if (currentPlaybackId != playbackId || streamEnded) return@post
+      streamEnded = true
+      val generation = streamGeneration
+      val totalFrames = streamQueuedFrames
+      // After the last queued write: wait until the track has played it all.
+      streamWriter?.post {
+        mainHandler.post { awaitStreamPlayedOut(track, generation, totalFrames, lastHead = -1L, stalledMs = 0L) }
+      }
+    }
+  }
+
+  /** Queues one piece on the writer thread. Main thread. */
+  private fun appendStreamPcm(piece: ByteArray) {
+    val track = streamTrack ?: return
+    val writer = streamWriter ?: return
+    if (piece.isEmpty()) return
+    // A sample may be cut between two pieces.
+    val carry = streamCarryByte
+    var bytes = if (carry != null) byteArrayOf(carry) + piece else piece
+    streamCarryByte = null
+    if (bytes.size % 2 == 1) {
+      streamCarryByte = bytes[bytes.size - 1]
+      bytes = bytes.copyOf(bytes.size - 1)
+    }
+    if (bytes.isEmpty()) return
+    streamQueuedFrames += bytes.size / 2
+    val generation = streamGeneration
+    writer.post {
+      // Blocks while the track's buffer is full; a released track returns an error.
+      val written = runCatching { track.write(bytes, 0, bytes.size, AudioTrack.WRITE_BLOCKING) }.getOrDefault(-1)
+      if (written < 0) {
+        mainHandler.post {
+          if (streamGeneration == generation && streamTrack === track) onStreamError("audio_track_write($written)")
+        }
+      }
+    }
+  }
+
+  /** Polls until the track has played every frame written, then reports the clip finished. Main thread. */
+  private fun awaitStreamPlayedOut(
+    track: AudioTrack,
+    generation: Int,
+    totalFrames: Long,
+    lastHead: Long,
+    stalledMs: Long,
+  ) {
+    if (streamGeneration != generation || streamTrack !== track) return
+    // The head position is an unsigned 32-bit frame counter.
+    val head = runCatching { track.playbackHeadPosition.toLong() and 0xFFFFFFFFL }.getOrDefault(totalFrames)
+    val stalled = if (head == lastHead) stalledMs + STREAM_POLL_MS else 0L
+    // The last frames of a short write may never leave the buffer on some
+    // devices: a head that stopped moving also means it is over.
+    if (head >= totalFrames || stalled >= STREAM_STALL_MS) {
+      val payload = playbackPayload().apply { putBoolean("success", true) }
+      Log.i(TAG, "stream finished playbackId=${currentPlaybackId ?: ""} frames=$totalFrames head=$head")
+      releasePlayer()
+      clearIdentity()
+      emit("ttsPlaybackFinished", payload)
+      return
+    }
+    mainHandler.postDelayed(
+      { awaitStreamPlayedOut(track, generation, totalFrames, head, stalled) },
+      STREAM_POLL_MS,
+    )
+  }
+
+  private fun onStreamError(message: String) {
+    Log.w(TAG, "stream error playbackId=${currentPlaybackId ?: ""} $message")
+    val payload = playbackPayload().apply { putString("message", message) }
+    releasePlayer()
+    clearIdentity()
+    emit("ttsError", payload)
+  }
+
+  private fun decodePcm(base64: String?): ByteArray = try {
+    base64?.let { Base64.decode(it, Base64.DEFAULT) } ?: ByteArray(0)
+  } catch (_: IllegalArgumentException) {
+    ByteArray(0)
+  }
+
   @ReactMethod
   fun stop(promise: Promise) {
     mainHandler.post {
-      val wasPlaying = runCatching { player?.isPlaying == true }.getOrDefault(false)
+      val wasPlaying = runCatching { player?.isPlaying == true }.getOrDefault(false) || streamTrack != null
       val stopped = playbackPayload()
       releasePlayer()
       clearIdentity()
@@ -172,6 +362,14 @@ class NativeTTSModule(
     clearIdentity()
     emit("ttsError", payload)
   }
+
+  // During a voice talk the phone is in communication mode, and its echo
+  // canceller removes from the microphone only what plays as call audio. A
+  // translation read as media would go back into the call, so the other
+  // person would hear their own words translated. In a call it plays as call
+  // audio (and follows the call volume); otherwise as media, as before.
+  private fun playbackAttributesNow(): AudioAttributes =
+    if (audioManager.mode == AudioManager.MODE_IN_COMMUNICATION) CALL_PLAYBACK_ATTRIBUTES else PLAYBACK_ATTRIBUTES
 
   // ── Audio focus: other apps duck while a clip plays ─────────────────────
 
@@ -216,7 +414,7 @@ class NativeTTSModule(
   }
 
   private fun stopFlaggedClipIfEarphonesGone() {
-    if (!currentStopsOnEarphoneDisconnect || player == null) return
+    if (!currentStopsOnEarphoneDisconnect || (player == null && streamTrack == null)) return
     if (earphonesConnected()) return
     Log.i(TAG, "stopped playbackId=${currentPlaybackId ?: ""} reason=$EARPHONES_DISCONNECTED_REASON")
     val stopped = playbackPayload().apply { putString("reason", EARPHONES_DISCONNECTED_REASON) }
@@ -256,7 +454,28 @@ class NativeTTSModule(
     }
     clipFile?.delete()
     clipFile = null
+    releaseStream()
     abandonDuckingFocus()
+  }
+
+  /** Stops and forgets the streamed clip without reporting anything. Main thread. */
+  private fun releaseStream() {
+    streamGeneration += 1
+    val track = streamTrack
+    streamTrack = null
+    streamWriter?.removeCallbacksAndMessages(null)
+    streamWriter = null
+    if (track != null) {
+      // pause + flush unblocks a write waiting on a full buffer.
+      runCatching { track.pause() }
+      runCatching { track.flush() }
+      runCatching { track.release() }
+    }
+    streamWriterThread?.quitSafely()
+    streamWriterThread = null
+    streamEnded = false
+    streamCarryByte = null
+    streamQueuedFrames = 0L
   }
 
   private fun clearIdentity() {
@@ -284,9 +503,16 @@ class NativeTTSModule(
     const val NAME = "NativeTTSModule"
     private const val TAG = "NativeTTS"
     private const val EARPHONES_DISCONNECTED_REASON = "earphones_disconnected"
+    private const val DEFAULT_STREAM_SAMPLE_RATE = 24000
+    private const val STREAM_POLL_MS = 40L
+    private const val STREAM_STALL_MS = 600L
 
     private val PLAYBACK_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
       .setUsage(AudioAttributes.USAGE_MEDIA)
+      .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+      .build()
+    private val CALL_PLAYBACK_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
+      .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
       .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
       .build()
   }
