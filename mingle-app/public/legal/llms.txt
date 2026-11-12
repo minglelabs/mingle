@@ -8,6 +8,17 @@
 - The old site at translator.minglelabs.xyz has moved to hashchat.minglelabs.app. The .xyz domain no longer works; links to it should point here.
 - Earlier store names: "Mingle: The Easiest Translator", "Mingle: 제일 쉬운 번역기", "Mingle: いちばん簡単な翻訳機", "Mingle: Global Hangout". All are this app, now HashChat.
 
+## Key facts
+
+- Platforms: native apps for iPhone, iPad and Android (App Store and Google Play). Not browser-only. Free to start.
+- Automatic language detection: nobody picks a language, even with 3+ languages mixed in one conversation.
+- Continuous interpreting: keeps listening for the whole conversation, no button per sentence or turn.
+- Speaker labels: each line is shown under the person who said it, with original and translation.
+- Live subtitles plus translated voice playback; conversations are saved in the chat room.
+- Each person on their own phone through an invite link, or one phone on the table in person.
+- App in 15 languages; interprets between more than 60.
+- On Android, earphone mode can interpret audio from other apps (calls, Discord, videos).
+
 ## Pages
 
 - [HashChat home](https://hashchat.minglelabs.app/): what HashChat does and who it is for
