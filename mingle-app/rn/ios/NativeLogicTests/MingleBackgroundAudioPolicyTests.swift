@@ -172,14 +172,20 @@ enum MingleBackgroundAudioPolicyTests {
         typealias Plan = MingleBackgroundAudioPolicy.SttMicrophonePlan
         for kind in ["bluetooth", "wired"] {
             expect(
-                MingleBackgroundAudioPolicy.sttMicrophonePlan(outputRouteKind: kind) == Plan.phoneMicrophone,
+                MingleBackgroundAudioPolicy.sttMicrophonePlan(outputRouteKind: kind, prefersEarphoneMicrophone: false) == Plan.phoneMicrophone,
                 "\(kind) earphones play only; the phone records"
             )
         }
         for kind in ["speaker", "receiver", "usb", "car", "airplay", "hdmi", "other", "none"] {
             expect(
-                MingleBackgroundAudioPolicy.sttMicrophonePlan(outputRouteKind: kind) == Plan.routeDefault,
+                MingleBackgroundAudioPolicy.sttMicrophonePlan(outputRouteKind: kind, prefersEarphoneMicrophone: false) == Plan.routeDefault,
                 "\(kind) keeps the route's own microphone"
+            )
+        }
+        for kind in ["bluetooth", "wired", "speaker"] {
+            expect(
+                MingleBackgroundAudioPolicy.sttMicrophonePlan(outputRouteKind: kind, prefersEarphoneMicrophone: true) == Plan.routeDefault,
+                "picking the earphone microphone keeps the route's own on \(kind)"
             )
         }
     }

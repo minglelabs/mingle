@@ -750,6 +750,9 @@ class NativeSTTModule: RCTEventEmitter {
     private var sttSessionTokenAcquired = false
     private var isAecEnabled = false
     private var lastAppliedAec: Bool? = nil
+    /// The user picked the earphone microphone over the phone's (see
+    /// MingleBackgroundAudioPolicy.sttMicrophonePlan). Main thread.
+    private var prefersEarphoneMicrophone = false
     private var hasListeners = false
     private var audioObserversInstalled = false
     private var isRestartingAudio = false
@@ -942,6 +945,8 @@ class NativeSTTModule: RCTEventEmitter {
         return [
             // The shell offers device-audio capture only when this is true.
             "deviceAudioCaptureSupported": MingleDeviceAudioSupport.isSupported,
+            // setEarphoneMicrophone and the earphoneMicrophone start option.
+            "earphoneMicrophoneChoiceSupported": true,
             "runtimeConfig": [
                 "webAppBaseUrl": Self.readRuntimeConfigURL(
                     schemeKey: "MingleWebAppScheme",
@@ -1018,7 +1023,10 @@ class NativeSTTModule: RCTEventEmitter {
         // Read before setCategory: the route kind does not depend on it.
         let routeKind = MingleAudioRouteClassifier.currentSnapshot().routeKind
         let usePhoneMicrophone =
-            MingleBackgroundAudioPolicy.sttMicrophonePlan(outputRouteKind: routeKind) == .phoneMicrophone
+            MingleBackgroundAudioPolicy.sttMicrophonePlan(
+                outputRouteKind: routeKind,
+                prefersEarphoneMicrophone: prefersEarphoneMicrophone
+            ) == .phoneMicrophone
         // .voiceChat → iOS system-level AEC (works with AVAudioPlayer TTS)
         // .default   → no system AEC, full speaker volume, echo allowed
         // Earphones leak no echo into the phone's microphone, and .voiceChat
@@ -2011,8 +2019,8 @@ class NativeSTTModule: RCTEventEmitter {
     /// Bluetooth earphones switches them to HFP, which drops the whole device
     /// to a 16 kHz route, and flipping between HFP and A2DP makes other apps'
     /// playback (a video) run at the wrong rate, fast and high-pitched. Output
-    /// stays on A2DP and the microphone comes from the phone (wired earphones
-    /// keep their own microphone).
+    /// stays on A2DP and the microphone comes from the phone, whatever was
+    /// picked. Wired earphones follow the pick (the phone's by default).
     private func configureDeviceAudioSession() throws {
         let audioSession = AVAudioSession.sharedInstance()
         if audioSession.recordPermission == .granted {
@@ -2025,6 +2033,21 @@ class NativeSTTModule: RCTEventEmitter {
             try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
         }
         try audioSession.setActive(true, options: [])
+        if audioSession.recordPermission == .granted {
+            let routeKind = MingleAudioRouteClassifier.currentSnapshot().routeKind
+            let usePhoneMicrophone = MingleBackgroundAudioPolicy.sttMicrophonePlan(
+                outputRouteKind: routeKind,
+                prefersEarphoneMicrophone: prefersEarphoneMicrophone
+            ) == .phoneMicrophone
+            let phoneMicrophone = usePhoneMicrophone
+                ? audioSession.availableInputs?.first(where: { $0.portType == .builtInMic })
+                : nil
+            do {
+                try audioSession.setPreferredInput(phoneMicrophone)
+            } catch {
+                NSLog("[NativeSTTModule] device audio setPreferredInput failed: %@", error.localizedDescription)
+            }
+        }
         let inputs = audioSession.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
         let outputs = audioSession.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
         NSLog("[NativeSTTModule] device audio session active category=%@ inputs=[%@] outputs=[%@]",
@@ -2483,6 +2506,8 @@ class NativeSTTModule: RCTEventEmitter {
 
         let sttModel = options["sttModel"] as? String ?? "soniox"
         let aecEnabled = options["aecEnabled"] as? Bool ?? false
+        // Absent (older web): the phone's microphone while earphones are in.
+        prefersEarphoneMicrophone = options["earphoneMicrophone"] as? Bool ?? false
         let conversationId = (options["conversationId"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let apiNamespace = (options["apiNamespace"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let releaseVariant = (options["releaseVariant"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2627,6 +2652,27 @@ class NativeSTTModule: RCTEventEmitter {
                     "end_of_segment": endOfSegment,
                 ],
             ])
+        }
+    }
+
+    /// The microphone pick changed (the web's earphone-microphone question).
+    /// A running microphone session re-reads it through a capture restart;
+    /// a device-audio session applies it from its next start.
+    @objc(setEarphoneMicrophone:resolver:rejecter:)
+    func setEarphoneMicrophone(
+        _ enabled: Bool,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        performOnMainQueue { module in
+            let previous = module.prefersEarphoneMicrophone
+            module.prefersEarphoneMicrophone = enabled
+            NSLog("[NativeSTTModule] setEarphoneMicrophone %d→%d isRunning=%d",
+                  previous ? 1 : 0, enabled ? 1 : 0, module.isRunning ? 1 : 0)
+            if previous != enabled, module.isRunning, !module.deviceAudioActive {
+                module.restartAudioCapture(reason: "microphone_pick", bypassThrottle: true)
+            }
+            resolve(["ok": true])
         }
     }
 

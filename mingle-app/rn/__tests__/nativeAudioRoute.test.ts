@@ -113,6 +113,7 @@ describe('capabilities message (contract A.1)', () => {
       deviceAudioCapture: false,
       nativeTts: false,
       contacts: false,
+      earphoneMicrophoneChoice: false,
     });
     expect(buildNativeShellCapabilities({ audioRoute: false })).toEqual({
       type: 'capabilities',
@@ -121,6 +122,7 @@ describe('capabilities message (contract A.1)', () => {
       deviceAudioCapture: false,
       nativeTts: false,
       contacts: false,
+      earphoneMicrophoneChoice: false,
     });
   });
 
@@ -132,6 +134,7 @@ describe('capabilities message (contract A.1)', () => {
       deviceAudioCapture: true,
       nativeTts: false,
       contacts: false,
+      earphoneMicrophoneChoice: false,
     });
   });
 
@@ -143,6 +146,7 @@ describe('capabilities message (contract A.1)', () => {
       deviceAudioCapture: false,
       nativeTts: true,
       contacts: false,
+      earphoneMicrophoneChoice: false,
     });
   });
 });

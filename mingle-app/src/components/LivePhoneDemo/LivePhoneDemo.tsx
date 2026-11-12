@@ -3,6 +3,7 @@
 import ConversationImageComposer, { type ConversationImageComposerEarphoneMode } from './ConversationImageComposer'
 import MessageMediaDialog from './MessageMediaDialog'
 import EarphoneModeNoticeContent from './EarphoneModeNotice'
+import EarphoneMicrophoneNoticeContent from './EarphoneMicrophoneNotice'
 import LanguageRadioOption from './LanguageRadioOption'
 
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
@@ -70,6 +71,19 @@ import {
   subscribeNativeDeviceAudioCapability,
   subscribeSttCaptureSourcePick,
 } from '@/lib/native-device-audio'
+import {
+  getEarphoneMicrophonePickServerSnapshot,
+  getEarphoneMicrophonePickSnapshot,
+  getNativeEarphoneMicrophoneCapabilityServerSnapshot,
+  getNativeEarphoneMicrophoneCapabilitySnapshot,
+  resolveEarphoneMicrophoneEnabled,
+  shouldAskEarphoneMicrophone,
+  subscribeEarphoneMicrophonePick,
+  subscribeNativeEarphoneMicrophoneCapability,
+  writeEarphoneMicrophonePick,
+  DEFAULT_EARPHONE_MICROPHONE_PICK,
+  type EarphoneMicrophonePick,
+} from '@/lib/native-earphone-microphone'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
 import { TtsAgentTextScheduler } from './tts-agent-text'
 import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
@@ -2349,6 +2363,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     earphoneModeEnabled,
     pick: sttCaptureSourcePick,
   })
+  // Which microphone records while earphones are in: the phone's by default,
+  // asked once the first time earphones show up (shells that can switch).
+  const nativeEarphoneMicrophoneCapable = useSyncExternalStore(
+    subscribeNativeEarphoneMicrophoneCapability,
+    getNativeEarphoneMicrophoneCapabilitySnapshot,
+    getNativeEarphoneMicrophoneCapabilityServerSnapshot,
+  )
+  const earphoneMicrophonePick = useSyncExternalStore(
+    subscribeEarphoneMicrophonePick,
+    getEarphoneMicrophonePickSnapshot,
+    getEarphoneMicrophonePickServerSnapshot,
+  )
+  const earphoneMicrophoneEnabled = resolveEarphoneMicrophoneEnabled(earphoneMicrophonePick)
   // The read language (L) picked in the notice. Session state only: never
   // persisted, dropped on every on/off edge (see the reset below).
   const [earphoneModeReadLanguagePick, setEarphoneModeReadLanguagePick] = useState<EarphoneModeReadLanguagePick | null>(null)
@@ -4893,6 +4920,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled || speakerModeAecEnabled,
     captureSource: sttCaptureSource,
+    earphoneMicrophone: earphoneMicrophoneEnabled,
     sonioxManualFinalizeSilenceMs,
     sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
     sonioxEndpointMaxDelayMs,
@@ -7122,6 +7150,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const closeEarphoneModeNotice = useCallback(() => {
     setEarphoneModeNoticeOpen(false)
+  }, [])
+
+  // Only the visible room asks, and never on top of another notice.
+  const earphoneMicrophoneNoticeOpen = isVisible
+    && !earphoneModeNoticeOpen
+    && !screenCaptureNoticeOpen
+    && shouldAskEarphoneMicrophone({
+      shellCapable: nativeEarphoneMicrophoneCapable,
+      earphonesConnected: nativeAudioRoute.earphonesConnected,
+      pick: earphoneMicrophonePick,
+    })
+  const confirmEarphoneMicrophoneNotice = useCallback((pick: EarphoneMicrophonePick) => {
+    writeEarphoneMicrophonePick(pick)
+  }, [])
+  // Dismissed without a pick: keep the default and do not ask again.
+  const dismissEarphoneMicrophoneNotice = useCallback(() => {
+    writeEarphoneMicrophonePick(DEFAULT_EARPHONE_MICROPHONE_PICK)
   }, [])
 
   const isEarphoneModeOn = earphoneModeGate.controlVisible && earphoneModeEnabled
@@ -9934,6 +9979,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}
                 coinCostNotice={coinTtsCostNotice}
+              />
+            </MessageMediaDialog>
+          )}
+          {earphoneMicrophoneNoticeOpen && (
+            <MessageMediaDialog title={earphoneModeBaseCopy.microphoneNoticeTitle} onClose={dismissEarphoneMicrophoneNotice}>
+              <EarphoneMicrophoneNoticeContent
+                copy={earphoneModeBaseCopy}
+                onConfirm={confirmEarphoneMicrophoneNotice}
               />
             </MessageMediaDialog>
           )}

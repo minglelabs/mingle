@@ -474,6 +474,8 @@ type NativeSttStartCommand = {
     aecEnabled: boolean
     // Sent only for device audio; shells without it capture the microphone.
     captureSource?: SttCaptureSource
+    // iOS: record from the earphones' microphone instead of the phone's.
+    earphoneMicrophone?: boolean
     apiNamespace: string
     releaseVariant: MingleClientReleaseVariant
     behaviorProfile: MingleBehaviorProfile
@@ -507,6 +509,11 @@ type NativeSttSetAecCommand = {
   payload: { enabled: boolean }
 }
 
+type NativeSttSetEarphoneMicrophoneCommand = {
+  type: 'native_stt_set_earphone_microphone'
+  payload: { enabled: boolean }
+}
+
 // A piece of the translated sentence our TTS is reading aloud (Soniox
 // stt-rt-v6 agent text input); the native STT socket relays it to the server.
 type NativeSttAgentTextCommand = {
@@ -526,6 +533,7 @@ type NativeSttBridgeCommand =
   | NativeSttStopCommand
   | NativeSttStatusRequestCommand
   | NativeSttSetAecCommand
+  | NativeSttSetEarphoneMicrophoneCommand
   | NativeSttAgentTextCommand
   | NativeOpenAppSettingsCommand
 
@@ -1577,6 +1585,9 @@ interface UseRealtimeSTTOptions {
   enableAec?: boolean
   // What a native session transcribes. Fixed when the session starts.
   captureSource?: SttCaptureSource
+  // Record from the earphones' microphone instead of the phone's (shells
+  // that offer the choice; others ignore it).
+  earphoneMicrophone?: boolean
   sonioxManualFinalizeSilenceMs?: number
   sonioxEndpointMaxDelayMs?: number
   sonioxEndpointTuningStep?: number
@@ -3182,6 +3193,7 @@ export default function useRealtimeSTT({
   enableTts,
   enableAec = false,
   captureSource = 'microphone',
+  earphoneMicrophone = false,
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
   sonioxEndpointMaxDelayMs = DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
   sonioxEndpointTuningStep = DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
@@ -4063,6 +4075,15 @@ export default function useRealtimeSTT({
     if (!useNativeSttRef.current) return
     sendNativeSttCommand({ type: 'native_stt_set_aec', payload: { enabled: enableAec } })
   }, [enableAec, sendNativeSttCommand])
+
+  // The same for the microphone pick: a running session switches at once.
+  const prevEarphoneMicrophoneRef = useRef(earphoneMicrophone)
+  useEffect(() => {
+    if (prevEarphoneMicrophoneRef.current === earphoneMicrophone) return
+    prevEarphoneMicrophoneRef.current = earphoneMicrophone
+    if (!useNativeSttRef.current) return
+    sendNativeSttCommand({ type: 'native_stt_set_earphone_microphone', payload: { enabled: earphoneMicrophone } })
+  }, [earphoneMicrophone, sendNativeSttCommand])
 
   // Persist utterances to localStorage (debounced to avoid stringify on every update)
   const utterancePersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -6526,6 +6547,7 @@ export default function useRealtimeSTT({
             sttModel: 'soniox',
             aecEnabled: enableAec,
             ...(captureSource === 'device_audio' ? { captureSource } : {}),
+            ...(earphoneMicrophone ? { earphoneMicrophone } : {}),
             apiNamespace: runtimeBehaviorContext.apiNamespace,
             releaseVariant: runtimeBehaviorContext.releaseVariant,
             behaviorProfile: runtimeBehaviorContext.behaviorProfile,
@@ -6639,7 +6661,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, captureSource, ensureSessionKey, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
+  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, captureSource, earphoneMicrophone, ensureSessionKey, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
 
   // Keep the native listener stable while a session is active. Usage tracking
   // changes several callbacks on each tick, and re-subscribing here would

@@ -105,9 +105,14 @@ enum MingleBackgroundAudioPolicy {
     /// the wearer's ear and filters out other voices, so the person being
     /// translated (who talks toward the phone) comes in faint or not at all.
     /// Bluetooth earphones also drop to the 16 kHz hands-free profile to
-    /// record. With earphones in, record from the phone and leave the earphones
-    /// to play. `outputRouteKind` is `MingleAudioRouteClassifier.kind(of:)`.
-    static func sttMicrophonePlan(outputRouteKind: String) -> SttMicrophonePlan {
+    /// record. So with earphones in, the phone records and the earphones only
+    /// play, unless the user picked the earphone microphone (the web asks
+    /// once). `outputRouteKind` is `MingleAudioRouteClassifier.kind(of:)`.
+    static func sttMicrophonePlan(
+        outputRouteKind: String,
+        prefersEarphoneMicrophone: Bool
+    ) -> SttMicrophonePlan {
+        guard !prefersEarphoneMicrophone else { return .routeDefault }
         switch outputRouteKind {
         case "bluetooth", "wired":
             return .phoneMicrophone

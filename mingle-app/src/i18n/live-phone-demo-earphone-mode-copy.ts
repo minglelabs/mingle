@@ -39,6 +39,12 @@ export type LivePhoneDemoEarphoneModeCopy = {
   screenCaptureNoticeContinueLabel: string;
   screenCaptureNoticeCancelLabel: string;
   screenCaptureNoticeDontShowAgainLabel: string;
+  // Asked once, the first time earphones are in: which microphone records.
+  microphoneNoticeTitle: string;
+  microphonePhoneLabel: string;
+  microphonePhoneDescription: string;
+  microphoneEarphoneLabel: string;
+  microphoneEarphoneDescription: string;
 };
 
 const EARPHONE_MODE_COPY_BY_LOCALE = {
@@ -68,6 +74,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "계속",
     screenCaptureNoticeCancelLabel: "취소",
     screenCaptureNoticeDontShowAgainLabel: "다시 보지 않기",
+    microphoneNoticeTitle: "어떤 마이크로 들을까요?",
+    microphonePhoneLabel: "폰 마이크",
+    microphonePhoneDescription: "오프라인 인식을 위해 폰 마이크를 씁니다",
+    microphoneEarphoneLabel: "이어폰 마이크",
+    microphoneEarphoneDescription: "이어폰 마이크를 쓰면 앱이 내 목소리만 잘 듣고 다른 소리는 거의 인식하지 못합니다",
   },
   en: {
     label: "Earphone mode",
@@ -95,6 +106,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "Continue",
     screenCaptureNoticeCancelLabel: "Cancel",
     screenCaptureNoticeDontShowAgainLabel: "Don't show this again",
+    microphoneNoticeTitle: "Which microphone should we use?",
+    microphonePhoneLabel: "Phone microphone",
+    microphonePhoneDescription: "Uses the phone's microphone to hear the people around you",
+    microphoneEarphoneLabel: "Earphone microphone",
+    microphoneEarphoneDescription: "With the earphone microphone, the app hears your voice well but barely picks up any other sound",
   },
   ja: {
     label: "イヤホンモード",
@@ -122,6 +138,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "続ける",
     screenCaptureNoticeCancelLabel: "キャンセル",
     screenCaptureNoticeDontShowAgainLabel: "今後表示しない",
+    microphoneNoticeTitle: "どのマイクで聞き取りますか？",
+    microphonePhoneLabel: "スマホのマイク",
+    microphonePhoneDescription: "対面での会話を聞き取るため、スマホのマイクを使います",
+    microphoneEarphoneLabel: "イヤホンのマイク",
+    microphoneEarphoneDescription: "イヤホンのマイクを使うと、自分の声はよく聞き取れますが、ほかの音はほとんど認識できません",
   },
   "zh-CN": {
     label: "耳机模式",
@@ -149,6 +170,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "继续",
     screenCaptureNoticeCancelLabel: "取消",
     screenCaptureNoticeDontShowAgainLabel: "不再显示",
+    microphoneNoticeTitle: "使用哪个麦克风？",
+    microphonePhoneLabel: "手机麦克风",
+    microphonePhoneDescription: "使用手机麦克风来识别身边人的声音",
+    microphoneEarphoneLabel: "耳机麦克风",
+    microphoneEarphoneDescription: "使用耳机麦克风时，应用能清楚听到你的声音，但几乎识别不到其他声音",
   },
   "zh-TW": {
     label: "耳機模式",
@@ -176,6 +202,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "繼續",
     screenCaptureNoticeCancelLabel: "取消",
     screenCaptureNoticeDontShowAgainLabel: "不再顯示",
+    microphoneNoticeTitle: "要使用哪個麥克風？",
+    microphonePhoneLabel: "手機麥克風",
+    microphonePhoneDescription: "使用手機麥克風來辨識身邊的人說話",
+    microphoneEarphoneLabel: "耳機麥克風",
+    microphoneEarphoneDescription: "使用耳機麥克風時，應用程式能清楚聽到你的聲音，但幾乎辨識不到其他聲音",
   },
   fr: {
     label: "Mode écouteurs",
@@ -203,6 +234,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "Continuer",
     screenCaptureNoticeCancelLabel: "Annuler",
     screenCaptureNoticeDontShowAgainLabel: "Ne plus afficher",
+    microphoneNoticeTitle: "Quel micro utiliser ?",
+    microphonePhoneLabel: "Micro du téléphone",
+    microphonePhoneDescription: "Utilise le micro du téléphone pour entendre les personnes autour de vous",
+    microphoneEarphoneLabel: "Micro des écouteurs",
+    microphoneEarphoneDescription: "Avec le micro des écouteurs, l'app entend bien votre voix mais presque aucun autre son",
   },
   de: {
     label: "Kopfhörermodus",
@@ -230,6 +266,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "Weiter",
     screenCaptureNoticeCancelLabel: "Abbrechen",
     screenCaptureNoticeDontShowAgainLabel: "Nicht mehr anzeigen",
+    microphoneNoticeTitle: "Welches Mikrofon soll zuhören?",
+    microphonePhoneLabel: "Handy-Mikrofon",
+    microphonePhoneDescription: "Nutzt das Mikrofon des Handys, um Menschen in deiner Nähe zu hören",
+    microphoneEarphoneLabel: "Kopfhörer-Mikrofon",
+    microphoneEarphoneDescription: "Mit dem Kopfhörer-Mikrofon hört die App deine Stimme gut, andere Geräusche aber kaum",
   },
   es: {
     label: "Modo auriculares",
@@ -257,6 +298,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "Continuar",
     screenCaptureNoticeCancelLabel: "Cancelar",
     screenCaptureNoticeDontShowAgainLabel: "No volver a mostrar",
+    microphoneNoticeTitle: "¿Qué micrófono usamos?",
+    microphonePhoneLabel: "Micrófono del teléfono",
+    microphonePhoneDescription: "Usa el micrófono del teléfono para oír a las personas que tienes cerca",
+    microphoneEarphoneLabel: "Micrófono de los auriculares",
+    microphoneEarphoneDescription: "Con el micrófono de los auriculares, la app oye bien tu voz pero casi ningún otro sonido",
   },
   pt: {
     label: "Modo fones de ouvido",
@@ -284,6 +330,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "Continuar",
     screenCaptureNoticeCancelLabel: "Cancelar",
     screenCaptureNoticeDontShowAgainLabel: "Não mostrar novamente",
+    microphoneNoticeTitle: "Qual microfone usar?",
+    microphonePhoneLabel: "Microfone do celular",
+    microphonePhoneDescription: "Usa o microfone do celular para ouvir as pessoas ao seu redor",
+    microphoneEarphoneLabel: "Microfone do fone",
+    microphoneEarphoneDescription: "Com o microfone do fone, o app ouve bem a sua voz, mas quase nenhum outro som",
   },
   it: {
     label: "Modalità auricolari",
@@ -311,6 +362,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "Continua",
     screenCaptureNoticeCancelLabel: "Annulla",
     screenCaptureNoticeDontShowAgainLabel: "Non mostrare più",
+    microphoneNoticeTitle: "Quale microfono usiamo?",
+    microphonePhoneLabel: "Microfono del telefono",
+    microphonePhoneDescription: "Usa il microfono del telefono per sentire le persone intorno a te",
+    microphoneEarphoneLabel: "Microfono degli auricolari",
+    microphoneEarphoneDescription: "Con il microfono degli auricolari l'app sente bene la tua voce ma quasi nessun altro suono",
   },
   ru: {
     label: "Режим наушников",
@@ -338,6 +394,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "Продолжить",
     screenCaptureNoticeCancelLabel: "Отмена",
     screenCaptureNoticeDontShowAgainLabel: "Больше не показывать",
+    microphoneNoticeTitle: "Какой микрофон использовать?",
+    microphonePhoneLabel: "Микрофон телефона",
+    microphonePhoneDescription: "Микрофон телефона слышит людей рядом с вами",
+    microphoneEarphoneLabel: "Микрофон наушников",
+    microphoneEarphoneDescription: "С микрофоном наушников приложение хорошо слышит ваш голос, но почти не распознаёт другие звуки",
   },
   ar: {
     label: "وضع السماعات",
@@ -365,6 +426,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "متابعة",
     screenCaptureNoticeCancelLabel: "إلغاء",
     screenCaptureNoticeDontShowAgainLabel: "عدم الإظهار مرة أخرى",
+    microphoneNoticeTitle: "أي ميكروفون نستخدم؟",
+    microphonePhoneLabel: "ميكروفون الهاتف",
+    microphonePhoneDescription: "يستخدم ميكروفون الهاتف لسماع الأشخاص من حولك",
+    microphoneEarphoneLabel: "ميكروفون السماعات",
+    microphoneEarphoneDescription: "مع ميكروفون السماعات يسمع التطبيق صوتك جيدًا لكنه بالكاد يلتقط أي صوت آخر",
   },
   hi: {
     label: "ईयरफ़ोन मोड",
@@ -392,6 +458,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "जारी रखें",
     screenCaptureNoticeCancelLabel: "रद्द करें",
     screenCaptureNoticeDontShowAgainLabel: "दोबारा न दिखाएँ",
+    microphoneNoticeTitle: "कौन-सा माइक्रोफ़ोन इस्तेमाल करें?",
+    microphonePhoneLabel: "फ़ोन का माइक्रोफ़ोन",
+    microphonePhoneDescription: "आपके आसपास के लोगों को सुनने के लिए फ़ोन का माइक्रोफ़ोन इस्तेमाल होता है",
+    microphoneEarphoneLabel: "ईयरफ़ोन का माइक्रोफ़ोन",
+    microphoneEarphoneDescription: "ईयरफ़ोन के माइक्रोफ़ोन से ऐप आपकी आवाज़ अच्छी तरह सुनता है, पर दूसरी आवाज़ें लगभग नहीं पकड़ता",
   },
   th: {
     label: "โหมดหูฟัง",
@@ -419,6 +490,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "ดำเนินการต่อ",
     screenCaptureNoticeCancelLabel: "ยกเลิก",
     screenCaptureNoticeDontShowAgainLabel: "ไม่ต้องแสดงอีก",
+    microphoneNoticeTitle: "จะใช้ไมโครโฟนไหน",
+    microphonePhoneLabel: "ไมโครโฟนของโทรศัพท์",
+    microphonePhoneDescription: "ใช้ไมโครโฟนของโทรศัพท์เพื่อฟังคนที่อยู่รอบตัวคุณ",
+    microphoneEarphoneLabel: "ไมโครโฟนของหูฟัง",
+    microphoneEarphoneDescription: "ถ้าใช้ไมโครโฟนของหูฟัง แอปจะได้ยินเสียงของคุณชัด แต่แทบไม่ได้ยินเสียงอื่นเลย",
   },
   vi: {
     label: "Chế độ tai nghe",
@@ -446,6 +522,11 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     screenCaptureNoticeContinueLabel: "Tiếp tục",
     screenCaptureNoticeCancelLabel: "Hủy",
     screenCaptureNoticeDontShowAgainLabel: "Không hiển thị lại",
+    microphoneNoticeTitle: "Dùng micrô nào?",
+    microphonePhoneLabel: "Micrô điện thoại",
+    microphonePhoneDescription: "Dùng micrô của điện thoại để nghe những người xung quanh bạn",
+    microphoneEarphoneLabel: "Micrô tai nghe",
+    microphoneEarphoneDescription: "Với micrô tai nghe, ứng dụng nghe rõ giọng bạn nhưng gần như không nhận ra âm thanh khác",
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoEarphoneModeCopy>;
 
