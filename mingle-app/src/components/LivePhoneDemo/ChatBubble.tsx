@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useEffect, useRef, useState, type TouchEvent } from 'react'
+import { memo, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type TouchEvent } from 'react'
 import Image from 'next/image'
 import { AnimatePresence, motion } from 'framer-motion'
 import { UserRound } from 'lucide-react'
@@ -60,6 +60,24 @@ const BUBBLE_DOUBLE_TAP_MAX_DELAY_MS = 300
 const BUBBLE_DOUBLE_TAP_MAX_DISTANCE_PX = 30
 const BUBBLE_TOGGLE_GUARD_MS = 500
 function ignoreSurfaceDoubleTap() {}
+const BUBBLE_LONG_PRESS_DELAY_MS = 450
+const BUBBLE_LONG_PRESS_CANCEL_DISTANCE_PX = 10
+const BUBBLE_LONG_PRESS_CLICK_GUARD_MS = 800
+
+/** The bubble's text surface whose box is vertically nearest `y`. */
+function findNearestCopyableSurface(bubble: HTMLElement, y: number): HTMLElement | null {
+  let nearest: HTMLElement | null = null
+  let nearestDistance = Infinity
+  for (const surface of Array.from(bubble.querySelectorAll<HTMLElement>('[data-copyable-bubble]'))) {
+    const rect = surface.getBoundingClientRect()
+    const distance = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0
+    if (distance < nearestDistance) {
+      nearest = surface
+      nearestDistance = distance
+    }
+  }
+  return nearest
+}
 
 function SpeakingIndicator({ label }: { label: string }) {
   return (
@@ -642,8 +660,7 @@ function ChatLanguageBadge({
   lang: string
   isOriginal?: boolean
   isSelected?: boolean
-  /** icon: in a row (in the bubble or by the name); side: stacked in the avatar column. */
-  variant?: 'circle' | 'icon' | 'side'
+  variant?: 'circle' | 'icon'
   uiLocale: string
   originalLanguageLabel: string
   translationLanguageLabel: string
@@ -651,8 +668,7 @@ function ChatLanguageBadge({
 }) {
   const languageLabel = getSttLanguageDisplayName(lang, uiLocale)
     || (isOriginal ? getOriginalLanguageBadgeLabel(lang) : lang)
-  const isSideVariant = variant === 'side'
-  const isIconVariant = variant === 'icon' || isSideVariant
+  const isIconVariant = variant === 'icon'
 
   return (
     <button
@@ -672,9 +688,7 @@ function ChatLanguageBadge({
         event.stopPropagation()
         onSelect?.()
       }}
-      className={isSideVariant
-        ? 'relative inline-flex h-[22px] w-10 shrink-0 items-center justify-center bg-transparent p-0 text-[17px] leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-1'
-        : isIconVariant
+      className={isIconVariant
         // 36px wide per flag, and the touch area reaches 8px above and below
         // the 20px line (the ::before), so a flag between two others is easy to hit.
         ? "relative inline-flex h-5 w-9 shrink-0 items-center justify-center bg-transparent p-0 align-middle text-[17px] leading-none before:absolute before:inset-x-0 before:-inset-y-2 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 focus-visible:ring-offset-1"
@@ -928,6 +942,8 @@ function ChatBubble({
   const ttsActionCopy = resolveLivePhoneDemoTtsActionCopy(uiLocale)
   const lastBubbleTapRef = useRef<{ time: number, x: number, y: number } | null>(null)
   const lastBubbleToggleAtRef = useRef(0)
+  const bubbleLongPressRef = useRef<{ x: number, y: number, timer: ReturnType<typeof setTimeout> } | null>(null)
+  const suppressBubbleClickUntilRef = useRef(0)
   const [isBubbleExpanded, setIsBubbleExpanded] = useState(
     bubbleDisplayMode === 'expanded',
   )
@@ -1056,27 +1072,76 @@ function ChatBubble({
     lastBubbleTapRef.current = null
     setIsBubbleExpanded((expanded) => !expanded)
   }
+  const clearBubbleLongPress = () => {
+    if (bubbleLongPressRef.current) clearTimeout(bubbleLongPressRef.current.timer)
+    bubbleLongPressRef.current = null
+  }
+  useEffect(() => () => {
+    if (bubbleLongPressRef.current) clearTimeout(bubbleLongPressRef.current.timer)
+  }, [])
+  // A long press where no text surface takes it (padding, a divider, a flag)
+  // opens the menu of the text surface nearest the finger.
+  const startBubbleLongPress = (event: TouchEvent<HTMLDivElement>, touch: { clientX: number, clientY: number }) => {
+    clearBubbleLongPress()
+    const target = event.target instanceof Element ? event.target : null
+    const onFlag = Boolean(target?.closest('[data-chat-language-badge]'))
+    if (!onFlag && target?.closest('[data-copyable-bubble]')) return
+    const bubble = event.currentTarget
+    const { clientX: x, clientY: y } = touch
+    bubbleLongPressRef.current = {
+      x,
+      y,
+      timer: setTimeout(() => {
+        bubbleLongPressRef.current = null
+        const surface = findNearestCopyableSurface(bubble, y)
+        if (!surface) return
+        suppressBubbleClickUntilRef.current = Date.now() + BUBBLE_LONG_PRESS_CLICK_GUARD_MS
+        surface.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+      }, BUBBLE_LONG_PRESS_DELAY_MS),
+    }
+  }
   // Caught on the whole bubble in the capture phase, so the padding, the
   // dividers and the flags count too (the flags stop their own events).
-  const bubbleDoubleTapProps = canToggleBubble ? {
-    'data-chat-bubble-double-tap': 'toggle',
+  const bubbleGestureProps = !messageImage && !isRecalled ? {
+    ...(canToggleBubble ? { 'data-chat-bubble-double-tap': 'toggle' } : {}),
     onTouchStartCapture: (event: TouchEvent<HTMLDivElement>) => {
       const touch = event.touches.length === 1 ? event.touches[0] : null
-      if (!touch) { lastBubbleTapRef.current = null; return }
+      if (!touch) { lastBubbleTapRef.current = null; clearBubbleLongPress(); return }
       const now = Date.now()
       const last = lastBubbleTapRef.current
       if (
-        last
+        canToggleBubble
+        && last
         && now - last.time <= BUBBLE_DOUBLE_TAP_MAX_DELAY_MS
         && Math.abs(touch.clientX - last.x) <= BUBBLE_DOUBLE_TAP_MAX_DISTANCE_PX
         && Math.abs(touch.clientY - last.y) <= BUBBLE_DOUBLE_TAP_MAX_DISTANCE_PX
       ) {
+        clearBubbleLongPress()
         toggleBubbleExpanded()
         return
       }
       lastBubbleTapRef.current = { time: now, x: touch.clientX, y: touch.clientY }
+      startBubbleLongPress(event, touch)
     },
-    onDoubleClickCapture: toggleBubbleExpanded,
+    onTouchMoveCapture: (event: TouchEvent<HTMLDivElement>) => {
+      const pending = bubbleLongPressRef.current
+      const touch = event.touches[0]
+      if (!pending || !touch) return
+      if (
+        Math.abs(touch.clientX - pending.x) > BUBBLE_LONG_PRESS_CANCEL_DISTANCE_PX
+        || Math.abs(touch.clientY - pending.y) > BUBBLE_LONG_PRESS_CANCEL_DISTANCE_PX
+      ) clearBubbleLongPress()
+    },
+    onTouchEndCapture: clearBubbleLongPress,
+    onTouchCancelCapture: clearBubbleLongPress,
+    // The finger lifting after a long press on a flag must not also pick it.
+    onClickCapture: (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (Date.now() >= suppressBubbleClickUntilRef.current) return
+      suppressBubbleClickUntilRef.current = 0
+      event.preventDefault()
+      event.stopPropagation()
+    },
+    ...(canToggleBubble ? { onDoubleClickCapture: toggleBubbleExpanded } : {}),
   } : {}
   // The text surfaces inside leave the double tap to the bubble.
   const surfaceDoubleTap = canToggleBubble ? ignoreSurfaceDoubleTap : undefined
@@ -1100,32 +1165,30 @@ function ChatBubble({
             {activeLanguage}
           </span>
         )}
-        {(!isSharedRoomMember || isOwnMessage || isBubbleExpanded) && (
-          <span
-            data-chat-bubble-language-badges
-            className="mr-1 inline-flex items-center gap-0 align-middle whitespace-nowrap"
-          >
-            {languageOptions.map((lang) => {
-              const isOriginal = displayLanguageKey(lang)
-                === displayLanguageKey(originalDisplayLanguage)
-              return (
-                <ChatLanguageBadge
-                  key={lang}
-                  lang={lang}
-                  isOriginal={isOriginal}
-                  isSelected={displayLanguageKey(activeLanguage) === displayLanguageKey(lang)}
-                  variant="icon"
-                  uiLocale={uiLocale}
-                  originalLanguageLabel={copyActionCopy.originalLanguageLabel}
-                  translationLanguageLabel={copyActionCopy.translationLanguageLabel}
-                  onSelect={() => {
-                    selectDisplayLanguage(lang)
-                  }}
-                />
-              )
-            })}
-          </span>
-        )}
+        <span
+          data-chat-bubble-language-badges
+          className="mr-1 inline-flex items-center gap-0 align-middle whitespace-nowrap"
+        >
+          {languageOptions.map((lang) => {
+            const isOriginal = displayLanguageKey(lang)
+              === displayLanguageKey(originalDisplayLanguage)
+            return (
+              <ChatLanguageBadge
+                key={lang}
+                lang={lang}
+                isOriginal={isOriginal}
+                isSelected={displayLanguageKey(activeLanguage) === displayLanguageKey(lang)}
+                variant="icon"
+                uiLocale={uiLocale}
+                originalLanguageLabel={copyActionCopy.originalLanguageLabel}
+                translationLanguageLabel={copyActionCopy.translationLanguageLabel}
+                onSelect={() => {
+                  selectDisplayLanguage(lang)
+                }}
+              />
+            )
+          })}
+        </span>
         {activeIsPending ? (
           <>
             <span data-current-bubble-text-value className="align-middle">{originalDisplayText}</span>
@@ -1184,54 +1247,13 @@ function ChatBubble({
     </CopyableBubbleSurface>
   )
 
-  const originalLanguageKey = displayLanguageKey(originalDisplayLanguage)
-  const firstCollapsedHeaderLanguageOptions = languageOptions.slice(0, 5)
-  const originalHeaderLanguage = languageOptions.find((language) => (
-    displayLanguageKey(language) === originalLanguageKey
-  ))
-  const collapsedHeaderLanguageOptions = originalHeaderLanguage
-    && !firstCollapsedHeaderLanguageOptions.some((language) => (
-      displayLanguageKey(language) === originalLanguageKey
-    ))
-    ? [...firstCollapsedHeaderLanguageOptions.slice(0, 4), originalHeaderLanguage]
-    : firstCollapsedHeaderLanguageOptions
-  const shouldShowCollapsedHeaderLanguages = !messageImage && !isRecalled && isSharedRoomMember && !isOwnMessage && !isBubbleExpanded
-  // A continued run has no name line: its language buttons go in the empty
-  // avatar column beside the bubble instead of taking a line of their own.
-  const shouldShowSideLanguages = shouldShowCollapsedHeaderLanguages && isGroupContinuation
-  const shouldShowHeaderLanguages = shouldShowCollapsedHeaderLanguages && !isGroupContinuation
+  // Every collapsed bubble carries its language flags inside, at the start
+  // of the text: the same place as the expanded rows and the own bubbles.
   const headerSpeakerName = isGroupContinuation ? '' : speakerName
   const headerSpeakerBadge = isGroupContinuation ? null : speakerBadge
-  const renderCollapsedLanguageBadges = (variant: 'icon' | 'side') => collapsedHeaderLanguageOptions.map((lang) => (
-    <ChatLanguageBadge
-      key={lang}
-      lang={lang}
-      isOriginal={displayLanguageKey(lang) === displayLanguageKey(originalDisplayLanguage)}
-      isSelected={displayLanguageKey(activeLanguage) === displayLanguageKey(lang)}
-      variant={variant}
-      uiLocale={uiLocale}
-      originalLanguageLabel={copyActionCopy.originalLanguageLabel}
-      translationLanguageLabel={copyActionCopy.translationLanguageLabel}
-      onSelect={() => {
-        selectDisplayLanguage(lang)
-      }}
-    />
-  ))
-  // As tall as the bubble line: a one-line bubble shows one flag with the
-  // next one peeking, and the column scrolls; taller bubbles show them stacked.
-  const sideLanguageBadges = shouldShowSideLanguages ? (
-    <div
-      data-chat-bubble-side-language-badges
-      className="no-scrollbar absolute inset-y-0 right-full mr-1.5 flex w-10 flex-col items-center overflow-y-auto"
-    >
-      <div className="my-auto flex flex-col items-center">
-        {renderCollapsedLanguageBadges('side')}
-      </div>
-    </div>
-  ) : null
   const shouldShowSpeakerHeader = !isOwnMessage
     && isSharedRoomMember
-    && (Boolean(headerSpeakerName) || Boolean(headerSpeakerBadge) || shouldShowHeaderLanguages)
+    && (Boolean(headerSpeakerName) || Boolean(headerSpeakerBadge))
   const speakerHeader = shouldShowSpeakerHeader ? (
     <div
       data-chat-speaker-header
@@ -1248,14 +1270,6 @@ function ChatBubble({
       {headerSpeakerBadge && (
         <span data-chat-speaker-badge className="ml-0.5 mr-0.5 inline-flex shrink-0 items-center">
           <ChatAccountBadge kind={headerSpeakerBadge} locale={uiLocale} tone="dark" />
-        </span>
-      )}
-      {shouldShowHeaderLanguages && (
-        <span
-          data-chat-bubble-header-language-badges
-          className="inline-flex shrink-0 items-center gap-0 whitespace-nowrap"
-        >
-          {renderCollapsedLanguageBadges('icon')}
         </span>
       )}
     </div>
@@ -1342,7 +1356,7 @@ function ChatBubble({
               ref={expandedBubbleRef}
               data-chat-message-bubble
               data-expanded-bubble-container
-              {...bubbleDoubleTapProps}
+              {...bubbleGestureProps}
               data-display-language={originalDisplayLanguage}
               data-bubble-speaker={isOwnMessage ? 'own' : 'other'}
               className={`inline-block w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} ${expandedBubblePaddingClassName} shadow-sm`}
@@ -1401,7 +1415,7 @@ function ChatBubble({
               data-display-language={activeLanguage}
               data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
               data-bubble-speaker={isOwnMessage ? 'own' : 'other'}
-              {...bubbleDoubleTapProps}
+              {...bubbleGestureProps}
               className={`w-fit max-w-full rounded-2xl ${bubbleCornerClassName} border border-gray-200 ${bubbleBackgroundClassName} ${collapsedBubblePaddingClassName} shadow-sm`}
             >
               <div
@@ -1497,9 +1511,8 @@ function ChatBubble({
       )}
       <div
         data-chat-bubble-line
-        className="relative flex min-w-0 max-w-full items-end gap-1"
+        className="flex min-w-0 max-w-full items-end gap-1"
       >
-        {sideLanguageBadges}
         {isOwnMessage ? (
           <>
             {bubbleMeta}
