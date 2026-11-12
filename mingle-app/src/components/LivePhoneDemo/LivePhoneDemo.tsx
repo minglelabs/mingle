@@ -4,6 +4,7 @@ import ConversationImageComposer, { type ConversationImageComposerEarphoneMode }
 import MessageMediaDialog from './MessageMediaDialog'
 import EarphoneModeNoticeContent from './EarphoneModeNotice'
 import EarphoneMicrophoneNoticeContent from './EarphoneMicrophoneNotice'
+import EarphoneCaptureSourceNoticeContent from './EarphoneCaptureSourceNotice'
 import LanguageRadioOption from './LanguageRadioOption'
 
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
@@ -59,6 +60,8 @@ import {
   subscribeNativeAudioRoute,
 } from '@/lib/native-audio-route'
 import {
+  getDeviceAudioOptInServerSnapshot,
+  getDeviceAudioOptInSnapshot,
   getNativeDeviceAudioCapabilityServerSnapshot,
   getNativeDeviceAudioCapabilitySnapshot,
   getSttCaptureSourcePickServerSnapshot,
@@ -66,10 +69,14 @@ import {
   readCachedNativeShellCapabilities,
   resolveEffectiveSttCaptureSource,
   resolveNativeDeviceAudioSupported,
+  setDeviceAudioOptIn,
   setSttCaptureSourcePick,
+  shouldOfferDeviceAudioOnEarphonesIn,
   shouldPlayTtsViaNativeShell,
+  subscribeDeviceAudioOptIn,
   subscribeNativeDeviceAudioCapability,
   subscribeSttCaptureSourcePick,
+  type SttCaptureSource,
 } from '@/lib/native-device-audio'
 import {
   getEarphoneMicrophonePickServerSnapshot,
@@ -2356,11 +2363,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     getSttCaptureSourcePickSnapshot,
     getSttCaptureSourcePickServerSnapshot,
   )
+  // Outside earphone mode: picked when earphones went in mid-session.
+  const deviceAudioOptIn = useSyncExternalStore(
+    subscribeDeviceAudioOptIn,
+    getDeviceAudioOptInSnapshot,
+    getDeviceAudioOptInServerSnapshot,
+  )
   // Without earphones, speaker mode listens to the microphone only: no screen
   // broadcast, no capture of other apps' sound.
   const sttCaptureSource = resolveEffectiveSttCaptureSource({
     supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker,
     earphoneModeEnabled,
+    deviceAudioOptIn,
     pick: sttCaptureSourcePick,
   })
   // Which microphone records while earphones are in: the phone's by default,
@@ -5940,6 +5954,52 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (isSttSessionRunning) void handleStopRecording()
   }, [handleStopRecording, isSttSessionRunning, sttCaptureSource])
 
+  // Earphones went in while a microphone-only session ran: other apps' sound
+  // left the microphone's reach, so ask whether to translate it directly.
+  const [earphoneCaptureNoticeOpen, setEarphoneCaptureNoticeOpen] = useState(false)
+  // Set when that question switched a running session: listen again once the
+  // old session is gone.
+  const captureSourceRestartPendingRef = useRef(false)
+  const previousEarphonesConnectedRef = useRef(nativeAudioRoute.earphonesConnected)
+  useEffect(() => {
+    const wasConnected = previousEarphonesConnectedRef.current
+    previousEarphonesConnectedRef.current = nativeAudioRoute.earphonesConnected
+    if (!nativeAudioRoute.earphonesConnected) {
+      setEarphoneCaptureNoticeOpen(false)
+      return
+    }
+    if (shouldOfferDeviceAudioOnEarphonesIn({
+      earphonesJustConnected: !wasConnected,
+      supported: nativeDeviceAudioSupported && isVisible,
+      sessionRunning: isSttSessionRunning,
+      captureSource: sttCaptureSource,
+    })) {
+      setEarphoneCaptureNoticeOpen(true)
+    }
+  }, [isSttSessionRunning, isVisible, nativeAudioRoute.earphonesConnected, nativeDeviceAudioSupported, sttCaptureSource])
+
+  const confirmEarphoneCaptureNotice = useCallback((source: SttCaptureSource) => {
+    setEarphoneCaptureNoticeOpen(false)
+    if (source !== 'device_audio') return
+    // This question is the warning: Start goes straight to the system prompt.
+    screenCaptureNoticeAcknowledgedRef.current = true
+    captureSourceRestartPendingRef.current = isSttSessionRunning
+    setSttCaptureSourcePick('device_audio')
+    setDeviceAudioOptIn(true)
+  }, [isSttSessionRunning])
+
+  const dismissEarphoneCaptureNotice = useCallback(() => {
+    setEarphoneCaptureNoticeOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (!captureSourceRestartPendingRef.current) return
+    if (sttCaptureSource !== 'device_audio') return
+    if (isSttSessionRunning || isConnecting || isPreparingStart) return
+    captureSourceRestartPendingRef.current = false
+    void handleStartRecording()
+  }, [handleStartRecording, isConnecting, isPreparingStart, isSttSessionRunning, sttCaptureSource])
+
   // ── Sentence length ───────────────────────────────────────────────────
   // One 1-6 scale (see @/lib/speech-length) stands for the two speech split
   // settings, in the room settings and on the first-run card. A new user (no
@@ -7117,6 +7177,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // default, the microphone plus device audio (page 2/2 of the notice shows
     // it, and what Start will open, before the first Start).
     setSttCaptureSourcePick('device_audio')
+    setDeviceAudioOptIn(false)
     // A new session warns about the screen prompt again.
     screenCaptureNoticeAcknowledgedRef.current = false
   }), [])
@@ -9979,6 +10040,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}
                 coinCostNotice={coinTtsCostNotice}
+              />
+            </MessageMediaDialog>
+          )}
+          {earphoneCaptureNoticeOpen && !earphoneMicrophoneNoticeOpen && !earphoneModeNoticeOpen && (
+            <MessageMediaDialog title={earphoneModeBaseCopy.earphoneCaptureNoticeTitle} onClose={dismissEarphoneCaptureNotice}>
+              <EarphoneCaptureSourceNoticeContent
+                copy={earphoneModeBaseCopy}
+                deviceAudioViaBroadcast={isLikelyIOSPlatform()}
+                onConfirm={confirmEarphoneCaptureNotice}
               />
             </MessageMediaDialog>
           )}
