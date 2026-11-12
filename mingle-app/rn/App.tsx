@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Appearance,
   AppState,
   BackHandler,
   Image,
@@ -142,11 +141,9 @@ import {
 import {
   buildWebRestoreWebUrl,
   classifyConversationWebUrl,
-  readNativeLastScreenSnapshot,
   readNativeWebRestorePayload,
   resolveConversationRestorePayloadFromUrl,
   resolveWebRestorePayloadFromUrl,
-  type NativeLastScreenSnapshot,
   type NativeWebRestorePayload,
 } from './src/webViewRestore';
 import {
@@ -1651,7 +1648,7 @@ function AppInner(): React.JSX.Element {
   // once the overlay state setters it clears on success exist.
   const loadAttemptTrackerRef = useRef<WebViewLoadAttemptTracker | null>(null);
   const latestNativePipEventRef = useRef<NativePipEvent | null>(null);
-  const { width: windowWidthPx, height: windowHeightPx } = useWindowDimensions();
+  const { width: windowWidthPx } = useWindowDimensions();
   const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
     createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion, RUNTIME_INSTALL_SOURCE),
   );
@@ -2481,33 +2478,29 @@ function AppInner(): React.JSX.Element {
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // On a cold start that restores the previous screen, cover the loading
-  // WebView with a capture of that screen instead of the splash, until the
-  // page reports that its saved state is back.
-  const [lastScreenSnapshot, setLastScreenSnapshot] = useState<NativeLastScreenSnapshot | null>(() => {
-    if (Platform.OS !== 'ios' || !webUrl || !initialRestoreUrlRef.current) return null;
-    return readNativeLastScreenSnapshot(NATIVE_RUNTIME_CONFIG, {
-      width: windowWidthPx,
-      height: windowHeightPx,
-      colorScheme: Appearance.getColorScheme(),
-    });
-  });
+  // On a cold start that restores the previous screen, keep the splash over
+  // the loading WebView until the page reports that its saved state is back.
+  // It used to show a capture of the last screen instead; that picture looked
+  // like a working app while every tap went to a page still loading, so the
+  // app read as frozen. The splash makes the wait plain.
+  const [lastScreenSnapshotVisible, setLastScreenSnapshotVisible] = useState(
+    () => Platform.OS === 'ios' && Boolean(webUrl) && Boolean(initialRestoreUrlRef.current),
+  );
   const lastScreenSnapshotOpacity = useRef(new Animated.Value(1)).current;
   const lastScreenSnapshotHidingRef = useRef(false);
   const hideLastScreenSnapshot = useCallback((animated = true) => {
     if (lastScreenSnapshotHidingRef.current) return;
     lastScreenSnapshotHidingRef.current = true;
     if (!animated) {
-      setLastScreenSnapshot(null);
+      setLastScreenSnapshotVisible(false);
       return;
     }
     Animated.timing(lastScreenSnapshotOpacity, {
       toValue: 0,
       duration: LAST_SCREEN_SNAPSHOT_FADE_MS,
       useNativeDriver: true,
-    }).start(() => setLastScreenSnapshot(null));
+    }).start(() => setLastScreenSnapshotVisible(false));
   }, [lastScreenSnapshotOpacity]);
-  const lastScreenSnapshotVisible = lastScreenSnapshot !== null;
   useEffect(() => {
     if (!lastScreenSnapshotVisible) return;
     const timer = setTimeout(() => hideLastScreenSnapshot(), LAST_SCREEN_SNAPSHOT_MAX_MS);
@@ -2524,16 +2517,13 @@ function AppInner(): React.JSX.Element {
     const timer = setTimeout(() => hideLastScreenSnapshot(), LAST_SCREEN_SNAPSHOT_AFTER_LOAD_MAX_MS);
     return () => clearTimeout(timer);
   }, [hideLastScreenSnapshot, lastScreenSnapshotVisible, startupSplashVisible]);
-  // Let the native side capture the window on resign-active only while it
-  // shows a settled, restorable screen of this account.
+  // The native side no longer captures the window on resign-active: no build
+  // shows the capture any more. Keep telling it so, and drop a capture an
+  // older build left behind.
   const lastScreenSnapshotCaptureEnabledRef = useRef<boolean | null>(null);
   const syncLastScreenSnapshotCapture = useCallback(() => {
     if (Platform.OS !== 'ios') return;
-    const enabled = currentWebRestorableRef.current
-      && initialLoadSettledRef.current
-      && !startupSplashVisible
-      && !lastScreenSnapshotVisible
-      && !loadError;
+    const enabled = false;
     if (lastScreenSnapshotCaptureEnabledRef.current === enabled) return;
     lastScreenSnapshotCaptureEnabledRef.current = enabled;
     try {
@@ -2541,9 +2531,15 @@ function AppInner(): React.JSX.Element {
     } catch {
       // Older native builds have no capture support.
     }
-  }, [lastScreenSnapshotVisible, loadError, startupSplashVisible]);
+  }, []);
   useEffect(() => {
     syncLastScreenSnapshotCapture();
+    if (Platform.OS !== 'ios') return;
+    try {
+      void NATIVE_CONVERSATION_RESTORE_STORAGE.clearLastScreenSnapshot?.();
+    } catch {
+      // Ignore native persistence failures.
+    }
   }, [syncLastScreenSnapshotCapture]);
   const resetWebRestoreState = useCallback(() => {
     clearWebRestoreUrl();
@@ -5354,18 +5350,8 @@ function AppInner(): React.JSX.Element {
     webViewRef.current.clearCache(true);
   }, [shouldUseAggressiveWebViewCacheBypass, webViewMountToken]);
 
-  // The last-screen capture never takes a touch: it is a picture of buttons,
-  // so swallowing taps on it reads as a frozen app. The first touch drops it
-  // at once. Once the page has loaded the touch reaches the real screen;
-  // before that, dropping it shows the splash, so the wait is visible
-  // instead of a real-looking screen that ignores every tap.
-  const handleRootTouchStart = lastScreenSnapshotVisible ? () => hideLastScreenSnapshot(false) : undefined;
-
   return (
-    <View
-      style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}
-      onTouchStart={handleRootTouchStart}
-    >
+    <View style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}>
       {shouldRenderTopSafeAreaFill ? (
         <View
           pointerEvents="none"
@@ -5527,18 +5513,14 @@ function AppInner(): React.JSX.Element {
           />
         </View>
       ) : null}
-      {lastScreenSnapshot ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.lastScreenSnapshotOverlay, { opacity: lastScreenSnapshotOpacity }]}
-        >
+      {lastScreenSnapshotVisible && !startupSplashVisible ? (
+        <Animated.View style={[styles.startupSplashOverlay, { opacity: lastScreenSnapshotOpacity }]}>
           <Image
             alt=""
-            source={{ uri: lastScreenSnapshot.uri, cache: 'reload' }}
-            resizeMode="cover"
+            source={STARTUP_SPLASH_LOGO}
+            resizeMode="contain"
             fadeDuration={0}
-            style={styles.lastScreenSnapshotImage}
-            onError={() => hideLastScreenSnapshot(false)}
+            style={styles.startupSplashLogo}
           />
         </Animated.View>
       ) : null}
@@ -5632,15 +5614,6 @@ const styles = StyleSheet.create({
   startupSplashLogo: {
     width: 180,
     height: 180,
-  },
-  lastScreenSnapshotOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#ffffff',
-    zIndex: 31,
-  },
-  lastScreenSnapshotImage: {
-    width: '100%',
-    height: '100%',
   },
   errorOverlay: {
     position: 'absolute',

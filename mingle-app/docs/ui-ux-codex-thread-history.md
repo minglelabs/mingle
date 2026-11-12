@@ -14,6 +14,14 @@ One entry per UI/UX fix, newest first. This is the only copy; add new entries he
 - Change (profile basics): Opening a room with other members from the list now asks gender and birth date first, like a follow or a comment.
 - Verification: Web unit tests (480 files, 5,061 tests), `tsc`, lint on the changed files. Not tried on a device; the SMS path needs Twilio Verify set up (without it a non-production server accepts 000000).
 
+## 2026-11-12 — iOS restoring cold start keeps the splash instead of the last-screen capture
+
+- Surface: The cold-start cover in `rn/App.tsx`, shown on an iOS launch that restores the previous screen (the app was killed in the background).
+- Issue: The cover was a capture of the last screen. The 2026-10-30 fix let touches through it, so they reached a page that was still loading and restoring: the buttons looked ready but did nothing, and the first touch dropped the capture onto that half-loaded page. The app read as frozen.
+- Resolution: A restoring cold start keeps the yellow splash (same logo as the launch splash) until the page sends `native_web_restore_ready`, at most 3 s after the page loads and 10 s in all. Touches stay on the splash meanwhile. The native side is told never to capture the window again, and a capture left by an older build is deleted on launch.
+- QA: `qa/agent/scenarios/cold-start-restore-splash.md`.
+- Verification: RN jest (27 suites, 197 tests). Not tried on a device yet.
+
 ## 2026-11-12 — 채팅 버블: 더블탭으로 펼치기/접기, 옆 칸은 읽음 표시 위·시간 아래
 
 - 화면: 대화방 채팅 버블 (`ChatBubble.tsx`, `CopyableBubbleSurface.tsx`, `MessageReadReceipts.tsx`). `feat/voicetalk-windows-livekit-mvp`의 버블 옆 칸 작업 최종 결과를 옮김(중간 단계인 이름 줄 시간 표시는 제외).

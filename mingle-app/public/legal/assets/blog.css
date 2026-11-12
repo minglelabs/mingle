@@ -121,6 +121,11 @@ img {
   filter: drop-shadow(0 28px 70px rgba(25, 105, 90, 0.22));
 }
 
+/* Arabic pages run right to left: keep the hero picture on the far side of the text. */
+[dir="rtl"] .hero::before {
+  background-position: left 9% center;
+}
+
 .hero .section-inner {
   position: relative;
 }
@@ -316,6 +321,10 @@ h1 {
 
   .hero {
     padding: 72px 0 68px;
+  }
+
+  [dir="rtl"] .hero::before {
+    background-position: left -90px bottom -20px;
   }
 
   .hero::before {

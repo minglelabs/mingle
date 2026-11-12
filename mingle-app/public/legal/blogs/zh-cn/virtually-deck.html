@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-cn">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>Virtually：由生成式 AI 驱动的 VTuber 直播 - HashChat Blog</title>
+    <meta name="description" content="从一张静态图片到实时互动直播。" />
+    <link rel="canonical" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=zh-cn" />
+    <link rel="alternate" hreflang="en" href="https://hashchat.minglelabs.app/blogs/virtually-deck" />
+    <link rel="alternate" hreflang="ko" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=ko" />
+    <link rel="alternate" hreflang="ja" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=ja" />
+    <link rel="alternate" hreflang="zh-cn" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=zh-cn" />
+    <link rel="alternate" hreflang="zh-tw" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=zh-tw" />
+    <link rel="alternate" hreflang="fr" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=fr" />
+    <link rel="alternate" hreflang="de" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=de" />
+    <link rel="alternate" hreflang="es" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=es" />
+    <link rel="alternate" hreflang="pt" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=pt" />
+    <link rel="alternate" hreflang="it" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=it" />
+    <link rel="alternate" hreflang="ru" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=ru" />
+    <link rel="alternate" hreflang="ar" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=ar" />
+    <link rel="alternate" hreflang="hi" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=hi" />
+    <link rel="alternate" hreflang="th" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=th" />
+    <link rel="alternate" hreflang="vi" href="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=vi" />
+    <link rel="alternate" hreflang="x-default" href="https://hashchat.minglelabs.app/blogs/virtually-deck" />
+    <meta property="og:site_name" content="HashChat" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://hashchat.minglelabs.app/blogs/virtually-deck?lang=zh-cn" />
+    <meta property="og:title" content="Virtually：由生成式 AI 驱动的 VTuber 直播 - HashChat Blog" />
+    <meta property="og:description" content="从一张静态图片到实时互动直播。" />
+    <meta property="og:image" content="https://hashchat.minglelabs.app/assets/virtually-vtuber-cover.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Virtually：由生成式 AI 驱动的 VTuber 直播 - HashChat Blog" />
+    <meta name="twitter:description" content="从一张静态图片到实时互动直播。" />
+    <meta name="twitter:image" content="https://hashchat.minglelabs.app/assets/virtually-vtuber-cover.png" />
+    <link rel="icon" href="/assets/site/hashchat-icon.png" />
+    <link rel="stylesheet" href="/assets/blog.css" />
+    <link rel="stylesheet" href="/assets/site-header.css" />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"PresentationDigitalDocument","name":"Virtually：由生成式 AI 驱动的 VTuber 直播","description":"从一张静态图片到实时互动直播。","inLanguage":"zh-cn","datePublished":"2026-09-13","url":"https://hashchat.minglelabs.app/blogs/virtually-deck?lang=zh-cn","image":"https://hashchat.minglelabs.app/assets/virtually-vtuber-cover.png","author":{"@type":"Person","name":"Hyeongkeol Nam"},"publisher":{"@type":"Organization","name":"Mingle Labs","url":"https://minglelabs.app/"}}</script>
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="HashChat site navigation">
+        <a class="brand" href="/?lang=zh-cn" aria-label="HashChat home">
+          <img src="/assets/site/hashchat-icon.png" alt="" />
+          <span>HashChat</span>
+        </a>
+        <div class="nav-actions">
+          <div class="nav-links">
+            <a href="/?lang=zh-cn#how">工作原理</a>
+            <a href="/?lang=zh-cn#features">功能特色</a>
+            <a href="/?lang=zh-cn#translate">翻译</a>
+            <a href="/?lang=zh-cn#uses">使用场景</a>
+            <a class="nav-legal is-current" aria-current="page" href="/blogs?lang=zh-cn">博客</a>
+            <a class="nav-legal" href="/legal?lang=zh-cn">Legal</a>
+          </div>
+          <label class="language-picker">
+            <span aria-hidden="true">🌐</span>
+            <select id="blog-language" aria-label="Language">
+              <option value="en">🇺🇸 English</option>
+              <option value="ko">🇰🇷 한국어</option>
+              <option value="ja">🇯🇵 日本語</option>
+              <option value="zh-cn" selected>🇨🇳 简体中文</option>
+              <option value="zh-tw">🇹🇼 繁體中文</option>
+              <option value="fr">🇫🇷 Français</option>
+              <option value="de">🇩🇪 Deutsch</option>
+              <option value="es">🇪🇸 Español</option>
+              <option value="pt">🇧🇷 Português</option>
+              <option value="it">🇮🇹 Italiano</option>
+              <option value="ru">🇷🇺 Русский</option>
+              <option value="ar">🇸🇦 العربية</option>
+              <option value="hi">🇮🇳 हिन्दी</option>
+              <option value="th">🇹🇭 ไทย</option>
+              <option value="vi">🇻🇳 Tiếng Việt</option>
+            </select>
+          </label>
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <article>
+        <section class="deck-post-hero">
+          <div class="section-inner">
+            <p class="eyebrow">路演演示文稿 · 幻灯片</p>
+            <h1>Virtually：由生成式 AI 驱动的 VTuber 直播</h1>
+            <p class="deck-post-meta">Hyeongkeol Nam，Mingle Labs · 2026年9月13日</p>
+            <p class="deck-post-lede">从一张静态图片到实时互动直播。</p>
+          </div>
+        </section>
+        <section aria-label="幻灯片">
+          <div class="section-inner">
+            <div class="deck-frame">
+              <iframe
+                id="deck-frame"
+                src="/xr-virtually"
+                title="Virtually：由生成式 AI 驱动的 VTuber 直播"
+                loading="lazy"
+                allow="fullscreen; autoplay; encrypted-media; picture-in-picture"
+                allowfullscreen
+              ></iframe>
+              <button class="deck-shield" id="deck-shield" type="button" aria-controls="deck-frame">
+                <span>点击以浏览幻灯片</span>
+              </button>
+            </div>
+            <div class="deck-actions">
+              <a href="/xr-virtually" target="_blank" rel="noopener">全屏查看 ↗</a>
+              <span>幻灯片内容为英文。</span>
+              <span>点击幻灯片，然后使用方向键、滚轮或滑动手势进行浏览。在全屏链接后添加 #数字，即可直接跳转到指定幻灯片。</span>
+            </div>
+          </div>
+        </section>
+        <section class="deck-post-body">
+          <div class="section-inner">
+            <p>这是为 Virtually 制作的演示文稿。Virtually 是我们专为 VTuber 打造的生成式 AI 工具。内容展示了如何将一张角色图片转变为实时互动直播，以及 Virtually 在 VTuber 生态系统中的定位。</p>
+            <p>你也可以通过幻灯片左下角的语言切换按钮查看日语和中文版本。</p>
+            <p><a href="/blogs?lang=zh-cn">← 所有文章</a></p>
+          </div>
+        </section>
+      </article>
+    </main>
+    <footer class="footer">
+      <div class="footer-inner">
+        <span>© Mingle Labs。 HashChat 的前身名为 Mingle。</span>
+        <div class="footer-links">
+          <a href="/blogs?lang=zh-cn">博客</a>
+          <a href="/privacy-policy">隐私政策</a>
+          <a href="/terms-of-use">服务条款</a>
+          <a href="/legal">Legal</a>
+        </div>
+      </div>
+    </footer>
+    <script>
+      (function () {
+        var select = document.getElementById("blog-language");
+        if (!select) return;
+        select.addEventListener("change", function () {
+          var url = new URL(window.location.href);
+          if (select.value === "en") url.searchParams.delete("lang");
+          else url.searchParams.set("lang", select.value);
+          window.location.href = url.toString();
+        });
+      })();
+    </script>
+    <script>
+      (function () {
+        // The deck turns pages on wheel, swipe and arrow keys. Until the reader
+        // clicks it, a shield keeps the wheel scrolling the page; the click hands
+        // focus to the deck so the arrow keys work right away.
+        var frame = document.getElementById("deck-frame");
+        var shield = document.getElementById("deck-shield");
+        var box = frame.parentElement;
+        function focusDeck() {
+          try {
+            frame.contentWindow.focus();
+          } catch (error) {
+            frame.focus();
+          }
+        }
+        shield.addEventListener("click", function () {
+          box.classList.add("is-active");
+          focusDeck();
+        });
+        box.addEventListener("mouseleave", function () {
+          box.classList.remove("is-active");
+        });
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") box.classList.remove("is-active");
+        });
+        frame.addEventListener("load", function () {
+          try {
+            frame.contentWindow.document.addEventListener("pointerdown", focusDeck);
+          } catch (error) {}
+        });
+
+        // Below this width the decks switch to their phone layout, which does not
+        // fit a 16:9 box. Render them at a desktop size and scale the whole slide down.
+        var BASE_WIDTH = 1280;
+        function fit() {
+          var width = box.clientWidth;
+          if (width >= 900) {
+            frame.style.width = "";
+            frame.style.height = "";
+            frame.style.transform = "";
+            return;
+          }
+          frame.style.width = BASE_WIDTH + "px";
+          frame.style.height = (BASE_WIDTH * 9) / 16 + "px";
+          frame.style.transform = "scale(" + width / BASE_WIDTH + ")";
+        }
+        fit();
+        if (window.ResizeObserver) new ResizeObserver(fit).observe(box);
+        else window.addEventListener("resize", fit);
+      })();
+    </script>
+  </body>
+</html>

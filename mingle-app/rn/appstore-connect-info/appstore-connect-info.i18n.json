@@ -1,6 +1,6 @@
 {
   "meta": {
-    "shots": 7,
+    "shots": 8,
     "locales": [
       "ar",
       "de",
@@ -32,23 +32,27 @@
             "line2": "친구가 되는 곳"
           },
           {
-            "line1": "어떤 언어로 써도",
-            "line2": "내 언어로 읽어요"
+            "line1": "외국어 몰라도",
+            "line2": "외국인 친구랑 톡"
           },
           {
-            "line1": "댓글도",
+            "line1": "보이스톡 동시통역",
+            "line2": "각자 자기 말로 통화해요"
+          },
+          {
+            "line1": "해외 스시집·음식점",
+            "line2": "예약 전화도 통역"
+          },
+          {
+            "line1": "친구의 일상도",
+            "line2": "내 언어로"
+          },
+          {
+            "line1": "모든 글과 댓글이",
             "line2": "자동으로 번역돼요"
           },
           {
-            "line1": "여러 언어로 나누는",
-            "line2": "실시간 통역 대화"
-          },
-          {
-            "line1": "관심 있는 사람과",
-            "line2": "게시물을 찾아보세요"
-          },
-          {
-            "line1": "친구들과 햄스터 레이스",
+            "line1": "외국인 친구들과 게임 한판",
             "line2": "Hash Rush"
           },
           {
@@ -62,24 +66,28 @@
             "line2": "in any language"
           },
           {
-            "line1": "Written in any language,",
-            "line2": "read in yours"
+            "line1": "Chat with friends abroad",
+            "line2": "in your own language"
           },
           {
-            "line1": "Comments are",
-            "line2": "translated too"
+            "line1": "Voice calls, interpreted live",
+            "line2": "Talk in your own language"
           },
           {
-            "line1": "Chat in many languages,",
-            "line2": "translated live"
+            "line1": "Booking calls abroad,",
+            "line2": "interpreted too"
           },
           {
-            "line1": "Find people and posts",
-            "line2": "you're into"
+            "line1": "Your friends' daily life,",
+            "line2": "in your language"
           },
           {
-            "line1": "Race hamsters with friends",
-            "line2": "in Hash Rush"
+            "line1": "Every post and comment,",
+            "line2": "translated automatically"
+          },
+          {
+            "line1": "Play a round with friends",
+            "line2": "Hash Rush"
           },
           {
             "line1": "Grab the seed,",
@@ -92,23 +100,27 @@
             "line2": "友だちになれる場所"
           },
           {
-            "line1": "どの言語の投稿も",
-            "line2": "自分の言語で読める"
+            "line1": "外国語ができなくても",
+            "line2": "海外の友だちとトーク"
           },
           {
-            "line1": "コメントも",
+            "line1": "ボイストークを同時通訳",
+            "line2": "それぞれの言葉で通話"
+          },
+          {
+            "line1": "韓国の飲食店やお店の",
+            "line2": "予約電話も通訳"
+          },
+          {
+            "line1": "友だちの日常も",
+            "line2": "自分の言語で"
+          },
+          {
+            "line1": "すべての投稿とコメントが",
             "line2": "自動で翻訳"
           },
           {
-            "line1": "いくつもの言語で話せる",
-            "line2": "リアルタイム通訳チャット"
-          },
-          {
-            "line1": "気になる人や",
-            "line2": "投稿を見つけよう"
-          },
-          {
-            "line1": "友だちとハムスターレース",
+            "line1": "海外の友だちとゲームで対戦",
             "line2": "Hash Rush"
           },
           {
@@ -122,23 +134,27 @@
             "line2": "也能成为朋友"
           },
           {
-            "line1": "无论用什么语言写",
-            "line2": "都能用你的语言读"
+            "line1": "不会外语",
+            "line2": "也能和外国朋友聊天"
           },
           {
-            "line1": "评论也会",
+            "line1": "语音通话同声传译",
+            "line2": "各说各的语言"
+          },
+          {
+            "line1": "海外预约电话",
+            "line2": "也能翻译"
+          },
+          {
+            "line1": "朋友的日常",
+            "line2": "用你的语言看"
+          },
+          {
+            "line1": "所有帖子和评论",
             "line2": "自动翻译"
           },
           {
-            "line1": "多种语言同时聊",
-            "line2": "实时口译对话"
-          },
-          {
-            "line1": "找到感兴趣的",
-            "line2": "人和帖子"
-          },
-          {
-            "line1": "和朋友一起赛仓鼠",
+            "line1": "和外国朋友来一局",
             "line2": "Hash Rush"
           },
           {
@@ -152,23 +168,27 @@
             "line2": "也能成為朋友"
           },
           {
-            "line1": "無論用什麼語言寫",
-            "line2": "都能用你的語言讀"
+            "line1": "不會外語",
+            "line2": "也能和外國朋友聊天"
           },
           {
-            "line1": "留言也會",
+            "line1": "語音通話同步口譯",
+            "line2": "各說各的語言"
+          },
+          {
+            "line1": "海外預約電話",
+            "line2": "也能翻譯"
+          },
+          {
+            "line1": "朋友的日常",
+            "line2": "用你的語言看"
+          },
+          {
+            "line1": "所有貼文和留言",
             "line2": "自動翻譯"
           },
           {
-            "line1": "多種語言同時聊",
-            "line2": "即時口譯對話"
-          },
-          {
-            "line1": "找到感興趣的",
-            "line2": "人和貼文"
-          },
-          {
-            "line1": "和朋友一起賽倉鼠",
+            "line1": "和外國朋友來一局",
             "line2": "Hash Rush"
           },
           {
@@ -182,23 +202,27 @@
             "line2": "ก็เป็นเพื่อนกันได้"
           },
           {
-            "line1": "เขียนภาษาไหนก็ได้",
-            "line2": "อ่านเป็นภาษาของคุณ"
+            "line1": "ไม่รู้ภาษาก็แชต",
+            "line2": "กับเพื่อนต่างชาติได้"
           },
           {
-            "line1": "คอมเมนต์ก็",
+            "line1": "โทรเสียงพร้อมล่ามสด",
+            "line2": "ต่างคนต่างพูดภาษาตัวเอง"
+          },
+          {
+            "line1": "โทรจองร้านในต่างประเทศ",
+            "line2": "ก็แปลให้"
+          },
+          {
+            "line1": "ชีวิตประจำวันของเพื่อน",
+            "line2": "ในภาษาของคุณ"
+          },
+          {
+            "line1": "ทุกโพสต์และคอมเมนต์",
             "line2": "แปลให้อัตโนมัติ"
           },
           {
-            "line1": "แชตหลายภาษา",
-            "line2": "แปลแบบเรียลไทม์"
-          },
-          {
-            "line1": "ค้นหาคนและโพสต์",
-            "line2": "ที่คุณสนใจ"
-          },
-          {
-            "line1": "แข่งแฮมสเตอร์กับเพื่อน",
+            "line1": "เล่นเกมกับเพื่อนสักตา",
             "line2": "Hash Rush"
           },
           {
@@ -212,24 +236,28 @@
             "line2": "bằng mọi ngôn ngữ"
           },
           {
-            "line1": "Viết bằng ngôn ngữ nào",
-            "line2": "cũng đọc bằng tiếng của bạn"
+            "line1": "Chat với bạn nước ngoài",
+            "line2": "bằng tiếng của bạn"
           },
           {
-            "line1": "Bình luận cũng",
+            "line1": "Gọi thoại phiên dịch trực tiếp",
+            "line2": "Mỗi người nói tiếng mình"
+          },
+          {
+            "line1": "Gọi đặt chỗ ở nước ngoài",
+            "line2": "cũng được phiên dịch"
+          },
+          {
+            "line1": "Cuộc sống của bạn bè",
+            "line2": "bằng tiếng của bạn"
+          },
+          {
+            "line1": "Mọi bài đăng và bình luận",
             "line2": "được dịch tự động"
           },
           {
-            "line1": "Trò chuyện nhiều ngôn ngữ,",
-            "line2": "dịch trực tiếp"
-          },
-          {
-            "line1": "Tìm người và bài đăng",
-            "line2": "bạn quan tâm"
-          },
-          {
-            "line1": "Đua hamster cùng bạn bè",
-            "line2": "trong Hash Rush"
+            "line1": "Chơi một ván với bạn bè",
+            "line2": "Hash Rush"
           },
           {
             "line1": "Ngậm hạt hướng dương,",
@@ -242,23 +270,27 @@
             "line2": "दोस्त बनाइए"
           },
           {
-            "line1": "किसी भी भाषा में लिखा",
-            "line2": "अपनी भाषा में पढ़ें"
+            "line1": "अपनी भाषा में",
+            "line2": "विदेशी दोस्तों से चैट"
           },
           {
-            "line1": "कमेंट भी",
+            "line1": "वॉइस कॉल में लाइव अनुवाद",
+            "line2": "अपनी भाषा में बात करें"
+          },
+          {
+            "line1": "विदेश में बुकिंग कॉल",
+            "line2": "भी अनुवादित"
+          },
+          {
+            "line1": "दोस्तों की रोज़मर्रा",
+            "line2": "अपनी भाषा में"
+          },
+          {
+            "line1": "हर पोस्ट और टिप्पणी",
             "line2": "अपने-आप अनुवादित"
           },
           {
-            "line1": "कई भाषाओं में चैट",
-            "line2": "लाइव अनुवाद के साथ"
-          },
-          {
-            "line1": "अपनी पसंद के लोग",
-            "line2": "और पोस्ट खोजें"
-          },
-          {
-            "line1": "दोस्तों के साथ हैम्स्टर रेस",
+            "line1": "दोस्तों के साथ एक गेम",
             "line2": "Hash Rush"
           },
           {
@@ -272,24 +304,28 @@
             "line2": "in jeder Sprache"
           },
           {
-            "line1": "In jeder Sprache geschrieben,",
-            "line2": "in deiner gelesen"
+            "line1": "Chatte mit Freunden weltweit",
+            "line2": "in deiner Sprache"
           },
           {
-            "line1": "Auch Kommentare",
-            "line2": "werden übersetzt"
+            "line1": "Sprachanrufe live gedolmetscht",
+            "line2": "Jeder spricht seine Sprache"
           },
           {
-            "line1": "Chats in vielen Sprachen,",
-            "line2": "live übersetzt"
+            "line1": "Auch Buchungsanrufe",
+            "line2": "im Ausland gedolmetscht"
           },
           {
-            "line1": "Finde Menschen und Beiträge,",
-            "line2": "die dich interessieren"
+            "line1": "Der Alltag deiner Freunde",
+            "line2": "in deiner Sprache"
           },
           {
-            "line1": "Hamsterrennen mit Freunden",
-            "line2": "in Hash Rush"
+            "line1": "Alle Beiträge und Kommentare",
+            "line2": "automatisch übersetzt"
+          },
+          {
+            "line1": "Eine Runde mit Freunden",
+            "line2": "Hash Rush"
           },
           {
             "line1": "Schnapp dir den Kern,",
@@ -302,24 +338,28 @@
             "line2": "en cualquier idioma"
           },
           {
-            "line1": "Escrito en cualquier idioma,",
-            "line2": "leído en el tuyo"
+            "line1": "Chatea con amigos del mundo",
+            "line2": "en tu idioma"
           },
           {
-            "line1": "Los comentarios",
-            "line2": "también se traducen"
+            "line1": "Llamadas interpretadas en vivo",
+            "line2": "Habla en tu idioma"
           },
           {
-            "line1": "Chats en varios idiomas,",
-            "line2": "traducidos al instante"
+            "line1": "Llamadas para reservar",
+            "line2": "en el extranjero, interpretadas"
           },
           {
-            "line1": "Encuentra personas",
-            "line2": "y publicaciones a tu gusto"
+            "line1": "El día a día de tus amigos",
+            "line2": "en tu idioma"
           },
           {
-            "line1": "Carreras de hámsters",
-            "line2": "con amigos en Hash Rush"
+            "line1": "Todas las publicaciones y comentarios",
+            "line2": "se traducen solos"
+          },
+          {
+            "line1": "Una partida con amigos",
+            "line2": "Hash Rush"
           },
           {
             "line1": "Atrapa la semilla",
@@ -332,24 +372,28 @@
             "line2": "dans toutes les langues"
           },
           {
-            "line1": "Écrit dans toutes les langues,",
-            "line2": "lu dans la vôtre"
+            "line1": "Discutez avec vos amis du monde",
+            "line2": "dans votre langue"
           },
           {
-            "line1": "Les commentaires",
-            "line2": "aussi sont traduits"
+            "line1": "Appels interprétés en direct",
+            "line2": "Parlez votre langue"
           },
           {
-            "line1": "Discutez en plusieurs langues,",
-            "line2": "traduites en direct"
+            "line1": "Vos appels de réservation",
+            "line2": "à l’étranger, interprétés"
           },
           {
-            "line1": "Trouvez des personnes",
-            "line2": "et des publications"
+            "line1": "Le quotidien de vos amis",
+            "line2": "dans votre langue"
           },
           {
-            "line1": "Courses de hamsters",
-            "line2": "entre amis : Hash Rush"
+            "line1": "Publications et commentaires",
+            "line2": "traduits automatiquement"
+          },
+          {
+            "line1": "Une partie entre amis",
+            "line2": "Hash Rush"
           },
           {
             "line1": "Attrapez la graine,",
@@ -362,24 +406,28 @@
             "line2": "in ogni lingua"
           },
           {
-            "line1": "Scritto in qualsiasi lingua,",
-            "line2": "letto nella tua"
+            "line1": "Chatta con amici nel mondo",
+            "line2": "nella tua lingua"
           },
           {
-            "line1": "Anche i commenti",
-            "line2": "vengono tradotti"
+            "line1": "Chiamate tradotte dal vivo",
+            "line2": "Parla nella tua lingua"
           },
           {
-            "line1": "Chat in più lingue,",
-            "line2": "tradotte dal vivo"
+            "line1": "Anche le chiamate",
+            "line2": "per prenotare all’estero"
           },
           {
-            "line1": "Trova persone e post",
-            "line2": "che ti interessano"
+            "line1": "La vita dei tuoi amici",
+            "line2": "nella tua lingua"
           },
           {
-            "line1": "Corse di criceti",
-            "line2": "con gli amici: Hash Rush"
+            "line1": "Tutti i post e i commenti",
+            "line2": "tradotti in automatico"
+          },
+          {
+            "line1": "Una partita con gli amici",
+            "line2": "Hash Rush"
           },
           {
             "line1": "Prendi il seme,",
@@ -392,24 +440,28 @@
             "line2": "em qualquer idioma"
           },
           {
-            "line1": "Escrito em qualquer idioma,",
-            "line2": "lido no seu"
+            "line1": "Converse com amigos do mundo",
+            "line2": "no seu idioma"
           },
           {
-            "line1": "Os comentários",
-            "line2": "também são traduzidos"
+            "line1": "Chamadas traduzidas ao vivo",
+            "line2": "Fale no seu idioma"
           },
           {
-            "line1": "Conversas em vários idiomas,",
-            "line2": "traduzidas ao vivo"
+            "line1": "Ligações para reservar",
+            "line2": "no exterior, interpretadas"
           },
           {
-            "line1": "Encontre pessoas",
-            "line2": "e publicações do seu gosto"
+            "line1": "O dia a dia dos amigos",
+            "line2": "no seu idioma"
           },
           {
-            "line1": "Corrida de hamsters",
-            "line2": "com amigos: Hash Rush"
+            "line1": "Todos os posts e comentários",
+            "line2": "traduzidos automaticamente"
+          },
+          {
+            "line1": "Uma partida com os amigos",
+            "line2": "Hash Rush"
           },
           {
             "line1": "Pegue a semente",
@@ -422,24 +474,28 @@
             "line2": "на любом языке"
           },
           {
-            "line1": "Написано на любом языке,",
-            "line2": "читайте на своём"
+            "line1": "Общайтесь с друзьями из-за рубежа",
+            "line2": "на своём языке"
           },
           {
-            "line1": "Комментарии",
-            "line2": "тоже переводятся"
+            "line1": "Голосовые звонки с переводом",
+            "line2": "Каждый на своём языке"
           },
           {
-            "line1": "Чаты на разных языках",
-            "line2": "с живым переводом"
+            "line1": "Звонки для записи",
+            "line2": "за границей — с переводом"
           },
           {
-            "line1": "Находите людей",
-            "line2": "и посты по интересам"
+            "line1": "Жизнь друзей",
+            "line2": "на вашем языке"
           },
           {
-            "line1": "Гонки хомяков с друзьями",
-            "line2": "в Hash Rush"
+            "line1": "Все посты и комментарии",
+            "line2": "переводятся автоматически"
+          },
+          {
+            "line1": "Сыграйте с друзьями",
+            "line2": "Hash Rush"
           },
           {
             "line1": "Хватай семечко",
@@ -452,23 +508,27 @@
             "line2": "بأي لغة"
           },
           {
-            "line1": "مكتوب بأي لغة",
-            "line2": "اقرأه بلغتك"
+            "line1": "دردش مع أصدقائك حول العالم",
+            "line2": "بلغتك أنت"
           },
           {
-            "line1": "التعليقات أيضاً",
-            "line2": "تُترجم تلقائياً"
+            "line1": "مكالمات صوتية بترجمة فورية",
+            "line2": "تحدّث بلغتك"
           },
           {
-            "line1": "دردشة بعدة لغات",
-            "line2": "مع ترجمة فورية"
+            "line1": "مكالمات الحجز في الخارج",
+            "line2": "مترجمة أيضًا"
           },
           {
-            "line1": "اعثر على أشخاص",
-            "line2": "ومنشورات تهمك"
+            "line1": "يوميات أصدقائك",
+            "line2": "بلغتك"
           },
           {
-            "line1": "سباق الهامستر مع الأصدقاء",
+            "line1": "كل المنشورات والتعليقات",
+            "line2": "تُترجم تلقائيًا"
+          },
+          {
+            "line1": "العب جولة مع أصدقائك",
             "line2": "Hash Rush"
           },
           {
@@ -481,123 +541,123 @@
         "defaultMetadataLocale": "en",
         "metadata": {
           "en": {
-            "promotionalText": "Language barriers are over. Continuous real-time interpreting, live captions, and 3+ language translation. The easiest way to befriend anyone, HashChat.",
+            "promotionalText": "Chat with friends abroad, each in your own language. Speak and it's interpreted at once. No more copy-pasting into a translator. Meetings and travel, too.",
             "whatsNew": "What's New in Version 2.3.4:\n• Stability and performance improvements",
-            "description": "HashChat\n\n• HashChat supports all-direction interpreting and translation across 3+ languages. Even when multiple languages are mixed in the same conversation, everything is translated in real time, so you do not need to manually choose or switch languages whenever speakers change.\n• Get uninterrupted translation with live transcripts. Instead of stopping after each sentence, HashChat continuously translates along the full flow of your conversation or meeting, helping you follow context naturally.\n• See real-time captions and translations even for audio from other apps. If you run voice apps such as phone calls, radio, or Discord in the background on speakerphone while HashChat is in the foreground, that audio is captured as HashChat input and shown instantly as transcripts and translations.\n• Listen to translation as real-time voice interpreting. Turn on voice output to hear translated content like having an interpreter beside you, so you can understand without looking at the screen, even while running.\n• Keep it running in the background and switch apps freely. Even if you lock your screen or move HashChat to the background, it stays active and continues writing live conversation logs and translations.\n\nHashChat: Global Hangout",
-            "keywords": "voice translator,live captions,call translation,simultaneous,multilingual,global,hangout,mingle",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "HashChat is a messenger that interprets as you talk, so you and your friends abroad each use your own language.\n• What you write shows up in their language, and what they write shows up in yours.\n• Speak, and it is interpreted in real time.\n• Read your friends' posts and comments in your language.\n\nHashChat\n\n• HashChat supports all-direction interpreting and translation across 3+ languages. Even when multiple languages are mixed in the same conversation, everything is translated in real time, so you do not need to manually choose or switch languages whenever speakers change.\n• Get uninterrupted translation with live transcripts. Instead of stopping after each sentence, HashChat continuously translates along the full flow of your conversation or meeting, helping you follow context naturally.\n• See real-time captions and translations even for audio from other apps. If you run voice apps such as phone calls, radio, or Discord in the background on speakerphone while HashChat is in the foreground, that audio is captured as HashChat input and shown instantly as transcripts and translations.\n• Listen to translation as real-time voice interpreting. Turn on voice output to hear translated content like having an interpreter beside you, so you can understand without looking at the screen, even while running.\n• Keep it running in the background and switch apps freely. Even if you lock your screen or move HashChat to the background, it stays active and continues writing live conversation logs and translations.\n\nHashChat: Global Hangout",
+            "keywords": "live captions,call translation,simultaneous,multilingual,global,hangout,mingle,friends,chat,korean",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "ar": {
-            "promotionalText": "انتهت حواجز اللغة. ترجمة فورية مستمرة، وتسميات مباشرة، وترجمة لأكثر من 3 لغات. أسهل طريقة لتكوين صداقة مع أي شخص، HashChat.",
+            "promotionalText": "تحدّث مع أصدقائك في الخارج، كلٌّ بلغته. تكلّم وستُترجم كلماتك فورًا. لا حاجة بعد الآن للنسخ واللصق في المترجم. وللاجتماعات والسفر أيضًا.",
             "whatsNew": "الجديد في الإصدار 2.3.4:\n• تحسينات في الثبات والأداء",
-            "description": "HashChat\n\n• يدعم HashChat الترجمة الفورية والتحريرية في جميع الاتجاهات عبر أكثر من 3 لغات. حتى عند مزج عدة لغات في المحادثة نفسها، تتم ترجمة كل شيء في الوقت الحقيقي، لذلك لا تحتاج إلى اختيار اللغة أو تبديلها يدويًا عند تغير المتحدث.\n• احصل على ترجمة مستمرة مع نصوص مباشرة. بدلا من التوقف بعد كل جملة، يواصل HashChat الترجمة عبر كامل تدفق المحادثة أو الاجتماع، ما يساعدك على متابعة السياق بشكل طبيعي.\n• شاهد التسميات المباشرة والترجمة في الوقت الحقيقي حتى لصوت التطبيقات الأخرى. عند تشغيل تطبيقات الصوت مثل المكالمات أو الراديو أو Discord في الخلفية على مكبر الصوت بينما يكون HashChat في الواجهة، يتم التقاط هذا الصوت كمدخلات لـ HashChat ويعرض فورا كنص وترجمة.\n• استمع إلى الترجمة كتفسير صوتي فوري. فعل الإخراج الصوتي لتسمع المحتوى المترجم كما لو أن مترجما بجانبك، لتفهم دون النظر إلى الشاشة حتى أثناء الجري.\n• أبقه يعمل في الخلفية وبدل بين التطبيقات بحرية. حتى إذا قفلت الشاشة أو نقلت HashChat إلى الخلفية، يظل نشطا ويواصل كتابة سجلات المحادثة والترجمة مباشرة.\n\nHashChat: Global Hangout\nHashChat: أصدقاء حول العالم",
+            "description": "HashChat تطبيق مراسلة يترجم أثناء حديثك، فتتحدث أنت وأصدقاؤك في الخارج كلٌّ بلغته.\n• ما تكتبه يظهر بلغتهم، وما يكتبونه يظهر بلغتك.\n• تحدّث وستُترجم كلماتك في الوقت الفعلي.\n• اقرأ منشورات أصدقائك وتعليقاتهم بلغتك.\n\nHashChat\n\n• يدعم HashChat الترجمة الفورية والتحريرية في جميع الاتجاهات عبر أكثر من 3 لغات. حتى عند مزج عدة لغات في المحادثة نفسها، تتم ترجمة كل شيء في الوقت الحقيقي، لذلك لا تحتاج إلى اختيار اللغة أو تبديلها يدويًا عند تغير المتحدث.\n• احصل على ترجمة مستمرة مع نصوص مباشرة. بدلا من التوقف بعد كل جملة، يواصل HashChat الترجمة عبر كامل تدفق المحادثة أو الاجتماع، ما يساعدك على متابعة السياق بشكل طبيعي.\n• شاهد التسميات المباشرة والترجمة في الوقت الحقيقي حتى لصوت التطبيقات الأخرى. عند تشغيل تطبيقات الصوت مثل المكالمات أو الراديو أو Discord في الخلفية على مكبر الصوت بينما يكون HashChat في الواجهة، يتم التقاط هذا الصوت كمدخلات لـ HashChat ويعرض فورا كنص وترجمة.\n• استمع إلى الترجمة كتفسير صوتي فوري. فعل الإخراج الصوتي لتسمع المحتوى المترجم كما لو أن مترجما بجانبك، لتفهم دون النظر إلى الشاشة حتى أثناء الجري.\n• أبقه يعمل في الخلفية وبدل بين التطبيقات بحرية. حتى إذا قفلت الشاشة أو نقلت HashChat إلى الخلفية، يظل نشطا ويواصل كتابة سجلات المحادثة والترجمة مباشرة.\n\nHashChat: Global Hangout\nHashChat: أصدقاء حول العالم",
             "keywords": "مترجم صوتي,ترجمة فورية,تسميات مباشرة,ترجمة متزامنة,ترجمة المكالمات,hangout,mingle,مينغل,هاش شات",
-            "supportUrl": "https://translator.minglelabs.app",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "de": {
-            "promotionalText": "Sprachbarrieren sind vorbei. HashChat dolmetscht in Echtzeit mit Live-Untertiteln und Übersetzung in 3+ Sprachen. So schließen Sie weltweit leichter Freundschaften.",
+            "promotionalText": "Chatte mit Freunden im Ausland, jeder in seiner Sprache. Sprich, und es wird sofort gedolmetscht. Kein Kopieren in den Übersetzer mehr. Auch für Meetings und Reisen.",
             "whatsNew": "Neu in Version 2.3.4:\n• Verbesserungen bei Stabilität und Leistung",
-            "description": "HashChat\n\n• HashChat unterstützt Dolmetschen und Übersetzen in alle Richtungen für 3+ Sprachen. Selbst wenn in einem Gespräch mehrere Sprachen gemischt werden, wird alles in Echtzeit übersetzt, sodass Sie bei Sprecherwechseln keine Sprache manuell auswählen oder umschalten müssen.\n• Erhalten Sie unterbrechungsfreie Übersetzung mit Live-Transkripten. Statt nach jedem Satz zu stoppen, übersetzt HashChat kontinuierlich entlang des gesamten Gesprächs- oder Meetingverlaufs, damit Sie den Kontext natürlich verfolgen können.\n• Sehen Sie Echtzeit-Untertitel und Übersetzungen auch für Audio aus anderen Apps. Wenn Sprach-Apps wie Telefonate, Radio oder Discord im Hintergrund über den Lautsprecher laufen, während HashChat im Vordergrund ist, wird dieses Audio als HashChat-Eingabe erfasst und sofort als Transkript und Übersetzung angezeigt.\n• Hören Sie Übersetzungen als Echtzeit-Sprachdolmetschen. Aktivieren Sie die Sprachausgabe, um übersetzte Inhalte zu hören, als wäre ein Dolmetscher neben Ihnen, sodass Sie auch ohne Blick auf den Bildschirm alles verstehen, sogar beim Laufen.\n• Lassen Sie HashChat im Hintergrund laufen und wechseln Sie Apps frei. Selbst wenn Sie den Bildschirm sperren oder HashChat in den Hintergrund verschieben, bleibt es aktiv und schreibt Gesprächsprotokolle und Übersetzungen in Echtzeit weiter.\n\nHashChat: Global Hangout\nHashChat: Freunde weltweit",
-            "keywords": "Sprachübersetzer,Live-Untertitel,Anrufübersetzung,Simultanübersetzung,global,hangout,mingle",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "HashChat ist ein Messenger, der beim Schreiben und Sprechen dolmetscht: Du und deine Freunde im Ausland nutzt jeweils eure eigene Sprache.\n• Was du schreibst, erscheint in ihrer Sprache, und was sie schreiben, in deiner.\n• Sprich einfach, es wird in Echtzeit gedolmetscht.\n• Lies Beiträge und Kommentare deiner Freunde in deiner Sprache.\n\nHashChat\n\n• HashChat unterstützt Dolmetschen und Übersetzen in alle Richtungen für 3+ Sprachen. Selbst wenn in einem Gespräch mehrere Sprachen gemischt werden, wird alles in Echtzeit übersetzt, sodass Sie bei Sprecherwechseln keine Sprache manuell auswählen oder umschalten müssen.\n• Erhalten Sie unterbrechungsfreie Übersetzung mit Live-Transkripten. Statt nach jedem Satz zu stoppen, übersetzt HashChat kontinuierlich entlang des gesamten Gesprächs- oder Meetingverlaufs, damit Sie den Kontext natürlich verfolgen können.\n• Sehen Sie Echtzeit-Untertitel und Übersetzungen auch für Audio aus anderen Apps. Wenn Sprach-Apps wie Telefonate, Radio oder Discord im Hintergrund über den Lautsprecher laufen, während HashChat im Vordergrund ist, wird dieses Audio als HashChat-Eingabe erfasst und sofort als Transkript und Übersetzung angezeigt.\n• Hören Sie Übersetzungen als Echtzeit-Sprachdolmetschen. Aktivieren Sie die Sprachausgabe, um übersetzte Inhalte zu hören, als wäre ein Dolmetscher neben Ihnen, sodass Sie auch ohne Blick auf den Bildschirm alles verstehen, sogar beim Laufen.\n• Lassen Sie HashChat im Hintergrund laufen und wechseln Sie Apps frei. Selbst wenn Sie den Bildschirm sperren oder HashChat in den Hintergrund verschieben, bleibt es aktiv und schreibt Gesprächsprotokolle und Übersetzungen in Echtzeit weiter.\n\nHashChat: Global Hangout\nHashChat: Freunde weltweit",
+            "keywords": "Sprachübersetzer,Live-Untertitel,Anrufübersetzung,Simultanübersetzung,global,hangout,mingle,easiest",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "es": {
-            "promotionalText": "Se acabaron las barreras del idioma. HashChat interpreta en tiempo real con subtítulos en vivo y traducción en 3+ idiomas. La forma más simple de conectar con cualquiera.",
+            "promotionalText": "Chatea con amigos de otros países, cada uno en su idioma. Habla y se interpreta al instante. Se acabó copiar y pegar en el traductor. También en reuniones y viajes.",
             "whatsNew": "Novedades de la versión 2.3.4:\n• Mejoras de estabilidad y rendimiento",
-            "description": "HashChat\n\n• HashChat admite interpretación y traducción en todas las direcciones en 3+ idiomas. Incluso cuando se mezclan varios idiomas en la misma conversación, todo se traduce en tiempo real, por lo que no necesita elegir ni cambiar manualmente el idioma cuando cambia el hablante.\n• Obtenga traducción ininterrumpida con transcripciones en vivo. En lugar de detenerse después de cada frase, HashChat traduce de forma continua durante todo el flujo de la conversación o la reunión, para que siga el contexto de forma natural.\n• Vea subtítulos y traducciones en tiempo real incluso para audio de otras apps. Si ejecuta apps de voz como llamadas, radio o Discord en segundo plano con altavoz mientras HashChat está en primer plano, ese audio se captura como entrada de HashChat y se muestra al instante como transcripción y traducción.\n• Escuche la traducción como interpretación de voz en tiempo real. Active la salida de voz para oír el contenido traducido como si tuviera un intérprete a su lado, y así entender sin mirar la pantalla, incluso mientras corre.\n• Mantenga la app activa en segundo plano y cambie de aplicación libremente. Aunque bloquee la pantalla o envíe HashChat al fondo, sigue activa y continúa registrando conversaciones y traducciones en tiempo real.\n\nHashChat: Global Hangout\nHashChat: Amigos del mundo",
-            "keywords": "traductor voz,subtítulos vivos,trad. llamadas,intérprete simultáneo,global,hangout,mingle",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "HashChat es un mensajero que interpreta mientras hablas: tú y tus amigos de otros países usáis cada uno vuestro idioma.\n• Lo que escribes aparece en su idioma y lo que escriben aparece en el tuyo.\n• Habla y se interpreta en tiempo real.\n• Lee las publicaciones y los comentarios de tus amigos en tu idioma.\n\nHashChat\n\n• HashChat admite interpretación y traducción en todas las direcciones en 3+ idiomas. Incluso cuando se mezclan varios idiomas en la misma conversación, todo se traduce en tiempo real, por lo que no necesita elegir ni cambiar manualmente el idioma cuando cambia el hablante.\n• Obtenga traducción ininterrumpida con transcripciones en vivo. En lugar de detenerse después de cada frase, HashChat traduce de forma continua durante todo el flujo de la conversación o la reunión, para que siga el contexto de forma natural.\n• Vea subtítulos y traducciones en tiempo real incluso para audio de otras apps. Si ejecuta apps de voz como llamadas, radio o Discord en segundo plano con altavoz mientras HashChat está en primer plano, ese audio se captura como entrada de HashChat y se muestra al instante como transcripción y traducción.\n• Escuche la traducción como interpretación de voz en tiempo real. Active la salida de voz para oír el contenido traducido como si tuviera un intérprete a su lado, y así entender sin mirar la pantalla, incluso mientras corre.\n• Mantenga la app activa en segundo plano y cambie de aplicación libremente. Aunque bloquee la pantalla o envíe HashChat al fondo, sigue activa y continúa registrando conversaciones y traducciones en tiempo real.\n\nHashChat: Global Hangout\nHashChat: Amigos del mundo",
+            "keywords": "subtítulos vivos,trad. llamadas,intérprete simultáneo,global,hangout,mingle,easiest,translator",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "fr": {
-            "promotionalText": "Les barrières linguistiques, c'est fini. HashChat interprète en temps réel avec sous-titres en direct et traduction en 3+ langues. Le moyen simple de créer du lien.",
+            "promotionalText": "Discutez avec vos amis à l’étranger, chacun dans sa langue. Parlez, c’est interprété aussitôt. Fini le copier-coller dans un traducteur. Réunions et voyages aussi.",
             "whatsNew": "Nouveautés de la version 2.3.4 :\n• Améliorations de la stabilité et des performances",
-            "description": "HashChat\n\n• HashChat prend en charge l'interprétation et la traduction dans tous les sens sur plus de 3 langues. Même lorsque plusieurs langues sont mélangées dans une même conversation, tout est traduit en temps réel, vous n'avez donc pas besoin de choisir ou de changer de langue manuellement quand l'interlocuteur change.\n• Profitez d'une traduction continue avec transcription en direct. Au lieu de s'arrêter après chaque phrase, HashChat traduit en continu tout au long de la conversation ou de la réunion, pour vous aider à suivre le contexte naturellement.\n• Affichez des sous-titres et des traductions en temps réel, même pour l'audio provenant d'autres apps. Si vous utilisez des apps vocales comme les appels, la radio ou Discord en arrière-plan sur haut-parleur pendant que HashChat est au premier plan, cet audio est capté comme entrée HashChat et affiché instantanément en transcription et traduction.\n• Écoutez la traduction comme une interprétation vocale en temps réel. Activez la sortie audio pour entendre le contenu traduit comme si un interprète était à vos côtés, afin de comprendre sans regarder l'écran, même en courant.\n• Laissez HashChat actif en arrière-plan et passez d'une app à l'autre librement. Même si vous verrouillez l'écran ou mettez HashChat en arrière-plan, l'app reste active et continue d'écrire les journaux de conversation et les traductions en temps réel.\n\nHashChat: Global Hangout\nHashChat : Amis du monde entier",
-            "keywords": "traducteur vocal,sous-titres live,traduction appels,interprétation,global,hangout,mingle",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "HashChat est une messagerie qui interprète pendant que vous discutez : vous et vos amis à l’étranger utilisez chacun votre langue.\n• Ce que vous écrivez s’affiche dans leur langue, et ce qu’ils écrivent s’affiche dans la vôtre.\n• Parlez, c’est interprété en temps réel.\n• Lisez les publications et les commentaires de vos amis dans votre langue.\n\nHashChat\n\n• HashChat prend en charge l'interprétation et la traduction dans tous les sens sur plus de 3 langues. Même lorsque plusieurs langues sont mélangées dans une même conversation, tout est traduit en temps réel, vous n'avez donc pas besoin de choisir ou de changer de langue manuellement quand l'interlocuteur change.\n• Profitez d'une traduction continue avec transcription en direct. Au lieu de s'arrêter après chaque phrase, HashChat traduit en continu tout au long de la conversation ou de la réunion, pour vous aider à suivre le contexte naturellement.\n• Affichez des sous-titres et des traductions en temps réel, même pour l'audio provenant d'autres apps. Si vous utilisez des apps vocales comme les appels, la radio ou Discord en arrière-plan sur haut-parleur pendant que HashChat est au premier plan, cet audio est capté comme entrée HashChat et affiché instantanément en transcription et traduction.\n• Écoutez la traduction comme une interprétation vocale en temps réel. Activez la sortie audio pour entendre le contenu traduit comme si un interprète était à vos côtés, afin de comprendre sans regarder l'écran, même en courant.\n• Laissez HashChat actif en arrière-plan et passez d'une app à l'autre librement. Même si vous verrouillez l'écran ou mettez HashChat en arrière-plan, l'app reste active et continue d'écrire les journaux de conversation et les traductions en temps réel.\n\nHashChat: Global Hangout\nHashChat : Amis du monde entier",
+            "keywords": "sous-titres live,traduction appels,interprétation,global,hangout,mingle,easiest,translator",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "hi": {
-            "promotionalText": "भाषा की दीवारें अब खत्म। लगातार रियल-टाइम दुभाषिया, लाइव कैप्शन और 3+ भाषाओं में अनुवाद। किसी से भी दोस्ती करने का सबसे आसान तरीका, HashChat.",
+            "promotionalText": "विदेशी दोस्तों से अपनी-अपनी भाषा में चैट करें। बोलिए, तुरंत अनुवाद हो जाएगा। अब अनुवादक में कॉपी-पेस्ट की ज़रूरत नहीं। मीटिंग और सफ़र में भी।",
             "whatsNew": "संस्करण 2.3.4 में नया क्या है:\n• स्थिरता और प्रदर्शन में सुधार",
-            "description": "HashChat\n\n• HashChat 3+ भाषाओं में सभी दिशाओं में दुभाषिया और अनुवाद का समर्थन करता है। एक ही बातचीत में कई भाषाएं मिली हों तब भी सब कुछ रियल-टाइम में अनुवादित होता है, इसलिए वक्ता बदलने पर आपको भाषा हाथ से चुननी या बदलनी नहीं पड़ती।\n• लाइव ट्रांसक्रिप्ट के साथ बिना रुके अनुवाद पाएं। हर वाक्य के बाद रुकने के बजाय, HashChat बातचीत या मीटिंग के पूरे प्रवाह में लगातार अनुवाद करता है, जिससे संदर्भ स्वाभाविक रूप से समझ आता है।\n• अन्य ऐप्स की ऑडियो के लिए भी रियल-टाइम कैप्शन और अनुवाद देखें। अगर आप कॉल, रेडियो या Discord जैसे वॉइस ऐप्स को स्पीकरफोन पर बैकग्राउंड में चलाएं और HashChat को फोरग्राउंड में रखें, तो वह ऑडियो HashChat इनपुट के रूप में कैप्चर होकर तुरंत ट्रांसक्रिप्ट और अनुवाद के रूप में दिखता है।\n• अनुवाद को रियल-टाइम वॉइस इंटरप्रिटेशन की तरह सुनें। वॉइस आउटपुट चालू करें, और अनुवादित सामग्री ऐसे सुनें जैसे दुभाषिया आपके पास हो, ताकि स्क्रीन देखे बिना भी समझ सकें, यहां तक कि दौड़ते समय भी।\n• इसे बैकग्राउंड में चलने दें और ऐप्स को स्वतंत्र रूप से बदलें। स्क्रीन लॉक करने या HashChat को बैकग्राउंड में भेजने पर भी यह सक्रिय रहता है और लाइव बातचीत लॉग व अनुवाद लिखता रहता है।\n\nHashChat: Global Hangout\nHashChat: दुनिया भर के दोस्त",
-            "keywords": "वॉइसअनुवाद,लाइवकैप्शन,कॉलअनुवाद,तुरंतअनुवाद,global,hangout,mingle,मिंगल,हैशचैट",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "HashChat एक मैसेंजर है जो बातचीत के साथ-साथ अनुवाद करता है, ताकि आप और आपके विदेशी दोस्त अपनी-अपनी भाषा में बात कर सकें।\n• आप जो लिखते हैं वह उनकी भाषा में दिखता है, और वे जो लिखते हैं वह आपकी भाषा में।\n• बोलिए, रियल टाइम में अनुवाद होता है।\n• दोस्तों की पोस्ट और टिप्पणियाँ अपनी भाषा में पढ़िए।\n\nHashChat\n\n• HashChat 3+ भाषाओं में सभी दिशाओं में दुभाषिया और अनुवाद का समर्थन करता है। एक ही बातचीत में कई भाषाएं मिली हों तब भी सब कुछ रियल-टाइम में अनुवादित होता है, इसलिए वक्ता बदलने पर आपको भाषा हाथ से चुननी या बदलनी नहीं पड़ती।\n• लाइव ट्रांसक्रिप्ट के साथ बिना रुके अनुवाद पाएं। हर वाक्य के बाद रुकने के बजाय, HashChat बातचीत या मीटिंग के पूरे प्रवाह में लगातार अनुवाद करता है, जिससे संदर्भ स्वाभाविक रूप से समझ आता है।\n• अन्य ऐप्स की ऑडियो के लिए भी रियल-टाइम कैप्शन और अनुवाद देखें। अगर आप कॉल, रेडियो या Discord जैसे वॉइस ऐप्स को स्पीकरफोन पर बैकग्राउंड में चलाएं और HashChat को फोरग्राउंड में रखें, तो वह ऑडियो HashChat इनपुट के रूप में कैप्चर होकर तुरंत ट्रांसक्रिप्ट और अनुवाद के रूप में दिखता है।\n• अनुवाद को रियल-टाइम वॉइस इंटरप्रिटेशन की तरह सुनें। वॉइस आउटपुट चालू करें, और अनुवादित सामग्री ऐसे सुनें जैसे दुभाषिया आपके पास हो, ताकि स्क्रीन देखे बिना भी समझ सकें, यहां तक कि दौड़ते समय भी।\n• इसे बैकग्राउंड में चलने दें और ऐप्स को स्वतंत्र रूप से बदलें। स्क्रीन लॉक करने या HashChat को बैकग्राउंड में भेजने पर भी यह सक्रिय रहता है और लाइव बातचीत लॉग व अनुवाद लिखता रहता है।\n\nHashChat: Global Hangout\nHashChat: दुनिया भर के दोस्त",
+            "keywords": "वॉइसअनुवाद,लाइवकैप्शन,कॉलअनुवाद,तुरंतअनुवाद,global,hangout,mingle,मिंगल,हैशचैट,easiest,translator",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "it": {
-            "promotionalText": "Le barriere linguistiche sono finite. HashChat offre interpretariato in tempo reale, sottotitoli live e traduzione in 3+ lingue. Per fare amicizia ovunque, usa HashChat.",
+            "promotionalText": "Chatta con amici all’estero, ognuno nella propria lingua. Parla e viene interpretato subito. Basta copia-incolla nel traduttore. Anche per riunioni e viaggi.",
             "whatsNew": "Novità della versione 2.3.4:\n• Miglioramenti di stabilità e prestazioni",
-            "description": "HashChat\n\n• HashChat supporta interpretariato e traduzione in tutte le direzioni in 3+ lingue. Anche quando nella stessa conversazione si mescolano più lingue, tutto viene tradotto in tempo reale, quindi non è necessario scegliere o cambiare lingua manualmente quando cambia chi parla.\n• Ottieni traduzione continua con trascrizioni live. Invece di fermarsi dopo ogni frase, HashChat traduce in modo continuo lungo tutto il flusso della conversazione o della riunione, aiutandoti a seguire il contesto in modo naturale.\n• Visualizza sottotitoli e traduzioni in tempo reale anche per audio proveniente da altre app. Se usi app vocali come chiamate, radio o Discord in background con vivavoce mentre HashChat è in primo piano, quell'audio viene acquisito come input di HashChat e mostrato subito come trascrizione e traduzione.\n• Ascolta la traduzione come interpretazione vocale in tempo reale. Attiva l'uscita vocale per sentire i contenuti tradotti come se avessi un interprete accanto, così puoi capire senza guardare lo schermo, anche mentre corri.\n• Tienilo attivo in background e passa liberamente tra le app. Anche se blocchi lo schermo o mandi HashChat in background, resta attivo e continua a scrivere log conversazionali e traduzioni in tempo reale.\n\nHashChat: Global Hangout\nHashChat: Amici nel mondo",
-            "keywords": "traduttore vocale,sottotitoli live,traduzione chiamate,simultaneo,global,hangout,mingle",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "HashChat è un messenger che interpreta mentre parli: tu e i tuoi amici all’estero usate ognuno la propria lingua.\n• Quello che scrivi appare nella loro lingua e quello che scrivono appare nella tua.\n• Parla e viene interpretato in tempo reale.\n• Leggi i post e i commenti dei tuoi amici nella tua lingua.\n\nHashChat\n\n• HashChat supporta interpretariato e traduzione in tutte le direzioni in 3+ lingue. Anche quando nella stessa conversazione si mescolano più lingue, tutto viene tradotto in tempo reale, quindi non è necessario scegliere o cambiare lingua manualmente quando cambia chi parla.\n• Ottieni traduzione continua con trascrizioni live. Invece di fermarsi dopo ogni frase, HashChat traduce in modo continuo lungo tutto il flusso della conversazione o della riunione, aiutandoti a seguire il contesto in modo naturale.\n• Visualizza sottotitoli e traduzioni in tempo reale anche per audio proveniente da altre app. Se usi app vocali come chiamate, radio o Discord in background con vivavoce mentre HashChat è in primo piano, quell'audio viene acquisito come input di HashChat e mostrato subito come trascrizione e traduzione.\n• Ascolta la traduzione come interpretazione vocale in tempo reale. Attiva l'uscita vocale per sentire i contenuti tradotti come se avessi un interprete accanto, così puoi capire senza guardare lo schermo, anche mentre corri.\n• Tienilo attivo in background e passa liberamente tra le app. Anche se blocchi lo schermo o mandi HashChat in background, resta attivo e continua a scrivere log conversazionali e traduzioni in tempo reale.\n\nHashChat: Global Hangout\nHashChat: Amici nel mondo",
+            "keywords": "sottotitoli live,traduzione chiamate,simultaneo,global,hangout,mingle,easiest,translator",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "pt": {
-            "promotionalText": "As barreiras de idioma acabaram. HashChat traz interpretação em tempo real, legendas ao vivo e tradução em mais de 3 idiomas. A forma mais simples de se conectar.",
+            "promotionalText": "Converse com amigos de outros países, cada um no seu idioma. Fale e a interpretação sai na hora. Chega de copiar e colar no tradutor. Reuniões e viagens também.",
             "whatsNew": "Novidades da versão 2.3.4:\n• Melhorias de estabilidade e desempenho",
-            "description": "HashChat\n\n• O HashChat oferece interpretação e tradução em todas as direções em mais de 3 idiomas. Mesmo quando vários idiomas se misturam na mesma conversa, tudo é traduzido em tempo real, então você não precisa escolher ou alternar idiomas manualmente quando o falante muda.\n• Tenha tradução contínua com transcrições ao vivo. Em vez de parar após cada frase, o HashChat traduz continuamente ao longo de toda a conversa ou reunião, ajudando você a acompanhar o contexto naturalmente.\n• Veja legendas e traduções em tempo real até para áudio de outros apps. Se você executar apps de voz como chamadas, rádio ou Discord em segundo plano no viva-voz enquanto o HashChat está em primeiro plano, esse áudio é capturado como entrada do HashChat e exibido instantaneamente como transcrição e tradução.\n• Ouça a tradução como interpretação de voz em tempo real. Ative a saída de voz para ouvir o conteúdo traduzido como se houvesse um intérprete ao seu lado, assim você entende sem olhar para a tela, até mesmo correndo.\n• Mantenha o app rodando em segundo plano e troque de aplicativo livremente. Mesmo se bloquear a tela ou mover o HashChat para o fundo, ele continua ativo e segue registrando conversas e traduções em tempo real.\n\nHashChat: Global Hangout\nHashChat: Amigos no mundo todo",
-            "keywords": "tradutor voz,legendas ao vivo,tradução chamadas,interpretação,global,hangout,mingle",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "O HashChat é um mensageiro que interpreta enquanto você conversa: você e seus amigos de outros países usam cada um o seu idioma.\n• O que você escreve aparece no idioma deles, e o que eles escrevem aparece no seu.\n• Fale e a interpretação acontece em tempo real.\n• Leia as publicações e os comentários dos seus amigos no seu idioma.\n\nHashChat\n\n• O HashChat oferece interpretação e tradução em todas as direções em mais de 3 idiomas. Mesmo quando vários idiomas se misturam na mesma conversa, tudo é traduzido em tempo real, então você não precisa escolher ou alternar idiomas manualmente quando o falante muda.\n• Tenha tradução contínua com transcrições ao vivo. Em vez de parar após cada frase, o HashChat traduz continuamente ao longo de toda a conversa ou reunião, ajudando você a acompanhar o contexto naturalmente.\n• Veja legendas e traduções em tempo real até para áudio de outros apps. Se você executar apps de voz como chamadas, rádio ou Discord em segundo plano no viva-voz enquanto o HashChat está em primeiro plano, esse áudio é capturado como entrada do HashChat e exibido instantaneamente como transcrição e tradução.\n• Ouça a tradução como interpretação de voz em tempo real. Ative a saída de voz para ouvir o conteúdo traduzido como se houvesse um intérprete ao seu lado, assim você entende sem olhar para a tela, até mesmo correndo.\n• Mantenha o app rodando em segundo plano e troque de aplicativo livremente. Mesmo se bloquear a tela ou mover o HashChat para o fundo, ele continua ativo e segue registrando conversas e traduções em tempo real.\n\nHashChat: Global Hangout\nHashChat: Amigos no mundo todo",
+            "keywords": "legendas ao vivo,tradução chamadas,interpretação,global,hangout,mingle,easiest,translator",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "ru": {
-            "promotionalText": "Языковые барьеры в прошлом. HashChat дает синхронный перевод в реальном времени, живые субтитры и перевод на 3+ языках. Самый простой способ легче знакомиться.",
+            "promotionalText": "Общайтесь с друзьями из других стран — каждый на своём языке. Говорите, и перевод появится сразу. Не нужно копировать в переводчик. И для встреч, и для поездок.",
             "whatsNew": "Что нового в версии 2.3.4:\n• Повышение стабильности и производительности",
-            "description": "HashChat\n\n• HashChat поддерживает перевод и устный синхронный перевод во всех направлениях на 3+ языках. Даже если в одном разговоре смешиваются несколько языков, все переводится в реальном времени, поэтому вам не нужно вручную выбирать или переключать язык при смене говорящего.\n• Получайте непрерывный перевод с живыми расшифровками. Вместо остановки после каждого предложения HashChat переводит непрерывно по всему ходу разговора или встречи, помогая естественно удерживать контекст.\n• Смотрите субтитры и перевод в реальном времени даже для аудио из других приложений. Если запустить голосовые приложения, например звонки, радио или Discord, в фоне на громкой связи, пока HashChat открыт на переднем плане, этот звук захватывается как вход HashChat и сразу показывается как расшифровка и перевод.\n• Слушайте перевод как голосовой синхронный перевод в реальном времени. Включите голосовой вывод, чтобы слышать перевод как будто рядом переводчик, и понимать без взгляда на экран даже во время бега.\n• Оставляйте HashChat работать в фоне и свободно переключайтесь между приложениями. Даже если вы заблокируете экран или свернете HashChat, он остается активным и продолжает вести живой журнал разговора и перевода.\n\nHashChat: Global Hangout\nHashChat: Друзья по всему миру",
+            "description": "HashChat — мессенджер, который переводит прямо во время разговора: вы и ваши друзья из других стран общаетесь каждый на своём языке.\n• То, что пишете вы, показывается на их языке, а то, что пишут они, — на вашем.\n• Говорите — перевод идёт в реальном времени.\n• Читайте посты и комментарии друзей на своём языке.\n\nHashChat\n\n• HashChat поддерживает перевод и устный синхронный перевод во всех направлениях на 3+ языках. Даже если в одном разговоре смешиваются несколько языков, все переводится в реальном времени, поэтому вам не нужно вручную выбирать или переключать язык при смене говорящего.\n• Получайте непрерывный перевод с живыми расшифровками. Вместо остановки после каждого предложения HashChat переводит непрерывно по всему ходу разговора или встречи, помогая естественно удерживать контекст.\n• Смотрите субтитры и перевод в реальном времени даже для аудио из других приложений. Если запустить голосовые приложения, например звонки, радио или Discord, в фоне на громкой связи, пока HashChat открыт на переднем плане, этот звук захватывается как вход HashChat и сразу показывается как расшифровка и перевод.\n• Слушайте перевод как голосовой синхронный перевод в реальном времени. Включите голосовой вывод, чтобы слышать перевод как будто рядом переводчик, и понимать без взгляда на экран даже во время бега.\n• Оставляйте HashChat работать в фоне и свободно переключайтесь между приложениями. Даже если вы заблокируете экран или свернете HashChat, он остается активным и продолжает вести живой журнал разговора и перевода.\n\nHashChat: Global Hangout\nHashChat: Друзья по всему миру",
             "keywords": "переводчик,живые субтитры,перевод звонков,синхроперевод,global,hangout,mingle,Мингл,ХэшЧат,Хэш,Чат",
-            "supportUrl": "https://translator.minglelabs.app",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "ko": {
-            "promotionalText": "언어 장벽은 이제 끝났습니다. 마치 동시 통역가를 대동한 듯한 대화 번역.\nHashChat은 긴 대화도 끊김 없이 계속해서 통번역해요. 한 문장씩 멈추는 번역기는 그만 사용하세요.\n세 개 이상의 언어도 전방향 실시간 번역을 해드립니다.\n외국인과 친해지는 가장 쉬운 방법, HashChat.",
+            "promotionalText": "외국인 친구와 각자 모국어로 톡하세요. 말하면 바로 상대 언어로 통역돼요. 번역기 복사·붙여넣기는 이제 그만. 회의와 여행 대화도 끊김 없이 실시간으로 통번역해요.",
             "whatsNew": "버전 2.3.4 업데이트:\n• 안정성 및 성능 개선",
-            "description": "HashChat\n\n• 세 개 이상의 언어도 전방향으로 통번역해 드립니다. 여러 언어가 동시에 섞여 말해져도 모두 실시간으로 통번역되며, 발화자가 바뀔 때마다 언어를 직접 선택하거나 스위칭하실 필요가 없습니다.\n• 끊김 없는 번역과 실시간 스크립트를 제공합니다. 한 문장씩 끊어 번역하는 방식이 아니라, 대화나 회의의 전체 흐름을 따라 실시간으로 연속 번역되어 맥락까지 자연스럽게 확인하실 수 있습니다.\n• 다른 앱의 음성까지 실시간 자막과 번역으로 확인하실 수 있습니다. 스피커폰을 켠 상태로 통화, 라디오, 디스코드 같은 보이스 앱을 백그라운드에서 실행하고 HashChat을 포그라운드에서 켜두시면, 해당 앱의 음성이 HashChat 입력으로 들어와 실시간 스크립트와 번역을 바로 확인하실 수 있습니다.\n• 번역을 음성으로 실시간 동시 통역해 드립니다. 음성 출력을 켜면 동시통역사를 곁에 둔 것처럼 내용을 모두 음성으로 들려드려, 화면을 보지 않고 듣기만으로도 이해하실 수 있으며 러닝 중에도 편하게 사용하실 수 있습니다.\n• 백그라운드 실행으로 앱을 자유롭게 전환할 수 있습니다. 필요할 때 화면을 잠그거나 HashChat을 백그라운드로 전환해도 꺼지지 않고, 대화 기록과 번역본을 계속 실시간으로 작성합니다.\n\nHashChat: Global Hangout\nHashChat: 글로벌 친구 만들기\nHashChat The Easiest Translator",
-            "keywords": "동시통역,대화통역,통화통역,실시간자막,자동언어감지,다국어번역,보이스번역,global,hangout,mingle,밍글,해시챗,해쉬챗,해시,해쉬,챗",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "외국인 친구와 각자 모국어로 대화하는 통번역 메신저, HashChat.\n• 내가 쓴 말은 상대 언어로, 상대가 쓴 말은 내 언어로 바로 보여요.\n• 말로 하면 실시간으로 통역돼요.\n• 친구의 글과 댓글도 내 언어로 읽어요.\n\nHashChat\n\n• 세 개 이상의 언어도 전방향으로 통번역해 드립니다. 여러 언어가 동시에 섞여 말해져도 모두 실시간으로 통번역되며, 발화자가 바뀔 때마다 언어를 직접 선택하거나 스위칭하실 필요가 없습니다.\n• 끊김 없는 번역과 실시간 스크립트를 제공합니다. 한 문장씩 끊어 번역하는 방식이 아니라, 대화나 회의의 전체 흐름을 따라 실시간으로 연속 번역되어 맥락까지 자연스럽게 확인하실 수 있습니다.\n• 다른 앱의 음성까지 실시간 자막과 번역으로 확인하실 수 있습니다. 스피커폰을 켠 상태로 통화, 라디오, 디스코드 같은 보이스 앱을 백그라운드에서 실행하고 HashChat을 포그라운드에서 켜두시면, 해당 앱의 음성이 HashChat 입력으로 들어와 실시간 스크립트와 번역을 바로 확인하실 수 있습니다.\n• 번역을 음성으로 실시간 동시 통역해 드립니다. 음성 출력을 켜면 동시통역사를 곁에 둔 것처럼 내용을 모두 음성으로 들려드려, 화면을 보지 않고 듣기만으로도 이해하실 수 있으며 러닝 중에도 편하게 사용하실 수 있습니다.\n• 백그라운드 실행으로 앱을 자유롭게 전환할 수 있습니다. 필요할 때 화면을 잠그거나 HashChat을 백그라운드로 전환해도 꺼지지 않고, 대화 기록과 번역본을 계속 실시간으로 작성합니다.\n\nHashChat: Global Hangout\nHashChat: 글로벌 친구 만들기\nHashChat The Easiest Translator",
+            "keywords": "동시통역,대화통역,통화통역,실시간자막,자동언어감지,다국어번역,보이스번역,밍글,해시챗,해쉬챗,해시,해쉬,챗,번역기,통역,실시간,만들기,제일,쉬운,일본,한국,언어교환,채팅",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "zh-cn": {
-            "promotionalText": "语言障碍到此为止。HashChat 可为长对话提供不中断的实时口译，支持三种以上语言的全方向翻译。",
+            "promotionalText": "和外国朋友各用母语聊天。开口说话，立即翻译成对方的语言。不用再复制粘贴到翻译软件。会议和旅行对话也能不间断实时口译。",
             "whatsNew": "版本 2.3.4 更新：\n• 稳定性与性能提升",
-            "description": "HashChat\n\n• HashChat 支持 3 种以上语言的全方向口译与翻译。即使在同一段对话中混合多种语言，也能全部实时翻译；发言人切换时，您无需手动选择或切换语言。\n• 提供不中断的翻译与实时文字稿。不是一句一句停顿翻译，而是沿着对话或会议的整体流程连续翻译，让您自然把握上下文。\n• 其他应用的音频也可实时显示字幕与翻译。开启扬声器后，在后台运行通话、广播或 Discord 等语音应用，并将 HashChat 保持在前台时，这些音频会作为 HashChat 输入，立即显示文字稿与翻译。\n• 可将翻译内容以语音实时播报。打开语音输出后，就像身边有同声传译员一样，您可通过聆听直接理解内容，不看屏幕也能使用，跑步时也方便。\n• 后台运行时可自由切换应用。即使锁屏或将 HashChat 切到后台，它也不会中断，并会持续实时记录对话与翻译内容。\n\nHashChat: Global Hangout\nHashChat：全球交友\nHashChat The Easiest Translator",
-            "keywords": "同声传译,对话口译,通话口译,实时字幕,自动语言检测,多语言翻译,语音翻译,global,hangout,mingle,明格尔,哈希聊天",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "HashChat 是一款边聊边翻译的聊天应用，你和外国朋友都可以用自己的母语交流。\n• 你发的话会以对方的语言显示，对方发的话会以你的语言显示。\n• 开口说话，实时口译。\n• 朋友的帖子和评论也能用你的语言阅读。\n\nHashChat\n\n• HashChat 支持 3 种以上语言的全方向口译与翻译。即使在同一段对话中混合多种语言，也能全部实时翻译；发言人切换时，您无需手动选择或切换语言。\n• 提供不中断的翻译与实时文字稿。不是一句一句停顿翻译，而是沿着对话或会议的整体流程连续翻译，让您自然把握上下文。\n• 其他应用的音频也可实时显示字幕与翻译。开启扬声器后，在后台运行通话、广播或 Discord 等语音应用，并将 HashChat 保持在前台时，这些音频会作为 HashChat 输入，立即显示文字稿与翻译。\n• 可将翻译内容以语音实时播报。打开语音输出后，就像身边有同声传译员一样，您可通过聆听直接理解内容，不看屏幕也能使用，跑步时也方便。\n• 后台运行时可自由切换应用。即使锁屏或将 HashChat 切到后台，它也不会中断，并会持续实时记录对话与翻译内容。\n\nHashChat: Global Hangout\nHashChat：全球交友\nHashChat The Easiest Translator",
+            "keywords": "同声传译,对话口译,通话口译,实时字幕,自动语言检测,多语言翻译,语音翻译,global,hangout,mingle,明格尔,哈希聊天,翻译器,最简单,外国朋友,交友",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "zh-tw": {
-            "promotionalText": "語言隔閡就此結束。HashChat 為長對話提供不中斷的即時口譯，支援三種以上語言的全方向翻譯。",
+            "promotionalText": "和外國朋友各用母語聊天。開口說話，立即翻譯成對方的語言。不用再複製貼上到翻譯軟體。會議和旅行對話也能不間斷即時口譯。",
             "whatsNew": "版本 2.3.4 更新：\n• 穩定性與效能提升",
-            "description": "HashChat\n\n• HashChat 支援三種以上語言的全方向口譯與翻譯。即使同一段對話混合多種語言，也能全部即時翻譯；說話者切換時，您不需要手動選擇或切換語言。\n• 提供不中斷翻譯與即時逐字稿。不是每句停下來翻譯，而是沿著對話或會議的整體流程連續翻譯，讓您自然掌握上下文。\n• 其他 App 的音訊也能即時顯示字幕與翻譯。開啟擴音後，在背景執行通話、廣播或 Discord 等語音 App，並將 HashChat 保持在前景時，這些音訊會作為 HashChat 輸入，立即顯示逐字稿與翻譯。\n• 可將翻譯內容以語音即時播報。開啟語音輸出後，就像身邊有同步口譯員一樣，您可只靠聆聽理解內容，不看螢幕也能使用，跑步時也方便。\n• 背景執行時可自由切換 App。即使鎖定螢幕或把 HashChat 切到背景，它也不會中斷，並會持續即時記錄對話與翻譯內容。\n\nHashChat: Global Hangout\nHashChat：全球交友\nHashChat The Easiest Translator",
-            "keywords": "同步口譯,對話口譯,通話口譯,即時字幕,自動語言偵測,多語翻譯,語音翻譯,global,hangout,mingle,明格爾,哈希聊天",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "HashChat 是一款邊聊邊翻譯的聊天應用程式，你和外國朋友都可以用自己的母語交流。\n• 你傳的話會以對方的語言顯示，對方傳的話會以你的語言顯示。\n• 開口說話，即時口譯。\n• 朋友的貼文和留言也能用你的語言閱讀。\n\nHashChat\n\n• HashChat 支援三種以上語言的全方向口譯與翻譯。即使同一段對話混合多種語言，也能全部即時翻譯；說話者切換時，您不需要手動選擇或切換語言。\n• 提供不中斷翻譯與即時逐字稿。不是每句停下來翻譯，而是沿著對話或會議的整體流程連續翻譯，讓您自然掌握上下文。\n• 其他 App 的音訊也能即時顯示字幕與翻譯。開啟擴音後，在背景執行通話、廣播或 Discord 等語音 App，並將 HashChat 保持在前景時，這些音訊會作為 HashChat 輸入，立即顯示逐字稿與翻譯。\n• 可將翻譯內容以語音即時播報。開啟語音輸出後，就像身邊有同步口譯員一樣，您可只靠聆聽理解內容，不看螢幕也能使用，跑步時也方便。\n• 背景執行時可自由切換 App。即使鎖定螢幕或把 HashChat 切到背景，它也不會中斷，並會持續即時記錄對話與翻譯內容。\n\nHashChat: Global Hangout\nHashChat：全球交友\nHashChat The Easiest Translator",
+            "keywords": "同步口譯,對話口譯,通話口譯,即時字幕,自動語言偵測,多語翻譯,語音翻譯,global,hangout,mingle,明格爾,哈希聊天,翻譯器,最簡單,外國朋友,交友",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "ja": {
-            "promotionalText": "言語の壁はもう終わり。HashChatなら長い会話も途切れずリアルタイム通訳。3言語以上でも全方向に翻訳できます。",
+            "promotionalText": "海外の友達と、それぞれの母語でトーク。話すとすぐ相手の言語に通訳されます。翻訳アプリのコピペはもう必要ありません。会議や旅行の会話も途切れずリアルタイムで通訳します。",
             "whatsNew": "バージョン 2.3.4 の更新内容：\n• 安定性とパフォーマンスの向上",
-            "description": "HashChat\n\n• HashChatは3言語以上でも全方向の通訳・翻訳を提供します。複数言語が同時に混ざる会話でもリアルタイムで翻訳されるため、話者が変わるたびに言語を手動で選択・切り替えする必要はありません。\n• 途切れない翻訳とリアルタイム字幕を提供します。一文ごとに止まって翻訳するのではなく、会話や会議の流れ全体に沿って連続翻訳されるため、文脈まで自然に把握できます。\n• 他アプリの音声もリアルタイム字幕と翻訳で確認できます。スピーカーフォンで通話、ラジオ、Discordなどの音声アプリをバックグラウンドで動かし、HashChatをフォアグラウンドで開いておくと、その音声がHashChat入力として取り込まれ、字幕と翻訳がすぐ表示されます。\n• 翻訳結果を音声でリアルタイム同時通訳できます。音声出力をオンにすると、通訳者がそばにいるように内容を聞けるため、画面を見なくても理解でき、ランニング中でも使えます。\n• バックグラウンド実行のままアプリを自由に切り替えできます。画面をロックしたりHashChatをバックグラウンドにしても停止せず、会話ログと翻訳をリアルタイムで記録し続けます。\n\nHashChat: Global Hangout\nHashChat: 世界中の友達づくり\nHashChat The Easiest Translator",
-            "keywords": "同時通訳,会話通訳,通話通訳,リアルタイム字幕,自動言語検出,多言語翻訳,音声翻訳,global,hangout,mingle,ミングル,ハッシュチャット,ハッシュ,チャット",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "HashChatは、海外の友達とそれぞれの母語で話せる通訳・翻訳メッセンジャーです。\n• 自分の言葉は相手の言語で、相手の言葉は自分の言語ですぐに表示されます。\n• 話すとリアルタイムで通訳されます。\n• 友達の投稿やコメントも自分の言語で読めます。\n\nHashChat\n\n• HashChatは3言語以上でも全方向の通訳・翻訳を提供します。複数言語が同時に混ざる会話でもリアルタイムで翻訳されるため、話者が変わるたびに言語を手動で選択・切り替えする必要はありません。\n• 途切れない翻訳とリアルタイム字幕を提供します。一文ごとに止まって翻訳するのではなく、会話や会議の流れ全体に沿って連続翻訳されるため、文脈まで自然に把握できます。\n• 他アプリの音声もリアルタイム字幕と翻訳で確認できます。スピーカーフォンで通話、ラジオ、Discordなどの音声アプリをバックグラウンドで動かし、HashChatをフォアグラウンドで開いておくと、その音声がHashChat入力として取り込まれ、字幕と翻訳がすぐ表示されます。\n• 翻訳結果を音声でリアルタイム同時通訳できます。音声出力をオンにすると、通訳者がそばにいるように内容を聞けるため、画面を見なくても理解でき、ランニング中でも使えます。\n• バックグラウンド実行のままアプリを自由に切り替えできます。画面をロックしたりHashChatをバックグラウンドにしても停止せず、会話ログと翻訳をリアルタイムで記録し続けます。\n\nHashChat: Global Hangout\nHashChat: 世界中の友達づくり\nHashChat The Easiest Translator",
+            "keywords": "同時通訳,会話通訳,通話通訳,リアルタイム字幕,自動言語検出,多言語翻訳,音声翻訳,ミングル,ハッシュチャット,ハッシュ,チャット,翻訳機,リアルタイム,づくり,簡単,いちばん,韓国人,日韓,言語交換",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "vi": {
-            "promotionalText": "Rào cản ngôn ngữ đã kết thúc. HashChat phiên dịch thời gian thực liên tục cho hội thoại dài và hỗ trợ dịch đa chiều 3+ ngôn ngữ.",
+            "promotionalText": "Trò chuyện với bạn bè nước ngoài, mỗi người dùng tiếng của mình. Chỉ cần nói là được phiên dịch ngay. Không cần sao chép sang ứng dụng dịch nữa. Cả khi họp và du lịch.",
             "whatsNew": "Tính năng mới trong phiên bản 2.3.4:\n• Cải thiện độ ổn định và hiệu năng",
-            "description": "HashChat\n\n• HashChat hỗ trợ phiên dịch và dịch thuật đa chiều với hơn 3 ngôn ngữ. Ngay cả khi nhiều ngôn ngữ được dùng xen kẽ trong cùng một cuộc trò chuyện, mọi nội dung vẫn được dịch theo thời gian thực, nên bạn không cần tự chọn hay chuyển ngôn ngữ mỗi khi đổi người nói.\n• Cung cấp bản dịch liên tục và transcript thời gian thực. Thay vì dừng lại sau từng câu, HashChat dịch liên tục theo toàn bộ mạch hội thoại hoặc cuộc họp để bạn nắm được ngữ cảnh tự nhiên.\n• Ngay cả âm thanh từ ứng dụng khác cũng có thể hiển thị phụ đề và bản dịch theo thời gian thực. Khi bật loa ngoài cho cuộc gọi, radio hoặc ứng dụng thoại như Discord chạy nền và giữ HashChat ở tiền cảnh, âm thanh đó sẽ đi vào HashChat để hiển thị transcript và bản dịch ngay lập tức.\n• Có thể phát bản dịch bằng giọng nói theo thời gian thực. Khi bật đầu ra giọng nói, nội dung dịch sẽ được đọc như có thông dịch viên bên cạnh, giúp bạn hiểu chỉ bằng nghe mà không cần nhìn màn hình, kể cả khi đang chạy bộ.\n• Chạy nền và chuyển ứng dụng tự do. Dù khóa màn hình hay đưa HashChat xuống nền, ứng dụng vẫn tiếp tục hoạt động và ghi lại hội thoại cùng bản dịch theo thời gian thực.\n\nHashChat: Global Hangout\nHashChat: Kết bạn toàn cầu",
-            "keywords": "dịchgiọngnói,phụđềtrực tiếp,dịchcuộcgọi,dịchtứcthì,global,hangout,mingle",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "HashChat là ứng dụng nhắn tin phiên dịch ngay khi bạn trò chuyện: bạn và bạn bè nước ngoài mỗi người dùng tiếng của mình.\n• Điều bạn viết hiện bằng tiếng của họ, điều họ viết hiện bằng tiếng của bạn.\n• Chỉ cần nói, lời nói được phiên dịch theo thời gian thực.\n• Đọc bài đăng và bình luận của bạn bè bằng tiếng của bạn.\n\nHashChat\n\n• HashChat hỗ trợ phiên dịch và dịch thuật đa chiều với hơn 3 ngôn ngữ. Ngay cả khi nhiều ngôn ngữ được dùng xen kẽ trong cùng một cuộc trò chuyện, mọi nội dung vẫn được dịch theo thời gian thực, nên bạn không cần tự chọn hay chuyển ngôn ngữ mỗi khi đổi người nói.\n• Cung cấp bản dịch liên tục và transcript thời gian thực. Thay vì dừng lại sau từng câu, HashChat dịch liên tục theo toàn bộ mạch hội thoại hoặc cuộc họp để bạn nắm được ngữ cảnh tự nhiên.\n• Ngay cả âm thanh từ ứng dụng khác cũng có thể hiển thị phụ đề và bản dịch theo thời gian thực. Khi bật loa ngoài cho cuộc gọi, radio hoặc ứng dụng thoại như Discord chạy nền và giữ HashChat ở tiền cảnh, âm thanh đó sẽ đi vào HashChat để hiển thị transcript và bản dịch ngay lập tức.\n• Có thể phát bản dịch bằng giọng nói theo thời gian thực. Khi bật đầu ra giọng nói, nội dung dịch sẽ được đọc như có thông dịch viên bên cạnh, giúp bạn hiểu chỉ bằng nghe mà không cần nhìn màn hình, kể cả khi đang chạy bộ.\n• Chạy nền và chuyển ứng dụng tự do. Dù khóa màn hình hay đưa HashChat xuống nền, ứng dụng vẫn tiếp tục hoạt động và ghi lại hội thoại cùng bản dịch theo thời gian thực.\n\nHashChat: Global Hangout\nHashChat: Kết bạn toàn cầu",
+            "keywords": "dịchgiọngnói,phụđềtrực tiếp,dịchcuộcgọi,dịchtứcthì,global,hangout,mingle,easiest,translator,kết bạn",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           },
           "th": {
-            "promotionalText": "จบปัญหากำแพงภาษา HashChat แปลและล่ามแบบเรียลไทม์ต่อเนื่องสำหรับบทสนทนายาว รองรับ 3+ ภาษาแบบทุกทิศทาง",
+            "promotionalText": "แชตกับเพื่อนต่างชาติด้วยภาษาของตัวเอง แค่พูดก็แปลให้ทันที ไม่ต้องคัดลอกไปวางในแอปแปลอีกต่อไป ใช้ได้ทั้งประชุมและท่องเที่ยว",
             "whatsNew": "มีอะไรใหม่ในเวอร์ชัน 2.3.4:\n• ปรับปรุงความเสถียรและประสิทธิภาพ",
-            "description": "HashChat\n\n• HashChat รองรับการล่ามและแปลแบบทุกทิศทางมากกว่า 3 ภาษา แม้ในบทสนทนาเดียวจะมีหลายภาษาปะปนกัน ระบบก็แปลแบบเรียลไทม์ทั้งหมดได้ โดยไม่ต้องเลือกหรือสลับภาษาเองทุกครั้งที่ผู้พูดเปลี่ยน\n• ให้การแปลต่อเนื่องพร้อมสคริปต์แบบเรียลไทม์ ไม่ได้หยุดแปลทีละประโยค แต่แปลต่อเนื่องตามทั้งบริบทของบทสนทนาหรือการประชุม ทำให้เข้าใจเนื้อหาได้เป็นธรรมชาติ\n• แม้เป็นเสียงจากแอปอื่นก็แสดงซับและคำแปลแบบเรียลไทม์ได้ เมื่อเปิดลำโพงสำหรับสายโทร วิทยุ หรือแอปเสียงอย่าง Discord ไว้เบื้องหลัง และเปิด HashChat ไว้ด้านหน้า เสียงนั้นจะเข้ามาเป็นอินพุตของ HashChat และแสดงสคริปต์กับคำแปลทันที\n• สามารถฟังคำแปลเป็นเสียงแบบล่ามพร้อมกันเรียลไทม์ได้ เมื่อเปิดเสียงออก ระบบจะอ่านคำแปลเหมือนมีล่ามอยู่ข้าง ๆ ทำให้เข้าใจได้แม้ไม่ต้องมองหน้าจอ และใช้งานระหว่างวิ่งได้สะดวก\n• ทำงานต่อได้ในเบื้องหลังและสลับแอปได้อิสระ แม้ล็อกหน้าจอหรือย้าย HashChat ไปเบื้องหลัง ระบบก็ไม่หยุด และยังบันทึกบทสนทนากับคำแปลแบบเรียลไทม์ต่อเนื่อง\n\nHashChat: Global Hangout\nHashChat: หาเพื่อนทั่วโลก",
-            "keywords": "แปลเสียง,ซับสด,แปลสายโทร,แปลทันที,global,hangout,mingle,มิงเกิล,แฮชแชท",
-            "supportUrl": "https://translator.minglelabs.app",
+            "description": "HashChat คือแอปแชตที่แปลให้ระหว่างคุย คุณกับเพื่อนต่างชาติจึงใช้ภาษาของตัวเองได้\n• สิ่งที่คุณพิมพ์จะแสดงเป็นภาษาของเพื่อน และสิ่งที่เพื่อนพิมพ์จะแสดงเป็นภาษาของคุณ\n• แค่พูด ก็แปลให้แบบเรียลไทม์\n• อ่านโพสต์และคอมเมนต์ของเพื่อนในภาษาของคุณ\n\nHashChat\n\n• HashChat รองรับการล่ามและแปลแบบทุกทิศทางมากกว่า 3 ภาษา แม้ในบทสนทนาเดียวจะมีหลายภาษาปะปนกัน ระบบก็แปลแบบเรียลไทม์ทั้งหมดได้ โดยไม่ต้องเลือกหรือสลับภาษาเองทุกครั้งที่ผู้พูดเปลี่ยน\n• ให้การแปลต่อเนื่องพร้อมสคริปต์แบบเรียลไทม์ ไม่ได้หยุดแปลทีละประโยค แต่แปลต่อเนื่องตามทั้งบริบทของบทสนทนาหรือการประชุม ทำให้เข้าใจเนื้อหาได้เป็นธรรมชาติ\n• แม้เป็นเสียงจากแอปอื่นก็แสดงซับและคำแปลแบบเรียลไทม์ได้ เมื่อเปิดลำโพงสำหรับสายโทร วิทยุ หรือแอปเสียงอย่าง Discord ไว้เบื้องหลัง และเปิด HashChat ไว้ด้านหน้า เสียงนั้นจะเข้ามาเป็นอินพุตของ HashChat และแสดงสคริปต์กับคำแปลทันที\n• สามารถฟังคำแปลเป็นเสียงแบบล่ามพร้อมกันเรียลไทม์ได้ เมื่อเปิดเสียงออก ระบบจะอ่านคำแปลเหมือนมีล่ามอยู่ข้าง ๆ ทำให้เข้าใจได้แม้ไม่ต้องมองหน้าจอ และใช้งานระหว่างวิ่งได้สะดวก\n• ทำงานต่อได้ในเบื้องหลังและสลับแอปได้อิสระ แม้ล็อกหน้าจอหรือย้าย HashChat ไปเบื้องหลัง ระบบก็ไม่หยุด และยังบันทึกบทสนทนากับคำแปลแบบเรียลไทม์ต่อเนื่อง\n\nHashChat: Global Hangout\nHashChat: หาเพื่อนทั่วโลก",
+            "keywords": "แปลเสียง,ซับสด,แปลสายโทร,แปลทันที,global,hangout,mingle,มิงเกิล,แฮชแชท,easiest,translator,เพื่อน",
+            "supportUrl": "https://hashchat.minglelabs.app",
             "marketingUrl": "https://minglelabs.app"
           }
         }
@@ -606,40 +666,40 @@
     },
     "generalInfo": {
       "appInfo": {
-        "privacyPolicyUrl": "https://translator.minglelabs.app/privacy-policy",
+        "privacyPolicyUrl": "https://hashchat.minglelabs.app/privacy-policy",
         "title": {
-          "ar": "HashChat: Easiest Translator",
-          "de": "HashChat: Easiest Translator",
-          "en": "HashChat: Easiest Translator",
-          "es": "HashChat: Easiest Translator",
-          "fr": "HashChat: Easiest Translator",
-          "hi": "HashChat: Easiest Translator",
-          "it": "HashChat: Easiest Translator",
-          "ja": "HashChat: いちばん簡単な翻訳機",
-          "ko": "HashChat: 제일 쉬운 번역기",
-          "pt": "HashChat: Easiest Translator",
-          "ru": "HashChat: Easiest Translator",
-          "th": "HashChat: Easiest Translator",
-          "vi": "HashChat: Easiest Translator",
-          "zh-cn": "HashChat：最简单的翻译器",
-          "zh-tw": "HashChat：最簡單的翻譯器"
+          "ar": "HashChat: مراسلة مع ترجمة",
+          "de": "HashChat: Dolmetsch-Messenger",
+          "en": "HashChat: Translator Messenger",
+          "es": "HashChat: Mensajero traductor",
+          "fr": "HashChat: Messagerie traduite",
+          "hi": "HashChat: अनुवाद मैसेंजर",
+          "it": "HashChat: Messenger traduttore",
+          "ja": "HashChat: 通訳・翻訳メッセンジャー",
+          "ko": "HashChat: 통번역 메신저",
+          "pt": "HashChat: Mensageiro tradutor",
+          "ru": "HashChat: чат с переводчиком",
+          "th": "HashChat: แชตแปลภาษา",
+          "vi": "HashChat: Nhắn tin phiên dịch",
+          "zh-cn": "HashChat：口译翻译聊天",
+          "zh-tw": "HashChat：口譯翻譯聊天"
         },
         "subtitle": {
-          "ar": "مترجم صوتي مباشر",
-          "de": "Live-Sprachübersetzer",
-          "en": "Live Voice Translator",
-          "es": "Traductor de voz en vivo",
-          "fr": "Traducteur vocal en direct",
-          "hi": "लाइव वॉइस ट्रांसलेटर",
-          "it": "Traduttore vocale live",
-          "ja": "ライブ音声翻訳機",
-          "ko": "라이브 음성 번역기",
-          "pt": "Tradutor de voz ao vivo",
-          "ru": "Живой голосовой переводчик",
-          "th": "นักแปลเสียงสด",
-          "vi": "Dịch giọng nói trực tiếp",
-          "zh-cn": "实时语音翻译器",
-          "zh-tw": "即時語音翻譯器"
+          "ar": "دردشة ومترجم صوتي مباشر",
+          "de": "Live-Sprachübersetzer & Chat",
+          "en": "Easiest live voice translation",
+          "es": "Chat, traductor de voz en vivo",
+          "fr": "Chat, traducteur vocal direct",
+          "hi": "चैट और लाइव वॉइस ट्रांसलेटर",
+          "it": "Chat e traduttore vocale live",
+          "ja": "世界中の友達とライブ音声翻訳トーク",
+          "ko": "글로벌 친구와 라이브 음성 번역 톡",
+          "pt": "Chat e tradutor de voz ao vivo",
+          "ru": "Чат и живой голосовой перевод",
+          "th": "แชตและนักแปลเสียงสด",
+          "vi": "Chat, dịch giọng nói trực tiếp",
+          "zh-cn": "和全球朋友实时语音翻译聊天",
+          "zh-tw": "和全球朋友即時語音翻譯聊天"
         }
       }
     }

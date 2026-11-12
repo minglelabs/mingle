@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="strict-origin-when-cross-origin" name="referrer"/>
+<title>AI翻訳アプリ比較</title>
+<meta content="HashChat、Felo Translator、Transync、Google Translate、Apple Translate、Microsoft Translator、Papago、DeepLのリアルタイムAI音声翻訳、字幕、文字起こし、バックグラウンド翻訳、外部アプリの音声翻訳機能を比較します。" name="description"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ja" rel="canonical"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison" hreflang="en" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ko" hreflang="ko" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ja" hreflang="ja" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=zh-cn" hreflang="zh-cn" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=zh-tw" hreflang="zh-tw" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=fr" hreflang="fr" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=de" hreflang="de" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=es" hreflang="es" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=pt" hreflang="pt" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=it" hreflang="it" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ru" hreflang="ru" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ar" hreflang="ar" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=hi" hreflang="hi" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=th" hreflang="th" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=vi" hreflang="vi" rel="alternate"/>
+<link href="https://hashchat.minglelabs.app/blogs/ai-translators-comparison" hreflang="x-default" rel="alternate"/>
+<meta content="AI翻訳アプリ比較" property="og:title"/>
+<meta content="実際の会話で使えるリアルタイムAI翻訳機能を、一覧表を中心にわかりやすく比較するガイドです。" property="og:description"/>
+<meta content="article" property="og:type"/>
+<meta content="https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ja" property="og:url"/>
+<meta content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" property="og:image"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<script type="application/ld+json">
+      {"@context": "https://schema.org", "@type": "BlogPosting", "headline": "AI翻訳アプリ比較", "description": "HashChat、Felo Translator、Transync、Google Translate、Apple Translate、Microsoft Translator、Papago、DeepLのリアルタイムAI音声翻訳、字幕、文字起こし、バックグラウンド翻訳、外部アプリの音声翻訳機能を比較します。", "datePublished": "2026-04-20", "dateModified": "2026-11-02", "author": {"@type": "Organization", "name": "Mingle Labs"}, "publisher": {"@type": "Organization", "name": "Mingle Labs"}, "mainEntityOfPage": "https://hashchat.minglelabs.app/blogs/ai-translators-comparison?lang=ja", "image": "https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1", "about": {"@type": "MobileApplication", "@id": "https://hashchat.minglelabs.app/#app", "name": "HashChat", "alternateName": ["Mingle", "Mingle: Global Hangout"], "description": "HashChat (formerly Mingle) is a real-time voice translation app for foreign friends, global communities, and conversations while traveling. The app was renamed from Mingle to HashChat in October 2026; it is the same app, account, and store listing.", "applicationCategory": "SocialNetworkingApplication", "operatingSystem": "iOS, Android", "url": "https://hashchat.minglelabs.app/", "sameAs": ["https://apps.apple.com/app/id6759795134", "https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"], "publisher": {"@id": "https://minglelabs.app/#organization"}}, "inLanguage": "ja"}
+    </script>
+<style>
+      :root {
+        color-scheme: light;
+        --paper: #fbf7ee;
+        --paper-deep: #f0eadf;
+        --surface: #fffdf8;
+        --ink: #1d211d;
+        --muted: #626a61;
+        --line: rgba(29, 33, 29, 0.13);
+        --green: #19695a;
+        --green-deep: #0f4339;
+        --amber: #e6a72a;
+        --blue: #2f68d8;
+        --rose: #a34436;
+        --shadow: 0 20px 60px rgba(29, 33, 29, 0.13);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--paper);
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Segoe UI",
+          sans-serif;
+        letter-spacing: 0;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+      }
+
+      ::selection {
+        background: rgba(230, 167, 42, 0.34);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      img {
+        max-width: 100%;
+      }
+
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        border-bottom: 1px solid var(--line);
+        background: rgba(251, 247, 238, 0.86);
+        backdrop-filter: blur(18px);
+      }
+
+      .nav,
+      .article-inner,
+      .footer-inner {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .nav {
+        min-height: 68px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        font-weight: 800;
+      }
+
+      .brand img {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        box-shadow: 0 8px 20px rgba(25, 105, 90, 0.2);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        color: rgba(29, 33, 29, 0.72);
+        font-size: 0.93rem;
+        font-weight: 650;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+      }
+
+      .nav-links a:hover,
+      .nav-links a:focus-visible {
+        color: var(--green);
+        outline: none;
+      }
+
+      .article-hero {
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-height: 540px;
+        overflow: hidden;
+        padding: 118px 0 112px;
+        background:
+          linear-gradient(90deg, rgba(251, 247, 238, 0.98) 0%, rgba(251, 247, 238, 0.9) 52%, rgba(251, 247, 238, 0.56) 100%),
+          linear-gradient(135deg, #fbf7ee 0%, #fffaf0 46%, #e8f0eb 100%);
+      }
+
+      .article-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: url("/assets/mingle.png");
+        background-position: right 8% center;
+        background-repeat: no-repeat;
+        background-size: min(320px, 24vw) auto;
+        opacity: 0.28;
+        filter: drop-shadow(0 28px 70px rgba(25, 105, 90, 0.24));
+      }
+
+      .article-hero .article-inner {
+        position: relative;
+      }
+
+      .eyebrow {
+        margin: 0 0 18px;
+        color: var(--green);
+        font-size: 0.9rem;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p,
+      ul,
+      ol {
+        margin: 0;
+      }
+
+      h1 {
+        max-width: 920px;
+        font-size: 4rem;
+        line-height: 1.02;
+        font-weight: 900;
+        letter-spacing: 0;
+      }
+
+      .article-meta {
+        margin-top: 26px;
+        color: rgba(29, 33, 29, 0.62);
+        font-size: 0.98rem;
+        font-weight: 680;
+      }
+
+      .lede {
+        max-width: 760px;
+        margin-top: 24px;
+        color: rgba(29, 33, 29, 0.74);
+        font-size: 1.2rem;
+        line-height: 1.76;
+        font-weight: 520;
+      }
+
+      .article-section {
+        padding: 80px 0;
+      }
+
+      .article-section--surface {
+        background: var(--surface);
+      }
+
+      .article-section--deep {
+        background: var(--green-deep);
+        color: #fffdf8;
+      }
+
+      .section-heading {
+        display: grid;
+        gap: 16px;
+        max-width: 850px;
+        margin-bottom: 34px;
+      }
+
+      .section-heading h2 {
+        font-size: 2.75rem;
+        line-height: 1.1;
+        font-weight: 880;
+        letter-spacing: 0;
+      }
+
+      .section-heading p {
+        color: var(--muted);
+        font-size: 1.06rem;
+        line-height: 1.78;
+      }
+
+      .article-section--deep .section-heading p,
+      .article-section--deep .eyebrow {
+        color: rgba(255, 253, 248, 0.72);
+      }
+
+      .comparison-shell {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      table {
+        width: 100%;
+        min-width: 2620px;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        border-right: 1px solid var(--line);
+        min-width: 180px;
+        padding: 20px 24px;
+        text-align: left;
+        vertical-align: top;
+        line-height: 1.55;
+      }
+
+      th:nth-child(1),
+      td:nth-child(1) {
+        width: 170px;
+        min-width: 170px;
+      }
+
+      th:nth-child(2),
+      td:nth-child(2) {
+        width: 145px;
+        min-width: 145px;
+      }
+
+      th:nth-child(3),
+      td:nth-child(3) {
+        width: 170px;
+        min-width: 170px;
+      }
+
+      th:last-child,
+      td:last-child {
+        border-right: 0;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #f7f0e4;
+        color: rgba(29, 33, 29, 0.82);
+        font-size: 0.78rem;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      td {
+        color: rgba(29, 33, 29, 0.77);
+        font-size: 0.94rem;
+        background: rgba(255, 253, 248, 0.96);
+      }
+
+      tbody tr.is-featured td {
+        background: rgba(25, 105, 90, 0.07);
+      }
+
+      .tool-cell {
+        min-width: 170px;
+      }
+
+      .tool-name {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        color: var(--ink);
+        font-weight: 850;
+      }
+
+      .tool-name img {
+        width: 34px;
+        height: 34px;
+        object-fit: contain;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(29, 33, 29, 0.1);
+      }
+
+      .status {
+        font-weight: 820;
+      }
+
+      .status-yes {
+        color: var(--green);
+      }
+
+      .status-partial {
+        color: var(--blue);
+      }
+
+      .status-no {
+        color: var(--rose);
+      }
+
+      .table-note {
+        margin-top: 16px;
+        color: rgba(29, 33, 29, 0.58);
+        font-size: 0.92rem;
+        line-height: 1.7;
+      }
+
+      .content-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.78fr) minmax(280px, 0.36fr);
+        gap: 54px;
+        align-items: start;
+      }
+
+      .prose {
+        display: grid;
+        gap: 24px;
+      }
+
+      .prose h2 {
+        margin-top: 22px;
+        font-size: 2.25rem;
+        line-height: 1.14;
+        font-weight: 880;
+      }
+
+      .prose h3 {
+        font-size: 1.3rem;
+        line-height: 1.36;
+        font-weight: 850;
+      }
+
+      .prose p,
+      .prose li {
+        color: rgba(29, 33, 29, 0.74);
+        font-size: 1.06rem;
+        line-height: 1.86;
+      }
+
+      .prose ul {
+        padding-left: 1.2rem;
+        display: grid;
+        gap: 12px;
+      }
+
+      .callout {
+        border-left: 5px solid var(--amber);
+        border-radius: 8px;
+        background: rgba(230, 167, 42, 0.1);
+        padding: 22px;
+      }
+
+      .callout p {
+        color: rgba(29, 33, 29, 0.78);
+      }
+
+      .aside {
+        position: sticky;
+        top: 96px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .aside-box {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 22px;
+      }
+
+      .aside-box h3 {
+        color: var(--green);
+        font-size: 1.02rem;
+        line-height: 1.4;
+      }
+
+      .aside-box p,
+      .aside-box li {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.72;
+      }
+
+      .aside-box ul {
+        padding-left: 1.1rem;
+      }
+
+      .recommendation-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .recommendation {
+        min-height: 205px;
+        border: 1px solid rgba(255, 253, 248, 0.17);
+        border-radius: 8px;
+        padding: 22px;
+        background: rgba(255, 253, 248, 0.08);
+      }
+
+      .recommendation strong {
+        display: block;
+        color: #fff7d7;
+        font-size: 1.06rem;
+        line-height: 1.45;
+      }
+
+      .recommendation span {
+        display: block;
+        margin-top: 12px;
+        color: rgba(255, 253, 248, 0.74);
+        font-size: 0.98rem;
+        line-height: 1.72;
+      }
+
+      .sources {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        padding: 0;
+        list-style: none;
+      }
+
+      .sources a {
+        display: block;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 253, 248, 0.74);
+        padding: 15px;
+        color: rgba(29, 33, 29, 0.78);
+        font-size: 0.94rem;
+        line-height: 1.55;
+        text-decoration: none;
+      }
+
+      .sources a:hover,
+      .sources a:focus-visible {
+        border-color: rgba(25, 105, 90, 0.38);
+        color: var(--green);
+        outline: none;
+      }
+
+      .reference-cta {
+        display: flex;
+        justify-content: center;
+        margin-top: 34px;
+      }
+
+      .reference-button {
+        display: inline-flex;
+        min-height: 48px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(25, 105, 90, 0.28);
+        border-radius: 8px;
+        background: var(--green);
+        padding: 0 22px;
+        color: #fffdf8;
+        font-size: 0.96rem;
+        font-weight: 800;
+        line-height: 1.2;
+        text-decoration: none;
+        box-shadow: 0 16px 34px rgba(15, 67, 57, 0.18);
+      }
+
+      .reference-button:hover,
+      .reference-button:focus-visible {
+        background: var(--green-deep);
+        outline: none;
+      }
+
+      .footer {
+        border-top: 1px solid var(--line);
+        background: #151914;
+        color: rgba(255, 253, 248, 0.74);
+        padding: 36px 0;
+      }
+
+      .footer-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        font-size: 0.92rem;
+      }
+
+      .footer-links {
+        display: flex;
+        gap: 16px;
+      }
+
+      .footer-links a {
+        color: rgba(255, 253, 248, 0.76);
+        text-decoration: none;
+      }
+
+      .footer-links a:hover,
+      .footer-links a:focus-visible {
+        color: #fffdf8;
+        outline: none;
+      }
+
+      @media (max-width: 980px) {
+        .nav,
+        .article-inner,
+        .footer-inner {
+          width: min(100% - 28px, 900px);
+        }
+
+        .nav-links {
+          gap: 14px;
+        }
+
+        .article-hero {
+          min-height: 500px;
+          padding: 90px 0 82px;
+        }
+
+        .article-hero::before {
+          background-position: right -70px center;
+          background-size: 240px auto;
+          opacity: 0.18;
+        }
+
+        h1 {
+          font-size: 3.15rem;
+        }
+
+        .content-grid,
+        .recommendation-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .aside {
+          position: static;
+        }
+      }
+
+      @media (max-width: 680px) {
+        body {
+          word-break: normal;
+        }
+
+        .site-header {
+          position: static;
+        }
+
+        .nav {
+          min-height: 62px;
+        }
+
+        .nav-links a:nth-child(2) {
+          display: none;
+        }
+
+        .brand img {
+          width: 31px;
+          height: 31px;
+        }
+
+        h1 {
+          font-size: 2.35rem;
+          line-height: 1.08;
+        }
+
+        .lede,
+        .section-heading p,
+        .prose p,
+        .prose li {
+          font-size: 1rem;
+          line-height: 1.78;
+        }
+
+        .article-section {
+          padding: 64px 0;
+        }
+
+        .section-heading {
+          margin-bottom: 26px;
+        }
+
+        .section-heading h2,
+        .prose h2 {
+          font-size: 1.92rem;
+          line-height: 1.16;
+        }
+
+        th,
+        td {
+          padding: 14px 12px;
+        }
+
+        .sources {
+          grid-template-columns: 1fr;
+        }
+
+        .footer-inner {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    </style>
+<link href="/assets/site-header.css" rel="stylesheet"/>
+</head>
+<body>
+<header class="site-header">
+<nav aria-label="HashChat site navigation" class="nav">
+<a aria-label="HashChat home" class="brand" href="/?lang=ja">
+<img alt="" src="/assets/site/hashchat-icon.png"/>
+<span>HashChat</span>
+</a>
+<div class="nav-actions">
+<div class="nav-links">
+<a href="/?lang=ja#how">使い方</a>
+<a href="/?lang=ja#features">機能</a>
+<a href="/?lang=ja#translate">翻訳</a>
+<a href="/?lang=ja#uses">活用シーン</a>
+<a aria-current="page" class="nav-legal is-current" href="/blogs?lang=ja">ブログ</a>
+<a class="nav-legal" href="/legal?lang=ja">Legal</a>
+</div>
+<label class="language-picker">
+<span aria-hidden="true">🌐</span>
+<select aria-label="Language" id="blog-language">
+<option value="en">🇺🇸 English</option>
+<option value="ko">🇰🇷 한국어</option>
+<option selected="" value="ja">🇯🇵 日本語</option>
+<option value="zh-cn">🇨🇳 简体中文</option>
+<option value="zh-tw">🇹🇼 繁體中文</option>
+<option value="fr">🇫🇷 Français</option>
+<option value="de">🇩🇪 Deutsch</option>
+<option value="es">🇪🇸 Español</option>
+<option value="pt">🇧🇷 Português</option>
+<option value="it">🇮🇹 Italiano</option>
+<option value="ru">🇷🇺 Русский</option>
+<option value="ar">🇸🇦 العربية</option>
+<option value="hi">🇮🇳 हिन्दी</option>
+<option value="th">🇹🇭 ไทย</option>
+<option value="vi">🇻🇳 Tiếng Việt</option>
+</select>
+</label>
+</div>
+</nav>
+</header>
+<main>
+<article>
+<header class="article-hero">
+<div class="article-inner">
+<p class="eyebrow">AI翻訳アプリ比較</p>
+<h1>AI翻訳アプリの比較</h1>
+<p class="article-meta">2026年4月20日更新 - Mingle Labs</p>
+<p class="lede">ほとんどの翻訳アプリは、1つの文章を翻訳できます。しかし、会話が途切れずに続いたり、話す言語が切り替わったり、ボイスルームを利用したり、会話の記録を残したりする場面に対応できるアプリは多くありません。この比較では、文書翻訳だけでなく、リアルタイムの音声会話に焦点を当てています。</p>
+<p class="lede">料金、対応プラットフォーム、対応言語、リアルタイム字幕、文字起こし、バックグラウンド翻訳、外部アプリの音声取り込みなど、12項目で比較した結果、HashChatは、複数言語が飛び交う会話を途切れずに翻訳できる総合的に最も優れたモバイルアプリです。</p>
+<p class="lede">HashChatは以前、Mingleという名称で提供されていました。2026年10月に名称が変更されましたが、App StoreとGoogle Playの掲載内容も含め、同じアプリです。</p>
+</div>
+</header>
+<section class="article-section article-section--surface" id="comparison">
+<div class="article-inner">
+<div class="section-heading">
+<p class="eyebrow">比較表</p>
+<h2>まずはリアルタイム会話機能から見ていきましょう。</h2>
+<p>料金や対応言語は、国やプラットフォーム、機能によって変更される場合があります。以下の表は、2026年4月20日時点で確認した公式製品ページ、プラットフォームの掲載情報、アプリの掲載情報、およびHashChatの最新アプリ内カタログに基づいています。</p>
+</div>
+<div aria-label="AI translator comparison table" class="comparison-shell" tabindex="0">
+<table>
+<thead>
+<tr>
+<th>翻訳アプリ</th>
+<th>料金</th>
+<th>対応プラットフォーム</th>
+<th>対応言語数</th>
+<th>AI翻訳性能</th>
+<th>途切れない連続翻訳</th>
+<th>リアルタイム字幕・文字起こし</th>
+<th>メッセンジャー形式の会話表示</th>
+<th>リアルタイム話者識別</th>
+<th>メッセンジャー＋ボイスチャット</th>
+<th>3言語以上の同時翻訳</th>
+<th>自動言語検出・切り替え</th>
+<th>バックグラウンド翻訳</th>
+<th>外部アプリの音声取り込み</th>
+</tr>
+</thead>
+<tbody>
+<tr class="is-featured">
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/mingle-icon.png"/>HashChat</div></td>
+<td>無料の一般ユーザー向けアプリ。</td>
+<td>iOS、Android、Web。</td>
+<td>現在のアプリ内カタログでは、翻訳対応言語は62言語、音声言語は61言語から選択できます。</td>
+<td><span class="status status-yes">優秀。</span> 複数言語が飛び交うボイスルーム、話者ごとの会話区切り、自動言語切り替えに対応した高性能なリアルタイム音声AI。</td>
+<td><span class="status status-yes">対応。</span> 長時間の会話でも途切れることなく翻訳できるように設計されています。</td>
+<td><span class="status status-yes">対応。</span> リアルタイム字幕を表示し、翻訳済みの会話履歴も保存できます。</td>
+<td><span class="status status-yes">対応。</span> ルーム形式のタイムライン上に、発話ごとに会話を区切って表示します。</td>
+<td><span class="status status-yes">対応。</span> 話者を識別し、リアルタイムの発話を読みやすく表示します。</td>
+<td><span class="status status-yes">対応。</span> メッセンジャーとボイスチャットアプリとして、そのまま利用できます。</td>
+<td><span class="status status-yes">対応。</span> 3言語以上が混在する会話を、あらゆる方向に翻訳できるよう設計されています。</td>
+<td><span class="status status-yes">対応。</span> 話されている言語を自動検出し、話者が手動で切り替えなくても翻訳言語を変更します。</td>
+<td><span class="status status-yes">対応。</span> アプリの切り替え中や画面ロック中も翻訳を継続します。</td>
+<td><span class="status status-yes">対応。</span> HashChatが音声を聞き取っている間、スピーカーから再生される他のアプリの音声も取り込めます。</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-google-translate.jpg"/>Google Translate</div></td>
+<td>無料の一般ユーザー向けアプリ。</td>
+<td>iOS、Android、Web。</td>
+<td>Google Playの掲載情報によると、テキスト翻訳は108言語、会話翻訳は70言語、文字起こしは8言語に対応しています。</td>
+<td><span class="status status-yes">優秀。</span> テキスト、カメラ、音声、言語検出など、幅広い用途に対応する汎用性の高いAI翻訳。</td>
+<td><span class="status status-partial">一部対応。</span> Transcribeでは、対応言語は限られますが、ほぼリアルタイムの連続翻訳が可能です。</td>
+<td><span class="status status-partial">一部対応。</span> Transcribeは便利ですが、対応範囲はテキスト翻訳よりも限定的です。</td>
+<td><span class="status status-partial">一部対応。</span> 会話ビューと文字起こしビューには発言が区切られて表示されますが、メッセンジャーのように会話ルームが継続的に維持されるわけではありません。</td>
+<td><span class="status status-no">いいえ。</span> 一般向けの翻訳アプリは、リアルタイムの話者ダイアライゼーション（話者識別）ツールではありません。</td>
+<td><span class="status status-no">いいえ。</span> 翻訳ユーティリティであり、メッセンジャーアプリや音声チャットアプリではありません。</td>
+<td><span class="status status-no">いいえ。</span> 会話モードは、2つの言語を使った双方向の会話を想定して設計されています。</td>
+<td><span class="status status-yes">はい。</span> テキスト入力や2言語間の会話では、優れた自動言語検出機能を備えています。</td>
+<td><span class="status status-no">いいえ。</span> 主に、アプリを前面で操作しながら翻訳する形式です。</td>
+<td><span class="status status-no">いいえ。</span> 一般的な外部アプリの音声をキャプチャする仕組みとしては動作しません。</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-apple-translate.jpg"/>Apple Translate</div></td>
+<td>無料。iOSおよびiPadOSに標準搭載されています。</td>
+<td>iOS、iPadOS、macOSに対応。Android版および単独のWebアプリはありません。</td>
+<td>翻訳アプリでは21言語に対応しています。Apple IntelligenceのLive Translationは、対応言語がさらに限定されています。</td>
+<td><span class="status status-partial">標準的。</span> 対応するApple製品・機能内では便利ですが、利用できる範囲や柔軟性には制限があります。</td>
+<td><span class="status status-no">いいえ。</span> メモのように継続して翻訳する汎用ツールではありません。</td>
+<td><span class="status status-partial">一部対応。</span> 対応するデバイスと言語の組み合わせでは、PhoneやFaceTimeで翻訳字幕を表示できます。</td>
+<td><span class="status status-partial">一部対応。</span> TranslateやMessagesには会話形式の使いやすさがありますが、その大部分はApple製品・機能の中に限られます。</td>
+<td><span class="status status-no">いいえ。</span> 独立したリアルタイム話者識別のワークフローには対応していません。</td>
+<td><span class="status status-no">いいえ。</span> 翻訳機能はApple製品・機能内で動作します。翻訳ツール自体が独立したメッセンジャーや音声チャットアプリというわけではありません。</td>
+<td><span class="status status-no">いいえ。</span> Live Translationは、1対1のメッセージ、通話、近くにいる人との会話を想定しています。</td>
+<td><span class="status status-partial">一部対応。</span> 言語を選択した後や、対応するAppleアプリ内ではスムーズに利用できます。</td>
+<td><span class="status status-partial">一部対応。</span> Phone、FaceTime、Messages、AirPodsとの連携機能では利用できますが、あらゆるアプリに対応するバックグラウンド翻訳機能ではありません。</td>
+<td><span class="status status-no">いいえ。</span> 任意のサードパーティ製アプリから音声を汎用的にキャプチャする機能はありません。</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-microsoft-translator.png"/>Microsoft Translator</div></td>
+<td>無料の一般ユーザー向けアプリ。</td>
+<td>iOS、Android、Web版の会話サイトに対応。</td>
+<td>アプリの掲載情報では100以上の言語に対応。テキスト、音声、画像、会話など、機能によって対応言語は異なります。</td>
+<td><span class="status status-partial">標準的。</span> ホストが開始したセッションでの翻訳は安定していますが、一般ユーザー向けのAI機能は、受動的なリスニング用途では柔軟性に欠けます。</td>
+<td><span class="status status-partial">一部対応。</span> 主催者が設定したグループセッションには強いものの、あらゆるアプリでメモのように受動的に聞き取り続ける用途には対応していません。</td>
+<td><span class="status status-yes">はい。</span> グループ会話では、文字起こしと字幕を利用できます。</td>
+<td><span class="status status-yes">はい。</span> グループ会話では、文字起こしと操作を補助するナビゲーション機能を利用できます。</td>
+<td><span class="status status-partial">一部対応。</span> 各参加者が自分のデバイスから主催者が設定した会話に参加すると、参加者ごとに音声が区別されます。</td>
+<td><span class="status status-no">いいえ。</span> 翻訳セッションを提供していますが、一般的なメッセンジャーアプリや音声チャットアプリではありません。</td>
+<td><span class="status status-yes">はい。</span> 複数のデバイスを使った会話では、多言語グループに対応できます。</td>
+<td><span class="status status-partial">一部対応。</span> 参加者がそれぞれ使用言語を選択し、コメントは各ユーザーの言語に翻訳されます。</td>
+<td><span class="status status-no">いいえ。</span> バックグラウンドでマイクを常時使用する翻訳アプリとしては設計されていません。</td>
+<td><span class="status status-no">いいえ。</span> Microsoftによると、外部のメディアソースやファイルには対応していません。</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-papago.jpg"/>Papago</div></td>
+<td>一般ユーザー向けアプリは無料。NAVER CloudのPapago APIは法人利用の場合、有料です。</td>
+<td>iOS、Android、Web。</td>
+<td>NAVER Cloudのドキュメントでは、主要なテキスト翻訳言語は13言語。アプリの機能や言語検出機能によって対応範囲は異なります。</td>
+<td><span class="status status-partial">標準的。</span> 韓国語を中心とした実用的な翻訳に強い一方、リアルタイムのAI会話機能は比較的限定的です。</td>
+<td><span class="status status-no">いいえ。</span> 会話翻訳を継続的に記録できる文字起こしノートとしては設計されていません。</td>
+<td><span class="status status-no">いいえ。</span> 音声や会話の翻訳出力には対応していますが、リアルタイム字幕を文字起こしとして表示する仕組みはありません。</td>
+<td><span class="status status-partial">一部対応。</span> 1対1の会話モードは、発話を交互に行う形式です。</td>
+<td><span class="status status-no">いいえ。</span> 複数の話者をリアルタイムで識別し、発言者ごとに分ける機能には対応していません。</td>
+<td><span class="status status-no">いいえ。</span> メッセンジャーアプリや音声チャットアプリではありません。</td>
+<td><span class="status status-no">いいえ。</span> 2言語間の旅行会話や、韓国語を中心とした用途に最適化されています。</td>
+<td><span class="status status-partial">一部対応。</span> テキストの自動言語検出には対応していますが、話者の発話に応じて複数言語を幅広く自動切り替えする機能はありません。</td>
+<td><span class="status status-no">いいえ。</span> 基本的にアプリを前面に表示して使用する必要があります。</td>
+<td><span class="status status-no">いいえ。</span> 他のアプリの音声を一般的に取り込んで翻訳する機能はありません。</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-deepl.png"/>DeepL</div></td>
+<td>無料プランあり。Pro、API、Voiceの各プランは有料で、料金は地域やプランによって異なります。</td>
+<td>iOS、Android、Web、デスクトップアプリ、ブラウザ拡張機能。</td>
+<td>Translatorは主要30言語に加え、次世代言語にも対応。Voiceの対応言語はそれより限定的です。</td>
+<td><span class="status status-yes">良好。</span> 文章の翻訳品質が高く、会議向けの専用Voice製品も提供しています。</td>
+<td><span class="status status-partial">一部対応。</span> DeepL Voiceは会議中の会話をリアルタイムで翻訳できますが、通常のTranslatorとは別の製品として提供されています。</td>
+<td><span class="status status-partial">一部対応。</span> DeepL Voiceは会議や会話中に翻訳字幕を表示できます。</td>
+<td><span class="status status-partial">一部対応。</span> DeepL Voiceは会議中の字幕表示に対応していますが、通常のTranslatorはメッセンジャーのような会話履歴形式ではありません。</td>
+<td><span class="status status-partial">一部対応。</span> 会議向け製品は話者ごとのセッションを前提としていますが、モバイル版Translatorはリアルタイムの話者識別アプリではありません。</td>
+<td><span class="status status-no">いいえ。</span> DeepLはメッセンジャーアプリや音声チャットアプリではありません。</td>
+<td><span class="status status-partial">一部対応。</span> 会議・会話向け製品では利用できますが、通常のモバイル版翻訳機能には含まれていません。</td>
+<td><span class="status status-partial">一部対応。</span> テキストの言語検出には優れていますが、リアルタイム音声翻訳の利用方法はDeepL Voiceの設定によって異なります。</td>
+<td><span class="status status-no">いいえ。</span> 一般的なスマートフォン向けバックグラウンド翻訳アプリではありません。</td>
+<td><span class="status status-no">いいえ。</span> スマートフォン上の任意のサードパーティ製アプリの音声を取得するようには設計されていません。</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-felo.jpg"/>Felo Translator</div></td>
+<td>約2ドル/時間。公開されているWeb版の料金では、120分で3.90ドルです。</td>
+<td>iOSおよびAndroidに対応。Web版のアカウントページと料金ページも提供されています。</td>
+<td>公式製品ページによると、音声翻訳は15言語に対応しています。</td>
+<td><span class="status status-partial">標準的。</span> リアルタイム音声AIとしての性能は十分ですが、公開されている対応言語や利用シーンは比較的限定的です。</td>
+<td><span class="status status-partial">一部対応。</span> リアルタイム録音、文字起こし、翻訳、履歴の保存に対応していますが、ルーム形式のノート機能ではありません。</td>
+<td><span class="status status-yes">はい。</span> 話しているそばから音声をリアルタイムでテキストに翻訳し、字幕として表示します。</td>
+<td><span class="status status-yes">はい。</span> 音声出力は、文単位の文字起こしとして区切って表示されます。</td>
+<td><span class="status status-no">いいえ。</span> 公開情報では文字起こしと翻訳が中心で、話者の識別や話者分離には重点が置かれていません。</td>
+<td><span class="status status-no">いいえ。</span> メッセンジャーアプリでも音声チャットアプリでもありません。</td>
+<td><span class="status status-partial">一部対応。</span> 音声翻訳は複数言語に対応していますが、3言語以上が混在するルームでの双方向・全方向リアルタイム翻訳には対応していません。</td>
+<td><span class="status status-yes">はい。</span> アプリの掲載情報によると、会話する双方の言語を自動的に検出します。</td>
+<td><span class="status status-no">いいえ。</span> アプリを前面で起動して録音・翻訳する使い方が基本です。</td>
+<td><span class="status status-no">いいえ。</span> 他のアプリの音声を外部から取得する機能としては提供されていません。</td>
+</tr>
+<tr>
+<td class="tool-cell"><div class="tool-name"><img alt="" src="/assets/logo-transync.jpg"/>Transync</div></td>
+<td>40分間の無料トライアルあり。Personal Premiumは月額8.99ドルで10時間利用可能。時間制の追加カードは1時間あたり0.70ドルから購入できます。</td>
+<td>iOS、Android、Web、Windows、macOSに対応。</td>
+<td>60以上の翻訳対応言語。</td>
+<td><span class="status status-yes">優秀。</span> リアルタイム字幕、議事録、言語の識別に強みを持つ、会議向けの高性能な音声AIです。</td>
+<td><span class="status status-yes">はい。</span> 会議や音声の継続的なリアルタイム翻訳を目的に設計されています。</td>
+<td><span class="status status-yes">はい。</span> リアルタイム翻訳字幕とAIによる会議議事録の作成に対応しています。</td>
+<td><span class="status status-no">いいえ。</span> ライブ文字起こしや字幕は表示されますが、メッセンジャーのように文単位で会話を表示する形式ではありません。</td>
+<td><span class="status status-no">いいえ。</span> 公開ドキュメントでは言語の自動識別が強調されており、話者の個人識別や話者分離については明記されていません。</td>
+<td><span class="status status-no">いいえ。</span> 会議ツールとの連携には対応していますが、独自のメッセンジャーや音声チャットアプリではありません。</td>
+<td><span class="status status-yes">はい。</span> 多言語会議やリアルタイム通訳のワークフロー向けに設計されています。</td>
+<td><span class="status status-yes">はい。</span> ボタンで切り替えることなく、話者の使用言語を自動的に識別します。</td>
+<td><span class="status status-partial">一部対応。</span> デスクトップや会議での利用時には、会議アプリと並行して動作できますが、一般的なスマートフォン向けバックグラウンド翻訳アプリではありません。</td>
+<td><span class="status status-no">いいえ。</span> 会議ツールとの連携機能はありますが、他のアプリの音声を外部から取得する機能ではありません。</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="table-note">音声翻訳アプリでは、単に「対応言語数」を比較するよりも、機能ごとの対応言語を確認することが重要です。テキスト翻訳では多くの言語に対応していても、リアルタイム字幕、会話モード、文字起こしでは対応言語が限られる場合があります。</p>
+</div>
+</section>
+<section class="article-section">
+<div class="article-inner">
+<div class="content-grid">
+<div class="prose">
+<h2>この比較で本当に評価していること</h2>
+<p>旅行会話向けの翻訳アプリ、文書翻訳ツール、会議字幕サービス、ソーシャルな音声会話向け翻訳アプリは、それぞれ異なる課題を解決します。リアルタイムの会話では、難しいのは翻訳の精度だけではありません。会話を途切れることなく聞き取り、文脈を維持し、発言ごとに区切り、言語の切り替わりを検出し、相手がすでに話している最中でも快適に使える必要があります。</p>
+<p>だからこそ、最初に比較表を掲載しています。看板を翻訳したり、旅行中にちょっとした質問をしたりする程度なら、Google Translate、Apple Translate、Papago、DeepLはいずれも非常に優れた選択肢です。一方、長時間にわたる多言語の音声ルーム、リアルタイムで更新される文字起こし、あるいは別のアプリで音声を再生しながらの翻訳が必要な場合は、求められる機能が異なります。</p>
+<div class="callout">
+<p>HashChatは、継続的な音声翻訳を最優先に設計されています。重要なのは会話画面のあり方です。一度きりのフレーズを入力するボックスではなく、ひとつの会話ルームのように機能するリアルタイムの文字起こしを提供します。</p>
+</div>
+<h2>HashChat（旧Mingle）が他のサービスと異なる点</h2>
+<p>HashChatは、翻訳をリアルタイムの会話レイヤーとして捉えています。長時間のセッションを聞き取り続け、発言ごとに音声を区切り、選択した2つ以上の言語に翻訳できるほか、アプリをバックグラウンドに移しても動作を継続できます。HelloTalkの音声ルームに参加しているとき、Discordの通話をスピーカーで流しているとき、ホステルで会話しているとき、あるいは話題が次々と移り変わる多言語交流会に参加しているときなどに、この機能が役立ちます。</p>
+<p>その方向性は、辞書やフレーズ翻訳アプリというより、翻訳機能を内蔵した音声メッセンジャーに近いものです。ユーザーが知りたいのは、単に「この一文はどういう意味？」ということだけではありません。数秒おきに会話を止めることなく、相手との関係を深める会話を続けたいのです。</p>
+<h2>他の翻訳サービスが得意とすること</h2>
+<p>Google Translateの強みは、幅広い用途に対応できることです。テキスト、カメラ、オフライン翻訳、会話、文字起こしのすべてを、使い慣れたひとつのアプリで利用できます。Microsoft Translatorは、主催者が用意したグループ会話に強く、参加者はそれぞれの端末から参加し、自分の言語で会話を読むことができます。Apple Translateは、Phone、FaceTime、Messages、AirPodsなど、Appleのエコシステムを日常的に利用している人にとって魅力的な選択肢です。</p>
+<p>Papagoは、韓国語・日本語・中国語の翻訳や、アジア圏での旅行用途において、今も特に実用的なサービスです。DeepLは、文章の翻訳品質、文書翻訳、用語管理、ビジネス用途に優れています。DeepL Voiceも会議向けの翻訳機能を提供していますが、これは日常的に使うモバイル翻訳アプリとは別の用途です。</p>
+<h2>選び方</h2>
+<ul>
+<li>会話が長時間続く場合、多言語で行われる場合、または別の音声アプリを使いながら翻訳したい場合は、HashChatがおすすめです。</li>
+<li>旅行全般で幅広く使える翻訳アプリが必要なら、Google Translateがおすすめです。</li>
+<li>参加者全員が同じ多言語対応の会話セッションに参加できるなら、Microsoft Translatorがおすすめです。</li>
+<li>Apple Intelligence、Phone、FaceTime、Messages、AirPodsの対応機能を中心に利用するなら、Apple Translateがおすすめです。</li>
+<li>韓国語を中心とした旅行やフレーズ翻訳が主な用途なら、Papagoがおすすめです。</li>
+<li>モバイルでのバックグラウンド音声キャプチャよりも、文章の翻訳品質、文書、ビジネス用語の正確さを重視するならDeepLがおすすめです。</li>
+</ul>
+</div>
+<aside aria-label="Article notes" class="aside">
+<div class="aside-box">
+<h3>HashChatに最適な用途</h3>
+<p>多言語での継続的な会話、ボイスルーム、リアルタイム字幕、会話の文字起こし、スピーカーから再生される他のアプリの音声など。</p>
+</div>
+<div class="aside-box">
+<h3>機能に関する注意点</h3>
+<p>一般向け翻訳アプリは頻繁にアップデートされます。購入、企業への導入、アクセシビリティに関する判断を行う前に、以下の公式リンクで最新情報をご確認ください。</p>
+</div>
+</aside>
+</div>
+</div>
+</section>
+<section aria-labelledby="recommendations-title" class="article-section article-section--deep">
+<div class="article-inner">
+<div class="section-heading">
+<p class="eyebrow">用途別のおすすめ</p>
+<h2 id="recommendations-title">会話のスタイルに合った翻訳ツールを選びましょう。</h2>
+<p>最適な翻訳ツールは、対応言語数の多さではなく、その場の使い方に合ったインターフェースを備えているかどうかで決まることがほとんどです。</p>
+</div>
+<div class="recommendation-grid"><div class="recommendation">
+<strong>長時間のボイスルーム</strong>
+<span>継続的な字幕表示、自動言語切り替え、ルーム形式の会話履歴が必要ならHashChatがおすすめです。</span>
+</div>
+<div class="recommendation">
+<strong>講義やイベントの開催</strong>
+<span>参加者全員がそれぞれのデバイスから共通の会話セッションに参加できる場合は、Microsoft Translatorがおすすめです。</span>
+</div>
+<div class="recommendation">
+<strong>旅行での利用</strong>
+<span>看板、メニュー、簡単なフレーズ、カメラ翻訳など、画面上で手軽に使いたい場合はGoogle TranslateまたはPapagoがおすすめです。</span>
+</div>
+<div class="recommendation">
+<strong>Apple製品での通話</strong>
+<span>対応するApple製アプリと言語で通話やメッセージを利用する場合は、Apple Live Translationがおすすめです。</span>
+</div>
+<div class="recommendation">
+<strong>ビジネス文書の作成</strong>
+<span>モバイルでのリアルタイム音声翻訳よりも、文章の翻訳品質、専門用語の正確さ、文書への対応を重視するならDeepLがおすすめです。</span>
+</div>
+<div class="recommendation">
+<strong>他のアプリの音声翻訳</strong>
+<span>スピーカーから再生される別のアプリの音声をリアルタイムで字幕化・翻訳したい場合はHashChatがおすすめです。</span>
+</div></div>
+</div>
+</section>
+<section aria-labelledby="sources-title" class="article-section">
+<div class="article-inner">
+<div class="section-heading">
+<p class="eyebrow">参考資料</p>
+<h2 id="sources-title">この記事の確認に使用した公開情報。</h2>
+<p>以下のリンクを使用して、公開されている料金情報、プラットフォームの対応状況、対応言語、機能の説明を確認しました。</p>
+</div>
+<ul class="sources">
+<li><a href="https://apps.apple.com/us/app/mingle-global-hangout/id6759795134">HashChat: Global Hangout（App Store）</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn">HashChat: Global Hangout（Google Play）</a></li>
+<li><a href="https://felo.me/en/translator">Felo Translator 製品ページ</a></li>
+<li><a href="https://felo.me/download">Felo Translator ダウンロードページ</a></li>
+<li><a href="https://felo.me/pricing">Felo Translator 料金プラン</a></li>
+<li><a href="https://apps.apple.com/us/app/felo-translator/id6447256759">Felo Translator（App Store）</a></li>
+<li><a href="https://www.transyncai.com/pricing/">Transync AI 料金プラン</a></li>
+<li><a href="https://translate.google.com/about/">Google Translate 製品ページ</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=com.google.android.apps.translate&amp;hl=en_US">Google Translate（Google Play）</a></li>
+<li><a href="https://www.apple.com/ios/feature-availability/">Apple iOS・iPadOS 機能の対応状況</a></li>
+<li><a href="https://support.apple.com/guide/iphone/translate-messages-calls-and-conversations-iph22b72984d/26/ios/26">Apple Live Translation ガイド</a></li>
+<li><a href="https://www.microsoft.com/en-us/translator/apps/">Microsoft Translator アプリ紹介ページ</a></li>
+<li><a href="https://apps.apple.com/us/app/microsoft-translator/id1018949559">App StoreでMicrosoft Translatorを見る</a></li>
+<li><a href="https://www.microsoft.com/en-us/translator/help/multi-device-conversation/">Microsoft Translatorの複数デバイス間での会話に関するFAQ</a></li>
+<li><a href="https://api.ncloud-docs.com/docs/en/ai-naver-papagonmt-translation">NAVER Cloud Papagoテキスト翻訳のドキュメント</a></li>
+<li><a href="https://apps.apple.com/us/app/naver-papago-ai-translator/id1147874819">App StoreでNaver Papagoを見る</a></li>
+<li><a href="https://play.google.com/store/apps/details?id=com.naver.labs.translator">Google PlayでNaver Papagoを見る</a></li>
+<li><a href="https://www.deepl.com/en/translator">DeepL Translatorの製品ページ</a></li>
+<li><a href="https://support.deepl.com/hc/en-us/articles/360019925219-DeepL-Translator-languages">DeepL Translatorの対応言語</a></li>
+<li><a href="https://support.deepl.com/hc/en-us/articles/26625846174364-DeepL-Voice-languages">DeepL Voiceの対応言語</a></li>
+</ul>
+<div class="reference-cta"><a class="reference-button" href="https://hashchat.minglelabs.app/landing/">HashChatのランディングページを見る</a></div>
+</div>
+</section>
+</article>
+</main>
+<footer class="footer">
+<div class="footer-inner">
+<span>© Mingle Labs. HashChatは以前、Mingleという名称でした。</span>
+<div class="footer-links">
+<a href="/blogs?lang=ja">ブログ</a>
+<a href="/privacy-policy">プライバシーポリシー</a>
+<a href="/terms-of-use">利用規約</a>
+<a href="/legal">Legal</a>
+</div>
+</div>
+</footer>
+<script>
+      (function () {
+        var select = document.getElementById("blog-language");
+        if (!select) return;
+        select.addEventListener("change", function () {
+          var url = new URL(window.location.href);
+          if (select.value === "en") url.searchParams.delete("lang");
+          else url.searchParams.set("lang", select.value);
+          window.location.href = url.toString();
+        });
+      })();
+    </script>
+</body>
+</html>

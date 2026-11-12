@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>บล็อก HashChat - AI แปลภาษาสำหรับบทสนทนาสด</title>
+    <meta name="description" content="อ่านบันทึกจาก HashChat (เดิมชื่อ Mingle) เกี่ยวกับ AI แปลภาษา คำบรรยายเสียงแบบเรียลไทม์ ผลิตภัณฑ์สำหรับการสนทนาหลายภาษา และการบรรยายของเรา" />
+    <link rel="canonical" href="https://hashchat.minglelabs.app/blogs?lang=th" />
+    <link rel="alternate" hreflang="en" href="https://hashchat.minglelabs.app/blogs" />
+    <link rel="alternate" hreflang="ko" href="https://hashchat.minglelabs.app/blogs?lang=ko" />
+    <link rel="alternate" hreflang="ja" href="https://hashchat.minglelabs.app/blogs?lang=ja" />
+    <link rel="alternate" hreflang="zh-cn" href="https://hashchat.minglelabs.app/blogs?lang=zh-cn" />
+    <link rel="alternate" hreflang="zh-tw" href="https://hashchat.minglelabs.app/blogs?lang=zh-tw" />
+    <link rel="alternate" hreflang="fr" href="https://hashchat.minglelabs.app/blogs?lang=fr" />
+    <link rel="alternate" hreflang="de" href="https://hashchat.minglelabs.app/blogs?lang=de" />
+    <link rel="alternate" hreflang="es" href="https://hashchat.minglelabs.app/blogs?lang=es" />
+    <link rel="alternate" hreflang="pt" href="https://hashchat.minglelabs.app/blogs?lang=pt" />
+    <link rel="alternate" hreflang="it" href="https://hashchat.minglelabs.app/blogs?lang=it" />
+    <link rel="alternate" hreflang="ru" href="https://hashchat.minglelabs.app/blogs?lang=ru" />
+    <link rel="alternate" hreflang="ar" href="https://hashchat.minglelabs.app/blogs?lang=ar" />
+    <link rel="alternate" hreflang="hi" href="https://hashchat.minglelabs.app/blogs?lang=hi" />
+    <link rel="alternate" hreflang="th" href="https://hashchat.minglelabs.app/blogs?lang=th" />
+    <link rel="alternate" hreflang="vi" href="https://hashchat.minglelabs.app/blogs?lang=vi" />
+    <link rel="alternate" hreflang="x-default" href="https://hashchat.minglelabs.app/blogs" />
+    <meta property="og:site_name" content="HashChat" />
+    <meta property="og:locale" content="th_TH" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://hashchat.minglelabs.app/blogs?lang=th" />
+    <meta property="og:title" content="บล็อก HashChat - AI แปลภาษาสำหรับบทสนทนาสด" />
+    <meta property="og:description" content="อ่านบันทึกจาก HashChat (เดิมชื่อ Mingle) เกี่ยวกับ AI แปลภาษา คำบรรยายเสียงแบบเรียลไทม์ ผลิตภัณฑ์สำหรับการสนทนาหลายภาษา และการบรรยายของเรา" />
+    <meta property="og:image" content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="บล็อก HashChat - AI แปลภาษาสำหรับบทสนทนาสด" />
+    <meta name="twitter:description" content="อ่านบันทึกจาก HashChat (เดิมชื่อ Mingle) เกี่ยวกับ AI แปลภาษา คำบรรยายเสียงแบบเรียลไทม์ ผลิตภัณฑ์สำหรับการสนทนาหลายภาษา และการบรรยายของเรา" />
+    <meta name="twitter:image" content="https://hashchat.minglelabs.app/assets/og-image.png?v=20260420-1" />
+    <link rel="icon" href="/assets/site/hashchat-icon.png" />
+    <link rel="stylesheet" href="/assets/blog.css" />
+    <link rel="stylesheet" href="/assets/site-header.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="HashChat site navigation">
+        <a class="brand" href="/?lang=th" aria-label="HashChat home">
+          <img src="/assets/site/hashchat-icon.png" alt="" />
+          <span>HashChat</span>
+        </a>
+        <div class="nav-actions">
+          <div class="nav-links">
+            <a href="/?lang=th#how">วิธีการทำงาน</a>
+            <a href="/?lang=th#features">ฟีเจอร์</a>
+            <a href="/?lang=th#translate">การแปลภาษา</a>
+            <a href="/?lang=th#uses">การใช้งาน</a>
+            <a class="nav-legal is-current" aria-current="page" href="/blogs?lang=th">บล็อก</a>
+            <a class="nav-legal" href="/legal?lang=th">Legal</a>
+          </div>
+          <label class="language-picker">
+            <span aria-hidden="true">🌐</span>
+            <select id="blog-language" aria-label="Language">
+              <option value="en">🇺🇸 English</option>
+              <option value="ko">🇰🇷 한국어</option>
+              <option value="ja">🇯🇵 日本語</option>
+              <option value="zh-cn">🇨🇳 简体中文</option>
+              <option value="zh-tw">🇹🇼 繁體中文</option>
+              <option value="fr">🇫🇷 Français</option>
+              <option value="de">🇩🇪 Deutsch</option>
+              <option value="es">🇪🇸 Español</option>
+              <option value="pt">🇧🇷 Português</option>
+              <option value="it">🇮🇹 Italiano</option>
+              <option value="ru">🇷🇺 Русский</option>
+              <option value="ar">🇸🇦 العربية</option>
+              <option value="hi">🇮🇳 हिन्दी</option>
+              <option value="th" selected>🇹🇭 ไทย</option>
+              <option value="vi">🇻🇳 Tiếng Việt</option>
+            </select>
+          </label>
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="blog-title">
+        <div class="section-inner">
+          <p class="eyebrow">บล็อก HashChat</p>
+          <h1 id="blog-title">เรื่องราวเกี่ยวกับ AI แปลภาษาแบบเรียลไทม์</h1>
+          <p>แนวคิดในการพัฒนาผลิตภัณฑ์ การเปรียบเทียบ บทบรรยาย และบันทึกจากประสบการณ์จริง สำหรับผู้ที่สร้างบทสนทนาข้ามภาษา HashChat เดิมใช้ชื่อ Mingle</p>
+        </div>
+      </section>
+      <section class="section" aria-labelledby="latest-posts">
+        <div class="section-inner">
+          <div class="section-heading">
+            <p class="eyebrow">ล่าสุด</p>
+            <h2 id="latest-posts">บทบรรยาย สไลด์นำเสนอ และเรื่องราวของผลิตภัณฑ์</h2>
+            <p>สไลด์จากการบรรยายและการนำเสนอของเรา พร้อมเรื่องราวการเปลี่ยนจาก Mingle มาเป็น HashChat และการเปรียบเทียบเครื่องมือแปลภาษา AI แบบเรียลไทม์</p>
+          </div>
+          <div class="post-list">
+            <a class="post-card" href="/blogs/ai-wrapper-business?lang=th">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/presentations/assets/ai-beyond-wrapper-og-en.png?v=3" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">การบรรยาย - 5 พฤศจิกายน 2026</p>
+                <h3>สำรวจโอกาสทางธุรกิจของซอฟต์แวร์ AI Wrapper</h3>
+                <p>กรณีศึกษาธุรกิจ AI Wrapper และกลยุทธ์สำหรับก้าวต่อไป</p>
+                <span class="post-link">ดูสไลด์</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-social-network?lang=th">
+              <div class="post-visual" aria-hidden="true">
+                <div class="logo-cloud">
+                  <span><img src="/assets/logo-mingle.png" alt="" /></span>
+                  <span><img src="/assets/logo-line.png" alt="" /></span>
+                  <span><img src="/assets/logo-wechat.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-hellotalk.png" alt="" /></span>
+                  <span><img src="/assets/logo-instagram.png" alt="" /></span>
+                  <span><img src="/assets/logo-discord.png" alt="" /></span>
+                </div>
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">เรื่องราวผลิตภัณฑ์ - 2 พฤศจิกายน 2026</p>
+                <h3>HashChat: โซเชียลเน็ตเวิร์กไร้กำแพงภาษา</h3>
+                <p>จาก Mingle สู่ HashChat: ฟีดที่แปลภาษาให้อัตโนมัติ โปรไฟล์ที่แสดงว่าคุณอยากพบปะผู้คนแบบไหน และแชตที่มีล่ามแบบเรียลไทม์ในตัว พร้อมเปรียบเทียบกับ LINE, WeChat, WhatsApp, HelloTalk และแพลตฟอร์มอื่น ๆ</p>
+                <span class="post-link">อ่านเรื่องราว</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/virtually-deck?lang=th">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/virtually-vtuber-cover.png" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">สไลด์นำเสนอธุรกิจ - 13 กันยายน 2026</p>
+                <h3>Virtually: ไลฟ์สตรีม VTuber ที่ขับเคลื่อนด้วย Generative AI</h3>
+                <p>เปลี่ยนภาพเพียงภาพเดียวให้กลายเป็นการถ่ายทอดสดแบบโต้ตอบได้</p>
+                <span class="post-link">ดูสไลด์</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-pitch-deck-short?lang=th">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/og-image.png?v=20260416-2" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">สไลด์นำเสนอธุรกิจ - อัปเดตเมื่อ 1 กันยายน 2026</p>
+                <h3>สไลด์นำเสนอ HashChat: ฉบับย่อ</h3>
+                <p>ปัญหาไก่กับไข่ของการแลกเปลี่ยนภาษา และวิธีที่การแปลสดช่วยขจัดอุปสรรคไปได้หนึ่งด้าน</p>
+                <span class="post-link">ดูสไลด์</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/hashchat-pitch-deck?lang=th">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/assets/og-image.png?v=20260416-2" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">สไลด์นำเสนอธุรกิจ - อัปเดตเมื่อ 1 กันยายน 2026</p>
+                <h3>สไลด์นำเสนอ HashChat: แอปส่งข้อความด้วยเสียงที่ไร้กำแพงภาษา</h3>
+                <p>เหตุผลที่เราสร้าง HashChat กลุ่มผู้ใช้งานเป้าหมาย และวิธีพัฒนาจากล่ามแบบเรียลไทม์สู่โซเชียลเน็ตเวิร์กที่ขับเคลื่อนด้วย AI ตั้งแต่ต้น</p>
+                <span class="post-link">ดูสไลด์</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/ai-wrapper-business-surfers-3rd?lang=th">
+              <div class="post-visual post-visual--cover" aria-hidden="true">
+                <img src="/presentations/assets/surfers-logo.png" alt="" loading="lazy" />
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">การบรรยาย - 12 สิงหาคม 2026</p>
+                <h3>ธุรกิจ AI Wrapper: ฉบับ Surfers Cohort 3</h3>
+                <p>เวอร์ชันแรกที่มีเนื้อหาละเอียดและยาวกว่าของการบรรยายเรื่อง AI Wrapper ซึ่งจัดขึ้นสำหรับ Surfers Cohort 3</p>
+                <span class="post-link">ดูสไลด์</span>
+              </div>
+            </a>
+            <a class="post-card" href="/blogs/ai-translators-comparison?lang=th">
+              <div class="post-visual" aria-hidden="true">
+                <div class="logo-cloud">
+                  <span><img src="/assets/logo-mingle.png" alt="" /></span>
+                  <span><img src="/assets/logo-google-translate.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-apple-translate.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-microsoft-translator.png" alt="" /></span>
+                  <span><img src="/assets/logo-papago.jpg" alt="" /></span>
+                  <span><img src="/assets/logo-deepl.png" alt="" /></span>
+                </div>
+              </div>
+              <div class="post-copy">
+                <p class="post-meta">บทความเปรียบเทียบ - อัปเดตเมื่อ 20 เมษายน 2026</p>
+                <h3>เปรียบเทียบเครื่องมือแปลภาษา AI</h3>
+                <p>คู่มือเปรียบเทียบที่เน้นตารางเป็นหลัก ครอบคลุมราคา การรองรับแพลตฟอร์ม จำนวนภาษาที่รองรับ คำบรรยายสด บันทึกบทสนทนา การสลับภาษาอัตโนมัติ การแปลเสียงในพื้นหลัง และการบันทึกเสียงจากแอปภายนอก</p>
+                <span class="post-link">อ่านบทความเปรียบเทียบ</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="footer">
+      <div class="footer-inner">
+        <span>© Mingle Labs. HashChat เดิมใช้ชื่อ Mingle</span>
+        <div class="footer-links">
+          <a href="/blogs?lang=th">บล็อก</a>
+          <a href="/privacy-policy">นโยบายความเป็นส่วนตัว</a>
+          <a href="/terms-of-use">ข้อกำหนดการใช้งาน</a>
+          <a href="/legal">Legal</a>
+        </div>
+      </div>
+    </footer>
+    <script>
+      (function () {
+        var select = document.getElementById("blog-language");
+        if (!select) return;
+        select.addEventListener("change", function () {
+          var url = new URL(window.location.href);
+          if (select.value === "en") url.searchParams.delete("lang");
+          else url.searchParams.set("lang", select.value);
+          window.location.href = url.toString();
+        });
+      })();
+    </script>
+  </body>
+</html>
