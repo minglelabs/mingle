@@ -288,7 +288,7 @@ describe('translate-texts', () => {
         shouldRedetectSourceLanguage: false,
         isFinal: true,
       }
-      const previous = { sourceLanguage: 'en', sourceText: 'but, um, and I\'m also.', translations: { ko: '하지만, 음, 저도 그래요.' }, ageMs: 500 }
+      const previous = { sourceLanguage: 'en', sourceText: 'but, um, and I\'m also.', translations: { ko: '하지만, 음, 저도 그래요.' }, ageMs: 500, isFinalized: true }
       expect(buildPrompt({ ...base, immediatePreviousTurn: previous }).userPrompt).toContain('splits one sentence across bubbles')
       expect(buildPrompt({ ...base, shouldRedetectSourceLanguage: true, immediatePreviousTurn: previous }).userPrompt).toContain('splits one sentence across bubbles')
       expect(buildPrompt({ ...base, immediatePreviousTurn: null }).userPrompt).not.toContain('splits one sentence across bubbles')
