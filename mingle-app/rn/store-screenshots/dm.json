@@ -1,0 +1,274 @@
+{
+  "_comment": "1:1 slides drawn by capture.mjs with the app's bubble layout: a chat with a friend (dm), the same room in voice mode (voice), and a booking call on speaker (booking). 'me' lines are the viewer's; the other speaker uses the first partner language from chat.json.",
+  "friendName": {
+    "ja": "ゆき",
+    "ko": "민지",
+    "en": "Emma",
+    "es": "Sofía",
+    "fr": "Léa"
+  },
+  "bookingTitle": {
+    "ko": "스시집 예약",
+    "en": "Sushi booking",
+    "ja": "お寿司屋さんの予約",
+    "zh-cn": "预约寿司店",
+    "zh-tw": "預約壽司店",
+    "ar": "حجز مطعم سوشي",
+    "de": "Sushi-Reservierung",
+    "es": "Reserva de sushi",
+    "fr": "Réservation sushi",
+    "hi": "सुशी बुकिंग",
+    "it": "Prenota sushi",
+    "pt": "Reserva no sushi",
+    "ru": "Бронь в суши-баре",
+    "th": "จองร้านซูชิ",
+    "vi": "Đặt bàn sushi"
+  },
+  "dm": [
+    {
+      "by": "friend",
+      "text": {
+        "ko": "오늘 뭐 했어?",
+        "en": "What did you do today?",
+        "ja": "今日は何してたの？",
+        "zh-cn": "今天做了什么？",
+        "zh-tw": "今天做了什麼？",
+        "ar": "ماذا فعلت اليوم؟",
+        "de": "Was hast du heute gemacht?",
+        "es": "¿Qué hiciste hoy?",
+        "fr": "Tu as fait quoi aujourd’hui ?",
+        "hi": "आज क्या किया?",
+        "it": "Cos’hai fatto oggi?",
+        "pt": "O que você fez hoje?",
+        "ru": "Как прошёл твой день?",
+        "th": "วันนี้ทำอะไรมาบ้าง",
+        "vi": "Hôm nay bạn làm gì thế?"
+      }
+    },
+    {
+      "by": "me",
+      "text": {
+        "ko": "퇴근하고 라멘 먹었어. 진짜 맛있었어!",
+        "en": "Had ramen after work. It was so good!",
+        "ja": "仕事帰りにラーメン食べたよ。すごくおいしかった！",
+        "zh-cn": "下班后吃了拉面，超好吃！",
+        "zh-tw": "下班後吃了拉麵，超好吃！",
+        "ar": "أكلت رامن بعد العمل. كان لذيذًا جدًا!",
+        "de": "Nach der Arbeit gab’s Ramen. War richtig lecker!",
+        "es": "Comí ramen después del trabajo. ¡Estaba buenísimo!",
+        "fr": "J’ai mangé des ramen après le boulot. Trop bon !",
+        "hi": "काम के बाद रामेन खाया। बहुत स्वादिष्ट था!",
+        "it": "Ho mangiato ramen dopo il lavoro. Buonissimo!",
+        "pt": "Comi lámen depois do trabalho. Estava uma delícia!",
+        "ru": "После работы был рамен. Очень вкусно!",
+        "th": "เลิกงานแล้วไปกินราเมง อร่อยมาก!",
+        "vi": "Tan làm mình đi ăn ramen. Ngon lắm!"
+      }
+    },
+    {
+      "by": "friend",
+      "text": {
+        "ko": "맛있겠다! 나 다음 달에 거기 놀러 가.",
+        "en": "Sounds delicious! I'm visiting next month.",
+        "ja": "おいしそう！来月そっちに遊びに行くよ。",
+        "zh-cn": "看起来好好吃！我下个月要去那边玩。",
+        "zh-tw": "看起來好好吃！我下個月要去那邊玩。",
+        "ar": "يبدو شهيًا! سأزور بلدك الشهر القادم.",
+        "de": "Klingt lecker! Nächsten Monat komme ich zu Besuch.",
+        "es": "¡Qué rico! El mes que viene voy de visita.",
+        "fr": "Ça a l’air trop bon ! Je viens le mois prochain.",
+        "hi": "सुनकर मज़ा आ गया! अगले महीने वहाँ आना है।",
+        "it": "Che buono! Il mese prossimo vengo a trovarti.",
+        "pt": "Que delícia! Mês que vem vou te visitar.",
+        "ru": "Звучит вкусно! В следующем месяце приеду в гости.",
+        "th": "น่ากินจัง! เดือนหน้าเราจะไปเที่ยวที่นั่นนะ",
+        "vi": "Nghe ngon quá! Tháng sau mình sang đó chơi."
+      }
+    },
+    {
+      "by": "me",
+      "text": {
+        "ko": "진짜? 그럼 내가 맛집 데려갈게!",
+        "en": "Really? Then I'll take you to my favorite spot!",
+        "ja": "ほんと？じゃあ、おすすめのお店に連れて行くね！",
+        "zh-cn": "真的吗？那我带你去我最爱的店！",
+        "zh-tw": "真的嗎？那我帶你去我最愛的店！",
+        "ar": "حقًا؟ إذن سآخذك إلى مطعمي المفضل!",
+        "de": "Echt? Dann zeige ich dir meinen Lieblingsladen!",
+        "es": "¿En serio? ¡Entonces te llevo a mi sitio favorito!",
+        "fr": "C’est vrai ? Alors je t’emmène à mon resto préféré !",
+        "hi": "सच में? तो चलो, मेरी पसंदीदा जगह चलेंगे!",
+        "it": "Davvero? Allora ti porto nel mio posto preferito!",
+        "pt": "Sério? Então te levo no meu lugar favorito!",
+        "ru": "Правда? Тогда отведу тебя в моё любимое место!",
+        "th": "จริงเหรอ? งั้นเดี๋ยวพาไปร้านโปรดเลย!",
+        "vi": "Thật á? Vậy mình dẫn bạn đi quán ruột nhé!"
+      }
+    },
+    {
+      "by": "friend",
+      "text": {
+        "ko": "약속이야! 벌써 기대돼 😆",
+        "en": "It's a promise! Can't wait 😆",
+        "ja": "約束だよ！もう楽しみ 😆",
+        "zh-cn": "说好了！已经开始期待了 😆",
+        "zh-tw": "說好了！已經開始期待了 😆",
+        "ar": "وعد! لا أستطيع الانتظار 😆",
+        "de": "Versprochen! Ich freu mich schon 😆",
+        "es": "¡Prometido! Ya tengo ganas 😆",
+        "fr": "Promis ! J’ai trop hâte 😆",
+        "hi": "पक्का वादा! अभी से इंतज़ार है 😆",
+        "it": "Promesso! Non vedo l’ora 😆",
+        "pt": "Combinado! Mal posso esperar 😆",
+        "ru": "Договорились! Уже жду 😆",
+        "th": "สัญญานะ! รอไม่ไหวแล้ว 😆",
+        "vi": "Hứa nhé! Mong quá đi 😆"
+      }
+    }
+  ],
+  "voice": [
+    {
+      "by": "me",
+      "text": {
+        "ko": "주말에 뭐 해? 같이 영화 볼래?",
+        "en": "What are you up to this weekend? Want to see a movie?",
+        "ja": "週末は何するの？一緒に映画見ない？",
+        "zh-cn": "周末有什么安排？一起看电影吗？",
+        "zh-tw": "週末有什麼安排？一起看電影嗎？",
+        "ar": "ماذا ستفعل في عطلة نهاية الأسبوع؟ نشاهد فيلمًا معًا؟",
+        "de": "Was machst du am Wochenende? Lust auf Kino?",
+        "es": "¿Qué haces el finde? ¿Vemos una peli?",
+        "fr": "Tu fais quoi ce week-end ? On se fait un ciné ?",
+        "hi": "वीकेंड पर क्या प्लान है? साथ में फ़िल्म देखें?",
+        "it": "Che fai nel weekend? Andiamo al cinema?",
+        "pt": "O que vai fazer no fim de semana? Vamos ver um filme?",
+        "ru": "Что делаешь на выходных? Сходим в кино?",
+        "th": "เสาร์อาทิตย์นี้ทำอะไร? ไปดูหนังกันไหม",
+        "vi": "Cuối tuần bạn làm gì? Đi xem phim không?"
+      }
+    },
+    {
+      "by": "friend",
+      "text": {
+        "ko": "좋아! 몇 시에 만날까?",
+        "en": "Sure! What time should we meet?",
+        "ja": "いいね！何時に会う？",
+        "zh-cn": "好啊！几点见？",
+        "zh-tw": "好啊！幾點見？",
+        "ar": "بالتأكيد! في أي ساعة نلتقي؟",
+        "de": "Gern! Wann treffen wir uns?",
+        "es": "¡Claro! ¿A qué hora quedamos?",
+        "fr": "Carrément ! On se retrouve à quelle heure ?",
+        "hi": "ज़रूर! कितने बजे मिलें?",
+        "it": "Certo! A che ora ci vediamo?",
+        "pt": "Bora! Que horas a gente se encontra?",
+        "ru": "Давай! Во сколько встретимся?",
+        "th": "ได้เลย! เจอกันกี่โมงดี",
+        "vi": "Được chứ! Mấy giờ mình gặp nhau?"
+      }
+    },
+    {
+      "by": "me",
+      "live": true,
+      "text": {
+        "ko": "7시에 역 앞에서 만나자",
+        "en": "Let's meet at the station at 7",
+        "ja": "7時に駅前で会おう",
+        "zh-cn": "7点在车站见吧",
+        "zh-tw": "7點在車站見吧",
+        "ar": "لنلتقِ عند المحطة الساعة 7",
+        "de": "Treffen wir uns um 7 am Bahnhof",
+        "es": "Quedamos a las 7 en la estación",
+        "fr": "On se retrouve à 19 h à la gare",
+        "hi": "7 बजे स्टेशन पर मिलते हैं",
+        "it": "Vediamoci alle 7 in stazione",
+        "pt": "Vamos nos encontrar às 7 na estação",
+        "ru": "Встретимся в 7 у станции",
+        "th": "เจอกันที่สถานีตอนหนึ่งทุ่มนะ",
+        "vi": "7 giờ gặp nhau ở ga nhé"
+      }
+    }
+  ],
+  "booking": [
+    {
+      "by": "me",
+      "text": {
+        "ko": "안녕하세요. 내일 저녁 7시에 예약할 수 있을까요?",
+        "ja": "こんにちは。明日の夜7時に予約できますか？",
+        "en": "Hello. Can I book a table for 7 pm tomorrow?",
+        "zh-cn": "你好，明天晚上7点可以预约吗？",
+        "zh-tw": "你好，明天晚上7點可以預約嗎？",
+        "ar": "مرحبًا. هل يمكنني حجز طاولة غدًا الساعة 7 مساءً؟",
+        "de": "Hallo. Kann ich für morgen um 19 Uhr einen Tisch reservieren?",
+        "es": "Hola. ¿Puedo reservar para mañana a las 7 de la noche?",
+        "fr": "Bonjour. Puis-je réserver pour demain à 19 h ?",
+        "hi": "नमस्ते। क्या कल शाम 7 बजे के लिए टेबल बुक हो सकती है?",
+        "it": "Buonasera. Posso prenotare per domani alle 19?",
+        "pt": "Olá. Posso reservar para amanhã às 19h?",
+        "ru": "Здравствуйте. Можно забронировать столик на завтра на 19:00?",
+        "th": "สวัสดีค่ะ ขอจองโต๊ะพรุ่งนี้หนึ่งทุ่มได้ไหมคะ",
+        "vi": "Xin chào. Tôi có thể đặt bàn lúc 7 giờ tối mai không?"
+      }
+    },
+    {
+      "by": "friend",
+      "text": {
+        "ko": "네, 카운터석이 있어요. 몇 분이세요?",
+        "ja": "はい、カウンター席が空いています。何名様ですか？",
+        "en": "Yes, we have seats at the counter. How many people?",
+        "zh-cn": "可以，吧台还有座位。请问几位？",
+        "zh-tw": "可以，吧台還有座位。請問幾位？",
+        "ar": "نعم، لدينا مقاعد على الكاونتر. كم عدد الأشخاص؟",
+        "de": "Ja, an der Theke ist noch Platz. Für wie viele Personen?",
+        "es": "Sí, tenemos sitio en la barra. ¿Para cuántas personas?",
+        "fr": "Oui, il reste de la place au comptoir. Pour combien de personnes ?",
+        "hi": "जी, काउंटर पर जगह है। कितने लोग हैं?",
+        "it": "Sì, abbiamo posto al bancone. Per quante persone?",
+        "pt": "Sim, temos lugar no balcão. Para quantas pessoas?",
+        "ru": "Да, есть места у стойки. На сколько человек?",
+        "th": "ได้ค่ะ มีที่นั่งที่เคาน์เตอร์ กี่ท่านคะ",
+        "vi": "Vâng, quầy còn chỗ ạ. Quý khách đi mấy người?"
+      }
+    },
+    {
+      "by": "me",
+      "text": {
+        "ko": "두 명이에요.",
+        "ja": "2名です。",
+        "en": "Two people.",
+        "zh-cn": "两位。",
+        "zh-tw": "兩位。",
+        "ar": "شخصان.",
+        "de": "Für zwei.",
+        "es": "Para dos.",
+        "fr": "Pour deux.",
+        "hi": "दो लोग।",
+        "it": "Per due.",
+        "pt": "Para duas.",
+        "ru": "На двоих.",
+        "th": "สองคนค่ะ",
+        "vi": "Hai người."
+      }
+    },
+    {
+      "by": "friend",
+      "text": {
+        "ko": "예약되었습니다. 내일 7시에 뵙겠습니다.",
+        "ja": "ご予約を承りました。明日7時にお待ちしております。",
+        "en": "You're booked. See you tomorrow at 7.",
+        "zh-cn": "已为您预约好了，明天7点见。",
+        "zh-tw": "已為您預約好了，明天7點見。",
+        "ar": "تم الحجز. نراكم غدًا الساعة 7.",
+        "de": "Ist reserviert. Bis morgen um 19 Uhr.",
+        "es": "Reservado. Le esperamos mañana a las 7.",
+        "fr": "C'est réservé. À demain, 19 h.",
+        "hi": "बुकिंग हो गई। कल 7 बजे मिलते हैं।",
+        "it": "Prenotato. A domani alle 19.",
+        "pt": "Reservado. Até amanhã às 19h.",
+        "ru": "Забронировано. Ждём вас завтра в 19:00.",
+        "th": "จองเรียบร้อยแล้วค่ะ พบกันพรุ่งนี้หนึ่งทุ่มนะคะ",
+        "vi": "Đã đặt xong ạ. Hẹn gặp quý khách 7 giờ tối mai."
+      }
+    }
+  ]
+}
