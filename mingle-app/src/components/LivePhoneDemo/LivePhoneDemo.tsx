@@ -9356,6 +9356,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               )}
             </AnimatePresence>
             {speechLengthCardOpen ? (
+              <motion.div
+                aria-hidden
+                data-qa="speech-length-scrim"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2 }}
+                onClick={handleSpeechLengthClose}
+                className="absolute inset-0 z-30 bg-slate-950/30"
+              />
+            ) : null}
+            {speechLengthCardOpen ? (
               <div
                 className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3"
                 style={{ bottom: copyToastBottomOffsetPx }}
