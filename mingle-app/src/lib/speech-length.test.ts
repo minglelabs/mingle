@@ -6,7 +6,19 @@ import {
   isExactSpeechLengthLevel,
   matchSpeechLengthLevel,
   resolveSpeechLengthPreferences,
+  SPEECH_LENGTH_CARD_AFTER_BUBBLES,
+  shouldShowSpeechLengthCard,
 } from '@/lib/speech-length'
+
+describe('first-run sentence length card', () => {
+  it('waits for a few finished bubbles before asking', () => {
+    expect(SPEECH_LENGTH_CARD_AFTER_BUBBLES).toBe(5)
+    expect(shouldShowSpeechLengthCard(1)).toBe(false)
+    expect(shouldShowSpeechLengthCard(4)).toBe(false)
+    expect(shouldShowSpeechLengthCard(5)).toBe(true)
+    expect(shouldShowSpeechLengthCard(9)).toBe(true)
+  })
+})
 
 const settings = (preferences: ReturnType<typeof resolveSpeechLengthPreferences>) => ({
   sttSegmentationMode: preferences.sttSegmentationMode,
