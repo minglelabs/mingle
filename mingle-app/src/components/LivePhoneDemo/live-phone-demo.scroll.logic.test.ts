@@ -10,6 +10,7 @@ import {
   LIVE_DEMO_SCROLL_HANDLER_MEDIAN_BUDGET_MS,
   LIVE_DEMO_SCROLL_MEASUREMENT_SEARCH_PARAM,
   createAutoScrollScheduler,
+  resolveLiveGrowthRollScrollTop,
   deriveAutoScrollClockDelayMs,
   deriveLateMessageHeightChangeEffectAboveViewportAnchor,
   deriveLivePhoneDemoScrollMetrics,
@@ -506,6 +507,23 @@ describe('live-phone-demo scroll/platform logic', () => {
         scrollable: true,
         distanceToBottom: 824,
       })
+    })
+  })
+
+  describe('resolveLiveGrowthRollScrollTop', () => {
+    it('starts where the view is and ends on the bottom', () => {
+      expect(resolveLiveGrowthRollScrollTop({ startScrollTop: 100, targetScrollTop: 120, elapsedMs: 0, rollMs: 100 })).toBe(100)
+      expect(resolveLiveGrowthRollScrollTop({ startScrollTop: 100, targetScrollTop: 120, elapsedMs: 100, rollMs: 100 })).toBe(120)
+      expect(resolveLiveGrowthRollScrollTop({ startScrollTop: 100, targetScrollTop: 120, elapsedMs: 400, rollMs: 100 })).toBe(120)
+    })
+
+    it('covers most of the way early, so the roll settles instead of drifting', () => {
+      const halfway = resolveLiveGrowthRollScrollTop({ startScrollTop: 100, targetScrollTop: 120, elapsedMs: 50, rollMs: 100 })
+      expect(halfway).toBe(115)
+    })
+
+    it('jumps straight to the bottom when the roll has no duration', () => {
+      expect(resolveLiveGrowthRollScrollTop({ startScrollTop: 100, targetScrollTop: 120, elapsedMs: 0, rollMs: 0 })).toBe(120)
     })
   })
 
