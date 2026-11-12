@@ -199,10 +199,9 @@ export function joinTailTranslations(
 
 // ===== When to ask for the next interim fill =====
 //
-// Most interim requests come back with nothing fixed: the model can only cut at
-// a clause or sentence boundary, and a boundary almost always shows up as a
-// punctuation mark in the STT text. So a request is worth sending when a new
-// mark has appeared, and otherwise only after a long stretch of new text.
+// The model cuts at a clause or sentence boundary. A punctuation mark in the
+// STT text is the surest sign of one, so a new mark triggers a request; speech
+// often has no marks, so a stretch of new text (about one clause) does too.
 
 const CUT_CANDIDATE = /[.,!?;:…。、，！？；：،؛؟।]/g
 const SENTENCE_END = /[.!?…。！？؟।]$/
@@ -210,9 +209,9 @@ const DENSE_SCRIPT_CHAR = /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p
 const LETTER = /\p{L}/gu
 
 /** New characters that trigger a request when no new mark appeared. */
-export const INTERIM_FILL_FALLBACK_CHARS_DENSE = 40
-export const INTERIM_FILL_FALLBACK_CHARS_DEFAULT = 80
-/** A new mark triggers a request only after fallback / 4 new characters (10 dense, 20 otherwise). */
+export const INTERIM_FILL_FALLBACK_CHARS_DENSE = 30
+export const INTERIM_FILL_FALLBACK_CHARS_DEFAULT = 60
+/** A new mark triggers a request only after fallback / 4 new characters (7 dense, 15 otherwise). */
 const INTERIM_FILL_MIN_CHARS_DIVISOR = 4
 
 /**

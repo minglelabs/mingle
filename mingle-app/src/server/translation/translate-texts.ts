@@ -907,8 +907,9 @@ function buildBubbleTailFillPrompt(
   const tailRules = interim
     ? [
       `Keys: ${TAIL_CUT_AFTER_KEY} and the target language codes.`,
-      'The speaker is still talking. Translate the start of the blank up to a safe cut point: the end of a sentence, or the end of a complete clause (its own subject and verb, usually before a comma or a conjunction) whose meaning cannot change with the words that follow. Even a short sentence counts ("Yes.", "네.").',
+      'The speaker is still talking. Translate the start of the blank up to a cut point: the end of a sentence, of a finished remark, or of a clause (a dependent clause too). Punctuation is not needed: speech transcripts often have none. Even a short sentence counts ("Yes.", "네.").',
       'Your translation is final and never revised, and the next part will be appended after it, so it must read correctly and naturally whatever comes next. Never cut inside a phrase, between a verb and its object, or where the target language would need the next words to order the sentence. When unsure, cut earlier or translate nothing.',
+      'Translate exactly the source up to your cut: never pull in words that come after it, even though you can see them.',
       'The last words of the blank were just heard and the next words may change them: never include them unless the blank ends with punctuation.',
       `${TAIL_CUT_AFTER_KEY} = the last words of the source you translated, copied exactly from the blank: 2 to 4 words (in a language written without spaces, the last 4 to 8 characters), enough that they appear only once in the blank. Write it before the translations. Nothing to translate yet: "" everywhere.`,
     ]

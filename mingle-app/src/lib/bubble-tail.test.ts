@@ -90,10 +90,10 @@ describe('interim fill gate', () => {
   })
 
   it('uses the shorter fallback for dense scripts, judged from the text', () => {
-    expect(resolveInterimFillFallbackChars('오늘 회의에서는 다음 분기')).toBe(40)
-    expect(resolveInterimFillFallbackChars('今日は天気がとても良い')).toBe(40)
-    expect(resolveInterimFillFallbackChars('Today I want to talk about')).toBe(80)
-    expect(resolveInterimFillFallbackChars('')).toBe(80)
+    expect(resolveInterimFillFallbackChars('오늘 회의에서는 다음 분기')).toBe(30)
+    expect(resolveInterimFillFallbackChars('今日は天気がとても良い')).toBe(30)
+    expect(resolveInterimFillFallbackChars('Today I want to talk about')).toBe(60)
+    expect(resolveInterimFillFallbackChars('')).toBe(60)
   })
 
   it('asks on a new mark, or after the fallback stretch without one', () => {
@@ -107,6 +107,9 @@ describe('interim fill gate', () => {
     expect(shouldRequestInterimFill('Yes. No. Well, I mean, maybe', 'Yes')).toBe(true)
     const korean = '가'.repeat(45)
     expect(shouldRequestInterimFill(korean, '가가가')).toBe(true)
+    // Unpunctuated speech: about one clause of new text is enough.
+    expect(shouldRequestInterimFill('야 지금 일부 번역하는 거 있잖아 좀 더 잘게 일부 번역하는', '야')).toBe(true)
+    expect(shouldRequestInterimFill('야 지금 일부 번역하는 거 있잖아', '야')).toBe(false)
     const english = 'word '.repeat(12).trim()
     expect(shouldRequestInterimFill(english, 'word')).toBe(false)
     expect(shouldRequestInterimFill('word '.repeat(18).trim(), 'word')).toBe(true)
