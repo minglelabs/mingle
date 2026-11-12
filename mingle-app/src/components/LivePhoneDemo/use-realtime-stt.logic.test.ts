@@ -2800,3 +2800,14 @@ describe('committed rows keep the fixed tail', () => {
     expect(source).toContain('finalizedPayload.utterance = withBubbleTailFixedTranslations(')
   })
 })
+
+describe('recent turn context age', () => {
+  const source = readFileSync(new URL('./use-realtime-stt.ts', import.meta.url), 'utf8')
+
+  it('counts from when the previous bubble ended to when the current one started', () => {
+    // A long previous bubble that ran straight into this one must stay in the
+    // prompt: measured from its start it would be over the window.
+    expect(source).toContain('const endedAtMs = utterance.id === lastFinished?.utteranceId ? lastFinished.finishedAtMs : occurredAtMs')
+    expect(source).toContain('const ageMs = Math.max(0, referenceMs - endedAtMs)')
+  })
+})
