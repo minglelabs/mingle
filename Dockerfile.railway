@@ -20,6 +20,11 @@ ARG NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY
 # build-app.mjs copies this into NEXT_PUBLIC_MINGLE_RELEASE_TARGET. Plain browsers
 # (no apiNamespace) get the app UI; set to legacy_1_0_11 for the old demo.
 ARG MINGLE_RELEASE_TARGET=web_app
+# Hash Rush is inlined at build time; without both the room's game button stays hidden.
+ARG NEXT_PUBLIC_HASH_RUSH_URL
+ARG NEXT_PUBLIC_HASH_RUSH_SERVER
+ENV NEXT_PUBLIC_HASH_RUSH_URL="$NEXT_PUBLIC_HASH_RUSH_URL"
+ENV NEXT_PUBLIC_HASH_RUSH_SERVER="$NEXT_PUBLIC_HASH_RUSH_SERVER"
 ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mingle?schema=app"
 ENV NEXT_PUBLIC_WS_PATH="$NEXT_PUBLIC_WS_PATH"
 ENV NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY="$NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY"

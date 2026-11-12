@@ -58,6 +58,12 @@ const nextConfig = {
         { source: `/api/${platform}/v2.4.0`, destination: `/api/${platform}/v2.2.0` },
         { source: `/api/${platform}/v2.4.0/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
       ]),
+      // 2.5.0 (voice talk with live interpreting, Hash Rush in rooms) keeps
+      // its new routes inside the v2.2.0 tree too.
+      ...['ios', 'android'].flatMap(platform => [
+        { source: `/api/${platform}/v2.5.0`, destination: `/api/${platform}/v2.2.0` },
+        { source: `/api/${platform}/v2.5.0/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
+      ]),
       ...['ios', 'android'].flatMap(platform => [
         { source: `/api/${platform}/v2.3.4`, destination: `/api/${platform}/v2.2.0` },
         { source: `/api/${platform}/v2.3.4/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },

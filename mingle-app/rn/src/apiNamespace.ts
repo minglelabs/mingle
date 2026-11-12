@@ -1,6 +1,6 @@
 export const EXPECTED_API_NAMESPACE_BY_OS = {
-  android: 'android/v2.4.0',
-  ios: 'ios/v2.4.0',
+  android: 'android/v2.5.0',
+  ios: 'ios/v2.5.0',
 } as const
 
 export type ApiNamespaceVersion = {
