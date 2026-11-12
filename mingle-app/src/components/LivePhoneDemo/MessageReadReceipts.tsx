@@ -68,8 +68,8 @@ function ReadReceiptRoom({ conversationId, active, viewerUserId, children }: {
 
 // Next to the bubble's "5m ago", in the same size: the number of members who
 // haven't read the message yet, or a check once everyone has.
-export function MessageReadReceipt({ senderUserId, createdAtMs, locale }: {
-  senderUserId?: string | null; createdAtMs?: number; locale: string
+export function MessageReadReceipt({ senderUserId, createdAtMs, locale, className }: {
+  senderUserId?: string | null; createdAtMs?: number; locale: string; className?: string
 }) {
   const room = useContext(Room)
   if (!room || !senderUserId || typeof createdAtMs !== 'number' || !Number.isFinite(createdAtMs)) return null
@@ -80,7 +80,7 @@ export function MessageReadReceipt({ senderUserId, createdAtMs, locale }: {
       data-chat-bubble-read-receipt
       role="img"
       aria-label={unread > 0 ? copy.unreadLabel.replace('{count}', String(unread)) : copy.read}
-      className={`inline-flex shrink-0 items-center whitespace-nowrap text-[10px] font-medium leading-none tabular-nums ${unread > 0 ? 'text-amber-500' : 'text-black/[0.34]'}`}
+      className={`inline-flex shrink-0 items-center whitespace-nowrap text-[10px] font-medium leading-none tabular-nums ${unread > 0 ? 'text-amber-500' : 'text-black/[0.34]'}${className ? ` ${className}` : ''}`}
     >
       {unread > 0 ? unread : (
         <svg aria-hidden="true" viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
