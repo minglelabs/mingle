@@ -36,9 +36,21 @@
  * to point at, so people elsewhere can use the API: it requires CHATGPT_POOL_KEY and
  * never serves the extensions' /agent endpoints. A tunnel's requests arrive from
  * 127.0.0.1 too, so the main port must never be the one exposed.
+ *
+ * Profile rotation (on by default on Windows; CHATGPT_POOL_ROTATE=1/0 to force):
+ * every open profile costs a Chrome profile's memory, so only
+ * CHATGPT_POOL_MIN_OPEN (5) stay open. A profile idle for
+ * CHATGPT_POOL_IDLE_CLOSE_MS (15 min) beyond that is told to close its own
+ * windows (the extension does it, only when every tab in it is ChatGPT); when
+ * jobs wait and the open ones cannot take them, the least recently used closed
+ * profile is opened in the same running Chrome (`chrome.exe
+ * --profile-directory=…`, never a second Chrome). Profiles the pool has seen
+ * are remembered in profiles.json next to this script, so a restart (or a
+ * reboot, when Chrome opens no profile by itself) opens them again.
  */
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
@@ -52,8 +64,8 @@ const HOST = process.env.CHATGPT_POOL_HOST || '127.0.0.1'
 const KEY = process.env.CHATGPT_POOL_KEY?.trim() || ''
 const PUBLIC_PORT = Number(process.env.CHATGPT_POOL_PUBLIC_PORT || 0)
 const LOOPBACK_HOSTS = ['127.0.0.1', '::1', 'localhost']
-const POLL_HOLD_MS = 20_000
-const AGENT_STALE_MS = 75_000
+const POLL_HOLD_MS = Number(process.env.CHATGPT_POOL_POLL_HOLD_MS || 20_000)
+const AGENT_STALE_MS = Number(process.env.CHATGPT_POOL_AGENT_STALE_MS || 75_000)
 const TEXT_TIMEOUT_MS = 5 * 60_000
 const IMAGE_TIMEOUT_MS = 8 * 60_000
 /** More waiting jobs than this are refused (503 queue_full) instead of piling up for hours. */
@@ -77,6 +89,15 @@ const ACCOUNT_PER_DAY = envNumber('CHATGPT_POOL_ACCOUNT_PER_DAY', 200)
 const HOUR_MS = 3_600_000
 const DAY_MS = 24 * HOUR_MS
 const LABEL = 'app.mingle.chatgpt-pool'
+const ROTATE = process.env.CHATGPT_POOL_ROTATE ? process.env.CHATGPT_POOL_ROTATE === '1' : process.platform === 'win32'
+const MIN_OPEN = envNumber('CHATGPT_POOL_MIN_OPEN', 5)
+const IDLE_CLOSE_MS = envNumber('CHATGPT_POOL_IDLE_CLOSE_MS', 15 * 60_000)
+/** A job waiting this long with no open account free opens another profile. */
+const WAKE_AFTER_WAIT_MS = envNumber('CHATGPT_POOL_WAKE_AFTER_MS', 30_000)
+/** Between two profile openings, and before giving up on one that did not connect. */
+const WAKE_GAP_MS = envNumber('CHATGPT_POOL_WAKE_GAP_MS', 20_000)
+const WAKE_CONNECT_MS = envNumber('CHATGPT_POOL_WAKE_CONNECT_MS', 3 * 60_000)
+const ROTATE_TICK_MS = envNumber('CHATGPT_POOL_ROTATE_TICK_MS', 15_000)
 
 const log = (...args) => console.error(new Date().toISOString(), ...args)
 
@@ -131,7 +152,7 @@ function wakeAfterRest() {
 const accepts = (job, agent) => !job.account || job.account === agent.email || job.account === agent.id
 
 function eligible(agent, job) {
-  if (agent.busy || agent.signedOut || !agent.email || job.tried.has(agent.id) || !accepts(job, agent)) return false
+  if (agent.busy || agent.parking || agent.signedOut || !agent.email || job.tried.has(agent.id) || !accepts(job, agent)) return false
   if (Date.now() < (agent.pausedUntil ?? 0)) return false
   if (resting(agent) || quotaFreeAt(agent)) return false
   return job.kind !== 'image' || Date.now() >= agent.limitedUntil
@@ -183,6 +204,8 @@ function failUnservable() {
       error = new PoolError(429, 'image_limit', `every account is at its image limit, the first until ${new Date(soonest).toISOString()}`)
     }
     if (!error) continue
+    // A closed profile could take it: open one and keep the job waiting.
+    if (wakeFor(job)) continue
     queue.splice(queue.indexOf(job), 1)
     job.reject(error)
   }
@@ -196,6 +219,7 @@ function finish(jobId, outcome) {
   clearTimeout(job.timer)
   const agent = job.agent
   agent.busy = false
+  saveProfiles()
   // Every finished job, answered or not, used the account: let it rest before the next one.
   if (ACCOUNT_GAP_MS > 0) {
     agent.restUntil = Date.now() + Math.round(ACCOUNT_GAP_MS * (1 + Math.random() * 0.5))
@@ -285,9 +309,9 @@ const IS_WINDOWS = process.platform === 'win32'
  * Where Chrome keeps its profiles. Mac and Windows put "User Data" in different
  * places; on Windows it lives under %LOCALAPPDATA%\Google\Chrome\User Data.
  */
-const CHROME_DIR = IS_WINDOWS
+const CHROME_DIR = process.env.CHATGPT_POOL_CHROME_DIR || (IS_WINDOWS
   ? join(process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'), 'Google', 'Chrome', 'User Data')
-  : join(homedir(), 'Library/Application Support/Google/Chrome')
+  : join(homedir(), 'Library/Application Support/Google/Chrome'))
 
 /**
  * Which Chrome profile an agent runs in, e.g. "Profile 2 (Somi is so cute)". An
@@ -330,10 +354,13 @@ async function poll(body, response) {
   if (!id) throw new PoolError(400, 'agent_id_required')
   const agent = agents.get(id) ?? { id, email: null, busy: false, limitedUntil: 0, limitMessage: '', signedOut: false, lastUsed: 0, hold: null }
   agents.set(id, agent)
+  if (!online(agent)) { agent.openedAt = Date.now(); agent.wokenAt = 0 }
+  // It polls again after being told to close: it kept its windows (a tab other than ChatGPT is open).
+  if (agent.parking) { agent.parking = false; if (body.keepOpen) { agent.keepOpen = true; log('keep', who(agent), 'has other tabs open, stays open') } }
   const email = typeof body.email === 'string' && body.email ? body.email : null
   if (!agent.profileLookup) {
     agent.profileLookup = chromeProfileOf(id).then((profile) => {
-      if (profile) { agent.profile = profile; log('profile', id.slice(0, 8), agent.email ?? '', profile) }
+      if (profile) { agent.profile = profile; agent.folder = profile.split(' (')[0]; log('profile', id.slice(0, 8), agent.email ?? '', profile); saveProfiles() }
     })
   }
   if (email !== agent.email || !agent.lastSeen) log('agent', id.slice(0, 8), email ?? '(signed out)', agent.profile ?? '')
@@ -359,6 +386,110 @@ async function poll(body, response) {
     failUnservable()
     dispatch()
   })
+}
+
+// ---- profile rotation --------------------------------------------------
+
+const PROFILES_FILE = process.env.CHATGPT_POOL_PROFILES_FILE || join(dirname(resolve(process.argv[1])), 'profiles.json')
+
+/** chrome.exe of the installed Chrome (the one already running), or null. */
+function chromePath() {
+  if (process.env.CHATGPT_POOL_CHROME) return process.env.CHATGPT_POOL_CHROME
+  if (!IS_WINDOWS) return null
+  const roots = [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.LOCALAPPDATA].filter(Boolean)
+  return roots.map((root) => join(root, 'Google', 'Chrome', 'Application', 'chrome.exe')).find((file) => existsSync(file)) ?? null
+}
+
+let saving = null
+/** Remembers every profile the pool has seen, so it can open them again after a restart. */
+function saveProfiles() {
+  if (!ROTATE) return
+  clearTimeout(saving)
+  saving = setTimeout(() => {
+    const known = Object.fromEntries([...agents.values()].filter((agent) => agent.folder)
+      .map((agent) => [agent.folder, { agentId: agent.id, email: agent.email, profile: agent.profile, lastUsed: agent.lastUsed }]))
+    writeFile(PROFILES_FILE, JSON.stringify(known, null, 2)).catch((error) => log('profiles', 'save failed', error.message))
+  }, 1000)
+  saving.unref?.()
+}
+
+async function loadProfiles() {
+  const known = JSON.parse(await readFile(PROFILES_FILE, 'utf8').catch(() => '{}'))
+  for (const [folder, entry] of Object.entries(known)) {
+    if (!entry?.agentId || agents.has(entry.agentId)) continue
+    agents.set(entry.agentId, {
+      id: entry.agentId, email: entry.email ?? null, profile: entry.profile ?? folder, folder, busy: false, limitedUntil: 0, limitMessage: '',
+      signedOut: false, lastUsed: Number(entry.lastUsed) || 0, lastSeen: 0, hold: null, profileLookup: Promise.resolve(),
+    })
+  }
+}
+
+const isOpen = (agent) => online(agent) && !agent.parking
+/** Opened by the pool and not connected yet. */
+const waking = (agent) => !online(agent) && Date.now() - (agent.wokenAt ?? 0) < WAKE_CONNECT_MS
+/** A profile the pool may open: known folder, last seen signed in, not open, not just opened. */
+const closedCandidates = () => [...agents.values()]
+  .filter((agent) => agent.folder && agent.email && !agent.signedOut && !online(agent) && !waking(agent))
+  .sort((a, b) => a.lastUsed - b.lastUsed)
+
+let lastWakeAt = 0
+let rotationStarted = false
+/** Opens one closed profile in the running Chrome. */
+function wake(agent, why) {
+  const chrome = chromePath()
+  if (!chrome) return false
+  lastWakeAt = Date.now()
+  agent.wokenAt = lastWakeAt
+  log('open', who(agent), why)
+  try {
+    const child = spawn(chrome, [`--profile-directory=${agent.folder}`, 'https://chatgpt.com/'], { detached: true, stdio: 'ignore', windowsHide: false })
+    child.on('error', (error) => log('open', who(agent), 'failed', error.message))
+    child.unref()
+  } catch (error) {
+    log('open', who(agent), 'failed', error.message)
+  }
+  return true
+}
+
+/**
+ * For a job no open account can take: true while a profile is being opened for it
+ * (one now, or one already on its way), false when no closed profile could take it.
+ */
+function wakeFor(job) {
+  if (!ROTATE || !rotationStarted) return false
+  const fits = (agent) => accepts(job, agent) && !job.tried.has(agent.id) && Date.now() >= (agent.pausedUntil ?? 0) && !quotaFreeAt(agent)
+    && (job.kind !== 'image' || Date.now() >= agent.limitedUntil)
+  if ([...agents.values()].some((agent) => waking(agent) && fits(agent))) return true
+  const next = closedCandidates().find(fits)
+  if (!next || !chromePath()) return false
+  if (Date.now() - lastWakeAt < WAKE_GAP_MS) return true
+  return wake(next, `for a waiting ${job.kind} job`)
+}
+
+/** Keeps MIN_OPEN profiles open, opens more while jobs wait, and closes the idle extra ones. */
+function rotate() {
+  const now = Date.now()
+  const all = [...agents.values()]
+  const open = all.filter(isOpen)
+  // Too few open (after a restart or a reboot): open the next one.
+  if (open.length + all.filter(waking).length < MIN_OPEN && now - lastWakeAt >= WAKE_GAP_MS) {
+    const next = closedCandidates().at(-1) // the most recently used first, they are the warmest
+    if (next && chromePath()) { wake(next, `to keep ${MIN_OPEN} open`); return }
+  }
+  // A job has waited and no open account is free for it: open one more.
+  const stuck = queue.find((job) => now - job.queuedAt >= WAKE_AFTER_WAIT_MS && !open.some((agent) => eligible(agent, job)))
+  if (stuck && now - lastWakeAt >= WAKE_GAP_MS) { wakeFor(stuck); return }
+  // Nothing waiting: close the profile idle the longest, one per tick, down to MIN_OPEN.
+  if (queue.length || open.length <= MIN_OPEN) return
+  const idle = open
+    .filter((agent) => agent.hold && !agent.busy && !agent.keepOpen && agent.folder && now - Math.max(agent.lastUsed, agent.openedAt ?? 0) >= IDLE_CLOSE_MS)
+    .sort((a, b) => Math.max(a.lastUsed, a.openedAt ?? 0) - Math.max(b.lastUsed, b.openedAt ?? 0))[0]
+  if (!idle || !chromePath()) return
+  idle.parking = true
+  const hold = idle.hold
+  idle.hold = null
+  log('close', who(idle), `idle ${Math.round((now - Math.max(idle.lastUsed, idle.openedAt ?? 0)) / 60_000)} min, ${open.length - 1} stay open`)
+  hold({ park: true })
 }
 
 function accountsStatus() {
@@ -495,7 +626,7 @@ function serve() {
       const keyed = exposed || (KEY && !LOOPBACK_HOSTS.includes(HOST))
       if (keyed && !keyMatches(request.headers.authorization)) return reply(response, 401, { error: { code: 'unauthorized' } })
       if (request.method === 'GET' && path === '/health') return reply(response, 200, { ok: true, accounts: accountsStatus().length, ready: accountsStatus().filter((a) => a.email && !a.signedOut && !a.pausedUntil && !a.cappedUntil).length, queued: queue.length, running: running.size })
-      if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus() })
+      if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus(), closed: [...agents.values()].filter((agent) => agent.folder && !online(agent)).map((agent) => ({ email: agent.email, profile: agent.profile, opening: waking(agent) })) })
       if (request.method === 'GET' && path.startsWith('/v1/jobs/')) return reply(response, 200, asyncStatus(decodeURIComponent(path.slice('/v1/jobs/'.length))))
       if (request.method === 'POST' && (path === '/v1/chat/completions' || path === '/v1/images/generations')) {
         const body = await readBody(request)
@@ -515,6 +646,16 @@ function serve() {
   // Image jobs answer after minutes; Node's default 5-minute request timeout would cut them off.
   const server = (exposed) => createServer({ requestTimeout: 0 }, handler(exposed))
   server(false).listen(PORT, HOST, () => log(`ChatGPT pool on http://${HOST}:${PORT}${KEY && !LOOPBACK_HOSTS.includes(HOST) ? ' (key required)' : ''}; waiting for the Chrome extensions`))
+  if (ROTATE) {
+    // Open profiles reconnect within a poll or two after a restart; wait for them
+    // before opening any, or an already open profile would get a second window.
+    void loadProfiles().then(() => {
+      const startRotation = () => { rotationStarted = true; const tick = setInterval(rotate, ROTATE_TICK_MS); tick.unref?.(); rotate() }
+      const grace = setTimeout(startRotation, envNumber('CHATGPT_POOL_ROTATE_GRACE_MS', 90_000))
+      grace.unref?.()
+      log('rotation', `keeps ${MIN_OPEN} profiles open, closes extra ones after ${Math.round(IDLE_CLOSE_MS / 60_000)} min idle; chrome: ${chromePath() ?? 'not found, rotation idle'}`)
+    })
+  }
   if (PUBLIC_PORT) {
     if (!KEY) log('CHATGPT_POOL_PUBLIC_PORT is ignored without CHATGPT_POOL_KEY: the API would be open to anyone')
     else server(true).listen(PUBLIC_PORT, '127.0.0.1', () => log(`public API (key required) on http://127.0.0.1:${PUBLIC_PORT}, for a tunnel`))
