@@ -2,6 +2,19 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-13 — 채팅 버블: 더블탭 범위 확대, 옆 칸 아래 끝 정렬, 이어지는 버블의 국기는 왼쪽 칸
+
+- 화면: 대화방 채팅 버블 (`ChatBubble.tsx`). 11-12 "더블탭으로 펼치기/접기" 작업의 후속.
+- 문제(더블탭): 펼쳤다가 바로 다시 접히거나, 국기·언어 구분선·버블 여백을 더블탭하면 반응이 없었다. 더블탭을 글자 영역(`CopyableBubbleSurface`)마다 따로 잡았고, 터치 더블탭 뒤에 오는 브라우저 `dblclick`이 새로 그려진 쪽에 한 번 더 들어갔다.
+- 해결(더블탭): 버블 전체(`data-chat-message-bubble`, `data-chat-bubble-double-tap="toggle"`)가 캡처 단계에서 더블탭을 잡는다. 여백, 구분선, 국기 위도 된다. 한 번 바뀐 뒤 0.5초 안의 두 번째 신호는 무시한다. 안쪽 글자 영역은 더블탭에 아무것도 하지 않는다. 언어가 하나뿐인 버블은 전처럼 읽어준다.
+- 문제(옆 칸): 날짜가 붙는 지난 메시지는 읽음 표시·날짜·시간 세 줄이라 한 줄 버블보다 높아서, 읽음 표시가 버블 위로 떠 보였다.
+- 해결(옆 칸): 옆 칸을 버블 아래 끝에 붙인다(`pb-1` → `pb-px`). 날짜가 붙는 시간은 읽음 표시를 날짜 줄 왼쪽에 두어 두 줄을 넘지 않는다. 오늘 메시지는 전처럼 읽음 표시 위, 시간 아래.
+- 문제(국기 줄): 같은 사람이 연달아 보낸 버블은 이름이 없는데도 국기만 있는 줄이 버블 위에 한 줄씩 생겼다.
+- 해결(국기 줄): 이어지는 버블은 국기를 비어 있는 프로필 사진 칸(40px)에 세로로 둔다(`data-chat-bubble-side-language-badges`, 버튼 40×22px). 칸 높이는 버블 높이와 같다. 한 줄 버블은 국기 하나와 다음 국기 윗부분이 보이고 칸을 위아래로 밀어 나머지를 고른다. 두 줄 이상이면 그만큼 더 보인다. 이름이 있는 첫 버블은 전처럼 이름 옆.
+- 문제(가로 국기): 버블 안이나 이름 옆에 가로로 놓인 국기 중 가운데 것이 잘 안 눌렸다(08-25에 28px로 넓힌 것의 재발).
+- 해결(가로 국기): 버튼 너비 28px → 36px, 터치 영역은 위아래로 8px씩 더(보이는 국기는 18px 그대로).
+- 확인: `chat-bubble.test.ts`, 타입 체크, lint. 실기기에서는 아직 확인하지 않았다: 왼쪽 칸 스크롤 느낌, 넓어진 국기 간격으로 버블 안 글자가 밀리는 정도.
+
 ## 2026-11-13 — Invites and first run: friends on HashChat, mutual follow, length preview
 
 - Surface: Contact-sync screen (`contacts/contact-sync-screen.tsx`, new `phone-verify-sheet.tsx`), invite messages (`i18n/invite-ticket-copy.ts`, profile and room link copy), the first-run sentence length card (`LivePhoneDemo/SpeechLengthCard.tsx`), opening a room from the list (`conversation-list.tsx`).
