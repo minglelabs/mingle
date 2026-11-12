@@ -83,7 +83,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "이어폰 마이크",
     microphoneEarphoneDescription: "이어폰 마이크를 쓰면 앱이 내 목소리만 잘 듣고 다른 소리는 거의 인식하지 못합니다",
     earphoneCaptureNoticeTitle: "이어폰이 연결됐어요",
-    earphoneCaptureNoticeBody: "이제 다른 앱 소리가 이어폰으로만 나와서 마이크로는 번역되지 않아요.",
+    earphoneCaptureNoticeBody: "이제 다른 앱 소리가 이어폰으로만 나와서 이대로는 번역되지 않아요.",
   },
   en: {
     label: "Earphone mode",
@@ -117,7 +117,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "Earphone microphone",
     microphoneEarphoneDescription: "With the earphone microphone, the app hears your voice well but barely picks up any other sound",
     earphoneCaptureNoticeTitle: "Earphones connected",
-    earphoneCaptureNoticeBody: "Other apps' sound now plays only in your earphones, so the microphone can no longer translate it.",
+    earphoneCaptureNoticeBody: "Other apps' sound now plays only in your earphones, so it won't be translated as things are.",
   },
   ja: {
     label: "イヤホンモード",
@@ -151,7 +151,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "イヤホンのマイク",
     microphoneEarphoneDescription: "イヤホンのマイクを使うと、自分の声はよく聞き取れますが、ほかの音はほとんど認識できません",
     earphoneCaptureNoticeTitle: "イヤホンが接続されました",
-    earphoneCaptureNoticeBody: "ほかのアプリの音はイヤホンだけで流れるため、マイクでは翻訳できなくなります。",
+    earphoneCaptureNoticeBody: "ほかのアプリの音はイヤホンだけで流れるため、このままでは翻訳されません。",
   },
   "zh-CN": {
     label: "耳机模式",
@@ -185,7 +185,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "耳机麦克风",
     microphoneEarphoneDescription: "使用耳机麦克风时，应用能清楚听到你的声音，但几乎识别不到其他声音",
     earphoneCaptureNoticeTitle: "耳机已连接",
-    earphoneCaptureNoticeBody: "其他应用的声音现在只从耳机播放，麦克风无法再翻译这些声音。",
+    earphoneCaptureNoticeBody: "其他应用的声音现在只从耳机播放，这样下去无法翻译。",
   },
   "zh-TW": {
     label: "耳機模式",
@@ -219,7 +219,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "耳機麥克風",
     microphoneEarphoneDescription: "使用耳機麥克風時，應用程式能清楚聽到你的聲音，但幾乎辨識不到其他聲音",
     earphoneCaptureNoticeTitle: "耳機已連接",
-    earphoneCaptureNoticeBody: "其他應用程式的聲音現在只從耳機播放，麥克風無法再翻譯這些聲音。",
+    earphoneCaptureNoticeBody: "其他應用程式的聲音現在只從耳機播放，這樣下去無法翻譯。",
   },
   fr: {
     label: "Mode écouteurs",
@@ -253,7 +253,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "Micro des écouteurs",
     microphoneEarphoneDescription: "Avec le micro des écouteurs, l'app entend bien votre voix mais presque aucun autre son",
     earphoneCaptureNoticeTitle: "Écouteurs connectés",
-    earphoneCaptureNoticeBody: "Le son des autres apps ne sort plus que dans vos écouteurs : le micro ne peut plus le traduire.",
+    earphoneCaptureNoticeBody: "Le son des autres apps ne sort plus que dans vos écouteurs : en l'état, il ne sera pas traduit.",
   },
   de: {
     label: "Kopfhörermodus",
@@ -287,7 +287,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "Kopfhörer-Mikrofon",
     microphoneEarphoneDescription: "Mit dem Kopfhörer-Mikrofon hört die App deine Stimme gut, andere Geräusche aber kaum",
     earphoneCaptureNoticeTitle: "Kopfhörer verbunden",
-    earphoneCaptureNoticeBody: "Der Ton anderer Apps läuft jetzt nur noch über deine Kopfhörer, das Mikrofon kann ihn nicht mehr übersetzen.",
+    earphoneCaptureNoticeBody: "Der Ton anderer Apps läuft jetzt nur noch über deine Kopfhörer und wird so nicht übersetzt.",
   },
   es: {
     label: "Modo auriculares",
@@ -321,7 +321,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "Micrófono de los auriculares",
     microphoneEarphoneDescription: "Con el micrófono de los auriculares, la app oye bien tu voz pero casi ningún otro sonido",
     earphoneCaptureNoticeTitle: "Auriculares conectados",
-    earphoneCaptureNoticeBody: "El sonido de otras apps ahora solo suena en tus auriculares, así que el micrófono ya no puede traducirlo.",
+    earphoneCaptureNoticeBody: "El sonido de otras apps ahora solo suena en tus auriculares, así que tal como está no se traducirá.",
   },
   pt: {
     label: "Modo fones de ouvido",
@@ -355,7 +355,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "Microfone do fone",
     microphoneEarphoneDescription: "Com o microfone do fone, o app ouve bem a sua voz, mas quase nenhum outro som",
     earphoneCaptureNoticeTitle: "Fone conectado",
-    earphoneCaptureNoticeBody: "O som de outros apps agora toca só no fone, então o microfone não consegue mais traduzi-lo.",
+    earphoneCaptureNoticeBody: "O som de outros apps agora toca só no fone, então assim ele não será traduzido.",
   },
   it: {
     label: "Modalità auricolari",
@@ -389,7 +389,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "Microfono degli auricolari",
     microphoneEarphoneDescription: "Con il microfono degli auricolari l'app sente bene la tua voce ma quasi nessun altro suono",
     earphoneCaptureNoticeTitle: "Auricolari collegati",
-    earphoneCaptureNoticeBody: "Ora il suono delle altre app esce solo dagli auricolari, quindi il microfono non può più tradurlo.",
+    earphoneCaptureNoticeBody: "Ora il suono delle altre app esce solo dagli auricolari, quindi così non verrà tradotto.",
   },
   ru: {
     label: "Режим наушников",
@@ -423,7 +423,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "Микрофон наушников",
     microphoneEarphoneDescription: "С микрофоном наушников приложение хорошо слышит ваш голос, но почти не распознаёт другие звуки",
     earphoneCaptureNoticeTitle: "Наушники подключены",
-    earphoneCaptureNoticeBody: "Звук других приложений теперь идёт только в наушники, и микрофон больше не может его перевести.",
+    earphoneCaptureNoticeBody: "Звук других приложений теперь идёт только в наушники, и в таком виде он не будет переведён.",
   },
   ar: {
     label: "وضع السماعات",
@@ -457,7 +457,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "ميكروفون السماعات",
     microphoneEarphoneDescription: "مع ميكروفون السماعات يسمع التطبيق صوتك جيدًا لكنه بالكاد يلتقط أي صوت آخر",
     earphoneCaptureNoticeTitle: "تم توصيل السماعات",
-    earphoneCaptureNoticeBody: "أصبح صوت التطبيقات الأخرى يُشغَّل في السماعات فقط، لذا لم يعد الميكروفون قادرًا على ترجمته.",
+    earphoneCaptureNoticeBody: "أصبح صوت التطبيقات الأخرى يُشغَّل في السماعات فقط، لذا لن تتم ترجمته بهذا الوضع.",
   },
   hi: {
     label: "ईयरफ़ोन मोड",
@@ -491,7 +491,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "ईयरफ़ोन का माइक्रोफ़ोन",
     microphoneEarphoneDescription: "ईयरफ़ोन के माइक्रोफ़ोन से ऐप आपकी आवाज़ अच्छी तरह सुनता है, पर दूसरी आवाज़ें लगभग नहीं पकड़ता",
     earphoneCaptureNoticeTitle: "ईयरफ़ोन जुड़ गए",
-    earphoneCaptureNoticeBody: "अब दूसरे ऐप की आवाज़ सिर्फ़ ईयरफ़ोन में चलती है, इसलिए माइक्रोफ़ोन उसका अनुवाद नहीं कर सकता।",
+    earphoneCaptureNoticeBody: "अब दूसरे ऐप की आवाज़ सिर्फ़ ईयरफ़ोन में चलती है, इसलिए ऐसे में उसका अनुवाद नहीं होगा।",
   },
   th: {
     label: "โหมดหูฟัง",
@@ -525,7 +525,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "ไมโครโฟนของหูฟัง",
     microphoneEarphoneDescription: "ถ้าใช้ไมโครโฟนของหูฟัง แอปจะได้ยินเสียงของคุณชัด แต่แทบไม่ได้ยินเสียงอื่นเลย",
     earphoneCaptureNoticeTitle: "เชื่อมต่อหูฟังแล้ว",
-    earphoneCaptureNoticeBody: "ตอนนี้เสียงจากแอปอื่นดังเฉพาะในหูฟัง ไมโครโฟนจึงแปลเสียงนั้นไม่ได้อีก",
+    earphoneCaptureNoticeBody: "ตอนนี้เสียงจากแอปอื่นดังเฉพาะในหูฟัง ถ้าเป็นแบบนี้จะไม่ถูกแปล",
   },
   vi: {
     label: "Chế độ tai nghe",
@@ -559,7 +559,7 @@ const EARPHONE_MODE_COPY_BY_LOCALE = {
     microphoneEarphoneLabel: "Micrô tai nghe",
     microphoneEarphoneDescription: "Với micrô tai nghe, ứng dụng nghe rõ giọng bạn nhưng gần như không nhận ra âm thanh khác",
     earphoneCaptureNoticeTitle: "Đã kết nối tai nghe",
-    earphoneCaptureNoticeBody: "Âm thanh của ứng dụng khác giờ chỉ phát trong tai nghe nên micrô không thể dịch nữa.",
+    earphoneCaptureNoticeBody: "Âm thanh của ứng dụng khác giờ chỉ phát trong tai nghe nên cứ thế này sẽ không được dịch.",
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoEarphoneModeCopy>;
 
