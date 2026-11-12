@@ -782,6 +782,14 @@ const CHINESE_VARIANT_SCRIPT_NOTES = {
 
 const CHINESE_VARIANT_GLOSSARY_LINE = `Chinese language codes: zh-CN = ${CHINESE_VARIANT_SCRIPT_NOTES['zh-CN']}; zh-TW = ${CHINESE_VARIANT_SCRIPT_NOTES['zh-TW']}. zh-CN and zh-TW are different targets.`
 
+/**
+ * The recognizer sometimes ends a bubble in the middle of a sentence ("..., and
+ * I'm also.") and the rest opens the next bubble ("One of these people that
+ * I, ..."). The previous bubble's translation is already out, so the next one
+ * has to carry the sentence's meaning.
+ */
+const CONTINUED_SENTENCE_RULE = 'The recognizer sometimes splits one sentence across bubbles, and a period ending the previous one may be wrong. First read the end of the previous bubble and the current text together: if they make one sentence ("...and I\'m also." + "one of these people who..." = "...and I\'m also one of these people who..."), translate the current text as the rest of that sentence, so the meaning of the whole sentence comes through even if the previous translation got it wrong. Never repeat what the previous translation already says.'
+
 const SOURCE_LANGUAGE_CODE_RULE = 'Use one of the requested codes when it matches; for Chinese always answer zh-CN or zh-TW, never zh.'
 
 function describeChineseVariantScript(language: string): string | null {
@@ -827,6 +835,7 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
       formatSingleTurnForPromptWithOptions('Immediate previous turn', immediatePreviousTurn, {
         includeSourceLanguage,
       }),
+      CONTINUED_SENTENCE_RULE,
     )
   }
 
@@ -890,6 +899,7 @@ function buildBubbleTailFillPrompt(
       ...ctx.targetLanguages
         .filter((language) => Boolean(tail.previousTranslations?.[language]))
         .map((language) => `  ${language}: "${tail.previousTranslations?.[language]}"`),
+      CONTINUED_SENTENCE_RULE,
     )
   }
   userPromptLines.push(`blank: "${ctx.text}"`)

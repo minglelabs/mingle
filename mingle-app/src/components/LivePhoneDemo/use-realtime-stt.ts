@@ -4632,14 +4632,22 @@ export default function useRealtimeSTT({
 
   const buildRecentTurnContextPayload = useCallback((excludeUtteranceId?: string): RecentTurnContextPayload[] => {
     const now = Date.now()
-    const windowStart = now - RECENT_TURN_CONTEXT_WINDOW_MS
+    // Age is measured from when a turn ended to when the current bubble
+    // started: a long previous bubble that ran straight into this one is the
+    // closest context there is, however long this bubble then takes.
+    const lastFinished = lastFinishedBubbleRef.current
+    const currentStartMs = excludeUtteranceId ? inferUtteranceCreatedAtMs({ id: excludeUtteranceId }) : null
+    const referenceMs = currentStartMs !== null && currentStartMs <= now ? currentStartMs : now
     const recentTurns: RecentTurnContextPayload[] = []
 
     for (const utterance of utterancesRef.current) {
       if (utterance.image) continue
       if (excludeUtteranceId && utterance.id === excludeUtteranceId) continue
       const occurredAtMs = inferUtteranceCreatedAtMs(utterance)
-      if (occurredAtMs === null || occurredAtMs < windowStart || occurredAtMs > now) continue
+      if (occurredAtMs === null || occurredAtMs > now) continue
+      const endedAtMs = utterance.id === lastFinished?.utteranceId ? lastFinished.finishedAtMs : occurredAtMs
+      const ageMs = Math.max(0, referenceMs - endedAtMs)
+      if (ageMs > RECENT_TURN_CONTEXT_WINDOW_MS) continue
 
       const sourceText = utterance.originalText.trim()
       if (!sourceText) continue
@@ -4657,7 +4665,7 @@ export default function useRealtimeSTT({
         sourceText,
         translations,
         occurredAtMs,
-        ageMs: Math.max(0, now - occurredAtMs),
+        ageMs,
         isFinalized,
       })
     }

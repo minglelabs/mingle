@@ -278,6 +278,31 @@ describe('translate-texts', () => {
       expect(result.userPrompt).toContain('is_final=yes')
     })
 
+    it('asks to continue a sentence the previous bubble left unfinished, only when there is a previous bubble', async () => {
+      const { buildPrompt } = await import('./translate-texts')
+      const base = {
+        text: 'One of these people that I, I don\'t really care about being right.',
+        sourceLanguage: 'en',
+        targetLanguages: ['ko'],
+        provider: 'gemini' as const,
+        shouldRedetectSourceLanguage: false,
+        isFinal: true,
+      }
+      const previous = { sourceLanguage: 'en', sourceText: 'but, um, and I\'m also.', translations: { ko: '하지만, 음, 저도 그래요.' }, ageMs: 500 }
+      expect(buildPrompt({ ...base, immediatePreviousTurn: previous }).userPrompt).toContain('splits one sentence across bubbles')
+      expect(buildPrompt({ ...base, shouldRedetectSourceLanguage: true, immediatePreviousTurn: previous }).userPrompt).toContain('splits one sentence across bubbles')
+      expect(buildPrompt({ ...base, immediatePreviousTurn: null }).userPrompt).not.toContain('splits one sentence across bubbles')
+
+      const tail = buildPrompt({
+        ...base,
+        isFinal: false,
+        immediatePreviousTurn: null,
+        bubbleTail: { fixedSource: '', fixedTranslations: {}, previousSource: 'but, um, and I\'m also.', previousTranslations: { ko: '하지만, 음, 저도 그래요.' } },
+      })
+      expect(tail.userPrompt).toContain('previous bubble ended with')
+      expect(tail.userPrompt).toContain('splits one sentence across bubbles')
+    })
+
     it('builds redetection prompt when enabled', async () => {
       const { buildPrompt } = await import('./translate-texts')
       const result = buildPrompt({
