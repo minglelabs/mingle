@@ -37,7 +37,8 @@ import {
   DEFAULT_BUBBLE_DISPLAY_MODE,
   type LivePhoneDemoBubbleDisplayMode,
 } from './live-phone-demo.bubble-display'
-import { useMonotonicBubbleWidth } from './live-phone-demo.bubble-width'
+import { useMonotonicBubbleSize } from './live-phone-demo.bubble-width'
+import { holdLastShownTranslation } from './live-phone-demo.translation-hold'
 import ChatAccountBadge from './ChatAccountBadge'
 import { readAccountBadgeKind } from './chat-account-badge.logic'
 import type { AccountBadgeKind } from '@/lib/account-badge'
@@ -51,6 +52,8 @@ import {
 
 const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.15
 const MESSAGE_BUBBLE_MAX_WIDTH = '100%'
+// The widest label a same-day relative time can show (the clock face is English everywhere).
+const CHAT_BUBBLE_META_WIDEST_TIME = '59m ago'
 
 /** 버블 텍스트 끝에 표시되는 음파 재생 중 표시 */
 const BUBBLE_DOUBLE_TAP_MAX_DELAY_MS = 300
@@ -934,9 +937,9 @@ function ChatBubble({
   // The two layouts are separate elements that overlap while they cross-fade.
   const expandedBubbleRef = useRef<HTMLDivElement | null>(null)
   const collapsedBubbleRef = useRef<HTMLDivElement | null>(null)
-  useMonotonicBubbleWidth(
+  useMonotonicBubbleSize(
     utterance.id,
-    bubbleTextClassName,
+    `${bubbleTextClassName}|${isBubbleExpanded ? 'expanded' : 'collapsed'}`,
     isBubbleExpanded ? expandedBubbleRef : collapsedBubbleRef,
   )
   // Keep target language list fixed per utterance so language toggles
@@ -949,7 +952,13 @@ function ChatBubble({
   )
   const translationEntries = targetLangs
     .map((lang) => {
-      const { text, finalized } = findDisplayTranslation(utterance, lang, displayLanguageResolver)
+      const found = findDisplayTranslation(utterance, lang, displayLanguageResolver)
+      // A translation already on screen never blanks back to "…" while the
+      // message hands over from live to stored (or a late snapshot without it
+      // lands): the last text stays, greyed as interim, until a new one arrives.
+      const held = isRecalled ? null : holdLastShownTranslation(utterance.id, displayLanguageKey(lang), found.text)
+      const text = held ?? found.text
+      const finalized = held ? false : found.finalized
       // An interim translation that is all fixed already reads like a final one.
       const fixed = findLanguageRecordValue(utterance.translationFixed, lang, displayLanguageResolver)?.trim() || ''
       const isFixed = Boolean(fixed) && fixed === text.trim()
@@ -1447,6 +1456,18 @@ function ChatBubble({
     >
       {bubbleReadReceipt}
       {bubbleTimestamp}
+      {/* Holds the column at the widest relative time ("59m ago"), so the
+          bubble beside it keeps its width (and its line breaks) while the
+          time ticks from "9s ago" to "10s ago" to "1m ago". */}
+      {hasTimestamp && (
+        <span
+          aria-hidden="true"
+          data-chat-bubble-meta-sizer
+          className="invisible h-0 overflow-hidden whitespace-nowrap text-[10px] font-medium tabular-nums"
+        >
+          {CHAT_BUBBLE_META_WIDEST_TIME}
+        </span>
+      )}
     </div>
   )
 

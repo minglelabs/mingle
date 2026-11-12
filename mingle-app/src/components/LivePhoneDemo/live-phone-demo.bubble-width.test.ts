@@ -1,39 +1,44 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
-  forgetAllBubbleWidthFloors,
+  forgetAllBubbleSizeFloors,
   isBubbleWidthFloorTooWide,
-  readBubbleWidthFloor,
-  rememberBubbleWidthFloor,
+  readBubbleSizeFloor,
+  rememberBubbleSizeFloor,
 } from './live-phone-demo.bubble-width'
 
-describe('bubble width floor', () => {
-  beforeEach(() => forgetAllBubbleWidthFloors())
+describe('bubble size floor', () => {
+  beforeEach(() => forgetAllBubbleSizeFloors())
 
   it('keeps the widest width a message has reached', () => {
-    rememberBubbleWidthFloor('m1', 'text-sm|390', 180)
-    expect(readBubbleWidthFloor('m1', 'text-sm|390')).toBe(180)
-    expect(readBubbleWidthFloor('m2', 'text-sm|390')).toBe(0)
+    rememberBubbleSizeFloor('m1', 'text-sm|390', { width: 180, height: 90 })
+    expect(readBubbleSizeFloor('m1', 'text-sm|390').width).toBe(180)
+    expect(readBubbleSizeFloor('m2', 'text-sm|390').width).toBe(0)
+  })
+
+  it('keeps the tallest height too, so a shorter rewrite does not shrink the bubble', () => {
+    rememberBubbleSizeFloor('m1', 'k', { width: 180, height: 64 })
+    expect(readBubbleSizeFloor('m1', 'k')).toEqual({ width: 180, height: 64 })
   })
 
   it('starts over when the text size or the viewport width changed', () => {
-    rememberBubbleWidthFloor('m1', 'text-sm|390', 180)
-    expect(readBubbleWidthFloor('m1', 'text-lg|390')).toBe(0)
-    expect(readBubbleWidthFloor('m1', 'text-sm|844')).toBe(0)
+    rememberBubbleSizeFloor('m1', 'text-sm|390', { width: 180, height: 90 })
+    expect(readBubbleSizeFloor('m1', 'text-lg|390').width).toBe(0)
+    expect(readBubbleSizeFloor('m1', 'text-sm|844').width).toBe(0)
   })
 
   it('forgets a message whose floor was dropped', () => {
-    rememberBubbleWidthFloor('m1', 'text-sm|390', 180)
-    rememberBubbleWidthFloor('m1', 'text-sm|390', 0)
-    expect(readBubbleWidthFloor('m1', 'text-sm|390')).toBe(0)
+    rememberBubbleSizeFloor('m1', 'text-sm|390', { width: 180, height: 90 })
+    rememberBubbleSizeFloor('m1', 'text-sm|390', { width: 0, height: 0 })
+    expect(readBubbleSizeFloor('m1', 'text-sm|390').width).toBe(0)
   })
 
   it('forgets the message untouched for the longest once too many are remembered', () => {
-    for (let index = 0; index < 400; index++) rememberBubbleWidthFloor(`m${index}`, 'k', 100)
-    rememberBubbleWidthFloor('m0', 'k', 120)
-    rememberBubbleWidthFloor('extra', 'k', 100)
-    expect(readBubbleWidthFloor('m0', 'k')).toBe(120)
-    expect(readBubbleWidthFloor('m1', 'k')).toBe(0)
-    expect(readBubbleWidthFloor('extra', 'k')).toBe(100)
+    for (let index = 0; index < 400; index++) rememberBubbleSizeFloor(`m${index}`, 'k', { width: 100, height: 50 })
+    rememberBubbleSizeFloor('m0', 'k', { width: 120, height: 60 })
+    rememberBubbleSizeFloor('extra', 'k', { width: 100, height: 50 })
+    expect(readBubbleSizeFloor('m0', 'k').width).toBe(120)
+    expect(readBubbleSizeFloor('m1', 'k').width).toBe(0)
+    expect(readBubbleSizeFloor('extra', 'k').width).toBe(100)
   })
 
   it('gives way only when the bubble no longer fits its slot', () => {
