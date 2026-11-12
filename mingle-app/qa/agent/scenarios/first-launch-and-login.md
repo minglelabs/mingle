@@ -54,6 +54,8 @@ onboarding starts when the Chats tab is opened (owner: intended, 2026-10-31).
   not choose (the 2026-10-15 run saw a silent Keychain sign-in; record whether it still happens).
 - No permission prompt appears before the user does something that needs it (T22).
 - The login screen has no ad banner (T11) and no wrong-colour safe-area bands.
+- A fresh install shows no `최근 사용` / `Last used` badge on any sign-in button (the badge and sign-in failures are
+  covered by `sign-in-error-and-account-switch`).
 - Labels fit, and buttons are not clipped or wrapped awkwardly (T16).
 
 ## Signals
