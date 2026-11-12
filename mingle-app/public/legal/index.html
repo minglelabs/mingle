@@ -1012,6 +1012,31 @@
         .hero-phone { width: 44%; }
         .section-heading h2 { font-size: 2rem; }
       }
+
+      /* Comparison tables (the same tables as the two comparison blog posts). */
+      #compare .compare-block { margin-top: 40px; }
+      #compare .compare-block h3 { font-size: 1.3rem; font-weight: 860; margin: 0 0 14px; }
+      #compare .comparison-shell { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: #fffdf8; }
+      #compare table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      #compare [data-compare-slug="ai-translators-comparison"] table { min-width: 2620px; }
+      #compare [data-compare-slug="hashchat-social-network"] table { min-width: 1500px; }
+      #compare th, #compare td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 16px 18px; text-align: left; vertical-align: top; line-height: 1.5; font-size: 0.9rem; }
+      #compare th:first-child, #compare td:first-child { width: 170px; position: sticky; left: 0; z-index: 1; background: #fffdf8; }
+      #compare th { background: #f7f0e4; color: rgba(29, 33, 29, 0.82); font-size: 0.74rem; font-weight: 850; text-transform: uppercase; }
+      #compare th:first-child { background: #f7f0e4; z-index: 2; }
+      #compare td { color: rgba(29, 33, 29, 0.77); }
+      #compare tbody tr.is-featured td { background: #eef3ee; }
+      #compare th:last-child, #compare td:last-child { border-right: 0; }
+      #compare tbody tr:last-child td { border-bottom: 0; }
+      #compare .tool-name { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 850; }
+      #compare .tool-name img { width: 30px; height: 30px; object-fit: contain; border-radius: 8px; background: #fff; box-shadow: 0 4px 14px rgba(29, 33, 29, 0.1); }
+      #compare .status { font-weight: 820; }
+      #compare .status-yes { color: #19695a; }
+      #compare .status-partial { color: #2f5fa8; }
+      #compare .status-no { color: #b4475b; }
+      #compare .table-note { margin-top: 12px; color: rgba(29, 33, 29, 0.58); font-size: 0.9rem; line-height: 1.7; }
+      #compare .compare-more { margin-top: 10px; font-weight: 800; }
+      #compare .compare-more a { color: var(--green); }
     </style>
   </head>
   <body>
@@ -1158,6 +1183,318 @@
             <blockquote class="quote" data-i18n="translate.q1">“It&#x27;s so easy. The translation just keeps playing like subtitles.”</blockquote>
             <blockquote class="quote" data-i18n="translate.q2">“I speak Russian, you speak Korean, and we still understand each other.”</blockquote>
             <blockquote class="quote" data-i18n="translate.q3">“It understands me much better than Apple Translate.”</blockquote>
+          </div>
+        </div>
+      </section>
+
+
+      <section class="section section--paper-deep" id="compare" aria-labelledby="compare-title">
+        <div class="section-inner">
+          <div class="section-heading">
+            <p class="eyebrow" data-compare-copy="0">Compared</p>
+            <h2 id="compare-title" data-compare-copy="1">HashChat next to the apps you already use</h2>
+          </div>
+          <div class="compare-block">
+            <h3 data-compare-copy="2">Translator apps</h3>
+            <div class="compare-slot" data-compare-slug="ai-translators-comparison">
+<div aria-label="AI translator comparison table" class="comparison-shell" tabindex="0">
+<table>
+<thead>
+<tr>
+<th>Translator</th>
+<th>Price</th>
+<th>Platforms</th>
+<th>Supported languages</th>
+<th>AI performance</th>
+<th>Continuous note-style translation</th>
+<th>Live captions + transcript</th>
+<th>Messenger-like sentence turns</th>
+<th>Realtime speaker diarization</th>
+<th>Messenger + voice chat app</th>
+<th>3+ languages at once</th>
+<th>Auto detect + switching</th>
+<th>Background translation</th>
+<th>External app audio capture</th>
+</tr>
+</thead>
+<tbody>
+<tr class="is-featured">
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/mingle-icon.png"/>HashChat</div>
+</td>
+<td>Free consumer app.</td>
+<td>iOS, Android, and Web.</td>
+<td>62 translation languages and 61 selectable speech languages in the current app catalog.</td>
+<td><span class="status status-yes">Good.</span> Strong live speech AI for continuous multilingual rooms, speaker turns, and auto-switching.</td>
+<td><span class="status status-yes">Yes.</span> Designed for uninterrupted long-form conversation flow.</td>
+<td><span class="status status-yes">Yes.</span> Shows live captions and keeps translated transcripts.</td>
+<td><span class="status status-yes">Yes.</span> Speech is split into conversation turns in a room-style timeline.</td>
+<td><span class="status status-yes">Yes.</span> Separates speakers and keeps live turns readable in real time.</td>
+<td><span class="status status-yes">Yes.</span> Can be used directly as a messenger and voice chat app.</td>
+<td><span class="status status-yes">Yes.</span> Built for all-direction translation across 3+ languages.</td>
+<td><span class="status status-yes">Yes.</span> Detects the spoken language and switches without manual speaker changes.</td>
+<td><span class="status status-yes">Yes.</span> Keeps translating during app switches or lock screen sessions.</td>
+<td><span class="status status-yes">Yes.</span> Captures other app audio played through speaker while HashChat is listening.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-google-translate.jpg"/>Google Translate</div>
+</td>
+<td>Free consumer app.</td>
+<td>iOS, Android, and Web.</td>
+<td>108 typed text languages, 70 conversation languages, and 8 transcribe languages on the Google Play listing.</td>
+<td><span class="status status-yes">Good.</span> Strong general-purpose translation AI across text, camera, speech, and detection workflows.</td>
+<td><span class="status status-partial">Partial.</span> Transcribe supports near real-time continuous translation in fewer languages.</td>
+<td><span class="status status-partial">Partial.</span> Transcribe is useful, but feature coverage is narrower than text translation.</td>
+<td><span class="status status-partial">Partial.</span> Conversation and transcribe views show chunks, not a persistent messenger room.</td>
+<td><span class="status status-no">No.</span> The consumer Translate app is not a real-time speaker diarization tool.</td>
+<td><span class="status status-no">No.</span> It is a translation utility, not a messenger or voice chat app.</td>
+<td><span class="status status-no">No.</span> Conversation mode is built around bilingual conversations.</td>
+<td><span class="status status-yes">Yes.</span> Strong automatic detection for text and bilingual conversation flows.</td>
+<td><span class="status status-no">No.</span> It is mainly an active foreground translation experience.</td>
+<td><span class="status status-no">No.</span> It does not operate as a general external app audio capture layer.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-apple-translate.jpg"/>Apple Translate</div>
+</td>
+<td>Free, built into iOS and iPadOS.</td>
+<td>iOS, iPadOS, and macOS. No Android or standalone web app.</td>
+<td>21 Translate app language entries; Apple Intelligence Live Translation has a narrower language list.</td>
+<td><span class="status status-partial">Standard.</span> Useful inside supported Apple surfaces, but coverage and flexibility are narrower.</td>
+<td><span class="status status-no">No.</span> Not a general continuous note-style translator.</td>
+<td><span class="status status-partial">Partial.</span> Phone and FaceTime can show translated captions on supported devices and languages.</td>
+<td><span class="status status-partial">Partial.</span> Translate and Messages feel conversation-like, but mostly inside Apple surfaces.</td>
+<td><span class="status status-no">No.</span> Not a standalone real-time speaker diarization workflow.</td>
+<td><span class="status status-no">No.</span> Translation runs inside Apple surfaces; the translator is not its own messenger or voice chat app.</td>
+<td><span class="status status-no">No.</span> Live Translation is positioned for one-to-one messages, calls, and nearby conversations.</td>
+<td><span class="status status-partial">Partial.</span> Works well after languages are selected or inside supported Apple apps.</td>
+<td><span class="status status-partial">Partial.</span> Supported inside Phone, FaceTime, Messages, and AirPods flows, not as a universal background translator.</td>
+<td><span class="status status-no">No.</span> No general-purpose capture of audio from arbitrary third-party apps.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-microsoft-translator.png"/>Microsoft Translator</div>
+</td>
+<td>Free consumer app.</td>
+<td>iOS, Android, and Web conversation site.</td>
+<td>Over 100 languages in the app listing; feature support varies by text, speech, image, and conversation.</td>
+<td><span class="status status-partial">Standard.</span> Reliable hosted-session translation, but the consumer AI flow is less flexible for passive listening.</td>
+<td><span class="status status-partial">Partial.</span> Strong for hosted group sessions, but not a passive note-style listener for every app.</td>
+<td><span class="status status-yes">Yes.</span> Group conversations include transcripts and captions.</td>
+<td><span class="status status-yes">Yes.</span> Group conversations include transcripts and navigation aids.</td>
+<td><span class="status status-partial">Partial.</span> Participants are separated when each joins a hosted conversation from their own device.</td>
+<td><span class="status status-no">No.</span> It hosts translation sessions, but is not a general messenger or voice chat app.</td>
+<td><span class="status status-yes">Yes.</span> Multi-device conversations can support multilingual groups.</td>
+<td><span class="status status-partial">Partial.</span> Participants choose their language; comments translate into each user's language.</td>
+<td><span class="status status-no">No.</span> The app is not designed as a persistent background microphone translator.</td>
+<td><span class="status status-no">No.</span> Microsoft states external media sources and files are not supported.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-papago.jpg"/>Papago</div>
+</td>
+<td>Free consumer app; NAVER Cloud Papago APIs are paid for business use.</td>
+<td>iOS, Android, and Web.</td>
+<td>13 core text translation languages in NAVER Cloud docs; app and detection features have different coverage.</td>
+<td><span class="status status-partial">Standard.</span> Practical Korean-centered translation, but live AI conversation depth is narrower.</td>
+<td><span class="status status-no">No.</span> Conversation translation is not built as a continuous transcript notebook.</td>
+<td><span class="status status-no">No.</span> Voice and conversation output exists, but not a live caption transcript workflow.</td>
+<td><span class="status status-partial">Partial.</span> One-on-one conversation mode is turn-based.</td>
+<td><span class="status status-no">No.</span> Not built for live speaker diarization across multiple speakers.</td>
+<td><span class="status status-no">No.</span> It is not a messenger or voice chat app.</td>
+<td><span class="status status-no">No.</span> Best suited to two-language travel and Korean-centered use cases.</td>
+<td><span class="status status-partial">Partial.</span> Auto language detection exists for text, but not broad speaker auto-switching.</td>
+<td><span class="status status-no">No.</span> It is primarily used in the foreground.</td>
+<td><span class="status status-no">No.</span> No general external app audio capture workflow.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-deepl.png"/>DeepL</div>
+</td>
+<td>Free tier; Pro, API, and Voice plans are paid and vary by region and plan.</td>
+<td>iOS, Android, Web, desktop apps, and browser extensions.</td>
+<td>30 core Translator languages plus additional next-generation languages; Voice language coverage is narrower.</td>
+<td><span class="status status-yes">Good.</span> Strong translation quality for written content and dedicated Voice meeting products.</td>
+<td><span class="status status-partial">Partial.</span> DeepL Voice can follow meetings, but it is a separate product path.</td>
+<td><span class="status status-partial">Partial.</span> DeepL Voice provides translated captions for meetings and conversations.</td>
+<td><span class="status status-partial">Partial.</span> DeepL Voice supports meeting captions; the main Translator is not a messenger timeline.</td>
+<td><span class="status status-partial">Partial.</span> Meeting products are speaker-session oriented; the mobile Translator is not a live diarization app.</td>
+<td><span class="status status-no">No.</span> DeepL is not a messenger or voice chat app.</td>
+<td><span class="status status-partial">Partial.</span> Available in meeting/conversation products, not the standard mobile translator flow.</td>
+<td><span class="status status-partial">Partial.</span> Strong text detection; live speech workflows depend on DeepL Voice setup.</td>
+<td><span class="status status-no">No.</span> Not a general mobile background translator.</td>
+<td><span class="status status-no">No.</span> Not designed to capture arbitrary third-party app audio from a phone.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-felo.jpg"/>Felo Translator</div>
+</td>
+<td>About $2/hour; public web pricing lists 120 minutes at $3.90.</td>
+<td>iOS and Android, with web account and pricing pages.</td>
+<td>15 voice translation languages on the public product page.</td>
+<td><span class="status status-partial">Standard.</span> Capable real-time voice AI, but narrower public language and workflow coverage.</td>
+<td><span class="status status-partial">Partial.</span> Built for real-time recording, transcription, translation, and saved history, but not a room-style notebook.</td>
+<td><span class="status status-yes">Yes.</span> Provides real-time speech-to-text translation and subtitles as you speak.</td>
+<td><span class="status status-yes">Yes.</span> Speech output is separated into sentence-level transcript turns.</td>
+<td><span class="status status-no">No.</span> Public materials emphasize transcription and translation, not speaker identity diarization.</td>
+<td><span class="status status-no">No.</span> It is not a messenger or voice chat app.</td>
+<td><span class="status status-partial">Partial.</span> Voice translation supports multiple languages, but not all-direction 3+ live rooms.</td>
+<td><span class="status status-yes">Yes.</span> The app listing says it automatically detects the languages spoken by both parties.</td>
+<td><span class="status status-no">No.</span> Best treated as a foreground recording and translation workflow.</td>
+<td><span class="status status-no">No.</span> Not positioned as an external app audio capture layer.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-transync.jpg"/>Transync</div>
+</td>
+<td>Free 40-minute trial; Personal Premium is $8.99/month for 10 hours, with time cards from $0.70/hour.</td>
+<td>iOS, Android, Web, Windows, and macOS.</td>
+<td>60+ translation languages.</td>
+<td><span class="status status-yes">Good.</span> Strong meeting-focused speech AI for live captions, notes, and language distinction.</td>
+<td><span class="status status-yes">Yes.</span> Built for continuous real-time meeting and speech translation.</td>
+<td><span class="status status-yes">Yes.</span> Provides real-time translated subtitles and AI-generated meeting minutes.</td>
+<td><span class="status status-no">No.</span> Shows live transcript and caption output, not messenger-like sentence turns.</td>
+<td><span class="status status-no">No.</span> Public docs emphasize automatic language distinction, not speaker identity diarization.</td>
+<td><span class="status status-no">No.</span> It integrates with meeting tools, but is not its own messenger or voice chat app.</td>
+<td><span class="status status-yes">Yes.</span> Designed for multilingual meetings and real-time interpretation workflows.</td>
+<td><span class="status status-yes">Yes.</span> Automatically distinguishes the speaker's language without button switching.</td>
+<td><span class="status status-partial">Partial.</span> Desktop and meeting workflows can run alongside meeting apps, but it is not a general mobile background translator.</td>
+<td><span class="status status-no">No.</span> Meeting integrations exist, but it is not an external app audio capture layer.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="table-note">
+              For voice products, "supported languages" is less useful than feature-specific coverage. A translator may
+              support many text languages while live captions, conversation mode, or transcription covers a smaller set.
+            </p>
+            </div>
+            <p class="compare-more"><a href="/blogs/ai-translators-comparison" data-compare-copy="4">Read the full comparison</a> →</p>
+          </div>
+          <div class="compare-block">
+            <h3 data-compare-copy="3">Messengers and social apps</h3>
+            <div class="compare-slot" data-compare-slug="hashchat-social-network">
+<div aria-label="Social app comparison table" class="comparison-shell" tabindex="0">
+<table>
+<thead>
+<tr>
+<th>App</th>
+<th>Built for</th>
+<th>Social feed + follows</th>
+<th>Posts &amp; comments translated</th>
+<th>Profiles show languages + level</th>
+<th>Voice talk with live interpreting</th>
+<th>Seamless interpreting</th>
+<th>Interprets other apps' audio</th>
+</tr>
+</thead>
+<tbody>
+<tr class="is-featured">
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/mingle-icon.png"/>HashChat</div>
+</td>
+<td>Making friends across languages, no shared language needed.</td>
+<td><span class="status status-yes">Yes.</span> For You and Following feeds, follows, likes, comments, notifications.</td>
+<td><span class="status status-yes">Yes.</span> One tap on any post or comment shows it in your language.</td>
+<td><span class="status status-yes">Yes.</span> Languages spoken, languages wanted, and a 5-step level for each.</td>
+<td><span class="status status-yes">Yes.</span> Voice talk, one-to-one and in groups, interpreted live as you speak.</td>
+<td><span class="status status-yes">Yes.</span> Just talk. HashChat picks up who is speaking and in which language, with no buttons to press.</td>
+<td><span class="status status-yes">Yes.</span> Calls, Discord, or videos playing on speaker are interpreted live.</td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-line.png"/>LINE</div>
+</td>
+<td>Everyday messaging, popular in Japan, Taiwan, and Thailand.</td>
+<td><span class="status status-yes">Yes.</span> LINE VOOM.</td>
+<td><span class="status status-partial">Partial.</span> Through translation bot accounts added to a chat.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-partial">Partial.</span> Free voice calls, not interpreted.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-no">No.</span></td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-wechat.jpg"/>WeChat</div>
+</td>
+<td>Messaging, payments, and services, centred on China.</td>
+<td><span class="status status-partial">Partial.</span> Moments, shared with friends only.</td>
+<td><span class="status status-partial">Partial.</span> Chat messages can be translated; Moments posts cannot.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-partial">Partial.</span> Voice calls are not interpreted; some voice messages can be transcribed and translated.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-no">No.</span></td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><span class="tool-mark" style="background:#25d366">W</span>WhatsApp</div>
+</td>
+<td>Private messaging with your contacts.</td>
+<td><span class="status status-partial">Partial.</span> Status and Channels, no feed of people to follow.</td>
+<td><span class="status status-partial">Partial.</span> Message translation since 2025, in a limited set of languages.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-partial">Partial.</span> Voice calls, not interpreted.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-no">No.</span></td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-hellotalk.png"/>HelloTalk</div>
+</td>
+<td>Language exchange and practice.</td>
+<td><span class="status status-yes">Yes.</span> Moments feed.</td>
+<td><span class="status status-yes">Yes.</span> Built-in translation and corrections.</td>
+<td><span class="status status-yes">Yes.</span> Native and learning languages with levels.</td>
+<td><span class="status status-partial">Partial.</span> Calls and Voicerooms, for practising in the language itself.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-no">No.</span></td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-market-tandem.jpg"/>Tandem</div>
+</td>
+<td>Finding a language exchange partner.</td>
+<td><span class="status status-partial">Partial.</span> Language Clubs and Parties, centred on partner matching.</td>
+<td><span class="status status-partial">Partial.</span> Text translation in chat; unlimited only with Pro.</td>
+<td><span class="status status-yes">Yes.</span> Native and learning languages.</td>
+<td><span class="status status-partial">Partial.</span> Audio and video calls, not interpreted.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-no">No.</span></td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-instagram.png"/>Instagram</div>
+</td>
+<td>Sharing photos and video, mostly with people you know.</td>
+<td><span class="status status-yes">Yes.</span></td>
+<td><span class="status status-yes">Yes.</span> See translation on captions and comments; DM translation since 2025.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-partial">Partial.</span> Voice and video calls, not interpreted.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-no">No.</span></td>
+</tr>
+<tr>
+<td class="tool-cell">
+<div class="tool-name"><img alt="" src="/assets/logo-discord.png"/>Discord</div>
+</td>
+<td>Communities and group voice chat.</td>
+<td><span class="status status-partial">Partial.</span> Servers and channels rather than a personal feed.</td>
+<td><span class="status status-no">No.</span> Needs third-party bots.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-partial">Partial.</span> Voice channels, not interpreted.</td>
+<td><span class="status status-no">No.</span></td>
+<td><span class="status status-no">No.</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="table-note">
+              "Partial" means the feature exists in a narrower form, through add-ons, or behind a paid plan. HashChat
+              voice talk is rolling out in November 2026. Apps update often; check the source links below for the current state.
+            </p>
+            </div>
+            <p class="compare-more"><a href="/blogs/hashchat-social-network" data-compare-copy="4">Read the full comparison</a> →</p>
           </div>
         </div>
       </section>
@@ -2702,6 +3039,39 @@
           }
         }
 
+
+        // Comparison tables: English is in the page for crawlers; other languages take the
+        // same table from that language's blog post.
+        var compareCopy = {"en": ["Compared", "HashChat next to the apps you already use", "Translator apps", "Messengers and social apps", "Read the full comparison"], "ko": ["비교", "지금 쓰는 앱들과 HashChat 비교", "번역기 앱", "메신저·소셜 앱", "전체 비교 글 읽기"], "ja": ["比較", "いま使っているアプリとHashChatを比べる", "翻訳アプリ", "メッセンジャー・SNS", "比較記事をすべて読む"], "zh-CN": ["对比", "HashChat 与你正在用的应用对比", "翻译应用", "聊天与社交应用", "阅读完整对比"], "zh-TW": ["比較", "HashChat 與你正在用的 App 比較", "翻譯 App", "聊天與社群 App", "閱讀完整比較"], "fr": ["Comparatif", "HashChat face aux applis que vous utilisez déjà", "Applis de traduction", "Messageries et réseaux sociaux", "Lire le comparatif complet"], "de": ["Vergleich", "HashChat neben den Apps, die du schon nutzt", "Übersetzer-Apps", "Messenger und soziale Apps", "Den ganzen Vergleich lesen"], "es": ["Comparativa", "HashChat frente a las apps que ya usas", "Apps de traducción", "Mensajería y redes sociales", "Leer la comparativa completa"], "pt": ["Comparação", "HashChat ao lado dos apps que você já usa", "Apps de tradução", "Mensageiros e redes sociais", "Ler a comparação completa"], "it": ["Confronto", "HashChat accanto alle app che usi già", "App di traduzione", "Messaggistica e social", "Leggi il confronto completo"], "ru": ["Сравнение", "HashChat рядом с приложениями, которыми вы уже пользуетесь", "Приложения-переводчики", "Мессенджеры и соцсети", "Читать полное сравнение"], "ar": ["مقارنة", "HashChat مقارنةً بالتطبيقات التي تستخدمها", "تطبيقات الترجمة", "تطبيقات المراسلة والتواصل", "اقرأ المقارنة كاملة"], "hi": ["तुलना", "आप जो ऐप इस्तेमाल करते हैं, उनके साथ HashChat", "अनुवाद ऐप", "मैसेंजर और सोशल ऐप", "पूरी तुलना पढ़ें"], "th": ["เปรียบเทียบ", "HashChat เทียบกับแอปที่คุณใช้อยู่", "แอปแปลภาษา", "แอปแชตและโซเชียล", "อ่านการเปรียบเทียบทั้งหมด"], "vi": ["So sánh", "HashChat so với các ứng dụng bạn đang dùng", "Ứng dụng dịch", "Ứng dụng nhắn tin và mạng xã hội", "Đọc toàn bộ bài so sánh"]};
+        var compareEnglish = {};
+        var compareCache = {};
+        document.querySelectorAll("[data-compare-slug]").forEach(function (slot) {
+          compareEnglish[slot.getAttribute("data-compare-slug")] = slot.innerHTML;
+        });
+        function loadCompareTables(locale) {
+          var copy = compareCopy[locale] || compareCopy.en;
+          document.querySelectorAll("[data-compare-copy]").forEach(function (element) {
+            element.textContent = copy[Number(element.getAttribute("data-compare-copy"))];
+          });
+          var lang = locale.toLowerCase();
+          document.querySelectorAll("[data-compare-slug]").forEach(function (slot) {
+            var slug = slot.getAttribute("data-compare-slug");
+            if (lang === "en") { slot.innerHTML = compareEnglish[slug]; return; }
+            var key = slug + "|" + lang;
+            var fill = function (markup) { if (markup && document.documentElement.lang.toLowerCase() === lang) slot.innerHTML = markup; };
+            if (compareCache[key]) { fill(compareCache[key]); return; }
+            fetch("/blogs/" + slug + "?lang=" + lang).then(function (response) { return response.ok ? response.text() : ""; }).then(function (text) {
+              if (!text) return;
+              var doc = new DOMParser().parseFromString(text, "text/html");
+              var shell = doc.querySelector(".comparison-shell");
+              var note = doc.querySelector(".table-note");
+              if (!shell) return;
+              compareCache[key] = shell.outerHTML + (note ? note.outerHTML : "");
+              fill(compareCache[key]);
+            }).catch(function () {});
+          });
+        }
+
         function applyLocale(locale, options) {
           var resolved = resolveSupportedLocale(locale) || defaultLocale;
           var dictionary = messages[resolved];
@@ -2741,6 +3111,8 @@
             var base = link.getAttribute("href").split("?")[0];
             link.setAttribute("href", blogLocale === "en" ? base : base + "?lang=" + blogLocale);
           });
+
+          loadCompareTables(resolved);
 
           try {
             window.localStorage.setItem(storageKey, resolved);
