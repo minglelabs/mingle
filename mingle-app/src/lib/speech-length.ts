@@ -17,6 +17,19 @@ export const SPEECH_LENGTH_LEVELS = [1, 2, 3, 4, 5, 6] as const
 
 export type SpeechLengthLevel = (typeof SPEECH_LENGTH_LEVELS)[number]
 
+/**
+ * The first-run card offers only the shorter levels: the long ones wait for
+ * several seconds of silence, which a new user takes for the app not working.
+ * All six stay in the room settings.
+ */
+export const SPEECH_LENGTH_FIRST_RUN_LEVELS = [1, 2, 3, 4] as const satisfies readonly SpeechLengthLevel[]
+
+/** The level the first-run card starts on: the current one, or the longest it offers. */
+export function firstRunSpeechLengthLevel(current: SpeechLengthLevel): SpeechLengthLevel {
+  const longest = SPEECH_LENGTH_FIRST_RUN_LEVELS[SPEECH_LENGTH_FIRST_RUN_LEVELS.length - 1]
+  return current > longest ? longest : current
+}
+
 export const DEFAULT_SPEECH_LENGTH_LEVEL: SpeechLengthLevel = 3
 
 /**

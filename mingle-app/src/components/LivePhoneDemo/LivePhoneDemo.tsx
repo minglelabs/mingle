@@ -9368,8 +9368,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             ) : null}
             {speechLengthCardOpen ? (
               <div
-                className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3"
-                style={{ bottom: copyToastBottomOffsetPx }}
+                className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-end justify-center px-3"
+                style={{ bottom: copyToastBottomOffsetPx, paddingTop: nativeChatTopSpacerPx + 12 }}
               >
                 <SpeechLengthCard
                   copy={firstRunCopy}

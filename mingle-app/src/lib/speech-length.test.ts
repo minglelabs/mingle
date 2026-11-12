@@ -8,7 +8,18 @@ import {
   resolveSpeechLengthPreferences,
   SPEECH_LENGTH_CARD_AFTER_BUBBLES,
   shouldShowSpeechLengthCard,
+  SPEECH_LENGTH_FIRST_RUN_LEVELS,
+  firstRunSpeechLengthLevel,
 } from '@/lib/speech-length'
+
+describe('first-run card levels', () => {
+  it('offers only levels 1-4 and starts a longer setting on 4', () => {
+    expect(SPEECH_LENGTH_FIRST_RUN_LEVELS).toEqual([1, 2, 3, 4])
+    expect(firstRunSpeechLengthLevel(3)).toBe(3)
+    expect(firstRunSpeechLengthLevel(4)).toBe(4)
+    expect(firstRunSpeechLengthLevel(6)).toBe(4)
+  })
+})
 
 describe('first-run sentence length card', () => {
   it('waits for a few finished bubbles before asking', () => {

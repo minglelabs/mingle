@@ -2,14 +2,22 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import SpeechLengthScale from "@/components/LivePhoneDemo/SpeechLengthScale";
 import type { FirstRunCopy } from "@/i18n/first-run-copy";
-import { groupSpeechLengthPreview, type SpeechLengthLevel } from "@/lib/speech-length";
+import {
+  SPEECH_LENGTH_FIRST_RUN_LEVELS,
+  firstRunSpeechLengthLevel,
+  groupSpeechLengthPreview,
+  type SpeechLengthLevel,
+} from "@/lib/speech-length";
 
 // One colour per example sentence. A bubble holding several sentences runs
 // from its first sentence's colour to its last, so a merge is visible.
 const PIECE_COLORS = ["#FFD166", "#8FD3FF", "#9BE8B4", "#FFB3C1", "#C9B8FF", "#FFC08A"] as const;
+
+// The example is laid out for this height; a shorter room scales it down whole.
+const PREVIEW_HEIGHT_PX = 252;
 
 const DROP_SPRING = { type: "spring", stiffness: 420, damping: 24, mass: 0.8 } as const;
 
@@ -32,7 +40,11 @@ const TEXT_VARIANTS = {
  * the example above the scale, where the coloured bubbles run together or drip
  * apart like water drops as that level would; "Apply" is what changes the
  * setting (and, if the room is listening, restarts it). The current level
- * starts selected, so the card can also just be closed.
+ * starts selected, so the card can also just be closed. Only levels 1-4 are
+ * offered here; the room settings have all six.
+ *
+ * The card never runs under the room header: its holder stops below the
+ * header, and the example shrinks when the room is short.
  *
  * The drops: an SVG "goo" filter (blur, then a hard alpha threshold) joins
  * shapes that come close, and the original is drawn back on top so the text
@@ -52,8 +64,19 @@ export default function SpeechLengthCard({
   onApply: (level: SpeechLengthLevel) => void;
   onClose: () => void;
 }) {
-  const [picked, setPicked] = useState<SpeechLengthLevel>(selected);
+  const [picked, setPicked] = useState<SpeechLengthLevel>(() => firstRunSpeechLengthLevel(selected));
   const gooId = `speech-length-goo-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const [fit, setFit] = useState(1);
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const measure = () => setFit(Math.min(1, frame.clientHeight / PREVIEW_HEIGHT_PX));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
   const bubbles = useMemo(() => {
     const groups = groupSpeechLengthPreview(picked, copy.lengthPreview);
     return groups.map((bubble, index) => {
@@ -74,7 +97,7 @@ export default function SpeechLengthCard({
       initial={{ opacity: 0, y: 28, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
-      className="pointer-events-auto w-full max-w-[420px] overflow-hidden rounded-[1.75rem] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/5"
+      className="pointer-events-auto flex max-h-full w-full max-w-[420px] flex-col overflow-hidden rounded-[1.75rem] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/5"
     >
       <svg aria-hidden width="0" height="0" className="absolute">
         <defs>
@@ -86,14 +109,20 @@ export default function SpeechLengthCard({
         </defs>
       </svg>
 
-      <div className="relative h-[252px] overflow-hidden bg-gradient-to-b from-slate-50 to-slate-100">
+      <div ref={frameRef} className="relative h-[252px] min-h-[132px] shrink overflow-hidden bg-gradient-to-b from-slate-50 to-slate-100">
       {/* Only the bubbles sit inside the filter: it works on their outline. */}
       <div
         aria-hidden
         data-qa="speech-length-preview"
         data-bubbles={bubbles.length}
-        className="absolute inset-0 flex flex-col items-end justify-center gap-2 px-4"
-        style={{ filter: `url(#${gooId})` }}
+        className="absolute left-0 top-1/2 flex flex-col items-end justify-center gap-2 px-4"
+        style={{
+          filter: `url(#${gooId})`,
+          height: PREVIEW_HEIGHT_PX,
+          width: `${100 / fit}%`,
+          transform: `translateY(-50%) scale(${fit})`,
+          transformOrigin: "left center",
+        }}
       >
         <AnimatePresence initial={false} mode="popLayout">
           {bubbles.map((bubble) => (
@@ -117,7 +146,7 @@ export default function SpeechLengthCard({
       </div>
       </div>
 
-      <div className="px-5 pb-5 pt-4">
+      <div className="shrink-0 px-5 pb-5 pt-4">
         <div className="flex items-start gap-2">
           <p className="min-w-0 flex-1 text-[1.08rem] font-extrabold leading-snug tracking-[-0.01em] text-slate-950">{copy.lengthTitle}</p>
           <button
@@ -131,7 +160,7 @@ export default function SpeechLengthCard({
         </div>
         <p className="mt-1 text-[0.8rem] leading-relaxed text-slate-500">{copy.lengthHint}</p>
         <div className="mt-4">
-          <SpeechLengthScale copy={copy} selected={picked} disabled={disabled} dragToPick onSelect={setPicked} />
+          <SpeechLengthScale copy={copy} selected={picked} disabled={disabled} livePick levels={SPEECH_LENGTH_FIRST_RUN_LEVELS} onSelect={setPicked} />
         </div>
         <button
           type="button"

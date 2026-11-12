@@ -2,6 +2,15 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-13 — First run: the length card offers 1-4, a drag slider, and stays below the header
+
+- Surface: `LivePhoneDemo/SpeechLengthCard.tsx`, `SpeechLengthScale.tsx` (also the room settings), the card's holder in `LivePhoneDemo.tsx`, `lib/speech-length.ts`.
+- Issue 1: The first-run card offered all six levels; 5 and 6 wait three to five seconds of silence, which a new user reads as the app not working.
+- Issue 2: On a short room the card grew past the top of the message area and its top ran under the room header, so it looked as if something was hidden there.
+- Issue 3: "Short" and "Long" under six number buttons did not read as a direction, and the numbers looked like buttons to tap rather than a scale to slide.
+- Resolution: The card offers levels 1-4 (`SPEECH_LENGTH_FIRST_RUN_LEVELS`; a longer current setting starts on 4); the room settings keep 1-6. The card's holder stops below the header (and a top ad banner), and the example scales down whole when the room is short. The scale is a slider: a rail filled up to a round numbered thumb that follows the finger, dots for the stops, a many-small-bubbles icon at the short end and one long bubble at the long end, and `← Short` / `Long →` under them (mirrored in RTL). On the card the example follows the finger; in the room settings the stop the finger lets go on is applied. Arrow keys, Home and End move it.
+- Verification: `speech-length.test.ts`, `tsc`; rendered alone in a browser at 760px and 560px room heights, dragged to 1 (six bubbles) and past the end (stops at 4). Not tried on a device.
+
 ## 2026-11-13 — Sign-in: the button this device last signed in with says "Last used"
 
 - Surface: The app sign-in screen (`mingle-home.tsx`), `lib/last-sign-in-method.ts`, `last-sign-in-method-recorder.tsx` (PR #532).
