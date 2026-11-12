@@ -1455,19 +1455,23 @@ function ChatBubble({
         : `flex-col ${isOwnMessage ? 'items-end' : 'items-start'}`}`}
     >
       {bubbleReadReceipt}
-      {bubbleTimestamp}
-      {/* Holds the column at the widest relative time ("59m ago"), so the
-          bubble beside it keeps its width (and its line breaks) while the
-          time ticks from "9s ago" to "10s ago" to "1m ago". */}
-      {hasTimestamp && (
-        <span
-          aria-hidden="true"
-          data-chat-bubble-meta-sizer
-          className="invisible h-0 overflow-hidden whitespace-nowrap text-[10px] font-medium tabular-nums"
-        >
-          {CHAT_BUBBLE_META_WIDEST_TIME}
-        </span>
-      )}
+      {hasTimestamp && !hasDatedTimestamp ? (
+        // Holds the column at the widest relative time ("59m ago"), so the
+        // bubble beside it keeps its width (and its line breaks) while the
+        // time ticks from "9s ago" to "10s ago" to "1m ago". The sizer shares
+        // the time's grid cell, so it adds no height and no gap. A dated time
+        // no longer ticks and needs none.
+        <div className={`grid ${isOwnMessage ? 'justify-items-end' : 'justify-items-start'}`}>
+          <span
+            aria-hidden="true"
+            data-chat-bubble-meta-sizer
+            className="invisible col-start-1 row-start-1 h-0 overflow-hidden whitespace-nowrap text-[10px] font-medium tabular-nums"
+          >
+            {CHAT_BUBBLE_META_WIDEST_TIME}
+          </span>
+          <div className="col-start-1 row-start-1">{bubbleTimestamp}</div>
+        </div>
+      ) : bubbleTimestamp}
     </div>
   )
 
