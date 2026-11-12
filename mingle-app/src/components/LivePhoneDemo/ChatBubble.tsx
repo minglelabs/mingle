@@ -1258,6 +1258,7 @@ function ChatBubble({
           key="expanded"
           data-chat-bubble-content-switch="expanded"
           layout="position"
+          layoutDependency={isBubbleExpanded}
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 5 }}
@@ -1313,6 +1314,7 @@ function ChatBubble({
           key="collapsed"
           data-chat-bubble-content-switch="collapsed"
           layout="position"
+          layoutDependency={isBubbleExpanded}
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -5 }}
@@ -1387,7 +1389,13 @@ function ChatBubble({
     <motion.div
       key="message"
       data-chat-message-column
+      // Animate only the expand/collapse switch. Measured on every render, a
+      // bubble whose live text grew a line was animated too: framer read the
+      // transcript's follow-scroll as the bubble moving and slid it back over
+      // 0.32s, and eased its new height in by scaling, so every new line
+      // twitched although the scroll itself lands in the same frame.
       layout
+      layoutDependency={isBubbleExpanded}
       transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
       className={isOwnMessage
         ? 'flex min-w-0 max-w-full flex-col items-end gap-px'
