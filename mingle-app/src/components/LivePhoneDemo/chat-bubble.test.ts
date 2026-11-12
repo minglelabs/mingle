@@ -612,7 +612,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('data-chat-bubble-own-meta="true"')
   })
 
-  it('renders the counterpart name and up to five collapsed language flags above the bubble', () => {
+  it('renders the counterpart name above the bubble and every language flag inside it', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -640,15 +640,15 @@ describe('ChatBubble', () => {
     expect(html).toContain('data-chat-speaker-header="true"')
     expect(html).toContain('data-chat-speaker-name="true"')
     expect(html).toContain('>정은교</span>')
-    expect((html.match(/data-chat-bubble-header-language-badges="true"/g) || []).length).toBe(1)
-    expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(5)
-    expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(5)
+    expect(html).not.toContain('data-chat-bubble-header-language-badges')
+    expect((html.match(/data-chat-bubble-language-badges="true"/g) || []).length).toBe(1)
+    expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(7)
+    expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(7)
     expect((html.match(/border-b-2 border-amber-400/g) || []).length).toBeGreaterThanOrEqual(1)
     expect(html).toContain('h-5 min-h-5')
     expect(html).toContain('text-sm font-medium leading-5')
     expect(html).toContain('px-2.5 pt-0.5 pb-1')
     expect(html).toContain('w-max min-w-0 max-w-full')
-    expect(html).not.toContain('data-chat-bubble-language-badges')
     expect(html).toContain('rounded-2xl rounded-tl-none')
     expect(html.indexOf('data-chat-speaker-header')).toBeLessThan(
       html.indexOf('data-chat-message-bubble-stack'),
@@ -805,18 +805,12 @@ describe('ChatBubble', () => {
     ...extra,
   })
 
-  it('puts a continued bubble\'s language flags in the avatar column, not on a line above', () => {
+  it('keeps a continued bubble\'s language flags inside it, with no line above', () => {
     const html = renderToStaticMarkup(createElement(ChatBubble, counterpartProps({ isGroupContinuation: true })))
     expect(html).not.toContain('data-chat-speaker-header')
-    expect(html).not.toContain('data-chat-bubble-header-language-badges')
-    expect(html).toContain('data-chat-bubble-side-language-badges="true"')
-    expect(html).toContain('absolute inset-y-0 right-full mr-1.5 flex w-10 flex-col items-center overflow-y-auto')
-    expect((html.match(/data-chat-language-badge-variant="side"/g) || []).length).toBe(3)
-    expect(html).toContain('h-[22px] w-10')
-
-    const first = renderToStaticMarkup(createElement(ChatBubble, counterpartProps({})))
-    expect(first).toContain('data-chat-bubble-header-language-badges="true"')
-    expect(first).not.toContain('data-chat-bubble-side-language-badges')
+    expect(html).not.toContain('data-chat-bubble-side-language-badges')
+    expect((html.match(/data-chat-bubble-language-badges="true"/g) || []).length).toBe(1)
+    expect((html.match(/data-chat-language-badge-variant="icon"/g) || []).length).toBe(3)
   })
 
   it('takes the double tap on the whole bubble and keeps a recent time in a column on the bottom edge', () => {
