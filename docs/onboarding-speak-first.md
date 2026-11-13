@@ -22,6 +22,7 @@
 | 변수 | 뜻 |
 |---|---|
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID` | 문자 인증. 없으면 운영에서는 전화번호 로그인 버튼이 숨겨진다. |
+| `SOLAPI_API_KEY`, `SOLAPI_API_SECRET`, `SOLAPI_SENDER` | 한국 번호(+82)는 솔라피 일반 문자(건당 약 18원)로 보낸다. 인증번호는 우리 서버가 만들고 5분, 5번 시도까지 메모리에 둔다(서버 한 대 기준, 재시작하면 다시 받으면 된다). `SOLAPI_SENDER`는 솔라피 콘솔에 등록한 발신번호. 셋 다 있어야 켜지고, 해외 번호는 계속 Twilio로 간다. |
 | `PHONE_REVIEW_LOGINS` | 심사용 번호와 고정 코드. 예: `+821000000000:123456,+15555550100:654321`. 문자를 보내지 않고 이 코드만 받는다. |
 | `REVIEW_ACCOUNT_EMAILS` | 초대권 확인을 건너뛰는 심사용 이메일 계정 (쉼표로 구분). |
 | `INVITE_GATE` | `on`이면 초대권 확인을 켠다. 기본은 꺼짐. |

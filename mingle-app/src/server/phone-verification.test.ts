@@ -139,6 +139,29 @@ describe('sign-in by phone number', () => {
     await expect(startPhoneSignIn('+821044445555', { clientKey: 'same-ip' })).rejects.toMatchObject({ code: 'too_many_requests' })
   })
 
+  it('texts Korean numbers through Solapi with our own code, others through Twilio', async () => {
+    process.env.TWILIO_ACCOUNT_SID = 'AC'
+    process.env.TWILIO_AUTH_TOKEN = 't'
+    process.env.TWILIO_VERIFY_SERVICE_SID = 'VA'
+    process.env.SOLAPI_API_KEY = 'k'
+    process.env.SOLAPI_API_SECRET = 's'
+    process.env.SOLAPI_SENDER = '0212345678'
+    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }))
+    await startPhoneSignIn('+821055556666', { clientKey: 'a' })
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.solapi.com/messages/v4/send')
+    const text = JSON.parse(fetchMock.mock.calls[0][1].body).message.text as string
+    const code = text.match(/\d{6}/)?.[0] ?? ''
+    expect(await verifyPhoneSignIn('+821055556666', '000000' === code ? '111111' : '000000')).toBeNull()
+    expect(await verifyPhoneSignIn('+821055556666', code)).toBe('+821055556666')
+
+    fetchMock.mockClear()
+    await startPhoneSignIn('+819012345678', { clientKey: 'b' })
+    expect(String(fetchMock.mock.calls[0][0])).toContain('verify.twilio.com')
+    delete process.env.SOLAPI_API_KEY
+    delete process.env.SOLAPI_API_SECRET
+    delete process.env.SOLAPI_SENDER
+  })
+
   it('lets store reviewers in with a fixed number and code, with Twilio set up', async () => {
     process.env.TWILIO_ACCOUNT_SID = 'AC'
     process.env.TWILIO_AUTH_TOKEN = 't'
