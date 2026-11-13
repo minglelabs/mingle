@@ -5995,6 +5995,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // on a new device has a speech split this device has not loaded yet.
     if (!isStorageHydrated || accountPreferencesHydratedGeneration === 0) return
     speechLengthDefaultAppliedRef.current = true
+    setIntroSettingsApplied(true)
     // A length picked in the speak trial (before this account existed) wins
     // over the default, and the length card is not asked again.
     const trialLevel = takePendingSpeechLength()
@@ -6002,14 +6003,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // Someone who already chose a speech split keeps it.
     if (sttSegmentationMode !== null) return
     applySpeechLengthPreferences(trialLevel ?? DEFAULT_SPEECH_LENGTH_LEVEL)
-    // The first room starts listening on open, usually before the account's
-    // settings arrive, so its session (still connecting, or running) has the
-    // server default. The split is fixed per session: start it again.
-    if (isSttSessionRunning || isConnecting || isPreparingStart) {
-      speechLengthRestartPendingRef.current = true
-      void handleStopRecording({ forceNativeStop: !isSttSessionRunning })
+  }, [accountPreferencesHydratedGeneration, applySpeechLengthPreferences, isStorageHydrated, speechLengthIntro, sttSegmentationMode])
+
+  // The first room starts listening on open, usually before the account's
+  // settings arrive; the split is fixed per session, so that session would
+  // keep the server default. Its start waits for the length above (one render
+  // later, so the start sees the new settings), or 4 s at most.
+  const [introSettingsApplied, setIntroSettingsApplied] = useState(false)
+  const [introStartQueued, setIntroStartQueued] = useState(false)
+  useEffect(() => {
+    if (!introStartQueued) return
+    if (introSettingsApplied) {
+      setIntroStartQueued(false)
+      void handleStartRecording()
+      return
     }
-  }, [accountPreferencesHydratedGeneration, applySpeechLengthPreferences, handleStopRecording, isConnecting, isPreparingStart, isStorageHydrated, isSttSessionRunning, speechLengthIntro, sttSegmentationMode])
+    const fallback = window.setTimeout(() => {
+      setIntroStartQueued(false)
+      void handleStartRecording()
+    }, 4000)
+    return () => window.clearTimeout(fallback)
+  }, [handleStartRecording, introSettingsApplied, introStartQueued])
 
   // Bubbles already in the room when it first listens (a welcome message, an
   // earlier conversation) do not count. A bubble still being spoken is not in
@@ -6305,6 +6319,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useImperativeHandle(ref, () => ({
     startRecording: async () => {
+      if (speechLengthIntro && !speechLengthDefaultAppliedRef.current) {
+        setIntroStartQueued(true)
+        return
+      }
       await handleStartRecording()
     },
     stopRecording: async (options) => {
@@ -6317,7 +6335,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     isSttSessionRunning: () => isSttSessionRunning,
     requestCloseTopmostOverlay,
     resetNavigationOverlays,
-  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion, requestCloseTopmostOverlay, resetNavigationOverlays])
+  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion, requestCloseTopmostOverlay, resetNavigationOverlays, speechLengthIntro])
 
   const chatRef = useRef<HTMLDivElement>(null)
   const scrollDateLabelAnchorsRef = useRef<ScrollDateLabelAnchor[]>([])
