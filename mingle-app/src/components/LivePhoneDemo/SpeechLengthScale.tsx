@@ -37,7 +37,9 @@ function LongIcon() {
  * `livePick` (the first-run card) reports each stop the finger passes so the
  * example above can follow; without it (room settings, where a pick applies at
  * once) only the stop the finger lets go on is reported. `levels` limits the
- * stops; the first-run card offers only the shorter ones.
+ * stops: the three-stop scale (first-run card, room settings) or all five.
+ * `showNumbers` puts the level on the thumb (the five-level page only), and
+ * `recommended` tags one stop.
  */
 export default function SpeechLengthScale({
   copy,
@@ -45,6 +47,8 @@ export default function SpeechLengthScale({
   disabled = false,
   livePick = false,
   levels = SPEECH_LENGTH_LEVELS,
+  showNumbers = true,
+  recommended,
   onSelect,
 }: {
   copy: FirstRunCopy;
@@ -52,6 +56,8 @@ export default function SpeechLengthScale({
   disabled?: boolean;
   livePick?: boolean;
   levels?: readonly SpeechLengthLevel[];
+  showNumbers?: boolean;
+  recommended?: SpeechLengthLevel;
   onSelect: (level: SpeechLengthLevel) => void;
 }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -109,7 +115,7 @@ export default function SpeechLengthScale({
   const position = (ratio: number) => `calc(${(isRtl ? 1 - ratio : ratio) * 100}% - ${(isRtl ? 1 - ratio : ratio) * THUMB_PX}px)`;
 
   return (
-    <div data-qa="speech-length-scale" className={disabled ? "opacity-50" : ""}>
+    <div data-qa="speech-length-scale" className={`${disabled ? "opacity-50" : ""} ${recommended && levels.includes(recommended) ? "pt-6" : ""}`}>
       <div className="flex items-center gap-2.5">
         <ShortIcon />
         <div
@@ -143,6 +149,18 @@ export default function SpeechLengthScale({
             animate={{ width: `calc(${shownRatio * 100}% - ${shownRatio * THUMB_PX}px)` }}
             transition={drag ? { duration: 0 } : THUMB_SPRING}
           />
+          {recommended && levels.includes(recommended) && (
+            <span
+              aria-hidden
+              data-qa="speech-length-recommended"
+              className="pointer-events-none absolute -top-6 flex w-10 justify-center"
+              style={{ left: position(lastStops > 0 ? levels.indexOf(recommended) / lastStops : 0) }}
+            >
+              <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[0.68rem] font-extrabold leading-4 ${shownLevel === recommended ? "bg-amber-400 text-slate-950" : "bg-amber-100 text-amber-800"}`}>
+                {copy.lengthRecommended}
+              </span>
+            </span>
+          )}
           {levels.map((level, index) => {
             const ratio = lastStops > 0 ? index / lastStops : 0;
             const passed = index <= Math.round(shownRatio * lastStops);
@@ -165,7 +183,7 @@ export default function SpeechLengthScale({
             animate={{ left: position(shownRatio), scale: drag ? 1.12 : 1 }}
             transition={drag ? { left: { duration: 0 }, scale: THUMB_SPRING } : THUMB_SPRING}
           >
-            {shownLevel}
+            {showNumbers ? shownLevel : <span className="h-3 w-3 rounded-full bg-amber-400" />}
           </motion.span>
         </div>
         <LongIcon />

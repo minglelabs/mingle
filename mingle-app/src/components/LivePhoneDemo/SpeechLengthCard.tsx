@@ -6,8 +6,9 @@ import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import SpeechLengthScale from "@/components/LivePhoneDemo/SpeechLengthScale";
 import type { FirstRunCopy } from "@/i18n/first-run-copy";
 import {
-  SPEECH_LENGTH_FIRST_RUN_LEVELS,
-  firstRunSpeechLengthLevel,
+  RECOMMENDED_SPEECH_LENGTH_LEVEL,
+  SPEECH_LENGTH_SIMPLE_LEVELS,
+  simpleSpeechLengthLevel,
   groupSpeechLengthPreview,
   type SpeechLengthLevel,
 } from "@/lib/speech-length";
@@ -36,12 +37,13 @@ const TEXT_VARIANTS = {
 
 /**
  * Shown once in a new user's first room, after a couple of finished bubbles:
- * how long a sentence should be kept together. Picking a number only changes
+ * how long a sentence should be kept together. Moving the slider only changes
  * the example above the scale, where the coloured bubbles run together or drip
  * apart like water drops as that level would; "Apply" is what changes the
  * setting (and, if the room is listening, restarts it). The current level
- * starts selected, so the card can also just be closed. Only levels 1-4 are
- * offered here; the room settings have all six.
+ * starts selected, so the card can also just be closed. Three stops are
+ * offered: short, the recommended default in the middle, and long; the
+ * room settings' "More" page has all five.
  *
  * The card never runs under the room header: its holder stops below the
  * header, and the example shrinks when the room is short.
@@ -64,7 +66,7 @@ export default function SpeechLengthCard({
   onApply: (level: SpeechLengthLevel) => void;
   onClose: () => void;
 }) {
-  const [picked, setPicked] = useState<SpeechLengthLevel>(() => firstRunSpeechLengthLevel(selected));
+  const [picked, setPicked] = useState<SpeechLengthLevel>(() => simpleSpeechLengthLevel(selected));
   const gooId = `speech-length-goo-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const frameRef = useRef<HTMLDivElement | null>(null);
   const [fit, setFit] = useState(1);
@@ -160,7 +162,7 @@ export default function SpeechLengthCard({
         </div>
         <p className="mt-1 text-[0.8rem] leading-relaxed text-slate-500">{copy.lengthHint}</p>
         <div className="mt-4">
-          <SpeechLengthScale copy={copy} selected={picked} disabled={disabled} livePick levels={SPEECH_LENGTH_FIRST_RUN_LEVELS} onSelect={setPicked} />
+          <SpeechLengthScale copy={copy} selected={picked} disabled={disabled} livePick levels={SPEECH_LENGTH_SIMPLE_LEVELS} showNumbers={false} recommended={RECOMMENDED_SPEECH_LENGTH_LEVEL} onSelect={setPicked} />
         </div>
         <button
           type="button"
