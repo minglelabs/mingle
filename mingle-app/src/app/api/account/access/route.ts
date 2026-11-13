@@ -3,8 +3,8 @@ import { getAppAccess, postAppAccessCode } from '@/server/api/controllers/shared
 
 export const runtime = 'nodejs'
 
-export async function GET() {
-  return getAppAccess()
+export async function GET(request: NextRequest) {
+  return getAppAccess(request)
 }
 
 export async function POST(request: NextRequest) {

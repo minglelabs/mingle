@@ -10,9 +10,13 @@ import { ReferralError, redeemReferralCode } from '@/server/referral'
  * accounts are the PHONE_REVIEW_LOGINS numbers and the REVIEW_ACCOUNT_EMAILS
  * addresses (comma-separated), so a reviewer never needs an invite.
  *
+ * Only for some app languages: INVITE_GATE_LOCALES (comma-separated, default
+ * "ko") lists them, "*" means every language. The app sends the language it
+ * shows (the one picked on the first screen); any other language gets in.
+ *
  * Off by default: until INVITE_GATE=on nothing changes for anyone.
  */
-export type AppAccessReason = 'gate_off' | 'existing' | 'invited' | 'staff' | 'review' | 'needs_invite'
+export type AppAccessReason = 'gate_off' | 'other_locale' | 'existing' | 'invited' | 'staff' | 'review' | 'needs_invite'
 
 export type AppAccess = { allowed: boolean; reason: AppAccessReason }
 
@@ -36,6 +40,16 @@ export function isInviteGateOn(env: NodeJS.ProcessEnv = process.env): boolean {
   return ['1', 'on', 'true'].includes((env.INVITE_GATE ?? '').trim().toLowerCase())
 }
 
+/** Whether the gate applies to an app language ("ko", "ko-KR", "en"...). No language sent counts as gated. */
+export function isInviteGateLocale(rawLocale: string | null | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  const locales = (env.INVITE_GATE_LOCALES ?? 'ko').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean)
+  if (locales.length === 0 || locales.includes('*')) return true
+  const locale = (rawLocale ?? '').trim().toLowerCase()
+  if (!locale) return true
+  const language = locale.split(/[-_]/)[0]
+  return locales.some((entry) => entry === locale || entry === language)
+}
+
 export function isReviewAccount(user: Pick<AppAccessUser, 'phoneE164' | 'email'>, env: NodeJS.ProcessEnv = process.env): boolean {
   if (user.phoneE164 && isReviewPhoneNumber(user.phoneE164, env)) return true
   const email = user.email?.trim().toLowerCase()
@@ -43,8 +57,9 @@ export function isReviewAccount(user: Pick<AppAccessUser, 'phoneE164' | 'email'>
   return (env.REVIEW_ACCOUNT_EMAILS ?? '').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean).includes(email)
 }
 
-export function resolveAppAccess(user: AppAccessUser, env: NodeJS.ProcessEnv = process.env): AppAccess {
+export function resolveAppAccess(user: AppAccessUser, env: NodeJS.ProcessEnv = process.env, locale?: string | null): AppAccess {
   if (!isInviteGateOn(env)) return { allowed: true, reason: 'gate_off' }
+  if (!isInviteGateLocale(locale, env)) return { allowed: true, reason: 'other_locale' }
   if (user.isOperator || user.isOfficial) return { allowed: true, reason: 'staff' }
   if (isReviewAccount(user, env)) return { allowed: true, reason: 'review' }
   if (user.referredByUserId) return { allowed: true, reason: 'invited' }
@@ -57,20 +72,21 @@ const ACCESS_SELECT = {
   createdAt: true, referredByUserId: true, isOperator: true, isOfficial: true, phoneE164: true, email: true,
 } as const
 
-export async function readAppAccess(userId: string): Promise<AppAccess> {
+export async function readAppAccess(userId: string, locale?: string | null): Promise<AppAccess> {
   if (!isInviteGateOn()) return { allowed: true, reason: 'gate_off' }
+  if (!isInviteGateLocale(locale)) return { allowed: true, reason: 'other_locale' }
   const user = await prisma.user.findUnique({ where: { id: userId }, select: ACCESS_SELECT })
   if (!user) return { allowed: false, reason: 'needs_invite' }
-  return resolveAppAccess(user)
+  return resolveAppAccess(user, process.env, locale)
 }
 
 /** Enters an invite code at the gate: accepts the invite (both sides get the join reward) and lets the account in. */
-export async function enterInviteCode(userId: string, rawCode: unknown): Promise<AppAccess> {
+export async function enterInviteCode(userId: string, rawCode: unknown, locale?: string | null): Promise<AppAccess> {
   try {
     await redeemReferralCode(userId, rawCode, { source: 'code' })
   } catch (error) {
     // Already invited earlier: the gate should simply open.
     if (!(error instanceof ReferralError && error.code === 'already_redeemed')) throw error
   }
-  return readAppAccess(userId)
+  return readAppAccess(userId, locale)
 }

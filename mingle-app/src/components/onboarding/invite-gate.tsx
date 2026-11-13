@@ -11,12 +11,12 @@ import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression"
 type Access = { allowed: boolean; reason: string };
 
 /** Asks the server whether the signed-in account may use the app (null until known). */
-export function useAppAccess(enabled: boolean): { access: Access | null; setAccess: (next: Access) => void } {
+export function useAppAccess(enabled: boolean, locale: string): { access: Access | null; setAccess: (next: Access) => void } {
   const [access, setAccess] = useState<Access | null>(null);
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    void fetch(buildClientApiPath("/account/access"), { cache: "no-store" })
+    void fetch(`${buildClientApiPath("/account/access")}?locale=${encodeURIComponent(locale)}`, { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
       .then((body: Access | null) => {
         // Any failure opens the app: the gate must never lock someone out by mistake.
@@ -26,13 +26,14 @@ export function useAppAccess(enabled: boolean): { access: Access | null; setAcce
         if (!cancelled) setAccess({ allowed: true, reason: "unknown" });
       });
     return () => { cancelled = true; };
-  }, [enabled]);
+  }, [enabled, locale]);
   return { access: enabled ? access : null, setAccess };
 }
 
 /**
  * Shown over the app after sign-in when the account needs an invite
- * (INVITE_GATE on the server): enter a friend's invite code, or sign out.
+ * (INVITE_GATE on the server, for the app languages in INVITE_GATE_LOCALES):
+ * enter a friend's invite code, or sign out.
  * Accepting the code pays both sides the usual invite reward.
  */
 export default function InviteGate({ locale, onAllowed }: { locale: string; onAllowed: (access: Access) => void }) {
@@ -56,7 +57,7 @@ export default function InviteGate({ locale, onAllowed }: { locale: string; onAl
       const response = await fetch(buildClientApiPath("/account/access"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: trimmed }),
+        body: JSON.stringify({ code: trimmed, locale }),
       });
       const body = await response.json().catch(() => ({})) as Partial<Access> & { error?: string };
       if (response.ok && body.allowed) {

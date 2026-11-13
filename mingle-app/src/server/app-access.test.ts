@@ -30,6 +30,23 @@ describe('invite gate', () => {
     expect(resolveAppAccess({ ...newUser, isOperator: true }, gate).reason).toBe('staff')
   })
 
+  it('asks only people using the app in Korean, by default', () => {
+    expect(resolveAppAccess(newUser, gate, 'ko').reason).toBe('needs_invite')
+    expect(resolveAppAccess(newUser, gate, 'ko-KR').reason).toBe('needs_invite')
+    expect(resolveAppAccess(newUser, gate, 'en')).toEqual({ allowed: true, reason: 'other_locale' })
+    expect(resolveAppAccess(newUser, gate, 'ja').reason).toBe('other_locale')
+    // No language sent: gated, so an old app cannot slip past.
+    expect(resolveAppAccess(newUser, gate, null).reason).toBe('needs_invite')
+  })
+
+  it('follows INVITE_GATE_LOCALES, where * means every language', () => {
+    const jaToo = { ...gate, INVITE_GATE_LOCALES: 'ko, ja' } as unknown as NodeJS.ProcessEnv
+    expect(resolveAppAccess(newUser, jaToo, 'ja').reason).toBe('needs_invite')
+    expect(resolveAppAccess(newUser, jaToo, 'en').reason).toBe('other_locale')
+    const everyone = { ...gate, INVITE_GATE_LOCALES: '*' } as unknown as NodeJS.ProcessEnv
+    expect(resolveAppAccess(newUser, everyone, 'en').reason).toBe('needs_invite')
+  })
+
   it('never asks a store reviewer for an invite', () => {
     const env = { ...gate, PHONE_REVIEW_LOGINS: '+821000000000:123456', REVIEW_ACCOUNT_EMAILS: 'Review@HashChat.app' } as unknown as NodeJS.ProcessEnv
     expect(resolveAppAccess({ ...newUser, phoneE164: '+821000000000' }, env).reason).toBe('review')

@@ -2143,7 +2143,7 @@ export default function ConversationList({
   }, []);
   // Invite-only (server INVITE_GATE): a signed-in account without an invite
   // sees the invite gate. Asked again once a pending invite link is accepted.
-  const { access: appAccess, setAccess: setAppAccess } = useAppAccess(sessionStatus === "authenticated" && !inviteOnboarding);
+  const { access: appAccess, setAccess: setAppAccess } = useAppAccess(sessionStatus === "authenticated" && !inviteOnboarding, locale);
   const handleSpeakTrialDone = useCallback(() => {
     setSpeakTrialPending(false);
     setSpeakTrialJustDone(true);

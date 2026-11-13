@@ -13,7 +13,7 @@
    - 문자로 받은 6자리 코드로 로그인한다. 처음 쓰는 번호면 계정이 바로 생긴다 (NextAuth provider `phone-code`).
    - 그 번호는 인증된 번호로 저장되므로, 연락처로 친구 찾기에 그대로 쓰인다.
    - 버튼은 서버가 코드를 보낼 수 있을 때만 보인다 (`GET /phone/sign-in`).
-4. **초대권**: 서버에서 `INVITE_GATE=on`이면 초대받지 않은 새 계정에 초대 코드 입력 화면이 뜬다 (`components/onboarding/invite-gate.tsx`, `server/app-access.ts`).
+4. **초대권**: 서버에서 `INVITE_GATE=on`이면, 앱을 한국어로 쓰는 사람(`INVITE_GATE_LOCALES`, 기본 `ko`) 중 초대받지 않은 새 계정에 초대 코드 입력 화면이 뜬다 (`components/onboarding/invite-gate.tsx`, `server/app-access.ts`).
    - 코드를 넣으면 기존 초대와 똑같이 처리된다. 양쪽이 보상 코인을 받고 서로 팔로우한다.
    - 초대 링크로 들어온 사람은 자동으로 통과한다.
 
@@ -25,6 +25,7 @@
 | `PHONE_REVIEW_LOGINS` | 심사용 번호와 고정 코드. 예: `+821000000000:123456,+15555550100:654321`. 문자를 보내지 않고 이 코드만 받는다. |
 | `REVIEW_ACCOUNT_EMAILS` | 초대권 확인을 건너뛰는 심사용 이메일 계정 (쉼표로 구분). |
 | `INVITE_GATE` | `on`이면 초대권 확인을 켠다. 기본은 꺼짐. |
+| `INVITE_GATE_LOCALES` | 초대권 확인을 적용할 앱 언어. 쉼표로 구분하고 기본값은 `ko`(한국어만). `*`이면 모든 언어. 앱은 첫 화면에서 고른 언어를 보내고, 그 밖의 언어는 바로 통과한다. 언어를 보내지 않은 요청(예전 앱)은 확인 대상이다. |
 | `INVITE_GATE_SINCE` | ISO 날짜. 이 시각 이전에 만든 계정은 초대 없이 계속 쓴다. 비워 두면 모든 계정에 적용된다. |
 
 초대권 확인을 켤 때는 기존 유저가 막히지 않게 `INVITE_GATE_SINCE`를 켜는 시각으로 꼭 넣는다.
