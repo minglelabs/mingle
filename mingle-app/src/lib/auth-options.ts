@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { NextAuthOptions } from "next-auth";
 import type { Adapter, AdapterUser } from "next-auth/adapters";
 import AppleProvider from "next-auth/providers/apple";
@@ -138,8 +139,10 @@ export async function findOrCreateUserForPhoneSignIn(phoneE164: string) {
   if (existing) {
     await prisma.user.update({ where: { id: existing.id }, data: { phoneE164: null, phoneHash: null, phoneVerifiedAt: null } });
   }
+  // No name or email yet: "user" is the first handle tried, then "user_" with
+  // a random suffix (a fixed seed gave every new number the same handle).
   return createWithDefaultHandle(
-    { name: null },
+    { name: "user", id: randomBytes(6).toString("hex") },
     (handle) => prisma.user.create({
       data: {
         name: "HashChat User",

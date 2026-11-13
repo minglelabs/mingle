@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { resolveInviteGateCopy } from "@/i18n/invite-gate-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 
 type Access = { allowed: boolean; reason: string };
 
@@ -39,6 +40,8 @@ export default function InviteGate({ locale, onAllowed }: { locale: string; onAl
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The native banner draws above the WebView and would cover the gate.
+  useNativeBannerSuppression(true);
 
   useEffect(() => {
     captureMingleClientEvent("mingle_first_run_step", { step: "invite_gate_shown" });
