@@ -29,6 +29,7 @@
     "test:all": "pnpm test && pnpm test:live",
     "test:watch": "vitest",
     "test:live": "vitest run src/integration/live",
+    "test:qa:i18n": "node scripts/i18n-audit.mjs && vitest run src/i18n/i18n-coverage.test.ts",
     "test:qa:ui": "node scripts/mobile-ui-qa.mjs",
     "test:qa:ui:android": "node scripts/mobile-ui-qa.mjs --platform android",
     "test:qa:ui:android:regressions": "node scripts/android-ui-regression-suite.mjs",

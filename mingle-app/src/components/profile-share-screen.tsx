@@ -415,7 +415,7 @@ export default function ProfileShareScreen({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={qrDataUrl}
-              alt={`${name} HashChat profile QR code`}
+              alt={`${name} · QR`}
               className="h-64 w-64 rounded-xl"
             />
           ) : (
