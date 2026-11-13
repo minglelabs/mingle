@@ -90,6 +90,9 @@ import {
   markFirstSpeakPending,
 } from "@/lib/first-run";
 import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
+import { readLastSignInMethod } from "@/lib/last-sign-in-method";
+import { resolveSpeakTrialCopy } from "@/i18n/speak-trial-copy";
+import { isSpeakTrialDone } from "@/lib/speak-trial";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
   resolveLanguageSelectorOwnSelectedLanguages,
@@ -227,6 +230,7 @@ import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/
 import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
+const SpeakTrial = lazy(() => import("@/components/onboarding/speak-trial"));
 
 const LS_KEY_CONVERSATION_LIST_SORT_MODE = "mingle:conversation-list-sort-mode";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
@@ -2128,6 +2132,17 @@ export default function ConversationList({
   // with a "say something" card and every room is ready to show the speech
   // length choice. Read from storage after mount, so the server render matches.
   const [firstSpeakPending, setFirstSpeakPending] = useState(false);
+  // Signed out on a device that never signed in: speak for ten seconds first,
+  // then the sign-in screen. Read after mount, so the server render matches.
+  const [speakTrialPending, setSpeakTrialPending] = useState(false);
+  const [speakTrialJustDone, setSpeakTrialJustDone] = useState(false);
+  useEffect(() => {
+    setSpeakTrialPending(!isSpeakTrialDone() && readLastSignInMethod() === null);
+  }, []);
+  const handleSpeakTrialDone = useCallback(() => {
+    setSpeakTrialPending(false);
+    setSpeakTrialJustDone(true);
+  }, []);
   // Where the user heard of the app, asked once when they leave their first room.
   const [discoveryPromptOpen, setDiscoveryPromptOpen] = useState(false);
   const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
@@ -5687,13 +5702,24 @@ export default function ConversationList({
               </div>
             )}
           >
-            <MingleHome
-              authOnly
-              dictionary={dictionary}
-              appleOAuthEnabled={appleOAuthEnabled}
-              googleOAuthEnabled={googleOAuthEnabled}
-              locale={locale}
-            />
+            {speakTrialPending ? (
+              <SpeakTrial
+                dictionary={dictionary}
+                locale={locale}
+                appleOAuthEnabled={appleOAuthEnabled}
+                googleOAuthEnabled={googleOAuthEnabled}
+                onDone={handleSpeakTrialDone}
+              />
+            ) : (
+              <MingleHome
+                authOnly
+                dictionary={dictionary}
+                appleOAuthEnabled={appleOAuthEnabled}
+                googleOAuthEnabled={googleOAuthEnabled}
+                locale={locale}
+                authNotice={speakTrialJustDone ? resolveSpeakTrialCopy(locale).signInNotice : null}
+              />
+            )}
           </Suspense>
         </div>
       ) : null}

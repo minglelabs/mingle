@@ -18,7 +18,9 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
+import type { SpeechLengthLevel } from "@/lib/speech-length";
 import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { MessageRecallProvider } from "./LivePhoneDemo/MessageRecall";
 import { MessageRetranslateProvider } from "./LivePhoneDemo/MessageRetranslate";
@@ -96,6 +98,12 @@ type MingleHomeProps = {
   isVisible?: boolean;
   /** Render only the existing authentication surface without mounting a room. */
   authOnly?: boolean;
+  /**
+   * The speak trial before sign-in: a room without the sign-in gate, the menu
+   * or saved settings, starting on `speechLength`, with `headerAccessory`
+   * (the countdown) in the header.
+   */
+  trial?: { speechLength: SpeechLengthLevel; headerAccessory: ReactNode };
   /** Auth-only: a line under the logo, e.g. why sign-in is needed. */
   authNotice?: string | null;
   /**
@@ -1365,7 +1373,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   // Keep loading and unauthenticated states within one stable layout.
   // The panel always stays mounted and only its inner content changes to avoid pop-in.
   const authGateVisualState = resolveAuthGateVisualState({
-    requireAuthGate: REQUIRE_AUTH_FOR_TRANSLATOR,
+    requireAuthGate: REQUIRE_AUTH_FOR_TRANSLATOR && !props.trial,
     status,
     isSigningIn,
     isEmailSubmitting,
@@ -2069,8 +2077,11 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onDeleteAccount={handleDeleteAccount}
           defaultFeedbackEmail={typeof session?.user?.email === "string" ? session.user.email : ""}
           isAuthActionPending={isDeletingAccount}
-          showMenuButton
-          showAccountActions={status === "authenticated"}
+          showMenuButton={!props.trial}
+          showAccountActions={status === "authenticated" && !props.trial}
+          enableAccountPreferencesSync={!props.trial}
+          headerAccessory={props.trial?.headerAccessory}
+          trialSpeechLength={props.trial?.speechLength}
           headerMode={props.headerMode}
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}

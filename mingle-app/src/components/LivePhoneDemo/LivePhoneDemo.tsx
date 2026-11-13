@@ -13,6 +13,7 @@ import SpeechLengthCard from '@/components/LivePhoneDemo/SpeechLengthCard'
 import { resolveFirstRunCopy } from '@/i18n/first-run-copy'
 import { captureMingleClientEvent } from '@/lib/posthog-client'
 import SpeechLengthScale from '@/components/LivePhoneDemo/SpeechLengthScale'
+import { takePendingSpeechLength } from '@/lib/speak-trial'
 import {
   DEFAULT_SPEECH_LENGTH_LEVEL,
   RECOMMENDED_SPEECH_LENGTH_LEVEL,
@@ -84,7 +85,7 @@ import HashSeedIcon from '@/components/coins/hash-seed-icon'
 import CoinRoomBanner from '@/components/coins/coin-room-banner'
 import { resolveLivePhoneDemoEarphoneModeCopy } from '@/i18n/live-phone-demo-earphone-mode-copy'
 
-import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
@@ -1475,6 +1476,13 @@ interface LivePhoneDemoProps {
   showAccountActions?: boolean
   enableAccountPreferencesSync?: boolean
   headerMode?: 'default' | 'conversation'
+  /** Shown in the header's free space (the speak trial's countdown). */
+  headerAccessory?: ReactNode
+  /**
+   * The speak trial before sign-in: the room starts on this sentence length
+   * without saving it anywhere (there is no account yet).
+   */
+  trialSpeechLength?: SpeechLengthLevel
   backButtonLabel?: string
   onBack?: () => void
   onConversationDeleted?: () => void
@@ -1981,6 +1989,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   showAccountActions = true,
   enableAccountPreferencesSync = true,
   headerMode = 'default',
+  headerAccessory,
+  trialSpeechLength,
   backButtonLabel = 'Back',
   onBack,
   onConversationDeleted,
@@ -5972,14 +5982,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [applySpeechSplitPreferences])
 
   useEffect(() => {
+    if (!trialSpeechLength) return
+    const preferences = resolveSpeechLengthPreferences(trialSpeechLength)
+    setSttSegmentationMode(preferences.sttSegmentationMode)
+    if (preferences.sttSegmentationMode === 'end') setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
+    else setSonioxManualFinalizeSilenceMs(preferences.sonioxManualFinalizeSilenceMs)
+  }, [trialSpeechLength])
+
+  useEffect(() => {
     if (!speechLengthIntro || speechLengthDefaultAppliedRef.current) return
     // Wait for the account's saved settings: an existing account signing in
     // on a new device has a speech split this device has not loaded yet.
     if (!isStorageHydrated || accountPreferencesHydratedGeneration === 0) return
     speechLengthDefaultAppliedRef.current = true
+    // A length picked in the speak trial (before this account existed) wins
+    // over the default, and the length card is not asked again.
+    const trialLevel = takePendingSpeechLength()
+    if (trialLevel !== null) speechLengthIntroDoneRef.current = true
     // Someone who already chose a speech split keeps it.
     if (sttSegmentationMode !== null) return
-    applySpeechLengthPreferences(DEFAULT_SPEECH_LENGTH_LEVEL)
+    applySpeechLengthPreferences(trialLevel ?? DEFAULT_SPEECH_LENGTH_LEVEL)
   }, [accountPreferencesHydratedGeneration, applySpeechLengthPreferences, isStorageHydrated, speechLengthIntro, sttSegmentationMode])
 
   // Bubbles already in the room when it first listens (a welcome message, an
@@ -7913,7 +7935,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             <MingleWordmark className="relative z-20" />
           )}
           <div className="relative z-20 flex items-center gap-1">
-            <CoinBalanceChip locale={coinLocale} size="compact" />
+            {headerAccessory}
+            {headerAccessory ? null : <CoinBalanceChip locale={coinLocale} size="compact" />}
             <div className="relative mr-1.5">
               <button
                 ref={langSelectorButtonRef}
