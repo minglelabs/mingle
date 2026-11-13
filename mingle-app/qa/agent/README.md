@@ -26,6 +26,7 @@ Scripts in `mingle-app/scripts/`:
 | --- | --- |
 | `qa-agent-scenarios.mjs list \| select \| check` | Lists the catalog, selects scenarios for a diff, and validates frontmatter, path globs, history headings and taste ids. |
 | `qa-agent-report.mjs <run-dir>` | Turns a run's `results.json` and screenshots into one self-contained `report.html` for publishing. |
+| `i18n-audit.mjs` (+ `src/i18n/i18n-coverage.test.ts`) | Static i18n check run at the start of every `/qa`: hardcoded UI copy, and strings missing in any of the 15 UI locales. `pnpm test:qa:i18n`. Also runs in CI. |
 | `qa-agent-device.mjs` | Drives the connected iPhone over Appium XCUITest (real-device mode, WDA signed with the team ID): `devices`, `servers`, `build` (Release + QA bridge, local URLs, AdMob test units), `install`, `start`, `screenshot`, `tap`, `long-press`, `swipe`, `type`, `alert`, `snapshot`, `eval`, `app`, `logs`, `stop`. |
 
 ## Running

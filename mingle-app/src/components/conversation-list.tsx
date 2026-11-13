@@ -1041,7 +1041,7 @@ function mapConversationSummaryToItem(
     status: conversation.status,
     statusLabel,
     avatarSrc: avatar.src,
-    avatarAlt: `${title} ${avatar.name} avatar`,
+    avatarAlt: title,
     otherMembers: conversation.otherMembers,
     titleAccountBadge: resolveRoomAccountBadge(conversation.otherMembers),
     titleAccountBadgeLocale: locale,

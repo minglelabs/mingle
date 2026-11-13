@@ -46,6 +46,29 @@ it the way the product owner would. Everything you need is in `mingle-app/qa/age
 - Report honestly: a scenario that did not run is `blocked`, never `pass`. A check that needs a person is `manual`.
 - Run outputs go in `mingle-app/qa/agent/runs/` (gitignored). Do not commit them.
 
+## 0. Static i18n check (every run)
+
+Run this first, on every `/qa` invocation, whatever scenarios are selected. It takes a few seconds and needs no
+device:
+
+```bash
+pnpm --dir mingle-app test:qa:i18n
+```
+
+It has two parts, both of which must pass:
+
+- `scripts/i18n-audit.mjs` scans the web and RN UI code for copy that bypasses the copy layer: literal JSX text,
+  literal `aria-label`/`placeholder`/`title`/`alt`, `locale === "ko" ? … : …` copy that only covers Korean and
+  English, and Hangul string literals outside a locale table.
+- `src/i18n/i18n-coverage.test.ts` resolves the dictionary and every `resolve*Copy`/`get*Copy` resolver for all 15
+  primary UI locales and flags strings that fell back to Korean or stayed exactly English.
+
+Each new finding is an i18n finding (T17) in the report, under the `locale-copy-sweep` card: S1 when a whole
+screen, sheet or option list shows in another language, S2 for a single label, S3 for screen-reader-only text.
+Fix it in the copy table (all 15 locales). Add a line to a baseline (`scripts/i18n-audit.baseline.json`,
+`src/i18n/i18n-coverage.baseline.json`) only for a true same-spelling word (fr "Notifications") or a brand
+name, and say so in the report. When the diff touches UI copy, also run the `locale-copy-sweep` scenario.
+
 ## 1. Select scenarios
 
 ```bash

@@ -534,7 +534,7 @@ export default function PublicUserProfileScreen({
   // The name as screen readers hear it: with the badge label.
   const nameLabel = withAccountBadgeLabel(name, badge, locale);
   const repeatedNameBadge = null;
-  const bio = profile?.bio?.trim() || (locale === "ko" ? "" : "");
+  const bio = profile?.bio?.trim() || "";
   const primaryLanguages = sanitizeSttLanguageSelection(
     profile?.primaryLanguages,
     profile?.nationality ? [profile.nationality] : [],

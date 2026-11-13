@@ -1294,7 +1294,7 @@ function ChatBubble({
   ) : (
     <Image
       src={avatar.src}
-      alt={`${speakerLabel} ${avatar.name} avatar`}
+      alt={speakerLabel}
       className="h-8 w-8 rounded-full bg-white object-cover"
       width={32}
       height={32}
