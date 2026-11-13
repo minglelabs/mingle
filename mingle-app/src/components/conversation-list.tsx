@@ -93,6 +93,7 @@ import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
 import { readLastSignInMethod } from "@/lib/last-sign-in-method";
 import { resolveSpeakTrialCopy } from "@/i18n/speak-trial-copy";
 import { isSpeakTrialDone } from "@/lib/speak-trial";
+import { useAppAccess } from "@/components/onboarding/invite-gate";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
   resolveLanguageSelectorOwnSelectedLanguages,
@@ -231,6 +232,7 @@ import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY }
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 const SpeakTrial = lazy(() => import("@/components/onboarding/speak-trial"));
+const InviteGate = lazy(() => import("@/components/onboarding/invite-gate"));
 
 const LS_KEY_CONVERSATION_LIST_SORT_MODE = "mingle:conversation-list-sort-mode";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
@@ -2139,6 +2141,9 @@ export default function ConversationList({
   useEffect(() => {
     setSpeakTrialPending(!isSpeakTrialDone() && readLastSignInMethod() === null);
   }, []);
+  // Invite-only (server INVITE_GATE): a signed-in account without an invite
+  // sees the invite gate. Asked again once a pending invite link is accepted.
+  const { access: appAccess, setAccess: setAppAccess } = useAppAccess(sessionStatus === "authenticated" && !inviteOnboarding);
   const handleSpeakTrialDone = useCallback(() => {
     setSpeakTrialPending(false);
     setSpeakTrialJustDone(true);
@@ -5722,6 +5727,12 @@ export default function ConversationList({
             )}
           </Suspense>
         </div>
+      ) : null}
+
+      {sessionStatus === "authenticated" && !inviteOnboarding && appAccess && !appAccess.allowed ? (
+        <Suspense fallback={null}>
+          <InviteGate locale={locale} onAllowed={setAppAccess} />
+        </Suspense>
       ) : null}
 
       {isClientReady ? (

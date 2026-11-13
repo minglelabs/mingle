@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-13 — First run: speak for 10 seconds before sign-in, phone number sign-in, invite gate
+
+- Surface: `components/onboarding/speak-trial.tsx` (new), `components/onboarding/invite-gate.tsx` (new), the sign-in screen in `mingle-home.tsx`, `contacts/phone-verify-sheet.tsx`, `conversation-list.tsx`, `LivePhoneDemo.tsx` (`headerAccessory`, `trialSpeechLength`). Details and env: `docs/onboarding-speak-first.md`.
+- Issue: The sign-in screen came before anyone had seen the interpretation work, the biggest drop in the funnel.
+- Resolution: After the language choice, a device that never signed in gets a room without the menu or back button and speaks for 10 seconds; a ring in the header counts down (number in the middle, green to red, emptying). Then "How was it?" with the three-stop length choice (recommended in the middle), then sign-in with "This is why: sign in to keep going" under the logo. "I already have an account" skips to sign-in. The sign-in screen leads with "Continue with phone number" (SMS code; a new number makes an account) when the server can send codes. With `INVITE_GATE=on`, a new account without an invite sees an invite code screen; review accounts and accounts from before `INVITE_GATE_SINCE` pass.
+- Verification: `speak-trial.test.ts`, `phone-verification.test.ts`, `app-access.test.ts`, `tsc`, `vitest`. Not run in a browser or on a device yet.
+
 ## 2026-11-13 — Sentence length: five levels, three stops with the default in the middle, and a "More" page
 
 - Surface: `lib/speech-length.ts`, `SpeechLengthScale.tsx`, `SpeechLengthCard.tsx`, the room settings and a new `speech-length` menu page in `LivePhoneDemo.tsx`, `i18n/first-run-copy.ts`.

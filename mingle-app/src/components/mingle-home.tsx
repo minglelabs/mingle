@@ -8,7 +8,7 @@ import {
   type SignInMethod,
 } from "@/lib/last-sign-in-method";
 import { resolveSignInFailedCopy } from "@/i18n/sign-in-failed-copy";
-import { ArrowLeft, Check, Loader2, Mail, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Mail, Smartphone, X } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -21,6 +21,10 @@ import {
   type ReactNode,
 } from "react";
 import type { SpeechLengthLevel } from "@/lib/speech-length";
+import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
+import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
+import { resolvePhoneSignInCopy } from "@/i18n/phone-sign-in-copy";
+import { buildClientApiPath } from "@/lib/api-contract";
 import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { MessageRecallProvider } from "./LivePhoneDemo/MessageRecall";
 import { MessageRetranslateProvider } from "./LivePhoneDemo/MessageRetranslate";
@@ -374,6 +378,15 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const [signingInProvider, setSigningInProvider] =
     useState<NativeAuthProvider | null>(null);
   const [authPanelStep, setAuthPanelStep] = useState<AuthPanelStep>("provider");
+  // Sign-in by phone number: offered once the server says it can send codes.
+  const [phoneSignInAvailable, setPhoneSignInAvailable] = useState(false);
+  const [isPhoneSheetOpen, setIsPhoneSheetOpen] = useState(false);
+  const phoneSignInCopy = useMemo(() => resolvePhoneSignInCopy(props.locale), [props.locale]);
+  const phoneSheetCopy = useMemo(() => ({
+    ...resolvePhoneFriendsCopy(props.locale),
+    sheetTitle: phoneSignInCopy.sheetTitle,
+    sheetBody: phoneSignInCopy.sheetBody,
+  }), [phoneSignInCopy, props.locale]);
   const [selectedProvider, setSelectedProvider] =
     useState<AuthProvider | null>(null);
   const [agreedPrivacy, setAgreedPrivacy] = useState(false);
@@ -1235,6 +1248,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       handleOpenEmailSheet();
       return;
     }
+    if (selectedProvider === "phone") {
+      setIsPhoneSheetOpen(true);
+      return;
+    }
     handleSocialSignIn(selectedProvider);
   }, [
     handleOpenEmailSheet,
@@ -1370,6 +1387,31 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     signedOutCallbackUrl,
   ]);
 
+  useEffect(() => {
+    if (status !== "unauthenticated") return;
+    let cancelled = false;
+    void fetch(buildClientApiPath("/phone/sign-in"), { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { available?: unknown } | null) => {
+        if (!cancelled) setPhoneSignInAvailable(body?.available === true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [status]);
+
+  // Checks the SMS code by signing in with it; a new number makes an account.
+  const confirmPhoneSignIn = useCallback(async (phone: string, code: string): Promise<string | null> => {
+    try {
+      const result = await signIn("phone-code", { phone, code, callbackUrl, redirect: false });
+      if (!result?.ok || result.error) return "wrong_code";
+      saveLastSignInMethod("phone");
+      window.location.assign(typeof result.url === "string" && result.url ? result.url : callbackUrl);
+      return null;
+    } catch {
+      return "generic";
+    }
+  }, [callbackUrl]);
+
   // Keep loading and unauthenticated states within one stable layout.
   // The panel always stays mounted and only its inner content changes to avoid pop-in.
   const authGateVisualState = resolveAuthGateVisualState({
@@ -1480,6 +1522,22 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                 <div className="w-1/2 shrink-0">
                   {/* The "last used" badge sits on a button's top edge; room for it on the first one. */}
                   <div className={`space-y-3 ${lastSignInMethod ? "pt-2.5" : ""}`}>
+                    {phoneSignInAvailable ? (
+                      <button
+                        type="button"
+                        data-qa="auth-phone-button"
+                        aria-label={phoneSignInCopy.button}
+                        onClick={() => handleProviderSelect("phone")}
+                        disabled={disabled}
+                        className="relative inline-flex w-full items-center justify-center rounded-2xl bg-[#FBBC32] py-[0.92rem] text-[0.95rem] font-bold text-slate-950 transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span className="absolute left-5">
+                          <Smartphone className="h-5 w-5" aria-hidden />
+                        </span>
+                        {phoneSignInCopy.button}
+                        {lastSignInMethod === "phone" ? lastUsedBadge : null}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       aria-label={
@@ -1675,6 +1733,16 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
               />
             </section>
           </div>
+        ) : null}
+        {isPhoneSheetOpen ? (
+          <PhoneVerifySheet
+            copy={phoneSheetCopy}
+            locale={props.locale}
+            sendPath="/phone/sign-in"
+            confirmCode={confirmPhoneSignIn}
+            onClose={() => setIsPhoneSheetOpen(false)}
+            onVerified={() => {}}
+          />
         ) : null}
         {isEmailSheetOpen ? (
           <div

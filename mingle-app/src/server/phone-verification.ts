@@ -7,6 +7,13 @@ import { isE164 } from '@/lib/phone-number'
 // TWILIO_VERIFY_SERVICE_SID); it is never stored here. Without Twilio set up,
 // a non-production server accepts the code 000000 so the flow can be tried
 // locally; production then answers "unavailable".
+//
+// The same code also signs in (or signs up) by phone number alone, before
+// there is an account; see startPhoneSignIn / verifyPhoneSignIn.
+//
+// App review: PHONE_REVIEW_LOGINS lists fixed numbers and codes for store
+// reviewers ("+821000000000:123456,+15555550100:654321"). Those numbers get
+// no SMS and always take their own code, on any server.
 
 const DAY_MS = 24 * 60 * 60 * 1000
 /** Codes one account may ask for in a day, and one number may receive. */
@@ -52,6 +59,22 @@ async function twilioRequest(config: TwilioConfig, path: string, form: Record<st
   })
 }
 
+/** Store-review numbers with their fixed code (PHONE_REVIEW_LOGINS). */
+export function readReviewPhoneLogins(env: NodeJS.ProcessEnv = process.env): Map<string, string> {
+  const logins = new Map<string, string>()
+  for (const entry of (env.PHONE_REVIEW_LOGINS ?? '').split(',')) {
+    const [rawPhone, rawCode] = entry.split(':')
+    const phone = rawPhone?.trim() ?? ''
+    const code = rawCode?.replace(/\D/g, '') ?? ''
+    if (isE164(phone) && code.length === 6) logins.set(phone, code)
+  }
+  return logins
+}
+
+export function isReviewPhoneNumber(phone: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  return readReviewPhoneLogins(env).has(phone)
+}
+
 export function hashPhoneE164(e164: string): string {
   return createHash('sha256').update(e164).digest('hex')
 }
@@ -70,6 +93,7 @@ function twilioLocale(uiLocale: string | undefined): string | undefined {
 export async function startPhoneVerification(userId: string, rawPhone: unknown, options: { locale?: string } = {}): Promise<void> {
   const phone = typeof rawPhone === 'string' ? rawPhone.trim() : ''
   if (!isE164(phone)) throw new PhoneVerificationFailure('invalid_phone')
+  if (isReviewPhoneNumber(phone)) return
   const config = readTwilioConfig()
   if (!config && !devCodesAllowed()) throw new PhoneVerificationFailure('unavailable')
 
@@ -82,12 +106,15 @@ export async function startPhoneVerification(userId: string, rawPhone: unknown, 
     throw new PhoneVerificationFailure('too_many_requests')
   }
   await prisma.phoneVerificationRequest.create({ data: { userId, phoneE164: phone } })
+  await sendCode(config, phone, options.locale)
+}
 
+async function sendCode(config: TwilioConfig | null, phone: string, uiLocale: string | undefined): Promise<void> {
   if (!config) {
     console.info('[phone-verification] dev mode: the code is', DEV_CODE)
     return
   }
-  const locale = twilioLocale(options.locale)
+  const locale = twilioLocale(uiLocale)
   const response = await twilioRequest(config, 'Verifications', { To: phone, Channel: 'sms', ...(locale ? { Locale: locale } : {}) })
   if (response.ok) return
   // 60200: invalid parameter (a number Twilio cannot text); 60203: Twilio's own send cap.
@@ -98,6 +125,8 @@ export async function startPhoneVerification(userId: string, rawPhone: unknown, 
 }
 
 async function checkCode(phone: string, code: string): Promise<boolean> {
+  const reviewCode = readReviewPhoneLogins().get(phone)
+  if (reviewCode) return code === reviewCode
   const config = readTwilioConfig()
   if (!config) {
     if (!devCodesAllowed()) throw new PhoneVerificationFailure('unavailable')
@@ -156,4 +185,62 @@ export async function readVerifiedPhone(userId: string): Promise<string | null> 
 /** Removes the number from the account: it can no longer be found by it. */
 export async function removeVerifiedPhone(userId: string): Promise<void> {
   await prisma.user.update({ where: { id: userId }, data: { phoneE164: null, phoneHash: null, phoneVerifiedAt: null } })
+}
+
+// ── Sign-in by phone number ─────────────────────────────────────────────
+// Before there is an account the daily caps above (per account) do not apply,
+// so codes are capped per number and per client address here, in memory: a
+// restart forgets them, and Twilio Verify's own per-number limit still holds.
+
+/** Codes one number, and one client address, may ask for in a day before signing in. */
+export const PHONE_SIGN_IN_CODES_PER_NUMBER_PER_DAY = 5
+export const PHONE_SIGN_IN_CODES_PER_CLIENT_PER_DAY = 10
+
+const signInRequests = new Map<string, number[]>()
+
+function takeSignInSlot(key: string, limit: number, now: number): boolean {
+  const recent = (signInRequests.get(key) ?? []).filter((at) => now - at < DAY_MS)
+  if (recent.length >= limit) {
+    signInRequests.set(key, recent)
+    return false
+  }
+  recent.push(now)
+  signInRequests.set(key, recent)
+  return true
+}
+
+/** Test hook: forgets every sign-in request. */
+export function resetPhoneSignInLimits(): void {
+  signInRequests.clear()
+}
+
+/** Sends a sign-in code to the number (no account needed). `clientKey` is the caller's address. */
+export async function startPhoneSignIn(rawPhone: unknown, options: { locale?: string; clientKey?: string; now?: number } = {}): Promise<void> {
+  const phone = typeof rawPhone === 'string' ? rawPhone.trim() : ''
+  if (!isE164(phone)) throw new PhoneVerificationFailure('invalid_phone')
+  if (isReviewPhoneNumber(phone)) return
+  const config = readTwilioConfig()
+  if (!config && !devCodesAllowed()) throw new PhoneVerificationFailure('unavailable')
+  const now = options.now ?? Date.now()
+  const clientKey = options.clientKey?.trim()
+  if (clientKey && !takeSignInSlot(`client:${clientKey}`, PHONE_SIGN_IN_CODES_PER_CLIENT_PER_DAY, now)) {
+    throw new PhoneVerificationFailure('too_many_requests')
+  }
+  if (!takeSignInSlot(`phone:${phone}`, PHONE_SIGN_IN_CODES_PER_NUMBER_PER_DAY, now)) {
+    throw new PhoneVerificationFailure('too_many_requests')
+  }
+  await sendCode(config, phone, options.locale)
+}
+
+/** True when the code proves the number; the caller then signs that number's account in. */
+export async function verifyPhoneSignIn(rawPhone: unknown, rawCode: unknown): Promise<string | null> {
+  const phone = typeof rawPhone === 'string' ? rawPhone.trim() : ''
+  if (!isE164(phone)) return null
+  const code = typeof rawCode === 'string' ? rawCode.replace(/\D/g, '') : ''
+  if (code.length !== 6) return null
+  try {
+    return (await checkCode(phone, code)) ? phone : null
+  } catch {
+    return null
+  }
 }
