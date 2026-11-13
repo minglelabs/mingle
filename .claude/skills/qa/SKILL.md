@@ -69,6 +69,11 @@ Fix it in the copy table (all 15 locales). Add a line to a baseline (`scripts/i1
 `src/i18n/i18n-coverage.baseline.json`) only for a true same-spelling word (fr "Notifications") or a brand
 name, and say so in the report. When the diff touches UI copy, also run the `locale-copy-sweep` scenario.
 
+Missing translations are only half of i18n: longer locales (vi, es, de, fr, ru, en) also push labels out of
+layouts designed in Korean. That is checked on the device by the `locale-text-overflow` scenario, which runs
+`qa-agent-device.mjs overflow --locale all` on each screen (15 locales, one screenshot each) and reports clipped,
+off-screen, escaping, wrapped and overlapping text. Run it whenever `locale-copy-sweep` runs, and with `/qa all`.
+
 ## 1. Select scenarios
 
 ```bash
@@ -158,6 +163,7 @@ would tap. Read state with `snapshot`/`eval`, but never use `eval` to click for 
 | System alert | `alert text`, then `alert accept` or `alert dismiss`. |
 | App state | `snapshot` returns `liveDemo` (the room), `conversationList`, `activeElement` (is the composer focused?), `alerts` and the viewport. |
 | QA bridge method | `eval 'window.__MINGLE_QA__.seedScrollPerformanceHistory()'` |
+| Text overflow | `overflow` scans the current screen; `overflow --locale all --shots <dir> --out <file>` reloads the same path in each of the 15 UI locales, screenshots each, then returns to the starting locale. |
 | Relaunch | `app terminate`, then `app launch`. |
 | Native logs | `logs --grep STT` (device syslog lines from the app since the session started). |
 | Client events | LAN profile only (local DB), read-only: `SELECT created_at, event_type, metadata FROM app.app_event_logs WHERE created_at > '<start UTC>' ORDER BY created_at;` |

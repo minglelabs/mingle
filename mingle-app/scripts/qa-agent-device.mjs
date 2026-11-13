@@ -20,6 +20,8 @@
 //   node scripts/qa-agent-device.mjs alert <accept|dismiss|text>  # iOS alerts / Android permission dialogs
 //   node scripts/qa-agent-device.mjs snapshot                   # WebView QA bridge state
 //   node scripts/qa-agent-device.mjs eval '<expression>'        # synchronous, JSON-serialisable
+//   node scripts/qa-agent-device.mjs overflow [--locale L|all] [--shots DIR] [--out FILE]
+//                                     # clipped / off-screen / wrapped / overlapping text on this screen, per UI locale
 //   node scripts/qa-agent-device.mjs app <launch|terminate|state>
 //   node scripts/qa-agent-device.mjs logs [--grep TEXT]         # syslog / logcat lines since the last call
 //   node scripts/qa-agent-device.mjs stop                       # end the session and the Appium server
@@ -33,6 +35,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { buildOverflowExpression, withLocalePath } from './qa-text-overflow.mjs';
 
 const APP_ROOT = path.resolve(import.meta.dirname, '..');
 const REPO_ROOT = path.resolve(APP_ROOT, '..');
@@ -673,6 +676,68 @@ async function cmdEval(expression) {
   console.log(JSON.stringify({ result: parsed?.mingleQaResult ?? null }, null, 2));
 }
 
+const OVERFLOW_LOCALES = ['ko', 'en', 'ja', 'zh-CN', 'zh-TW', 'fr', 'de', 'es', 'pt', 'it', 'ru', 'ar', 'hi', 'th', 'vi'];
+
+function flagValue(args, name) {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : undefined;
+}
+
+async function evalInWebView(state, expression) {
+  const result = await inWebView(state, () => appium(state, 'POST', '/session/:session/execute/sync', {
+    script: `return JSON.stringify({ mingleQaResult: (${expression}) });`,
+    args: [],
+  }));
+  const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+  return parsed?.mingleQaResult ?? null;
+}
+
+// Scans the current screen for text that spills out of its box. With --locale it reloads the same
+// path under that UI locale first (/ko/feed → /vi/feed); `all` walks the 15 UI locales and then
+// returns to the starting locale. Navigation reloads the page, so open sheets close: run it on
+// screens reachable by URL, and scan sheets/menus with plain `overflow` after switching the app language.
+async function cmdOverflow(args) {
+  const state = requireSession();
+  const localeArg = flagValue(args, '--locale');
+  const shotsDir = flagValue(args, '--shots');
+  const outFile = flagValue(args, '--out');
+  const settleMs = Number(flagValue(args, '--settle-ms')) || 2500;
+  const expression = buildOverflowExpression();
+  const locales = !localeArg ? [null] : localeArg === 'all' ? OVERFLOW_LOCALES : localeArg.split(',');
+  const startPath = await evalInWebView(state, 'location.pathname + location.search');
+  const results = [];
+  for (const locale of locales) {
+    if (locale) {
+      const [pathname, search = ''] = String(startPath).split('?');
+      const target = withLocalePath(pathname, locale) + (search ? `?${search}` : '');
+      await evalInWebView(state, `(location.assign(${JSON.stringify(target)}), true)`);
+      await delay(settleMs);
+    }
+    const scan = await evalInWebView(state, expression);
+    if (shotsDir && locale) {
+      fs.mkdirSync(shotsDir, { recursive: true });
+      const base64 = await appium(state, 'GET', '/session/:session/screenshot');
+      const file = path.join(shotsDir, `overflow-${locale}.png`);
+      fs.writeFileSync(file, Buffer.from(base64, 'base64'));
+      scan.screenshot = file;
+    }
+    results.push({ locale: locale ?? scan?.locale ?? null, ...scan });
+  }
+  if (localeArg) {
+    await evalInWebView(state, `(location.assign(${JSON.stringify(startPath)}), true)`);
+  }
+  const summary = {
+    path: startPath,
+    locales: results.map((result) => ({ locale: result.locale, controlFindings: result.controlFindings, findings: result.findings?.length ?? 0 })),
+    results,
+  };
+  if (outFile) {
+    fs.mkdirSync(path.dirname(path.resolve(outFile)), { recursive: true });
+    fs.writeFileSync(outFile, `${JSON.stringify(summary, null, 2)}\n`);
+  }
+  console.log(JSON.stringify(outFile ? { out: outFile, locales: summary.locales } : summary, null, 2));
+}
+
 async function cmdApp(args) {
   const state = requireSession();
   const action = args[0] || 'state';
@@ -1019,11 +1084,12 @@ async function main() {
     case 'alert': await cmdAlert(args); break;
     case 'snapshot': await cmdEval(SNAPSHOT_EXPRESSION); break;
     case 'eval': await cmdEval(args.join(' ')); break;
+    case 'overflow': await cmdOverflow(args); break;
     case 'app': await cmdApp(args); break;
     case 'logs': await cmdLogs(args); break;
     case 'stop': await cmdStop(); break;
     default:
-      console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 28).join('\n'));
+      console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 30).join('\n'));
       process.exitCode = command === 'help' ? 0 : 2;
   }
 }
