@@ -9,9 +9,10 @@ import SlideSurface from "@/components/slide-surface";
 import AccountBadge from "@/components/posts/account-badge";
 import IdentityRow from "@/components/posts/identity-row";
 import { resolveAccountBadge, withAccountBadgeLabel } from "@/lib/account-badge";
-import { Check, ChevronLeft, Contact, Loader2, Search, UserRound, X } from "lucide-react";
+import { ChevronLeft, Contact, Loader2, Search, UserRound, X } from "lucide-react";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { openContactSync } from "@/lib/native-contacts";
+import FollowStatusIndicator from "@/components/follow-status-indicator";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
 import {
@@ -95,6 +96,7 @@ export default function FollowListScreen({
     clearSearch: dictionary.connect.clearSearchLabel ?? (locale === "ko" ? "검색어 지우기" : "Clear search"),
     follow: dictionary.connect.followAction ?? (locale === "ko" ? "팔로우" : "Follow"),
     followError: dictionary.connect.followError ?? (locale === "ko" ? "팔로우하지 못했습니다." : "Could not follow this user."),
+    followingStatus: dictionary.connect.followingAction ?? (locale === "ko" ? "팔로잉" : "Following"),
     mutual: dictionary.profile.mutualFollowLabel ?? (locale === "ko" ? "맞팔" : "Mutual"),
     empty: activeTab === "followers"
       ? (dictionary.profile.noFollowersLabel ?? "No followers yet.")
@@ -432,10 +434,9 @@ export default function FollowListScreen({
                           {isPending ? "…" : labels.follow}
                         </button>
                       ) : isMutual ? (
-                        <span className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-emerald-600">
-                          <Check size={14} strokeWidth={2.5} aria-hidden="true" />
-                          <span>{labels.mutual}</span>
-                        </span>
+                        <FollowStatusIndicator label={labels.mutual} mutual />
+                      ) : activeTab === "following" ? (
+                        <FollowStatusIndicator label={labels.followingStatus} />
                       ) : null}
                     </div>
                     {followErrorId === user.id ? (
