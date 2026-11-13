@@ -4,6 +4,7 @@ import { Loader2, X } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { fillPhoneFriendsCopy, type PhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { useKeyboardInset } from "@/components/compose/compose-chrome";
 import { PHONE_COUNTRIES, maskE164, normalizePhoneNumber, resolveDefaultPhoneCountry } from "@/lib/phone-number";
 
 const RESEND_AFTER_MS = 30_000;
@@ -44,6 +45,7 @@ export default function PhoneVerifySheet({
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const codeInputRef = useRef<HTMLInputElement | null>(null);
+  const keyboardInset = useKeyboardInset();
 
   const phone = normalizePhoneNumber(number, country.callingCode);
 
@@ -123,7 +125,11 @@ export default function PhoneVerifySheet({
       <button type="button" className="absolute inset-0 bg-black/45" aria-label={copy.close} onClick={onClose} />
       <div
         className="relative w-full max-w-[520px] rounded-t-[1.6rem] bg-white px-5 pt-4 text-slate-950"
-        style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }}
+        style={{
+          // Above the keyboard while typing; the safe area only when it is closed.
+          marginBottom: keyboardInset,
+          paddingBottom: keyboardInset > 0 ? 16 : "calc(20px + env(safe-area-inset-bottom, 0px))",
+        }}
       >
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">

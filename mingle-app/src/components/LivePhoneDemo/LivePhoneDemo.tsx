@@ -6002,7 +6002,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // Someone who already chose a speech split keeps it.
     if (sttSegmentationMode !== null) return
     applySpeechLengthPreferences(trialLevel ?? DEFAULT_SPEECH_LENGTH_LEVEL)
-  }, [accountPreferencesHydratedGeneration, applySpeechLengthPreferences, isStorageHydrated, speechLengthIntro, sttSegmentationMode])
+    // The first room may already be listening (it starts on open) with the
+    // server default; the split is fixed per session, so start it again.
+    if (isSttSessionRunning) {
+      speechLengthRestartPendingRef.current = true
+      void handleStopRecording()
+    }
+  }, [accountPreferencesHydratedGeneration, applySpeechLengthPreferences, handleStopRecording, isStorageHydrated, isSttSessionRunning, speechLengthIntro, sttSegmentationMode])
 
   // Bubbles already in the room when it first listens (a welcome message, an
   // earlier conversation) do not count. A bubble still being spoken is not in

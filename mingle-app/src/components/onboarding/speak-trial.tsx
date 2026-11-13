@@ -16,11 +16,15 @@ import {
   speakTrialSecondsLeft,
 } from "@/lib/speak-trial";
 import { DEFAULT_SPEECH_LENGTH_LEVEL, type SpeechLengthLevel } from "@/lib/speech-length";
+import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 
 type Phase = "ready" | "listening" | "ending" | "asking";
 
 // After the mic stops, the last sentence still needs its translation.
 const SETTLE_MS = 1800;
+// A try in which nothing was heard starts over, this many times, before the
+// length question comes anyway.
+const MAX_SILENT_TRIES = 2;
 const RING_SIZE = 36;
 const RING_STROKE = 3.5;
 
@@ -102,6 +106,11 @@ export default function SpeakTrial({
   const [now, setNow] = useState(() => Date.now());
   // Moved together with `phase` in the callbacks below, so they read it without re-binding.
   const phaseRef = useRef<Phase>("ready");
+  // Finished messages in the room, and how many tries heard nothing.
+  const messageCountRef = useRef(0);
+  const [silentTries, setSilentTries] = useState(0);
+  // No ads in the first minute: the native banner would also cover the card.
+  useNativeBannerSuppression(true);
 
   useEffect(() => {
     captureMingleClientEvent("mingle_first_run_step", { step: "speak_trial_shown" });
@@ -138,9 +147,19 @@ export default function SpeakTrial({
 
   useEffect(() => {
     if (phase !== "ending") return;
-    const timer = window.setTimeout(() => setPhase("asking"), SETTLE_MS);
+    const timer = window.setTimeout(() => {
+      if (messageCountRef.current === 0 && silentTries + 1 < MAX_SILENT_TRIES) {
+        captureMingleClientEvent("mingle_first_run_step", { step: "speak_trial_nothing_heard" });
+        setSilentTries((count) => count + 1);
+        setStartedAt(null);
+        phaseRef.current = "ready";
+        setPhase("ready");
+        return;
+      }
+      setPhase("asking");
+    }, SETTLE_MS);
     return () => window.clearTimeout(timer);
-  }, [phase]);
+  }, [phase, silentTries]);
 
   const finish = useCallback((level: SpeechLengthLevel, source: "apply" | "close") => {
     savePendingSpeechLength(level);
@@ -173,6 +192,7 @@ export default function SpeakTrial({
         sessionKeyOverride="speak-trial"
         trial={{ speechLength: DEFAULT_SPEECH_LENGTH_LEVEL, headerAccessory }}
         onSttSessionRunningChange={handleRunningChange}
+        onConversationStatsChange={(stats) => { messageCountRef.current = stats.messageCount; }}
       />
 
       <AnimatePresence>
@@ -187,7 +207,7 @@ export default function SpeakTrial({
           >
             <div className="flex flex-col items-center gap-2">
               <p data-qa="speak-trial-hint" className="max-w-[360px] rounded-2xl bg-slate-950/85 px-4 py-2.5 text-center text-[0.92rem] font-semibold leading-snug text-white shadow-lg">
-                {copy.hint}
+                {silentTries > 0 ? copy.retryHint : copy.hint}
               </p>
               {phase === "ready" ? (
                 <button
