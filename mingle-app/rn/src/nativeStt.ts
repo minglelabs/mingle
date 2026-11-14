@@ -11,6 +11,8 @@ type NativeSttStartOptions = {
   sttModel?: string;
   aecEnabled?: boolean;
   captureSource?: NativeSttCaptureSource;
+  // iOS: record from the earphones' microphone instead of the phone's.
+  earphoneMicrophone?: boolean;
   sonioxManualFinalizeSilenceMs?: number;
   sttSegmentationMode?: 'fin' | 'end';
   sonioxEndpointMaxDelayMs?: number;
@@ -59,13 +61,16 @@ type NativeSttModuleType = {
   start(options: NativeSttStartOptions): Promise<{ sampleRate: number }>;
   stop(options?: NativeSttStopOptions): Promise<void>;
   setAec(enabled: boolean): Promise<{ ok: boolean }>;
+  // iOS builds that record from the phone while earphones are in.
+  setEarphoneMicrophone?: (enabled: boolean) => Promise<{ ok: boolean }>;
   // Absent on builds before Soniox v6 agent text input.
   sendAgentText?: (text: string, endOfSegment: boolean) => void;
   getMicrophonePermissionStatus(): Promise<NativeSttMicrophonePermissionStatus>;
   getStatus?: () => Promise<NativeSttStatus>;
   // iOS only: the broadcast extension and its App Group are in this build.
   deviceAudioCaptureSupported?: boolean;
-  getConstants?: () => { deviceAudioCaptureSupported?: boolean };
+  earphoneMicrophoneChoiceSupported?: boolean;
+  getConstants?: () => { deviceAudioCaptureSupported?: boolean; earphoneMicrophoneChoiceSupported?: boolean };
   qaInjectAudio?: (options: NativeSttQaAudioInjectionOptions) => Promise<NativeSttQaAudioInjectionEvent>;
   qaClearAudioInjection?: () => Promise<{ cleared: boolean }>;
 };
@@ -107,6 +112,16 @@ export function isNativeDeviceAudioCaptureAvailable(): boolean {
   return supported === true;
 }
 
+// Whether this build records from the phone's microphone while earphones are
+// in and can switch to the earphones' on request (iOS only: Android records
+// from the phone with Bluetooth earphones already).
+export function isNativeEarphoneMicrophoneChoiceAvailable(): boolean {
+  if (!nativeModule || !nativeEmitter || Platform.OS !== 'ios') return false;
+  const supported = nativeModule.earphoneMicrophoneChoiceSupported
+    ?? nativeModule.getConstants?.().earphoneMicrophoneChoiceSupported;
+  return supported === true && typeof nativeModule.setEarphoneMicrophone === 'function';
+}
+
 export function normalizeNativeSttCaptureSource(value: unknown): NativeSttCaptureSource {
   return typeof value === 'string' && value.trim().toLowerCase() === 'device_audio'
     ? 'device_audio'
@@ -132,6 +147,10 @@ export async function setNativeSttAec(enabled: boolean): Promise<void> {
     return;
   }
   await nativeModule.setAec(enabled);
+}
+
+export async function setNativeSttEarphoneMicrophone(enabled: boolean): Promise<void> {
+  await nativeModule?.setEarphoneMicrophone?.(enabled);
 }
 
 export function sendNativeSttAgentText(text: string, endOfSegment: boolean): void {

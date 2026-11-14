@@ -1,0 +1,6 @@
+{
+  "note": "Accepted hardcoded strings. Shrink this list; never grow it to silence new copy.",
+  "accepted": [
+    "hangul-literal|rn/src/nativeQrScanner.tsx|프로필"
+  ]
+}
