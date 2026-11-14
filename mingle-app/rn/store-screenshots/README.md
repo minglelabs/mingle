@@ -6,10 +6,10 @@ Source for the App Store and Google Play screenshot set: 8 slides in 15 language
 |---|---|---|
 | 01 | Full-bleed photo of friends from many countries. Caption: make Korean friends and explore Korea together (ko: meet foreign friends who love Korea) | `hero/group.jpg` |
 | 02 | 1:1 chat, each in their own language | `dm.json` `dm` (+ `viewerOverrides.ko.dm`), photo slide over `scenes/backdrop-02.jpg` |
-| 03 | A group voice talk with all 8 seats filled (K-pop chat room), every line interpreted. The seats use operator accounts' profile photos (`people/*.jpg`, face crops) | `dm.json` `group` → `captures/<lang>/group.png`, over `scenes/backdrop-03.jpg` |
+| 03 | A group voice talk with all 8 seats filled (K-pop chat room), every line interpreted. The seats use operator accounts' profile photos (`people/*.jpg`, face crops); the viewer's own seat is `people/me.jpg` | `dm.json` `group` → `captures/<lang>/group.png`, over `scenes/backdrop-03.jpg` |
 | 04 | Safety statement: creeps, rude users and scammers banned for good; one tap to report | `render.py` `STATEMENT_PAGE` |
-| 05 | Planning a Korea trip with a friend: a photo of friends around a phone (`trip/friends.jpg`, a crop of the hero photo), the trip chat on a tilted phone, and the route Incheon Airport → Gwanghwamun → Gangnam → Han River as connected stops | `render.py` `TRIP_PAGE`, `dm.json` `trip` and `tripStops` |
-| 06 | An interpreted booking call to a hair salon | `render.py` scene (`booking` lines) over the `booking/` photos |
+| 05 | Planning a Korea trip with a friend: a photo of friends around a phone (`trip/friends.jpg`, drawn with ChatGPT), the trip chat on a tilted phone, and the route Incheon Airport → Gwanghwamun → Gangnam → Han River as connected stops | `render.py` `TRIP_PAGE`, `dm.json` `trip` and `tripStops` |
+| 06 | An interpreted booking call to a hair salon | `render.py` scene (`booking` lines) over the `booking/` salon photos (`salon.jpg` above, `salon-desk.jpg` below, drawn with ChatGPT) |
 | 07 | A friend's post read in your language | app (`/{locale}/feed?postId=…`) |
 | 08 | Hash Rush (meadow) | live site, `?lang=` |
 | 09 | Hash Rush (beach). App Store only (`"iosOnly": true`): Google Play takes at most 8 phone screenshots | live site, `?lang=` |

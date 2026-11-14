@@ -296,7 +296,8 @@ function dmHtml(lang, kind, { call = false } = {}) {
   const title = group ? group.title[lang] : kind === 'booking' ? dm.bookingTitle[lang] : dm.friendName[partner];
   const avatar = kind === 'booking' ? 'squirrel.svg' : 'rabbit.svg';
   const listening = kind !== 'dm' && kind !== 'trip';
-  const meAvatar = 'fox.svg';
+  // In the group voice room every seat is a person's photo, the viewer's too.
+  const meAvatar = group ? 'people/me.jpg' : 'fox.svg';
   // In a call the last line is the one being spoken.
   const lastBy = lines[lines.length - 1]?.by;
   const speaking = group ? lastBy : lastBy === 'me' ? 'me' : 'friend';
