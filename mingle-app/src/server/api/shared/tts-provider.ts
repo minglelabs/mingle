@@ -137,6 +137,15 @@ export function getGeminiTtsStyle(language?: string | null): string | null {
   return (lang && GEMINI_TTS_LANGUAGE_STYLES[lang]) || DEFAULT_GEMINI_TTS_STYLE
 }
 
+/**
+ * `GEMINI_TTS_STREAM=off` (or `0` / `false`) asks for one unary answer instead
+ * of a stream, for A/B checks and as a kill switch. Default: stream.
+ */
+function isGeminiTtsStreamEnabled(): boolean {
+  const value = (process.env.GEMINI_TTS_STREAM || '').trim().toLowerCase()
+  return !['off', '0', 'false'].includes(value)
+}
+
 function getGeminiTtsTimeoutMs(): number {
   const value = Number(process.env.GEMINI_TTS_TIMEOUT_MS || '')
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_GEMINI_TTS_TIMEOUT_MS
@@ -379,7 +388,7 @@ export async function synthesizeWithGemini(
         store: false,
         // Streamed audio arrives as it is synthesized: for a short line the
         // whole clip is in about 1.5 s instead of 2.5 s unary.
-        stream: true,
+        ...(isGeminiTtsStreamEnabled() ? { stream: true } : {}),
       }),
       cache: 'no-store',
       signal: controller.signal,

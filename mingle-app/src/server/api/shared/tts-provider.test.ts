@@ -10,6 +10,7 @@ const TTS_ENV_KEYS = [
   'GEMINI_TTS_STYLE_KO',
   'GEMINI_TTS_STYLE_JA',
   'GEMINI_TTS_TIMEOUT_MS',
+  'GEMINI_TTS_STREAM',
   'INWORLD_RUNTIME_BASE64_CREDENTIAL',
 ] as const
 
@@ -354,6 +355,26 @@ describe('synthesizeSpeech — gemini', () => {
     }))
     const direct = await synthesizeWithGemini({ text: 'hello', language: null, modelId: 'gemini-3.8-flash-tts' })
     expect(direct).toMatchObject({ ok: false, reason: 'timeout' })
+  })
+
+  it('asks for one unary answer when GEMINI_TTS_STREAM is off', async () => {
+    for (const value of ['off', '0', 'FALSE']) {
+      process.env.GEMINI_TTS_STREAM = value
+      const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wavBytes(), 'audio/wav'))
+      vi.stubGlobal('fetch', fetchMock)
+      const { synthesizeWithGemini } = await loadModule()
+
+      const result = await synthesizeWithGemini({ text: 'hello', language: 'en', modelId: 'gemini-3.8-flash-lite-tts' })
+
+      expect(result).toMatchObject({ ok: true, provider: 'gemini' })
+      expect(bodyOf(fetchMock.mock.calls[0])).not.toHaveProperty('stream')
+    }
+    process.env.GEMINI_TTS_STREAM = 'on'
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wavBytes(), 'audio/wav'))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeWithGemini } = await loadModule()
+    await synthesizeWithGemini({ text: 'hello', language: 'en', modelId: 'gemini-3.8-flash-lite-tts' })
+    expect(bodyOf(fetchMock.mock.calls[0]).stream).toBe(true)
   })
 
   it('joins streamed PCM chunks in order into one 24 kHz WAV', async () => {
