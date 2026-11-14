@@ -39,6 +39,15 @@ describe("language-selector.logic", () => {
     expect(japanese?.secondaryLabel).toContain("日本語");
   });
 
+  it("capitalizes native names so server and WebView render the same label (hydration)", () => {
+    const items = buildLanguageSelectorItems("ko-KR");
+
+    // Node's ICU says "español"/"français"; WebKit capitalizes. A mismatch made React re-create
+    // the tree on the client and drop the canvas scale on My Page.
+    expect(items.find((item) => item.code === "es")?.secondaryLabel).toBe("Spanish / Español");
+    expect(items.find((item) => item.code === "fr")?.nativeName).toBe("Français");
+  });
+
   it("shows separate Simplified and Traditional Chinese rows", () => {
     const items = buildLanguageSelectorItems("en-US");
 

@@ -59,6 +59,10 @@ function replaceFollowListSearchParams(updates: Record<string, string | null>): 
   }
 }
 
+function capitalizeLabel(label: string, locale: string): string {
+  return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
+}
+
 export default function FollowListScreen({
   dictionary,
   locale,
@@ -84,8 +88,10 @@ export default function FollowListScreen({
 
   const contactSyncLabel = resolveContactSyncCopy(locale).title;
   const labels = useMemo(() => ({
-    followers: dictionary.profile.followersLabel ?? (locale === "ko" ? "팔로워" : "Followers"),
-    following: dictionary.profile.followingLabel ?? (locale === "ko" ? "팔로잉" : "Following"),
+    // The profile count labels are lowercase in several locales ("followers", "seguidores",
+    // "người theo dõi"); here they are a screen title and tabs.
+    followers: capitalizeLabel(dictionary.profile.followersLabel ?? (locale === "ko" ? "팔로워" : "Followers"), locale),
+    following: capitalizeLabel(dictionary.profile.followingLabel ?? (locale === "ko" ? "팔로잉" : "Following"), locale),
     back: dictionary.profile.profileShareBackLabel ?? (locale === "ko" ? "뒤로가기" : "Back"),
     search: dictionary.connect.searchPlaceholder
       ?? (locale === "ko" ? "아이디 또는 이름 검색" : "Search by handle or name"),

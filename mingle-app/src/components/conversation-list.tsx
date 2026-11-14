@@ -1752,7 +1752,8 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
             paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
           }}
         >
-          <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
+          {/* min-w-0: an input's default width would otherwise push a long "Cancel" (de) off-screen. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
             <Search size={16} className="shrink-0 text-gray-400" />
             <input
               ref={inputRef}
@@ -1760,7 +1761,7 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={copy.searchPlaceholder}
-              className={`flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400 ${
+              className={`min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400 ${
                 caretHidden ? "caret-transparent" : ""
               }`}
               enterKeyHint="search"

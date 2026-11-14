@@ -935,8 +935,9 @@ function ProfileSettingsPanel({
               className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 text-left transition active:bg-gray-50"
             >
               <Contact size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
-              <span className="min-w-0 flex-1 text-[15px] font-semibold">{contactSyncCopy.title}</span>
-              <span className="truncate text-[13px] text-gray-400">{contactSyncCopy.headline}</span>
+              {/* The title stays whole; the reward headline gives way (it is long in fr/de). */}
+              <span className="shrink-0 text-[15px] font-semibold">{contactSyncCopy.title}</span>
+              <span data-qa-allow-truncate className="min-w-0 flex-1 truncate text-right text-[13px] text-gray-400">{contactSyncCopy.headline}</span>
               <ChevronRight size={19} strokeWidth={2} className="shrink-0 text-gray-400" aria-hidden="true" />
             </button>
             {postingFeedSupported !== false ? (
