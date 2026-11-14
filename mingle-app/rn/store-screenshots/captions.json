@@ -182,7 +182,28 @@
       }
     },
     {
-      "id": "05-trip",
+      "id": "05-women",
+      "capture": "captures/{lang}/women.png",
+      "caption": {
+        "ko": "여성 전용 연결로\n부담 없이 대화해요",
+        "en": "Women-only mode:\nchat with no pressure",
+        "ja": "女性限定モードで\n気軽におしゃべり",
+        "zh-cn": "女性专属模式\n轻松无负担地聊",
+        "zh-tw": "女性專屬模式\n輕鬆無負擔地聊",
+        "es": "Modo solo mujeres:\nhabla sin presión",
+        "fr": "Mode entre femmes :\ndiscutez sereinement",
+        "de": "Nur-Frauen-Modus:\nentspannt chatten",
+        "it": "Modalità solo donne:\nchiacchiera serena",
+        "pt": "Modo só mulheres:\nconverse sem pressão",
+        "ru": "Режим «только девушки»:\nобщайтесь спокойно",
+        "ar": "وضع للنساء فقط\nدردشي براحة",
+        "hi": "सिर्फ़ महिलाओं का मोड\nबेझिझक बात करें",
+        "th": "โหมดเฉพาะผู้หญิง\nคุยสบายใจ",
+        "vi": "Chế độ chỉ nữ\ntrò chuyện thoải mái"
+      }
+    },
+    {
+      "id": "06-trip",
       "capture": "captures/{lang}/trip.png",
       "caption": {
         "ko": "외국인 친구와 함께\n한국 여행 계획을",
@@ -204,7 +225,7 @@
       "tripScene": true
     },
     {
-      "id": "06-booking",
+      "id": "07-booking",
       "capture": "captures/{lang}/booking.png",
       "caption": {
         "ko": "예약 전화도\n실시간 통역으로",
@@ -233,7 +254,7 @@
       }
     },
     {
-      "id": "07-feed",
+      "id": "08-feed",
       "capture": "captures/{lang}/translation.png",
       "caption": {
         "ko": "친구들의 일상을\n내 언어로",
@@ -251,10 +272,11 @@
         "ru": "Посты друзей\nна вашем языке",
         "th": "โพสต์ของเพื่อน\nในภาษาของคุณ",
         "vi": "Bài đăng của bạn bè\nbằng tiếng của bạn"
-      }
+      },
+      "iosOnly": true
     },
     {
-      "id": "08-hash-rush",
+      "id": "09-hash-rush",
       "capture": "captures/{lang}/hash-rush.png",
       "caption": {
         "ko": "친구와 함께\n미니게임",

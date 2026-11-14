@@ -49,7 +49,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const chat = JSON.parse(await fs.readFile(path.join(HERE, 'chat.json'), 'utf8'));
 const dm = JSON.parse(await fs.readFile(path.join(HERE, 'dm.json'), 'utf8'));
 // Screens drawn from JSON here; they need no devbox server and no sign-in.
-const DRAWN_SCREENS = ['chat', 'dm', 'voice', 'booking', 'group', 'trip'];
+const DRAWN_SCREENS = ['chat', 'dm', 'voice', 'booking', 'group', 'trip', 'women'];
 const NEEDS_SERVER = !SCREENS || SCREENS.some((name) => !DRAWN_SCREENS.includes(name) && !name.startsWith('hash-rush'));
 
 const browser = await puppeteer.launch({
@@ -375,6 +375,46 @@ function dmHtml(lang, kind, { call = false } = {}) {
   </footer></body></html>`;
 }
 
+// 05: the friend finder with the "Women only" chip on: a note that only women
+// see each other here, and a two-column grid of women's profile cards (photo,
+// name and age, their language flag and the one they're learning, "Say hi").
+// The cards are the same for every viewer; the words follow the viewer.
+function womenHtml(lang) {
+  const w = dm.women;
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const cards = w.cards.map((card) => `
+    <div class="card"><div class="ph" style="background-image:url('${avatarSrc(card.avatar)}')"><span class="dot"></span></div>
+      <div class="info"><div class="nm" dir="auto">${esc(card.name)} <span>${card.age}</span></div>
+      <div class="lg" dir="ltr">${chat.flags[card.lang]}<span>→</span>${chat.flags[card.learn]}</div>
+      <div class="hi">${esc(w.say[lang])}</div></div></div>`).join('');
+  const dir = lang === 'ar' ? 'rtl' : 'ltr';
+  return `<!doctype html><html lang="${LANGS[lang]}" dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+  *{box-sizing:border-box}
+  html,body{margin:0;width:390px;height:797px;overflow:hidden;background:#F7F7F8;
+    font-family:-apple-system,"SF Pro Text","Apple SD Gothic Neo","Hiragino Sans","PingFang SC","Geeza Pro","Kohinoor Devanagari","Thonburi",sans-serif;color:#111}
+  header{height:52px;background:#fff;display:flex;align-items:center;padding:0 18px;font-size:19px;font-weight:700}
+  .chips{display:flex;gap:8px;padding:6px 16px 12px;background:#fff;border-bottom:1px solid #EEE}
+  .chip{border:1px solid #E5E5E5;border-radius:16px;padding:7px 13px;font-size:14px;color:#444;white-space:nowrap}
+  .chip.on{background:#FFE7F0;border-color:#F9A8C9;color:#D6336C;font-weight:700}
+  .note{margin:12px 14px 4px;padding:10px 12px;border-radius:12px;background:#FFF0F6;color:#C2255C;font-size:13px;line-height:1.4;display:flex;gap:8px;align-items:center}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 14px}
+  .card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .ph{position:relative;height:170px;background:center/cover no-repeat}
+  .dot{position:absolute;right:9px;top:9px;width:11px;height:11px;border-radius:50%;background:#22C55E;border:2px solid #fff}
+  .info{padding:8px 10px 10px}
+  .nm{font-size:15px;font-weight:700}
+  .nm span{font-weight:500;color:#6B7280;font-size:14px}
+  .lg{font-size:15px;margin-top:3px;display:flex;gap:4px;align-items:center}
+  .lg span{font-size:11px;color:#9CA3AF}
+  .hi{margin-top:7px;height:30px;border-radius:15px;background:#FFF1CC;color:#B45309;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  </style></head><body>
+  <header>${esc(w.title[lang])}</header>
+  <div class="chips"><span class="chip">${esc(w.all[lang])}</span><span class="chip on">♀ ${esc(w.womenOnly[lang])}</span><span class="chip">🇰🇷</span><span class="chip">🇯🇵</span></div>
+  <div class="note">🔒 <span>${esc(w.banner[lang])}</span></div>
+  <div class="grid">${cards}</div>
+  </body></html>`;
+}
+
 async function hashRush(lang, dir, name, map) {
   if (SCREENS && !SCREENS.includes(name)) return;
   const p = await newPage(LANGS[lang]);
@@ -432,6 +472,9 @@ for (const lang of Object.keys(LANGS)) {
     await fs.writeFile(page, dmHtml(lang, kind, { call: kind !== 'dm' && kind !== 'trip' }));
     await capture(lang, dir, kind, pathToFileURL(page).href);
   }
+  const womenPage = path.join(os.tmpdir(), `hashchat-women-${lang}.html`);
+  await fs.writeFile(womenPage, womenHtml(lang));
+  await capture(lang, dir, 'women', pathToFileURL(womenPage).href);
 
   await hashRush(lang, dir, 'hash-rush', 'meadow');
   await hashRush(lang, dir, 'hash-rush-maps', 'beach');

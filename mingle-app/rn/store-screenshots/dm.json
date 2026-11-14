@@ -725,5 +725,136 @@
         }
       ]
     }
+  },
+  "women": {
+    "cards": [
+      {
+        "name": "ゆき",
+        "age": 24,
+        "lang": "ja",
+        "learn": "ko",
+        "avatar": "people/yuki.jpg"
+      },
+      {
+        "name": "Ava",
+        "age": 26,
+        "lang": "en",
+        "learn": "ko",
+        "avatar": "people/ava.jpg"
+      },
+      {
+        "name": "Chloé",
+        "age": 25,
+        "lang": "fr",
+        "learn": "ko",
+        "avatar": "people/chloe.jpg"
+      },
+      {
+        "name": "莉奈",
+        "age": 23,
+        "lang": "ja",
+        "learn": "ko",
+        "avatar": "people/rina.jpg"
+      },
+      {
+        "name": "지민",
+        "age": 25,
+        "lang": "ko",
+        "learn": "en",
+        "avatar": "people/me.jpg"
+      },
+      {
+        "name": "美咲",
+        "age": 27,
+        "lang": "ja",
+        "learn": "ko",
+        "avatar": "people/misaki.jpg"
+      }
+    ],
+    "title": {
+      "ko": "친구 찾기",
+      "en": "Find friends",
+      "ja": "友だちを探す",
+      "zh-cn": "找朋友",
+      "zh-tw": "找朋友",
+      "es": "Buscar amigos",
+      "fr": "Trouver des amis",
+      "de": "Freunde finden",
+      "it": "Trova amici",
+      "pt": "Encontrar amigos",
+      "ru": "Найти друзей",
+      "ar": "ابحث عن أصدقاء",
+      "hi": "दोस्त खोजें",
+      "th": "หาเพื่อน",
+      "vi": "Tìm bạn"
+    },
+    "all": {
+      "ko": "전체",
+      "en": "All",
+      "ja": "すべて",
+      "zh-cn": "全部",
+      "zh-tw": "全部",
+      "es": "Todos",
+      "fr": "Tous",
+      "de": "Alle",
+      "it": "Tutti",
+      "pt": "Todos",
+      "ru": "Все",
+      "ar": "الكل",
+      "hi": "सभी",
+      "th": "ทั้งหมด",
+      "vi": "Tất cả"
+    },
+    "womenOnly": {
+      "ko": "여성 전용",
+      "en": "Women only",
+      "ja": "女性限定",
+      "zh-cn": "女性专属",
+      "zh-tw": "女性專屬",
+      "es": "Solo mujeres",
+      "fr": "Entre femmes",
+      "de": "Nur Frauen",
+      "it": "Solo donne",
+      "pt": "Só mulheres",
+      "ru": "Только девушки",
+      "ar": "للنساء فقط",
+      "hi": "सिर्फ़ महिलाएँ",
+      "th": "เฉพาะผู้หญิง",
+      "vi": "Chỉ nữ"
+    },
+    "banner": {
+      "ko": "여성 회원끼리만 서로 보이고 대화할 수 있어요",
+      "en": "Only women see and message each other here",
+      "ja": "女性メンバー同士だけが表示され、話せます",
+      "zh-cn": "只有女性会员彼此可见、可以聊天",
+      "zh-tw": "只有女性會員彼此可見、可以聊天",
+      "es": "Aquí solo las mujeres se ven y se escriben",
+      "fr": "Ici, seules les femmes se voient et s’écrivent",
+      "de": "Hier sehen und schreiben sich nur Frauen",
+      "it": "Qui solo le donne si vedono e si scrivono",
+      "pt": "Aqui só mulheres se veem e conversam",
+      "ru": "Здесь видят и пишут друг другу только девушки",
+      "ar": "هنا ترى النساء بعضهن ويتراسلن فقط",
+      "hi": "यहाँ सिर्फ़ महिलाएँ एक-दूसरे को देखती और बात करती हैं",
+      "th": "เฉพาะสมาชิกผู้หญิงที่เห็นและคุยกันได้",
+      "vi": "Chỉ thành viên nữ thấy và nhắn tin cho nhau"
+    },
+    "say": {
+      "ko": "말 걸기",
+      "en": "Say hi",
+      "ja": "話しかける",
+      "zh-cn": "打招呼",
+      "zh-tw": "打招呼",
+      "es": "Saludar",
+      "fr": "Dire salut",
+      "de": "Hallo sagen",
+      "it": "Saluta",
+      "pt": "Dizer oi",
+      "ru": "Написать",
+      "ar": "قل مرحبًا",
+      "hi": "हाय कहें",
+      "th": "ทักทาย",
+      "vi": "Chào"
+    }
   }
 }
