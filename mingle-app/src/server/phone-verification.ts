@@ -1,12 +1,25 @@
 import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { isE164 } from '@/lib/phone-number'
+import { KoreanSmsError, koreanSmsProvider, sendKoreanSms } from '@/server/korean-sms'
+import { buildSmsCodeText, checkSmsCode, issueSmsCode } from '@/server/sms-codes'
 
 // A user proves a phone number with a 6-digit SMS code. The code is made,
 // sent and checked by Twilio Verify (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
 // TWILIO_VERIFY_SERVICE_SID); it is never stored here. Without Twilio set up,
 // a non-production server accepts the code 000000 so the flow can be tried
 // locally; production then answers "unavailable".
+//
+// The same code also signs in (or signs up) by phone number alone, before
+// there is an account; see startPhoneSignIn / verifyPhoneSignIn.
+//
+// Korean numbers (+82) go through Sendon or Solapi when one is set up: a
+// plain SMS with a code made here (see @/server/korean-sms), much cheaper
+// than Twilio Verify to Korea. Every other number uses Twilio.
+//
+// App review: PHONE_REVIEW_LOGINS lists fixed numbers and codes for store
+// reviewers ("+821000000000:123456,+15555550100:654321"). Those numbers get
+// no SMS and always take their own code, on any server.
 
 const DAY_MS = 24 * 60 * 60 * 1000
 /** Codes one account may ask for in a day, and one number may receive. */
@@ -52,6 +65,22 @@ async function twilioRequest(config: TwilioConfig, path: string, form: Record<st
   })
 }
 
+/** Store-review numbers with their fixed code (PHONE_REVIEW_LOGINS). */
+export function readReviewPhoneLogins(env: NodeJS.ProcessEnv = process.env): Map<string, string> {
+  const logins = new Map<string, string>()
+  for (const entry of (env.PHONE_REVIEW_LOGINS ?? '').split(',')) {
+    const [rawPhone, rawCode] = entry.split(':')
+    const phone = rawPhone?.trim() ?? ''
+    const code = rawCode?.replace(/\D/g, '') ?? ''
+    if (isE164(phone) && code.length === 6) logins.set(phone, code)
+  }
+  return logins
+}
+
+export function isReviewPhoneNumber(phone: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  return readReviewPhoneLogins(env).has(phone)
+}
+
 export function hashPhoneE164(e164: string): string {
   return createHash('sha256').update(e164).digest('hex')
 }
@@ -66,12 +95,22 @@ function twilioLocale(uiLocale: string | undefined): string | undefined {
   return code.split('-')[0]
 }
 
+type CodeRoute = 'korean_sms' | 'twilio' | 'dev'
+
+/** Who sends and checks the number's code, or null when nobody can. */
+function resolveCodeRoute(phone: string): CodeRoute | null {
+  if (phone.startsWith('+82') && koreanSmsProvider()) return 'korean_sms'
+  if (readTwilioConfig()) return 'twilio'
+  return devCodesAllowed() ? 'dev' : null
+}
+
 /** Sends a code to the number, within the daily caps. */
 export async function startPhoneVerification(userId: string, rawPhone: unknown, options: { locale?: string } = {}): Promise<void> {
   const phone = typeof rawPhone === 'string' ? rawPhone.trim() : ''
   if (!isE164(phone)) throw new PhoneVerificationFailure('invalid_phone')
-  const config = readTwilioConfig()
-  if (!config && !devCodesAllowed()) throw new PhoneVerificationFailure('unavailable')
+  if (isReviewPhoneNumber(phone)) return
+  const route = resolveCodeRoute(phone)
+  if (!route) throw new PhoneVerificationFailure('unavailable')
 
   const since = new Date(Date.now() - DAY_MS)
   const [byUser, byNumber] = await Promise.all([
@@ -82,12 +121,26 @@ export async function startPhoneVerification(userId: string, rawPhone: unknown, 
     throw new PhoneVerificationFailure('too_many_requests')
   }
   await prisma.phoneVerificationRequest.create({ data: { userId, phoneE164: phone } })
+  await sendCode(route, phone, options.locale)
+}
 
-  if (!config) {
+async function sendCode(route: CodeRoute, phone: string, uiLocale: string | undefined): Promise<void> {
+  if (route === 'dev') {
     console.info('[phone-verification] dev mode: the code is', DEV_CODE)
     return
   }
-  const locale = twilioLocale(options.locale)
+  if (route === 'korean_sms') {
+    try {
+      await sendKoreanSms(phone, buildSmsCodeText(issueSmsCode(phone)))
+    } catch (error) {
+      if (error instanceof KoreanSmsError) throw new PhoneVerificationFailure(error.kind)
+      throw error
+    }
+    return
+  }
+  const config = readTwilioConfig()
+  if (!config) throw new PhoneVerificationFailure('unavailable')
+  const locale = twilioLocale(uiLocale)
   const response = await twilioRequest(config, 'Verifications', { To: phone, Channel: 'sms', ...(locale ? { Locale: locale } : {}) })
   if (response.ok) return
   // 60200: invalid parameter (a number Twilio cannot text); 60203: Twilio's own send cap.
@@ -98,11 +151,14 @@ export async function startPhoneVerification(userId: string, rawPhone: unknown, 
 }
 
 async function checkCode(phone: string, code: string): Promise<boolean> {
+  const reviewCode = readReviewPhoneLogins().get(phone)
+  if (reviewCode) return code === reviewCode
+  const route = resolveCodeRoute(phone)
+  if (!route) throw new PhoneVerificationFailure('unavailable')
+  if (route === 'korean_sms') return checkSmsCode(phone, code)
+  if (route === 'dev') return code === DEV_CODE
   const config = readTwilioConfig()
-  if (!config) {
-    if (!devCodesAllowed()) throw new PhoneVerificationFailure('unavailable')
-    return code === DEV_CODE
-  }
+  if (!config) throw new PhoneVerificationFailure('unavailable')
   const response = await twilioRequest(config, 'VerificationCheck', { To: phone, Code: code })
   // 404: no pending code for this number (expired, used up, or never sent).
   if (response.status === 404) return false
@@ -144,7 +200,7 @@ export async function confirmPhoneVerification(userId: string, rawPhone: unknown
  * the whole "find friends by number" part instead of offering a dead button.
  */
 export function isPhoneVerificationAvailable(): boolean {
-  return readTwilioConfig() !== null || devCodesAllowed()
+  return readTwilioConfig() !== null || koreanSmsProvider() !== null || devCodesAllowed()
 }
 
 /** The account's verified number, if any. */
@@ -156,4 +212,62 @@ export async function readVerifiedPhone(userId: string): Promise<string | null> 
 /** Removes the number from the account: it can no longer be found by it. */
 export async function removeVerifiedPhone(userId: string): Promise<void> {
   await prisma.user.update({ where: { id: userId }, data: { phoneE164: null, phoneHash: null, phoneVerifiedAt: null } })
+}
+
+// ── Sign-in by phone number ─────────────────────────────────────────────
+// Before there is an account the daily caps above (per account) do not apply,
+// so codes are capped per number and per client address here, in memory: a
+// restart forgets them, and Twilio Verify's own per-number limit still holds.
+
+/** Codes one number, and one client address, may ask for in a day before signing in. */
+export const PHONE_SIGN_IN_CODES_PER_NUMBER_PER_DAY = 5
+export const PHONE_SIGN_IN_CODES_PER_CLIENT_PER_DAY = 10
+
+const signInRequests = new Map<string, number[]>()
+
+function takeSignInSlot(key: string, limit: number, now: number): boolean {
+  const recent = (signInRequests.get(key) ?? []).filter((at) => now - at < DAY_MS)
+  if (recent.length >= limit) {
+    signInRequests.set(key, recent)
+    return false
+  }
+  recent.push(now)
+  signInRequests.set(key, recent)
+  return true
+}
+
+/** Test hook: forgets every sign-in request. */
+export function resetPhoneSignInLimits(): void {
+  signInRequests.clear()
+}
+
+/** Sends a sign-in code to the number (no account needed). `clientKey` is the caller's address. */
+export async function startPhoneSignIn(rawPhone: unknown, options: { locale?: string; clientKey?: string; now?: number } = {}): Promise<void> {
+  const phone = typeof rawPhone === 'string' ? rawPhone.trim() : ''
+  if (!isE164(phone)) throw new PhoneVerificationFailure('invalid_phone')
+  if (isReviewPhoneNumber(phone)) return
+  const route = resolveCodeRoute(phone)
+  if (!route) throw new PhoneVerificationFailure('unavailable')
+  const now = options.now ?? Date.now()
+  const clientKey = options.clientKey?.trim()
+  if (clientKey && !takeSignInSlot(`client:${clientKey}`, PHONE_SIGN_IN_CODES_PER_CLIENT_PER_DAY, now)) {
+    throw new PhoneVerificationFailure('too_many_requests')
+  }
+  if (!takeSignInSlot(`phone:${phone}`, PHONE_SIGN_IN_CODES_PER_NUMBER_PER_DAY, now)) {
+    throw new PhoneVerificationFailure('too_many_requests')
+  }
+  await sendCode(route, phone, options.locale)
+}
+
+/** True when the code proves the number; the caller then signs that number's account in. */
+export async function verifyPhoneSignIn(rawPhone: unknown, rawCode: unknown): Promise<string | null> {
+  const phone = typeof rawPhone === 'string' ? rawPhone.trim() : ''
+  if (!isE164(phone)) return null
+  const code = typeof rawCode === 'string' ? rawCode.replace(/\D/g, '') : ''
+  if (code.length !== 6) return null
+  try {
+    return (await checkCode(phone, code)) ? phone : null
+  } catch {
+    return null
+  }
 }

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { NextAuthOptions } from "next-auth";
 import type { Adapter, AdapterUser } from "next-auth/adapters";
 import AppleProvider from "next-auth/providers/apple";
@@ -12,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { createWithDefaultHandle } from "@/lib/handles";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 import { NEW_REGISTERED_USER_TRANSLATION_MODEL } from "@/lib/translation-models";
+import { hashPhoneE164, verifyPhoneSignIn } from "@/server/phone-verification";
 
 function normalizeEmail(rawValue: unknown): string | null {
   if (typeof rawValue !== "string") return null;
@@ -112,6 +114,42 @@ async function upsertUserForCredentialsSignIn(args: {
         name: normalizedName ?? "HashChat User",
         handle,
         externalUserId: normalizedExternalUserId ?? undefined,
+        firstSeenAt: now,
+        lastSeenAt: now,
+        translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
+      },
+      select,
+    }),
+  );
+}
+
+/**
+ * Signs in the account that owns a proven phone number, or creates one. A
+ * deleted account still holding the number gives it up first, so the number
+ * starts a fresh account (as a new OAuth sign-in would).
+ */
+export async function findOrCreateUserForPhoneSignIn(phoneE164: string) {
+  const now = new Date();
+  const select = { id: true, name: true, email: true, externalUserId: true, isDeleted: true } as const;
+  const existing = await prisma.user.findUnique({ where: { phoneE164 }, select });
+  if (existing && !existing.isDeleted) {
+    await prisma.user.update({ where: { id: existing.id }, data: { lastSeenAt: now, phoneVerifiedAt: now } }).catch(() => null);
+    return existing;
+  }
+  if (existing) {
+    await prisma.user.update({ where: { id: existing.id }, data: { phoneE164: null, phoneHash: null, phoneVerifiedAt: null } });
+  }
+  // No name or email yet: "user" is the first handle tried, then "user_" with
+  // a random suffix (a fixed seed gave every new number the same handle).
+  return createWithDefaultHandle(
+    { name: "user", id: randomBytes(6).toString("hex") },
+    (handle) => prisma.user.create({
+      data: {
+        name: "HashChat User",
+        handle,
+        phoneE164,
+        phoneHash: hashPhoneE164(phoneE164),
+        phoneVerifiedAt: now,
         firstSeenAt: now,
         lastSeenAt: now,
         translationModel: NEW_REGISTERED_USER_TRANSLATION_MODEL,
@@ -244,6 +282,25 @@ function buildProviders(): NextAuthOptions["providers"] {
           id: user.id,
           name: user.name || "HashChat User",
           email: user.email || email,
+          externalUserId: user.externalUserId || null,
+        };
+      },
+    }),
+    CredentialsProvider({
+      id: "phone-code",
+      name: "Phone",
+      credentials: {
+        phone: { label: "Phone", type: "tel" },
+        code: { label: "Code", type: "text" },
+      },
+      async authorize(credentials) {
+        const phoneE164 = await verifyPhoneSignIn(credentials?.phone, credentials?.code);
+        if (!phoneE164) return null;
+        const user = await findOrCreateUserForPhoneSignIn(phoneE164);
+        return {
+          id: user.id,
+          name: user.name || "HashChat User",
+          email: user.email || "",
           externalUserId: user.externalUserId || null,
         };
       },

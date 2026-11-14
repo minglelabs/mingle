@@ -10,7 +10,7 @@
  * right away and is saved directly.
  */
 
-export type SignInMethod = "apple" | "google" | "email";
+export type SignInMethod = "apple" | "google" | "email" | "phone";
 
 const LAST_KEY = "mingle:last-sign-in-method:v1";
 const PENDING_KEY = "mingle:pending-sign-in-method:v1";
@@ -18,7 +18,7 @@ const PENDING_KEY = "mingle:pending-sign-in-method:v1";
 export const PENDING_SIGN_IN_METHOD_TTL_MS = 15 * 60 * 1000;
 
 function isSignInMethod(value: unknown): value is SignInMethod {
-  return value === "apple" || value === "google" || value === "email";
+  return value === "apple" || value === "google" || value === "email" || value === "phone";
 }
 
 function storage(): Storage | null {

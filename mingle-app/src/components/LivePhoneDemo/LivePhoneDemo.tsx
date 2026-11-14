@@ -16,6 +16,7 @@ import SpeechLengthCard from '@/components/LivePhoneDemo/SpeechLengthCard'
 import { resolveFirstRunCopy } from '@/i18n/first-run-copy'
 import { captureMingleClientEvent } from '@/lib/posthog-client'
 import SpeechLengthScale from '@/components/LivePhoneDemo/SpeechLengthScale'
+import { takePendingSpeechLength } from '@/lib/speak-trial'
 import {
   DEFAULT_SPEECH_LENGTH_LEVEL,
   RECOMMENDED_SPEECH_LENGTH_LEVEL,
@@ -106,7 +107,7 @@ import HashSeedIcon from '@/components/coins/hash-seed-icon'
 import CoinRoomBanner from '@/components/coins/coin-room-banner'
 import { resolveLivePhoneDemoEarphoneModeCopy } from '@/i18n/live-phone-demo-earphone-mode-copy'
 
-import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
@@ -1497,6 +1498,13 @@ interface LivePhoneDemoProps {
   showAccountActions?: boolean
   enableAccountPreferencesSync?: boolean
   headerMode?: 'default' | 'conversation'
+  /** Shown in the header's free space (the speak trial's countdown). */
+  headerAccessory?: ReactNode
+  /**
+   * The speak trial before sign-in: the room starts on this sentence length
+   * without saving it anywhere (there is no account yet).
+   */
+  trialSpeechLength?: SpeechLengthLevel
   backButtonLabel?: string
   onBack?: () => void
   onConversationDeleted?: () => void
@@ -2003,6 +2011,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   showAccountActions = true,
   enableAccountPreferencesSync = true,
   headerMode = 'default',
+  headerAccessory,
+  trialSpeechLength,
   backButtonLabel = 'Back',
   onBack,
   onConversationDeleted,
@@ -6061,15 +6071,48 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [applySpeechSplitPreferences])
 
   useEffect(() => {
+    if (!trialSpeechLength) return
+    const preferences = resolveSpeechLengthPreferences(trialSpeechLength)
+    setSttSegmentationMode(preferences.sttSegmentationMode)
+    if (preferences.sttSegmentationMode === 'end') setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
+    else setSonioxManualFinalizeSilenceMs(preferences.sonioxManualFinalizeSilenceMs)
+  }, [trialSpeechLength])
+
+  useEffect(() => {
     if (!speechLengthIntro || speechLengthDefaultAppliedRef.current) return
     // Wait for the account's saved settings: an existing account signing in
     // on a new device has a speech split this device has not loaded yet.
     if (!isStorageHydrated || accountPreferencesHydratedGeneration === 0) return
     speechLengthDefaultAppliedRef.current = true
+    setIntroSettingsApplied(true)
+    // A length picked in the speak trial (before this account existed) wins
+    // over the default, and the length card is not asked again.
+    const trialLevel = takePendingSpeechLength()
+    if (trialLevel !== null) speechLengthIntroDoneRef.current = true
     // Someone who already chose a speech split keeps it.
     if (sttSegmentationMode !== null) return
-    applySpeechLengthPreferences(DEFAULT_SPEECH_LENGTH_LEVEL)
+    applySpeechLengthPreferences(trialLevel ?? DEFAULT_SPEECH_LENGTH_LEVEL)
   }, [accountPreferencesHydratedGeneration, applySpeechLengthPreferences, isStorageHydrated, speechLengthIntro, sttSegmentationMode])
+
+  // The first room starts listening on open, usually before the account's
+  // settings arrive; the split is fixed per session, so that session would
+  // keep the server default. Its start waits for the length above (one render
+  // later, so the start sees the new settings), or 4 s at most.
+  const [introSettingsApplied, setIntroSettingsApplied] = useState(false)
+  const [introStartQueued, setIntroStartQueued] = useState(false)
+  useEffect(() => {
+    if (!introStartQueued) return
+    if (introSettingsApplied) {
+      setIntroStartQueued(false)
+      void handleStartRecording()
+      return
+    }
+    const fallback = window.setTimeout(() => {
+      setIntroStartQueued(false)
+      void handleStartRecording()
+    }, 4000)
+    return () => window.clearTimeout(fallback)
+  }, [handleStartRecording, introSettingsApplied, introStartQueued])
 
   // Bubbles already in the room when it first listens (a welcome message, an
   // earlier conversation) do not count. A bubble still being spoken is not in
@@ -6365,6 +6408,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useImperativeHandle(ref, () => ({
     startRecording: async () => {
+      if (speechLengthIntro && !speechLengthDefaultAppliedRef.current) {
+        setIntroStartQueued(true)
+        return
+      }
       await handleStartRecording()
     },
     stopRecording: async (options) => {
@@ -6377,7 +6424,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     isSttSessionRunning: () => isSttSessionRunning,
     requestCloseTopmostOverlay,
     resetNavigationOverlays,
-  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion, requestCloseTopmostOverlay, resetNavigationOverlays])
+  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion, requestCloseTopmostOverlay, resetNavigationOverlays, speechLengthIntro])
 
   const chatRef = useRef<HTMLDivElement>(null)
   const scrollDateLabelAnchorsRef = useRef<ScrollDateLabelAnchor[]>([])
@@ -8020,7 +8067,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             <MingleWordmark className="relative z-20" />
           )}
           <div className="relative z-20 flex items-center gap-1">
-            <CoinBalanceChip locale={coinLocale} size="compact" />
+            {headerAccessory}
+            {headerAccessory ? null : <CoinBalanceChip locale={coinLocale} size="compact" />}
             <div className="relative mr-1.5">
               <button
                 ref={langSelectorButtonRef}

@@ -30,17 +30,21 @@ describe("invite-ticket-copy", () => {
     expect(fillInviteTicketCopy("{name}: {coins}", { name: "미나", coins: 1000 })).toBe("미나: 1,000");
   });
 
-  it("writes the pasted message for the Korean-Japanese pair in both languages, partner first", () => {
-    const fromKorean = buildInviteTicketMessage("ko", "https://x.test/i/ab3de", "ab3de").split("\n");
-    expect(fromKorean).toHaveLength(5);
-    expect(fromKorean[0]).toContain("招待券");
-    expect(fromKorean[1]).toContain("초대권");
-    expect(fromKorean[2]).toBe("https://x.test/i/ab3de");
-    expect(fromKorean[3]).toBe("招待コード ab3de · アプリをインストールしたら、このリンクをもう一度タップしてね");
-    expect(fromKorean[4]).toBe("초대 코드 ab3de · 앱을 설치한 뒤 이 링크를 한 번 더 눌러 주세요");
-    expect(buildInviteTicketMessage("ja", "L").split("\n")[0]).toContain("초대권");
-    expect(buildInviteTicketMessage("en", "L", "ab3de").split("\n")).toHaveLength(3);
-    expect(buildInviteTicketMessage("fr", "L", "ab3de").split("\n")).toHaveLength(5);
+  it("writes the pasted message in four plain lines, in the sender's language", () => {
+    expect(buildInviteTicketMessage("ko", "https://x.test/i/ab3de", "ab3de").split("\n")).toEqual([
+      "해시챗 초대권",
+      "초대코드 ab3de",
+      "https://x.test/i/ab3de",
+      "앱스토어(플레이스토어)에서 설치한 뒤 다시 링크를 눌러 들어가 보세요",
+    ]);
+    for (const locale of PRIMARY_UI_LOCALES) {
+      const lines = buildInviteTicketMessage(locale, "L", "ab3de").split("\n");
+      expect(lines, locale).toHaveLength(4);
+      expect(lines[1], locale).toContain("ab3de");
+      expect(lines[2], locale).toBe("L");
+    }
+    // Without a code the code line is left out.
+    expect(buildInviteTicketMessage("en", "L").split("\n")).toHaveLength(3);
   });
 
   it("puts the code and the reopen note under every shared link, in every locale", () => {
@@ -48,10 +52,11 @@ describe("invite-ticket-copy", () => {
       expect(resolveInviteTicketCopy(locale).codeLine, locale).toContain("{code}");
       const lines = buildInviteSharedLinkMessage(locale, "https://x.test/u/1", "ab3de").split("\n");
       expect(lines[0]).toBe("https://x.test/u/1");
-      expect(lines.slice(1).every((line) => line.includes("ab3de")), locale).toBe(true);
+      expect(lines[1], locale).toContain("ab3de");
+      expect(lines, locale).toHaveLength(3);
     }
     // Without a code (signed out, offline) only the reopen note is added.
-    expect(buildInviteSharedLinkMessage("en", "L", null)).toBe("L\nAfter installing the app, tap this link once more");
+    expect(buildInviteSharedLinkMessage("en", "L", null)).toBe("L\nInstall it from the App Store (Google Play), then tap the link again");
   });
 
   it("picks the landing language from the browser, Japanese when unknown", () => {

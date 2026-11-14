@@ -4,6 +4,7 @@ import { Loader2, X } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { fillPhoneFriendsCopy, type PhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { useKeyboardInset } from "@/components/compose/compose-chrome";
 import { PHONE_COUNTRIES, maskE164, normalizePhoneNumber, resolveDefaultPhoneCountry } from "@/lib/phone-number";
 
 const RESEND_AFTER_MS = 30_000;
@@ -14,17 +15,25 @@ type Step = { kind: "phone" } | { kind: "code"; phone: string; sentAt: number };
  * Proves the user's own phone number with a 6-digit SMS code: pick the
  * country, type the number, get the code, type it. Resolves the verified
  * E.164 number through `onVerified`.
+ *
+ * Sign-in uses the same sheet: `sendPath` "/phone/sign-in" texts a code with
+ * no account, and `confirmCode` checks it (signing in) instead of saving the
+ * number to the current account; it resolves an error code, or null.
  */
 export default function PhoneVerifySheet({
   copy,
   locale,
   onClose,
   onVerified,
+  sendPath = "/phone/verification",
+  confirmCode,
 }: {
   copy: PhoneFriendsCopy;
   locale: string;
   onClose: () => void;
   onVerified: (phoneE164: string) => void;
+  sendPath?: "/phone/verification" | "/phone/sign-in";
+  confirmCode?: (phoneE164: string, code: string) => Promise<string | null>;
 }) {
   const defaultCountry = useMemo(() => resolveDefaultPhoneCountry(locale), [locale]);
   const [countryIso, setCountryIso] = useState(defaultCountry.iso);
@@ -36,6 +45,7 @@ export default function PhoneVerifySheet({
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const codeInputRef = useRef<HTMLInputElement | null>(null);
+  const keyboardInset = useKeyboardInset();
 
   const phone = normalizePhoneNumber(number, country.callingCode);
 
@@ -52,7 +62,7 @@ export default function PhoneVerifySheet({
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(buildClientApiPath("/phone/verification"), {
+      const response = await fetch(buildClientApiPath(sendPath), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: target, locale }),
@@ -74,13 +84,22 @@ export default function PhoneVerifySheet({
     } finally {
       setBusy(false);
     }
-  }, [busy, copy.errorGeneric, errorText, locale]);
+  }, [busy, copy.errorGeneric, errorText, locale, sendPath]);
 
   const confirm = useCallback(async () => {
     if (busy || step.kind !== "code" || code.length !== 6) return;
     setBusy(true);
     setError(null);
     try {
+      if (confirmCode) {
+        const failure = await confirmCode(step.phone, code);
+        if (failure) {
+          setError(errorText(failure));
+          return;
+        }
+        onVerified(step.phone);
+        return;
+      }
       const response = await fetch(buildClientApiPath("/phone/verification/confirm"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -97,7 +116,7 @@ export default function PhoneVerifySheet({
     } finally {
       setBusy(false);
     }
-  }, [busy, code, copy.errorGeneric, errorText, onVerified, step]);
+  }, [busy, code, confirmCode, copy.errorGeneric, errorText, onVerified, step]);
 
   const canResend = step.kind === "code" && now - step.sentAt >= RESEND_AFTER_MS;
 
@@ -106,7 +125,11 @@ export default function PhoneVerifySheet({
       <button type="button" className="absolute inset-0 bg-black/45" aria-label={copy.close} onClick={onClose} />
       <div
         className="relative w-full max-w-[520px] rounded-t-[1.6rem] bg-white px-5 pt-4 text-slate-950"
-        style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }}
+        style={{
+          // Above the keyboard while typing; the safe area only when it is closed.
+          marginBottom: keyboardInset,
+          paddingBottom: keyboardInset > 0 ? 16 : "calc(20px + env(safe-area-inset-bottom, 0px))",
+        }}
       >
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
