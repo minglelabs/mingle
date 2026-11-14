@@ -48,25 +48,70 @@ describe('bubble size floor', () => {
     expect(isBubbleWidthFloorTooWide(280.4, 280)).toBe(false)
   })
 
-  it('grows at once and holds a smaller size for two seconds before shrinking', () => {
+  const timing = { holdMs: 800, easeMs: 1200 }
+
+  it('grows at once', () => {
     const floor = { width: 200, height: 80, shrinkSince: null }
-    expect(resolveBubbleSizeFloor(floor, { width: 220, height: 90 }, 0))
-      .toEqual({ width: 220, height: 90, shrinkSince: null, retryInMs: null })
-
-    const held = resolveBubbleSizeFloor(floor, { width: 200, height: 56 }, 1000, 2000)
-    expect(held).toEqual({ width: 200, height: 80, shrinkSince: 1000, retryInMs: 2000 })
-
-    const stillHeld = resolveBubbleSizeFloor(held, { width: 190, height: 56 }, 2500, 2000)
-    expect(stillHeld).toEqual({ width: 200, height: 80, shrinkSince: 1000, retryInMs: 500 })
-
-    expect(resolveBubbleSizeFloor(stillHeld, { width: 190, height: 56 }, 3000, 2000))
-      .toEqual({ width: 190, height: 56, shrinkSince: null, retryInMs: null })
+    expect(resolveBubbleSizeFloor(floor, { width: 220, height: 90 }, 0, timing)).toEqual({
+      width: 220, height: 90, shrinkSince: null, shown: { width: 220, height: 90 }, retryInMs: null,
+    })
   })
 
-  it('cancels a waiting shrink once the content fills the floor again', () => {
+  it('holds a smaller size still, then eases down to it within two seconds', () => {
+    const floor = { width: 200, height: 80, shrinkSince: null }
+    const natural = { width: 190, height: 56 }
+
+    const held = resolveBubbleSizeFloor(floor, natural, 1000, timing)
+    expect(held).toEqual({
+      width: 200, height: 80, shrinkSince: 1000, shown: { width: 200, height: 80 }, retryInMs: 800,
+    })
+    const stillHeld = resolveBubbleSizeFloor(held, natural, 1500, timing)
+    expect(stillHeld.shown).toEqual({ width: 200, height: 80 })
+    expect(stillHeld.retryInMs).toBe(300)
+
+    // Easing: the floor itself stays, only what is shown comes down.
+    const halfway = resolveBubbleSizeFloor(stillHeld, natural, 1800 + 600, timing)
+    expect(halfway).toMatchObject({ width: 200, height: 80, shrinkSince: 1000, retryInMs: 0 })
+    expect(halfway.shown.width).toBeCloseTo(195)
+    expect(halfway.shown.height).toBeCloseTo(68)
+
+    const early = resolveBubbleSizeFloor(stillHeld, natural, 1800 + 120, timing)
+    const late = resolveBubbleSizeFloor(stillHeld, natural, 1800 + 1080, timing)
+    expect(early.shown.height).toBeGreaterThan(79.9)
+    expect(early.shown.height).toBeLessThan(80)
+    expect(late.shown.height).toBeLessThan(56.1)
+    expect(late.shown.height).toBeGreaterThan(56)
+
+    expect(resolveBubbleSizeFloor(halfway, natural, 3000, timing)).toEqual({
+      width: 190, height: 56, shrinkSince: null, shown: natural, retryInMs: null,
+    })
+  })
+
+  it('never shows a size below the content while easing', () => {
+    const floor = { width: 200, height: 80, shrinkSince: 0 }
+    for (let now = 0; now <= 2000; now += 50) {
+      const step = resolveBubbleSizeFloor(floor, { width: 210, height: 56 }, now, timing)
+      expect(step.shown.width).toBeGreaterThanOrEqual(210)
+      expect(step.shown.height).toBeGreaterThanOrEqual(56)
+      expect(step.shown.height).toBeLessThanOrEqual(80)
+    }
+  })
+
+  it('takes the size in one step after the full wait when there is no easing', () => {
+    const floor = { width: 200, height: 80, shrinkSince: 0 }
+    const natural = { width: 200, height: 56 }
+    const noEase = { holdMs: 2000, easeMs: 0 }
+    expect(resolveBubbleSizeFloor(floor, natural, 1999, noEase).shown).toEqual({ width: 200, height: 80 })
+    expect(resolveBubbleSizeFloor(floor, natural, 2000, noEase).shown).toEqual(natural)
+  })
+
+  it('cancels a waiting or easing shrink once the content fills the floor again', () => {
     const held = { width: 200, height: 80, shrinkSince: 1000 }
-    expect(resolveBubbleSizeFloor(held, { width: 200, height: 80 }, 2500, 2000))
-      .toEqual({ width: 200, height: 80, shrinkSince: null, retryInMs: null })
+    for (const now of [1500, 2500]) {
+      expect(resolveBubbleSizeFloor(held, { width: 200, height: 80 }, now, timing)).toEqual({
+        width: 200, height: 80, shrinkSince: null, shown: { width: 200, height: 80 }, retryInMs: null,
+      })
+    }
   })
 
   it('keeps the waiting start across a remount of the same message', () => {
