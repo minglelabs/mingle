@@ -16,8 +16,8 @@ import {
   type EarphoneMicrophonePick,
 } from '@/lib/native-earphone-microphone'
 
-// The microphone pick asked once when earphones first go in, changed again
-// later from the room menu or my page. Shown only on a shell that can switch.
+// The microphone pick, changed from the room menu or my page (the phone's
+// microphone until then). Shown only on a shell that can switch.
 export function useEarphoneMicrophoneSetting() {
   const capable = useSyncExternalStore(
     subscribeNativeEarphoneMicrophoneCapability,

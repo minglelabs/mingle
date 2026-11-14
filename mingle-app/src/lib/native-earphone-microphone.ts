@@ -3,9 +3,9 @@
 // An earphone microphone hears its wearer only: the person being translated,
 // who talks toward the phone, comes in faint or not at all. So a shell that
 // reports `earphoneMicrophoneChoice: true` in its `capabilities` message
-// records from the phone's microphone while earphones are in, and the web asks
-// once (the first time earphones show up) whether to keep it that way or use
-// the earphones' microphone. The answer is kept per device.
+// records from the phone's microphone while earphones are in. The earphones'
+// microphone can be picked instead from the room menu or my page (never asked
+// unprompted). The pick is kept per device.
 
 import {
   NATIVE_SHELL_CAPABILITIES_EVENT,
@@ -30,15 +30,6 @@ export function parseNativeEarphoneMicrophoneChoiceCapability(detail: unknown): 
 
 export function parseEarphoneMicrophonePick(raw: unknown): EarphoneMicrophonePick | null {
   return raw === 'phone' || raw === 'earphone' ? raw : null
-}
-
-// Asked once, on a shell that can switch, the first time earphones are in.
-export function shouldAskEarphoneMicrophone(input: {
-  shellCapable: boolean
-  earphonesConnected: boolean
-  pick: EarphoneMicrophonePick | null
-}): boolean {
-  return input.shellCapable && input.earphonesConnected && input.pick === null
 }
 
 // The `earphoneMicrophone` start option: only an explicit earphone pick.

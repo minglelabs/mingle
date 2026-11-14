@@ -3,7 +3,6 @@
 import ConversationImageComposer, { type ConversationImageComposerEarphoneMode } from './ConversationImageComposer'
 import MessageMediaDialog from './MessageMediaDialog'
 import EarphoneModeNoticeContent from './EarphoneModeNotice'
-import EarphoneMicrophoneNoticeContent from './EarphoneMicrophoneNotice'
 import EarphoneCaptureSourceNoticeContent from './EarphoneCaptureSourceNotice'
 import { EarphoneMicrophoneSettingControl } from './EarphoneMicrophoneSetting'
 import LanguageRadioOption from './LanguageRadioOption'
@@ -83,15 +82,8 @@ import {
 import {
   getEarphoneMicrophonePickServerSnapshot,
   getEarphoneMicrophonePickSnapshot,
-  getNativeEarphoneMicrophoneCapabilityServerSnapshot,
-  getNativeEarphoneMicrophoneCapabilitySnapshot,
   resolveEarphoneMicrophoneEnabled,
-  shouldAskEarphoneMicrophone,
   subscribeEarphoneMicrophonePick,
-  subscribeNativeEarphoneMicrophoneCapability,
-  writeEarphoneMicrophonePick,
-  DEFAULT_EARPHONE_MICROPHONE_PICK,
-  type EarphoneMicrophonePick,
 } from '@/lib/native-earphone-microphone'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
 import { TtsAgentTextScheduler } from './tts-agent-text'
@@ -2379,13 +2371,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     deviceAudioOptIn,
     pick: sttCaptureSourcePick,
   })
-  // Which microphone records while earphones are in: the phone's by default,
-  // asked once the first time earphones show up (shells that can switch).
-  const nativeEarphoneMicrophoneCapable = useSyncExternalStore(
-    subscribeNativeEarphoneMicrophoneCapability,
-    getNativeEarphoneMicrophoneCapabilitySnapshot,
-    getNativeEarphoneMicrophoneCapabilityServerSnapshot,
-  )
+  // Which microphone records while earphones are in: the phone's, unless the
+  // earphones were picked in the room menu or on my page. Never asked: the
+  // phone's is what translation needs almost always.
   const earphoneMicrophonePick = useSyncExternalStore(
     subscribeEarphoneMicrophonePick,
     getEarphoneMicrophonePickSnapshot,
@@ -7226,23 +7214,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setEarphoneModeNoticeOpen(false)
   }, [])
 
-  // Only the visible room asks, and never on top of another notice.
-  const earphoneMicrophoneNoticeOpen = isVisible
-    && !earphoneModeNoticeOpen
-    && !screenCaptureNoticeOpen
-    && shouldAskEarphoneMicrophone({
-      shellCapable: nativeEarphoneMicrophoneCapable,
-      earphonesConnected: nativeAudioRoute.earphonesConnected,
-      pick: earphoneMicrophonePick,
-    })
-  const confirmEarphoneMicrophoneNotice = useCallback((pick: EarphoneMicrophonePick) => {
-    writeEarphoneMicrophonePick(pick)
-  }, [])
-  // Dismissed without a pick: keep the default and do not ask again.
-  const dismissEarphoneMicrophoneNotice = useCallback(() => {
-    writeEarphoneMicrophonePick(DEFAULT_EARPHONE_MICROPHONE_PICK)
-  }, [])
-
   const isEarphoneModeOn = earphoneModeGate.controlVisible && earphoneModeEnabled
   const earphoneModeControlLabel = earphoneModeGate.waitingForEarphones
     ? `${earphoneModeCopy.label}, ${earphoneModeCopy.waitingLabel}`
@@ -10084,20 +10055,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               />
             </MessageMediaDialog>
           )}
-          {earphoneCaptureNoticeOpen && !earphoneMicrophoneNoticeOpen && !earphoneModeNoticeOpen && (
+          {earphoneCaptureNoticeOpen && !earphoneModeNoticeOpen && (
             <MessageMediaDialog title={earphoneModeBaseCopy.earphoneCaptureNoticeTitle} onClose={dismissEarphoneCaptureNotice}>
               <EarphoneCaptureSourceNoticeContent
                 copy={earphoneModeBaseCopy}
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={confirmEarphoneCaptureNotice}
-              />
-            </MessageMediaDialog>
-          )}
-          {earphoneMicrophoneNoticeOpen && (
-            <MessageMediaDialog title={earphoneModeBaseCopy.microphoneNoticeTitle} onClose={dismissEarphoneMicrophoneNotice}>
-              <EarphoneMicrophoneNoticeContent
-                copy={earphoneModeBaseCopy}
-                onConfirm={confirmEarphoneMicrophoneNotice}
               />
             </MessageMediaDialog>
           )}

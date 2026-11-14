@@ -11,7 +11,6 @@ import {
   readEarphoneMicrophonePick,
   resetNativeEarphoneMicrophoneStoresForTests,
   resolveEarphoneMicrophoneEnabled,
-  shouldAskEarphoneMicrophone,
   subscribeEarphoneMicrophonePick,
   writeEarphoneMicrophonePick,
 } from './native-earphone-microphone'
@@ -37,11 +36,11 @@ describe('earphone microphone choice', () => {
     expect(parseNativeEarphoneMicrophoneChoiceCapability(null)).toBeNull()
   })
 
-  it('asks once, on a capable shell, while earphones are in', () => {
-    expect(shouldAskEarphoneMicrophone({ shellCapable: true, earphonesConnected: true, pick: null })).toBe(true)
-    expect(shouldAskEarphoneMicrophone({ shellCapable: true, earphonesConnected: true, pick: 'phone' })).toBe(false)
-    expect(shouldAskEarphoneMicrophone({ shellCapable: true, earphonesConnected: false, pick: null })).toBe(false)
-    expect(shouldAskEarphoneMicrophone({ shellCapable: false, earphonesConnected: true, pick: null })).toBe(false)
+  it('never asks in the room: the pick lives in the menus only', async () => {
+    const { readFileSync } = await import('node:fs')
+    const room = readFileSync(new URL('../components/LivePhoneDemo/LivePhoneDemo.tsx', import.meta.url), 'utf8')
+    expect(room).not.toContain('EarphoneMicrophoneNoticeContent')
+    expect(room).not.toContain('microphoneNoticeTitle')
   })
 
   it('uses the phone unless the earphones were picked', () => {
