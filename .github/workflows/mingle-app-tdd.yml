@@ -144,7 +144,7 @@ jobs:
       - name: Enforce RN iOS namespace contract
         if: matrix.shard == 1
         env:
-          RN_API_NAMESPACE: ios/v2.4.0
+          RN_API_NAMESPACE: ios/v2.4.1
         run: pnpm run rn:ios:env-check
 
       - name: Run devbox script contract tests
