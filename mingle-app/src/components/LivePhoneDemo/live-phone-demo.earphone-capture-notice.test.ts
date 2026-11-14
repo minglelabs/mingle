@@ -23,6 +23,19 @@ describe('capture-source question when earphones go in', () => {
     expect(html).toContain('data-earphone-capture-source-confirm')
   })
 
+  it('carries the one-time microphone hint instead of a second popup', () => {
+    const copy = resolveLivePhoneDemoEarphoneModeCopy('ko')
+    const render = (microphoneHint?: string) => renderToStaticMarkup(createElement(EarphoneCaptureSourceNoticeContent, {
+      copy,
+      microphoneHint,
+      onConfirm: () => {},
+    }))
+    expect(render(copy.microphoneHint)).toContain(copy.microphoneHint)
+    expect(render()).not.toContain('data-earphone-microphone-hint')
+    expect(liveDemoSource).toContain('if (withHint) writeEarphoneMicrophoneHintShown()')
+    expect(liveDemoSource).toContain('showFloatingToast(earphoneModeBaseCopy.microphoneHint, 4000)')
+  })
+
   it('switches a running session to device audio and listens again', () => {
     expect(liveDemoSource).toContain('deviceAudioOptIn,\n    pick: sttCaptureSourcePick,')
     expect(liveDemoSource).toContain('setDeviceAudioOptIn(true)')

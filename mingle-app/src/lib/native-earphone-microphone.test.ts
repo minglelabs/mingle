@@ -8,7 +8,11 @@ import {
   EARPHONE_MICROPHONE_PICK_STORAGE_KEY,
   getEarphoneMicrophonePickSnapshot,
   parseNativeEarphoneMicrophoneChoiceCapability,
+  readEarphoneMicrophoneHintShown,
   readEarphoneMicrophonePick,
+  EARPHONE_MICROPHONE_HINT_STORAGE_KEY,
+  shouldShowEarphoneMicrophoneHint,
+  writeEarphoneMicrophoneHintShown,
   resetNativeEarphoneMicrophoneStoresForTests,
   resolveEarphoneMicrophoneEnabled,
   subscribeEarphoneMicrophonePick,
@@ -41,6 +45,23 @@ describe('earphone microphone choice', () => {
     const room = readFileSync(new URL('../components/LivePhoneDemo/LivePhoneDemo.tsx', import.meta.url), 'utf8')
     expect(room).not.toContain('EarphoneMicrophoneNoticeContent')
     expect(room).not.toContain('microphoneNoticeTitle')
+  })
+
+  it('says once, only while listening with earphones in, that the phone still listens', () => {
+    const base = { shellCapable: true, earphonesConnected: true, sessionRunning: true, pick: null, shown: false } as const
+    expect(shouldShowEarphoneMicrophoneHint(base)).toBe(true)
+    expect(shouldShowEarphoneMicrophoneHint({ ...base, pick: 'phone' })).toBe(true)
+    expect(shouldShowEarphoneMicrophoneHint({ ...base, sessionRunning: false })).toBe(false)
+    expect(shouldShowEarphoneMicrophoneHint({ ...base, earphonesConnected: false })).toBe(false)
+    expect(shouldShowEarphoneMicrophoneHint({ ...base, pick: 'earphone' })).toBe(false)
+    expect(shouldShowEarphoneMicrophoneHint({ ...base, shown: true })).toBe(false)
+    expect(shouldShowEarphoneMicrophoneHint({ ...base, shellCapable: false })).toBe(false)
+    const storage = memoryStorage()
+    expect(readEarphoneMicrophoneHintShown(storage)).toBe(false)
+    writeEarphoneMicrophoneHintShown(storage)
+    expect(storage.values.get(EARPHONE_MICROPHONE_HINT_STORAGE_KEY)).toBe('1')
+    expect(readEarphoneMicrophoneHintShown(storage)).toBe(true)
+    expect(resolveLivePhoneDemoEarphoneModeCopy('ko').microphoneHint).toBe('상대방 목소리까지 들리게 휴대폰으로 들어요')
   })
 
   it('uses the phone unless the earphones were picked', () => {

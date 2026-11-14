@@ -14,11 +14,14 @@ export default function EarphoneCaptureSourceNoticeContent({
   copy,
   deviceAudioViaBroadcast = false,
   initialSource = 'device_audio',
+  microphoneHint,
   onConfirm,
 }: {
   copy: LivePhoneDemoEarphoneModeCopy
   deviceAudioViaBroadcast?: boolean
   initialSource?: SttCaptureSource
+  // The one-time "the phone still listens" line, when it falls on this notice.
+  microphoneHint?: string
   onConfirm: (source: SttCaptureSource) => void
 }) {
   const labelId = useId()
@@ -27,6 +30,9 @@ export default function EarphoneCaptureSourceNoticeContent({
     <div data-qa="live-demo-earphone-capture-source-notice">
       <h2 className="text-xl font-bold leading-tight text-gray-900">{copy.earphoneCaptureNoticeTitle}</h2>
       <p className="mt-1.5 text-sm leading-relaxed text-gray-600">{copy.earphoneCaptureNoticeBody}</p>
+      {microphoneHint && (
+        <p data-earphone-microphone-hint className="mt-1 text-sm leading-relaxed text-gray-600">{microphoneHint}</p>
+      )}
       <p id={labelId} className="mt-4 text-sm font-semibold text-gray-900">
         {copy.captureSourceLabel}
       </p>

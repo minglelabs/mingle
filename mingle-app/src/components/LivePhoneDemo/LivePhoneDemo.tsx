@@ -82,8 +82,14 @@ import {
 import {
   getEarphoneMicrophonePickServerSnapshot,
   getEarphoneMicrophonePickSnapshot,
+  getNativeEarphoneMicrophoneCapabilityServerSnapshot,
+  getNativeEarphoneMicrophoneCapabilitySnapshot,
+  readEarphoneMicrophoneHintShown,
   resolveEarphoneMicrophoneEnabled,
+  shouldShowEarphoneMicrophoneHint,
   subscribeEarphoneMicrophonePick,
+  subscribeNativeEarphoneMicrophoneCapability,
+  writeEarphoneMicrophoneHintShown,
 } from '@/lib/native-earphone-microphone'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
 import { TtsAgentTextScheduler } from './tts-agent-text'
@@ -2374,6 +2380,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Which microphone records while earphones are in: the phone's, unless the
   // earphones were picked in the room menu or on my page. Never asked: the
   // phone's is what translation needs almost always.
+  const nativeEarphoneMicrophoneCapable = useSyncExternalStore(
+    subscribeNativeEarphoneMicrophoneCapability,
+    getNativeEarphoneMicrophoneCapabilitySnapshot,
+    getNativeEarphoneMicrophoneCapabilityServerSnapshot,
+  )
   const earphoneMicrophonePick = useSyncExternalStore(
     subscribeEarphoneMicrophonePick,
     getEarphoneMicrophonePickSnapshot,
@@ -2516,7 +2527,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeConversationBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeConversationBannerPosition')
   const nativeBannerPositionFromQuery = nativeConversationBannerPositionFromQuery ?? legacyNativeBannerPositionFromQuery
 
-  const showFloatingToast = useCallback((message: string) => {
+  const showFloatingToast = useCallback((message: string, durationMs = 1500) => {
     const normalizedMessage = message.trim()
     if (!normalizedMessage) return
     if (floatingToastTimerRef.current) {
@@ -2525,7 +2536,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setFloatingToastMessage(normalizedMessage)
     floatingToastTimerRef.current = window.setTimeout(() => {
       setFloatingToastMessage('')
-    }, 1500)
+    }, durationMs)
   }, [])
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: initialCachedAccountPreferences?.textSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
@@ -5947,6 +5958,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Earphones went in while a microphone-only session ran: other apps' sound
   // left the microphone's reach, so ask whether to translate it directly.
   const [earphoneCaptureNoticeOpen, setEarphoneCaptureNoticeOpen] = useState(false)
+  // The one-time "the phone still listens" hint rides on that question when
+  // both fall on the same moment, so earphones going in show one thing only.
+  const [earphoneCaptureNoticeMicrophoneHint, setEarphoneCaptureNoticeMicrophoneHint] = useState(false)
+  const isEarphoneMicrophoneHintDue = useCallback(() => shouldShowEarphoneMicrophoneHint({
+    shellCapable: nativeEarphoneMicrophoneCapable,
+    earphonesConnected: nativeAudioRoute.earphonesConnected,
+    sessionRunning: isSttSessionRunning,
+    pick: earphoneMicrophonePick,
+    shown: readEarphoneMicrophoneHintShown(),
+  }), [earphoneMicrophonePick, isSttSessionRunning, nativeAudioRoute.earphonesConnected, nativeEarphoneMicrophoneCapable])
   // Set when that question switched a running session: listen again once the
   // old session is gone.
   const captureSourceRestartPendingRef = useRef(false)
@@ -5964,9 +5985,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       sessionRunning: isSttSessionRunning,
       captureSource: sttCaptureSource,
     })) {
+      const withHint = isEarphoneMicrophoneHintDue()
+      if (withHint) writeEarphoneMicrophoneHintShown()
+      setEarphoneCaptureNoticeMicrophoneHint(withHint)
       setEarphoneCaptureNoticeOpen(true)
     }
-  }, [isSttSessionRunning, isVisible, nativeAudioRoute.earphonesConnected, nativeDeviceAudioSupported, sttCaptureSource])
+  }, [isEarphoneMicrophoneHintDue, isSttSessionRunning, isVisible, nativeAudioRoute.earphonesConnected, nativeDeviceAudioSupported, sttCaptureSource])
+
+  // Otherwise the hint is a toast: listening started with earphones in, or
+  // earphones went in while listening without the question above. Declared
+  // after that effect so it sees the hint already spent in the same commit.
+  useEffect(() => {
+    if (!isVisible || earphoneCaptureNoticeOpen) return
+    if (!isEarphoneMicrophoneHintDue()) return
+    writeEarphoneMicrophoneHintShown()
+    showFloatingToast(earphoneModeBaseCopy.microphoneHint, 4000)
+  }, [earphoneCaptureNoticeOpen, earphoneModeBaseCopy.microphoneHint, isEarphoneMicrophoneHintDue, isVisible, showFloatingToast])
 
   const confirmEarphoneCaptureNotice = useCallback((source: SttCaptureSource) => {
     setEarphoneCaptureNoticeOpen(false)
@@ -10060,6 +10094,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               <EarphoneCaptureSourceNoticeContent
                 copy={earphoneModeBaseCopy}
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
+                microphoneHint={earphoneCaptureNoticeMicrophoneHint ? earphoneModeBaseCopy.microphoneHint : undefined}
                 onConfirm={confirmEarphoneCaptureNotice}
               />
             </MessageMediaDialog>

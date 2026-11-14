@@ -32,6 +32,43 @@ export function parseEarphoneMicrophonePick(raw: unknown): EarphoneMicrophonePic
   return raw === 'phone' || raw === 'earphone' ? raw : null
 }
 
+export const EARPHONE_MICROPHONE_HINT_STORAGE_KEY = 'mingle_earphone_microphone_hint_shown'
+
+// Once ever, while listening with earphones in: say that the phone still
+// listens (people expect the earphones' microphone). Not after an earphone
+// pick, and not while STT is off: it only matters while listening.
+export function shouldShowEarphoneMicrophoneHint(input: {
+  shellCapable: boolean
+  earphonesConnected: boolean
+  sessionRunning: boolean
+  pick: EarphoneMicrophonePick | null
+  shown: boolean
+}): boolean {
+  return input.shellCapable
+    && input.earphonesConnected
+    && input.sessionRunning
+    && input.pick !== 'earphone'
+    && !input.shown
+}
+
+export function readEarphoneMicrophoneHintShown(storage?: Pick<Storage, 'getItem'> | null): boolean {
+  try {
+    const target = storage ?? (typeof window === 'undefined' ? null : window.localStorage)
+    return target?.getItem(EARPHONE_MICROPHONE_HINT_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function writeEarphoneMicrophoneHintShown(storage?: Pick<Storage, 'setItem'> | null): void {
+  try {
+    const target = storage ?? (typeof window === 'undefined' ? null : window.localStorage)
+    target?.setItem(EARPHONE_MICROPHONE_HINT_STORAGE_KEY, '1')
+  } catch {
+    // Private mode: the hint may show again next time.
+  }
+}
+
 // The `earphoneMicrophone` start option: only an explicit earphone pick.
 export function resolveEarphoneMicrophoneEnabled(pick: EarphoneMicrophonePick | null): boolean {
   return pick === 'earphone'
