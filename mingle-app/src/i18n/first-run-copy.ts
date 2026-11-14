@@ -8,8 +8,8 @@ import { resolvePrimaryUiLocaleTag, type PrimaryUiLocale } from "@/i18n/mingle-l
  * recommended one, long), and "More" opens a page with all five levels.
  */
 export type FirstRunCopy = {
+  /** The line over the "say something" button. */
   speakTitle: string;
-  speakHint: string;
   speakButton: string;
   lengthTitle: string;
   lengthHint: string;
@@ -37,8 +37,7 @@ export type FirstRunCopy = {
 
 const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
   ko: {
-    speakTitle: "말하면 바로 통역돼요",
-    speakHint: "아무 말이나 해 보세요. 알아듣고 바로 번역해 드려요.",
+    speakTitle: "통번역 기능을 먼저 사용해 볼까요?",
     speakButton: "눌러서 말해 보기",
     lengthTitle: "문장을 얼마나 길게 묶을까요?",
     lengthHint: "밀어 보면 예시가 바뀌어요. 적용을 누르면 바뀌고, 설정에서 언제든 다시 바꿀 수 있어요.",
@@ -57,8 +56,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "문장 길이",
   },
   en: {
-    speakTitle: "Speak, and it's interpreted right away",
-    speakHint: "Say anything. It listens and translates at once.",
+    speakTitle: "Want to try interpreting first?",
     speakButton: "Tap to speak",
     lengthTitle: "How long should a sentence run?",
     lengthHint: "Slide to see the example change. Tap Apply to use it; you can change it again in settings.",
@@ -77,8 +75,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "Sentence length",
   },
   ja: {
-    speakTitle: "話すとすぐに通訳されます",
-    speakHint: "何か話してみてください。聞き取ってすぐに翻訳します。",
+    speakTitle: "まず通訳機能を使ってみませんか？",
     speakButton: "タップして話してみる",
     lengthTitle: "文をどのくらいの長さでまとめますか？",
     lengthHint: "動かすと例が変わります。「適用」で反映され、設定でいつでも変更できます。",
@@ -97,8 +94,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "文の長さ",
   },
   "zh-CN": {
-    speakTitle: "一开口，立即翻译",
-    speakHint: "随便说点什么。它会听懂并立即翻译。",
+    speakTitle: "先试试口译功能吧？",
     speakButton: "点一下说说看",
     lengthTitle: "一句话要多长才断开？",
     lengthHint: "拖动一下，示例会跟着变。点“应用”后生效，之后也能在设置里更改。",
@@ -117,8 +113,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "句子长度",
   },
   "zh-TW": {
-    speakTitle: "一開口，立即翻譯",
-    speakHint: "隨便說點什麼。它會聽懂並立即翻譯。",
+    speakTitle: "先試試口譯功能吧？",
     speakButton: "點一下說說看",
     lengthTitle: "一句話要多長才斷開？",
     lengthHint: "拖動一下，範例會跟著變。點「套用」後生效，之後也能在設定裡更改。",
@@ -137,8 +132,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "句子長度",
   },
   fr: {
-    speakTitle: "Parlez, c’est interprété aussitôt",
-    speakHint: "Dites ce que vous voulez. L’appli écoute et traduit tout de suite.",
+    speakTitle: "Et si vous essayiez d’abord l’interprétation ?",
     speakButton: "Touchez pour parler",
     lengthTitle: "Quelle longueur pour une phrase ?",
     lengthHint: "Faites glisser pour voir l’exemple changer. Touchez Appliquer ; vous pourrez le modifier dans les réglages.",
@@ -157,8 +151,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "Longueur des phrases",
   },
   de: {
-    speakTitle: "Sprich, und es wird sofort gedolmetscht",
-    speakHint: "Sag einfach etwas. Die App hört zu und übersetzt sofort.",
+    speakTitle: "Möchtest du zuerst das Dolmetschen ausprobieren?",
     speakButton: "Tippen und sprechen",
     lengthTitle: "Wie lang soll ein Satz werden?",
     lengthHint: "Schiebe den Regler, und das Beispiel ändert sich. Tippe auf Übernehmen; in den Einstellungen kannst du es jederzeit ändern.",
@@ -177,8 +170,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "Satzlänge",
   },
   es: {
-    speakTitle: "Habla y se interpreta al instante",
-    speakHint: "Di lo que quieras. La app escucha y traduce enseguida.",
+    speakTitle: "¿Probamos primero la interpretación?",
     speakButton: "Toca para hablar",
     lengthTitle: "¿Qué longitud debe tener una frase?",
     lengthHint: "Desliza y verás cambiar el ejemplo. Toca Aplicar; puedes cambiarlo en los ajustes.",
@@ -197,8 +189,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "Longitud de las frases",
   },
   pt: {
-    speakTitle: "Fale e a interpretação sai na hora",
-    speakHint: "Diga qualquer coisa. O app escuta e traduz na hora.",
+    speakTitle: "Que tal experimentar a interpretação primeiro?",
     speakButton: "Toque para falar",
     lengthTitle: "Qual o tamanho de uma frase?",
     lengthHint: "Deslize para ver o exemplo mudar. Toque em Aplicar; dá para alterar nos ajustes.",
@@ -217,8 +208,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "Tamanho das frases",
   },
   it: {
-    speakTitle: "Parla e viene interpretato subito",
-    speakHint: "Di’ qualcosa. L’app ascolta e traduce subito.",
+    speakTitle: "Vuoi provare prima l’interpretazione?",
     speakButton: "Tocca per parlare",
     lengthTitle: "Quanto deve essere lunga una frase?",
     lengthHint: "Fai scorrere e l’esempio cambia. Tocca Applica; puoi modificarlo nelle impostazioni.",
@@ -237,8 +227,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "Lunghezza delle frasi",
   },
   ru: {
-    speakTitle: "Говорите — перевод появится сразу",
-    speakHint: "Скажите что угодно. Приложение услышит и сразу переведёт.",
+    speakTitle: "Попробуем сначала устный перевод?",
     speakButton: "Нажмите и говорите",
     lengthTitle: "Какой длины должна быть фраза?",
     lengthHint: "Передвиньте ползунок — пример изменится. Нажмите «Применить»; позже можно поменять в настройках.",
@@ -257,8 +246,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "Длина фразы",
   },
   ar: {
-    speakTitle: "تحدّث وستُترجم فورًا",
-    speakHint: "قل أي شيء. التطبيق يسمع ويترجم في الحال.",
+    speakTitle: "هل تريد تجربة الترجمة الفورية أولًا؟",
     speakButton: "اضغط وتحدّث",
     lengthTitle: "ما طول الجملة المناسب؟",
     lengthHint: "حرّك المؤشر لترى المثال يتغيّر. اضغط «تطبيق»، ويمكنك تغييره لاحقًا من الإعدادات.",
@@ -277,8 +265,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "طول الجملة",
   },
   hi: {
-    speakTitle: "बोलिए, तुरंत अनुवाद हो जाएगा",
-    speakHint: "कुछ भी बोलकर देखें। ऐप सुनकर तुरंत अनुवाद करता है।",
+    speakTitle: "पहले अनुवाद आज़माकर देखें?",
     speakButton: "दबाकर बोलें",
     lengthTitle: "एक वाक्य कितना लंबा रखा जाए?",
     lengthHint: "स्लाइड करें, उदाहरण बदल जाएगा। लागू करें दबाएँ; सेटिंग्स में कभी भी बदल सकते हैं।",
@@ -297,8 +284,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "वाक्य की लंबाई",
   },
   th: {
-    speakTitle: "พูดแล้วแปลให้ทันที",
-    speakHint: "ลองพูดอะไรก็ได้ แอปจะฟังและแปลให้ทันที",
+    speakTitle: "ลองใช้การแปลก่อนไหม?",
     speakButton: "แตะเพื่อพูด",
     lengthTitle: "อยากให้หนึ่งประโยคยาวแค่ไหน",
     lengthHint: "เลื่อนดูแล้วตัวอย่างจะเปลี่ยน แตะ \"ใช้\" เพื่อเปลี่ยนจริง และเปลี่ยนได้อีกในการตั้งค่า",
@@ -317,8 +303,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthMenuLabel: "ความยาวประโยค",
   },
   vi: {
-    speakTitle: "Nói là được phiên dịch ngay",
-    speakHint: "Hãy nói bất cứ điều gì. Ứng dụng nghe và dịch ngay.",
+    speakTitle: "Thử tính năng phiên dịch trước nhé?",
     speakButton: "Chạm để nói",
     lengthTitle: "Một câu nên dài bao nhiêu?",
     lengthHint: "Kéo để xem ví dụ thay đổi. Bấm Áp dụng; bạn có thể đổi lại trong phần cài đặt.",
