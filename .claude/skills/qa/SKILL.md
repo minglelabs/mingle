@@ -46,6 +46,34 @@ it the way the product owner would. Everything you need is in `mingle-app/qa/age
 - Report honestly: a scenario that did not run is `blocked`, never `pass`. A check that needs a person is `manual`.
 - Run outputs go in `mingle-app/qa/agent/runs/` (gitignored). Do not commit them.
 
+## 0. Static i18n check (every run)
+
+Run this first, on every `/qa` invocation, whatever scenarios are selected. It takes a few seconds and needs no
+device:
+
+```bash
+pnpm --dir mingle-app test:qa:i18n
+```
+
+It has two parts, both of which must pass:
+
+- `scripts/i18n-audit.mjs` scans the web and RN UI code for copy that bypasses the copy layer: literal JSX text,
+  literal `aria-label`/`placeholder`/`title`/`alt`, `locale === "ko" ? … : …` copy that only covers Korean and
+  English, and Hangul string literals outside a locale table.
+- `src/i18n/i18n-coverage.test.ts` resolves the dictionary and every `resolve*Copy`/`get*Copy` resolver for all 15
+  primary UI locales and flags strings that fell back to Korean or stayed exactly English.
+
+Each new finding is an i18n finding (T17) in the report, under the `locale-copy-sweep` card: S1 when a whole
+screen, sheet or option list shows in another language, S2 for a single label, S3 for screen-reader-only text.
+Fix it in the copy table (all 15 locales). Add a line to a baseline (`scripts/i18n-audit.baseline.json`,
+`src/i18n/i18n-coverage.baseline.json`) only for a true same-spelling word (fr "Notifications") or a brand
+name, and say so in the report. When the diff touches UI copy, also run the `locale-copy-sweep` scenario.
+
+Missing translations are only half of i18n: longer locales (vi, es, de, fr, ru, en) also push labels out of
+layouts designed in Korean. That is checked on the device by the `locale-text-overflow` scenario, which runs
+`qa-agent-device.mjs overflow --locale all` on each screen (15 locales, one screenshot each) and reports clipped,
+off-screen, escaping, wrapped and overlapping text. Run it whenever `locale-copy-sweep` runs, and with `/qa all`.
+
 ## 1. Select scenarios
 
 ```bash
@@ -135,6 +163,8 @@ would tap. Read state with `snapshot`/`eval`, but never use `eval` to click for 
 | System alert | `alert text`, then `alert accept` or `alert dismiss`. |
 | App state | `snapshot` returns `liveDemo` (the room), `conversationList`, `activeElement` (is the composer focused?), `alerts` and the viewport. |
 | QA bridge method | `eval 'window.__MINGLE_QA__.seedScrollPerformanceHistory()'` |
+| Text overflow | `overflow` scans the current screen; `overflow --locale all --shots <dir> --out <file>` reloads the same path in each of the 15 UI locales, screenshots each, then returns to the starting locale. |
+| Every layer of the UI | `crawl --routes <ko paths> [--locales ko] [--states <discovery.json>] --out <file> --shots <dir>` taps every safe control on each screen and in each sheet/menu it opens, scans every state, and replays the states per locale. |
 | Relaunch | `app terminate`, then `app launch`. |
 | Native logs | `logs --grep STT` (device syslog lines from the app since the session started). |
 | Client events | LAN profile only (local DB), read-only: `SELECT created_at, event_type, metadata FROM app.app_event_logs WHERE created_at > '<start UTC>' ORDER BY created_at;` |

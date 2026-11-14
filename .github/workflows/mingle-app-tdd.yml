@@ -157,6 +157,7 @@ jobs:
         run: |
           pnpm test:scripts
           node scripts/qa-agent-scenarios.mjs check
+          node scripts/i18n-audit.mjs
 
       - name: Run TDD suite (unit)
         run: pnpm test:unit --shard=${{ matrix.shard }}/4

@@ -83,6 +83,7 @@ export const ptDictionary: BaseAppDictionarySource = {
     bio: "Uma pessoa que ama café e conversas significativas",
     editProfile: "Editar perfil",
     shareProfile: "Compartilhar perfil",
+    shareProfileShort: "Compartilhar",
     editProfileTitle: "Editar perfil",
     profileNameLabel: "Nome",
     profileNamePlaceholder: "Digite seu nome",

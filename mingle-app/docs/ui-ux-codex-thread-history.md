@@ -19,6 +19,15 @@ One entry per UI/UX fix, newest first. This is the only copy; add new entries he
 - Resolution: The card offers levels 1-4 (`SPEECH_LENGTH_FIRST_RUN_LEVELS`; a longer current setting starts on 4); the room settings keep 1-6. The card's holder stops below the header (and a top ad banner), and the example scales down whole when the room is short. The scale is a slider: a rail filled up to a round numbered thumb that follows the finger, dots for the stops, a many-small-bubbles icon at the short end and one long bubble at the long end, and `← Short` / `Long →` under them (mirrored in RTL). On the card the example follows the finger; in the room settings the stop the finger lets go on is applied. Arrow keys, Home and End move it.
 - Verification: `speech-length.test.ts`, `tsc`; rendered alone in a browser at 760px and 560px room heights, dragged to 1 (six bubbles) and past the end (stops at 4). Not tried on a device.
 
+## 2026-11-13 — Live STT keeps running across a tab switch and room re-entry
+
+- Surface: `use-realtime-stt.ts` (room hook unmount), `bottom-tab-bar.tsx`, `conversation-list.tsx`, `lib/tab-navigation.ts`.
+- Issue: Start the mic in a room, go back to the list, switch to My Page (or Feed or Explore) and back to Chats, then open the room: the mic showed Start and `nativeSttStatus` was `idle`, and the list's "In progress" badge disappeared. Found by the agent QA run on main (iPhone 11 Pro, `stt-survives-navigation`, 2/2).
+- Cause: The 2026-08-24 Android lifecycle fix sends a forced `native_stt_stop` when the owning room hook unmounts. A tab switch unmounts the whole conversations page, so it stopped native STT, against the 2026-08-08 decision that a tab change is not a session boundary.
+- Resolution: The tab bar marks a top-level tab switch before it navigates. While that mark is fresh (30 s, cleared when the conversation list mounts again), the room hook's unmount releases its owner without stopping native STT, and the list re-attaches the live room as a hidden consumer when Chats returns. Explicit Stop, room close, deletion, sign-out and any other unmount still stop it.
+- Atoms: `2026-11-13-stt-tab-switch-reentry#1` (STT survives a tab switch and room re-entry).
+- Verification: `tab-navigation.test.ts`; on the iPhone 11 Pro via devbox, My Page → Chats → room and Explore → Chats → room kept the mic running (2/2), and Stop cleared the list badge.
+
 ## 2026-11-13 — Sign-in: the button this device last signed in with says "Last used"
 
 - Surface: The app sign-in screen (`mingle-home.tsx`), `lib/last-sign-in-method.ts`, `last-sign-in-method-recorder.tsx` (PR #532).

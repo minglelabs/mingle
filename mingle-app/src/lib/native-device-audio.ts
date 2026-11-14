@@ -68,14 +68,36 @@ export function resolveNativeDeviceAudioSupported(input: {
 
 // Device audio is captured only while earphone mode is on (that is where the
 // choice is made and explained) and only where it is supported (above).
+// Outside earphone mode it is captured too once the user said so in the
+// question asked when earphones go in during a session (see
+// shouldOfferDeviceAudioOnEarphonesIn).
 export function resolveEffectiveSttCaptureSource(input: {
   supported: boolean
   earphoneModeEnabled: boolean
+  deviceAudioOptIn?: boolean
   pick: SttCaptureSource
 }): SttCaptureSource {
-  return input.supported && input.earphoneModeEnabled && input.pick === 'device_audio'
+  return input.supported
+    && (input.earphoneModeEnabled || input.deviceAudioOptIn === true)
+    && input.pick === 'device_audio'
     ? 'device_audio'
     : 'microphone'
+}
+
+// Before earphones go in, the microphone hears what other apps play through
+// the speaker; after, that sound plays in the earphones only and translation
+// of it stops. So earphones going in while a microphone-only session runs ask
+// whether to translate this device's sound too.
+export function shouldOfferDeviceAudioOnEarphonesIn(input: {
+  earphonesJustConnected: boolean
+  supported: boolean
+  sessionRunning: boolean
+  captureSource: SttCaptureSource
+}): boolean {
+  return input.earphonesJustConnected
+    && input.supported
+    && input.sessionRunning
+    && input.captureSource === 'microphone'
 }
 
 // ── Capability store (one per window, shared by every mounted room) ────────
@@ -174,7 +196,37 @@ export function setSttCaptureSourcePick(next: SttCaptureSource): void {
   }
 }
 
+// ── Opt-in outside earphone mode (in memory, shared by every mounted room) ──
+
+let deviceAudioOptInSnapshot = false
+const deviceAudioOptInListeners = new Set<() => void>()
+
+export function subscribeDeviceAudioOptIn(listener: () => void): () => void {
+  deviceAudioOptInListeners.add(listener)
+  return () => {
+    deviceAudioOptInListeners.delete(listener)
+  }
+}
+
+export function getDeviceAudioOptInSnapshot(): boolean {
+  return deviceAudioOptInSnapshot
+}
+
+export function getDeviceAudioOptInServerSnapshot(): boolean {
+  return false
+}
+
+export function setDeviceAudioOptIn(next: boolean): void {
+  if (deviceAudioOptInSnapshot === next) return
+  deviceAudioOptInSnapshot = next
+  for (const listener of [...deviceAudioOptInListeners]) {
+    listener()
+  }
+}
+
 export function resetNativeDeviceAudioStoresForTests(): void {
+  deviceAudioOptInListeners.clear()
+  deviceAudioOptInSnapshot = false
   detachCapabilityListener?.()
   detachCapabilityListener = null
   capabilityListeners.clear()

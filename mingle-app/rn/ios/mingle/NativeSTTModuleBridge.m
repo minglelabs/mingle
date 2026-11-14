@@ -15,6 +15,10 @@ RCT_EXTERN_METHOD(setAec:(BOOL)enabled
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(setEarphoneMicrophone:(BOOL)enabled
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(sendAgentText:(NSString *)text
                   endOfSegment:(BOOL)endOfSegment)
 

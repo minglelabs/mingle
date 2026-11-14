@@ -224,7 +224,7 @@ import { useUnreadNotifications } from "@/components/notifications/use-unread-no
 import { feedHref } from "@/lib/feed-routes";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
-import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
+import { clearTopLevelTabSwitch, NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 
@@ -1041,7 +1041,7 @@ function mapConversationSummaryToItem(
     status: conversation.status,
     statusLabel,
     avatarSrc: avatar.src,
-    avatarAlt: `${title} ${avatar.name} avatar`,
+    avatarAlt: title,
     otherMembers: conversation.otherMembers,
     titleAccountBadge: resolveRoomAccountBadge(conversation.otherMembers),
     titleAccountBadgeLocale: locale,
@@ -1752,7 +1752,8 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
             paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
           }}
         >
-          <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
+          {/* min-w-0: an input's default width would otherwise push a long "Cancel" (de) off-screen. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
             <Search size={16} className="shrink-0 text-gray-400" />
             <input
               ref={inputRef}
@@ -1760,7 +1761,7 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={copy.searchPlaceholder}
-              className={`flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400 ${
+              className={`min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400 ${
                 caretHidden ? "caret-transparent" : ""
               }`}
               enterKeyHint="search"
@@ -2128,10 +2129,16 @@ export default function ConversationList({
   // with a "say something" card and every room is ready to show the speech
   // length choice. Read from storage after mount, so the server render matches.
   const [firstSpeakPending, setFirstSpeakPending] = useState(false);
+  const showFirstSpeakCard = firstSpeakPending && sessionStatus === "authenticated";
   // Where the user heard of the app, asked once when they leave their first room.
   const [discoveryPromptOpen, setDiscoveryPromptOpen] = useState(false);
   const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
+  useEffect(() => {
+    // Back on the conversations page: a later room unmount is a normal
+    // session boundary again, not a tab switch.
+    clearTopLevelTabSwitch();
+  }, []);
   // A mount that starts with a conversation already active (SSR props, a
   // deep link, or a client-side remount after a real route round trip like
   // returning from add-members) isn't the user "opening" a room — it's the
@@ -5845,7 +5852,7 @@ export default function ConversationList({
               : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
-          {firstSpeakPending && sessionStatus === "authenticated" ? (
+          {showFirstSpeakCard ? (
             <div className="px-4 pb-4 pt-3">
               <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50/90 px-5 pb-5 pt-6 text-center shadow-[0_16px_36px_rgba(245,158,11,0.12)]">
                 <p className="text-[1.35rem] font-extrabold leading-snug tracking-[-0.02em] text-slate-950">
@@ -5875,7 +5882,7 @@ export default function ConversationList({
             <div className="flex flex-col items-center py-16 text-gray-400">
               <Loader2 size={28} className="animate-spin" />
             </div>
-          ) : conversationItems.length === 0 ? (
+          ) : conversationItems.length === 0 && showFirstSpeakCard ? null : conversationItems.length === 0 ? (
             <div
               className="flex flex-col items-center px-6 py-16 text-center text-gray-400"
               style={{
@@ -5944,6 +5951,9 @@ export default function ConversationList({
         </div>
       </div>
 
+      {/* Before the first bubble the "say something" card is the one thing to
+          press, so the bottom button and the empty list's invite stay away. */}
+      {showFirstSpeakCard ? null : (
       <div
         className="absolute inset-x-0 z-20"
         style={{
@@ -5985,6 +5995,7 @@ export default function ConversationList({
           ) : null}
         </button>
       </div>
+      )}
 
       <BottomTabBar
         activeRoute="conversations"

@@ -15,7 +15,7 @@ and scores translation quality.
 | --- | --- |
 | [taste.md](taste.md) | The owner's UX rules (T1–T23), each traced to entries in [the UI/UX history](../../docs/ui-ux-codex-thread-history.md). |
 | [rubric.md](rubric.md) | Verdicts, severity anchors, the translation 1–5 scale, responsiveness thresholds. |
-| [scenarios/](scenarios) | 19 scenarios with frontmatter (`id`, `priority`, `environment`, `tags`, `taste`, `paths`, `history`). `environment` is `device` (the agent runs it end to end), `assisted` (parts need a person: speaking, AirPods) or `manual-only`. |
+| [scenarios/](scenarios) | 20 scenarios with frontmatter (`id`, `priority`, `environment`, `tags`, `taste`, `paths`, `history`). `environment` is `device` (the agent runs it end to end), `assisted` (parts need a person: speaking, AirPods) or `manual-only`. |
 | [fixtures/](fixtures) | Inputs the scenarios type or send. |
 | `local/` | Gitignored: the local QA account, the device session and the Appium log. |
 | `runs/` | Gitignored: screenshots, notes, `results.json` and `report.html` per run. |
@@ -26,6 +26,8 @@ Scripts in `mingle-app/scripts/`:
 | --- | --- |
 | `qa-agent-scenarios.mjs list \| select \| check` | Lists the catalog, selects scenarios for a diff, and validates frontmatter, path globs, history headings and taste ids. |
 | `qa-agent-report.mjs <run-dir>` | Turns a run's `results.json` and screenshots into one self-contained `report.html` for publishing. |
+| `i18n-audit.mjs` (+ `src/i18n/i18n-coverage.test.ts`) | Static i18n check run at the start of every `/qa`: hardcoded UI copy, and strings missing in any of the 15 UI locales. `pnpm test:qa:i18n`. Also runs in CI. |
+| `qa-text-overflow.mjs` | The in-WebView scanner behind `qa-agent-device.mjs overflow`: clipped, off-screen, escaping, wrapped and overlapping text, per UI locale. `pnpm qa:i18n:long-labels` lists the labels most likely to overflow. |
 | `qa-agent-device.mjs` | Drives the connected iPhone over Appium XCUITest (real-device mode, WDA signed with the team ID): `devices`, `servers`, `build` (Release + QA bridge, local URLs, AdMob test units), `install`, `start`, `screenshot`, `tap`, `long-press`, `swipe`, `type`, `alert`, `snapshot`, `eval`, `app`, `logs`, `stop`. |
 
 ## Running

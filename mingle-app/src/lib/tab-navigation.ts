@@ -78,3 +78,24 @@ export function buildNativeAwareTabPath(
   const nextSearch = nextSearchParams.toString();
   return nextSearch ? `${pathname}?${nextSearch}` : pathname;
 }
+
+// A top-level tab switch unmounts the conversations page, but it is not an STT
+// session boundary: the native shell keeps recognizing, and the conversations
+// tab re-attaches the live room as a hidden consumer when it returns
+// (2026-08-08). The room hook reads this marker so its unmount does not stop
+// native STT. The conversation list clears it when it mounts again.
+const TOP_LEVEL_TAB_SWITCH_WINDOW_MS = 30_000;
+let topLevelTabSwitchStartedAt = 0;
+
+export function markTopLevelTabSwitch(now: number = Date.now()): void {
+  topLevelTabSwitchStartedAt = now;
+}
+
+export function clearTopLevelTabSwitch(): void {
+  topLevelTabSwitchStartedAt = 0;
+}
+
+export function isTopLevelTabSwitchPending(now: number = Date.now()): boolean {
+  return topLevelTabSwitchStartedAt > 0
+    && now - topLevelTabSwitchStartedAt < TOP_LEVEL_TAB_SWITCH_WINDOW_MS;
+}
