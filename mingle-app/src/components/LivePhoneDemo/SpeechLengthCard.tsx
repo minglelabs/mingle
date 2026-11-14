@@ -86,7 +86,7 @@ export default function SpeechLengthCard({
         </defs>
       </svg>
 
-      <div className="relative h-[252px] overflow-hidden bg-gradient-to-b from-slate-50 to-slate-100">
+      <div className="relative h-[340px] overflow-hidden bg-gradient-to-b from-slate-50 to-slate-100">
       {/* Only the bubbles sit inside the filter: it works on their outline. */}
       <div
         aria-hidden
@@ -106,7 +106,7 @@ export default function SpeechLengthCard({
               exit="absorbed"
               transition={{ ...DROP_SPRING, layout: DROP_SPRING }}
               style={{ background: bubble.background, borderRadius: 20, originX: 1, originY: 0 }}
-              className="max-w-[88%] px-3.5 py-1.5 text-[0.84rem] font-semibold leading-snug text-slate-900"
+              className="max-w-[88%] px-4 py-2 text-[1.02rem] font-semibold leading-snug text-slate-900"
             >
               <motion.span layout="position" variants={TEXT_VARIANTS} transition={DROP_SPRING} className="block">
                 {bubble.text}
