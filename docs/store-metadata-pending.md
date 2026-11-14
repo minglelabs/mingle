@@ -15,10 +15,11 @@ Google Play 스토어 정보는 앱 버전과 상관없이 언제든 올릴 수 
 ## 대기 중
 
 - 음성 통화가 배포되면: 3번 슬라이드(`03-voice`)를 통화 화면으로 바꾸고, 한국어 부제에 `·통화`(일본어 `・通話`)를 붙인다. 그 전에는 넣지 않는다.
-- 연락처 연동·초대 링크가 들어간 iOS 빌드(2.4.0)가 App Store에 나간 뒤: Railway prod에 `IOS_INVITE_UNIVERSAL_LINKS=1`을 넣으세요. 그 전에는 `/i/` 초대 링크가 앱이 아니라 웹 초대 페이지(코드 표시)로 열립니다. 옛 앱은 이 링크를 받으면 초대를 버리기 때문입니다. Android는 앱 매니페스트에 들어 있어 따로 할 일이 없습니다.
 
 ## 반영 완료
 
+- 초대 링크 앱 열기: 2.4.0이 App Store에 나간 뒤 2026-11-15에 Railway prod에 `IOS_INVITE_UNIVERSAL_LINKS=1`을 넣음. AASA에 `/i/*`가 들어간 것을 확인함. 같은 날 `IOS_CLIENT_LATEST_VERSION`도 2.3.4에서 2.4.0으로 올림. 2.4.1이 출시되면 2.4.1로 올린다.
+- iOS 2.4.1 (120): 이어폰을 껴도 폰 마이크로 듣기, 이어폰을 꽂거나 빼도 STT 유지. 릴리스 노트를 `ios-appstore-sync-metadata`로 올리고 2026-11-15에 심사 제출함(#550).
 - 통번역 메신저 리포지셔닝: Play는 2026-11-12에 문구·스크린샷 업로드(#498). iOS 2.4.0 (119)에 앱 이름·부제·키워드·설명·릴리스 노트(`ios-appstore-sync-metadata`)와 스크린샷(`scripts/ios-appstore-upload.sh`)을 올려 2026-11-12 심사 제출. Android 2.4.0 (109) 프로덕션 제출.
   - 옛 검색어 유지: 한국어·일본어 키워드에서 뺀 `global,hangout,mingle`은 영어 키워드에 남아 있다(영어 전용 키워드가 한국·일본 스토어 검색에 잡히는 것을 2026-11-11에 확인). 옛 제목의 `easiest`, `translator`는 영어 제목·부제에 있고, 자리가 되는 언어(es, fr, it, pt, hi, th, vi)는 키워드에도 넣었다. de, ar, ru는 자리가 없어 영어 페이지에 의존한다.
 - iOS 2.3.3: 현지 문자 검색 키워드(해시챗 등)를 `ios-appstore-sync-metadata`로 올려 제출함(2026-11-07, minglelabs/mingle#467). Play는 2026-11-04에 반영.
