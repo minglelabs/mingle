@@ -8,7 +8,7 @@ import {
   type EarphoneMicrophonePick,
 } from '@/lib/native-earphone-microphone'
 
-function MicrophoneRadioOption({
+export function MicrophoneRadioOption({
   pick,
   icon: Icon,
   label,
@@ -52,8 +52,8 @@ function MicrophoneRadioOption({
   )
 }
 
-// Asked once, the first time earphones are in: record from the phone (the
-// default, so the people around are heard) or from the earphones.
+// Opened from the room menu or my page: record from the phone (the default,
+// so the people around are heard) or from the earphones.
 export default function EarphoneMicrophoneNoticeContent({
   copy,
   initialPick = DEFAULT_EARPHONE_MICROPHONE_PICK,
