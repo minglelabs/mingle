@@ -757,6 +757,7 @@ class NativeSTTModule: RCTEventEmitter {
     private var audioObserversInstalled = false
     private var isRestartingAudio = false
     private var lastAudioRestartAt = Date.distantPast
+    private var captureRestartQuickRetriesLeft = 0
     private var audioChunkCount: Int64 = 0
     private var wsMessageCount: Int64 = 0
     private var wsPingTimer: DispatchSourceTimer?
@@ -1235,7 +1236,7 @@ class NativeSTTModule: RCTEventEmitter {
         hasInputTap = true
     }
 
-    private func restartAudioCapture(reason: String, bypassThrottle: Bool = false) {
+    private func restartAudioCapture(reason: String, bypassThrottle: Bool = false, isQuickRetry: Bool = false) {
         guard isRunning else { return }
         let now = Date()
         if isRestartingAudio {
@@ -1247,6 +1248,9 @@ class NativeSTTModule: RCTEventEmitter {
 
         isRestartingAudio = true
         lastAudioRestartAt = now
+        if !isQuickRetry {
+            captureRestartQuickRetriesLeft = MingleBackgroundAudioPolicy.captureRestartQuickRetries
+        }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             // Reset before the running check: a restart dropped because STT
@@ -1259,7 +1263,7 @@ class NativeSTTModule: RCTEventEmitter {
             do {
                 try self.configureAudioSession(aecEnabled: self.isAecEnabled)
             } catch {
-                self.handleCaptureRestartFailure("audio_reconfigure_failed(\(reason)): \(error.localizedDescription)")
+                self.handleCaptureRestartFailure("audio_reconfigure_failed(\(reason)): \(error.localizedDescription)", reason: reason)
                 return
             }
 
@@ -1271,7 +1275,7 @@ class NativeSTTModule: RCTEventEmitter {
             // While another app or a call holds the microphone the input can
             // report an empty format; installing a tap with it raises an exception.
             guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
-                self.handleCaptureRestartFailure("audio_restart_failed(\(reason)): input_unavailable")
+                self.handleCaptureRestartFailure("audio_restart_failed(\(reason)): input_unavailable", reason: reason)
                 return
             }
             self.installInputTap(format: inputFormat)
@@ -1283,6 +1287,7 @@ class NativeSTTModule: RCTEventEmitter {
             do {
                 self.audioEngine.prepare()
                 try self.audioEngine.start()
+                self.captureRestartQuickRetriesLeft = 0
                 if self.isCaptureSuspended {
                     // The engine can start while a call still holds the
                     // microphone. Stay silenced until the health check sees
@@ -1293,7 +1298,7 @@ class NativeSTTModule: RCTEventEmitter {
                     NSLog("[NativeSTTModule] audio restarted reason=%@", reason)
                 }
             } catch {
-                self.handleCaptureRestartFailure("audio_restart_failed(\(reason)): \(error.localizedDescription)")
+                self.handleCaptureRestartFailure("audio_restart_failed(\(reason)): \(error.localizedDescription)", reason: reason)
             }
         }
     }
@@ -1301,12 +1306,21 @@ class NativeSTTModule: RCTEventEmitter {
     /// Main thread. Live STT must not end because the app is in the background
     /// or iOS holds the microphone: such a failure keeps the session, reports
     /// it as silenced and is retried by the health check.
-    private func handleCaptureRestartFailure(_ message: String) {
+    private func handleCaptureRestartFailure(_ message: String, reason: String) {
         let action = MingleBackgroundAudioPolicy.captureRestartFailureAction(
             isCaptureSuspended: isCaptureSuspended,
-            isAppActive: UIApplication.shared.applicationState == .active
+            isAppActive: UIApplication.shared.applicationState == .active,
+            quickRetriesLeft: captureRestartQuickRetriesLeft
         )
         switch action {
+        case .retrySoon:
+            // Right after a route change the new input can be unready for a
+            // moment. Try again quietly before anything reaches the WebView.
+            captureRestartQuickRetriesLeft -= 1
+            NSLog("[NativeSTTModule] capture restart retrying soon (left=%d): %@", captureRestartQuickRetriesLeft, message)
+            DispatchQueue.main.asyncAfter(deadline: .now() + MingleBackgroundAudioPolicy.captureRestartQuickRetryDelaySeconds) { [weak self] in
+                self?.restartAudioCapture(reason: reason, bypassThrottle: true, isQuickRetry: true)
+            }
         case .deferAndRetry:
             NSLog("[NativeSTTModule] capture restart deferred: %@", message)
             markCaptureSuspended()
@@ -1363,6 +1377,18 @@ class NativeSTTModule: RCTEventEmitter {
         }
         switch reason {
         case .newDeviceAvailable, .oldDeviceUnavailable, .noSuitableRouteForCategory, .wakeFromSleep:
+            // Port types and ids only; never device names.
+            let previousRoute = userInfo[AVAudioSessionRouteChangePreviousRouteKey] as? AVAudioSessionRouteDescription
+            let previousInputs = previousRoute?.inputs.map { "\($0.portType.rawValue):\($0.uid)" } ?? []
+            let currentInputs = AVAudioSession.sharedInstance().currentRoute.inputs.map { "\($0.portType.rawValue):\($0.uid)" }
+            guard MingleBackgroundAudioPolicy.shouldRestartCaptureOnRouteChange(
+                previousInputs: previousInputs,
+                currentInputs: currentInputs,
+                engineRunning: audioEngine.isRunning
+            ) else {
+                NSLog("[NativeSTTModule] route change %lu: same microphone, capture continues", reasonValue)
+                return
+            }
             restartAudioCapture(reason: "route_change_\(reasonValue)")
         default:
             break

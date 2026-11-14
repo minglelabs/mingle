@@ -141,6 +141,9 @@ enum MingleBackgroundAudioPolicy {
     }
 
     enum CaptureRestartFailureAction: String, Equatable {
+        /// Try again in a moment, silently. A route change can leave the new
+        /// input unready for a few hundred milliseconds.
+        case retrySoon
         /// Keep the STT session, report it as silenced and retry from the health check.
         case deferAndRetry
         /// Surface the failure to the WebView as before.
@@ -150,13 +153,34 @@ enum MingleBackgroundAudioPolicy {
     /// A capture restart that fails while the OS holds the microphone, or while
     /// the app is not active, is retried instead of ending live STT. Only a
     /// failure in the foreground with no pending interruption is reported.
+    static let captureRestartQuickRetries = 3
+    static let captureRestartQuickRetryDelaySeconds: TimeInterval = 0.3
+
     static func captureRestartFailureAction(
         isCaptureSuspended: Bool,
-        isAppActive: Bool
+        isAppActive: Bool,
+        quickRetriesLeft: Int = 0
     ) -> CaptureRestartFailureAction {
+        if quickRetriesLeft > 0 {
+            return .retrySoon
+        }
         if isCaptureSuspended || !isAppActive {
             return .deferAndRetry
         }
         return .reportError
+    }
+
+    /// A route change restarts capture only when the microphone that records
+    /// changed (or the engine stopped). Earphones going in or out while the
+    /// phone's microphone records change the output only: live STT carries on
+    /// untouched instead of blinking off and on.
+    static func shouldRestartCaptureOnRouteChange(
+        previousInputs: [String],
+        currentInputs: [String],
+        engineRunning: Bool
+    ) -> Bool {
+        guard engineRunning else { return true }
+        guard !currentInputs.isEmpty else { return true }
+        return previousInputs != currentInputs
     }
 }
