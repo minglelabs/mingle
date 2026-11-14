@@ -32,7 +32,7 @@ export function parseEarphoneMicrophonePick(raw: unknown): EarphoneMicrophonePic
   return raw === 'phone' || raw === 'earphone' ? raw : null
 }
 
-export const EARPHONE_LISTENING_NOTICE_STORAGE_KEY = 'mingle_earphone_listening_notice_shown'
+export const EARPHONE_CAPTURE_SOURCE_ANSWER_STORAGE_KEY = 'mingle_earphone_capture_source_answer'
 
 export type EarphoneListeningNotice = {
   open: boolean
@@ -42,44 +42,50 @@ export type EarphoneListeningNotice = {
   showCaptureSource: boolean
 }
 
-// One modal, once ever, the first time STT listens with earphones in (it
-// started with them in, or they went in while listening). Never while STT is
-// off. Each part shows only when it applies; with neither, nothing opens.
+// One modal per earphone connection, the first time STT listens with them in
+// (it started with them in, or they went in while listening). Never while STT
+// is off. Each part shows only when it applies; with neither, nothing opens.
+// Both parts start on the last answer (first time: phone microphone, and the
+// microphone only).
 export function resolveEarphoneListeningNotice(input: {
   visible: boolean
   earphonesConnected: boolean
   sessionRunning: boolean
-  shown: boolean
+  askedThisConnection: boolean
   microphoneChoiceCapable: boolean
-  microphonePick: EarphoneMicrophonePick | null
   deviceAudioSupported: boolean
   captureSource: 'microphone' | 'device_audio'
 }): EarphoneListeningNotice {
-  const showMicrophone = input.microphoneChoiceCapable && input.microphonePick !== 'earphone'
+  const showMicrophone = input.microphoneChoiceCapable
   const showCaptureSource = input.deviceAudioSupported && input.captureSource === 'microphone'
   const open = input.visible
     && input.earphonesConnected
     && input.sessionRunning
-    && !input.shown
+    && !input.askedThisConnection
     && (showMicrophone || showCaptureSource)
   return { open, showMicrophone, showCaptureSource }
 }
 
-export function readEarphoneListeningNoticeShown(storage?: Pick<Storage, 'getItem'> | null): boolean {
+export function readEarphoneCaptureSourceAnswer(
+  storage?: Pick<Storage, 'getItem'> | null,
+): 'microphone' | 'device_audio' {
   try {
     const target = storage ?? (typeof window === 'undefined' ? null : window.localStorage)
-    return target?.getItem(EARPHONE_LISTENING_NOTICE_STORAGE_KEY) === '1'
+    return target?.getItem(EARPHONE_CAPTURE_SOURCE_ANSWER_STORAGE_KEY) === 'device_audio' ? 'device_audio' : 'microphone'
   } catch {
-    return false
+    return 'microphone'
   }
 }
 
-export function writeEarphoneListeningNoticeShown(storage?: Pick<Storage, 'setItem'> | null): void {
+export function writeEarphoneCaptureSourceAnswer(
+  answer: 'microphone' | 'device_audio',
+  storage?: Pick<Storage, 'setItem'> | null,
+): void {
   try {
     const target = storage ?? (typeof window === 'undefined' ? null : window.localStorage)
-    target?.setItem(EARPHONE_LISTENING_NOTICE_STORAGE_KEY, '1')
+    target?.setItem(EARPHONE_CAPTURE_SOURCE_ANSWER_STORAGE_KEY, answer)
   } catch {
-    // Private mode: the notice may show again next time.
+    // Private mode: the next question starts on the microphone again.
   }
 }
 

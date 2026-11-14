@@ -8,11 +8,11 @@ import {
   EARPHONE_MICROPHONE_PICK_STORAGE_KEY,
   getEarphoneMicrophonePickSnapshot,
   parseNativeEarphoneMicrophoneChoiceCapability,
-  readEarphoneListeningNoticeShown,
+  readEarphoneCaptureSourceAnswer,
   readEarphoneMicrophonePick,
-  EARPHONE_LISTENING_NOTICE_STORAGE_KEY,
+  EARPHONE_CAPTURE_SOURCE_ANSWER_STORAGE_KEY,
   resolveEarphoneListeningNotice,
-  writeEarphoneListeningNoticeShown,
+  writeEarphoneCaptureSourceAnswer,
   resetNativeEarphoneMicrophoneStoresForTests,
   resolveEarphoneMicrophoneEnabled,
   subscribeEarphoneMicrophonePick,
@@ -47,33 +47,36 @@ describe('earphone microphone choice', () => {
     expect(room).not.toContain('microphoneNoticeTitle')
   })
 
-  it('opens one notice, once, the first time STT listens with earphones in', () => {
+  it('opens one notice per earphone connection while STT listens', () => {
     const base = {
       visible: true,
       earphonesConnected: true,
       sessionRunning: true,
-      shown: false,
+      askedThisConnection: false,
       microphoneChoiceCapable: true,
-      microphonePick: null,
       deviceAudioSupported: true,
       captureSource: 'microphone',
     } as const
     expect(resolveEarphoneListeningNotice(base)).toEqual({ open: true, showMicrophone: true, showCaptureSource: true })
     expect(resolveEarphoneListeningNotice({ ...base, sessionRunning: false }).open).toBe(false)
     expect(resolveEarphoneListeningNotice({ ...base, earphonesConnected: false }).open).toBe(false)
-    expect(resolveEarphoneListeningNotice({ ...base, shown: true }).open).toBe(false)
+    expect(resolveEarphoneListeningNotice({ ...base, askedThisConnection: true }).open).toBe(false)
     expect(resolveEarphoneListeningNotice({ ...base, visible: false }).open).toBe(false)
     // Each part only where it applies.
-    expect(resolveEarphoneListeningNotice({ ...base, microphonePick: 'earphone' })).toEqual({ open: true, showMicrophone: false, showCaptureSource: true })
     expect(resolveEarphoneListeningNotice({ ...base, captureSource: 'device_audio' })).toEqual({ open: true, showMicrophone: true, showCaptureSource: false })
     // Today's App Store app: no microphone choice, the capture question alone.
     expect(resolveEarphoneListeningNotice({ ...base, microphoneChoiceCapable: false })).toEqual({ open: true, showMicrophone: false, showCaptureSource: true })
     expect(resolveEarphoneListeningNotice({ ...base, microphoneChoiceCapable: false, deviceAudioSupported: false }).open).toBe(false)
+  })
+
+  it('starts the capture question on the last answer, the microphone the first time', () => {
     const storage = memoryStorage()
-    expect(readEarphoneListeningNoticeShown(storage)).toBe(false)
-    writeEarphoneListeningNoticeShown(storage)
-    expect(storage.values.get(EARPHONE_LISTENING_NOTICE_STORAGE_KEY)).toBe('1')
-    expect(readEarphoneListeningNoticeShown(storage)).toBe(true)
+    expect(readEarphoneCaptureSourceAnswer(storage)).toBe('microphone')
+    writeEarphoneCaptureSourceAnswer('device_audio', storage)
+    expect(storage.values.get(EARPHONE_CAPTURE_SOURCE_ANSWER_STORAGE_KEY)).toBe('device_audio')
+    expect(readEarphoneCaptureSourceAnswer(storage)).toBe('device_audio')
+    writeEarphoneCaptureSourceAnswer('microphone', storage)
+    expect(readEarphoneCaptureSourceAnswer(storage)).toBe('microphone')
     expect(resolveLivePhoneDemoEarphoneModeCopy('ko').microphoneHint).toBe('이어폰은 소리만 나와요. 입력은 이어폰이 아니라 휴대폰 마이크가 해요')
     expect(resolveLivePhoneDemoEarphoneModeCopy('ko').microphoneHintChangeLabel).toBe('바꾸기')
   })

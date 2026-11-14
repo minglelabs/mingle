@@ -38,9 +38,17 @@ describe('capture-source question when earphones go in', () => {
     expect(microphoneOnly).toContain(copy.microphoneHint)
     expect(microphoneOnly).not.toContain('data-capture-source=')
     expect(render({ showCaptureSource: true })).not.toContain('data-earphone-microphone-hint')
-    // One trigger for both: listening with earphones in, once ever.
+    // The last answers are the defaults.
+    const lastAnswers = renderToStaticMarkup(createElement(EarphoneCaptureSourceNoticeContent, {
+      copy, onConfirm: () => {}, showMicrophone: true, initialMicrophonePick: 'earphone', initialSource: 'device_audio',
+    }))
+    expect(lastAnswers).toMatch(/aria-checked="true" data-earphone-microphone="earphone"/)
+    expect(lastAnswers).toMatch(/aria-checked="true" data-capture-source="device_audio"/)
+    // One trigger for both, once per earphone connection.
     expect(liveDemoSource).toContain('const notice = resolveEarphoneListeningNotice({')
-    expect(liveDemoSource).toContain('writeEarphoneListeningNoticeShown()')
+    expect(liveDemoSource).toContain('earphoneListeningNoticeAskedRef.current = false')
+    expect(liveDemoSource).toContain('initialSource: readEarphoneCaptureSourceAnswer()')
+    expect(liveDemoSource).toContain('writeEarphoneCaptureSourceAnswer(source)')
     expect(liveDemoSource).not.toContain('HintToast')
   })
 

@@ -16,11 +16,12 @@ export type EarphoneListeningNoticeResult = {
   microphonePick: EarphoneMicrophonePick
 }
 
-// Shown once, the first time STT listens with earphones in (see
-// resolveEarphoneListeningNotice). Up to two parts in one modal:
+// Shown once per earphone connection, when STT listens with them in (see
+// resolveEarphoneListeningNotice). Both parts start on the last answer. Up
+// to two parts in one modal:
 // - the phone's microphone still listens, with Change to pick the earphones';
 // - other apps' sound now plays in the earphones only: keep the microphone
-//   (picked) or translate this device's sound too.
+//   (first time) or translate this device's sound too.
 export default function EarphoneCaptureSourceNoticeContent({
   copy,
   deviceAudioViaBroadcast = false,
@@ -42,14 +43,15 @@ export default function EarphoneCaptureSourceNoticeContent({
   const microphoneLabelId = useId()
   const [source, setSource] = useState<SttCaptureSource>(initialSource)
   const [microphonePick, setMicrophonePick] = useState<EarphoneMicrophonePick>(initialMicrophonePick)
-  const [microphoneChoiceOpen, setMicrophoneChoiceOpen] = useState(false)
+  // Last time the earphones were picked: show the choice, not the phone line.
+  const [microphoneChoiceOpen, setMicrophoneChoiceOpen] = useState(initialMicrophonePick === 'earphone')
   return (
     <div data-qa="live-demo-earphone-capture-source-notice">
       <h2 className="text-xl font-bold leading-tight text-gray-900">{copy.earphoneCaptureNoticeTitle}</h2>
       {showMicrophone && (
         <div data-earphone-microphone-hint>
           <p id={microphoneLabelId} className="mt-1.5 text-sm leading-relaxed text-gray-600">
-            {copy.microphoneHint}
+            {initialMicrophonePick === 'earphone' ? copy.microphoneMenuLabel : copy.microphoneHint}
             {!microphoneChoiceOpen && (
               <>
                 {' · '}
