@@ -273,28 +273,6 @@
         "th": "เล่นเกม\nกับเพื่อน ๆ",
         "vi": "Chơi game\ncùng bạn bè"
       }
-    },
-    {
-      "id": "09-hash-rush-maps",
-      "capture": "captures/{lang}/hash-rush-maps.png",
-      "caption": {
-        "ko": "함께 즐기는\n다양한 맵",
-        "en": "New maps\nto play together",
-        "ja": "みんなで遊べる\n新しいマップ",
-        "zh-cn": "一起畅玩\n全新地图",
-        "zh-tw": "一起暢玩\n全新地圖",
-        "ar": "خرائط جديدة\nللعب معًا",
-        "de": "Neue Maps\nzum gemeinsamen Spielen",
-        "es": "Nuevos mapas\npara jugar juntos",
-        "fr": "De nouvelles cartes\nà jouer ensemble",
-        "hi": "साथ खेलने के लिए\nनए मैप",
-        "it": "Nuove mappe\nda giocare insieme",
-        "pt": "Novos mapas\npara jogar juntos",
-        "ru": "Новые карты\nдля совместной игры",
-        "th": "แมปใหม่\nเล่นด้วยกัน",
-        "vi": "Bản đồ mới\nđể chơi cùng nhau"
-      },
-      "iosOnly": true
     }
   ],
   "uploadLocales": {

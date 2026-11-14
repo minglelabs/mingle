@@ -12,7 +12,6 @@ Source for the App Store and Google Play screenshot set: 8 slides in 15 language
 | 06 | An interpreted booking call to a hair salon | `render.py` scene (`booking` lines) over the `booking/` salon photos (`salon.jpg` above, `salon-desk.jpg` below, drawn with ChatGPT) |
 | 07 | A friend's post read in your language | app (`/{locale}/feed?postId=…`) |
 | 08 | Hash Rush (meadow) | live site, `?lang=` |
-| 09 | Hash Rush (beach). App Store only (`"iosOnly": true`): Google Play takes at most 8 phone screenshots | live site, `?lang=` |
 
 The positioning behind the captions is in `docs/positioning-korean-friends.md`. A viewer can have its own lines under `dm.json` `viewerOverrides.<lang>` (used for Korean, who talks with a foreign friend); `capture.mjs` and `render.py` read them before the shared lines. `chat.json` `partners` puts Korean first for every non-Korean viewer.
 
