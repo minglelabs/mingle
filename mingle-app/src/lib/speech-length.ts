@@ -1,23 +1,41 @@
 /**
  * How long a stretch of speech is kept together before it is translated, as
- * one scale of six levels. The room has two ways to split speech (automatic
+ * one scale of five levels. The room has two ways to split speech (automatic
  * detection with five steps, and a fixed silence), which read as two unrelated
  * settings; the levels put them in one order, shortest to longest:
  *
- *   1  automatic detection, step 1 of 5
- *   2  automatic detection, step 3 of 5
- *   3  automatic detection, step 5 of 5   (what a new user starts on)
- *   4  2 seconds of silence
- *   5  3 seconds of silence
- *   6  5 seconds of silence
+ *   1  automatic detection, step 3 of 5
+ *   2  automatic detection, step 5 of 5   (what a new user starts on)
+ *   3  2 seconds of silence
+ *   4  3.5 seconds of silence
+ *   5  5 seconds of silence
  *
- * The stored settings are unchanged; a level only names one combination.
+ * Steps 1-2 of 5 are left out: on real speech they split no shorter than step
+ * 3. The stored settings are unchanged; a level only names one combination.
  */
-export const SPEECH_LENGTH_LEVELS = [1, 2, 3, 4, 5, 6] as const
+export const SPEECH_LENGTH_LEVELS = [1, 2, 3, 4, 5] as const
 
 export type SpeechLengthLevel = (typeof SPEECH_LENGTH_LEVELS)[number]
 
-export const DEFAULT_SPEECH_LENGTH_LEVEL: SpeechLengthLevel = 3
+/**
+ * The three stops shown first (the first-run card, and the room settings until
+ * "More" is tapped): short, the recommended automatic one in the middle, long.
+ */
+export const SPEECH_LENGTH_SIMPLE_LEVELS = [1, 2, 4] as const satisfies readonly SpeechLengthLevel[]
+
+export const DEFAULT_SPEECH_LENGTH_LEVEL: SpeechLengthLevel = 2
+
+/** The level marked "Recommended". */
+export const RECOMMENDED_SPEECH_LENGTH_LEVEL: SpeechLengthLevel = 2
+
+export function isSimpleSpeechLengthLevel(level: SpeechLengthLevel): boolean {
+  return (SPEECH_LENGTH_SIMPLE_LEVELS as readonly SpeechLengthLevel[]).includes(level)
+}
+
+/** The three-stop level nearest to a level: 2 seconds and 5 seconds of silence show as the long stop. */
+export function simpleSpeechLengthLevel(current: SpeechLengthLevel): SpeechLengthLevel {
+  return isSimpleSpeechLengthLevel(current) ? current : 4
+}
 
 /**
  * The first-run sentence length card waits for this many finished bubbles, so a
@@ -36,12 +54,11 @@ export type SpeechLengthPreferences =
 
 /** Automatic detection steps are stored zero-based: step 3 of 5 is 2. */
 const PREFERENCES: Record<SpeechLengthLevel, SpeechLengthPreferences> = {
-  1: { sttSegmentationMode: 'end', sonioxEndpointTuningStep: 0 },
-  2: { sttSegmentationMode: 'end', sonioxEndpointTuningStep: 2 },
-  3: { sttSegmentationMode: 'end', sonioxEndpointTuningStep: 4 },
-  4: { sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: 2000 },
-  5: { sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: 3000 },
-  6: { sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: 5000 },
+  1: { sttSegmentationMode: 'end', sonioxEndpointTuningStep: 2 },
+  2: { sttSegmentationMode: 'end', sonioxEndpointTuningStep: 4 },
+  3: { sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: 2000 },
+  4: { sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: 3500 },
+  5: { sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: 5000 },
 }
 
 export function resolveSpeechLengthPreferences(level: SpeechLengthLevel): SpeechLengthPreferences {
@@ -50,7 +67,7 @@ export function resolveSpeechLengthPreferences(level: SpeechLengthLevel): Speech
 
 /**
  * The level the current settings sit at. Settings saved before the scale
- * existed (automatic step 2 or 4 of 5, any other silence) show as the nearest
+ * existed (automatic step 1, 2 or 4 of 5, any other silence) show as the nearest
  * level; they keep their exact value until the user picks a level.
  */
 export function matchSpeechLengthLevel(settings: {
@@ -59,13 +76,11 @@ export function matchSpeechLengthLevel(settings: {
   sonioxManualFinalizeSilenceMs: number
 }): SpeechLengthLevel {
   if (settings.sttSegmentationMode === 'end') {
-    if (settings.sonioxEndpointTuningStep <= 1) return 1
-    if (settings.sonioxEndpointTuningStep <= 3) return 2
-    return 3
+    return settings.sonioxEndpointTuningStep <= 2 ? 1 : 2
   }
-  if (settings.sonioxManualFinalizeSilenceMs <= 2500) return 4
-  if (settings.sonioxManualFinalizeSilenceMs <= 4000) return 5
-  return 6
+  if (settings.sonioxManualFinalizeSilenceMs <= 2700) return 3
+  if (settings.sonioxManualFinalizeSilenceMs <= 4200) return 4
+  return 5
 }
 
 /** True when the settings are exactly the level's, not just nearest to it. */
@@ -82,17 +97,16 @@ export function isExactSpeechLengthLevel(level: SpeechLengthLevel, settings: {
 }
 
 /**
- * How the first-run card's example speech splits into bubbles at each level:
- * six short pieces become six bubbles at the shortest level and one at the
- * longest, so moving along the scale visibly merges or splits them.
+ * How the card's example speech splits into bubbles at each level, as measured
+ * on real speech: the short level splits at nearly every sentence, step 5 of 5
+ * keeps two or three together, and the silences keep a whole thought.
  */
 const PREVIEW_GROUPS: Record<SpeechLengthLevel, readonly (readonly number[])[]> = {
   1: [[0], [1], [2], [3], [4], [5]],
-  2: [[0, 1], [2], [3], [4], [5]],
-  3: [[0, 1], [2, 3], [4], [5]],
-  4: [[0, 1], [2, 3], [4, 5]],
-  5: [[0, 1, 2], [3, 4, 5]],
-  6: [[0, 1, 2, 3, 4, 5]],
+  2: [[0, 1], [2, 3], [4, 5]],
+  3: [[0, 1, 2], [3, 4, 5]],
+  4: [[0, 1, 2, 3, 4, 5]],
+  5: [[0, 1, 2, 3, 4, 5]],
 }
 
 // Chinese and Japanese run sentences together without a space.

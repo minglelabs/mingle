@@ -4,8 +4,8 @@ import { resolvePrimaryUiLocaleTag, type PrimaryUiLocale } from "@/i18n/mingle-l
  * Copy for a new user's first run: the "say something" card on the
  * conversation list and the speech length choice shown after the first
  * translation. Wording avoids the settings' terms (automatic detection,
- * silence); the card and the room settings show one scale from 1 (short) to
- * 6 (long).
+ * silence); the card and the room settings show three stops (short, the
+ * recommended one, long), and "More" opens a page with all five levels.
  */
 export type FirstRunCopy = {
   speakTitle: string;
@@ -19,11 +19,18 @@ export type FirstRunCopy = {
   /** Six short spoken pieces, in order: the card groups them as each level would. */
   lengthPreview: readonly [string, string, string, string, string, string];
   lengthClose: string;
-  /** The two ends of the 1-6 scale, and what each end suits. */
+  /** The two ends of the scale, and what each end suits. */
   lengthShort: string;
   lengthLong: string;
   lengthShortHint: string;
   lengthLongHint: string;
+  /** The tag over the recommended stop. */
+  lengthRecommended: string;
+  /** Opens the page with the full five-level scale and the detailed settings. */
+  lengthMore: string;
+  /** The switch that unlocks automatic detection / silence time on that page. */
+  lengthCustom: string;
+  lengthCustomHint: string;
   /** Name of the same scale in the room settings. */
   lengthMenuLabel: string;
 };
@@ -34,7 +41,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "아무 말이나 해 보세요. 알아듣고 바로 번역해 드려요.",
     speakButton: "눌러서 말해 보기",
     lengthTitle: "문장을 얼마나 길게 묶을까요?",
-    lengthHint: "숫자를 고르면 예시가 바뀌어요. 적용을 누르면 바뀌고, 설정에서 언제든 다시 바꿀 수 있어요.",
+    lengthHint: "밀어 보면 예시가 바뀌어요. 적용을 누르면 바뀌고, 설정에서 언제든 다시 바꿀 수 있어요.",
     lengthApplied: "바꿨어요. 다시 말해 보세요.",
     lengthApply: "적용",
     lengthPreview: ["안녕! 진짜 오랜만이다.", "나 어제 저녁에 도쿄 도착했어.", "날씨가 너무 좋아서 하루 종일 걸어 다녔어.", "내일은 시부야 쪽에 가 볼 생각인데,", "혹시 근처에 아는 맛집 있어?", "시간 괜찮으면 같이 가자!"],
@@ -43,6 +50,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "길게",
     lengthShortHint: "수다에 좋아요",
     lengthLongHint: "회의·통역에 좋아요",
+    lengthRecommended: "추천",
+    lengthMore: "자세히",
+    lengthCustom: "직접 설정하기",
+    lengthCustomHint: "켜면 아래에서 자동 감지와 무음 시간을 직접 고를 수 있어요.",
     lengthMenuLabel: "문장 길이",
   },
   en: {
@@ -50,7 +61,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "Say anything. It listens and translates at once.",
     speakButton: "Tap to speak",
     lengthTitle: "How long should a sentence run?",
-    lengthHint: "Pick a number to see the example change. Tap Apply to use it; you can change it again in settings.",
+    lengthHint: "Slide to see the example change. Tap Apply to use it; you can change it again in settings.",
     lengthApplied: "Changed. Try speaking again.",
     lengthApply: "Apply",
     lengthPreview: ["Hey! It's been so long.", "I got to Tokyo last night.", "The weather's so nice I walked around all day.", "I'm thinking of going to Shibuya tomorrow,", "do you know any good places to eat near there?", "Come along if you're free!"],
@@ -59,6 +70,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "Long",
     lengthShortHint: "Good for chatting",
     lengthLongHint: "Good for meetings and interpreting",
+    lengthRecommended: "Recommended",
+    lengthMore: "More",
+    lengthCustom: "Set it myself",
+    lengthCustomHint: "Turn on to choose automatic detection or a silence time below.",
     lengthMenuLabel: "Sentence length",
   },
   ja: {
@@ -66,7 +81,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "何か話してみてください。聞き取ってすぐに翻訳します。",
     speakButton: "タップして話してみる",
     lengthTitle: "文をどのくらいの長さでまとめますか？",
-    lengthHint: "数字を選ぶと例が変わります。「適用」で反映され、設定でいつでも変更できます。",
+    lengthHint: "動かすと例が変わります。「適用」で反映され、設定でいつでも変更できます。",
     lengthApplied: "変更しました。もう一度話してみてください。",
     lengthApply: "適用",
     lengthPreview: ["やあ!本当に久しぶり。", "昨日の夜ソウルに着いたよ。", "天気がよすぎて一日中歩き回ってた。", "明日は明洞のほうに行こうと思ってるんだけど、", "近くでおいしいお店知ってる?", "時間あったら一緒に行こう!"],
@@ -75,6 +90,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "長め",
     lengthShortHint: "おしゃべり向き",
     lengthLongHint: "会議・通訳向き",
+    lengthRecommended: "おすすめ",
+    lengthMore: "詳しく",
+    lengthCustom: "自分で設定する",
+    lengthCustomHint: "オンにすると、下で自動検出か無音時間を自分で選べます。",
     lengthMenuLabel: "文の長さ",
   },
   "zh-CN": {
@@ -82,7 +101,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "随便说点什么。它会听懂并立即翻译。",
     speakButton: "点一下说说看",
     lengthTitle: "一句话要多长才断开？",
-    lengthHint: "选一个数字，示例会跟着变。点“应用”后生效，之后也能在设置里更改。",
+    lengthHint: "拖动一下，示例会跟着变。点“应用”后生效，之后也能在设置里更改。",
     lengthApplied: "已更改。请再说一次试试。",
     lengthApply: "应用",
     lengthPreview: ["嗨！好久不见了。", "我昨天晚上到东京了。", "天气太好了，我走了一整天。", "明天打算去涩谷那边，", "你知道附近有什么好吃的店吗？", "有空的话一起去吧！"],
@@ -91,6 +110,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "长",
     lengthShortHint: "适合闲聊",
     lengthLongHint: "适合会议和口译",
+    lengthRecommended: "推荐",
+    lengthMore: "详细",
+    lengthCustom: "自己设置",
+    lengthCustomHint: "打开后可以在下方自己选择自动检测或静音时长。",
     lengthMenuLabel: "句子长度",
   },
   "zh-TW": {
@@ -98,7 +121,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "隨便說點什麼。它會聽懂並立即翻譯。",
     speakButton: "點一下說說看",
     lengthTitle: "一句話要多長才斷開？",
-    lengthHint: "選一個數字，範例會跟著變。點「套用」後生效，之後也能在設定裡更改。",
+    lengthHint: "拖動一下，範例會跟著變。點「套用」後生效，之後也能在設定裡更改。",
     lengthApplied: "已更改。請再說一次試試。",
     lengthApply: "套用",
     lengthPreview: ["嗨！好久不見了。", "我昨天晚上到東京了。", "天氣太好了，我走了一整天。", "明天打算去澀谷那邊，", "你知道附近有什麼好吃的店嗎？", "有空的話一起去吧！"],
@@ -107,6 +130,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "長",
     lengthShortHint: "適合閒聊",
     lengthLongHint: "適合會議和口譯",
+    lengthRecommended: "推薦",
+    lengthMore: "詳細",
+    lengthCustom: "自己設定",
+    lengthCustomHint: "開啟後可以在下方自己選擇自動偵測或靜音時間。",
     lengthMenuLabel: "句子長度",
   },
   fr: {
@@ -114,7 +141,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "Dites ce que vous voulez. L’appli écoute et traduit tout de suite.",
     speakButton: "Touchez pour parler",
     lengthTitle: "Quelle longueur pour une phrase ?",
-    lengthHint: "Choisissez un chiffre pour voir l’exemple changer. Touchez Appliquer ; vous pourrez le modifier dans les réglages.",
+    lengthHint: "Faites glisser pour voir l’exemple changer. Touchez Appliquer ; vous pourrez le modifier dans les réglages.",
     lengthApplied: "C’est changé. Essayez de parler à nouveau.",
     lengthApply: "Appliquer",
     lengthPreview: ["Salut ! Ça fait longtemps.", "Je suis arrivé à Tokyo hier soir.", "Il fait tellement beau que j'ai marché toute la journée.", "Je pense aller à Shibuya demain,", "tu connais un bon resto dans le coin ?", "Viens avec moi si tu es libre !"],
@@ -123,6 +150,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "Longue",
     lengthShortHint: "Idéal pour bavarder",
     lengthLongHint: "Idéal pour les réunions et l’interprétation",
+    lengthRecommended: "Recommandé",
+    lengthMore: "Plus",
+    lengthCustom: "Régler moi-même",
+    lengthCustomHint: "Activez pour choisir ci-dessous la détection automatique ou une durée de silence.",
     lengthMenuLabel: "Longueur des phrases",
   },
   de: {
@@ -130,7 +161,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "Sag einfach etwas. Die App hört zu und übersetzt sofort.",
     speakButton: "Tippen und sprechen",
     lengthTitle: "Wie lang soll ein Satz werden?",
-    lengthHint: "Wähle eine Zahl, und das Beispiel ändert sich. Tippe auf Übernehmen; in den Einstellungen kannst du es jederzeit ändern.",
+    lengthHint: "Schiebe den Regler, und das Beispiel ändert sich. Tippe auf Übernehmen; in den Einstellungen kannst du es jederzeit ändern.",
     lengthApplied: "Geändert. Sprich noch einmal.",
     lengthApply: "Übernehmen",
     lengthPreview: ["Hi! Lange nicht gesehen.", "Ich bin gestern Abend in Tokio angekommen.", "Das Wetter ist so schön, dass ich den ganzen Tag herumgelaufen bin.", "Morgen will ich nach Shibuya,", "kennst du da in der Nähe ein gutes Restaurant?", "Komm mit, wenn du Zeit hast!"],
@@ -139,6 +170,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "Lang",
     lengthShortHint: "Gut zum Plaudern",
     lengthLongHint: "Gut für Meetings und Dolmetschen",
+    lengthRecommended: "Empfohlen",
+    lengthMore: "Mehr",
+    lengthCustom: "Selbst einstellen",
+    lengthCustomHint: "Einschalten, um unten automatische Erkennung oder eine Pausenlänge zu wählen.",
     lengthMenuLabel: "Satzlänge",
   },
   es: {
@@ -146,7 +181,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "Di lo que quieras. La app escucha y traduce enseguida.",
     speakButton: "Toca para hablar",
     lengthTitle: "¿Qué longitud debe tener una frase?",
-    lengthHint: "Elige un número y verás cambiar el ejemplo. Toca Aplicar; puedes cambiarlo en los ajustes.",
+    lengthHint: "Desliza y verás cambiar el ejemplo. Toca Aplicar; puedes cambiarlo en los ajustes.",
     lengthApplied: "Cambiado. Prueba a hablar de nuevo.",
     lengthApply: "Aplicar",
     lengthPreview: ["¡Hola! Cuánto tiempo.", "Llegué a Tokio anoche.", "Hace tan buen tiempo que estuve caminando todo el día.", "Mañana pienso ir a Shibuya,", "¿conoces algún buen sitio para comer por ahí?", "¡Ven conmigo si tienes tiempo!"],
@@ -155,6 +190,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "Larga",
     lengthShortHint: "Ideal para charlar",
     lengthLongHint: "Ideal para reuniones e interpretación",
+    lengthRecommended: "Recomendado",
+    lengthMore: "Más",
+    lengthCustom: "Ajustarlo yo",
+    lengthCustomHint: "Actívalo para elegir abajo la detección automática o un tiempo de silencio.",
     lengthMenuLabel: "Longitud de las frases",
   },
   pt: {
@@ -162,7 +201,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "Diga qualquer coisa. O app escuta e traduz na hora.",
     speakButton: "Toque para falar",
     lengthTitle: "Qual o tamanho de uma frase?",
-    lengthHint: "Escolha um número para ver o exemplo mudar. Toque em Aplicar; dá para alterar nos ajustes.",
+    lengthHint: "Deslize para ver o exemplo mudar. Toque em Aplicar; dá para alterar nos ajustes.",
     lengthApplied: "Alterado. Tente falar de novo.",
     lengthApply: "Aplicar",
     lengthPreview: ["Oi! Quanto tempo.", "Cheguei em Tóquio ontem à noite.", "O tempo está tão bom que andei o dia inteiro.", "Amanhã penso em ir a Shibuya,", "conhece algum lugar bom para comer por lá?", "Vem comigo se estiver livre!"],
@@ -171,6 +210,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "Longa",
     lengthShortHint: "Boa para bater papo",
     lengthLongHint: "Boa para reuniões e interpretação",
+    lengthRecommended: "Recomendado",
+    lengthMore: "Mais",
+    lengthCustom: "Ajustar eu mesmo",
+    lengthCustomHint: "Ative para escolher abaixo a detecção automática ou um tempo de silêncio.",
     lengthMenuLabel: "Tamanho das frases",
   },
   it: {
@@ -178,7 +221,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "Di’ qualcosa. L’app ascolta e traduce subito.",
     speakButton: "Tocca per parlare",
     lengthTitle: "Quanto deve essere lunga una frase?",
-    lengthHint: "Scegli un numero e l’esempio cambia. Tocca Applica; puoi modificarlo nelle impostazioni.",
+    lengthHint: "Fai scorrere e l’esempio cambia. Tocca Applica; puoi modificarlo nelle impostazioni.",
     lengthApplied: "Modificato. Prova a parlare di nuovo.",
     lengthApply: "Applica",
     lengthPreview: ["Ciao! Quanto tempo.", "Sono arrivato a Tokyo ieri sera.", "Il tempo è così bello che ho camminato tutto il giorno.", "Domani penso di andare a Shibuya,", "conosci un buon posto per mangiare lì vicino?", "Vieni con me se sei libero!"],
@@ -187,6 +230,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "Lunga",
     lengthShortHint: "Ideale per chiacchierare",
     lengthLongHint: "Ideale per riunioni e interpretariato",
+    lengthRecommended: "Consigliato",
+    lengthMore: "Altro",
+    lengthCustom: "Imposta tu",
+    lengthCustomHint: "Attiva per scegliere qui sotto il rilevamento automatico o una durata del silenzio.",
     lengthMenuLabel: "Lunghezza delle frasi",
   },
   ru: {
@@ -194,7 +241,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "Скажите что угодно. Приложение услышит и сразу переведёт.",
     speakButton: "Нажмите и говорите",
     lengthTitle: "Какой длины должна быть фраза?",
-    lengthHint: "Выберите число — пример изменится. Нажмите «Применить»; позже можно поменять в настройках.",
+    lengthHint: "Передвиньте ползунок — пример изменится. Нажмите «Применить»; позже можно поменять в настройках.",
     lengthApplied: "Изменено. Попробуйте сказать ещё раз.",
     lengthApply: "Применить",
     lengthPreview: ["Привет! Сто лет не виделись.", "Я вчера вечером прилетел в Токио.", "Погода такая хорошая, что я гулял весь день.", "Завтра думаю съездить в Сибую,", "знаешь там рядом какое-нибудь вкусное место?", "Пойдём вместе, если будет время!"],
@@ -203,6 +250,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "Длинная",
     lengthShortHint: "Для болтовни",
     lengthLongHint: "Для встреч и перевода",
+    lengthRecommended: "Рекомендуем",
+    lengthMore: "Подробнее",
+    lengthCustom: "Настроить вручную",
+    lengthCustomHint: "Включите, чтобы ниже выбрать автоопределение или длину паузы.",
     lengthMenuLabel: "Длина фразы",
   },
   ar: {
@@ -210,7 +261,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "قل أي شيء. التطبيق يسمع ويترجم في الحال.",
     speakButton: "اضغط وتحدّث",
     lengthTitle: "ما طول الجملة المناسب؟",
-    lengthHint: "اختر رقمًا لترى المثال يتغيّر. اضغط «تطبيق»، ويمكنك تغييره لاحقًا من الإعدادات.",
+    lengthHint: "حرّك المؤشر لترى المثال يتغيّر. اضغط «تطبيق»، ويمكنك تغييره لاحقًا من الإعدادات.",
     lengthApplied: "تم التغيير. جرّب التحدّث مرة أخرى.",
     lengthApply: "تطبيق",
     lengthPreview: ["مرحبًا! لم نتحدث منذ زمن.", "وصلت إلى طوكيو مساء أمس.", "الطقس جميل جدًا لدرجة أنني مشيت طوال اليوم.", "أفكر في الذهاب إلى شيبويا غدًا،", "هل تعرف مطعمًا جيدًا بالقرب من هناك؟", "تعال معي إن كان لديك وقت!"],
@@ -219,6 +270,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "طويلة",
     lengthShortHint: "مناسبة للدردشة",
     lengthLongHint: "مناسبة للاجتماعات والترجمة الفورية",
+    lengthRecommended: "موصى به",
+    lengthMore: "المزيد",
+    lengthCustom: "الضبط يدويًا",
+    lengthCustomHint: "فعّله لتختار بالأسفل الاكتشاف التلقائي أو مدة الصمت.",
     lengthMenuLabel: "طول الجملة",
   },
   hi: {
@@ -226,7 +281,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "कुछ भी बोलकर देखें। ऐप सुनकर तुरंत अनुवाद करता है।",
     speakButton: "दबाकर बोलें",
     lengthTitle: "एक वाक्य कितना लंबा रखा जाए?",
-    lengthHint: "कोई नंबर चुनें, उदाहरण बदल जाएगा। लागू करें दबाएँ; सेटिंग्स में कभी भी बदल सकते हैं।",
+    lengthHint: "स्लाइड करें, उदाहरण बदल जाएगा। लागू करें दबाएँ; सेटिंग्स में कभी भी बदल सकते हैं।",
     lengthApplied: "बदल दिया। फिर से बोलकर देखें।",
     lengthApply: "लागू करें",
     lengthPreview: ["हाय! बहुत दिन हो गए।", "मैं कल रात टोक्यो पहुँचा।", "मौसम इतना अच्छा है कि मैं पूरे दिन घूमता रहा।", "कल शिबुया जाने का सोच रहा हूँ,", "क्या तुम्हें वहाँ पास में कोई अच्छी खाने की जगह पता है?", "समय हो तो साथ चलो!"],
@@ -235,6 +290,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "लंबा",
     lengthShortHint: "गपशप के लिए अच्छा",
     lengthLongHint: "मीटिंग और अनुवाद के लिए अच्छा",
+    lengthRecommended: "सुझाया गया",
+    lengthMore: "और",
+    lengthCustom: "खुद सेट करें",
+    lengthCustomHint: "चालू करें और नीचे अपने-आप पहचान या चुप्पी का समय चुनें।",
     lengthMenuLabel: "वाक्य की लंबाई",
   },
   th: {
@@ -242,7 +301,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "ลองพูดอะไรก็ได้ แอปจะฟังและแปลให้ทันที",
     speakButton: "แตะเพื่อพูด",
     lengthTitle: "อยากให้หนึ่งประโยคยาวแค่ไหน",
-    lengthHint: "เลือกตัวเลขแล้วตัวอย่างจะเปลี่ยน แตะ \"ใช้\" เพื่อเปลี่ยนจริง และเปลี่ยนได้อีกในการตั้งค่า",
+    lengthHint: "เลื่อนดูแล้วตัวอย่างจะเปลี่ยน แตะ \"ใช้\" เพื่อเปลี่ยนจริง และเปลี่ยนได้อีกในการตั้งค่า",
     lengthApplied: "เปลี่ยนแล้ว ลองพูดอีกครั้ง",
     lengthApply: "ใช้",
     lengthPreview: ["หวัดดี! ไม่ได้เจอกันนานเลย", "เมื่อคืนมาถึงโตเกียวแล้ว", "อากาศดีมากจนเดินเที่ยวทั้งวันเลย", "พรุ่งนี้ว่าจะไปแถวชิบุยะ", "รู้จักร้านอร่อยแถวนั้นไหม?", "ถ้าว่างก็ไปด้วยกันนะ!"],
@@ -251,6 +310,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "ยาว",
     lengthShortHint: "เหมาะกับการคุยเล่น",
     lengthLongHint: "เหมาะกับการประชุมและล่าม",
+    lengthRecommended: "แนะนำ",
+    lengthMore: "เพิ่มเติม",
+    lengthCustom: "ตั้งค่าเอง",
+    lengthCustomHint: "เปิดเพื่อเลือกการตรวจจับอัตโนมัติหรือเวลาเงียบด้านล่างเอง",
     lengthMenuLabel: "ความยาวประโยค",
   },
   vi: {
@@ -258,7 +321,7 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     speakHint: "Hãy nói bất cứ điều gì. Ứng dụng nghe và dịch ngay.",
     speakButton: "Chạm để nói",
     lengthTitle: "Một câu nên dài bao nhiêu?",
-    lengthHint: "Chọn một số để xem ví dụ thay đổi. Bấm Áp dụng; bạn có thể đổi lại trong phần cài đặt.",
+    lengthHint: "Kéo để xem ví dụ thay đổi. Bấm Áp dụng; bạn có thể đổi lại trong phần cài đặt.",
     lengthApplied: "Đã đổi. Hãy thử nói lại.",
     lengthApply: "Áp dụng",
     lengthPreview: ["Chào! Lâu quá không gặp.", "Tối qua mình tới Tokyo rồi.", "Thời tiết đẹp đến mức mình đi bộ cả ngày.", "Mai mình định đi Shibuya,", "bạn biết quán nào ngon gần đó không?", "Rảnh thì đi cùng nhé!"],
@@ -267,6 +330,10 @@ const FIRST_RUN_COPY: Record<PrimaryUiLocale, FirstRunCopy> = {
     lengthLong: "Dài",
     lengthShortHint: "Hợp để trò chuyện",
     lengthLongHint: "Hợp cho họp và phiên dịch",
+    lengthRecommended: "Đề xuất",
+    lengthMore: "Chi tiết",
+    lengthCustom: "Tự cài đặt",
+    lengthCustomHint: "Bật để tự chọn tự động nhận diện hoặc thời gian im lặng bên dưới.",
     lengthMenuLabel: "Độ dài câu",
   },
 };

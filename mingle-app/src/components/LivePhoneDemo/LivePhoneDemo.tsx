@@ -18,10 +18,14 @@ import { captureMingleClientEvent } from '@/lib/posthog-client'
 import SpeechLengthScale from '@/components/LivePhoneDemo/SpeechLengthScale'
 import {
   DEFAULT_SPEECH_LENGTH_LEVEL,
+  RECOMMENDED_SPEECH_LENGTH_LEVEL,
+  SPEECH_LENGTH_SIMPLE_LEVELS,
   isExactSpeechLengthLevel,
+  simpleSpeechLengthLevel,
   matchSpeechLengthLevel,
   resolveSpeechLengthPreferences,
   shouldShowSpeechLengthCard,
+  type SpeechLengthPreferences,
   type SpeechLengthLevel,
 } from '@/lib/speech-length'
 import type { MessageReplyReference } from '@/lib/message-reply'
@@ -171,6 +175,8 @@ import {
   DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
   DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
+  MAX_SONIOX_SILENCE_MS,
+  MIN_SONIOX_SILENCE_MS,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   LS_KEY_AD_BANNER_POSITION,
@@ -1281,7 +1287,13 @@ type FeedbackHistoryResponse = {
   threads: FeedbackHistoryThread[]
 }
 
-type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite'
+type CustomSpeechSplit = {
+  sttSegmentationMode: 'end' | 'fin'
+  sonioxEndpointTuningStep?: number
+  sonioxManualFinalizeSilenceMs?: number
+}
+
+type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite' | 'speech-length'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 
@@ -1347,6 +1359,7 @@ function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuSc
     || value === 'participants'
     || value === 'display-language'
     || value === 'invite'
+    || value === 'speech-length'
 }
 
 function resolveMenuScreenForDepth(
@@ -1361,6 +1374,7 @@ function resolveMenuScreenForDepth(
     return 'conversation-management'
   }
   if (preferredScreen === 'display-language') return 'display-language'
+  if (preferredScreen === 'speech-length') return 'speech-length'
   if (preferredScreen === 'conversation-management') return 'conversation-management'
   if (preferredScreen === 'participants') return 'participants'
   return 'feedback'
@@ -1961,6 +1975,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   connectionFailedLabel,
   switchLiveRoomToastLabel,
   textSizeLabel,
+  silenceFinalizeLabel,
+  sttSegmentationModeLabel,
+  sttSegmentationModeEndLabel,
+  sttSegmentationModeFinLabel,
+  endpointTuningLabel,
+  endpointTuningShortLabel,
+  endpointTuningLongLabel,
   translationModelLabel,
   ttsModelLabel,
   adBannerPositionLabel,
@@ -6003,7 +6024,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [handleStartRecording, isConnecting, isPreparingStart, isSttSessionRunning, sttCaptureSource])
 
   // ── Sentence length ───────────────────────────────────────────────────
-  // One 1-6 scale (see @/lib/speech-length) stands for the two speech split
+  // One five-level scale (see @/lib/speech-length) stands for the two speech split
   // settings, in the room settings and on the first-run card. A new user (no
   // split ever chosen) starts on the default level before the room first
   // listens, then sees the scale after a few finished bubbles
@@ -6019,21 +6040,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const onFirstSpeakCompletedRef = useRef(onFirstSpeakCompleted)
   onFirstSpeakCompletedRef.current = onFirstSpeakCompleted
 
-  const applySpeechLengthPreferences = useCallback((level: SpeechLengthLevel) => {
-    const preferences = resolveSpeechLengthPreferences(level)
+  // A level, or the "Set it myself" controls (any mode, step or silence).
+  const applySpeechSplitPreferences = useCallback((preferences: SpeechLengthPreferences | CustomSpeechSplit) => {
     const nextPreferences = commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
       ...preferences,
     })
     setSttSegmentationMode(preferences.sttSegmentationMode)
-    if (preferences.sttSegmentationMode === 'end') {
+    if ('sonioxEndpointTuningStep' in preferences && typeof preferences.sonioxEndpointTuningStep === 'number') {
       setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
-    } else {
+    }
+    if ('sonioxManualFinalizeSilenceMs' in preferences && typeof preferences.sonioxManualFinalizeSilenceMs === 'number') {
       setSonioxManualFinalizeSilenceMs(preferences.sonioxManualFinalizeSilenceMs)
     }
     clearAccountPreferencesSyncTimer()
     syncAccountPreferencesOverride(nextPreferences)
   }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
+  const applySpeechLengthPreferences = useCallback((level: SpeechLengthLevel) => {
+    applySpeechSplitPreferences(resolveSpeechLengthPreferences(level))
+  }, [applySpeechSplitPreferences])
 
   useEffect(() => {
     if (!speechLengthIntro || speechLengthDefaultAppliedRef.current) return
@@ -6121,6 +6146,51 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     selectedSpeechLengthLevel,
     showFloatingToast,
   ])
+
+  // The "More" page: all five levels, and below them the two underlying
+  // settings (automatic detection step, silence time). Those follow the level
+  // and stay locked until "Set it myself" is turned on; a setting that is no
+  // level's (saved before the scale, or set by hand) opens with it on.
+  const [speechLengthCustom, setSpeechLengthCustom] = useState(false)
+  const [speechSplitDraft, setSpeechSplitDraft] = useState<{ step?: number; silenceMs?: number } | null>(null)
+  const isSpeechLengthLevelExactRef = useRef(isSpeechLengthLevelExact)
+  isSpeechLengthLevelExactRef.current = isSpeechLengthLevelExact
+  useEffect(() => {
+    if (menuScreen !== 'speech-length') return
+    setSpeechLengthCustom(!isSpeechLengthLevelExactRef.current)
+    setSpeechSplitDraft(null)
+  }, [menuScreen])
+
+  const handleSpeechLengthMorePress = useCallback(() => {
+    if (!menuOpen || menuScreen === 'speech-length') return
+    pushMenuHistoryEntry(2, 'speech-length')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleCustomSpeechSplitCommit = useCallback(async (preferences: CustomSpeechSplit) => {
+    setSpeechSplitDraft(null)
+    if (isApplyingSpeechLength) return
+    const unchanged = preferences.sttSegmentationMode === (sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE)
+      && (preferences.sonioxEndpointTuningStep ?? sonioxEndpointTuningStep) === sonioxEndpointTuningStep
+      && (preferences.sonioxManualFinalizeSilenceMs ?? sonioxManualFinalizeSilenceMs) === sonioxManualFinalizeSilenceMs
+    if (unchanged) return
+    captureMingleClientEvent('mingle_first_run_step', { step: 'length_custom_set', mode: preferences.sttSegmentationMode })
+    setIsApplyingSpeechLength(true)
+    try {
+      const wasRunning = isSttSessionRunning
+      if (wasRunning) await handleStopRecording()
+      applySpeechSplitPreferences(preferences)
+      speechLengthRestartPendingRef.current = wasRunning
+    } finally {
+      setIsApplyingSpeechLength(false)
+    }
+  }, [applySpeechSplitPreferences, handleStopRecording, isApplyingSpeechLength, isSttSessionRunning, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode])
+
+  const handleSpeechLengthCustomToggle = useCallback((next: boolean) => {
+    setSpeechLengthCustom(next)
+    setSpeechSplitDraft(null)
+    // Turning it off puts a hand-made setting back on the nearest level.
+    if (!next && !isSpeechLengthLevelExact) void handleSpeechLengthSelect(selectedSpeechLengthLevel, 'settings')
+  }, [handleSpeechLengthSelect, isSpeechLengthLevelExact, selectedSpeechLengthLevel])
 
   // Listen again once the stopped session is gone and the new setting is in.
   useEffect(() => {
@@ -8237,14 +8307,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </div>
 
                             <div className="block">
-                              {/* One 1-6 scale instead of the two speech split settings
-                                  (automatic detection steps, silence time). */}
-                              <div className="mb-2 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{firstRunCopy.lengthMenuLabel}</div>
+                              {/* Three stops (short, recommended, long) for the two speech
+                                  split settings; "More" opens all five levels and the
+                                  settings themselves. */}
+                              <div className="mb-2 flex items-center justify-between gap-3 pl-1 pt-1.5">
+                                <span className="min-w-0 text-[0.98rem] font-medium text-gray-900">{firstRunCopy.lengthMenuLabel}</span>
+                                <button
+                                  type="button"
+                                  data-qa="speech-length-more"
+                                  onClick={handleSpeechLengthMorePress}
+                                  className="-mr-1 inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-1 text-[0.85rem] font-semibold text-gray-500 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                                >
+                                  {firstRunCopy.lengthMore}
+                                  <ChevronRight size={16} strokeWidth={2.4} aria-hidden />
+                                </button>
+                              </div>
                               <div className="relative">
                                 <SpeechLengthScale
                                   copy={firstRunCopy}
-                                  selected={selectedSpeechLengthLevel}
+                                  selected={simpleSpeechLengthLevel(selectedSpeechLengthLevel)}
                                   disabled={isApplyingSpeechLength}
+                                  levels={SPEECH_LENGTH_SIMPLE_LEVELS}
+                                  showNumbers={false}
+                                  recommended={RECOMMENDED_SPEECH_LENGTH_LEVEL}
                                   onSelect={(level) => { void handleSpeechLengthSelect(level, 'settings') }}
                                 />
                                 {isSilenceFinalizeSliderLocked && (
@@ -9123,6 +9208,179 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                     <motion.section
                       initial={false}
+                      animate={menuContentScreen === 'speech-length' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuContentScreen !== 'speech-length'}
+                      data-qa="speech-length-page"
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuContentScreen === 'speech-length' ? 'auto' : 'none',
+                        zIndex: menuContentScreen === 'speech-length'
+                          ? 3
+                          : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
+                      }}
+                    >
+                      <LivePhoneDemoPanelHeader
+                        title={firstRunCopy.lengthMenuLabel}
+                        backLabel={roomManagementCopy.backButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
+                      <div
+                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                        style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}
+                      >
+                        <div className="px-4 py-5">
+                          <div className="relative">
+                            <SpeechLengthScale
+                              copy={firstRunCopy}
+                              selected={selectedSpeechLengthLevel}
+                              disabled={isApplyingSpeechLength}
+                              recommended={RECOMMENDED_SPEECH_LENGTH_LEVEL}
+                              onSelect={(level) => {
+                                setSpeechLengthCustom(false)
+                                setSpeechSplitDraft(null)
+                                void handleSpeechLengthSelect(level, 'settings')
+                              }}
+                            />
+                            {isSilenceFinalizeSliderLocked && (
+                              <button
+                                type="button"
+                                aria-label={silenceFinalizeLockedButtonLabel}
+                                onClick={handleSilenceFinalizeLockedInteraction}
+                                className="absolute inset-0 z-10 cursor-not-allowed rounded-xl bg-white/40"
+                              />
+                            )}
+                          </div>
+
+                          <div className="mt-6 flex items-center justify-between gap-3 rounded-2xl border border-gray-200 px-3.5 py-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[0.98rem] font-medium text-gray-900">{firstRunCopy.lengthCustom}</p>
+                              <p className="mt-0.5 text-[0.8rem] leading-5 text-gray-500">{firstRunCopy.lengthCustomHint}</p>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              data-qa="speech-length-custom"
+                              aria-checked={speechLengthCustom}
+                              aria-label={firstRunCopy.lengthCustom}
+                              disabled={isApplyingSpeechLength}
+                              onClick={() => {
+                                if (isSilenceFinalizeSliderLocked) {
+                                  handleSilenceFinalizeLockedInteraction()
+                                  return
+                                }
+                                handleSpeechLengthCustomToggle(!speechLengthCustom)
+                              }}
+                              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border-0 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 ${speechLengthCustom ? 'bg-amber-500' : 'bg-gray-300'}`}
+                            >
+                              <span
+                                className="absolute left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+                                style={{ transform: speechLengthCustom ? 'translateX(20px)' : 'translateX(0px)' }}
+                              />
+                            </button>
+                          </div>
+
+                          {(() => {
+                            const locked = !speechLengthCustom || isApplyingSpeechLength
+                            const mode = sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE
+                            const step = speechSplitDraft?.step ?? sonioxEndpointTuningStep
+                            const silenceMs = speechSplitDraft?.silenceMs ?? sonioxManualFinalizeSilenceMs
+                            const commitStep = () => {
+                              if (speechSplitDraft?.step !== undefined) void handleCustomSpeechSplitCommit({ sttSegmentationMode: 'end', sonioxEndpointTuningStep: speechSplitDraft.step })
+                            }
+                            const commitSilence = () => {
+                              if (speechSplitDraft?.silenceMs !== undefined) void handleCustomSpeechSplitCommit({ sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: speechSplitDraft.silenceMs })
+                            }
+                            return (
+                              <div data-qa="speech-length-detail" aria-disabled={locked} className={`mt-4 transition-opacity ${locked ? 'opacity-45' : ''}`}>
+                                <div className="mb-1 pl-1 text-[0.9rem] font-medium text-gray-700">{sttSegmentationModeLabel}</div>
+                                <div role="radiogroup" aria-label={sttSegmentationModeLabel} className="space-y-2">
+                                  {([
+                                    { value: 'end' as const, label: sttSegmentationModeEndLabel },
+                                    { value: 'fin' as const, label: sttSegmentationModeFinLabel },
+                                  ]).map((option) => {
+                                    const isSelected = mode === option.value
+                                    return (
+                                      <div
+                                        key={option.value}
+                                        className={`overflow-hidden rounded-[1.25rem] border transition ${isSelected ? 'border-amber-300 bg-amber-50/60' : 'border-gray-200 bg-gray-50'}`}
+                                      >
+                                        <button
+                                          type="button"
+                                          role="radio"
+                                          aria-checked={isSelected}
+                                          disabled={locked}
+                                          onClick={() => void handleCustomSpeechSplitCommit({ sttSegmentationMode: option.value })}
+                                          className="flex min-h-11 w-full items-center gap-3 px-3.5 py-2.5 text-left disabled:cursor-not-allowed"
+                                        >
+                                          <span aria-hidden className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 bg-white ${isSelected ? 'border-amber-500' : 'border-gray-300'}`}>
+                                            {isSelected && <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />}
+                                          </span>
+                                          <span className={`text-[0.9rem] font-semibold leading-tight ${isSelected ? 'text-amber-900' : 'text-gray-500'}`}>{option.label}</span>
+                                        </button>
+                                        {isSelected && option.value === 'end' && (
+                                          <label className="block px-3.5 pb-3">
+                                            <span className="flex items-center justify-between gap-3 pl-1 text-[0.9rem] text-gray-800">
+                                              <span>{endpointTuningLabel}</span>
+                                              <span className="shrink-0 font-semibold tabular-nums">{step + 1}/5</span>
+                                            </span>
+                                            <span className="mt-1 flex items-center gap-2">
+                                              <span className="shrink-0 text-[0.7rem] text-gray-500">{endpointTuningShortLabel}</span>
+                                              <input
+                                                type="range"
+                                                min={0}
+                                                max={4}
+                                                step={1}
+                                                value={step}
+                                                disabled={locked}
+                                                data-qa="speech-length-endpoint-step"
+                                                aria-label={endpointTuningLabel}
+                                                onChange={(event) => setSpeechSplitDraft({ step: Number(event.target.value) })}
+                                                onPointerUp={commitStep}
+                                                onKeyUp={commitStep}
+                                                onBlur={commitStep}
+                                                className="h-8 min-w-0 flex-1 accent-amber-500 disabled:cursor-not-allowed"
+                                              />
+                                              <span className="shrink-0 text-[0.7rem] text-gray-500">{endpointTuningLongLabel}</span>
+                                            </span>
+                                          </label>
+                                        )}
+                                        {isSelected && option.value === 'fin' && (
+                                          <label className="block px-3.5 pb-3">
+                                            <span className="flex items-center justify-between gap-3 pl-1 text-[0.9rem] text-gray-800">
+                                              <span>{silenceFinalizeLabel}</span>
+                                              <span className="shrink-0 font-semibold tabular-nums">{(silenceMs / 1000).toFixed(1)}s</span>
+                                            </span>
+                                            <input
+                                              type="range"
+                                              min={MIN_SONIOX_SILENCE_MS}
+                                              max={MAX_SONIOX_SILENCE_MS}
+                                              step={100}
+                                              value={silenceMs}
+                                              disabled={locked}
+                                              data-qa="speech-length-silence"
+                                              aria-label={silenceFinalizeLabel}
+                                              onChange={(event) => setSpeechSplitDraft({ silenceMs: Number(event.target.value) })}
+                                              onPointerUp={commitSilence}
+                                              onKeyUp={commitSilence}
+                                              onBlur={commitSilence}
+                                              className="mt-1 h-8 w-full accent-amber-500 disabled:cursor-not-allowed"
+                                            />
+                                          </label>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      </div>
+                    </motion.section>
+
+                    <motion.section
+                      initial={false}
                       animate={menuContentScreen === 'participants' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
                       transition={resolveMenuContentTransition(menuScreenTransitionMode)}
                       aria-hidden={menuContentScreen !== 'participants'}
@@ -9492,8 +9750,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             ) : null}
             {speechLengthCardOpen ? (
               <div
-                className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3"
-                style={{ bottom: copyToastBottomOffsetPx }}
+                className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-end justify-center px-3"
+                style={{ bottom: copyToastBottomOffsetPx, paddingTop: nativeChatTopSpacerPx + 12 }}
               >
                 <SpeechLengthCard
                   copy={firstRunCopy}

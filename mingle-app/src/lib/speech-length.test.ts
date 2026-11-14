@@ -8,7 +8,25 @@ import {
   resolveSpeechLengthPreferences,
   SPEECH_LENGTH_CARD_AFTER_BUBBLES,
   shouldShowSpeechLengthCard,
+  SPEECH_LENGTH_SIMPLE_LEVELS,
+  RECOMMENDED_SPEECH_LENGTH_LEVEL,
+  simpleSpeechLengthLevel,
 } from '@/lib/speech-length'
+
+describe('three-stop scale', () => {
+  it('shows short, the recommended default in the middle, and long', () => {
+    expect(SPEECH_LENGTH_SIMPLE_LEVELS).toEqual([1, 2, 4])
+    expect(RECOMMENDED_SPEECH_LENGTH_LEVEL).toBe(DEFAULT_SPEECH_LENGTH_LEVEL)
+    expect(SPEECH_LENGTH_SIMPLE_LEVELS[1]).toBe(DEFAULT_SPEECH_LENGTH_LEVEL)
+  })
+
+  it('puts the other silences on the long stop', () => {
+    expect(simpleSpeechLengthLevel(1)).toBe(1)
+    expect(simpleSpeechLengthLevel(2)).toBe(2)
+    expect(simpleSpeechLengthLevel(3)).toBe(4)
+    expect(simpleSpeechLengthLevel(5)).toBe(4)
+  })
+})
 
 describe('first-run sentence length card', () => {
   it('waits for a few finished bubbles before asking', () => {
@@ -26,18 +44,17 @@ const settings = (preferences: ReturnType<typeof resolveSpeechLengthPreferences>
 })
 
 describe('speech length levels', () => {
-  it('starts a new user on level 3: automatic detection step 5 of 5', () => {
-    expect(DEFAULT_SPEECH_LENGTH_LEVEL).toBe(3)
-    expect(resolveSpeechLengthPreferences(3)).toEqual({ sttSegmentationMode: 'end', sonioxEndpointTuningStep: 4 })
+  it('starts a new user on level 2: automatic detection step 5 of 5', () => {
+    expect(DEFAULT_SPEECH_LENGTH_LEVEL).toBe(2)
+    expect(resolveSpeechLengthPreferences(2)).toEqual({ sttSegmentationMode: 'end', sonioxEndpointTuningStep: 4 })
   })
 
-  it('orders the six levels from automatic step 1 to 5 seconds of silence', () => {
+  it('orders the five levels from automatic step 3 to 5 seconds of silence', () => {
     expect(SPEECH_LENGTH_LEVELS.map(resolveSpeechLengthPreferences)).toEqual([
-      { sttSegmentationMode: 'end', sonioxEndpointTuningStep: 0 },
       { sttSegmentationMode: 'end', sonioxEndpointTuningStep: 2 },
       { sttSegmentationMode: 'end', sonioxEndpointTuningStep: 4 },
       { sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: 2000 },
-      { sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: 3000 },
+      { sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: 3500 },
       { sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: 5000 },
     ])
   })
@@ -51,28 +68,29 @@ describe('speech length levels', () => {
   })
 
   it('shows a setting from before the scale as the nearest level, without calling it exact', () => {
-    const autoStep2 = { sttSegmentationMode: 'end' as const, sonioxEndpointTuningStep: 1, sonioxManualFinalizeSilenceMs: 1000 }
-    expect(matchSpeechLengthLevel(autoStep2)).toBe(1)
-    expect(isExactSpeechLengthLevel(1, autoStep2)).toBe(false)
-    expect(matchSpeechLengthLevel({ ...autoStep2, sonioxEndpointTuningStep: 3 })).toBe(2)
+    const autoStep1 = { sttSegmentationMode: 'end' as const, sonioxEndpointTuningStep: 0, sonioxManualFinalizeSilenceMs: 1000 }
+    expect(matchSpeechLengthLevel(autoStep1)).toBe(1)
+    expect(isExactSpeechLengthLevel(1, autoStep1)).toBe(false)
+    expect(matchSpeechLengthLevel({ ...autoStep1, sonioxEndpointTuningStep: 3 })).toBe(2)
     const oneSecond = { sttSegmentationMode: 'fin' as const, sonioxEndpointTuningStep: 4, sonioxManualFinalizeSilenceMs: 1000 }
-    expect(matchSpeechLengthLevel(oneSecond)).toBe(4)
-    expect(matchSpeechLengthLevel({ ...oneSecond, sonioxManualFinalizeSilenceMs: 3500 })).toBe(5)
-    expect(matchSpeechLengthLevel({ ...oneSecond, sonioxManualFinalizeSilenceMs: 4500 })).toBe(6)
+    expect(matchSpeechLengthLevel(oneSecond)).toBe(3)
+    expect(matchSpeechLengthLevel({ ...oneSecond, sonioxManualFinalizeSilenceMs: 3000 })).toBe(4)
+    expect(isExactSpeechLengthLevel(4, { ...oneSecond, sonioxManualFinalizeSilenceMs: 3000 })).toBe(false)
+    expect(matchSpeechLengthLevel({ ...oneSecond, sonioxManualFinalizeSilenceMs: 4500 })).toBe(5)
   })
 })
 
 describe('speech length preview', () => {
   const pieces = ['Hi!', 'I got here.', 'Nice day.', 'Tomorrow,', 'any food?', "Let's go!"]
 
-  it('merges the example into one fewer bubble at each longer level', () => {
-    expect(SPEECH_LENGTH_LEVELS.map((level) => groupSpeechLengthPreview(level, pieces).length)).toEqual([6, 5, 4, 3, 2, 1])
-    expect(groupSpeechLengthPreview(6, pieces)).toEqual([{ key: 'p0', text: "Hi! I got here. Nice day. Tomorrow, any food? Let's go!" }])
-    expect(groupSpeechLengthPreview(4, pieces).map((bubble) => bubble.key)).toEqual(['p0', 'p2', 'p4'])
+  it('merges the example into fewer bubbles at each longer level', () => {
+    expect(SPEECH_LENGTH_LEVELS.map((level) => groupSpeechLengthPreview(level, pieces).length)).toEqual([6, 3, 2, 1, 1])
+    expect(groupSpeechLengthPreview(4, pieces)).toEqual([{ key: 'p0', text: "Hi! I got here. Nice day. Tomorrow, any food? Let's go!" }])
+    expect(groupSpeechLengthPreview(2, pieces).map((bubble) => bubble.key)).toEqual(['p0', 'p2', 'p4'])
   })
 
   it('joins Japanese and Chinese pieces without a space', () => {
-    expect(groupSpeechLengthPreview(5, ['やあ!', '着いたよ。', 'いいね。', 'a', 'b', 'c'])[0].text).toBe('やあ! 着いたよ。いいね。')
+    expect(groupSpeechLengthPreview(3, ['やあ!', '着いたよ。', 'いいね。', 'a', 'b', 'c'])[0].text).toBe('やあ! 着いたよ。いいね。')
     expect(groupSpeechLengthPreview(2, ['嗨！', '到了。', '', '', '', ''])[0].text).toBe('嗨！到了。')
   })
 })

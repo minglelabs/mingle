@@ -2,6 +2,23 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-13 — Sentence length: five levels, three stops with the default in the middle, and a "More" page
+
+- Surface: `lib/speech-length.ts`, `SpeechLengthScale.tsx`, `SpeechLengthCard.tsx`, the room settings and a new `speech-length` menu page in `LivePhoneDemo.tsx`, `i18n/first-run-copy.ts`.
+- Issue 1: Measured on real speech (Korean, Japanese, Chinese, English), automatic steps 1 and 3 of 5 split about the same, and step 5 of 5 (the default) often kept speech together longer than 2 seconds of silence, so levels 1-2 and 3-4 of the 1-6 scale were not in order.
+- Issue 2: The default sat at 3 of 4 on the card, not in an obvious place, and users could not tell automatic detection from silence time anyway.
+- Resolution: Five levels: 1 automatic 3/5, 2 automatic 5/5 (default), 3 two seconds, 4 three and a half seconds, 5 five seconds of silence; older settings show as the nearest level. The card and the room settings show three stops without numbers (short = 1, recommended = 2 in the middle with a "Recommended" tag, long = 4). "More" in the room settings opens a page with all five numbered levels, a "Set it myself" switch, and under it the automatic detection / silence time controls, which follow the level and stay dimmed until the switch is on; a hand-made setting opens with the switch on, and turning it off moves back to the nearest level. Example bubbles follow the measured splits (6 / 3 / 1 bubbles on the three stops).
+- Verification: `speech-length.test.ts`, `tsc`, `vitest` (2266 tests). Not tried in a browser or on a device yet.
+
+## 2026-11-13 — First run: the length card offers 1-4, a drag slider, and stays below the header
+
+- Surface: `LivePhoneDemo/SpeechLengthCard.tsx`, `SpeechLengthScale.tsx` (also the room settings), the card's holder in `LivePhoneDemo.tsx`, `lib/speech-length.ts`.
+- Issue 1: The first-run card offered all six levels; 5 and 6 wait three to five seconds of silence, which a new user reads as the app not working.
+- Issue 2: On a short room the card grew past the top of the message area and its top ran under the room header, so it looked as if something was hidden there.
+- Issue 3: "Short" and "Long" under six number buttons did not read as a direction, and the numbers looked like buttons to tap rather than a scale to slide.
+- Resolution: The card offers levels 1-4 (`SPEECH_LENGTH_FIRST_RUN_LEVELS`; a longer current setting starts on 4); the room settings keep 1-6. The card's holder stops below the header (and a top ad banner), and the example scales down whole when the room is short. The scale is a slider: a rail filled up to a round numbered thumb that follows the finger, dots for the stops, a many-small-bubbles icon at the short end and one long bubble at the long end, and `← Short` / `Long →` under them (mirrored in RTL). On the card the example follows the finger; in the room settings the stop the finger lets go on is applied. Arrow keys, Home and End move it.
+- Verification: `speech-length.test.ts`, `tsc`; rendered alone in a browser at 760px and 560px room heights, dragged to 1 (six bubbles) and past the end (stops at 4). Not tried on a device.
+
 ## 2026-11-13 — Live STT keeps running across a tab switch and room re-entry
 
 - Surface: `use-realtime-stt.ts` (room hook unmount), `bottom-tab-bar.tsx`, `conversation-list.tsx`, `lib/tab-navigation.ts`.
