@@ -123,6 +123,8 @@ function PersonCard({
   onOpen: (userId: string) => void;
 }) {
   const name = person.name?.trim() || person.handle?.trim() || copy.userFallback;
+  // A photo that fails to load (expired avatar URL, removed object) falls back to the silhouette.
+  const [imageFailed, setImageFailed] = useState(false);
   const accountBadge = resolveAccountBadge(person);
   const crop = normalizeProfileImageCrop({ scale: person.imageCropScale, x: person.imageCropX, y: person.imageCropY });
   const primary = person.primaryLanguages.slice(0, MAX_PRIMARY_ON_CARD);
@@ -145,13 +147,14 @@ function PersonCard({
         className="block w-full overflow-hidden rounded-2xl border border-gray-100 bg-white text-left shadow-[0_1px_4px_rgba(15,23,42,0.06)] transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
       >
         <span className="relative block aspect-square w-full overflow-hidden bg-gray-100" aria-hidden="true">
-          {person.image ? (
+          {person.image && !imageFailed ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={person.image}
               alt=""
               loading="lazy"
               draggable={false}
+              onError={() => setImageFailed(true)}
               className="h-full w-full object-cover"
               // The stored crop offsets are fractions of the (square) viewport.
               style={{ transform: `translate3d(${crop.x * 100}%, ${crop.y * 100}%, 0) scale(${crop.scale})` }}
