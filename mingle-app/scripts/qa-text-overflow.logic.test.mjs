@@ -79,6 +79,14 @@ test('flags overlapping sibling labels', () => {
   assert.equal(result.findings.filter((finding) => finding.kind === 'overlap').length, 1);
 });
 
+test('does not report inline runs of one wrapped sentence as overlapping', () => {
+  const name = el('STRONG', { rect: R(70, 180, 220, 40), text: 'Maximilian Schwarzenberger', style: { display: 'inline' } });
+  const rest = el('SPAN', { rect: R(70, 180, 200, 40), text: 'folgt Ihnen.', style: { display: 'inline' } });
+  const p = el('P', { rect: R(70, 180, 220, 40), children: [name, rest] });
+  const result = scan(el('BODY', { rect: R(0, 0, 390, 844), children: [p] }));
+  assert.equal(result.findings.filter((finding) => finding.kind === 'overlap').length, 0);
+});
+
 test('skips allowed truncation, hidden and sr-only text, and fitting labels', () => {
   const name = el('SPAN', { rect: R(0, 0, 60, 20), text: 'A very long display name', style: { overflow: 'hidden', textOverflow: 'ellipsis' }, scrollWidth: 200, clientWidth: 60, attrs: { 'data-qa-allow-truncate': '' } });
   const hidden = el('SPAN', { rect: R(0, 30, 600, 20), text: 'Hidden', style: { display: 'none' } });
@@ -87,6 +95,22 @@ test('skips allowed truncation, hidden and sr-only text, and fitting labels', ()
   const result = scan(el('BODY', { rect: R(0, 0, 390, 844), children: [name, hidden, srOnly, ok] }));
   assert.deepEqual(result.findings, []);
   assert.equal(result.scanned, 2);
+});
+
+test('skips panels parked entirely off-screen (slide-in sheets)', () => {
+  const label = el('BUTTON', { rect: R(400, 500, 300, 24), text: 'Agree and continue' });
+  const panel = el('DIV', { rect: R(390, 400, 390, 300), children: [label] });
+  const result = scan(el('BODY', { rect: R(0, 0, 390, 844), children: [panel] }));
+  assert.deepEqual(result.findings, []);
+});
+
+test('skips pages clipped away by an overflow-hidden ancestor', () => {
+  const title = el('H2', { rect: R(371, 531, 323, 23), text: 'Service Terms' });
+  const page = el('DIV', { rect: R(356, 500, 338, 300), children: [title] });
+  const track = el('DIV', { rect: R(19, 500, 675, 300), children: [page] });
+  const pager = el('DIV', { rect: R(19, 500, 338, 300), style: { overflow: 'hidden' }, children: [track] });
+  const result = scan(el('BODY', { rect: R(0, 0, 390, 844), children: [pager] }));
+  assert.deepEqual(result.findings, []);
 });
 
 test('the WebView expression is self-contained', () => {

@@ -34,6 +34,14 @@ export function scanTextOverflow(doc, win, options = {}) {
     const rect = element.getBoundingClientRect();
     if (rect.width <= 1 || rect.height <= 1) return true; // sr-only and collapsed nodes
     if (rect.bottom < 0 || rect.top > viewportHeight) return true; // scrolled out of view
+    if (rect.right <= 0 || rect.left >= viewportWidth) return true; // slid-out panel (off-canvas sheet, carousel page)
+    // Clipped away by an ancestor with overflow hidden (the next page of a carousel or pager).
+    for (let node = element.parentElement; node && node !== doc.body; node = node.parentElement) {
+      const nodeStyle = styleOf(node);
+      if (!/hidden|clip/.test(`${nodeStyle.overflow} ${nodeStyle.overflowX}`)) continue;
+      const clip = node.getBoundingClientRect();
+      if (Math.min(rect.right, clip.right) - Math.max(rect.left, clip.left) <= 1) return true;
+    }
     return false;
   };
   const ownText = (element) => {
@@ -181,6 +189,9 @@ export function scanTextOverflow(doc, win, options = {}) {
       const b = textElements[j];
       if (a.contains && (a.contains(b) || b.contains(a))) continue;
       if (a.parentElement !== b.parentElement && a.parentElement?.parentElement !== b.parentElement?.parentElement) continue;
+      // Inline runs in the same paragraph ("<strong>Name</strong> followed you" wrapping onto two
+      // lines) have overlapping bounding boxes without any text overlapping.
+      if (styleOf(a).display === 'inline' && styleOf(b).display === 'inline') continue;
       const rb = b.getBoundingClientRect();
       const overlapX = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
       const overlapY = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);

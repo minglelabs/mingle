@@ -37,6 +37,9 @@ import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { buildOverflowExpression, withLocalePath } from './qa-text-overflow.mjs';
 
+// Same key as src/components/app-locale-preference-sync.tsx.
+const APP_LOCALE_STORAGE_KEY = 'mingle.appLocale';
+
 const APP_ROOT = path.resolve(import.meta.dirname, '..');
 const REPO_ROOT = path.resolve(APP_ROOT, '..');
 const LOCAL_DIR = path.join(APP_ROOT, 'qa/agent/local');
@@ -705,12 +708,15 @@ async function cmdOverflow(args) {
   const expression = buildOverflowExpression();
   const locales = !localeArg ? [null] : localeArg === 'all' ? OVERFLOW_LOCALES : localeArg.split(',');
   const startPath = await evalInWebView(state, 'location.pathname + location.search');
+  // The app sends every page back to the language saved in localStorage (AppLocalePreferenceSync),
+  // so each locale is saved there before navigating and the original value restored at the end.
+  const storedLocale = await evalInWebView(state, `localStorage.getItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)})`).catch(() => null);
   const results = [];
   for (const locale of locales) {
     if (locale) {
       const [pathname, search = ''] = String(startPath).split('?');
       const target = withLocalePath(pathname, locale) + (search ? `?${search}` : '');
-      await evalInWebView(state, `(location.assign(${JSON.stringify(target)}), true)`);
+      await evalInWebView(state, `(localStorage.setItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)}, ${JSON.stringify(locale)}), location.assign(${JSON.stringify(target)}), true)`);
       // Wait for the new page (not the old one still unloading), then let it render.
       const deadline = Date.now() + 30000;
       for (;;) {
@@ -731,7 +737,10 @@ async function cmdOverflow(args) {
     results.push({ ...scan, documentLang: scan?.locale ?? null, locale: locale ?? scan?.locale ?? null });
   }
   if (localeArg) {
-    await evalInWebView(state, `(location.assign(${JSON.stringify(startPath)}), true)`);
+    const restore = storedLocale == null
+      ? `localStorage.removeItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)})`
+      : `localStorage.setItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)}, ${JSON.stringify(storedLocale)})`;
+    await evalInWebView(state, `(${restore}, location.assign(${JSON.stringify(startPath)}), true)`);
   }
   const summary = {
     path: startPath,
