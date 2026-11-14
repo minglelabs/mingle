@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/prisma', () => ({ prisma: {} }))
+const db = vi.hoisted(() => ({ findUnique: vi.fn(), updateMany: vi.fn() }))
+vi.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: db.findUnique, updateMany: db.updateMany } } }))
 vi.mock('@/server/referral', () => ({ ReferralError: class extends Error {}, redeemReferralCode: vi.fn() }))
 
-import { isReviewAccount, resolveAppAccess } from '@/server/app-access'
+import { isReviewAccount, readAppAccess, resolveAppAccess } from '@/server/app-access'
 
 const newUser = {
   createdAt: new Date('2026-12-01T00:00:00Z'),
@@ -59,5 +60,22 @@ describe('invite gate', () => {
     expect(resolveAppAccess({ ...newUser, phoneE164: '+821000000000' }, env).reason).toBe('review')
     expect(isReviewAccount({ phoneE164: null, email: 'review@hashchat.app' }, env)).toBe(true)
     expect(isReviewAccount({ phoneE164: '+821012345678', email: 'other@hashchat.app' }, env)).toBe(false)
+  })
+})
+
+describe('waitlist', () => {
+  it('puts an account the gate stops on the waitlist by itself', async () => {
+    vi.stubEnv('INVITE_GATE', 'on')
+    vi.stubEnv('INVITE_GATE_SINCE', '2026-11-20T00:00:00Z')
+    db.findUnique.mockResolvedValue({ ...newUser, waitlistedAt: null, accessGrantedAt: null })
+    db.updateMany.mockResolvedValue({ count: 1 })
+    await expect(readAppAccess('u-new', 'ko')).resolves.toEqual({ allowed: false, reason: 'waitlisted' })
+    expect(db.updateMany).toHaveBeenCalledWith({ where: { id: 'u-new', waitlistedAt: null }, data: { waitlistedAt: expect.any(Date) } })
+
+    db.updateMany.mockClear()
+    db.findUnique.mockResolvedValue({ ...newUser, referredByUserId: 'u1' })
+    await expect(readAppAccess('u-invited', 'ko')).resolves.toEqual({ allowed: true, reason: 'invited' })
+    expect(db.updateMany).not.toHaveBeenCalled()
+    vi.unstubAllEnvs()
   })
 })

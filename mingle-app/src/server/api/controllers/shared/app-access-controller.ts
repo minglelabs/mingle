@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
-import { WaitlistError, enterInviteCode, joinWaitlist, readAppAccess } from '@/server/app-access'
+import { enterInviteCode, readAppAccess } from '@/server/app-access'
 import { ReferralError, type ReferralRedeemError } from '@/server/referral'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' }
@@ -32,19 +32,6 @@ export async function getAppAccess(request?: NextRequest) {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
   return json(await readAppAccess(userId, readLocale(request?.nextUrl.searchParams.get('locale'))))
-}
-
-/** POST /account/access/waitlist { locale } — joins the waitlist (needs a verified phone: 409 phone_not_verified). */
-export async function postWaitlist(request: Request) {
-  const userId = await readSessionUserId()
-  if (!userId) return json({ error: 'unauthorized' }, 401)
-  const body = await request.json().catch(() => ({})) as { locale?: unknown }
-  try {
-    return json(await joinWaitlist(userId, readLocale(body.locale)))
-  } catch (error) {
-    if (error instanceof WaitlistError) return json({ error: error.code }, 409)
-    throw error
-  }
 }
 
 /** POST /account/access { code } — enters an invite code at the gate. */

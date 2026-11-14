@@ -14,8 +14,8 @@ import { ReferralError, redeemReferralCode } from '@/server/referral'
  * "ko") lists them, "*" means every language. The app sends the language it
  * shows (the one picked on the first screen); any other language gets in.
  *
- * Without an invite, an account can join the waitlist once its phone number is
- * verified ('waitlisted'); an admin lets it in from the waitlist tab
+ * An account the gate stops is put on the waitlist by itself the first time
+ * it asks ('waitlisted'); an admin lets it in from the waitlist tab
  * ('granted', src/app/admin/waitlist).
  *
  * Off by default: until INVITE_GATE=on nothing changes for anyone.
@@ -86,7 +86,11 @@ export async function readAppAccess(userId: string, locale?: string | null): Pro
   if (!isInviteGateLocale(locale)) return { allowed: true, reason: 'other_locale' }
   const user = await prisma.user.findUnique({ where: { id: userId }, select: ACCESS_SELECT })
   if (!user) return { allowed: false, reason: 'needs_invite' }
-  return resolveAppAccess(user, process.env, locale)
+  const access = resolveAppAccess(user, process.env, locale)
+  if (access.reason !== 'needs_invite') return access
+  // Stopped by the gate for the first time: onto the waitlist, no button needed.
+  await prisma.user.updateMany({ where: { id: userId, waitlistedAt: null }, data: { waitlistedAt: new Date() } })
+  return { allowed: false, reason: 'waitlisted' }
 }
 
 /** Enters an invite code at the gate: accepts the invite (both sides get the join reward) and lets the account in. */
@@ -97,20 +101,6 @@ export async function enterInviteCode(userId: string, rawCode: unknown, locale?:
     // Already invited earlier: the gate should simply open.
     if (!(error instanceof ReferralError && error.code === 'already_redeemed')) throw error
   }
-  return readAppAccess(userId, locale)
-}
-
-export class WaitlistError extends Error {
-  constructor(readonly code: 'phone_not_verified') {
-    super(code)
-  }
-}
-
-/** Puts an account on the waitlist; it needs a verified phone number first (one account per number). */
-export async function joinWaitlist(userId: string, locale?: string | null): Promise<AppAccess> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { phoneVerifiedAt: true, waitlistedAt: true } })
-  if (!user?.phoneVerifiedAt) throw new WaitlistError('phone_not_verified')
-  if (!user.waitlistedAt) await prisma.user.update({ where: { id: userId }, data: { waitlistedAt: new Date() } })
   return readAppAccess(userId, locale)
 }
 

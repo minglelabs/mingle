@@ -5732,7 +5732,7 @@ export default function ConversationList({
 
       {sessionStatus === "authenticated" && !inviteOnboarding && appAccess && !appAccess.allowed ? (
         <Suspense fallback={null}>
-          <InviteGate locale={locale} access={appAccess} onAccess={setAppAccess} />
+          <InviteGate locale={locale} onAccess={setAppAccess} />
         </Suspense>
       ) : null}
 

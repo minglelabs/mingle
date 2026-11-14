@@ -104,8 +104,8 @@ const RESULT_TEXT: Record<string, { tone: "success" | "error"; text: string }> =
 };
 
 /**
- * 대기열: accounts that joined the invite gate's waitlist (each with a
- * verified phone number), oldest first, and the ones an admin already let in.
+ * 대기열: accounts the invite gate stopped (each is put on the waitlist the
+ * first time it is stopped), oldest first, and the ones an admin already let in.
  * "입장시키기" lets an account in without an invite.
  */
 export default async function AdminWaitlistPage({ searchParams }: WaitlistPageProps) {
@@ -152,7 +152,7 @@ export default async function AdminWaitlistPage({ searchParams }: WaitlistPagePr
     <AdminPage>
       <AdminPageHeader
         title="대기열"
-        description={`초대 코드 없이 대기 명단에 올린 사람들이에요. 전화번호 인증을 마친 사람만 올라와요. 대기 중 ${waitingCount.toLocaleString("ko-KR")}명.`}
+        description={`초대 코드 없이 가입해 초대권 화면에서 멈춘 사람들이에요. 처음 멈춘 순간 저절로 대기 명단에 올라와요. 대기 중 ${waitingCount.toLocaleString("ko-KR")}명.`}
       />
       {!isInviteGateOn() ? (
         <AdminNotice className="mb-3">지금은 초대권 확인(INVITE_GATE)이 꺼져 있어서 누구나 바로 들어와요.</AdminNotice>
