@@ -9,8 +9,9 @@ Source for the App Store and Google Play screenshot set: 8 slides in 15 language
 | 03 | A voice talk with the friend, interpreted live (airport pick-up) | `dm.json` (`voice`), laid out as the app's voice talk panel, over `scenes/backdrop-03.jpg` |
 | 04 | Tips from a local friend and an interpreted booking call to a hair salon | `render.py` scene (`booking` lines) over the two `booking/` photos, with the tilted phone on the booking call |
 | 05 | A friend's post read in your language | app (`/{locale}/feed?postId=…`) |
-| 06 | Comments, translated. Caption: honest chats without creeps or scammers | app (comment sheet) |
-| 07–08 | Hash Rush (meadow, beach). Caption: play games with friends | live site, `?lang=` |
+| 06 | Comments, translated. Caption: comment on posts in your language | app (comment sheet) |
+| 07 | Hash Rush. Caption: play games with friends | live site, `?lang=` |
+| 08 | Safety statement, no phone: creeps, rude users and scammers are banned for good; one tap to report, the team reviews every report | `render.py` `STATEMENT_PAGE` from `captions.json` `statement` (points and note per language) |
 
 The positioning behind the captions is in `docs/positioning-korean-friends.md`. A viewer can have its own lines under `dm.json` `viewerOverrides.<lang>` (used for Korean, who talks with a foreign friend); `capture.mjs` and `render.py` read them before the shared lines. `chat.json` `partners` puts Korean first for every non-Korean viewer.
 

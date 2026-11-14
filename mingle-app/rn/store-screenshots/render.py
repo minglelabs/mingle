@@ -212,6 +212,41 @@ def render(html_text: str, out: Path, work: Path) -> None:
     subprocess.run(["pngquant", "--quality=80-95", "--speed=1", "--force", "--ext=.png", str(out)], check=True)
 
 
+# 08: a statement slide with no phone: the headline, a large "no entry" badge,
+# the three kinds of users who are banned, and a line on how reporting works.
+STATEMENT_PAGE = """<!doctype html>
+<html lang="{lang}" dir="{dir}"><head><meta charset="utf-8"><style>
+html,body{{margin:0;width:{W}px;height:{H}px;overflow:hidden}}
+body{{background:linear-gradient(180deg,#FFFBF0 0%,#FFF1CC 55%,#FDE3A0 100%);
+  font-family:{font},-apple-system,"SF Pro Display","Helvetica Neue",sans-serif;color:#1F2430}}
+h1{{position:absolute;top:220px;left:60px;right:60px;margin:0;text-align:center;
+  font-size:112px;line-height:1.2;font-weight:800;letter-spacing:-1px;color:#1F2430;white-space:pre}}
+.badge{{position:absolute;left:50%;top:760px;width:760px;height:760px;margin-left:-380px}}
+.points{{position:absolute;left:80px;right:80px;top:1660px;display:flex;flex-direction:column;gap:44px;align-items:center}}
+.point{{display:flex;align-items:center;justify-content:center;gap:36px;min-width:760px;padding:34px 56px;border-radius:999px;background:#fff;
+  box-shadow:0 18px 40px rgba(120,80,0,.14);font-size:84px;font-weight:800}}
+.point s{{text-decoration:none;position:relative}}
+.point s::after{{content:"";position:absolute;left:-8px;right:-8px;top:52%;height:12px;border-radius:6px;background:#EF4444}}
+.x{{flex:none;width:92px;height:92px;border-radius:50%;background:#EF4444;color:#fff;display:flex;align-items:center;justify-content:center;font-size:62px;font-weight:900}}
+.note{{position:absolute;left:90px;right:90px;bottom:250px;text-align:center;font-size:60px;line-height:1.35;font-weight:700;color:#7A5A1A}}
+</style></head><body>
+<h1 id="t">{caption}</h1>
+<svg class="badge" viewBox="0 0 200 200" aria-hidden="true">
+  <path d="M100 14 L170 40 V96 C170 140 140 172 100 188 C60 172 30 140 30 96 V40 Z" fill="#F29A0E"/>
+  <path d="M100 30 L156 51 V96 C156 131 133 157 100 171 C67 157 44 131 44 96 V51 Z" fill="#FFF8E6"/>
+  <circle cx="100" cy="88" r="20" fill="#1F2430"/>
+  <path d="M64 146 C66 120 82 110 100 110 C118 110 134 120 136 146 Z" fill="#1F2430"/>
+  <circle cx="100" cy="104" r="62" fill="none" stroke="#EF4444" stroke-width="13"/>
+  <line x1="57" y1="61" x2="143" y2="147" stroke="#EF4444" stroke-width="13" stroke-linecap="round"/>
+</svg>
+<div class="points">{points}</div>
+<div class="note">{note}</div>
+<script>
+const t=document.getElementById('t');let s=112;
+while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
+</script></body></html>"""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", help="comma-separated caption languages (e.g. ko,en)")
@@ -235,6 +270,21 @@ def main() -> None:
                         font=FONT.get(lang, '"SF Pro Display"'),
                         caption=html.escape(shot["caption"][lang]),
                         img=(HERE / shot["fullBleed"]).as_uri(),
+                    ), out, work)
+                    rendered[(lang, shot["id"])] = out
+                    continue
+                if shot.get("statement"):
+                    statement = shot["statement"]
+                    points = "".join(
+                        f'<div class="point"><span class="x">✕</span><s>{html.escape(word)}</s></div>'
+                        for word in statement["points"][lang]
+                    )
+                    render(STATEMENT_PAGE.format(
+                        lang=lang, dir="rtl" if lang == "ar" else "ltr", W=W, H=H,
+                        font=FONT.get(lang, '"SF Pro Display"'),
+                        caption=html.escape(shot["caption"][lang]),
+                        points=points,
+                        note=html.escape(statement["note"][lang]),
                     ), out, work)
                     rendered[(lang, shot["id"])] = out
                     continue

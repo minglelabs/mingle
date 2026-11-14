@@ -119,21 +119,21 @@
       "id": "06-comments",
       "capture": "captures/{lang}/comments.png",
       "caption": {
-        "ko": "변태·사기꾼 걱정 없는\n진솔한 대화",
-        "en": "Honest chats, no\ncreeps or scammers",
-        "ja": "変な人や詐欺の心配なく\n本音で話せる",
-        "zh-cn": "不用担心怪人和骗子\n真诚交流",
-        "zh-tw": "不用擔心怪人和騙子\n真誠交流",
-        "ar": "محادثات صادقة\nبلا مزعجين ولا محتالين",
-        "de": "Ehrliche Gespräche,\nohne Spinner und Betrüger",
-        "es": "Charlas sinceras,\nsin pesados ni estafadores",
-        "fr": "Des échanges sincères,\nsans relous ni arnaqueurs",
-        "hi": "सच्ची बातचीत,\nबिना अजीब लोगों और ठगों के",
-        "it": "Chat sincere, senza\ntipi strani né truffatori",
-        "pt": "Conversas sinceras,\nsem esquisitos nem golpistas",
-        "ru": "Честное общение\nбез неадекватов и мошенников",
-        "th": "คุยกันอย่างจริงใจ\nไร้คนแปลก ๆ และมิจฉาชีพ",
-        "vi": "Trò chuyện chân thành,\nkhông lo kẻ lạ hay lừa đảo"
+        "ko": "친구 글에 댓글도\n내 언어로",
+        "en": "Comment on posts\nin your language",
+        "ja": "友だちの投稿にも\n自分の言葉でコメント",
+        "zh-cn": "用自己的语言\n给朋友留言",
+        "zh-tw": "用自己的語言\n給朋友留言",
+        "es": "Comenta publicaciones\nen tu idioma",
+        "fr": "Commentez les posts\ndans votre langue",
+        "de": "Kommentiere Beiträge\nin deiner Sprache",
+        "it": "Commenta i post\nnella tua lingua",
+        "pt": "Comente posts\nno seu idioma",
+        "ru": "Комментируйте посты\nна своём языке",
+        "ar": "علّق على المنشورات\nبلغتك",
+        "hi": "पोस्ट पर कमेंट करें\nअपनी भाषा में",
+        "th": "คอมเมนต์โพสต์เพื่อน\nเป็นภาษาของคุณ",
+        "vi": "Bình luận bài viết\nbằng ngôn ngữ của bạn"
       }
     },
     {
@@ -158,24 +158,119 @@
       }
     },
     {
-      "id": "08-hash-rush-maps",
-      "capture": "captures/{lang}/hash-rush-maps.png",
+      "id": "08-safety",
       "caption": {
-        "ko": "함께 즐기는\n다양한 맵",
-        "en": "New maps\nto play together",
-        "ja": "みんなで遊べる\n新しいマップ",
-        "zh-cn": "一起畅玩\n全新地图",
-        "zh-tw": "一起暢玩\n全新地圖",
-        "ar": "خرائط جديدة\nللعب معًا",
-        "de": "Neue Maps\nzum gemeinsamen Spielen",
-        "es": "Nuevos mapas\npara jugar juntos",
-        "fr": "De nouvelles cartes\nà jouer ensemble",
-        "hi": "साथ खेलने के लिए\nनए मैप",
-        "it": "Nuove mappe\nda giocare insieme",
-        "pt": "Novos mapas\npara jogar juntos",
-        "ru": "Новые карты\nдля совместной игры",
-        "th": "แมปใหม่\nเล่นด้วยกัน",
-        "vi": "Bản đồ mới\nđể chơi cùng nhau"
+        "ko": "변태·비매너·사기 유저는\n영구 퇴출해요",
+        "en": "Creeps, rude users, scammers:\nbanned for good",
+        "ja": "変な人・マナー違反・詐欺は\n永久追放",
+        "zh-cn": "骚扰、无礼、诈骗用户\n永久封禁",
+        "zh-tw": "騷擾、無禮、詐騙用戶\n永久封鎖",
+        "es": "Acosadores, groseros, estafadores:\nfuera para siempre",
+        "fr": "Harceleurs, malpolis, arnaqueurs :\nbannis pour de bon",
+        "de": "Belästiger, Rüpel, Betrüger:\nfür immer gesperrt",
+        "it": "Molestatori, maleducati, truffatori:\nbannati per sempre",
+        "pt": "Assediadores, grosseiros, golpistas:\nbanidos para sempre",
+        "ru": "Извращенцы, хамы, мошенники —\nбан навсегда",
+        "ar": "المتحرشون والمسيئون والمحتالون\nحظر دائم",
+        "hi": "बदतमीज़, परेशान करने वाले, ठग\nहमेशा के लिए बाहर",
+        "th": "พวกโรคจิต ไร้มารยาท สแกมเมอร์\nแบนถาวร",
+        "vi": "Kẻ biến thái, thô lỗ, lừa đảo\nbị cấm vĩnh viễn"
+      },
+      "statement": {
+        "points": {
+          "ko": [
+            "변태",
+            "비매너",
+            "사기"
+          ],
+          "en": [
+            "Creeps",
+            "Rude",
+            "Scams"
+          ],
+          "ja": [
+            "変な人",
+            "マナー違反",
+            "詐欺"
+          ],
+          "zh-cn": [
+            "骚扰",
+            "无礼",
+            "诈骗"
+          ],
+          "zh-tw": [
+            "騷擾",
+            "無禮",
+            "詐騙"
+          ],
+          "es": [
+            "Acoso",
+            "Groserías",
+            "Estafas"
+          ],
+          "fr": [
+            "Harcèlement",
+            "Impolitesse",
+            "Arnaques"
+          ],
+          "de": [
+            "Belästigung",
+            "Pöbeln",
+            "Betrug"
+          ],
+          "it": [
+            "Molestie",
+            "Maleducazione",
+            "Truffe"
+          ],
+          "pt": [
+            "Assédio",
+            "Grosseria",
+            "Golpes"
+          ],
+          "ru": [
+            "Домогательства",
+            "Хамство",
+            "Мошенничество"
+          ],
+          "ar": [
+            "تحرش",
+            "إساءة",
+            "احتيال"
+          ],
+          "hi": [
+            "छेड़छाड़",
+            "बदतमीज़ी",
+            "ठगी"
+          ],
+          "th": [
+            "ลวนลาม",
+            "ไร้มารยาท",
+            "หลอกลวง"
+          ],
+          "vi": [
+            "Quấy rối",
+            "Thô lỗ",
+            "Lừa đảo"
+          ]
+        },
+        "note": {
+          "ko": "신고는 한 번에, 운영진이 하나하나 확인해요",
+          "en": "One tap to report. Our team reviews every report.",
+          "ja": "通報はワンタップ。運営チームがひとつずつ確認します",
+          "zh-cn": "一键举报，运营团队逐一审核",
+          "zh-tw": "一鍵檢舉，營運團隊逐一審核",
+          "es": "Denuncia con un toque. Nuestro equipo revisa cada caso.",
+          "fr": "Signalez en un geste, notre équipe vérifie chaque cas.",
+          "de": "Mit einem Tipp melden – unser Team prüft jede Meldung.",
+          "it": "Segnala con un tocco, il nostro team controlla ogni caso.",
+          "pt": "Denuncie com um toque. Nossa equipe analisa cada caso.",
+          "ru": "Жалоба в одно касание — команда проверит каждую.",
+          "ar": "أبلغ بلمسة واحدة، وفريقنا يراجع كل بلاغ.",
+          "hi": "एक टैप में रिपोर्ट करें, हमारी टीम हर रिपोर्ट जाँचती है।",
+          "th": "แจ้งรายงานได้ในแตะเดียว ทีมงานตรวจสอบทุกเรื่อง",
+          "vi": "Báo cáo chỉ một chạm, đội ngũ kiểm tra từng trường hợp."
+        }
       }
     }
   ],
