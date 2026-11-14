@@ -185,11 +185,13 @@ Every open profile costs memory, so the pool keeps only 5 open
   window of the profile in the Chrome already running (no second Chrome); the
   extension starts, adopts that tab and connects. One profile per 20 s.
 - Profiles the pool has seen are kept in `profiles.json` next to the script
-  (folder, agent id, email, last use), so after a restart it knows the closed
-  ones. Rotation starts 90 s after `serve` starts, so open profiles reconnect
+  (folder, agent id, email, last use, and image limits / ChatGPT pauses still
+  in force), so after a restart it knows the closed ones and does not open a
+  limited one for an image. Rotation starts 90 s after `serve` starts, so open profiles reconnect
   first.
 - On by default on Windows; `CHATGPT_POOL_ROTATE=0` turns it off. `GET /accounts`
-  lists the closed profiles under `closed`. The log shows `open …` and
+  lists the closed profiles under `closed`, with `imageLimitedUntil` and
+  `pausedUntil`. Test: `node scripts/chatgpt-pool.limits.test.mjs`. The log shows `open …` and
   `close …` lines.
 - Deploy: copy `scripts/chatgpt-pool.mjs` and `scripts/chatgpt-pool-extension\*`
   into the deployed copy, then restart `serve` by its exact PID (step 5). The
