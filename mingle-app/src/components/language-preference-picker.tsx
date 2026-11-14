@@ -65,7 +65,7 @@ function LanguageOptionButton({
         <LanguageFlag language={option.code} className="text-[2rem] leading-none" />
       </span>
       <span className="min-w-0 flex-1">
-        <span suppressHydrationWarning className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
+        <span suppressHydrationWarning className="block leading-snug [overflow-wrap:anywhere] text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
           {option.localizedName}
         </span>
         <span suppressHydrationWarning data-qa-allow-truncate className="mt-0.5 block truncate text-[0.9rem] text-slate-500">{option.secondaryLabel}</span>

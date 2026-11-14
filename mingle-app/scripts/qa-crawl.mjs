@@ -84,7 +84,16 @@ export function screenFingerprint(doc, win) {
 
 /** Taps the control at `path` (a CSS path from collectTapTargets). */
 export function tapTarget(doc, path) {
-  const element = doc.querySelector(path);
+  // Portals and toasts come and go at the top of <body>, which shifts the first steps of the path.
+  // When the exact path misses, relax the position of the top one, two, then three steps and take
+  // the match only if it is unique.
+  let element = doc.querySelector(path);
+  const parts = path.split(' > ');
+  for (let relax = 1; !element && relax <= 3 && relax < parts.length; relax += 1) {
+    const loose = parts.map((part, index) => (index >= 1 && index <= relax ? part.replace(/:nth-child\(\d+\)/, '') : part)).join(' > ');
+    const matches = doc.querySelectorAll(loose);
+    if (matches.length === 1) element = matches[0];
+  }
   if (!element) return false;
   element.scrollIntoView({ block: 'center', inline: 'nearest' });
   element.click();
@@ -92,14 +101,15 @@ export function tapTarget(doc, path) {
 }
 
 // Controls the crawler never taps: they change data, leave the app or hand off to native UI
-// (permission prompts, the share sheet, purchases) that the WebView scan cannot see or undo.
+// (permission prompts, the share sheet, purchases, Picture in Picture, the QR camera, the audio
+// route) that the WebView scan cannot see or undo.
 // Matched against the label in the discovery locale (Korean) plus test ids and aria labels.
 export const RISKY_TARGET = new RegExp([
   '로그아웃', '탈퇴', '삭제', '지우기', '차단', '해제', '신고하기', '제출', '(?<!초대권 )보내기', '전송', '게시하기', '게시(?!물)', '올리기', '저장', '완료', '확인', '동의', '적용',
   '팔로우', '팔로잉', '맞팔', '좋아요', '구매', '결제', '충전', '구독', '복원', '카메라', '사진', '앨범', '갤러리', '연락처', '동기화',
   '마이크', '말하기', '말해', '녹음', '통화', '나가기', '숨기기', '보관', '공유', '복사', '다운로드', '업로드', '재생', '알림 허용', '권한',
   'logout', 'log out', 'sign out', 'delete', 'remove', 'block', 'submit', 'send', 'save', 'purchase', 'buy', 'camera', 'photo',
-  '새 대화방', '만들기', '^start\\b', '^stop\\b', '시작하기',
+  '정보 등록(?!해)', '등록하기', '추가하기', '새 대화방', '만들기', '작은 창', 'QR', '스캔', '스피커', 'picture', 'speaker', 'scan', '^start\\b', '^stop\\b', '시작하기',
   'microphone', 'record', 'share', 'copy', 'download', 'upload', 'follow',
 ].join('|'), 'i');
 

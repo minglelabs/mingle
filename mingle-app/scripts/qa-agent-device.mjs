@@ -784,7 +784,15 @@ async function cmdCrawl(args) {
     save();
     return result;
   };
+  const dismissAlert = async () => {
+    const text = await appium(state, 'GET', '/session/:session/alert/text').catch(() => null);
+    if (text != null) {
+      log(`dismissed native alert: ${String(text).slice(0, 80)}`);
+      await appium(state, 'POST', '/session/:session/alert/accept', {}).catch(() => {});
+    }
+  };
   const replay = async (route, taps, locale) => {
+    await dismissAlert();
     await openInLocale(state, route, locale, loadMs);
     for (const tap of taps) {
       const ok = await evalInWebView(state, buildTapExpression(tap.path)).catch(() => false);
@@ -852,14 +860,32 @@ async function cmdCrawl(args) {
   }
   log(`discovered ${report.states.length} states; replaying in ${locales.length - 1} more locales`);
 
+  // A state that leaves the WebView in a bad place (a non-app page, a crashed web process) must not
+  // end the run: relaunch the app and go on with the next state.
+  const relaunch = async () => {
+    const target = state.platform === 'android' ? { appId: BUNDLE_ID } : { bundleId: BUNDLE_ID };
+    await appium(state, 'POST', '/session/:session/execute/sync', { script: 'mobile: terminateApp', args: [target] }).catch(() => {});
+    await appium(state, 'POST', '/session/:session/execute/sync', { script: 'mobile: activateApp', args: [target] }).catch(() => {});
+    await delay(8000);
+  };
+
   // Replay in every other locale (all of them with --states, discovery already scanned the first).
   for (const locale of statesFile ? locales : locales.slice(1)) {
     for (const entry of report.states) {
-      if (!(await replay(entry.route, entry.taps, locale))) {
-        report.results.push({ stateId: entry.id, locale, error: 'replay_failed' });
+      let result;
+      try {
+        if (!(await replay(entry.route, entry.taps, locale))) {
+          report.results.push({ stateId: entry.id, locale, error: 'replay_failed' });
+          continue;
+        }
+        result = await scanState(entry.id, locale);
+      } catch (error) {
+        log(`${locale} ${entry.id}: ${String(error.message || error).slice(0, 120)} — relaunching the app`);
+        report.results.push({ stateId: entry.id, locale, error: String(error.message || error).slice(0, 200) });
+        save();
+        await relaunch();
         continue;
       }
-      const result = await scanState(entry.id, locale);
       if (result.controlFindings > 0) log(`${locale} ${entry.id} ${entry.labels.join(' > ') || entry.route}: ${result.findings.filter((finding) => finding.control).map((finding) => `${finding.kind}:${finding.text.slice(0, 30)}`).join(' | ')}`);
     }
   }
