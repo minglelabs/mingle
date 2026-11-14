@@ -3,7 +3,7 @@
 import ConversationImageComposer, { type ConversationImageComposerEarphoneMode } from './ConversationImageComposer'
 import MessageMediaDialog from './MessageMediaDialog'
 import EarphoneModeNoticeContent from './EarphoneModeNotice'
-import EarphoneCaptureSourceNoticeContent from './EarphoneCaptureSourceNotice'
+import EarphoneCaptureSourceNoticeContent, { type EarphoneListeningNoticeResult } from './EarphoneCaptureSourceNotice'
 import { EarphoneMicrophoneSettingControl } from './EarphoneMicrophoneSetting'
 import LanguageRadioOption from './LanguageRadioOption'
 
@@ -72,24 +72,23 @@ import {
   resolveNativeDeviceAudioSupported,
   setDeviceAudioOptIn,
   setSttCaptureSourcePick,
-  shouldOfferDeviceAudioOnEarphonesIn,
   shouldPlayTtsViaNativeShell,
   subscribeDeviceAudioOptIn,
   subscribeNativeDeviceAudioCapability,
   subscribeSttCaptureSourcePick,
-  type SttCaptureSource,
 } from '@/lib/native-device-audio'
 import {
   getEarphoneMicrophonePickServerSnapshot,
   getEarphoneMicrophonePickSnapshot,
   getNativeEarphoneMicrophoneCapabilityServerSnapshot,
   getNativeEarphoneMicrophoneCapabilitySnapshot,
-  readEarphoneMicrophoneHintShown,
+  readEarphoneListeningNoticeShown,
   resolveEarphoneMicrophoneEnabled,
-  shouldShowEarphoneMicrophoneHint,
+  resolveEarphoneListeningNotice,
   subscribeEarphoneMicrophonePick,
   subscribeNativeEarphoneMicrophoneCapability,
-  writeEarphoneMicrophoneHintShown,
+  writeEarphoneListeningNoticeShown,
+  writeEarphoneMicrophonePick,
 } from '@/lib/native-earphone-microphone'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
 import { TtsAgentTextScheduler } from './tts-agent-text'
@@ -363,7 +362,6 @@ const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABA
 const TTS_STT_GAIN = 1.0
 const NATIVE_TTS_EVENT = 'mingle:native-tts'
 const SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX = 24
-const EARPHONE_MICROPHONE_HINT_TOAST_MS = 6000
 const SCROLL_TO_BOTTOM_BUTTON_SIZE_PX = 48
 const SCROLL_UI_HIDE_DELAY_MS = 1000
 const USER_SCROLL_INTENT_WINDOW_MS = 2000
@@ -5956,73 +5954,61 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (isSttSessionRunning) void handleStopRecording()
   }, [handleStopRecording, isSttSessionRunning, sttCaptureSource])
 
-  // Earphones went in while a microphone-only session ran: other apps' sound
-  // left the microphone's reach, so ask whether to translate it directly.
+  // The first time STT listens with earphones in (started with them in, or
+  // they went in while listening), one modal, once ever: the phone's
+  // microphone still listens (Change to pick the earphones'), and, when the
+  // microphone alone is listening, whether to translate this device's sound
+  // now that other apps play in the earphones only.
   const [earphoneCaptureNoticeOpen, setEarphoneCaptureNoticeOpen] = useState(false)
-  // The one-time "the phone still listens" hint rides on that question when
-  // both fall on the same moment, so earphones going in show one thing only.
-  const [earphoneCaptureNoticeMicrophoneHint, setEarphoneCaptureNoticeMicrophoneHint] = useState(false)
-  const isEarphoneMicrophoneHintDue = useCallback(() => shouldShowEarphoneMicrophoneHint({
-    shellCapable: nativeEarphoneMicrophoneCapable,
-    earphonesConnected: nativeAudioRoute.earphonesConnected,
-    sessionRunning: isSttSessionRunning,
-    pick: earphoneMicrophonePick,
-    shown: readEarphoneMicrophoneHintShown(),
-  }), [earphoneMicrophonePick, isSttSessionRunning, nativeAudioRoute.earphonesConnected, nativeEarphoneMicrophoneCapable])
+  const [earphoneCaptureNoticeParts, setEarphoneCaptureNoticeParts] = useState({ showMicrophone: false, showCaptureSource: false })
   // Set when that question switched a running session: listen again once the
   // old session is gone.
   const captureSourceRestartPendingRef = useRef(false)
-  const previousEarphonesConnectedRef = useRef(nativeAudioRoute.earphonesConnected)
   useEffect(() => {
-    const wasConnected = previousEarphonesConnectedRef.current
-    previousEarphonesConnectedRef.current = nativeAudioRoute.earphonesConnected
     if (!nativeAudioRoute.earphonesConnected) {
       setEarphoneCaptureNoticeOpen(false)
       return
     }
-    if (shouldOfferDeviceAudioOnEarphonesIn({
-      earphonesJustConnected: !wasConnected,
-      supported: nativeDeviceAudioSupported && isVisible,
+    if (earphoneCaptureNoticeOpen || earphoneModeNoticeOpen || screenCaptureNoticeOpen) return
+    const notice = resolveEarphoneListeningNotice({
+      visible: isVisible,
+      earphonesConnected: nativeAudioRoute.earphonesConnected,
       sessionRunning: isSttSessionRunning,
+      shown: readEarphoneListeningNoticeShown(),
+      microphoneChoiceCapable: nativeEarphoneMicrophoneCapable,
+      microphonePick: earphoneMicrophonePick,
+      deviceAudioSupported: nativeDeviceAudioSupported,
       captureSource: sttCaptureSource,
-    })) {
-      const withHint = isEarphoneMicrophoneHintDue()
-      if (withHint) writeEarphoneMicrophoneHintShown()
-      setEarphoneCaptureNoticeMicrophoneHint(withHint)
-      setEarphoneCaptureNoticeOpen(true)
-    }
-  }, [isEarphoneMicrophoneHintDue, isSttSessionRunning, isVisible, nativeAudioRoute.earphonesConnected, nativeDeviceAudioSupported, sttCaptureSource])
+    })
+    if (!notice.open) return
+    writeEarphoneListeningNoticeShown()
+    setEarphoneCaptureNoticeParts({ showMicrophone: notice.showMicrophone, showCaptureSource: notice.showCaptureSource })
+    setEarphoneCaptureNoticeOpen(true)
+  }, [
+    earphoneCaptureNoticeOpen,
+    earphoneMicrophonePick,
+    earphoneModeNoticeOpen,
+    isSttSessionRunning,
+    isVisible,
+    nativeAudioRoute.earphonesConnected,
+    nativeDeviceAudioSupported,
+    nativeEarphoneMicrophoneCapable,
+    screenCaptureNoticeOpen,
+    sttCaptureSource,
+  ])
 
-  // Otherwise the hint is a toast (with a Change button): listening started with earphones in, or
-  // earphones went in while listening without the question above. Declared
-  // after that effect so it sees the hint already spent in the same commit.
-  const [earphoneMicrophoneHintToastVisible, setEarphoneMicrophoneHintToastVisible] = useState(false)
-  const [earphoneMicrophoneHintDialogOpen, setEarphoneMicrophoneHintDialogOpen] = useState(false)
-  useEffect(() => {
-    if (!isVisible || earphoneCaptureNoticeOpen) return
-    if (!isEarphoneMicrophoneHintDue()) return
-    writeEarphoneMicrophoneHintShown()
-    setEarphoneMicrophoneHintToastVisible(true)
-  }, [earphoneCaptureNoticeOpen, isEarphoneMicrophoneHintDue, isVisible])
-  useEffect(() => {
-    if (!earphoneMicrophoneHintToastVisible) return
-    const timer = window.setTimeout(() => setEarphoneMicrophoneHintToastVisible(false), EARPHONE_MICROPHONE_HINT_TOAST_MS)
-    return () => window.clearTimeout(timer)
-  }, [earphoneMicrophoneHintToastVisible])
-  const openEarphoneMicrophoneHintDialog = useCallback(() => {
-    setEarphoneMicrophoneHintToastVisible(false)
-    setEarphoneMicrophoneHintDialogOpen(true)
-  }, [])
-
-  const confirmEarphoneCaptureNotice = useCallback((source: SttCaptureSource) => {
+  const confirmEarphoneCaptureNotice = useCallback(({ source, microphonePick }: EarphoneListeningNoticeResult) => {
     setEarphoneCaptureNoticeOpen(false)
+    if (earphoneCaptureNoticeParts.showMicrophone && microphonePick !== (earphoneMicrophonePick ?? 'phone')) {
+      writeEarphoneMicrophonePick(microphonePick)
+    }
     if (source !== 'device_audio') return
     // This question is the warning: Start goes straight to the system prompt.
     screenCaptureNoticeAcknowledgedRef.current = true
     captureSourceRestartPendingRef.current = isSttSessionRunning
     setSttCaptureSourcePick('device_audio')
     setDeviceAudioOptIn(true)
-  }, [isSttSessionRunning])
+  }, [earphoneCaptureNoticeParts.showMicrophone, earphoneMicrophonePick, isSttSessionRunning])
 
   const dismissEarphoneCaptureNotice = useCallback(() => {
     setEarphoneCaptureNoticeOpen(false)
@@ -9474,42 +9460,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               )}
             </AnimatePresence>
 
-            <EarphoneMicrophoneSettingControl
-              copy={earphoneModeBaseCopy}
-              open={earphoneMicrophoneHintDialogOpen}
-              onOpenChange={setEarphoneMicrophoneHintDialogOpen}
-              renderRow={() => (
-                <AnimatePresence>
-                  {earphoneMicrophoneHintToastVisible && (
-                    <motion.div
-                      key="earphone-microphone-hint"
-                      data-qa="live-demo-earphone-microphone-hint"
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 4 }}
-                      transition={{ duration: 0.18, ease: 'easeOut' }}
-                      className="pointer-events-none absolute inset-x-4 z-30 flex justify-center"
-                      style={{ bottom: copyToastBottomOffsetPx }}
-                    >
-                      <div className="pointer-events-auto flex items-center gap-3 rounded-2xl bg-black py-2.5 pl-4 pr-3 text-white shadow-[0_4px_16px_rgba(15,23,42,0.24),0_1px_4px_rgba(0,0,0,0.2)]">
-                        <span className="min-w-0 text-[14px] font-medium leading-snug">
-                          {earphoneModeBaseCopy.microphoneHint}
-                        </span>
-                        <button
-                          type="button"
-                          data-qa="live-demo-earphone-microphone-hint-change"
-                          onClick={openEarphoneMicrophoneHintDialog}
-                          className="shrink-0 rounded-full px-2 py-1 text-[14px] font-semibold text-amber-400 transition-colors hover:text-amber-300"
-                        >
-                          {earphoneModeBaseCopy.microphoneHintChangeLabel}
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              )}
-            />
-
             <AnimatePresence>
               {floatingToastMessage && (
                 <motion.div
@@ -10142,7 +10092,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               <EarphoneCaptureSourceNoticeContent
                 copy={earphoneModeBaseCopy}
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
-                microphoneHint={earphoneCaptureNoticeMicrophoneHint ? earphoneModeBaseCopy.microphoneHint : undefined}
+                showMicrophone={earphoneCaptureNoticeParts.showMicrophone}
+                showCaptureSource={earphoneCaptureNoticeParts.showCaptureSource}
+                initialMicrophonePick={earphoneMicrophonePick ?? 'phone'}
                 onConfirm={confirmEarphoneCaptureNotice}
               />
             </MessageMediaDialog>

@@ -24,18 +24,24 @@ describe('capture-source question when earphones go in', () => {
     expect(html).toContain('data-earphone-capture-source-confirm')
   })
 
-  it('carries the one-time microphone hint instead of a second popup', () => {
+  it('puts the phone-microphone line, with Change, in the same notice', () => {
     const copy = resolveLivePhoneDemoEarphoneModeCopy('ko')
-    const render = (microphoneHint?: string) => renderToStaticMarkup(createElement(EarphoneCaptureSourceNoticeContent, {
-      copy,
-      microphoneHint,
-      onConfirm: () => {},
-    }))
-    expect(render(copy.microphoneHint)).toContain(copy.microphoneHint)
-    expect(render()).not.toContain('data-earphone-microphone-hint')
-    expect(liveDemoSource).toContain('if (withHint) writeEarphoneMicrophoneHintShown()')
-    expect(liveDemoSource).toContain('setEarphoneMicrophoneHintToastVisible(true)')
-    expect(liveDemoSource).toContain('{earphoneModeBaseCopy.microphoneHintChangeLabel}')
+    const render = (props: { showMicrophone?: boolean; showCaptureSource?: boolean }) => renderToStaticMarkup(
+      createElement(EarphoneCaptureSourceNoticeContent, { copy, onConfirm: () => {}, ...props }),
+    )
+    const both = render({ showMicrophone: true, showCaptureSource: true })
+    expect(both).toContain(copy.microphoneHint)
+    expect(both).toContain(copy.microphoneHintChangeLabel)
+    expect(both).toContain('data-earphone-microphone-change')
+    expect(both).toContain(copy.earphoneCaptureNoticeBody)
+    const microphoneOnly = render({ showMicrophone: true, showCaptureSource: false })
+    expect(microphoneOnly).toContain(copy.microphoneHint)
+    expect(microphoneOnly).not.toContain('data-capture-source=')
+    expect(render({ showCaptureSource: true })).not.toContain('data-earphone-microphone-hint')
+    // One trigger for both: listening with earphones in, once ever.
+    expect(liveDemoSource).toContain('const notice = resolveEarphoneListeningNotice({')
+    expect(liveDemoSource).toContain('writeEarphoneListeningNoticeShown()')
+    expect(liveDemoSource).not.toContain('HintToast')
   })
 
   it('switches a running session to device audio and listens again', () => {

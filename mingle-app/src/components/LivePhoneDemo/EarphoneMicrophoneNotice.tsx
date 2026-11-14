@@ -8,7 +8,7 @@ import {
   type EarphoneMicrophonePick,
 } from '@/lib/native-earphone-microphone'
 
-function MicrophoneRadioOption({
+export function MicrophoneRadioOption({
   pick,
   icon: Icon,
   label,
