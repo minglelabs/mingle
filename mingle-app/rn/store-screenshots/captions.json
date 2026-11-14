@@ -3,21 +3,21 @@
     {
       "id": "01-friends",
       "caption": {
-        "ko": "언어가 달라도\n친구가 되는 곳",
-        "en": "Make friends\nin any language",
-        "ja": "言葉が違っても\n友だちになれる場所",
-        "zh-cn": "语言不同\n也能成为朋友",
-        "zh-tw": "語言不同\n也能成為朋友",
-        "ar": "كوّن صداقات\nبأي لغة",
-        "de": "Freunde finden\nin jeder Sprache",
-        "es": "Haz amigos\nen cualquier idioma",
-        "fr": "Faites-vous des amis\ndans toutes les langues",
-        "hi": "किसी भी भाषा में\nदोस्त बनाइए",
-        "it": "Fai amicizia\nin ogni lingua",
-        "pt": "Faça amigos\nem qualquer idioma",
-        "ru": "Находите друзей\nна любом языке",
-        "th": "ภาษาต่างกัน\nก็เป็นเพื่อนกันได้",
-        "vi": "Kết bạn\nbằng mọi ngôn ngữ"
+        "ko": "한국을 좋아하는\n외국인 친구 만나기",
+        "en": "Make Korean friends,\nexplore Korea together",
+        "ja": "韓国人の友だちと\n一緒に韓国を楽しもう",
+        "zh-cn": "结交韩国朋友\n一起探索韩国",
+        "zh-tw": "結交韓國朋友\n一起探索韓國",
+        "ar": "كوّن صداقات مع كوريين\nواكتشفوا كوريا معًا",
+        "de": "Finde koreanische Freunde,\nentdeckt Korea zusammen",
+        "es": "Haz amigos coreanos\ny descubre Corea con ellos",
+        "fr": "Faites-vous des amis coréens,\nexplorez la Corée ensemble",
+        "hi": "कोरियाई दोस्त बनाइए,\nसाथ में कोरिया घूमिए",
+        "it": "Fai amicizia con coreani,\nscopri la Corea insieme",
+        "pt": "Faça amigos coreanos\ne explore a Coreia juntos",
+        "ru": "Заводите друзей из Кореи\nи открывайте её вместе",
+        "th": "มีเพื่อนคนเกาหลี\nเที่ยวเกาหลีไปด้วยกัน",
+        "vi": "Kết bạn với người Hàn,\ncùng khám phá Hàn Quốc"
       },
       "fullBleed": "hero/group.jpg"
     },
@@ -25,157 +25,253 @@
       "id": "02-dm",
       "capture": "captures/{lang}/dm.png",
       "caption": {
-        "ko": "외국어 몰라도\n외국인 친구랑 톡",
-        "en": "Chat with friends abroad\nin your own language",
-        "ja": "外国語ができなくても\n海外の友だちとトーク",
-        "zh-cn": "不会外语\n也能和外国朋友聊天",
-        "zh-tw": "不會外語\n也能和外國朋友聊天",
-        "ar": "دردش مع أصدقائك حول العالم\nبلغتك أنت",
-        "de": "Chatte mit Freunden weltweit\nin deiner Sprache",
-        "es": "Chatea con amigos del mundo\nen tu idioma",
-        "fr": "Discutez avec vos amis du monde\ndans votre langue",
-        "hi": "अपनी भाषा में\nविदेशी दोस्तों से चैट",
-        "it": "Chatta con amici nel mondo\nnella tua lingua",
-        "pt": "Converse com amigos do mundo\nno seu idioma",
-        "ru": "Общайтесь с друзьями из-за рубежа\nна своём языке",
-        "th": "ไม่รู้ภาษาก็แชต\nกับเพื่อนต่างชาติได้",
-        "vi": "Chat với bạn nước ngoài\nbằng tiếng của bạn"
+        "ko": "각자 모국어로\n톡하세요",
+        "en": "Chat, each in\nyour own language",
+        "ja": "それぞれの母語で\nトークしよう",
+        "zh-cn": "用各自的母语\n轻松聊天",
+        "zh-tw": "用各自的母語\n輕鬆聊天",
+        "ar": "دردشوا، كلٌّ\nبلغته",
+        "de": "Chattet, jeder\nin seiner Sprache",
+        "es": "Chatead, cada uno\nen su idioma",
+        "fr": "Discutez, chacun\ndans sa langue",
+        "hi": "सब अपनी-अपनी\nभाषा में चैट करें",
+        "it": "Chattate, ognuno\nnella sua lingua",
+        "pt": "Converse, cada um\nno seu idioma",
+        "ru": "Переписывайтесь,\nкаждый на своём языке",
+        "th": "แชตกัน ต่างคน\nต่างใช้ภาษาตัวเอง",
+        "vi": "Nhắn tin, mỗi người\nmột ngôn ngữ"
       },
       "photo": "scenes/backdrop-02.jpg"
     },
     {
       "id": "03-voice",
-      "capture": "captures/{lang}/voice.png",
+      "capture": "captures/{lang}/group.png",
       "caption": {
-        "ko": "보이스톡 동시통역\n각자 자기 말로 통화해요",
-        "ja": "ボイストークを同時通訳\nそれぞれの言葉で通話",
-        "en": "Voice calls, interpreted live\nTalk in your own language",
-        "zh-cn": "语音通话同声传译\n各说各的语言",
-        "zh-tw": "語音通話同步口譯\n各說各的語言",
-        "ar": "مكالمات صوتية بترجمة فورية\nتحدّث بلغتك",
-        "de": "Sprachanrufe live gedolmetscht\nJeder spricht seine Sprache",
-        "es": "Llamadas interpretadas en vivo\nHabla en tu idioma",
-        "fr": "Appels interprétés en direct\nParlez votre langue",
-        "hi": "वॉइस कॉल में लाइव अनुवाद\nअपनी भाषा में बात करें",
-        "it": "Chiamate tradotte dal vivo\nParla nella tua lingua",
-        "pt": "Chamadas traduzidas ao vivo\nFale no seu idioma",
-        "ru": "Голосовые звонки с переводом\nКаждый на своём языке",
-        "th": "โทรเสียงพร้อมล่ามสด\nต่างคนต่างพูดภาษาตัวเอง",
-        "vi": "Gọi thoại phiên dịch trực tiếp\nMỗi người nói tiếng mình"
+        "ko": "여럿이 함께 떠드는\n실시간 통역 보이스톡",
+        "en": "Group voice talks,\ninterpreted live",
+        "ja": "みんなでボイストーク\nリアルタイム通訳つき",
+        "zh-cn": "多人语音聊天\n实时口译",
+        "zh-tw": "多人語音聊天\n即時口譯",
+        "ar": "محادثات صوتية جماعية\nبترجمة فورية",
+        "de": "Gruppen-Sprachchats,\nlive gedolmetscht",
+        "es": "Charlas de voz en grupo,\ninterpretadas en vivo",
+        "fr": "Appels vocaux en groupe,\ninterprétés en direct",
+        "hi": "ग्रुप वॉइस बातचीत,\nलाइव अनुवाद के साथ",
+        "it": "Chiamate di gruppo,\ntradotte dal vivo",
+        "pt": "Conversas em grupo por voz,\ninterpretadas ao vivo",
+        "ru": "Групповые голосовые чаты\nс живым переводом",
+        "th": "คุยเสียงเป็นกลุ่ม\nพร้อมล่ามเรียลไทม์",
+        "vi": "Trò chuyện nhóm bằng giọng nói,\nphiên dịch trực tiếp"
       },
       "photo": "scenes/backdrop-03.jpg"
     },
     {
-      "id": "04-booking",
+      "id": "04-safety",
+      "caption": {
+        "ko": "변태·비매너·사기 유저는\n영구 퇴출해요",
+        "en": "Creeps, rude users, scammers:\nbanned for good",
+        "ja": "変な人・マナー違反・詐欺は\n永久追放",
+        "zh-cn": "骚扰、无礼、诈骗用户\n永久封禁",
+        "zh-tw": "騷擾、無禮、詐騙用戶\n永久封鎖",
+        "es": "Acosadores, groseros, estafadores:\nfuera para siempre",
+        "fr": "Harceleurs, malpolis, arnaqueurs :\nbannis pour de bon",
+        "de": "Belästiger, Rüpel, Betrüger:\nfür immer gesperrt",
+        "it": "Molestatori, maleducati, truffatori:\nbannati per sempre",
+        "pt": "Assediadores, grosseiros, golpistas:\nbanidos para sempre",
+        "ru": "Извращенцы, хамы, мошенники —\nбан навсегда",
+        "ar": "المتحرشون والمسيئون والمحتالون\nحظر دائم",
+        "hi": "बदतमीज़, परेशान करने वाले, ठग\nहमेशा के लिए बाहर",
+        "th": "พวกโรคจิต ไร้มารยาท สแกมเมอร์\nแบนถาวร",
+        "vi": "Kẻ biến thái, thô lỗ, lừa đảo\nbị cấm vĩnh viễn"
+      },
+      "statement": {
+        "points": {
+          "ko": [
+            "변태",
+            "비매너",
+            "사기"
+          ],
+          "en": [
+            "Creeps",
+            "Rude",
+            "Scams"
+          ],
+          "ja": [
+            "変な人",
+            "マナー違反",
+            "詐欺"
+          ],
+          "zh-cn": [
+            "骚扰",
+            "无礼",
+            "诈骗"
+          ],
+          "zh-tw": [
+            "騷擾",
+            "無禮",
+            "詐騙"
+          ],
+          "es": [
+            "Acoso",
+            "Groserías",
+            "Estafas"
+          ],
+          "fr": [
+            "Harcèlement",
+            "Impolitesse",
+            "Arnaques"
+          ],
+          "de": [
+            "Belästigung",
+            "Pöbeln",
+            "Betrug"
+          ],
+          "it": [
+            "Molestie",
+            "Maleducazione",
+            "Truffe"
+          ],
+          "pt": [
+            "Assédio",
+            "Grosseria",
+            "Golpes"
+          ],
+          "ru": [
+            "Домогательства",
+            "Хамство",
+            "Мошенничество"
+          ],
+          "ar": [
+            "تحرش",
+            "إساءة",
+            "احتيال"
+          ],
+          "hi": [
+            "छेड़छाड़",
+            "बदतमीज़ी",
+            "ठगी"
+          ],
+          "th": [
+            "ลวนลาม",
+            "ไร้มารยาท",
+            "หลอกลวง"
+          ],
+          "vi": [
+            "Quấy rối",
+            "Thô lỗ",
+            "Lừa đảo"
+          ]
+        },
+        "note": {
+          "ko": "신고는 한 번에, 운영진이 하나하나 확인해요",
+          "en": "One tap to report. Our team reviews every report.",
+          "ja": "通報はワンタップ。運営チームがひとつずつ確認します",
+          "zh-cn": "一键举报，运营团队逐一审核",
+          "zh-tw": "一鍵檢舉，營運團隊逐一審核",
+          "es": "Denuncia con un toque. Nuestro equipo revisa cada caso.",
+          "fr": "Signalez en un geste, notre équipe vérifie chaque cas.",
+          "de": "Mit einem Tipp melden – unser Team prüft jede Meldung.",
+          "it": "Segnala con un tocco, il nostro team controlla ogni caso.",
+          "pt": "Denuncie com um toque. Nossa equipe analisa cada caso.",
+          "ru": "Жалоба в одно касание — команда проверит каждую.",
+          "ar": "أبلغ بلمسة واحدة، وفريقنا يراجع كل بلاغ.",
+          "hi": "एक टैप में रिपोर्ट करें, हमारी टीम हर रिपोर्ट जाँचती है।",
+          "th": "แจ้งรายงานได้ในแตะเดียว ทีมงานตรวจสอบทุกเรื่อง",
+          "vi": "Báo cáo chỉ một chạm, đội ngũ kiểm tra từng trường hợp."
+        }
+      }
+    },
+    {
+      "id": "05-trip",
+      "capture": "captures/{lang}/trip.png",
+      "caption": {
+        "ko": "외국인 친구와 함께\n한국 여행 계획을",
+        "en": "Plan your Korea trip\nwith a Korean friend",
+        "ja": "韓国人の友だちと\n韓国旅行を計画",
+        "zh-cn": "和韩国朋友\n一起规划韩国之旅",
+        "zh-tw": "和韓國朋友\n一起規劃韓國之旅",
+        "ar": "خطّط لرحلتك إلى كوريا\nمع صديق كوري",
+        "de": "Plane deine Korea-Reise\nmit einem koreanischen Freund",
+        "es": "Planea tu viaje a Corea\ncon un amigo coreano",
+        "fr": "Préparez votre voyage en Corée\navec un ami coréen",
+        "hi": "कोरियाई दोस्त के साथ\nकोरिया ट्रिप प्लान करें",
+        "it": "Organizza il viaggio in Corea\ncon un amico coreano",
+        "pt": "Planeje sua viagem à Coreia\ncom um amigo coreano",
+        "ru": "Планируйте поездку в Корею\nс корейским другом",
+        "th": "วางแผนเที่ยวเกาหลี\nกับเพื่อนคนเกาหลี",
+        "vi": "Lên kế hoạch du lịch Hàn Quốc\ncùng một người bạn Hàn"
+      },
+      "tripScene": true
+    },
+    {
+      "id": "06-booking",
       "capture": "captures/{lang}/booking.png",
       "caption": {
-        "ko": "해외 스시집·음식점\n예약 전화도 통역",
-        "en": "Booking calls abroad,\ninterpreted too",
-        "ja": "韓国の飲食店やお店の\n予約電話も通訳",
-        "zh-cn": "海外预约电话\n也能翻译",
-        "zh-tw": "海外預約電話\n也能翻譯",
-        "ar": "مكالمات الحجز في الخارج\nمترجمة أيضًا",
-        "de": "Auch Buchungsanrufe\nim Ausland gedolmetscht",
-        "es": "Llamadas para reservar\nen el extranjero, interpretadas",
-        "fr": "Vos appels de réservation\nà l’étranger, interprétés",
-        "hi": "विदेश में बुकिंग कॉल\nभी अनुवादित",
-        "it": "Anche le chiamate\nper prenotare all’estero",
-        "pt": "Ligações para reservar\nno exterior, interpretadas",
-        "ru": "Звонки для записи\nза границей — с переводом",
-        "th": "โทรจองร้านในต่างประเทศ\nก็แปลให้",
-        "vi": "Gọi đặt chỗ ở nước ngoài\ncũng được phiên dịch"
+        "ko": "예약 전화도\n실시간 통역으로",
+        "en": "Booking calls,\ninterpreted live",
+        "ja": "予約の電話も\nリアルタイム通訳で",
+        "zh-cn": "预约电话\n也能实时口译",
+        "zh-tw": "預約電話\n也能即時口譯",
+        "ar": "مكالمات الحجز\nبترجمة فورية",
+        "de": "Buchungsanrufe,\nlive gedolmetscht",
+        "es": "Llamadas para reservar,\ninterpretadas en vivo",
+        "fr": "Appels de réservation,\ninterprétés en direct",
+        "hi": "बुकिंग कॉल भी,\nलाइव अनुवाद के साथ",
+        "it": "Chiamate per prenotare,\ntradotte dal vivo",
+        "pt": "Ligações para reservar,\ninterpretadas ao vivo",
+        "ru": "Звонки для брони\nс живым переводом",
+        "th": "โทรจองก็มี\nล่ามแบบเรียลไทม์",
+        "vi": "Gọi đặt chỗ,\nphiên dịch trực tiếp"
       },
       "scene": {
         "lines": "booking",
         "count": 4,
         "background": [
-          "booking/sushi.jpg",
-          "booking/restaurant.jpg"
+          "booking/salon.jpg",
+          "booking/salon-desk.jpg"
         ]
       }
     },
     {
-      "id": "05-feed",
+      "id": "07-feed",
       "capture": "captures/{lang}/translation.png",
       "caption": {
-        "ko": "친구의 일상도\n내 언어로",
-        "en": "Your friends' daily life,\nin your language",
-        "ja": "友だちの日常も\n自分の言語で",
-        "zh-cn": "朋友的日常\n用你的语言看",
-        "zh-tw": "朋友的日常\n用你的語言看",
-        "ar": "يوميات أصدقائك\nبلغتك",
-        "de": "Der Alltag deiner Freunde\nin deiner Sprache",
-        "es": "El día a día de tus amigos\nen tu idioma",
-        "fr": "Le quotidien de vos amis\ndans votre langue",
-        "hi": "दोस्तों की रोज़मर्रा\nअपनी भाषा में",
-        "it": "La vita dei tuoi amici\nnella tua lingua",
-        "pt": "O dia a dia dos amigos\nno seu idioma",
-        "ru": "Жизнь друзей\nна вашем языке",
-        "th": "ชีวิตประจำวันของเพื่อน\nในภาษาของคุณ",
-        "vi": "Cuộc sống của bạn bè\nbằng tiếng của bạn"
+        "ko": "친구들의 일상을\n내 언어로",
+        "en": "Friends' posts\nin your language",
+        "ja": "友だちの投稿を\n自分の言語で",
+        "zh-cn": "朋友的动态\n用你的语言看",
+        "zh-tw": "朋友的動態\n用你的語言看",
+        "ar": "منشورات أصدقائك\nبلغتك",
+        "de": "Posts deiner Freunde\nin deiner Sprache",
+        "es": "Posts de tus amigos\nen tu idioma",
+        "fr": "Les posts de vos amis\ndans votre langue",
+        "hi": "दोस्तों की पोस्ट\nअपनी भाषा में",
+        "it": "I post dei tuoi amici\nnella tua lingua",
+        "pt": "Posts dos amigos\nno seu idioma",
+        "ru": "Посты друзей\nна вашем языке",
+        "th": "โพสต์ของเพื่อน\nในภาษาของคุณ",
+        "vi": "Bài đăng của bạn bè\nbằng tiếng của bạn"
       }
     },
     {
-      "id": "06-comments",
-      "capture": "captures/{lang}/comments.png",
-      "caption": {
-        "ko": "모든 글과 댓글이\n자동으로 번역돼요",
-        "en": "Every post and comment,\ntranslated automatically",
-        "ja": "すべての投稿とコメントが\n自動で翻訳",
-        "zh-cn": "所有帖子和评论\n自动翻译",
-        "zh-tw": "所有貼文和留言\n自動翻譯",
-        "ar": "كل المنشورات والتعليقات\nتُترجم تلقائيًا",
-        "de": "Alle Beiträge und Kommentare\nautomatisch übersetzt",
-        "es": "Todas las publicaciones y comentarios\nse traducen solos",
-        "fr": "Publications et commentaires\ntraduits automatiquement",
-        "hi": "हर पोस्ट और टिप्पणी\nअपने-आप अनुवादित",
-        "it": "Tutti i post e i commenti\ntradotti in automatico",
-        "pt": "Todos os posts e comentários\ntraduzidos automaticamente",
-        "ru": "Все посты и комментарии\nпереводятся автоматически",
-        "th": "ทุกโพสต์และคอมเมนต์\nแปลให้อัตโนมัติ",
-        "vi": "Mọi bài đăng và bình luận\nđược dịch tự động"
-      }
-    },
-    {
-      "id": "07-hash-rush",
+      "id": "08-hash-rush",
       "capture": "captures/{lang}/hash-rush.png",
       "caption": {
-        "ko": "외국인 친구들과 게임 한판\nHash Rush",
-        "en": "Play a round with friends\nHash Rush",
-        "ja": "海外の友だちとゲームで対戦\nHash Rush",
-        "zh-cn": "和外国朋友来一局\nHash Rush",
-        "zh-tw": "和外國朋友來一局\nHash Rush",
-        "ar": "العب جولة مع أصدقائك\nHash Rush",
-        "de": "Eine Runde mit Freunden\nHash Rush",
-        "es": "Una partida con amigos\nHash Rush",
-        "fr": "Une partie entre amis\nHash Rush",
-        "hi": "दोस्तों के साथ एक गेम\nHash Rush",
-        "it": "Una partita con gli amici\nHash Rush",
-        "pt": "Uma partida com os amigos\nHash Rush",
-        "ru": "Сыграйте с друзьями\nHash Rush",
-        "th": "เล่นเกมกับเพื่อนสักตา\nHash Rush",
-        "vi": "Chơi một ván với bạn bè\nHash Rush"
-      }
-    },
-    {
-      "id": "08-hash-rush-maps",
-      "capture": "captures/{lang}/hash-rush-maps.png",
-      "caption": {
-        "en": "Grab the seed,\nbe first home",
-        "ko": "해바라기씨를 물고\n집에 먼저 오면 승리",
-        "ja": "ひまわりの種をくわえて\n先に帰れば勝ち",
-        "zh-cn": "叼起葵花籽\n先回家就赢",
-        "zh-tw": "叼起葵花籽\n先回家就贏",
-        "ar": "التقط البذرة\nوكن أول من يعود",
-        "de": "Schnapp dir den Kern,\nsei zuerst zu Hause",
-        "es": "Atrapa la semilla\ny llega primero a casa",
-        "fr": "Attrapez la graine,\nrentrez le premier",
-        "hi": "बीज उठाओ\nऔर सबसे पहले घर पहुँचो",
-        "it": "Prendi il seme,\ntorna a casa per primo",
-        "pt": "Pegue a semente\ne chegue primeiro em casa",
-        "ru": "Хватай семечко\nи беги домой первым",
-        "th": "คาบเมล็ดทานตะวัน\nกลับบ้านก่อนชนะ",
-        "vi": "Ngậm hạt hướng dương,\nvề nhà trước là thắng"
+        "ko": "친구와 함께\n미니게임",
+        "en": "Play games\nwith friends",
+        "ja": "友だちと\nゲームで遊ぼう",
+        "zh-cn": "和朋友\n一起玩游戏",
+        "zh-tw": "和朋友\n一起玩遊戲",
+        "ar": "العب ألعابًا\nمع أصدقائك",
+        "de": "Spiele\nmit Freunden",
+        "es": "Juega\ncon tus amigos",
+        "fr": "Jouez\navec vos amis",
+        "hi": "दोस्तों के साथ\nगेम खेलिए",
+        "it": "Gioca\ncon gli amici",
+        "pt": "Jogue\ncom os amigos",
+        "ru": "Играйте\nс друзьями",
+        "th": "เล่นเกม\nกับเพื่อน ๆ",
+        "vi": "Chơi game\ncùng bạn bè"
       }
     }
   ],

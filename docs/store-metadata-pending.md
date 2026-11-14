@@ -14,6 +14,8 @@ Google Play 스토어 정보는 앱 버전과 상관없이 언제든 올릴 수 
 
 ## 대기 중
 
+- 한국인-외국인 교류·언어교환 리포지셔닝(`docs/positioning-korean-friends.md`): 15개 언어 제목·부제·홍보 문구·설명·키워드와 스크린샷 8장을 새로 만들었다. 다음 iOS 버전 제출 때 `ios-appstore-sync-metadata`와 `scripts/ios-appstore-upload.sh`로 올리고, Play는 `google-play-console-sync.mjs`로 올린다. 옛 검색어(해시챗·밍글·번역기·동시통역, 영어 `translator,easiest,global,hangout,mingle`)는 키워드와 설명 끝 문단에 남겨 두었다. 키워드는 지금 계약 테스트처럼 글자 수 100으로 맞췄다(한·중·일 등은 100바이트를 넘지만 지금 스토어에 나간 값과 같은 방식).
+
 - 음성 통화가 배포되면: 3번 슬라이드(`03-voice`)를 통화 화면으로 바꾸고, 한국어 부제에 `·통화`(일본어 `・通話`)를 붙인다. 그 전에는 넣지 않는다.
 - 연락처 연동·초대 링크가 들어간 iOS 빌드(2.4.0)가 App Store에 나간 뒤: Railway prod에 `IOS_INVITE_UNIVERSAL_LINKS=1`을 넣으세요. 그 전에는 `/i/` 초대 링크가 앱이 아니라 웹 초대 페이지(코드 표시)로 열립니다. 옛 앱은 이 링크를 받으면 초대를 버리기 때문입니다. Android는 앱 매니페스트에 들어 있어 따로 할 일이 없습니다.
 

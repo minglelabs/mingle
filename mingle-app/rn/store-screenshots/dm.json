@@ -8,184 +8,184 @@
     "fr": "Léa"
   },
   "bookingTitle": {
-    "ko": "스시집 예약",
-    "en": "Sushi booking",
-    "ja": "お寿司屋さんの予約",
-    "zh-cn": "预约寿司店",
-    "zh-tw": "預約壽司店",
-    "ar": "حجز مطعم سوشي",
-    "de": "Sushi-Reservierung",
-    "es": "Reserva de sushi",
-    "fr": "Réservation sushi",
-    "hi": "सुशी बुकिंग",
-    "it": "Prenota sushi",
-    "pt": "Reserva no sushi",
-    "ru": "Бронь в суши-баре",
-    "th": "จองร้านซูชิ",
-    "vi": "Đặt bàn sushi"
+    "ko": "미용실 예약",
+    "en": "Hair salon booking",
+    "ja": "美容院の予約",
+    "zh-cn": "预约美发店",
+    "zh-tw": "預約美髮店",
+    "ar": "حجز صالون شعر",
+    "de": "Friseurtermin",
+    "es": "Reserva en la peluquería",
+    "fr": "Réservation coiffeur",
+    "hi": "हेयर सैलून बुकिंग",
+    "it": "Prenota parrucchiere",
+    "pt": "Reserva no salão",
+    "ru": "Запись в салон",
+    "th": "จองร้านทำผม",
+    "vi": "Đặt lịch tiệm tóc"
   },
   "dm": [
     {
       "by": "friend",
       "text": {
-        "ko": "오늘 뭐 했어?",
-        "en": "What did you do today?",
-        "ja": "今日は何してたの？",
-        "zh-cn": "今天做了什么？",
-        "zh-tw": "今天做了什麼？",
-        "ar": "ماذا فعلت اليوم؟",
-        "de": "Was hast du heute gemacht?",
-        "es": "¿Qué hiciste hoy?",
-        "fr": "Tu as fait quoi aujourd’hui ?",
-        "hi": "आज क्या किया?",
-        "it": "Cos’hai fatto oggi?",
-        "pt": "O que você fez hoje?",
-        "ru": "Как прошёл твой день?",
-        "th": "วันนี้ทำอะไรมาบ้าง",
-        "vi": "Hôm nay bạn làm gì thế?"
+        "ko": "다음 달에 서울 온다며? 진짜 기대돼!",
+        "en": "You're coming to Seoul next month? So excited!",
+        "ja": "来月ソウルに来るんだって？すごく楽しみ！",
+        "zh-cn": "听说你下个月来首尔？好期待！",
+        "zh-tw": "聽說你下個月來首爾？好期待！",
+        "ar": "ستأتي إلى سيول الشهر القادم؟ أنا متحمسة جدًا!",
+        "de": "Du kommst nächsten Monat nach Seoul? Ich freu mich so!",
+        "es": "¿Vienes a Seúl el mes que viene? ¡Qué ilusión!",
+        "fr": "Tu viens à Séoul le mois prochain ? J'ai trop hâte !",
+        "hi": "अगले महीने सियोल आ रहे हो? बहुत एक्साइटेड हूँ!",
+        "it": "Il mese prossimo vieni a Seul? Che emozione!",
+        "pt": "Você vem pra Seul mês que vem? Que animação!",
+        "ru": "Приезжаешь в Сеул в следующем месяце? Так жду!",
+        "th": "เดือนหน้าจะมาโซลเหรอ? ตื่นเต้นมาก!",
+        "vi": "Tháng sau bạn sang Seoul hả? Háo hức quá!"
       }
     },
     {
       "by": "me",
       "text": {
-        "ko": "퇴근하고 라멘 먹었어. 진짜 맛있었어!",
-        "en": "Had ramen after work. It was so good!",
-        "ja": "仕事帰りにラーメン食べたよ。すごくおいしかった！",
-        "zh-cn": "下班后吃了拉面，超好吃！",
-        "zh-tw": "下班後吃了拉麵，超好吃！",
-        "ar": "أكلت رامن بعد العمل. كان لذيذًا جدًا!",
-        "de": "Nach der Arbeit gab’s Ramen. War richtig lecker!",
-        "es": "Comí ramen después del trabajo. ¡Estaba buenísimo!",
-        "fr": "J’ai mangé des ramen après le boulot. Trop bon !",
-        "hi": "काम के बाद रामेन खाया। बहुत स्वादिष्ट था!",
-        "it": "Ho mangiato ramen dopo il lavoro. Buonissimo!",
-        "pt": "Comi lámen depois do trabalho. Estava uma delícia!",
-        "ru": "После работы был рамен. Очень вкусно!",
-        "th": "เลิกงานแล้วไปกินราเมง อร่อยมาก!",
-        "vi": "Tan làm mình đi ăn ramen. Ngon lắm!"
+        "ko": "응! 한국어로 말하는 건 아직 떨려 😅",
+        "en": "Yes! I'm still nervous about speaking Korean 😅",
+        "ja": "うん！韓国語で話すのはまだ緊張する 😅",
+        "zh-cn": "对！用韩语说话还是有点紧张 😅",
+        "zh-tw": "對！用韓語說話還是有點緊張 😅",
+        "ar": "نعم! ما زلت أتوتر من التحدث بالكورية 😅",
+        "de": "Ja! Koreanisch sprechen macht mich noch nervös 😅",
+        "es": "¡Sí! Todavía me pone nervioso hablar coreano 😅",
+        "fr": "Oui ! Parler coréen me stresse encore 😅",
+        "hi": "हाँ! कोरियन बोलने में अभी भी घबराहट होती है 😅",
+        "it": "Sì! Parlare coreano mi agita ancora 😅",
+        "pt": "Sim! Ainda fico nervoso pra falar coreano 😅",
+        "ru": "Да! Пока стесняюсь говорить по-корейски 😅",
+        "th": "ใช่! ยังตื่นเต้นเวลาพูดภาษาเกาหลีอยู่เลย 😅",
+        "vi": "Ừ! Mình vẫn hồi hộp khi nói tiếng Hàn 😅"
       }
     },
     {
       "by": "friend",
       "text": {
-        "ko": "맛있겠다! 나 다음 달에 거기 놀러 가.",
-        "en": "Sounds delicious! I'm visiting next month.",
-        "ja": "おいしそう！来月そっちに遊びに行くよ。",
-        "zh-cn": "看起来好好吃！我下个月要去那边玩。",
-        "zh-tw": "看起來好好吃！我下個月要去那邊玩。",
-        "ar": "يبدو شهيًا! سأزور بلدك الشهر القادم.",
-        "de": "Klingt lecker! Nächsten Monat komme ich zu Besuch.",
-        "es": "¡Qué rico! El mes que viene voy de visita.",
-        "fr": "Ça a l’air trop bon ! Je viens le mois prochain.",
-        "hi": "सुनकर मज़ा आ गया! अगले महीने वहाँ आना है।",
-        "it": "Che buono! Il mese prossimo vengo a trovarti.",
-        "pt": "Que delícia! Mês que vem vou te visitar.",
-        "ru": "Звучит вкусно! В следующем месяце приеду в гости.",
-        "th": "น่ากินจัง! เดือนหน้าเราจะไปเที่ยวที่นั่นนะ",
-        "vi": "Nghe ngon quá! Tháng sau mình sang đó chơi."
+        "ko": "괜찮아, 각자 편한 말로 하면 돼",
+        "en": "No worries, just talk in your own language",
+        "ja": "大丈夫、それぞれ話しやすい言葉で話せばいいよ",
+        "zh-cn": "没关系，用你习惯的语言说就好",
+        "zh-tw": "沒關係，用你習慣的語言說就好",
+        "ar": "لا تقلق، تكلّم بلغتك فقط",
+        "de": "Keine Sorge, sprich einfach deine Sprache",
+        "es": "Tranqui, habla en tu idioma",
+        "fr": "T'inquiète, parle juste ta langue",
+        "hi": "कोई बात नहीं, अपनी भाषा में ही बात करो",
+        "it": "Tranquillo, parla pure nella tua lingua",
+        "pt": "Relaxa, é só falar na sua língua",
+        "ru": "Не переживай, говори на своём языке",
+        "th": "ไม่เป็นไร พูดภาษาตัวเองไปเลย",
+        "vi": "Không sao, cứ nói bằng tiếng của bạn"
       }
     },
     {
       "by": "me",
       "text": {
-        "ko": "진짜? 그럼 내가 맛집 데려갈게!",
-        "en": "Really? Then I'll take you to my favorite spot!",
-        "ja": "ほんと？じゃあ、おすすめのお店に連れて行くね！",
-        "zh-cn": "真的吗？那我带你去我最爱的店！",
-        "zh-tw": "真的嗎？那我帶你去我最愛的店！",
-        "ar": "حقًا؟ إذن سآخذك إلى مطعمي المفضل!",
-        "de": "Echt? Dann zeige ich dir meinen Lieblingsladen!",
-        "es": "¿En serio? ¡Entonces te llevo a mi sitio favorito!",
-        "fr": "C’est vrai ? Alors je t’emmène à mon resto préféré !",
-        "hi": "सच में? तो चलो, मेरी पसंदीदा जगह चलेंगे!",
-        "it": "Davvero? Allora ti porto nel mio posto preferito!",
-        "pt": "Sério? Então te levo no meu lugar favorito!",
-        "ru": "Правда? Тогда отведу тебя в моё любимое место!",
-        "th": "จริงเหรอ? งั้นเดี๋ยวพาไปร้านโปรดเลย!",
-        "vi": "Thật á? Vậy mình dẫn bạn đi quán ruột nhé!"
+        "ko": "그럼 매일 조금씩 한국어 연습할래!",
+        "en": "Then I'll practice a little Korean every day!",
+        "ja": "じゃあ毎日ちょっとずつ韓国語を練習する！",
+        "zh-cn": "那我每天练一点韩语！",
+        "zh-tw": "那我每天練一點韓語！",
+        "ar": "إذن سأتدرّب على الكورية قليلًا كل يوم!",
+        "de": "Dann übe ich jeden Tag ein bisschen Koreanisch!",
+        "es": "¡Entonces practicaré un poco de coreano cada día!",
+        "fr": "Alors je vais pratiquer un peu le coréen chaque jour !",
+        "hi": "तो मैं रोज़ थोड़ी-थोड़ी कोरियन प्रैक्टिस करूँगा!",
+        "it": "Allora farò un po' di pratica di coreano ogni giorno!",
+        "pt": "Então vou praticar um pouco de coreano todo dia!",
+        "ru": "Тогда буду каждый день понемногу учить корейский!",
+        "th": "งั้นจะฝึกภาษาเกาหลีทุกวันทีละนิดเลย!",
+        "vi": "Vậy mỗi ngày mình sẽ luyện tiếng Hàn một chút!"
       }
     },
     {
       "by": "friend",
       "text": {
-        "ko": "약속이야! 벌써 기대돼 😆",
-        "en": "It's a promise! Can't wait 😆",
-        "ja": "約束だよ！もう楽しみ 😆",
-        "zh-cn": "说好了！已经开始期待了 😆",
-        "zh-tw": "說好了！已經開始期待了 😆",
-        "ar": "وعد! لا أستطيع الانتظار 😆",
-        "de": "Versprochen! Ich freu mich schon 😆",
-        "es": "¡Prometido! Ya tengo ganas 😆",
-        "fr": "Promis ! J’ai trop hâte 😆",
-        "hi": "पक्का वादा! अभी से इंतज़ार है 😆",
-        "it": "Promesso! Non vedo l’ora 😆",
-        "pt": "Combinado! Mal posso esperar 😆",
-        "ru": "Договорились! Уже жду 😆",
-        "th": "สัญญานะ! รอไม่ไหวแล้ว 😆",
-        "vi": "Hứa nhé! Mong quá đi 😆"
+        "ko": "좋아! 나도 네 언어 배워 볼게",
+        "en": "Deal! I'll learn yours too",
+        "ja": "いいね！私もあなたの言葉を勉強してみる",
+        "zh-cn": "好呀！我也来学你的语言",
+        "zh-tw": "好呀！我也來學你的語言",
+        "ar": "اتفقنا! وأنا سأتعلم لغتك أيضًا",
+        "de": "Abgemacht! Ich lerne deine auch",
+        "es": "¡Trato hecho! Yo aprenderé el tuyo",
+        "fr": "Marché conclu ! J'apprendrai la tienne aussi",
+        "hi": "पक्का! मैं भी तुम्हारी भाषा सीखूँगी",
+        "it": "Affare fatto! Io imparerò la tua",
+        "pt": "Combinado! Vou aprender a sua também",
+        "ru": "Договорились! А я выучу твой",
+        "th": "ตกลง! เราจะเรียนภาษาของเธอด้วย",
+        "vi": "Chốt! Mình cũng sẽ học tiếng của bạn"
       }
     }
   ],
   "voice": [
     {
+      "by": "friend",
+      "text": {
+        "ko": "도착하면 내가 공항으로 마중 갈게",
+        "en": "I'll pick you up at the airport when you land",
+        "ja": "着いたら空港まで迎えに行くね",
+        "zh-cn": "你到了我去机场接你",
+        "zh-tw": "你到了我去機場接你",
+        "ar": "سأستقبلك في المطار عندما تصل",
+        "de": "Ich hol dich vom Flughafen ab, wenn du landest",
+        "es": "Te recojo en el aeropuerto cuando aterrices",
+        "fr": "Je viens te chercher à l'aéroport quand tu atterris",
+        "hi": "तुम पहुँचोगे तो मैं एयरपोर्ट लेने आऊँगी",
+        "it": "Quando atterri ti vengo a prendere in aeroporto",
+        "pt": "Quando você chegar, te busco no aeroporto",
+        "ru": "Когда прилетишь, встречу тебя в аэропорту",
+        "th": "ถึงแล้วเดี๋ยวไปรับที่สนามบินนะ",
+        "vi": "Bạn đến nơi thì mình ra sân bay đón nhé"
+      }
+    },
+    {
       "by": "me",
       "text": {
-        "ko": "주말에 뭐 해? 같이 영화 볼래?",
-        "en": "What are you up to this weekend? Want to see a movie?",
-        "ja": "週末は何するの？一緒に映画見ない？",
-        "zh-cn": "周末有什么安排？一起看电影吗？",
-        "zh-tw": "週末有什麼安排？一起看電影嗎？",
-        "ar": "ماذا ستفعل في عطلة نهاية الأسبوع؟ نشاهد فيلمًا معًا؟",
-        "de": "Was machst du am Wochenende? Lust auf Kino?",
-        "es": "¿Qué haces el finde? ¿Vemos una peli?",
-        "fr": "Tu fais quoi ce week-end ? On se fait un ciné ?",
-        "hi": "वीकेंड पर क्या प्लान है? साथ में फ़िल्म देखें?",
-        "it": "Che fai nel weekend? Andiamo al cinema?",
-        "pt": "O que vai fazer no fim de semana? Vamos ver um filme?",
-        "ru": "Что делаешь на выходных? Сходим в кино?",
-        "th": "เสาร์อาทิตย์นี้ทำอะไร? ไปดูหนังกันไหม",
-        "vi": "Cuối tuần bạn làm gì? Đi xem phim không?"
+        "ko": "정말? 고마워! 맛있는 거 먹자",
+        "en": "Really? Thank you! Let's eat something tasty",
+        "ja": "ほんと？ありがとう！おいしいもの食べよう",
+        "zh-cn": "真的吗？谢谢！一起去吃好吃的吧",
+        "zh-tw": "真的嗎？謝謝！一起去吃好吃的吧",
+        "ar": "حقًا؟ شكرًا! لنأكل شيئًا لذيذًا",
+        "de": "Echt? Danke! Lass uns was Leckeres essen",
+        "es": "¿En serio? ¡Gracias! Vamos a comer algo rico",
+        "fr": "C'est vrai ? Merci ! On ira manger un bon truc",
+        "hi": "सच में? थैंक यू! कुछ टेस्टी खाते हैं",
+        "it": "Davvero? Grazie! Mangiamo qualcosa di buono",
+        "pt": "Sério? Obrigado! Vamos comer algo gostoso",
+        "ru": "Правда? Спасибо! Поедим чего-нибудь вкусного",
+        "th": "จริงเหรอ? ขอบคุณนะ! ไปกินของอร่อยกัน",
+        "vi": "Thật á? Cảm ơn nhé! Mình đi ăn món gì ngon đi"
       }
     },
     {
       "by": "friend",
-      "text": {
-        "ko": "좋아! 몇 시에 만날까?",
-        "en": "Sure! What time should we meet?",
-        "ja": "いいね！何時に会う？",
-        "zh-cn": "好啊！几点见？",
-        "zh-tw": "好啊！幾點見？",
-        "ar": "بالتأكيد! في أي ساعة نلتقي؟",
-        "de": "Gern! Wann treffen wir uns?",
-        "es": "¡Claro! ¿A qué hora quedamos?",
-        "fr": "Carrément ! On se retrouve à quelle heure ?",
-        "hi": "ज़रूर! कितने बजे मिलें?",
-        "it": "Certo! A che ora ci vediamo?",
-        "pt": "Bora! Que horas a gente se encontra?",
-        "ru": "Давай! Во сколько встретимся?",
-        "th": "ได้เลย! เจอกันกี่โมงดี",
-        "vi": "Được chứ! Mấy giờ mình gặp nhau?"
-      }
-    },
-    {
-      "by": "me",
       "live": true,
       "text": {
-        "ko": "7시에 역 앞에서 만나자",
-        "en": "Let's meet at the station at 7",
-        "ja": "7時に駅前で会おう",
-        "zh-cn": "7点在车站见吧",
-        "zh-tw": "7點在車站見吧",
-        "ar": "لنلتقِ عند المحطة الساعة 7",
-        "de": "Treffen wir uns um 7 am Bahnhof",
-        "es": "Quedamos a las 7 en la estación",
-        "fr": "On se retrouve à 19 h à la gare",
-        "hi": "7 बजे स्टेशन पर मिलते हैं",
-        "it": "Vediamoci alle 7 in stazione",
-        "pt": "Vamos nos encontrar às 7 na estação",
-        "ru": "Встретимся в 7 у станции",
-        "th": "เจอกันที่สถานีตอนหนึ่งทุ่มนะ",
-        "vi": "7 giờ gặp nhau ở ga nhé"
+        "ko": "떡볶이 맛집 알아, 같이 가자",
+        "en": "I know a great tteokbokki place, let's go",
+        "ja": "おいしいトッポッキのお店知ってるよ、一緒に行こう",
+        "zh-cn": "我知道一家超好吃的炒年糕店，一起去吧",
+        "zh-tw": "我知道一家超好吃的辣炒年糕店，一起去吧",
+        "ar": "أعرف مطعم توكبوكي رائعًا، لنذهب معًا",
+        "de": "Ich kenne einen tollen Tteokbokki-Laden, lass uns hin",
+        "es": "Conozco un sitio de tteokbokki buenísimo, vamos",
+        "fr": "Je connais un super resto de tteokbokki, on y va",
+        "hi": "मुझे तोक्पोक्की की एक बढ़िया जगह पता है, चलो चलते हैं",
+        "it": "Conosco un posto di tteokbokki fantastico, andiamo",
+        "pt": "Conheço um lugar ótimo de tteokbokki, vamos lá",
+        "ru": "Я знаю отличное место с токпокки, пойдём",
+        "th": "รู้จักร้านต็อกบกกีเด็ด ๆ ไปด้วยกันนะ",
+        "vi": "Mình biết một quán tteokbokki ngon lắm, đi cùng nhé"
       }
     }
   ],
@@ -193,82 +193,537 @@
     {
       "by": "me",
       "text": {
-        "ko": "안녕하세요. 내일 저녁 7시에 예약할 수 있을까요?",
-        "ja": "こんにちは。明日の夜7時に予約できますか？",
-        "en": "Hello. Can I book a table for 7 pm tomorrow?",
-        "zh-cn": "你好，明天晚上7点可以预约吗？",
-        "zh-tw": "你好，明天晚上7點可以預約嗎？",
-        "ar": "مرحبًا. هل يمكنني حجز طاولة غدًا الساعة 7 مساءً؟",
-        "de": "Hallo. Kann ich für morgen um 19 Uhr einen Tisch reservieren?",
-        "es": "Hola. ¿Puedo reservar para mañana a las 7 de la noche?",
-        "fr": "Bonjour. Puis-je réserver pour demain à 19 h ?",
-        "hi": "नमस्ते। क्या कल शाम 7 बजे के लिए टेबल बुक हो सकती है?",
-        "it": "Buonasera. Posso prenotare per domani alle 19?",
-        "pt": "Olá. Posso reservar para amanhã às 19h?",
-        "ru": "Здравствуйте. Можно забронировать столик на завтра на 19:00?",
-        "th": "สวัสดีค่ะ ขอจองโต๊ะพรุ่งนี้หนึ่งทุ่มได้ไหมคะ",
-        "vi": "Xin chào. Tôi có thể đặt bàn lúc 7 giờ tối mai không?"
+        "ko": "안녕하세요, 토요일 2시에 커트 예약할 수 있을까요?",
+        "en": "Hi, can I book a haircut for Saturday at 2?",
+        "ja": "こんにちは、土曜日の2時にカットの予約はできますか？",
+        "zh-cn": "你好，周六下午两点可以预约剪发吗？",
+        "zh-tw": "你好，週六下午兩點可以預約剪髮嗎？",
+        "ar": "مرحبًا، هل يمكنني حجز قصّة شعر يوم السبت الساعة 2؟",
+        "de": "Hallo, kann ich für Samstag um 14 Uhr einen Haarschnitt buchen?",
+        "es": "Hola, ¿puedo reservar un corte para el sábado a las 2?",
+        "fr": "Bonjour, je peux réserver une coupe samedi à 14 h ?",
+        "hi": "नमस्ते, क्या शनिवार 2 बजे हेयरकट बुक हो सकता है?",
+        "it": "Salve, posso prenotare un taglio per sabato alle 14?",
+        "pt": "Oi, posso marcar um corte para sábado às 14h?",
+        "ru": "Здравствуйте, можно записаться на стрижку в субботу на 14:00?",
+        "th": "สวัสดีค่ะ ขอจองตัดผมวันเสาร์บ่ายสองได้ไหมคะ",
+        "vi": "Xin chào, tôi đặt lịch cắt tóc thứ Bảy lúc 2 giờ được không?"
       }
     },
     {
       "by": "friend",
       "text": {
-        "ko": "네, 카운터석이 있어요. 몇 분이세요?",
-        "ja": "はい、カウンター席が空いています。何名様ですか？",
-        "en": "Yes, we have seats at the counter. How many people?",
-        "zh-cn": "可以，吧台还有座位。请问几位？",
-        "zh-tw": "可以，吧台還有座位。請問幾位？",
-        "ar": "نعم، لدينا مقاعد على الكاونتر. كم عدد الأشخاص؟",
-        "de": "Ja, an der Theke ist noch Platz. Für wie viele Personen?",
-        "es": "Sí, tenemos sitio en la barra. ¿Para cuántas personas?",
-        "fr": "Oui, il reste de la place au comptoir. Pour combien de personnes ?",
-        "hi": "जी, काउंटर पर जगह है। कितने लोग हैं?",
-        "it": "Sì, abbiamo posto al bancone. Per quante persone?",
-        "pt": "Sim, temos lugar no balcão. Para quantas pessoas?",
-        "ru": "Да, есть места у стойки. На сколько человек?",
-        "th": "ได้ค่ะ มีที่นั่งที่เคาน์เตอร์ กี่ท่านคะ",
-        "vi": "Vâng, quầy còn chỗ ạ. Quý khách đi mấy người?"
+        "ko": "네, 토요일 2시 가능해요. 성함이 어떻게 되세요?",
+        "en": "Yes, Saturday at 2 works. May I have your name?",
+        "ja": "はい、土曜日の2時で大丈夫です。お名前をお願いします",
+        "zh-cn": "可以，周六两点没问题。请问怎么称呼您？",
+        "zh-tw": "可以，週六兩點沒問題。請問怎麼稱呼您？",
+        "ar": "نعم، السبت الساعة 2 متاح. ما اسمك من فضلك؟",
+        "de": "Ja, Samstag um 14 Uhr passt. Wie ist Ihr Name?",
+        "es": "Sí, el sábado a las 2 está libre. ¿Me dice su nombre?",
+        "fr": "Oui, samedi 14 h, c'est possible. À quel nom ?",
+        "hi": "जी, शनिवार 2 बजे हो जाएगा। आपका नाम बताइए?",
+        "it": "Sì, sabato alle 14 va bene. Mi dice il suo nome?",
+        "pt": "Sim, sábado às 14h está livre. Qual é o seu nome?",
+        "ru": "Да, в субботу в 14:00 можно. Как вас зовут?",
+        "th": "ได้ค่ะ วันเสาร์บ่ายสองว่างค่ะ ขอทราบชื่อด้วยค่ะ",
+        "vi": "Vâng, thứ Bảy 2 giờ được ạ. Cho tôi xin tên quý khách?"
       }
     },
     {
       "by": "me",
       "text": {
-        "ko": "두 명이에요.",
-        "ja": "2名です。",
-        "en": "Two people.",
-        "zh-cn": "两位。",
-        "zh-tw": "兩位。",
-        "ar": "شخصان.",
-        "de": "Für zwei.",
-        "es": "Para dos.",
-        "fr": "Pour deux.",
-        "hi": "दो लोग।",
-        "it": "Per due.",
-        "pt": "Para duas.",
-        "ru": "На двоих.",
-        "th": "สองคนค่ะ",
-        "vi": "Hai người."
+        "ko": "알렉스예요. 친구 민지가 추천해 줬어요!",
+        "en": "It's Alex. My friend Minji recommended you!",
+        "ja": "アレックスです。友だちのミンジに勧められました！",
+        "zh-cn": "我叫亚历克斯。是朋友敏智推荐我来的！",
+        "zh-tw": "我叫亞歷克斯。是朋友敏智推薦我來的！",
+        "ar": "اسمي أليكس. صديقتي مينجي رشّحتكم لي!",
+        "de": "Alex. Meine Freundin Minji hat Sie empfohlen!",
+        "es": "Soy Alex. ¡Me lo recomendó mi amiga Minji!",
+        "fr": "C'est Alex. Mon amie Minji m'a recommandé votre salon !",
+        "hi": "एलेक्स। मेरी दोस्त मिंजी ने आपके बारे में बताया!",
+        "it": "Sono Alex. Me l'ha consigliato la mia amica Minji!",
+        "pt": "É Alex. Foi minha amiga Minji que indicou vocês!",
+        "ru": "Алекс. Мне вас посоветовала подруга Минджи!",
+        "th": "อเล็กซ์ค่ะ เพื่อนชื่อมินจีแนะนำมาค่ะ",
+        "vi": "Tôi là Alex. Bạn tôi là Minji giới thiệu tiệm đó!"
       }
     },
     {
       "by": "friend",
       "text": {
-        "ko": "예약되었습니다. 내일 7시에 뵙겠습니다.",
-        "ja": "ご予約を承りました。明日7時にお待ちしております。",
-        "en": "You're booked. See you tomorrow at 7.",
-        "zh-cn": "已为您预约好了，明天7点见。",
-        "zh-tw": "已為您預約好了，明天7點見。",
-        "ar": "تم الحجز. نراكم غدًا الساعة 7.",
-        "de": "Ist reserviert. Bis morgen um 19 Uhr.",
-        "es": "Reservado. Le esperamos mañana a las 7.",
-        "fr": "C'est réservé. À demain, 19 h.",
-        "hi": "बुकिंग हो गई। कल 7 बजे मिलते हैं।",
-        "it": "Prenotato. A domani alle 19.",
-        "pt": "Reservado. Até amanhã às 19h.",
-        "ru": "Забронировано. Ждём вас завтра в 19:00.",
-        "th": "จองเรียบร้อยแล้วค่ะ พบกันพรุ่งนี้หนึ่งทุ่มนะคะ",
-        "vi": "Đã đặt xong ạ. Hẹn gặp quý khách 7 giờ tối mai."
+        "ko": "감사합니다! 토요일에 뵐게요",
+        "en": "Thank you! See you on Saturday",
+        "ja": "ありがとうございます！土曜日にお待ちしています",
+        "zh-cn": "谢谢！周六见",
+        "zh-tw": "謝謝！週六見",
+        "ar": "شكرًا! نراك يوم السبت",
+        "de": "Danke! Bis Samstag",
+        "es": "¡Gracias! Nos vemos el sábado",
+        "fr": "Merci ! À samedi",
+        "hi": "धन्यवाद! शनिवार को मिलते हैं",
+        "it": "Grazie! A sabato",
+        "pt": "Obrigado! Até sábado",
+        "ru": "Спасибо! Ждём вас в субботу",
+        "th": "ขอบคุณค่ะ! เจอกันวันเสาร์นะคะ",
+        "vi": "Cảm ơn quý khách! Hẹn gặp vào thứ Bảy"
       }
     }
-  ]
+  ],
+  "group": {
+    "title": {
+      "ko": "K-POP 수다방",
+      "en": "K-pop chat room",
+      "ja": "K-POPおしゃべり部屋",
+      "zh-cn": "K-POP聊天室",
+      "zh-tw": "K-POP聊天室",
+      "ar": "غرفة دردشة الكيبوب",
+      "de": "K-Pop-Plauderrunde",
+      "es": "Sala de charla K-pop",
+      "fr": "Salon K-pop",
+      "hi": "K-pop चैट रूम",
+      "it": "Chiacchiere K-pop",
+      "pt": "Papo de K-pop",
+      "ru": "Болтаем о K-pop",
+      "th": "ห้องคุย K-pop",
+      "vi": "Phòng tám K-pop"
+    },
+    "seats": [
+      {
+        "key": "siwoo",
+        "name": "시우",
+        "lang": "ko",
+        "avatar": "people/siwoo.jpg"
+      },
+      {
+        "key": "yuki",
+        "name": "ゆき",
+        "lang": "ja",
+        "avatar": "people/yuki.jpg"
+      },
+      {
+        "key": "ava",
+        "name": "Ava",
+        "lang": "en",
+        "avatar": "people/ava.jpg"
+      },
+      {
+        "key": "chloe",
+        "name": "Chloé",
+        "lang": "fr",
+        "avatar": "people/chloe.jpg"
+      },
+      {
+        "key": "junho",
+        "name": "준호",
+        "lang": "ko",
+        "avatar": "people/junho.jpg"
+      },
+      {
+        "key": "rina",
+        "name": "莉奈",
+        "lang": "ja",
+        "avatar": "people/rina.jpg"
+      },
+      {
+        "key": "misaki",
+        "name": "美咲",
+        "lang": "ja",
+        "avatar": "people/misaki.jpg"
+      }
+    ],
+    "lines": [
+      {
+        "by": "yuki",
+        "text": {
+          "ko": "뉴진스 신곡 들어 봤어?",
+          "en": "Have you heard NewJeans' new song?",
+          "ja": "NewJeansの新曲もう聴いた？",
+          "zh-cn": "你听过NewJeans的新歌了吗？",
+          "zh-tw": "你聽過NewJeans的新歌了嗎？",
+          "ar": "هل سمعتم أغنية NewJeans الجديدة؟",
+          "de": "Habt ihr den neuen Song von NewJeans schon gehört?",
+          "es": "¿Ya habéis oído la nueva canción de NewJeans?",
+          "fr": "Vous avez écouté le nouveau son de NewJeans ?",
+          "hi": "NewJeans का नया गाना सुना?",
+          "it": "Avete sentito la nuova canzone delle NewJeans?",
+          "pt": "Já ouviram a música nova do NewJeans?",
+          "ru": "Слышали новую песню NewJeans?",
+          "th": "ฟังเพลงใหม่ของ NewJeans หรือยัง",
+          "vi": "Mọi người nghe bài mới của NewJeans chưa?"
+        }
+      },
+      {
+        "by": "siwoo",
+        "text": {
+          "ko": "당연하지! 하루 종일 듣고 있어",
+          "en": "Of course! I've been playing it all day",
+          "ja": "もちろん！一日中聴いてるよ",
+          "zh-cn": "当然！我听了一整天",
+          "zh-tw": "當然！我聽了一整天",
+          "ar": "طبعًا! أسمعها طوال اليوم",
+          "de": "Klar! Läuft bei mir den ganzen Tag",
+          "es": "¡Claro! La llevo escuchando todo el día",
+          "fr": "Bien sûr ! Je l'écoute en boucle toute la journée",
+          "hi": "बिल्कुल! पूरे दिन से वही सुन रही हूँ",
+          "it": "Certo! La ascolto tutto il giorno",
+          "pt": "Claro! Tô ouvindo o dia todo",
+          "ru": "Конечно! Слушаю весь день",
+          "th": "แน่นอน! เปิดฟังทั้งวันเลย",
+          "vi": "Tất nhiên! Mình nghe cả ngày luôn"
+        }
+      },
+      {
+        "by": "ava",
+        "text": {
+          "ko": "춤 배우기 너무 어려워 😂",
+          "en": "The dance is so hard to learn 😂",
+          "ja": "ダンス覚えるの難しすぎ 😂",
+          "zh-cn": "舞蹈太难学了 😂",
+          "zh-tw": "舞蹈太難學了 😂",
+          "ar": "الرقصة صعبة جدًا 😂",
+          "de": "Der Tanz ist so schwer zu lernen 😂",
+          "es": "El baile es dificilísimo 😂",
+          "fr": "La choré est trop dure à apprendre 😂",
+          "hi": "डांस सीखना बहुत मुश्किल है 😂",
+          "it": "Il balletto è difficilissimo da imparare 😂",
+          "pt": "A coreografia é muito difícil 😂",
+          "ru": "Танец так сложно выучить 😂",
+          "th": "ท่าเต้นยากมากเลย 😂",
+          "vi": "Điệu nhảy khó học ghê 😂"
+        }
+      },
+      {
+        "by": "me",
+        "text": {
+          "ko": "같이 연습해요!",
+          "en": "Let's practice it together!",
+          "ja": "一緒に練習しよう！",
+          "zh-cn": "我们一起练吧！",
+          "zh-tw": "我們一起練吧！",
+          "ar": "لنتدرّب عليها معًا!",
+          "de": "Lasst uns zusammen üben!",
+          "es": "¡Practiquemos juntos!",
+          "fr": "On s'entraîne ensemble !",
+          "hi": "चलो साथ में प्रैक्टिस करते हैं!",
+          "it": "Esercitiamoci insieme!",
+          "pt": "Vamos ensaiar juntos!",
+          "ru": "Давайте репетировать вместе!",
+          "th": "มาซ้อมด้วยกันเถอะ!",
+          "vi": "Cùng tập với nhau nhé!"
+        }
+      },
+      {
+        "by": "chloe",
+        "live": true,
+        "text": {
+          "ko": "나도 배우고 싶어!",
+          "en": "Me too, I want to learn it!",
+          "ja": "私も覚えたい！",
+          "zh-cn": "我也想学！",
+          "zh-tw": "我也想學！",
+          "ar": "وأنا أيضًا أريد أن أتعلّمها!",
+          "de": "Ich auch, ich will ihn lernen!",
+          "es": "¡Yo también quiero aprenderlo!",
+          "fr": "Moi aussi, je veux l'apprendre !",
+          "hi": "मैं भी सीखना चाहती हूँ!",
+          "it": "Anch'io voglio impararlo!",
+          "pt": "Eu também quero aprender!",
+          "ru": "Я тоже хочу выучить!",
+          "th": "เราก็อยากเรียนด้วย!",
+          "vi": "Mình cũng muốn học!"
+        }
+      }
+    ]
+  },
+  "trip": [
+    {
+      "by": "me",
+      "text": {
+        "ko": "다음 달에 인천 도착해! 서울 일정 같이 짜 줄래?",
+        "en": "I land at Incheon next month! Plan my Seoul trip with me?",
+        "ja": "来月仁川に着くよ！ソウルの旅程、一緒に立ててくれる？",
+        "zh-cn": "我下个月到仁川！一起帮我排首尔行程吗？",
+        "zh-tw": "我下個月到仁川！一起幫我排首爾行程嗎？",
+        "ar": "سأصل إلى إنتشون الشهر القادم! نخطّط لرحلتي في سيول معًا؟",
+        "de": "Nächsten Monat lande ich in Incheon! Planst du meine Seoul-Reise mit mir?",
+        "es": "¡El mes que viene aterrizo en Incheon! ¿Planeamos juntos mi viaje a Seúl?",
+        "fr": "J'atterris à Incheon le mois prochain ! On prépare mon séjour à Séoul ensemble ?",
+        "hi": "अगले महीने इंचॉन पहुँच रहा हूँ! सियोल ट्रिप का प्लान साथ बनाओगी?",
+        "it": "Il mese prossimo atterro a Incheon! Mi aiuti a organizzare il viaggio a Seul?",
+        "pt": "Mês que vem chego em Incheon! Me ajuda a planejar a viagem pra Seul?",
+        "ru": "В следующем месяце прилетаю в Инчхон! Поможешь спланировать поездку по Сеулу?",
+        "th": "เดือนหน้าจะถึงอินชอนแล้ว! ช่วยวางแผนเที่ยวโซลด้วยกันหน่อยได้ไหม",
+        "vi": "Tháng sau mình đáp xuống Incheon! Lên lịch đi Seoul cùng mình nhé?"
+      }
+    },
+    {
+      "by": "friend",
+      "text": {
+        "ko": "좋아! 첫날은 광화문, 둘째 날은 강남, 마지막엔 한강에서 피크닉!",
+        "en": "Sure! Day 1 Gwanghwamun, day 2 Gangnam, then a picnic by the Han River",
+        "ja": "いいよ！1日目は光化門、2日目は江南、最後は漢江でピクニック！",
+        "zh-cn": "好啊！第一天光化门，第二天江南，最后去汉江边野餐！",
+        "zh-tw": "好啊！第一天光化門，第二天江南，最後去漢江邊野餐！",
+        "ar": "طبعًا! اليوم الأول غوانغهوامون، والثاني غانغنام، ثم نزهة على ضفاف نهر هان!",
+        "de": "Klar! Tag 1 Gwanghwamun, Tag 2 Gangnam, dann ein Picknick am Han-Fluss!",
+        "es": "¡Claro! Día 1 Gwanghwamun, día 2 Gangnam y luego un pícnic junto al río Han",
+        "fr": "Avec plaisir ! Jour 1 Gwanghwamun, jour 2 Gangnam, puis un pique-nique au bord du fleuve Han !",
+        "hi": "ज़रूर! पहले दिन ग्वांगह्वामुन, दूसरे दिन गंगनम, फिर हान नदी किनारे पिकनिक!",
+        "it": "Certo! Giorno 1 Gwanghwamun, giorno 2 Gangnam, poi un picnic sul fiume Han!",
+        "pt": "Claro! Dia 1 Gwanghwamun, dia 2 Gangnam e depois um piquenique no rio Han!",
+        "ru": "Конечно! В первый день Кванхвамун, во второй Каннам, а потом пикник у реки Хан!",
+        "th": "ได้เลย! วันแรกควังฮวามุน วันที่สองคังนัม แล้วปิดท้ายด้วยปิกนิกริมแม่น้ำฮัน!",
+        "vi": "Được! Ngày 1 Gwanghwamun, ngày 2 Gangnam, rồi picnic bên sông Hàn!"
+      }
+    },
+    {
+      "by": "me",
+      "text": {
+        "ko": "완벽해! 같이 가 줄 거지?",
+        "en": "Perfect! You'll come with me, right?",
+        "ja": "完璧！一緒に来てくれるよね？",
+        "zh-cn": "太完美了！你会陪我去吧？",
+        "zh-tw": "太完美了！你會陪我去吧？",
+        "ar": "رائع! ستأتين معي، صح؟",
+        "de": "Perfekt! Du kommst doch mit, oder?",
+        "es": "¡Perfecto! Vendrás conmigo, ¿verdad?",
+        "fr": "Parfait ! Tu viens avec moi, hein ?",
+        "hi": "परफ़ेक्ट! तुम साथ चलोगी ना?",
+        "it": "Perfetto! Vieni con me, vero?",
+        "pt": "Perfeito! Você vai comigo, né?",
+        "ru": "Идеально! Ты же пойдёшь со мной?",
+        "th": "เป๊ะเลย! ไปด้วยกันใช่ไหม",
+        "vi": "Tuyệt! Bạn sẽ đi cùng mình chứ?"
+      }
+    },
+    {
+      "by": "friend",
+      "text": {
+        "ko": "당연하지 😆 공항으로 마중 갈게",
+        "en": "Of course 😆 I'll pick you up at the airport",
+        "ja": "もちろん 😆 空港まで迎えに行くね",
+        "zh-cn": "当然 😆 我去机场接你",
+        "zh-tw": "當然 😆 我去機場接你",
+        "ar": "طبعًا 😆 سأستقبلك في المطار",
+        "de": "Klar 😆 Ich hol dich vom Flughafen ab",
+        "es": "Claro 😆 Te recojo en el aeropuerto",
+        "fr": "Bien sûr 😆 Je viens te chercher à l'aéroport",
+        "hi": "बिल्कुल 😆 मैं एयरपोर्ट लेने आऊँगी",
+        "it": "Certo 😆 Ti vengo a prendere in aeroporto",
+        "pt": "Claro 😆 Te busco no aeroporto",
+        "ru": "Конечно 😆 Встречу тебя в аэропорту",
+        "th": "แน่นอน 😆 เดี๋ยวไปรับที่สนามบินนะ",
+        "vi": "Tất nhiên 😆 Mình ra sân bay đón bạn"
+      }
+    }
+  ],
+  "tripStops": [
+    {
+      "icon": "✈️",
+      "name": {
+        "ko": "인천공항",
+        "en": "Incheon Airport",
+        "ja": "仁川空港",
+        "zh-cn": "仁川机场",
+        "zh-tw": "仁川機場",
+        "ar": "مطار إنتشون",
+        "de": "Flughafen Incheon",
+        "es": "Aeropuerto de Incheon",
+        "fr": "Aéroport d'Incheon",
+        "hi": "इंचॉन एयरपोर्ट",
+        "it": "Aeroporto di Incheon",
+        "pt": "Aeroporto de Incheon",
+        "ru": "Аэропорт Инчхон",
+        "th": "สนามบินอินชอน",
+        "vi": "Sân bay Incheon"
+      }
+    },
+    {
+      "icon": "🏯",
+      "name": {
+        "ko": "광화문",
+        "en": "Gwanghwamun",
+        "ja": "光化門",
+        "zh-cn": "光化门",
+        "zh-tw": "光化門",
+        "ar": "غوانغهوامون",
+        "de": "Gwanghwamun",
+        "es": "Gwanghwamun",
+        "fr": "Gwanghwamun",
+        "hi": "ग्वांगह्वामुन",
+        "it": "Gwanghwamun",
+        "pt": "Gwanghwamun",
+        "ru": "Кванхвамун",
+        "th": "ควังฮวามุน",
+        "vi": "Gwanghwamun"
+      }
+    },
+    {
+      "icon": "🛍️",
+      "name": {
+        "ko": "강남",
+        "en": "Gangnam",
+        "ja": "江南",
+        "zh-cn": "江南",
+        "zh-tw": "江南",
+        "ar": "غانغنام",
+        "de": "Gangnam",
+        "es": "Gangnam",
+        "fr": "Gangnam",
+        "hi": "गंगनम",
+        "it": "Gangnam",
+        "pt": "Gangnam",
+        "ru": "Каннам",
+        "th": "คังนัม",
+        "vi": "Gangnam"
+      }
+    },
+    {
+      "icon": "🌉",
+      "name": {
+        "ko": "한강",
+        "en": "Han River",
+        "ja": "漢江",
+        "zh-cn": "汉江",
+        "zh-tw": "漢江",
+        "ar": "نهر هان",
+        "de": "Han-Fluss",
+        "es": "Río Han",
+        "fr": "Fleuve Han",
+        "hi": "हान नदी",
+        "it": "Fiume Han",
+        "pt": "Rio Han",
+        "ru": "Река Хан",
+        "th": "แม่น้ำฮัน",
+        "vi": "sông Hán"
+      }
+    }
+  ],
+  "viewerOverrides": {
+    "ko": {
+      "dm": [
+        {
+          "by": "friend",
+          "text": {
+            "ko": "다음 달에 서울 가! 추천할 곳 있어?",
+            "en": "I'm visiting Seoul next month! Any tips?"
+          }
+        },
+        {
+          "by": "me",
+          "text": {
+            "ko": "당연하지! 홍대에 내 단골 미용실 있어",
+            "en": "Of course! I have a favorite hair salon in Hongdae"
+          }
+        },
+        {
+          "by": "friend",
+          "text": {
+            "ko": "완벽해, 한국 스타일로 머리 하고 싶었어!",
+            "en": "Perfect, I wanted a Korean haircut!"
+          }
+        },
+        {
+          "by": "me",
+          "text": {
+            "ko": "예약도 내가 도와줄게 😊",
+            "en": "I'll help you book it too 😊"
+          }
+        },
+        {
+          "by": "friend",
+          "text": {
+            "ko": "최고야! 같이 한국어 연습하자",
+            "en": "You're the best! Let's practice Korean together"
+          }
+        }
+      ],
+      "voice": [
+        {
+          "by": "friend",
+          "text": {
+            "ko": "방금 인천 도착했어!",
+            "en": "I just landed at Incheon!"
+          }
+        },
+        {
+          "by": "me",
+          "text": {
+            "ko": "환영해! 공항철도 타고 홍대입구역으로 와",
+            "en": "Welcome! Take the airport train to Hongik Univ. Station"
+          }
+        },
+        {
+          "by": "friend",
+          "live": true,
+          "text": {
+            "ko": "알겠어, 곧 보자!",
+            "en": "Got it, see you soon!"
+          }
+        }
+      ],
+      "booking": [
+        {
+          "by": "me",
+          "text": {
+            "ko": "토요일 2시에 커트 예약할 수 있을까요?",
+            "en": "Can I book a haircut for Saturday at 2?"
+          }
+        },
+        {
+          "by": "friend",
+          "text": {
+            "ko": "네, 토요일 2시 가능해요. 성함이요?",
+            "en": "Sure, Saturday at 2 is open. Your name?"
+          }
+        },
+        {
+          "by": "me",
+          "text": {
+            "ko": "민준이에요. 친구 Emma가 추천해 줬어요!",
+            "en": "It's Minjun. My friend Emma recommended you!"
+          }
+        },
+        {
+          "by": "friend",
+          "text": {
+            "ko": "감사합니다! 토요일에 봬요",
+            "en": "Thanks! See you Saturday"
+          }
+        }
+      ],
+      "trip": [
+        {
+          "by": "friend",
+          "text": {
+            "ko": "다음 달에 인천 도착해! 서울 일정 도와줄래?",
+            "en": "I land at Incheon next month! Help me plan Seoul?"
+          }
+        },
+        {
+          "by": "me",
+          "text": {
+            "ko": "좋아! 첫날은 광화문, 둘째 날은 강남, 마지막엔 한강에서 피크닉!",
+            "en": "Sure! Day 1 Gwanghwamun, day 2 Gangnam, then a Han River picnic!"
+          }
+        },
+        {
+          "by": "friend",
+          "text": {
+            "ko": "완벽해! 같이 가 줄 거지?",
+            "en": "Perfect! You'll come with me, right?"
+          }
+        },
+        {
+          "by": "me",
+          "text": {
+            "ko": "당연하지 😆 공항으로 마중 갈게",
+            "en": "Of course 😆 I'll pick you up at the airport"
+          }
+        }
+      ]
+    }
+  }
 }

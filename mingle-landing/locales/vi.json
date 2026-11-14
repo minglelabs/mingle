@@ -1,112 +1,125 @@
 {
   "nav": {
-    "cta": "Tải xuống"
+    "cta": "Tải về"
   },
   "hero": {
-    "title1": "Dịch từng câu một,",
-    "title2": "đủ rồi.",
-    "subtitle": "Không còn phải dừng lại sau mỗi câu để dịch. HashChat dịch các cuộc trò chuyện dài liên tục, hiển thị theo thời gian thực trên màn hình những gì bạn nói. Tất cả cuộc trò chuyện được lưu trong phòng chat, và bạn có thể mời người khác tiếp tục nói chuyện trực tuyến bất cứ lúc nào.",
-    "cta": "Tải xuống",
-    "tryDemo": "Dùng thử",
-    "flirting": {
-      "title1": "Tán tỉnh người nước ngoài,",
-      "title2": "giờ đã dễ dàng hơn.",
-      "subtitle": "Đừng để ngôn ngữ cản trở bạn. HashChat dịch theo thời gian thực để duy trì không khí tự nhiên. Cuộc trò chuyện của bạn được lưu làm phòng chat, kết nối lại bất cứ khi nào bạn muốn."
-    },
-    "working": {
-      "title1": "Làm việc với đội ngũ toàn cầu,",
-      "title2": "không rào cản ngôn ngữ.",
-      "subtitle": "Giao tiếp với đội ngũ toàn cầu theo thời gian thực. HashChat dịch liền mạch trong suốt cuộc họp. Tất cả cuộc trò chuyện được ghi lại để xem lại sau, và bạn có thể tiếp tục chat với đồng nghiệp bất cứ lúc nào."
-    }
+    "title1": "Kết bạn với người Hàn,",
+    "title2": "dù tiếng Hàn của bạn chưa giỏi.",
+    "subtitle": "HashChat dịch ngay khi hai bạn trò chuyện. Bạn viết bằng tiếng của mình, bạn người Hàn đọc bằng tiếng của họ. Trò chuyện bằng giọng nói cũng được thông dịch trực tiếp, nên trao đổi ngôn ngữ bắt đầu từ ngày đầu tiên.",
+    "cta": "Tải về",
+    "tryDemo": "Thử thông dịch trực tiếp"
   },
   "valueProposition": {
-    "label": "Why HashChat",
-    "title": "Nói chuyện với Người nước ngoài? Sự tự tin là Tất cả",
-    "description": "Không nói được ngôn ngữ của họ? Không sao. Chỉ cần bật HashChat. Chúng tôi sẽ mang lại cho bạn sự tự tin.",
-    "social": {
-      "label": "Offline",
-      "title": "Tự tin tham gia gặp mặt offline.",
-      "description": "Biến thành trình dịch giọng nói thời gian thực. Tự động dịch nhiều ngôn ngữ theo cả hai hướng.",
-      "titleHighlight": "Cùng HashChat."
-    },
-    "titleHighlight": ""
+    "label": "Giọng nói",
+    "title": "Cứ nói thôi.",
+    "titleHighlight": "HashChat thông dịch trực tiếp.",
+    "description": "Gọi điện hay ngồi cà phê, cứ nói bằng tiếng của bạn. HashChat dịch ngay khi bạn nói, không cần dừng sau mỗi câu."
   },
   "problem": {
-    "label": "Vấn Đề",
-    "title1": "Kết bạn với người nước ngoài,",
-    "title2": "tại sao lại khó đến vậy?",
-    "description": "Bạn gặp một người tuyệt vời tại bữa tiệc, nhưng việc dịch từng câu một làm gián đoạn dòng chảy cuộc trò chuyện, chỉ để lại sự im lặng ngượng ngùng."
+    "label": "Nghe quen không?",
+    "title1": "Bạn muốn có bạn người Hàn.",
+    "title2": "Sao lại khó đến vậy?",
+    "description": "Tiếng Hàn chưa đủ tốt. Người lạ trên mạng khiến bạn ngại. Và kể cả khi đã kết nối, cuộc trò chuyện dừng lại sau câu chào."
   },
   "beforeAfter": {
-    "beforeLabel": "Trước",
+    "beforeLabel": "Trước đây",
     "afterLabel": "Với HashChat",
-    "beforeDesc": "Dịch từng câu một...",
-    "afterDesc": "Cuộc trò chuyện trôi chảy tự nhiên!",
+    "beforeDesc": "Muốn có bạn người Hàn, nhưng...",
+    "afterDesc": "Cứ nói chuyện là thành bạn",
     "problemLabel": "Vấn đề",
     "solutionLabel": "Giải pháp",
     "problems": [
-      "Dòng chảy cuộc trò chuyện bị gián đoạn khi dịch từng câu",
-      "Trong cuộc trò chuyện 3+ người không thể phân biệt ai nói gì",
-      "Không có cách giữ liên lạc sau khi chia tay",
-      "Phải chuyển đổi ngôn ngữ thủ công mỗi lượt nói"
+      "Tiếng Hàn chưa đủ để duy trì cuộc trò chuyện",
+      "Lo gặp người kỳ quặc và kẻ lừa đảo trên app trao đổi ngôn ngữ",
+      "Chào nhau vài câu rồi im lặng",
+      "Không có người bản địa để hỏi trước chuyến đi Hàn Quốc"
     ],
     "solutions": [
-      "Cuộc trò chuyện trôi chảy tự nhiên theo thời gian thực",
-      "Nhận dạng giọng nói tự động tách theo người nói",
-      "Cuộc trò chuyện trở thành phòng chat, luôn kết nối",
-      "Tự động phát hiện bất kỳ ngôn ngữ nào cho dịch hai chiều"
+      "Tin nhắn và cuộc gọi thoại được dịch theo thời gian thực",
+      "Báo cáo hoặc chặn chỉ với một chạm, đội ngũ xem xét báo cáo",
+      "Đọc bài đăng của bạn bè, bình luận và cùng chơi Hash Rush",
+      "Hỏi bạn bản địa về tiệm làm tóc, phòng khám và quán ăn"
     ]
   },
   "features": {
-    "label": "Tính Năng",
-    "title": "Để bạn tập trung vào cuộc trò chuyện",
-    "subtitle": "HashChat không chỉ là ứng dụng dịch thuật. Nó là ứng dụng nhắn tin thoải mái nhất thế giới giúp bạn tập trung chỉ vào cuộc trò chuyện.",
-    "realtime": {
-      "title": "Dịch Thời Gian Thực",
-      "desc": "Bản dịch bắt đầu khi bạn nói. Trò chuyện tự nhiên không gián đoạn."
+    "label": "Vì sao chọn HashChat",
+    "title": "Bốn lý do để kết bạn ở đây",
+    "subtitle": "Bắt đầu trò chuyện ngay. Tiếng Hàn sẽ tiến bộ cùng tình bạn.",
+    "interpret": {
+      "title": "Thông dịch thời gian thực",
+      "desc": "Mỗi tin nhắn hiện bằng ngôn ngữ của từng người. Cuộc gọi thoại được thông dịch trực tiếp. Trao đổi ngôn ngữ ngay từ ngày đầu."
     },
-    "continuous": {
-      "title": "Dịch cuộc trò chuyện dài liên tục",
-      "desc": "Cuộc trò chuyện dài không phải vấn đề. Bản dịch tiếp tục khi đối tác của bạn nói. Cho đến khi bạn dừng."
+    "honest": {
+      "title": "Trò chuyện chân thành",
+      "desc": "Nơi kết bạn thật lòng, không phải lo người kỳ quặc hay kẻ lừa đảo. Báo cáo hoặc chặn chỉ với một chạm, đội ngũ xem xét báo cáo."
     },
-    "autoDetect": {
-      "title": "Phát Hiện Đa Ngôn Ngữ",
-      "desc": "Không cần chọn ngôn ngữ. Tự động phát hiện bất kỳ ngôn ngữ nào. Hỗ trợ 3+ người nói các ngôn ngữ khác nhau cùng lúc."
+    "together": {
+      "title": "Cùng nhau vui vẻ",
+      "desc": "Đọc bài đăng của bạn bè bằng tiếng của bạn, bình luận và cùng chơi mini game Hash Rush."
     },
-    "speaker": {
-      "title": "Nhận Dạng Giọng Nói",
-      "desc": "AI nhận dạng giọng nói của từng người. Ngay cả trong cuộc trò chuyện 3+ người cũng hiển thị rõ ai nói gì."
+    "localTips": {
+      "title": "Gợi ý từ bạn bản địa",
+      "desc": "Trước khi đến Hàn Quốc, hãy hỏi bạn bản địa về tiệm làm tóc, phòng khám và món ngon."
     }
   },
   "realtimeSync": {
-    "label": "Đồng bộ thời gian thực",
-    "title": "Mời đối tác trò chuyện và cùng xem bản ghi cuộc hội thoại",
-    "description": "Mời đối tác trò chuyện vào phòng chat. Với tính năng đồng bộ thời gian thực, họ cũng có thể dễ dàng xem cùng bản ghi cuộc hội thoại.",
-    "myScreen": "Màn hình của tôi",
-    "theirScreen": "Màn hình của họ",
-    "syncStatus": "Đồng bộ thời gian thực"
+    "label": "Trò chuyện",
+    "title": "Bạn viết bằng tiếng của mình. Bạn ấy đọc bằng tiếng của họ.",
+    "description": "Mỗi tin nhắn hiện bằng cả hai ngôn ngữ, nên bạn vừa theo kịp câu chuyện vừa học tiếng Hàn.",
+    "myScreen": "Màn hình của bạn",
+    "theirScreen": "Màn hình của bạn ấy",
+    "syncStatus": "Dịch trực tiếp"
   },
   "coreValue": {
-    "label": "Giá Trị Cốt Lõi",
-    "title": "Tiếp tục cuộc trò chuyện offline trong phòng chat trực tuyến",
-    "desc1": "Đây là giá trị thực sự của HashChat.",
-    "desc2": "Mời người bạn gặp ngoài đời vào ứng dụng. Cuộc trò chuyện đã dịch trở thành phòng chat vĩnh viễn. Tiếp tục nói chuyện ngày hôm sau, tuần sau, hoặc bất cứ khi nào.",
-    "desc3": "Khoảnh khắc cuộc gặp gỡ tình cờ tại bữa tiệc trở thành tình bạn thực sự, đó là",
-    "chatDate": "Cuộc trò chuyện ngày 4 tháng 2 năm 2024",
-    "inviteBtn": "Mời Jamie"
+    "label": "Gợi ý bản địa",
+    "title": "Có bạn bản địa trước khi hạ cánh",
+    "desc1": "Bạn đang lên kế hoạch đi Hàn Quốc?",
+    "desc2": "Kết bạn trước khi đi và hỏi xem người địa phương thật sự thích gì: tiệm làm tóc, phòng khám, nhà hàng. Cần đặt chỗ? Gọi điện với thông dịch của HashChat."
   },
-  "talkToWorld": {
-    "label": "Kết Nối Toàn Cầu",
-    "title": "Nói chuyện với cả thế giới",
-    "subtitle": "Gặp gỡ mọi người từ khắp nơi trên thế giới và trò chuyện thoải mái trực tuyến.",
-    "description": "Chúng tôi sẽ loại bỏ hoàn toàn rào cản ngôn ngữ cho bạn. Dù là giọng nói hay văn bản, chỉ cần tập trung vào cuộc trò chuyện."
+  "safety": {
+    "label": "Trò chuyện chân thành",
+    "title": "Bạn bè thật lòng, không lo lắng",
+    "description": "HashChat dành cho những ai muốn tình bạn chân thành. Nếu ai đó khiến bạn khó chịu, bạn có thể xử lý ngay.",
+    "points": [
+      {
+        "title": "Báo cáo một chạm",
+        "desc": "Thấy điều gì lạ? Báo cáo tin nhắn hoặc hồ sơ chỉ với một chạm."
+      },
+      {
+        "title": "Chặn một chạm",
+        "desc": "Chặn bất kỳ ai, bất cứ lúc nào, và không cần bận tâm nữa."
+      },
+      {
+        "title": "Đội ngũ xem xét",
+        "desc": "Đội ngũ của chúng tôi xem xét báo cáo và xử lý tài khoản vi phạm quy định."
+      }
+    ]
+  },
+  "together": {
+    "label": "Cùng nhau",
+    "title": "Không chỉ là nhắn tin",
+    "description": "Tình bạn lớn lên khi có điều để chia sẻ. HashChat có rất nhiều thứ để chia sẻ.",
+    "points": [
+      {
+        "title": "Bài đăng bằng tiếng của bạn",
+        "desc": "Đọc chuyện thường ngày của bạn bè bằng chính ngôn ngữ của bạn."
+      },
+      {
+        "title": "Bình luận kết nối",
+        "desc": "Bình luận bằng tiếng của bạn, bạn ấy đọc bằng tiếng của họ."
+      },
+      {
+        "title": "Hash Rush cùng bạn bè",
+        "desc": "Chơi mini game Hash Rush cùng bạn bè cho vui."
+      }
+    ]
   },
   "cta": {
-    "title1": "Cách dễ nhất để",
-    "title2": "kết bạn —",
+    "title1": "Kết bạn với người Hàn,",
+    "title2": "bắt đầu hôm nay trên",
     "title2Highlight": "HashChat",
-    "subtitle": "Với HashChat, bạn có thể có những cuộc trò chuyện sâu sắc với bất kỳ ai, dù họ nói ngôn ngữ gì.",
-    "button": "Tải Xuống Ngay"
+    "subtitle": "Tiếng Hàn không cần hoàn hảo. Chỉ cần một lời chào.",
+    "button": "Tải ngay"
   },
   "footer": {
     "copyright": "© 2026 HashChat. Bảo lưu mọi quyền."
@@ -127,15 +140,15 @@
     "limitDesc": "Đăng ký truy cập sớm để tiếp tục"
   },
   "partyScenario": {
-    "step1Title": "1. Gặp nhau tại bữa tiệc",
-    "step1Desc": "Dịch theo thời gian thực với HashChat",
-    "step2Title": "2. Mời vào ứng dụng!",
-    "step2Desc": "Khi mời người khác",
-    "step2Highlight": "Cuộc trò chuyện trở thành chat!",
-    "step3Title": "3. Giữ liên lạc!",
-    "step3Desc": "Chat bất cứ lúc nào",
-    "resultFriends": "Bạn bè sau bữa tiệc!",
-    "resultSaved": "Lịch sử dịch được lưu mãi mãi"
+    "step1Title": "1. Kết bạn bản địa",
+    "step1Desc": "Trò chuyện trước chuyến đi",
+    "step2Title": "2. Xin gợi ý",
+    "step2Desc": "Làm tóc, phòng khám, ăn uống",
+    "step2Highlight": "Gợi ý từ người sống ở đó",
+    "step3Title": "3. Gọi điện đặt chỗ",
+    "step3Desc": "HashChat thông dịch cuộc gọi",
+    "resultFriends": "Một người bạn chờ bạn ở Hàn",
+    "resultSaved": "Gợi ý lưu lại trong chat"
   },
   "socialHero": {
     "title1": "Nói chuyện với thế giới",
@@ -180,8 +193,8 @@
     "label": "Voiceroom"
   },
   "worldMap": {
-    "title": "Tìm bất kỳ ai trên thế giới",
-    "description": "Trước khi đi du lịch, kết bạn với người bản địa trên HashChat trước.",
-    "label": "Explore"
+    "label": "Bạn bè khắp nơi",
+    "title": "Bạn người Hàn, và bạn từ khắp thế giới",
+    "description": "Nhiều người Hàn trên HashChat cũng muốn có bạn nước ngoài. Gửi lời chào và cùng trao đổi ngôn ngữ nhé."
   }
 }

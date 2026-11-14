@@ -3,110 +3,123 @@
     "cta": "Descargar"
   },
   "hero": {
-    "title1": "Traducción frase por frase,",
-    "title2": "basta ya.",
-    "subtitle": "No más pausas después de cada frase para traducir. HashChat traduce las conversaciones largas continuamente, mostrando en tiempo real en pantalla lo que dices. Todas las conversaciones se guardan en una sala de chat, y puedes invitar a otros a continuar hablando en línea en cualquier momento.",
+    "title1": "Haz amigos coreanos,",
+    "title2": "aunque tu coreano aún no sea bueno.",
+    "subtitle": "HashChat traduce mientras hablas. Tú escribes en tu idioma y tu amigo coreano lo lee en el suyo. Las llamadas de voz se interpretan en vivo, así que el intercambio de idiomas empieza desde el primer día.",
     "cta": "Descargar",
-    "tryDemo": "Pruébalo",
-    "flirting": {
-      "title1": "Coquetear con extranjeros,",
-      "title2": "ahora es más fácil.",
-      "subtitle": "No dejes que el idioma te detenga. HashChat traduce en tiempo real para que mantengas la conexión natural. Tu conversación se guarda como sala de chat, así puedes reconectarte cuando quieras."
-    },
-    "working": {
-      "title1": "Trabajar con equipos globales,",
-      "title2": "sin barreras idiomáticas.",
-      "subtitle": "Comunícate con tu equipo global en tiempo real. HashChat traduce sin interrupciones durante las reuniones. Todas las conversaciones se registran para revisarlas después, y puedes seguir chateando con tus compañeros cuando quieras."
-    }
+    "tryDemo": "Probar interpretación en vivo"
   },
   "valueProposition": {
-    "label": "Why HashChat",
-    "title": "¿Hablar con Extranjeros? La Confianza lo es Todo",
-    "description": "¿No hablas su idioma? No hay problema. Solo enciende HashChat. Te daremos la confianza.",
-    "social": {
-      "label": "Offline",
-      "title": "Participa en encuentros offline con confianza.",
-      "description": "Se transforma en un traductor de voz en tiempo real. Traduce automáticamente múltiples idiomas en ambas direcciones sin detenerse en cada frase.",
-      "titleHighlight": "Con HashChat."
-    },
-    "titleHighlight": ""
+    "label": "Voz",
+    "title": "Solo habla.",
+    "titleHighlight": "HashChat interpreta en vivo.",
+    "description": "En una llamada o tomando un café, habla en tu idioma. HashChat interpreta mientras hablas, sin parar después de cada frase."
   },
   "problem": {
-    "label": "El Problema",
-    "title1": "Hacer amigos extranjeros,",
-    "title2": "¿por qué es tan difícil?",
-    "description": "Conoces a alguien increíble en una fiesta, pero traducir frase por frase rompe el flujo de la conversación, dejando solo un silencio incómodo."
+    "label": "¿Te suena?",
+    "title1": "Quieres amigos coreanos.",
+    "title2": "¿Por qué cuesta tanto?",
+    "description": "Tu coreano todavía no da para mucho. Los desconocidos en internet dan desconfianza. Y aunque haya match, la charla se acaba después del hola."
   },
   "beforeAfter": {
     "beforeLabel": "Antes",
     "afterLabel": "Con HashChat",
-    "beforeDesc": "Traduciendo frase por frase...",
-    "afterDesc": "¡Conversación fluida y natural!",
+    "beforeDesc": "Quieres amigos coreanos, pero...",
+    "afterDesc": "Solo habla y haz amigos",
     "problemLabel": "Problema",
     "solutionLabel": "Solución",
     "problems": [
-      "El flujo de conversación se rompe al traducir frase por frase",
-      "En conversaciones con 3+ personas es imposible distinguir quién dijo qué",
-      "No hay forma de mantener el contacto después de separarse",
-      "Hay que cambiar manualmente la selección de idioma en cada turno"
+      "Tu coreano no alcanza para mantener una conversación",
+      "Te preocupan los raros y los estafadores en las apps de idiomas",
+      "Las charlas se apagan después de unos holas",
+      "No tienes a nadie local a quien preguntar antes de viajar a Corea"
     ],
     "solutions": [
-      "Conversación fluida y natural en tiempo real",
-      "Reconocimiento de voz separa automáticamente por hablante",
-      "La conversación se convierte en sala de chat, siempre conectados",
-      "Detecta automáticamente cualquier idioma para traducción bidireccional"
+      "Chats y llamadas de voz traducidos en tiempo real",
+      "Reporta o bloquea con un toque; nuestro equipo revisa los reportes",
+      "Lee las publicaciones de tus amigos, comenta y juega Hash Rush juntos",
+      "Pregunta a amigos locales por peluquerías, clínicas y dónde comer"
     ]
   },
   "features": {
-    "label": "Características",
-    "title": "Para que puedas concentrarte en la conversación",
-    "subtitle": "HashChat no es solo un traductor. Es el mensajero más cómodo del mundo que te permite concentrarte solo en la conversación.",
-    "realtime": {
-      "title": "Traducción en Tiempo Real",
-      "desc": "La traducción comienza mientras hablas. Conversación natural sin interrupciones."
+    "label": "Por qué HashChat",
+    "title": "Cuatro razones para hacer amigos aquí",
+    "subtitle": "Empieza a hablar ya. Tu coreano crece junto con la amistad.",
+    "interpret": {
+      "title": "Interpretación en tiempo real",
+      "desc": "Cada mensaje se ve en el idioma de cada persona. Las llamadas de voz se interpretan en vivo. El intercambio de idiomas funciona desde el primer día."
     },
-    "continuous": {
-      "title": "Traducción de conversaciones largas",
-      "desc": "Las conversaciones largas no son problema. La traducción continúa mientras tu compañero habla. Hasta que tú lo detengas."
+    "honest": {
+      "title": "Conversaciones sinceras",
+      "desc": "Un lugar para hacer amigos de verdad, sin preocuparte por raros ni estafadores. Reporta o bloquea con un toque; nuestro equipo revisa los reportes."
     },
-    "autoDetect": {
-      "title": "Detección Multi-idioma",
-      "desc": "No necesitas seleccionar un idioma. Detecta automáticamente cualquier idioma. Soporta 3+ personas hablando diferentes idiomas simultáneamente."
+    "together": {
+      "title": "Cosas para disfrutar juntos",
+      "desc": "Lee las publicaciones de tus amigos en tu idioma, comenta y juega con ellos al minijuego Hash Rush."
     },
-    "speaker": {
-      "title": "Reconocimiento de Voz",
-      "desc": "La IA identifica la voz de cada persona. Incluso en conversaciones con 3+ personas, muestra claramente quién dijo qué."
+    "localTips": {
+      "title": "Recomendaciones de amigos locales",
+      "desc": "Antes de venir a Corea, pregunta a amigos locales por peluquerías, clínicas y buena comida."
     }
   },
   "realtimeSync": {
-    "label": "Sincronización en tiempo real",
-    "title": "Invita a tu compañero de conversación y compartan la misma transcripción",
-    "description": "Invita a tu compañero de conversación a la sala de chat. Con la sincronización en tiempo real, también puede ver cómodamente la misma transcripción.",
-    "myScreen": "Mi pantalla",
-    "theirScreen": "Su pantalla",
-    "syncStatus": "Sincronización en tiempo real"
+    "label": "Chat",
+    "title": "Tú escribes en tu idioma. Ellos leen en el suyo.",
+    "description": "Cada mensaje se muestra en los dos idiomas, así que sigues la charla y aprendes coreano sin darte cuenta.",
+    "myScreen": "Tu pantalla",
+    "theirScreen": "La pantalla de tu amigo",
+    "syncStatus": "Traducido en vivo"
   },
   "coreValue": {
-    "label": "Valor Central",
-    "title": "Continúa tu conversación offline en una sala de chat en línea",
-    "desc1": "Este es el verdadero valor de HashChat.",
-    "desc2": "Invita a la persona que conociste en persona a la app. Tu conversación traducida se convierte en una sala de chat permanente. Continúa hablando al día siguiente, la próxima semana, o cuando quieras.",
-    "desc3": "El momento en que un encuentro casual en una fiesta se convierte en verdadera amistad, eso es",
-    "chatDate": "Conversación del 4 de febrero de 2024",
-    "inviteBtn": "Invitar a Jamie"
+    "label": "Consejos locales",
+    "title": "Ten un amigo local antes de aterrizar",
+    "desc1": "¿Planeas un viaje a Corea?",
+    "desc2": "Haz amigos antes de ir y pregúntales lo que de verdad les gusta a los locales: peluquerías, clínicas, restaurantes. ¿Hay que reservar? Llama con la interpretación de HashChat."
   },
-  "talkToWorld": {
-    "label": "Conexión Global",
-    "title": "Habla con el mundo",
-    "subtitle": "Conoce gente de todo el mundo y chatea cómodamente en línea.",
-    "description": "Nosotros eliminamos completamente la barrera del idioma por ti. Ya sea voz o texto, solo concéntrate en la conversación."
+  "safety": {
+    "label": "Conversaciones sinceras",
+    "title": "Amigos de verdad, sin preocupaciones",
+    "description": "HashChat es para quienes buscan amistades sinceras. Si alguien te incomoda, puedes actuar al instante.",
+    "points": [
+      {
+        "title": "Reporta con un toque",
+        "desc": "¿Algo raro? Reporta el mensaje o el perfil con un solo toque."
+      },
+      {
+        "title": "Bloquea con un toque",
+        "desc": "Bloquea a quien quieras, cuando quieras, y olvídate."
+      },
+      {
+        "title": "Revisado por nuestro equipo",
+        "desc": "Nuestro equipo revisa los reportes y actúa contra las cuentas que rompen las reglas."
+      }
+    ]
+  },
+  "together": {
+    "label": "Juntos",
+    "title": "Mucho más que chatear",
+    "description": "La amistad crece cuando compartes cosas. En HashChat hay mucho para compartir.",
+    "points": [
+      {
+        "title": "Publicaciones en tu idioma",
+        "desc": "Lee el día a día de tus amigos en tu propio idioma."
+      },
+      {
+        "title": "Comentarios que acercan",
+        "desc": "Comenta en tu idioma y tu amigo lo lee en el suyo."
+      },
+      {
+        "title": "Hash Rush con amigos",
+        "desc": "Juega nuestro minijuego Hash Rush con tus amigos y pásalo bien."
+      }
+    ]
   },
   "cta": {
-    "title1": "La forma más fácil de",
-    "title2": "hacer amigos —",
+    "title1": "Haz amigos coreanos,",
+    "title2": "desde hoy en",
     "title2Highlight": "HashChat",
-    "subtitle": "Con HashChat, puedes tener conversaciones profundas con cualquiera, sin importar qué idioma hable.",
-    "button": "Descargar Ahora"
+    "subtitle": "Tu coreano no tiene que ser perfecto. Solo di hola.",
+    "button": "Descargar ahora"
   },
   "footer": {
     "copyright": "© 2026 HashChat. Todos los derechos reservados."
@@ -127,15 +140,15 @@
     "limitDesc": "Regístrate para acceso anticipado"
   },
   "partyScenario": {
-    "step1Title": "1. Conocerse en la fiesta",
-    "step1Desc": "Traducción en tiempo real con HashChat",
-    "step2Title": "2. ¡Invitar a la app!",
-    "step2Desc": "Al invitar a la otra persona",
-    "step2Highlight": "¡La conversación se convierte en chat!",
-    "step3Title": "3. ¡Seguir en contacto!",
-    "step3Desc": "Chatear cuando quieras",
-    "resultFriends": "¡Amigos después de la fiesta!",
-    "resultSaved": "Historial traducido guardado para siempre"
+    "step1Title": "1. Haz un amigo local",
+    "step1Desc": "Chatea antes del viaje",
+    "step2Title": "2. Pide recomendaciones",
+    "step2Desc": "Peluquerías, clínicas, comida",
+    "step2Highlight": "Consejos de alguien que vive allí",
+    "step3Title": "3. Reserva por teléfono",
+    "step3Desc": "HashChat interpreta la llamada",
+    "resultFriends": "Un amigo te espera en Corea",
+    "resultSaved": "Los consejos quedan en el chat"
   },
   "socialHero": {
     "title1": "Habla con el mundo",
@@ -180,8 +193,8 @@
     "label": "Voiceroom"
   },
   "worldMap": {
-    "title": "Encuentra a cualquiera en el mundo",
-    "description": "Antes de viajar, haz amigos locales en HashChat primero.",
-    "label": "Explore"
+    "label": "Amigos en todas partes",
+    "title": "Amigos coreanos y amigos de todo el mundo",
+    "description": "Muchos coreanos en HashChat también buscan amigos extranjeros. Saluda e intercambien idiomas."
   }
 }
