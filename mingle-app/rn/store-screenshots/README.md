@@ -4,15 +4,15 @@ Source for the App Store and Google Play screenshot set: 8 slides in 15 language
 
 | # | Screen | Source |
 |---|---|---|
-| 01 | Full-bleed photo of friends from many countries. Caption: make Korean friends (ko: foreign friends) | `hero/group.jpg` |
-| 02 | 1:1 chat, each in their own language (a foreign viewer with Korean friend 민지; the Korean viewer with Emma) | `dm.json` `dm` (+ `viewerOverrides.ko.dm`), photo slide over `scenes/backdrop-02.jpg` |
-| 03 | A group voice talk with all 8 seats filled (K-pop chat room), every line interpreted; the last speaker is still talking | `dm.json` `group` (seats and lines) → `captures/<lang>/group.png`, over `scenes/backdrop-03.jpg` |
-| 04 | Safety statement, no phone: creeps, rude users and scammers banned for good; one tap to report | `render.py` `STATEMENT_PAGE` from `captions.json` `statement` |
-| 05 | A friend's post read in your language | app (`/{locale}/feed?postId=…`) |
-| 06 | Hash Rush (meadow). Caption: play games with friends | live site, `?lang=` |
-| 07 | Planning a trip with a friend met on HashChat (Busan with 민지; the Korean viewer plans London with Emma) | `dm.json` `trip` (+ `viewerOverrides.ko.trip`), photo slide over `scenes/backdrop-03.jpg` |
-| 08 | Tips from a local friend and an interpreted booking call to a hair salon | `render.py` scene (`booking` lines) over the `booking/` photos |
-| 09 | Hash Rush (beach). App Store only (`"iosOnly": true`): Google Play takes at most 8 phone screenshots, so `render.py` leaves it out of the Play folders | live site, `?lang=` |
+| 01 | Full-bleed photo of friends from many countries. Caption: make Korean friends and explore Korea together (ko: meet foreign friends who love Korea) | `hero/group.jpg` |
+| 02 | 1:1 chat, each in their own language | `dm.json` `dm` (+ `viewerOverrides.ko.dm`), photo slide over `scenes/backdrop-02.jpg` |
+| 03 | A group voice talk with all 8 seats filled (K-pop chat room), every line interpreted. The seats use operator accounts' profile photos (`people/*.jpg`, face crops) | `dm.json` `group` → `captures/<lang>/group.png`, over `scenes/backdrop-03.jpg` |
+| 04 | Safety statement: creeps, rude users and scammers banned for good; one tap to report | `render.py` `STATEMENT_PAGE` |
+| 05 | Planning a Korea trip with a friend: a photo of friends around a phone (`trip/friends.jpg`, a crop of the hero photo), the trip chat on a tilted phone, and the route Incheon Airport → Gwanghwamun → Gangnam → Han River as connected stops | `render.py` `TRIP_PAGE`, `dm.json` `trip` and `tripStops` |
+| 06 | An interpreted booking call to a hair salon | `render.py` scene (`booking` lines) over the `booking/` photos |
+| 07 | A friend's post read in your language | app (`/{locale}/feed?postId=…`) |
+| 08 | Hash Rush (meadow) | live site, `?lang=` |
+| 09 | Hash Rush (beach). App Store only (`"iosOnly": true`): Google Play takes at most 8 phone screenshots | live site, `?lang=` |
 
 The positioning behind the captions is in `docs/positioning-korean-friends.md`. A viewer can have its own lines under `dm.json` `viewerOverrides.<lang>` (used for Korean, who talks with a foreign friend); `capture.mjs` and `render.py` read them before the shared lines. `chat.json` `partners` puts Korean first for every non-Korean viewer.
 

@@ -22,6 +22,8 @@ import puppeteer from 'puppeteer-core';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const AVATARS = path.resolve(HERE, '../../public/avatars/animals');
+// An avatar is an animal from the app ("fox.svg") or a profile photo here ("people/yuki.jpg": operator accounts' photos).
+const avatarSrc = (avatar) => pathToFileURL(avatar.includes('/') ? path.join(HERE, avatar) : path.join(AVATARS, avatar));
 const args = process.argv.slice(2);
 const argValue = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
 const BASE = argValue('--base') || 'http://localhost:8538';
@@ -221,7 +223,7 @@ function voiceTalkPanel(lang, { partner, partnerName, partnerAvatar, meAvatar, s
     <div class="vt-seat">
       <span class="vt-ring">
         ${who.speaking ? '<span class="vt-ripple r1"></span><span class="vt-ripple r2"></span><span class="vt-glow"></span>' : ''}
-        <span class="vt-face"><img src="${pathToFileURL(path.join(AVATARS, who.avatar))}"></span>
+        <span class="vt-face${who.avatar.includes('/') ? ' photo' : ''}"><img src="${avatarSrc(who.avatar)}"></span>
         <span class="vt-flag">${chat.flags[who.lang]}</span>
       </span>
       <span class="vt-label">${esc(who.label)}</span>
@@ -267,6 +269,7 @@ const VOICE_TALK_CSS = `
   .vt-glow{position:absolute;inset:-3px;border-radius:50%;background:rgba(203,213,225,.3)}
   .vt-face{position:relative;width:48px;height:48px;border-radius:50%;background:#FEF3C7;overflow:hidden;display:flex;align-items:center;justify-content:center}
   .vt-face img{width:40px;height:40px}
+  .vt-face.photo img{width:100%;height:100%;object-fit:cover}
   .vt-empty{background:#F9FAFB;border:1px dashed #D1D5DB}
   .vt-plus{width:18px;height:18px;fill:none;stroke:#D1D5DB;stroke-width:2.2;stroke-linecap:round}
   .vt-flag{position:absolute;left:-2px;bottom:-2px;min-width:18px;height:18px;padding:0 2px;border-radius:9px;background:#fff;box-shadow:0 0 0 1px #E5E7EB;
@@ -313,7 +316,7 @@ function dmHtml(lang, kind, { call = false } = {}) {
     return mine
       ? `<div class="msg own"><div class="bubble">${rows}${pending}</div></div>`
       : who
-        ? `<div class="msg"><img class="avatar" src="${pathToFileURL(path.join(AVATARS, who.avatar))}"><div><div class="who">${esc(who.name)}</div><div class="bubble">${rows}</div></div></div>`
+        ? `<div class="msg"><img class="avatar${who.avatar.includes('/') ? ' photo' : ''}" src="${avatarSrc(who.avatar)}"><div><div class="who">${esc(who.name)}</div><div class="bubble">${rows}</div></div></div>`
         : `<div class="msg"><img class="avatar" src="${pathToFileURL(path.join(AVATARS, avatar))}"><div class="bubble">${rows}</div></div>`;
   }).join('');
   const micIcon = '<svg viewBox="0 0 24 24" style="width:20px;height:20px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
@@ -351,6 +354,7 @@ function dmHtml(lang, kind, { call = false } = {}) {
   .start.live{background:#1F2430;box-shadow:0 6px 14px rgba(31,36,48,.25)}
   svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   .who{font-size:12px;color:#6B7280;margin:0 0 3px 4px}
+  .avatar.photo{padding:0;object-fit:cover}
   ${call ? `${VOICE_TALK_CSS} main{padding-top:${group ? 268 : 200}px}` : ''}
   ${group ? 'main{justify-content:flex-end;padding-bottom:14px} .vt-panel{background:#fff}' : ''}
   </style></head><body>

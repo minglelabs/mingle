@@ -291,46 +291,46 @@
     },
     "seats": [
       {
-        "key": "minji",
-        "name": "민지",
+        "key": "siwoo",
+        "name": "시우",
         "lang": "ko",
-        "avatar": "rabbit.svg"
+        "avatar": "people/siwoo.jpg"
       },
       {
         "key": "yuki",
         "name": "ゆき",
         "lang": "ja",
-        "avatar": "penguin.svg"
+        "avatar": "people/yuki.jpg"
       },
       {
-        "key": "emma",
-        "name": "Emma",
+        "key": "ava",
+        "name": "Ava",
         "lang": "en",
-        "avatar": "bear.svg"
+        "avatar": "people/ava.jpg"
       },
       {
-        "key": "sofia",
-        "name": "Sofía",
-        "lang": "es",
-        "avatar": "squirrel.svg"
+        "key": "chloe",
+        "name": "Chloé",
+        "lang": "fr",
+        "avatar": "people/chloe.jpg"
       },
       {
         "key": "junho",
         "name": "준호",
         "lang": "ko",
-        "avatar": "raccoon.svg"
+        "avatar": "people/junho.jpg"
       },
       {
-        "key": "mei",
-        "name": "美玲",
-        "lang": "zh-tw",
-        "avatar": "whale.svg"
+        "key": "rina",
+        "name": "莉奈",
+        "lang": "ja",
+        "avatar": "people/rina.jpg"
       },
       {
-        "key": "lucas",
-        "name": "Lucas",
-        "lang": "pt",
-        "avatar": "lion.svg"
+        "key": "misaki",
+        "name": "美咲",
+        "lang": "ja",
+        "avatar": "people/misaki.jpg"
       }
     ],
     "lines": [
@@ -355,7 +355,7 @@
         }
       },
       {
-        "by": "minji",
+        "by": "siwoo",
         "text": {
           "ko": "당연하지! 하루 종일 듣고 있어",
           "en": "Of course! I've been playing it all day",
@@ -375,7 +375,7 @@
         }
       },
       {
-        "by": "emma",
+        "by": "ava",
         "text": {
           "ko": "춤 배우기 너무 어려워 😂",
           "en": "The dance is so hard to learn 😂",
@@ -415,7 +415,7 @@
         }
       },
       {
-        "by": "sofia",
+        "by": "chloe",
         "live": true,
         "text": {
           "ko": "나도 배우고 싶어!",
@@ -441,81 +441,163 @@
     {
       "by": "me",
       "text": {
-        "ko": "다음 달에 부산도 가 보고 싶어! 일정 같이 짜 줄래?",
-        "en": "I want to visit Busan next month too! Plan it with me?",
-        "ja": "来月は釜山にも行ってみたい！一緒にプラン立ててくれる？",
-        "zh-cn": "下个月我也想去釜山！一起排个行程吗？",
-        "zh-tw": "下個月我也想去釜山！一起排個行程嗎？",
-        "ar": "أريد زيارة بوسان أيضًا الشهر القادم! تخطّطين معي؟",
-        "de": "Nächsten Monat will ich auch nach Busan! Planst du mit mir?",
-        "es": "¡El mes que viene también quiero ir a Busan! ¿Lo planeamos juntos?",
-        "fr": "Le mois prochain, je veux aussi aller à Busan ! Tu m'aides à planifier ?",
-        "hi": "अगले महीने बुसान भी जाना है! प्लान बनाने में मदद करोगी?",
-        "it": "Il mese prossimo voglio andare anche a Busan! Mi aiuti a organizzare?",
-        "pt": "Mês que vem quero ir pra Busan também! Me ajuda a planejar?",
-        "ru": "В следующем месяце хочу ещё и в Пусан! Поможешь спланировать?",
-        "th": "เดือนหน้าอยากไปปูซานด้วย! ช่วยวางแผนด้วยกันหน่อยได้ไหม",
-        "vi": "Tháng sau mình muốn đi Busan nữa! Lên lịch cùng mình nhé?"
+        "ko": "다음 달에 인천 도착해! 서울 일정 같이 짜 줄래?",
+        "en": "I land at Incheon next month! Plan my Seoul trip with me?",
+        "ja": "来月仁川に着くよ！ソウルの旅程、一緒に立ててくれる？",
+        "zh-cn": "我下个月到仁川！一起帮我排首尔行程吗？",
+        "zh-tw": "我下個月到仁川！一起幫我排首爾行程嗎？",
+        "ar": "سأصل إلى إنتشون الشهر القادم! نخطّط لرحلتي في سيول معًا؟",
+        "de": "Nächsten Monat lande ich in Incheon! Planst du meine Seoul-Reise mit mir?",
+        "es": "¡El mes que viene aterrizo en Incheon! ¿Planeamos juntos mi viaje a Seúl?",
+        "fr": "J'atterris à Incheon le mois prochain ! On prépare mon séjour à Séoul ensemble ?",
+        "hi": "अगले महीने इंचॉन पहुँच रहा हूँ! सियोल ट्रिप का प्लान साथ बनाओगी?",
+        "it": "Il mese prossimo atterro a Incheon! Mi aiuti a organizzare il viaggio a Seul?",
+        "pt": "Mês que vem chego em Incheon! Me ajuda a planejar a viagem pra Seul?",
+        "ru": "В следующем месяце прилетаю в Инчхон! Поможешь спланировать поездку по Сеулу?",
+        "th": "เดือนหน้าจะถึงอินชอนแล้ว! ช่วยวางแผนเที่ยวโซลด้วยกันหน่อยได้ไหม",
+        "vi": "Tháng sau mình đáp xuống Incheon! Lên lịch đi Seoul cùng mình nhé?"
       }
     },
     {
       "by": "friend",
       "text": {
-        "ko": "좋아! 1일차는 해운대, 2일차는 감천문화마을 어때?",
-        "en": "Sure! Day 1 Haeundae Beach, day 2 Gamcheon Culture Village?",
-        "ja": "いいよ！1日目は海雲台ビーチ、2日目は甘川文化村はどう？",
-        "zh-cn": "好啊！第一天海云台海滩，第二天甘川文化村怎么样？",
-        "zh-tw": "好啊！第一天海雲台海灘，第二天甘川文化村怎麼樣？",
-        "ar": "طبعًا! اليوم الأول شاطئ هايونده، والثاني قرية غامتشون الثقافية؟",
-        "de": "Klar! Tag 1 Haeundae Beach, Tag 2 Gamcheon Culture Village?",
-        "es": "¡Claro! ¿Día 1 la playa de Haeundae y día 2 la aldea cultural de Gamcheon?",
-        "fr": "Avec plaisir ! Jour 1 plage de Haeundae, jour 2 village culturel de Gamcheon ?",
-        "hi": "ज़रूर! पहले दिन हेउंदे बीच, दूसरे दिन गामचॉन कल्चर विलेज?",
-        "it": "Certo! Giorno 1 spiaggia di Haeundae, giorno 2 villaggio culturale di Gamcheon?",
-        "pt": "Claro! Dia 1 praia de Haeundae, dia 2 Vila Cultural de Gamcheon?",
-        "ru": "Конечно! В первый день пляж Хэундэ, во второй — деревня культуры Камчхон?",
-        "th": "ได้เลย! วันแรกหาดแฮอุนแด วันที่สองหมู่บ้านวัฒนธรรมคัมช็อนดีไหม",
-        "vi": "Được! Ngày 1 biển Haeundae, ngày 2 làng văn hóa Gamcheon nhé?"
+        "ko": "좋아! 첫날은 광화문, 둘째 날은 강남, 마지막엔 한강에서 피크닉!",
+        "en": "Sure! Day 1 Gwanghwamun, day 2 Gangnam, then a picnic by the Han River",
+        "ja": "いいよ！1日目は光化門、2日目は江南、最後は漢江でピクニック！",
+        "zh-cn": "好啊！第一天光化门，第二天江南，最后去汉江边野餐！",
+        "zh-tw": "好啊！第一天光化門，第二天江南，最後去漢江邊野餐！",
+        "ar": "طبعًا! اليوم الأول غوانغهوامون، والثاني غانغنام، ثم نزهة على ضفاف نهر هان!",
+        "de": "Klar! Tag 1 Gwanghwamun, Tag 2 Gangnam, dann ein Picknick am Han-Fluss!",
+        "es": "¡Claro! Día 1 Gwanghwamun, día 2 Gangnam y luego un pícnic junto al río Han",
+        "fr": "Avec plaisir ! Jour 1 Gwanghwamun, jour 2 Gangnam, puis un pique-nique au bord du fleuve Han !",
+        "hi": "ज़रूर! पहले दिन ग्वांगह्वामुन, दूसरे दिन गंगनम, फिर हान नदी किनारे पिकनिक!",
+        "it": "Certo! Giorno 1 Gwanghwamun, giorno 2 Gangnam, poi un picnic sul fiume Han!",
+        "pt": "Claro! Dia 1 Gwanghwamun, dia 2 Gangnam e depois um piquenique no rio Han!",
+        "ru": "Конечно! В первый день Кванхвамун, во второй Каннам, а потом пикник у реки Хан!",
+        "th": "ได้เลย! วันแรกควังฮวามุน วันที่สองคังนัม แล้วปิดท้ายด้วยปิกนิกริมแม่น้ำฮัน!",
+        "vi": "Được! Ngày 1 Gwanghwamun, ngày 2 Gangnam, rồi picnic bên sông Hàn!"
       }
     },
     {
       "by": "me",
       "text": {
-        "ko": "완벽해! KTX 표는 어떻게 예매해?",
-        "en": "Perfect! How do I book KTX tickets?",
-        "ja": "完璧！KTXのチケットはどうやって予約するの？",
-        "zh-cn": "太完美了！KTX的票怎么订？",
-        "zh-tw": "太完美了！KTX的票怎麼訂？",
-        "ar": "رائع! كيف أحجز تذاكر KTX؟",
-        "de": "Perfekt! Wie buche ich KTX-Tickets?",
-        "es": "¡Perfecto! ¿Cómo reservo los billetes del KTX?",
-        "fr": "Parfait ! Comment je réserve les billets KTX ?",
-        "hi": "परफ़ेक्ट! KTX टिकट कैसे बुक करूँ?",
-        "it": "Perfetto! Come prenoto i biglietti del KTX?",
-        "pt": "Perfeito! Como compro passagem do KTX?",
-        "ru": "Идеально! Как купить билеты на KTX?",
-        "th": "เป๊ะเลย! จองตั๋ว KTX ยังไง",
-        "vi": "Tuyệt! Đặt vé KTX thế nào vậy?"
+        "ko": "완벽해! 같이 가 줄 거지?",
+        "en": "Perfect! You'll come with me, right?",
+        "ja": "完璧！一緒に来てくれるよね？",
+        "zh-cn": "太完美了！你会陪我去吧？",
+        "zh-tw": "太完美了！你會陪我去吧？",
+        "ar": "رائع! ستأتين معي، صح؟",
+        "de": "Perfekt! Du kommst doch mit, oder?",
+        "es": "¡Perfecto! Vendrás conmigo, ¿verdad?",
+        "fr": "Parfait ! Tu viens avec moi, hein ?",
+        "hi": "परफ़ेक्ट! तुम साथ चलोगी ना?",
+        "it": "Perfetto! Vieni con me, vero?",
+        "pt": "Perfeito! Você vai comigo, né?",
+        "ru": "Идеально! Ты же пойдёшь со мной?",
+        "th": "เป๊ะเลย! ไปด้วยกันใช่ไหม",
+        "vi": "Tuyệt! Bạn sẽ đi cùng mình chứ?"
       }
     },
     {
       "by": "friend",
       "text": {
-        "ko": "같이 예매하자. 나도 갈래 😆",
-        "en": "Let's book together. I'm coming too 😆",
-        "ja": "一緒に予約しよう。私も行く 😆",
-        "zh-cn": "一起订吧，我也要去 😆",
-        "zh-tw": "一起訂吧，我也要去 😆",
-        "ar": "لنحجز معًا. سآتي أنا أيضًا 😆",
-        "de": "Lass uns zusammen buchen. Ich komm mit 😆",
-        "es": "Reservemos juntos. Yo también voy 😆",
-        "fr": "On réserve ensemble. Je viens aussi 😆",
-        "hi": "साथ में बुक करते हैं। मैं भी चलूँगी 😆",
-        "it": "Prenotiamo insieme. Vengo anch'io 😆",
-        "pt": "Vamos reservar juntos. Eu também vou 😆",
-        "ru": "Давай купим вместе. Я тоже еду 😆",
-        "th": "จองด้วยกันเลย เราก็จะไปด้วย 😆",
-        "vi": "Cùng đặt luôn đi. Mình cũng đi nữa 😆"
+        "ko": "당연하지 😆 공항으로 마중 갈게",
+        "en": "Of course 😆 I'll pick you up at the airport",
+        "ja": "もちろん 😆 空港まで迎えに行くね",
+        "zh-cn": "当然 😆 我去机场接你",
+        "zh-tw": "當然 😆 我去機場接你",
+        "ar": "طبعًا 😆 سأستقبلك في المطار",
+        "de": "Klar 😆 Ich hol dich vom Flughafen ab",
+        "es": "Claro 😆 Te recojo en el aeropuerto",
+        "fr": "Bien sûr 😆 Je viens te chercher à l'aéroport",
+        "hi": "बिल्कुल 😆 मैं एयरपोर्ट लेने आऊँगी",
+        "it": "Certo 😆 Ti vengo a prendere in aeroporto",
+        "pt": "Claro 😆 Te busco no aeroporto",
+        "ru": "Конечно 😆 Встречу тебя в аэропорту",
+        "th": "แน่นอน 😆 เดี๋ยวไปรับที่สนามบินนะ",
+        "vi": "Tất nhiên 😆 Mình ra sân bay đón bạn"
+      }
+    }
+  ],
+  "tripStops": [
+    {
+      "icon": "✈️",
+      "name": {
+        "ko": "인천공항",
+        "en": "Incheon Airport",
+        "ja": "仁川空港",
+        "zh-cn": "仁川机场",
+        "zh-tw": "仁川機場",
+        "ar": "مطار إنتشون",
+        "de": "Flughafen Incheon",
+        "es": "Aeropuerto de Incheon",
+        "fr": "Aéroport d'Incheon",
+        "hi": "इंचॉन एयरपोर्ट",
+        "it": "Aeroporto di Incheon",
+        "pt": "Aeroporto de Incheon",
+        "ru": "Аэропорт Инчхон",
+        "th": "สนามบินอินชอน",
+        "vi": "Sân bay Incheon"
+      }
+    },
+    {
+      "icon": "🏯",
+      "name": {
+        "ko": "광화문",
+        "en": "Gwanghwamun",
+        "ja": "光化門",
+        "zh-cn": "光化门",
+        "zh-tw": "光化門",
+        "ar": "غوانغهوامون",
+        "de": "Gwanghwamun",
+        "es": "Gwanghwamun",
+        "fr": "Gwanghwamun",
+        "hi": "ग्वांगह्वामुन",
+        "it": "Gwanghwamun",
+        "pt": "Gwanghwamun",
+        "ru": "Кванхвамун",
+        "th": "ควังฮวามุน",
+        "vi": "Gwanghwamun"
+      }
+    },
+    {
+      "icon": "🛍️",
+      "name": {
+        "ko": "강남",
+        "en": "Gangnam",
+        "ja": "江南",
+        "zh-cn": "江南",
+        "zh-tw": "江南",
+        "ar": "غانغنام",
+        "de": "Gangnam",
+        "es": "Gangnam",
+        "fr": "Gangnam",
+        "hi": "गंगनम",
+        "it": "Gangnam",
+        "pt": "Gangnam",
+        "ru": "Каннам",
+        "th": "คังนัม",
+        "vi": "Gangnam"
+      }
+    },
+    {
+      "icon": "🌉",
+      "name": {
+        "ko": "한강",
+        "en": "Han River",
+        "ja": "漢江",
+        "zh-cn": "汉江",
+        "zh-tw": "漢江",
+        "ar": "نهر هان",
+        "de": "Han-Fluss",
+        "es": "Río Han",
+        "fr": "Fleuve Han",
+        "hi": "हान नदी",
+        "it": "Fiume Han",
+        "pt": "Rio Han",
+        "ru": "Река Хан",
+        "th": "แม่น้ำฮัน",
+        "vi": "sông Hán"
       }
     }
   ],
@@ -614,31 +696,31 @@
       ],
       "trip": [
         {
-          "by": "me",
-          "text": {
-            "ko": "다음 달에 런던 가는데 일정 좀 도와줄래?",
-            "en": "I'm going to London next month, can you help me plan?"
-          }
-        },
-        {
           "by": "friend",
           "text": {
-            "ko": "물론이지! 1일차는 캠든 마켓, 2일차는 옥스퍼드 당일치기 어때?",
-            "en": "Of course! Day 1 Camden Market, day 2 a day trip to Oxford?"
+            "ko": "다음 달에 인천 도착해! 서울 일정 도와줄래?",
+            "en": "I land at Incheon next month! Help me plan Seoul?"
           }
         },
         {
           "by": "me",
           "text": {
-            "ko": "좋아! 현지 맛집도 알려 줘",
-            "en": "Great! Tell me some local food spots too"
+            "ko": "좋아! 첫날은 광화문, 둘째 날은 강남, 마지막엔 한강에서 피크닉!",
+            "en": "Sure! Day 1 Gwanghwamun, day 2 Gangnam, then a Han River picnic!"
           }
         },
         {
           "by": "friend",
           "text": {
-            "ko": "우리 집 근처에 단골 펍 있어. 같이 가자 😆",
-            "en": "There's a pub I love near my place. Let's go together 😆"
+            "ko": "완벽해! 같이 가 줄 거지?",
+            "en": "Perfect! You'll come with me, right?"
+          }
+        },
+        {
+          "by": "me",
+          "text": {
+            "ko": "당연하지 😆 공항으로 마중 갈게",
+            "en": "Of course 😆 I'll pick you up at the airport"
           }
         }
       ]

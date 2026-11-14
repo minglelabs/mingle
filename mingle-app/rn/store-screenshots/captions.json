@@ -3,21 +3,21 @@
     {
       "id": "01-friends",
       "caption": {
-        "ko": "외국인 친구,\n말 안 통해도 OK",
-        "en": "Make\nKorean friends",
-        "ja": "韓国人の\n友だちを作ろう",
-        "zh-cn": "结交\n韩国朋友",
-        "zh-tw": "結交\n韓國朋友",
-        "ar": "كوّن صداقات\nمع الكوريين",
-        "de": "Finde\nkoreanische Freunde",
-        "es": "Haz amigos\ncoreanos",
-        "fr": "Faites-vous\ndes amis coréens",
-        "hi": "कोरियाई\nदोस्त बनाइए",
-        "it": "Fai amicizia\ncon i coreani",
-        "pt": "Faça amigos\ncoreanos",
-        "ru": "Заводите\nдрузей из Кореи",
-        "th": "มีเพื่อน\nเป็นคนเกาหลี",
-        "vi": "Kết bạn\nvới người Hàn"
+        "ko": "한국을 좋아하는\n외국인 친구 만나기",
+        "en": "Make Korean friends,\nexplore Korea together",
+        "ja": "韓国人の友だちと\n一緒に韓国を楽しもう",
+        "zh-cn": "结交韩国朋友\n一起探索韩国",
+        "zh-tw": "結交韓國朋友\n一起探索韓國",
+        "ar": "كوّن صداقات مع كوريين\nواكتشفوا كوريا معًا",
+        "de": "Finde koreanische Freunde,\nentdeckt Korea zusammen",
+        "es": "Haz amigos coreanos\ny descubre Corea con ellos",
+        "fr": "Faites-vous des amis coréens,\nexplorez la Corée ensemble",
+        "hi": "कोरियाई दोस्त बनाइए,\nसाथ में कोरिया घूमिए",
+        "it": "Fai amicizia con coreani,\nscopri la Corea insieme",
+        "pt": "Faça amigos coreanos\ne explore a Coreia juntos",
+        "ru": "Заводите друзей из Кореи\nи открывайте её вместе",
+        "th": "มีเพื่อนคนเกาหลี\nเที่ยวเกาหลีไปด้วยกัน",
+        "vi": "Kết bạn với người Hàn,\ncùng khám phá Hàn Quốc"
       },
       "fullBleed": "hero/group.jpg"
     },
@@ -182,7 +182,58 @@
       }
     },
     {
-      "id": "05-feed",
+      "id": "05-trip",
+      "capture": "captures/{lang}/trip.png",
+      "caption": {
+        "ko": "외국인 친구와 함께\n한국 여행 계획을",
+        "en": "Plan your Korea trip\nwith a Korean friend",
+        "ja": "韓国人の友だちと\n韓国旅行を計画",
+        "zh-cn": "和韩国朋友\n一起规划韩国之旅",
+        "zh-tw": "和韓國朋友\n一起規劃韓國之旅",
+        "ar": "خطّط لرحلتك إلى كوريا\nمع صديق كوري",
+        "de": "Plane deine Korea-Reise\nmit einem koreanischen Freund",
+        "es": "Planea tu viaje a Corea\ncon un amigo coreano",
+        "fr": "Préparez votre voyage en Corée\navec un ami coréen",
+        "hi": "कोरियाई दोस्त के साथ\nकोरिया ट्रिप प्लान करें",
+        "it": "Organizza il viaggio in Corea\ncon un amico coreano",
+        "pt": "Planeje sua viagem à Coreia\ncom um amigo coreano",
+        "ru": "Планируйте поездку в Корею\nс корейским другом",
+        "th": "วางแผนเที่ยวเกาหลี\nกับเพื่อนคนเกาหลี",
+        "vi": "Lên kế hoạch du lịch Hàn Quốc\ncùng một người bạn Hàn"
+      },
+      "tripScene": true
+    },
+    {
+      "id": "06-booking",
+      "capture": "captures/{lang}/booking.png",
+      "caption": {
+        "ko": "예약 전화도\n실시간 통역으로",
+        "en": "Booking calls,\ninterpreted live",
+        "ja": "予約の電話も\nリアルタイム通訳で",
+        "zh-cn": "预约电话\n也能实时口译",
+        "zh-tw": "預約電話\n也能即時口譯",
+        "ar": "مكالمات الحجز\nبترجمة فورية",
+        "de": "Buchungsanrufe,\nlive gedolmetscht",
+        "es": "Llamadas para reservar,\ninterpretadas en vivo",
+        "fr": "Appels de réservation,\ninterprétés en direct",
+        "hi": "बुकिंग कॉल भी,\nलाइव अनुवाद के साथ",
+        "it": "Chiamate per prenotare,\ntradotte dal vivo",
+        "pt": "Ligações para reservar,\ninterpretadas ao vivo",
+        "ru": "Звонки для брони\nс живым переводом",
+        "th": "โทรจองก็มี\nล่ามแบบเรียลไทม์",
+        "vi": "Gọi đặt chỗ,\nphiên dịch trực tiếp"
+      },
+      "scene": {
+        "lines": "booking",
+        "count": 4,
+        "background": [
+          "booking/sushi.jpg",
+          "booking/restaurant.jpg"
+        ]
+      }
+    },
+    {
+      "id": "07-feed",
       "capture": "captures/{lang}/translation.png",
       "caption": {
         "ko": "친구들의 일상을\n내 언어로",
@@ -203,7 +254,7 @@
       }
     },
     {
-      "id": "06-hash-rush",
+      "id": "08-hash-rush",
       "capture": "captures/{lang}/hash-rush.png",
       "caption": {
         "ko": "친구와 함께\n미니게임",
@@ -221,57 +272,6 @@
         "ru": "Играйте\nс друзьями",
         "th": "เล่นเกม\nกับเพื่อน ๆ",
         "vi": "Chơi game\ncùng bạn bè"
-      }
-    },
-    {
-      "id": "07-trip",
-      "capture": "captures/{lang}/trip.png",
-      "caption": {
-        "ko": "외국인 친구와\n여행 계획도 함께",
-        "en": "Plan your Korea trip\nwith Korean friends",
-        "ja": "韓国人の友だちと\n韓国旅行を計画",
-        "zh-cn": "和韩国朋友\n一起规划韩国之旅",
-        "zh-tw": "和韓國朋友\n一起規劃韓國之旅",
-        "ar": "خطّط لرحلتك إلى كوريا\nمع أصدقاء كوريين",
-        "de": "Plane deine Korea-Reise\nmit koreanischen Freunden",
-        "es": "Planea tu viaje a Corea\ncon amigos coreanos",
-        "fr": "Préparez votre voyage en Corée\navec des amis coréens",
-        "hi": "कोरियाई दोस्तों के साथ\nकोरिया ट्रिप प्लान करें",
-        "it": "Organizza il viaggio in Corea\ncon amici coreani",
-        "pt": "Planeje sua viagem à Coreia\ncom amigos coreanos",
-        "ru": "Планируйте поездку в Корею\nс корейскими друзьями",
-        "th": "วางแผนเที่ยวเกาหลี\nกับเพื่อนคนเกาหลี",
-        "vi": "Lên kế hoạch du lịch Hàn Quốc\ncùng bạn người Hàn"
-      },
-      "photo": "scenes/backdrop-03.jpg"
-    },
-    {
-      "id": "08-booking",
-      "capture": "captures/{lang}/booking.png",
-      "caption": {
-        "ko": "현지 친구 추천받고\n예약 전화도 통역으로",
-        "en": "Ask locals for tips,\nbook with interpreting",
-        "ja": "現地の人におすすめを聞いて\n予約電話も通訳で",
-        "zh-cn": "向当地人求推荐\n预约电话也有口译",
-        "zh-tw": "向當地人求推薦\n預約電話也有口譯",
-        "ar": "اسأل السكان المحليين\nواحجز بترجمة فورية",
-        "de": "Tipps von Einheimischen,\nbuchen mit Dolmetscher",
-        "es": "Pide consejos a locales,\nreserva con intérprete",
-        "fr": "Les bons plans des locaux,\nréservez avec interprète",
-        "hi": "लोकल लोगों से टिप्स लें,\nअनुवाद के साथ बुक करें",
-        "it": "Chiedi consigli ai locali,\nprenota con l'interprete",
-        "pt": "Peça dicas aos locais,\nreserve com intérprete",
-        "ru": "Советы от местных\nи запись с переводом",
-        "th": "ถามคนท้องถิ่นหาร้านเด็ด\nโทรจองพร้อมล่าม",
-        "vi": "Hỏi người địa phương,\nđặt chỗ có phiên dịch"
-      },
-      "scene": {
-        "lines": "booking",
-        "count": 4,
-        "background": [
-          "booking/sushi.jpg",
-          "booking/restaurant.jpg"
-        ]
       }
     },
     {
