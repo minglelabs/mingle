@@ -2129,6 +2129,7 @@ export default function ConversationList({
   // with a "say something" card and every room is ready to show the speech
   // length choice. Read from storage after mount, so the server render matches.
   const [firstSpeakPending, setFirstSpeakPending] = useState(false);
+  const showFirstSpeakCard = firstSpeakPending && sessionStatus === "authenticated";
   // Where the user heard of the app, asked once when they leave their first room.
   const [discoveryPromptOpen, setDiscoveryPromptOpen] = useState(false);
   const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
@@ -5851,7 +5852,7 @@ export default function ConversationList({
               : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
-          {firstSpeakPending && sessionStatus === "authenticated" ? (
+          {showFirstSpeakCard ? (
             <div className="px-4 pb-4 pt-3">
               <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50/90 px-5 pb-5 pt-6 text-center shadow-[0_16px_36px_rgba(245,158,11,0.12)]">
                 <p className="text-[1.35rem] font-extrabold leading-snug tracking-[-0.02em] text-slate-950">
@@ -5881,7 +5882,7 @@ export default function ConversationList({
             <div className="flex flex-col items-center py-16 text-gray-400">
               <Loader2 size={28} className="animate-spin" />
             </div>
-          ) : conversationItems.length === 0 ? (
+          ) : conversationItems.length === 0 && showFirstSpeakCard ? null : conversationItems.length === 0 ? (
             <div
               className="flex flex-col items-center px-6 py-16 text-center text-gray-400"
               style={{
@@ -5950,6 +5951,9 @@ export default function ConversationList({
         </div>
       </div>
 
+      {/* Before the first bubble the "say something" card is the one thing to
+          press, so the bottom button and the empty list's invite stay away. */}
+      {showFirstSpeakCard ? null : (
       <div
         className="absolute inset-x-0 z-20"
         style={{
@@ -5991,6 +5995,7 @@ export default function ConversationList({
           ) : null}
         </button>
       </div>
+      )}
 
       <BottomTabBar
         activeRoute="conversations"

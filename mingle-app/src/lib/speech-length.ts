@@ -23,7 +23,7 @@ export const DEFAULT_SPEECH_LENGTH_LEVEL: SpeechLengthLevel = 3
  * The first-run sentence length card waits for this many finished bubbles, so a
  * new user has seen a few translations at the default length before choosing.
  */
-export const SPEECH_LENGTH_CARD_AFTER_BUBBLES = 2
+export const SPEECH_LENGTH_CARD_AFTER_BUBBLES = 4
 
 /** True once enough new bubbles have finished in the first room for the length card. */
 export function shouldShowSpeechLengthCard(newFinishedBubbles: number): boolean {
