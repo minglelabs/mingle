@@ -162,6 +162,21 @@ describe('sign-in by phone number', () => {
     delete process.env.SENDON_SENDER
   })
 
+  it('uses Solapi for Korean numbers when Sendon is not set up', async () => {
+    process.env.SOLAPI_API_KEY = 'k'
+    process.env.SOLAPI_API_SECRET = 's'
+    process.env.SOLAPI_SENDER = '0212345678'
+    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }))
+    await startPhoneSignIn('+821077778888', { clientKey: 'c' })
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.solapi.com/messages/v4/send')
+    const text = JSON.parse(fetchMock.mock.calls[0][1].body).message.text as string
+    const code = text.match(/\d{6}/)?.[0] ?? ''
+    expect(await verifyPhoneSignIn('+821077778888', code)).toBe('+821077778888')
+    delete process.env.SOLAPI_API_KEY
+    delete process.env.SOLAPI_API_SECRET
+    delete process.env.SOLAPI_SENDER
+  })
+
   it('lets store reviewers in with a fixed number and code, with Twilio set up', async () => {
     process.env.TWILIO_ACCOUNT_SID = 'AC'
     process.env.TWILIO_AUTH_TOKEN = 't'
