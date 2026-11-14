@@ -16,6 +16,9 @@
 4. **초대권**: 서버에서 `INVITE_GATE=on`이면, 앱을 한국어로 쓰는 사람(`INVITE_GATE_LOCALES`, 기본 `ko`) 중 초대받지 않은 새 계정에 초대 코드 입력 화면이 뜬다 (`components/onboarding/invite-gate.tsx`, `server/app-access.ts`).
    - 코드를 넣으면 기존 초대와 똑같이 처리된다. 양쪽이 보상 코인을 받고 서로 팔로우한다.
    - 초대 링크로 들어온 사람은 자동으로 통과한다.
+   - 초대 코드가 없으면 "대기 명단에 올리기"를 누른다. 전화번호 인증을 안 했으면 인증 시트가 먼저 뜨고, 인증하면 대기 명단에 오른다(`POST /account/access/waitlist`). 그 뒤에는 "내 차례인지 확인하기"로 다시 확인한다.
+   - 운영툴 **대기열** 탭(`/admin/waitlist`)에서 대기자의 이름, 핸들, 전화번호, 이메일, 가입·대기 등록 시각을 오래된 순으로 본다. "입장시키기"를 누르면 초대 없이 들어온다(`access_granted_at`). "입장시킴" 목록에서 취소할 수 있다.
+   - DB: 마이그레이션 `20261114120000_add_invite_waitlist`가 `app_users.waitlisted_at`, `access_granted_at`을 추가한다. 운영 DB에는 `_prisma_migrations`가 없으므로 배포 전에 이 SQL을 `psql -1 -v ON_ERROR_STOP=1`로 직접 적용한다(`20261113090000_add_phone_verification`도 함께).
 
 ## 환경변수 (Railway, mingle-2-0-0)
 
