@@ -373,8 +373,8 @@ RN app URLs are never hardcoded and are read only from environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v2.4.0`; Android uses `android/v2.4.0`)
-- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v2.4.0`, the app shows an error instead of loading the WebView.
+- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v2.4.1`; Android uses `android/v2.4.0`)
+- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v2.4.1`, the app shows an error instead of loading the WebView.
 - `RN_CLIENT_VERSION` (optional, fallback: `CFBundleShortVersionString`)
 - `RN_CLIENT_BUILD` (optional, fallback: `CFBundleVersion`)
 
