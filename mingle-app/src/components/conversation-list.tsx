@@ -5852,29 +5852,17 @@ export default function ConversationList({
               : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
+          {/* The "say something" button itself sits at the bottom, where the
+              thumb reaches it (the new-conversation button's place). */}
           {showFirstSpeakCard ? (
             <div className="px-4 pb-4 pt-3">
-              <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50/90 px-5 pb-5 pt-6 text-center shadow-[0_16px_36px_rgba(245,158,11,0.12)]">
+              <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50/90 px-5 py-6 text-center shadow-[0_16px_36px_rgba(245,158,11,0.12)]">
                 <p className="text-[1.35rem] font-extrabold leading-snug tracking-[-0.02em] text-slate-950">
                   {firstRunCopy.speakTitle}
                 </p>
                 <p className="mt-1.5 text-[0.9rem] leading-snug text-slate-600">
                   {firstRunCopy.speakHint}
                 </p>
-                <button
-                  type="button"
-                  onClick={handleFirstSpeakRequested}
-                  disabled={actionDisabled}
-                  className="mt-4 flex h-14 w-full items-center justify-center gap-2.5 rounded-full text-[1.05rem] font-bold text-white shadow-[0_16px_32px_rgba(245,158,11,0.3)] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
-                  style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}
-                >
-                  {isCreatingConversation ? (
-                    <Loader2 size={20} className="animate-spin" strokeWidth={2.25} aria-hidden />
-                  ) : (
-                    <Mic size={20} strokeWidth={2.4} aria-hidden />
-                  )}
-                  <span>{firstRunCopy.speakButton}</span>
-                </button>
               </div>
             </div>
           ) : null}
@@ -5951,9 +5939,8 @@ export default function ConversationList({
         </div>
       </div>
 
-      {/* Before the first bubble the "say something" card is the one thing to
-          press, so the bottom button and the empty list's invite stay away. */}
-      {showFirstSpeakCard ? null : (
+      {/* Before the first bubble the bottom button is the "say something"
+          button, the one thing to press; the empty list's invite stays away. */}
       <div
         className="absolute inset-x-0 z-20"
         style={{
@@ -5972,8 +5959,11 @@ export default function ConversationList({
             setIsCreateChoiceModalOpen(true);
           }}
           disabled={actionDisabled}
-          className="relative flex w-full items-center justify-center px-5 pt-4 text-[1rem] font-semibold text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
-          aria-label={copy.newConversationButtonLabel}
+          className={`relative flex w-full items-center justify-center px-5 pt-4 text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60 ${
+            showFirstSpeakCard ? "text-[1.05rem] font-bold" : "text-[1rem] font-semibold"
+          }`}
+          aria-label={showFirstSpeakCard ? firstRunCopy.speakButton : copy.newConversationButtonLabel}
+          data-testid={showFirstSpeakCard ? "conversation-list-first-speak" : undefined}
           style={{
             minHeight: `${CONVERSATION_CREATE_BUTTON_HEIGHT_PX}px`,
             paddingBottom: "16px",
@@ -5985,8 +5975,17 @@ export default function ConversationList({
               isCreatingConversation ? "opacity-0" : "opacity-100"
             }`}
           >
-            <span>{copy.newConversationButtonLabel}</span>
-            <ArrowRight size={18} strokeWidth={2.4} />
+            {showFirstSpeakCard ? (
+              <>
+                <Mic size={20} strokeWidth={2.4} aria-hidden />
+                <span>{firstRunCopy.speakButton}</span>
+              </>
+            ) : (
+              <>
+                <span>{copy.newConversationButtonLabel}</span>
+                <ArrowRight size={18} strokeWidth={2.4} />
+              </>
+            )}
           </span>
           {isCreatingConversation ? (
             <span className="absolute inset-0 flex items-center justify-center">
@@ -5995,7 +5994,6 @@ export default function ConversationList({
           ) : null}
         </button>
       </div>
-      )}
 
       <BottomTabBar
         activeRoute="conversations"
