@@ -4,11 +4,12 @@
  *
  * - The client sends the user's selected TTS model per request (`ttsModel` /
  *   `tts.ttsModel`). Missing or invalid values resolve to the default
- *   (gemini-3.8-flash-tts) via `@/lib/tts-models`. No DB lookup on the TTS path.
+ *   (gemini-3.8-flash-lite-tts) via `@/lib/tts-models`. No DB lookup on the TTS path.
  * - Gemini failures (non-2xx, timeout, missing audio, exception, missing key)
  *   fall back to Inworld automatically.
  *
- * Gemini TTS uses the Interactions API (POST /v1beta/interactions) via fetch:
+ * Gemini TTS uses the Interactions API (POST /v1beta/interactions, `stream: true`)
+ * via fetch; the streamed PCM chunks are joined into one clip on the server:
  * https://ai.google.dev/gemini-api/docs/speech-generation
  */
 
@@ -250,6 +251,78 @@ type GeminiInteractionResponse = {
   steps?: Array<{ type?: string, content?: GeminiAudioContent[] }>
 }
 
+/** One SSE `data:` payload of a streamed interaction (only the fields read here). */
+type GeminiStreamEvent = {
+  event_type?: string
+  delta?: GeminiAudioContent
+  error?: { code?: number, message?: string }
+}
+
+type GeminiStreamAudio =
+  | { ok: true, audio: GeminiAudioContent & { buffer: Buffer } }
+  | { ok: false, detail: string }
+
+/**
+ * Reads a `stream: true` interaction (SSE) and joins the `step.delta` audio
+ * chunks in order. Chunks are headerless 16-bit PCM (24 kHz by default), so
+ * plain concatenation is the whole clip. Every received chunk calls `onData`,
+ * which the caller uses to reset its idle timeout.
+ */
+async function readGeminiAudioStream(body: ReadableStream<Uint8Array>, onData: () => void): Promise<GeminiStreamAudio> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  const chunks: Buffer[] = []
+  let format: GeminiAudioContent = {}
+  let pending = ''
+
+  const handleBlock = (block: string): string | null => {
+    const data = block.split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim())
+      .join('')
+    if (!data || data === '[DONE]') return null
+    let event: GeminiStreamEvent
+    try { event = JSON.parse(data) as GeminiStreamEvent } catch { return null }
+    if (event.event_type === 'error' || event.error) {
+      return JSON.stringify(event.error ?? event).slice(0, 300)
+    }
+    const delta = event.delta
+    if (event.event_type !== 'step.delta' || delta?.type !== 'audio') return null
+    const audio = decodeAudioContent(delta.data)
+    if (!audio || audio.length === 0) return null
+    if (chunks.length === 0) format = { mime_type: delta.mime_type ?? delta.mimeType, sample_rate: delta.sample_rate }
+    chunks.push(audio)
+    return null
+  }
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    onData()
+    pending += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+    let boundary: number
+    while ((boundary = pending.indexOf('\n\n')) >= 0) {
+      const error = handleBlock(pending.slice(0, boundary))
+      pending = pending.slice(boundary + 2)
+      if (error) {
+        await reader.cancel().catch(() => {})
+        return { ok: false, detail: error }
+      }
+    }
+  }
+  const tailError = pending.trim() ? handleBlock(pending) : null
+  if (tailError) return { ok: false, detail: tailError }
+  return {
+    ok: true,
+    audio: {
+      type: 'audio',
+      mime_type: format.mime_type || `audio/l16;rate=${format.sample_rate || DEFAULT_PCM_SAMPLE_RATE}`,
+      sample_rate: format.sample_rate,
+      buffer: Buffer.concat(chunks),
+    },
+  }
+}
+
 /** Last audio block of the model_output steps (as documented for REST). */
 function extractGeminiAudio(data: GeminiInteractionResponse): GeminiAudioContent | null {
   const steps = Array.isArray(data?.steps) ? data.steps : []
@@ -331,8 +404,16 @@ export async function synthesizeWithGemini(
     return { ok: false, provider: 'gemini', reason: 'missing_credentials', modelId, voiceId }
   }
 
+  // Idle timeout: aborts when Gemini sends nothing for GEMINI_TTS_TIMEOUT_MS
+  // (before the first byte or between stream chunks), so a long text that
+  // keeps streaming is never cut off just for being long.
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), getGeminiTtsTimeoutMs())
+  const timeoutMs = getGeminiTtsTimeoutMs()
+  let timer = setTimeout(() => controller.abort(), timeoutMs)
+  const resetTimer = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => controller.abort(), timeoutMs)
+  }
   try {
     const response = await fetch(GEMINI_INTERACTIONS_URL, {
       method: 'POST',
@@ -356,6 +437,9 @@ export async function synthesizeWithGemini(
         },
         // Do not retain user utterances server-side (default is store=true).
         store: false,
+        // Streamed audio arrives as it is synthesized: for a short line the
+        // whole clip is in about 1.5 s instead of 2.5 s unary.
+        stream: true,
       }),
       cache: 'no-store',
       signal: controller.signal,
@@ -374,9 +458,23 @@ export async function synthesizeWithGemini(
       }
     }
 
-    const data = await response.json() as GeminiInteractionResponse
-    const audioItem = extractGeminiAudio(data)
-    const raw = decodeAudioContent(audioItem?.data)
+    resetTimer()
+    let audioItem: GeminiAudioContent | null
+    let raw: Buffer | null
+    const contentType = (response.headers.get('content-type') || '').toLowerCase()
+    if (contentType.includes('text/event-stream') && response.body) {
+      const streamed = await readGeminiAudioStream(response.body, resetTimer)
+      if (!streamed.ok) {
+        return { ok: false, provider: 'gemini', reason: 'upstream_error', detail: streamed.detail, voiceId, modelId }
+      }
+      audioItem = streamed.audio
+      raw = streamed.audio.buffer
+    } else {
+      // Unary JSON (an interaction that answered without streaming).
+      const data = await response.json() as GeminiInteractionResponse
+      audioItem = extractGeminiAudio(data)
+      raw = decodeAudioContent(audioItem?.data)
+    }
     if (!audioItem || !raw || raw.length === 0) {
       return { ok: false, provider: 'gemini', reason: 'invalid_audio', voiceId, modelId }
     }
