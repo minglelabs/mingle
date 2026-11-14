@@ -1,18 +1,19 @@
 /**
- * TTS provider abstraction — shared by tts-inworld-handler (standalone TTS)
- * and translate-finalize-handler (inline TTS).
+ * TTS synthesis — shared by tts-inworld-handler (standalone TTS; the route
+ * keeps its old `/tts/inworld` path for installed apps) and
+ * translate-finalize-handler (inline TTS).
  *
  * - The client sends the user's selected TTS model per request (`ttsModel` /
  *   `tts.ttsModel`). Missing or invalid values resolve to the default
- *   (gemini-3.8-flash-tts) via `@/lib/tts-models`. No DB lookup on the TTS path.
- * - Gemini failures (non-2xx, timeout, missing audio, exception, missing key)
- *   fall back to Inworld automatically.
+ *   (gemini-3.8-flash-lite-tts) via `@/lib/tts-models`. No DB lookup on the TTS path.
+ * - A failed synthesis (non-2xx, timeout, missing audio, exception) is retried
+ *   once with the other Gemini model. Inworld is no longer used.
  *
- * Gemini TTS uses the Interactions API (POST /v1beta/interactions) via fetch:
+ * Gemini TTS uses the Interactions API (POST /v1beta/interactions, `stream: true`)
+ * via fetch; the streamed PCM chunks are joined into one clip on the server:
  * https://ai.google.dev/gemini-api/docs/speech-generation
  */
 
-import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
 import { decodeAudioContent, detectAudioMime, wrapPcm16AsWav } from '@/server/api/shared/audio-utils'
 import {
   floatToPcm16Buffer,
@@ -21,15 +22,14 @@ import {
   timeStretchWsola,
   trimSilence,
 } from '@/server/api/shared/audio-dsp'
-import { resolveVoiceId, INWORLD_API_BASE } from '@/server/api/shared/inworld-voice'
 import {
-  getInworldTtsModelId,
+  getFallbackTtsModel,
   resolveTtsRuntimeSelection,
   type TtsProviderId,
 } from '@/lib/tts-models'
 
 export type { TtsProviderId }
-export { getInworldTtsModelId, resolveTtsRuntimeSelection }
+export { resolveTtsRuntimeSelection }
 
 const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions'
 const DEFAULT_GEMINI_TTS_VOICE = 'Kore'
@@ -58,11 +58,6 @@ const MIN_GEMINI_TTS_SPEED = 0.5
 const MAX_GEMINI_TTS_SPEED = 2
 const DEFAULT_GEMINI_TTS_TIMEOUT_MS = 8000
 const DEFAULT_PCM_SAMPLE_RATE = 24000
-
-function getInworldSpeakingRate(): number {
-  const rate = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
-  return Number.isFinite(rate) && rate > 0 ? rate : 1.3
-}
 
 function baseLanguage(language: string | null | undefined): string | null {
   const normalized = (language || '').trim().replace(/_/g, '-').toLowerCase().split('-')[0]
@@ -142,6 +137,15 @@ export function getGeminiTtsStyle(language?: string | null): string | null {
   return (lang && GEMINI_TTS_LANGUAGE_STYLES[lang]) || DEFAULT_GEMINI_TTS_STYLE
 }
 
+/**
+ * `GEMINI_TTS_STREAM=off` (or `0` / `false`) asks for one unary answer instead
+ * of a stream, for A/B checks and as a kill switch. Default: stream.
+ */
+function isGeminiTtsStreamEnabled(): boolean {
+  const value = (process.env.GEMINI_TTS_STREAM || '').trim().toLowerCase()
+  return !['off', '0', 'false'].includes(value)
+}
+
 function getGeminiTtsTimeoutMs(): number {
   const value = Number(process.env.GEMINI_TTS_TIMEOUT_MS || '')
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_GEMINI_TTS_TIMEOUT_MS
@@ -154,7 +158,8 @@ export type TtsSynthesisSuccess = {
   mime: string
   voiceId: string
   modelId: string
-  fallbackFrom?: TtsProviderId
+  /** Model whose failure this result replaces (a retry with the other model). */
+  fallbackFrom?: string
 }
 
 export type TtsSynthesisFailure = {
@@ -171,7 +176,8 @@ export type TtsSynthesisFailure = {
   status?: number
   detail?: string
   error?: unknown
-  fallbackFrom?: TtsProviderId
+  /** Model whose failure this result replaces (a retry with the other model). */
+  fallbackFrom?: string
 }
 
 export type TtsSynthesisResult = TtsSynthesisSuccess | TtsSynthesisFailure
@@ -180,62 +186,6 @@ export type TtsSynthesisInput = {
   text: string
   /** Normalized base language code (e.g. "ko"), or null. */
   language: string | null
-  /** Inworld voice id sent by the client. Ignored on the Gemini path. */
-  requestedVoiceId?: string
-}
-
-/**
- * Inworld synthesis — request body, defaults and voice resolution are
- * identical to the pre-refactor handlers.
- */
-export async function synthesizeWithInworld(input: TtsSynthesisInput): Promise<TtsSynthesisResult> {
-  const modelId = getInworldTtsModelId()
-  const authHeader = getInworldAuthHeaderValue()
-  if (!authHeader) {
-    return { ok: false, provider: 'inworld', reason: 'missing_credentials', modelId }
-  }
-
-  const voiceId = input.requestedVoiceId?.trim() || await resolveVoiceId(authHeader, input.language)
-  try {
-    const response = await fetch(`${INWORLD_API_BASE}/tts/v1/voice`, {
-      method: 'POST',
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text: input.text,
-        voiceId,
-        modelId,
-        audioConfig: {
-          speakingRate: getInworldSpeakingRate(),
-        },
-      }),
-      cache: 'no-store',
-    })
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '')
-      return {
-        ok: false,
-        provider: 'inworld',
-        reason: 'upstream_error',
-        status: response.status,
-        detail: detail.slice(0, 300),
-        voiceId,
-        modelId,
-      }
-    }
-
-    const data = await response.json() as { audioContent?: string }
-    const audio = decodeAudioContent(data.audioContent)
-    if (!audio) {
-      return { ok: false, provider: 'inworld', reason: 'invalid_audio', voiceId, modelId }
-    }
-    return { ok: true, provider: 'inworld', audio, mime: detectAudioMime(audio), voiceId, modelId }
-  } catch (error) {
-    return { ok: false, provider: 'inworld', reason: 'exception', error, voiceId, modelId }
-  }
 }
 
 type GeminiAudioContent = {
@@ -248,6 +198,78 @@ type GeminiAudioContent = {
 
 type GeminiInteractionResponse = {
   steps?: Array<{ type?: string, content?: GeminiAudioContent[] }>
+}
+
+/** One SSE `data:` payload of a streamed interaction (only the fields read here). */
+type GeminiStreamEvent = {
+  event_type?: string
+  delta?: GeminiAudioContent
+  error?: { code?: number, message?: string }
+}
+
+type GeminiStreamAudio =
+  | { ok: true, audio: GeminiAudioContent & { buffer: Buffer } }
+  | { ok: false, detail: string }
+
+/**
+ * Reads a `stream: true` interaction (SSE) and joins the `step.delta` audio
+ * chunks in order. Chunks are headerless 16-bit PCM (24 kHz by default), so
+ * plain concatenation is the whole clip. Every received chunk calls `onData`,
+ * which the caller uses to reset its idle timeout.
+ */
+async function readGeminiAudioStream(body: ReadableStream<Uint8Array>, onData: () => void): Promise<GeminiStreamAudio> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  const chunks: Buffer[] = []
+  let format: GeminiAudioContent = {}
+  let pending = ''
+
+  const handleBlock = (block: string): string | null => {
+    const data = block.split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim())
+      .join('')
+    if (!data || data === '[DONE]') return null
+    let event: GeminiStreamEvent
+    try { event = JSON.parse(data) as GeminiStreamEvent } catch { return null }
+    if (event.event_type === 'error' || event.error) {
+      return JSON.stringify(event.error ?? event).slice(0, 300)
+    }
+    const delta = event.delta
+    if (event.event_type !== 'step.delta' || delta?.type !== 'audio') return null
+    const audio = decodeAudioContent(delta.data)
+    if (!audio || audio.length === 0) return null
+    if (chunks.length === 0) format = { mime_type: delta.mime_type ?? delta.mimeType, sample_rate: delta.sample_rate }
+    chunks.push(audio)
+    return null
+  }
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    onData()
+    pending += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+    let boundary: number
+    while ((boundary = pending.indexOf('\n\n')) >= 0) {
+      const error = handleBlock(pending.slice(0, boundary))
+      pending = pending.slice(boundary + 2)
+      if (error) {
+        await reader.cancel().catch(() => {})
+        return { ok: false, detail: error }
+      }
+    }
+  }
+  const tailError = pending.trim() ? handleBlock(pending) : null
+  if (tailError) return { ok: false, detail: tailError }
+  return {
+    ok: true,
+    audio: {
+      type: 'audio',
+      mime_type: format.mime_type || `audio/l16;rate=${format.sample_rate || DEFAULT_PCM_SAMPLE_RATE}`,
+      sample_rate: format.sample_rate,
+      buffer: Buffer.concat(chunks),
+    },
+  }
 }
 
 /** Last audio block of the model_output steps (as documented for REST). */
@@ -331,8 +353,16 @@ export async function synthesizeWithGemini(
     return { ok: false, provider: 'gemini', reason: 'missing_credentials', modelId, voiceId }
   }
 
+  // Idle timeout: aborts when Gemini sends nothing for GEMINI_TTS_TIMEOUT_MS
+  // (before the first byte or between stream chunks), so a long text that
+  // keeps streaming is never cut off just for being long.
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), getGeminiTtsTimeoutMs())
+  const timeoutMs = getGeminiTtsTimeoutMs()
+  let timer = setTimeout(() => controller.abort(), timeoutMs)
+  const resetTimer = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => controller.abort(), timeoutMs)
+  }
   try {
     const response = await fetch(GEMINI_INTERACTIONS_URL, {
       method: 'POST',
@@ -356,6 +386,9 @@ export async function synthesizeWithGemini(
         },
         // Do not retain user utterances server-side (default is store=true).
         store: false,
+        // Streamed audio arrives as it is synthesized: for a short line the
+        // whole clip is in about 1.5 s instead of 2.5 s unary.
+        ...(isGeminiTtsStreamEnabled() ? { stream: true } : {}),
       }),
       cache: 'no-store',
       signal: controller.signal,
@@ -374,9 +407,23 @@ export async function synthesizeWithGemini(
       }
     }
 
-    const data = await response.json() as GeminiInteractionResponse
-    const audioItem = extractGeminiAudio(data)
-    const raw = decodeAudioContent(audioItem?.data)
+    resetTimer()
+    let audioItem: GeminiAudioContent | null
+    let raw: Buffer | null
+    const contentType = (response.headers.get('content-type') || '').toLowerCase()
+    if (contentType.includes('text/event-stream') && response.body) {
+      const streamed = await readGeminiAudioStream(response.body, resetTimer)
+      if (!streamed.ok) {
+        return { ok: false, provider: 'gemini', reason: 'upstream_error', detail: streamed.detail, voiceId, modelId }
+      }
+      audioItem = streamed.audio
+      raw = streamed.audio.buffer
+    } else {
+      // Unary JSON (an interaction that answered without streaming).
+      const data = await response.json() as GeminiInteractionResponse
+      audioItem = extractGeminiAudio(data)
+      raw = decodeAudioContent(audioItem?.data)
+    }
     if (!audioItem || !raw || raw.length === 0) {
       return { ok: false, provider: 'gemini', reason: 'invalid_audio', voiceId, modelId }
     }
@@ -400,23 +447,25 @@ export async function synthesizeWithGemini(
 
 /**
  * Synthesize with the model the user selected (`ttsModel`, default gemini-3.8-flash-lite-tts).
- * Gemini failures fall back to Inworld; the Inworld result (success or
- * failure) is then returned with `fallbackFrom: 'gemini'`.
+ * A failure is retried once with the other Gemini model, whose result
+ * (success or failure) is returned with `fallbackFrom` set to the first model.
+ * A missing API key is not retried: the other model needs the same key.
  */
 export async function synthesizeSpeech(
   input: TtsSynthesisInput & { ttsModel?: unknown },
 ): Promise<TtsSynthesisResult> {
   const selection = resolveTtsRuntimeSelection(input.ttsModel)
-  if (selection.provider === 'inworld') return await synthesizeWithInworld(input)
+  const first = await synthesizeWithGemini({ ...input, modelId: selection.runtimeModel })
+  if (first.ok || first.reason === 'missing_credentials') return first
 
-  const geminiResult = await synthesizeWithGemini({ ...input, modelId: selection.runtimeModel })
-  if (geminiResult.ok) return geminiResult
-
-  console.warn('[tts] gemini failed, falling back to inworld', {
-    reason: geminiResult.reason,
-    status: geminiResult.status,
-    modelId: geminiResult.modelId,
+  const retryModel = getFallbackTtsModel(selection.value)
+  console.warn('[tts] gemini failed, retrying with the other model', {
+    reason: first.reason,
+    status: first.status,
+    detail: first.detail,
+    modelId: first.modelId,
+    retryModel,
   })
-  const inworldResult = await synthesizeWithInworld(input)
-  return { ...inworldResult, fallbackFrom: 'gemini' }
+  const retry = await synthesizeWithGemini({ ...input, modelId: retryModel })
+  return { ...retry, fallbackFrom: first.modelId }
 }

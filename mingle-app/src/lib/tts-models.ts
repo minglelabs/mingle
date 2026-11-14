@@ -1,12 +1,11 @@
 // Single source of truth for user-selectable TTS models.
 // Shared by the server (tts-provider, handlers, account preferences) and the client.
 
-export type TtsProviderId = 'inworld' | 'gemini'
+export type TtsProviderId = 'gemini'
 
 export type UserSelectableTtsModel =
-  | 'inworld-tts-1.5-mini'
-  | 'gemini-3.8-flash-tts'
   | 'gemini-3.8-flash-lite-tts'
+  | 'gemini-3.8-flash-tts'
 
 export type TtsModelOption = {
   value: UserSelectableTtsModel
@@ -20,24 +19,25 @@ export type TtsRuntimeSelection = {
 }
 
 // Default for users who never picked a model (app_users.tts_model is NULL).
-// Inworld remains the automatic fallback when a Gemini synthesis fails.
+// A stored value that is no longer offered (the removed `inworld-tts-1.5-mini`)
+// resolves here too.
 export const DEFAULT_SELECTABLE_TTS_MODEL: UserSelectableTtsModel = 'gemini-3.8-flash-lite-tts'
 
+// The default comes first: the settings row falls back to the first option.
 export const TTS_MODEL_OPTIONS: TtsModelOption[] = [
-  { value: 'inworld-tts-1.5-mini', label: 'inworld-tts-1.5-mini' },
-  { value: 'gemini-3.8-flash-tts', label: 'gemini-3.8-flash-tts' },
   { value: 'gemini-3.8-flash-lite-tts', label: 'gemini-3.8-flash-lite-tts' },
+  { value: 'gemini-3.8-flash-tts', label: 'gemini-3.8-flash-tts' },
 ]
 
 const TTS_MODEL_PROVIDERS: Record<UserSelectableTtsModel, TtsProviderId> = {
-  'inworld-tts-1.5-mini': 'inworld',
-  'gemini-3.8-flash-tts': 'gemini',
   'gemini-3.8-flash-lite-tts': 'gemini',
+  'gemini-3.8-flash-tts': 'gemini',
 }
 
-/** Inworld runtime model id. Env override keeps the existing production behavior. */
-export function getInworldTtsModelId(): string {
-  return process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.5-mini'
+/** When a synthesis fails, it is retried once with the other Gemini model. */
+const TTS_FALLBACK_MODELS: Record<UserSelectableTtsModel, UserSelectableTtsModel> = {
+  'gemini-3.8-flash-lite-tts': 'gemini-3.8-flash-tts',
+  'gemini-3.8-flash-tts': 'gemini-3.8-flash-lite-tts',
 }
 
 export function normalizeSelectableTtsModel(value: unknown): UserSelectableTtsModel | null {
@@ -52,10 +52,14 @@ export function normalizeSelectableTtsModel(value: unknown): UserSelectableTtsMo
 /** Missing or invalid values resolve to the default (gemini-3.8-flash-lite-tts). */
 export function resolveTtsRuntimeSelection(value: unknown): TtsRuntimeSelection {
   const selected = normalizeSelectableTtsModel(value) ?? DEFAULT_SELECTABLE_TTS_MODEL
-  const provider = TTS_MODEL_PROVIDERS[selected]
   return {
     value: selected,
-    provider,
-    runtimeModel: provider === 'inworld' ? getInworldTtsModelId() : selected,
+    provider: TTS_MODEL_PROVIDERS[selected],
+    runtimeModel: selected,
   }
+}
+
+/** The model a failed synthesis with `model` is retried with. */
+export function getFallbackTtsModel(model: UserSelectableTtsModel): UserSelectableTtsModel {
+  return TTS_FALLBACK_MODELS[model]
 }
