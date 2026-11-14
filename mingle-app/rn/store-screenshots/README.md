@@ -9,8 +9,8 @@ Source for the App Store and Google Play screenshot set: 8 slides in 15 language
 | 03 | A group voice talk with all 8 seats filled (K-pop chat room), every line interpreted. The seats use operator accounts' profile photos (`people/*.jpg`, face crops); the viewer's own seat is `people/me.jpg` | `dm.json` `group` → `captures/<lang>/group.png`, over `scenes/backdrop-03.jpg` |
 | 04 | Safety statement: creeps, rude users and scammers banned for good; one tap to report | `render.py` `STATEMENT_PAGE` |
 | 05 | Planning a Korea trip with a friend: a photo of friends around a phone (`trip/friends.jpg`, drawn with ChatGPT), the trip chat on a tilted phone, and the route Incheon Airport → Gwanghwamun → Gangnam → Han River as connected stops | `render.py` `TRIP_PAGE`, `dm.json` `trip` and `tripStops` |
-| 06 | Women-only mode (not built yet: ships with the matching feature, and this PR waits for it): the friend finder with the "Women only" chip on and women's profile cards | `capture.mjs` `womenHtml`, `dm.json` `women` → `captures/<lang>/women.png` |
-| 07 | An interpreted booking call to a hair salon | `render.py` scene (`booking` lines) over the `booking/` salon photos (`salon.jpg` above, `salon-desk.jpg` below, drawn with ChatGPT) |
+| 06 | An interpreted booking call to a hair salon | `render.py` scene (`booking` lines) over the `booking/` salon photos (`salon.jpg` above, `salon-desk.jpg` below, drawn with ChatGPT) |
+| 07 | Women-only mode (not built yet: ships with the matching feature, and this PR waits for it): the friend finder with the "Women only" chip on and women's profile cards | `capture.mjs` `womenHtml`, `dm.json` `women` → `captures/<lang>/women.png` |
 | 08 | A friend's post read in your language. App Store only (`"iosOnly": true`): Google Play takes at most 8 phone screenshots | app (`/{locale}/feed?postId=…`) |
 | 09 | Hash Rush (meadow) | live site, `?lang=` |
 

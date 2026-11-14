@@ -204,28 +204,7 @@
       "tripScene": true
     },
     {
-      "id": "06-women",
-      "capture": "captures/{lang}/women.png",
-      "caption": {
-        "ko": "여성 전용 연결로\n부담 없이 대화해요",
-        "en": "Women-only mode:\nchat with no pressure",
-        "ja": "女性限定モードで\n気軽におしゃべり",
-        "zh-cn": "女性专属模式\n轻松无负担地聊",
-        "zh-tw": "女性專屬模式\n輕鬆無負擔地聊",
-        "es": "Modo solo mujeres:\nhabla sin presión",
-        "fr": "Mode entre femmes :\ndiscutez sereinement",
-        "de": "Nur-Frauen-Modus:\nentspannt chatten",
-        "it": "Modalità solo donne:\nchiacchiera serena",
-        "pt": "Modo só mulheres:\nconverse sem pressão",
-        "ru": "Режим «только девушки»:\nобщайтесь спокойно",
-        "ar": "وضع للنساء فقط\nدردشي براحة",
-        "hi": "सिर्फ़ महिलाओं का मोड\nबेझिझक बात करें",
-        "th": "โหมดเฉพาะผู้หญิง\nคุยสบายใจ",
-        "vi": "Chế độ chỉ nữ\ntrò chuyện thoải mái"
-      }
-    },
-    {
-      "id": "07-booking",
+      "id": "06-booking",
       "capture": "captures/{lang}/booking.png",
       "caption": {
         "ko": "예약 전화도\n실시간 통역으로",
@@ -251,6 +230,27 @@
           "booking/salon.jpg",
           "booking/salon-desk.jpg"
         ]
+      }
+    },
+    {
+      "id": "07-women",
+      "capture": "captures/{lang}/women.png",
+      "caption": {
+        "ko": "여성 전용 연결로\n부담 없이 대화해요",
+        "en": "Women-only mode:\nchat with no pressure",
+        "ja": "女性限定モードで\n気軽におしゃべり",
+        "zh-cn": "女性专属模式\n轻松无负担地聊",
+        "zh-tw": "女性專屬模式\n輕鬆無負擔地聊",
+        "es": "Modo solo mujeres:\nhabla sin presión",
+        "fr": "Mode entre femmes :\ndiscutez sereinement",
+        "de": "Nur-Frauen-Modus:\nentspannt chatten",
+        "it": "Modalità solo donne:\nchiacchiera serena",
+        "pt": "Modo só mulheres:\nconverse sem pressão",
+        "ru": "Режим «только девушки»:\nобщайтесь спокойно",
+        "ar": "وضع للنساء فقط\nدردشي براحة",
+        "hi": "सिर्फ़ महिलाओं का मोड\nबेझिझक बात करें",
+        "th": "โหมดเฉพาะผู้หญิง\nคุยสบายใจ",
+        "vi": "Chế độ chỉ nữ\ntrò chuyện thoải mái"
       }
     },
     {
