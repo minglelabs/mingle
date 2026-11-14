@@ -18,7 +18,7 @@ import {
 const PIECE_COLORS = ["#FFD166", "#8FD3FF", "#9BE8B4", "#FFB3C1", "#C9B8FF", "#FFC08A"] as const;
 
 // The example is laid out for this height; a shorter room scales it down whole.
-const PREVIEW_HEIGHT_PX = 252;
+const PREVIEW_HEIGHT_PX = 340;
 
 const DROP_SPRING = { type: "spring", stiffness: 420, damping: 24, mass: 0.8 } as const;
 
@@ -111,7 +111,7 @@ export default function SpeechLengthCard({
         </defs>
       </svg>
 
-      <div ref={frameRef} className="relative h-[252px] min-h-[132px] shrink overflow-hidden bg-gradient-to-b from-slate-50 to-slate-100">
+      <div ref={frameRef} className="relative h-[340px] min-h-[150px] shrink overflow-hidden bg-gradient-to-b from-slate-50 to-slate-100">
       {/* Only the bubbles sit inside the filter: it works on their outline. */}
       <div
         aria-hidden
@@ -137,7 +137,7 @@ export default function SpeechLengthCard({
               exit="absorbed"
               transition={{ ...DROP_SPRING, layout: DROP_SPRING }}
               style={{ background: bubble.background, borderRadius: 20, originX: 1, originY: 0 }}
-              className="max-w-[88%] px-3.5 py-1.5 text-[0.84rem] font-semibold leading-snug text-slate-900"
+              className="max-w-[88%] px-4 py-2 text-[1.02rem] font-semibold leading-snug text-slate-900"
             >
               <motion.span layout="position" variants={TEXT_VARIANTS} transition={DROP_SPRING} className="block">
                 {bubble.text}
