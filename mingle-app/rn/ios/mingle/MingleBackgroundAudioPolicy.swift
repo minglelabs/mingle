@@ -150,21 +150,28 @@ enum MingleBackgroundAudioPolicy {
         case reportError
     }
 
-    /// A capture restart that fails while the OS holds the microphone, or while
-    /// the app is not active, is retried instead of ending live STT. Only a
-    /// failure in the foreground with no pending interruption is reported.
+    /// A failed capture restart (a new microphone, an AEC switch, an
+    /// interruption) never ends live STT for the user: it is retried quickly
+    /// first, then kept as silenced and retried from the health check while
+    /// the room still shows the microphone on. Only a foreground failure that
+    /// keeps failing for about a minute (no pending interruption) is reported.
     static let captureRestartQuickRetries = 3
     static let captureRestartQuickRetryDelaySeconds: TimeInterval = 0.3
+    static let captureRestartFailuresBeforeReport = 15
 
     static func captureRestartFailureAction(
         isCaptureSuspended: Bool,
         isAppActive: Bool,
-        quickRetriesLeft: Int = 0
+        quickRetriesLeft: Int = 0,
+        consecutiveFailures: Int = captureRestartFailuresBeforeReport
     ) -> CaptureRestartFailureAction {
         if quickRetriesLeft > 0 {
             return .retrySoon
         }
         if isCaptureSuspended || !isAppActive {
+            return .deferAndRetry
+        }
+        if consecutiveFailures < captureRestartFailuresBeforeReport {
             return .deferAndRetry
         }
         return .reportError

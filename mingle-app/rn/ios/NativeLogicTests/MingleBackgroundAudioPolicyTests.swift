@@ -171,6 +171,17 @@ enum MingleBackgroundAudioPolicyTests {
             MingleBackgroundAudioPolicy.captureRestartFailureAction(isCaptureSuspended: false, isAppActive: true, quickRetriesLeft: 1) == .retrySoon,
             "a foreground failure is retried quietly first"
         )
+        expect(
+            MingleBackgroundAudioPolicy.captureRestartFailureAction(isCaptureSuspended: false, isAppActive: true, consecutiveFailures: 4) == .deferAndRetry,
+            "after the quick retries the session stays on (silenced) and the health check retries"
+        )
+        expect(
+            MingleBackgroundAudioPolicy.captureRestartFailureAction(
+                isCaptureSuspended: false, isAppActive: true,
+                consecutiveFailures: MingleBackgroundAudioPolicy.captureRestartFailuresBeforeReport
+            ) == .reportError,
+            "a failure that keeps failing for about a minute is reported"
+        )
     }
 
     private static func testSttMicrophonePlan() {

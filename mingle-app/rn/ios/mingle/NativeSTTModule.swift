@@ -758,6 +758,7 @@ class NativeSTTModule: RCTEventEmitter {
     private var isRestartingAudio = false
     private var lastAudioRestartAt = Date.distantPast
     private var captureRestartQuickRetriesLeft = 0
+    private var captureRestartConsecutiveFailures = 0
     private var audioChunkCount: Int64 = 0
     private var wsMessageCount: Int64 = 0
     private var wsPingTimer: DispatchSourceTimer?
@@ -1288,6 +1289,7 @@ class NativeSTTModule: RCTEventEmitter {
                 self.audioEngine.prepare()
                 try self.audioEngine.start()
                 self.captureRestartQuickRetriesLeft = 0
+                self.captureRestartConsecutiveFailures = 0
                 if self.isCaptureSuspended {
                     // The engine can start while a call still holds the
                     // microphone. Stay silenced until the health check sees
@@ -1307,10 +1309,16 @@ class NativeSTTModule: RCTEventEmitter {
     /// or iOS holds the microphone: such a failure keeps the session, reports
     /// it as silenced and is retried by the health check.
     private func handleCaptureRestartFailure(_ message: String, reason: String) {
+        // One failure per round: quick retries inside a round do not count, so
+        // the report comes after about a minute of health-check rounds.
+        if captureRestartQuickRetriesLeft <= 0 {
+            captureRestartConsecutiveFailures += 1
+        }
         let action = MingleBackgroundAudioPolicy.captureRestartFailureAction(
             isCaptureSuspended: isCaptureSuspended,
             isAppActive: UIApplication.shared.applicationState == .active,
-            quickRetriesLeft: captureRestartQuickRetriesLeft
+            quickRetriesLeft: captureRestartQuickRetriesLeft,
+            consecutiveFailures: captureRestartConsecutiveFailures
         )
         switch action {
         case .retrySoon:
@@ -2743,8 +2751,10 @@ class NativeSTTModule: RCTEventEmitter {
             NSLog("[NativeSTTModule] audioEngine restarted after AEC toggle, isRunning=%d", audioEngine.isRunning ? 1 : 0)
             resolve(["ok": true])
         } catch {
+            // Keep live STT on: retry like any other capture restart.
             NSLog("[NativeSTTModule] audioEngine restart after AEC toggle FAILED: %@", error.localizedDescription)
-            reject("audio_engine", "Failed to restart after AEC toggle", error)
+            restartAudioCapture(reason: "aec_toggle", bypassThrottle: true)
+            resolve(["ok": true])
         }
     }
 
