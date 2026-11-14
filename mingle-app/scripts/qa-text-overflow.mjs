@@ -175,7 +175,11 @@ export function scanTextOverflow(doc, win, options = {}) {
     }
 
     // wrapped: a control label on two or more lines.
-    if (control && style.whiteSpace !== 'pre-line' && style.whiteSpace !== 'pre-wrap') {
+    // Cards and list rows that are buttons hold body text that wraps by design: only label-sized
+    // controls (≤ 50 characters, ≤ 72px tall) count.
+    const controlText = control ? (control.textContent || '').replace(/\s+/g, ' ').trim() : '';
+    const controlTall = control ? control.getBoundingClientRect().height > 72 : false;
+    if (control && controlText.length <= 50 && !controlTall && style.whiteSpace !== 'pre-line' && style.whiteSpace !== 'pre-wrap') {
       const lines = countLines(element, style);
       if (lines >= 2) push('wrapped', element, { lines });
     }

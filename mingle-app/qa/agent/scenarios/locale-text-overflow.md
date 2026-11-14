@@ -18,6 +18,7 @@ paths:
   - mingle-app/src/components/search/**
   - mingle-app/src/app/globals.css
   - mingle-app/scripts/qa-text-overflow.mjs
+  - mingle-app/scripts/qa-crawl.mjs
 history:
   - 2026-08-14 - Profile language selector horizontal overflow
   - P2 2026-08-17 Shared English US/UK flag in language selectors
@@ -40,19 +41,23 @@ clip, wrap or run off the screen.
 
 ## Steps
 
-1. Screens reachable by URL. Open each one, then run the 15-locale sweep on it
-   (`node mingle-app/scripts/qa-agent-device.mjs overflow --locale all --shots <run>/shots/<screen> --out <run>/overflow-<screen>.json`):
-   - the conversation list (`/<locale>/conversations`) with the bottom tab bar
-   - the feed (`/<locale>/feed`)
-   - Explore / search (`/<locale>/connect`)
-   - My Page (`/<locale>/mypage`) and the follow list (`/<locale>/mypage/follows`, both tabs)
-   - notifications (`/<locale>/notifications`)
-   - a public profile (`/<locale>/users/<id>`) with its follow button
-2. Sheets, menus and rooms (a reload closes them). Switch the app language in My Page to vi, then de, then ru
-   (the widest three for most labels) and, in each, open and run plain `overflow` on: the gear menu, a room
-   header + composer + room menu, the language selector, the post composer, and the notification follow-back row.
-3. Look at each locale's screenshot for anything the scan cannot judge: icons pushed out of line, a label that
-   wraps but looks wrong, right-to-left mirroring in ar.
+1. Crawl every layer of the UI. `crawl` opens each screen, taps every safe control (and every control in the
+   sheet, menu, tab or screen it opens), scans each state, then replays the same states in the other 14 locales:
+   ```
+   node mingle-app/scripts/qa-agent-device.mjs crawl --routes "<ko routes>" --locales ko --out <run>/discovery.json --shots <run>/shots
+   node mingle-app/scripts/qa-agent-device.mjs crawl --routes "<ko routes>" --states <run>/discovery.json --locales en,ja,...,vi --out <run>/replay.json --shots <run>/shots
+   ```
+   Routes: every page under `src/app/[locale]` that the QA account can open — conversations, feed, connect (+ people
+   search), mypage (+ follows both tabs, posts/archived|trash|hidden, share), notifications, public profiles (one
+   follower-only, one mutual, one you follow), compose, new-group, add-members, account, translator, the post viewer
+   and post edit for a seeded post. Seed follows, a post and a direct conversation first, so lists are not empty.
+   Controls that change data or open native UI (send, delete, block, follow, purchase, camera, share, copy…) are
+   never tapped (`isRiskyTarget` in `scripts/qa-crawl.mjs`); the run lists them under `skipped`.
+2. For a single screen, `overflow --locale all --shots <dir> --out <file>` sweeps it in the 15 locales.
+3. Look at the screenshots of every state with a `control: true` finding, and at a few clean ones per locale, for
+   what the scan cannot judge: icons pushed out of line, a label that wraps but looks wrong, right-to-left mirroring in ar.
+4. Native chrome (the bottom tab bar, native sheets and the login screen's native parts) is outside the WebView
+   scan: check it by screenshot in vi, de and ru.
 
 Switch the app back to Korean at the end.
 

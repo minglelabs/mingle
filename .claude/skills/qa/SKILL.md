@@ -164,6 +164,7 @@ would tap. Read state with `snapshot`/`eval`, but never use `eval` to click for 
 | App state | `snapshot` returns `liveDemo` (the room), `conversationList`, `activeElement` (is the composer focused?), `alerts` and the viewport. |
 | QA bridge method | `eval 'window.__MINGLE_QA__.seedScrollPerformanceHistory()'` |
 | Text overflow | `overflow` scans the current screen; `overflow --locale all --shots <dir> --out <file>` reloads the same path in each of the 15 UI locales, screenshots each, then returns to the starting locale. |
+| Every layer of the UI | `crawl --routes <ko paths> [--locales ko] [--states <discovery.json>] --out <file> --shots <dir>` taps every safe control on each screen and in each sheet/menu it opens, scans every state, and replays the states per locale. |
 | Relaunch | `app terminate`, then `app launch`. |
 | Native logs | `logs --grep STT` (device syslog lines from the app since the session started). |
 | Client events | LAN profile only (local DB), read-only: `SELECT created_at, event_type, metadata FROM app.app_event_logs WHERE created_at > '<start UTC>' ORDER BY created_at;` |
