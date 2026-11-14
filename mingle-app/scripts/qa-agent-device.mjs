@@ -711,6 +711,13 @@ async function cmdOverflow(args) {
       const [pathname, search = ''] = String(startPath).split('?');
       const target = withLocalePath(pathname, locale) + (search ? `?${search}` : '');
       await evalInWebView(state, `(location.assign(${JSON.stringify(target)}), true)`);
+      // Wait for the new page (not the old one still unloading), then let it render.
+      const deadline = Date.now() + 30000;
+      for (;;) {
+        await delay(500);
+        const ready = await evalInWebView(state, `location.pathname === ${JSON.stringify(withLocalePath(pathname, locale))} && document.readyState === 'complete'`).catch(() => false);
+        if (ready || Date.now() > deadline) break;
+      }
       await delay(settleMs);
     }
     const scan = await evalInWebView(state, expression);
@@ -721,7 +728,7 @@ async function cmdOverflow(args) {
       fs.writeFileSync(file, Buffer.from(base64, 'base64'));
       scan.screenshot = file;
     }
-    results.push({ locale: locale ?? scan?.locale ?? null, ...scan });
+    results.push({ ...scan, documentLang: scan?.locale ?? null, locale: locale ?? scan?.locale ?? null });
   }
   if (localeArg) {
     await evalInWebView(state, `(location.assign(${JSON.stringify(startPath)}), true)`);
