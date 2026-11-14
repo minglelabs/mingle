@@ -27,9 +27,9 @@
 | | 한국어 (한국인 대상) | 영어 (외국인 대상, 다른 언어의 기준) |
 |---|---|---|
 | 한 줄 | 외국인 친구, 말이 안 통해도 사귈 수 있어요 | Make Korean friends, even before your Korean is good |
-| App Store 제목 (30자) | HashChat: 외국인 친구·언어교환 | HashChat: Make Korean Friends |
-| 부제 (30자) | 말하면 통역되는 글로벌 친구 톡 | Language exchange, translated |
-| 일본어 제목/부제 | HashChat: 韓国人の友達・言語交換 / 話すと通訳される韓国語トーク | |
+| App Store 제목 (짧게, 검색 결과에서 안 잘리게) | HashChat: 외국인 친구 | HashChat: Korean Friends |
+| 부제 (실시간 통역이 차별점이라는 걸 여기서 말한다) | 실시간 통역되는 언어교환 톡 | Voice & chat, interpreted live |
+| 일본어 제목/부제 | HashChat: 韓国人の友達 / リアルタイム通訳で言語交換 | |
 
 ## 검색어는 옛것까지 유지
 
