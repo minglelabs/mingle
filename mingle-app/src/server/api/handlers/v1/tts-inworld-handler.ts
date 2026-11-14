@@ -8,7 +8,6 @@ import {
   parseClientContext,
 } from '@/lib/app-analytics'
 import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
-import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
 import { resolveTtsRuntimeSelection, synthesizeSpeech } from '@/server/api/shared/tts-provider'
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
 import { randomUUID } from 'node:crypto'
@@ -27,7 +26,6 @@ function normalizeLanguage(input?: string): string | null {
 export async function handleTtsInworldV1(request: NextRequest) {
   const body = await request.json().catch((): Record<string, unknown> => ({}))
   const text = typeof body?.text === 'string' ? body.text.trim() : ''
-  const requestedVoiceId = typeof body?.voiceId === 'string' ? body.voiceId.trim() : ''
   const language = normalizeLanguage(typeof body?.language === 'string' ? body.language : '')
   const sessionKeyHint = typeof body?.sessionKey === 'string' ? body.sessionKey.trim() : null
   const clientMessageId = typeof body?.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : null
@@ -38,19 +36,12 @@ export async function handleTtsInworldV1(request: NextRequest) {
   const buildMissingCredentialsResponse = () => {
     const response = NextResponse.json(
       {
-        error:
-          'INWORLD_BASIC (or INWORLD_RUNTIME_BASE64_CREDENTIAL / INWORLD_BASIC_CREDENTIAL) is required',
+        error: 'GEMINI_API_KEY is required',
       },
       { status: 500 },
     )
     ensureTrackingContext(request, response, { sessionKeyHint })
     return response
-  }
-
-  // Inworld path keeps the original check order (credentials, then text).
-  // Gemini can synthesize without Inworld credentials; it only needs them to fall back.
-  if (ttsSelection.provider === 'inworld' && !getInworldAuthHeaderValue()) {
-    return buildMissingCredentialsResponse()
   }
 
   if (!text) {
@@ -76,7 +67,6 @@ export async function handleTtsInworldV1(request: NextRequest) {
     const result = await synthesizeSpeech({
       text,
       language,
-      requestedVoiceId,
       ttsModel: ttsSelection.value,
     })
     const fallbackMetadata = result.fallbackFrom ? { fallbackFrom: result.fallbackFrom } : {}

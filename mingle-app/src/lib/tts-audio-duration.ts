@@ -1,8 +1,8 @@
 // Clip-length estimate for the iOS native TTS watchdog. The native player
 // reports the end of a clip over the bridge; the watchdog only frees the queue
 // when that report never arrives, so it must outlast the clip itself. The TTS
-// API returns MP3 (Inworld) or WAV (Gemini); both carry enough header data to
-// derive the duration without decoding.
+// API returns WAV (Gemini; MP3 from the retired Inworld path is still read),
+// and both carry enough header data to derive the duration without decoding.
 
 // Old fixed timeout; still the floor so short clips behave as before.
 export const NATIVE_TTS_WATCHDOG_MIN_TIMEOUT_MS = 15_000

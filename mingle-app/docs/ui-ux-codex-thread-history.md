@@ -2,6 +2,16 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-14 — Read-aloud translation starts about a second sooner, long lines get audio again, and Inworld is gone
+
+- Surface: `server/api/shared/tts-provider.ts`, `lib/tts-models.ts`, `tts-inworld-handler.ts` (the `/tts/inworld` path is kept for installed apps), the TTS model row in settings (PR #542).
+- Issue: A short read-aloud line took about 2.4 s before it played, and lines over about 1,000 characters got no audio at all. In prod over 14 days, 12 of the 15 Gemini TTS failures were lines of 861-3,375 characters. Each failure fell back to Inworld, which has answered 402 on every call since 10-28.
+- Cause: The Gemini call waited for the whole clip in one response, and the 8 s timeout capped the whole request, while long lines take 12-26 s to synthesize. The Inworld fallback depended on an account that no longer works.
+- Resolution: The server asks Gemini to stream (`stream: true`) and joins the 24 kHz PCM chunks into the same WAV clip, so apps and native players are unchanged. `GEMINI_TTS_TIMEOUT_MS` now ends a call only after 8 s with no data. A failed synthesis is retried once with the other Gemini model (Flash-Lite ↔ Flash). The Inworld provider, its credentials and its voice lookup are removed. Settings offers `gemini-3.8-flash-lite-tts` (default, listed first) and `gemini-3.8-flash-tts`. A stored `inworld-tts-1.5-mini` (one user) now follows the default.
+- Measurements (same 30 lines in 15 languages, back to back, from Seoul): short-line clip ready in 1.45 s instead of 2.38 s; ~500-character lines 5.2 s instead of 5.4 s. A 2,207-character line returned 155 s of audio in 22.8 s.
+- Investigated, not adopted: Soniox `tts-rt-v2` gave a first sound in 0.4-0.5 s, but its REST stream is paced at real time (a short clip is complete only after about 4.5 s). Same-text cost is about 1.7× Gemini's. Content errors were similar (27 vs 23 over 30 clips, judged by gpt-4o-transcribe + gpt-5.4-mini). Streaming playback in the app (first sound about 0.85 s with Gemini) would need native player changes and a store release.
+- Verification: `tts-provider`, `tts-models`, `tts-inworld-handler`, `translate/finalize` and account-preference suites; full unit suite (5,135 pass; the two `integration/live` files need a running server). Live calls returned 24 kHz WAV, and the transcription matched the text. Not checked on a device.
+
 ## 2026-11-13 — Live STT keeps running across a tab switch and room re-entry
 
 - Surface: `use-realtime-stt.ts` (room hook unmount), `bottom-tab-bar.tsx`, `conversation-list.tsx`, `lib/tab-navigation.ts`.
