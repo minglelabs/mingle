@@ -9,6 +9,7 @@ import {
   resetNativeDeviceAudioStoresForTests,
   resolveEffectiveSttCaptureSource,
   resolveNativeDeviceAudioSupported,
+  shouldOfferDeviceAudioOnEarphonesIn,
   setSttCaptureSourcePick,
   shouldPlayTtsViaNativeShell,
   subscribeNativeDeviceAudioCapability,
@@ -93,6 +94,25 @@ describe('effective capture source', () => {
     expect(resolveEffectiveSttCaptureSource({ supported: false, earphoneModeEnabled: true, pick: 'device_audio' })).toBe('microphone')
     expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: false, pick: 'device_audio' })).toBe('microphone')
     expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: true, pick: 'microphone' })).toBe('microphone')
+  })
+
+  it('captures device audio outside earphone mode only after the opt-in', () => {
+    expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: false, deviceAudioOptIn: true, pick: 'device_audio' })).toBe('device_audio')
+    expect(resolveEffectiveSttCaptureSource({ supported: false, earphoneModeEnabled: false, deviceAudioOptIn: true, pick: 'device_audio' })).toBe('microphone')
+    expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: false, deviceAudioOptIn: true, pick: 'microphone' })).toBe('microphone')
+  })
+})
+
+describe('device audio offer when earphones go in', () => {
+  const base = { earphonesJustConnected: true, supported: true, sessionRunning: true, captureSource: 'microphone' as const }
+  it('asks when earphones go in during a microphone-only session', () => {
+    expect(shouldOfferDeviceAudioOnEarphonesIn(base)).toBe(true)
+  })
+  it('stays quiet otherwise', () => {
+    expect(shouldOfferDeviceAudioOnEarphonesIn({ ...base, earphonesJustConnected: false })).toBe(false)
+    expect(shouldOfferDeviceAudioOnEarphonesIn({ ...base, supported: false })).toBe(false)
+    expect(shouldOfferDeviceAudioOnEarphonesIn({ ...base, sessionRunning: false })).toBe(false)
+    expect(shouldOfferDeviceAudioOnEarphonesIn({ ...base, captureSource: 'device_audio' })).toBe(false)
   })
 })
 
