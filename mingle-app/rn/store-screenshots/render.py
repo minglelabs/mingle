@@ -252,7 +252,8 @@ def main() -> None:
                     continue
                 if shot.get("scene"):
                     scene = shot["scene"]
-                    lines = dm[scene["lines"]][: scene.get("count", 4)]
+                    # A viewer can have its own lines (the Korean viewer talks with a foreign friend).
+                    lines = (dm.get("viewerOverrides", {}).get(lang, {}).get(scene["lines"]) or dm[scene["lines"]])[: scene.get("count", 4)]
                     band = scene.get("band", 370)
                     render(BOOKING_PAGE.format(
                         bar=bar, ink=ink, lang=lang, dir="rtl" if lang == "ar" else "ltr", W=W, H=H,

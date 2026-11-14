@@ -8,12 +8,12 @@ export const HASHCHAT_OG_IMAGE = {
   url: "/og-hashchat.png?v=20261112",
   width: 1200,
   height: 630,
-  alt: "HashChat (formerly Mingle): a messenger that interprets as you talk",
+  alt: "HashChat: make Korean friends, interpreted as you talk",
 };
 
-export const HASHCHAT_OG_TITLE = "HashChat (formerly Mingle): translating messenger";
+export const HASHCHAT_OG_TITLE = "HashChat: make Korean friends";
 export const HASHCHAT_OG_DESCRIPTION =
-  "Talk with friends abroad, each in your own language. Chats, voice and posts are interpreted as you talk.";
+  "Make Korean friends, even before your Korean is good. Chats show in your own language and voice talks are interpreted live.";
 
 /** openGraph + twitter for one page, always with the HashChat card. */
 export function shareLinkPreview(title: string, description: string): Pick<Metadata, "openGraph" | "twitter"> {

@@ -49,7 +49,7 @@
 		<true/>
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>HashChat uses your microphone for real-time speech translation.</string>
+	<string>HashChat uses your microphone to interpret your voice talks with friends in real time.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>HashChat uses your camera to scan profile QR codes.</string>
 	<key>NSContactsUsageDescription</key>

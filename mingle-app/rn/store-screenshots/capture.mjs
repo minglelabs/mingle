@@ -277,7 +277,8 @@ const VOICE_TALK_CSS = `
 
 function dmHtml(lang, kind, { call = false } = {}) {
   const partner = chat.partners[lang][0];
-  const lines = dm[kind];
+  // A viewer can have its own lines (the Korean viewer talks with a foreign friend).
+  const lines = dm.viewerOverrides?.[lang]?.[kind] ?? dm[kind];
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const title = kind === 'booking' ? dm.bookingTitle[lang] : dm.friendName[partner];
   const avatar = kind === 'booking' ? 'squirrel.svg' : 'rabbit.svg';
