@@ -101,8 +101,8 @@ export default function InterestLanguageSheet({
           <LanguageFlag language={lang.code} className="translate-y-[0.12em] text-[2rem] leading-none" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">{lang.localizedName}</span>
-          <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">{lang.secondaryLabel}</span>
+          <span suppressHydrationWarning className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">{lang.localizedName}</span>
+          <span suppressHydrationWarning className="mt-0.5 block truncate text-[0.9rem] text-slate-500">{lang.secondaryLabel}</span>
         </span>
         <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${selected ? "border-amber-500 bg-amber-500 text-white" : "border-slate-300 text-transparent"}`}>
           <Check size={14} strokeWidth={3.2} />

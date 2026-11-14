@@ -382,10 +382,10 @@ export default function LanguageOnboardingModal({
           <LanguageFlag language={lang.code} className="translate-y-[0.12em] text-[2.4rem] leading-none" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[1.3rem] font-bold tracking-[-0.01em] text-slate-950">
+          <span suppressHydrationWarning className="block truncate text-[1.3rem] font-bold tracking-[-0.01em] text-slate-950">
             {lang.localizedName}
           </span>
-          <span className="mt-0.5 block truncate text-[0.95rem] text-slate-500">
+          <span suppressHydrationWarning className="mt-0.5 block truncate text-[0.95rem] text-slate-500">
             {lang.secondaryLabel}
           </span>
         </span>

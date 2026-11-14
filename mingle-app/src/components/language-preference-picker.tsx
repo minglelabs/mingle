@@ -65,10 +65,10 @@ function LanguageOptionButton({
         <LanguageFlag language={option.code} className="text-[2rem] leading-none" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
+        <span suppressHydrationWarning className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
           {option.localizedName}
         </span>
-        <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">{option.secondaryLabel}</span>
+        <span suppressHydrationWarning className="mt-0.5 block truncate text-[0.9rem] text-slate-500">{option.secondaryLabel}</span>
       </span>
       <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${selected
         ? "border-amber-500 bg-amber-500 text-white"
@@ -158,6 +158,8 @@ export default function LanguagePreferencePicker({
             <button
               key={code}
               type="button"
+              // Intl language names differ between Node and the WebView (see language-selector.logic.ts).
+              suppressHydrationWarning
               onClick={() => handleToggle(code)}
               disabled={!canRemove}
               className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-amber-400 bg-white text-[2rem] leading-none shadow-[0_14px_28px_rgba(245,158,11,0.14)] transition active:scale-95 disabled:cursor-default"
