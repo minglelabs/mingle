@@ -47,7 +47,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const chat = JSON.parse(await fs.readFile(path.join(HERE, 'chat.json'), 'utf8'));
 const dm = JSON.parse(await fs.readFile(path.join(HERE, 'dm.json'), 'utf8'));
 // Screens drawn from JSON here; they need no devbox server and no sign-in.
-const DRAWN_SCREENS = ['chat', 'dm', 'voice', 'booking'];
+const DRAWN_SCREENS = ['chat', 'dm', 'voice', 'booking', 'group', 'trip'];
 const NEEDS_SERVER = !SCREENS || SCREENS.some((name) => !DRAWN_SCREENS.includes(name) && !name.startsWith('hash-rush'));
 
 const browser = await puppeteer.launch({
@@ -214,7 +214,7 @@ const VOICE_TALK_COPY = {
   th: { name: 'โทรด้วยเสียง', me: 'ฉัน', empty: 'ที่ว่าง', micOn: 'เสียงของฉัน เปิด', leave: 'ออก' },
   vi: { name: 'Gọi thoại', me: 'Tôi', empty: 'Chỗ trống', micOn: 'Giọng tôi bật', leave: 'Rời đi' },
 };
-function voiceTalkPanel(lang, { partner, partnerName, partnerAvatar, meAvatar, speaking }) {
+function voiceTalkPanel(lang, { partner, partnerName, partnerAvatar, meAvatar, speaking, group = null }) {
   const copy = VOICE_TALK_COPY[lang] || VOICE_TALK_COPY.en;
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const seat = (who) => `
@@ -227,16 +227,22 @@ function voiceTalkPanel(lang, { partner, partnerName, partnerAvatar, meAvatar, s
       <span class="vt-label">${esc(who.label)}</span>
     </div>`;
   const empty = `<div class="vt-seat"><span class="vt-ring"><span class="vt-face vt-empty"><svg viewBox="0 0 24 24" class="vt-plus"><path d="M12 5v14M5 12h14"/></svg></span></span><span class="vt-label">${copy.empty}</span></div>`;
-  const seats = [
-    seat({ avatar: meAvatar, lang, label: copy.me, speaking: speaking === 'me' }),
-    seat({ avatar: partnerAvatar, lang: partner, label: partnerName, speaking: speaking === 'friend' }),
-    empty,
-  ].join('');
+  const seatList = group
+    ? [
+      seat({ avatar: meAvatar, lang, label: copy.me, speaking: speaking === 'me' }),
+      ...group.map((who) => seat({ avatar: who.avatar, lang: who.lang, label: who.name, speaking: speaking === who.key })),
+    ]
+    : [
+      seat({ avatar: meAvatar, lang, label: copy.me, speaking: speaking === 'me' }),
+      seat({ avatar: partnerAvatar, lang: partner, label: partnerName, speaking: speaking === 'friend' }),
+    ];
+  const filled = seatList.length;
+  const seats = [...seatList, ...(filled < 8 ? [empty] : [])].join('');
   const mic = '<svg viewBox="0 0 24 24" style="width:17px;height:17px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
   const phoneOff = '<svg viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M10.7 13.3a16 16 0 0 0 3.4 2.6l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 4.2 2 2 0 0 1 5.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8.9 9.7"/><path d="M22 2 2 22"/></svg>';
   return `
   <div class="vt-panel">
-    <div class="vt-top"><span class="vt-dot"><i></i><b></b></span><span class="vt-title">${copy.name} · 2/8</span>
+    <div class="vt-top"><span class="vt-dot"><i></i><b></b></span><span class="vt-title">${copy.name} · ${filled}/8</span>
       <svg viewBox="0 0 24 24" class="vt-chev"><path d="m18 15-6-6-6 6"/></svg></div>
     <div class="vt-grid">${seats}</div>
     <div class="vt-buttons" dir="ltr"><span class="vt-mic">${mic}${copy.micOn}</span><span class="vt-leave">${phoneOff}${copy.leave}</span></div>
@@ -277,19 +283,26 @@ const VOICE_TALK_CSS = `
 
 function dmHtml(lang, kind, { call = false } = {}) {
   const partner = chat.partners[lang][0];
+  const group = kind === 'group' ? dm.group : null;
   // A viewer can have its own lines (the Korean viewer talks with a foreign friend).
-  const lines = dm.viewerOverrides?.[lang]?.[kind] ?? dm[kind];
+  const lines = group ? group.lines : (dm.viewerOverrides?.[lang]?.[kind] ?? dm[kind]);
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  const title = kind === 'booking' ? dm.bookingTitle[lang] : dm.friendName[partner];
+  // In a group the seats are the same for every viewer; a line in the viewer's own language shows once.
+  const others = group ? group.seats : null;
+  const seatOf = (key) => others?.find((who) => who.key === key);
+  const title = group ? group.title[lang] : kind === 'booking' ? dm.bookingTitle[lang] : dm.friendName[partner];
   const avatar = kind === 'booking' ? 'squirrel.svg' : 'rabbit.svg';
-  const listening = kind !== 'dm';
+  const listening = kind !== 'dm' && kind !== 'trip';
   const meAvatar = 'fox.svg';
   // In a call the last line is the one being spoken.
-  const speaking = lines[lines.length - 1]?.by === 'me' ? 'me' : 'friend';
+  const lastBy = lines[lines.length - 1]?.by;
+  const speaking = group ? lastBy : lastBy === 'me' ? 'me' : 'friend';
   const partnerName = kind === 'booking' ? dm.bookingTitle[lang] : dm.friendName[partner];
   const bubbles = lines.map((line) => {
     const mine = line.by === 'me';
-    const order = mine ? [lang, partner] : [partner, lang];
+    const who = group && !mine ? seatOf(line.by) : null;
+    const theirs = who ? who.lang : partner;
+    const order = theirs === lang ? [lang] : mine ? [lang, theirs] : [theirs, lang];
     const shown = line.live ? order.slice(0, 1) : order;
     const rows = shown.map((l, k) => `
       <div class="row${k === 0 ? ' original' : ''}">
@@ -299,7 +312,9 @@ function dmHtml(lang, kind, { call = false } = {}) {
     const pending = line.live ? '<div class="row"><span class="dots"><b></b><b></b><b></b></span></div>' : '';
     return mine
       ? `<div class="msg own"><div class="bubble">${rows}${pending}</div></div>`
-      : `<div class="msg"><img class="avatar" src="${pathToFileURL(path.join(AVATARS, avatar))}"><div class="bubble">${rows}</div></div>`;
+      : who
+        ? `<div class="msg"><img class="avatar" src="${pathToFileURL(path.join(AVATARS, who.avatar))}"><div><div class="who">${esc(who.name)}</div><div class="bubble">${rows}</div></div></div>`
+        : `<div class="msg"><img class="avatar" src="${pathToFileURL(path.join(AVATARS, avatar))}"><div class="bubble">${rows}</div></div>`;
   }).join('');
   const micIcon = '<svg viewBox="0 0 24 24" style="width:20px;height:20px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
   const stopIcon = '<svg viewBox="0 0 24 24" style="width:18px;height:18px"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>';
@@ -335,13 +350,15 @@ function dmHtml(lang, kind, { call = false } = {}) {
   .start{margin:0 auto;background:linear-gradient(90deg,#FFB400,#FF7A00);color:#fff;border-radius:24px;height:46px;width:112px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:17px;font-weight:600;box-shadow:0 6px 14px rgba(255,140,0,.3)}
   .start.live{background:#1F2430;box-shadow:0 6px 14px rgba(31,36,48,.25)}
   svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-  ${call ? `${VOICE_TALK_CSS} main{padding-top:200px}` : ''}
+  .who{font-size:12px;color:#6B7280;margin:0 0 3px 4px}
+  ${call ? `${VOICE_TALK_CSS} main{padding-top:${group ? 268 : 200}px}` : ''}
+  ${group ? 'main{justify-content:flex-end;padding-bottom:14px} .vt-panel{background:#fff}' : ''}
   </style></head><body>
   <header><span class="back">‹</span><span class="title">${esc(title)}</span>
-    <span class="pill">${[lang, partner].map((l) => chat.flags[l]).join('')}<b>⌄</b></span>
+    <span class="pill">${(group ? [...new Set([lang, ...others.map((who) => who.lang)])].slice(0, 3) : [lang, partner]).map((l) => chat.flags[l]).join('')}<b>⌄</b></span>
     <span class="icons"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><rect x="11" y="11" width="8" height="6" rx="1.5"/></svg>
     <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></header>
-  ${call ? voiceTalkPanel(lang, { partner, partnerName, partnerAvatar: avatar, meAvatar, speaking }) : ''}
+  ${call ? voiceTalkPanel(lang, { partner, partnerName, partnerAvatar: avatar, meAvatar, speaking, group: others }) : ''}
   <main>${bubbles}</main>
   <footer>${call
     ? '<span class="vt-phone"><svg viewBox="0 0 24 24" style="width:20px;height:20px"><path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 4.2 2 2 0 0 1 5.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L9 9.6a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg><i></i></span>'
@@ -404,10 +421,10 @@ for (const lang of Object.keys(LANGS)) {
   const tmp = path.join(os.tmpdir(), `hashchat-chat-${lang}.html`);
   await fs.writeFile(tmp, chatHtml(lang));
   await capture(lang, dir, 'chat', pathToFileURL(tmp).href);
-  for (const kind of ['dm', 'voice', 'booking']) {
+  for (const kind of ['dm', 'voice', 'booking', 'group', 'trip']) {
     const page = path.join(os.tmpdir(), `hashchat-${kind}-${lang}.html`);
     // 03: the voice talk call itself; 04 puts the booking call on a phone in its scene.
-    await fs.writeFile(page, dmHtml(lang, kind, { call: kind !== 'dm' }));
+    await fs.writeFile(page, dmHtml(lang, kind, { call: kind !== 'dm' && kind !== 'trip' }));
     await capture(lang, dir, kind, pathToFileURL(page).href);
   }
 

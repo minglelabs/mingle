@@ -45,120 +45,28 @@
     },
     {
       "id": "03-voice",
-      "capture": "captures/{lang}/voice.png",
+      "capture": "captures/{lang}/group.png",
       "caption": {
-        "ko": "음성 대화도\n실시간 통역",
-        "en": "Voice talks,\ninterpreted live",
-        "ja": "ボイストークも\nリアルタイム通訳",
-        "zh-cn": "语音聊天\n实时口译",
-        "zh-tw": "語音聊天\n即時口譯",
-        "ar": "محادثات صوتية\nبترجمة فورية",
-        "de": "Sprachchats,\nlive gedolmetscht",
-        "es": "Charlas de voz,\ninterpretadas en vivo",
-        "fr": "Appels vocaux,\ninterprétés en direct",
-        "hi": "वॉइस बातचीत,\nलाइव अनुवाद के साथ",
-        "it": "Chiamate vocali,\ntradotte dal vivo",
-        "pt": "Conversas por voz,\ninterpretadas ao vivo",
-        "ru": "Голосовые разговоры\nс живым переводом",
-        "th": "คุยด้วยเสียง\nพร้อมล่ามเรียลไทม์",
-        "vi": "Trò chuyện bằng giọng nói,\nphiên dịch trực tiếp"
+        "ko": "여럿이 함께 떠드는\n실시간 통역 보이스톡",
+        "en": "Group voice talks,\ninterpreted live",
+        "ja": "みんなでボイストーク\nリアルタイム通訳つき",
+        "zh-cn": "多人语音聊天\n实时口译",
+        "zh-tw": "多人語音聊天\n即時口譯",
+        "ar": "محادثات صوتية جماعية\nبترجمة فورية",
+        "de": "Gruppen-Sprachchats,\nlive gedolmetscht",
+        "es": "Charlas de voz en grupo,\ninterpretadas en vivo",
+        "fr": "Appels vocaux en groupe,\ninterprétés en direct",
+        "hi": "ग्रुप वॉइस बातचीत,\nलाइव अनुवाद के साथ",
+        "it": "Chiamate di gruppo,\ntradotte dal vivo",
+        "pt": "Conversas em grupo por voz,\ninterpretadas ao vivo",
+        "ru": "Групповые голосовые чаты\nс живым переводом",
+        "th": "คุยเสียงเป็นกลุ่ม\nพร้อมล่ามเรียลไทม์",
+        "vi": "Trò chuyện nhóm bằng giọng nói,\nphiên dịch trực tiếp"
       },
       "photo": "scenes/backdrop-03.jpg"
     },
     {
-      "id": "04-booking",
-      "capture": "captures/{lang}/booking.png",
-      "caption": {
-        "ko": "현지 친구 추천받고\n예약 전화도 통역으로",
-        "en": "Ask locals for tips,\nbook with interpreting",
-        "ja": "現地の人におすすめを聞いて\n予約電話も通訳で",
-        "zh-cn": "向当地人求推荐\n预约电话也有口译",
-        "zh-tw": "向當地人求推薦\n預約電話也有口譯",
-        "ar": "اسأل السكان المحليين\nواحجز بترجمة فورية",
-        "de": "Tipps von Einheimischen,\nbuchen mit Dolmetscher",
-        "es": "Pide consejos a locales,\nreserva con intérprete",
-        "fr": "Les bons plans des locaux,\nréservez avec interprète",
-        "hi": "लोकल लोगों से टिप्स लें,\nअनुवाद के साथ बुक करें",
-        "it": "Chiedi consigli ai locali,\nprenota con l'interprete",
-        "pt": "Peça dicas aos locais,\nreserve com intérprete",
-        "ru": "Советы от местных\nи запись с переводом",
-        "th": "ถามคนท้องถิ่นหาร้านเด็ด\nโทรจองพร้อมล่าม",
-        "vi": "Hỏi người địa phương,\nđặt chỗ có phiên dịch"
-      },
-      "scene": {
-        "lines": "booking",
-        "count": 4,
-        "background": [
-          "booking/sushi.jpg",
-          "booking/restaurant.jpg"
-        ]
-      }
-    },
-    {
-      "id": "05-feed",
-      "capture": "captures/{lang}/translation.png",
-      "caption": {
-        "ko": "친구들의 일상을\n내 언어로",
-        "en": "Friends' posts\nin your language",
-        "ja": "友だちの投稿を\n自分の言語で",
-        "zh-cn": "朋友的动态\n用你的语言看",
-        "zh-tw": "朋友的動態\n用你的語言看",
-        "ar": "منشورات أصدقائك\nبلغتك",
-        "de": "Posts deiner Freunde\nin deiner Sprache",
-        "es": "Posts de tus amigos\nen tu idioma",
-        "fr": "Les posts de vos amis\ndans votre langue",
-        "hi": "दोस्तों की पोस्ट\nअपनी भाषा में",
-        "it": "I post dei tuoi amici\nnella tua lingua",
-        "pt": "Posts dos amigos\nno seu idioma",
-        "ru": "Посты друзей\nна вашем языке",
-        "th": "โพสต์ของเพื่อน\nในภาษาของคุณ",
-        "vi": "Bài đăng của bạn bè\nbằng tiếng của bạn"
-      }
-    },
-    {
-      "id": "06-comments",
-      "capture": "captures/{lang}/comments.png",
-      "caption": {
-        "ko": "친구 글에 댓글도\n내 언어로",
-        "en": "Comment on posts\nin your language",
-        "ja": "友だちの投稿にも\n自分の言葉でコメント",
-        "zh-cn": "用自己的语言\n给朋友留言",
-        "zh-tw": "用自己的語言\n給朋友留言",
-        "es": "Comenta publicaciones\nen tu idioma",
-        "fr": "Commentez les posts\ndans votre langue",
-        "de": "Kommentiere Beiträge\nin deiner Sprache",
-        "it": "Commenta i post\nnella tua lingua",
-        "pt": "Comente posts\nno seu idioma",
-        "ru": "Комментируйте посты\nна своём языке",
-        "ar": "علّق على المنشورات\nبلغتك",
-        "hi": "पोस्ट पर कमेंट करें\nअपनी भाषा में",
-        "th": "คอมเมนต์โพสต์เพื่อน\nเป็นภาษาของคุณ",
-        "vi": "Bình luận bài viết\nbằng ngôn ngữ của bạn"
-      }
-    },
-    {
-      "id": "07-hash-rush",
-      "capture": "captures/{lang}/hash-rush.png",
-      "caption": {
-        "ko": "친구와 함께\n미니게임",
-        "en": "Play games\nwith friends",
-        "ja": "友だちと\nゲームで遊ぼう",
-        "zh-cn": "和朋友\n一起玩游戏",
-        "zh-tw": "和朋友\n一起玩遊戲",
-        "ar": "العب ألعابًا\nمع أصدقائك",
-        "de": "Spiele\nmit Freunden",
-        "es": "Juega\ncon tus amigos",
-        "fr": "Jouez\navec vos amis",
-        "hi": "दोस्तों के साथ\nगेम खेलिए",
-        "it": "Gioca\ncon gli amici",
-        "pt": "Jogue\ncom os amigos",
-        "ru": "Играйте\nс друзьями",
-        "th": "เล่นเกม\nกับเพื่อน ๆ",
-        "vi": "Chơi game\ncùng bạn bè"
-      }
-    },
-    {
-      "id": "08-safety",
+      "id": "04-safety",
       "caption": {
         "ko": "변태·비매너·사기 유저는\n영구 퇴출해요",
         "en": "Creeps, rude users, scammers:\nbanned for good",
@@ -272,6 +180,121 @@
           "vi": "Báo cáo chỉ một chạm, đội ngũ kiểm tra từng trường hợp."
         }
       }
+    },
+    {
+      "id": "05-feed",
+      "capture": "captures/{lang}/translation.png",
+      "caption": {
+        "ko": "친구들의 일상을\n내 언어로",
+        "en": "Friends' posts\nin your language",
+        "ja": "友だちの投稿を\n自分の言語で",
+        "zh-cn": "朋友的动态\n用你的语言看",
+        "zh-tw": "朋友的動態\n用你的語言看",
+        "ar": "منشورات أصدقائك\nبلغتك",
+        "de": "Posts deiner Freunde\nin deiner Sprache",
+        "es": "Posts de tus amigos\nen tu idioma",
+        "fr": "Les posts de vos amis\ndans votre langue",
+        "hi": "दोस्तों की पोस्ट\nअपनी भाषा में",
+        "it": "I post dei tuoi amici\nnella tua lingua",
+        "pt": "Posts dos amigos\nno seu idioma",
+        "ru": "Посты друзей\nна вашем языке",
+        "th": "โพสต์ของเพื่อน\nในภาษาของคุณ",
+        "vi": "Bài đăng của bạn bè\nbằng tiếng của bạn"
+      }
+    },
+    {
+      "id": "06-hash-rush",
+      "capture": "captures/{lang}/hash-rush.png",
+      "caption": {
+        "ko": "친구와 함께\n미니게임",
+        "en": "Play games\nwith friends",
+        "ja": "友だちと\nゲームで遊ぼう",
+        "zh-cn": "和朋友\n一起玩游戏",
+        "zh-tw": "和朋友\n一起玩遊戲",
+        "ar": "العب ألعابًا\nمع أصدقائك",
+        "de": "Spiele\nmit Freunden",
+        "es": "Juega\ncon tus amigos",
+        "fr": "Jouez\navec vos amis",
+        "hi": "दोस्तों के साथ\nगेम खेलिए",
+        "it": "Gioca\ncon gli amici",
+        "pt": "Jogue\ncom os amigos",
+        "ru": "Играйте\nс друзьями",
+        "th": "เล่นเกม\nกับเพื่อน ๆ",
+        "vi": "Chơi game\ncùng bạn bè"
+      }
+    },
+    {
+      "id": "07-trip",
+      "capture": "captures/{lang}/trip.png",
+      "caption": {
+        "ko": "외국인 친구와\n여행 계획도 함께",
+        "en": "Plan your Korea trip\nwith Korean friends",
+        "ja": "韓国人の友だちと\n韓国旅行を計画",
+        "zh-cn": "和韩国朋友\n一起规划韩国之旅",
+        "zh-tw": "和韓國朋友\n一起規劃韓國之旅",
+        "ar": "خطّط لرحلتك إلى كوريا\nمع أصدقاء كوريين",
+        "de": "Plane deine Korea-Reise\nmit koreanischen Freunden",
+        "es": "Planea tu viaje a Corea\ncon amigos coreanos",
+        "fr": "Préparez votre voyage en Corée\navec des amis coréens",
+        "hi": "कोरियाई दोस्तों के साथ\nकोरिया ट्रिप प्लान करें",
+        "it": "Organizza il viaggio in Corea\ncon amici coreani",
+        "pt": "Planeje sua viagem à Coreia\ncom amigos coreanos",
+        "ru": "Планируйте поездку в Корею\nс корейскими друзьями",
+        "th": "วางแผนเที่ยวเกาหลี\nกับเพื่อนคนเกาหลี",
+        "vi": "Lên kế hoạch du lịch Hàn Quốc\ncùng bạn người Hàn"
+      },
+      "photo": "scenes/backdrop-03.jpg"
+    },
+    {
+      "id": "08-booking",
+      "capture": "captures/{lang}/booking.png",
+      "caption": {
+        "ko": "현지 친구 추천받고\n예약 전화도 통역으로",
+        "en": "Ask locals for tips,\nbook with interpreting",
+        "ja": "現地の人におすすめを聞いて\n予約電話も通訳で",
+        "zh-cn": "向当地人求推荐\n预约电话也有口译",
+        "zh-tw": "向當地人求推薦\n預約電話也有口譯",
+        "ar": "اسأل السكان المحليين\nواحجز بترجمة فورية",
+        "de": "Tipps von Einheimischen,\nbuchen mit Dolmetscher",
+        "es": "Pide consejos a locales,\nreserva con intérprete",
+        "fr": "Les bons plans des locaux,\nréservez avec interprète",
+        "hi": "लोकल लोगों से टिप्स लें,\nअनुवाद के साथ बुक करें",
+        "it": "Chiedi consigli ai locali,\nprenota con l'interprete",
+        "pt": "Peça dicas aos locais,\nreserve com intérprete",
+        "ru": "Советы от местных\nи запись с переводом",
+        "th": "ถามคนท้องถิ่นหาร้านเด็ด\nโทรจองพร้อมล่าม",
+        "vi": "Hỏi người địa phương,\nđặt chỗ có phiên dịch"
+      },
+      "scene": {
+        "lines": "booking",
+        "count": 4,
+        "background": [
+          "booking/sushi.jpg",
+          "booking/restaurant.jpg"
+        ]
+      }
+    },
+    {
+      "id": "09-hash-rush-maps",
+      "capture": "captures/{lang}/hash-rush-maps.png",
+      "caption": {
+        "ko": "함께 즐기는\n다양한 맵",
+        "en": "New maps\nto play together",
+        "ja": "みんなで遊べる\n新しいマップ",
+        "zh-cn": "一起畅玩\n全新地图",
+        "zh-tw": "一起暢玩\n全新地圖",
+        "ar": "خرائط جديدة\nللعب معًا",
+        "de": "Neue Maps\nzum gemeinsamen Spielen",
+        "es": "Nuevos mapas\npara jugar juntos",
+        "fr": "De nouvelles cartes\nà jouer ensemble",
+        "hi": "साथ खेलने के लिए\nनए मैप",
+        "it": "Nuove mappe\nda giocare insieme",
+        "pt": "Novos mapas\npara jogar juntos",
+        "ru": "Новые карты\nдля совместной игры",
+        "th": "แมปใหม่\nเล่นด้วยกัน",
+        "vi": "Bản đồ mới\nđể chơi cùng nhau"
+      },
+      "iosOnly": true
     }
   ],
   "uploadLocales": {

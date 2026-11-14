@@ -271,6 +271,254 @@
       }
     }
   ],
+  "group": {
+    "title": {
+      "ko": "K-POP 수다방",
+      "en": "K-pop chat room",
+      "ja": "K-POPおしゃべり部屋",
+      "zh-cn": "K-POP聊天室",
+      "zh-tw": "K-POP聊天室",
+      "ar": "غرفة دردشة الكيبوب",
+      "de": "K-Pop-Plauderrunde",
+      "es": "Sala de charla K-pop",
+      "fr": "Salon K-pop",
+      "hi": "K-pop चैट रूम",
+      "it": "Chiacchiere K-pop",
+      "pt": "Papo de K-pop",
+      "ru": "Болтаем о K-pop",
+      "th": "ห้องคุย K-pop",
+      "vi": "Phòng tám K-pop"
+    },
+    "seats": [
+      {
+        "key": "minji",
+        "name": "민지",
+        "lang": "ko",
+        "avatar": "rabbit.svg"
+      },
+      {
+        "key": "yuki",
+        "name": "ゆき",
+        "lang": "ja",
+        "avatar": "penguin.svg"
+      },
+      {
+        "key": "emma",
+        "name": "Emma",
+        "lang": "en",
+        "avatar": "bear.svg"
+      },
+      {
+        "key": "sofia",
+        "name": "Sofía",
+        "lang": "es",
+        "avatar": "squirrel.svg"
+      },
+      {
+        "key": "junho",
+        "name": "준호",
+        "lang": "ko",
+        "avatar": "raccoon.svg"
+      },
+      {
+        "key": "mei",
+        "name": "美玲",
+        "lang": "zh-tw",
+        "avatar": "whale.svg"
+      },
+      {
+        "key": "lucas",
+        "name": "Lucas",
+        "lang": "pt",
+        "avatar": "lion.svg"
+      }
+    ],
+    "lines": [
+      {
+        "by": "yuki",
+        "text": {
+          "ko": "뉴진스 신곡 들어 봤어?",
+          "en": "Have you heard NewJeans' new song?",
+          "ja": "NewJeansの新曲もう聴いた？",
+          "zh-cn": "你听过NewJeans的新歌了吗？",
+          "zh-tw": "你聽過NewJeans的新歌了嗎？",
+          "ar": "هل سمعتم أغنية NewJeans الجديدة؟",
+          "de": "Habt ihr den neuen Song von NewJeans schon gehört?",
+          "es": "¿Ya habéis oído la nueva canción de NewJeans?",
+          "fr": "Vous avez écouté le nouveau son de NewJeans ?",
+          "hi": "NewJeans का नया गाना सुना?",
+          "it": "Avete sentito la nuova canzone delle NewJeans?",
+          "pt": "Já ouviram a música nova do NewJeans?",
+          "ru": "Слышали новую песню NewJeans?",
+          "th": "ฟังเพลงใหม่ของ NewJeans หรือยัง",
+          "vi": "Mọi người nghe bài mới của NewJeans chưa?"
+        }
+      },
+      {
+        "by": "minji",
+        "text": {
+          "ko": "당연하지! 하루 종일 듣고 있어",
+          "en": "Of course! I've been playing it all day",
+          "ja": "もちろん！一日中聴いてるよ",
+          "zh-cn": "当然！我听了一整天",
+          "zh-tw": "當然！我聽了一整天",
+          "ar": "طبعًا! أسمعها طوال اليوم",
+          "de": "Klar! Läuft bei mir den ganzen Tag",
+          "es": "¡Claro! La llevo escuchando todo el día",
+          "fr": "Bien sûr ! Je l'écoute en boucle toute la journée",
+          "hi": "बिल्कुल! पूरे दिन से वही सुन रही हूँ",
+          "it": "Certo! La ascolto tutto il giorno",
+          "pt": "Claro! Tô ouvindo o dia todo",
+          "ru": "Конечно! Слушаю весь день",
+          "th": "แน่นอน! เปิดฟังทั้งวันเลย",
+          "vi": "Tất nhiên! Mình nghe cả ngày luôn"
+        }
+      },
+      {
+        "by": "emma",
+        "text": {
+          "ko": "춤 배우기 너무 어려워 😂",
+          "en": "The dance is so hard to learn 😂",
+          "ja": "ダンス覚えるの難しすぎ 😂",
+          "zh-cn": "舞蹈太难学了 😂",
+          "zh-tw": "舞蹈太難學了 😂",
+          "ar": "الرقصة صعبة جدًا 😂",
+          "de": "Der Tanz ist so schwer zu lernen 😂",
+          "es": "El baile es dificilísimo 😂",
+          "fr": "La choré est trop dure à apprendre 😂",
+          "hi": "डांस सीखना बहुत मुश्किल है 😂",
+          "it": "Il balletto è difficilissimo da imparare 😂",
+          "pt": "A coreografia é muito difícil 😂",
+          "ru": "Танец так сложно выучить 😂",
+          "th": "ท่าเต้นยากมากเลย 😂",
+          "vi": "Điệu nhảy khó học ghê 😂"
+        }
+      },
+      {
+        "by": "me",
+        "text": {
+          "ko": "같이 연습해요!",
+          "en": "Let's practice it together!",
+          "ja": "一緒に練習しよう！",
+          "zh-cn": "我们一起练吧！",
+          "zh-tw": "我們一起練吧！",
+          "ar": "لنتدرّب عليها معًا!",
+          "de": "Lasst uns zusammen üben!",
+          "es": "¡Practiquemos juntos!",
+          "fr": "On s'entraîne ensemble !",
+          "hi": "चलो साथ में प्रैक्टिस करते हैं!",
+          "it": "Esercitiamoci insieme!",
+          "pt": "Vamos ensaiar juntos!",
+          "ru": "Давайте репетировать вместе!",
+          "th": "มาซ้อมด้วยกันเถอะ!",
+          "vi": "Cùng tập với nhau nhé!"
+        }
+      },
+      {
+        "by": "sofia",
+        "live": true,
+        "text": {
+          "ko": "나도 배우고 싶어!",
+          "en": "Me too, I want to learn it!",
+          "ja": "私も覚えたい！",
+          "zh-cn": "我也想学！",
+          "zh-tw": "我也想學！",
+          "ar": "وأنا أيضًا أريد أن أتعلّمها!",
+          "de": "Ich auch, ich will ihn lernen!",
+          "es": "¡Yo también quiero aprenderlo!",
+          "fr": "Moi aussi, je veux l'apprendre !",
+          "hi": "मैं भी सीखना चाहती हूँ!",
+          "it": "Anch'io voglio impararlo!",
+          "pt": "Eu também quero aprender!",
+          "ru": "Я тоже хочу выучить!",
+          "th": "เราก็อยากเรียนด้วย!",
+          "vi": "Mình cũng muốn học!"
+        }
+      }
+    ]
+  },
+  "trip": [
+    {
+      "by": "me",
+      "text": {
+        "ko": "다음 달에 부산도 가 보고 싶어! 일정 같이 짜 줄래?",
+        "en": "I want to visit Busan next month too! Plan it with me?",
+        "ja": "来月は釜山にも行ってみたい！一緒にプラン立ててくれる？",
+        "zh-cn": "下个月我也想去釜山！一起排个行程吗？",
+        "zh-tw": "下個月我也想去釜山！一起排個行程嗎？",
+        "ar": "أريد زيارة بوسان أيضًا الشهر القادم! تخطّطين معي؟",
+        "de": "Nächsten Monat will ich auch nach Busan! Planst du mit mir?",
+        "es": "¡El mes que viene también quiero ir a Busan! ¿Lo planeamos juntos?",
+        "fr": "Le mois prochain, je veux aussi aller à Busan ! Tu m'aides à planifier ?",
+        "hi": "अगले महीने बुसान भी जाना है! प्लान बनाने में मदद करोगी?",
+        "it": "Il mese prossimo voglio andare anche a Busan! Mi aiuti a organizzare?",
+        "pt": "Mês que vem quero ir pra Busan também! Me ajuda a planejar?",
+        "ru": "В следующем месяце хочу ещё и в Пусан! Поможешь спланировать?",
+        "th": "เดือนหน้าอยากไปปูซานด้วย! ช่วยวางแผนด้วยกันหน่อยได้ไหม",
+        "vi": "Tháng sau mình muốn đi Busan nữa! Lên lịch cùng mình nhé?"
+      }
+    },
+    {
+      "by": "friend",
+      "text": {
+        "ko": "좋아! 1일차는 해운대, 2일차는 감천문화마을 어때?",
+        "en": "Sure! Day 1 Haeundae Beach, day 2 Gamcheon Culture Village?",
+        "ja": "いいよ！1日目は海雲台ビーチ、2日目は甘川文化村はどう？",
+        "zh-cn": "好啊！第一天海云台海滩，第二天甘川文化村怎么样？",
+        "zh-tw": "好啊！第一天海雲台海灘，第二天甘川文化村怎麼樣？",
+        "ar": "طبعًا! اليوم الأول شاطئ هايونده، والثاني قرية غامتشون الثقافية؟",
+        "de": "Klar! Tag 1 Haeundae Beach, Tag 2 Gamcheon Culture Village?",
+        "es": "¡Claro! ¿Día 1 la playa de Haeundae y día 2 la aldea cultural de Gamcheon?",
+        "fr": "Avec plaisir ! Jour 1 plage de Haeundae, jour 2 village culturel de Gamcheon ?",
+        "hi": "ज़रूर! पहले दिन हेउंदे बीच, दूसरे दिन गामचॉन कल्चर विलेज?",
+        "it": "Certo! Giorno 1 spiaggia di Haeundae, giorno 2 villaggio culturale di Gamcheon?",
+        "pt": "Claro! Dia 1 praia de Haeundae, dia 2 Vila Cultural de Gamcheon?",
+        "ru": "Конечно! В первый день пляж Хэундэ, во второй — деревня культуры Камчхон?",
+        "th": "ได้เลย! วันแรกหาดแฮอุนแด วันที่สองหมู่บ้านวัฒนธรรมคัมช็อนดีไหม",
+        "vi": "Được! Ngày 1 biển Haeundae, ngày 2 làng văn hóa Gamcheon nhé?"
+      }
+    },
+    {
+      "by": "me",
+      "text": {
+        "ko": "완벽해! KTX 표는 어떻게 예매해?",
+        "en": "Perfect! How do I book KTX tickets?",
+        "ja": "完璧！KTXのチケットはどうやって予約するの？",
+        "zh-cn": "太完美了！KTX的票怎么订？",
+        "zh-tw": "太完美了！KTX的票怎麼訂？",
+        "ar": "رائع! كيف أحجز تذاكر KTX؟",
+        "de": "Perfekt! Wie buche ich KTX-Tickets?",
+        "es": "¡Perfecto! ¿Cómo reservo los billetes del KTX?",
+        "fr": "Parfait ! Comment je réserve les billets KTX ?",
+        "hi": "परफ़ेक्ट! KTX टिकट कैसे बुक करूँ?",
+        "it": "Perfetto! Come prenoto i biglietti del KTX?",
+        "pt": "Perfeito! Como compro passagem do KTX?",
+        "ru": "Идеально! Как купить билеты на KTX?",
+        "th": "เป๊ะเลย! จองตั๋ว KTX ยังไง",
+        "vi": "Tuyệt! Đặt vé KTX thế nào vậy?"
+      }
+    },
+    {
+      "by": "friend",
+      "text": {
+        "ko": "같이 예매하자. 나도 갈래 😆",
+        "en": "Let's book together. I'm coming too 😆",
+        "ja": "一緒に予約しよう。私も行く 😆",
+        "zh-cn": "一起订吧，我也要去 😆",
+        "zh-tw": "一起訂吧，我也要去 😆",
+        "ar": "لنحجز معًا. سآتي أنا أيضًا 😆",
+        "de": "Lass uns zusammen buchen. Ich komm mit 😆",
+        "es": "Reservemos juntos. Yo también voy 😆",
+        "fr": "On réserve ensemble. Je viens aussi 😆",
+        "hi": "साथ में बुक करते हैं। मैं भी चलूँगी 😆",
+        "it": "Prenotiamo insieme. Vengo anch'io 😆",
+        "pt": "Vamos reservar juntos. Eu também vou 😆",
+        "ru": "Давай купим вместе. Я тоже еду 😆",
+        "th": "จองด้วยกันเลย เราก็จะไปด้วย 😆",
+        "vi": "Cùng đặt luôn đi. Mình cũng đi nữa 😆"
+      }
+    }
+  ],
   "viewerOverrides": {
     "ko": {
       "dm": [
@@ -361,6 +609,36 @@
           "text": {
             "ko": "감사합니다! 토요일에 봬요",
             "en": "Thanks! See you Saturday"
+          }
+        }
+      ],
+      "trip": [
+        {
+          "by": "me",
+          "text": {
+            "ko": "다음 달에 런던 가는데 일정 좀 도와줄래?",
+            "en": "I'm going to London next month, can you help me plan?"
+          }
+        },
+        {
+          "by": "friend",
+          "text": {
+            "ko": "물론이지! 1일차는 캠든 마켓, 2일차는 옥스퍼드 당일치기 어때?",
+            "en": "Of course! Day 1 Camden Market, day 2 a day trip to Oxford?"
+          }
+        },
+        {
+          "by": "me",
+          "text": {
+            "ko": "좋아! 현지 맛집도 알려 줘",
+            "en": "Great! Tell me some local food spots too"
+          }
+        },
+        {
+          "by": "friend",
+          "text": {
+            "ko": "우리 집 근처에 단골 펍 있어. 같이 가자 😆",
+            "en": "There's a pub I love near my place. Let's go together 😆"
           }
         }
       ]

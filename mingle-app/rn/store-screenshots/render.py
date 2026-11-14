@@ -334,7 +334,11 @@ def main() -> None:
                 d.mkdir(parents=True, exist_ok=True)
                 for old in d.glob("*.png"):
                     old.unlink()
+                # Google Play takes at most 8 phone screenshots; the App Store takes 10.
+                play = "google-play" in target.name or "google-play" in str(target)
                 for shot in cfg["shots"]:
+                    if play and shot.get("iosOnly"):
+                        continue
                     shutil.copy(rendered[(lang, shot["id"])], d / f"{shot['id']}.png")
         print("done")
 
