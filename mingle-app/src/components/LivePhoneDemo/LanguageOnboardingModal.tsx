@@ -385,7 +385,7 @@ export default function LanguageOnboardingModal({
           <span suppressHydrationWarning className="block truncate text-[1.3rem] font-bold tracking-[-0.01em] text-slate-950">
             {lang.localizedName}
           </span>
-          <span suppressHydrationWarning className="mt-0.5 block truncate text-[0.95rem] text-slate-500">
+          <span suppressHydrationWarning data-qa-allow-truncate className="mt-0.5 block truncate text-[0.95rem] text-slate-500">
             {lang.secondaryLabel}
           </span>
         </span>

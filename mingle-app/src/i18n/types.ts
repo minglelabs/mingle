@@ -160,6 +160,8 @@ export type BaseAppDictionarySource = {
     comingSoonLabel?: string;
     editProfile: string;
     shareProfile: string;
+    /** Shorter "Share" for the three-button row on a public profile, where the full label wraps. */
+    shareProfileShort?: string;
     editProfileTitle?: string;
     profileNameLabel?: string;
     profileNamePlaceholder?: string;
