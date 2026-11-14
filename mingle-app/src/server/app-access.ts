@@ -14,9 +14,14 @@ import { ReferralError, redeemReferralCode } from '@/server/referral'
  * "ko") lists them, "*" means every language. The app sends the language it
  * shows (the one picked on the first screen); any other language gets in.
  *
+ * Without an invite, an account can join the waitlist once its phone number is
+ * verified ('waitlisted'); an admin lets it in from the waitlist tab
+ * ('granted', src/app/admin/waitlist).
+ *
  * Off by default: until INVITE_GATE=on nothing changes for anyone.
  */
-export type AppAccessReason = 'gate_off' | 'other_locale' | 'existing' | 'invited' | 'staff' | 'review' | 'needs_invite'
+export type AppAccessReason =
+  | 'gate_off' | 'other_locale' | 'existing' | 'invited' | 'granted' | 'staff' | 'review' | 'needs_invite' | 'waitlisted'
 
 export type AppAccess = { allowed: boolean; reason: AppAccessReason }
 
@@ -27,6 +32,8 @@ export type AppAccessUser = {
   isOfficial: boolean
   phoneE164: string | null
   email: string | null
+  waitlistedAt?: Date | null
+  accessGrantedAt?: Date | null
 }
 
 function readGateSince(env: NodeJS.ProcessEnv): Date | null {
@@ -63,13 +70,15 @@ export function resolveAppAccess(user: AppAccessUser, env: NodeJS.ProcessEnv = p
   if (user.isOperator || user.isOfficial) return { allowed: true, reason: 'staff' }
   if (isReviewAccount(user, env)) return { allowed: true, reason: 'review' }
   if (user.referredByUserId) return { allowed: true, reason: 'invited' }
+  if (user.accessGrantedAt) return { allowed: true, reason: 'granted' }
   const since = readGateSince(env)
   if (since && user.createdAt < since) return { allowed: true, reason: 'existing' }
-  return { allowed: false, reason: 'needs_invite' }
+  return { allowed: false, reason: user.waitlistedAt ? 'waitlisted' : 'needs_invite' }
 }
 
 const ACCESS_SELECT = {
   createdAt: true, referredByUserId: true, isOperator: true, isOfficial: true, phoneE164: true, email: true,
+  waitlistedAt: true, accessGrantedAt: true,
 } as const
 
 export async function readAppAccess(userId: string, locale?: string | null): Promise<AppAccess> {
@@ -89,4 +98,28 @@ export async function enterInviteCode(userId: string, rawCode: unknown, locale?:
     if (!(error instanceof ReferralError && error.code === 'already_redeemed')) throw error
   }
   return readAppAccess(userId, locale)
+}
+
+export class WaitlistError extends Error {
+  constructor(readonly code: 'phone_not_verified') {
+    super(code)
+  }
+}
+
+/** Puts an account on the waitlist; it needs a verified phone number first (one account per number). */
+export async function joinWaitlist(userId: string, locale?: string | null): Promise<AppAccess> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { phoneVerifiedAt: true, waitlistedAt: true } })
+  if (!user?.phoneVerifiedAt) throw new WaitlistError('phone_not_verified')
+  if (!user.waitlistedAt) await prisma.user.update({ where: { id: userId }, data: { waitlistedAt: new Date() } })
+  return readAppAccess(userId, locale)
+}
+
+/** Admin: lets a waitlisted (or any) account in without an invite. */
+export async function grantAppAccess(userId: string): Promise<void> {
+  await prisma.user.update({ where: { id: userId }, data: { accessGrantedAt: new Date() } })
+}
+
+/** Admin: takes back a grant made by mistake. */
+export async function revokeAppAccessGrant(userId: string): Promise<void> {
+  await prisma.user.update({ where: { id: userId }, data: { accessGrantedAt: null } })
 }

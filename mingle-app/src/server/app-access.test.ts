@@ -30,6 +30,13 @@ describe('invite gate', () => {
     expect(resolveAppAccess({ ...newUser, isOperator: true }, gate).reason).toBe('staff')
   })
 
+  it('keeps a waitlisted account out until an admin lets it in', () => {
+    const waiting = { ...newUser, waitlistedAt: new Date('2026-12-02T00:00:00Z') }
+    expect(resolveAppAccess(waiting, gate)).toEqual({ allowed: false, reason: 'waitlisted' })
+    expect(resolveAppAccess({ ...waiting, accessGrantedAt: new Date('2026-12-03T00:00:00Z') }, gate))
+      .toEqual({ allowed: true, reason: 'granted' })
+  })
+
   it('asks only people using the app in Korean, by default', () => {
     expect(resolveAppAccess(newUser, gate, 'ko').reason).toBe('needs_invite')
     expect(resolveAppAccess(newUser, gate, 'ko-KR').reason).toBe('needs_invite')

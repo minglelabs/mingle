@@ -1,9 +1,11 @@
 "use client";
 
-import { Loader2, Ticket } from "lucide-react";
+import { Clock3, Loader2, Ticket } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
 import { resolveInviteGateCopy } from "@/i18n/invite-gate-copy";
+import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
@@ -33,14 +35,19 @@ export function useAppAccess(enabled: boolean, locale: string): { access: Access
 /**
  * Shown over the app after sign-in when the account needs an invite
  * (INVITE_GATE on the server, for the app languages in INVITE_GATE_LOCALES):
- * enter a friend's invite code, or sign out.
+ * enter a friend's invite code, join the waitlist (after verifying a phone
+ * number) and wait for an admin to let you in, or sign out.
  * Accepting the code pays both sides the usual invite reward.
  */
-export default function InviteGate({ locale, onAllowed }: { locale: string; onAllowed: (access: Access) => void }) {
+export default function InviteGate({ locale, access, onAccess }: { locale: string; access: Access; onAccess: (access: Access) => void }) {
   const copy = useMemo(() => resolveInviteGateCopy(locale), [locale]);
+  const phoneCopy = useMemo(() => resolvePhoneFriendsCopy(locale), [locale]);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [waitlistBusy, setWaitlistBusy] = useState(false);
+  const [phoneSheetOpen, setPhoneSheetOpen] = useState(false);
+  const waitlisted = access.reason === "waitlisted";
   // The native banner draws above the WebView and would cover the gate.
   useNativeBannerSuppression(true);
 
@@ -62,7 +69,7 @@ export default function InviteGate({ locale, onAllowed }: { locale: string; onAl
       const body = await response.json().catch(() => ({})) as Partial<Access> & { error?: string };
       if (response.ok && body.allowed) {
         captureMingleClientEvent("mingle_first_run_step", { step: "invite_gate_passed" });
-        onAllowed({ allowed: true, reason: body.reason ?? "invited" });
+        onAccess({ allowed: true, reason: body.reason ?? "invited" });
         return;
       }
       setError(body.error === "not_found" || body.error === "invalid_code" ? copy.errorNotFound
@@ -73,7 +80,51 @@ export default function InviteGate({ locale, onAllowed }: { locale: string; onAl
     } finally {
       setBusy(false);
     }
-  }, [busy, code, copy, onAllowed]);
+  }, [busy, code, copy, locale, onAccess]);
+
+  // Joining needs a verified phone (one account per number): without one the
+  // server answers phone_not_verified and the phone sheet opens first.
+  const joinWaitlist = useCallback(async () => {
+    if (waitlistBusy) return;
+    setWaitlistBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(buildClientApiPath("/account/access/waitlist"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locale }),
+      });
+      const body = await response.json().catch(() => ({})) as Partial<Access> & { error?: string };
+      if (response.ok && typeof body.allowed === "boolean") {
+        captureMingleClientEvent("mingle_first_run_step", { step: "waitlist_joined" });
+        onAccess({ allowed: body.allowed, reason: body.reason ?? "waitlisted" });
+        return;
+      }
+      if (body.error === "phone_not_verified") {
+        setPhoneSheetOpen(true);
+        return;
+      }
+      setError(copy.errorGeneric);
+    } catch {
+      setError(copy.errorGeneric);
+    } finally {
+      setWaitlistBusy(false);
+    }
+  }, [copy.errorGeneric, locale, onAccess, waitlistBusy]);
+
+  const checkTurn = useCallback(async () => {
+    if (waitlistBusy) return;
+    setWaitlistBusy(true);
+    try {
+      const response = await fetch(`${buildClientApiPath("/account/access")}?locale=${encodeURIComponent(locale)}`, { cache: "no-store" });
+      const body = response.ok ? await response.json() as Partial<Access> : null;
+      if (body && typeof body.allowed === "boolean") onAccess({ allowed: body.allowed, reason: body.reason ?? "unknown" });
+    } catch {
+      // Stays on the waitlist card; the next tap tries again.
+    } finally {
+      setWaitlistBusy(false);
+    }
+  }, [locale, onAccess, waitlistBusy]);
 
   return (
     <div
@@ -81,7 +132,7 @@ export default function InviteGate({ locale, onAllowed }: { locale: string; onAl
       role="dialog"
       aria-modal="true"
       aria-label={copy.title}
-      className="absolute inset-0 z-[210] flex flex-col bg-gradient-to-b from-[#FBBC32] to-[#F97316] px-6"
+      className="absolute inset-0 z-[210] flex flex-col overflow-y-auto bg-gradient-to-b from-[#FBBC32] to-[#F97316] px-6"
       style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 72px)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
     >
       <div className="flex flex-1 flex-col items-center text-center">
@@ -117,14 +168,59 @@ export default function InviteGate({ locale, onAllowed }: { locale: string; onAl
             {busy ? <Loader2 size={20} className="animate-spin" aria-hidden /> : copy.submit}
           </button>
         </form>
+
+        <div className="mt-8 w-full max-w-[360px]" data-qa="invite-gate-waitlist" data-waitlisted={waitlisted ? "1" : "0"}>
+          {waitlisted ? (
+            <div className="rounded-2xl bg-white/85 px-5 py-4 text-left shadow-sm">
+              <p className="flex items-center gap-2 text-[1rem] font-extrabold text-slate-950">
+                <Clock3 size={18} strokeWidth={2.4} aria-hidden />
+                {copy.waitlistedTitle}
+              </p>
+              <p className="mt-1.5 text-[0.88rem] leading-relaxed text-slate-700">{copy.waitlistedBody}</p>
+              <button
+                type="button"
+                onClick={() => void checkTurn()}
+                disabled={waitlistBusy}
+                className="mt-3 flex h-11 w-full items-center justify-center rounded-xl bg-slate-950/5 text-[0.92rem] font-bold text-slate-900 transition active:bg-slate-950/10 disabled:opacity-60"
+              >
+                {waitlistBusy ? <Loader2 size={18} className="animate-spin" aria-hidden /> : copy.waitlistCheck}
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-[0.88rem] font-bold text-slate-900/70">{copy.waitlistDivider}</p>
+              <button
+                type="button"
+                onClick={() => void joinWaitlist()}
+                disabled={waitlistBusy}
+                data-qa="invite-gate-join-waitlist"
+                className="mt-2 flex h-12 w-full items-center justify-center rounded-2xl bg-white/85 text-[0.98rem] font-extrabold text-slate-950 shadow-sm transition active:scale-[0.985] disabled:opacity-60"
+              >
+                {waitlistBusy ? <Loader2 size={18} className="animate-spin" aria-hidden /> : copy.waitlistJoin}
+              </button>
+              <p className="mt-2 text-[0.8rem] leading-relaxed text-slate-900/65">{copy.waitlistHint}</p>
+            </>
+          )}
+        </div>
       </div>
       <button
         type="button"
         onClick={() => void signOut()}
-        className="mx-auto text-[0.9rem] font-semibold text-slate-900/70 underline underline-offset-4"
+        className="mx-auto mt-6 text-[0.9rem] font-semibold text-slate-900/70 underline underline-offset-4"
       >
         {copy.signOut}
       </button>
+      {phoneSheetOpen ? (
+        <PhoneVerifySheet
+          copy={phoneCopy}
+          locale={locale}
+          onClose={() => setPhoneSheetOpen(false)}
+          onVerified={() => {
+            setPhoneSheetOpen(false);
+            void joinWaitlist();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
