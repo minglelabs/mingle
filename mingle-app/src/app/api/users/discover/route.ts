@@ -114,5 +114,10 @@ export async function GET(request: NextRequest) {
       };
     });
 
-  return NextResponse.json({ users, nextCursor }, { headers: NO_STORE });
+  return NextResponse.json({
+    users,
+    nextCursor,
+    // Which side the viewer is on, so the client can title the grid ("Korean friends" vs "friends from abroad").
+    viewerSide: viewerIsKorean ? "korean" : "foreign",
+  }, { headers: NO_STORE });
 }

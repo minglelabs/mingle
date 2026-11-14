@@ -11,6 +11,7 @@ import { feedSourceEndpoint } from "@/lib/feed-routes";
 import { isSearchExcludedHandle } from "@/lib/handles";
 import type { ConnectSearchResult } from "@/components/connect-search-cache";
 import PostGrid from "./post-grid";
+import PeopleDiscoveryGrid from "./people-discovery-grid";
 import { buildConnectTrackingHeaders, PersonRow, usePeopleFollow, type PeopleSearchContext } from "./people-follow";
 import {
   createRecentSearchRecorder,
@@ -348,6 +349,11 @@ export default function UnifiedSearch({
             onRemove={(value) => void deleteRecentSearch(value).then(setRecent)}
             onClearAll={() => void clearAllRecentSearches().then(setRecent)}
           />
+        ) : null}
+
+        {/* No query: the explore tab shows people cards (other side of the exchange first). */}
+        {!normalizedQuery && currentUserId ? (
+          <PeopleDiscoveryGrid locale={locale} viewerId={currentUserId} onOpenPerson={onOpenPerson} />
         ) : null}
 
         {normalizedQuery ? (

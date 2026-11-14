@@ -77,6 +77,7 @@ describe("/api/users/discover route", () => {
     const sql = mockQueryRaw.mock.calls[0][0] as { sql: string };
     expect(sql.sql.replace(/\s+/g, " ")).toMatch(/THEN 0 ELSE 2 END/);
     expect(payload.nextCursor).toBeNull();
+    expect(payload.viewerSide).toBe("foreign");
     expect(payload.users.map((user: { id: string }) => user.id)).toEqual(["mina", "yuki"]);
     expect(payload.users[0]).toMatchObject({
       id: "mina",
@@ -98,7 +99,7 @@ describe("/api/users/discover route", () => {
     mockUserFindUnique.mockResolvedValue({ nationalityCountry: "KR", nationality: null, primaryLanguages: ["ko"] });
     mockQueryRaw.mockResolvedValue([]);
     const payload = await (await GET(request())).json();
-    expect(payload).toEqual({ users: [], nextCursor: null });
+    expect(payload).toEqual({ users: [], nextCursor: null, viewerSide: "korean" });
     const sql = mockQueryRaw.mock.calls[0][0] as { sql: string };
     expect(sql.sql.replace(/\s+/g, " ")).toMatch(/THEN 2 ELSE 0 END/);
     expect(mockUserFindMany).not.toHaveBeenCalled();
