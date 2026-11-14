@@ -39,21 +39,32 @@ export function earphoneMicrophonePickLabel(
   return pick === 'earphone' ? copy.microphoneEarphoneLabel : copy.microphonePhoneLabel
 }
 
-// A menu row (rendered by the caller, in its own style) plus the dialog it opens.
+// A menu row (rendered by the caller, in its own style) plus the dialog it
+// opens. `open`/`onOpenChange` let a caller keep the dialog up after its row
+// goes away (the room's one-time hint toast).
 export function EarphoneMicrophoneSettingControl({
   copy,
   renderRow,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   copy: LivePhoneDemoEarphoneModeCopy
   renderRow: (input: { valueLabel: string; open: () => void }) => ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const { capable, pick } = useEarphoneMicrophoneSetting()
-  const [open, setOpen] = useState(false)
-  const close = useCallback(() => setOpen(false), [])
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = controlledOpen ?? ownOpen
+  const setOpen = useCallback((next: boolean) => {
+    setOwnOpen(next)
+    onOpenChange?.(next)
+  }, [onOpenChange])
+  const close = useCallback(() => setOpen(false), [setOpen])
   const confirm = useCallback((next: EarphoneMicrophonePick) => {
     writeEarphoneMicrophonePick(next)
     setOpen(false)
-  }, [])
+  }, [setOpen])
   if (!capable) return null
   return (
     <>

@@ -8,12 +8,12 @@ import type { SttCaptureSource } from '@/lib/native-device-audio'
 
 // Asked when earphones go in while a microphone-only session runs: other
 // apps' sound has moved into the earphones, out of the microphone's reach.
-// Same choice and hint as page 2 of the earphone-mode notice, with the same
-// default (this device's sound too).
+// Same choice and hint as page 2 of the earphone-mode notice, but the
+// microphone stays picked: switching to this device's sound is opt-in.
 export default function EarphoneCaptureSourceNoticeContent({
   copy,
   deviceAudioViaBroadcast = false,
-  initialSource = 'device_audio',
+  initialSource = 'microphone',
   microphoneHint,
   onConfirm,
 }: {

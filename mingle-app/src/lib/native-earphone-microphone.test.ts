@@ -61,7 +61,8 @@ describe('earphone microphone choice', () => {
     writeEarphoneMicrophoneHintShown(storage)
     expect(storage.values.get(EARPHONE_MICROPHONE_HINT_STORAGE_KEY)).toBe('1')
     expect(readEarphoneMicrophoneHintShown(storage)).toBe(true)
-    expect(resolveLivePhoneDemoEarphoneModeCopy('ko').microphoneHint).toBe('상대방 목소리까지 들리게 휴대폰으로 들어요')
+    expect(resolveLivePhoneDemoEarphoneModeCopy('ko').microphoneHint).toBe('이어폰은 소리만 나와요. 입력은 이어폰이 아니라 휴대폰 마이크가 해요')
+    expect(resolveLivePhoneDemoEarphoneModeCopy('ko').microphoneHintChangeLabel).toBe('바꾸기')
   })
 
   it('uses the phone unless the earphones were picked', () => {

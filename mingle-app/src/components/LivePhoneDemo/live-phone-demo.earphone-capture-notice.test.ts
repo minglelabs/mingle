@@ -8,7 +8,7 @@ import { resolveLivePhoneDemoEarphoneModeCopy } from '@/i18n/live-phone-demo-ear
 const liveDemoSource = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
 
 describe('capture-source question when earphones go in', () => {
-  it('explains why, offers both sources with this device picked, and confirms', () => {
+  it('explains why, offers both sources with the microphone picked, and confirms', () => {
     const copy = resolveLivePhoneDemoEarphoneModeCopy('ko')
     const html = renderToStaticMarkup(createElement(EarphoneCaptureSourceNoticeContent, {
       copy,
@@ -17,9 +17,10 @@ describe('capture-source question when earphones go in', () => {
     }))
     expect(html).toContain(copy.earphoneCaptureNoticeTitle)
     expect(html).toContain(copy.earphoneCaptureNoticeBody)
-    expect(html).toMatch(/aria-checked="false" data-capture-source="microphone"/)
-    expect(html).toMatch(/aria-checked="true" data-capture-source="device_audio"/)
-    expect(html).toContain(copy.captureSourceDeviceAudioHintIos)
+    expect(html).toMatch(/aria-checked="true" data-capture-source="microphone"/)
+    expect(html).toMatch(/aria-checked="false" data-capture-source="device_audio"/)
+    // The broadcast hint shows only once this device's sound is picked.
+    expect(html).not.toContain(copy.captureSourceDeviceAudioHintIos)
     expect(html).toContain('data-earphone-capture-source-confirm')
   })
 
@@ -33,7 +34,8 @@ describe('capture-source question when earphones go in', () => {
     expect(render(copy.microphoneHint)).toContain(copy.microphoneHint)
     expect(render()).not.toContain('data-earphone-microphone-hint')
     expect(liveDemoSource).toContain('if (withHint) writeEarphoneMicrophoneHintShown()')
-    expect(liveDemoSource).toContain('showFloatingToast(earphoneModeBaseCopy.microphoneHint, 4000)')
+    expect(liveDemoSource).toContain('setEarphoneMicrophoneHintToastVisible(true)')
+    expect(liveDemoSource).toContain('{earphoneModeBaseCopy.microphoneHintChangeLabel}')
   })
 
   it('switches a running session to device audio and listens again', () => {

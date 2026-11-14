@@ -363,6 +363,7 @@ const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABA
 const TTS_STT_GAIN = 1.0
 const NATIVE_TTS_EVENT = 'mingle:native-tts'
 const SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX = 24
+const EARPHONE_MICROPHONE_HINT_TOAST_MS = 6000
 const SCROLL_TO_BOTTOM_BUTTON_SIZE_PX = 48
 const SCROLL_UI_HIDE_DELAY_MS = 1000
 const USER_SCROLL_INTENT_WINDOW_MS = 2000
@@ -2527,7 +2528,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeConversationBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeConversationBannerPosition')
   const nativeBannerPositionFromQuery = nativeConversationBannerPositionFromQuery ?? legacyNativeBannerPositionFromQuery
 
-  const showFloatingToast = useCallback((message: string, durationMs = 1500) => {
+  const showFloatingToast = useCallback((message: string) => {
     const normalizedMessage = message.trim()
     if (!normalizedMessage) return
     if (floatingToastTimerRef.current) {
@@ -2536,7 +2537,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setFloatingToastMessage(normalizedMessage)
     floatingToastTimerRef.current = window.setTimeout(() => {
       setFloatingToastMessage('')
-    }, durationMs)
+    }, 1500)
   }, [])
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: initialCachedAccountPreferences?.textSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
@@ -5992,15 +5993,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [isEarphoneMicrophoneHintDue, isSttSessionRunning, isVisible, nativeAudioRoute.earphonesConnected, nativeDeviceAudioSupported, sttCaptureSource])
 
-  // Otherwise the hint is a toast: listening started with earphones in, or
+  // Otherwise the hint is a toast (with a Change button): listening started with earphones in, or
   // earphones went in while listening without the question above. Declared
   // after that effect so it sees the hint already spent in the same commit.
+  const [earphoneMicrophoneHintToastVisible, setEarphoneMicrophoneHintToastVisible] = useState(false)
+  const [earphoneMicrophoneHintDialogOpen, setEarphoneMicrophoneHintDialogOpen] = useState(false)
   useEffect(() => {
     if (!isVisible || earphoneCaptureNoticeOpen) return
     if (!isEarphoneMicrophoneHintDue()) return
     writeEarphoneMicrophoneHintShown()
-    showFloatingToast(earphoneModeBaseCopy.microphoneHint, 4000)
-  }, [earphoneCaptureNoticeOpen, earphoneModeBaseCopy.microphoneHint, isEarphoneMicrophoneHintDue, isVisible, showFloatingToast])
+    setEarphoneMicrophoneHintToastVisible(true)
+  }, [earphoneCaptureNoticeOpen, isEarphoneMicrophoneHintDue, isVisible])
+  useEffect(() => {
+    if (!earphoneMicrophoneHintToastVisible) return
+    const timer = window.setTimeout(() => setEarphoneMicrophoneHintToastVisible(false), EARPHONE_MICROPHONE_HINT_TOAST_MS)
+    return () => window.clearTimeout(timer)
+  }, [earphoneMicrophoneHintToastVisible])
+  const openEarphoneMicrophoneHintDialog = useCallback(() => {
+    setEarphoneMicrophoneHintToastVisible(false)
+    setEarphoneMicrophoneHintDialogOpen(true)
+  }, [])
 
   const confirmEarphoneCaptureNotice = useCallback((source: SttCaptureSource) => {
     setEarphoneCaptureNoticeOpen(false)
@@ -9461,6 +9473,42 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </motion.div>
               )}
             </AnimatePresence>
+
+            <EarphoneMicrophoneSettingControl
+              copy={earphoneModeBaseCopy}
+              open={earphoneMicrophoneHintDialogOpen}
+              onOpenChange={setEarphoneMicrophoneHintDialogOpen}
+              renderRow={() => (
+                <AnimatePresence>
+                  {earphoneMicrophoneHintToastVisible && (
+                    <motion.div
+                      key="earphone-microphone-hint"
+                      data-qa="live-demo-earphone-microphone-hint"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 4 }}
+                      transition={{ duration: 0.18, ease: 'easeOut' }}
+                      className="pointer-events-none absolute inset-x-4 z-30 flex justify-center"
+                      style={{ bottom: copyToastBottomOffsetPx }}
+                    >
+                      <div className="pointer-events-auto flex items-center gap-3 rounded-2xl bg-black py-2.5 pl-4 pr-3 text-white shadow-[0_4px_16px_rgba(15,23,42,0.24),0_1px_4px_rgba(0,0,0,0.2)]">
+                        <span className="min-w-0 text-[14px] font-medium leading-snug">
+                          {earphoneModeBaseCopy.microphoneHint}
+                        </span>
+                        <button
+                          type="button"
+                          data-qa="live-demo-earphone-microphone-hint-change"
+                          onClick={openEarphoneMicrophoneHintDialog}
+                          className="shrink-0 rounded-full px-2 py-1 text-[14px] font-semibold text-amber-400 transition-colors hover:text-amber-300"
+                        >
+                          {earphoneModeBaseCopy.microphoneHintChangeLabel}
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              )}
+            />
 
             <AnimatePresence>
               {floatingToastMessage && (
