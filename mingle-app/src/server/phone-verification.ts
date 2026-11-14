@@ -2,13 +2,13 @@ import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { isE164 } from '@/lib/phone-number'
 import {
-  SolapiSendError,
+  SendonSendError,
   buildSmsCodeText,
   checkSmsCode,
   issueSmsCode,
-  readSolapiConfig,
-  sendSolapiSms,
-} from '@/server/solapi-sms'
+  readSendonConfig,
+  sendSendonSms,
+} from '@/server/sendon-sms'
 
 // A user proves a phone number with a 6-digit SMS code. The code is made,
 // sent and checked by Twilio Verify (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
@@ -19,8 +19,8 @@ import {
 // The same code also signs in (or signs up) by phone number alone, before
 // there is an account; see startPhoneSignIn / verifyPhoneSignIn.
 //
-// Korean numbers (+82) go through Solapi when SOLAPI_* is set: a plain SMS
-// with a code made here (see @/server/solapi-sms), much cheaper than Twilio
+// Korean numbers (+82) go through Sendon when SENDON_* is set: a plain SMS
+// with a code made here (see @/server/sendon-sms), much cheaper than Twilio
 // Verify to Korea. Every other number uses Twilio.
 //
 // App review: PHONE_REVIEW_LOGINS lists fixed numbers and codes for store
@@ -101,11 +101,11 @@ function twilioLocale(uiLocale: string | undefined): string | undefined {
   return code.split('-')[0]
 }
 
-type CodeRoute = 'solapi' | 'twilio' | 'dev'
+type CodeRoute = 'sendon' | 'twilio' | 'dev'
 
 /** Who sends and checks the number's code, or null when nobody can. */
 function resolveCodeRoute(phone: string): CodeRoute | null {
-  if (phone.startsWith('+82') && readSolapiConfig()) return 'solapi'
+  if (phone.startsWith('+82') && readSendonConfig()) return 'sendon'
   if (readTwilioConfig()) return 'twilio'
   return devCodesAllowed() ? 'dev' : null
 }
@@ -135,14 +135,14 @@ async function sendCode(route: CodeRoute, phone: string, uiLocale: string | unde
     console.info('[phone-verification] dev mode: the code is', DEV_CODE)
     return
   }
-  if (route === 'solapi') {
-    const solapi = readSolapiConfig()
-    if (!solapi) throw new PhoneVerificationFailure('unavailable')
+  if (route === 'sendon') {
+    const sendon = readSendonConfig()
+    if (!sendon) throw new PhoneVerificationFailure('unavailable')
     try {
-      await sendSolapiSms(solapi, phone, buildSmsCodeText(issueSmsCode(phone)))
+      await sendSendonSms(sendon, phone, buildSmsCodeText(issueSmsCode(phone)))
     } catch (error) {
-      if (error instanceof SolapiSendError && error.status === 400) throw new PhoneVerificationFailure('invalid_phone')
-      if (error instanceof SolapiSendError && error.status === 429) throw new PhoneVerificationFailure('too_many_requests')
+      if (error instanceof SendonSendError && error.code === 400) throw new PhoneVerificationFailure('invalid_phone')
+      if (error instanceof SendonSendError && error.code === 429) throw new PhoneVerificationFailure('too_many_requests')
       throw error
     }
     return
@@ -164,7 +164,7 @@ async function checkCode(phone: string, code: string): Promise<boolean> {
   if (reviewCode) return code === reviewCode
   const route = resolveCodeRoute(phone)
   if (!route) throw new PhoneVerificationFailure('unavailable')
-  if (route === 'solapi') return checkSmsCode(phone, code)
+  if (route === 'sendon') return checkSmsCode(phone, code)
   if (route === 'dev') return code === DEV_CODE
   const config = readTwilioConfig()
   if (!config) throw new PhoneVerificationFailure('unavailable')
@@ -209,7 +209,7 @@ export async function confirmPhoneVerification(userId: string, rawPhone: unknown
  * the whole "find friends by number" part instead of offering a dead button.
  */
 export function isPhoneVerificationAvailable(): boolean {
-  return readTwilioConfig() !== null || readSolapiConfig() !== null || devCodesAllowed()
+  return readTwilioConfig() !== null || readSendonConfig() !== null || devCodesAllowed()
 }
 
 /** The account's verified number, if any. */
