@@ -164,9 +164,36 @@ Chrome settings the pool needs:
 
 - `chrome://settings/system` → **Continue running background apps when Google
   Chrome is closed**: on.
-- Every profile must stay open, with at least one window. An extension in a
-  closed profile does not run. The extension pins its own chatgpt.com tab;
-  tell the user not to close it.
+- An extension in a closed profile does not run. Since extension 1.3.0 the pool
+  opens and closes profiles itself (next section); the extension pins its own
+  chatgpt.com tab; tell the user not to close it.
+
+### 3b. Profile rotation (2026-11-12, extension 1.3.0)
+
+Every open profile costs memory, so the pool keeps only 5 open
+(`CHATGPT_POOL_MIN_OPEN`) and rotates the rest:
+
+- **Close:** with nothing waiting, a profile beyond the 5 that has been idle for
+  15 min (`CHATGPT_POOL_IDLE_CLOSE_MS`) is told to close (one per 15 s tick).
+  Its extension closes every window of that profile, but only if all its tabs
+  are chatgpt.com or blank; a profile with any other tab answers `keepOpen` and
+  is never asked again until the pool restarts. Nothing is killed.
+- **Open:** when a job has waited 30 s and no open account can take it (all
+  busy, resting, at a cap or the image limit), or fewer than 5 are open (after a
+  reboot or a restart), the pool runs
+  `chrome.exe --profile-directory="Profile N" https://chatgpt.com/`. That opens a
+  window of the profile in the Chrome already running (no second Chrome); the
+  extension starts, adopts that tab and connects. One profile per 20 s.
+- Profiles the pool has seen are kept in `profiles.json` next to the script
+  (folder, agent id, email, last use), so after a restart it knows the closed
+  ones. Rotation starts 90 s after `serve` starts, so open profiles reconnect
+  first.
+- On by default on Windows; `CHATGPT_POOL_ROTATE=0` turns it off. `GET /accounts`
+  lists the closed profiles under `closed`. The log shows `open …` and
+  `close …` lines.
+- Deploy: copy `scripts/chatgpt-pool.mjs` and `scripts/chatgpt-pool-extension\*`
+  into the deployed copy, then restart `serve` by its exact PID (step 5). The
+  extensions see the new version on their next poll and reload themselves.
 
 ### 4. Keep the PC awake
 

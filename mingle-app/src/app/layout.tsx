@@ -9,6 +9,7 @@ import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import CoinHost from "@/components/coins/coin-host";
 import ContactSyncHost from "@/components/contacts/contact-sync-host";
 import ProfileBasicsGate from "@/components/profile-basics-gate";
+import LastSignInMethodRecorder from "@/components/last-sign-in-method-recorder";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
 import NativeBannerRouteGuard from "@/components/native-banner-route-guard";
@@ -30,6 +31,7 @@ import { MOBILE_CANVAS_BOOTSTRAP_SCRIPT } from "@/lib/mobile-canvas-bootstrap";
 import { SCRIPT_LOAD_RECOVERY_SCRIPT } from "@/lib/script-load-recovery";
 import { resolvePostHogBrowserConfig } from "@/lib/posthog-browser-config";
 import { DEFAULT_LOCALE } from "@/i18n";
+import { HASHCHAT_OG_DESCRIPTION, HASHCHAT_OG_TITLE, shareLinkPreview } from "@/lib/share-og";
 import "./globals.css";
 
 function toMetadataBaseUrl(raw?: string): URL | undefined {
@@ -70,31 +72,12 @@ function resolveProfileImageOrigin(): string | null {
 
 export const metadata: Metadata = {
   metadataBase,
-  title: "HashChat, Seamless Translator",
-  description: "Just stay in the conversation. HashChat lets you talk without translating sentence by sentence.",
+  title: HASHCHAT_OG_TITLE,
+  description: HASHCHAT_OG_DESCRIPTION,
   icons: {
     icon: "/favicon.ico",
   },
-  openGraph: {
-    title: "HashChat, Seamless Translator",
-    description: "Just stay in the conversation. HashChat lets you talk without translating sentence by sentence.",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "HashChat - Seamless Translator",
-      },
-    ],
-    type: "website",
-    siteName: "HashChat",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "HashChat, Seamless Translator",
-    description: "Just stay in the conversation. HashChat lets you talk without translating sentence by sentence.",
-    images: ["/og-image.png"],
-  },
+  ...shareLinkPreview(HASHCHAT_OG_TITLE, HASHCHAT_OG_DESCRIPTION),
 };
 
 export const viewport: Viewport = {
@@ -148,6 +131,7 @@ export default async function RootLayout({
                 <CoinHost />
                 <ContactSyncHost />
                 <ProfileBasicsGate />
+                <LastSignInMethodRecorder />
                 <NativePushTapReceiver />
                 <NativeBannerRouteGuard />
                 <UiDiagnosticsProbe />

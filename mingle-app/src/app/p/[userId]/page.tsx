@@ -5,6 +5,7 @@ import { resolveProfileLinkInstallLocale } from "@/components/profile-link-insta
 import { isValidProfileLinkUserId } from "@/lib/profile-link";
 import { getUserProfile } from "@/server/user-profile";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
+import { shareLinkPreview } from "@/lib/share-og";
 
 const DEFAULT_IOS_APP_STORE_URL = "https://apps.apple.com/app/id6759795134";
 const DEFAULT_ANDROID_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn";
@@ -61,9 +62,20 @@ export default async function ProfileLinkPage({ params }: ProfileLinkPageProps) 
   );
 }
 
-export function generateMetadata({ params }: ProfileLinkPageProps) {
-  return params.then(({ userId }) => ({
-    title: isValidProfileLinkUserId(decodePathSegment(userId)) ? "Open profile in HashChat" : "Invalid HashChat profile link",
-    description: "Open a shared HashChat profile in the HashChat app.",
-  }));
+export async function generateMetadata({ params }: ProfileLinkPageProps) {
+  const userId = decodePathSegment((await params).userId);
+  if (!isValidProfileLinkUserId(userId)) {
+    return { title: "Invalid HashChat profile link", description: "This HashChat profile link is not valid." };
+  }
+  let name: string | null = null;
+  try {
+    name = (await getUserProfile(userId))?.name?.trim() || null;
+  } catch {
+    // The preview falls back to the generic text.
+  }
+  const title = name ? `${name} on HashChat` : "Open profile in HashChat";
+  const description = name
+    ? `Talk with ${name} on HashChat, each in your own language. HashChat (formerly Mingle) interprets as you talk.`
+    : "Open a shared HashChat profile. HashChat (formerly Mingle) interprets as you talk.";
+  return { title, description, ...shareLinkPreview(title, description) };
 }

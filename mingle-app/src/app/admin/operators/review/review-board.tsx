@@ -14,6 +14,7 @@ import { withBack } from '../../_lib/back-path'
 import { OperatorAvatar } from '../_components/operator-ui'
 import { PhotoRedrawPanel } from '../../feed/_components/photo-redraw-panel'
 import { koreanLanguageName } from '../_lib/options'
+import { reviewImageUrl } from './review-image-url'
 
 type Action = 'publish' | 'delete' | 'regenerate' | 'draw'
 
@@ -53,9 +54,6 @@ function useReviewPath(): string {
   return `${pathname}${search ? `?${search}` : ''}`
 }
 
-export function reviewImageUrl(objectKey: string): string {
-  return `/admin/operators/api/review/image?key=${encodeURIComponent(objectKey)}`
-}
 
 /**
  * Edit a post's photos: add (upload), remove, reorder; the first is the one

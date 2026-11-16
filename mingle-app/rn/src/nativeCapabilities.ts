@@ -16,6 +16,11 @@
  * `contacts` is true when the shell can read the address book and open a
  * written text message (`native_contacts_request`, `native_sms_compose`);
  * absent or false means the contact-sync screen offers neither.
+ * `earphoneMicrophoneChoice` is true when the shell records from the phone's
+ * microphone while earphones are in and takes the user's pick of the earphone
+ * microphone instead (`earphoneMicrophone` on `native_stt_start`,
+ * `native_stt_set_earphone_microphone`); absent or false means the web does
+ * not ask.
  */
 export type NativeShellCapabilities = {
   type: 'capabilities';
@@ -25,6 +30,7 @@ export type NativeShellCapabilities = {
   nativeTts: boolean;
   nativeTtsStream: boolean;
   contacts: boolean;
+  earphoneMicrophoneChoice: boolean;
 };
 
 // The capabilities message is sent once per load end and a room usually mounts
@@ -37,6 +43,7 @@ export function buildNativeShellCapabilities(options: {
   nativeTts?: boolean;
   nativeTtsStream?: boolean;
   contacts?: boolean;
+  earphoneMicrophoneChoice?: boolean;
 }): NativeShellCapabilities {
   return {
     type: 'capabilities',
@@ -46,5 +53,6 @@ export function buildNativeShellCapabilities(options: {
     nativeTts: options.nativeTts === true,
     nativeTtsStream: options.nativeTtsStream === true,
     contacts: options.contacts === true,
+    earphoneMicrophoneChoice: options.earphoneMicrophoneChoice === true,
   };
 }

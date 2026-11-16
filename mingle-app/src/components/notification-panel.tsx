@@ -3,6 +3,7 @@
 import { requestProfileBasics } from "@/lib/profile-basics";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { resolveLegalDocumentLocale } from "@/i18n/config";
+import FollowStatusIndicator from "@/components/follow-status-indicator";
 import { resolveNotificationCopy, type NotificationCopy } from "@/i18n/notification-copy";
 import { resolveTeamNotificationCopy, resolveTeamNotificationText } from "@/i18n/team-notification-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -584,22 +585,21 @@ export default function NotificationPanel({
             </span>
           </IdentityRow>
 
-          {isFollow && primaryActor ? (
+          {isFollow && primaryActor && notification.isFollowing ? (
+            <FollowStatusIndicator
+              label={dictionary.profile.mutualFollowLabel ?? copy.followingAction}
+              mutual
+            />
+          ) : isFollow && primaryActor ? (
             <button
               type="button"
               onClick={() => void handleFollowBack(notification)}
-              disabled={notification.isFollowing || isPending}
-              className={`min-h-9 shrink-0 rounded-full px-3 text-[12px] font-semibold transition ${
-                notification.isFollowing
-                  ? "bg-gray-100 text-gray-500"
-                  : "bg-slate-900 text-white active:bg-slate-700 disabled:opacity-60"
-              }`}
-              aria-label={notification.isFollowing ? copy.followingAction : copy.followBackAction}
+              disabled={isPending}
+              className="min-h-9 shrink-0 rounded-full bg-slate-900 px-3 text-[12px] font-semibold text-white transition active:bg-slate-700 disabled:opacity-60"
+              aria-label={copy.followBackAction}
             >
               {isPending ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : null}
-              {!isPending && notification.isFollowing ? <Check size={14} className="mr-1 inline" aria-hidden="true" /> : null}
-              {isPending ? <span className="sr-only">{copy.followBackAction}</span> : null}
-              {!isPending ? (notification.isFollowing ? copy.followingAction : copy.followBackAction) : null}
+              {isPending ? <span className="sr-only">{copy.followBackAction}</span> : copy.followBackAction}
             </button>
           ) : null}
         </div>

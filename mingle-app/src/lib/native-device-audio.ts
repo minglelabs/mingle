@@ -87,12 +87,18 @@ export function resolveNativeDeviceAudioSupported(input: {
 
 // Device audio is captured only while earphone mode is on (that is where the
 // choice is made and explained) and only where it is supported (above).
+// Outside earphone mode it is captured too once the user said so in the
+// question asked the first time STT listens with earphones in (see
+// resolveEarphoneListeningNotice).
 export function resolveEffectiveSttCaptureSource(input: {
   supported: boolean
   earphoneModeEnabled: boolean
+  deviceAudioOptIn?: boolean
   pick: SttCaptureSource
 }): SttCaptureSource {
-  return input.supported && input.earphoneModeEnabled && input.pick === 'device_audio'
+  return input.supported
+    && (input.earphoneModeEnabled || input.deviceAudioOptIn === true)
+    && input.pick === 'device_audio'
     ? 'device_audio'
     : 'microphone'
 }
@@ -193,7 +199,37 @@ export function setSttCaptureSourcePick(next: SttCaptureSource): void {
   }
 }
 
+// ── Opt-in outside earphone mode (in memory, shared by every mounted room) ──
+
+let deviceAudioOptInSnapshot = false
+const deviceAudioOptInListeners = new Set<() => void>()
+
+export function subscribeDeviceAudioOptIn(listener: () => void): () => void {
+  deviceAudioOptInListeners.add(listener)
+  return () => {
+    deviceAudioOptInListeners.delete(listener)
+  }
+}
+
+export function getDeviceAudioOptInSnapshot(): boolean {
+  return deviceAudioOptInSnapshot
+}
+
+export function getDeviceAudioOptInServerSnapshot(): boolean {
+  return false
+}
+
+export function setDeviceAudioOptIn(next: boolean): void {
+  if (deviceAudioOptInSnapshot === next) return
+  deviceAudioOptInSnapshot = next
+  for (const listener of [...deviceAudioOptInListeners]) {
+    listener()
+  }
+}
+
 export function resetNativeDeviceAudioStoresForTests(): void {
+  deviceAudioOptInListeners.clear()
+  deviceAudioOptInSnapshot = false
   detachCapabilityListener?.()
   detachCapabilityListener = null
   capabilityListeners.clear()

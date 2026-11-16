@@ -771,10 +771,15 @@ class NativeSTTModule: RCTEventEmitter {
     private var sttSessionTokenAcquired = false
     private var isAecEnabled = false
     private var lastAppliedAec: Bool? = nil
+    /// The user picked the earphone microphone over the phone's (see
+    /// MingleBackgroundAudioPolicy.sttMicrophonePlan). Main thread.
+    private var prefersEarphoneMicrophone = false
     private var hasListeners = false
     private var audioObserversInstalled = false
     private var isRestartingAudio = false
     private var lastAudioRestartAt = Date.distantPast
+    private var captureRestartQuickRetriesLeft = 0
+    private var captureRestartConsecutiveFailures = 0
     private var audioChunkCount: Int64 = 0
     private var wsMessageCount: Int64 = 0
     private var wsPingTimer: DispatchSourceTimer?
@@ -963,6 +968,8 @@ class NativeSTTModule: RCTEventEmitter {
         return [
             // The shell offers device-audio capture only when this is true.
             "deviceAudioCaptureSupported": MingleDeviceAudioSupport.isSupported,
+            // setEarphoneMicrophone and the earphoneMicrophone start option.
+            "earphoneMicrophoneChoiceSupported": true,
             "runtimeConfig": [
                 "webAppBaseUrl": Self.readRuntimeConfigURL(
                     schemeKey: "MingleWebAppScheme",
@@ -1034,28 +1041,53 @@ class NativeSTTModule: RCTEventEmitter {
 
     private func configureAudioSession(aecEnabled: Bool) throws {
         let audioSession = AVAudioSession.sharedInstance()
+        // With earphones in, record from the phone's microphone and leave the
+        // earphones to play (see MingleBackgroundAudioPolicy.sttMicrophonePlan).
+        // Read before setCategory: the route kind does not depend on it.
+        let routeKind = MingleAudioRouteClassifier.currentSnapshot().routeKind
+        let usePhoneMicrophone =
+            MingleBackgroundAudioPolicy.sttMicrophonePlan(
+                outputRouteKind: routeKind,
+                prefersEarphoneMicrophone: prefersEarphoneMicrophone
+            ) == .phoneMicrophone
         // .voiceChat → iOS system-level AEC (works with AVAudioPlayer TTS)
         // .default   → no system AEC, full speaker volume, echo allowed
+        // Earphones leak no echo into the phone's microphone, and .voiceChat
+        // turns the hands-free profile back on by itself, so they get .default.
         // A live voice call already runs the session in `.voiceChat`; keep it
         // there so starting STT does not switch the call's audio route.
         let voiceCallActive = MingleAudioSessionCoordinator.shared.isVoiceCallActive
-        let mode: AVAudioSession.Mode = (aecEnabled || voiceCallActive) ? .voiceChat : .default
-        NSLog("[NativeSTTModule] configureAudioSession aec=%d mode=%@ category=%@ sampleRate=%.0f",
-              aecEnabled ? 1 : 0, mode.rawValue, audioSession.category.rawValue, audioSession.sampleRate)
-        try audioSession.setCategory(
-            .playAndRecord,
-            mode: mode,
-            options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]
-        )
+        let mode: AVAudioSession.Mode = ((aecEnabled && !usePhoneMicrophone) || voiceCallActive) ? .voiceChat : .default
+        // .allowBluetooth is the hands-free profile: it moves both playback and
+        // the microphone to the earphones at 16 kHz. Without it Bluetooth
+        // earphones stay on A2DP and the phone records. A voice call keeps it.
+        var options: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers]
+        if !usePhoneMicrophone || voiceCallActive {
+            options.insert(.allowBluetooth)
+        }
+        NSLog("[NativeSTTModule] configureAudioSession aec=%d mode=%@ category=%@ sampleRate=%.0f route=%@ phoneMic=%d",
+              aecEnabled ? 1 : 0, mode.rawValue, audioSession.category.rawValue, audioSession.sampleRate,
+              routeKind, usePhoneMicrophone ? 1 : 0)
+        try audioSession.setCategory(.playAndRecord, mode: mode, options: options)
         try? audioSession.setPreferredSampleRate(48_000)
         try? audioSession.setPreferredIOBufferDuration(0.02)
         try audioSession.setActive(true, options: [])
+        // Wired earphones with a microphone: pick the phone's over theirs. nil
+        // hands the choice back to the system on every other route.
+        let phoneMicrophone = usePhoneMicrophone
+            ? audioSession.availableInputs?.first(where: { $0.portType == .builtInMic })
+            : nil
+        do {
+            try audioSession.setPreferredInput(phoneMicrophone)
+        } catch {
+            NSLog("[NativeSTTModule] setPreferredInput failed: %@", error.localizedDescription)
+        }
         // Port types and numeric audio metadata only; never log device names or speech.
         let inputs = audioSession.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
         let outputs = audioSession.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
-        audioDiagnostics.notice("session input=\(inputs, privacy: .public) output=\(outputs, privacy: .public) hardwareRate=\(audioSession.sampleRate) mode=\(mode.rawValue, privacy: .public) aec=\(aecEnabled)")
-        NSLog("[NativeSTTModule] audioSession active mode=%@ sampleRate=%.0f ioBufferDuration=%.4f",
-              mode.rawValue, audioSession.sampleRate, audioSession.ioBufferDuration)
+        audioDiagnostics.notice("session input=\(inputs, privacy: .public) output=\(outputs, privacy: .public) hardwareRate=\(audioSession.sampleRate) mode=\(mode.rawValue, privacy: .public) aec=\(aecEnabled) phoneMic=\(usePhoneMicrophone)")
+        NSLog("[NativeSTTModule] audioSession active mode=%@ sampleRate=%.0f ioBufferDuration=%.4f inputs=[%@] outputs=[%@]",
+              mode.rawValue, audioSession.sampleRate, audioSession.ioBufferDuration, inputs, outputs)
     }
 
     private func installAudioObserversIfNeeded() {
@@ -1229,7 +1261,7 @@ class NativeSTTModule: RCTEventEmitter {
         hasInputTap = true
     }
 
-    private func restartAudioCapture(reason: String, bypassThrottle: Bool = false) {
+    private func restartAudioCapture(reason: String, bypassThrottle: Bool = false, isQuickRetry: Bool = false) {
         guard isRunning else { return }
         let now = Date()
         if isRestartingAudio {
@@ -1241,6 +1273,9 @@ class NativeSTTModule: RCTEventEmitter {
 
         isRestartingAudio = true
         lastAudioRestartAt = now
+        if !isQuickRetry {
+            captureRestartQuickRetriesLeft = MingleBackgroundAudioPolicy.captureRestartQuickRetries
+        }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             // Reset before the running check: a restart dropped because STT
@@ -1253,7 +1288,7 @@ class NativeSTTModule: RCTEventEmitter {
             do {
                 try self.configureAudioSession(aecEnabled: self.isAecEnabled)
             } catch {
-                self.handleCaptureRestartFailure("audio_reconfigure_failed(\(reason)): \(error.localizedDescription)")
+                self.handleCaptureRestartFailure("audio_reconfigure_failed(\(reason)): \(error.localizedDescription)", reason: reason)
                 return
             }
 
@@ -1265,7 +1300,7 @@ class NativeSTTModule: RCTEventEmitter {
             // While another app or a call holds the microphone the input can
             // report an empty format; installing a tap with it raises an exception.
             guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
-                self.handleCaptureRestartFailure("audio_restart_failed(\(reason)): input_unavailable")
+                self.handleCaptureRestartFailure("audio_restart_failed(\(reason)): input_unavailable", reason: reason)
                 return
             }
             self.installInputTap(format: inputFormat)
@@ -1277,6 +1312,8 @@ class NativeSTTModule: RCTEventEmitter {
             do {
                 self.audioEngine.prepare()
                 try self.audioEngine.start()
+                self.captureRestartQuickRetriesLeft = 0
+                self.captureRestartConsecutiveFailures = 0
                 if self.isCaptureSuspended {
                     // The engine can start while a call still holds the
                     // microphone. Stay silenced until the health check sees
@@ -1287,7 +1324,7 @@ class NativeSTTModule: RCTEventEmitter {
                     NSLog("[NativeSTTModule] audio restarted reason=%@", reason)
                 }
             } catch {
-                self.handleCaptureRestartFailure("audio_restart_failed(\(reason)): \(error.localizedDescription)")
+                self.handleCaptureRestartFailure("audio_restart_failed(\(reason)): \(error.localizedDescription)", reason: reason)
             }
         }
     }
@@ -1295,12 +1332,27 @@ class NativeSTTModule: RCTEventEmitter {
     /// Main thread. Live STT must not end because the app is in the background
     /// or iOS holds the microphone: such a failure keeps the session, reports
     /// it as silenced and is retried by the health check.
-    private func handleCaptureRestartFailure(_ message: String) {
+    private func handleCaptureRestartFailure(_ message: String, reason: String) {
+        // One failure per round: quick retries inside a round do not count, so
+        // the report comes after about a minute of health-check rounds.
+        if captureRestartQuickRetriesLeft <= 0 {
+            captureRestartConsecutiveFailures += 1
+        }
         let action = MingleBackgroundAudioPolicy.captureRestartFailureAction(
             isCaptureSuspended: isCaptureSuspended,
-            isAppActive: UIApplication.shared.applicationState == .active
+            isAppActive: UIApplication.shared.applicationState == .active,
+            quickRetriesLeft: captureRestartQuickRetriesLeft,
+            consecutiveFailures: captureRestartConsecutiveFailures
         )
         switch action {
+        case .retrySoon:
+            // Right after a route change the new input can be unready for a
+            // moment. Try again quietly before anything reaches the WebView.
+            captureRestartQuickRetriesLeft -= 1
+            NSLog("[NativeSTTModule] capture restart retrying soon (left=%d): %@", captureRestartQuickRetriesLeft, message)
+            DispatchQueue.main.asyncAfter(deadline: .now() + MingleBackgroundAudioPolicy.captureRestartQuickRetryDelaySeconds) { [weak self] in
+                self?.restartAudioCapture(reason: reason, bypassThrottle: true, isQuickRetry: true)
+            }
         case .deferAndRetry:
             NSLog("[NativeSTTModule] capture restart deferred: %@", message)
             markCaptureSuspended()
@@ -1357,6 +1409,18 @@ class NativeSTTModule: RCTEventEmitter {
         }
         switch reason {
         case .newDeviceAvailable, .oldDeviceUnavailable, .noSuitableRouteForCategory, .wakeFromSleep:
+            // Port types and ids only; never device names.
+            let previousRoute = userInfo[AVAudioSessionRouteChangePreviousRouteKey] as? AVAudioSessionRouteDescription
+            let previousInputs = previousRoute?.inputs.map { "\($0.portType.rawValue):\($0.uid)" } ?? []
+            let currentInputs = AVAudioSession.sharedInstance().currentRoute.inputs.map { "\($0.portType.rawValue):\($0.uid)" }
+            guard MingleBackgroundAudioPolicy.shouldRestartCaptureOnRouteChange(
+                previousInputs: previousInputs,
+                currentInputs: currentInputs,
+                engineRunning: audioEngine.isRunning
+            ) else {
+                NSLog("[NativeSTTModule] route change %lu: same microphone, capture continues", reasonValue)
+                return
+            }
             restartAudioCapture(reason: "route_change_\(reasonValue)")
         default:
             break
@@ -2013,8 +2077,8 @@ class NativeSTTModule: RCTEventEmitter {
     /// Bluetooth earphones switches them to HFP, which drops the whole device
     /// to a 16 kHz route, and flipping between HFP and A2DP makes other apps'
     /// playback (a video) run at the wrong rate, fast and high-pitched. Output
-    /// stays on A2DP and the microphone comes from the phone (wired earphones
-    /// keep their own microphone).
+    /// stays on A2DP and the microphone comes from the phone, whatever was
+    /// picked. Wired earphones follow the pick (the phone's by default).
     private func configureDeviceAudioSession() throws {
         let audioSession = AVAudioSession.sharedInstance()
         if audioSession.recordPermission == .granted {
@@ -2027,6 +2091,21 @@ class NativeSTTModule: RCTEventEmitter {
             try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
         }
         try audioSession.setActive(true, options: [])
+        if audioSession.recordPermission == .granted {
+            let routeKind = MingleAudioRouteClassifier.currentSnapshot().routeKind
+            let usePhoneMicrophone = MingleBackgroundAudioPolicy.sttMicrophonePlan(
+                outputRouteKind: routeKind,
+                prefersEarphoneMicrophone: prefersEarphoneMicrophone
+            ) == .phoneMicrophone
+            let phoneMicrophone = usePhoneMicrophone
+                ? audioSession.availableInputs?.first(where: { $0.portType == .builtInMic })
+                : nil
+            do {
+                try audioSession.setPreferredInput(phoneMicrophone)
+            } catch {
+                NSLog("[NativeSTTModule] device audio setPreferredInput failed: %@", error.localizedDescription)
+            }
+        }
         let inputs = audioSession.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
         let outputs = audioSession.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
         NSLog("[NativeSTTModule] device audio session active category=%@ inputs=[%@] outputs=[%@]",
@@ -2485,6 +2564,8 @@ class NativeSTTModule: RCTEventEmitter {
 
         let sttModel = options["sttModel"] as? String ?? "soniox"
         let aecEnabled = options["aecEnabled"] as? Bool ?? false
+        // Absent (older web): the phone's microphone while earphones are in.
+        prefersEarphoneMicrophone = options["earphoneMicrophone"] as? Bool ?? false
         let conversationId = (options["conversationId"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let apiNamespace = (options["apiNamespace"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let releaseVariant = (options["releaseVariant"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2652,6 +2733,27 @@ class NativeSTTModule: RCTEventEmitter {
         }
     }
 
+    /// The microphone pick changed (the web's earphone-microphone question).
+    /// A running microphone session re-reads it through a capture restart;
+    /// a device-audio session applies it from its next start.
+    @objc(setEarphoneMicrophone:resolver:rejecter:)
+    func setEarphoneMicrophone(
+        _ enabled: Bool,
+        resolver resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        performOnMainQueue { module in
+            let previous = module.prefersEarphoneMicrophone
+            module.prefersEarphoneMicrophone = enabled
+            NSLog("[NativeSTTModule] setEarphoneMicrophone %d→%d isRunning=%d",
+                  previous ? 1 : 0, enabled ? 1 : 0, module.isRunning ? 1 : 0)
+            if previous != enabled, module.isRunning, !module.deviceAudioActive {
+                module.restartAudioCapture(reason: "microphone_pick", bypassThrottle: true)
+            }
+            resolve(["ok": true])
+        }
+    }
+
     @objc(setAec:resolver:rejecter:)
     func setAec(
         _ enabled: Bool,
@@ -2693,8 +2795,10 @@ class NativeSTTModule: RCTEventEmitter {
             NSLog("[NativeSTTModule] audioEngine restarted after AEC toggle, isRunning=%d", audioEngine.isRunning ? 1 : 0)
             resolve(["ok": true])
         } catch {
+            // Keep live STT on: retry like any other capture restart.
             NSLog("[NativeSTTModule] audioEngine restart after AEC toggle FAILED: %@", error.localizedDescription)
-            reject("audio_engine", "Failed to restart after AEC toggle", error)
+            restartAudioCapture(reason: "aec_toggle", bypassThrottle: true)
+            resolve(["ok": true])
         }
     }
 

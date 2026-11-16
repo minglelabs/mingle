@@ -207,6 +207,13 @@ async function workerTab() {
     const tab = await chrome.tabs.get(tabId).catch(() => null)
     if (tab) return tab
   }
+  // The pool opened this profile with a chatgpt.com tab: use that one rather than a second.
+  const [opened] = await chrome.tabs.query({ url: 'https://chatgpt.com/*' })
+  if (opened) {
+    await chrome.tabs.update(opened.id, { pinned: true, autoDiscardable: false })
+    await chrome.storage.local.set({ tabId: opened.id })
+    return opened
+  }
   const windows = await chrome.windows.getAll({ windowTypes: ['normal'] })
   const tab = windows.length
     ? await chrome.tabs.create({ windowId: windows[0].id, url: IMAGE_URL, active: false, pinned: true, index: 0 })
@@ -414,6 +421,19 @@ async function post(path, body) {
 
 let looping = false
 let currentAgentId = null
+let keepOpen = false
+
+const POOL_TAB = /^(https:\/\/chatgpt\.com\/|about:blank|chrome:\/\/newtab\/?$|chrome:\/\/new-tab-page\/?$)/
+
+/** Closes every window of this profile when all its tabs are ChatGPT or blank; false otherwise. */
+async function closeProfile() {
+  const windows = await chrome.windows.getAll({ populate: true })
+  const tabs = windows.flatMap((window) => window.tabs ?? [])
+  if (tabs.some((tab) => !POOL_TAB.test(tab.pendingUrl || tab.url || ''))) return false
+  await chrome.storage.local.remove('tabId')
+  for (const window of windows) await chrome.windows.remove(window.id).catch(() => {})
+  return true
+}
 
 async function loop() {
   if (looping) return
@@ -424,7 +444,7 @@ async function loop() {
     for (;;) {
       let reply
       try {
-        reply = await post('/agent/poll', { agentId: id, email: await currentEmail(), idle: true })
+        reply = await post('/agent/poll', { agentId: id, email: await currentEmail(), idle: true, ...(keepOpen ? { keepOpen: true } : {}) })
       } catch {
         await sleep(10_000) // the pool is not running
         continue
@@ -432,6 +452,13 @@ async function loop() {
       if (reply?.extensionVersion && reply.extensionVersion !== chrome.runtime.getManifest().version) {
         chrome.runtime.reload() // the server has newer code on disk
         return
+      }
+      // The pool has more profiles open than it needs: close this one, unless the
+      // staff use it for anything else (a tab that is not ChatGPT).
+      if (reply?.park) {
+        if (await closeProfile()) return
+        keepOpen = true
+        continue
       }
       const job = reply?.job
       if (!job) continue

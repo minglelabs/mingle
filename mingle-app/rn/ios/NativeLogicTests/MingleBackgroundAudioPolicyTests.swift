@@ -32,6 +32,8 @@ enum MingleBackgroundAudioPolicyTests {
         testSilentWav()
         testSttSilenceKeepalive()
         testCaptureRestartFailureAction()
+        testSttMicrophonePlan()
+        testRouteChangeRestart()
         if failures == 0 {
             print("PASS \(checks) checks")
             exit(0)
@@ -165,5 +167,54 @@ enum MingleBackgroundAudioPolicyTests {
         expect(action(suspended: true, active: true) == .deferAndRetry, "a pending interruption is retried in the foreground too")
         expect(action(suspended: true, active: false) == .deferAndRetry, "a pending interruption is retried in the background")
         expect(action(suspended: false, active: true) == .reportError, "a foreground failure is still reported")
+        expect(
+            MingleBackgroundAudioPolicy.captureRestartFailureAction(isCaptureSuspended: false, isAppActive: true, quickRetriesLeft: 1) == .retrySoon,
+            "a foreground failure is retried quietly first"
+        )
+        expect(
+            MingleBackgroundAudioPolicy.captureRestartFailureAction(isCaptureSuspended: false, isAppActive: true, consecutiveFailures: 4) == .deferAndRetry,
+            "after the quick retries the session stays on (silenced) and the health check retries"
+        )
+        expect(
+            MingleBackgroundAudioPolicy.captureRestartFailureAction(
+                isCaptureSuspended: false, isAppActive: true,
+                consecutiveFailures: MingleBackgroundAudioPolicy.captureRestartFailuresBeforeReport
+            ) == .reportError,
+            "a failure that keeps failing for about a minute is reported"
+        )
+    }
+
+    private static func testSttMicrophonePlan() {
+        typealias Plan = MingleBackgroundAudioPolicy.SttMicrophonePlan
+        for kind in ["bluetooth", "wired"] {
+            expect(
+                MingleBackgroundAudioPolicy.sttMicrophonePlan(outputRouteKind: kind, prefersEarphoneMicrophone: false) == Plan.phoneMicrophone,
+                "\(kind) earphones play only; the phone records"
+            )
+        }
+        for kind in ["speaker", "receiver", "usb", "car", "airplay", "hdmi", "other", "none"] {
+            expect(
+                MingleBackgroundAudioPolicy.sttMicrophonePlan(outputRouteKind: kind, prefersEarphoneMicrophone: false) == Plan.routeDefault,
+                "\(kind) keeps the route's own microphone"
+            )
+        }
+        for kind in ["bluetooth", "wired", "speaker"] {
+            expect(
+                MingleBackgroundAudioPolicy.sttMicrophonePlan(outputRouteKind: kind, prefersEarphoneMicrophone: true) == Plan.routeDefault,
+                "picking the earphone microphone keeps the route's own on \(kind)"
+            )
+        }
+    }
+
+    private static func testRouteChangeRestart() {
+        func restart(_ previous: [String], _ current: [String], running: Bool = true) -> Bool {
+            MingleBackgroundAudioPolicy.shouldRestartCaptureOnRouteChange(
+                previousInputs: previous, currentInputs: current, engineRunning: running
+            )
+        }
+        expect(!restart(["builtin:a"], ["builtin:a"]), "earphones out with the phone recording: nothing to restart")
+        expect(restart(["bt:x"], ["builtin:a"]), "the earphone microphone went away: restart on the phone's")
+        expect(restart(["builtin:a"], ["builtin:a"], running: false), "a stopped engine always restarts")
+        expect(restart(["builtin:a"], []), "no input yet: restart (and retry) as before")
     }
 }

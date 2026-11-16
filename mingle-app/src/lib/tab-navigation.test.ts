@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildNativeAwareTabPath,
+  clearTopLevelTabSwitch,
   isNativeTabRootHref,
   isNativeTabRootSearch,
+  isTopLevelTabSwitchPending,
+  markTopLevelTabSwitch,
   NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY,
   NATIVE_TAB_ROOT_QUERY_KEY,
 } from "@/lib/tab-navigation";
@@ -72,5 +75,26 @@ describe("tab navigation", () => {
 
     const inRoom = new URLSearchParams("nativeUi=1&nativeTabRoot=1&conversation=conv-1");
     expect(isNativeTabRootSearch((key) => inRoom.get(key))).toBe(false);
+  });
+
+  describe("top-level tab switch marker", () => {
+    it("is pending right after a tab switch so the room unmount keeps native STT", () => {
+      clearTopLevelTabSwitch();
+      expect(isTopLevelTabSwitchPending(1_000)).toBe(false);
+
+      markTopLevelTabSwitch(1_000);
+      expect(isTopLevelTabSwitchPending(1_500)).toBe(true);
+    });
+
+    it("expires, so a later room unmount stops native STT again", () => {
+      markTopLevelTabSwitch(1_000);
+      expect(isTopLevelTabSwitchPending(31_000)).toBe(false);
+    });
+
+    it("is cleared when the conversation list mounts again", () => {
+      markTopLevelTabSwitch(1_000);
+      clearTopLevelTabSwitch();
+      expect(isTopLevelTabSwitchPending(1_500)).toBe(false);
+    });
   });
 });

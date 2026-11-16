@@ -95,6 +95,12 @@ describe('effective capture source', () => {
     expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: false, pick: 'device_audio' })).toBe('microphone')
     expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: true, pick: 'microphone' })).toBe('microphone')
   })
+
+  it('captures device audio outside earphone mode only after the opt-in', () => {
+    expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: false, deviceAudioOptIn: true, pick: 'device_audio' })).toBe('device_audio')
+    expect(resolveEffectiveSttCaptureSource({ supported: false, earphoneModeEnabled: false, deviceAudioOptIn: true, pick: 'device_audio' })).toBe('microphone')
+    expect(resolveEffectiveSttCaptureSource({ supported: true, earphoneModeEnabled: false, deviceAudioOptIn: true, pick: 'microphone' })).toBe('microphone')
+  })
 })
 
 describe('page-wide stores', () => {

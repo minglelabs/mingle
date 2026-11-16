@@ -15,7 +15,8 @@ import { OperatorPostStatsRow } from '../../../_components/operator-post-stats-r
 import { OperatorPostEditor } from '../../../feed/_components/operator-post-editor'
 import { PostTakedownButton } from '../../../feed/_components/post-takedown-button'
 import { OperatorAvatar, OperatorsMain } from '../../_components/operator-ui'
-import { ReviewBoard, ReviewPhotos, reviewImageUrl } from '../../review/review-board'
+import { ReviewBoard, ReviewPhotos } from '../../review/review-board'
+import { reviewImageUrl } from '../../review/review-image-url'
 
 export const dynamic = 'force-dynamic'
 

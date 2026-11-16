@@ -1,0 +1,90 @@
+[
+ {
+  "title": "A voice messenger without language barriers",
+  "text": "Talking with people abroad, made easier than on HelloTalk or Discord.\nLast updated: Sep 1, 2026\nDownload HashChat 👇"
+ },
+ {
+  "title": "“ I want to make friends abroad, but the language gets in the way ”",
+  "text": "Problem"
+ },
+ {
+  "title": "The chicken-and-egg problem",
+  "text": "Problem\nI want friends\nfrom abroad\nI want to learn\na language"
+ },
+ {
+  "title": "There are lots of language exchange apps, but none solve chicken-and-egg",
+  "text": "Market\nHelloTalk\n~70M+\nTandem\n~35M+\nYeetalk\n~11M\nK-Friends\n~4.5M\nHilokal\n~1.7M\nKOF\n~600K\nEstimated lifetime downloads, iOS and Android combined · KOF: Google Play only"
+ },
+ {
+  "title": "Other apps that connect you with people abroad mostly hit the language barrier too",
+  "text": "Market"
+ },
+ {
+  "title": "What if we removed one side entirely?!",
+  "text": "Solution\nI want friends\nfrom abroad\nI want to learn\na language\nBuilt-in interpretation"
+ },
+ {
+  "title": "Couldn't people just relax and enjoy the talk?!",
+  "text": "Solution\nI want friends\nfrom abroad\nNo shared language,\nstill a real conversation!"
+ },
+ {
+  "title": "“ Talk with people abroad, with live interpretation ”",
+  "text": "Solution"
+ },
+ {
+  "title": "So why haven't social apps offered interpretation until now?",
+  "text": "Why"
+ },
+ {
+  "title": "Social conversation is demanding, and older AI couldn't keep up",
+  "text": "Problem\nContinuous translation\nPressing buttons keeps breaking the flow\nLive translation\nBatch processing only\nVoice interpretation\nText output only\nSpeech recognition\nMisses even basic sentences\nMultilingual\nNo Korean, among others\nLanguage switching\nYou keep switching languages by hand\nUtterance split\nDoesn't break speech into sentences\nSpeaker split\nCan't tell several speakers apart\nCost\nAbout $2 per hour"
+ },
+ {
+  "title": "AI progress now makes every one of these solvable",
+  "text": "Solution\nContinuous translation\nTranslates nonstop, like auto captions\nLive translation\nUnder 0.5 s after you speak\nVoice interpretation\nLive voice interpretation\nSpeech recognition\nUnderstands better than people\nMultilingual\n60 languages\nLanguage switching\nFive languages at once\nUtterance split\nSplits speech into proper sentences\nSpeaker split\nSeparates voices in real time\nCost\nUnder $0.20 per hour"
+ },
+ {
+  "title": "So we started with an interpreter app that solves all of it",
+  "text": "HashChat"
+ },
+ {
+  "title": "Then we had people use it alongside voice chat apps",
+  "text": "HashChat"
+ },
+ {
+  "title": "Users who tried HashChat have been positive",
+  "text": "Customers\n\"It never stops to translate.\nIt just plays like subtitles. So easy.\"\n\"I speak Russian, you speak Korean,\nand we still understand each other. Love it.\"\n\"It understands far better than Apple Translate.\""
+ },
+ {
+  "title": "Some users already rely on HashChat",
+  "text": "Customers\nOne Japanese user ran HashChat 2.5 hours a day for two weeks.\nSeveral others always keep HashChat open while on HelloTalk."
+ },
+ {
+  "title": "We also found huge demand for add-on captions",
+  "text": "Customers\nSome people use HashChat alongside Xiaohongshu, Roblox and Discord.\nOthers often wanted HashChat for watching content that has no captions.\nWatching Xiaohongshu live streams in PiP\nwith HashChat captions on top\nAlso used with Roblox and Discord"
+ },
+ {
+  "title": "Many also use it for in-person and work interpretation",
+  "text": "Customers\nA young man in Africa got hired as an interpreter thanks to HashChat, despite weak English\nAnother user appears to be a Seoul tour guide for Japanese visitors\nHair salon owners use it a lot with tourists"
+ },
+ {
+  "title": "That makes seven distinct UX cases We'll win them one at a time",
+  "text": "Customers"
+ },
+ {
+  "title": "Our first goal: win over K-Friends users",
+  "text": "Goal\nThe Kfriends app. Updated once every two years."
+ },
+ {
+  "title": "Start with interpretation, grow into an AI-native messenger and social network!",
+  "text": "Vision"
+ },
+ {
+  "title": "We're hiring",
+  "text": "Product or business, humanities or engineering: your background doesn't matter."
+ },
+ {
+  "title": "Thank you. Q & A",
+  "text": "GitHub\nLinkedIn\nDownload HashChat 👇"
+ }
+]

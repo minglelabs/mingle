@@ -14,6 +14,7 @@ interface ChatBubbleTimestampProps {
   uiLocale: string
   align?: 'right' | 'left' | 'center'
   minWidth?: string
+  lineHeight?: number
   className?: string
 }
 
@@ -22,6 +23,7 @@ function ChatBubbleTimestamp({
   uiLocale,
   align = 'right',
   minWidth = '2.25rem',
+  lineHeight = CHAT_BUBBLE_TIMESTAMP_LINE_HEIGHT,
   className,
 }: ChatBubbleTimestampProps) {
   const [tick, setTick] = useState(0)
@@ -46,7 +48,7 @@ function ChatBubbleTimestamp({
     <div
       data-original-bubble-timestamp
       suppressHydrationWarning
-      style={{ lineHeight: CHAT_BUBBLE_TIMESTAMP_LINE_HEIGHT, minWidth }}
+      style={{ lineHeight, minWidth }}
       className={cn(
         'flex shrink-0 flex-col text-[10px] text-black/[0.34] tabular-nums',
         align === 'center'
@@ -77,6 +79,7 @@ export default memo(
     && prev.uiLocale === next.uiLocale
     && prev.align === next.align
     && prev.minWidth === next.minWidth
+    && prev.lineHeight === next.lineHeight
     && prev.className === next.className
   ),
 )

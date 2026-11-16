@@ -17,6 +17,7 @@ import { feedHref as buildFeedHref } from "@/lib/feed-routes";
 import {
   buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
   isNativeTabRootHref,
+  markTopLevelTabSwitch,
   NATIVE_TAB_ROOT_QUERY_KEY,
 } from "@/lib/tab-navigation";
 
@@ -342,6 +343,7 @@ export default function BottomTabBar({
           type="button"
           onClick={() => {
             if (isOnTabRoute(feedPath)) return;
+            markTopLevelTabSwitch();
             router.replace(feedHref);
           }}
           className="flex flex-1 items-center justify-center transition active:opacity-60"
@@ -361,6 +363,7 @@ export default function BottomTabBar({
         type="button"
         onClick={() => {
           if (isConversationsActive) return;
+          markTopLevelTabSwitch();
           router.replace(conversationsHref);
         }}
         className="flex flex-1 items-center justify-center transition active:opacity-60"
@@ -391,6 +394,7 @@ export default function BottomTabBar({
         type="button"
         onClick={() => {
           if (isOnTabRoute(connectPath)) return;
+          markTopLevelTabSwitch();
           router.replace(connectHref);
         }}
         className="flex flex-1 items-center justify-center transition active:opacity-60"
@@ -408,6 +412,7 @@ export default function BottomTabBar({
         type="button"
         onClick={() => {
           if (isOnTabRoute(mypagePath)) return;
+          markTopLevelTabSwitch();
           router.replace(mypageHref);
         }}
         className="flex flex-1 items-center justify-center transition active:opacity-60"

@@ -29,6 +29,8 @@
     "test:all": "pnpm test && pnpm test:live",
     "test:watch": "vitest",
     "test:live": "vitest run src/integration/live",
+    "qa:i18n:long-labels": "I18N_LONG_LABELS_OUT=qa/agent/local/i18n-long-labels.json vitest run src/i18n/i18n-coverage.test.ts -t \"long labels\"",
+    "test:qa:i18n": "node scripts/i18n-audit.mjs && vitest run src/i18n/i18n-coverage.test.ts",
     "test:qa:ui": "node scripts/mobile-ui-qa.mjs",
     "test:qa:ui:android": "node scripts/mobile-ui-qa.mjs --platform android",
     "test:qa:ui:android:regressions": "node scripts/android-ui-regression-suite.mjs",

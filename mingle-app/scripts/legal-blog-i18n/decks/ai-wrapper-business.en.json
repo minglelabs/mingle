@@ -1,0 +1,378 @@
+[
+ {
+  "title": "Exploring Business Opportunities for AI Wrapper Software",
+  "text": "AI Beyond 2026\nHyeongkeol Nam, Mingle Labs\nNov 5, 2026"
+ },
+ {
+  "title": "Hyeongkeol Nam Mingle Labs",
+  "text": "AI Beyond 2026\nAbout me\nBefore\nHyperconnect · Scatter Lab\nBuilt AI and social products at both\n2 years\nAll in on AI wrappers\nTwo years of shipping, failing and learning at Mingle Labs\nNow\nHashChat\nFormerly Mingle. Nonstop, real-time interpreting across 3+ languages"
+ },
+ {
+  "title": "AI Beyond 2026",
+  "text": "Contents\nAI Wrapper Case Studies\n→\nWhat Comes Next"
+ },
+ {
+  "title": "1. AI Wrapper Case Studies",
+  "text": ""
+ },
+ {
+  "title": "What is a wrapper?",
+  "text": "AI Beyond 2026\nCase Studies\nDefinition\n“Software built by putting\na UI on top of a foundation\nmodel like GPT.”"
+ },
+ {
+  "title": "15 AI wrapper categories with real revenue",
+  "text": "AI Beyond 2026\nCase Studies\nOVERVIEW\n01Character chatCharacter.AI · Zeta\n02AI aggregatorsOpenRouter\n03Note-takingGranola · tiro\n04AI diet trackingCal AI\n05Vibe codingCursor · Lovable\n06AI study helpersStudyFetch\n07AI browsersAside · Ego(lite)\n08Language learningSpeak · heyring\n09Photo editingSNOW · Fotor\n10Professional servicesHarvey · Abridge\n11Fortune tellingForceteller · Jeomsin\n12YouTube summariesLilys AI · Eightify\n13Shorts & highlightsOpusClip · AlphaCut\n14Photo managementSwipewipe · Google Photos\n15Workplace searchGlean · Notion AI\nWe’ll take a closer look at the four highlighted fields"
+ },
+ {
+  "title": "Field 01 Character Chat",
+  "text": "AI Beyond 2026\nCase Studies\nCHARACTER\nC.AI\nZeta\nCrack\nDitto\nWhif\nSpicyChat.AI\nJanitorAI\nTalkie\nCandy AI\nChai\nCaveduck\nLoveyDovey\nDotDotDot\nBabeChat\nLumo"
+ },
+ {
+  "title": "One of the hottest fields Character.AI started it",
+  "text": "AI Beyond 2026\nCase Studies\nCHARACTER\nFounded by ex-Google stars\nRejoined Google in a $2.7B deal"
+ },
+ {
+  "title": "How big is character chat?",
+  "text": "AI Beyond 2026\nCase Studies\nCHARACTER\n$30M+Zeta + Crack (OOC), combined 2026E worldwide revenue, growing 10x every year\n2026 estimate (provided figures)\n4 hrsa day per Zeta user in Japan\nAI Times, Jul 2025\n> YouTubeZeta’s daily time spent in Korea\nApp usage data, 2025\n10M+Zeta sign-ups worldwide\nScatter Lab, 2025\n17%operating margin at Zeta (Q2 ’25)\nScatter Lab, Jul 2025\n$120M+consumer spend on AI companion apps in 2025\nAppfigures, Aug 2025"
+ },
+ {
+  "title": "At its core, character chat is spicy stories & dopamine",
+  "text": "AI Beyond 2026\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "In Korea, Zeta beat YouTube on time spent",
+  "text": "AI Beyond 2026\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Global apps only sell subscriptions: thin revenue Korean apps squeeze the dopamine and charge about 7¢ a turn",
+  "text": "AI Beyond 2026\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "History of Character Chat",
+  "text": "AI Beyond 2026\nCase Studies\nCHARACTER\nPhase 1Sep 2022 – Aug 2024\nKey: model quality\nFrom the C.AI launch to Google’s deal in Aug ’24\nPhase 2Aug 2024 – Oct 2026\nKey: content supply\nA race for killer content, ended by C.AI’s bankruptcy"
+ },
+ {
+  "title": "What matters in Phase 3 The creator ecosystem",
+  "text": "AI Beyond 2026\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Like webtoons, it all comes down to the business model!",
+  "text": "AI Beyond 2026\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Where is this field headed? Merged with webtoons and shorts, it could grow 10x or more Expect a crowded field, and keep an eye out for a hectocorn",
+  "text": "AI Beyond 2026\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "My take: the hidden opportunity Local-model businesses",
+  "text": "AI Beyond 2026\nCase Studies\nCHARACTER\nInference cost is the margin\nPer-turn pricing brings revenue, but API bills eat the profit\nGeneral models limit content\nThe product is spicy storytelling, yet Big Tech APIs play it safe\nServe character-tuned models\nTune open models for role-play, then serve them yourself or on-device"
+ },
+ {
+  "title": "Field 02 AI Aggregators",
+  "text": "AI Beyond 2026\nCase Studies\nAGGREGATOR\nOpenRouter\nPoe\nHiggsfield"
+ },
+ {
+  "title": "One API and one bill for countless AI models and infrastructure",
+  "text": "AI Beyond 2026\nCase Studies\nAGGREGATOR"
+ },
+ {
+  "title": "How big is aggregators?",
+  "text": "AI Beyond 2026\nCase Studies\nAGGREGATOR\n$50Mannualized fee revenue, OpenRouter\nOpenRouter\n23M+Combined accounts: OpenRouter 8M + Higgsfield 15M\nCompany figures, as shown\n100Ttokens per month through OpenRouter\n3M/daygenerations per day on Higgsfield\nHiggsfield\n$500Mannualized transaction volume, Higgsfield\n5%OpenRouter fee on every call, on top of provider prices\nOpenRouter fee structure"
+ },
+ {
+  "title": "Aggregators take a 5% cut much like Stripe or Visa",
+  "text": "AI Beyond 2026\nCase Studies\nAGGREGATOR\nCustomer\nApps\nOpenRouter\n5% fee\nInference Provider\n95% payout"
+ },
+ {
+  "title": "The core job: serving countless open models reliably",
+  "text": "AI Beyond 2026\nCase Studies\nAGGREGATOR"
+ },
+ {
+  "title": "In practice, the two blur together",
+  "text": "AI Beyond 2026\nCase Studies\nAGGREGATOR\nPure Aggregators\nOpenRouter\nPoe\nHiggsfield\nvs\nInference Provider\nFriendliAI\nReplicate\nWaveSpeed\nTogether\nBaseten\nFireworks"
+ },
+ {
+  "title": "Aggregators route traffic across inference providers",
+  "text": "AI Beyond 2026\nCase Studies\nAGGREGATOR\nInference providers\nFriendliAI\nReplicate\nWaveSpeed\nTogether\nBaseten\nFireworks\nAggr.\nOpenRouter API"
+ },
+ {
+  "title": "My take: the hidden opportunity Character chat & contents",
+  "text": "AI Beyond 2026\nCase Studies\nAGGREGATOR\nOpen source keeps prices stable\nWith per-turn pricing, cheaper inference is the edge\nReliable open-model serving\nHop across providers without downtime\nFree choice of approved models\nPick models without being bound by general API policies"
+ },
+ {
+  "title": "Field 03 Note-taking",
+  "text": "AI Beyond 2026\nCase Studies\nNOTES\nCountless note-taking apps"
+ },
+ {
+  "title": "How big is note-taking?",
+  "text": "AI Beyond 2026\nCase Studies\nNOTES\n$2.9MTiro’s annualized revenue, Korea’s best-known AI note-taker\n₩4B annualized (≈$2.9M at ₩1,400/$)\n40M+Otter.ai users\nOtter.ai, 2025\n$1.5BGranola valuation, 6x in 10 months\nSeries C, Mar 2026\n$1B+Fireflies valuation, profitable since 2023\nFireflies, Jun 2025\n$250Mexpected 2025 revenue at Plaud, 1M+ devices sold\nPlaud co-founder, 2025\n$3.5BAI meeting assistant market in 2025\nGrand View Research"
+ },
+ {
+  "title": "Everyone is making money and growing fast",
+  "text": "AI Beyond 2026\nCase Studies\nNOTES\nAbout 10% growth every week"
+ },
+ {
+  "title": "The endgame: owning the context layer",
+  "text": "AI Beyond 2026\nCase Studies\nNOTES"
+ },
+ {
+  "title": "My take: the hidden opportunity Messaging",
+  "text": "AI Beyond 2026\nCase Studies\nNOTES\nNotes are only part of it\nMost work context lives in chats, not meetings\nOwn the context layer\nOwning where conversations happen creates workflow lock-in\nAI-native from day one\nGrow into a messenger with summaries, to-dos and search built in"
+ },
+ {
+  "title": "Field 04 AI Diet Tracking",
+  "text": "AI Beyond 2026\nCase Studies\nDIET\nFoodvisor\nCal AI\nSnapCalorie\nNutriScan\nCalZen\nBiteSnap\nMyFitnessPal\nLose It!\nCronometer\nNutrola\nCalory App\nRex.fit"
+ },
+ {
+  "title": "Snap a photo, get calories and macros",
+  "text": "AI Beyond 2026\nCase Studies\nCORE FEATURE\nFood is recognized from the photo, and calories and macros are logged automatically."
+ },
+ {
+  "title": "How big is AI diet tracking?",
+  "text": "AI Beyond 2026\nCase Studies\nDIET\n$30M+Cal AI’s annual revenue, reached in under two years\nTechCrunch, Mar 2026 (reports go up to $40M)\n15M+Cal AI downloads in under two years\nTechCrunch, Mar 2026\nMar ’26MyFitnessPal acquires Cal AI, a teen-built app\n~$6BDiet and nutrition app market in 2025 (estimates range $2.4B to $14B)\nMarket Research Future, Roots Analysis\n$1.2BCalorie-tracking apps segment\nMarket Research Future\n~2xMarket forecast to roughly double by 2030 ($5.8B to $10.2B)\nMordor Intelligence"
+ },
+ {
+  "title": "Another red-hot field Cal AI started it",
+  "text": "AI Beyond 2026\nCase Studies\nDIET\nZach Yadegari · founded it in high school"
+ },
+ {
+  "title": "Fully paid from day one and still hugely popular",
+  "text": "AI Beyond 2026\nCase Studies\nDIET\nCharging upfront beats converting free users\nInference costs make it paid-only anyway"
+ },
+ {
+  "title": "Where is this field headed? Likely absorbed as one feature of the vast healthcare industry Linking into other healthcare workflows will be key",
+  "text": "AI Beyond 2026\nCase Studies\nDIET"
+ },
+ {
+  "title": "My take: the hidden opportunity Medical consultations",
+  "text": "AI Beyond 2026\nCase Studies\nDIET\nYour data is the asset\nDaily meal and weight logs are where consultations begin\nFrom prevention to care\nLike Pomellow (eating disorders), Noom and Counsel Health\nIn Korea, check the rules\nTelemedicine rules apply, so start with non-medical coaching or abroad"
+ },
+ {
+  "title": "One more: AI VTubers",
+  "text": "AI Beyond 2026\nCase Studies\nVTUBER\nBecoming a VTuber is still too hard\n2D rigging, 3D modeling, mocap studios: costly and slow\nGenerative models are collapsing the pipeline\nBringing models like Wan Animate and DreamActor to live streams\nGo live from one photo\nVirtually starts a stream from a single image in 10 seconds"
+ },
+ {
+  "title": "The key: simpler character creation",
+  "text": "AI Beyond 2026\nCase Studies\nVTUBER\nHow\nLive AI animation · vibe rigging\nAnimate one image with generative models, or let AI handle rigging\nProof\nIRIAM proved the demand\nSimple avatar streaming alone: 6.21M downloads, ¥8.5B+ in annual revenue"
+ },
+ {
+  "title": "1/200 the cost, live in 10 seconds",
+  "text": "AI Beyond 2026\nCase Studies\nVTUBER\n$7/hrAI live operation, vs up to $1,500/hr for mocap\nVirtually estimates\n$0Setup and production, vs $1,000–$25,000 for 3D\n10 secFrom a single still image to a live stream\nVirtually"
+ },
+ {
+  "title": "How big is AI VTubers?",
+  "text": "AI Beyond 2026\nCase Studies\nVTUBER\n$2.2–3.0BGlobal VTuber market size, 2026E\n$45M+Japan market size\n$36M+China market size\n$150M+Global production and operations\n$22M+US production and operations\n$7M+Korea production and operations"
+ },
+ {
+  "title": "Five ideas worth pursuing",
+  "text": "AI Beyond 2026\nCase Studies\nMY VIEW\nCharacter chat → local-model businesses\nAggregators → character chat & content\nNote-taking → messaging\nAI diet tracking → medical consultations\nAI VTubers"
+ },
+ {
+  "title": "More fields AI Study Helpers",
+  "text": "AI Beyond 2026\nCase Studies\nSTUDY\nQANDA\nPhotomath\nGauth\nBrainly\nStudyFetch"
+ },
+ {
+  "title": "More fields Browsers",
+  "text": "AI Beyond 2026\nCase Studies\nBROWSER\nPerplexity Comet\nDia\nArc Search\nAside\nEgo Lite"
+ },
+ {
+  "title": "More fields Language Learning",
+  "text": "AI Beyond 2026\nCase Studies\nLANGUAGE\nDuolingo\nSpeak\nELSA Speak\nheyring"
+ },
+ {
+  "title": "More fields Photo Editing",
+  "text": "AI Beyond 2026\nCase Studies\nPHOTO\nRemini\nFaceApp\nPhotoroom\nSNOW\nCarat\nConcept"
+ },
+ {
+  "title": "More fields Professional Services",
+  "text": "AI Beyond 2026\nCase Studies\nEXPERT\nHarvey\nSuperLawyer\nNorm AI\nLegora\nLBOX\nNearDoc\nAbridge\nPilot\nCounsel Health\nRogo\nHebbia\nAlphaSense\nInkle\nMaxed\nCranston\nBlack Ore"
+ },
+ {
+  "title": "More fields Fortune Telling",
+  "text": "AI Beyond 2026\nCase Studies\nFORTUNE\nPersonalized LLM readings and pay-per-consult\nare a natural fit\nForceteller\nJeomsin\nHellobot\nCo–Star"
+ },
+ {
+  "title": "More fields YouTube Summaries",
+  "text": "AI Beyond 2026\nCase Studies\nSUMMARY\nVideo summaries are becoming a Big Tech default\nSurvival means tying into notes and study\nLilys AI\nEightify\nNoteGPT"
+ },
+ {
+  "title": "More fields Shorts & Highlights",
+  "text": "AI Beyond 2026\nCase Studies\nCLIPS\nAuto-cutting long-form into short-form\ngrowing with the creator economy\nOpusClip\nVizard\nVrew\nAlphaCut"
+ },
+ {
+  "title": "More fields Photo Management",
+  "text": "AI Beyond 2026\nCase Studies\nPHOTOS\nAI apps to search, clean up and organize photos\nBig Tech has the OS and cloud advantage\nSwipewipe\nCleanup\nClever Cleaner\nSlidebox\nGoogle Photos\nApple Photos"
+ },
+ {
+  "title": "More fields Workplace Search",
+  "text": "AI Beyond 2026\nCase Studies\nKNOWLEDGE\nSearch scattered docs and chats, permissions intact\nThe front line of the context-layer race\nGlean\nNotion AI\nGuru\nDeepWiki"
+ },
+ {
+  "title": "2. What Comes Next",
+  "text": ""
+ },
+ {
+  "title": "AI wrappers create real value but have no moat",
+  "text": "AI Beyond 2026\nWhat Comes Next\nLimits\n“If your startup's core value proposition can be cloned in a weekend, you don’t have a business, you have a feature.”\n- Andrew Ng"
+ },
+ {
+  "title": "Elad Gil argues moats can come later",
+  "text": "AI Beyond 2026\nWhat Comes Next\nLimits\n“Serving a customer need well is often more important (and harder) to think about than defensibility.”\n- Elad Gil"
+ },
+ {
+  "title": "Wrapper first, moat next",
+  "text": "AI Beyond 2026\nWhat Comes Next\nMOAT\n“The mistake isn't building an AI wrapper — the mistake is staying one.”\n- Paul Graham"
+ },
+ {
+  "title": "Where I think we should aim \"Ambient AI\"",
+  "text": "AI Beyond 2026\nWhat Comes Next\nVISION\nAmbient means “all around you.”"
+ },
+ {
+  "title": "Design Principles of Ambient AI",
+  "text": "AI Beyond 2026\nWhat Comes Next\nVISION\nWorkflow Integration\nWeave AI naturally into the customer’s workflow\nAlways-On Intelligence\nOffer AI help automatically, as naturally as breathing\nGUI to CUI\nReplace complex GUIs with conversation"
+ },
+ {
+  "title": "First, workflow integration",
+  "text": "AI Beyond 2026\nWhat Comes Next\nWORKFLOW INTEGRATION\nWorkflow Integration\nAlways-On Intelligence\nGUI to CUI"
+ },
+ {
+  "title": "Let’s recall how software was built until summer 2024, before Cursor took off",
+  "text": "AI Beyond 2026\nWhat Comes Next\nWorkflow Integration"
+ },
+ {
+  "title": "AI was already helping a lot with coding",
+  "text": "AI Beyond 2026\nWhat Comes Next\nWorkflow Integration\nChatGPT"
+ },
+ {
+  "title": "“Developers are done” was already a familiar line.",
+  "text": "AI Beyond 2026\nWhat Comes Next\nWorkflow Integration\nChatGPT"
+ },
+ {
+  "title": "But to get that help, you had to copy and paste code by hand.",
+  "text": "AI Beyond 2026\nWhat Comes Next\nWorkflow Integration\nVS Code\nCopy & paste\nback and forth\nChatGPT"
+ },
+ {
+  "title": "Cursor’s team spotted this and built AI into the editor",
+  "text": "AI Beyond 2026\nWhat Comes Next\nWorkflow Integration\nVS Code\nChatGPT"
+ },
+ {
+  "title": "Then vibe coding took off, just from the right integration.",
+  "text": "AI Beyond 2026\nWhat Comes Next\nWorkflow Integration\nCursor"
+ },
+ {
+  "title": "Second,",
+  "text": "AI Beyond 2026\nWhat Comes Next\nAlways-On Intelligence\nAOI\nWorkflow Integration\nGUI to CUI"
+ },
+ {
+  "title": "In April, X’s auto-translate took the world by storm",
+  "text": "AI Beyond 2026\nWhat Comes Next\nAlways-On Intelligence"
+ },
+ {
+  "title": "It just flipped the old “Show translation” button on",
+  "text": "AI Beyond 2026\nWhat Comes Next\nAlways-On Intelligence"
+ },
+ {
+  "title": "Yet people loved it Why?",
+  "text": "AI Beyond 2026\nWhat Comes Next\nAlways-On Intelligence"
+ },
+ {
+  "title": "Because it saved them a single click",
+  "text": "AI Beyond 2026\nWhat Comes Next\nAlways-On Intelligence\nThe bigger reason may be X’s recommender becoming i18n-aware.\nThat worked because X rebuilt its recommender to be AI-native a year earlier."
+ },
+ {
+  "title": "Users found even one click too much",
+  "text": "AI Beyond 2026\nWhat Comes Next\nAlways-On Intelligence"
+ },
+ {
+  "title": "A feature that needs a click was practically no feature at all",
+  "text": "AI Beyond 2026\nWhat Comes Next\nAlways-On Intelligence"
+ },
+ {
+  "title": "Still, auto-applied AI isn’t always a win",
+  "text": "AI Beyond 2026\nWhat Comes Next\nAlways-On Intelligence"
+ },
+ {
+  "title": "iPhone autocorrect fails",
+  "text": "AI Beyond 2026\nCase Studies\nAlways-On Intelligence"
+ },
+ {
+  "title": "Smarter AI will get it right on its own Until then, designers have to design it right",
+  "text": "AI Beyond 2026\nWhat Comes Next\nAlways-On Intelligence"
+ },
+ {
+  "title": "Third,",
+  "text": "AI Beyond 2026\nWhat Comes Next\nGUI to CUI\nWorkflow Integration\nAlways-On Intelligence"
+ },
+ {
+  "title": "One reason vibe coding feels easy: no more fighting GUI complexity",
+  "text": "AI Beyond 2026\nWhat Comes Next\nGUI to CUI"
+ },
+ {
+  "title": "App Store releases, AWS setup: same story",
+  "text": "AI Beyond 2026\nWhat Comes Next\nGUI to CUI\nEven inviting internal testers in App Store Connect, it’s hard to find where the invite code comes from"
+ },
+ {
+  "title": "AI solves exactly this Once things get complex, CUI wins by far",
+  "text": "AI Beyond 2026\nWhat Comes Next\nGUI to CUI"
+ },
+ {
+  "title": "Same with Google Ads: editing an ad is a maze",
+  "text": "AI Beyond 2026\nWhat Comes Next\nGUI to CUI"
+ },
+ {
+  "title": "Same when a banking app frustrates you you end up calling support Why?",
+  "text": "AI Beyond 2026\nWhat Comes Next\nGUI to CUI"
+ },
+ {
+  "title": "Same when a banking app frustrates you you end up calling support to solve it in a conversational UI.",
+  "text": "AI Beyond 2026\nWhat Comes Next\nGUI to CUI"
+ },
+ {
+  "title": "GUI to CUI alone means browsers and OSes must go AI-native!",
+  "text": "AI Beyond 2026\nWhat Comes Next\nComet\nDia\nArc Search\nAside\nEgo Lite\niOS\nmacOS\nAndroid\nWindows\nLinux"
+ },
+ {
+  "title": "In short, whoever nails Ambient AI in their domain survives",
+  "text": "AI Beyond 2026\nWhat Comes Next\nWorkflow Integration\nAlways-On Intelligence\nGUI to CUI"
+ },
+ {
+  "title": "Sometimes an AI wrapper eats the existing workflow",
+  "text": "AI Beyond 2026\nWhat Comes Next\nAmbient AI"
+ },
+ {
+  "title": "But incumbents may reach Ambient AI first",
+  "text": "AI Beyond 2026\nWhat Comes Next"
+ },
+ {
+  "title": "So what should AI wrapper startups do?",
+  "text": "AI Beyond 2026\nWhat Comes Next\nOpportunity"
+ },
+ {
+  "title": "1. Solve a real problem with a sharp wrapper",
+  "text": "AI Beyond 2026\nWhat Comes Next\nOpportunity"
+ },
+ {
+  "title": "1. Solve a real problem with a sharp wrapper 2. Grow into that domain’s Ambient AI",
+  "text": "AI Beyond 2026\nWhat Comes Next\nOpportunity"
+ },
+ {
+  "title": "My biggest bet: AI-native messaging",
+  "text": "AI Beyond 2026\nWhat Comes Next\nOpportunity"
+ },
+ {
+  "title": "AI plus messaging and social will transform most industries",
+  "text": "AI Beyond 2026\nWhat Comes Next\nOpportunity\nAI+\nMessaging\nSocial\nSales & work\nShopping\nEducation\nTravel\nContent\nCharacter chat\nCompanions\nDating\nMedical, legal, finance and more"
+ },
+ {
+  "title": "Clayton Christensen The Innovator’s Dilemma",
+  "text": "AI Beyond 2026\nWhat Comes Next\nOpportunity\nThe Innovator’s Dilemma: When New Technologies Cause Great Firms to Fail\n\"The reason is that good management itself was the root cause.\"\n- Clayton M. Christensen"
+ },
+ {
+  "title": "The chance to overtake the giants is right now",
+  "text": "AI Beyond 2026\nWhat Comes Next\nOpportunity"
+ },
+ {
+  "title": "Thank you Q & A",
+  "text": "AI Beyond 2026\nWhat Comes Next\nHyeongkeol Nam, Mingle Labs\nLinkedIn"
+ }
+]

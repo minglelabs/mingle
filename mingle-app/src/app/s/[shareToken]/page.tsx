@@ -10,6 +10,7 @@ import { getUserProfile } from "@/server/user-profile";
 import { readAccountBadgeKind } from "@/components/LivePhoneDemo/chat-account-badge.logic";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 import type { ConversationSpectateState } from "@/components/use-conversation-spectate";
+import { shareLinkPreview } from "@/lib/share-og";
 
 const DEFAULT_IOS_APP_STORE_URL = "https://apps.apple.com/app/id6759795134";
 const DEFAULT_ANDROID_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn";
@@ -136,10 +137,11 @@ export default async function ConversationSpectatePage({ params }: ConversationS
 
 export async function generateMetadata({ params }: ConversationSpectatePageProps) {
   const { shareToken } = await params;
-  return {
-    title: isValidConversationShareToken(decodePathSegment(shareToken))
-      ? "Open shared conversation in HashChat"
-      : "Invalid HashChat conversation link",
-    description: "View a shared HashChat conversation in the HashChat app.",
-  };
+  if (!isValidConversationShareToken(decodePathSegment(shareToken))) {
+    return { title: "Invalid HashChat conversation link", description: "This HashChat conversation link is not valid." };
+  }
+  const title = "A conversation shared from HashChat";
+  const description =
+    "Read it in your own language. HashChat (formerly Mingle) interprets conversations as people talk.";
+  return { title, description, ...shareLinkPreview(title, description) };
 }

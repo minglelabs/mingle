@@ -1,0 +1,662 @@
+[
+ {
+  "title": "The AI Wrapper Business Where It Stands Today",
+  "text": "Surfers Cohort 3\nHyeongkeol Nam, Mingle Labs\nAug 12, 2026"
+ },
+ {
+  "title": "Surfers Cohort 3",
+  "text": "Contents\nWhat is an AI wrapper\n→\nWrapper case studies\nWhat's next, and advice"
+ },
+ {
+  "title": "1. What is an AI wrapper",
+  "text": ""
+ },
+ {
+  "title": "Surfers Cohort 3",
+  "text": "What is an AI wrapper\nDefinition\n“Software built by putting\na UI on top of a foundation\nmodel like GPT.”"
+ },
+ {
+  "title": "Surfers Cohort 3",
+  "text": "What is an AI wrapper\nTraits\nAI wrappers are easy to build,\nso they're flooding every domain."
+ },
+ {
+  "title": "Examples of AI wrappers",
+  "text": "Surfers Cohort 3\nWhat is an AI wrapper\nCursor, Perplexity and Tiro are typical.\nCursor\nVibe coding tool\nPerplexity\nAI search engine\nTiro\nAI meeting notes"
+ },
+ {
+  "title": "What is an AI wrapper, at its core?",
+  "text": "Surfers Cohort 3\nEssence"
+ },
+ {
+  "title": "Surfers Cohort 3",
+  "text": "What is an AI wrapper\nEssence\nTo me, the core of an AI wrapper is\ntaking a user experience that already existed\nand automating it with AI"
+ },
+ {
+  "title": "Cursor",
+  "text": "Surfers Cohort 3\nWhat is an AI wrapper\nExamples\nAutomates writing and editing code\nPerplexity\nAutomates searching and summing up answers\nTiro\nAutomates taking and summarizing meeting notes"
+ },
+ {
+  "title": "AI wrappers create real value but have no moat",
+  "text": "Surfers Cohort 3\nWhat is an AI wrapper\nLimits\n“If your startup's core value proposition can be cloned in a weekend, you don’t have a business, you have a feature.”\n“If the core value of your startup can be cloned over a weekend, you don't have a business. You have a feature.”\n- Andrew Ng"
+ },
+ {
+  "title": "That's why AI wrappers are everywhere",
+  "text": "Surfers Cohort 3\nWhat is an AI wrapper\nLimits\nCountless note-taking apps"
+ },
+ {
+  "title": "Even more dangerous: Big Tech entering the market",
+  "text": "Surfers Cohort 3\nWhat is an AI wrapper\nLimits\nEvery patch they ship\nwipes out thousands of startups\nChatGPT\nClaude\nGemini\nDeepSeek"
+ },
+ {
+  "title": "So is an AI wrapper with no moat just walking into the AI tsunami?",
+  "text": "Surfers Cohort 3\nWhat is an AI wrapper\nLimits"
+ },
+ {
+  "title": "Elad Gil argues moats can come later",
+  "text": "Surfers Cohort 3\nWhat is an AI wrapper\nLimits\n“Serving a customer need well is often more important (and harder) to think about than defensibility.”\n“Rather than worrying about moats, focus on solving the customer's problem well.”\n- Elad Gil"
+ },
+ {
+  "title": "So let's look at the AI wrappers so far, and which ones the tsunami swept away",
+  "text": "Surfers Cohort 3\nWhat is an AI wrapper\nLimits"
+ },
+ {
+  "title": "2. Wrapper case studies",
+  "text": ""
+ },
+ {
+  "title": "Surfers Cohort 3",
+  "text": "Case Studies\nContents\nVibe coding and agents\n→\nCharacter chat\nNote-taking\nAI diet tracking\nAI aggregators\nAI study helpers\nBrowsers\nLanguage learning\nPhoto editing\nExpert services"
+ },
+ {
+  "title": "Field 01 Vibe coding and agents",
+  "text": "Surfers Cohort 3\nCase Studies\nVIBE CODING\nCursor\nLovable\nBolt.new\nv0\nReplit Agent\nWindsurf\nManus"
+ },
+ {
+  "title": "The field where the giants' tsunami hit hardest",
+  "text": "Surfers Cohort 3\nCase Studies\nVIBE CODING\nClaude Code\nCodex"
+ },
+ {
+  "title": "Still, some exited well, and the rest keep growing",
+  "text": "Surfers Cohort 3\nCase Studies\nVIBE CODING\nCursor\nAcquired by Elon Musk for $60B\nWindsurf\nAcquired by Google for $2.4B\nManus\nMeta's $2B deal fell through?\nLovable\nPassed $500M ARR"
+ },
+ {
+  "title": "The market is huge, and it's work AI does well",
+  "text": "Surfers Cohort 3\nCase Studies\nVIBE CODING\nEstimated total salaries of developers worldwide\n~$700B"
+ },
+ {
+  "title": "What's next for this field? Competing with Big Tech on coding looks hard, but a sharp vertical might survive for a while...",
+  "text": "Surfers Cohort 3\nCase Studies\nVIBE CODING"
+ },
+ {
+  "title": "Field 02 Character chat",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nC.AI\nZeta\nCrack\nDitto\nWhif\nSpicyChat.AI\nJanitorAI\nTalkie\nCandy AI\nChai\nCaveduck\nLoveyDovey\nDotDotDot\nBabeChat\nLumo"
+ },
+ {
+  "title": "One of the hottest fields Character.AI started it",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nFounded by ex-Google stars\nRejoined Google in a $2.7B deal"
+ },
+ {
+  "title": "Create a character concept and AI talks to users in character",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "No Big Tech at all Regulatory risk, and they'd rather focus on tech",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Character chat actually splits into two fields",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nContent-driven character chat\nCompanion-driven character chat"
+ },
+ {
+  "title": "Content-driven is far bigger C.AI set the standard",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nOtaku money is real money"
+ },
+ {
+  "title": "At its core, character chat is spicy stories & dopamine",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "How does chatting with AI deliver a dopamine hit?",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nWeb novels and erotica, automated by AI\nRole-play maximizes the thrill\nThe story goes wherever you want"
+ },
+ {
+  "title": "How well does it do?! People even skip games for it.",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Social media use is falling worldwide Is character chat the cause?!",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Zeta, No. 1 in Korea, passed 10M sign-ups",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "In Korea, Zeta beat YouTube on time spent",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "A crowded field, but everyone's doing great",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Character chat Phase 1 C.AI sold in Aug 2024",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nWhat mattered in Phase 1:\n'model performance'"
+ },
+ {
+  "title": "Phase 2 is all about a steady stream of killer content",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Koreans, with a sharp sense for content, are doing well",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nZeta\nCrack\nDitto\nWhif\nCaveduck\nLoveyDovey\nDotDotDot"
+ },
+ {
+  "title": "Zeta, DotDotDot, Loveydovey are doing well abroad",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Korea's Loveydovey was No. 1 in global revenue two years ago?!",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Global apps only sell subscriptions: thin revenue Korean apps squeeze the dopamine and charge about 7¢ a turn",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "But despite big revenue, competition is fierce, so profit is hard",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nLoveydovey lost over ₩5B (~$3.6M) in 2024"
+ },
+ {
+  "title": "What if Phase 3 comes? Beyond web novels, to webtoons and shorts.",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nThe tech is still raw, but improving fast"
+ },
+ {
+  "title": "What matters in Phase 3 The creator ecosystem",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Unlike web novels, webtoons and shorts still need heavy creator involvement for now!",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Like webtoons, it all comes down to the business model!",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "A content big bang from China Anime-style short dramas",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nA war of giants"
+ },
+ {
+  "title": "Live action is a hit now too 200M views",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nFang Taozi (方桃子), virtual actress of the AI short drama 'The Girl Who Got Laid Off' (被裁掉的女孩)"
+ },
+ {
+  "title": "Korea, a content powerhouse, can surely do this well",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\n*flutter*\nKorea is where webtoons were born, after all.."
+ },
+ {
+  "title": "Five traits of the character chat field",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nNo Big Tech invasion\nBut fierce competition between startups\nYet everyone earns good revenue\nBut few turn an operating profit\nKorean companies are doing well"
+ },
+ {
+  "title": "So what should latecomers and small startups do?!",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Offer sharply different content, like Whif",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nFocused on BL"
+ },
+ {
+  "title": "Evolve into webtoons and shorts Build content methods and a creator ecosystem",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER\nZeta Labs: AI webtoon beta"
+ },
+ {
+  "title": "Where is this field headed? Merged with webtoons and shorts, it could grow 10x or more Expect a crowded field, and keep an eye out for a hectocorn",
+  "text": "Surfers Cohort 3\nCase Studies\nCHARACTER"
+ },
+ {
+  "title": "Field 03 Note-taking",
+  "text": "Surfers Cohort 3\nCase Studies\nNOTES\nCountless note-taking apps"
+ },
+ {
+  "title": "Writes, summarizes and translates meeting notes Interpretation is a directly adjacent market",
+  "text": "Surfers Cohort 3\nCase Studies\nNOTES"
+ },
+ {
+  "title": "Big Tech is moving in very aggressively",
+  "text": "Surfers Cohort 3\nCase Studies\nNOTES\nGemini\nMicrosoft\nChatGPT"
+ },
+ {
+  "title": "Startups may actually be sharper at it Granola is the best known, but there are many more",
+  "text": "Surfers Cohort 3\nCase Studies\nNOTES"
+ },
+ {
+  "title": "Korea does well here too Tiro is the best known",
+  "text": "Surfers Cohort 3\nCase Studies\nNOTES"
+ },
+ {
+  "title": "Everyone is making money and growing fast",
+  "text": "Surfers Cohort 3\nCase Studies\nNOTES\nAbout 10% growth every week"
+ },
+ {
+  "title": "But profit looks hard to come by It's a fully competitive market where standing out is hard",
+  "text": "Surfers Cohort 3\nCase Studies\nNOTES"
+ },
+ {
+  "title": "What does it take to stand out?",
+  "text": "Surfers Cohort 3\nCase Studies\nNOTES"
+ },
+ {
+  "title": "Maybe by stacking small innovations?",
+  "text": "Surfers Cohort 3\nCase Studies\nNOTES\nAlt\nMobile, on-device and free\nLater grows into a work messenger\nTiro\nRich features, integrations, cross-platform:\nan all-in-one for the meeting vertical\nChar\nNotepads, to-do automation and more:\nexpands across the whole workspace"
+ },
+ {
+  "title": "The endgame: owning the context layer",
+  "text": "Surfers Cohort 3\nCase Studies\nNOTES"
+ },
+ {
+  "title": "What's next for this field? A stronger moat may need deeper workflow integration AI messengers may come to social before work",
+  "text": "Surfers Cohort 3\nCase Studies\nNOTES"
+ },
+ {
+  "title": "Field 04 AI Diet Tracking",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET\nFoodvisor\nCal AI\nSnapCalorie\nNutriScan\nCalZen\nBiteSnap\nMyFitnessPal\nLose It!\nCronometer\nNutrola\nCalory App\nRex.fit"
+ },
+ {
+  "title": "Another red-hot field Cal AI started it",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET\nZach Yadegari · founded it in high school"
+ },
+ {
+  "title": "Snap a photo of your food and AI breaks down the nutrients",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET"
+ },
+ {
+  "title": "Over 80% accurate Within FDA error limits",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET\nUX that also tempers users' sky-high expectations of AI"
+ },
+ {
+  "title": "UX that makes you feel carefully looked after",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET"
+ },
+ {
+  "title": "Fully paid from day one and still hugely popular",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET\nCharging upfront beats converting free users\nInference costs make it paid-only anyway"
+ },
+ {
+  "title": "Data lock-in is a moat of sorts And it seems quite profitable?",
+  "text": "Surfers Cohort 3\nCase Studies\nSTUDY"
+ },
+ {
+  "title": "Existing diet apps are adding AI features one after another",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET\nMyFitnessPal\n100M+ downloads\nLose It!\n10M+ downloads\nFoodvisor\nYAZIO\n80M+ downloads"
+ },
+ {
+  "title": "Similar new apps keep pouring in Most are paid, and all do well",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET\nCal AI\nSnapCalorie\nNutriScan\nCalZen\nBitePal\nCaloAI\nNutrola"
+ },
+ {
+  "title": "But most Koreans barely know this field exists Why?",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET"
+ },
+ {
+  "title": "Possible reason 1 Little obesity in Korea",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET"
+ },
+ {
+  "title": "Possible reason 2 The belief that national health insurance will cover diabetes",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET\nWhen in fact they pay for it all themselves.."
+ },
+ {
+  "title": "Possible reason 3 Koreans rarely pay for software",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET"
+ },
+ {
+  "title": "In the West, prevention matters The prevention market is huge which is why Cal AI does well",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET"
+ },
+ {
+  "title": "Very likely to link up with medical and health advice",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET"
+ },
+ {
+  "title": "Could it link up with M2E apps too?",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nNEXT\nMoneyWalk\nCashwalk\nToss Pedometer\nGeniet\nBalso\nSuperWalk\nSTEPN\nSweatcoin\nWeWard\nMacadam\nEvidation\nWinwalk\nSweat Economy"
+ },
+ {
+  "title": "Here too, no Big Tech at all",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET"
+ },
+ {
+  "title": "Where is this field headed? Likely absorbed as one feature of the vast healthcare industry Linking into other healthcare workflows will be key",
+  "text": "Surfers Cohort 3\nCase Studies\nDIET"
+ },
+ {
+  "title": "Field 05 AI aggregators",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR\nOpenRouter\nPoe\nHiggsfield"
+ },
+ {
+  "title": "One API and one bill for countless AI models and infrastructure",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR"
+ },
+ {
+  "title": "The core job: serving countless open models reliably",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR"
+ },
+ {
+  "title": "In practice, the two blur together",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR\nPure Aggregators\nOpenRouter\nPoe\nHiggsfield\nvs\nInference Provider\nFriendliAI\nReplicate\nWaveSpeed\nTogether\nBaseten\nFireworks"
+ },
+ {
+  "title": "Inference providers serve models themselves",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR\nClustering — GPU servers and networking\nServing engines — built and run on vLLM, SGLang and more\nInference optimization — batching, concurrency, max GPU/VRAM use\nLoad balancing — spreading requests\nAPI connection — linking real services to inference servers\nScaling and monitoring — load, outages, performance\nThey do all this for you"
+ },
+ {
+  "title": "Pure aggregators only offer an API",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR\nInference providers\nFriendliAI\nReplicate\nWaveSpeed\nTogether\nBaseten\nFireworks\nAggr.\nOpenRouter API"
+ },
+ {
+  "title": "Inference providers already offer every model by API So why do people use OpenRouter?",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR"
+ },
+ {
+  "title": "Using a provider directly means frequent outages.",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR\nFriendliAI\nReplicate\nWaveSpeed\nTogether\nBaseten\nFireworks\nOpenRouter\nOpenRouter routes around them in real time"
+ },
+ {
+  "title": "Aggregators take a 5% cut much like Stripe or Visa",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR\nCustomer\nApps\nOpenRouter\n5% fee\nInference Provider\n95% payout"
+ },
+ {
+  "title": "Open-source progress made aggregators boom too",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR\nHiggsfield\n15M accounts\n3M generations/day\n$500M annualized volume\nOpenRouter\n8M accounts\n100T tokens/month\n$50M annualized fee revenue"
+ },
+ {
+  "title": "As the market matures, inference providers may end up replacing aggregators",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR"
+ },
+ {
+  "title": "Yet Stripe reportedly offered $10B for OpenRouter Why on earth?",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR"
+ },
+ {
+  "title": "Once a customer's code is built on OpenRouter's API, it's hard to switch, so maybe it's chasing lock-in, just as Stripe did?!",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR"
+ },
+ {
+  "title": "What's next for this field? If AI keeps shifting, aggregators may keep growing but lock-in likely won't be as strong as Stripe's",
+  "text": "Surfers Cohort 3\nCase Studies\nAGGREGATOR"
+ },
+ {
+  "title": "Field 06 AI study helpers",
+  "text": "Surfers Cohort 3\nCase Studies\nSTUDY\nQANDA\nPhotomath\nGauth\nBrainly\nStudyFetch"
+ },
+ {
+  "title": "Called study helpers, but really used to copy homework..",
+  "text": "Surfers Cohort 3\nCase Studies\nSTUDY"
+ },
+ {
+  "title": "Even the leader, Qanda, struggled to break even",
+  "text": "Surfers Cohort 3\nCase Studies\nSTUDY"
+ },
+ {
+  "title": "GPT's progress and a flood of rivals seem to make it even harder",
+  "text": "Surfers Cohort 3\nCase Studies\nSTUDY"
+ },
+ {
+  "title": "Latecomer StudyFetch pointed a new way",
+  "text": "Surfers Cohort 3\nCase Studies\nSTUDY"
+ },
+ {
+  "title": "Surfers Cohort 3",
+  "text": "Case Studies\nSTUDY\nFast growth from viral Reels,\na well-run creator network\nAuto-built study sets from lecture material,\nlock-in through a rich, personal study space\nFocused on a clear goal: exams.\nSolving the customer's real problem"
+ },
+ {
+  "title": "What's next for this field? 'Photo to solution' can't stand out; another path is needed Or is there a chance in going all in on fun?",
+  "text": "Surfers Cohort 3\nCase Studies\nSTUDY"
+ },
+ {
+  "title": "Field 07 Browsers",
+  "text": "Surfers Cohort 3\nCase Studies\nBROWSER\nPerplexity Comet\nDia\nArc Search\nAside"
+ },
+ {
+  "title": "Field 08 Language learning",
+  "text": "Surfers Cohort 3\nCase Studies\nLANGUAGE\nDuolingo\nSpeak\nELSA Speak\nheyring"
+ },
+ {
+  "title": "Field 09 Photo editing",
+  "text": "Surfers Cohort 3\nCase Studies\nPHOTO\nRemini\nFaceApp\nPhotoroom\nSNOW\nCarat\nConcept"
+ },
+ {
+  "title": "Field 10 Expert services",
+  "text": "Surfers Cohort 3\nCase Studies\nEXPERT\nHarvey\nSuperLawyer\nNorm AI\nLegora\nLBOX\nNearDoc\nAbridge\nPilot\nCounsel Health\nRogo\nHebbia\nAlphaSense\nInkle\nMaxed\nCranston\nBlack Ore"
+ },
+ {
+  "title": "Fields likely to take off",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nNEXT\nFlight, hotel and travel search agents\ne.g. Toki\nSales assistants\ne.g. Caret\nAd reference agents\ne.g. GRIIM AI\nConversational browsers\ne.g. Aside\nAdult video viewers\nNo example yet"
+ },
+ {
+  "title": "23 startup opportunities for the AI era, hot in Silicon Valley",
+  "text": "Surfers Cohort 3\nCase Studies\nNEXT"
+ },
+ {
+  "title": "Everyone has plenty of ideas What matters is validating the market",
+  "text": "Surfers Cohort 3\nCase Studies\nNEXT"
+ },
+ {
+  "title": "Revenue alone is minimal validation Operating losses may shrink as AI improves!",
+  "text": "Surfers Cohort 3\nCase Studies\nNEXT"
+ },
+ {
+  "title": "The catch: without a moat, revenue shrinks too So you also have to think about building one",
+  "text": "Surfers Cohort 3\nCase Studies\nNEXT"
+ },
+ {
+  "title": "3. What's next, and advice",
+  "text": ""
+ },
+ {
+  "title": "Wrapper first, moat next",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nMOAT\n“The mistake isn't building an AI wrapper — the mistake is staying one.”\n“Starting as an AI wrapper isn't the mistake. Staying one forever is.”\n- Paul Graham"
+ },
+ {
+  "title": "Five moats of a software business",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nMOAT\nNetwork effects\nSwitching costs\n(data, workflow lock-in)\nHardware and offline ties\nProprietary data\nOverwhelming technology"
+ },
+ {
+  "title": "Leading software usually has two or more moats",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nMOAT\nNetwork effects\nSwitching costs\n(data, workflow lock-in)\nHardware and offline ties\nProprietary data\nOverwhelming technology"
+ },
+ {
+  "title": "YouTube's moats at least two, rock solid",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nMOAT\nNetwork effects\nSwitching costs\n(data, workflow lock-in)\nHardware and offline ties\nProprietary data\nOverwhelming technology"
+ },
+ {
+  "title": "CUDA's moats four, maybe five?",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nMOAT\nNetwork effects\nSwitching costs\n(data, workflow lock-in)\nHardware and offline ties\nProprietary data\nOverwhelming technology"
+ },
+ {
+  "title": "Zeta's moats not there yet, four at most",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nMOAT\nNetwork effects\nSwitching costs\n(data, workflow lock-in)\nHardware and offline ties\nProprietary data\nOverwhelming technology"
+ },
+ {
+  "title": "Can we copy them?",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nMOAT\nYouTube\nCUDA\nZeta"
+ },
+ {
+  "title": "Square's Jim McKelvey Innovation Stack",
+  "text": "Surfers Cohort 3\nWhat Comes Next"
+ },
+ {
+  "title": "Stack enough small startup innovations and you can beat even Amazon",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nInnovation Stack\nThe problem to solve\nCut operating costs to keep fees the lowest\nSmall innovation 1\nBuilt its own card-reader hardware to cut costs\nSmall innovation 2\nReinvented support, dropping phone calls to cut costs"
+ },
+ {
+  "title": "Not a blueprint drawn up in advance, but a fight to survive each moment is what turns into innovation",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nInnovation Stack"
+ },
+ {
+  "title": "I agree 100% It's exactly the right founder mindset",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nInnovation Stack"
+ },
+ {
+  "title": "But there are traps You may stay just an AI wrapper You may fall into feature creep",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nInnovation Stack"
+ },
+ {
+  "title": "To avoid the traps, an AI wrapper needs a clear UX north star, I think",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nVISION"
+ },
+ {
+  "title": "Where I think we should aim \"Ambient AI\"",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nVISION\nAmbient means “all around you.”"
+ },
+ {
+  "title": "Design Principles of Ambient AI",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nVISION\nWorkflow Integration\nWeave AI naturally into the customer’s workflow\nAlways-on AI\nOffer AI help automatically, as naturally as breathing\nGUI to CUI\nReplace complex GUIs with conversation"
+ },
+ {
+  "title": "First, workflow integration",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nWORKFLOW INTEGRATION\nWorkflow Integration\nAlways-on AI\nGUI to CUI"
+ },
+ {
+  "title": "Let’s recall how software was built until summer 2024, before Cursor took off",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nWorkflow Integration"
+ },
+ {
+  "title": "AI was already helping a lot with coding",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nWorkflow Integration\nChatGPT"
+ },
+ {
+  "title": "“Developers are done” was already a familiar line.",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nWorkflow Integration\nChatGPT"
+ },
+ {
+  "title": "But to get that help, you had to copy and paste code by hand.",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nWorkflow Integration\nVS Code\nCopy & paste\nback and forth\nChatGPT"
+ },
+ {
+  "title": "Cursor’s team spotted this and built AI into the editor",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nWorkflow Integration\nVS Code\nChatGPT"
+ },
+ {
+  "title": "Then vibe coding took off, just from the right integration.",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nWorkflow Integration\nCursor"
+ },
+ {
+  "title": "Second,",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nAlways-on AI\nAOAI\nWorkflow Integration\nGUI to CUI"
+ },
+ {
+  "title": "In April, X’s auto-translate took the world by storm",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nAlways-on AI"
+ },
+ {
+  "title": "It just flipped the old “Show translation” button on",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nAlways-on AI"
+ },
+ {
+  "title": "Yet people loved it Why?",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nAlways-on AI"
+ },
+ {
+  "title": "Because it saved them a single click",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nAlways-on AI\nThe bigger reason may be X’s recommender becoming i18n-aware.\nThat worked because X rebuilt its recommender to be AI-native a year earlier."
+ },
+ {
+  "title": "Users found even one click too much",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nAlways-on AI"
+ },
+ {
+  "title": "A feature that needs a click was practically no feature at all",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nAlways-on AI"
+ },
+ {
+  "title": "Still, auto-applied AI isn’t always a win",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nAlways-on AI"
+ },
+ {
+  "title": "iPhone autocorrect fails",
+  "text": "Surfers Cohort 3\nCase Studies\nAlways-on AI"
+ },
+ {
+  "title": "Smarter AI will get it right on its own Until then, designers have to design it right",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nAlways-on AI"
+ },
+ {
+  "title": "Third,",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nGUI to CUI\nWorkflow Integration\nAlways-on AI"
+ },
+ {
+  "title": "One reason vibe coding feels easy: no more fighting GUI complexity",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nGUI to CUI"
+ },
+ {
+  "title": "App Store releases, AWS setup: same story",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nGUI to CUI\nEven inviting internal testers in App Store Connect, it’s hard to find where the invite code comes from"
+ },
+ {
+  "title": "AI solves exactly this Once things get complex, CUI wins by far",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nGUI to CUI"
+ },
+ {
+  "title": "Same with Google Ads: editing an ad is a maze",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nGUI to CUI"
+ },
+ {
+  "title": "Same when a banking app frustrates you you end up calling support Why?",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nGUI to CUI"
+ },
+ {
+  "title": "Same when a banking app frustrates you you end up calling support to solve it in a conversational UI.",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nGUI to CUI"
+ },
+ {
+  "title": "GUI to CUI alone means browsers and OSes must go AI-native!",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nPerplexity Comet\nDia\nArc Search\nAside\niOS\nmacOS\nAndroid\nWindows\nLinux"
+ },
+ {
+  "title": "In short, whoever nails Ambient AI in their domain survives",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nWorkflow Integration\nAlways-on AI\nGUI to CUI"
+ },
+ {
+  "title": "Sometimes an AI wrapper eats the existing workflow",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nAmbient AI"
+ },
+ {
+  "title": "But incumbents may reach Ambient AI first",
+  "text": "Surfers Cohort 3\nWhat Comes Next"
+ },
+ {
+  "title": "So what should AI wrapper startups do?",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nOpportunity"
+ },
+ {
+  "title": "1. Solve a real problem with a sharp wrapper",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nOpportunity"
+ },
+ {
+  "title": "1. Solve a real problem with a sharp wrapper 2. Grow into that domain’s Ambient AI",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nOpportunity"
+ },
+ {
+  "title": "My biggest bet: AI-native messaging",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nOpportunity"
+ },
+ {
+  "title": "AI plus messaging and social will transform most industries",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nOpportunity\nAI+\nMessaging\nSocial\nSales & work\nShopping\nEducation\nTravel\nContent\nCharacter chat\nCompanions\nDating\nMedical, legal, finance and more"
+ },
+ {
+  "title": "Clayton Christensen The Innovator’s Dilemma",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nOpportunity\nThe Innovator’s Dilemma: When New Technologies Cause Great Firms to Fail\n\"The reason is that good management itself was the root cause.\"\n\"The root cause of failure was good management itself.\"\n- Clayton M. Christensen"
+ },
+ {
+  "title": "The chance to overtake the giants is right now",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nOpportunity"
+ },
+ {
+  "title": "Thank you Q & A",
+  "text": "Surfers Cohort 3\nWhat Comes Next\nHyeongkeol Nam, Mingle Labs\nLinkedIn"
+ }
+]

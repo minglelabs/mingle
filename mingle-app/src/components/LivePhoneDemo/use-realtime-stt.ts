@@ -1,6 +1,7 @@
 'use client'
 
 import { isTranslateStreamResponse, readTranslateStream, TRANSLATE_STREAM_CONTENT_TYPE } from './translate-stream.client'
+import { notifyTranslationModelUnavailable } from '@/lib/translation-model-notice'
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-errors'
 import {
   appendCoinBillingToWsUrl,
@@ -69,6 +70,7 @@ import {
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
 import type { SttCaptureSource } from '@/lib/native-device-audio'
 import { shouldRequestInterimFill } from '@/lib/bubble-tail'
+import { isTopLevelTabSwitchPending } from '@/lib/tab-navigation'
 import {
   REALTIME_FALLBACK_POLL_INTERVAL_MS,
   shouldRunRealtimeFallbackRefresh,
@@ -476,6 +478,8 @@ type NativeSttStartCommand = {
     aecEnabled: boolean
     // Sent only for device audio; shells without it capture the microphone.
     captureSource?: SttCaptureSource
+    // iOS: record from the earphones' microphone instead of the phone's.
+    earphoneMicrophone?: boolean
     apiNamespace: string
     releaseVariant: MingleClientReleaseVariant
     behaviorProfile: MingleBehaviorProfile
@@ -509,6 +513,11 @@ type NativeSttSetAecCommand = {
   payload: { enabled: boolean }
 }
 
+type NativeSttSetEarphoneMicrophoneCommand = {
+  type: 'native_stt_set_earphone_microphone'
+  payload: { enabled: boolean }
+}
+
 // A piece of the translated sentence our TTS is reading aloud (Soniox
 // stt-rt-v6 agent text input); the native STT socket relays it to the server.
 type NativeSttAgentTextCommand = {
@@ -528,6 +537,7 @@ type NativeSttBridgeCommand =
   | NativeSttStopCommand
   | NativeSttStatusRequestCommand
   | NativeSttSetAecCommand
+  | NativeSttSetEarphoneMicrophoneCommand
   | NativeSttAgentTextCommand
   | NativeOpenAppSettingsCommand
 
@@ -1594,6 +1604,9 @@ interface UseRealtimeSTTOptions {
   externalPreviews?: readonly Utterance[]
   // What a native session transcribes. Fixed when the session starts.
   captureSource?: SttCaptureSource
+  // Record from the earphones' microphone instead of the phone's (shells
+  // that offer the choice; others ignore it).
+  earphoneMicrophone?: boolean
   sonioxManualFinalizeSilenceMs?: number
   sonioxEndpointMaxDelayMs?: number
   sonioxEndpointTuningStep?: number
@@ -3197,6 +3210,7 @@ export default function useRealtimeSTT({
   suppressLivePreview = false,
   externalPreviews,
   captureSource = 'microphone',
+  earphoneMicrophone = false,
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
   sonioxEndpointMaxDelayMs = DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
   sonioxEndpointTuningStep = DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
@@ -4080,6 +4094,15 @@ export default function useRealtimeSTT({
     sendNativeSttCommand({ type: 'native_stt_set_aec', payload: { enabled: enableAec } })
   }, [enableAec, sendNativeSttCommand])
 
+  // The same for the microphone pick: a running session switches at once.
+  const prevEarphoneMicrophoneRef = useRef(earphoneMicrophone)
+  useEffect(() => {
+    if (prevEarphoneMicrophoneRef.current === earphoneMicrophone) return
+    prevEarphoneMicrophoneRef.current = earphoneMicrophone
+    if (!useNativeSttRef.current) return
+    sendNativeSttCommand({ type: 'native_stt_set_earphone_microphone', payload: { enabled: earphoneMicrophone } })
+  }, [earphoneMicrophone, sendNativeSttCommand])
+
   // Persist utterances to localStorage (debounced to avoid stringify on every update)
   const utterancePersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
@@ -4654,14 +4677,22 @@ export default function useRealtimeSTT({
 
   const buildRecentTurnContextPayload = useCallback((excludeUtteranceId?: string): RecentTurnContextPayload[] => {
     const now = Date.now()
-    const windowStart = now - RECENT_TURN_CONTEXT_WINDOW_MS
+    // Age is measured from when a turn ended to when the current bubble
+    // started: a long previous bubble that ran straight into this one is the
+    // closest context there is, however long this bubble then takes.
+    const lastFinished = lastFinishedBubbleRef.current
+    const currentStartMs = excludeUtteranceId ? inferUtteranceCreatedAtMs({ id: excludeUtteranceId }) : null
+    const referenceMs = currentStartMs !== null && currentStartMs <= now ? currentStartMs : now
     const recentTurns: RecentTurnContextPayload[] = []
 
     for (const utterance of utterancesRef.current) {
       if (utterance.image) continue
       if (excludeUtteranceId && utterance.id === excludeUtteranceId) continue
       const occurredAtMs = inferUtteranceCreatedAtMs(utterance)
-      if (occurredAtMs === null || occurredAtMs < windowStart || occurredAtMs > now) continue
+      if (occurredAtMs === null || occurredAtMs > now) continue
+      const endedAtMs = utterance.id === lastFinished?.utteranceId ? lastFinished.finishedAtMs : occurredAtMs
+      const ageMs = Math.max(0, referenceMs - endedAtMs)
+      if (ageMs > RECENT_TURN_CONTEXT_WINDOW_MS) continue
 
       const sourceText = utterance.originalText.trim()
       if (!sourceText) continue
@@ -4679,7 +4710,7 @@ export default function useRealtimeSTT({
         sourceText,
         translations,
         occurredAtMs,
-        ageMs: Math.max(0, now - occurredAtMs),
+        ageMs,
         isFinalized,
       })
     }
@@ -4824,6 +4855,7 @@ export default function useRealtimeSTT({
       }
       if (typeof data.coinBalance === 'number') applyCoinBalance(data.coinBalance)
       if (data.coinExhausted === true) notifyCoinsExhausted()
+      if (typeof data.unavailableModel === 'string') notifyTranslationModelUnavailable(data.unavailableModel)
       const responseSourceLanguage = typeof data.sourceLanguage === 'string'
         ? normalizeIncomingSourceLanguage(data.sourceLanguage, text, { candidates: [sourceLanguage, ...targetLanguages] })
         : undefined
@@ -6535,6 +6567,7 @@ export default function useRealtimeSTT({
             sttModel: 'soniox',
             aecEnabled: enableAec,
             ...(captureSource === 'device_audio' ? { captureSource } : {}),
+            ...(earphoneMicrophone ? { earphoneMicrophone } : {}),
             apiNamespace: runtimeBehaviorContext.apiNamespace,
             releaseVariant: runtimeBehaviorContext.releaseVariant,
             behaviorProfile: runtimeBehaviorContext.behaviorProfile,
@@ -6648,7 +6681,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, captureSource, ensureSessionKey, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
+  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, captureSource, earphoneMicrophone, ensureSessionKey, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, usageSec])
 
   // Keep the native listener stable while a session is active. Usage tracking
   // changes several callbacks on each tick, and re-subscribing here would
@@ -7480,7 +7513,15 @@ export default function useRealtimeSTT({
   useEffect(() => {
     return () => {
       clearConnectionErrorResetTimer()
-      if (useNativeSttRef.current && isCurrentNativeSttOwner()) {
+      if (useNativeSttRef.current && isCurrentNativeSttOwner() && isTopLevelTabSwitchPending()) {
+        // The whole conversations page is unmounting for a tab switch. Native
+        // STT keeps running; the list re-attaches this room as a hidden
+        // consumer when the conversations tab returns.
+        logSttDebug('native.unmount.keep_for_tab_switch', {
+          conversationId: conversationId || null,
+          connectionStatus: connectionStatusRef.current,
+        })
+      } else if (useNativeSttRef.current && isCurrentNativeSttOwner()) {
         nativeStopRequestedRef.current = true
         logSttDebug('native.unmount.stop', {
           conversationId: conversationId || null,

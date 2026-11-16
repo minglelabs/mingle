@@ -90,6 +90,37 @@ enum MingleBackgroundAudioPolicy {
         return data
     }
 
+    // MARK: - Live STT microphone
+
+    /// Which microphone live STT records from.
+    enum SttMicrophonePlan: String, Equatable {
+        /// Whatever the route gives: the phone's microphone on the speaker or
+        /// receiver, an external USB microphone, a car's.
+        case routeDefault
+        /// The phone's own microphone while the sound plays through earphones.
+        case phoneMicrophone
+    }
+
+    /// An earphone microphone is built to pick up its wearer only: it sits at
+    /// the wearer's ear and filters out other voices, so the person being
+    /// translated (who talks toward the phone) comes in faint or not at all.
+    /// Bluetooth earphones also drop to the 16 kHz hands-free profile to
+    /// record. So with earphones in, the phone records and the earphones only
+    /// play, unless the user picked the earphone microphone (the web asks
+    /// once). `outputRouteKind` is `MingleAudioRouteClassifier.kind(of:)`.
+    static func sttMicrophonePlan(
+        outputRouteKind: String,
+        prefersEarphoneMicrophone: Bool
+    ) -> SttMicrophonePlan {
+        guard !prefersEarphoneMicrophone else { return .routeDefault }
+        switch outputRouteKind {
+        case "bluetooth", "wired":
+            return .phoneMicrophone
+        default:
+            return .routeDefault
+        }
+    }
+
     // MARK: - Live STT transport
 
     /// mingle-stt closes a stream after 30 s without client audio
@@ -110,22 +141,53 @@ enum MingleBackgroundAudioPolicy {
     }
 
     enum CaptureRestartFailureAction: String, Equatable {
+        /// Try again in a moment, silently. A route change can leave the new
+        /// input unready for a few hundred milliseconds.
+        case retrySoon
         /// Keep the STT session, report it as silenced and retry from the health check.
         case deferAndRetry
         /// Surface the failure to the WebView as before.
         case reportError
     }
 
-    /// A capture restart that fails while the OS holds the microphone, or while
-    /// the app is not active, is retried instead of ending live STT. Only a
-    /// failure in the foreground with no pending interruption is reported.
+    /// A failed capture restart (a new microphone, an AEC switch, an
+    /// interruption) never ends live STT for the user: it is retried quickly
+    /// first, then kept as silenced and retried from the health check while
+    /// the room still shows the microphone on. Only a foreground failure that
+    /// keeps failing for about a minute (no pending interruption) is reported.
+    static let captureRestartQuickRetries = 3
+    static let captureRestartQuickRetryDelaySeconds: TimeInterval = 0.3
+    static let captureRestartFailuresBeforeReport = 15
+
     static func captureRestartFailureAction(
         isCaptureSuspended: Bool,
-        isAppActive: Bool
+        isAppActive: Bool,
+        quickRetriesLeft: Int = 0,
+        consecutiveFailures: Int = captureRestartFailuresBeforeReport
     ) -> CaptureRestartFailureAction {
+        if quickRetriesLeft > 0 {
+            return .retrySoon
+        }
         if isCaptureSuspended || !isAppActive {
             return .deferAndRetry
         }
+        if consecutiveFailures < captureRestartFailuresBeforeReport {
+            return .deferAndRetry
+        }
         return .reportError
+    }
+
+    /// A route change restarts capture only when the microphone that records
+    /// changed (or the engine stopped). Earphones going in or out while the
+    /// phone's microphone records change the output only: live STT carries on
+    /// untouched instead of blinking off and on.
+    static func shouldRestartCaptureOnRouteChange(
+        previousInputs: [String],
+        currentInputs: [String],
+        engineRunning: Bool
+    ) -> Bool {
+        guard engineRunning else { return true }
+        guard !currentInputs.isEmpty else { return true }
+        return previousInputs != currentInputs
     }
 }

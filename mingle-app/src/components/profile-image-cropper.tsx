@@ -2,7 +2,6 @@
 
 import {
   DEFAULT_PROFILE_IMAGE_CROP,
-  PROFILE_IMAGE_MAX_SCALE,
   clampProfileImageCropToImage,
   normalizeProfileImageCrop,
   type ProfileImageCrop,
@@ -257,7 +256,6 @@ export default function ProfileImageCropper({
 
       {fileError ? <p className="text-center text-[12px] text-red-500" role="alert">{copy.invalidFile}</p> : null}
       {imageError ? <p className="text-center text-[12px] text-red-500" role="alert">{copy.loadError}</p> : null}
-      <span className="sr-only">Zoom up to {PROFILE_IMAGE_MAX_SCALE}x</span>
     </div>
   );
 }

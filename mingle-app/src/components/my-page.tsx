@@ -42,6 +42,8 @@ import { resolveProfileGenderCopy } from "@/i18n/profile-gender-copy";
 import { normalizeProfileGender, type ProfileGender } from "@/lib/profile-gender";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
+import { EarphoneMicrophoneSettingControl } from "@/components/LivePhoneDemo/EarphoneMicrophoneSetting";
+import { resolveLivePhoneDemoEarphoneModeCopy } from "@/i18n/live-phone-demo-earphone-mode-copy";
 import {
   NativeAppUpdateCard,
   openNativeAppUpdateStore,
@@ -111,7 +113,7 @@ import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { openContactSync } from "@/lib/native-contacts";
-import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
 import { feedCopy } from "@/i18n/feed-copy";
@@ -933,8 +935,9 @@ function ProfileSettingsPanel({
               className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 text-left transition active:bg-gray-50"
             >
               <Contact size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
-              <span className="min-w-0 flex-1 text-[15px] font-semibold">{contactSyncCopy.title}</span>
-              <span className="truncate text-[13px] text-gray-400">{contactSyncCopy.headline}</span>
+              {/* The title stays whole; the reward headline gives way (it is long in fr/de). */}
+              <span className="shrink-0 text-[15px] font-semibold">{contactSyncCopy.title}</span>
+              <span data-qa-allow-truncate className="min-w-0 flex-1 truncate text-right text-[13px] text-gray-400">{contactSyncCopy.headline}</span>
               <ChevronRight size={19} strokeWidth={2} className="shrink-0 text-gray-400" aria-hidden="true" />
             </button>
             {postingFeedSupported !== false ? (
@@ -1042,6 +1045,24 @@ function ProfileSettingsPanel({
                 <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
               </button>
             </div>
+            <EarphoneMicrophoneSettingControl
+              copy={resolveLivePhoneDemoEarphoneModeCopy(locale)}
+              renderRow={({ valueLabel, open }) => (
+                <div className="mt-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+                  <button
+                    type="button"
+                    data-testid="menu-earphone-microphone"
+                    onClick={open}
+                    className="flex w-full items-center gap-3 px-4 py-4 text-left transition active:bg-gray-50"
+                  >
+                    <Headphones size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 text-[15px] font-semibold">{resolveLivePhoneDemoEarphoneModeCopy(locale).microphoneMenuLabel}</span>
+                    <span className="truncate text-[13px] text-gray-400">{valueLabel}</span>
+                    <ChevronRight size={19} strokeWidth={2} className="shrink-0 text-gray-400" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+            />
             <div className="mt-4 overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <div className="flex items-center gap-3 px-4 py-4">
                 <Bell size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />

@@ -35,6 +35,47 @@ export function resolveFirstUnreadUtteranceId(input: {
 // button" dead zone (see PR review on the scroll perf branch).
 export const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = AUTO_SCROLL_BOTTOM_THRESHOLD_PX
 export const AUTO_SCROLL_MIN_INTERVAL_MS = 1000
+
+// Once the user scrolls up, following stays off until they are back at the
+// very bottom themselves (or tap the jump-to-latest button). The near-bottom
+// band above only decides whether a viewer who has NOT scrolled up is followed.
+export const USER_DETACH_REATTACH_DISTANCE_PX = 2
+
+export function resolveUserDetachedFromBottom(input: {
+  wasDetached: boolean
+  fromUserScroll: boolean
+  previousScrollTop: number
+  scrollTop: number
+  distanceToBottom: number
+}): boolean {
+  if (input.distanceToBottom <= USER_DETACH_REATTACH_DISTANCE_PX) return false
+  if (input.fromUserScroll && input.scrollTop < input.previousScrollTop - 1) return true
+  return input.wasDetached
+}
+
+// How the transcript follows a bubble that grows while someone is speaking
+// (a new bubble has always been followed at once; this is about added lines).
+// - 'instant': in the same frame as the new line, so the newest line never
+//   leaves the bottom edge and everything above steps up by exactly that line.
+// - 'roll': the same step, eased over LIVE_GROWTH_FOLLOW_ROLL_MS.
+// - 'throttled': the earlier behavior, one smooth scroll per
+//   AUTO_SCROLL_MIN_INTERVAL_MS; new lines wait below the edge until then.
+export type LiveGrowthFollowMode = 'instant' | 'roll' | 'throttled'
+export const LIVE_GROWTH_FOLLOW_MODE: LiveGrowthFollowMode = 'instant'
+export const LIVE_GROWTH_FOLLOW_ROLL_MS = 100
+
+export function resolveLiveGrowthRollScrollTop(input: {
+  startScrollTop: number
+  targetScrollTop: number
+  elapsedMs: number
+  rollMs?: number
+}): number {
+  const rollMs = input.rollMs ?? LIVE_GROWTH_FOLLOW_ROLL_MS
+  if (rollMs <= 0 || input.elapsedMs >= rollMs) return input.targetScrollTop
+  const progress = Math.max(0, input.elapsedMs) / rollMs
+  const eased = 1 - (1 - progress) ** 2
+  return input.startScrollTop + (input.targetScrollTop - input.startScrollTop) * eased
+}
 export const CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 export const LIVE_DEMO_SCROLL_MEASUREMENT_SEARCH_PARAM = 'mingleScrollMeasure'
 export const LIVE_DEMO_SCROLL_MEASUREMENT_STORAGE_KEY = 'mingle_live_demo_scroll_measure'

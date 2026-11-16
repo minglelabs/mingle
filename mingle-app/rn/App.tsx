@@ -25,12 +25,14 @@ import {
   getNativeSttMicrophonePermissionStatus,
   getNativeSttStatus,
   isNativeDeviceAudioCaptureAvailable,
+  isNativeEarphoneMicrophoneChoiceAvailable,
   isNativeSttAvailable,
   normalizeNativeSttCaptureSource,
   qaClearNativeSttAudioInjection,
   qaInjectNativeSttAudio,
   sendNativeSttAgentText,
   setNativeSttAec,
+  setNativeSttEarphoneMicrophone,
   startNativeStt,
   stopNativeStt,
   type NativeSttQaAudioInjectionEvent,
@@ -751,6 +753,8 @@ type NativeSttStartPayload = {
   aecEnabled?: boolean;
   // 'device_audio' transcribes what other apps play instead of the microphone.
   captureSource?: string;
+  // iOS: record from the earphones' microphone instead of the phone's.
+  earphoneMicrophone?: boolean;
   apiNamespace?: string;
   behaviorProfile?: string;
   sonioxManualFinalizeSilenceMs?: number;
@@ -830,6 +834,11 @@ type NativeSttAgentTextCommand = {
 
 type NativeSttAecCommand = {
   type: 'native_stt_set_aec';
+  payload: { enabled: boolean };
+};
+
+type NativeSttEarphoneMicrophoneCommand = {
+  type: 'native_stt_set_earphone_microphone';
   payload: { enabled: boolean };
 };
 
@@ -1018,6 +1027,7 @@ type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
   | NativeSttAecCommand
+  | NativeSttEarphoneMicrophoneCommand
   | NativeSttAgentTextCommand
   | NativeAudioRouteRequestCommand
   | NativeOpenAppSettingsCommand
@@ -1776,6 +1786,7 @@ function AppInner(): React.JSX.Element {
   // and the relay that forwards NativeAudioRouteModule readings to the page.
   const nativeAudioRouteAvailable = useMemo(() => isNativeAudioRouteAvailable(), []);
   const nativeDeviceAudioCaptureAvailable = useMemo(() => isNativeDeviceAudioCaptureAvailable(), []);
+  const nativeEarphoneMicrophoneChoiceAvailable = useMemo(() => isNativeEarphoneMicrophoneChoiceAvailable(), []);
   const nativeAudioRouteRelayRef = useRef<NativeAudioRouteRelay | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
@@ -3943,6 +3954,7 @@ function AppInner(): React.JSX.Element {
       : 'soniox';
     const aecEnabled = payload?.aecEnabled === true;
     const captureSource = normalizeNativeSttCaptureSource(payload?.captureSource);
+    const earphoneMicrophone = payload?.earphoneMicrophone === true;
     const apiNamespace = typeof payload?.apiNamespace === 'string' ? payload.apiNamespace.trim() : '';
     const behaviorProfile = typeof payload?.behaviorProfile === 'string' ? payload.behaviorProfile.trim() : '';
     const sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
@@ -3980,6 +3992,7 @@ function AppInner(): React.JSX.Element {
       sttModel,
       aecEnabled,
       ...(captureSource === 'device_audio' ? { captureSource } : {}),
+      ...(earphoneMicrophone ? { earphoneMicrophone } : {}),
       ...(apiNamespace ? { apiNamespace } : {}),
       ...(behaviorProfile ? { behaviorProfile } : {}),
       ...(typeof sonioxManualFinalizeSilenceMs === 'number'
@@ -4817,6 +4830,11 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_stt_set_earphone_microphone') {
+      void setNativeSttEarphoneMicrophone(parsed.payload?.enabled === true);
+      return;
+    }
+
     if (parsed.type === 'iap_get_products') {
       const requestId = typeof parsed.payload?.requestId === 'string' ? parsed.payload.requestId : undefined;
       void getNativeIapBridge().getProducts(sanitizeIapProductIds(parsed.payload?.productIds), requestId);
@@ -5307,6 +5325,7 @@ function AppInner(): React.JSX.Element {
       nativeTts: isNativeTtsAvailable(),
       nativeTtsStream: isNativeTtsStreamAvailable(),
       contacts: isNativeContactsAvailable(),
+      earphoneMicrophoneChoice: nativeEarphoneMicrophoneChoiceAvailable,
     }));
     // Earphone mode (contract A.2a): the latest route follows the capabilities
     // message on every load end.
@@ -5372,7 +5391,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingInviteToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingInviteToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, nativeEarphoneMicrophoneChoiceAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     // Record the failure before anything else: react-native-webview calls

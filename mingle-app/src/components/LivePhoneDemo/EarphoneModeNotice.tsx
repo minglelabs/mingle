@@ -12,7 +12,7 @@ import type { SttCaptureSource } from '@/lib/native-device-audio'
 
 // One row of the "what to translate" choice. Same shape as a language row,
 // with an icon where the flag sits.
-function CaptureSourceRadioOption({
+export function CaptureSourceRadioOption({
   source,
   icon: Icon,
   label,

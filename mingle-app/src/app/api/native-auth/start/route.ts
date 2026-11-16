@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveNativeAuthRequestId, resolveNativeOAuthProvider, resolveSafeCallbackPath } from "@/lib/native-auth-bridge";
 import { DEFAULT_LOCALE, isSupportedLocale } from "@/i18n";
+import {
+  NATIVE_AUTH_RETURN_COOKIE,
+  NATIVE_AUTH_RETURN_COOKIE_MAX_AGE_SECONDS,
+} from "@/lib/native-auth-return";
 
 function normalizeOriginCandidate(rawValue: string | null | undefined): string | null {
   if (typeof rawValue !== "string") return null;
@@ -106,5 +110,31 @@ export async function GET(request: NextRequest) {
     )}"`,
   );
 
-  return NextResponse.redirect(launchUrl);
+  const response = NextResponse.redirect(launchUrl);
+  // Remembers where to return if the OAuth step fails, so the NextAuth route can
+  // close the browser sheet instead of showing its own sign-in page.
+  response.cookies.set(NATIVE_AUTH_RETURN_COOKIE, `${completeUrl.pathname}${completeUrl.search}`, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    secure: externalOrigin.startsWith("https://"),
+    maxAge: NATIVE_AUTH_RETURN_COOKIE_MAX_AGE_SECONDS,
+  });
+  // The sheet shares Safari's cookies, so a website session left there (an
+  // earlier sign-in inside the sheet, or in Safari) would ride along to the
+  // OAuth callback. NextAuth then either refuses a different Google account
+  // (OAuthAccountNotLinked) or links a new one to that old user. The app
+  // signs in through the bridge token, never through this cookie, so drop it.
+  for (const { name } of request.cookies.getAll()) {
+    if (name.includes("next-auth.session-token")) {
+      response.cookies.set(name, "", {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: name.startsWith("__Secure-") || externalOrigin.startsWith("https://"),
+        maxAge: 0,
+      });
+    }
+  }
+  return response;
 }

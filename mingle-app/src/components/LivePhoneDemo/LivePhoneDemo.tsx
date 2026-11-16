@@ -3,6 +3,8 @@
 import ConversationImageComposer, { type ConversationImageComposerEarphoneMode, type ConversationImageComposerVoiceTalk } from './ConversationImageComposer'
 import MessageMediaDialog from './MessageMediaDialog'
 import EarphoneModeNoticeContent from './EarphoneModeNotice'
+import EarphoneCaptureSourceNoticeContent, { type EarphoneListeningNoticeResult } from './EarphoneCaptureSourceNotice'
+import { EarphoneMicrophoneSettingControl } from './EarphoneMicrophoneSetting'
 import LanguageRadioOption from './LanguageRadioOption'
 
 import { compareUtteranceOrder, utteranceOrderTime } from './utterance-order'
@@ -15,9 +17,14 @@ import { captureMingleClientEvent } from '@/lib/posthog-client'
 import SpeechLengthScale from '@/components/LivePhoneDemo/SpeechLengthScale'
 import {
   DEFAULT_SPEECH_LENGTH_LEVEL,
+  RECOMMENDED_SPEECH_LENGTH_LEVEL,
+  SPEECH_LENGTH_SIMPLE_LEVELS,
   isExactSpeechLengthLevel,
+  simpleSpeechLengthLevel,
   matchSpeechLengthLevel,
   resolveSpeechLengthPreferences,
+  shouldShowSpeechLengthCard,
+  type SpeechLengthPreferences,
   type SpeechLengthLevel,
 } from '@/lib/speech-length'
 import type { MessageReplyReference } from '@/lib/message-reply'
@@ -58,6 +65,8 @@ import {
   subscribeNativeAudioRoute,
 } from '@/lib/native-audio-route'
 import {
+  getDeviceAudioOptInServerSnapshot,
+  getDeviceAudioOptInSnapshot,
   getNativeDeviceAudioCapabilityServerSnapshot,
   getNativeDeviceAudioCapabilitySnapshot,
   getSttCaptureSourcePickServerSnapshot,
@@ -65,12 +74,27 @@ import {
   readCachedNativeShellCapabilities,
   resolveEffectiveSttCaptureSource,
   resolveNativeDeviceAudioSupported,
+  setDeviceAudioOptIn,
   setSttCaptureSourcePick,
   shouldPlayTtsViaNativeShell,
   shouldStreamTtsToNativeShell,
+  subscribeDeviceAudioOptIn,
   subscribeNativeDeviceAudioCapability,
   subscribeSttCaptureSourcePick,
 } from '@/lib/native-device-audio'
+import {
+  getEarphoneMicrophonePickServerSnapshot,
+  getEarphoneMicrophonePickSnapshot,
+  getNativeEarphoneMicrophoneCapabilityServerSnapshot,
+  getNativeEarphoneMicrophoneCapabilitySnapshot,
+  readEarphoneCaptureSourceAnswer,
+  resolveEarphoneMicrophoneEnabled,
+  resolveEarphoneListeningNotice,
+  subscribeEarphoneMicrophonePick,
+  subscribeNativeEarphoneMicrophoneCapability,
+  writeEarphoneCaptureSourceAnswer,
+  writeEarphoneMicrophonePick,
+} from '@/lib/native-earphone-microphone'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
 import {
   isTtsStreamClip,
@@ -164,6 +188,8 @@ import {
   DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
   DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
+  MAX_SONIOX_SILENCE_MS,
+  MIN_SONIOX_SILENCE_MS,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   LS_KEY_AD_BANNER_POSITION,
@@ -223,6 +249,8 @@ import { unreadDividerLabel } from '@/i18n/unread-divider-copy'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   INITIAL_SCROLL_METRICS,
+  LIVE_GROWTH_FOLLOW_MODE,
+  USER_DETACH_REATTACH_DISTANCE_PX,
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET,
   LIVE_DEMO_SCROLL_MEASUREMENT_STORAGE_KEY,
@@ -237,6 +265,8 @@ import {
   readLivePhoneDemoScrollHandlerMeasurement,
   recordLivePhoneDemoScrollHandlerMeasurement,
   resolveLateMessageHeightChangeAnchorScrollTop,
+  resolveLiveGrowthRollScrollTop,
+  resolveUserDetachedFromBottom,
   resolveLivePhoneDemoScrollMeasurementCounter,
   resolveNewMessageAutoScrollTargetTop,
   resolveScrollViewportAnchorSnapshot,
@@ -1304,7 +1334,13 @@ type FeedbackHistoryResponse = {
   threads: FeedbackHistoryThread[]
 }
 
-type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite'
+type CustomSpeechSplit = {
+  sttSegmentationMode: 'end' | 'fin'
+  sonioxEndpointTuningStep?: number
+  sonioxManualFinalizeSilenceMs?: number
+}
+
+type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite' | 'speech-length'
   // The room's Hash Rush page (depth 2) and the two pages it opens (depth 3).
   | 'hash-rush' | 'hash-rush-ranking' | 'hash-rush-howto'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
@@ -1381,6 +1417,7 @@ function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuSc
     || value === 'hash-rush'
     || value === 'hash-rush-ranking'
     || value === 'hash-rush-howto'
+    || value === 'speech-length'
 }
 
 function resolveMenuScreenForDepth(
@@ -1398,6 +1435,7 @@ function resolveMenuScreenForDepth(
   }
   if (preferredScreen === 'display-language') return 'display-language'
   if (preferredScreen === 'hash-rush' || preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return 'hash-rush'
+  if (preferredScreen === 'speech-length') return 'speech-length'
   if (preferredScreen === 'conversation-management') return 'conversation-management'
   if (preferredScreen === 'participants') return 'participants'
   return 'feedback'
@@ -2024,6 +2062,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   connectionFailedLabel,
   switchLiveRoomToastLabel,
   textSizeLabel,
+  silenceFinalizeLabel,
+  sttSegmentationModeLabel,
+  sttSegmentationModeEndLabel,
+  sttSegmentationModeFinLabel,
+  endpointTuningLabel,
+  endpointTuningShortLabel,
+  endpointTuningLongLabel,
   translationModelLabel,
   adBannerPositionLabel,
   adBannerPositionTopLabel,
@@ -2546,14 +2591,35 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     getSttCaptureSourcePickSnapshot,
     getSttCaptureSourcePickServerSnapshot,
   )
+  // Outside earphone mode: picked when earphones went in mid-session.
+  const deviceAudioOptIn = useSyncExternalStore(
+    subscribeDeviceAudioOptIn,
+    getDeviceAudioOptInSnapshot,
+    getDeviceAudioOptInServerSnapshot,
+  )
   // Without earphones, speaker mode listens to the microphone only: no screen
   // broadcast, no capture of other apps' sound.
   const sttCaptureSource = resolveEffectiveSttCaptureSource({
     // A call writes down the microphone only, never other apps' sound.
     supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker && !voiceTalkState.joined,
     earphoneModeEnabled,
+    deviceAudioOptIn,
     pick: sttCaptureSourcePick,
   })
+  // Which microphone records while earphones are in: the phone's, unless the
+  // earphones were picked in the room menu or on my page. Never asked: the
+  // phone's is what translation needs almost always.
+  const nativeEarphoneMicrophoneCapable = useSyncExternalStore(
+    subscribeNativeEarphoneMicrophoneCapability,
+    getNativeEarphoneMicrophoneCapabilitySnapshot,
+    getNativeEarphoneMicrophoneCapabilityServerSnapshot,
+  )
+  const earphoneMicrophonePick = useSyncExternalStore(
+    subscribeEarphoneMicrophonePick,
+    getEarphoneMicrophonePickSnapshot,
+    getEarphoneMicrophonePickServerSnapshot,
+  )
+  const earphoneMicrophoneEnabled = resolveEarphoneMicrophoneEnabled(earphoneMicrophonePick)
   // The read language (L) picked in the notice. Session state only: never
   // persisted, dropped on every on/off edge (see the reset below).
   const [earphoneModeReadLanguagePick, setEarphoneModeReadLanguagePick] = useState<EarphoneModeReadLanguagePick | null>(null)
@@ -5139,6 +5205,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     suppressLivePreview: voiceTalkState.joined,
     externalPreviews: voiceTalkCaptionDrafts,
     captureSource: sttCaptureSource,
+    earphoneMicrophone: earphoneMicrophoneEnabled,
     sonioxManualFinalizeSilenceMs,
     sttSegmentationMode: sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE,
     sonioxEndpointMaxDelayMs,
@@ -6287,11 +6354,93 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (isSttSessionRunning) void handleStopRecording()
   }, [handleStopRecording, isSttSessionRunning, sttCaptureSource])
 
+  // Once per earphone connection, when STT listens with them in (started with
+  // them in, or they went in while listening), one modal: the phone's
+  // microphone still listens (Change to pick the earphones'), and, when the
+  // microphone alone is listening, whether to translate this device's sound
+  // now that other apps play in the earphones only. Both start on the last
+  // answer.
+  const [earphoneCaptureNoticeOpen, setEarphoneCaptureNoticeOpen] = useState(false)
+  const [earphoneCaptureNoticeParts, setEarphoneCaptureNoticeParts] = useState({
+    showMicrophone: false,
+    showCaptureSource: false,
+    initialSource: 'microphone' as 'microphone' | 'device_audio',
+  })
+  const earphoneListeningNoticeAskedRef = useRef(false)
+  // Set when that question switched a running session: listen again once the
+  // old session is gone.
+  const captureSourceRestartPendingRef = useRef(false)
+  useEffect(() => {
+    if (!nativeAudioRoute.earphonesConnected) {
+      // Earphones out: the next connection asks again, and the answer given
+      // for this one (this device's sound) ends with it.
+      earphoneListeningNoticeAskedRef.current = false
+      setEarphoneCaptureNoticeOpen(false)
+      if (getDeviceAudioOptInSnapshot()) setDeviceAudioOptIn(false)
+      return
+    }
+    if (earphoneCaptureNoticeOpen || earphoneModeNoticeOpen || screenCaptureNoticeOpen) return
+    const notice = resolveEarphoneListeningNotice({
+      visible: isVisible,
+      earphonesConnected: nativeAudioRoute.earphonesConnected,
+      sessionRunning: isSttSessionRunning,
+      askedThisConnection: earphoneListeningNoticeAskedRef.current,
+      microphoneChoiceCapable: nativeEarphoneMicrophoneCapable,
+      deviceAudioSupported: nativeDeviceAudioSupported,
+      captureSource: sttCaptureSource,
+    })
+    if (!notice.open) return
+    earphoneListeningNoticeAskedRef.current = true
+    setEarphoneCaptureNoticeParts({
+      showMicrophone: notice.showMicrophone,
+      showCaptureSource: notice.showCaptureSource,
+      initialSource: readEarphoneCaptureSourceAnswer(),
+    })
+    setEarphoneCaptureNoticeOpen(true)
+  }, [
+    earphoneCaptureNoticeOpen,
+    earphoneModeNoticeOpen,
+    isSttSessionRunning,
+    isVisible,
+    nativeAudioRoute.earphonesConnected,
+    nativeDeviceAudioSupported,
+    nativeEarphoneMicrophoneCapable,
+    screenCaptureNoticeOpen,
+    sttCaptureSource,
+  ])
+
+  const confirmEarphoneCaptureNotice = useCallback(({ source, microphonePick }: EarphoneListeningNoticeResult) => {
+    setEarphoneCaptureNoticeOpen(false)
+    if (earphoneCaptureNoticeParts.showMicrophone && microphonePick !== (earphoneMicrophonePick ?? 'phone')) {
+      writeEarphoneMicrophonePick(microphonePick)
+    }
+    if (earphoneCaptureNoticeParts.showCaptureSource) writeEarphoneCaptureSourceAnswer(source)
+    if (source !== 'device_audio') return
+    // This question is the warning: Start goes straight to the system prompt.
+    screenCaptureNoticeAcknowledgedRef.current = true
+    captureSourceRestartPendingRef.current = isSttSessionRunning
+    setSttCaptureSourcePick('device_audio')
+    setDeviceAudioOptIn(true)
+  }, [earphoneCaptureNoticeParts.showCaptureSource, earphoneCaptureNoticeParts.showMicrophone, earphoneMicrophonePick, isSttSessionRunning])
+
+  const dismissEarphoneCaptureNotice = useCallback(() => {
+    setEarphoneCaptureNoticeOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (!captureSourceRestartPendingRef.current) return
+    if (sttCaptureSource !== 'device_audio') return
+    if (isSttSessionRunning || isConnecting || isPreparingStart) return
+    captureSourceRestartPendingRef.current = false
+    void handleStartRecording()
+  }, [handleStartRecording, isConnecting, isPreparingStart, isSttSessionRunning, sttCaptureSource])
+
   // ── Sentence length ───────────────────────────────────────────────────
-  // One 1-6 scale (see @/lib/speech-length) stands for the two speech split
+  // One five-level scale (see @/lib/speech-length) stands for the two speech split
   // settings, in the room settings and on the first-run card. A new user (no
   // split ever chosen) starts on the default level before the room first
-  // listens, then sees the scale right after their first finished bubble.
+  // listens, then sees the scale after a few finished bubbles
+  // (SPEECH_LENGTH_CARD_AFTER_BUBBLES).
   // Both settings are fixed when a session starts, so a level picked while
   // listening ends the session and starts a new one.
   const firstRunCopy = useMemo(() => resolveFirstRunCopy(uiLocale), [uiLocale])
@@ -6303,21 +6452,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const onFirstSpeakCompletedRef = useRef(onFirstSpeakCompleted)
   onFirstSpeakCompletedRef.current = onFirstSpeakCompleted
 
-  const applySpeechLengthPreferences = useCallback((level: SpeechLengthLevel) => {
-    const preferences = resolveSpeechLengthPreferences(level)
+  // A level, or the "Set it myself" controls (any mode, step or silence).
+  const applySpeechSplitPreferences = useCallback((preferences: SpeechLengthPreferences | CustomSpeechSplit) => {
     const nextPreferences = commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
       ...preferences,
     })
     setSttSegmentationMode(preferences.sttSegmentationMode)
-    if (preferences.sttSegmentationMode === 'end') {
+    if ('sonioxEndpointTuningStep' in preferences && typeof preferences.sonioxEndpointTuningStep === 'number') {
       setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
-    } else {
+    }
+    if ('sonioxManualFinalizeSilenceMs' in preferences && typeof preferences.sonioxManualFinalizeSilenceMs === 'number') {
       setSonioxManualFinalizeSilenceMs(preferences.sonioxManualFinalizeSilenceMs)
     }
     clearAccountPreferencesSyncTimer()
     syncAccountPreferencesOverride(nextPreferences)
   }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
+  const applySpeechLengthPreferences = useCallback((level: SpeechLengthLevel) => {
+    applySpeechSplitPreferences(resolveSpeechLengthPreferences(level))
+  }, [applySpeechSplitPreferences])
 
   useEffect(() => {
     if (!speechLengthIntro || speechLengthDefaultAppliedRef.current) return
@@ -6331,12 +6484,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [accountPreferencesHydratedGeneration, applySpeechLengthPreferences, isStorageHydrated, speechLengthIntro, sttSegmentationMode])
 
   // Bubbles already in the room when it first listens (a welcome message, an
-  // earlier conversation) do not count as the first one. A bubble still being
-  // spoken is not in `utterances` yet, so a new id here is a finished bubble;
-  // its translation may still be on the way.
+  // earlier conversation) do not count. A bubble still being spoken is not in
+  // `utterances` yet, so a new id here is a finished bubble; its translation
+  // may still be on the way. The first new bubble completes the first run
+  // (which turns `speechLengthIntro` off upstream); the length card waits for
+  // a few more, so the person has seen some translations before choosing.
   const speechLengthBaselineIdsRef = useRef<Set<string> | null>(null)
+  const speechLengthIntroSeenRef = useRef(false)
+  const firstSpeakReportedRef = useRef(false)
+  if (speechLengthIntro) speechLengthIntroSeenRef.current = true
   useEffect(() => {
-    if (!speechLengthIntro || speechLengthIntroDoneRef.current || !isVisible) return
+    if (!speechLengthIntroSeenRef.current || speechLengthIntroDoneRef.current || !isVisible) return
     const bubbleIds = utterances
       .filter((utterance) => !utterance.recalled && !utterance.image && Boolean(utterance.originalText?.trim()))
       .map((utterance) => utterance.id)
@@ -6345,11 +6503,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
     const baseline = speechLengthBaselineIdsRef.current
-    if (!bubbleIds.some((id) => !baseline.has(id))) return
+    const newBubbles = bubbleIds.filter((id) => !baseline.has(id)).length
+    if (newBubbles === 0) return
+    if (!firstSpeakReportedRef.current) {
+      firstSpeakReportedRef.current = true
+      onFirstSpeakCompletedRef.current?.()
+    }
+    if (!shouldShowSpeechLengthCard(newBubbles)) return
     speechLengthIntroDoneRef.current = true
     setSpeechLengthCardOpen(true)
-    captureMingleClientEvent('mingle_first_run_step', { step: 'length_shown' })
-    onFirstSpeakCompletedRef.current?.()
+    captureMingleClientEvent('mingle_first_run_step', { step: 'length_shown', bubbles: newBubbles })
   }, [isSttSessionRunning, isVisible, speechLengthIntro, utterances])
 
   const speechLengthSettings = {
@@ -6395,6 +6558,51 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     selectedSpeechLengthLevel,
     showFloatingToast,
   ])
+
+  // The "More" page: all five levels, and below them the two underlying
+  // settings (automatic detection step, silence time). Those follow the level
+  // and stay locked until "Set it myself" is turned on; a setting that is no
+  // level's (saved before the scale, or set by hand) opens with it on.
+  const [speechLengthCustom, setSpeechLengthCustom] = useState(false)
+  const [speechSplitDraft, setSpeechSplitDraft] = useState<{ step?: number; silenceMs?: number } | null>(null)
+  const isSpeechLengthLevelExactRef = useRef(isSpeechLengthLevelExact)
+  isSpeechLengthLevelExactRef.current = isSpeechLengthLevelExact
+  useEffect(() => {
+    if (menuScreen !== 'speech-length') return
+    setSpeechLengthCustom(!isSpeechLengthLevelExactRef.current)
+    setSpeechSplitDraft(null)
+  }, [menuScreen])
+
+  const handleSpeechLengthMorePress = useCallback(() => {
+    if (!menuOpen || menuScreen === 'speech-length') return
+    pushMenuHistoryEntry(2, 'speech-length')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleCustomSpeechSplitCommit = useCallback(async (preferences: CustomSpeechSplit) => {
+    setSpeechSplitDraft(null)
+    if (isApplyingSpeechLength) return
+    const unchanged = preferences.sttSegmentationMode === (sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE)
+      && (preferences.sonioxEndpointTuningStep ?? sonioxEndpointTuningStep) === sonioxEndpointTuningStep
+      && (preferences.sonioxManualFinalizeSilenceMs ?? sonioxManualFinalizeSilenceMs) === sonioxManualFinalizeSilenceMs
+    if (unchanged) return
+    captureMingleClientEvent('mingle_first_run_step', { step: 'length_custom_set', mode: preferences.sttSegmentationMode })
+    setIsApplyingSpeechLength(true)
+    try {
+      const wasRunning = isSttSessionRunning
+      if (wasRunning) await handleStopRecording()
+      applySpeechSplitPreferences(preferences)
+      speechLengthRestartPendingRef.current = wasRunning
+    } finally {
+      setIsApplyingSpeechLength(false)
+    }
+  }, [applySpeechSplitPreferences, handleStopRecording, isApplyingSpeechLength, isSttSessionRunning, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode])
+
+  const handleSpeechLengthCustomToggle = useCallback((next: boolean) => {
+    setSpeechLengthCustom(next)
+    setSpeechSplitDraft(null)
+    // Turning it off puts a hand-made setting back on the nearest level.
+    if (!next && !isSpeechLengthLevelExact) void handleSpeechLengthSelect(selectedSpeechLengthLevel, 'settings')
+  }, [handleSpeechLengthSelect, isSpeechLengthLevelExact, selectedSpeechLengthLevel])
 
   // Listen again once the stopped session is gone and the new setting is in.
   useEffect(() => {
@@ -6725,6 +6933,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const shouldAutoScroll = useRef(true)
   const suppressAutoScrollRef = useRef(false)
   const userScrollIntentUntilRef = useRef(0)
+  const lastChatScrollTopRef = useRef(0)
+  const userDetachedFromBottomRef = useRef(false)
   const hasInitialBottomAnchorRef = useRef(false)
   const bottomAnchorConversationRef = useRef(conversationId)
   const allowAutoTopPaginationRef = useRef(false)
@@ -6943,8 +7153,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       isLoadingOlder: isLoadingOlderRef.current,
       nearBottomThresholdPx: AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
     })
-    suppressAutoScrollRef.current = nextScrollState.suppressAutoScroll
-    shouldAutoScroll.current = nextScrollState.shouldAutoScroll
+    if (distanceToBottom <= USER_DETACH_REATTACH_DISTANCE_PX) userDetachedFromBottomRef.current = false
+    const isUserDetached = userDetachedFromBottomRef.current
+    suppressAutoScrollRef.current = isUserDetached || nextScrollState.suppressAutoScroll
+    shouldAutoScroll.current = !isUserDetached && nextScrollState.shouldAutoScroll
 
     const nextScrollMetrics = deriveLivePhoneDemoScrollMetrics({
       scrollTop,
@@ -7055,6 +7267,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         prevScrollTopRef.current = scrollTop
       }
     }
+    if (node) {
+      // The user's own move up wins at once and stays in force: the derived
+      // state below is only computed a frame later, and it must not turn
+      // following back on just because the view is still near the bottom.
+      userDetachedFromBottomRef.current = resolveUserDetachedFromBottom({
+        wasDetached: userDetachedFromBottomRef.current,
+        fromUserScroll: isUserScrollIntentActive(),
+        previousScrollTop: lastChatScrollTopRef.current,
+        scrollTop: node.scrollTop,
+        distanceToBottom: node.scrollHeight - node.scrollTop - node.clientHeight,
+      })
+      if (userDetachedFromBottomRef.current) {
+        suppressAutoScrollRef.current = true
+        shouldAutoScroll.current = false
+      }
+      lastChatScrollTopRef.current = node.scrollTop
+    }
     scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })
     if (measurementStartMs !== null) {
       recordScrollHandlerMeasurement(readBrowserPerformanceNowMs() - measurementStartMs)
@@ -7070,6 +7299,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!chatRef.current) return
     markUserScrollIntent()
     clearPendingAutoScrollTimer()
+    userDetachedFromBottomRef.current = false
     suppressAutoScrollRef.current = false
     shouldAutoScroll.current = true
     chatRef.current.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' })
@@ -7110,6 +7340,56 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     [nativeAppUpdate, nativeAppUpdateCopy],
   )
 
+  // Follows a bubble that grew a line. Declared before the layout effects
+  // below on purpose: they re-read the distance to the bottom, and a bubble
+  // that grew past the near-bottom band in one update would otherwise read as
+  // "the user scrolled away" before this had the chance to follow it.
+  const liveGrowthRollFrameRef = useRef<number | null>(null)
+  const cancelLiveGrowthRoll = useCallback(() => {
+    if (liveGrowthRollFrameRef.current === null) return
+    window.cancelAnimationFrame(liveGrowthRollFrameRef.current)
+    liveGrowthRollFrameRef.current = null
+  }, [])
+  useEffect(() => cancelLiveGrowthRoll, [cancelLiveGrowthRoll])
+  useLayoutEffect(() => {
+    if (LIVE_GROWTH_FOLLOW_MODE === 'throttled') return
+    const node = chatRef.current
+    const isFollowing = () => (
+      hasInitialBottomAnchorRef.current
+      && shouldAutoScroll.current
+      && !suppressAutoScrollRef.current
+      && !userDetachedFromBottomRef.current
+      && !isPaginatingRef.current
+      && !isLoadingOlderRef.current
+    )
+    if (!node || !isFollowing()) return
+    if (node.scrollHeight - node.clientHeight - node.scrollTop <= 1) return
+
+    if (LIVE_GROWTH_FOLLOW_MODE === 'instant') {
+      node.scrollTop = node.scrollHeight - node.clientHeight
+      return
+    }
+
+    // A line added mid-roll restarts the roll from where the view is now.
+    cancelLiveGrowthRoll()
+    const startScrollTop = node.scrollTop
+    const startedAtMs = performance.now()
+    const step = (nowMs: number) => {
+      liveGrowthRollFrameRef.current = null
+      if (!isFollowing()) return
+      const targetScrollTop = node.scrollHeight - node.clientHeight
+      node.scrollTop = resolveLiveGrowthRollScrollTop({
+        startScrollTop,
+        targetScrollTop,
+        elapsedMs: nowMs - startedAtMs,
+      })
+      if (targetScrollTop - node.scrollTop > 1) {
+        liveGrowthRollFrameRef.current = window.requestAnimationFrame(step)
+      }
+    }
+    liveGrowthRollFrameRef.current = window.requestAnimationFrame(step)
+  }, [cancelLiveGrowthRoll, demoTypingText, isConnecting, liveUtterances, utterances])
+
   useLayoutEffect(() => {
     const nextCounts: ChatScrollMessageCountSnapshot = {
       utteranceCount: utterances.length,
@@ -7126,7 +7406,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     renderedMessageCountsRef.current = nextCounts
 
-    if (!autoScrollState.shouldAutoScroll || !hasInitialBottomAnchorRef.current || !chatRef.current) return
+    if (
+      !autoScrollState.shouldAutoScroll
+      || userDetachedFromBottomRef.current
+      || !hasInitialBottomAnchorRef.current
+      || !chatRef.current
+    ) return
 
     const node = chatRef.current
     suppressAutoScrollRef.current = false
@@ -7233,6 +7518,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } else {
       node.scrollTop = node.scrollHeight
       lastDistanceToBottomRef.current = 0
+      userDetachedFromBottomRef.current = false
       shouldAutoScroll.current = true
       suppressAutoScrollRef.current = false
       autoScrollSchedulerRef.current.markPerformed()
@@ -7285,6 +7571,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useEffect(() => {
     updateScrollDerivedState()
+    if (LIVE_GROWTH_FOLLOW_MODE !== 'throttled') return
     autoScrollSchedulerRef.current.update({
       shouldAutoScroll: () => (
         !!chatRef.current
@@ -7584,6 +7871,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // default, the microphone plus device audio (page 2/2 of the notice shows
     // it, and what Start will open, before the first Start).
     setSttCaptureSourcePick('device_audio')
+    setDeviceAudioOptIn(false)
     // A new session warns about the screen prompt again.
     screenCaptureNoticeAcknowledgedRef.current = false
   }), [])
@@ -8638,6 +8926,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </span>
                               </button>
                             )}
+                            <EarphoneMicrophoneSettingControl
+                              copy={earphoneModeBaseCopy}
+                              renderRow={({ valueLabel, open }) => (
+                                <button
+                                  type="button"
+                                  data-qa="live-demo-menu-earphone-microphone"
+                                  onClick={open}
+                                  className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-1 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                                >
+                                  <span className="min-w-0 flex-1">{earphoneModeBaseCopy.microphoneMenuLabel}</span>
+                                  <span className="flex shrink-0 items-center gap-1.5 text-gray-500">
+                                    <span className="text-[0.9rem]">{valueLabel}</span>
+                                    <ChevronRight size={18} strokeWidth={2.4} />
+                                  </span>
+                                </button>
+                              )}
+                            />
 
                             <div
                               data-qa="live-demo-menu-usage"
@@ -8782,14 +9087,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </div>
 
                             <div className="block">
-                              {/* One 1-6 scale instead of the two speech split settings
-                                  (automatic detection steps, silence time). */}
-                              <div className="mb-2 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{firstRunCopy.lengthMenuLabel}</div>
+                              {/* Three stops (short, recommended, long) for the two speech
+                                  split settings; "More" opens all five levels and the
+                                  settings themselves. */}
+                              <div className="mb-2 flex items-center justify-between gap-3 pl-1 pt-1.5">
+                                <span className="min-w-0 text-[0.98rem] font-medium text-gray-900">{firstRunCopy.lengthMenuLabel}</span>
+                                <button
+                                  type="button"
+                                  data-qa="speech-length-more"
+                                  onClick={handleSpeechLengthMorePress}
+                                  className="-mr-1 inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-1 text-[0.85rem] font-semibold text-gray-500 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                                >
+                                  {firstRunCopy.lengthMore}
+                                  <ChevronRight size={16} strokeWidth={2.4} aria-hidden />
+                                </button>
+                              </div>
                               <div className="relative">
                                 <SpeechLengthScale
                                   copy={firstRunCopy}
-                                  selected={selectedSpeechLengthLevel}
+                                  selected={simpleSpeechLengthLevel(selectedSpeechLengthLevel)}
                                   disabled={isApplyingSpeechLength}
+                                  levels={SPEECH_LENGTH_SIMPLE_LEVELS}
+                                  showNumbers={false}
+                                  recommended={RECOMMENDED_SPEECH_LENGTH_LEVEL}
                                   onSelect={(level) => { void handleSpeechLengthSelect(level, 'settings') }}
                                 />
                                 {isSilenceFinalizeSliderLocked && (
@@ -9683,6 +10003,179 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                     <motion.section
                       initial={false}
+                      animate={menuContentScreen === 'speech-length' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuContentScreen !== 'speech-length'}
+                      data-qa="speech-length-page"
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuContentScreen === 'speech-length' ? 'auto' : 'none',
+                        zIndex: menuContentScreen === 'speech-length'
+                          ? 3
+                          : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
+                      }}
+                    >
+                      <LivePhoneDemoPanelHeader
+                        title={firstRunCopy.lengthMenuLabel}
+                        backLabel={roomManagementCopy.backButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
+                      <div
+                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                        style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}
+                      >
+                        <div className="px-4 py-5">
+                          <div className="relative">
+                            <SpeechLengthScale
+                              copy={firstRunCopy}
+                              selected={selectedSpeechLengthLevel}
+                              disabled={isApplyingSpeechLength}
+                              recommended={RECOMMENDED_SPEECH_LENGTH_LEVEL}
+                              onSelect={(level) => {
+                                setSpeechLengthCustom(false)
+                                setSpeechSplitDraft(null)
+                                void handleSpeechLengthSelect(level, 'settings')
+                              }}
+                            />
+                            {isSilenceFinalizeSliderLocked && (
+                              <button
+                                type="button"
+                                aria-label={silenceFinalizeLockedButtonLabel}
+                                onClick={handleSilenceFinalizeLockedInteraction}
+                                className="absolute inset-0 z-10 cursor-not-allowed rounded-xl bg-white/40"
+                              />
+                            )}
+                          </div>
+
+                          <div className="mt-6 flex items-center justify-between gap-3 rounded-2xl border border-gray-200 px-3.5 py-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[0.98rem] font-medium text-gray-900">{firstRunCopy.lengthCustom}</p>
+                              <p className="mt-0.5 text-[0.8rem] leading-5 text-gray-500">{firstRunCopy.lengthCustomHint}</p>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              data-qa="speech-length-custom"
+                              aria-checked={speechLengthCustom}
+                              aria-label={firstRunCopy.lengthCustom}
+                              disabled={isApplyingSpeechLength}
+                              onClick={() => {
+                                if (isSilenceFinalizeSliderLocked) {
+                                  handleSilenceFinalizeLockedInteraction()
+                                  return
+                                }
+                                handleSpeechLengthCustomToggle(!speechLengthCustom)
+                              }}
+                              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border-0 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 ${speechLengthCustom ? 'bg-amber-500' : 'bg-gray-300'}`}
+                            >
+                              <span
+                                className="absolute left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+                                style={{ transform: speechLengthCustom ? 'translateX(20px)' : 'translateX(0px)' }}
+                              />
+                            </button>
+                          </div>
+
+                          {(() => {
+                            const locked = !speechLengthCustom || isApplyingSpeechLength
+                            const mode = sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE
+                            const step = speechSplitDraft?.step ?? sonioxEndpointTuningStep
+                            const silenceMs = speechSplitDraft?.silenceMs ?? sonioxManualFinalizeSilenceMs
+                            const commitStep = () => {
+                              if (speechSplitDraft?.step !== undefined) void handleCustomSpeechSplitCommit({ sttSegmentationMode: 'end', sonioxEndpointTuningStep: speechSplitDraft.step })
+                            }
+                            const commitSilence = () => {
+                              if (speechSplitDraft?.silenceMs !== undefined) void handleCustomSpeechSplitCommit({ sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: speechSplitDraft.silenceMs })
+                            }
+                            return (
+                              <div data-qa="speech-length-detail" aria-disabled={locked} className={`mt-4 transition-opacity ${locked ? 'opacity-45' : ''}`}>
+                                <div className="mb-1 pl-1 text-[0.9rem] font-medium text-gray-700">{sttSegmentationModeLabel}</div>
+                                <div role="radiogroup" aria-label={sttSegmentationModeLabel} className="space-y-2">
+                                  {([
+                                    { value: 'end' as const, label: sttSegmentationModeEndLabel },
+                                    { value: 'fin' as const, label: sttSegmentationModeFinLabel },
+                                  ]).map((option) => {
+                                    const isSelected = mode === option.value
+                                    return (
+                                      <div
+                                        key={option.value}
+                                        className={`overflow-hidden rounded-[1.25rem] border transition ${isSelected ? 'border-amber-300 bg-amber-50/60' : 'border-gray-200 bg-gray-50'}`}
+                                      >
+                                        <button
+                                          type="button"
+                                          role="radio"
+                                          aria-checked={isSelected}
+                                          disabled={locked}
+                                          onClick={() => void handleCustomSpeechSplitCommit({ sttSegmentationMode: option.value })}
+                                          className="flex min-h-11 w-full items-center gap-3 px-3.5 py-2.5 text-left disabled:cursor-not-allowed"
+                                        >
+                                          <span aria-hidden className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 bg-white ${isSelected ? 'border-amber-500' : 'border-gray-300'}`}>
+                                            {isSelected && <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />}
+                                          </span>
+                                          <span className={`text-[0.9rem] font-semibold leading-tight ${isSelected ? 'text-amber-900' : 'text-gray-500'}`}>{option.label}</span>
+                                        </button>
+                                        {isSelected && option.value === 'end' && (
+                                          <label className="block px-3.5 pb-3">
+                                            <span className="flex items-center justify-between gap-3 pl-1 text-[0.9rem] text-gray-800">
+                                              <span>{endpointTuningLabel}</span>
+                                              <span className="shrink-0 font-semibold tabular-nums">{step + 1}/5</span>
+                                            </span>
+                                            <span className="mt-1 flex items-center gap-2">
+                                              <span className="shrink-0 text-[0.7rem] text-gray-500">{endpointTuningShortLabel}</span>
+                                              <input
+                                                type="range"
+                                                min={0}
+                                                max={4}
+                                                step={1}
+                                                value={step}
+                                                disabled={locked}
+                                                data-qa="speech-length-endpoint-step"
+                                                aria-label={endpointTuningLabel}
+                                                onChange={(event) => setSpeechSplitDraft({ step: Number(event.target.value) })}
+                                                onPointerUp={commitStep}
+                                                onKeyUp={commitStep}
+                                                onBlur={commitStep}
+                                                className="h-8 min-w-0 flex-1 accent-amber-500 disabled:cursor-not-allowed"
+                                              />
+                                              <span className="shrink-0 text-[0.7rem] text-gray-500">{endpointTuningLongLabel}</span>
+                                            </span>
+                                          </label>
+                                        )}
+                                        {isSelected && option.value === 'fin' && (
+                                          <label className="block px-3.5 pb-3">
+                                            <span className="flex items-center justify-between gap-3 pl-1 text-[0.9rem] text-gray-800">
+                                              <span>{silenceFinalizeLabel}</span>
+                                              <span className="shrink-0 font-semibold tabular-nums">{(silenceMs / 1000).toFixed(1)}s</span>
+                                            </span>
+                                            <input
+                                              type="range"
+                                              min={MIN_SONIOX_SILENCE_MS}
+                                              max={MAX_SONIOX_SILENCE_MS}
+                                              step={100}
+                                              value={silenceMs}
+                                              disabled={locked}
+                                              data-qa="speech-length-silence"
+                                              aria-label={silenceFinalizeLabel}
+                                              onChange={(event) => setSpeechSplitDraft({ silenceMs: Number(event.target.value) })}
+                                              onPointerUp={commitSilence}
+                                              onKeyUp={commitSilence}
+                                              onBlur={commitSilence}
+                                              className="mt-1 h-8 w-full accent-amber-500 disabled:cursor-not-allowed"
+                                            />
+                                          </label>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      </div>
+                    </motion.section>
+
+                    <motion.section
+                      initial={false}
                       animate={menuContentScreen === 'participants' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
                       transition={resolveMenuContentTransition(menuScreenTransitionMode)}
                       aria-hidden={menuContentScreen !== 'participants'}
@@ -10120,9 +10613,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               )}
             </AnimatePresence>
             {speechLengthCardOpen ? (
+              <motion.div
+                aria-hidden
+                data-qa="speech-length-scrim"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2 }}
+                onClick={handleSpeechLengthClose}
+                className="absolute inset-0 z-30 bg-slate-950/30"
+              />
+            ) : null}
+            {speechLengthCardOpen ? (
               <div
-                className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3"
-                style={{ bottom: copyToastBottomOffsetPx }}
+                className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-end justify-center px-3"
+                style={{ bottom: copyToastBottomOffsetPx, paddingTop: nativeChatTopSpacerPx + 12 }}
               >
                 <SpeechLengthCard
                   copy={firstRunCopy}
@@ -10712,6 +11216,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}
                 coinCostNotice={coinTtsCostNotice}
+              />
+            </MessageMediaDialog>
+          )}
+          {earphoneCaptureNoticeOpen && !earphoneModeNoticeOpen && (
+            <MessageMediaDialog title={earphoneModeBaseCopy.earphoneCaptureNoticeTitle} onClose={dismissEarphoneCaptureNotice}>
+              <EarphoneCaptureSourceNoticeContent
+                copy={earphoneModeBaseCopy}
+                deviceAudioViaBroadcast={isLikelyIOSPlatform()}
+                showMicrophone={earphoneCaptureNoticeParts.showMicrophone}
+                showCaptureSource={earphoneCaptureNoticeParts.showCaptureSource}
+                initialMicrophonePick={earphoneMicrophonePick ?? 'phone'}
+                initialSource={earphoneCaptureNoticeParts.initialSource}
+                onConfirm={confirmEarphoneCaptureNotice}
               />
             </MessageMediaDialog>
           )}

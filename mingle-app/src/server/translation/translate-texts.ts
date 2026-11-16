@@ -782,6 +782,14 @@ const CHINESE_VARIANT_SCRIPT_NOTES = {
 
 const CHINESE_VARIANT_GLOSSARY_LINE = `Chinese language codes: zh-CN = ${CHINESE_VARIANT_SCRIPT_NOTES['zh-CN']}; zh-TW = ${CHINESE_VARIANT_SCRIPT_NOTES['zh-TW']}. zh-CN and zh-TW are different targets.`
 
+/**
+ * The recognizer sometimes ends a bubble in the middle of a sentence ("..., and
+ * I'm also.") and the rest opens the next bubble ("One of these people that
+ * I, ..."). The previous bubble's translation is already out, so the next one
+ * has to carry the sentence's meaning.
+ */
+const CONTINUED_SENTENCE_RULE = 'The recognizer sometimes splits one sentence across bubbles, and a period ending the previous one may be wrong. First read the end of the previous bubble and the current text together: if they make one sentence ("...and I\'m also." + "one of these people who..." = "...and I\'m also one of these people who..."), translate the current text as the rest of that sentence, so the meaning of the whole sentence comes through even if the previous translation got it wrong. Never repeat what the previous translation already says.'
+
 const SOURCE_LANGUAGE_CODE_RULE = 'Use one of the requested codes when it matches; for Chinese always answer zh-CN or zh-TW, never zh.'
 
 function describeChineseVariantScript(language: string): string | null {
@@ -827,6 +835,7 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
       formatSingleTurnForPromptWithOptions('Immediate previous turn', immediatePreviousTurn, {
         includeSourceLanguage,
       }),
+      CONTINUED_SENTENCE_RULE,
     )
   }
 
@@ -890,6 +899,7 @@ function buildBubbleTailFillPrompt(
       ...ctx.targetLanguages
         .filter((language) => Boolean(tail.previousTranslations?.[language]))
         .map((language) => `  ${language}: "${tail.previousTranslations?.[language]}"`),
+      CONTINUED_SENTENCE_RULE,
     )
   }
   userPromptLines.push(`blank: "${ctx.text}"`)
@@ -907,8 +917,9 @@ function buildBubbleTailFillPrompt(
   const tailRules = interim
     ? [
       `Keys: ${TAIL_CUT_AFTER_KEY} and the target language codes.`,
-      'The speaker is still talking. Translate the start of the blank up to a safe cut point: the end of a sentence, or the end of a complete clause (its own subject and verb, usually before a comma or a conjunction) whose meaning cannot change with the words that follow. Even a short sentence counts ("Yes.", "네.").',
+      'The speaker is still talking. Translate the start of the blank up to a cut point: the end of a sentence, of a finished remark, or of a clause (a dependent clause too). Punctuation is not needed: speech transcripts often have none. Even a short sentence counts ("Yes.", "네.").',
       'Your translation is final and never revised, and the next part will be appended after it, so it must read correctly and naturally whatever comes next. Never cut inside a phrase, between a verb and its object, or where the target language would need the next words to order the sentence. When unsure, cut earlier or translate nothing.',
+      'Translate exactly the source up to your cut: never pull in words that come after it, even though you can see them.',
       'The last words of the blank were just heard and the next words may change them: never include them unless the blank ends with punctuation.',
       `${TAIL_CUT_AFTER_KEY} = the last words of the source you translated, copied exactly from the blank: 2 to 4 words (in a language written without spaces, the last 4 to 8 characters), enough that they appear only once in the blank. Write it before the translations. Nothing to translate yet: "" everywhere.`,
     ]

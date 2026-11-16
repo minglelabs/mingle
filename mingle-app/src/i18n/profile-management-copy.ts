@@ -97,7 +97,7 @@ const PROFILE_MANAGEMENT_COPY_BY_LOCALE: Record<LegalDocumentLocale, ProfileMana
     },
   },
   es: {
-    defaultLanguages: 'Idiomas predeterminados de conversación',
+    defaultLanguages: 'Idiomas de conversación',
     defaultLanguagesDescription: 'Elige los idiomas y el orden para las conversaciones nuevas.',
     defaultLanguagesSaveError: 'No se pudieron guardar los idiomas predeterminados.',
     usage: {
@@ -117,7 +117,7 @@ const PROFILE_MANAGEMENT_COPY_BY_LOCALE: Record<LegalDocumentLocale, ProfileMana
     },
   },
   it: {
-    defaultLanguages: 'Lingue predefinite delle conversazioni',
+    defaultLanguages: 'Lingue delle conversazioni',
     defaultLanguagesDescription: 'Scegli le lingue e l’ordine per le nuove conversazioni.',
     defaultLanguagesSaveError: 'Impossibile salvare le lingue predefinite.',
     usage: {

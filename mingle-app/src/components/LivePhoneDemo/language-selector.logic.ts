@@ -4,6 +4,7 @@ import {
   resolveSupportedLocaleTag,
   type LegalDocumentLocale,
 } from "@/i18n/config";
+import { resolvePrimaryUiLocaleTag, type PrimaryUiLocale } from "@/i18n/mingle-locales";
 import {
   MAX_STT_LANGUAGE_SELECTION,
   STT_LANGUAGE_OPTIONS,
@@ -36,12 +37,27 @@ export const LANGUAGE_SELECTOR_FEATURED_CODES = [
   "pt",
 ] as const satisfies readonly SttLanguageCode[];
 
+const LANGUAGE_SELECTOR_SECTION_COPY: Record<PrimaryUiLocale, LanguageSelectorSectionCopy> = {
+  ko: { featured: "주요 언어", all: "전체 언어" },
+  en: { featured: "Popular languages", all: "All languages" },
+  ja: { featured: "主な言語", all: "すべての言語" },
+  "zh-CN": { featured: "常用语言", all: "全部语言" },
+  "zh-TW": { featured: "常用語言", all: "所有語言" },
+  fr: { featured: "Langues populaires", all: "Toutes les langues" },
+  de: { featured: "Beliebte Sprachen", all: "Alle Sprachen" },
+  es: { featured: "Idiomas populares", all: "Todos los idiomas" },
+  pt: { featured: "Idiomas populares", all: "Todos os idiomas" },
+  it: { featured: "Lingue più usate", all: "Tutte le lingue" },
+  ru: { featured: "Популярные языки", all: "Все языки" },
+  ar: { featured: "اللغات الشائعة", all: "جميع اللغات" },
+  hi: { featured: "लोकप्रिय भाषाएँ", all: "सभी भाषाएँ" },
+  th: { featured: "ภาษายอดนิยม", all: "ภาษาทั้งหมด" },
+  vi: { featured: "Ngôn ngữ phổ biến", all: "Tất cả ngôn ngữ" },
+};
+
 export function resolveLanguageSelectorSectionCopy(rawLocale?: string): LanguageSelectorSectionCopy {
-  const normalizedLocale = rawLocale?.trim().toLowerCase() ?? "";
-  const isKorean = normalizedLocale === "ko" || normalizedLocale.startsWith("ko-");
-  return isKorean
-    ? { featured: "주요 언어", all: "전체 언어" }
-    : { featured: "Popular languages", all: "All languages" };
+  const locale = resolvePrimaryUiLocaleTag(rawLocale?.trim() ?? "") ?? "en";
+  return LANGUAGE_SELECTOR_SECTION_COPY[locale] ?? LANGUAGE_SELECTOR_SECTION_COPY.en;
 }
 
 type LanguageSelectorLocaleSource = "ui" | "browser" | "fallback";
@@ -89,7 +105,13 @@ function formatLanguageName(
   fallbackLabel: string,
 ): string {
   const formatted = displayNames?.of(languageCode)?.trim();
-  return formatted || fallbackLabel;
+  if (!formatted) return fallbackLabel;
+  // Engines disagree on the capitalization of a standalone language name (Node's ICU gives
+  // "español", WebKit "Español"). The server-rendered label must match the one the WebView
+  // hydrates with, or React rebuilds the whole tree and drops the canvas scale. Names are list
+  // items here, so always start them with a capital.
+  const locale = displayNames?.resolvedOptions().locale;
+  return formatted.charAt(0).toLocaleUpperCase(locale) + formatted.slice(1);
 }
 
 function areLabelsEquivalent(left: string, right: string): boolean {

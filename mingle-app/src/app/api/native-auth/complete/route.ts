@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import {
@@ -10,41 +10,18 @@ import {
   type NativeOAuthProvider,
 } from "@/lib/native-auth-bridge";
 import { savePendingNativeAuthResult } from "@/lib/native-auth-pending-store";
-
-const APP_AUTH_CALLBACK_URL = "mingleauth://auth";
+import {
+  NATIVE_AUTH_ERROR_PARAM,
+  NATIVE_AUTH_OAUTH_FAILED_MESSAGE,
+  buildAppAuthRedirectUrl,
+  buildClearNativeAuthReturnCookie,
+  renderReturnToAppResponse,
+} from "@/lib/native-auth-return";
 
 function summarizeUserAgent(rawValue: string | null): string {
   const normalized = (rawValue || "").trim().replace(/\s+/g, " ");
   if (!normalized) return "unknown";
   return normalized.slice(0, 160);
-}
-
-function buildAppRedirect(params: {
-  status: "success" | "error";
-  provider?: NativeOAuthProvider;
-  callbackUrl?: string;
-  token?: string;
-  message?: string;
-  requestId?: string;
-}): URL {
-  const redirectUrl = new URL(APP_AUTH_CALLBACK_URL);
-  redirectUrl.searchParams.set("status", params.status);
-  if (params.provider) {
-    redirectUrl.searchParams.set("provider", params.provider);
-  }
-  if (params.callbackUrl) {
-    redirectUrl.searchParams.set("callbackUrl", params.callbackUrl);
-  }
-  if (params.token) {
-    redirectUrl.searchParams.set("token", params.token);
-  }
-  if (params.message) {
-    redirectUrl.searchParams.set("message", params.message);
-  }
-  if (params.requestId) {
-    redirectUrl.searchParams.set("requestId", params.requestId);
-  }
-  return redirectUrl;
 }
 
 function redirectToApp(params: {
@@ -54,52 +31,11 @@ function redirectToApp(params: {
   token?: string;
   message?: string;
   requestId?: string;
-}): NextResponse {
-  const redirectUrl = buildAppRedirect(params).toString();
-  // Some iOS browsers can keep a blank tab after custom-scheme redirects.
-  // Render an auto-open page with a visible fallback button to reliably return to the app.
-  const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta http-equiv="refresh" content="0;url=${redirectUrl}" />
-    <title>Return to HashChat</title>
-    <style>
-      body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fff; color: #111827; }
-      main { min-height: 100dvh; display: grid; place-items: center; padding: 24px; text-align: center; }
-      .card { max-width: 320px; width: 100%; border: 1px solid #e5e7eb; border-radius: 16px; padding: 18px; background: #f9fafb; }
-      h1 { margin: 0; font-size: 18px; }
-      p { margin: 8px 0 0; font-size: 14px; color: #4b5563; line-height: 1.45; }
-      a { display: inline-block; margin-top: 14px; background: #111827; color: #fff; text-decoration: none; border-radius: 10px; padding: 10px 14px; font-size: 14px; font-weight: 600; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <section class="card">
-        <h1>Returning to HashChat</h1>
-        <p>If the app does not open automatically, tap the button below.</p>
-        <a href="${redirectUrl}" id="open-app">Open HashChat App</a>
-      </section>
-    </main>
-    <script>
-      const url = ${JSON.stringify(redirectUrl)};
-      const tryOpen = () => { window.location.href = url; };
-      tryOpen();
-      setTimeout(tryOpen, 300);
-      setTimeout(tryOpen, 900);
-    </script>
-  </body>
-</html>`;
-  const response = new NextResponse(html, {
-    status: 200,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-    },
-  });
-  response.headers.set("cache-control", "no-store, max-age=0, must-revalidate");
-  response.headers.set("pragma", "no-cache");
-  response.headers.set("expires", "0");
+}): Response {
+  const response = renderReturnToAppResponse(buildAppAuthRedirectUrl(params));
+  // The sign-in this cookie belonged to is over, whichever way it ended.
+  response.headers.append("set-cookie", buildClearNativeAuthReturnCookie(true));
+  response.headers.append("set-cookie", buildClearNativeAuthReturnCookie(false));
   return response;
 }
 
@@ -144,6 +80,29 @@ export async function GET(request: NextRequest) {
       status: "error",
       callbackUrl,
       message: "invalid_provider",
+      requestId: requestId ?? undefined,
+    });
+  }
+
+  // The OAuth step failed and the NextAuth route sent the browser here instead
+  // of showing its sign-in page. Report the failure even if an older session
+  // cookie is still present in this browser.
+  const authError = (request.nextUrl.searchParams.get(NATIVE_AUTH_ERROR_PARAM) || "").trim();
+  if (authError) {
+    console.warn(`[native-auth/complete] oauth failed provider=${provider} error=${authError.slice(0, 64)}`);
+    if (requestId) {
+      await savePendingNativeAuthResult(requestId, {
+        status: "error",
+        provider,
+        callbackUrl,
+        message: NATIVE_AUTH_OAUTH_FAILED_MESSAGE,
+      });
+    }
+    return redirectToApp({
+      status: "error",
+      provider,
+      callbackUrl,
+      message: NATIVE_AUTH_OAUTH_FAILED_MESSAGE,
       requestId: requestId ?? undefined,
     });
   }

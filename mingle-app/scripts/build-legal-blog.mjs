@@ -57,13 +57,44 @@ const DECKS = [
   { slug: "ai-wrapper-business-surfers-3rd", deck: "/presentations/surfers-3rd-ai-wrapper", date: "2026-08-12",
     og: { en: "/presentations/assets/surfers-logo.png", ko: "/presentations/assets/surfers-logo.png" } },
   { slug: "hashchat-pitch-deck", deck: "/xr", date: "2026-09-01",
-    og: { en: "/assets/og-image.png?v=20260416-2", ko: "/assets/og-image.png?v=20260416-2" } },
+    og: { en: "/assets/og-hashchat.png?v=20261112", ko: "/assets/og-hashchat.png?v=20261112" } },
   { slug: "hashchat-pitch-deck-short", deck: "/xr-short", date: "2026-09-02",
-    og: { en: "/assets/og-image.png?v=20260416-2", ko: "/assets/og-image.png?v=20260416-2" } },
+    og: { en: "/assets/og-hashchat.png?v=20261112", ko: "/assets/og-hashchat.png?v=20261112" } },
   { slug: "virtually-deck", deck: "/xr-virtually", date: "2026-09-13",
     og: { en: "/assets/virtually-vtuber-cover.png", ko: "/assets/virtually-vtuber-cover.png" } },
 ];
 const ogOf = (post, lang) => post.og[lang] ?? post.og.en;
+
+// Every slide's words as plain HTML text under the deck, so readers, search engines and AI
+// assistants get the content without running the deck. Made by scripts/extract-deck-text.mjs.
+const SLIDE_TEXT_TITLE = {
+  en: "Slide text", ko: "슬라이드 내용", ja: "スライドの内容", "zh-cn": "幻灯片内容", "zh-tw": "投影片內容",
+  fr: "Texte des diapositives", de: "Folientext", es: "Texto de las diapositivas", pt: "Texto dos slides",
+  it: "Testo delle slide", ru: "Текст слайдов", ar: "نص الشرائح", hi: "स्लाइड का पाठ", th: "ข้อความในสไลด์",
+  vi: "Nội dung các trang trình bày",
+};
+const deckText = (slug, lang) =>
+  JSON.parse(readFileSync(join(HERE, "legal-blog-i18n", "decks", `${slug}.${DECK_LANGS.has(lang) ? lang : "en"}.json`), "utf8"));
+
+function slideTextSection(post, lang) {
+  const slides = deckText(post.slug, lang);
+  const t = T[lang].ui;
+  const note = DECK_LANGS.has(lang) || !t.deckLanguageNote ? "" : `\n            <p class="deck-transcript-note">${esc(t.deckLanguageNote)}</p>`;
+  const items = slides.map((s, i) => {
+    const lines = s.text ? `\n                <p>${s.text.split("\n").map(esc).join("<br />")}</p>` : "";
+    return `              <li>\n                <h3><span>${i + 1}.</span> ${esc(s.title)}</h3>${lines}\n              </li>`;
+  });
+  return `        <section class="deck-transcript" aria-labelledby="deck-transcript-title">
+          <div class="section-inner">
+            <details>
+              <summary><h2 id="deck-transcript-title">${esc(SLIDE_TEXT_TITLE[lang] ?? SLIDE_TEXT_TITLE.en)}</h2></summary>${note}
+            <ol${DECK_LANGS.has(lang) ? "" : ' lang="en"'}>
+${items.join("\n")}
+            </ol>
+            </details>
+          </div>
+        </section>`;
+}
 
 // Hand-written English articles (blogs/<slug>.html); their translations sit in blogs/<lang>/<slug>.html.
 const ARTICLES = [
@@ -229,6 +260,11 @@ ${siteHeader(lang, "blog")}
         <section class="deck-post-body">
           <div class="section-inner">
 ${c.body.map((p) => `            <p>${esc(p)}</p>`).join("\n")}
+          </div>
+        </section>
+${slideTextSection(post, lang)}
+        <section class="deck-post-body">
+          <div class="section-inner">
             <p><a href="${esc(withLang("/blogs", lang))}">← ${esc(t.backToBlog)}</a></p>
           </div>
         </section>
@@ -328,7 +364,7 @@ ${a.logos.map((logo) => `                  <span><img src="/assets/${logo}" alt=
     .sort((a, b) => b.date.localeCompare(a.date))
     .map((card) => card.html)
     .join("\n");
-  return `${head({ lang, title: t.indexMetaTitle, description: t.indexMetaDescription, path: "/blogs", image: "/assets/og-image.png?v=20260420-1" })}
+  return `${head({ lang, title: t.indexMetaTitle, description: t.indexMetaDescription, path: "/blogs", image: "/assets/og-hashchat.png?v=20261112" })}
   <body>
 ${siteHeader(lang, "blog")}
 
