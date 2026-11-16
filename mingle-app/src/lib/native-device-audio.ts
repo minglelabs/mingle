@@ -69,8 +69,8 @@ export function resolveNativeDeviceAudioSupported(input: {
 // Device audio is captured only while earphone mode is on (that is where the
 // choice is made and explained) and only where it is supported (above).
 // Outside earphone mode it is captured too once the user said so in the
-// question asked when earphones go in during a session (see
-// shouldOfferDeviceAudioOnEarphonesIn).
+// question asked the first time STT listens with earphones in (see
+// resolveEarphoneListeningNotice).
 export function resolveEffectiveSttCaptureSource(input: {
   supported: boolean
   earphoneModeEnabled: boolean
@@ -82,22 +82,6 @@ export function resolveEffectiveSttCaptureSource(input: {
     && input.pick === 'device_audio'
     ? 'device_audio'
     : 'microphone'
-}
-
-// Before earphones go in, the microphone hears what other apps play through
-// the speaker; after, that sound plays in the earphones only and translation
-// of it stops. So earphones going in while a microphone-only session runs ask
-// whether to translate this device's sound too.
-export function shouldOfferDeviceAudioOnEarphonesIn(input: {
-  earphonesJustConnected: boolean
-  supported: boolean
-  sessionRunning: boolean
-  captureSource: SttCaptureSource
-}): boolean {
-  return input.earphonesJustConnected
-    && input.supported
-    && input.sessionRunning
-    && input.captureSource === 'microphone'
 }
 
 // ── Capability store (one per window, shared by every mounted room) ────────

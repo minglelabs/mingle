@@ -97,7 +97,7 @@ describe('iOS background keep-alive and live STT in the background', () => {
 
     const restart = sliceBetween(
       sttModule,
-      'private func restartAudioCapture(reason: String, bypassThrottle: Bool = false) {',
+      'private func restartAudioCapture(reason: String, bypassThrottle: Bool = false, isQuickRetry: Bool = false) {',
       'private func handleCaptureRestartFailure(',
     );
     expect(restart).not.toContain('self.emitError(');

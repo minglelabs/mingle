@@ -258,6 +258,8 @@ const LIST_PULL_REFRESH_TRIGGER_PX = 72;
 const LIST_PULL_REFRESH_MAX_PX = 108;
 const LIST_PULL_REFRESH_RESISTANCE = 0.45;
 const CONVERSATION_CREATE_BUTTON_HEIGHT_PX = 72;
+/** Bottom first-run card: title, button and its margins. */
+const FIRST_SPEAK_CARD_HEIGHT_PX = 156;
 
 let recentSearchesSnapshot = EMPTY_RECENT_SEARCHES;
 let recentSearchesSnapshotRaw = "__initial__";
@@ -2312,7 +2314,11 @@ export default function ConversationList({
         ? runtimeNativeConversationBottomInsetPx
         : resolveEffectiveNativeBannerInsetPx(runtimeNativeConversationBottomInsetPx, estimatedNativeBannerInsetPx))
     : 0;
-  const conversationListScrollPaddingBottomPx = CONVERSATION_CREATE_BUTTON_HEIGHT_PX + 20;
+  // The first-run card at the bottom is taller than the new-conversation
+  // button: rooms an existing account already has stay scrollable above it.
+  const conversationListScrollPaddingBottomPx = showFirstSpeakCard
+    ? FIRST_SPEAK_CARD_HEIGHT_PX + 20
+    : CONVERSATION_CREATE_BUTTON_HEIGHT_PX + 20;
 
   useEffect(() => {
     if (languageOnboardingPhase !== "ready") return;
@@ -5883,32 +5889,6 @@ export default function ConversationList({
               : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
-          {showFirstSpeakCard ? (
-            <div className="px-4 pb-4 pt-3">
-              <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50/90 px-5 pb-5 pt-6 text-center shadow-[0_16px_36px_rgba(245,158,11,0.12)]">
-                <p className="text-[1.35rem] font-extrabold leading-snug tracking-[-0.02em] text-slate-950">
-                  {firstRunCopy.speakTitle}
-                </p>
-                <p className="mt-1.5 text-[0.9rem] leading-snug text-slate-600">
-                  {firstRunCopy.speakHint}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleFirstSpeakRequested}
-                  disabled={actionDisabled}
-                  className="mt-4 flex h-14 w-full items-center justify-center gap-2.5 rounded-full text-[1.05rem] font-bold text-white shadow-[0_16px_32px_rgba(245,158,11,0.3)] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
-                  style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}
-                >
-                  {isCreatingConversation ? (
-                    <Loader2 size={20} className="animate-spin" strokeWidth={2.25} aria-hidden />
-                  ) : (
-                    <Mic size={20} strokeWidth={2.4} aria-hidden />
-                  )}
-                  <span>{firstRunCopy.speakButton}</span>
-                </button>
-              </div>
-            </div>
-          ) : null}
           {isHydratingConversations ? (
             <div className="flex flex-col items-center py-16 text-gray-400">
               <Loader2 size={28} className="animate-spin" />
@@ -5982,9 +5962,38 @@ export default function ConversationList({
         </div>
       </div>
 
-      {/* Before the first bubble the "say something" card is the one thing to
-          press, so the bottom button and the empty list's invite stay away. */}
-      {showFirstSpeakCard ? null : (
+      {/* Before the first bubble the "say something" card takes the bottom
+          button's place, where the thumb reaches it; the new-conversation
+          button and the empty list's invite stay away. */}
+      {showFirstSpeakCard ? (
+      <div
+        className="absolute inset-x-0 z-20 px-4 pb-3"
+        style={{
+          bottom: `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`,
+        }}
+      >
+        <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50 px-5 pb-5 pt-5 text-center shadow-[0_16px_36px_rgba(245,158,11,0.12)]">
+          <p className="text-[1.2rem] font-extrabold leading-snug tracking-[-0.02em] text-slate-950">
+            {firstRunCopy.speakTitle}
+          </p>
+          <button
+            type="button"
+            onClick={handleFirstSpeakRequested}
+            disabled={actionDisabled}
+            data-testid="conversation-list-first-speak"
+            className="mt-4 flex h-14 w-full items-center justify-center gap-2.5 rounded-full text-[1.05rem] font-bold text-white shadow-[0_16px_32px_rgba(245,158,11,0.3)] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}
+          >
+            {isCreatingConversation ? (
+              <Loader2 size={20} className="animate-spin" strokeWidth={2.25} aria-hidden />
+            ) : (
+              <Mic size={20} strokeWidth={2.4} aria-hidden />
+            )}
+            <span>{firstRunCopy.speakButton}</span>
+          </button>
+        </div>
+      </div>
+      ) : (
       <div
         className="absolute inset-x-0 z-20"
         style={{

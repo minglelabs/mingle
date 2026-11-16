@@ -97,6 +97,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'ios/v2.3.3', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.3.4', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.4.0', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v2.4.1', enablesFinalizeSourceRedetection: true },
 ] as const
 const ALLOWED_API_NAMESPACES = new Set<string>([
   DEFAULT_API_NAMESPACE,

@@ -24,7 +24,7 @@
       "phoneScreenshotsDir": "upload"
     },
     "submission": {
-      "version": "2.4.0",
+      "version": "2.4.1",
       "screenshots": {
         "ko": [
           {
@@ -542,7 +542,7 @@
         "metadata": {
           "en": {
             "promotionalText": "Make Korean friends, even before your Korean is good. Chats show in your own language and voice talks are interpreted live. Language exchange from day one.",
-            "whatsNew": "What's New in Version 2.4.0:\n• Find friends from your contacts, invite them by text, and you both follow each other\n• A simpler first run: pick your language and just start talking\n• Stability and performance improvements",
+            "whatsNew": "What's New in Version 2.4.1:\n• Better with earphones: your phone's microphone keeps hearing the people around you, and listening no longer stops when earphones go in or out\n• Stability and performance improvements",
             "description": "Make Korean friends, even before your Korean is good. That's HashChat.\n\nTalk in your own language\n• Chat messages show up in each person's own language.\n• Voice talks are interpreted live, so you can just speak.\n• Language exchange works from day one. Pick up Korean as you chat.\n\nHonest conversations\n• Make real friends without worrying about creeps or scammers.\n• Report or block anyone in one tap, and our team reviews reports.\n\nThings to enjoy together\n• Read your friends' posts in your own language and leave comments.\n• Play mini games like Hash Rush with your friends.\n\nTips from local friends\n• Planning a trip to Korea? Make local friends before you go.\n• Ask them about the hair salons, clinics and restaurants they love.\n• Need a booking? Make the call, and HashChat interprets it for you.\n\nFor K-pop and K-drama fans, Korean learners, and anyone heading to Korea.\n\nAlso in HashChat: live voice translator, simultaneous interpretation, real-time captions, call translation and multilingual chat translation. HashChat (Mingle): the easiest translator for your global hangout.",
             "keywords": "language,exchange,penpal,learn,korea,travel,kpop,chat,translator,easiest,global,hangout,mingle",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -550,7 +550,7 @@
           },
           "ar": {
             "promotionalText": "كوّن صداقات مع كوريين حتى لو كانت لغتك الكورية ضعيفة. تظهر الدردشة بلغتك، وتُترجم المحادثات الصوتية مباشرة. ابدأ التبادل اللغوي من اليوم الأول.",
-            "whatsNew": "الجديد في الإصدار 2.4.0:\n• اعثر على أصدقائك من جهات الاتصال وادعهم برسالة، وستتابعان بعضكما تلقائيًا\n• بداية أبسط: اختر لغتك وابدأ الكلام مباشرة\n• تحسينات في الثبات والأداء",
+            "whatsNew": "الجديد في الإصدار 2.4.1:\n• أفضل مع السماعات: يواصل ميكروفون الهاتف سماع من حولك، ولا يتوقف الاستماع عند توصيل السماعات أو فصلها\n• تحسينات في الثبات والأداء",
             "description": "كوّن صداقات مع كوريين حتى لو كانت لغتك الكورية ما زالت ضعيفة. هذا هو HashChat.\n\nتحدّث بلغتك\n• تظهر رسائل الدردشة بلغة كل شخص.\n• تُترجم المحادثات الصوتية مباشرة، فقط تحدّث.\n• التبادل اللغوي يعمل من اليوم الأول. تعلّم الكورية وأنت تدردش.\n\nمحادثات صادقة\n• كوّن صداقات حقيقية دون القلق من المتحرشين أو المحتالين.\n• أبلغ أو احظر بلمسة واحدة، وفريقنا يراجع البلاغات.\n\nأشياء نستمتع بها معًا\n• اقرأ منشورات أصدقائك بلغتك وعلّق عليها.\n• العب ألعابًا صغيرة مثل Hash Rush مع أصدقائك.\n\nنصائح من أصدقاء محليين\n• تخطط لرحلة إلى كوريا؟ كوّن أصدقاء محليين قبل السفر.\n• اسألهم عن صالونات الشعر والعيادات والمطاعم المفضلة لديهم.\n• تحتاج إلى حجز؟ أجرِ المكالمة وسيترجمها HashChat لك.\n\nلمحبي الكيبوب والدراما الكورية، ومتعلمي اللغة الكورية، وكل من يخطط لزيارة كوريا.\n\nأيضًا في HashChat: مترجم صوتي مباشر، ترجمة متزامنة، تسميات توضيحية مباشرة، ترجمة المكالمات ودردشة متعددة اللغات. HashChat (Mingle) · The Easiest Translator · Global Hangout",
             "keywords": "تعلم الكورية,كوريا,سفر,كيبوب,مترجم صوتي,ترجمة متزامنة,تسميات مباشرة,hangout,mingle,مينغل,هاش شات",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -558,7 +558,7 @@
           },
           "de": {
             "promotionalText": "Finde koreanische Freunde, auch wenn dein Koreanisch noch holprig ist. Chats erscheinen in deiner Sprache, Sprachgespräche werden live gedolmetscht.",
-            "whatsNew": "Neu in Version 2.4.0:\n• Freunde aus deinen Kontakten finden, per SMS einladen und euch gegenseitig folgen\n• Einfacherer Einstieg: Sprache wählen und direkt lossprechen\n• Verbesserungen bei Stabilität und Leistung",
+            "whatsNew": "Neu in Version 2.4.1:\n• Besser mit Kopfhörern: Das Handy-Mikrofon hört die Menschen um dich herum weiter, und das Zuhören stoppt nicht mehr beim Ein- oder Ausstecken\n• Verbesserungen bei Stabilität und Leistung",
             "description": "Finde koreanische Freunde, auch wenn dein Koreanisch noch holprig ist. Das ist HashChat.\n\nSprich in deiner Sprache\n• Chatnachrichten erscheinen in der Sprache jeder Person.\n• Sprachgespräche werden live gedolmetscht – du sprichst einfach.\n• Sprachaustausch klappt ab dem ersten Tag. Lerne Koreanisch beim Chatten.\n\nEhrliche Gespräche\n• Finde echte Freunde, ohne dir Sorgen um Belästiger oder Betrüger zu machen.\n• Melden oder Blockieren mit einem Tipp; unser Team prüft Meldungen.\n\nGemeinsam Spaß haben\n• Lies die Beiträge deiner Freunde in deiner Sprache und kommentiere sie.\n• Spiele Minispiele wie Hash Rush mit deinen Freunden.\n\nTipps von Freunden vor Ort\n• Reise nach Korea geplant? Finde schon vorher Freunde vor Ort.\n• Frag sie nach ihren liebsten Friseuren, Kliniken und Restaurants.\n• Reservieren? Ruf einfach an, HashChat dolmetscht das Gespräch.\n\nFür K-Pop- und K-Drama-Fans, alle, die Koreanisch lernen, und alle, die nach Korea reisen. Dein Sprach-Tandem, ganz ohne Hürden.\n\nAußerdem in HashChat: Live-Sprachübersetzer, Simultanübersetzung, Live-Untertitel, Anrufübersetzung und mehrsprachiger Chat. HashChat (Mingle) · The Easiest Translator · Global Hangout",
             "keywords": "Tandem,lernen,Korea,Reise,kpop,Sprachübersetzer,Live-Untertitel,global,hangout,mingle,easiest",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -566,7 +566,7 @@
           },
           "es": {
             "promotionalText": "Haz amigos coreanos aunque tu coreano aún no sea bueno. Los chats se ven en tu idioma y la voz se interpreta en vivo. Intercambio de idiomas desde el primer día.",
-            "whatsNew": "Novedades de la versión 2.4.0:\n• Encuentra amigos en tus contactos, invítalos por SMS y os seguiréis mutuamente\n• Un inicio más sencillo: elige tu idioma y empieza a hablar\n• Mejoras de estabilidad y rendimiento",
+            "whatsNew": "Novedades de la versión 2.4.1:\n• Mejor con auriculares: el micrófono del teléfono sigue oyendo a quienes te rodean y la escucha ya no se detiene al conectar o quitar los auriculares\n• Mejoras de estabilidad y rendimiento",
             "description": "Haz amigos coreanos, aunque tu coreano todavía no sea bueno. Eso es HashChat.\n\nHabla en tu idioma\n• Los mensajes del chat se ven en el idioma de cada persona.\n• Las charlas de voz se interpretan en vivo: solo tienes que hablar.\n• El intercambio de idiomas funciona desde el primer día. Aprende coreano mientras chateas.\n\nConversaciones sinceras\n• Haz amigos de verdad sin preocuparte por acosadores ni estafadores.\n• Denuncia o bloquea con un toque; nuestro equipo revisa las denuncias.\n\nPara disfrutar juntos\n• Lee las publicaciones de tus amigos en tu idioma y coméntalas.\n• Juega minijuegos como Hash Rush con tus amigos.\n\nConsejos de amigos locales\n• ¿Vas a viajar a Corea? Haz amigos locales antes de ir.\n• Pregúntales por sus peluquerías, clínicas y restaurantes favoritos.\n• ¿Hay que reservar? Haz la llamada y HashChat la interpreta por ti.\n\nPara fans del K-pop y los K-dramas, estudiantes de coreano y quien planea un viaje a Corea.\n\nTambién en HashChat: traductor de voz en vivo, intérprete simultáneo, subtítulos en tiempo real, traducción de llamadas y chat multilingüe. HashChat (Mingle) · The Easiest Translator · Global Hangout",
             "keywords": "aprender,corea,viaje,kpop,traductor,intérprete,subtítulos,global,hangout,mingle,easiest,translator",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -574,7 +574,7 @@
           },
           "fr": {
             "promotionalText": "Faites-vous des amis coréens, même si votre coréen est encore hésitant. Les chats s'affichent dans votre langue, la voix est interprétée en direct.",
-            "whatsNew": "Nouveautés de la version 2.4.0 :\n• Retrouvez vos amis dans vos contacts, invitez-les par SMS et suivez-vous mutuellement\n• Un démarrage plus simple : choisissez votre langue et parlez tout de suite\n• Améliorations de la stabilité et des performances",
+            "whatsNew": "Nouveautés de la version 2.4.1 :\n• Mieux avec des écouteurs : le micro du téléphone continue d'entendre les personnes autour de vous, et l'écoute ne s'arrête plus quand vous branchez ou retirez les écouteurs\n• Améliorations de la stabilité et des performances",
             "description": "Faites-vous des amis coréens, même si votre coréen est encore hésitant. C'est ça, HashChat.\n\nParlez dans votre langue\n• Les messages s'affichent dans la langue de chacun.\n• Les conversations vocales sont interprétées en direct : il suffit de parler.\n• L'échange linguistique marche dès le premier jour. Apprenez le coréen en discutant.\n\nDes conversations sincères\n• Faites-vous de vrais amis sans craindre les pervers ni les arnaqueurs.\n• Signalez ou bloquez en un geste ; notre équipe examine les signalements.\n\nÀ partager ensemble\n• Lisez les publications de vos amis dans votre langue et commentez-les.\n• Jouez à des mini-jeux comme Hash Rush avec vos amis.\n\nLes bons plans des amis locaux\n• Un voyage en Corée en vue ? Faites-vous des amis sur place avant de partir.\n• Demandez-leur leurs coiffeurs, cliniques et restaurants préférés.\n• Besoin de réserver ? Passez l'appel, HashChat l'interprète pour vous.\n\nPour les fans de K-pop et de K-dramas, ceux qui apprennent le coréen et ceux qui préparent un voyage en Corée.\n\nAussi dans HashChat : traducteur vocal en direct, interprétation simultanée, sous-titres en temps réel, traduction des appels et chat multilingue. HashChat (Mingle) · The Easiest Translator · Global Hangout",
             "keywords": "apprendre,corée,voyage,traducteur,interprète,sous-titres,global,hangout,mingle,easiest,translator",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -582,7 +582,7 @@
           },
           "hi": {
             "promotionalText": "कोरियाई कमज़ोर हो तब भी कोरियाई दोस्त बनाएं। चैट आपकी भाषा में दिखती है और वॉइस बातचीत का लाइव अनुवाद होता है। पहले दिन से भाषा एक्सचेंज।",
-            "whatsNew": "संस्करण 2.4.0 में नया क्या है:\n• संपर्कों से दोस्त ढूँढें, SMS से बुलाएँ और एक-दूसरे को फ़ॉलो करें\n• आसान शुरुआत: अपनी भाषा चुनें और सीधे बोलना शुरू करें\n• स्थिरता और प्रदर्शन में सुधार",
+            "whatsNew": "संस्करण 2.4.1 में नया क्या है:\n• ईयरफ़ोन के साथ बेहतर: फ़ोन का माइक्रोफ़ोन आसपास के लोगों को सुनता रहता है, और ईयरफ़ोन लगाने या निकालने पर सुनना नहीं रुकता\n• स्थिरता और प्रदर्शन में सुधार",
             "description": "कोरियाई अभी अच्छी न हो, तब भी कोरियाई दोस्त बनाएं। यही है HashChat.\n\nअपनी भाषा में बात करें\n• चैट मैसेज हर व्यक्ति की अपनी भाषा में दिखते हैं।\n• वॉइस बातचीत का लाइव अनुवाद होता है, बस बोलिए।\n• पहले दिन से भाषा एक्सचेंज। चैट करते-करते कोरियाई सीखें।\n\nसच्ची बातचीत\n• बदतमीज़ लोगों या ठगों की चिंता किए बिना सच्चे दोस्त बनाएं।\n• एक टैप में रिपोर्ट या ब्लॉक करें, हमारी टीम रिपोर्ट की जांच करती है।\n\nसाथ में मज़ा\n• दोस्तों की पोस्ट अपनी भाषा में पढ़ें और कमेंट करें।\n• दोस्तों के साथ Hash Rush जैसे मिनी गेम खेलें।\n\nलोकल दोस्तों की सलाह\n• कोरिया घूमने का प्लान है? जाने से पहले लोकल दोस्त बनाएं।\n• उनसे पसंदीदा हेयर सैलून, क्लिनिक और रेस्टोरेंट पूछें।\n• बुकिंग करनी है? कॉल करें, HashChat उसका अनुवाद कर देगा।\n\nK-pop और K-drama के फैंस, कोरियाई सीखने वालों और कोरिया जाने वालों के लिए।\n\nHashChat में और भी: लाइव वॉइस ट्रांसलेटर, साथ-साथ अनुवाद (सिमल्टेनियस इंटरप्रिटेशन), रियल-टाइम कैप्शन, कॉल अनुवाद और बहुभाषी चैट। HashChat (Mingle) · The Easiest Translator · Global Hangout",
             "keywords": "कोरिया,यात्रा,वॉइसअनुवाद,लाइवकैप्शन,कॉलअनुवाद,global,hangout,mingle,मिंगल,हैशचैट,easiest,translator",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -590,7 +590,7 @@
           },
           "it": {
             "promotionalText": "Fai amicizia con coreani anche se il tuo coreano è ancora incerto. Le chat appaiono nella tua lingua e la voce viene interpretata dal vivo. Scambio dal primo giorno.",
-            "whatsNew": "Novità della versione 2.4.0:\n• Trova amici nei contatti, invitali via SMS e seguitevi a vicenda\n• Un avvio più semplice: scegli la lingua e inizia subito a parlare\n• Miglioramenti di stabilità e prestazioni",
+            "whatsNew": "Novità della versione 2.4.1:\n• Meglio con gli auricolari: il microfono del telefono continua a sentire chi ti sta intorno e l'ascolto non si interrompe più quando colleghi o togli gli auricolari\n• Miglioramenti di stabilità e prestazioni",
             "description": "Fai amici coreani, anche se il tuo coreano è ancora incerto. Questo è HashChat.\n\nParla nella tua lingua\n• I messaggi in chat appaiono nella lingua di ciascuno.\n• Le chiacchierate vocali vengono interpretate dal vivo: basta parlare.\n• Lo scambio linguistico funziona dal primo giorno. Impara il coreano chattando.\n\nConversazioni sincere\n• Fai amicizie vere senza preoccuparti di molestatori o truffatori.\n• Segnala o blocca con un tocco; il nostro team esamina le segnalazioni.\n\nDa vivere insieme\n• Leggi i post dei tuoi amici nella tua lingua e commentali.\n• Gioca a minigiochi come Hash Rush con i tuoi amici.\n\nI consigli degli amici del posto\n• Stai pianificando un viaggio in Corea? Fatti degli amici del posto prima di partire.\n• Chiedi loro i parrucchieri, le cliniche e i ristoranti preferiti.\n• Devi prenotare? Fai la telefonata e HashChat la interpreta per te.\n\nPer i fan del K-pop e dei K-drama, per chi studia coreano e per chi sta per partire per la Corea.\n\nAnche in HashChat: traduttore vocale dal vivo, interpretazione simultanea, sottotitoli in tempo reale, traduzione delle chiamate e chat multilingue. HashChat (Mingle) · The Easiest Translator · Global Hangout",
             "keywords": "tandem,imparare,corea,viaggio,kpop,traduttore,interprete,sottotitoli,global,hangout,mingle,easiest",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -598,7 +598,7 @@
           },
           "pt": {
             "promotionalText": "Faça amigos coreanos mesmo que seu coreano ainda não seja bom. As conversas aparecem no seu idioma e a voz é interpretada ao vivo. Intercâmbio desde o 1º dia.",
-            "whatsNew": "Novidades da versão 2.4.0:\n• Encontre amigos nos seus contatos, convide por SMS e sigam um ao outro\n• Início mais simples: escolha seu idioma e comece a falar\n• Melhorias de estabilidade e desempenho",
+            "whatsNew": "Novidades da versão 2.4.1:\n• Melhor com fone: o microfone do celular continua ouvindo as pessoas ao seu redor, e a escuta não para mais ao conectar ou tirar o fone\n• Melhorias de estabilidade e desempenho",
             "description": "Faça amigos coreanos, mesmo que seu coreano ainda não seja bom. Isso é o HashChat.\n\nFale no seu idioma\n• As mensagens do chat aparecem no idioma de cada pessoa.\n• As conversas por voz são interpretadas ao vivo: é só falar.\n• O intercâmbio de idiomas funciona desde o primeiro dia. Aprenda coreano conversando.\n\nConversas sinceras\n• Faça amizades de verdade sem se preocupar com assediadores ou golpistas.\n• Denuncie ou bloqueie com um toque; nossa equipe analisa as denúncias.\n\nPara curtir juntos\n• Leia as publicações dos seus amigos no seu idioma e comente.\n• Jogue minigames como o Hash Rush com seus amigos.\n\nDicas de amigos locais\n• Vai viajar para a Coreia? Faça amigos locais antes de ir.\n• Peça indicações de salões, clínicas e restaurantes favoritos deles.\n• Precisa reservar? Faça a ligação e o HashChat interpreta para você.\n\nPara fãs de K-pop e K-drama, quem estuda coreano e quem está planejando uma viagem para a Coreia.\n\nTambém no HashChat: tradutor de voz ao vivo, interpretação simultânea, legendas em tempo real, tradução de chamadas e chat multilíngue. HashChat (Mingle) · The Easiest Translator · Global Hangout",
             "keywords": "intercâmbio,aprender,coreia,viagem,tradutor,intérprete,legendas,global,hangout,mingle,translator",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -606,7 +606,7 @@
           },
           "ru": {
             "promotionalText": "Заводите друзей-корейцев, даже если корейский пока слабый. Чат показывается на вашем языке, а голос переводится вживую. Языковой обмен с первого дня.",
-            "whatsNew": "Что нового в версии 2.4.0:\n• Находите друзей в контактах, приглашайте по SMS и подписывайтесь друг на друга\n• Простое начало: выберите язык и сразу начните говорить\n• Повышение стабильности и производительности",
+            "whatsNew": "Что нового в версии 2.4.1:\n• Лучше с наушниками: микрофон телефона продолжает слышать людей вокруг, а прослушивание больше не прерывается, когда вы подключаете или снимаете наушники\n• Улучшения стабильности и производительности",
             "description": "Заводите друзей-корейцев, даже если ваш корейский пока слабый. Это HashChat.\n\nГоворите на своём языке\n• Сообщения в чате показываются на языке каждого собеседника.\n• Голосовые разговоры переводятся вживую — просто говорите.\n• Языковой обмен работает с первого дня. Учите корейский прямо в переписке.\n\nИскренние разговоры\n• Заводите настоящих друзей, не опасаясь извращенцев и мошенников.\n• Жалоба или блокировка в одно касание, а наша команда проверяет жалобы.\n\nЧем заняться вместе\n• Читайте посты друзей на своём языке и комментируйте их.\n• Играйте с друзьями в мини-игры, например Hash Rush.\n\nСоветы местных друзей\n• Собираетесь в Корею? Найдите местных друзей ещё до поездки.\n• Спросите у них, какие парикмахерские, клиники и рестораны они любят.\n• Нужно забронировать? Позвоните, а HashChat переведёт разговор.\n\nДля фанатов K-pop и дорам, тех, кто учит корейский, и всех, кто собирается в Корею.\n\nТакже в HashChat: живой голосовой переводчик, синхронный перевод, субтитры в реальном времени, перевод звонков и многоязычный чат. HashChat (Mingle) · The Easiest Translator · Global Hangout",
             "keywords": "корейский,Корея,туризм,переводчик,субтитры,синхроперевод,global,hangout,mingle,Мингл,ХэшЧат,Хэш,Чат",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -614,7 +614,7 @@
           },
           "ko": {
             "promotionalText": "외국인 친구, 말이 안 통해도 사귈 수 있어요. 채팅은 서로 자기 언어로 보이고, 음성 대화는 실시간으로 통역돼요. 첫날부터 언어교환을 시작해 보세요.",
-            "whatsNew": "버전 2.4.0 업데이트:\n• 연락처에서 친구를 찾고 문자로 초대하면 서로 자동 팔로우돼요\n• 더 쉬워진 시작: 언어만 고르고 바로 말해 보세요\n• 안정성 및 성능 개선",
+            "whatsNew": "버전 2.4.1 업데이트:\n• 이어폰을 껴도 휴대폰 마이크로 주변 사람 말까지 잘 들어요. 이어폰을 꽂거나 빼도 듣기가 끊기지 않아요\n• 안정성 및 성능 개선",
             "description": "외국인 친구, 말이 안 통해도 사귈 수 있어요. HashChat(해시챗)\n\n내 언어로 편하게 대화해요\n• 채팅은 서로 자기 언어로 보여요.\n• 음성 대화는 실시간으로 통역돼요. 그냥 말하면 돼요.\n• 외국어가 서툴러도 첫날부터 언어교환이 돼요.\n\n진솔한 대화\n• 변태나 사기꾼 걱정 없이 진짜 친구를 사귀는 곳이에요.\n• 신고와 차단은 한 번에, 운영진이 신고를 확인해요.\n\n함께 즐길 거리\n• 친구들의 일상 글을 내 언어로 읽고 댓글을 달아요.\n• 친구와 미니게임 해시 러시(Hash Rush)도 함께해요.\n\n현지 친구의 추천\n• 외국인 친구에게 한국의 맛집과 명소를 소개해 주세요.\n• 해외여행 갈 땐 현지 친구에게 미용실·병원·맛집을 추천받아요.\n• 예약 전화도 HashChat 통역으로 걸어 보세요.\n\n외국어를 공부하는 분, 외국인 펜팔을 찾는 분, 해외여행을 앞둔 분께 추천해요.\n\n그 밖의 기능: 실시간 음성 번역기, 동시통역, 실시간 자막, 통화 통역, 다국어 채팅 번역. HashChat(해시챗, 밍글): 제일 쉬운 번역기, 글로벌 친구 만들기.",
             "keywords": "펜팔,외국어,해외여행,동시통역,대화통역,통화통역,실시간자막,번역기,통역,밍글,해시챗,해쉬챗,해시,해쉬,챗,채팅,만들기,제일,쉬운,일본,한국,다국어번역,보이스번역,자동언어감지",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -622,7 +622,7 @@
           },
           "zh-cn": {
             "promotionalText": "韩语还不好，也能交到韩国朋友。聊天各自用母语显示，语音对话实时口译。第一天就能开始语言交换。",
-            "whatsNew": "版本 2.4.0 更新：\n• 从通讯录找到朋友，用短信邀请，双方自动互相关注\n• 更简单的开始：选好语言，直接开口说\n• 稳定性与性能提升",
+            "whatsNew": "版本 2.4.1 更新：\n• 戴耳机也好用：手机麦克风继续听清身边的人，插拔耳机时收听也不会中断\n• 稳定性与性能提升",
             "description": "韩语还不好，也能交到韩国朋友。HashChat（哈希聊天）\n\n用自己的语言聊天\n• 聊天消息会以各自的语言显示。\n• 语音对话实时口译，开口说就行。\n• 第一天就能语言交换，边聊边学韩语。\n\n真诚的交流\n• 不用担心变态或骗子，在这里交到真正的朋友。\n• 一键举报和屏蔽，运营团队会审核举报。\n\n一起玩\n• 用自己的语言阅读朋友的动态，留言互动。\n• 和朋友一起玩小游戏 Hash Rush。\n\n当地朋友的推荐\n• 去韩国之前，先交几个当地朋友。\n• 问问他们推荐的美发店、诊所和餐厅。\n• 需要预约？用 HashChat 口译打电话就好。\n\n适合韩流、韩剧粉丝，学韩语的人，以及准备去韩国旅行的人。\n\n其他功能：实时语音翻译器、同声传译、实时字幕、通话口译、多语言聊天翻译。HashChat（明格尔 Mingle）：最简单的翻译器，全球交友。",
             "keywords": "笔友,学韩语,韩国旅行,韩流,韩剧,同声传译,对话口译,通话口译,实时字幕,翻译器,语音翻译,多语言翻译,global,hangout,mingle,明格尔,哈希聊天,最简单,外国朋友,交友",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -630,7 +630,7 @@
           },
           "zh-tw": {
             "promotionalText": "韓語還不好，也能交到韓國朋友。聊天各自用母語顯示，語音對話即時口譯。第一天就能開始語言交換。",
-            "whatsNew": "版本 2.4.0 更新：\n• 從通訊錄找到朋友，用簡訊邀請，雙方自動互相追蹤\n• 更簡單的開始：選好語言，直接開口說\n• 穩定性與效能提升",
+            "whatsNew": "版本 2.4.1 更新：\n• 戴耳機也好用：手機麥克風繼續聽清身邊的人，插拔耳機時收聽也不會中斷\n• 穩定性與效能提升",
             "description": "韓語還不好，也能交到韓國朋友。HashChat（哈希聊天）\n\n用自己的語言聊天\n• 聊天訊息會以各自的語言顯示。\n• 語音對話即時口譯，開口說就好。\n• 第一天就能語言交換，邊聊邊學韓語。\n\n真誠的交流\n• 不用擔心變態或騙子，在這裡交到真正的朋友。\n• 一鍵檢舉和封鎖，營運團隊會審核檢舉。\n\n一起玩\n• 用自己的語言閱讀朋友的動態，留言互動。\n• 和朋友一起玩小遊戲 Hash Rush。\n\n當地朋友的推薦\n• 去韓國之前，先交幾個當地朋友。\n• 問問他們推薦的美髮店、診所和餐廳。\n• 需要預約？用 HashChat 口譯打電話就好。\n\n適合韓流、韓劇粉絲，學韓語的人，以及準備去韓國旅遊的人。\n\n其他功能：即時語音翻譯器、同步口譯、即時字幕、通話口譯、多語聊天翻譯。HashChat（明格爾 Mingle）：最簡單的翻譯器，全球交友。",
             "keywords": "筆友,學韓語,韓國旅遊,韓流,韓劇,同步口譯,對話口譯,通話口譯,即時字幕,翻譯器,語音翻譯,多語翻譯,global,hangout,mingle,明格爾,哈希聊天,最簡單,外國朋友,交友",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -638,7 +638,7 @@
           },
           "ja": {
             "promotionalText": "韓国語が苦手でも、韓国人の友達ができます。チャットはお互いの言語で表示、音声の会話はリアルタイムで通訳。初日から言語交換を始めましょう。",
-            "whatsNew": "バージョン 2.4.0 の更新内容：\n• 連絡先から友だちを見つけてSMSで招待、お互いに自動でフォローされます\n• かんたんスタート：言語を選んで、すぐに話してみましょう\n• 安定性とパフォーマンスの向上",
+            "whatsNew": "バージョン 2.4.1 の更新内容：\n• イヤホンでも快適に：スマホのマイクが周りの人の声も聞き取り、イヤホンの抜き差しでも聞き取りが止まりません\n• 安定性とパフォーマンスの向上",
             "description": "韓国語がまだ上手じゃなくても、韓国人の友達ができる。HashChat（ハッシュチャット）\n\n自分の言葉で話せる\n• チャットはお互いの言語で表示されます。\n• 音声の会話はリアルタイムで通訳。話すだけでOKです。\n• 初日から言語交換ができて、話しながら韓国語が身につきます。\n\n本音で話せる場所\n• 変な人や詐欺を心配せずに、本当の友達をつくれる場所です。\n• 通報・ブロックはワンタップ。運営チームが通報を確認します。\n\n一緒に楽しめる\n• 友達の投稿を自分の言語で読んで、コメントできます。\n• 友達とミニゲーム「Hash Rush」で遊べます。\n\n現地の友達のおすすめ\n• 韓国旅行の前に、現地の友達をつくっておきましょう。\n• 美容室、病院、おいしいお店をおすすめしてもらえます。\n• 予約の電話も、HashChatの通訳でかけられます。\n\nK-POPや韓国ドラマが好きな方、韓国語を勉強中の方、韓国旅行を予定している方におすすめです。\n\nそのほかの機能：リアルタイム音声翻訳機、同時通訳、リアルタイム字幕、通話通訳、多言語チャット翻訳。HashChat（ミングル）：いちばん簡単な翻訳アプリで、世界中の友達づくり。",
             "keywords": "ペンパル,韓国語勉強,韓国旅行,同時通訳,会話通訳,通話通訳,リアルタイム字幕,翻訳機,音声翻訳,多言語翻訳,ミングル,ハッシュチャット,ハッシュ,チャット,づくり,簡単,いちばん,日韓",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -646,7 +646,7 @@
           },
           "vi": {
             "promotionalText": "Kết bạn với người Hàn dù tiếng Hàn của bạn chưa giỏi. Tin nhắn hiện bằng ngôn ngữ của bạn, nói chuyện bằng giọng được phiên dịch trực tiếp.",
-            "whatsNew": "Tính năng mới trong phiên bản 2.4.0:\n• Tìm bạn bè từ danh bạ, mời qua tin nhắn và tự động theo dõi nhau\n• Bắt đầu đơn giản hơn: chọn ngôn ngữ và nói ngay\n• Cải thiện độ ổn định và hiệu năng",
+            "whatsNew": "Tính năng mới trong phiên bản 2.4.1:\n• Tốt hơn khi đeo tai nghe: micrô điện thoại vẫn nghe rõ người xung quanh, và việc nghe không còn bị ngắt khi cắm hoặc tháo tai nghe\n• Cải thiện độ ổn định và hiệu suất",
             "description": "Kết bạn với người Hàn, dù tiếng Hàn của bạn chưa giỏi. Đó là HashChat.\n\nNói bằng ngôn ngữ của bạn\n• Tin nhắn hiện bằng ngôn ngữ của mỗi người.\n• Trò chuyện bằng giọng nói được phiên dịch trực tiếp, cứ nói thôi.\n• Trao đổi ngôn ngữ ngay từ ngày đầu. Vừa chat vừa học tiếng Hàn.\n\nTrò chuyện chân thành\n• Kết bạn thật lòng mà không phải lo kẻ biến thái hay lừa đảo.\n• Báo cáo hoặc chặn chỉ với một chạm, đội ngũ của chúng tôi xem xét các báo cáo.\n\nCùng nhau vui vẻ\n• Đọc bài đăng của bạn bè bằng ngôn ngữ của bạn và bình luận.\n• Chơi minigame như Hash Rush cùng bạn bè.\n\nGợi ý từ bạn bè địa phương\n• Sắp du lịch Hàn Quốc? Kết bạn với người địa phương trước khi đi.\n• Hỏi họ về tiệm làm tóc, phòng khám và quán ăn họ yêu thích.\n• Cần đặt chỗ? Cứ gọi điện, HashChat sẽ phiên dịch giúp bạn.\n\nDành cho fan K-pop và phim Hàn, người học tiếng Hàn và ai sắp đến Hàn Quốc.\n\nNgoài ra HashChat còn có: dịch giọng nói trực tiếp, phiên dịch song song, phụ đề thời gian thực, dịch cuộc gọi và chat đa ngôn ngữ. HashChat (Mingle) · The Easiest Translator · Global Hangout",
             "keywords": "học tiếng,du lịch,phiên dịch,dịchgiọngnói,phụđề,dịchtứcthì,global,hangout,mingle,easiest,translator",
             "supportUrl": "https://hashchat.minglelabs.app",
@@ -654,7 +654,7 @@
           },
           "th": {
             "promotionalText": "หาเพื่อนคนเกาหลีได้ แม้ภาษาเกาหลียังไม่เก่ง แชตแสดงเป็นภาษาของคุณ คุยด้วยเสียงก็แปลสด เริ่มแลกเปลี่ยนภาษาได้ตั้งแต่วันแรก",
-            "whatsNew": "มีอะไรใหม่ในเวอร์ชัน 2.4.0:\n• ค้นหาเพื่อนจากรายชื่อติดต่อ เชิญทาง SMS แล้วติดตามกันโดยอัตโนมัติ\n• เริ่มต้นง่ายขึ้น: เลือกภาษาแล้วพูดได้เลย\n• ปรับปรุงความเสถียรและประสิทธิภาพ",
+            "whatsNew": "มีอะไรใหม่ในเวอร์ชัน 2.4.1:\n• ดีขึ้นเมื่อใช้หูฟัง: ไมโครโฟนของโทรศัพท์ยังได้ยินคนรอบตัว และการฟังไม่หยุดเมื่อเสียบหรือถอดหูฟัง\n• ปรับปรุงความเสถียรและประสิทธิภาพ",
             "description": "ภาษาเกาหลียังไม่เก่ง ก็มีเพื่อนคนเกาหลีได้ นี่คือ HashChat\n\nคุยด้วยภาษาของคุณ\n• ข้อความแชตแสดงเป็นภาษาของแต่ละคน\n• คุยด้วยเสียงก็แปลสดให้ทันที แค่พูดออกมา\n• แลกเปลี่ยนภาษาได้ตั้งแต่วันแรก เรียนภาษาเกาหลีไปพร้อมกับการแชต\n\nคุยกันอย่างจริงใจ\n• หาเพื่อนแท้ได้ โดยไม่ต้องกังวลเรื่องคนโรคจิตหรือมิจฉาชีพ\n• รายงานหรือบล็อกได้ในแตะเดียว และทีมงานจะตรวจสอบรายงาน\n\nสนุกไปด้วยกัน\n• อ่านโพสต์ของเพื่อนเป็นภาษาของคุณ และแสดงความคิดเห็นได้\n• เล่นมินิเกมอย่าง Hash Rush กับเพื่อน\n\nคำแนะนำจากเพื่อนท้องถิ่น\n• วางแผนเที่ยวเกาหลี? หาเพื่อนท้องถิ่นไว้ก่อนเดินทาง\n• ถามร้านทำผม คลินิก และร้านอาหารที่เพื่อนชอบ\n• ต้องจองไหม? โทรได้เลย HashChat ช่วยแปลให้\n\nสำหรับแฟน K-pop และซีรีส์เกาหลี คนที่เรียนภาษาเกาหลี และทุกคนที่กำลังจะไปเกาหลี\n\nใน HashChat ยังมี: นักแปลเสียงสด ล่ามแปลพร้อมกัน ซับไตเติลเรียลไทม์ แปลสายโทร และแชตหลายภาษา HashChat (Mingle) · The Easiest Translator · Global Hangout",
             "keywords": "เรียนเกาหลี,เที่ยวเกาหลี,แปลเสียง,ซับสด,ล่าม,global,hangout,mingle,มิงเกิล,แฮชแชท,easiest,translator",
             "supportUrl": "https://hashchat.minglelabs.app",

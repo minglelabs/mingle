@@ -16,8 +16,8 @@ import {
   type EarphoneMicrophonePick,
 } from '@/lib/native-earphone-microphone'
 
-// The microphone pick asked once when earphones first go in, changed again
-// later from the room menu or my page. Shown only on a shell that can switch.
+// The microphone pick, changed from the room menu or my page (the phone's
+// microphone until then). Shown only on a shell that can switch.
 export function useEarphoneMicrophoneSetting() {
   const capable = useSyncExternalStore(
     subscribeNativeEarphoneMicrophoneCapability,
@@ -39,21 +39,32 @@ export function earphoneMicrophonePickLabel(
   return pick === 'earphone' ? copy.microphoneEarphoneLabel : copy.microphonePhoneLabel
 }
 
-// A menu row (rendered by the caller, in its own style) plus the dialog it opens.
+// A menu row (rendered by the caller, in its own style) plus the dialog it
+// opens. `open`/`onOpenChange` let a caller keep the dialog up after its row
+// goes away (the room's one-time hint toast).
 export function EarphoneMicrophoneSettingControl({
   copy,
   renderRow,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   copy: LivePhoneDemoEarphoneModeCopy
   renderRow: (input: { valueLabel: string; open: () => void }) => ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const { capable, pick } = useEarphoneMicrophoneSetting()
-  const [open, setOpen] = useState(false)
-  const close = useCallback(() => setOpen(false), [])
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = controlledOpen ?? ownOpen
+  const setOpen = useCallback((next: boolean) => {
+    setOwnOpen(next)
+    onOpenChange?.(next)
+  }, [onOpenChange])
+  const close = useCallback(() => setOpen(false), [setOpen])
   const confirm = useCallback((next: EarphoneMicrophonePick) => {
     writeEarphoneMicrophonePick(next)
     setOpen(false)
-  }, [])
+  }, [setOpen])
   if (!capable) return null
   return (
     <>
