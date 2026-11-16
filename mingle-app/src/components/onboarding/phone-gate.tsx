@@ -7,6 +7,7 @@ import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
 import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { resolvePhoneGateCopy } from "@/i18n/phone-gate-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { resolveDeviceIdentityHeaders } from "@/lib/native-device-identity";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 
@@ -33,7 +34,7 @@ export default function PhoneGate({ locale, onAccess }: { locale: string; onAcce
     setSheetOpen(false);
     captureMingleClientEvent("mingle_first_run_step", { step: "phone_gate_passed" });
     try {
-      const response = await fetch(`${buildClientApiPath("/account/access")}?locale=${encodeURIComponent(locale)}`, { cache: "no-store" });
+      const response = await fetch(`${buildClientApiPath("/account/access")}?locale=${encodeURIComponent(locale)}`, { cache: "no-store", headers: await resolveDeviceIdentityHeaders() });
       const body = response.ok ? await response.json() as Partial<Access> : null;
       if (body && typeof body.allowed === "boolean") {
         onAccess({ allowed: body.allowed, reason: body.reason ?? "unknown" });

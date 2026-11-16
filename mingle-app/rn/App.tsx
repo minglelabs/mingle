@@ -187,6 +187,9 @@ type NativeRuntimeConfig = {
   clientBuild?: string;
   // app_store | testflight | play_store | local | other, detected natively.
   installSource?: string;
+  // One account per person: the keychain id (iOS) or ANDROID_ID, see src/nativeCapabilities.ts.
+  deviceId?: string;
+  deviceKind?: string;
   qaBridgeEnabled?: string | boolean;
   deviceLocaleTag?: string;
   devicePreferredLanguages?: string[];
@@ -5203,6 +5206,8 @@ function AppInner(): React.JSX.Element {
       nativeTts: isNativeTtsAvailable(),
       contacts: isNativeContactsAvailable(),
       earphoneMicrophoneChoice: nativeEarphoneMicrophoneChoiceAvailable,
+      deviceId: NATIVE_RUNTIME_CONFIG.deviceId,
+      deviceKind: NATIVE_RUNTIME_CONFIG.deviceKind,
     }));
     // Earphone mode (contract A.2a): the latest route follows the capabilities
     // message on every load end.

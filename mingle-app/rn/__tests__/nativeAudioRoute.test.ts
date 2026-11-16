@@ -488,3 +488,30 @@ describe('route relay (contract A.2 a-c)', () => {
     expect(delivered).toHaveLength(1);
   });
 });
+
+describe('capabilities message: device value (one account per person)', () => {
+  const { resolveNativeDeviceIdentity } = require('../src/nativeCapabilities');
+
+  it('carries the keychain id or ANDROID_ID with its kind', () => {
+    expect(buildNativeShellCapabilities({ audioRoute: false, deviceId: ' 0f8fad5b-d9cb-469f-a165-70867728950e ', deviceKind: 'keychain' }))
+      .toMatchObject({ deviceId: '0f8fad5b-d9cb-469f-a165-70867728950e', deviceKind: 'keychain' });
+    expect(buildNativeShellCapabilities({ audioRoute: false, deviceId: 'a1b2c3d4e5f60718', deviceKind: 'android_id' }))
+      .toMatchObject({ deviceId: 'a1b2c3d4e5f60718', deviceKind: 'android_id' });
+  });
+
+  it('leaves both out when the native side gave nothing usable', () => {
+    for (const options of [
+      {},
+      { deviceId: '', deviceKind: 'keychain' },
+      { deviceId: 'short', deviceKind: 'keychain' },
+      { deviceId: 'x'.repeat(129), deviceKind: 'keychain' },
+      { deviceId: 'a1b2c3d4e5f60718', deviceKind: 'advertising_id' },
+      { deviceId: 'a1b2c3d4e5f60718' },
+    ]) {
+      const message = buildNativeShellCapabilities({ audioRoute: false, ...options });
+      expect(message).not.toHaveProperty('deviceId');
+      expect(message).not.toHaveProperty('deviceKind');
+    }
+    expect(resolveNativeDeviceIdentity(null, 'keychain')).toBeNull();
+  });
+});

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { fillPhoneFriendsCopy, type PhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { resolveDeviceIdentityHeaders } from "@/lib/native-device-identity";
 import { useKeyboardInset } from "@/components/compose/compose-chrome";
 import { PHONE_COUNTRIES, maskE164, normalizePhoneNumber, resolveDefaultPhoneCountry } from "@/lib/phone-number";
 
@@ -106,7 +107,8 @@ export default function PhoneVerifySheet({
       }
       const response = await fetch(buildClientApiPath("/phone/verification/confirm"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        // The device headers let the server apply the one-account rules for this phone.
+        headers: { "Content-Type": "application/json", ...(await resolveDeviceIdentityHeaders()) },
         body: JSON.stringify({ phone: step.phone, code }),
       });
       const body = await response.json().catch(() => ({})) as { error?: string; phoneE164?: string; switched?: boolean };

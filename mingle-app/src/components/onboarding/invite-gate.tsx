@@ -5,6 +5,7 @@ import { signOut } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { resolveInviteGateCopy } from "@/i18n/invite-gate-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { resolveDeviceIdentityHeaders } from "@/lib/native-device-identity";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 
@@ -16,7 +17,9 @@ export function useAppAccess(enabled: boolean, locale: string): { access: Access
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    void fetch(`${buildClientApiPath("/account/access")}?locale=${encodeURIComponent(locale)}`, { cache: "no-store" })
+    // The device headers tell the server which phone this account is on (one account per person).
+    void resolveDeviceIdentityHeaders()
+      .then((headers) => fetch(`${buildClientApiPath("/account/access")}?locale=${encodeURIComponent(locale)}`, { cache: "no-store", headers }))
       .then((response) => (response.ok ? response.json() : null))
       .then((body: Access | null) => {
         // Any failure opens the app: the gate must never lock someone out by mistake.
@@ -81,7 +84,7 @@ export default function InviteGate({ locale, onAccess }: { locale: string; onAcc
     if (waitlistBusy) return;
     setWaitlistBusy(true);
     try {
-      const response = await fetch(`${buildClientApiPath("/account/access")}?locale=${encodeURIComponent(locale)}`, { cache: "no-store" });
+      const response = await fetch(`${buildClientApiPath("/account/access")}?locale=${encodeURIComponent(locale)}`, { cache: "no-store", headers: await resolveDeviceIdentityHeaders() });
       const body = response.ok ? await response.json() as Partial<Access> : null;
       if (body && typeof body.allowed === "boolean") onAccess({ allowed: body.allowed, reason: body.reason ?? "unknown" });
     } catch {
