@@ -21,7 +21,7 @@ import UnifiedSearch from "@/components/search/unified-search";
 import SearchPeopleScreen from "@/components/search/search-people-screen";
 import { useReducedMotion } from "@/components/feed/use-reduced-motion";
 import { searchCopy } from "@/i18n/search-copy";
-import { postViewerHref } from "@/lib/feed-routes";
+import { feedHref, postViewerHref } from "@/lib/feed-routes";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -199,6 +199,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
             onOpenPerson={(userId) => openConnectProfile(userId)}
             onOpenSearchPost={(postQuery, postId) =>
               router.push(postViewerHref(locale, { kind: "search", query: postQuery }, postId))}
+            onOpenBrowsePost={(postId) => router.push(feedHref(locale, { postId }))}
             onSeeAllPeople={openConnectPeople}
           />
         </div>

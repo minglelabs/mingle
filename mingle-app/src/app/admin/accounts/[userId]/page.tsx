@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { Ban, ShieldCheck, Smartphone, Unlink, Undo2 } from "lucide-react";
+import { BAN_NOTICE_CATEGORIES, resolveHomeCopy } from "@/i18n/home-copy";
 import { prisma } from "@/lib/prisma";
 import { sanitizeAdminReturnTo } from "@/lib/admin-return-to";
 import { requireAdmin } from "@/server/admin/guard";
@@ -16,6 +17,8 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "계정" };
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Seoul" });
+
+const BAN_CATEGORY_LABEL = resolveHomeCopy("ko").banCategory;
 
 const METHOD_LABEL: Record<string, string> = { apple: "Apple", google: "Google", email: "이메일", phone: "전화번호" };
 const EVENT_LABEL: Record<string, string> = {
@@ -74,7 +77,13 @@ async function banAction(formData: FormData) {
   if (!userId) redirect("/admin/accounts");
   if (readField(formData, "confirm") !== "퇴출") redirect(accountPath(userId, "confirm"));
   const onlyUserIds = formData.getAll("include").filter((value): value is string => typeof value === "string");
-  await banUserBundle({ userId, reason: readField(formData, "reason"), adminSessionId: ctx.sessionId, onlyUserIds });
+  await banUserBundle({
+    userId,
+    reason: readField(formData, "reason"),
+    adminSessionId: ctx.sessionId,
+    onlyUserIds,
+    noticeCategory: readField(formData, "noticeCategory") || null,
+  });
   revalidatePath("/admin/accounts");
   redirect(accountPath(userId, "banned"));
 }
@@ -324,6 +333,12 @@ export default async function AdminAccountPage({ params, searchParams }: PagePro
               ))}
             </ul>
             <input name="reason" placeholder="사유 (운영 기록용)" className={adminInputClassName} maxLength={500} />
+            <select name="noticeCategory" className={adminInputClassName} defaultValue="other" aria-label="홈 탭 퇴출 공지">
+              {BAN_NOTICE_CATEGORIES.map((category) => (
+                <option key={category} value={category}>퇴출 공지 올림: {BAN_CATEGORY_LABEL[category]}</option>
+              ))}
+              <option value="">퇴출 공지 올리지 않음</option>
+            </select>
             <input name="confirm" placeholder="확인: '퇴출'이라고 입력" className={adminInputClassName} autoComplete="off" />
             <AdminButton type="submit" variant="danger">
               <Ban size={16} aria-hidden />

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { createBanNotice } from '@/server/notices'
 import { identityKeyHash, identityMethodForProvider, STRONG_DEVICE_KEY_KINDS, type IdentityKeyKind } from '@/server/identity/keys'
 
 // Permanent ban (docs/one-account-per-person.md, section 7). Banning one
@@ -151,6 +152,8 @@ export async function banUserBundle(input: {
   /** app_admin_sessions.id of the staff login that did it. */
   adminSessionId?: string | null
   onlyUserIds?: string[]
+  /** Posts a ban notice on the home tab with this reason category (see home-copy BAN_NOTICE_CATEGORIES). Left out: no notice. */
+  noticeCategory?: string | null
 }): Promise<BanResult> {
   const reason = input.reason?.trim().slice(0, 500) || null
   let bundle = await collectBanBundle(input.userId)
@@ -187,6 +190,15 @@ export async function banUserBundle(input: {
       },
     }),
   ])
+  if (input.noticeCategory) {
+    // One notice per ban, for the account the operator banned; the notice keeps only the first letter of its name.
+    try {
+      const banned = await prisma.user.findUnique({ where: { id: input.userId }, select: { name: true } })
+      await createBanNotice({ name: banned?.name ?? '', category: input.noticeCategory })
+    } catch (error) {
+      console.error('[identity] ban notice failed', error)
+    }
+  }
   return { bannedUserIds: bundle.userIds, blockedKeys: bundle.keys.length, blockedDevices: bundle.deviceIds.length }
 }
 

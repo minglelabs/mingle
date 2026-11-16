@@ -1,5 +1,6 @@
 import { buildPathWithSearchParams } from "@/lib/build-path-with-search-params";
 import { feedHref } from "@/lib/feed-routes";
+import { homeHref } from "@/lib/home-routes";
 import { conversationsHref, requestNamespaceSupportsPostingFeed } from "@/lib/posting-feed-guard";
 import { redirect } from "next/navigation";
 
@@ -27,5 +28,8 @@ export default function V110HomeEntry({ locale, searchParams }: V110HomeEntryPro
     redirect(buildPathWithSearchParams(conversationsHref(locale), searchParams));
   }
 
-  redirect(buildPathWithSearchParams(feedHref(locale), searchParams));
+  // Home/explore plan: the first screen is the home tab (people cards). A link
+  // that names a post still opens the feed on that post.
+  const namesPost = Boolean(searchParams.postId || searchParams.commentId);
+  redirect(buildPathWithSearchParams(namesPost ? feedHref(locale) : homeHref(locale), searchParams));
 }

@@ -23,6 +23,7 @@ import {
 import { isSupportedLocale } from "@/i18n/config";
 import { prisma } from "@/lib/prisma";
 import { captureMingleEvent } from "@/lib/posthog-server";
+import { checkDailyNewChatLimit } from "@/server/daily-new-chat-limit";
 
 export const runtime = "nodejs";
 
@@ -296,6 +297,24 @@ export async function postDirectConversationResponse(request: NextRequest) {
         sessionKey: resolvedUser.tracking.sessionKey,
       }
     : resolvedUser.identity;
+
+  // One new person a day (see @/server/daily-new-chat-limit). Only a first
+  // room with someone counts: a person there is already a room with, whoever
+  // opened it, is never "new". A failed check lets the room through.
+  try {
+    const existingRoom = await findExistingConversationWithExactMembers({
+      userId: resolvedUser.userId,
+      otherUserIds: [targetUserId],
+    });
+    if (!existingRoom) {
+      const dailyLimit = await checkDailyNewChatLimit(resolvedUser.userId, targetUserId);
+      if (!dailyLimit.allowed) {
+        return NextResponse.json({ error: "daily_new_chat_limit", limit: dailyLimit.limit }, { status: 429 });
+      }
+    }
+  } catch (error) {
+    console.error("[conversations/direct] daily_limit_check_failed", error);
+  }
 
   let conversationResult;
   try {

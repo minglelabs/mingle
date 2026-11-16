@@ -30,6 +30,9 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
+const notices = vi.hoisted(() => ({ createBanNotice: vi.fn() }))
+vi.mock('@/server/notices', () => notices)
+
 import { identityKeyHash } from '@/server/identity/keys'
 import { banUserBundle, collectBanBundle } from './ban'
 
@@ -108,6 +111,14 @@ describe('banUserBundle', () => {
     expect(db.blockCreateMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }))
     expect(db.deviceUpdateMany).toHaveBeenCalledWith({ where: { id: { in: ['d1'] }, blockedAt: null }, data: { blockedAt: expect.any(Date), blockedReason: 'scam' } })
     expect(db.auditCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ action: 'identity.ban', operatorUserId: 'op', targetId: 'bad' }) })
+  })
+
+  it('posts a ban notice only when a reason category is given', async () => {
+    await banUserBundle({ userId: 'bad' })
+    expect(notices.createBanNotice).not.toHaveBeenCalled()
+    db.userFindUnique.mockResolvedValueOnce({ email: 'bad@x.com', phoneE164: '+821000000001', mergedIntoUserId: null })
+    await banUserBundle({ userId: 'bad', noticeCategory: 'scam' })
+    expect(notices.createBanNotice).toHaveBeenCalledWith(expect.objectContaining({ category: 'scam' }))
   })
 
   it('can be narrowed to the accounts the operator chose', async () => {
