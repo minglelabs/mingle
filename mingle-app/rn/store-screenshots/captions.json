@@ -207,7 +207,7 @@
       "id": "06-booking",
       "capture": "captures/{lang}/booking.png",
       "caption": {
-        "ko": "예약 전화도\n실시간 통역으로",
+        "ko": "해외 음식점·미용실\n예약 전화도 통역",
         "en": "Booking calls,\ninterpreted live",
         "ja": "予約の電話も\nリアルタイム通訳で",
         "zh-cn": "预约电话\n也能实时口译",
