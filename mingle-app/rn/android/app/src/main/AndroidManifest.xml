@@ -59,6 +59,17 @@
             <action android:name="MINGLE_NOTIFICATION_OPEN" />
             <category android:name="android.intent.category.DEFAULT" />
         </intent-filter>
+        <!-- Content shared from another app: one image, or text / a link.
+             NativeShareTargetModule keeps it until the page asks for it. -->
+        <intent-filter>
+            <action android:name="android.intent.action.SEND" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <data android:mimeType="image/*" />
+            <data android:mimeType="text/plain" />
+        </intent-filter>
+        <meta-data
+            android:name="android.app.shortcuts"
+            android:resource="@xml/shortcuts" />
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />

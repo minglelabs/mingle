@@ -13,27 +13,32 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		1CB99352440A05B26F4FCB2B /* MingleBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B83750719D730D4C34F40A7F /* MingleBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2313836D4D36F162D3EE14A2 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 99EBB39BCA16B7687297C2B1 /* Foundation.framework */; };
+		3CA18D1FCC7B8307D4508257 /* MingleShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADCAB73053733819D9175D8E /* MingleShareInbox.swift */; };
 		4E407725BA45614BA113FE21 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABDA839FAA4C07DF2182B100 /* SampleHandler.swift */; };
+		50A33EF4A923DD03567FB149 /* NativeShareTargetModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = F376F8464AD7F7BF2047DED5 /* NativeShareTargetModule.swift */; };
+		6E9C252D0B8EB868D43A8FA2 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 99EBB39BCA16B7687297C2B1 /* Foundation.framework */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		8AE84E57B22234C771D43F48 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E807F7E23A1D4DBA6AA6DBBC /* ShareViewController.swift */; };
 		A1B2C3D45E6F708192A3B4C5 /* NativeAuthModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6708192A3B4C5D6E7 /* NativeAuthModule.swift */; };
 		A8F1C3B52D4E6A7091BC23D4 /* NativeSTTModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D9E1F32A4B6C8091DE45F6 /* NativeSTTModule.swift */; };
 		A9B5F951A7F4B3989E8581A2 /* MingleDeviceAudioReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2C515897F2EDAF5FF58F1F /* MingleDeviceAudioReceiver.swift */; };
-		C3E1A7B2D4F60918A2B3C4D5 /* MingleTranslationEchoCanceller.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F2B8C3E5A71029B3C4D5E6 /* MingleTranslationEchoCanceller.swift */; };
-		B9C8D7E6F5A4B3C2D1E0F9A8 /* MingleBackgroundAudioPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B8C7D6E5F4A3B2C1D0E9F8 /* MingleBackgroundAudioPolicy.swift */; };
-		B7C8D9E0F1A2B3C4D5E6F708 /* NativeQrImageModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */; };
-		C8D9E0F1A2B3C4D5E6F70819 /* NativeQrImageModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */; };
-		C0A1AC75000000000000B001 /* NativeContactsModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A1AC75000000000000A001 /* NativeContactsModule.swift */; };
-		C0A1AC75000000000000B002 /* NativeContactsModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = C0A1AC75000000000000A002 /* NativeContactsModuleBridge.m */; };
 		B1E2C3D44F5A6B7091CD23E4 /* NativeSTTModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = D2E3F4A55B6C7D8091EF34A5 /* NativeSTTModuleBridge.m */; };
+		B28D8DD1EF060775B6751995 /* MingleShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADCAB73053733819D9175D8E /* MingleShareInbox.swift */; };
 		B2C3D4E56F708192A3B4C5D6 /* NativeAuthModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6708192A3B4C5D6E7F8 /* NativeAuthModuleBridge.m */; };
 		B7C8D9E0F1A2B3C4D5E6F708 /* NativeQrImageModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */; };
+		B9C8D7E6F5A4B3C2D1E0F9A8 /* MingleBackgroundAudioPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B8C7D6E5F4A3B2C1D0E9F8 /* MingleBackgroundAudioPolicy.swift */; };
 		BF25FA2153F5D81173975EC3 /* MingleBroadcastChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6D0FE2C8CF627193DFFBB79 /* MingleBroadcastChannel.swift */; };
+		C0A1AC75000000000000B001 /* NativeContactsModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A1AC75000000000000A001 /* NativeContactsModule.swift */; };
+		C0A1AC75000000000000B002 /* NativeContactsModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = C0A1AC75000000000000A002 /* NativeContactsModuleBridge.m */; };
+		C3E1A7B2D4F60918A2B3C4D5 /* MingleTranslationEchoCanceller.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F2B8C3E5A71029B3C4D5E6 /* MingleTranslationEchoCanceller.swift */; };
 		C4D5E6F708192A3B4C5D6E7F /* NativePictureInPictureModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F708192A3B4C5D6E7F8091 /* NativePictureInPictureModule.swift */; };
 		C8D9E0F1A2B3C4D5E6F70819 /* NativeQrImageModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */; };
 		D5E6F708192A3B4C5D6E7F80 /* NativePictureInPictureModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = F708192A3B4C5D6E7F8091A2 /* NativePictureInPictureModuleBridge.m */; };
 		DA8D49A922D4BB77FCC1DA92 /* BroadcastAudioConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD4350731501AC72AC060026 /* BroadcastAudioConverter.swift */; };
+		E0F938F02C3E30F88A88138D /* NativeShareTargetModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = EA3C0AC0574726FC51B285D3 /* NativeShareTargetModuleBridge.m */; };
 		E3A4B5C62D5F7B8192CD34E5 /* NativeTTSModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B5C6D73B5D8E9192EF45F7 /* NativeTTSModule.swift */; };
+		EFB25E6D392422A16F29BA61 /* MingleShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3127024BFCD870458790E154 /* MingleShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F5C6D7E84F6A7C8192DE45F8 /* NativeTTSModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = A5D6E7F65C7D9F0192FA56A8 /* NativeTTSModuleBridge.m */; };
 /* End PBXBuildFile section */
 
@@ -45,6 +50,13 @@
 			remoteGlobalIDString = 73DB73985D6CB0C5D616C255;
 			remoteInfo = MingleBroadcast;
 		};
+		B837643E248F43691F29D002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 93F8E03D020F8FB146FA9303;
+			remoteInfo = MingleShare;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -55,6 +67,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				1CB99352440A05B26F4FCB2B /* MingleBroadcast.appex in Embed Foundation Extensions */,
+				EFB25E6D392422A16F29BA61 /* MingleShare.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -66,32 +79,39 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = mingle/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = mingle/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = mingle/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		3127024BFCD870458790E154 /* MingleShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MingleShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B4392A12AC88292D35C810B /* Pods-mingle.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-mingle.debug.xcconfig"; path = "Target Support Files/Pods-mingle/Pods-mingle.debug.xcconfig"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-mingle.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-mingle.release.xcconfig"; path = "Target Support Files/Pods-mingle/Pods-mingle.release.xcconfig"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-mingle.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-mingle.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = mingle/AppDelegate.swift; sourceTree = "<group>"; };
 		807FDE7341F492843A1FB603 /* MingleBroadcast.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = MingleBroadcast.entitlements; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = mingle/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		884DEB54654599A9B3C8D893 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8F2C515897F2EDAF5FF58F1F /* MingleDeviceAudioReceiver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MingleDeviceAudioReceiver.swift; path = mingle/MingleDeviceAudioReceiver.swift; sourceTree = "<group>"; };
-		D4F2B8C3E5A71029B3C4D5E6 /* MingleTranslationEchoCanceller.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MingleTranslationEchoCanceller.swift; path = mingle/MingleTranslationEchoCanceller.swift; sourceTree = "<group>"; };
 		99EBB39BCA16B7687297C2B1 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		A5D6E7F65C7D9F0192FA56A8 /* NativeTTSModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeTTSModuleBridge.m; path = mingle/NativeTTSModuleBridge.m; sourceTree = "<group>"; };
+		A9B8C7D6E5F4A3B2C1D0E9F8 /* MingleBackgroundAudioPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MingleBackgroundAudioPolicy.swift; path = mingle/MingleBackgroundAudioPolicy.swift; sourceTree = "<group>"; };
 		ABDA839FAA4C07DF2182B100 /* SampleHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
+		ADCAB73053733819D9175D8E /* MingleShareInbox.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MingleShareInbox.swift; sourceTree = "<group>"; };
 		B83750719D730D4C34F40A7F /* MingleBroadcast.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MingleBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0A1AC75000000000000A001 /* NativeContactsModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeContactsModule.swift; path = mingle/NativeContactsModule.swift; sourceTree = "<group>"; };
+		C0A1AC75000000000000A002 /* NativeContactsModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeContactsModuleBridge.m; path = mingle/NativeContactsModuleBridge.m; sourceTree = "<group>"; };
 		C3D4E5F6708192A3B4C5D6E7 /* NativeAuthModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeAuthModule.swift; path = mingle/NativeAuthModule.swift; sourceTree = "<group>"; };
 		C7D9E1F32A4B6C8091DE45F6 /* NativeSTTModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeSTTModule.swift; path = mingle/NativeSTTModule.swift; sourceTree = "<group>"; };
-		A9B8C7D6E5F4A3B2C1D0E9F8 /* MingleBackgroundAudioPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MingleBackgroundAudioPolicy.swift; path = mingle/MingleBackgroundAudioPolicy.swift; sourceTree = "<group>"; };
 		D2E3F4A55B6C7D8091EF34A5 /* NativeSTTModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeSTTModuleBridge.m; path = mingle/NativeSTTModuleBridge.m; sourceTree = "<group>"; };
 		D4E5F6708192A3B4C5D6E7F8 /* NativeAuthModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeAuthModuleBridge.m; path = mingle/NativeAuthModuleBridge.m; sourceTree = "<group>"; };
+		D4F2B8C3E5A71029B3C4D5E6 /* MingleTranslationEchoCanceller.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MingleTranslationEchoCanceller.swift; path = mingle/MingleTranslationEchoCanceller.swift; sourceTree = "<group>"; };
+		D8744E9A475F079CCED14A9C /* MingleShare.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = MingleShare.entitlements; sourceTree = "<group>"; };
 		DD4350731501AC72AC060026 /* BroadcastAudioConverter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BroadcastAudioConverter.swift; sourceTree = "<group>"; };
 		E0D0B9E05C526607A28873F0 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E1F2A3B4C5D6E7F8091A2B3C /* NativeQrImageModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeQrImageModule.swift; path = mingle/NativeQrImageModule.swift; sourceTree = "<group>"; };
 		E6D0FE2C8CF627193DFFBB79 /* MingleBroadcastChannel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MingleBroadcastChannel.swift; sourceTree = "<group>"; };
 		E6F708192A3B4C5D6E7F8091 /* NativePictureInPictureModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativePictureInPictureModule.swift; path = mingle/NativePictureInPictureModule.swift; sourceTree = "<group>"; };
+		E807F7E23A1D4DBA6AA6DBBC /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		EA3C0AC0574726FC51B285D3 /* NativeShareTargetModuleBridge.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = NativeShareTargetModuleBridge.m; path = mingle/NativeShareTargetModuleBridge.m; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F2A3B4C5D6E7F8091A2B3C4D /* NativeQrImageModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeQrImageModuleBridge.m; path = mingle/NativeQrImageModuleBridge.m; sourceTree = "<group>"; };
-		C0A1AC75000000000000A001 /* NativeContactsModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeContactsModule.swift; path = mingle/NativeContactsModule.swift; sourceTree = "<group>"; };
-		C0A1AC75000000000000A002 /* NativeContactsModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeContactsModuleBridge.m; path = mingle/NativeContactsModuleBridge.m; sourceTree = "<group>"; };
+		F376F8464AD7F7BF2047DED5 /* NativeShareTargetModule.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NativeShareTargetModule.swift; path = mingle/NativeShareTargetModule.swift; sourceTree = "<group>"; };
 		F4B5C6D73B5D8E9192EF45F7 /* NativeTTSModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeTTSModule.swift; path = mingle/NativeTTSModule.swift; sourceTree = "<group>"; };
 		F708192A3B4C5D6E7F8091A2 /* NativePictureInPictureModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativePictureInPictureModuleBridge.m; path = mingle/NativePictureInPictureModuleBridge.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -110,6 +130,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				2313836D4D36F162D3EE14A2 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AB6F622693DBC7799C33151 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6E9C252D0B8EB868D43A8FA2 /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -139,6 +167,8 @@
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
 				8F2C515897F2EDAF5FF58F1F /* MingleDeviceAudioReceiver.swift */,
 				D4F2B8C3E5A71029B3C4D5E6 /* MingleTranslationEchoCanceller.swift */,
+				F376F8464AD7F7BF2047DED5 /* NativeShareTargetModule.swift */,
+				EA3C0AC0574726FC51B285D3 /* NativeShareTargetModuleBridge.m */,
 			);
 			name = mingle;
 			sourceTree = "<group>";
@@ -147,6 +177,7 @@
 			isa = PBXGroup;
 			children = (
 				E6D0FE2C8CF627193DFFBB79 /* MingleBroadcastChannel.swift */,
+				ADCAB73053733819D9175D8E /* MingleShareInbox.swift */,
 			);
 			name = Shared;
 			path = Shared;
@@ -174,6 +205,17 @@
 			path = MingleBroadcast;
 			sourceTree = "<group>";
 		};
+		73AD445CF7808B9AF4B65E36 /* MingleShare */ = {
+			isa = PBXGroup;
+			children = (
+				E807F7E23A1D4DBA6AA6DBBC /* ShareViewController.swift */,
+				884DEB54654599A9B3C8D893 /* Info.plist */,
+				D8744E9A475F079CCED14A9C /* MingleShare.entitlements */,
+			);
+			name = MingleShare;
+			path = MingleShare;
+			sourceTree = "<group>";
+		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
 			isa = PBXGroup;
 			children = (
@@ -191,6 +233,7 @@
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
 				49ECC61D6E443C1386A16E57 /* MingleBroadcast */,
 				275917DA742C9174DA4104C4 /* Shared */,
+				73AD445CF7808B9AF4B65E36 /* MingleShare */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -202,6 +245,7 @@
 			children = (
 				13B07F961A680F5B00A75B9A /* mingle.app */,
 				B83750719D730D4C34F40A7F /* MingleBroadcast.appex */,
+				3127024BFCD870458790E154 /* MingleShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -245,6 +289,7 @@
 			);
 			dependencies = (
 				29DF3F0AD7FF171E768BF2B9 /* PBXTargetDependency */,
+				C12CC1D7A86790737D95EA48 /* PBXTargetDependency */,
 			);
 			name = mingle;
 			productName = mingle;
@@ -266,6 +311,23 @@
 			name = MingleBroadcast;
 			productName = MingleBroadcast;
 			productReference = B83750719D730D4C34F40A7F /* MingleBroadcast.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		93F8E03D020F8FB146FA9303 /* MingleShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4FEA4F46683906421F119746 /* Build configuration list for PBXNativeTarget "MingleShare" */;
+			buildPhases = (
+				4F6D30884C29B2F1B49E4B59 /* Sources */,
+				9AB6F622693DBC7799C33151 /* Frameworks */,
+				CE585BF5CE2AB0E551C398CB /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MingleShare;
+			productName = MingleShare;
+			productReference = 3127024BFCD870458790E154 /* MingleShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -296,6 +358,7 @@
 			targets = (
 				13B07F861A680F5B00A75B9A /* mingle */,
 				73DB73985D6CB0C5D616C255 /* MingleBroadcast */,
+				93F8E03D020F8FB146FA9303 /* MingleShare */,
 			);
 		};
 /* End PBXProject section */
@@ -312,6 +375,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		35483704E38E7E51E9B27292 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CE585BF5CE2AB0E551C398CB /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -443,6 +513,9 @@
 				A9B5F951A7F4B3989E8581A2 /* MingleDeviceAudioReceiver.swift in Sources */,
 				C3E1A7B2D4F60918A2B3C4D5 /* MingleTranslationEchoCanceller.swift in Sources */,
 				BF25FA2153F5D81173975EC3 /* MingleBroadcastChannel.swift in Sources */,
+				B28D8DD1EF060775B6751995 /* MingleShareInbox.swift in Sources */,
+				50A33EF4A923DD03567FB149 /* NativeShareTargetModule.swift in Sources */,
+				E0F938F02C3E30F88A88138D /* NativeShareTargetModuleBridge.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -456,6 +529,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		4F6D30884C29B2F1B49E4B59 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8AE84E57B22234C771D43F48 /* ShareViewController.swift in Sources */,
+				3CA18D1FCC7B8307D4508257 /* MingleShareInbox.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -464,6 +546,12 @@
 			name = MingleBroadcast;
 			target = 73DB73985D6CB0C5D616C255 /* MingleBroadcast */;
 			targetProxy = 15076B12CF76C15C396BEBE7 /* PBXContainerItemProxy */;
+		};
+		C12CC1D7A86790737D95EA48 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = MingleShare;
+			target = 93F8E03D020F8FB146FA9303 /* MingleShare */;
+			targetProxy = B837643E248F43691F29D002 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -557,6 +645,61 @@
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
+		};
+		1FEE23510FE4BEDEDBE199E2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = MingleShare/MingleShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 120;
+				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MingleShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.4.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.minglelabs.mingle.rn.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		33D8FF2074BEA6CBCC29C5DE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = MingleShare/MingleShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 120;
+				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MingleShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.4.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.minglelabs.mingle.rn.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
 		};
 		83CBBA201A601CBA00E9B192 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -786,6 +929,15 @@
 			buildConfigurations = (
 				89C9E8AA007B165061C43E0D /* Release */,
 				BCFAE47C243B0C360CAA4358 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4FEA4F46683906421F119746 /* Build configuration list for PBXNativeTarget "MingleShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1FEE23510FE4BEDEDBE199E2 /* Release */,
+				33D8FF2074BEA6CBCC29C5DE /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
