@@ -360,24 +360,6 @@ export default function BottomTabBar({
       <button
         type="button"
         onClick={() => {
-          if (isOnTabRoute(connectPath)) return;
-          markTopLevelTabSwitch();
-          router.replace(connectHref);
-        }}
-        className="flex flex-1 items-center justify-center transition active:opacity-60"
-        aria-label={dictionary.titles.connect}
-        aria-current={isConnectActive ? "page" : undefined}
-      >
-        <Compass
-          size={26}
-          stroke={isConnectActive ? activeColor : inactiveColor}
-          strokeWidth={isConnectActive ? activeStroke : 1.9}
-          aria-hidden="true"
-        />
-      </button>
-      <button
-        type="button"
-        onClick={() => {
           if (isConversationsActive) return;
           markTopLevelTabSwitch();
           router.replace(conversationsHref);
@@ -405,6 +387,24 @@ export default function BottomTabBar({
             </span>
           ) : null}
         </span>
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (isOnTabRoute(connectPath)) return;
+          markTopLevelTabSwitch();
+          router.replace(connectHref);
+        }}
+        className="flex flex-1 items-center justify-center transition active:opacity-60"
+        aria-label={dictionary.titles.connect}
+        aria-current={isConnectActive ? "page" : undefined}
+      >
+        <Compass
+          size={26}
+          stroke={isConnectActive ? activeColor : inactiveColor}
+          strokeWidth={isConnectActive ? activeStroke : 1.9}
+          aria-hidden="true"
+        />
       </button>
       <button
         type="button"
