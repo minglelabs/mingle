@@ -6,8 +6,10 @@ import {
   PhoneVerificationFailure,
   confirmPhoneVerification,
   isPhoneVerificationAvailable,
+  readReviewPhoneLogins,
   readVerifiedPhone,
   removeVerifiedPhone,
+  startPhoneSignIn,
   startPhoneVerification,
   type PhoneVerificationError,
 } from '@/server/phone-verification'
@@ -67,6 +69,35 @@ export async function startPhone(request: NextRequest) {
   const body = await readJsonBody(request)
   try {
     await startPhoneVerification(userId, body.phone, { locale: typeof body.locale === 'string' ? body.locale.slice(0, 16) : undefined })
+    return json({ ok: true })
+  } catch (error) {
+    if (error instanceof PhoneVerificationFailure) return json({ error: error.code }, PHONE_ERROR_STATUS[error.code])
+    throw error
+  }
+}
+
+/** The caller's address, for the per-client cap on sign-in codes. */
+function readClientKey(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+  return (forwarded || request.headers.get('x-real-ip') || '').slice(0, 64)
+}
+
+/** GET /phone/sign-in — whether the sign-in screen offers the phone number button. */
+export async function readPhoneSignInAvailability() {
+  return json({ available: isPhoneVerificationAvailable() || readReviewPhoneLogins().size > 0 })
+}
+
+/**
+ * POST /phone/sign-in { phone, locale? } — texts a sign-in code; no account
+ * needed. The code is then checked by the "phone-code" NextAuth provider.
+ */
+export async function startPhoneSignInRequest(request: NextRequest) {
+  const body = await readJsonBody(request)
+  try {
+    await startPhoneSignIn(body.phone, {
+      locale: typeof body.locale === 'string' ? body.locale.slice(0, 16) : undefined,
+      clientKey: readClientKey(request),
+    })
     return json({ ok: true })
   } catch (error) {
     if (error instanceof PhoneVerificationFailure) return json({ error: error.code }, PHONE_ERROR_STATUS[error.code])

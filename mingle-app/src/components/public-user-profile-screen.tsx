@@ -705,7 +705,7 @@ export default function PublicUserProfileScreen({
                   onClick={handleOpenProfileShare}
                   className={`${isOwnProfile ? "w-full" : "flex-1"} flex h-10 min-w-0 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100`}
                 >
-                  {dictionary.profile.shareProfile}
+                  {dictionary.profile.shareProfileShort ?? dictionary.profile.shareProfile}
                 </button>
               </div>
 

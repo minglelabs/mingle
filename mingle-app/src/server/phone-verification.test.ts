@@ -16,7 +16,17 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-import { confirmPhoneVerification, hashPhoneE164, startPhoneVerification } from './phone-verification'
+import {
+  PHONE_SIGN_IN_CODES_PER_CLIENT_PER_DAY,
+  PHONE_SIGN_IN_CODES_PER_NUMBER_PER_DAY,
+  confirmPhoneVerification,
+  hashPhoneE164,
+  isReviewPhoneNumber,
+  resetPhoneSignInLimits,
+  startPhoneSignIn,
+  startPhoneVerification,
+  verifyPhoneSignIn,
+} from './phone-verification'
 
 const env = { ...process.env }
 const fetchMock = vi.fn()
@@ -101,5 +111,84 @@ describe('confirmPhoneVerification', () => {
     await expect(confirmPhoneVerification('me', '+819012345678', '000000')).resolves.toEqual({ phoneE164: '+819012345678' })
     await expect(confirmPhoneVerification('me', '+819012345678', '111111')).rejects.toMatchObject({ code: 'wrong_code' })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('sign-in by phone number', () => {
+  beforeEach(() => {
+    resetPhoneSignInLimits()
+    delete process.env.PHONE_REVIEW_LOGINS
+  })
+
+  it('needs no account and takes the dev code on a local server', async () => {
+    await startPhoneSignIn('+821012345678', { clientKey: '1.2.3.4' })
+    expect(mocks.requestCreate).not.toHaveBeenCalled()
+    expect(await verifyPhoneSignIn('+821012345678', '000000')).toBe('+821012345678')
+    expect(await verifyPhoneSignIn('+821012345678', '111111')).toBeNull()
+    expect(await verifyPhoneSignIn('01012345678', '000000')).toBeNull()
+  })
+
+  it('caps codes per number and per client address', async () => {
+    for (let i = 0; i < PHONE_SIGN_IN_CODES_PER_NUMBER_PER_DAY; i += 1) {
+      await startPhoneSignIn('+821011112222', { clientKey: `ip-${i}` })
+    }
+    await expect(startPhoneSignIn('+821011112222', { clientKey: 'ip-new' })).rejects.toMatchObject({ code: 'too_many_requests' })
+    for (let i = 0; i < PHONE_SIGN_IN_CODES_PER_CLIENT_PER_DAY; i += 1) {
+      await startPhoneSignIn(`+8210333300${String(i).padStart(2, '0')}`, { clientKey: 'same-ip' })
+    }
+    await expect(startPhoneSignIn('+821044445555', { clientKey: 'same-ip' })).rejects.toMatchObject({ code: 'too_many_requests' })
+  })
+
+  it('texts Korean numbers through Sendon with our own code, others through Twilio', async () => {
+    process.env.TWILIO_ACCOUNT_SID = 'AC'
+    process.env.TWILIO_AUTH_TOKEN = 't'
+    process.env.TWILIO_VERIFY_SERVICE_SID = 'VA'
+    process.env.SENDON_ID = 'id'
+    process.env.SENDON_API_KEY = 'k'
+    process.env.SENDON_SENDER = '0212345678'
+    fetchMock.mockResolvedValue(new Response('{"code":200}', { status: 200 }))
+    await startPhoneSignIn('+821055556666', { clientKey: 'a' })
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.sendon.io/v2/messages/sms')
+    const text = JSON.parse(fetchMock.mock.calls[0][1].body).message as string
+    const code = text.match(/\d{6}/)?.[0] ?? ''
+    expect(await verifyPhoneSignIn('+821055556666', '000000' === code ? '111111' : '000000')).toBeNull()
+    expect(await verifyPhoneSignIn('+821055556666', code)).toBe('+821055556666')
+
+    fetchMock.mockClear()
+    await startPhoneSignIn('+819012345678', { clientKey: 'b' })
+    expect(String(fetchMock.mock.calls[0][0])).toContain('verify.twilio.com')
+    delete process.env.SENDON_ID
+    delete process.env.SENDON_API_KEY
+    delete process.env.SENDON_SENDER
+  })
+
+  it('uses Solapi for Korean numbers when Sendon is not set up', async () => {
+    process.env.SOLAPI_API_KEY = 'k'
+    process.env.SOLAPI_API_SECRET = 's'
+    process.env.SOLAPI_SENDER = '0212345678'
+    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }))
+    await startPhoneSignIn('+821077778888', { clientKey: 'c' })
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.solapi.com/messages/v4/send')
+    const text = JSON.parse(fetchMock.mock.calls[0][1].body).message.text as string
+    const code = text.match(/\d{6}/)?.[0] ?? ''
+    expect(await verifyPhoneSignIn('+821077778888', code)).toBe('+821077778888')
+    delete process.env.SOLAPI_API_KEY
+    delete process.env.SOLAPI_API_SECRET
+    delete process.env.SOLAPI_SENDER
+  })
+
+  it('lets store reviewers in with a fixed number and code, with Twilio set up', async () => {
+    process.env.TWILIO_ACCOUNT_SID = 'AC'
+    process.env.TWILIO_AUTH_TOKEN = 't'
+    process.env.TWILIO_VERIFY_SERVICE_SID = 'VA'
+    process.env.PHONE_REVIEW_LOGINS = '+821000000000:123456, bad, +15555550100:65-43-21'
+    await startPhoneSignIn('+821000000000')
+    await startPhoneVerification('me', '+821000000000')
+    expect(await verifyPhoneSignIn('+821000000000', '123456')).toBe('+821000000000')
+    expect(await verifyPhoneSignIn('+821000000000', '000000')).toBeNull()
+    expect(await verifyPhoneSignIn('+15555550100', '654321')).toBe('+15555550100')
+    expect(isReviewPhoneNumber('+821099999999')).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(mocks.requestCreate).not.toHaveBeenCalled()
   })
 })

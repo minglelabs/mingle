@@ -92,7 +92,11 @@ model User {
   /// sha256 hex of phoneE164. Friends' apps hash their contacts' numbers the same way to find this user (src/server/contact-match.ts); uploaded hashes are never stored.
   phoneHash                    String?   @unique(map: "app_users_phone_hash_key") @map("phone_hash")
   phoneVerifiedAt              DateTime? @map("phone_verified_at")
-  isActive                     Boolean   @default(true) @map("is_active")
+  /// Invite gate (src/server/app-access.ts): when an account without an invite joined the waitlist (a verified phone is required).
+  waitlistedAt                 DateTime? @map("waitlisted_at")
+  /// When an admin let this account in from the waitlist tab, without an invite.
+  accessGrantedAt              DateTime? @map("access_granted_at")
+  isActive                    Boolean   @default(true) @map("is_active")
   deactivatedAt                DateTime? @map("deactivated_at")
   withdrawnAt                  DateTime? @map("withdrawn_at")
   scheduledDeleteAt            DateTime? @map("scheduled_delete_at")
@@ -152,6 +156,7 @@ model User {
   @@index([createdAt], map: "app_users_created_at_idx")
   @@index([isOperator], map: "app_users_is_operator_idx")
   @@index([referredByUserId], map: "app_users_referred_by_user_id_idx")
+  @@index([waitlistedAt], map: "app_users_waitlisted_at_idx")
   @@map("app_users")
 }
 

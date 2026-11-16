@@ -20,6 +20,11 @@
 //   node scripts/qa-agent-device.mjs alert <accept|dismiss|text>  # iOS alerts / Android permission dialogs
 //   node scripts/qa-agent-device.mjs snapshot                   # WebView QA bridge state
 //   node scripts/qa-agent-device.mjs eval '<expression>'        # synchronous, JSON-serialisable
+//   node scripts/qa-agent-device.mjs overflow [--locale L|all] [--shots DIR] [--out FILE]
+//                                     # clipped / off-screen / wrapped / overlapping text on this screen, per UI locale
+//   node scripts/qa-agent-device.mjs crawl --routes /ko/mypage,/ko/notifications [--locales all] [--depth 2] [--out FILE] [--shots DIR] [--states FILE]
+//                                     # tap every safe control on each screen (and in each sheet it opens), scan every
+//                                     # state for overflow, then replay the same states in each UI locale
 //   node scripts/qa-agent-device.mjs app <launch|terminate|state>
 //   node scripts/qa-agent-device.mjs logs [--grep TEXT]         # syslog / logcat lines since the last call
 //   node scripts/qa-agent-device.mjs stop                       # end the session and the Appium server
@@ -33,6 +38,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { buildOverflowExpression, withLocalePath } from './qa-text-overflow.mjs';
+import { buildCollectExpression, buildFingerprintExpression, buildTapExpression, isRiskyTarget, openedNewState } from './qa-crawl.mjs';
+
+// Same key as src/components/app-locale-preference-sync.tsx.
+const APP_LOCALE_STORAGE_KEY = 'mingle.appLocale';
 
 const APP_ROOT = path.resolve(import.meta.dirname, '..');
 const REPO_ROOT = path.resolve(APP_ROOT, '..');
@@ -673,6 +683,281 @@ async function cmdEval(expression) {
   console.log(JSON.stringify({ result: parsed?.mingleQaResult ?? null }, null, 2));
 }
 
+const OVERFLOW_LOCALES = ['ko', 'en', 'ja', 'zh-CN', 'zh-TW', 'fr', 'de', 'es', 'pt', 'it', 'ru', 'ar', 'hi', 'th', 'vi'];
+
+function flagValue(args, name) {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : undefined;
+}
+
+async function evalInWebView(state, expression) {
+  const result = await inWebView(state, () => appium(state, 'POST', '/session/:session/execute/sync', {
+    script: `return JSON.stringify({ mingleQaResult: (${expression}) });`,
+    args: [],
+  }));
+  const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+  return parsed?.mingleQaResult ?? null;
+}
+
+// Opens `route` (a /ko/... path) in `locale`: saves the app language first, since the app sends
+// every page back to the saved one, then waits for the new page to finish loading.
+// Query parameters the native app puts on the first URL (nativeUi=1, insets, apiNamespace…). Every
+// URL the crawler opens keeps them, or the web falls back to its browser layout (web tab bar).
+let nativeQuery = '';
+const NATIVE_QUERY_KEY = /^(native\w*|apiNamespace|qa|sttDebug|ttsDebug)$/;
+async function captureNativeQuery(state) {
+  const search = String(await evalInWebView(state, 'location.search').catch(() => '') || '');
+  const params = new URLSearchParams(search);
+  for (const key of [...params.keys()]) if (!NATIVE_QUERY_KEY.test(key)) params.delete(key);
+  if (!params.has('nativeUi')) throw new Error('the WebView URL has no native query (nativeUi=1): relaunch the app (`app terminate`, `app launch`) before crawling');
+  // Do not reopen the last conversation room on every load.
+  params.set('nativeSkipConversationRestore', '1');
+  nativeQuery = params.toString();
+}
+
+async function openInLocale(state, route, locale, loadMs) {
+  const [pathname, search = ''] = route.split('?');
+  const query = [search, nativeQuery].filter(Boolean).join('&');
+  const target = withLocalePath(pathname, locale) + (query ? `?${query}` : '');
+  // Start from a clean screen: the app restores open panels from history.state
+  // (__mingle_slide_surface_history) and from mingle:webview-state-restore-v1. The marker on
+  // window tells the old document from the new one (a route may redirect elsewhere).
+  await evalInWebView(state, `(window.__qaLeaving = true, localStorage.setItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)}, ${JSON.stringify(locale)}), localStorage.removeItem('mingle:webview-state-restore-v1'), history.replaceState(null, '', location.href), location.assign(${JSON.stringify(target)}), true)`);
+  const deadline = Date.now() + 15000;
+  for (;;) {
+    await delay(200);
+    const ready = await evalInWebView(state, `!window.__qaLeaving && document.readyState === 'complete'`).catch(() => false);
+    if (ready || Date.now() > deadline) break;
+  }
+  await waitForStableScreen(state, loadMs, loadMs + 1500);
+  return evalInWebView(state, 'location.pathname + location.search');
+}
+
+// Waits at least `minMs`, then until two fingerprints 400ms apart match (data loaded, animation done).
+async function waitForStableScreen(state, minMs, maxMs) {
+  const started = Date.now();
+  await delay(minMs);
+  let previous = await evalInWebView(state, buildFingerprintExpression()).catch(() => null);
+  while (Date.now() - started < maxMs) {
+    await delay(400);
+    const current = await evalInWebView(state, buildFingerprintExpression()).catch(() => null);
+    if (current && previous && !openedNewState(previous, current)) return current;
+    previous = current;
+  }
+  return previous;
+}
+
+// Crawls every layer of the UI for text overflow. Discovery runs in the first locale: on each
+// route it taps every safe control (isRiskyTarget skips ones that change data or open native UI),
+// keeps the taps that open a new state, and (with --depth 2) the taps inside that state. Each
+// state is a route plus a tap path, so the other locales replay it exactly and scan it.
+async function cmdCrawl(args) {
+  const state = requireSession();
+  const routes = (flagValue(args, '--routes') || '').split(',').map((route) => route.trim()).filter(Boolean);
+  if (!routes.length) throw new Error('crawl needs --routes /ko/path,/ko/other');
+  const localeArg = flagValue(args, '--locales') || 'all';
+  const locales = localeArg === 'all' ? OVERFLOW_LOCALES : localeArg.split(',');
+  const depth = Number(flagValue(args, '--depth')) || 2;
+  const settleMs = Number(flagValue(args, '--settle-ms')) || 1200;
+  const loadMs = Number(flagValue(args, '--load-ms')) || 1500;
+  const maxTaps = Number(flagValue(args, '--max-taps')) || 40;
+  const outFile = flagValue(args, '--out');
+  const shotsDir = flagValue(args, '--shots');
+  const scanExpression = buildOverflowExpression();
+  await captureNativeQuery(state);
+  const startUrl = await evalInWebView(state, 'location.pathname + location.search');
+  const storedLocale = await evalInWebView(state, `localStorage.getItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)})`).catch(() => null);
+  const report = { routes, locales, nativeQuery, states: [], skipped: [], results: [] };
+  const save = () => { if (outFile) fs.writeFileSync(outFile, `${JSON.stringify(report, null, 2)}\n`); };
+  const log = (line) => process.stderr.write(`${line}\n`);
+
+  const scanState = async (stateId, locale) => {
+    const scan = await evalInWebView(state, scanExpression);
+    const result = { stateId, locale, ...scan };
+    if (shotsDir && scan?.controlFindings > 0) {
+      fs.mkdirSync(shotsDir, { recursive: true });
+      const file = path.join(shotsDir, `${stateId}-${locale}.png`);
+      fs.writeFileSync(file, Buffer.from(await appium(state, 'GET', '/session/:session/screenshot'), 'base64'));
+      result.screenshot = file;
+    }
+    report.results.push(result);
+    save();
+    return result;
+  };
+  const dismissAlert = async () => {
+    const text = await appium(state, 'GET', '/session/:session/alert/text').catch(() => null);
+    if (text != null) {
+      log(`dismissed native alert: ${String(text).slice(0, 80)}`);
+      await appium(state, 'POST', '/session/:session/alert/accept', {}).catch(() => {});
+    }
+  };
+  const replay = async (route, taps, locale) => {
+    await dismissAlert();
+    await openInLocale(state, route, locale, loadMs);
+    for (const tap of taps) {
+      const ok = await evalInWebView(state, buildTapExpression(tap.path)).catch(() => false);
+      if (!ok) return false;
+      await waitForStableScreen(state, settleMs, settleMs + 1200);
+    }
+    return true;
+  };
+
+  // Discovery.
+  const discovery = locales[0];
+  const routeKeys = new Set(routes.map((route) => withLocalePath(route.split('?')[0], discovery)));
+  const seen = new Set();
+  const addState = (route, taps, fingerprint) => {
+    const key = `${fingerprint.path}|${fingerprint.layers}|${fingerprint.hash}`;
+    if (seen.has(key)) return null;
+    seen.add(key);
+    const id = `s${String(report.states.length).padStart(3, '0')}`;
+    const entry = { id, route, taps, labels: taps.map((tap) => tap.label) };
+    report.states.push(entry);
+    log(`state ${id} ${route} ${entry.labels.join(' > ') || '(screen)'}`);
+    return entry;
+  };
+  // --states FILE: reuse the states of an earlier crawl (its discovery) and only replay them.
+  const statesFile = flagValue(args, '--states');
+  if (statesFile) report.states = JSON.parse(fs.readFileSync(statesFile, 'utf8')).states;
+  const landedPaths = new Set();
+  for (const route of statesFile ? [] : routes) {
+    const landed = String(await openInLocale(state, route, discovery, loadMs)).split('?')[0];
+    if (landed !== withLocalePath(route.split('?')[0], discovery) && (routeKeys.has(landed) || landedPaths.has(landed))) {
+      log(`skip ${route}: redirects to ${landed}`);
+      report.skipped.push({ route, label: `(redirects to ${landed})`, testId: '' });
+      continue;
+    }
+    landedPaths.add(landed);
+    const base = await evalInWebView(state, buildFingerprintExpression());
+    const baseState = addState(route, [], base);
+    if (baseState) await scanState(baseState.id, discovery);
+    const targets = (await evalInWebView(state, buildCollectExpression({ max: maxTaps }))) || [];
+    const baseLabels = new Map(targets.map((target) => [target.path, target.label]));
+    for (const target of targets) {
+      if (isRiskyTarget(target)) { report.skipped.push({ route, label: target.label, testId: target.testId }); continue; }
+      if (!(await replay(route, [target], discovery))) continue;
+      const opened = await evalInWebView(state, buildFingerprintExpression());
+      if (!openedNewState(base, opened)) continue;
+      // Another screen in the list (a tab bar link): it gets its own crawl.
+      const openedPathname = opened.path.split('?')[0];
+      if (openedPathname !== base.path.split('?')[0] && routeKeys.has(withLocalePath(openedPathname, discovery))) continue;
+      const level1 = addState(route, [target], opened);
+      if (!level1) continue;
+      await scanState(level1.id, discovery);
+      if (depth < 2) continue;
+      // Controls that appeared with the new state (a sheet's own buttons, a menu's items).
+      // (A panel can reuse a DOM position of the screen under it: compare the label too.)
+      const inner = ((await evalInWebView(state, buildCollectExpression({ max: maxTaps }))) || []).filter((candidate) => baseLabels.get(candidate.path) !== candidate.label);
+      for (const child of inner) {
+        if (isRiskyTarget(child)) { report.skipped.push({ route, label: `${target.label} > ${child.label}`, testId: child.testId }); continue; }
+        if (!(await replay(route, [target, child], discovery))) continue;
+        const nested = await evalInWebView(state, buildFingerprintExpression());
+        if (!openedNewState(opened, nested)) continue;
+        const level2 = addState(route, [target, child], nested);
+        if (level2) await scanState(level2.id, discovery);
+      }
+    }
+  }
+  log(`discovered ${report.states.length} states; replaying in ${locales.length - 1} more locales`);
+
+  // A state that leaves the WebView in a bad place (a non-app page, a crashed web process) must not
+  // end the run: relaunch the app and go on with the next state.
+  const relaunch = async () => {
+    const target = state.platform === 'android' ? { appId: BUNDLE_ID } : { bundleId: BUNDLE_ID };
+    await appium(state, 'POST', '/session/:session/execute/sync', { script: 'mobile: terminateApp', args: [target] }).catch(() => {});
+    await appium(state, 'POST', '/session/:session/execute/sync', { script: 'mobile: activateApp', args: [target] }).catch(() => {});
+    await delay(8000);
+  };
+
+  // Replay in every other locale (all of them with --states, discovery already scanned the first).
+  for (const locale of statesFile ? locales : locales.slice(1)) {
+    for (const entry of report.states) {
+      let result;
+      try {
+        if (!(await replay(entry.route, entry.taps, locale))) {
+          report.results.push({ stateId: entry.id, locale, error: 'replay_failed' });
+          continue;
+        }
+        result = await scanState(entry.id, locale);
+      } catch (error) {
+        log(`${locale} ${entry.id}: ${String(error.message || error).slice(0, 120)} — relaunching the app`);
+        report.results.push({ stateId: entry.id, locale, error: String(error.message || error).slice(0, 200) });
+        save();
+        await relaunch();
+        continue;
+      }
+      if (result.controlFindings > 0) log(`${locale} ${entry.id} ${entry.labels.join(' > ') || entry.route}: ${result.findings.filter((finding) => finding.control).map((finding) => `${finding.kind}:${finding.text.slice(0, 30)}`).join(' | ')}`);
+    }
+  }
+
+  const restore = storedLocale == null
+    ? `localStorage.removeItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)})`
+    : `localStorage.setItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)}, ${JSON.stringify(storedLocale)})`;
+  await evalInWebView(state, `(${restore}, location.assign(${JSON.stringify(startUrl)}), true)`);
+  save();
+  const withFindings = report.results.filter((result) => result.controlFindings > 0);
+  console.log(JSON.stringify({ states: report.states.length, scans: report.results.length, scansWithControlFindings: withFindings.length, skipped: report.skipped.length, out: outFile ?? null }, null, 2));
+}
+
+// Scans the current screen for text that spills out of its box. With --locale it reloads the same
+// path under that UI locale first (/ko/feed → /vi/feed); `all` walks the 15 UI locales and then
+// returns to the starting locale. Navigation reloads the page, so open sheets close: run it on
+// screens reachable by URL, and scan sheets/menus with plain `overflow` after switching the app language.
+async function cmdOverflow(args) {
+  const state = requireSession();
+  const localeArg = flagValue(args, '--locale');
+  const shotsDir = flagValue(args, '--shots');
+  const outFile = flagValue(args, '--out');
+  const settleMs = Number(flagValue(args, '--settle-ms')) || 2500;
+  const expression = buildOverflowExpression();
+  const locales = !localeArg ? [null] : localeArg === 'all' ? OVERFLOW_LOCALES : localeArg.split(',');
+  const startPath = await evalInWebView(state, 'location.pathname + location.search');
+  // The app sends every page back to the language saved in localStorage (AppLocalePreferenceSync),
+  // so each locale is saved there before navigating and the original value restored at the end.
+  const storedLocale = await evalInWebView(state, `localStorage.getItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)})`).catch(() => null);
+  const results = [];
+  for (const locale of locales) {
+    if (locale) {
+      const [pathname, search = ''] = String(startPath).split('?');
+      const target = withLocalePath(pathname, locale) + (search ? `?${search}` : '');
+      await evalInWebView(state, `(localStorage.setItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)}, ${JSON.stringify(locale)}), location.assign(${JSON.stringify(target)}), true)`);
+      // Wait for the new page (not the old one still unloading), then let it render.
+      const deadline = Date.now() + 30000;
+      for (;;) {
+        await delay(500);
+        const ready = await evalInWebView(state, `location.pathname === ${JSON.stringify(withLocalePath(pathname, locale))} && document.readyState === 'complete'`).catch(() => false);
+        if (ready || Date.now() > deadline) break;
+      }
+      await delay(settleMs);
+    }
+    const scan = await evalInWebView(state, expression);
+    if (shotsDir && locale) {
+      fs.mkdirSync(shotsDir, { recursive: true });
+      const base64 = await appium(state, 'GET', '/session/:session/screenshot');
+      const file = path.join(shotsDir, `overflow-${locale}.png`);
+      fs.writeFileSync(file, Buffer.from(base64, 'base64'));
+      scan.screenshot = file;
+    }
+    results.push({ ...scan, documentLang: scan?.locale ?? null, locale: locale ?? scan?.locale ?? null });
+  }
+  if (localeArg) {
+    const restore = storedLocale == null
+      ? `localStorage.removeItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)})`
+      : `localStorage.setItem(${JSON.stringify(APP_LOCALE_STORAGE_KEY)}, ${JSON.stringify(storedLocale)})`;
+    await evalInWebView(state, `(${restore}, location.assign(${JSON.stringify(startPath)}), true)`);
+  }
+  const summary = {
+    path: startPath,
+    locales: results.map((result) => ({ locale: result.locale, controlFindings: result.controlFindings, findings: result.findings?.length ?? 0 })),
+    results,
+  };
+  if (outFile) {
+    fs.mkdirSync(path.dirname(path.resolve(outFile)), { recursive: true });
+    fs.writeFileSync(outFile, `${JSON.stringify(summary, null, 2)}\n`);
+  }
+  console.log(JSON.stringify(outFile ? { out: outFile, locales: summary.locales } : summary, null, 2));
+}
+
 async function cmdApp(args) {
   const state = requireSession();
   const action = args[0] || 'state';
@@ -1019,11 +1304,13 @@ async function main() {
     case 'alert': await cmdAlert(args); break;
     case 'snapshot': await cmdEval(SNAPSHOT_EXPRESSION); break;
     case 'eval': await cmdEval(args.join(' ')); break;
+    case 'overflow': await cmdOverflow(args); break;
+    case 'crawl': await cmdCrawl(args); break;
     case 'app': await cmdApp(args); break;
     case 'logs': await cmdLogs(args); break;
     case 'stop': await cmdStop(); break;
     default:
-      console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 28).join('\n'));
+      console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 30).join('\n'));
       process.exitCode = command === 'help' ? 0 : 2;
   }
 }

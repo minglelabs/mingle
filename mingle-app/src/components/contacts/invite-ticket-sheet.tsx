@@ -45,9 +45,9 @@ async function copyText(value: string): Promise<boolean> {
 }
 
 /**
- * "Send a friend an invite ticket": shows the user's ticket and copies a short
- * message (partner's language first for Korean and Japanese users) with the
- * invite link, ready to paste into LINE, KakaoTalk or HelloTalk.
+ * "Send a friend an invite ticket": shows the user's ticket and copies a plain
+ * four-line message (ticket name, invite code, link, "tap again after install"),
+ * ready to paste into LINE, KakaoTalk or HelloTalk.
  */
 export default function InviteTicketSheet({ open, onClose, locale }: InviteTicketSheetProps) {
   const { data: session } = useSession();

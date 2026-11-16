@@ -90,6 +90,10 @@ import {
   markFirstSpeakPending,
 } from "@/lib/first-run";
 import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
+import { readLastSignInMethod } from "@/lib/last-sign-in-method";
+import { resolveSpeakTrialCopy } from "@/i18n/speak-trial-copy";
+import { isSpeakTrialDone } from "@/lib/speak-trial";
+import { useAppAccess } from "@/components/onboarding/invite-gate";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
   resolveLanguageSelectorOwnSelectedLanguages,
@@ -224,9 +228,11 @@ import { useUnreadNotifications } from "@/components/notifications/use-unread-no
 import { feedHref } from "@/lib/feed-routes";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
-import { clearTopLevelTabSwitch, NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
+import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
+const SpeakTrial = lazy(() => import("@/components/onboarding/speak-trial"));
+const InviteGate = lazy(() => import("@/components/onboarding/invite-gate"));
 
 const LS_KEY_CONVERSATION_LIST_SORT_MODE = "mingle:conversation-list-sort-mode";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
@@ -1041,7 +1047,7 @@ function mapConversationSummaryToItem(
     status: conversation.status,
     statusLabel,
     avatarSrc: avatar.src,
-    avatarAlt: title,
+    avatarAlt: `${title} ${avatar.name} avatar`,
     otherMembers: conversation.otherMembers,
     titleAccountBadge: resolveRoomAccountBadge(conversation.otherMembers),
     titleAccountBadgeLocale: locale,
@@ -2128,15 +2134,25 @@ export default function ConversationList({
   // with a "say something" card and every room is ready to show the speech
   // length choice. Read from storage after mount, so the server render matches.
   const [firstSpeakPending, setFirstSpeakPending] = useState(false);
+  const showFirstSpeakCard = firstSpeakPending && sessionStatus === "authenticated";
+  // Signed out on a device that never signed in: speak for ten seconds first,
+  // then the sign-in screen. Read after mount, so the server render matches.
+  const [speakTrialPending, setSpeakTrialPending] = useState(false);
+  const [speakTrialJustDone, setSpeakTrialJustDone] = useState(false);
+  useEffect(() => {
+    setSpeakTrialPending(!isSpeakTrialDone() && readLastSignInMethod() === null);
+  }, []);
+  // Invite-only (server INVITE_GATE): a signed-in account without an invite
+  // sees the invite gate. Asked again once a pending invite link is accepted.
+  const { access: appAccess, setAccess: setAppAccess } = useAppAccess(sessionStatus === "authenticated" && !inviteOnboarding, locale);
+  const handleSpeakTrialDone = useCallback(() => {
+    setSpeakTrialPending(false);
+    setSpeakTrialJustDone(true);
+  }, []);
   // Where the user heard of the app, asked once when they leave their first room.
   const [discoveryPromptOpen, setDiscoveryPromptOpen] = useState(false);
   const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
-  useEffect(() => {
-    // Back on the conversations page: a later room unmount is a normal
-    // session boundary again, not a tab switch.
-    clearTopLevelTabSwitch();
-  }, []);
   // A mount that starts with a conversation already active (SSR props, a
   // deep link, or a client-side remount after a real route round trip like
   // returning from add-members) isn't the user "opening" a room — it's the
@@ -5692,15 +5708,32 @@ export default function ConversationList({
               </div>
             )}
           >
-            <MingleHome
-              authOnly
-              dictionary={dictionary}
-              appleOAuthEnabled={appleOAuthEnabled}
-              googleOAuthEnabled={googleOAuthEnabled}
-              locale={locale}
-            />
+            {speakTrialPending ? (
+              <SpeakTrial
+                dictionary={dictionary}
+                locale={locale}
+                appleOAuthEnabled={appleOAuthEnabled}
+                googleOAuthEnabled={googleOAuthEnabled}
+                onDone={handleSpeakTrialDone}
+              />
+            ) : (
+              <MingleHome
+                authOnly
+                dictionary={dictionary}
+                appleOAuthEnabled={appleOAuthEnabled}
+                googleOAuthEnabled={googleOAuthEnabled}
+                locale={locale}
+                authNotice={speakTrialJustDone ? resolveSpeakTrialCopy(locale).signInNotice : null}
+              />
+            )}
           </Suspense>
         </div>
+      ) : null}
+
+      {sessionStatus === "authenticated" && !inviteOnboarding && appAccess && !appAccess.allowed ? (
+        <Suspense fallback={null}>
+          <InviteGate locale={locale} onAccess={setAppAccess} />
+        </Suspense>
       ) : null}
 
       {isClientReady ? (
@@ -5850,7 +5883,7 @@ export default function ConversationList({
               : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
-          {firstSpeakPending && sessionStatus === "authenticated" ? (
+          {showFirstSpeakCard ? (
             <div className="px-4 pb-4 pt-3">
               <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50/90 px-5 pb-5 pt-6 text-center shadow-[0_16px_36px_rgba(245,158,11,0.12)]">
                 <p className="text-[1.35rem] font-extrabold leading-snug tracking-[-0.02em] text-slate-950">
@@ -5880,7 +5913,7 @@ export default function ConversationList({
             <div className="flex flex-col items-center py-16 text-gray-400">
               <Loader2 size={28} className="animate-spin" />
             </div>
-          ) : conversationItems.length === 0 ? (
+          ) : conversationItems.length === 0 && showFirstSpeakCard ? null : conversationItems.length === 0 ? (
             <div
               className="flex flex-col items-center px-6 py-16 text-center text-gray-400"
               style={{
@@ -5949,6 +5982,9 @@ export default function ConversationList({
         </div>
       </div>
 
+      {/* Before the first bubble the "say something" card is the one thing to
+          press, so the bottom button and the empty list's invite stay away. */}
+      {showFirstSpeakCard ? null : (
       <div
         className="absolute inset-x-0 z-20"
         style={{
@@ -5990,6 +6026,7 @@ export default function ConversationList({
           ) : null}
         </button>
       </div>
+      )}
 
       <BottomTabBar
         activeRoute="conversations"
