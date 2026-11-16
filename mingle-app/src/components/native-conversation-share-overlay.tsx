@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingMessage } from "@/components/loading-message";
 import { ChevronLeft, Link2, Loader2, Smartphone } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -379,8 +380,9 @@ export default function NativeConversationShareOverlay() {
             style={{ touchAction: "pan-y" }}
           >
             {status === "loading" ? (
-              <div className="flex h-full items-center justify-center text-slate-400">
+              <div className="flex flex-col gap-3 h-full items-center justify-center text-slate-400">
                 <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+                <LoadingMessage locale={locale} />
               </div>
             ) : (
               state?.utterances.map((utterance) => (

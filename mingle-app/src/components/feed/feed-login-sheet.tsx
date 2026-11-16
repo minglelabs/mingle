@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingMessage } from "@/components/loading-message";
 import { useHasPendingInvite } from "@/lib/native-invite";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import type { LanguageOnboardingConfirmPayload } from "@/components/LivePhoneDemo/LanguageOnboardingModal";
@@ -106,8 +107,9 @@ export default function FeedLoginSheet({
         <>
           <Suspense
             fallback={(
-              <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+              <div className="flex flex-col gap-3 h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
                 <Loader2 size={24} className="animate-spin" aria-hidden />
+                <LoadingMessage locale={locale} />
               </div>
             )}
           >

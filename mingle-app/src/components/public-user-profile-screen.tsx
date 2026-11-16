@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingMessage } from "@/components/loading-message";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import ProfileBio from "@/components/profile-bio";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
@@ -594,8 +595,9 @@ export default function PublicUserProfileScreen({
 
       <div ref={profileScrollRef} data-restore-scroll="user-profile" className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="flex justify-center px-4 pt-12 text-gray-400" aria-live="polite">
+          <div className="flex flex-col items-center gap-3 px-4 pt-12 text-gray-400" aria-live="polite">
             <Loader2 size={26} className="animate-spin" aria-label={copy.loading} />
+            <LoadingMessage locale={locale} />
           </div>
         ) : loadError || !profile ? (
           <p className="px-4 pt-12 text-center text-[14px] text-gray-500" role="alert">{copy.profileLoadError}</p>

@@ -1,5 +1,6 @@
 'use client'
 
+import { LoadingMessage } from "@/components/loading-message"
 import ConversationImageComposer, { type ConversationImageComposerEarphoneMode } from './ConversationImageComposer'
 import MessageMediaDialog from './MessageMediaDialog'
 import EarphoneModeNoticeContent from './EarphoneModeNotice'
@@ -7966,8 +7967,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   if (headerMode === 'conversation' && !isStorageHydrated) {
     return (
       <PhoneFrame>
-        <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+        <div className="flex flex-col gap-3 h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
           <Loader2 size={24} className="animate-spin" aria-hidden="true" />
+          <LoadingMessage locale={uiLocale} />
         </div>
       </PhoneFrame>
     )

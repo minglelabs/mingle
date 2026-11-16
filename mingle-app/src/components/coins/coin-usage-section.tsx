@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingMessage } from "@/components/loading-message";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -194,7 +195,7 @@ export default function CoinUsageSection({ locale }: { locale: AppLocale }) {
       <section>
         <h3 className="mb-2 text-[14px] font-bold text-slate-900">{copy.history}</h3>
         {historyState === "loading" ? (
-          <div className="flex justify-center py-6 text-gray-400"><Loader2 size={22} className="animate-spin" aria-hidden="true" /></div>
+          <div className="flex flex-col items-center gap-3 py-6 text-gray-400"><Loader2 size={22} className="animate-spin" aria-hidden="true" /><LoadingMessage locale={locale} /></div>
         ) : items.length === 0 ? (
           <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.noHistory}</p>
         ) : (
