@@ -18,6 +18,8 @@ Google Play 스토어 정보는 앱 버전과 상관없이 언제든 올릴 수 
 
 ## 반영 완료
 
+- 2.4.2 (iOS 121, Android 113): 공유 시트에 대화 추천(#554). 2026-11-16에 iOS는 릴리스 노트를 `ios-appstore-sync-metadata`로 올려 심사 제출, Android는 프로덕션 제출(#558). Play versionCode 110~112는 출시 전 2.5.0 빌드(`feat/voicetalk-windows-livekit-mvp`)가 이미 써서 113을 씀. 2.5.0은 Android 114 이상, iOS 122 이상을 써야 한다.
+
 - 초대 링크 앱 열기: 2.4.0이 App Store에 나간 뒤 2026-11-15에 Railway prod에 `IOS_INVITE_UNIVERSAL_LINKS=1`을 넣음. AASA에 `/i/*`가 들어간 것을 확인함. 같은 날 `IOS_CLIENT_LATEST_VERSION`도 2.3.4에서 2.4.0으로 올림. 2.4.1이 출시되면 2.4.1로 올린다.
 - iOS 2.4.1 (120): 이어폰을 껴도 폰 마이크로 듣기, 이어폰을 꽂거나 빼도 STT 유지. 릴리스 노트를 `ios-appstore-sync-metadata`로 올리고 2026-11-15에 심사 제출함(#550).
 - 통번역 메신저 리포지셔닝: Play는 2026-11-12에 문구·스크린샷 업로드(#498). iOS 2.4.0 (119)에 앱 이름·부제·키워드·설명·릴리스 노트(`ios-appstore-sync-metadata`)와 스크린샷(`scripts/ios-appstore-upload.sh`)을 올려 2026-11-12 심사 제출. Android 2.4.0 (109) 프로덕션 제출.
