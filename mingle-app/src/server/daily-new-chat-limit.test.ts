@@ -13,8 +13,8 @@ const room = (others: string[], pending: string[] = []) => ({ ownerUserId: 'me',
 
 beforeEach(() => {
   vi.clearAllMocks()
-  db.userFindMany.mockImplementation(async ({ where }: { where: { OR?: unknown } }) => (
-    where.OR ? [] : [{ id: 'me', isOperator: false, isOfficial: false }, { id: 'target', isOperator: false, isOfficial: false }]
+  db.userFindMany.mockImplementation(async ({ where }: { where: { isOfficial?: unknown } }) => (
+    where.isOfficial ? [] : [{ id: 'me', isOperator: false, isOfficial: false }, { id: 'target', isOperator: false, isOfficial: false }]
   ))
   db.channelFindMany.mockResolvedValue([])
 })
@@ -50,23 +50,35 @@ describe('daily new chat limit', () => {
     }))
   })
 
-  it('does not count the same person twice, the welcome account, or staff', async () => {
+  it('does not count the same person twice, the welcome account, or the official account', async () => {
     db.channelFindMany.mockResolvedValue([room(['target'])])
     await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
     db.channelFindMany.mockResolvedValue([room(['royce'])])
     await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
     db.channelFindMany.mockResolvedValue([room(['operator'])])
-    db.userFindMany.mockImplementation(async ({ where }: { where: { OR?: unknown } }) => (
-      where.OR ? [{ id: 'operator' }] : [{ id: 'me', isOperator: false, isOfficial: false }, { id: 'target', isOperator: false, isOfficial: false }]
+    db.userFindMany.mockImplementation(async ({ where }: { where: { isOfficial?: unknown } }) => (
+      where.isOfficial ? [{ id: 'operator' }] : [{ id: 'me', isOperator: false, isOfficial: false }, { id: 'target', isOperator: false, isOfficial: false }]
     ))
     await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
   })
 
-  it('never limits the welcome account, staff on either side, or anyone while it is off', async () => {
+  it('never limits the welcome account, a staff account doing the writing, the official account, or anyone while it is off', async () => {
     db.channelFindMany.mockResolvedValue([room(['someone'])])
     await expect(checkDailyNewChatLimit('me', 'royce', { env: env() })).resolves.toEqual({ allowed: true })
     await expect(checkDailyNewChatLimit('me', 'target', { env: env('off') })).resolves.toEqual({ allowed: true })
     db.userFindMany.mockResolvedValue([{ id: 'me', isOperator: true, isOfficial: false }, { id: 'target', isOperator: false, isOfficial: false }])
+    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
+  })
+
+  it('counts an operator account like anyone else', async () => {
+    db.channelFindMany.mockResolvedValue([{ ownerUserId: 'me', pendingInviteeUserIds: [], members: [{ userId: 'me' }, { userId: 'someone' }] }])
+    db.userFindMany.mockImplementation(async ({ where }: { where: { isOfficial?: unknown } }) => (
+      where.isOfficial ? [] : [{ id: 'me', isOperator: false, isOfficial: false }, { id: 'target', isOperator: true, isOfficial: false }]
+    ))
+    await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: false, limit: 1 })
+    db.userFindMany.mockImplementation(async ({ where }: { where: { isOfficial?: unknown } }) => (
+      where.isOfficial ? [] : [{ id: 'me', isOperator: false, isOfficial: false }, { id: 'target', isOperator: false, isOfficial: true }]
+    ))
     await expect(checkDailyNewChatLimit('me', 'target', { env: env() })).resolves.toEqual({ allowed: true })
   })
 
