@@ -56,6 +56,12 @@ const nextConfig = {
       // features and new routes inside the v2.2.0 tree, so it aliases it too.
       // 2.4.1 (iOS: phone microphone with earphones, STT kept on across
       // earphone changes) adds none either.
+      // 2.4.2 (share sheet: conversations as direct share targets) adds none
+      // either.
+      ...['ios', 'android'].flatMap(platform => [
+        { source: `/api/${platform}/v2.4.2`, destination: `/api/${platform}/v2.2.0` },
+        { source: `/api/${platform}/v2.4.2/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
+      ]),
       ...['ios', 'android'].flatMap(platform => [
         { source: `/api/${platform}/v2.4.1`, destination: `/api/${platform}/v2.2.0` },
         { source: `/api/${platform}/v2.4.1/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
