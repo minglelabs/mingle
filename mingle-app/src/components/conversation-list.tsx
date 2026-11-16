@@ -233,6 +233,7 @@ import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY }
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 const SpeakTrial = lazy(() => import("@/components/onboarding/speak-trial"));
 const InviteGate = lazy(() => import("@/components/onboarding/invite-gate"));
+const PhoneGate = lazy(() => import("@/components/onboarding/phone-gate"));
 
 const LS_KEY_CONVERSATION_LIST_SORT_MODE = "mingle:conversation-list-sort-mode";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
@@ -5738,7 +5739,9 @@ export default function ConversationList({
 
       {sessionStatus === "authenticated" && !inviteOnboarding && appAccess && !appAccess.allowed ? (
         <Suspense fallback={null}>
-          <InviteGate locale={locale} onAccess={setAppAccess} />
+          {appAccess.reason === "needs_phone"
+            ? <PhoneGate locale={locale} onAccess={setAppAccess} />
+            : <InviteGate locale={locale} onAccess={setAppAccess} />}
         </Suspense>
       ) : null}
 

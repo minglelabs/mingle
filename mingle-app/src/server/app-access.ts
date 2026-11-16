@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { isReviewPhoneNumber } from '@/server/phone-verification'
+import { isPhoneVerificationAvailable, isReviewPhoneNumber } from '@/server/phone-verification'
 import { ReferralError, redeemReferralCode } from '@/server/referral'
 
 /**
@@ -19,9 +19,16 @@ import { ReferralError, redeemReferralCode } from '@/server/referral'
  * ('granted', src/app/admin/waitlist).
  *
  * Off by default: until INVITE_GATE=on nothing changes for anyone.
+ *
+ * Required phone number, checked before the invite gate: with PHONE_REQUIRED=on
+ * every account, old or new and in every app language, verifies its own phone
+ * number once after sign-in ('needs_phone'), however it signed in. Operators,
+ * the official account and store-review accounts skip it. While this server
+ * cannot send a code (no SMS provider set up) nobody is asked, so turning the
+ * switch on before the keys are in locks no one out.
  */
 export type AppAccessReason =
-  | 'gate_off' | 'other_locale' | 'existing' | 'invited' | 'granted' | 'staff' | 'review' | 'needs_invite' | 'waitlisted'
+  | 'gate_off' | 'other_locale' | 'existing' | 'invited' | 'granted' | 'staff' | 'review' | 'needs_invite' | 'waitlisted' | 'needs_phone'
 
 export type AppAccess = { allowed: boolean; reason: AppAccessReason }
 
@@ -64,6 +71,22 @@ export function isReviewAccount(user: Pick<AppAccessUser, 'phoneE164' | 'email'>
   return (env.REVIEW_ACCOUNT_EMAILS ?? '').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean).includes(email)
 }
 
+export function isPhoneRequiredOn(env: NodeJS.ProcessEnv = process.env): boolean {
+  return ['1', 'on', 'true'].includes((env.PHONE_REQUIRED ?? '').trim().toLowerCase())
+}
+
+/** Whether this account still has to verify a phone number before using the app. */
+export function needsPhoneNumber(
+  user: Pick<AppAccessUser, 'isOperator' | 'isOfficial' | 'phoneE164' | 'email'>,
+  env: NodeJS.ProcessEnv = process.env,
+  canSendCodes: boolean = isPhoneVerificationAvailable(),
+): boolean {
+  if (!isPhoneRequiredOn(env) || !canSendCodes) return false
+  if (user.phoneE164) return false
+  if (user.isOperator || user.isOfficial) return false
+  return !isReviewAccount(user, env)
+}
+
 export function resolveAppAccess(user: AppAccessUser, env: NodeJS.ProcessEnv = process.env, locale?: string | null): AppAccess {
   if (!isInviteGateOn(env)) return { allowed: true, reason: 'gate_off' }
   if (!isInviteGateLocale(locale, env)) return { allowed: true, reason: 'other_locale' }
@@ -82,10 +105,14 @@ const ACCESS_SELECT = {
 } as const
 
 export async function readAppAccess(userId: string, locale?: string | null): Promise<AppAccess> {
-  if (!isInviteGateOn()) return { allowed: true, reason: 'gate_off' }
-  if (!isInviteGateLocale(locale)) return { allowed: true, reason: 'other_locale' }
+  const phoneRequired = isPhoneRequiredOn() && isPhoneVerificationAvailable()
+  if (!phoneRequired) {
+    if (!isInviteGateOn()) return { allowed: true, reason: 'gate_off' }
+    if (!isInviteGateLocale(locale)) return { allowed: true, reason: 'other_locale' }
+  }
   const user = await prisma.user.findUnique({ where: { id: userId }, select: ACCESS_SELECT })
-  if (!user) return { allowed: false, reason: 'needs_invite' }
+  if (!user) return phoneRequired && !isInviteGateOn() ? { allowed: true, reason: 'gate_off' } : { allowed: false, reason: 'needs_invite' }
+  if (phoneRequired && needsPhoneNumber(user, process.env, true)) return { allowed: false, reason: 'needs_phone' }
   const access = resolveAppAccess(user, process.env, locale)
   if (access.reason !== 'needs_invite') return access
   // Stopped by the gate for the first time: onto the waitlist, no button needed.

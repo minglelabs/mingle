@@ -4,7 +4,7 @@ const db = vi.hoisted(() => ({ findUnique: vi.fn(), updateMany: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: db.findUnique, updateMany: db.updateMany } } }))
 vi.mock('@/server/referral', () => ({ ReferralError: class extends Error {}, redeemReferralCode: vi.fn() }))
 
-import { isReviewAccount, readAppAccess, resolveAppAccess } from '@/server/app-access'
+import { isReviewAccount, needsPhoneNumber, readAppAccess, resolveAppAccess } from '@/server/app-access'
 
 const newUser = {
   createdAt: new Date('2026-12-01T00:00:00Z'),
@@ -77,5 +77,31 @@ describe('waitlist', () => {
     await expect(readAppAccess('u-invited', 'ko')).resolves.toEqual({ allowed: true, reason: 'invited' })
     expect(db.updateMany).not.toHaveBeenCalled()
     vi.unstubAllEnvs()
+  })
+})
+
+describe('required phone number', () => {
+  const on = { PHONE_REQUIRED: 'on' } as unknown as NodeJS.ProcessEnv
+  const noPhone = { ...newUser, phoneE164: null }
+
+  it('asks nobody while the switch is off', () => {
+    expect(needsPhoneNumber(noPhone, {} as NodeJS.ProcessEnv, true)).toBe(false)
+  })
+
+  it('asks every account without a verified number, old or new', () => {
+    expect(needsPhoneNumber(noPhone, on, true)).toBe(true)
+    expect(needsPhoneNumber({ ...noPhone, email: 'someone@example.com' }, on, true)).toBe(true)
+  })
+
+  it('lets through an account that has a number, staff and review accounts', () => {
+    expect(needsPhoneNumber(newUser, on, true)).toBe(false)
+    expect(needsPhoneNumber({ ...noPhone, isOperator: true }, on, true)).toBe(false)
+    expect(needsPhoneNumber({ ...noPhone, isOfficial: true }, on, true)).toBe(false)
+    const review = { ...on, REVIEW_ACCOUNT_EMAILS: 'review@example.com' } as unknown as NodeJS.ProcessEnv
+    expect(needsPhoneNumber({ ...noPhone, email: 'Review@example.com' }, review, true)).toBe(false)
+  })
+
+  it('asks nobody while the server cannot send a code', () => {
+    expect(needsPhoneNumber(noPhone, on, false)).toBe(false)
   })
 })
