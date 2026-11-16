@@ -38,6 +38,12 @@ describe('normalizeNativeShareInboxPayload', () => {
     });
   });
 
+  it('accepts a photo-sized image', () => {
+    const imageBase64 = 'QUJD'.repeat(1_000_000);
+    expect(normalizeNativeShareInboxPayload({ id: 'abc', imageBase64, imageMimeType: 'image/jpeg' })?.image?.base64)
+      .toHaveLength(imageBase64.length);
+  });
+
   it('keeps a text share with no conversation picked', () => {
     expect(normalizeNativeShareInboxPayload({ id: 'abc', text: '  https://example.com  ' })).toEqual({
       id: 'abc',

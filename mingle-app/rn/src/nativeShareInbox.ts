@@ -20,7 +20,10 @@ const SHARE_INBOX_HOST = "share-inbox";
 /** A conversation id is an opaque token; keep it conservative (see pushNavigation.ts). */
 const CONVERSATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const SHARE_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
-const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
+// A photo is megabytes of base64. Searching for one character that does not
+// belong is a flat scan; an anchored `^[...]+$` match over the whole string
+// exceeds the regex stack limit of the app's JS engine (Hermes).
+const NON_BASE64_CHARACTER = /[^A-Za-z0-9+/=]/;
 const MAX_TEXT_LENGTH = 4_000;
 const MAX_DISPLAY_NAME_LENGTH = 120;
 const MAX_AVATAR_URL_LENGTH = 2_048;
@@ -72,7 +75,7 @@ export function normalizeNativeShareInboxPayload(value: unknown): NativeShareInb
   const text = asTrimmedString(raw.text).slice(0, MAX_TEXT_LENGTH) || null;
 
   const base64 = asTrimmedString(raw.imageBase64);
-  const image = base64 && BASE64_PATTERN.test(base64) && raw.imageMimeType === "image/jpeg"
+  const image = base64 && !NON_BASE64_CHARACTER.test(base64) && raw.imageMimeType === "image/jpeg"
     ? { mimeType: "image/jpeg" as const, base64 }
     : null;
 

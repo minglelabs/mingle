@@ -17,7 +17,10 @@ export const NATIVE_SHARE_INBOX_WINDOW_KEY = "__MINGLE_PENDING_NATIVE_SHARE_INBO
 
 const CONVERSATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const SHARE_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
-const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
+// A photo is megabytes of base64. Searching for one character that does not
+// belong is a flat scan; an anchored `^[...]+$` match over the whole string
+// exceeds the regex stack limit of the app's JS engine (Hermes).
+const NON_BASE64_CHARACTER = /[^A-Za-z0-9+/=]/;
 const MAX_TEXT_LENGTH = 4_000;
 
 export type NativeShareInboxPayload = {
@@ -50,7 +53,7 @@ export function parseNativeShareInboxPayload(value: unknown): NativeShareInboxPa
 
   const rawImage = isRecord(value.image) ? value.image : null;
   const base64 = asTrimmedString(rawImage?.base64);
-  const image = base64 && BASE64_PATTERN.test(base64) && rawImage?.mimeType === "image/jpeg"
+  const image = base64 && !NON_BASE64_CHARACTER.test(base64) && rawImage?.mimeType === "image/jpeg"
     ? { mimeType: "image/jpeg" as const, base64 }
     : null;
 
@@ -119,7 +122,13 @@ export function isPendingNativeShareArmed(): boolean {
 
 export function clearPendingNativeShare(): void {
   if (!pendingShare) return;
+  finishPendingNativeShare(pendingShare.id);
+}
+
+/** Nothing of the share is left to hand out: tell the shell to drop its copy. */
+function finishPendingNativeShare(id: string): void {
   pendingShare = null;
+  postNativeShareInboxAck(id, "done");
   notify();
 }
 
@@ -147,10 +156,12 @@ export function takePendingNativeShareImage(
   if (!isPendingShareFor(conversationId) || !pendingShare?.image) return null;
   const image = pendingShare.image;
   // Once a room took part of a share, the rest belongs to that room too.
-  pendingShare = pendingShare.text
-    ? { ...pendingShare, conversationId, image: null }
-    : null;
-  notify();
+  if (pendingShare.text) {
+    pendingShare = { ...pendingShare, conversationId, image: null };
+    notify();
+  } else {
+    finishPendingNativeShare(pendingShare.id);
+  }
   return image;
 }
 
@@ -158,10 +169,12 @@ export function takePendingNativeShareImage(
 export function takePendingNativeShareText(conversationId: string): string | null {
   if (!isPendingShareFor(conversationId) || !pendingShare?.text) return null;
   const text = pendingShare.text;
-  pendingShare = pendingShare.image
-    ? { ...pendingShare, conversationId, text: null }
-    : null;
-  notify();
+  if (pendingShare.image) {
+    pendingShare = { ...pendingShare, conversationId, text: null };
+    notify();
+  } else {
+    finishPendingNativeShare(pendingShare.id);
+  }
   return text;
 }
 
@@ -188,8 +201,13 @@ function postToNativeShell(message: { type: string; payload: Record<string, unkn
   }
 }
 
-export function postNativeShareInboxAck(id: string): void {
-  postToNativeShell({ type: "native_share_inbox_ack", payload: { id } });
+/**
+ * "received": the page holds the share (the shell stops repeating it).
+ * "done": a room took it or the user cancelled (the shell drops its copy;
+ * until then the shell hands it over again after every page load).
+ */
+export function postNativeShareInboxAck(id: string, stage: "received" | "done"): void {
+  postToNativeShell({ type: "native_share_inbox_ack", payload: { id, stage } });
 }
 
 export type NativeShareTargetDonation = {

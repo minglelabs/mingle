@@ -6358,6 +6358,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Text or a link shared to HashChat from another app lands in the message
   // box (after any draft already there) for the user to review and send.
   const pendingNativeShareVersion = useSyncExternalStore(subscribePendingNativeShare, getPendingNativeShareVersion, () => '')
+  const sharedTextComposerOpenUntilRef = useRef(0)
+  const [sharedTextArrivalCount, setSharedTextArrivalCount] = useState(0)
   useEffect(() => {
     if (!pendingNativeShareVersion || !isVisible || !conversationId || !viewerUserId) return
     const sharedText = takePendingNativeShareText(conversationId)
@@ -6371,10 +6373,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       composerTextareaRef.current.value = nextDraft
       syncComposerTextareaHeight(composerTextareaRef.current)
     }
-    // Voice mode has no message box on screen: switch to the keyboard, which
-    // mounts the box with this draft.
-    if (!isComposerOpen) handleToggleComposer()
-  }, [composerDraftStorageKey, conversationId, handleToggleComposer, isComposerOpen, isVisible, pendingNativeShareVersion, syncComposerTextareaHeight, viewerUserId])
+    sharedTextComposerOpenUntilRef.current = Date.now() + 8_000
+    setSharedTextArrivalCount((count) => count + 1)
+  }, [composerDraftStorageKey, conversationId, isVisible, pendingNativeShareVersion, syncComposerTextareaHeight, viewerUserId])
+  // Voice mode has no message box on screen: show the keyboard-mode box, which
+  // mounts with this draft. A room that is still loading applies its saved
+  // input mode a moment later, so the box is reopened for a short while.
+  useEffect(() => {
+    if (isComposerOpen || Date.now() > sharedTextComposerOpenUntilRef.current) return
+    setIsComposerOpen(true)
+  }, [isComposerOpen, sharedTextArrivalCount])
 
   const handleComposerSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

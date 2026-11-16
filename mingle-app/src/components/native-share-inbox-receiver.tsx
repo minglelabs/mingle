@@ -59,7 +59,7 @@ export default function NativeShareInboxReceiver() {
       const payload = parseNativeShareInboxPayload(rawPayload);
       if (!payload) return;
       // Acknowledge repeats too: the shell stops resending only on an ack.
-      postNativeShareInboxAck(payload.id);
+      postNativeShareInboxAck(payload.id, "received");
 
       const openConversationId = readOpenConversationId();
       if (!receiveNativeShare(payload, { roomOpen: openConversationId !== "" })) return;
