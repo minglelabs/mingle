@@ -14,6 +14,9 @@ import { createWithDefaultHandle } from "@/lib/handles";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 import { NEW_REGISTERED_USER_TRANSLATION_MODEL } from "@/lib/translation-models";
 import { hashPhoneE164, verifyPhoneSignIn } from "@/server/phone-verification";
+import { identityMethodForProvider } from "@/server/identity/keys";
+import { isIdentityBlocked, recordIdentityLink, recordSignIn, resolveMergedUser } from "@/server/identity/links";
+import { findPhoneOwnerId } from "@/server/identity/phone-claim";
 
 function normalizeEmail(rawValue: unknown): string | null {
   if (typeof rawValue !== "string") return null;
@@ -124,18 +127,29 @@ async function upsertUserForCredentialsSignIn(args: {
 }
 
 /**
- * Signs in the account that owns a proven phone number, or creates one. A
- * deleted account still holding the number gives it up first, so the number
- * starts a fresh account (as a new OAuth sign-in would).
+ * Signs in the account that owns a proven phone number, or creates one. The
+ * owner is the account whose own number it is, or one it was attached to as
+ * an extra number (docs/one-account-per-person.md). A deleted account still
+ * holding the number gives it up first, so the number starts a fresh account
+ * (as a new OAuth sign-in would). Null when a permanent ban closed the number.
  */
 export async function findOrCreateUserForPhoneSignIn(phoneE164: string) {
   const now = new Date();
   const select = { id: true, name: true, email: true, externalUserId: true, isDeleted: true } as const;
-  const existing = await prisma.user.findUnique({ where: { phoneE164 }, select });
-  if (existing && !existing.isDeleted) {
-    await prisma.user.update({ where: { id: existing.id }, data: { lastSeenAt: now, phoneVerifiedAt: now } }).catch(() => null);
-    return existing;
+  if (await isIdentityBlocked("phone", phoneE164)) return null;
+  const ownerId = await findPhoneOwnerId(phoneE164);
+  if (ownerId) {
+    const owner = await prisma.user.findUnique({ where: { id: ownerId }, select: { ...select, phoneE164: true } });
+    if (owner) {
+      await prisma.user.update({
+        where: { id: owner.id },
+        data: owner.phoneE164 === phoneE164 ? { lastSeenAt: now, phoneVerifiedAt: now } : { lastSeenAt: now },
+      }).catch(() => null);
+      await recordIdentityLink({ userId: owner.id, method: "phone", rawKey: phoneE164, event: "sign_in" });
+      return owner;
+    }
   }
+  const existing = await prisma.user.findUnique({ where: { phoneE164 }, select });
   if (existing) {
     await prisma.user.update({ where: { id: existing.id }, data: { phoneE164: null, phoneHash: null, phoneVerifiedAt: null } });
   }
@@ -156,7 +170,10 @@ export async function findOrCreateUserForPhoneSignIn(phoneE164: string) {
       },
       select,
     }),
-  );
+  ).then(async (created) => {
+    await recordIdentityLink({ userId: created.id, method: "phone", rawKey: phoneE164, event: "sign_up" });
+    return created;
+  });
 }
 
 const APPLE_OAUTH_SECRET_REFRESH_SKEW_MS = 5 * 60 * 1000;
@@ -297,6 +314,7 @@ function buildProviders(): NextAuthOptions["providers"] {
         const phoneE164 = await verifyPhoneSignIn(credentials?.phone, credentials?.code);
         if (!phoneE164) return null;
         const user = await findOrCreateUserForPhoneSignIn(phoneE164);
+        if (!user) return null;
         return {
           id: user.id,
           name: user.name || "HashChat User",
@@ -316,6 +334,17 @@ function buildProviders(): NextAuthOptions["providers"] {
         if (!token) return null;
         const payload = verifyNativeAuthBridgeToken(token);
         if (!payload) return null;
+
+        // The id may be an empty account that was folded into another one: sign that one in.
+        const merged = await resolveMergedUser(payload.sub).catch(() => null);
+        if (merged) {
+          return {
+            id: merged.id,
+            name: merged.name || "HashChat User",
+            email: merged.email || "",
+            externalUserId: merged.externalUserId || null,
+          };
+        }
 
         const user = await upsertUserForCredentialsSignIn({
           idHint: payload.sub,
@@ -488,13 +517,21 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
         console.error("[signup-welcome] OAuth onboarding failed", error);
       }
     },
-    async signIn({ user }) {
+    async signIn({ user, account, isNewUser }) {
       const userId = normalizeUserId(user?.id);
       if (!userId) return;
 
       const now = new Date();
       const email = normalizeEmail(user?.email);
       const name = normalizeName(user?.name);
+      // One account per person: note which sign-in method this account was seen with.
+      void recordSignIn({
+        userId,
+        provider: account?.provider,
+        providerAccountId: account?.providerAccountId,
+        email,
+        isNewUser,
+      }).catch(() => undefined);
       await createWithDefaultHandle(
         { id: userId, name, email },
         (handle) => prisma.user.upsert({
@@ -520,9 +557,19 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
     },
   },
   callbacks: {
-    async signIn({ user }) {
+    async signIn({ user, account }) {
       const userId = normalizeUserId(user?.id);
       if (!userId) return true;
+
+      // Permanent ban: the sign-in method or e-mail itself is closed, also for a brand-new account.
+      const oauthMethod = identityMethodForProvider(account?.provider);
+      try {
+        if (oauthMethod && account?.providerAccountId && await isIdentityBlocked(oauthMethod, account.providerAccountId)) return false;
+        const signInEmail = normalizeEmail(user?.email);
+        if (signInEmail && await isIdentityBlocked("email", signInEmail)) return false;
+      } catch {
+        // The ban list could not be read: the account's own ban flag below still applies.
+      }
 
       const dbUser = await prisma.user.findUnique({
         where: { id: userId },
@@ -530,10 +577,13 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
           isDeleted: true,
           scheduledDeleteAt: true,
           withdrawnAt: true,
+          bannedAt: true,
         },
       }).catch(() => null);
 
       if (!dbUser) return true;
+
+      if (dbUser.bannedAt) return false;
 
       // Already dangled — deny login (next OAuth sign-in will create a fresh account
       // because Account records were deleted during dangling)
@@ -584,9 +634,21 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
 
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user?.id) {
         token.sub = user.id;
+      }
+      // The app renews its session right after a phone check folded this
+      // sign-in into another account (docs/one-account-per-person.md): from
+      // here on the session is that account's.
+      if (trigger === "update" && typeof token.sub === "string" && token.sub.trim()) {
+        const merged = await resolveMergedUser(token.sub.trim()).catch(() => null);
+        if (merged) {
+          token.sub = merged.id;
+          token.email = normalizeEmail(merged.email) ?? undefined;
+          token.name = normalizeName(merged.name) ?? "HashChat User";
+          token.externalUserId = merged.externalUserId ?? undefined;
+        }
       }
       if (typeof user?.email === "string") {
         token.email = normalizeEmail(user.email) ?? user.email;

@@ -105,3 +105,15 @@ describe('required phone number', () => {
     expect(needsPhoneNumber(noPhone, on, false)).toBe(false)
   })
 })
+
+describe('permanent ban', () => {
+  it('stops a banned account, and any ordinary account on a banned device, whatever the gates say', async () => {
+    db.findUnique.mockResolvedValue({ ...newUser, bannedAt: new Date() })
+    await expect(readAppAccess('u-banned', 'en')).resolves.toEqual({ allowed: false, reason: 'banned' })
+    db.findUnique.mockResolvedValue({ ...newUser, bannedAt: null })
+    await expect(readAppAccess('u-ok', 'en', { deviceBlocked: true })).resolves.toEqual({ allowed: false, reason: 'banned' })
+    await expect(readAppAccess('u-ok', 'en')).resolves.toEqual({ allowed: true, reason: 'gate_off' })
+    db.findUnique.mockResolvedValue({ ...newUser, isOperator: true, bannedAt: null })
+    await expect(readAppAccess('u-staff', 'en', { deviceBlocked: true })).resolves.toEqual({ allowed: true, reason: 'gate_off' })
+  })
+})

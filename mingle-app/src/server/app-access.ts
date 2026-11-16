@@ -26,9 +26,12 @@ import { ReferralError, redeemReferralCode } from '@/server/referral'
  * the official account and store-review accounts skip it. While this server
  * cannot send a code (no SMS provider set up) nobody is asked, so turning the
  * switch on before the keys are in locks no one out.
+ *
+ * Permanent ban, checked first and always: a banned account, or any account
+ * on a device a ban closed, gets 'banned' (src/server/identity/ban.ts).
  */
 export type AppAccessReason =
-  | 'gate_off' | 'other_locale' | 'existing' | 'invited' | 'granted' | 'staff' | 'review' | 'needs_invite' | 'waitlisted' | 'needs_phone'
+  | 'gate_off' | 'other_locale' | 'existing' | 'invited' | 'granted' | 'staff' | 'review' | 'needs_invite' | 'waitlisted' | 'needs_phone' | 'banned'
 
 export type AppAccess = { allowed: boolean; reason: AppAccessReason }
 
@@ -101,16 +104,18 @@ export function resolveAppAccess(user: AppAccessUser, env: NodeJS.ProcessEnv = p
 
 const ACCESS_SELECT = {
   createdAt: true, referredByUserId: true, isOperator: true, isOfficial: true, phoneE164: true, email: true,
-  waitlistedAt: true, accessGrantedAt: true,
+  waitlistedAt: true, accessGrantedAt: true, bannedAt: true,
 } as const
 
-export async function readAppAccess(userId: string, locale?: string | null): Promise<AppAccess> {
+export async function readAppAccess(userId: string, locale?: string | null, options: { deviceBlocked?: boolean } = {}): Promise<AppAccess> {
   const phoneRequired = isPhoneRequiredOn() && isPhoneVerificationAvailable()
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: ACCESS_SELECT })
+  if (user?.bannedAt) return { allowed: false, reason: 'banned' }
+  if (options.deviceBlocked && user && !user.isOperator && !user.isOfficial) return { allowed: false, reason: 'banned' }
   if (!phoneRequired) {
     if (!isInviteGateOn()) return { allowed: true, reason: 'gate_off' }
     if (!isInviteGateLocale(locale)) return { allowed: true, reason: 'other_locale' }
   }
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: ACCESS_SELECT })
   if (!user) return phoneRequired && !isInviteGateOn() ? { allowed: true, reason: 'gate_off' } : { allowed: false, reason: 'needs_invite' }
   if (phoneRequired && needsPhoneNumber(user, process.env, true)) return { allowed: false, reason: 'needs_phone' }
   const access = resolveAppAccess(user, process.env, locale)

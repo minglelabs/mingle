@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { enterInviteCode, readAppAccess } from '@/server/app-access'
+import { readDeviceHeader, touchDevice } from '@/server/identity/links'
 import { ReferralError, type ReferralRedeemError } from '@/server/referral'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' }
@@ -31,7 +32,9 @@ function readLocale(raw: unknown): string | null {
 export async function getAppAccess(request?: NextRequest) {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
-  return json(await readAppAccess(userId, readLocale(request?.nextUrl.searchParams.get('locale'))))
+  // The app asks this every time it opens: the place where an account is noted on its device.
+  const device = request ? await touchDevice(userId, readDeviceHeader(request.headers)) : null
+  return json(await readAppAccess(userId, readLocale(request?.nextUrl.searchParams.get('locale')), { deviceBlocked: Boolean(device?.blocked) }))
 }
 
 /** POST /account/access { code } — enters an invite code at the gate. */

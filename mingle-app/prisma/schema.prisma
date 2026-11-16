@@ -87,7 +87,7 @@ model User {
   referralRechatAt             DateTime? @map("referral_rechat_at")
   /// When the contact-sync screen was shown on its own after signup. Null = not shown yet.
   contactSyncPromptedAt        DateTime? @map("contact_sync_prompted_at")
-  /// The user's own phone number, E.164 ("+821012345678"), set only after an SMS code check (src/server/phone-verification.ts). One account per number: verifying it elsewhere moves it.
+  /// The user's own phone number, E.164 ("+821012345678"), set only after an SMS code check (src/server/phone-verification.ts). One account per number: a number never moves; whoever proves it lands on its account (src/server/identity/phone-claim.ts).
   phoneE164                    String?   @unique(map: "app_users_phone_e164_key") @map("phone_e164")
   /// sha256 hex of phoneE164. Friends' apps hash their contacts' numbers the same way to find this user (src/server/contact-match.ts); uploaded hashes are never stored.
   phoneHash                    String?   @unique(map: "app_users_phone_hash_key") @map("phone_hash")
@@ -105,6 +105,12 @@ model User {
   inAppNotificationsEnabled    Boolean   @default(true) @map("in_app_notifications_enabled")
   moderationHiddenAt           DateTime? @map("moderation_hidden_at")
   moderationRestrictedAt       DateTime? @map("moderation_restricted_at")
+  /// Permanent ban (src/server/identity/ban.ts): no sign-in, no new account from the same device, number or sign-in method.
+  bannedAt                     DateTime? @map("banned_at")
+  bannedReason                 String?   @map("banned_reason")
+  /// One account per person (docs/one-account-per-person.md): this empty new account was folded into another one. The row stays as a pointer so a later sign-in with its id lands on that account.
+  mergedIntoUserId             String?   @map("merged_into_user_id")
+  mergedAt                     DateTime? @map("merged_at")
   /// The HashChat team's own official account (spec item 84): content it posts carries the "Official" badge. Display only; never affects ranking or counts. Not an operator account (see `isOperator`).
   isOfficial                   Boolean   @default(false) @map("is_official")
   /// Operator account run by HashChat staff (admin operator accounts): labeled "운영 계정" wherever its name is shown. Display and admin scoping only; never affects ranking or counts. Never true together with `isOfficial` (DB check app_users_operator_not_official_chk).
@@ -1430,4 +1436,102 @@ model AppCoinAdminGrant {
 
   @@index([userId, createdAt(sort: Desc)], map: "app_coin_admin_grants_user_created_at_idx")
   @@map("app_coin_admin_grants")
+}
+
+// ── One account per person (docs/one-account-per-person.md) ───────────────
+// Every key below is an HMAC (src/server/identity/keys.ts), never the raw
+// value. None of these rows is deleted with a user: a ban has to outlive it.
+
+/// One phone or browser. Only 'keychain' (iOS) and 'android_id' survive a reinstall and decide anything; the other kinds are recorded only.
+model AppDevice {
+  id            String    @id @default(cuid())
+  platform      String
+  deviceKeyHash String    @unique(map: "app_devices_device_key_hash_key") @map("device_key_hash")
+  /// keychain | android_id | web_local | push_installation
+  keyKind       String    @map("key_kind")
+  firstSeenAt   DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt    DateTime  @default(now()) @map("last_seen_at")
+  blockedAt     DateTime? @map("blocked_at")
+  blockedReason String?   @map("blocked_reason")
+  /// Staff test phone: any number of accounts, and left out of ban bundles.
+  exemptAt      DateTime? @map("exempt_at")
+
+  users  AppDeviceUser[]
+  phones AppDevicePhone[]
+
+  @@map("app_devices")
+}
+
+model AppDeviceUser {
+  id          String   @id @default(cuid())
+  deviceId    String   @map("device_id")
+  userId      String   @map("user_id")
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+
+  device AppDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, userId], map: "app_device_users_device_user_key")
+  @@index([userId], map: "app_device_users_user_id_idx")
+  @@map("app_device_users")
+}
+
+model AppDevicePhone {
+  id           String   @id @default(cuid())
+  deviceId     String   @map("device_id")
+  phoneKeyHash String   @map("phone_key_hash")
+  verifiedAt   DateTime @default(now()) @map("verified_at")
+
+  device AppDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, phoneKeyHash], map: "app_device_phones_device_phone_key")
+  @@index([phoneKeyHash], map: "app_device_phones_phone_key_hash_idx")
+  @@map("app_device_phones")
+}
+
+/// An extra number attached to an account (its own number stays on User.phoneE164). A number belongs to one account.
+model AppUserPhone {
+  id                  String   @id @default(cuid())
+  userId              String   @map("user_id")
+  phoneKeyHash        String   @unique(map: "app_user_phones_phone_key_hash_key") @map("phone_key_hash")
+  /// Last four digits, to show the owner which number it is.
+  last4               String   @map("last4")
+  attachedViaDeviceId String?  @map("attached_via_device_id")
+  verifiedAt          DateTime @default(now()) @map("verified_at")
+
+  @@index([userId], map: "app_user_phones_user_id_idx")
+  @@map("app_user_phones")
+}
+
+/// Append-only: one row each time an account is seen with a sign-in method, number or device. Two accounts sharing a (method, methodKeyHash) are the same bundle.
+model AppIdentityLink {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  deviceId      String?  @map("device_id")
+  /// apple | google | email | phone
+  method        String
+  methodKeyHash String   @map("method_key_hash")
+  /// sign_up | sign_in | phone_verified | phone_in_use | attached | detached | merged
+  event         String
+  ip            String?
+  appVersion    String?  @map("app_version")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt], map: "app_identity_links_user_created_idx")
+  @@index([method, methodKeyHash], map: "app_identity_links_method_key_idx")
+  @@map("app_identity_links")
+}
+
+/// What a permanent ban closed: no sign-in or sign-up through it.
+model AppIdentityBlock {
+  id           String   @id @default(cuid())
+  /// device | phone | apple | google | email
+  kind         String
+  keyHash      String   @map("key_hash")
+  sourceUserId String?  @map("source_user_id")
+  reason       String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([kind, keyHash], map: "app_identity_blocks_kind_key_hash_key")
+  @@map("app_identity_blocks")
 }

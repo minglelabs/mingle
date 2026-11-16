@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   userUpdateMany: vi.fn(),
   userUpdate: vi.fn(),
   transaction: vi.fn(),
+  claim: vi.fn(),
+  blocked: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -16,11 +18,19 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
+vi.mock('@/server/identity/links', () => ({ isIdentityBlocked: mocks.blocked }))
+vi.mock('@/server/identity/phone-claim', () => {
+  class PhoneClaimRefused extends Error {
+    constructor(readonly code: string) { super(code) }
+  }
+  return { PhoneClaimRefused, claimVerifiedPhone: mocks.claim }
+})
+
+import { PhoneClaimRefused } from '@/server/identity/phone-claim'
 import {
   PHONE_SIGN_IN_CODES_PER_CLIENT_PER_DAY,
   PHONE_SIGN_IN_CODES_PER_NUMBER_PER_DAY,
   confirmPhoneVerification,
-  hashPhoneE164,
   isReviewPhoneNumber,
   resetPhoneSignInLimits,
   startPhoneSignIn,
@@ -32,12 +42,14 @@ const env = { ...process.env }
 const fetchMock = vi.fn()
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   mocks.requestCount.mockResolvedValue(0)
   mocks.requestCreate.mockResolvedValue({})
   mocks.userUpdateMany.mockReturnValue('clear-others')
   mocks.userUpdate.mockReturnValue('set-mine')
   mocks.transaction.mockResolvedValue([])
+  mocks.blocked.mockResolvedValue(false)
+  mocks.claim.mockImplementation(async (_userId: string, phoneE164: string) => ({ phoneE164 }))
   vi.stubGlobal('fetch', fetchMock)
   delete process.env.TWILIO_ACCOUNT_SID
   delete process.env.TWILIO_AUTH_TOKEN
@@ -82,19 +94,27 @@ describe('startPhoneVerification', () => {
 })
 
 describe('confirmPhoneVerification', () => {
-  it('saves an approved number and takes it off any other account', async () => {
+  it('hands an approved number to the claim rules, which save it or land on its account', async () => {
     useTwilio()
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'approved' }), { status: 200 }))
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ status: 'approved' }), { status: 200 }))
     await expect(confirmPhoneVerification('me', '+821012345678', '123 456')).resolves.toEqual({ phoneE164: '+821012345678' })
-    expect(mocks.userUpdateMany).toHaveBeenCalledWith({
-      where: { phoneE164: '+821012345678', id: { not: 'me' } },
-      data: { phoneE164: null, phoneHash: null, phoneVerifiedAt: null },
-    })
-    expect(mocks.userUpdate).toHaveBeenCalledWith({
-      where: { id: 'me' },
-      data: expect.objectContaining({ phoneE164: '+821012345678', phoneHash: hashPhoneE164('+821012345678') }),
-    })
-    expect(mocks.transaction).toHaveBeenCalledWith(['clear-others', 'set-mine'])
+    expect(mocks.claim).toHaveBeenCalledWith('me', '+821012345678', {})
+    mocks.claim.mockResolvedValueOnce({ phoneE164: '+821012345678', switchedTo: 'owner' })
+    await expect(confirmPhoneVerification('me', '+821012345678', '123456')).resolves.toEqual({ phoneE164: '+821012345678', switchedTo: 'owner' })
+  })
+
+  it('answers "in use" or "blocked" when the claim rules refuse', async () => {
+    mocks.claim.mockRejectedValueOnce(new PhoneClaimRefused('phone_in_use'))
+    await expect(confirmPhoneVerification('me', '+819012345678', '000000')).rejects.toMatchObject({ code: 'phone_in_use' })
+    mocks.claim.mockRejectedValueOnce(new PhoneClaimRefused('blocked'))
+    await expect(confirmPhoneVerification('me', '+819012345678', '000000')).rejects.toMatchObject({ code: 'blocked' })
+  })
+
+  it('sends no code to a number a ban closed', async () => {
+    mocks.blocked.mockResolvedValue(true)
+    await expect(startPhoneVerification('me', '+821012345678')).rejects.toMatchObject({ code: 'blocked' })
+    await expect(startPhoneSignIn('+821012345678')).rejects.toMatchObject({ code: 'blocked' })
+    expect(mocks.requestCreate).not.toHaveBeenCalled()
   })
 
   it('rejects a wrong or expired code without saving', async () => {
@@ -104,7 +124,7 @@ describe('confirmPhoneVerification', () => {
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 404 }))
     await expect(confirmPhoneVerification('me', '+821012345678', '000000')).rejects.toMatchObject({ code: 'wrong_code' })
     await expect(confirmPhoneVerification('me', '+821012345678', '12')).rejects.toMatchObject({ code: 'invalid_code' })
-    expect(mocks.transaction).not.toHaveBeenCalled()
+    expect(mocks.claim).not.toHaveBeenCalled()
   })
 
   it('accepts 000000 on a local server without Twilio', async () => {

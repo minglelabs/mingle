@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, X } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { fillPhoneFriendsCopy, type PhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -46,6 +47,7 @@ export default function PhoneVerifySheet({
   const [now, setNow] = useState(() => Date.now());
   const codeInputRef = useRef<HTMLInputElement | null>(null);
   const keyboardInset = useKeyboardInset();
+  const { update: renewSession } = useSession();
 
   const phone = normalizePhoneNumber(number, country.callingCode);
 
@@ -54,7 +56,9 @@ export default function PhoneVerifySheet({
       : value === "invalid_code" || value === "wrong_code" ? copy.errorCode
         : value === "too_many_requests" ? copy.errorTooMany
           : value === "unavailable" ? copy.errorUnavailable
-            : copy.errorGeneric
+            : value === "phone_in_use" ? copy.errorInUse
+              : value === "blocked" ? copy.errorBlocked
+                : copy.errorGeneric
   ), [copy]);
 
   const sendCode = useCallback(async (target: string) => {
@@ -105,9 +109,17 @@ export default function PhoneVerifySheet({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: step.phone, code }),
       });
-      const body = await response.json().catch(() => ({})) as { error?: string; phoneE164?: string };
+      const body = await response.json().catch(() => ({})) as { error?: string; phoneE164?: string; switched?: boolean };
       if (!response.ok || !body.phoneE164) {
         setError(errorText(body.error));
+        return;
+      }
+      if (body.switched) {
+        // The number (or this device) already had an account: this sign-in was
+        // folded into it. Renew the session so it becomes that account's, then
+        // start the app over as that account.
+        await renewSession({}).catch(() => null);
+        window.location.reload();
         return;
       }
       onVerified(body.phoneE164);
@@ -116,7 +128,7 @@ export default function PhoneVerifySheet({
     } finally {
       setBusy(false);
     }
-  }, [busy, code, confirmCode, copy.errorGeneric, errorText, onVerified, step]);
+  }, [busy, code, confirmCode, copy.errorGeneric, errorText, onVerified, renewSession, step]);
 
   const canResend = step.kind === "code" && now - step.sentAt >= RESEND_AFTER_MS;
 
