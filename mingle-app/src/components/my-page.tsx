@@ -6,6 +6,8 @@ import ProfileImageCropper, {
   type ProfileImageCropperChange,
 } from "@/components/profile-image-cropper";
 import ProfileImagePreview from "@/components/profile-image-preview";
+import SignInMethodsSheet from "@/components/account/sign-in-methods-sheet";
+import { resolveSignInMethodsCopy } from "@/i18n/sign-in-methods-copy";
 import {
   clearMyPageProfileCache,
   createEmptyMyPageProfile,
@@ -431,6 +433,7 @@ function ProfileSettingsPanel({
   const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState<boolean | null>(null);
   const [isSavingNotificationsPreference, setIsSavingNotificationsPreference] = useState(false);
   const [isAccountActionModalOpen, setIsAccountActionModalOpen] = useState(false);
+  const [isSignInMethodsOpen, setIsSignInMethodsOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
@@ -1100,9 +1103,19 @@ function ProfileSettingsPanel({
             ) : null}
             <button
               type="button"
+              data-qa="open-sign-in-methods"
+              onClick={() => setIsSignInMethodsOpen(true)}
+              disabled={sessionStatus !== "authenticated"}
+              className="mt-8 flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {resolveSignInMethodsCopy(locale).title}
+            </button>
+            {isSignInMethodsOpen ? <SignInMethodsSheet locale={locale} onClose={() => setIsSignInMethodsOpen(false)} /> : null}
+            <button
+              type="button"
               onClick={onSignOut}
               disabled={sessionStatus !== "authenticated"}
-              className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <LogOut size={17} strokeWidth={2.1} aria-hidden="true" />
               {copy.logout}

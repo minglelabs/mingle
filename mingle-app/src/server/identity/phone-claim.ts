@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { ROYCE_USER_ID } from '@/lib/signup-welcome-onboarding'
 import { identityKeyHash, identityMethodForProvider } from '@/server/identity/keys'
 import { isIdentityBlocked, recordIdentityLink, type RequestIdentityContext } from '@/server/identity/links'
+import { notifyUserFromTeam } from '@/server/team-notifications'
 
 // What happens once a number is proved by an account that is already signed
 // in (docs/one-account-per-person.md, section 5). A number never moves:
@@ -173,6 +174,10 @@ async function foldAccountInto(input: {
   for (const account of accounts) {
     const method = identityMethodForProvider(account.provider)
     if (method) await recordIdentityLink({ userId: toUserId, method, rawKey: account.providerAccountId, event: 'attached', context })
+  }
+  // Tell the owner: if it was not them, they can take it off in Settings.
+  if (accounts.length > 0 || input.phone === 'attach') {
+    await notifyUserFromTeam({ recipientId: toUserId, type: 'sign_in_attached', body: '', targetId: toUserId })
   }
 }
 

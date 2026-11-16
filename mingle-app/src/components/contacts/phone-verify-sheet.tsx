@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { fillPhoneFriendsCopy, type PhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { resolveSignInMethodsCopy } from "@/i18n/sign-in-methods-copy";
 import { useKeyboardInset } from "@/components/compose/compose-chrome";
 import { PHONE_COUNTRIES, maskE164, normalizePhoneNumber, resolveDefaultPhoneCountry } from "@/lib/phone-number";
 
@@ -44,6 +45,7 @@ export default function PhoneVerifySheet({
   const [step, setStep] = useState<Step>({ kind: "phone" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [switchedNotice, setSwitchedNotice] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const codeInputRef = useRef<HTMLInputElement | null>(null);
   const keyboardInset = useKeyboardInset();
@@ -118,7 +120,10 @@ export default function PhoneVerifySheet({
         // The number (or this device) already had an account: this sign-in was
         // folded into it. Renew the session so it becomes that account's, then
         // start the app over as that account.
+        setSwitchedNotice(resolveSignInMethodsCopy(locale).switched);
         await renewSession({}).catch(() => null);
+        // Long enough to read the one line before the app starts over.
+        await new Promise((resolve) => setTimeout(resolve, 1600));
         window.location.reload();
         return;
       }
@@ -128,7 +133,7 @@ export default function PhoneVerifySheet({
     } finally {
       setBusy(false);
     }
-  }, [busy, code, confirmCode, copy.errorGeneric, errorText, onVerified, renewSession, step]);
+  }, [busy, code, confirmCode, copy.errorGeneric, errorText, locale, onVerified, renewSession, step]);
 
   const canResend = step.kind === "code" && now - step.sentAt >= RESEND_AFTER_MS;
 
@@ -253,6 +258,7 @@ export default function PhoneVerifySheet({
           </>
         )}
         {error ? <p className="mt-2 text-[13px] text-rose-600" role="alert">{error}</p> : null}
+        {switchedNotice ? <p className="mt-2 text-[13px] font-semibold text-slate-800" role="status" data-qa="phone-switched-notice">{switchedNotice}</p> : null}
       </div>
     </div>
   );

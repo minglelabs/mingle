@@ -20,7 +20,9 @@ const db = vi.hoisted(() => ({
   transaction: vi.fn(),
 }))
 
+const notify = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/signup-welcome-onboarding', () => ({ ROYCE_USER_ID: 'royce' }))
+vi.mock('@/server/team-notifications', () => ({ notifyUserFromTeam: notify }))
 vi.mock('@/lib/prisma', () => {
   const prisma = {
     user: { findFirst: db.userFindFirst, findUnique: db.userFindUnique, findMany: db.userFindMany, update: db.userUpdate, updateMany: db.userUpdateMany },
@@ -163,6 +165,7 @@ describe('claimVerifiedPhone', () => {
     })
     expect(db.userUpdate).toHaveBeenCalledTimes(1)
     expect(db.linkCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: 'owner', method: 'google', event: 'attached', methodKeyHash: identityKeyHash('google', 'g-1') }) })
+    expect(notify).toHaveBeenCalledWith({ recipientId: 'owner', type: 'sign_in_attached', body: '', targetId: 'owner' })
   })
 
   it('finds the owner through an attached extra number too', async () => {
