@@ -9,6 +9,7 @@ import { resolvePhoneGateCopy } from "@/i18n/phone-gate-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { resolveDeviceIdentityHeaders } from "@/lib/native-device-identity";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
+import { requestProfileBasics } from "@/lib/profile-basics";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 
 type Access = { allowed: boolean; reason: string };
@@ -38,6 +39,10 @@ export default function PhoneGate({ locale, onAccess }: { locale: string; onAcce
       const body = response.ok ? await response.json() as Partial<Access> : null;
       if (body && typeof body.allowed === "boolean") {
         onAccess({ allowed: body.allowed, reason: body.reason ?? "unknown" });
+        // Next step after the number: gender and birth date, if the profile
+        // still lacks them (the same two screens a first follow would show).
+        // Not while the invite gate is still in the way.
+        if (body.allowed) void requestProfileBasics();
         return;
       }
     } catch {
