@@ -18,6 +18,11 @@
  * microphone instead (`earphoneMicrophone` on `native_stt_start`,
  * `native_stt_set_earphone_microphone`); absent or false means the web does
  * not ask.
+ * `deviceId` with `deviceKind` is the value that tells the server two
+ * installs are the same phone (one account per person): a random id kept in
+ * the iOS keychain ('keychain') or Android's ANDROID_ID ('android_id'). Both
+ * survive a reinstall. Absent when the shell has none; the web then sends no
+ * device value. Never an advertising id.
  */
 export type NativeShellCapabilities = {
   type: 'capabilities';
@@ -27,7 +32,22 @@ export type NativeShellCapabilities = {
   nativeTts: boolean;
   contacts: boolean;
   earphoneMicrophoneChoice: boolean;
+  deviceId?: string;
+  deviceKind?: NativeDeviceKind;
 };
+
+export type NativeDeviceKind = 'keychain' | 'android_id';
+
+/** The device value to send, or null when the native side gave none that the server would take (8 to 128 characters). */
+export function resolveNativeDeviceIdentity(
+  rawId: unknown,
+  rawKind: unknown,
+): { deviceId: string; deviceKind: NativeDeviceKind } | null {
+  const deviceId = typeof rawId === 'string' ? rawId.trim() : '';
+  if (deviceId.length < 8 || deviceId.length > 128) return null;
+  if (rawKind !== 'keychain' && rawKind !== 'android_id') return null;
+  return { deviceId, deviceKind: rawKind };
+}
 
 // The capabilities message is sent once per load end and a room usually mounts
 // later, so the page also keeps the last one here for late readers.
@@ -39,7 +59,10 @@ export function buildNativeShellCapabilities(options: {
   nativeTts?: boolean;
   contacts?: boolean;
   earphoneMicrophoneChoice?: boolean;
+  deviceId?: string | null;
+  deviceKind?: string | null;
 }): NativeShellCapabilities {
+  const device = resolveNativeDeviceIdentity(options.deviceId, options.deviceKind);
   return {
     type: 'capabilities',
     openAppSettings: true,
@@ -48,5 +71,6 @@ export function buildNativeShellCapabilities(options: {
     nativeTts: options.nativeTts === true,
     contacts: options.contacts === true,
     earphoneMicrophoneChoice: options.earphoneMicrophoneChoice === true,
+    ...(device ?? {}),
   };
 }

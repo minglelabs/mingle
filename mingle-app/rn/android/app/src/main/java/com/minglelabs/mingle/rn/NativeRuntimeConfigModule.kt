@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -71,8 +72,25 @@ class NativeRuntimeConfigModule(
       "conversationRestoreUrl" to (restorePrefs.getString(RESTORE_URL_KEY, "") ?: ""),
       "conversationRestoreConversationId" to (restorePrefs.getString(RESTORE_CONVERSATION_ID_KEY, "") ?: ""),
       "conversationRestoreCreatedAtMs" to restorePrefs.getLong(RESTORE_CREATED_AT_MS_KEY, 0L).toDouble(),
+      // One account per person (docs/one-account-per-person.md). Empty when
+      // the device gives no usable value; the web then sends no device value.
+      "deviceId" to readDeviceId(),
+      "deviceKind" to "android_id",
     ),
   )
+
+  // ANDROID_ID: fixed for this app's signing key, this device and this device
+  // user, so it survives a reinstall and changes on a factory reset. It is not
+  // the advertising id and needs no permission.
+  private fun readDeviceId(): String {
+    val value = try {
+      Settings.Secure.getString(reactApplicationContext.contentResolver, Settings.Secure.ANDROID_ID)
+    } catch (_: Throwable) {
+      null
+    }?.trim().orEmpty()
+    // 9774d56d682e549c: the same value on every device of some old, broken ROMs.
+    return if (value.length < 8 || value == BROKEN_ANDROID_ID) "" else value
+  }
 
   // Where this build came from, for the app-update card: Google Play reports
   // com.android.vending as the installer; adb installs (devbox's
@@ -527,6 +545,7 @@ class NativeRuntimeConfigModule(
     const val MAX_LAST_KNOWN_AGE_MS = 10 * 60 * 1_000L
     const val PLAY_STORE_INSTALLER_PACKAGE = "com.android.vending"
     const val ADB_SHELL_INSTALLER_PACKAGE = "com.android.shell"
+    const val BROKEN_ANDROID_ID = "9774d56d682e549c"
 
     fun recordIncomingProfileLink(context: Context, rawUrl: String?) {
       val normalizedUrl = rawUrl?.trim() ?: return
