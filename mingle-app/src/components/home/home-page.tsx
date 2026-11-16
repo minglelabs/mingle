@@ -7,6 +7,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import BottomTabBar from "@/components/bottom-tab-bar";
 import FlagEmoji from "@/components/flag-emoji";
 import HomeNoticeStrip from "@/components/home/home-notices";
+import ProfileStartCard from "@/components/home/profile-start-card";
 import { useAppAccess } from "@/components/onboarding/invite-gate";
 import AccountBadge from "@/components/posts/account-badge";
 import { CompactLanguageLevels } from "@/components/profile-language-levels";
@@ -132,6 +133,7 @@ export default function HomePage({ dictionary, locale }: HomePageProps) {
         <h1 className="text-[20px] font-extrabold tracking-tight text-slate-950">HashChat</h1>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {sessionStatus === "authenticated" && viewerId ? <ProfileStartCard locale={locale} userId={viewerId} /> : null}
         <HomeNoticeStrip locale={locale} />
         {sessionStatus === "unauthenticated" ? (
           <div className="flex flex-col items-center px-6 pt-20 text-center">
