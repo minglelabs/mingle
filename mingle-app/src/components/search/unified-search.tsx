@@ -41,6 +41,8 @@ export type UnifiedSearchProps = {
   onOpenPerson: (userId: string) => void;
   /** Open a post in the search viewer, scoped to this query's results. */
   onOpenSearchPost: (query: string, postId: string) => void;
+  /** Open a post from the grid shown while nothing is typed. Without it that grid is left out. */
+  onOpenBrowsePost?: (postId: string) => void;
   /** Open the full sliding people-list screen ("see all"). */
   onSeeAllPeople: (query: string) => void;
   /**
@@ -60,6 +62,7 @@ export default function UnifiedSearch({
   currentUserId,
   onOpenPerson,
   onOpenSearchPost,
+  onOpenBrowsePost,
   onSeeAllPeople,
   query: controlledQuery,
   onQueryChange: controlledOnQueryChange,
@@ -348,6 +351,22 @@ export default function UnifiedSearch({
             onRemove={(value) => void deleteRecentSearch(value).then(setRecent)}
             onClearAll={() => void clearAllRecentSearches().then(setRecent)}
           />
+        ) : null}
+
+        {/* Nothing typed: the explore tab shows the posts everyone sees (the former feed tab). */}
+        {postingFeedEnabled && !normalizedQuery && onOpenBrowsePost ? (
+          <section className="px-0.5 pt-2" aria-label={copy.postsHeading} data-qa="explore-posts">
+            <h2 className="px-3.5 pb-2 text-[13px] font-semibold uppercase tracking-wide text-gray-500">{copy.postsHeading}</h2>
+            <PostGrid
+              locale={locale}
+              endpoint={feedSourceEndpoint({ kind: "home" }, { limit: 18, displayLanguage })}
+              displayLanguage={displayLanguage}
+              scrollScope="explore-posts"
+              onSelectPost={onOpenBrowsePost}
+              scrollContainerRef={scrollRef}
+              cacheResults
+            />
+          </section>
         ) : null}
 
         {normalizedQuery ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import type { AppDictionary } from "@/i18n/types";
-import { Home, MessageCircle, Search, UserCircle } from "lucide-react";
+import { Compass, Home, MessageCircle, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -14,6 +14,8 @@ import { runAfterStartup } from "@/lib/after-startup";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { useIsPostingFeedSupported } from "@/components/feed/use-posting-feed-guard";
 import { feedHref as buildFeedHref } from "@/lib/feed-routes";
+import { homeHref as buildHomeHref } from "@/lib/home-routes";
+import { resolveHomeCopy } from "@/i18n/home-copy";
 import {
   buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
   isNativeTabRootHref,
@@ -29,17 +31,9 @@ export const GLASS_TAB_BAR_INSET = `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(saf
 // the fast path; this only bounds how stale a visible badge can get.
 export const UNREAD_BADGE_POLL_INTERVAL_MS = 60_000;
 
-/**
- * The feed tab's accessible name. `tabs.feed` is translated in every locale
- * dictionary; `feed.tabLabel` exists only in ko/en, so a merged dictionary
- * would otherwise inherit the base locale's word for other languages.
- */
-function feedTabLabel(dictionary: AppDictionary): string {
-  return dictionary.tabs.feed ?? dictionary.feed?.tabLabel ?? "Feed";
-}
-
 type BottomTabBarProps = {
-  activeRoute: "feed" | "conversations" | "connect" | "mypage";
+  /** "feed" is kept for the post screens: they live under the explore tab now and light it up. */
+  activeRoute: "home" | "feed" | "conversations" | "connect" | "mypage";
   dictionary: AppDictionary;
   locale: string;
   unreadConversationMessageCount?: number;
@@ -129,12 +123,11 @@ export default function BottomTabBar({
   const { data: session } = useSession();
   const sessionUserId = session?.user?.id ?? "";
   const postingFeedSupported = useIsPostingFeedSupported();
-  // Hide the feed tab for a client whose namespace does not serve the posting
-  // feature (a pre-2.2.0 app). `null` means "not resolved yet" — the first
-  // paint matches the server render (which renders with the build-time
-  // namespace), and the tab collapses to the original three once a client is
-  // known to be unsupported. A supported client never reaches this branch.
-  const showFeedTab = postingFeedSupported !== false;
+  // Hide the home tab for a client whose namespace serves neither the people
+  // cards nor the posting feature (a pre-2.2.0 app). `null` means "not
+  // resolved yet" — the first paint matches the server render, and the tab
+  // collapses to the other three once a client is known to be unsupported.
+  const showHomeTab = postingFeedSupported !== false;
   const [loadedUnreadConversationMessageCount, setLoadedUnreadConversationMessageCount] = useState(0);
   const pathname = usePathname() || "";
   const router = useRouter();
@@ -146,6 +139,7 @@ export default function BottomTabBar({
   const connectPath = `/${locale}/connect`;
   const mypagePath = `/${locale}/mypage`;
   const feedPath = buildFeedHref(locale);
+  const homePath = buildHomeHref(locale);
   const conversationsHref = buildNativeAwareTabPath(conversationsPath, searchParams, {
     // Returning from another top-level tab is an intentional request for the
     // list. A live STT room must not be restored as a side effect of mounting
@@ -155,17 +149,22 @@ export default function BottomTabBar({
   });
   const connectHref = buildNativeAwareTabPath(connectPath, searchParams, { tabRoot: true });
   const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams, { tabRoot: true });
-  const feedHref = buildNativeAwareTabPath(feedPath, searchParams, { tabRoot: true });
+  const homeTabHref = buildNativeAwareTabPath(homePath, searchParams, { tabRoot: true });
   // A screen can highlight a tab without living under its route (the post
   // viewer opened from My page): tapping that tab must still go to it.
   const isOnTabRoute = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
+  const isHomeActive = activeRoute === "home"
+    || pathname === homePath
+    || pathname.startsWith(`${homePath}/`);
+  // The post feed sits under the explore tab (home/explore plan): its screens light that tab up.
   const isFeedActive = activeRoute === "feed"
     || pathname === feedPath
     || pathname.startsWith(`${feedPath}/`);
   const isConversationsActive = activeRoute === "conversations"
     || pathname === conversationsPath
     || pathname.startsWith(`${conversationsPath}/`);
-  const isConnectActive = activeRoute === "connect"
+  const isConnectActive = isFeedActive
+    || activeRoute === "connect"
     || pathname === connectPath
     || pathname.startsWith(`${connectPath}/`);
   const isMypageActive = activeRoute === "mypage"
@@ -256,9 +255,8 @@ export default function BottomTabBar({
 
   useEffect(() => {
     const inactiveTabHrefs = [
-      // Only once the client is known to serve the feed; an unsupported app
-      // hides the tab after mount and would never use this prefetch.
-      postingFeedSupported !== true || isFeedActive ? null : feedHref,
+      // Only once the client is known to serve it; an unsupported app hides the tab.
+      postingFeedSupported !== true || isHomeActive ? null : homeTabHref,
       isConversationsActive ? null : conversationsHref,
       isConnectActive ? null : connectHref,
       isMypageActive ? null : mypageHref,
@@ -304,10 +302,10 @@ export default function BottomTabBar({
   }, [
     connectHref,
     conversationsHref,
-    feedHref,
+    homeTabHref,
     isConnectActive,
     isConversationsActive,
-    isFeedActive,
+    isHomeActive,
     isMypageActive,
     mypageHref,
     postingFeedSupported,
@@ -338,27 +336,45 @@ export default function BottomTabBar({
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
-      {showFeedTab ? (
+      {showHomeTab ? (
         <button
           type="button"
           onClick={() => {
-            if (isOnTabRoute(feedPath)) return;
+            if (isOnTabRoute(homePath)) return;
             markTopLevelTabSwitch();
-            router.replace(feedHref);
+            router.replace(homeTabHref);
           }}
           className="flex flex-1 items-center justify-center transition active:opacity-60"
-          aria-label={feedTabLabel(dictionary)}
-          aria-current={isFeedActive ? "page" : undefined}
+          aria-label={resolveHomeCopy(locale).tabLabel}
+          aria-current={isHomeActive ? "page" : undefined}
         >
           <Home
             size={26}
-            fill={isFeedActive ? activeColor : "none"}
-            stroke={isFeedActive ? activeColor : inactiveColor}
+            fill={isHomeActive ? activeColor : "none"}
+            stroke={isHomeActive ? activeColor : inactiveColor}
             strokeWidth={1.9}
             aria-hidden="true"
           />
         </button>
       ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          if (isOnTabRoute(connectPath)) return;
+          markTopLevelTabSwitch();
+          router.replace(connectHref);
+        }}
+        className="flex flex-1 items-center justify-center transition active:opacity-60"
+        aria-label={dictionary.titles.connect}
+        aria-current={isConnectActive ? "page" : undefined}
+      >
+        <Compass
+          size={26}
+          stroke={isConnectActive ? activeColor : inactiveColor}
+          strokeWidth={isConnectActive ? activeStroke : 1.9}
+          aria-hidden="true"
+        />
+      </button>
       <button
         type="button"
         onClick={() => {
@@ -389,24 +405,6 @@ export default function BottomTabBar({
             </span>
           ) : null}
         </span>
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          if (isOnTabRoute(connectPath)) return;
-          markTopLevelTabSwitch();
-          router.replace(connectHref);
-        }}
-        className="flex flex-1 items-center justify-center transition active:opacity-60"
-        aria-label={dictionary.titles.connect}
-        aria-current={isConnectActive ? "page" : undefined}
-      >
-        <Search
-          size={26}
-          stroke={isConnectActive ? activeColor : inactiveColor}
-          strokeWidth={isConnectActive ? activeStroke : 1.9}
-          aria-hidden="true"
-        />
       </button>
       <button
         type="button"

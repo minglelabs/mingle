@@ -105,6 +105,8 @@ model User {
   inAppNotificationsEnabled    Boolean   @default(true) @map("in_app_notifications_enabled")
   moderationHiddenAt           DateTime? @map("moderation_hidden_at")
   moderationRestrictedAt       DateTime? @map("moderation_restricted_at")
+  /// When this user last opened the notice list (src/server/notices.ts). Notices published after it are unread.
+  noticesSeenAt                DateTime? @map("notices_seen_at")
   /// The HashChat team's own official account (spec item 84): content it posts carries the "Official" badge. Display only; never affects ranking or counts. Not an operator account (see `isOperator`).
   isOfficial                   Boolean   @default(false) @map("is_official")
   /// Operator account run by HashChat staff (admin operator accounts): labeled "운영 계정" wherever its name is shown. Display and admin scoping only; never affects ranking or counts. Never true together with `isOfficial` (DB check app_users_operator_not_official_chk).
@@ -1430,4 +1432,26 @@ model AppCoinAdminGrant {
 
   @@index([userId, createdAt(sort: Desc)], map: "app_coin_admin_grants_user_created_at_idx")
   @@map("app_coin_admin_grants")
+}
+
+/// A service notice shown from the strip on top of the home tab (src/server/notices.ts).
+/// kind 'ban': one permanently banned account, with the name masked ("J***"),
+/// only the category of the reason, and the day. kind 'general': a text notice,
+/// per app language in `texts` ({ "ko": { "title": "…", "body": "…" }, "en": … }).
+model AppNotice {
+  id          String    @id @default(cuid())
+  /// ban | general
+  kind        String
+  maskedName  String?   @map("masked_name")
+  /// harassment | spam | scam | inappropriate | impersonation | other
+  category    String?
+  texts       Json?
+  /// Important notices may also be pushed (not sent from here yet).
+  isImportant Boolean   @default(false) @map("is_important")
+  publishedAt DateTime  @default(now()) @map("published_at")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([publishedAt], map: "app_notices_published_at_idx")
+  @@map("app_notices")
 }
