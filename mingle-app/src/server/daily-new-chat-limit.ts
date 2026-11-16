@@ -6,7 +6,10 @@ import { ROYCE_USER_ID } from '@/lib/signup-welcome-onboarding'
 // 24 hours, from the rooms this account itself opened with exactly one other
 // person. Not counted: a person there is already a room with (whoever opened
 // it, so answering someone who wrote first is always free), the welcome
-// account, and official or staff accounts on either side.
+// account and the official HashChat account. Operator accounts count like
+// anyone else (2026-11-16): most cards on a young home tab are theirs, and
+// leaving them out would leave the limit with nothing to limit. An operator
+// or official account doing the writing is never limited.
 //
 // DAILY_NEW_CHAT_LIMIT sets the number (default 1); 0 or "off" turns the
 // limit off.
@@ -54,7 +57,9 @@ export async function checkDailyNewChatLimit(
     where: { id: { in: [userId, targetUserId] } },
     select: { id: true, isOperator: true, isOfficial: true },
   })
-  if (accounts.some((account) => account.isOperator || account.isOfficial)) return { allowed: true }
+  const self = accounts.find((account) => account.id === userId)
+  const target = accounts.find((account) => account.id === targetUserId)
+  if (self?.isOperator || self?.isOfficial || target?.isOfficial) return { allowed: true }
 
   const since = new Date((options.now ?? new Date()).getTime() - DAY_MS)
   const rooms = await prisma.appConversationChannel.findMany({
@@ -69,13 +74,13 @@ export async function checkDailyNewChatLimit(
   )
   // Opening a second room with someone already counted today costs nothing.
   if (people.has(targetUserId)) return { allowed: true }
-  // Staff and official accounts written to today do not use up the day.
+  // The official account written to today does not use up the day.
   if (people.size > 0) {
-    const staff = await prisma.user.findMany({
-      where: { id: { in: [...people] }, OR: [{ isOperator: true }, { isOfficial: true }] },
+    const official = await prisma.user.findMany({
+      where: { id: { in: [...people] }, isOfficial: true },
       select: { id: true },
     })
-    for (const account of staff) people.delete(account.id)
+    for (const account of official) people.delete(account.id)
   }
   return people.size >= limit ? { allowed: false, limit } : { allowed: true }
 }
