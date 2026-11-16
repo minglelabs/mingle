@@ -114,6 +114,7 @@ import {
   resolveVersionPolicyLocale,
   resolveWebLocaleSegment,
 } from './src/i18n';
+import { pickLoadingMessage } from '../src/i18n/loading-messages';
 import {
   createCheckingNativeAppUpdateSnapshot,
   createUnknownNativeAppUpdateSnapshot,
@@ -2593,6 +2594,13 @@ function AppInner(): React.JSX.Element {
     () => Platform.OS === 'ios' && Boolean(webUrl) && Boolean(initialRestoreUrlRef.current),
   );
   const lastScreenSnapshotOpacity = useRef(new Animated.Value(1)).current;
+  // The random line under the splash logo: a new one each time the splash
+  // comes up, the same one while it (and the fade that follows it) is showing.
+  const isStartupSplashShowing = startupSplashVisible || lastScreenSnapshotVisible;
+  const startupSplashMessage = useMemo(
+    () => (isStartupSplashShowing ? pickLoadingMessage(webLocale) : null),
+    [isStartupSplashShowing, webLocale],
+  );
   const lastScreenSnapshotHidingRef = useRef(false);
   const hideLastScreenSnapshot = useCallback((animated = true) => {
     if (lastScreenSnapshotHidingRef.current) return;
@@ -5665,6 +5673,14 @@ function AppInner(): React.JSX.Element {
             fadeDuration={0}
             style={styles.startupSplashLogo}
           />
+          {startupSplashMessage ? (
+            <View style={styles.startupSplashMessageBox}>
+              <Text style={styles.startupSplashMessage}>{startupSplashMessage.text}</Text>
+              {startupSplashMessage.source ? (
+                <Text style={styles.startupSplashSource}>— {startupSplashMessage.source}</Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       ) : null}
       {lastScreenSnapshotVisible && !startupSplashVisible ? (
@@ -5676,6 +5692,14 @@ function AppInner(): React.JSX.Element {
             fadeDuration={0}
             style={styles.startupSplashLogo}
           />
+          {startupSplashMessage ? (
+            <View style={styles.startupSplashMessageBox}>
+              <Text style={styles.startupSplashMessage}>{startupSplashMessage.text}</Text>
+              {startupSplashMessage.source ? (
+                <Text style={styles.startupSplashSource}>— {startupSplashMessage.source}</Text>
+              ) : null}
+            </View>
+          ) : null}
         </Animated.View>
       ) : null}
       {canRenderNativeBanner && !isAppBackgrounded ? (
@@ -5768,6 +5792,27 @@ const styles = StyleSheet.create({
   startupSplashLogo: {
     width: 180,
     height: 180,
+  },
+  startupSplashMessageBox: {
+    position: 'absolute',
+    left: 32,
+    right: 32,
+    top: '50%',
+    marginTop: 112,
+    alignItems: 'center',
+  },
+  startupSplashMessage: {
+    textAlign: 'center',
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600',
+    color: '#2D2A1E',
+  },
+  startupSplashSource: {
+    marginTop: 6,
+    textAlign: 'center',
+    fontSize: 12,
+    color: 'rgba(45, 42, 30, 0.7)',
   },
   errorOverlay: {
     position: 'absolute',

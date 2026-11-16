@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingMessage } from "@/components/loading-message";
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
@@ -5682,6 +5683,7 @@ export default function ConversationList({
           <div className="flex flex-col items-center gap-5">
             <MingleWordmark />
             <Loader2 size={22} className="animate-spin text-amber-500" aria-hidden />
+            <LoadingMessage locale={locale} className="min-h-10 max-w-[18rem] px-2 text-center text-[13px] leading-5 text-slate-500" />
           </div>
         </div>
       ) : null}
