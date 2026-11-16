@@ -41,6 +41,52 @@
       "permanent": true
     },
     {
+      "source": "/get",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(iPhone|iPad|iPod).*"
+        }
+      ],
+      "destination": "https://apps.apple.com/app/id6759795134",
+      "permanent": false
+    },
+    {
+      "source": "/get",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*Android.*"
+        },
+        {
+          "type": "query",
+          "key": "src",
+          "value": "(?<src>[A-Za-z0-9_-]{1,40})"
+        }
+      ],
+      "destination": "https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn&referrer=utm_source%3D:src",
+      "permanent": false
+    },
+    {
+      "source": "/get",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*Android.*"
+        }
+      ],
+      "destination": "https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn",
+      "permanent": false
+    },
+    {
+      "source": "/get",
+      "destination": "/",
+      "permanent": false
+    },
+    {
       "source": "/:page(privacy-policy|terms-of-use).html",
       "destination": "/:page",
       "permanent": true
