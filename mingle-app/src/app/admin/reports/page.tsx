@@ -31,6 +31,7 @@ import {
 import {
   AccountBadgeChip,
   AdminButton,
+  AdminButtonLink,
   AdminCard,
   AdminChip,
   AdminEmptyState,
@@ -517,6 +518,7 @@ export default async function AdminReportsPage({ searchParams }: AdminReportsPag
                 ) : null}
                 <ModAction action={report.reportedUser.moderationHiddenAt ? "unhide_user" : "hide_user"} label={report.reportedUser.moderationHiddenAt ? "사용자 숨김 해제" : "사용자 숨기기"} reportId={report.id} returnTo={returnTo} tone={report.reportedUser.moderationHiddenAt ? "neutral" : "danger"} />
                 <ModAction action={report.reportedUser.moderationRestrictedAt ? "unrestrict_user" : "restrict_user"} label={report.reportedUser.moderationRestrictedAt ? "제한 해제" : "이용 제한"} reportId={report.id} returnTo={returnTo} tone={report.reportedUser.moderationRestrictedAt ? "neutral" : "danger"} />
+                <AdminButtonLink href={`/admin/accounts/${encodeURIComponent(report.reportedUser.id)}`} variant="danger">영구 퇴출…</AdminButtonLink>
               </div>
 
               <form action={saveReportNoteAction} className="mt-4 space-y-2">

@@ -148,6 +148,8 @@ export async function banUserBundle(input: {
   userId: string
   reason?: string | null
   operatorUserId?: string | null
+  /** app_admin_sessions.id of the staff login that did it. */
+  adminSessionId?: string | null
   onlyUserIds?: string[]
 }): Promise<BanResult> {
   const reason = input.reason?.trim().slice(0, 500) || null
@@ -177,6 +179,7 @@ export async function banUserBundle(input: {
     prisma.adminAuditLog.create({
       data: {
         action: 'identity.ban',
+        sessionId: input.adminSessionId ?? null,
         operatorUserId: input.operatorUserId ?? null,
         targetType: 'user',
         targetId: input.userId,
@@ -188,7 +191,7 @@ export async function banUserBundle(input: {
 }
 
 /** Lifts the ban on one account and reopens what only it holds. Other accounts of the bundle stay banned. */
-export async function unbanUser(input: { userId: string; operatorUserId?: string | null }): Promise<void> {
+export async function unbanUser(input: { userId: string; operatorUserId?: string | null; adminSessionId?: string | null }): Promise<void> {
   const own = await readUserKeys(input.userId)
   const devices = await prisma.appDeviceUser.findMany({ where: { userId: input.userId }, select: { deviceId: true } })
   const deviceIds = devices.map((row) => row.deviceId)
@@ -209,7 +212,27 @@ export async function unbanUser(input: { userId: string; operatorUserId?: string
       : []),
     prisma.appDevice.updateMany({ where: { id: { in: reopenDeviceIds } }, data: { blockedAt: null, blockedReason: null } }),
     prisma.adminAuditLog.create({
-      data: { action: 'identity.unban', operatorUserId: input.operatorUserId ?? null, targetType: 'user', targetId: input.userId },
+      data: { action: 'identity.unban', sessionId: input.adminSessionId ?? null, operatorUserId: input.operatorUserId ?? null, targetType: 'user', targetId: input.userId },
+    }),
+  ])
+}
+
+/** Staff test phone on or off: an exempt device takes any number of accounts and joins no ban bundle. */
+export async function setDeviceExempt(input: { deviceId: string; exempt: boolean; adminSessionId?: string | null }): Promise<void> {
+  await prisma.$transaction([
+    prisma.appDevice.update({ where: { id: input.deviceId }, data: { exemptAt: input.exempt ? new Date() : null } }),
+    prisma.adminAuditLog.create({
+      data: { action: input.exempt ? 'identity.device_exempt' : 'identity.device_unexempt', sessionId: input.adminSessionId ?? null, targetType: 'device', targetId: input.deviceId },
+    }),
+  ])
+}
+
+/** Reopens one device a ban closed (a shared or second-hand phone), leaving the banned accounts banned. */
+export async function unblockDevice(input: { deviceId: string; adminSessionId?: string | null }): Promise<void> {
+  await prisma.$transaction([
+    prisma.appDevice.update({ where: { id: input.deviceId }, data: { blockedAt: null, blockedReason: null } }),
+    prisma.adminAuditLog.create({
+      data: { action: 'identity.device_unblock', sessionId: input.adminSessionId ?? null, targetType: 'device', targetId: input.deviceId },
     }),
   ])
 }
