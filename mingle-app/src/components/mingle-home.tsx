@@ -1448,9 +1448,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           ) : null}
           {/* Social sign-in in progress: the buttons below only dim, so say so here. */}
           {signingInProvider !== null ? (
-            <div className="flex items-center justify-center gap-2 text-[#2D2A1E]/80">
+            <div className="flex flex-col items-center justify-center gap-2 text-[#2D2A1E]/80">
               <Loader2 size={18} className="shrink-0 animate-spin" aria-hidden />
-              <LoadingMessage locale={props.locale} className="min-h-5 text-sm font-semibold leading-5" />
+              <LoadingMessage
+                locale={props.locale}
+                className="min-h-10 max-w-[18rem] text-center text-sm font-semibold leading-5"
+              />
             </div>
           ) : null}
         </div>
@@ -1462,9 +1465,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         >
           {isLoading ? (
             /* Loading state: spinner and a random loading line */
-            <div className="flex items-center justify-center gap-3 py-3 text-sm text-white/60">
+            <div className="flex flex-col items-center justify-center gap-2 py-3 text-sm text-white/60">
               <Loader2 size={18} className="animate-spin" aria-hidden />
-              <LoadingMessage locale={props.locale} className="min-h-5 text-sm leading-5" />
+              <LoadingMessage
+                locale={props.locale}
+                className="min-h-10 max-w-[18rem] text-center text-sm leading-5"
+              />
             </div>
           ) : (
             /* Sliding area for buttons and legal-agreement content */

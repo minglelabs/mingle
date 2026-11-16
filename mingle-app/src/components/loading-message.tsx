@@ -1,10 +1,10 @@
 "use client";
 
 import { pickLoadingMessage } from "@/i18n/loading-messages";
-import { useState, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 
 const subscribeToNothing = () => () => {};
-const getServerMessage = () => "";
+const getServerLocale = () => null;
 
 function resolveBrowserLocale(): string {
   const pathSegment = window.location.pathname.split("/")[1] ?? "";
@@ -12,28 +12,37 @@ function resolveBrowserLocale(): string {
 }
 
 /**
- * The random line shown next to a spinner on a loading screen. Put it beside
- * (or under) any page-level spinner; it inherits the spinner's text color.
+ * The random line shown under a spinner on a loading screen, with its source
+ * ("— 한국 속담") on a smaller line below. It inherits the text color.
  *
- * The line is empty on the server and during hydration so the markup matches, and the
- * element keeps its height while empty so the spinner does not jump.
+ * Nothing is rendered on the server or during hydration, so the markup
+ * matches; the line appears right after.
  */
 export function LoadingMessage(props: { locale?: string; className?: string }) {
   const { locale } = props;
   // One roll per mount; the line stays put across re-renders.
   const [roll] = useState(() => Math.random());
-  const message = useSyncExternalStore(
+  const resolvedLocale = useSyncExternalStore(
     subscribeToNothing,
-    () => pickLoadingMessage(locale || resolveBrowserLocale(), () => roll),
-    getServerMessage,
+    () => locale || resolveBrowserLocale(),
+    getServerLocale,
+  );
+  const message = useMemo(
+    () => (resolvedLocale === null ? null : pickLoadingMessage(resolvedLocale, () => roll)),
+    [resolvedLocale, roll],
   );
 
   return (
-    <p
+    <div
       data-testid="loading-message"
-      className={props.className ?? "min-h-5 px-6 text-center text-[13px] leading-5"}
+      className={props.className ?? "min-h-10 max-w-[18rem] px-2 text-center text-[13px] leading-5"}
     >
-      {message}
-    </p>
+      {message ? (
+        <>
+          <p className="break-keep">{message.text}</p>
+          {message.source ? <p className="mt-1 text-[11px] opacity-75">— {message.source}</p> : null}
+        </>
+      ) : null}
+    </div>
   );
 }
