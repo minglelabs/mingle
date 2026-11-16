@@ -234,6 +234,14 @@ import {
 } from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { requestNativeBannerZone } from '@/lib/native-banner-zone'
+import {
+  buildNativeShareTargetDonation,
+  getPendingNativeShareVersion,
+  postNativeShareTargetDonate,
+  postNativeShareTargetRemove,
+  subscribePendingNativeShare,
+  takePendingNativeShareText,
+} from '@/lib/native-share-inbox'
 import { reportUiDiagnostic } from '@/lib/ui-diagnostics'
 import { unreadDividerLabel } from '@/i18n/unread-divider-copy'
 import {
@@ -5428,6 +5436,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       clearConversationHistory()
       setDeleteConversationDialogOpen(false)
       requestCloseMenuPanel()
+      // Left or deleted: the system must stop suggesting it in the share sheet.
+      postNativeShareTargetRemove(conversationId)
       onConversationDeleted?.()
       toast.success(isMultiMember ? leaveConversationCopy.successToastLabel : deleteConversationCopy.successToastLabel)
     } catch {
@@ -6322,6 +6332,57 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setComposerHasDraft((current) => current === nextHasDraft ? current : nextHasDraft)
     syncComposerTextareaHeight(event.currentTarget)
   }, [composerDraftStorageKey, syncComposerTextareaHeight])
+
+  // System share sheet: suggest this room there (it lists the rooms the app
+  // reported as direct targets). Reported each time the room is opened, so iOS ranks the
+  // rooms the user actually uses first.
+  const shareTargetDonationKeyRef = useRef('')
+  useEffect(() => {
+    if (!isVisible || !conversationId || !viewerUserId || typeof window === 'undefined') return
+    const donation = buildNativeShareTargetDonation({
+      conversationId,
+      title: displayConversationTitle,
+      otherMembers: initialOtherMembers ?? [],
+      origin: window.location.origin,
+    })
+    if (!donation) return
+    const donationKey = JSON.stringify(donation)
+    if (shareTargetDonationKeyRef.current === donationKey) return
+    shareTargetDonationKeyRef.current = donationKey
+    postNativeShareTargetDonate(donation)
+  }, [conversationId, displayConversationTitle, initialOtherMembers, isVisible, viewerUserId])
+  useEffect(() => {
+    if (!isVisible) shareTargetDonationKeyRef.current = ''
+  }, [isVisible])
+
+  // Text or a link shared to HashChat from another app lands in the message
+  // box (after any draft already there) for the user to review and send.
+  const pendingNativeShareVersion = useSyncExternalStore(subscribePendingNativeShare, getPendingNativeShareVersion, () => '')
+  const sharedTextComposerOpenUntilRef = useRef(0)
+  const [sharedTextArrivalCount, setSharedTextArrivalCount] = useState(0)
+  useEffect(() => {
+    if (!pendingNativeShareVersion || !isVisible || !conversationId || !viewerUserId) return
+    const sharedText = takePendingNativeShareText(conversationId)
+    if (!sharedText) return
+    const currentDraft = composerTextareaRef.current?.value ?? composerDraftRef.current
+    const nextDraft = currentDraft.trim() ? `${currentDraft.replace(/\s+$/, '')}\n${sharedText}` : sharedText
+    composerDraftRef.current = nextDraft
+    persistComposerDraft(nextDraft, composerDraftStorageKey)
+    setComposerHasDraft(true)
+    if (composerTextareaRef.current) {
+      composerTextareaRef.current.value = nextDraft
+      syncComposerTextareaHeight(composerTextareaRef.current)
+    }
+    sharedTextComposerOpenUntilRef.current = Date.now() + 8_000
+    setSharedTextArrivalCount((count) => count + 1)
+  }, [composerDraftStorageKey, conversationId, isVisible, pendingNativeShareVersion, syncComposerTextareaHeight, viewerUserId])
+  // Voice mode has no message box on screen: show the keyboard-mode box, which
+  // mounts with this draft. A room that is still loading applies its saved
+  // input mode a moment later, so the box is reopened for a short while.
+  useEffect(() => {
+    if (isComposerOpen || Date.now() > sharedTextComposerOpenUntilRef.current) return
+    setIsComposerOpen(true)
+  }, [isComposerOpen, sharedTextArrivalCount])
 
   const handleComposerSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -10099,7 +10160,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
                         onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} /> : earphoneModeMenuItem ? (
+                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} acceptSharedPhoto={isVisible} /> : earphoneModeMenuItem ? (
                       // No sendable conversation: no photo row, but the "+" still
                       // carries the earphone-mode row and the voice-mode switch.
                       <ConversationImageComposer conversationId="" allowPhoto={false} locale={uiLocale}
@@ -10317,7 +10378,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                   <div className="flex items-center gap-1 self-end justify-self-end">
                     {conversationId && viewerUserId && <ConversationImageComposer voiceButtonSize={VOICE_MODE_SIDE_BUTTON_SIZE_PX} conversationId={conversationId} locale={uiLocale}
-                      onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} />}
+                      onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} acceptSharedPhoto={isVisible} />}
                     <motion.button
                       layoutId="live-phone-demo-keyboard-toggle"
                       data-qa="live-demo-keyboard-open"

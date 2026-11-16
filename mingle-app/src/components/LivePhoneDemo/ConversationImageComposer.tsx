@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react'
 import LanguageFlag from '@/components/language-flag'
 import { Headphones, Image as Photo, Keyboard, Loader2, Plus, Volume2, X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
@@ -10,6 +10,7 @@ import MessageMediaDialog from './MessageMediaDialog'
 import { chooseTooltipSide } from './CopyableBubbleSurface'
 import { captureRestorableFocus, scheduleFocusRestore } from './picker-focus-restore'
 import { createImageClientMessageId } from './image-client-message-id'
+import { decodeNativeShareImage, getPendingNativeShareVersion, subscribePendingNativeShare, takePendingNativeShareImage } from '@/lib/native-share-inbox'
 
 // ── Diagnostic constants ──────────────────────────────────────────────
 const DIAG_LS_KEY = '__mingle_diag_v1__'
@@ -49,12 +50,15 @@ export type ConversationImageComposerEarphoneMode = {
   onToggle: () => void
 }
 
-export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, onMenuOpenChange, voiceButtonSize = 33, earphoneMode, allowPhoto = true }: {
+export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, onMenuOpenChange, voiceButtonSize = 33, earphoneMode, allowPhoto = true, acceptSharedPhoto = false }: {
   conversationId: string; locale: string; onSent: () => void; onCloseKeyboard?: () => void; onMenuOpenChange?: (open: boolean) => void; voiceButtonSize?: number
   // Keyboard mode only: an "earphone mode" row between the photo and voice-mode rows.
   earphoneMode?: ConversationImageComposerEarphoneMode
   // false = no photo row (a room without a sendable conversation still gets the menu).
   allowPhoto?: boolean
+  // true while this room is on screen: a photo shared to HashChat from another
+  // app (system share sheet) opens here in the usual preview, ready to send.
+  acceptSharedPhoto?: boolean
 }) {
   const copy = resolveConversationImageCopy(locale)
   const [anchor, setAnchor] = useState<{ side: 'above'; bottom: number; left: number } | { side: 'below'; top: number; left: number }>({ side: 'above', bottom: 48, left: 120 })
@@ -215,6 +219,16 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
   }, [onMenuOpenChange, open])
   useEffect(() => () => { if (chosen) URL.revokeObjectURL(chosen.url) }, [chosen])
   const close = useCallback(() => { if (!request.current) { setOpen(false); setChosen(null); setError(null) } }, [])
+  const pendingShareVersion = useSyncExternalStore(subscribePendingNativeShare, getPendingNativeShareVersion, () => '')
+  useEffect(() => {
+    if (!pendingShareVersion || !acceptSharedPhoto || !allowPhoto || !conversationId || request.current) return
+    const image = takePendingNativeShareImage(conversationId)
+    if (!image) return
+    let file: File
+    try { file = decodeNativeShareImage(image) } catch { return }
+    if (!file.size || file.size > CONVERSATION_IMAGE_MAX_BYTES) { setError(copy.invalid); setOpen(true); return }
+    setError(null); setChosen({ file, url: URL.createObjectURL(file), id: createImageClientMessageId() }); setOpen(true)
+  }, [acceptSharedPhoto, allowPhoto, conversationId, copy.invalid, pendingShareVersion])
   useEffect(() => {
     if (!open || chosen) return
 
