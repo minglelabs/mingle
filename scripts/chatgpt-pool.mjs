@@ -211,6 +211,9 @@ function failUnservable() {
   }
 }
 
+/** Failures that belong to the account (it is limited or signed out), not to the job. */
+const ACCOUNT_CODES = new Set(['image_limit', 'rate_limited', 'signed_out'])
+
 /** An agent's answer (or a timeout): resolve, or try the job on another account. */
 function finish(jobId, outcome) {
   const job = running.get(jobId)
@@ -231,6 +234,8 @@ function finish(jobId, outcome) {
   }
   const { code, message, retryAfterMs } = outcome.error
   log('fail', who(agent), code, message ?? '')
+  // An account at its limit says nothing about the job: only other failures use up its tries.
+  if (!ACCOUNT_CODES.has(code)) job.failures = (job.failures ?? 0) + 1
   if (code === 'image_limit') {
     agent.limitedUntil = Date.now() + (retryAfterMs || 3_600_000)
     agent.limitMessage = message ?? ''
@@ -243,7 +248,7 @@ function finish(jobId, outcome) {
   }
   const error = new PoolError(code === 'image_refused' ? 422 : code === 'image_limit' || code === 'rate_limited' ? 429 : 502, code, `${agent.email}: ${message ?? ''}`)
   // A refusal is about the prompt; a pinned job has nowhere else to go.
-  if (code === 'image_refused' || code === 'bad_reference' || job.account || job.tried.size >= 4) {
+  if (code === 'image_refused' || code === 'bad_reference' || job.account || job.failures >= 4) {
     job.reject(error)
     return
   }
@@ -400,6 +405,15 @@ function chromePath() {
   return roots.map((root) => join(root, 'Google', 'Chrome', 'Application', 'chrome.exe')).find((file) => existsSync(file)) ?? null
 }
 
+/** An account's limits still in force, as saved in profiles.json. */
+function limitsOf(agent) {
+  const now = Date.now()
+  return {
+    ...(agent.limitedUntil > now ? { limitedUntil: agent.limitedUntil, limitMessage: agent.limitMessage } : {}),
+    ...((agent.pausedUntil ?? 0) > now ? { pausedUntil: agent.pausedUntil, pauseMessage: agent.pauseMessage } : {}),
+  }
+}
+
 let saving = null
 /** Remembers every profile the pool has seen, so it can open them again after a restart. */
 function saveProfiles() {
@@ -407,7 +421,7 @@ function saveProfiles() {
   clearTimeout(saving)
   saving = setTimeout(() => {
     const known = Object.fromEntries([...agents.values()].filter((agent) => agent.folder)
-      .map((agent) => [agent.folder, { agentId: agent.id, email: agent.email, profile: agent.profile, lastUsed: agent.lastUsed }]))
+      .map((agent) => [agent.folder, { agentId: agent.id, email: agent.email, profile: agent.profile, lastUsed: agent.lastUsed, ...limitsOf(agent) }]))
     writeFile(PROFILES_FILE, JSON.stringify(known, null, 2)).catch((error) => log('profiles', 'save failed', error.message))
   }, 1000)
   saving.unref?.()
@@ -418,7 +432,8 @@ async function loadProfiles() {
   for (const [folder, entry] of Object.entries(known)) {
     if (!entry?.agentId || agents.has(entry.agentId)) continue
     agents.set(entry.agentId, {
-      id: entry.agentId, email: entry.email ?? null, profile: entry.profile ?? folder, folder, busy: false, limitedUntil: 0, limitMessage: '',
+      id: entry.agentId, email: entry.email ?? null, profile: entry.profile ?? folder, folder, busy: false,
+      limitedUntil: Number(entry.limitedUntil) || 0, limitMessage: entry.limitMessage ?? '', pausedUntil: Number(entry.pausedUntil) || 0, pauseMessage: entry.pauseMessage ?? '',
       signedOut: false, lastUsed: Number(entry.lastUsed) || 0, lastSeen: 0, hold: null, profileLookup: Promise.resolve(),
     })
   }
@@ -626,7 +641,11 @@ function serve() {
       const keyed = exposed || (KEY && !LOOPBACK_HOSTS.includes(HOST))
       if (keyed && !keyMatches(request.headers.authorization)) return reply(response, 401, { error: { code: 'unauthorized' } })
       if (request.method === 'GET' && path === '/health') return reply(response, 200, { ok: true, accounts: accountsStatus().length, ready: accountsStatus().filter((a) => a.email && !a.signedOut && !a.pausedUntil && !a.cappedUntil).length, queued: queue.length, running: running.size })
-      if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus(), closed: [...agents.values()].filter((agent) => agent.folder && !online(agent)).map((agent) => ({ email: agent.email, profile: agent.profile, opening: waking(agent) })) })
+      if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus(), closed: [...agents.values()].filter((agent) => agent.folder && !online(agent)).map((agent) => ({
+        email: agent.email, profile: agent.profile, opening: waking(agent),
+        imageLimitedUntil: agent.limitedUntil > Date.now() ? new Date(agent.limitedUntil).toISOString() : null,
+        pausedUntil: (agent.pausedUntil ?? 0) > Date.now() ? new Date(agent.pausedUntil).toISOString() : null,
+      })) })
       if (request.method === 'GET' && path.startsWith('/v1/jobs/')) return reply(response, 200, asyncStatus(decodeURIComponent(path.slice('/v1/jobs/'.length))))
       if (request.method === 'POST' && (path === '/v1/chat/completions' || path === '/v1/images/generations')) {
         const body = await readBody(request)
