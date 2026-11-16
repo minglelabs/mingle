@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight, Newspaper, Bell, Bot, Images, Layers, UsersRound, Wand2, ChartLine, Coins, Flag, LogOut, MessageCircleHeart, MessagesSquare } from "lucide-react";
+import { ArrowUpRight, Megaphone, Newspaper, Bell, Bot, Images, Layers, UsersRound, Wand2, ChartLine, Coins, Flag, LogOut, MessageCircleHeart, MessagesSquare } from "lucide-react";
 import { requireAdmin } from "@/server/admin/guard";
 import { logoutAdminAction } from "../_components/session-actions";
 import { AdminButton, AdminCard, AdminListLink, AdminPage, AdminPageHeader } from "../_components/ui";
@@ -13,6 +13,7 @@ const MORE_LINKS = [
   { href: "/admin/posts", icon: Newspaper, title: "게시물 대량 작성", description: "운영 계정 여러 개로 글을 한 번에 올리기" },
   { href: "/admin", icon: MessageCircleHeart, title: "피드백", description: "앱 사용자가 보낸 의견과 답장" },
   { href: "/admin/reports", icon: Flag, title: "신고함", description: "신고 처리, 숨김과 이용 제한" },
+  { href: "/admin/notices", icon: Megaphone, title: "공지", description: "홈 탭 공지 띠: 퇴출 공지와 일반 공지 올리기" },
   { href: "/admin/coins", icon: Coins, title: "해씨 (코인)", description: "유저 잔액 조회·충전·회수, 상품과 단가표, 매출·사용량" },
   { href: "/admin/dashboard", icon: ChartLine, title: "대시보드", description: "사용시간, 메시지, DAU, 가입자 추이" },
   { href: "/admin/conversations", icon: MessagesSquare, title: "대화록", description: "외부 사용자 ID로 대화방과 메시지 조회" },

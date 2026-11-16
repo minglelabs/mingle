@@ -71,7 +71,6 @@ export default function HomeNoticeStrip({ locale }: { locale: string }) {
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setFailed(false);
     void fetch(`${buildClientApiPath("/notices")}?view=list&locale=${encodeURIComponent(locale)}`, { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error("notices_failed");
@@ -90,7 +89,10 @@ export default function HomeNoticeStrip({ locale }: { locale: string }) {
         <button
           type="button"
           data-qa="home-ban-strip"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setFailed(false);
+            setOpen(true);
+          }}
           className="mx-3 mb-2 flex h-10 items-center gap-2 rounded-xl bg-slate-900 px-3 text-left text-[13px] font-semibold text-white transition active:opacity-80"
         >
           <ShieldAlert size={16} className="shrink-0 text-amber-400" aria-hidden="true" />
