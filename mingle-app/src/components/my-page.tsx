@@ -1,6 +1,5 @@
 "use client";
 
-import { LoadingMessage } from "@/components/loading-message";
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import ProfileImageCropper, {
@@ -1412,9 +1411,8 @@ function ProfileSettingsPanel({
                 </div>
               </div>
             ) : isLoading ? (
-              <div className="flex flex-col items-center gap-3 pt-8 text-gray-400">
+              <div className="flex justify-center pt-8 text-gray-400">
                 <Loader2 size={24} className="animate-spin" aria-label={copy.loading} />
-                <LoadingMessage locale={locale} />
               </div>
             ) : managementPage === "blocked" ? (
               requiresAuthentication || blocksLoadState === "unauthorized" ? (

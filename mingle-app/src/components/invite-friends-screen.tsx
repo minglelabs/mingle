@@ -1,6 +1,5 @@
 "use client";
 
-import { LoadingMessage } from "@/components/loading-message";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { getConversationDictionary } from "@/i18n/conversations";
@@ -567,9 +566,8 @@ export default function InviteFriendsScreen({ dictionary, locale, conversationId
           </div>
 
           {isLoading ? (
-            <div className="flex flex-col items-center gap-3 pt-8 text-gray-400" aria-live="polite">
+            <div className="flex justify-center pt-8 text-gray-400" aria-live="polite">
               <Loader2 size={23} className="animate-spin" aria-label={labels.loading} />
-              <LoadingMessage locale={locale} />
             </div>
           ) : loadError ? (
             <p className="px-6 pt-8 text-center text-[14px] text-gray-500" role="alert">{labels.error}</p>

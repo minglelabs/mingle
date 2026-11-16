@@ -1,6 +1,5 @@
 "use client";
 
-import { LoadingMessage } from "@/components/loading-message";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { resolveLegalDocumentLocale } from "@/i18n/config";
@@ -662,8 +661,7 @@ export default function NotificationPanel({
               ) : isLoading && !hasLoaded ? (
                 <div className="flex flex-col items-center gap-3 py-16 text-gray-400" aria-live="polite">
                   <Loader2 size={24} className="animate-spin" aria-hidden="true" />
-                  <LoadingMessage locale={locale} />
-                  <span className="sr-only">{copy.loadingLabel}</span>
+                  <span className="text-[13px]">{copy.loadingLabel}</span>
                 </div>
               ) : notifications.length === 0 ? (
                 <p className="px-6 py-16 text-center text-[14px] text-gray-400">{copy.emptyLabel}</p>

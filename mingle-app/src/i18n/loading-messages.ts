@@ -1,10 +1,9 @@
-// Relative import on purpose: the React Native shell imports this file too.
 import { resolvePrimaryUiLocaleTag, type PrimaryUiLocale } from "./mingle-locales";
 
 /**
- * One line shown next to a spinner on every loading screen (session check,
- * sign-in, list loading, the native startup splash, ...). One is picked at
- * random each time a loading screen appears.
+ * One line shown next to the spinner while a loading screen is up. One is
+ * picked at random each time. For now only the login screen uses it (session
+ * check and social sign-in in progress).
  *
  * To add a line, append an entry. `ko` and `en` are required; any other
  * locale left out falls back to `en`.

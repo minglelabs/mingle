@@ -2121,9 +2121,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         </MessageRecallProvider>
         </MessageReactionsProvider>
       ) : (
-        <div className="flex flex-col gap-3 h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+        <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
           <Loader2 size={24} className="animate-spin" aria-hidden />
-          <LoadingMessage locale={props.locale} />
         </div>
       )}
     </main>

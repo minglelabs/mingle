@@ -1,6 +1,5 @@
 "use client";
 
-import { LoadingMessage } from "@/components/loading-message";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import { useEffect, useState } from "react";
@@ -156,7 +155,7 @@ export default function CoinStorePanel({
 
             <section>
               {store.status === "loading" || store.status === "idle" ? (
-                <div className="flex flex-col items-center gap-3 py-8 text-gray-400"><Loader2 size={24} className="animate-spin" aria-hidden="true" /><LoadingMessage locale={locale} /></div>
+                <div className="flex justify-center py-8 text-gray-400"><Loader2 size={24} className="animate-spin" aria-hidden="true" /></div>
               ) : store.status === "unavailable" ? (
                 <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-600">
                   {store.channel === "web" ? copy.webUnavailable : copy.updateRequired}

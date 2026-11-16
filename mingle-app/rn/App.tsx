@@ -114,7 +114,6 @@ import {
   resolveVersionPolicyLocale,
   resolveWebLocaleSegment,
 } from './src/i18n';
-import { pickLoadingMessage } from '../src/i18n/loading-messages';
 import {
   createCheckingNativeAppUpdateSnapshot,
   createUnknownNativeAppUpdateSnapshot,
@@ -2499,13 +2498,6 @@ function AppInner(): React.JSX.Element {
     () => Platform.OS === 'ios' && Boolean(webUrl) && Boolean(initialRestoreUrlRef.current),
   );
   const lastScreenSnapshotOpacity = useRef(new Animated.Value(1)).current;
-  // The random line under the splash logo: a new one each time the splash
-  // comes up, the same one while it (and the fade that follows it) is showing.
-  const isStartupSplashShowing = startupSplashVisible || lastScreenSnapshotVisible;
-  const startupSplashMessage = useMemo(
-    () => (isStartupSplashShowing ? pickLoadingMessage(webLocale) : ''),
-    [isStartupSplashShowing, webLocale],
-  );
   const lastScreenSnapshotHidingRef = useRef(false);
   const hideLastScreenSnapshot = useCallback((animated = true) => {
     if (lastScreenSnapshotHidingRef.current) return;
@@ -5538,7 +5530,6 @@ function AppInner(): React.JSX.Element {
             fadeDuration={0}
             style={styles.startupSplashLogo}
           />
-          <Text style={styles.startupSplashMessage}>{startupSplashMessage}</Text>
         </View>
       ) : null}
       {lastScreenSnapshotVisible && !startupSplashVisible ? (
@@ -5550,7 +5541,6 @@ function AppInner(): React.JSX.Element {
             fadeDuration={0}
             style={styles.startupSplashLogo}
           />
-          <Text style={styles.startupSplashMessage}>{startupSplashMessage}</Text>
         </Animated.View>
       ) : null}
       {canRenderNativeBanner && !isAppBackgrounded ? (
@@ -5643,17 +5633,6 @@ const styles = StyleSheet.create({
   startupSplashLogo: {
     width: 180,
     height: 180,
-  },
-  startupSplashMessage: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-    top: '50%',
-    marginTop: 112,
-    textAlign: 'center',
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#2D2A1E',
   },
   errorOverlay: {
     position: 'absolute',

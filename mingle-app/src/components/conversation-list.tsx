@@ -1,6 +1,5 @@
 "use client";
 
-import { LoadingMessage } from "@/components/loading-message";
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
@@ -5683,7 +5682,6 @@ export default function ConversationList({
           <div className="flex flex-col items-center gap-5">
             <MingleWordmark />
             <Loader2 size={22} className="animate-spin text-amber-500" aria-hidden />
-            <LoadingMessage locale={locale} />
           </div>
         </div>
       ) : null}
@@ -5697,9 +5695,8 @@ export default function ConversationList({
         >
           <Suspense
             fallback={(
-              <div className="flex flex-col gap-3 h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+              <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
                 <Loader2 size={24} className="animate-spin" aria-hidden />
-                <LoadingMessage locale={locale} />
               </div>
             )}
           >
@@ -5862,9 +5859,8 @@ export default function ConversationList({
           }}
         >
           {isHydratingConversations ? (
-            <div className="flex flex-col gap-3 items-center py-16 text-gray-400">
+            <div className="flex flex-col items-center py-16 text-gray-400">
               <Loader2 size={28} className="animate-spin" />
-              <LoadingMessage locale={locale} />
             </div>
           ) : conversationItems.length === 0 && showFirstSpeakCard ? null : conversationItems.length === 0 ? (
             <div
@@ -6114,9 +6110,8 @@ export default function ConversationList({
                   >
                     <Suspense
                       fallback={(
-                        <div className="flex flex-col gap-3 h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+                        <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
                           <Loader2 size={24} className="animate-spin" aria-hidden />
-                          <LoadingMessage locale={locale} />
                         </div>
                       )}
                     >

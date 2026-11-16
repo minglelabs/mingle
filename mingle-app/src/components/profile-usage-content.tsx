@@ -1,6 +1,5 @@
 "use client";
 
-import { LoadingMessage } from "@/components/loading-message";
 import { buildClientApiPath } from "@/lib/api-contract";
 import LanguageFlag from "@/components/language-flag";
 import CoinUsageSection from "@/components/coins/coin-usage-section";
@@ -148,9 +147,8 @@ export default function ProfileUsageContent({
 
   if (loadState === "loading") {
     return (
-      <div className="flex flex-col items-center gap-3 pt-8 text-gray-400">
+      <div className="flex justify-center pt-8 text-gray-400">
         <Loader2 size={24} className="animate-spin" aria-label={copy.title} />
-        <LoadingMessage locale={uiLocale} />
       </div>
     );
   }
