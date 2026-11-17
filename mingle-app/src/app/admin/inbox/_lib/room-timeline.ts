@@ -34,10 +34,16 @@ export function upsertUtterance(list: RoomUtterance[], utterance: RoomUtterance)
   return mergeUtterancePages(list.filter((item) => item.id !== utterance.id), [utterance])
 }
 
+/** A message its sender unsent whose content staff can still read: shown in full, marked as deleted. */
+export function isRevealedUnsent(utterance: RoomUtterance): boolean {
+  return utterance.recalled === true && Boolean(utterance.originalText || utterance.image)
+}
+
 /** ChatBubble's optional-field shape (it uses undefined where hydration uses null). */
 export function toBubbleUtterance(utterance: RoomUtterance): Utterance {
   return {
-    ...(utterance.recalled ? { recalled: true } : {}),
+    // Staff still get an unsent message's content (see isRevealedUnsent); without any, it is the app's placeholder.
+    ...(utterance.recalled && !isRevealedUnsent(utterance) ? { recalled: true } : {}),
     ...(utterance.replyTo ? { replyTo: utterance.replyTo } : {}),
     ...(utterance.image ? { image: utterance.image } : {}),
     id: utterance.id,
@@ -56,6 +62,7 @@ export function toBubbleUtterance(utterance: RoomUtterance): Utterance {
     createdAtMs: utterance.createdAtMs,
     ...(typeof utterance.serverCreatedAtMs === 'number' ? { serverCreatedAtMs: utterance.serverCreatedAtMs } : {}),
     ...(utterance.serverMessageId ? { serverMessageId: utterance.serverMessageId } : {}),
+    ...(typeof utterance.serverPersistedAtMs === 'number' ? { serverPersistedAtMs: utterance.serverPersistedAtMs } : {}),
   }
 }
 

@@ -70,6 +70,8 @@ function memberRow(channelId: string, userId: string, options: MemberOptions = {
   return {
     channelId,
     userId,
+    joinedAt: new Date(0),
+    lastReadAt: null,
     displayLanguage: options.displayLanguage ?? null,
     user: {
       id: userId,
@@ -355,7 +357,7 @@ describe('operator inbox room access', () => {
     const quiet = await loadInboxRoomView({ ctx, conversationId: 'c1' })
     expect(quiet.ok).toBe(true)
     expect(m.requireOperatorAccount).toHaveBeenCalledWith('op_1')
-    expect(m.hydrate).toHaveBeenCalledWith({ conversationId: 'c1', userId: 'op_1', before: null })
+    expect(m.hydrate).toHaveBeenCalledWith({ conversationId: 'c1', userId: 'op_1', before: null, revealRecalled: true })
     expect(m.writeAdminAudit).not.toHaveBeenCalled()
     if (quiet.ok) {
       expect(quiet.view.room).not.toHaveProperty('sessionKey')

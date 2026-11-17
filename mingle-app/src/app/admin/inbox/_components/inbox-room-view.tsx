@@ -12,7 +12,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from 'react'
-import { ArrowDown, ChevronLeft, Loader2, SendHorizontal } from 'lucide-react'
+import { ArrowDown, ChevronLeft, Loader2, SendHorizontal, Trash2 } from 'lucide-react'
 import ChatBubble from '@/components/LivePhoneDemo/ChatBubble'
 import {
   ConversationImageSrcProvider,
@@ -35,6 +35,7 @@ import {
 import {
   STAFF_KOREAN,
   buildRoomTimeline,
+  isRevealedUnsent,
   mergeUtterancePages,
   staffKoreanCandidateId,
   toBubbleUtterance,
@@ -43,6 +44,7 @@ import {
   type RoomTimelineItem,
   type RoomUtterance,
 } from '../_lib/room-timeline'
+import { MessageReadReceiptsStaticProvider } from '@/components/LivePhoneDemo/MessageReadReceipts'
 import { InboxAvatar, KoreanViewSwitch } from './inbox-ui'
 import { useAdminInboxRealtime } from './use-admin-inbox-realtime'
 import { useStaffKoreanView } from './use-staff-korean-view'
@@ -154,6 +156,12 @@ const RoomMessageList = memo(function RoomMessageList({
         const koId = korean ? staffKoreanCandidateId(item.utterance) : null
         return (
           <div key={item.key} className="px-3 py-1">
+            {isRevealedUnsent(item.utterance) ? (
+              <p className="mb-1 flex items-center gap-1 pl-12 text-xs font-medium text-rose-600">
+                <Trash2 size={12} aria-hidden="true" />
+                보낸 사람이 삭제한 메시지 · 상대 화면에는 안 보입니다
+              </p>
+            ) : null}
             <ChatBubble
               utterance={koId ? withStaffKorean(bubble, koById[koId], !(koId in koById)) : bubble}
               uiLocale="ko"
@@ -270,6 +278,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
     invite: initialView.hydration.inviteNotices,
   })
   const [utterances, setUtterances] = useState<RoomUtterance[]>(initialView.hydration.utterances)
+  const [readReceiptMembers, setReadReceiptMembers] = useState(initialView.readReceiptMembers)
   const [olderCursor, setOlderCursor] = useState<ConversationHydrationCursor | null>(initialView.hydration.oldestMessageCursor)
   const [hasMoreOlder, setHasMoreOlder] = useState(initialView.hydration.hasMoreUtterances)
   const [loadingOlder, setLoadingOlder] = useState(false)
@@ -323,6 +332,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
     }
     const next = await response.json() as InboxRoomView
     setRoom(next.room)
+    setReadReceiptMembers(next.readReceiptMembers)
     setConversation(next.hydration.conversation)
     setNotices({ leave: next.hydration.leaveNotices, invite: next.hydration.inviteNotices })
     setUtterances((current) => mergeUtterancePages(current, next.hydration.utterances))
@@ -607,6 +617,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
           {timeline.length === 0 && pending.length === 0 ? (
             <p className="px-6 py-10 text-center text-sm text-slate-500">아직 메시지가 없습니다.</p>
           ) : null}
+          <MessageReadReceiptsStaticProvider members={readReceiptMembers} viewerUserId={operatorId}>
           <RoomMessageList
             timeline={timeline}
             korean={korean}
@@ -615,6 +626,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
             languageOrder={languageOrder}
             viewerUserId={operatorId}
           />
+          </MessageReadReceiptsStaticProvider>
           {pending.map((reply) => (
             <PendingReplyRow key={reply.requestId} reply={reply} onRetry={retryReply} onDiscard={discardReply} />
           ))}
