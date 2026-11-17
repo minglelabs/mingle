@@ -33,8 +33,10 @@ history:
 - Entering Explore does not open the keyboard (T1), and the grid is there without typing: no empty screen that
   only says to search (T12).
 - Tapping a grid post opens the feed on that post, not on the first post of the feed.
-- While the feed is open, the Explore tab is the one in the key colour (T18). No tab is left unselected, and Home
-  is not selected.
+- While the feed is open, the Explore tab is the selected one (T18). Over the feed the bar is translucent and
+  drawn in one ink, so the selected tab must still stand out from the other three at a glance (on 2026-11-17 it
+  did not on an iPhone 11 Pro). Home is not selected.
+- Each tab of the bar over the feed answers the first tap (one miss in two on 2026-11-17).
 - Back from the feed is one step and lands on the grid at the same scroll position (T6, T9).
 - Typing replaces the grid with search results; clearing the field brings the grid back.
 

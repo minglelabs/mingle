@@ -27,7 +27,8 @@ history:
 
 1. Open P1's profile from Home. Screenshot the buttons.
 2. Tap `…`. Screenshot the extra actions, then tap `…` again.
-3. Tap Message. Screenshot the room that opens. Send `hi`, then go back to the profile and to Home.
+3. Tap Message. An account that has not given its gender and birth date is asked first; answer and continue.
+   Screenshot the room that opens. Send `hi`, then go back to the profile and to Home.
 4. Open P1's profile again and tap Message. Screenshot.
 5. Open P2's profile and tap Message. Screenshot the profile about 1 s later.
 6. Tap Message on P2 once more.

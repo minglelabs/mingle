@@ -25,7 +25,8 @@ history:
 
 ## Steps
 
-1. Open My Page, scroll to `로그인 수단` / "Sign-in methods" and tap it. Screenshot the sheet.
+1. Open My Page, tap the menu (≡, top right), scroll to the bottom and tap `로그인 수단` / "Sign-in methods".
+   It sits right above Sign out, which signs out at once without asking, so aim carefully. Screenshot the sheet.
 2. Note each row: its label (email, Google, Apple, `전화번호 ••••1234`), whether it says `Added later`, and
    whether it has a Remove button.
 3. Tap Remove on a later-added method. Screenshot the confirmation.

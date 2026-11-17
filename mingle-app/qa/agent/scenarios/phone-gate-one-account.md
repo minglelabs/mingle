@@ -28,7 +28,9 @@ history:
 ## Preconditions
 
 - Local server only, started with `PHONE_REQUIRED=on` and without Twilio Verify, so it accepts the development
-  code. Use made-up numbers in the `+1 202 555 01xx` range. Never a real person's number.
+  code. Use made-up numbers in the `+1 202 555 01xx` range, typed with the `+1` in the number field (the
+  country picker can stay on KR). Never a real person's number, and never a `+82` number: when a Korean SMS
+  provider is configured, the server sends a real text to it (seen on 2026-11-17, the provider answered 403).
 - Three accounts on the local server (O and F through the signup API, passwords kept in `qa/agent/local/` and
   never printed):
   - **O** (owner): has verified number N1 and has sent at least one message.
