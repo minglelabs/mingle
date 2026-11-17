@@ -112,6 +112,8 @@ export async function findAutoReplyCandidates(args: {
     JOIN app.app_users AS sender
       ON sender.id = latest.user_id
       AND sender.is_operator = false
+      -- Official accounts (the Hamzzi mascot) are bots too: answering them would never end.
+      AND sender.is_official = false
     WHERE member.left_at IS NULL
       -- A staff account (no persona country, e.g. @admin) never answers automatically.
       AND EXISTS (
