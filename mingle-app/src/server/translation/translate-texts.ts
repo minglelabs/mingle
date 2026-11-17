@@ -788,7 +788,7 @@ const CHINESE_VARIANT_GLOSSARY_LINE = `Chinese language codes: zh-CN = ${CHINESE
  * I, ..."). The previous bubble's translation is already out, so the next one
  * has to carry the sentence's meaning.
  */
-const CONTINUED_SENTENCE_RULE = 'The recognizer sometimes splits one sentence across bubbles, and a period ending the previous one may be wrong. First read the end of the previous bubble and the current text together: if they make one sentence ("...and I\'m also." + "one of these people who..." = "...and I\'m also one of these people who..."), translate the current text as the rest of that sentence, so the meaning of the whole sentence comes through even if the previous translation got it wrong. Never repeat what the previous translation already says.'
+const CONTINUED_SENTENCE_RULE = 'The recognizer sometimes splits one sentence across bubbles (a period or dash ending the previous one may be wrong). If the previous bubble\'s end and the current text make one sentence, even when the current text could stand alone, translate it as that sentence\'s ending: the previous translation + yours must read as one grammatical sentence, so start where it stopped and never repeat its words ("...was because—" + "I wanted to meet new people." → ko "새로운 사람들을 만나고 싶었기 때문이에요.").'
 
 const SOURCE_LANGUAGE_CODE_RULE = 'Use one of the requested codes when it matches; for Chinese always answer zh-CN or zh-TW, never zh.'
 
@@ -860,8 +860,15 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
         'You are an expert live-conversation translator.',
         'Return ONLY strict JSON with keys exactly matching target language codes.',
         'No explanations, no markdown, no extra keys.',
-        'Always translate the ENTIRE current text as a standalone translation for each target language.',
-        'Never return only a suffix, delta, patch, completion fragment, or continuation.',
+        ...(immediatePreviousTurn
+          ? [
+            'Always translate the ENTIRE current text for each target language.',
+            'Never return only a suffix, delta or patch of the current text.',
+          ]
+          : [
+            'Always translate the ENTIRE current text as a standalone translation for each target language.',
+            'Never return only a suffix, delta, patch, completion fragment, or continuation.',
+          ]),
         'If is_final=yes, translate the full final text from scratch, not an incremental update.',
         ...chineseGlossaryLines,
       ].join('\n')),
