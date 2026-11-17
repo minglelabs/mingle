@@ -41,6 +41,7 @@ const SKIP = [
   /\/qa\//,
   /Legacy\.tsx$/, /-legacy\.tsx$/, /\/web\/shared\//, // frozen old web bundles
   /\/posts\/post-admin-actions\.tsx$/, // shown to operators only
+  /\/staff-admin-entry\.tsx$/, // shown to staff only
   /\/lib\/admin-/, // admin dashboards
   /\.fixtures?\.[jt]sx?$/,
   /chinese-script-data\.ts$/,
