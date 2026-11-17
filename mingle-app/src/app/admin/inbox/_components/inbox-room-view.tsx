@@ -12,7 +12,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from 'react'
-import { ArrowDown, ChevronLeft, Info, Loader2, SendHorizontal } from 'lucide-react'
+import { ArrowDown, ChevronLeft, Loader2, SendHorizontal } from 'lucide-react'
 import ChatBubble from '@/components/LivePhoneDemo/ChatBubble'
 import {
   ConversationImageSrcProvider,
@@ -545,14 +545,6 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
         </div>
         <KoreanViewSwitch enabled={korean} onChange={toggleKorean} />
       </header>
-
-      <div role="note" className="flex shrink-0 items-start gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2 text-xs leading-5 text-slate-600">
-        <Info size={14} className="mt-0.5 shrink-0 text-slate-500" aria-hidden="true" />
-        <p className="min-w-0 break-words">
-          {KO_BADGE_COPY.chatDisclosure}
-          <span className="text-slate-400"> · 상대방 화면에도 표시되는 안내입니다.</span>
-        </p>
-      </div>
 
       {room.operators.length > 1 ? (
         <nav aria-label="답장할 운영 계정" className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-slate-200 bg-white px-3 py-1">
