@@ -2313,8 +2313,9 @@ describe('/api/translate/finalize route', () => {
       'You are an expert live-conversation translator.',
       'Return ONLY strict JSON with keys exactly matching target language codes.',
       'No explanations, no markdown, no extra keys.',
-      'Always translate the ENTIRE current text as a standalone translation for each target language.',
-      'Never return only a suffix, delta, patch, completion fragment, or continuation.',
+      'Always translate the ENTIRE current text for each target language.',
+      'Never return only a suffix, delta or patch of the current text.',
+      'When the previous bubble stops mid-sentence, the current text is the rest of that sentence: word its translation as the ending of that sentence, not as a separate sentence.',
       'If is_final=yes, translate the full final text from scratch, not an incremental update.',
     ].join('\n'))
   })
