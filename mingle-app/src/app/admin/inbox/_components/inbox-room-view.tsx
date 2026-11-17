@@ -50,6 +50,7 @@ import { useAdminInboxRealtime } from './use-admin-inbox-realtime'
 import { useStaffKoreanView } from './use-staff-korean-view'
 import { useVisualViewportBox } from './use-visual-viewport-box'
 import { useIsDesktop } from '../../_components/use-is-desktop'
+import { useEdgeSwipeBack } from '../../_components/use-edge-swipe-back'
 
 const KO_BADGE_COPY = accountBadgeCopy('ko')
 const REPLY_MAX_LENGTH = 2000
@@ -292,6 +293,11 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
   const box = useVisualViewportBox()
   // From `lg` up the room fills the detail pane beside the list instead of the whole screen.
   const desktop = useIsDesktop()
+  // On a phone, a swipe from the left edge leaves the room like the back button.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const backLinkRef = useRef<HTMLAnchorElement>(null)
+  const goBackToList = useCallback(() => backLinkRef.current?.click(), [])
+  useEdgeSwipeBack(rootRef, !desktop, goBackToList)
 
   const operator = room.operator
   const operatorId = operator.userId
@@ -532,6 +538,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
 
   return (
     <div
+      ref={rootRef}
       className="fixed inset-x-0 z-[60] flex flex-col bg-slate-50 text-slate-900 lg:absolute lg:inset-0 lg:z-0"
       style={desktop ? undefined : box ? { top: box.top, height: box.height } : { top: 0, bottom: 0 }}
     >
@@ -540,6 +547,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
         style={{ paddingTop: 'max(env(safe-area-inset-top), 4px)' }}
       >
         <Link
+          ref={backLinkRef}
           href="/admin/inbox"
           prefetch={false}
           aria-label="인박스로 돌아가기"
