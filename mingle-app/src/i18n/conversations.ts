@@ -76,7 +76,7 @@ const conversationDictionaries: Partial<Record<AppLocale, ConversationDictionary
     newConversationButtonLabel: "새 대화방 만들기",
     emptyTitle: "아직 대화가 없어요",
     emptyDescription: "새 대화방을 만들고 바로 통역을 시작해보세요.",
-    activeStatusLabel: "대화중",
+    activeStatusLabel: "음성 인식 중",
     pausedStatusLabel: "일시정지",
     switchLiveRoomToastLabel: "다른 대화방의 음성 인식을 끄고 여기서 시작합니다.",
     createErrorMessage: "대화방을 만들지 못했습니다.",
