@@ -103,12 +103,18 @@ type RawHandlers = {
 function routeQueries(handlers: RawHandlers) {
   m.queryRaw.mockImplementation(async (query: unknown) => {
     const text = sqlText(query)
+    if (text.includes('"officialChannelId"')) return []
     if (text.includes('"latestMessageId"')) return handlers.page ?? []
     if (text.includes('"unreadTotal"')) return handlers.total ?? [{ unreadTotal: 0 }]
     if (text.includes('"roomCount"')) return handlers.perOperator ?? []
     if (text.includes('"unreadCount"')) return handlers.unread ?? []
     throw new Error(`unexpected query: ${text.slice(0, 80)}`)
   })
+}
+
+/** The rooms page query (the shared Hamzzi room lookup may run before it). */
+function pageQuery(): unknown {
+  return m.queryRaw.mock.calls.map((call) => call[0]).find((query) => sqlText(query).includes('"latestMessageId"'))
 }
 
 describe('operator inbox queries', () => {
@@ -124,7 +130,7 @@ describe('operator inbox queries', () => {
   it('only counts active, materialized operator memberships and unread from real users', async () => {
     routeQueries({})
     await listOperatorInboxRooms()
-    const memberships = sqlText(m.queryRaw.mock.calls[0][0])
+    const memberships = sqlText(pageQuery())
     // left_at IS NULL: a departed operator's room is not in the inbox; a pending
     // invitee has no member row at all, so it can never match this join.
     expect(memberships).toContain('member.left_at IS NULL')
@@ -221,9 +227,9 @@ describe('operator inbox queries', () => {
       memberRow('c1', 'user_1'),
     ])
     const result = await listOperatorInboxRooms({ operatorUserId: 'op_1', limit: 1, cursor: { activityMs: 5000, conversationId: 'c9' } })
-    const pageQuery = m.queryRaw.mock.calls[0][0] as Prisma.Sql
-    expect(pageQuery.text).toMatch(/AND member\.user_id = \$\d+/)
-    expect(pageQuery.values).toEqual(expect.arrayContaining(['op_1', 5000, 'c9', 2]))
+    const page = pageQuery() as Prisma.Sql
+    expect(page.text).toMatch(/AND member\.user_id = \$\d+/)
+    expect(page.values).toEqual(expect.arrayContaining(['op_1', 5000, 'c9', 2]))
     expect(result.rooms.map((room) => [room.conversationId, room.unreadCount])).toEqual([['c1', 1]])
     expect(result.nextCursor).toBe('2000.c1')
     expect(decodeInboxCursor(result.nextCursor)).toEqual({ activityMs: 2000, conversationId: 'c1' })

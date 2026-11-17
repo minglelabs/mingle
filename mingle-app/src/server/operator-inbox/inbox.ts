@@ -169,12 +169,61 @@ function clampPageSize(limit: number | null | undefined): number {
 // ─── SQL building blocks ─────────────────────────────────────────────────────
 
 /** Every active membership of a non-deleted operator in a non-deleted room. */
-function operatorMembershipsCte(filter: { operatorUserId?: string | null; channelIds?: string[] | null } = {}): Prisma.Sql {
+const OFFICIAL_ROOM_IDS_TTL_MS = 30_000
+let officialRoomIdsCache: { ids: string[]; expiresAt: number } | null = null
+let officialRoomIdsLoad: Promise<string[]> | null = null
+
+/**
+ * Hamzzi's rooms that belong in the inbox: those where a real user has written
+ * (not its welcome alone). Hamzzi is in a room with every user, so finding
+ * them costs a probe per user; the inbox queries run on every refresh and
+ * badge poll, so they share this list for 30 s instead of each repeating the
+ * search. A first message to Hamzzi can therefore reach the list up to 30 s late.
+ */
+async function listStaffAnsweredOfficialRoomIds(): Promise<string[]> {
+  if (officialRoomIdsCache && officialRoomIdsCache.expiresAt > Date.now()) return officialRoomIdsCache.ids
+  officialRoomIdsLoad ??= prisma.$queryRaw<Array<{ officialChannelId: string }>>(Prisma.sql`
+    SELECT member.channel_id AS "officialChannelId"
+    FROM app.app_conversation_channel_members AS member
+    JOIN app.app_conversation_channels AS channel
+      ON channel.id = member.channel_id
+      AND (channel.is_deleted = false OR channel.is_deleted IS NULL)
+    WHERE member.user_id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
+      AND member.left_at IS NULL
+      AND EXISTS (
+        SELECT 1 FROM app.app_messages AS written
+        WHERE written.session_key = channel.session_key
+          AND (written.is_deleted = false OR written.is_deleted IS NULL)
+          AND written.user_id IS NOT NULL
+          AND written.user_id NOT IN (
+            SELECT staff.id FROM app.app_users AS staff
+            WHERE staff.is_operator = true OR staff.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
+          )
+      )
+  `).then((rows) => {
+    const ids = rows.map((row) => row.officialChannelId)
+    officialRoomIdsCache = { ids, expiresAt: Date.now() + OFFICIAL_ROOM_IDS_TTL_MS }
+    return ids
+  }).finally(() => {
+    officialRoomIdsLoad = null
+  })
+  return officialRoomIdsLoad
+}
+
+async function operatorMembershipsCte(filter: { operatorUserId?: string | null; channelIds?: string[] | null } = {}): Promise<Prisma.Sql> {
   const operatorFilter = filter.operatorUserId
     ? Prisma.sql`AND member.user_id = ${filter.operatorUserId}`
     : Prisma.empty
   const channelFilter = filter.channelIds && filter.channelIds.length > 0
     ? Prisma.sql`AND member.channel_id IN (${Prisma.join(filter.channelIds)})`
+    : Prisma.empty
+  const officialRoomIds = await listStaffAnsweredOfficialRoomIds()
+  // Hamzzi's rooms count only once a real user has written (see listStaffAnsweredOfficialRoomIds).
+  const officialRooms = officialRoomIds.length > 0
+    ? Prisma.sql`OR (
+          operator_user.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
+          AND member.channel_id = ANY(${officialRoomIds}::text[])
+        )`
     : Prisma.empty
   return Prisma.sql`memberships AS (
     SELECT
@@ -186,23 +235,14 @@ function operatorMembershipsCte(filter: { operatorUserId?: string | null; channe
     FROM app.app_conversation_channel_members AS member
     JOIN app.app_users AS operator_user
       ON operator_user.id = member.user_id
-      AND (operator_user.is_operator = true OR operator_user.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL}))
       AND operator_user.is_deleted = false
     JOIN app.app_conversation_channels AS channel
       ON channel.id = member.channel_id
       AND (channel.is_deleted = false OR channel.is_deleted IS NULL)
     WHERE member.left_at IS NULL
-      -- Hamzzi's rooms count only once a real user has written (not its welcome alone).
       AND (
         operator_user.is_operator = true
-        OR EXISTS (
-          SELECT 1 FROM app.app_messages AS written
-          JOIN app.app_users AS writer ON writer.id = written.user_id
-          WHERE written.session_key = channel.session_key
-            AND (written.is_deleted = false OR written.is_deleted IS NULL)
-            AND writer.is_operator = false
-            AND writer.id NOT IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
-        )
+        ${officialRooms}
       )
       ${operatorFilter}
       ${channelFilter}
@@ -236,7 +276,7 @@ async function listOperatorUnreadByRoom(channelIds: string[]): Promise<Map<strin
   const result = new Map<string, Map<string, number>>()
   if (channelIds.length === 0) return result
   const rows = await prisma.$queryRaw<UnreadRow[]>(Prisma.sql`
-    WITH ${operatorMembershipsCte({ channelIds })}, ${UNREAD_CTE}
+    WITH ${await operatorMembershipsCte({ channelIds })}, ${UNREAD_CTE}
     SELECT channel_id AS "channelId", operator_user_id AS "operatorUserId", unread_count AS "unreadCount"
     FROM unread
   `)
@@ -450,6 +490,10 @@ export async function listOperatorInboxRooms(args: {
   cursor?: InboxCursor | null
   limit?: number | null
   includeKorean?: boolean
+  /** Only rooms with a message the operator has not read. */
+  unreadOnly?: boolean
+  /** Only rooms with a real member whose name or handle contains this text. */
+  query?: string | null
 } = {}): Promise<InboxListResult> {
   const limit = clampPageSize(args.limit)
   const operatorUserId = args.operatorUserId ? normalizeInboxId(args.operatorUserId) : null
@@ -458,10 +502,35 @@ export async function listOperatorInboxRooms(args: {
     ? Prisma.sql`WHERE (activity_ms, channel_id) < (${args.cursor.activityMs}::bigint, ${args.cursor.conversationId}::text)`
     : Prisma.empty
 
+  const unreadFilter = args.unreadOnly
+    ? Prisma.sql`AND EXISTS (
+        SELECT 1 FROM unread
+        WHERE unread.channel_id = membership.channel_id
+          AND unread.operator_user_id = membership.operator_user_id
+          AND unread.unread_count > 0
+      )`
+    : Prisma.empty
+  const query = (args.query ?? '').trim().slice(0, 60)
+  const queryPattern = `%${query.replace(/[\\%_]/g, (char) => `\\${char}`)}%`
+  const queryFilter = query
+    ? Prisma.sql`AND EXISTS (
+        SELECT 1 FROM app.app_conversation_channel_members AS other
+        JOIN app.app_users AS other_user ON other_user.id = other.user_id
+        WHERE other.channel_id = membership.channel_id
+          AND other.left_at IS NULL
+          AND other_user.is_operator = false
+          AND (other_user.name ILIKE ${queryPattern} OR other_user.handle ILIKE ${queryPattern})
+      )`
+    : Prisma.empty
+
   const pageRows = await prisma.$queryRaw<RoomPageRow[]>(Prisma.sql`
-    WITH ${operatorMembershipsCte({ operatorUserId })},
+    WITH ${await operatorMembershipsCte({ operatorUserId })},${args.unreadOnly ? Prisma.sql` ${UNREAD_CTE},` : Prisma.empty}
     rooms AS (
-      SELECT DISTINCT channel_id, session_key, channel_created_at FROM memberships
+      SELECT DISTINCT membership.channel_id, membership.session_key, membership.channel_created_at
+      FROM memberships AS membership
+      WHERE true
+        ${unreadFilter}
+        ${queryFilter}
     ),
     activity AS (
       SELECT
@@ -562,7 +631,7 @@ export async function listOperatorInboxRooms(args: {
 /** Unread across every inbox room; a room counts once, with its most-behind operator. */
 export async function countOperatorInboxUnread(): Promise<number> {
   const rows = await prisma.$queryRaw<Array<{ unreadTotal: number | bigint | null }>>(Prisma.sql`
-    WITH ${operatorMembershipsCte()}, ${UNREAD_CTE}
+    WITH ${await operatorMembershipsCte()}, ${UNREAD_CTE}
     SELECT COALESCE(SUM(room_unread), 0)::int AS "unreadTotal"
     FROM (
       SELECT channel_id, MAX(unread_count) AS room_unread FROM unread GROUP BY channel_id
@@ -576,7 +645,7 @@ export async function countOperatorInboxUnread(): Promise<number> {
 export async function getOperatorInboxSummary(): Promise<InboxSummary> {
   const [operatorRows, unreadTotal] = await Promise.all([
     prisma.$queryRaw<Array<{ operatorUserId: string; roomCount: number | bigint; unreadCount: number | bigint }>>(Prisma.sql`
-      WITH ${operatorMembershipsCte()}, ${UNREAD_CTE}
+      WITH ${await operatorMembershipsCte()}, ${UNREAD_CTE}
       SELECT
         operator_user_id AS "operatorUserId",
         COUNT(*)::int AS "roomCount",
@@ -773,6 +842,8 @@ export async function loadInboxList(args: {
   cursor?: InboxCursor | null
   limit?: number | null
   includeKorean?: boolean
+  unreadOnly?: boolean
+  query?: string | null
 } = {}): Promise<InboxListResult & InboxSummary & { serverNowMs: number }> {
   const [list, summary] = await Promise.all([
     listOperatorInboxRooms(args),
