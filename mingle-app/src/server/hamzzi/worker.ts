@@ -87,6 +87,10 @@ export async function findHamzziCandidates(args: { now: Date; limit?: number }):
       ORDER BY message.created_at DESC
       LIMIT 1
     ) AS latest ON true
+    -- Never a staff-run operator persona: its own auto-reply would answer back forever.
+    JOIN app.app_users AS sender
+      ON sender.id = latest.user_id
+      AND sender.is_operator = false
     WHERE member.user_id = ${HAMZZI_USER_ID}
       AND member.left_at IS NULL
       AND latest.user_id IS NOT NULL
