@@ -2,7 +2,7 @@ import { MESSAGE_RECALLED_AT_METADATA_KEY, readMessageRecalledAtMs } from '@/lib
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
-import { operatorTextProvider, translateTexts } from '@/server/translation/translate-texts'
+import { translateTexts } from '@/server/translation/translate-texts'
 
 /**
  * Admin-only reading aid for the operator inbox (contract §5): staff read the
@@ -99,8 +99,9 @@ async function translateOne(request: StaffTranslationRequest, language: string):
 
   const promise = (async () => {
     try {
+      // The app's own chat providers: staff are waiting to read this, and the
+      // ChatGPT pool takes 10-25 s an answer.
       const result = await translateTexts({
-        provider: operatorTextProvider(),
         text,
         sourceLanguage: sourceLanguage || 'auto',
         targetLanguages: [language],

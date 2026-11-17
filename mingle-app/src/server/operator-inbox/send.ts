@@ -193,7 +193,7 @@ function canonicalTranslations(result: TranslateTextsResult, text: string, staff
 
 async function requestTranslation(input: Parameters<typeof translateTexts>[0]): Promise<TranslateTextsResult> {
   try {
-    return await translateTexts({ ...input, provider: operatorTextProvider() })
+    return await translateTexts(input)
   } catch (error) {
     throw new OperatorSendError('translation_failed', { cause: error })
   }
@@ -209,10 +209,17 @@ async function translateStaffReply(args: {
   text: string
   personaLanguage: string
   roomLanguages: string[]
+  /**
+   * A reply staff typed is translated by the app's own chat providers (a
+   * person is waiting for it to send). Only the AI's replies go through the
+   * ChatGPT pool, which takes 10-25 s an answer.
+   */
+  provider: 'chatgpt-pool' | undefined
 }): Promise<TranslatedReply> {
-  const { text, personaLanguage } = args
+  const { text, personaLanguage, provider } = args
   const targets = sanitizeSttLanguageUnion([personaLanguage, ...args.roomLanguages])
   const first = await requestTranslation({
+    provider,
     text,
     sourceLanguage: 'auto',
     targetLanguages: targets,
@@ -233,7 +240,7 @@ async function translateStaffReply(args: {
   if (missing.length > 0) {
     try {
       const retry = await translateTexts({
-        provider: operatorTextProvider(),
+        provider,
         text,
         sourceLanguage: staffLanguage || 'auto',
         targetLanguages: missing,
@@ -482,7 +489,13 @@ async function composeAndSend(args: {
     : resolvePersonaLanguage(operator)
   if (!personaLanguage) throw new OperatorSendError('persona_language_missing')
   const roomLanguages = sanitizeSttLanguageUnion(args.members.flatMap((member) => member.selectedLanguages), [personaLanguage])
-  const reply = await translateStaffReply({ text, personaLanguage, roomLanguages })
+  const typedByStaff = sender.badge === 'operator' || Boolean(sender.ctx)
+  const reply = await translateStaffReply({
+    text,
+    personaLanguage,
+    roomLanguages,
+    provider: typedByStaff ? undefined : operatorTextProvider(),
+  })
 
   const metadata: Prisma.InputJsonObject = {
     source: OPERATOR_REPLY_SOURCE,
