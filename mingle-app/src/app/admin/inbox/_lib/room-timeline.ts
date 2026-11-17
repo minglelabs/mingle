@@ -37,6 +37,8 @@ export function upsertUtterance(list: RoomUtterance[], utterance: RoomUtterance)
 /** ChatBubble's optional-field shape (it uses undefined where hydration uses null). */
 export function toBubbleUtterance(utterance: RoomUtterance): Utterance {
   return {
+    ...(utterance.recalled ? { recalled: true } : {}),
+    ...(utterance.replyTo ? { replyTo: utterance.replyTo } : {}),
     ...(utterance.image ? { image: utterance.image } : {}),
     id: utterance.id,
     speaker: utterance.speaker ?? undefined,
