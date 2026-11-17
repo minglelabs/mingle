@@ -457,8 +457,11 @@ async function deliverCommittedReply(args: {
 type SenderKind =
   /** A staff-run operator account: audited, shown in the operator inbox. */
   | { badge: 'operator'; ctx: AdminContext }
-  /** HashChat's own official account (Hamzzi): not audited as staff, not in the inbox. */
-  | { badge: 'official'; sourceLanguage: string }
+  /**
+   * HashChat's own official account (Hamzzi). The AI's replies carry no ctx
+   * (no staff audit); a reply staff typed in the inbox does.
+   */
+  | { badge: 'official'; sourceLanguage: string; ctx?: AdminContext }
 
 async function composeAndSend(args: {
   sender: SenderKind
@@ -560,7 +563,7 @@ async function composeAndSend(args: {
 
   // Audited right after the commit, so the record exists even if a later
   // delivery step hangs. The staff original lives only here.
-  if (sender.badge === 'operator') await writeAdminAudit(sender.ctx, {
+  if (sender.ctx) await writeAdminAudit(sender.ctx, {
     action: 'inbox.reply',
     operatorUserId: operator.id,
     targetType: 'message',
@@ -583,7 +586,8 @@ async function composeAndSend(args: {
     createdAt: message.createdAt,
     sourceText: reply.sourceText,
     utterance,
-    notifyInbox: sender.badge === 'operator',
+    // Refreshes the inbox; the sender is a room's inbox account, so it never alerts staff.
+    notifyInbox: true,
   })
 
   return {
@@ -615,14 +619,16 @@ export async function sendOperatorMessage(ctx: AdminContext, input: SendOperator
 /**
  * Sends `text` into the room as one of HashChat's official accounts (Hamzzi),
  * with `sourceLanguage` as the message's original language. Same storage,
- * translation and delivery as an operator reply, without the staff audit
- * and operator-inbox side effects.
+ * translation and delivery as an operator reply. The AI's replies pass no
+ * `ctx` (no staff audit); a staff reply from the inbox does.
  */
 export async function sendOfficialAccountMessage(input: SendOperatorMessageInput & {
   sender: OperatorAccountRecord
   sourceLanguage: string
+  /** Set when staff typed the reply in the inbox: audited as `inbox.reply`. */
+  ctx?: AdminContext
 }): Promise<SendOperatorMessageResult> {
-  return sendAsAccount({ badge: 'official', sourceLanguage: input.sourceLanguage }, input.sender, input)
+  return sendAsAccount({ badge: 'official', sourceLanguage: input.sourceLanguage, ctx: input.ctx }, input.sender, input)
 }
 
 async function sendAsAccount(
