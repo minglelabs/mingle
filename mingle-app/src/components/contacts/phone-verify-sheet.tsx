@@ -14,6 +14,14 @@ const RESEND_AFTER_MS = 30_000;
 
 type Step = { kind: "phone" } | { kind: "code"; phone: string; sentAt: number };
 
+/** Fired on `window` when this account's number was just verified (detail: the E.164 number). */
+export const PHONE_VERIFIED_EVENT = "mingle:phone-verified";
+
+function announcePhoneVerified(phoneE164: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(PHONE_VERIFIED_EVENT, { detail: phoneE164 }));
+}
+
 /**
  * Proves the user's own phone number with a 6-digit SMS code: pick the
  * country, type the number, get the code, type it. Resolves the verified
@@ -104,6 +112,7 @@ export default function PhoneVerifySheet({
           setError(errorText(failure));
           return;
         }
+        announcePhoneVerified(step.phone);
         onVerified(step.phone);
         return;
       }
@@ -129,6 +138,7 @@ export default function PhoneVerifySheet({
         window.location.reload();
         return;
       }
+      announcePhoneVerified(body.phoneE164);
       onVerified(body.phoneE164);
     } catch {
       setError(copy.errorGeneric);

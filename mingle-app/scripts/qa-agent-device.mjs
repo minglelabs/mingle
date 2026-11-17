@@ -664,8 +664,8 @@ async function inWebView(state, run) {
   await appium(state, 'POST', '/session/:session/context', { name: webview });
   // Android: every WebView in the app process (the AdMob banner's included) is a window of one
   // chromedriver context, so pick the app page, not the ad page.
-  if (state.platform === 'android') await selectAndroidAppWindow(state);
   try {
+    if (state.platform === 'android') await selectAndroidAppWindow(state);
     return await run();
   } finally {
     await appium(state, 'POST', '/session/:session/context', { name: 'NATIVE_APP' }).catch(() => {});

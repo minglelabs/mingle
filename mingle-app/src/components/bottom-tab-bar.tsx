@@ -399,12 +399,19 @@ export default function BottomTabBar({
         aria-label={dictionary.titles.connect}
         aria-current={isConnectActive ? "page" : undefined}
       >
-        <Compass
-          size={26}
-          stroke={isConnectActive ? activeColor : inactiveColor}
-          strokeWidth={isConnectActive ? activeStroke : 1.9}
-          aria-hidden="true"
-        />
+        {isConnectActive ? (
+          // Selected: a filled disc with the needle cut out in the opposite ink, so it
+          // stands out on the one-ink glass bar the way the filled Home and Chats icons do.
+          <svg width={26} height={26} viewBox="0 0 24 24" aria-hidden="true" data-qa="tab-explore-active">
+            <circle cx="12" cy="12" r="10" fill={activeColor} stroke={activeColor} strokeWidth={activeStroke - 0.6} />
+            <path
+              d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"
+              fill={glass ? (glyphTone === "dark" ? "#ffffff" : "#0f172a") : "#ffffff"}
+            />
+          </svg>
+        ) : (
+          <Compass size={26} stroke={inactiveColor} strokeWidth={1.9} aria-hidden="true" />
+        )}
       </button>
       <button
         type="button"

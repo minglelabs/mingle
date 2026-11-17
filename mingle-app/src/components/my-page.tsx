@@ -434,6 +434,9 @@ function ProfileSettingsPanel({
   const [isSavingNotificationsPreference, setIsSavingNotificationsPreference] = useState(false);
   const [isAccountActionModalOpen, setIsAccountActionModalOpen] = useState(false);
   const [isSignInMethodsOpen, setIsSignInMethodsOpen] = useState(false);
+  // Sign out sits at the end of a long menu next to other actions, so it asks first.
+  // Drawn in the page: window.confirm shows nothing in the app's WebView.
+  const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
@@ -1111,9 +1114,25 @@ function ProfileSettingsPanel({
               {resolveSignInMethodsCopy(locale).title}
             </button>
             {isSignInMethodsOpen ? <SignInMethodsSheet locale={locale} onClose={() => setIsSignInMethodsOpen(false)} /> : null}
+            {isSignOutConfirmOpen ? (
+              <div className="fixed inset-0 z-[150] flex items-center justify-center px-8" role="alertdialog" aria-modal="true" aria-label={resolveSignInMethodsCopy(locale).signOutConfirm} data-qa="sign-out-confirm">
+                <button type="button" className="absolute inset-0 bg-black/45" aria-label={resolveSignInMethodsCopy(locale).close} onClick={() => setIsSignOutConfirmOpen(false)} />
+                <div className="relative w-full max-w-[320px] rounded-2xl bg-white p-5 text-center shadow-xl">
+                  <p className="text-[15px] font-semibold text-slate-900">{resolveSignInMethodsCopy(locale).signOutConfirm}</p>
+                  <div className="mt-4 flex gap-2">
+                    <button type="button" onClick={() => setIsSignOutConfirmOpen(false)} className="flex h-11 flex-1 items-center justify-center rounded-xl border border-gray-200 bg-white text-[14px] font-semibold text-slate-700 active:bg-gray-100">
+                      {resolveSignInMethodsCopy(locale).close}
+                    </button>
+                    <button type="button" data-qa="sign-out-confirm-yes" onClick={() => { setIsSignOutConfirmOpen(false); onSignOut(); }} className="flex h-11 flex-1 items-center justify-center rounded-xl bg-slate-950 text-[14px] font-semibold text-white active:bg-slate-800">
+                      {copy.logout}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <button
               type="button"
-              onClick={onSignOut}
+              onClick={() => setIsSignOutConfirmOpen(true)}
               disabled={sessionStatus !== "authenticated"}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >

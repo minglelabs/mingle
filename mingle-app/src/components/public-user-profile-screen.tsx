@@ -2,6 +2,7 @@
 
 import { requestProfileBasics } from "@/lib/profile-basics";
 import ProfileBio from "@/components/profile-bio";
+import { sameBioLanguage } from "@/lib/profile-bio";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
@@ -178,6 +179,9 @@ function ProfileAvatar({
   size?: number;
   onClick?: () => void;
 }) {
+  // Remember WHICH url failed, so a changed photo is tried again.
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const showImage = Boolean(image) && failedImage !== image;
   return (
     <button
       type="button"
@@ -187,13 +191,14 @@ function ProfileAvatar({
       aria-label={label}
     >
       <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
-        {image ? (
+        {showImage && image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={image}
-            alt={label}
+            alt=""
             width={size}
             height={size}
+            onError={() => setFailedImage(image)}
             className="h-full w-full object-cover"
             style={{ transform: buildProfileImageTransform(size, crop) }}
           />
@@ -685,7 +690,12 @@ export default function PublicUserProfileScreen({
                     isOwnProfile={false}
                   />
                 ) : null}
-                <ProfileBio userId={profile.id} initialBio={bio} locale={locale} />
+                <ProfileBio
+                  userId={profile.id}
+                  initialBio={bio}
+                  locale={locale}
+                  expectTranslate={Boolean(bio) && Boolean(languageOption) && !sameBioLanguage(languageOption?.code ?? null, locale)}
+                />
               </div>
 
               {/* Row 1: follow and share. Row 2: message (the main action) and gift. Block and report sit behind "…". */}

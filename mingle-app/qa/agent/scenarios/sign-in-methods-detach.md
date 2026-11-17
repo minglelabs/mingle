@@ -26,7 +26,7 @@ history:
 ## Steps
 
 1. Open My Page, tap the menu (≡, top right), scroll to the bottom and tap `로그인 수단` / "Sign-in methods".
-   It sits right above Sign out, which signs out at once without asking, so aim carefully. Screenshot the sheet.
+   It sits right above Sign out, which asks `로그아웃할까요?` first. Screenshot the sheet.
 2. Note each row: its label (email, Google, Apple, `전화번호 ••••1234`), whether it says `Added later`, and
    whether it has a Remove button.
 3. Tap Remove on a later-added method. Screenshot the confirmation.
@@ -41,10 +41,12 @@ history:
   the X and a tap outside (T10, T19).
 - Phone numbers show only their last four digits.
 - The method the account was made with has no Remove button. Only later-added rows have one.
-- Remove asks first ("Once removed, it can no longer sign in to this account. Remove it?"). Cancel changes
-  nothing. Confirm removes the row and says `Removed.` without a system alert (T22).
+- Remove asks first ("Once removed, it can no longer sign in to this account. Remove it?") in a box inside the
+  sheet, not a system dialog: the app's WebView shows no `window.confirm`. Close changes nothing. Remove takes
+  the row away and says `Removed.` (T22).
 - After reopening, the removed row is still gone.
 - Step 6 does not open O. A removed number signs in to an account of its own (a new one), never to O.
+- Sign out (below the sheet's button in the menu) asks before signing out, and Close keeps the session.
 - Every string is in the app language (T17), and no label is clipped (T16).
 
 ## Signals

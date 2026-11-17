@@ -37,8 +37,12 @@ export default function SignInMethodsSheet({ locale, onClose }: { locale: string
     return () => { cancelled = true; };
   }, []);
 
+  // The method waiting for a yes. window.confirm shows nothing in the app's WebView, so the question is drawn here.
+  const [pending, setPending] = useState<{ kind: "account" | "phone"; id: string } | null>(null);
+
   const remove = useCallback(async (kind: "account" | "phone", id: string) => {
-    if (busyKey || !window.confirm(copy.removeConfirm)) return;
+    if (busyKey) return;
+    setPending(null);
     setBusyKey(`${kind}:${id}`);
     setNotice(null);
     try {
@@ -59,7 +63,7 @@ export default function SignInMethodsSheet({ locale, onClose }: { locale: string
     } finally {
       setBusyKey(null);
     }
-  }, [busyKey, copy.failed, copy.removeConfirm, copy.removed]);
+  }, [busyKey, copy.failed, copy.removed]);
 
   return (
     <div className="fixed inset-0 z-[150] flex items-end justify-center" role="dialog" aria-modal="true" aria-label={copy.title} data-qa="sign-in-methods-sheet">
@@ -101,7 +105,7 @@ export default function SignInMethodsSheet({ locale, onClose }: { locale: string
                     <button
                       type="button"
                       disabled={busyKey !== null}
-                      onClick={() => void remove(target.kind, target.id)}
+                      onClick={() => { setNotice(null); setPending(target); }}
                       className="flex h-9 shrink-0 items-center rounded-full border border-rose-200 px-3.5 text-[13px] font-semibold text-rose-600 active:bg-rose-50 disabled:opacity-50"
                     >
                       {busyKey === key ? <Loader2 className="animate-spin" size={15} aria-hidden /> : copy.remove}
@@ -112,6 +116,19 @@ export default function SignInMethodsSheet({ locale, onClose }: { locale: string
             })}
           </ul>
         )}
+        {pending ? (
+          <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3" role="alertdialog" aria-label={copy.removeConfirm} data-qa="sign-in-method-remove-confirm">
+            <p className="text-[13px] leading-relaxed text-slate-800">{copy.removeConfirm}</p>
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={() => setPending(null)} className="flex h-10 flex-1 items-center justify-center rounded-full border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 active:bg-slate-100">
+                {copy.close}
+              </button>
+              <button type="button" onClick={() => void remove(pending.kind, pending.id)} className="flex h-10 flex-1 items-center justify-center rounded-full bg-rose-600 text-[13px] font-semibold text-white active:bg-rose-700">
+                {copy.remove}
+              </button>
+            </div>
+          </div>
+        ) : null}
         {notice ? <p className="mt-3 text-[13px] text-slate-700" role="status">{notice}</p> : null}
       </div>
     </div>

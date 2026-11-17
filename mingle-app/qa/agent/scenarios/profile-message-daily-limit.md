@@ -39,6 +39,9 @@ history:
 
 - Row one is Follow, Share and `…`; row two is Message as the one filled button, with Gift next to it only when
   coin billing is on. Block and Report appear only after `…` (T19, T21).
+- The buttons stay where they are while the profile finishes loading: Message does not slide down when the bio's
+  translate row or the photo arrives (it did on 2026-11-17, and a tap landed on Share). A photo that fails to
+  load shows the grey placeholder, not the name as text.
 - Step 3 opens a room with P1 on the first tap (T8). Step 4 opens the same room, not a second one.
 - Step 5 opens no room. The profile shows the limit sentence under the buttons (`오늘은 새로운 사람 1명에게만…`
   / "You can start a chat with 1 new person a day…") in the app language, as text on the screen and not as a
