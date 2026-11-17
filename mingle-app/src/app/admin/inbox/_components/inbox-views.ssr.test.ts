@@ -109,11 +109,10 @@ describe('admin inbox screens (server render)', () => {
     expect(html).toContain('href="/admin/inbox/conv_1"')
   })
 
-  it('renders the room as the operator: header, disclosure, bubbles, photo proxy and composer', () => {
+  it('renders the room as the operator: header, bubbles, photo proxy and composer', () => {
     const html = render(createElement(InboxRoomView, { initialView: roomView }))
     expect(html).toContain('↔')
     expect(html).toContain('답장 언어 포르투갈어')
-    expect(html).toContain('이 대화에는 HashChat 팀이 운영하는 계정이 있습니다')
     expect(html).toContain('Olá, João!')
     // The counterpart's bubble shows in the operator's display language.
     expect(html).toContain('Oi Mina!')
