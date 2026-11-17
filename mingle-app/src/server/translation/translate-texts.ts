@@ -788,7 +788,7 @@ const CHINESE_VARIANT_GLOSSARY_LINE = `Chinese language codes: zh-CN = ${CHINESE
  * I, ..."). The previous bubble's translation is already out, so the next one
  * has to carry the sentence's meaning.
  */
-const CONTINUED_SENTENCE_RULE = 'The recognizer sometimes splits one sentence across bubbles, and a period ending the previous one may be wrong. First read the end of the previous bubble and the current text together: if they make one sentence ("...and I\'m also." + "one of these people who..." = "...and I\'m also one of these people who..."), translate the current text as the rest of that sentence, so the meaning of the whole sentence comes through even if the previous translation got it wrong. This holds even when the current text reads as a full sentence on its own: if the previous bubble stops mid-sentence (it ends with a dash or "...", or with a word that needs more after it, such as "because", "and", "so", "that"), the current text finishes it. Then the previous translation followed by yours must read as one grammatical sentence in each target language, so word yours as its ending ("I think the reason I came here was because—" + "I wanted to meet new people.": ko "제가 여기 온 이유는 아마—" + "새로운 사람들을 만나고 싶었기 때문이에요.", not "새로운 사람들을 만나고 싶었어요."). Yours is shown right after the previous translation, so never repeat any of its words: start where it stopped.'
+const CONTINUED_SENTENCE_RULE = 'The recognizer sometimes splits one sentence across bubbles (a period or dash ending the previous one may be wrong). If the previous bubble\'s end and the current text make one sentence, even when the current text could stand alone, translate it as that sentence\'s ending: the previous translation + yours must read as one grammatical sentence, so start where it stopped and never repeat its words ("...was because—" + "I wanted to meet new people." → ko "새로운 사람들을 만나고 싶었기 때문이에요.").'
 
 const SOURCE_LANGUAGE_CODE_RULE = 'Use one of the requested codes when it matches; for Chinese always answer zh-CN or zh-TW, never zh.'
 
@@ -864,7 +864,6 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
           ? [
             'Always translate the ENTIRE current text for each target language.',
             'Never return only a suffix, delta or patch of the current text.',
-            'When the previous bubble stops mid-sentence, the current text is the rest of that sentence: word its translation as the ending of that sentence, not as a separate sentence.',
           ]
           : [
             'Always translate the ENTIRE current text as a standalone translation for each target language.',
