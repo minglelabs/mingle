@@ -358,6 +358,8 @@ import {
 
 export { resolveKeyboardViewportInsetPx, resolveStableKeyboardViewportInsetPx }
 
+/** About as long as the iOS keyboard takes to slide down. */
+const KEYBOARD_CLOSE_EASE_MS = 250
 const VOLUME_THRESHOLD = 0.05
 // How long a "loaded" older-history page may go without changing the list before its loading state is released.
 const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
@@ -7764,6 +7766,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? COMPOSER_MODE_BOTTOM_MARGIN_PX
     : VOICE_MODE_BOTTOM_MARGIN_PX
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
+  // iOS reports the keyboard's final height (0) as soon as it starts sliding
+  // down, so the bar used to drop at once and the chat jumped to full height
+  // while the keyboard was still on screen. Ease the bar down alongside the
+  // keyboard instead. Only the closing side animates: when the keyboard opens,
+  // iOS already scrolls the focused field into view, and a delayed bar would
+  // leave the field under the keyboard.
+  const bottomBarKeyboardTransition = isComposerOpen && keyboardViewportInsetPx === 0
+    ? `padding-bottom ${KEYBOARD_CLOSE_EASE_MS}ms cubic-bezier(0.25, 0.8, 0.3, 1)`
+    : undefined
   const composerCanSend = composerHasDraft
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
@@ -10034,6 +10045,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             layout={!isComposerOpen}
             layoutDependency={isComposerOpen}
             onLayoutAnimationComplete={syncNativeBottomBarClearance}
+            onTransitionEnd={syncNativeBottomBarClearance}
             ref={bottomBarRef}
             data-qa="live-demo-bottom-bar"
             className="relative shrink-0 border-t border-gray-100 bg-white"
@@ -10041,6 +10053,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             style={{
               paddingTop: `${bottomBarTopPaddingPx}px`,
               paddingBottom: bottomBarPaddingBottom,
+              transition: bottomBarKeyboardTransition,
               paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
