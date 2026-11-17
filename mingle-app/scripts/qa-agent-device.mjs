@@ -1141,7 +1141,7 @@ function cmdBuild(args) {
 
 // Google's published AdMob test banner unit for Android.
 const ADMOB_TEST_BANNER_UNIT_ANDROID = 'ca-app-pub-3940256099942544/6300978111';
-const ANDROID_RN_API_NAMESPACE = 'android/v2.3.0';
+const ANDROID_RN_API_NAMESPACE = 'android/v2.4.0';
 const QA_APK_PATH = path.join(APP_ROOT, 'rn/android/app/build/outputs/apk/release/app-release.apk');
 
 // gradle reads the upload keystore from <worktree>/.credentials/android. A worktree has none, so
