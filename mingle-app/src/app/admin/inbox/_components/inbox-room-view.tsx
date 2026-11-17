@@ -12,7 +12,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from 'react'
-import { ArrowDown, ChevronLeft, Loader2, SendHorizontal } from 'lucide-react'
+import { ArrowDown, ChevronLeft, Loader2, SendHorizontal, Trash2 } from 'lucide-react'
 import ChatBubble from '@/components/LivePhoneDemo/ChatBubble'
 import {
   ConversationImageSrcProvider,
@@ -35,6 +35,7 @@ import {
 import {
   STAFF_KOREAN,
   buildRoomTimeline,
+  isRevealedUnsent,
   mergeUtterancePages,
   staffKoreanCandidateId,
   toBubbleUtterance,
@@ -154,6 +155,12 @@ const RoomMessageList = memo(function RoomMessageList({
         const koId = korean ? staffKoreanCandidateId(item.utterance) : null
         return (
           <div key={item.key} className="px-3 py-1">
+            {isRevealedUnsent(item.utterance) ? (
+              <p className="mb-1 flex items-center gap-1 pl-12 text-xs font-medium text-rose-600">
+                <Trash2 size={12} aria-hidden="true" />
+                보낸 사람이 삭제한 메시지 · 상대 화면에는 안 보입니다
+              </p>
+            ) : null}
             <ChatBubble
               utterance={koId ? withStaffKorean(bubble, koById[koId], !(koId in koById)) : bubble}
               uiLocale="ko"

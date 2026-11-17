@@ -1,3 +1,4 @@
+import { MESSAGE_RECALLED_AT_METADATA_KEY } from '@/lib/message-recall'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import {
@@ -788,6 +789,8 @@ export async function loadInboxRoomView(args: {
     conversationId: access.room.conversationId,
     userId: operatorUserId,
     before: args.before ?? null,
+    // Staff can still read a message its sender unsent (shown marked as deleted).
+    revealRecalled: true,
   })
   if (!hydration) return { ok: false, error: 'not_found' }
 
@@ -853,10 +856,16 @@ export async function loadInboxList(args: {
 }
 
 // Same key shape the photo upload path issues (conversation-image-controller.ts).
+/** A message its sender unsent: soft-deleted, but staff can still read it. */
+const RECALLED_MESSAGE_WHERE = {
+  isDeleted: true,
+  metadata: { path: [MESSAGE_RECALLED_AT_METADATA_KEY], gt: 0 },
+} satisfies Prisma.AppMessageWhereInput
+
 const CONVERSATION_IMAGE_KEY_PATTERN = /^conversation-images\/[\w-]+\.jpg$/
 
 /**
- * Storage key of a chat photo the admin may view: a visible photo message in
+ * Storage key of a chat photo the admin may view: a visible (or unsent) photo message in
  * a non-deleted room that has an active operator member. Anything else is
  * null, so the admin image proxy can never serve a photo from a room outside
  * the inbox.
@@ -865,7 +874,7 @@ export async function resolveInboxPhotoObjectKey(rawMessageId: string): Promise<
   const messageId = normalizeInboxId(rawMessageId)
   if (!messageId) return null
   const message = await prisma.appMessage.findFirst({
-    where: { id: messageId, OR: [{ isDeleted: false }, { isDeleted: null }] },
+    where: { id: messageId, OR: [{ isDeleted: false }, { isDeleted: null }, RECALLED_MESSAGE_WHERE] },
     select: { sessionKey: true, metadata: true },
   })
   if (!message?.sessionKey || !isPhotoMessageMetadata(message.metadata)) return null

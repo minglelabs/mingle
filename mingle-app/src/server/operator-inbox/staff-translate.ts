@@ -1,3 +1,4 @@
+import { MESSAGE_RECALLED_AT_METADATA_KEY, readMessageRecalledAtMs } from '@/lib/message-recall'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
@@ -178,30 +179,32 @@ export async function translateRoomMessagesForStaff(args: {
     where: {
       id: { in: ids },
       sessionKey: args.sessionKey,
-      OR: [{ isDeleted: false }, { isDeleted: null }],
+      // An unsent message is soft-deleted, but staff still read (and translate) it.
+      OR: [{ isDeleted: false }, { isDeleted: null }, { metadata: { path: [MESSAGE_RECALLED_AT_METADATA_KEY], gt: 0 } }],
     },
     select: {
       id: true,
       sourceLanguage: true,
       metadata: true,
-      contents: {
-        where: { OR: [{ isDeleted: false }, { isDeleted: null }] },
-        select: { contentType: true, language: true, text: true },
-      },
+      contents: { select: { contentType: true, language: true, text: true, isDeleted: true } },
     },
   })
 
   const requests: StaffTranslationRequest[] = []
   for (const row of rows) {
     if (isPhotoMessageMetadata(row.metadata)) continue
-    const stored = row.contents.find((content) => (
+    // Unsending soft-deletes the contents too; otherwise only live ones count.
+    const contents = readMessageRecalledAtMs(row.metadata) !== null
+      ? row.contents
+      : row.contents.filter((content) => content.isDeleted !== true)
+    const stored = contents.find((content) => (
       content.contentType === 'TRANSLATION_FINAL' && canonicalLanguage(content.language) === language && content.text.trim()
     ))
     if (stored) {
       result[row.id] = stored.text.trim()
       continue
     }
-    const sources = row.contents.filter((content) => content.contentType === 'SOURCE')
+    const sources = contents.filter((content) => content.contentType === 'SOURCE')
     const source = sources.find((content) => content.language === row.sourceLanguage) ?? sources[0]
     if (!source?.text.trim()) continue
     requests.push({ messageId: row.id, text: source.text, sourceLanguage: row.sourceLanguage })
