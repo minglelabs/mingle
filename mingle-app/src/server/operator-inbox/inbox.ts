@@ -172,31 +172,68 @@ function clampPageSize(limit: number | null | undefined): number {
 
 // ─── SQL building blocks ─────────────────────────────────────────────────────
 
-const OFFICIAL_ROOM_IDS_TTL_MS = 30_000
-let officialRoomIdsCache: { ids: string[]; expiresAt: number } | null = null
-let officialRoomIdsLoad: Promise<string[]> | null = null
+const SLOW_QUERY_LOG_MS = 1_000
+
+/** Runs one inbox query and logs it when it is slow, so a slow admin shows in the server log by name. */
+async function timedInboxQuery<T>(name: string, run: () => Promise<T>): Promise<T> {
+  const startedAt = Date.now()
+  try {
+    return await run()
+  } finally {
+    const ms = Date.now() - startedAt
+    if (ms >= SLOW_QUERY_LOG_MS) console.warn('[operator-inbox] slow_query', { name, ms })
+  }
+}
+
+/**
+ * A value that costs a search across every inbox room and is read on every
+ * refresh and badge poll: kept in memory for `ttlMs`. Once loaded, an expired
+ * value is still answered at once and renewed in the background, so only the
+ * first read (or the first after `clear`) waits for the search.
+ */
+function sharedInboxValue<T>(name: string, ttlMs: number, load: () => Promise<T>) {
+  let cached: { value: T; expiresAt: number } | null = null
+  let loading: Promise<T> | null = null
+  let generation = 0
+  const reload = (): Promise<T> => {
+    if (loading) return loading
+    const startedGeneration = generation
+    const current = timedInboxQuery(name, load).then((value) => {
+      // A `clear` during the load means this value may predate the change.
+      if (startedGeneration === generation) cached = { value, expiresAt: Date.now() + ttlMs }
+      return value
+    }).finally(() => {
+      if (loading === current) loading = null
+    })
+    loading = current
+    return current
+  }
+  return {
+    get(): Promise<T> {
+      if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value)
+      if (cached) {
+        void reload().catch(() => {})
+        return Promise.resolve(cached.value)
+      }
+      return reload()
+    },
+    clear(): void {
+      generation += 1
+      cached = null
+      loading = null
+    },
+  }
+}
 
 /**
  * Hamzzi's rooms that belong in the inbox: those where a real user has written
  * (not its welcome alone). Hamzzi is in a room with every user, so finding
- * them costs a probe per user; the inbox queries run on every refresh and
- * badge poll, so they share this list for 30 s instead of each repeating the
- * search. Once loaded, an expired list is still answered at once and renewed
- * in the background, so only the first request after a start waits for the
- * search. A first message to Hamzzi can therefore reach the list about a
- * minute late.
+ * them costs a probe per user; every inbox query shares this list for 30 s
+ * instead of repeating the search. A first message to Hamzzi can therefore
+ * reach the list about a minute late.
  */
-async function listStaffAnsweredOfficialRoomIds(): Promise<string[]> {
-  if (officialRoomIdsCache && officialRoomIdsCache.expiresAt > Date.now()) return officialRoomIdsCache.ids
-  if (officialRoomIdsCache) {
-    void loadStaffAnsweredOfficialRoomIds().catch(() => {})
-    return officialRoomIdsCache.ids
-  }
-  return loadStaffAnsweredOfficialRoomIds()
-}
-
-function loadStaffAnsweredOfficialRoomIds(): Promise<string[]> {
-  officialRoomIdsLoad ??= prisma.$queryRaw<Array<{ officialChannelId: string }>>(Prisma.sql`
+const staffAnsweredOfficialRoomIds = sharedInboxValue('official_rooms', 30_000, async () => {
+  const rows = await prisma.$queryRaw<Array<{ officialChannelId: string }>>(Prisma.sql`
     SELECT member.channel_id AS "officialChannelId"
     FROM app.app_conversation_channel_members AS member
     JOIN app.app_conversation_channels AS channel
@@ -214,15 +251,9 @@ function loadStaffAnsweredOfficialRoomIds(): Promise<string[]> {
             WHERE staff.is_operator = true OR staff.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
           )
       )
-  `).then((rows) => {
-    const ids = rows.map((row) => row.officialChannelId)
-    officialRoomIdsCache = { ids, expiresAt: Date.now() + OFFICIAL_ROOM_IDS_TTL_MS }
-    return ids
-  }).finally(() => {
-    officialRoomIdsLoad = null
-  })
-  return officialRoomIdsLoad
-}
+  `)
+  return rows.map((row) => row.officialChannelId)
+})
 
 /** Every active membership of a non-deleted operator in a non-deleted room. */
 async function operatorMembershipsCte(filter: { operatorUserId?: string | null; channelIds?: string[] | null } = {}): Promise<Prisma.Sql> {
@@ -232,8 +263,8 @@ async function operatorMembershipsCte(filter: { operatorUserId?: string | null; 
   const channelFilter = filter.channelIds && filter.channelIds.length > 0
     ? Prisma.sql`AND member.channel_id IN (${Prisma.join(filter.channelIds)})`
     : Prisma.empty
-  const officialRoomIds = await listStaffAnsweredOfficialRoomIds()
-  // Hamzzi's rooms count only once a real user has written (see listStaffAnsweredOfficialRoomIds).
+  const officialRoomIds = await staffAnsweredOfficialRoomIds.get()
+  // Hamzzi's rooms count only once a real user has written (see staffAnsweredOfficialRoomIds).
   const officialRooms = officialRoomIds.length > 0
     ? Prisma.sql`OR (
           operator_user.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
@@ -538,7 +569,7 @@ export async function listOperatorInboxRooms(args: {
       )`
     : Prisma.empty
 
-  const pageRows = await prisma.$queryRaw<RoomPageRow[]>(Prisma.sql`
+  const pageSql = Prisma.sql`
     WITH ${await operatorMembershipsCte({ operatorUserId })},${args.unreadOnly ? Prisma.sql` ${UNREAD_CTE},` : Prisma.empty}
     rooms AS (
       SELECT DISTINCT membership.channel_id, membership.session_key, membership.channel_created_at
@@ -572,7 +603,8 @@ export async function listOperatorInboxRooms(args: {
     ${cursorFilter}
     ORDER BY activity_ms DESC, channel_id DESC
     LIMIT ${limit + 1}
-  `)
+  `
+  const pageRows = await timedInboxQuery('rooms_page', () => prisma.$queryRaw<RoomPageRow[]>(pageSql))
 
   const hasMore = pageRows.length > limit
   const page = pageRows.slice(0, limit)
@@ -643,8 +675,9 @@ export async function listOperatorInboxRooms(args: {
 
 // ─── Summary / unread total ──────────────────────────────────────────────────
 
-/** Unread across every inbox room; a room counts once, with its most-behind operator. */
-export async function countOperatorInboxUnread(): Promise<number> {
+const INBOX_COUNTS_TTL_MS = 10_000
+
+const inboxUnreadTotal = sharedInboxValue('unread_total', INBOX_COUNTS_TTL_MS, async () => {
   const rows = await prisma.$queryRaw<Array<{ unreadTotal: number | bigint | null }>>(Prisma.sql`
     WITH ${await operatorMembershipsCte()}, ${UNREAD_CTE}
     SELECT COALESCE(SUM(room_unread), 0)::int AS "unreadTotal"
@@ -654,22 +687,38 @@ export async function countOperatorInboxUnread(): Promise<number> {
   `)
   const total = Number(rows[0]?.unreadTotal ?? 0)
   return Number.isFinite(total) && total > 0 ? Math.floor(total) : 0
+})
+
+const inboxOperatorCounts = sharedInboxValue('operator_counts', INBOX_COUNTS_TTL_MS, async () => (
+  prisma.$queryRaw<Array<{ operatorUserId: string; roomCount: number | bigint; unreadCount: number | bigint }>>(Prisma.sql`
+    WITH ${await operatorMembershipsCte()}, ${UNREAD_CTE}
+    SELECT
+      operator_user_id AS "operatorUserId",
+      COUNT(*)::int AS "roomCount",
+      COALESCE(SUM(unread_count), 0)::int AS "unreadCount"
+    FROM unread
+    GROUP BY operator_user_id
+  `)
+))
+
+/** Forgets the shared inbox counts (after a read changes them; and between tests). */
+export function clearOperatorInboxCounts(): void {
+  inboxUnreadTotal.clear()
+  inboxOperatorCounts.clear()
+}
+
+/**
+ * Unread across every inbox room; a room counts once, with its most-behind
+ * operator. Every admin screen polls this for the tab badge, so it is shared
+ * for 10 s (see sharedInboxValue); a read by staff refreshes it at once.
+ */
+export function countOperatorInboxUnread(): Promise<number> {
+  return inboxUnreadTotal.get()
 }
 
 /** unreadTotal plus one entry per operator that has at least one inbox room (for the filter chips). */
 export async function getOperatorInboxSummary(): Promise<InboxSummary> {
-  const [operatorRows, unreadTotal] = await Promise.all([
-    prisma.$queryRaw<Array<{ operatorUserId: string; roomCount: number | bigint; unreadCount: number | bigint }>>(Prisma.sql`
-      WITH ${await operatorMembershipsCte()}, ${UNREAD_CTE}
-      SELECT
-        operator_user_id AS "operatorUserId",
-        COUNT(*)::int AS "roomCount",
-        COALESCE(SUM(unread_count), 0)::int AS "unreadCount"
-      FROM unread
-      GROUP BY operator_user_id
-    `),
-    countOperatorInboxUnread(),
-  ])
+  const [operatorRows, unreadTotal] = await Promise.all([inboxOperatorCounts.get(), inboxUnreadTotal.get()])
   if (operatorRows.length === 0) return { unreadTotal, operators: [] }
 
   const users = await prisma.user.findMany({
@@ -853,6 +902,7 @@ export async function markInboxRoomRead(args: {
     userId: operatorUserId,
   })
   if (!updated) return { ok: false, error: 'not_found' }
+  clearOperatorInboxCounts()
   await writeAdminAudit(args.ctx, {
     action: 'inbox.mark_read',
     operatorUserId,

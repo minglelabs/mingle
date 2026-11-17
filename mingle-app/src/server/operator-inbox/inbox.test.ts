@@ -44,6 +44,7 @@ vi.mock('@/server/operator-inbox/staff-translate', async (importOriginal) => ({
 import { INBOX_ACCOUNT_USER_WHERE } from './inbox-accounts'
 import { OperatorAccountRequiredError } from '@/server/operators/operator-guard'
 import {
+  clearOperatorInboxCounts,
   countOperatorInboxUnread,
   decodeInboxCursor,
   encodeInboxCursor,
@@ -122,6 +123,7 @@ function pageQuery(): unknown {
 describe('operator inbox queries', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearOperatorInboxCounts()
     m.blockFindMany.mockResolvedValue([])
     m.messageFindMany.mockResolvedValue([])
     m.memberFindMany.mockResolvedValue([])
@@ -293,6 +295,7 @@ describe('operator inbox queries', () => {
 describe('operator inbox room access', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearOperatorInboxCounts()
     m.blockFindMany.mockResolvedValue([])
     m.channelFindFirst.mockResolvedValue({ id: 'c1', sessionKey: 's1', pendingInviteeUserIds: [] })
     m.memberFindMany.mockResolvedValue([
