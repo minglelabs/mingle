@@ -26,6 +26,7 @@ class MainActivity : ReactActivity() {
       ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
     if (savedInstanceState == null && !launchedFromHistory) {
       NativePushNotificationModule.recordPendingPushTap(applicationContext, intent)
+      NativeShareTargetModule.recordIncomingShare(intent)
     }
     super.onCreate(savedInstanceState)
   }
@@ -36,6 +37,7 @@ class MainActivity : ReactActivity() {
       setIntent(intent)
       NativeRuntimeConfigModule.recordIncomingProfileLink(applicationContext, intent.dataString)
       NativePushNotificationModule.recordPendingPushTap(applicationContext, intent)
+      NativeShareTargetModule.recordIncomingShare(intent)
     }
   }
 

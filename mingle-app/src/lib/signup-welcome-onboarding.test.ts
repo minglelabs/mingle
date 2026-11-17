@@ -17,7 +17,9 @@ const {
   mockNotifyConversationMessage,
   mockSendPushNotificationForUserNotification,
   mockSendPushNotificationForConversationMessage,
+  mockEnsureHamzziAccount,
 } = vi.hoisted(() => ({
+  mockEnsureHamzziAccount: vi.fn(),
   mockUserFindFirst: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockUserFollowUpsert: vi.fn(),
@@ -60,6 +62,11 @@ vi.mock("@/lib/app-conversations", () => ({
   listChannelMemberUserIdsBySessionKey: mockListChannelMemberUserIdsBySessionKey,
 }));
 
+vi.mock("@/lib/hamzzi", () => ({
+  HAMZZI_USER_ID: "hamzzi_user",
+  ensureHamzziAccount: mockEnsureHamzziAccount,
+}));
+
 vi.mock("@/server/conversation-realtime", () => ({
   notifyConversationMessage: mockNotifyConversationMessage,
 }));
@@ -75,10 +82,14 @@ import {
   ROYCE_WELCOME_MESSAGE,
 } from "@/lib/signup-welcome-onboarding";
 import { ROYCE_WELCOME_TRANSLATIONS } from "@/lib/royce-welcome-translations";
+import { HAMZZI_WELCOME_MESSAGE, HAMZZI_WELCOME_TRANSLATIONS } from "@/lib/hamzzi-welcome-translations";
+import { ensureHamzziWelcome } from "@/lib/signup-welcome-onboarding";
 
 describe("signup welcome onboarding", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Hamzzi is off in the Royce tests; its own block below turns it on.
+    mockEnsureHamzziAccount.mockResolvedValue(null);
     mockUserFindFirst.mockResolvedValue({ id: ROYCE_USER_ID });
     mockUserFindUnique.mockResolvedValue({ defaultConversationLanguages: ["ko", "en"] });
     mockTransaction.mockImplementation(async (callback: (tx: typeof transactionClient) => unknown) => (
@@ -253,6 +264,66 @@ describe("signup welcome onboarding", () => {
         language: { notIn: ["it"] },
       },
       data: { isDeleted: true },
+    });
+  });
+
+  describe("Hamzzi", () => {
+    beforeEach(() => {
+      mockEnsureHamzziAccount.mockResolvedValue({ id: "hamzzi_user", isActive: true });
+      mockUserFindFirst.mockResolvedValue(null); // Royce unavailable: isolate Hamzzi
+    });
+
+    it("sends Hamzzi's welcome after signup with mutual follows but no follow notifications", async () => {
+      await ensureSignupWelcomeOnboarding({ userId: "new_user", locale: "ko" });
+
+      expect(mockUserFollowUpsert).toHaveBeenCalledTimes(2);
+      expect(mockUserFollowUpsert).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        create: { followerId: "new_user", followingId: "hamzzi_user" },
+      }));
+      expect(mockUserFollowUpsert).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        create: { followerId: "hamzzi_user", followingId: "new_user" },
+      }));
+      expect(mockUserNotificationCreate).not.toHaveBeenCalled();
+      expect(mockFindOrCreateDirectConversationSession).toHaveBeenCalledWith(expect.objectContaining({
+        targetUserId: "hamzzi_user",
+        preferredSessionKey: "mingle-welcome-hamzzi-new_user",
+      }));
+      expect(mockAppMessageUpsert).toHaveBeenCalledWith(expect.objectContaining({
+        create: expect.objectContaining({ userId: "hamzzi_user", clientMessageId: "mingle-welcome-hamzzi-v1" }),
+      }));
+      expect(mockAppMessageContentUpsert).toHaveBeenCalledWith(expect.objectContaining({
+        create: expect.objectContaining({ contentType: "SOURCE", text: HAMZZI_WELCOME_MESSAGE }),
+      }));
+      expect(mockAppMessageContentUpsert).toHaveBeenCalledWith(expect.objectContaining({
+        create: expect.objectContaining({
+          contentType: "TRANSLATION_FINAL",
+          language: "ko",
+          text: HAMZZI_WELCOME_TRANSLATIONS.ko,
+          model: "hamzzi-welcome-v1",
+        }),
+      }));
+      expect(mockSendPushNotificationForConversationMessage).toHaveBeenCalledWith(expect.objectContaining({
+        senderUserId: "hamzzi_user",
+        sourceText: HAMZZI_WELCOME_MESSAGE,
+      }));
+    });
+
+    it("backfills without a push", async () => {
+      await expect(ensureHamzziWelcome({ userId: "old_user", push: false })).resolves.toBe(true);
+      expect(mockAppMessageUpsert).toHaveBeenCalledTimes(1);
+      expect(mockSendPushNotificationForConversationMessage).not.toHaveBeenCalled();
+    });
+
+    it("does nothing while Hamzzi is turned off", async () => {
+      mockEnsureHamzziAccount.mockResolvedValue(null);
+      await expect(ensureHamzziWelcome({ userId: "old_user", push: false })).resolves.toBe(false);
+      expect(mockUserFollowUpsert).not.toHaveBeenCalled();
+      expect(mockAppMessageUpsert).not.toHaveBeenCalled();
+    });
+
+    it("never welcomes Hamzzi itself", async () => {
+      await ensureSignupWelcomeOnboarding({ userId: "hamzzi_user" });
+      expect(mockEnsureHamzziAccount).not.toHaveBeenCalled();
     });
   });
 });

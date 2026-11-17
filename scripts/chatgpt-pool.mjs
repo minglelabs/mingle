@@ -17,6 +17,11 @@
  *   node scripts/chatgpt-pool.mjs image [--ref photo.jpg] [--out file.png] "prompt"
  *   node scripts/chatgpt-pool.mjs mcp               MCP server on stdio (tools chatgpt_chat, chatgpt_image, chatgpt_accounts), a client of `serve`
  *
+ * Gemini too: the same profiles lend gemini.google.com (signed in with the profile's
+ * Google account). A request whose model (or "provider") names Gemini
+ * ("gemini-web", "gemini-web/image") goes to a profile's Gemini instead of its
+ * ChatGPT. Each profile has one worker per site, with its own account, pacing and limits.
+ *
  * HTTP, in the OpenAI shape so existing clients work:
  *   POST /v1/chat/completions  model "chatgpt-web" answers in text; an image model
  *                              ("chatgpt-web/image", "chatgpt-app/…") answers with the
@@ -111,8 +116,20 @@ class PoolError extends Error {
 
 // ---- agents (one per Chrome profile) and jobs --------------------------
 
-/** agentId -> { id, email, profile, lastSeen, lastUsed, busy, limitedUntil, limitMessage, signedOut, hold } */
+/**
+ * workerId -> { id, base, provider, email, profile, lastSeen, lastUsed, busy, limitedUntil, limitMessage, signedOut, hold }.
+ * A worker is one site in one Chrome profile: the ChatGPT worker's id is the
+ * profile's agentId, the Gemini worker's is `<agentId>#gemini`. Profile rotation
+ * works on the ChatGPT workers, which stand for their profiles.
+ */
 const agents = new Map()
+const PROVIDERS = ['chatgpt', 'gemini']
+const SITE_NAME = { chatgpt: 'ChatGPT', gemini: 'Gemini' }
+const providerOf = (value) => (value === 'gemini' ? 'gemini' : 'chatgpt')
+const workerIdOf = (agentId, provider) => (providerOf(provider) === 'chatgpt' ? agentId : `${agentId}#${provider}`)
+const providerOfWorker = (agent) => agent.provider ?? 'chatgpt'
+/** The other site's worker in the same profile, if the pool knows it. */
+const siblings = (agent) => [...agents.values()].filter((other) => other !== agent && (other.base ?? other.id) === (agent.base ?? agent.id))
 /** Jobs waiting for an agent, oldest first. */
 const queue = []
 /** jobId -> job handed to an agent, waiting for its result. */
@@ -149,10 +166,12 @@ function wakeAfterRest() {
   restWake = setTimeout(() => { restWake = null; failUnservable(); dispatch() }, soonest - now + 50)
   restWake.unref?.()
 }
-const accepts = (job, agent) => !job.account || job.account === agent.email || job.account === agent.id
+const accepts = (job, agent) => (job.provider ?? 'chatgpt') === providerOfWorker(agent)
+  && (!job.account || job.account === agent.email || job.account === agent.id || job.account === agent.base)
 
 function eligible(agent, job) {
   if (agent.busy || agent.parking || agent.signedOut || !agent.email || job.tried.has(agent.id) || !accepts(job, agent)) return false
+  if (siblings(agent).some((other) => other.parking)) return false // its profile is closing
   if (Date.now() < (agent.pausedUntil ?? 0)) return false
   if (resting(agent) || quotaFreeAt(agent)) return false
   return job.kind !== 'image' || Date.now() >= agent.limitedUntil
@@ -193,12 +212,12 @@ function failUnservable() {
     const capped = candidates.filter((agent) => quotaFreeAt(agent))
     if (candidates.length > 0 && paused.length === candidates.length) {
       const soonest = Math.min(...paused.map((agent) => agent.pausedUntil))
-      error = job.lastError ?? new PoolError(429, 'rate_limited', `ChatGPT is throttling every connected account, the first until ${new Date(soonest).toISOString()}`)
+      error = job.lastError ?? new PoolError(429, 'rate_limited', `${SITE_NAME[job.provider ?? 'chatgpt']} is throttling every connected account, the first until ${new Date(soonest).toISOString()}`)
     } else if (candidates.length > 0 && candidates.every((agent) => paused.includes(agent) || capped.includes(agent))) {
       const soonest = Math.min(...candidates.map((agent) => (paused.includes(agent) ? agent.pausedUntil : quotaFreeAt(agent))))
       error = new PoolError(429, 'account_quota', `every account is resting or at its hourly/daily cap (${ACCOUNT_PER_HOUR}/h, ${ACCOUNT_PER_DAY}/day), the first free at ${new Date(soonest).toISOString()}`)
     } else if (candidates.length === 0) {
-      error = job.lastError ?? new PoolError(503, 'no_account', job.account ? `${job.account} is not connected` : 'no Chrome profile with the extension is connected')
+      error = job.lastError ?? new PoolError(503, 'no_account', job.account ? `${job.account} is not connected` : `no Chrome profile signed in to ${SITE_NAME[job.provider ?? 'chatgpt']} is connected`)
     } else if (job.kind === 'image' && candidates.every((agent) => Date.now() < agent.limitedUntil)) {
       const soonest = Math.min(...candidates.map((agent) => agent.limitedUntil))
       error = new PoolError(429, 'image_limit', `every account is at its image limit, the first until ${new Date(soonest).toISOString()}`)
@@ -210,6 +229,9 @@ function failUnservable() {
     job.reject(error)
   }
 }
+
+/** Failures that belong to the account (it is limited or signed out), not to the job. */
+const ACCOUNT_CODES = new Set(['image_limit', 'rate_limited', 'signed_out'])
 
 /** An agent's answer (or a timeout): resolve, or try the job on another account. */
 function finish(jobId, outcome) {
@@ -231,6 +253,8 @@ function finish(jobId, outcome) {
   }
   const { code, message, retryAfterMs } = outcome.error
   log('fail', who(agent), code, message ?? '')
+  // An account at its limit says nothing about the job: only other failures use up its tries.
+  if (!ACCOUNT_CODES.has(code)) job.failures = (job.failures ?? 0) + 1
   if (code === 'image_limit') {
     agent.limitedUntil = Date.now() + (retryAfterMs || 3_600_000)
     agent.limitMessage = message ?? ''
@@ -243,7 +267,7 @@ function finish(jobId, outcome) {
   }
   const error = new PoolError(code === 'image_refused' ? 422 : code === 'image_limit' || code === 'rate_limited' ? 429 : 502, code, `${agent.email}: ${message ?? ''}`)
   // A refusal is about the prompt; a pinned job has nowhere else to go.
-  if (code === 'image_refused' || code === 'bad_reference' || job.account || job.tried.size >= 4) {
+  if (code === 'image_refused' || code === 'bad_reference' || job.account || job.failures >= 4) {
     job.reject(error)
     return
   }
@@ -261,14 +285,14 @@ const shared = new Map()
  * that repeats itself does not fill the queue. `signal` aborts when the caller's
  * connection closes; a waiting job nobody waits for any more leaves the queue.
  */
-function submit({ kind, prompt, reference = null, account = null }, signal = null) {
-  const key = JSON.stringify([kind, account, prompt, reference && createHash('sha256').update(reference).digest('hex')])
+function submit({ kind, prompt, reference = null, account = null, provider = 'chatgpt' }, signal = null) {
+  const key = JSON.stringify([provider, kind, account, prompt, reference && createHash('sha256').update(reference).digest('hex')])
   let entry = shared.get(key)
   if (entry) {
     log('same', entry.job.id.slice(0, 8), `joins a ${running.has(entry.job.id) ? 'running' : 'waiting'} identical job`)
   } else {
     if (queue.length >= MAX_QUEUE) throw new PoolError(503, 'queue_full', `${queue.length} jobs are already waiting`)
-    const job = { id: randomUUID(), kind, prompt, reference, account, tried: new Set(), queuedAt: Date.now() }
+    const job = { id: randomUUID(), provider, kind, prompt, reference, account, tried: new Set(), queuedAt: Date.now() }
     const promise = new Promise((resolveJob, rejectJob) => { job.resolve = resolveJob; job.reject = rejectJob })
     entry = { job, promise, waiters: 0 }
     shared.set(key, entry)
@@ -350,20 +374,27 @@ const who = (agent) => (agent?.profile ? `${agent.email} [${agent.profile}]` : a
  * waited) is dropped, so a job is never handed to a request nobody will read.
  */
 async function poll(body, response) {
-  const id = String(body.agentId ?? '')
-  if (!id) throw new PoolError(400, 'agent_id_required')
-  const agent = agents.get(id) ?? { id, email: null, busy: false, limitedUntil: 0, limitMessage: '', signedOut: false, lastUsed: 0, hold: null }
+  const base = String(body.agentId ?? '')
+  if (!base) throw new PoolError(400, 'agent_id_required')
+  const provider = providerOf(body.provider)
+  const id = workerIdOf(base, provider)
+  const agent = agents.get(id) ?? { id, base, provider, email: null, busy: false, limitedUntil: 0, limitMessage: '', signedOut: false, lastUsed: 0, hold: null }
   agents.set(id, agent)
+  agent.base = base
+  agent.provider = provider
   if (!online(agent)) { agent.openedAt = Date.now(); agent.wokenAt = 0 }
   // It polls again after being told to close: it kept its windows (a tab other than ChatGPT is open).
   if (agent.parking) { agent.parking = false; if (body.keepOpen) { agent.keepOpen = true; log('keep', who(agent), 'has other tabs open, stays open') } }
   const email = typeof body.email === 'string' && body.email ? body.email : null
   if (!agent.profileLookup) {
-    agent.profileLookup = chromeProfileOf(id).then((profile) => {
-      if (profile) { agent.profile = profile; agent.folder = profile.split(' (')[0]; log('profile', id.slice(0, 8), agent.email ?? '', profile); saveProfiles() }
-    })
+    const known = siblings(agent).find((other) => other.profile)
+    agent.profileLookup = known
+      ? Promise.resolve().then(() => { agent.profile ??= known.profile; agent.folder ??= known.folder })
+      : chromeProfileOf(base).then((profile) => {
+        if (profile) { agent.profile = profile; agent.folder = profile.split(' (')[0]; log('profile', id.slice(0, 8), agent.email ?? '', profile); saveProfiles() }
+      })
   }
-  if (email !== agent.email || !agent.lastSeen) log('agent', id.slice(0, 8), email ?? '(signed out)', agent.profile ?? '')
+  if (email !== agent.email || !agent.lastSeen) log('agent', id.slice(0, 8), ...(provider === 'chatgpt' ? [] : [`[${provider}]`]), email ?? '(signed out)', agent.profile ?? '')
   agent.email = email
   agent.signedOut = !email
   agent.profile = body.profile ?? agent.profile ?? null
@@ -400,14 +431,31 @@ function chromePath() {
   return roots.map((root) => join(root, 'Google', 'Chrome', 'Application', 'chrome.exe')).find((file) => existsSync(file)) ?? null
 }
 
+/** An account's limits still in force, as saved in profiles.json. */
+function limitsOf(agent) {
+  const now = Date.now()
+  return {
+    ...(agent.limitedUntil > now ? { limitedUntil: agent.limitedUntil, limitMessage: agent.limitMessage } : {}),
+    ...((agent.pausedUntil ?? 0) > now ? { pausedUntil: agent.pausedUntil, pauseMessage: agent.pauseMessage } : {}),
+  }
+}
+
+/** The limits saved for an account in profiles.json. */
+const savedLimits = (entry) => ({
+  limitedUntil: Number(entry.limitedUntil) || 0, limitMessage: entry.limitMessage ?? '', pausedUntil: Number(entry.pausedUntil) || 0, pauseMessage: entry.pauseMessage ?? '',
+})
+
 let saving = null
 /** Remembers every profile the pool has seen, so it can open them again after a restart. */
 function saveProfiles() {
   if (!ROTATE) return
   clearTimeout(saving)
   saving = setTimeout(() => {
-    const known = Object.fromEntries([...agents.values()].filter((agent) => agent.folder)
-      .map((agent) => [agent.folder, { agentId: agent.id, email: agent.email, profile: agent.profile, lastUsed: agent.lastUsed }]))
+    const known = Object.fromEntries([...agents.values()].filter((agent) => agent.folder && providerOfWorker(agent) === 'chatgpt')
+      .map((agent) => {
+        const gemini = siblings(agent).find((other) => providerOfWorker(other) === 'gemini')
+        return [agent.folder, { agentId: agent.id, email: agent.email, profile: agent.profile, lastUsed: agent.lastUsed, ...limitsOf(agent), ...(gemini?.email ? { gemini: { email: gemini.email, lastUsed: gemini.lastUsed, ...limitsOf(gemini) } } : {}) }]
+      }))
     writeFile(PROFILES_FILE, JSON.stringify(known, null, 2)).catch((error) => log('profiles', 'save failed', error.message))
   }, 1000)
   saving.unref?.()
@@ -418,9 +466,16 @@ async function loadProfiles() {
   for (const [folder, entry] of Object.entries(known)) {
     if (!entry?.agentId || agents.has(entry.agentId)) continue
     agents.set(entry.agentId, {
-      id: entry.agentId, email: entry.email ?? null, profile: entry.profile ?? folder, folder, busy: false, limitedUntil: 0, limitMessage: '',
+      id: entry.agentId, base: entry.agentId, provider: 'chatgpt', email: entry.email ?? null, profile: entry.profile ?? folder, folder, busy: false, ...savedLimits(entry),
       signedOut: false, lastUsed: Number(entry.lastUsed) || 0, lastSeen: 0, hold: null, profileLookup: Promise.resolve(),
     })
+    if (entry.gemini?.email) {
+      const id = workerIdOf(entry.agentId, 'gemini')
+      agents.set(id, {
+        id, base: entry.agentId, provider: 'gemini', email: entry.gemini.email, profile: entry.profile ?? folder, folder, busy: false, ...savedLimits(entry.gemini),
+        signedOut: false, lastUsed: Number(entry.gemini.lastUsed) || 0, lastSeen: 0, hold: null, profileLookup: Promise.resolve(),
+      })
+    }
   }
 }
 
@@ -429,7 +484,7 @@ const isOpen = (agent) => online(agent) && !agent.parking
 const waking = (agent) => !online(agent) && Date.now() - (agent.wokenAt ?? 0) < WAKE_CONNECT_MS
 /** A profile the pool may open: known folder, last seen signed in, not open, not just opened. */
 const closedCandidates = () => [...agents.values()]
-  .filter((agent) => agent.folder && agent.email && !agent.signedOut && !online(agent) && !waking(agent))
+  .filter((agent) => agent.folder && agent.email && !agent.signedOut && !online(agent) && !waking(agent) && !siblings(agent).some(online))
   .sort((a, b) => a.lastUsed - b.lastUsed)
 
 let lastWakeAt = 0
@@ -439,10 +494,11 @@ function wake(agent, why) {
   const chrome = chromePath()
   if (!chrome) return false
   lastWakeAt = Date.now()
-  agent.wokenAt = lastWakeAt
+  for (const worker of [agent, ...siblings(agent)]) worker.wokenAt = lastWakeAt
   log('open', who(agent), why)
   try {
-    const child = spawn(chrome, [`--profile-directory=${agent.folder}`, 'https://chatgpt.com/'], { detached: true, stdio: 'ignore', windowsHide: false })
+    const url = providerOfWorker(agent) === 'gemini' ? 'https://gemini.google.com/app' : 'https://chatgpt.com/'
+    const child = spawn(chrome, [`--profile-directory=${agent.folder}`, url], { detached: true, stdio: 'ignore', windowsHide: false })
     child.on('error', (error) => log('open', who(agent), 'failed', error.message))
     child.unref()
   } catch (error) {
@@ -469,32 +525,38 @@ function wakeFor(job) {
 /** Keeps MIN_OPEN profiles open, opens more while jobs wait, and closes the idle extra ones. */
 function rotate() {
   const now = Date.now()
-  const all = [...agents.values()]
+  // Count and close profiles through their ChatGPT workers; a Gemini worker shares its profile's windows.
+  const all = [...agents.values()].filter((agent) => providerOfWorker(agent) === 'chatgpt')
   const open = all.filter(isOpen)
   // Too few open (after a restart or a reboot): open the next one.
   if (open.length + all.filter(waking).length < MIN_OPEN && now - lastWakeAt >= WAKE_GAP_MS) {
-    const next = closedCandidates().at(-1) // the most recently used first, they are the warmest
+    const next = closedCandidates().filter((agent) => providerOfWorker(agent) === 'chatgpt').at(-1) // the most recently used first, they are the warmest
     if (next && chromePath()) { wake(next, `to keep ${MIN_OPEN} open`); return }
   }
   // A job has waited and no open account is free for it: open one more.
-  const stuck = queue.find((job) => now - job.queuedAt >= WAKE_AFTER_WAIT_MS && !open.some((agent) => eligible(agent, job)))
+  const stuck = queue.find((job) => now - job.queuedAt >= WAKE_AFTER_WAIT_MS && ![...agents.values()].some((agent) => isOpen(agent) && eligible(agent, job)))
   if (stuck && now - lastWakeAt >= WAKE_GAP_MS) { wakeFor(stuck); return }
   // Nothing waiting: close the profile idle the longest, one per tick, down to MIN_OPEN.
   if (queue.length || open.length <= MIN_OPEN) return
   const idle = open
-    .filter((agent) => agent.hold && !agent.busy && !agent.keepOpen && agent.folder && now - Math.max(agent.lastUsed, agent.openedAt ?? 0) >= IDLE_CLOSE_MS)
-    .sort((a, b) => Math.max(a.lastUsed, a.openedAt ?? 0) - Math.max(b.lastUsed, b.openedAt ?? 0))[0]
+    .filter((agent) => agent.hold && !agent.busy && !agent.keepOpen && agent.folder && now - lastActive(agent) >= IDLE_CLOSE_MS && !siblings(agent).some((other) => other.busy))
+    .sort((a, b) => lastActive(a) - lastActive(b))[0]
   if (!idle || !chromePath()) return
   idle.parking = true
   const hold = idle.hold
   idle.hold = null
-  log('close', who(idle), `idle ${Math.round((now - Math.max(idle.lastUsed, idle.openedAt ?? 0)) / 60_000)} min, ${open.length - 1} stay open`)
+  log('close', who(idle), `idle ${Math.round((now - lastActive(idle)) / 60_000)} min, ${open.length - 1} stay open`)
   hold({ park: true })
+  // Its Gemini worker goes with the windows.
+  for (const other of siblings(idle)) { other.hold?.({}); other.hold = null; other.lastSeen = 0 }
 }
+
+/** When this profile last did anything, on either site. */
+const lastActive = (agent) => Math.max(agent.lastUsed, agent.openedAt ?? 0, ...siblings(agent).map((other) => other.lastUsed))
 
 function accountsStatus() {
   return [...agents.values()].filter(online).map((agent) => ({
-    email: agent.email, profile: agent.profile, agentId: agent.id, busy: agent.busy, signedOut: agent.signedOut,
+    provider: providerOfWorker(agent), email: agent.email, profile: agent.profile, agentId: agent.base ?? agent.id, busy: agent.busy, signedOut: agent.signedOut,
     imageLimitedUntil: agent.limitedUntil > Date.now() ? new Date(agent.limitedUntil).toISOString() : null,
     limitMessage: agent.limitedUntil > Date.now() ? agent.limitMessage : null,
     pausedUntil: (agent.pausedUntil ?? 0) > Date.now() ? new Date(agent.pausedUntil).toISOString() : null,
@@ -577,23 +639,28 @@ function asyncStatus(id) {
   return { id, object: 'job', status: entry.status, created: entry.created, ...(entry.result ? { result: entry.result } : {}), ...(entry.error ? { error: entry.error } : {}) }
 }
 
+/** Which site a request is for: "gemini" in its model ("gemini-web", "gemini-web/image") or provider field. */
+const requestProvider = (body) => (/gemini/i.test(`${body.provider ?? ''} ${body.model ?? ''}`) ? 'gemini' : 'chatgpt')
+
 async function handleApi(path, body, signal = null) {
+  const provider = requestProvider(body)
   const image = path === '/v1/images/generations' || /image/i.test(body.model ?? '')
   const lastUser = partsText([...(body.messages ?? [])].reverse().find((m) => m.role === 'user')?.content)
   const prompt = path === '/v1/images/generations' ? String(body.prompt ?? '') : image ? lastUser.replace(/^Generate this image\.\s*/i, '') : chatPrompt(body.messages ?? [])
   if (!prompt.trim()) throw new PoolError(400, 'empty_prompt')
   const reference = path === '/v1/images/generations' ? (typeof body.reference === 'string' ? body.reference : null) : referenceIn(body.messages)
   const started = Date.now()
-  log(image ? 'image' : 'chat', JSON.stringify(prompt.slice(0, 70)))
-  const result = await submit({ kind: image ? 'image' : 'text', prompt: prompt.trim(), reference, account: body.account ?? null }, signal)
+  log(image ? 'image' : 'chat', ...(provider === 'chatgpt' ? [] : [`[${provider}]`]), JSON.stringify(prompt.slice(0, 70)))
+  const result = await submit({ kind: image ? 'image' : 'text', prompt: prompt.trim(), reference, account: body.account ?? null, provider }, signal)
   log('done', result.profile ? `${result.account} [${result.profile}]` : result.account, `${Math.round((Date.now() - started) / 1000)}s`)
-  if (path === '/v1/images/generations') return { created: Math.floor(Date.now() / 1000), account: result.account, profile: result.profile, data: [{ b64_json: result.image.base64 }] }
+  if (path === '/v1/images/generations') return { created: Math.floor(Date.now() / 1000), provider, account: result.account, profile: result.profile, data: [{ b64_json: result.image.base64 }] }
   const content = image ? `![image](data:${result.image.type};base64,${result.image.base64})` : result.text
   return {
     id: `chatcmpl-${randomUUID()}`,
     object: 'chat.completion',
     created: Math.floor(Date.now() / 1000),
-    model: body.model ?? 'chatgpt-web',
+    model: body.model ?? (provider === 'gemini' ? 'gemini-web' : 'chatgpt-web'),
+    provider,
     account: result.account,
     profile: result.profile,
     choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }],
@@ -612,12 +679,12 @@ function serve() {
         const body = await readBody(request)
         if (path === '/agent/poll') return reply(response, 200, await poll(body, response))
         if (path === '/agent/progress') {
-          const agent = agents.get(String(body.agentId ?? ''))
+          const agent = agents.get(workerIdOf(String(body.agentId ?? ''), body.provider))
           if (agent) agent.lastSeen = Date.now()
-          log('step', who(agent), String(body.jobId ?? '').slice(0, 8), String(body.step ?? '').slice(0, 400))
+          log('step', who(agent), String(body.jobId ?? '').slice(0, 8), String(body.step ?? '').slice(0, 700))
           return reply(response, 200, { ok: true })
         }
-        const agent = agents.get(String(body.agentId ?? ''))
+        const agent = agents.get(workerIdOf(String(body.agentId ?? ''), body.provider))
         if (agent) agent.lastSeen = Date.now()
         finish(String(body.jobId ?? ''), body.error ? { error: body.error } : body.image ? { image: body.image } : { text: String(body.text ?? '') })
         return reply(response, 200, { ok: true })
@@ -625,8 +692,20 @@ function serve() {
       // The main port stays keyless while it listens only on this machine, so the local CLI and MCP need no key.
       const keyed = exposed || (KEY && !LOOPBACK_HOSTS.includes(HOST))
       if (keyed && !keyMatches(request.headers.authorization)) return reply(response, 401, { error: { code: 'unauthorized' } })
-      if (request.method === 'GET' && path === '/health') return reply(response, 200, { ok: true, accounts: accountsStatus().length, ready: accountsStatus().filter((a) => a.email && !a.signedOut && !a.pausedUntil && !a.cappedUntil).length, queued: queue.length, running: running.size })
-      if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus(), closed: [...agents.values()].filter((agent) => agent.folder && !online(agent)).map((agent) => ({ email: agent.email, profile: agent.profile, opening: waking(agent) })) })
+      if (request.method === 'GET' && path === '/health') {
+        const status = accountsStatus()
+        const site = (provider) => {
+          const mine = status.filter((a) => a.provider === provider)
+          return { accounts: mine.length, ready: mine.filter((a) => a.email && !a.signedOut && !a.pausedUntil && !a.cappedUntil).length }
+        }
+        // The top-level counts stay ChatGPT's, as before Gemini was added.
+        return reply(response, 200, { ok: true, ...site('chatgpt'), queued: queue.length, running: running.size, gemini: site('gemini') })
+      }
+      if (request.method === 'GET' && path === '/accounts') return reply(response, 200, { accounts: accountsStatus(), closed: [...agents.values()].filter((agent) => agent.folder && !online(agent)).map((agent) => ({
+        provider: providerOfWorker(agent), email: agent.email, profile: agent.profile, opening: waking(agent),
+        imageLimitedUntil: agent.limitedUntil > Date.now() ? new Date(agent.limitedUntil).toISOString() : null,
+        pausedUntil: (agent.pausedUntil ?? 0) > Date.now() ? new Date(agent.pausedUntil).toISOString() : null,
+      })) })
       if (request.method === 'GET' && path.startsWith('/v1/jobs/')) return reply(response, 200, asyncStatus(decodeURIComponent(path.slice('/v1/jobs/'.length))))
       if (request.method === 'POST' && (path === '/v1/chat/completions' || path === '/v1/images/generations')) {
         const body = await readBody(request)

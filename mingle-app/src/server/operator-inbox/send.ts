@@ -100,7 +100,8 @@ export type OperatorReplyUtterance = {
   speakerName: string | null
   speakerUserId: string
   speakerImage: string | null
-  speakerBadge: 'operator'
+  /** 'operator' for staff-run persona accounts, 'official' for HashChat's own accounts (Hamzzi). */
+  speakerBadge: 'operator' | 'official'
 }
 
 export type SendOperatorMessageInput = {
@@ -292,6 +293,7 @@ function buildReplyUtterance(args: {
   translations: Record<string, string>
   targetLanguages: string[]
   operator: Pick<OperatorAccountRecord, 'id' | 'name' | 'image'>
+  badge: OperatorReplyUtterance['speakerBadge']
 }): OperatorReplyUtterance {
   const createdAtMs = args.createdAt.getTime()
   return {
@@ -310,7 +312,7 @@ function buildReplyUtterance(args: {
     speakerName: args.operator.name ?? null,
     speakerUserId: args.operator.id,
     speakerImage: args.operator.image ?? null,
-    speakerBadge: 'operator',
+    speakerBadge: args.badge,
   }
 }
 
@@ -344,6 +346,7 @@ async function loadExistingReply(
   sessionKey: string,
   clientMessageId: string,
   operator: OperatorAccountRecord,
+  badge: OperatorReplyUtterance['speakerBadge'],
 ): Promise<SendOperatorMessageResult | null> {
   const existing = await prisma.appMessage.findUnique({
     where: { sessionKey_clientMessageId: { sessionKey, clientMessageId } },
@@ -381,6 +384,7 @@ async function loadExistingReply(
       translations,
       targetLanguages: readTargetLanguages(existing.metadata),
       operator,
+      badge,
     }),
   }
 }
@@ -404,6 +408,8 @@ async function deliverCommittedReply(args: {
   createdAt: Date
   sourceText: string
   utterance: OperatorReplyUtterance
+  /** False for official accounts: they are not in the operator inbox. */
+  notifyInbox: boolean
 }): Promise<void> {
   let committedMemberUserIds: string[] | null = null
   try {
@@ -432,6 +438,7 @@ async function deliverCommittedReply(args: {
   } catch (error) {
     console.error('[operator-inbox] push_failed', { error: error instanceof Error ? error.name : 'unknown' })
   }
+  if (!args.notifyInbox) return
   try {
     await notifyOperatorInboxActivity({
       sessionKey: args.sessionKey,
@@ -447,19 +454,29 @@ async function deliverCommittedReply(args: {
   }
 }
 
+type SenderKind =
+  /** A staff-run operator account: audited, shown in the operator inbox. */
+  | { badge: 'operator'; ctx: AdminContext }
+  /** HashChat's own official account (Hamzzi): not audited as staff, not in the inbox. */
+  | { badge: 'official'; sourceLanguage: string }
+
 async function composeAndSend(args: {
-  ctx: AdminContext
+  sender: SenderKind
   operator: OperatorAccountRecord
   channel: { id: string; sessionKey: string }
   members: ConversationMemberSummary[]
   text: string
   clientMessageId: string
 }): Promise<SendOperatorMessageResult> {
-  const { ctx, operator, channel, text, clientMessageId } = args
-  const existing = await loadExistingReply(channel.sessionKey, clientMessageId, operator)
+  const { sender, operator, channel, text, clientMessageId } = args
+  const existing = await loadExistingReply(channel.sessionKey, clientMessageId, operator, sender.badge)
   if (existing) return existing
 
-  const personaLanguage = resolvePersonaLanguage(operator)
+  // An official account writes in the language it chose for this message;
+  // an operator persona always speaks its own primary language.
+  const personaLanguage = sender.badge === 'official'
+    ? sanitizeSttLanguageSelection([sender.sourceLanguage])[0] ?? null
+    : resolvePersonaLanguage(operator)
   if (!personaLanguage) throw new OperatorSendError('persona_language_missing')
   const roomLanguages = sanitizeSttLanguageUnion(args.members.flatMap((member) => member.selectedLanguages), [personaLanguage])
   const reply = await translateStaffReply({ text, personaLanguage, roomLanguages })
@@ -523,7 +540,7 @@ async function composeAndSend(args: {
   } catch (error) {
     // A concurrent retry of the same request id won the insert.
     if (isUniqueViolation(error)) {
-      const raced = await loadExistingReply(channel.sessionKey, clientMessageId, operator)
+      const raced = await loadExistingReply(channel.sessionKey, clientMessageId, operator, sender.badge)
       if (raced) return raced
     }
     throw error
@@ -538,11 +555,12 @@ async function composeAndSend(args: {
     translations: reply.translations,
     targetLanguages: reply.targetLanguages,
     operator,
+    badge: sender.badge,
   })
 
   // Audited right after the commit, so the record exists even if a later
   // delivery step hangs. The staff original lives only here.
-  await writeAdminAudit(ctx, {
+  if (sender.badge === 'operator') await writeAdminAudit(sender.ctx, {
     action: 'inbox.reply',
     operatorUserId: operator.id,
     targetType: 'message',
@@ -565,6 +583,7 @@ async function composeAndSend(args: {
     createdAt: message.createdAt,
     sourceText: reply.sourceText,
     utterance,
+    notifyInbox: sender.badge === 'operator',
   })
 
   return {
@@ -584,12 +603,38 @@ async function composeAndSend(args: {
  * (`duplicate: true`) instead of sending twice.
  */
 export async function sendOperatorMessage(ctx: AdminContext, input: SendOperatorMessageInput): Promise<SendOperatorMessageResult> {
+  // Bad input is refused before any database read.
+  const text = normalizeStaffReplyText(input.text)
+  if (!text) throw new OperatorSendError('empty_text')
+  if (text.length > OPERATOR_REPLY_MAX_LENGTH) throw new OperatorSendError('text_too_long')
+  resolveClientRequestId(input.clientRequestId)
+  const operator = await requireOperatorAccount(input.operatorUserId)
+  return sendAsAccount({ badge: 'operator', ctx }, operator, input)
+}
+
+/**
+ * Sends `text` into the room as one of HashChat's official accounts (Hamzzi),
+ * with `sourceLanguage` as the message's original language. Same storage,
+ * translation and delivery as an operator reply, without the staff audit
+ * and operator-inbox side effects.
+ */
+export async function sendOfficialAccountMessage(input: SendOperatorMessageInput & {
+  sender: OperatorAccountRecord
+  sourceLanguage: string
+}): Promise<SendOperatorMessageResult> {
+  return sendAsAccount({ badge: 'official', sourceLanguage: input.sourceLanguage }, input.sender, input)
+}
+
+async function sendAsAccount(
+  sender: SenderKind,
+  operator: OperatorAccountRecord,
+  input: SendOperatorMessageInput,
+): Promise<SendOperatorMessageResult> {
   const text = normalizeStaffReplyText(input.text)
   if (!text) throw new OperatorSendError('empty_text')
   if (text.length > OPERATOR_REPLY_MAX_LENGTH) throw new OperatorSendError('text_too_long')
   const requestId = resolveClientRequestId(input.clientRequestId)
 
-  const operator = await requireOperatorAccount(input.operatorUserId)
   if (!operator.isActive) throw new OperatorSendError('operator_inactive')
 
   const conversationId = typeof input.conversationId === 'string' ? input.conversationId.trim() : ''
@@ -614,7 +659,7 @@ export async function sendOperatorMessage(ctx: AdminContext, input: SendOperator
   const running = inFlightReplies.get(flightKey)
   if (running) return { ...(await running), duplicate: true }
 
-  const promise = composeAndSend({ ctx, operator, channel, members, text, clientMessageId })
+  const promise = composeAndSend({ sender, operator, channel, members, text, clientMessageId })
   inFlightReplies.set(flightKey, promise)
   try {
     return await promise
