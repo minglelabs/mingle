@@ -2,6 +2,26 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-16 — Home tab: people first, tabs are Home, Chats, Explore, My, and one new chat a day
+
+- Surface: new `components/home/` (`home-page.tsx`, `home-notices.tsx`, `profile-start-card.tsx`) at `/[locale]/home`, `bottom-tab-bar.tsx`, `search/unified-search.tsx` and `connect-page.tsx` (Explore), `public-user-profile-screen.tsx`, `server/people-discovery.ts`, `server/notices.ts`, `server/daily-new-chat-limit.ts`, admin `/admin/notices`. Plan: `docs/home-explore-rooms-plan.md`.
+- Issue: The app opened on the posting feed, which shows posts, not people, and nothing led a new user to a first conversation.
+- Resolution (tabs): Home, Chats, Explore, My. The Feed tab is gone; the feed opens from the post grid in Explore, and Explore stays selected while the feed is open. The owner asked for Chats before Explore (2026-11-16). A launch that would land on the feed goes to Home; a link to one post still opens that post.
+- Resolution (home): A grid of people to meet, the other side of the language exchange first and whoever was active in the last 5 minutes on top with an "Online" badge. A strip on top ("N permanently banned this week") opens the notice list; bans show a masked name and a category. An account without a photo or a name of its own gets a "Finish your profile" card.
+- Resolution (explore): Before anything is typed, Explore shows a grid of posts instead of an empty search screen.
+- Resolution (profile): Row one is Follow, Share and "…"; row two is Message as the one filled button, with Gift beside it. Block and Report sit behind "…".
+- Resolution (limit): A free account can start a 1:1 chat with one new person in 24 hours (`DAILY_NEW_CHAT_LIMIT`). Operator accounts count (owner, 2026-11-16); the welcome and official accounts do not, and answering someone who wrote first is free. Over the limit, the profile shows a sentence under the buttons, not an alert.
+- Verification: unit tests for discovery, notices, the limit and the home entry; `tsc`. Against devbox at phone width in a browser: tab order, the grid, profile buttons, the Explore post grid, the limit (429 on the second new person, operator accounts included). The build was installed on an iPhone 11 Pro, but the phone's own screen was not seen. Agent QA scenarios: `home-tab-people`, `profile-message-daily-limit`, `explore-browse-posts`.
+
+## 2026-11-16 — One account per person: phone gate, number already in use, sign-in methods, permanent ban screen
+
+- Surface: `components/onboarding/phone-gate.tsx`, `contacts/phone-verify-sheet.tsx`, new `components/onboarding/banned-gate.tsx`, new `components/account/sign-in-methods-sheet.tsx` (My Page), `server/identity/` (`phone-claim.ts`, `ban.ts`, `methods.ts`, `links.ts`), admin `/admin/accounts`. Rules: `docs/one-account-per-person.md`.
+- Issue: One person could make any number of accounts (a new Google account, a new number), and a ban stopped one account while the person came back with the next.
+- Resolution (number): A number belongs to one account and never moves. Verifying a number another account holds is refused in the sheet ("This number is used by another account. Please sign in to that account."). When the account doing the verifying was just made and never used, it is folded into the number's account instead, the app says so in one line and continues signed in as that account. On a phone that already has an account, a brand-new account verifying a new number is folded the same way and the number is attached as an extra one.
+- Resolution (sign-in methods): My Page has "Sign-in methods": the ways into the account, phone numbers as their last four digits. Anything attached later has Remove, with a confirmation; the method the account was made with has none.
+- Resolution (ban): A permanent ban from the admin account page takes every account linked through a shared device, number or sign-in, after a preview of what it reaches. A banned account sees only "This account is permanently banned" with Sign out. Its numbers and devices cannot verify or sign up again ("This number can't be used."). The ban is announced on Home without the name.
+- Verification: unit tests for the claim rules, the ban walk and detaching; `tsc`. Against devbox with made-up numbers and the development code: the gate, the refusal, the fold and session switch, a ban across three linked accounts with the ban screen and the Home notice. Not tried: a fold from a Google or Apple sign-up, the admin pages by hand, the sign-in methods sheet on a phone, Android. Agent QA scenarios: `phone-gate-one-account`, `sign-in-methods-detach`, `banned-account-gate`.
+
 ## 2026-11-13 — First run: speak for 10 seconds before sign-in, phone number sign-in, invite gate
 
 - Surface: `components/onboarding/speak-trial.tsx` (new), `components/onboarding/invite-gate.tsx` (new), the sign-in screen in `mingle-home.tsx`, `contacts/phone-verify-sheet.tsx`, `conversation-list.tsx`, `LivePhoneDemo.tsx` (`headerAccessory`, `trialSpeechLength`). Details and env: `docs/onboarding-speak-first.md`.

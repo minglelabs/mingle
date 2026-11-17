@@ -26,7 +26,7 @@ history:
 ## Steps
 
 1. Kill and relaunch the app. Screenshot every ~300 ms until the list is stable (4 s at most).
-2. Switch Conversations → Search → My Page → Conversations, three times, as fast as the screens allow. Screenshot right after each tap.
+2. Switch Conversations → Home → Explore → My Page → Conversations, three times, as fast as the screens allow. Screenshot right after each tap.
 3. Open a room, send a typed message, and go back. Screenshot the row right away and after 3 s.
 4. Change the room's default display language (menu), go back, and check the row's preview.
 

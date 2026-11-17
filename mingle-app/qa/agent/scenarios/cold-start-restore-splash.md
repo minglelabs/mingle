@@ -28,7 +28,7 @@ history:
 3. While the yellow splash is up, tap where the room's composer and back button will be, three times, ~500 ms apart.
    Note each tap's time against the screenshots.
 4. As soon as the room is visible, tap the composer and type one character, then tap back once.
-5. Repeat steps 1–4 from the conversation list and from the Feed tab.
+5. Repeat steps 1–4 from the conversation list, from the Home tab and from the feed (opened from Explore).
 6. Repeat steps 1–2 with the network throttled or off (Settings → Developer → Network Link Conditioner, or
    airplane mode on the simulator host), and time how long the splash stays.
 
