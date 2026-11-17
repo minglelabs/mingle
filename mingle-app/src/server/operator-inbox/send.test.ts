@@ -133,7 +133,7 @@ describe('sendOperatorMessage', () => {
     expect(m.txMessageCreate).not.toHaveBeenCalled()
   })
 
-  it('sends as an official account in the language it wrote in, without staff audit or inbox notice', async () => {
+  it('sends as an official account in the language it wrote in, without staff audit', async () => {
     m.listMembers.mockResolvedValue([member('hamzzi', ['en']), member('user_1', ['ko', 'en'])])
     m.listMemberIds.mockResolvedValue(['hamzzi', 'user_1'])
     m.translateTexts.mockResolvedValue({
@@ -160,8 +160,26 @@ describe('sendOperatorMessage', () => {
     ]))
     expect(result.utterance.speakerBadge).toBe('official')
     expect(m.writeAdminAudit).not.toHaveBeenCalled()
-    expect(m.notifyInbox).not.toHaveBeenCalled()
+    // Refreshes the inbox (Hamzzi rooms are in it); never a staff alert, the sender is the room's inbox account.
+    expect(m.notifyInbox).toHaveBeenCalledWith(expect.objectContaining({ senderUserId: 'hamzzi' }))
     expect(m.sendPush).toHaveBeenCalled()
+
+    // Typed by staff in the inbox: audited like an operator reply.
+    vi.clearAllMocks()
+    await sendOfficialAccountMessage({
+      sender: { ...OPERATOR, id: 'hamzzi', name: 'Hamzzi', primaryLanguages: ['en'] },
+      sourceLanguage: 'en',
+      operatorUserId: 'hamzzi',
+      conversationId: 'conv_1',
+      text: '안녕 반가워',
+      clientRequestId: 'staff-reply-1',
+      ctx,
+    })
+    expect(m.writeAdminAudit).toHaveBeenCalledWith(ctx, expect.objectContaining({
+      action: 'inbox.reply',
+      operatorUserId: 'hamzzi',
+      metadata: expect.objectContaining({ staffOriginal: '안녕 반가워' }),
+    }))
   })
 
   it('refuses an inactive operator', async () => {

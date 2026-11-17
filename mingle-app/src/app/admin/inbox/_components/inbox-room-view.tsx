@@ -553,7 +553,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
             <span className="min-w-0 truncate">{counterpartTitle}</span>
           </p>
           <p className="truncate text-xs leading-4 text-sky-700">
-            {KO_BADGE_COPY.operator} · 답장 언어 {personaLanguageName}
+            {operator.isOfficial ? KO_BADGE_COPY.official : KO_BADGE_COPY.operator} · 답장 언어 {personaLanguageName}
           </p>
         </div>
         <KoreanViewSwitch enabled={korean} onChange={toggleKorean} />

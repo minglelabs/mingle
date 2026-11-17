@@ -41,6 +41,7 @@ vi.mock('@/server/operator-inbox/staff-translate', async (importOriginal) => ({
   translateForStaff: m.translateForStaff,
 }))
 
+import { INBOX_ACCOUNT_USER_WHERE } from './inbox-accounts'
 import { OperatorAccountRequiredError } from '@/server/operators/operator-guard'
 import {
   countOperatorInboxUnread,
@@ -137,7 +138,7 @@ describe('operator inbox queries', () => {
     expect(unreadSql).toContain('message.user_id <> membership.operator_user_id')
     expect(unreadSql).toContain('membership.last_read_at IS NULL OR message.created_at > membership.last_read_at')
     // A reply sent as another operator in the same room is not new for staff.
-    expect(unreadSql).toMatch(/message\.user_id NOT IN \(\s*SELECT staff\.id FROM app\.app_users AS staff WHERE staff\.is_operator = true/)
+    expect(unreadSql).toMatch(/message\.user_id NOT IN \(\s*SELECT staff\.id FROM app\.app_users AS staff\s+WHERE staff\.is_operator = true OR staff\.id IN \(/)
     // Each room counts once, with its most-behind operator.
     expect(unreadSql).toContain('MAX(unread_count)')
   })
@@ -221,7 +222,7 @@ describe('operator inbox queries', () => {
     ])
     const result = await listOperatorInboxRooms({ operatorUserId: 'op_1', limit: 1, cursor: { activityMs: 5000, conversationId: 'c9' } })
     const pageQuery = m.queryRaw.mock.calls[0][0] as Prisma.Sql
-    expect(pageQuery.text).toContain('AND member.user_id = $1')
+    expect(pageQuery.text).toMatch(/AND member\.user_id = \$\d+/)
     expect(pageQuery.values).toEqual(expect.arrayContaining(['op_1', 5000, 'c9', 2]))
     expect(result.rooms.map((room) => [room.conversationId, room.unreadCount])).toEqual([['c1', 1]])
     expect(result.nextCursor).toBe('2000.c1')
@@ -392,7 +393,7 @@ describe('inbox photo proxy lookup', () => {
     m.memberFindFirst.mockResolvedValue({ id: 'mem_1' })
     await expect(resolveInboxPhotoObjectKey('m1')).resolves.toBe('conversation-images/abc-1.jpg')
     expect(m.memberFindFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ leftAt: null, user: { isOperator: true, isDeleted: false } }),
+      where: expect.objectContaining({ leftAt: null, user: INBOX_ACCOUNT_USER_WHERE }),
     }))
 
     m.memberFindFirst.mockResolvedValue(null)

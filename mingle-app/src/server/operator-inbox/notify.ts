@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { INBOX_ACCOUNT_USER_WHERE } from '@/server/operator-inbox/inbox-accounts'
 import { resolveAccountBadge, withAccountBadgeLabel } from '@/lib/account-badge'
 import { publishAdminInboxEvent } from '@/server/conversation-realtime'
 import { sendPushToUsers } from '@/server/push-notifications'
@@ -90,7 +91,7 @@ async function findRoomWithOperators(activity: OperatorInboxActivity) {
       id: true,
       members: {
         // Materialized members only: a pending invitee has no row yet.
-        where: { leftAt: null, user: { isOperator: true, isDeleted: false } },
+        where: { leftAt: null, user: INBOX_ACCOUNT_USER_WHERE },
         orderBy: { joinedAt: 'asc' },
         select: { userId: true, user: { select: { name: true, handle: true } } },
       },

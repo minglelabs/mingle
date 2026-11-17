@@ -11,7 +11,15 @@ import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages
 import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { USER_IDENTITY_SELECT, identityBadgeFlags, type IdentityBadgeFlags } from '@/server/identity/user-identity-select'
-import { OperatorAccountRequiredError, requireOperatorAccount } from '@/server/operators/operator-guard'
+import { OperatorAccountRequiredError } from '@/server/operators/operator-guard'
+import {
+  INBOX_ACCOUNT_USER_WHERE,
+  isInboxAccountUser,
+  isStaffAnsweredOfficialId,
+  requireInboxAccount,
+  STAFF_ANSWERED_OFFICIAL_IDS_SQL,
+} from '@/server/operator-inbox/inbox-accounts'
+import { resolveHamzziStaffReplyLanguage } from '@/server/hamzzi/staff-reply-language'
 import {
   STAFF_TRANSLATION_LANGUAGE,
   isPhotoMessageMetadata,
@@ -178,12 +186,24 @@ function operatorMembershipsCte(filter: { operatorUserId?: string | null; channe
     FROM app.app_conversation_channel_members AS member
     JOIN app.app_users AS operator_user
       ON operator_user.id = member.user_id
-      AND operator_user.is_operator = true
+      AND (operator_user.is_operator = true OR operator_user.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL}))
       AND operator_user.is_deleted = false
     JOIN app.app_conversation_channels AS channel
       ON channel.id = member.channel_id
       AND (channel.is_deleted = false OR channel.is_deleted IS NULL)
     WHERE member.left_at IS NULL
+      -- Hamzzi's rooms count only once a real user has written (not its welcome alone).
+      AND (
+        operator_user.is_operator = true
+        OR EXISTS (
+          SELECT 1 FROM app.app_messages AS written
+          JOIN app.app_users AS writer ON writer.id = written.user_id
+          WHERE written.session_key = channel.session_key
+            AND (written.is_deleted = false OR written.is_deleted IS NULL)
+            AND writer.is_operator = false
+            AND writer.id NOT IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
+        )
+      )
       ${operatorFilter}
       ${channelFilter}
   )`
@@ -203,7 +223,8 @@ const UNREAD_CTE = Prisma.sql`unread AS (
     AND message.user_id <> membership.operator_user_id
     AND (membership.last_read_at IS NULL OR message.created_at > membership.last_read_at)
     AND message.user_id NOT IN (
-      SELECT staff.id FROM app.app_users AS staff WHERE staff.is_operator = true
+      SELECT staff.id FROM app.app_users AS staff
+      WHERE staff.is_operator = true OR staff.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
     )
   GROUP BY membership.channel_id, membership.operator_user_id
 )`
@@ -268,8 +289,9 @@ async function listActiveMembersByChannelId(channelIds: string[]): Promise<Map<s
   return result
 }
 
+/** A member staff act as here: an operator account, or Hamzzi. */
 function isOperatorMember(row: InboxMemberRow): boolean {
-  return row.user.isOperator === true && row.user.isDeleted !== true
+  return isInboxAccountUser(row.user)
 }
 
 function toInboxPerson(user: InboxMemberUser): InboxPerson {
@@ -635,7 +657,11 @@ export async function resolveInboxRoomAccess(args: {
   ])
   const unread = unreadByRoom.get(channel.id) ?? new Map<string, number>()
   const operators = operatorRows.map((member) => toInboxOperator(member, unread.get(member.userId) ?? 0))
-  const operator = operators.find((candidate) => candidate.userId === actingUserId) ?? operators[0]
+  const actingOperator = operators.find((candidate) => candidate.userId === actingUserId) ?? operators[0]
+  // Hamzzi has no fixed persona language: staff replies follow the room's conversation.
+  const operator = isStaffAnsweredOfficialId(actingOperator.userId)
+    ? { ...actingOperator, personaLanguage: await resolveHamzziStaffReplyLanguage(channel.sessionKey) }
+    : actingOperator
   const blocked = blockedRooms.has(channel.id)
   const recipientCount = members.length - 1 + channel.pendingInviteeUserIds.length
   const replyUnavailableReason: InboxReplyUnavailableReason | null = !operator.isActive
@@ -683,7 +709,7 @@ export async function loadInboxRoomView(args: {
   if (!access.ok) return access
   const operatorUserId = access.room.operator.userId
   try {
-    await requireOperatorAccount(operatorUserId)
+    await requireInboxAccount(operatorUserId)
   } catch (error) {
     if (error instanceof OperatorAccountRequiredError) return { ok: false, error: 'operator_required' }
     throw error
@@ -721,7 +747,7 @@ export async function markInboxRoomRead(args: {
   if (!access.ok) return access
   const operatorUserId = access.room.operator.userId
   try {
-    await requireOperatorAccount(operatorUserId)
+    await requireInboxAccount(operatorUserId)
   } catch (error) {
     if (error instanceof OperatorAccountRequiredError) return { ok: false, error: 'operator_required' }
     throw error
@@ -780,7 +806,7 @@ export async function resolveInboxPhotoObjectKey(rawMessageId: string): Promise<
     where: {
       leftAt: null,
       channel: { sessionKey: message.sessionKey, OR: [{ isDeleted: false }, { isDeleted: null }] },
-      user: { isOperator: true, isDeleted: false },
+      user: INBOX_ACCOUNT_USER_WHERE,
     },
     select: { id: true },
   })
