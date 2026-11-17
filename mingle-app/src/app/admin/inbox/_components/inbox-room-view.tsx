@@ -59,6 +59,11 @@ const ADMIN_INBOX_UPDATED_EVENT = 'mingle:admin-inbox-updated'
 // The admin reads chat photos through its own proxy (it has no member session).
 const resolveInboxImageSrc: ConversationImageSrcResolver = (image) => `/admin/inbox/api/images/${encodeURIComponent(image.messageId)}`
 
+/** A bubble's photo opens that member's app profile in a new tab, keeping the room open. */
+function openMemberProfile(userId: string): void {
+  window.open(`/ko/users/${encodeURIComponent(userId)}`, '_blank', 'noopener')
+}
+
 function goToLogin(): void {
   window.location.assign(`/admin?next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`)
 }
@@ -156,6 +161,7 @@ const RoomMessageList = memo(function RoomMessageList({
               preferredDisplayLanguage={displayLanguage}
               languageOrder={languageOrder}
               viewerUserId={viewerUserId}
+              onOpenProfile={openMemberProfile}
               shouldAnimateEntrance={false}
               bubbleTextClassName="text-[15px]"
             />
