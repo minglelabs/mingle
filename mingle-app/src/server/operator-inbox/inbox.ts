@@ -707,6 +707,12 @@ export function clearOperatorInboxCounts(): void {
   inboxOperatorCounts.clear()
 }
 
+/** Forgets every shared inbox value, the Hamzzi room list included (the speed check times them from scratch). */
+export function clearOperatorInboxCaches(): void {
+  staffAnsweredOfficialRoomIds.clear()
+  clearOperatorInboxCounts()
+}
+
 /**
  * Unread across every inbox room; a room counts once, with its most-behind
  * operator. Every admin screen polls this for the tab badge, so it is shared
