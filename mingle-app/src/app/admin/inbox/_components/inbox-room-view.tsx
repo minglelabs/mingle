@@ -531,7 +531,14 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
         >
           <ChevronLeft size={24} aria-hidden="true" />
         </Link>
-        <InboxAvatar person={operator} size={32} />
+        <Link
+          href={`/admin/operators/${encodeURIComponent(operator.userId)}`}
+          prefetch={false}
+          aria-label={`${operatorName} 운영 계정 상세`}
+          className="shrink-0 rounded-full active:opacity-70"
+        >
+          <InboxAvatar person={operator} size={32} />
+        </Link>
         <div className="min-w-0 flex-1 pl-1">
           <p className="flex min-w-0 items-center gap-1 text-[15px] font-semibold leading-5">
             <span className="min-w-0 truncate">{operatorName}</span>
