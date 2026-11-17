@@ -6,20 +6,55 @@ import {
 } from "@/lib/app-conversations";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { ROYCE_WELCOME_TRANSLATIONS } from "@/lib/royce-welcome-translations";
+import { HAMZZI_WELCOME_MESSAGE, HAMZZI_WELCOME_TRANSLATIONS } from "@/lib/hamzzi-welcome-translations";
+import { ensureHamzziAccount, HAMZZI_USER_ID } from "@/lib/hamzzi";
 import { notifyConversationMessage } from "@/server/conversation-realtime";
 import { sendPushNotificationForConversationMessage, sendPushNotificationForUserNotification } from "@/server/push-notifications";
 
 export const ROYCE_USER_ID = "cmsrqesom0000mx1hn62ce6r9";
 export const ROYCE_WELCOME_MESSAGE = "Welcome! My name is Royce. I'm developer of HashChat. If you have any feedback or questions, feel free to message me anytime on HashChat. The cat in the photo is Somi, my cat.";
 
-const ROYCE_WELCOME_CLIENT_MESSAGE_ID = "mingle-welcome-royce-v1";
-const ROYCE_WELCOME_RETRY_DELAYS_MS = [0, 250, 1_000] as const;
+const WELCOME_RETRY_DELAYS_MS = [0, 250, 1_000] as const;
+
+/** One account's welcome DM: who sends it, its fixed ids and its text. */
+type WelcomeSpec = {
+  senderUserId: string;
+  clientMessageId: string;
+  /** Prefix of the deterministic room key: `${prefix}${userId}`. */
+  sessionKeyPrefix: string;
+  sourceText: string;
+  translations: Record<string, string>;
+  /** Stored as the translation model of the hardcoded copies. */
+  translationModel: string;
+};
+
+const ROYCE_WELCOME: WelcomeSpec = {
+  senderUserId: ROYCE_USER_ID,
+  clientMessageId: "mingle-welcome-royce-v1",
+  sessionKeyPrefix: "mingle-welcome-royce-",
+  sourceText: ROYCE_WELCOME_MESSAGE,
+  translations: ROYCE_WELCOME_TRANSLATIONS,
+  translationModel: "royce-welcome-v2",
+};
+
+const HAMZZI_WELCOME: WelcomeSpec = {
+  senderUserId: HAMZZI_USER_ID,
+  clientMessageId: "mingle-welcome-hamzzi-v1",
+  sessionKeyPrefix: "mingle-welcome-hamzzi-",
+  sourceText: HAMZZI_WELCOME_MESSAGE,
+  translations: HAMZZI_WELCOME_TRANSLATIONS,
+  translationModel: "hamzzi-welcome-v1",
+};
 
 type NewNotification = {
   id: string;
 };
 
-async function ensureMutualFollow(userId: string): Promise<NewNotification[]> {
+async function ensureMutualFollow(
+  userId: string,
+  accountUserId: string,
+  options: { notify: boolean },
+): Promise<NewNotification[]> {
   const notifications: NewNotification[] = [];
 
   await prisma.$transaction(async (tx) => {
@@ -27,12 +62,12 @@ async function ensureMutualFollow(userId: string): Promise<NewNotification[]> {
       where: {
         followerId_followingId: {
           followerId: userId,
-          followingId: ROYCE_USER_ID,
+          followingId: accountUserId,
         },
       },
       create: {
         followerId: userId,
-        followingId: ROYCE_USER_ID,
+        followingId: accountUserId,
       },
       update: {},
     });
@@ -40,20 +75,21 @@ async function ensureMutualFollow(userId: string): Promise<NewNotification[]> {
     await tx.userFollow.upsert({
       where: {
         followerId_followingId: {
-          followerId: ROYCE_USER_ID,
+          followerId: accountUserId,
           followingId: userId,
         },
       },
       create: {
-        followerId: ROYCE_USER_ID,
+        followerId: accountUserId,
         followingId: userId,
       },
       update: {},
     });
 
+    if (!options.notify) return;
     const notificationPairs = [
-      { recipientId: ROYCE_USER_ID, actorId: userId },
-      { recipientId: userId, actorId: ROYCE_USER_ID },
+      { recipientId: accountUserId, actorId: userId },
+      { recipientId: userId, actorId: accountUserId },
     ];
 
     for (const pair of notificationPairs) {
@@ -80,14 +116,19 @@ async function ensureMutualFollow(userId: string): Promise<NewNotification[]> {
   return notifications;
 }
 
-async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promise<void> {
+async function ensureWelcomeMessage(
+  spec: WelcomeSpec,
+  userId: string,
+  locale: string | undefined,
+  options: { push: boolean },
+): Promise<void> {
   let sessionKey = "";
   let messageId = "";
   let lastError: unknown;
 
-  for (let attempt = 0; attempt < ROYCE_WELCOME_RETRY_DELAYS_MS.length; attempt += 1) {
+  for (let attempt = 0; attempt < WELCOME_RETRY_DELAYS_MS.length; attempt += 1) {
     if (attempt > 0) {
-      await new Promise((resolve) => setTimeout(resolve, ROYCE_WELCOME_RETRY_DELAYS_MS[attempt]));
+      await new Promise((resolve) => setTimeout(resolve, WELCOME_RETRY_DELAYS_MS[attempt]));
     }
 
     try {
@@ -96,15 +137,15 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
       // welcome message and can fail after a newly-created room is committed.
       const conversationResult = await findOrCreateDirectConversationSession({
         userId,
-        targetUserId: ROYCE_USER_ID,
+        targetUserId: spec.senderUserId,
         locale: locale || "en",
-        preferredSessionKey: `mingle-welcome-royce-${userId}`,
+        preferredSessionKey: `${spec.sessionKeyPrefix}${userId}`,
       });
       sessionKey = conversationResult.sessionKey;
 
       // Translate only into the languages the NEW USER actually wants — read
       // their own persisted defaultConversationLanguages directly rather than
-      // the room union, which also includes Royce's preferences.
+      // the room union, which also includes the sender's preferences.
       const targetUser = await prisma.user.findUnique({
         where: { id: userId },
         select: { defaultConversationLanguages: true },
@@ -114,12 +155,10 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
         deriveDefaultSttLanguagesForLocale(locale),
       );
       const welcomeTranslationLanguages = ownSelectedLanguages.filter(
-        (language): language is keyof typeof ROYCE_WELCOME_TRANSLATIONS => (
-          language !== "en" && language in ROYCE_WELCOME_TRANSLATIONS
-        ),
+        (language) => language !== "en" && Object.hasOwn(spec.translations, language),
       );
 
-      // A newly created direct room keeps Royce as a pending invitee until
+      // A newly created direct room keeps the sender as a pending invitee until
       // the first message. Materialize both accounts before inserting the
       // server-authored welcome message so the recipient has a real cursor.
       await materializePendingConversationInvitees(sessionKey);
@@ -129,13 +168,13 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
           where: {
             sessionKey_clientMessageId: {
               sessionKey,
-              clientMessageId: ROYCE_WELCOME_CLIENT_MESSAGE_ID,
+              clientMessageId: spec.clientMessageId,
             },
           },
           create: {
-            userId: ROYCE_USER_ID,
+            userId: spec.senderUserId,
             sessionKey,
-            clientMessageId: ROYCE_WELCOME_CLIENT_MESSAGE_ID,
+            clientMessageId: spec.clientMessageId,
             isDeleted: false,
             sourceLanguage: "en",
             metadata: {
@@ -145,7 +184,7 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
             },
           },
           update: {
-            userId: ROYCE_USER_ID,
+            userId: spec.senderUserId,
             isDeleted: false,
             metadata: {
               source: "signup_welcome",
@@ -169,16 +208,16 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
             contentType: "SOURCE",
             language: "en",
             isDeleted: false,
-            text: ROYCE_WELCOME_MESSAGE,
+            text: spec.sourceText,
           },
           update: {
             isDeleted: false,
-            text: ROYCE_WELCOME_MESSAGE,
+            text: spec.sourceText,
           },
         });
 
         for (const language of welcomeTranslationLanguages) {
-          const translatedText = ROYCE_WELCOME_TRANSLATIONS[language];
+          const translatedText = spec.translations[language];
           await tx.appMessageContent.upsert({
             where: {
               messageId_contentType_language: {
@@ -194,13 +233,13 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
               isDeleted: false,
               text: translatedText,
               provider: "hardcoded",
-              model: "royce-welcome-v2",
+              model: spec.translationModel,
             },
             update: {
               isDeleted: false,
               text: translatedText,
               provider: "hardcoded",
-              model: "royce-welcome-v2",
+              model: spec.translationModel,
             },
           });
         }
@@ -235,7 +274,7 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
       break;
     } catch (error) {
       lastError = error;
-      if (attempt === ROYCE_WELCOME_RETRY_DELAYS_MS.length - 1) {
+      if (attempt === WELCOME_RETRY_DELAYS_MS.length - 1) {
         throw error;
       }
       console.warn("[signup-welcome] database attempt failed; retrying", {
@@ -261,12 +300,13 @@ async function ensureRoyceWelcomeMessage(userId: string, locale?: string): Promi
     });
   }
 
+  if (!options.push) return;
   try {
     await sendPushNotificationForConversationMessage({
       messageId,
       sessionKey,
-      sourceText: ROYCE_WELCOME_MESSAGE,
-      senderUserId: ROYCE_USER_ID,
+      sourceText: spec.sourceText,
+      senderUserId: spec.senderUserId,
       memberUserIds,
     });
   } catch (error) {
@@ -281,8 +321,13 @@ export async function ensureSignupWelcomeOnboarding(args: {
   locale?: string | null;
 }): Promise<void> {
   const userId = args.userId.trim();
-  if (!userId || userId === ROYCE_USER_ID) return;
+  if (!userId || userId === ROYCE_USER_ID || userId === HAMZZI_USER_ID) return;
 
+  await ensureRoyceWelcome(userId, args.locale ?? undefined);
+  await ensureHamzziWelcome({ userId, locale: args.locale ?? undefined, push: true });
+}
+
+async function ensureRoyceWelcome(userId: string, locale: string | undefined): Promise<void> {
   try {
     const royce = await prisma.user.findFirst({
       where: {
@@ -294,7 +339,7 @@ export async function ensureSignupWelcomeOnboarding(args: {
     });
     if (!royce) return;
 
-    const newNotifications = await ensureMutualFollow(userId);
+    const newNotifications = await ensureMutualFollow(userId, ROYCE_USER_ID, { notify: true });
     for (const notification of newNotifications) {
       try {
         await sendPushNotificationForUserNotification(notification.id);
@@ -307,8 +352,38 @@ export async function ensureSignupWelcomeOnboarding(args: {
   }
 
   try {
-    await ensureRoyceWelcomeMessage(userId, args.locale ?? undefined);
+    await ensureWelcomeMessage(ROYCE_WELCOME, userId, locale, { push: true });
   } catch (error) {
     console.error("[signup-welcome] welcome message failed", error);
+  }
+}
+
+/**
+ * Hamzzi's mutual follow (without follow notifications) and welcome DM.
+ * Idempotent; also used to backfill existing users (with `push: false`).
+ * Returns false when Hamzzi is turned off or the welcome could not be written.
+ */
+export async function ensureHamzziWelcome(args: {
+  userId: string;
+  locale?: string;
+  push: boolean;
+}): Promise<boolean> {
+  const userId = args.userId.trim();
+  if (!userId || userId === HAMZZI_USER_ID) return false;
+  try {
+    const hamzzi = await ensureHamzziAccount();
+    if (!hamzzi) return false;
+    await ensureMutualFollow(userId, HAMZZI_USER_ID, { notify: false });
+  } catch (error) {
+    console.error("[signup-welcome] hamzzi follow failed", error);
+    return false;
+  }
+
+  try {
+    await ensureWelcomeMessage(HAMZZI_WELCOME, userId, args.locale, { push: args.push });
+    return true;
+  } catch (error) {
+    console.error("[signup-welcome] hamzzi welcome message failed", error);
+    return false;
   }
 }
