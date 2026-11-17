@@ -62,6 +62,7 @@ export function toBubbleUtterance(utterance: RoomUtterance): Utterance {
     createdAtMs: utterance.createdAtMs,
     ...(typeof utterance.serverCreatedAtMs === 'number' ? { serverCreatedAtMs: utterance.serverCreatedAtMs } : {}),
     ...(utterance.serverMessageId ? { serverMessageId: utterance.serverMessageId } : {}),
+    ...(typeof utterance.serverPersistedAtMs === 'number' ? { serverPersistedAtMs: utterance.serverPersistedAtMs } : {}),
   }
 }
 

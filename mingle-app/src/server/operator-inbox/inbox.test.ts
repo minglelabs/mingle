@@ -70,6 +70,8 @@ function memberRow(channelId: string, userId: string, options: MemberOptions = {
   return {
     channelId,
     userId,
+    joinedAt: new Date(0),
+    lastReadAt: null,
     displayLanguage: options.displayLanguage ?? null,
     user: {
       id: userId,

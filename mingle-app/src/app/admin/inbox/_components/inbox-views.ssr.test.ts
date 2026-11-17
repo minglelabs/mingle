@@ -48,6 +48,7 @@ const roomView: InboxRoomViewData = {
     blocked: false,
     replyUnavailableReason: null,
   },
+  readReceiptMembers: [],
   hydration: {
     conversation: {
       id: 'conv_1', sequenceNumber: 1, title: 'João', status: 'active', sessionKey: 'sess_1',

@@ -21,6 +21,14 @@ export function MessageReadReceiptsProvider({ conversationId, enabled, active = 
   return <ReadReceiptRoom key={conversationId} conversationId={conversationId} active={active} viewerUserId={viewerUserId}>{children}</ReadReceiptRoom>
 }
 
+/** Read marks from member cursors the caller already has (the admin inbox room, which has no member session to fetch them with). */
+export function MessageReadReceiptsStaticProvider({ members, viewerUserId, children }: {
+  members: MessageReadReceiptMember[]; viewerUserId: string | null; children: ReactNode
+}) {
+  const value = useMemo(() => ({ members, viewerUserId }), [members, viewerUserId])
+  return <Room.Provider value={value}>{children}</Room.Provider>
+}
+
 function ReadReceiptRoom({ conversationId, active, viewerUserId, children }: {
   conversationId: string; active: boolean; viewerUserId: string | null; children: ReactNode
 }) {

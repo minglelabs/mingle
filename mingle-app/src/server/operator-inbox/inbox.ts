@@ -1,3 +1,4 @@
+import type { MessageReadReceiptMember } from '@/lib/message-read-receipts'
 import { MESSAGE_RECALLED_AT_METADATA_KEY } from '@/lib/message-recall'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
@@ -136,6 +137,8 @@ export type InboxRoomAccessResult = { ok: true; room: InboxRoomAccess } | { ok: 
 export type InboxRoomView = {
   room: InboxRoomDetail
   hydration: ConversationHydrationState
+  /** Active members' read cursors, for the per-message read mark (same as the app's). */
+  readReceiptMembers: MessageReadReceiptMember[]
 }
 
 export type InboxRoomViewResult =
@@ -169,7 +172,6 @@ function clampPageSize(limit: number | null | undefined): number {
 
 // ─── SQL building blocks ─────────────────────────────────────────────────────
 
-/** Every active membership of a non-deleted operator in a non-deleted room. */
 const OFFICIAL_ROOM_IDS_TTL_MS = 30_000
 let officialRoomIdsCache: { ids: string[]; expiresAt: number } | null = null
 let officialRoomIdsLoad: Promise<string[]> | null = null
@@ -179,10 +181,21 @@ let officialRoomIdsLoad: Promise<string[]> | null = null
  * (not its welcome alone). Hamzzi is in a room with every user, so finding
  * them costs a probe per user; the inbox queries run on every refresh and
  * badge poll, so they share this list for 30 s instead of each repeating the
- * search. A first message to Hamzzi can therefore reach the list up to 30 s late.
+ * search. Once loaded, an expired list is still answered at once and renewed
+ * in the background, so only the first request after a start waits for the
+ * search. A first message to Hamzzi can therefore reach the list about a
+ * minute late.
  */
 async function listStaffAnsweredOfficialRoomIds(): Promise<string[]> {
   if (officialRoomIdsCache && officialRoomIdsCache.expiresAt > Date.now()) return officialRoomIdsCache.ids
+  if (officialRoomIdsCache) {
+    void loadStaffAnsweredOfficialRoomIds().catch(() => {})
+    return officialRoomIdsCache.ids
+  }
+  return loadStaffAnsweredOfficialRoomIds()
+}
+
+function loadStaffAnsweredOfficialRoomIds(): Promise<string[]> {
   officialRoomIdsLoad ??= prisma.$queryRaw<Array<{ officialChannelId: string }>>(Prisma.sql`
     SELECT member.channel_id AS "officialChannelId"
     FROM app.app_conversation_channel_members AS member
@@ -211,6 +224,7 @@ async function listStaffAnsweredOfficialRoomIds(): Promise<string[]> {
   return officialRoomIdsLoad
 }
 
+/** Every active membership of a non-deleted operator in a non-deleted room. */
 async function operatorMembershipsCte(filter: { operatorUserId?: string | null; channelIds?: string[] | null } = {}): Promise<Prisma.Sql> {
   const operatorFilter = filter.operatorUserId
     ? Prisma.sql`AND member.user_id = ${filter.operatorUserId}`
@@ -793,6 +807,15 @@ export async function loadInboxRoomView(args: {
     revealRecalled: true,
   })
   if (!hydration) return { ok: false, error: 'not_found' }
+  const memberRows = await prisma.appConversationChannelMember.findMany({
+    where: { channelId: access.room.conversationId, leftAt: null },
+    select: { userId: true, joinedAt: true, lastReadAt: true },
+  })
+  const readReceiptMembers = memberRows.map((member) => ({
+    userId: member.userId,
+    joinedAtMs: member.joinedAt.getTime(),
+    lastReadAtMs: member.lastReadAt ? member.lastReadAt.getTime() : null,
+  }))
 
   if (args.auditOpen) {
     await writeAdminAudit(args.ctx, {
@@ -802,7 +825,7 @@ export async function loadInboxRoomView(args: {
       targetId: access.room.conversationId,
     })
   }
-  return { ok: true, view: { room: toRoomDetail(access.room), hydration } }
+  return { ok: true, view: { room: toRoomDetail(access.room), hydration, readReceiptMembers } }
 }
 
 /** Marks the room read AS the operator (their own lastReadAt only) and audits it. */
