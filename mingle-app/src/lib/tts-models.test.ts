@@ -1,36 +1,33 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_SELECTABLE_TTS_MODEL,
   TTS_MODEL_OPTIONS,
-  getInworldTtsModelId,
+  getFallbackTtsModel,
+  getGeminiTtsModel,
   normalizeSelectableTtsModel,
   resolveTtsRuntimeSelection,
 } from './tts-models'
 
-const savedInworldModelId = process.env.INWORLD_TTS_MODEL_ID
-
-afterEach(() => {
-  if (savedInworldModelId === undefined) delete process.env.INWORLD_TTS_MODEL_ID
-  else process.env.INWORLD_TTS_MODEL_ID = savedInworldModelId
-})
-
 describe('tts model catalog', () => {
-  it('defaults unset users to gemini-3.8-flash-lite-tts', () => {
-    expect(DEFAULT_SELECTABLE_TTS_MODEL).toBe('gemini-3.8-flash-lite-tts')
+  it('defaults unset users to soniox-tts-rt-v2', () => {
+    expect(DEFAULT_SELECTABLE_TTS_MODEL).toBe('soniox-tts-rt-v2')
   })
 
-  it('lists the three selectable models with the model id as the label and no badges', () => {
+  it('lists Soniox and the two Gemini models, default first, with the model id as the label', () => {
     expect(TTS_MODEL_OPTIONS).toEqual([
-      { value: 'inworld-tts-1.5-mini', label: 'inworld-tts-1.5-mini' },
-      { value: 'gemini-3.8-flash-tts', label: 'gemini-3.8-flash-tts' },
+      { value: 'soniox-tts-rt-v2', label: 'soniox-tts-rt-v2' },
       { value: 'gemini-3.8-flash-lite-tts', label: 'gemini-3.8-flash-lite-tts' },
+      { value: 'gemini-3.8-flash-tts', label: 'gemini-3.8-flash-tts' },
     ])
+    expect(TTS_MODEL_OPTIONS[0].value).toBe(DEFAULT_SELECTABLE_TTS_MODEL)
   })
 
-  it('normalizes supported values and rejects everything else', () => {
+  it('normalizes supported values and rejects everything else, including the removed Inworld model', () => {
     expect(normalizeSelectableTtsModel(' Gemini-3.8-Flash-TTS ')).toBe('gemini-3.8-flash-tts')
     expect(normalizeSelectableTtsModel('gemini-3.8-flash-lite-tts')).toBe('gemini-3.8-flash-lite-tts')
-    expect(normalizeSelectableTtsModel('inworld-tts-1.5-mini')).toBe('inworld-tts-1.5-mini')
+    expect(normalizeSelectableTtsModel('SONIOX-TTS-RT-V2')).toBe('soniox-tts-rt-v2')
+    expect(normalizeSelectableTtsModel('tts-rt-v2')).toBeNull()
+    expect(normalizeSelectableTtsModel('inworld-tts-1.5-mini')).toBeNull()
     expect(normalizeSelectableTtsModel('gemini')).toBeNull()
     expect(normalizeSelectableTtsModel('inworld')).toBeNull()
     expect(normalizeSelectableTtsModel('toString')).toBeNull()
@@ -39,7 +36,12 @@ describe('tts model catalog', () => {
     expect(normalizeSelectableTtsModel(42)).toBeNull()
   })
 
-  it('resolves Gemini models to their own runtime id', () => {
+  it('resolves each model to its provider and runtime id', () => {
+    expect(resolveTtsRuntimeSelection('soniox-tts-rt-v2')).toEqual({
+      value: 'soniox-tts-rt-v2',
+      provider: 'soniox',
+      runtimeModel: 'tts-rt-v2',
+    })
     expect(resolveTtsRuntimeSelection('gemini-3.8-flash-tts')).toEqual({
       value: 'gemini-3.8-flash-tts',
       provider: 'gemini',
@@ -52,26 +54,24 @@ describe('tts model catalog', () => {
     })
   })
 
-  it('resolves Inworld through INWORLD_TTS_MODEL_ID so production behavior is unchanged', () => {
-    delete process.env.INWORLD_TTS_MODEL_ID
-    expect(getInworldTtsModelId()).toBe('inworld-tts-1.5-mini')
-    expect(resolveTtsRuntimeSelection('inworld-tts-1.5-mini')).toEqual({
-      value: 'inworld-tts-1.5-mini',
-      provider: 'inworld',
-      runtimeModel: 'inworld-tts-1.5-mini',
-    })
-    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-max'
-    expect(resolveTtsRuntimeSelection('inworld-tts-1.5-mini').runtimeModel).toBe('inworld-tts-1.5-max')
-  })
-
-  it('resolves missing or invalid values to the gemini-3.8-flash-lite-tts default', () => {
-    delete process.env.INWORLD_TTS_MODEL_ID
-    for (const value of [undefined, null, '', 'gemini', 'polly', 7, { ttsModel: 'inworld-tts-1.5-mini' }]) {
+  it('resolves missing, invalid or removed values to the soniox-tts-rt-v2 default', () => {
+    for (const value of [undefined, null, '', 'gemini', 'polly', 7, 'inworld-tts-1.5-mini', { ttsModel: 'gemini-3.8-flash-tts' }]) {
       expect(resolveTtsRuntimeSelection(value)).toEqual({
-        value: 'gemini-3.8-flash-lite-tts',
-        provider: 'gemini',
-        runtimeModel: 'gemini-3.8-flash-lite-tts',
+        value: 'soniox-tts-rt-v2',
+        provider: 'soniox',
+        runtimeModel: 'tts-rt-v2',
       })
     }
+  })
+
+  it('speaks with Flash-Lite when Soniox cannot, and keeps a Gemini selection', () => {
+    expect(getGeminiTtsModel('soniox-tts-rt-v2')).toBe('gemini-3.8-flash-lite-tts')
+    expect(getGeminiTtsModel('gemini-3.8-flash-tts')).toBe('gemini-3.8-flash-tts')
+    expect(getGeminiTtsModel('gemini-3.8-flash-lite-tts')).toBe('gemini-3.8-flash-lite-tts')
+  })
+
+  it('retries a failed Gemini synthesis with the other Gemini model', () => {
+    expect(getFallbackTtsModel('gemini-3.8-flash-lite-tts')).toBe('gemini-3.8-flash-tts')
+    expect(getFallbackTtsModel('gemini-3.8-flash-tts')).toBe('gemini-3.8-flash-lite-tts')
   })
 })

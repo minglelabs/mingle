@@ -75,8 +75,32 @@ vi.mock('@/server/reports/account-restriction', () => ({
   accountRestrictionGuard: mockAccountRestrictionGuard,
 }))
 
+// Operator accounts are queued for review instead; members (the default) publish.
+const { mockQueueOperatorAppPost } = vi.hoisted(() => ({
+  mockQueueOperatorAppPost: vi.fn<(input: unknown) => Promise<{ reserveId: string } | null>>(async () => null),
+}))
+vi.mock('@/server/operator-post-reserve/queue-app-post', () => ({
+  queueOperatorAppPostForReview: mockQueueOperatorAppPost,
+}))
+
 import { isKnownBackgroundKey } from '@/lib/post-backgrounds'
 import { POST } from './route'
+
+describe('POST /api/posts — operator accounts', () => {
+  it('queues the post for admin review instead of publishing it', async () => {
+    mockGetServerSession.mockResolvedValue({ user: { id: 'operator-1' } })
+    mockPostCreate.mockClear()
+    mockQueueOperatorAppPost.mockResolvedValueOnce({ reserveId: 'reserve-1' })
+    const res = await POST(new NextRequest('http://localhost/api/posts', {
+      method: 'POST',
+      body: JSON.stringify({ sourceText: 'Testing draft post creation', clientPostId: 'c-1' }),
+    }))
+    expect(res.status).toBe(202)
+    expect(await res.json()).toEqual({ postId: null, queuedForReview: true, reserveId: 'reserve-1' })
+    expect(mockQueueOperatorAppPost).toHaveBeenCalledWith({ authorId: 'operator-1', text: 'Testing draft post creation', images: [] })
+    expect(mockPostCreate).not.toHaveBeenCalled()
+  })
+})
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest('http://localhost/api/posts', {

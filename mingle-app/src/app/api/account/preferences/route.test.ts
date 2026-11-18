@@ -512,7 +512,7 @@ describe("/api/account/preferences route", () => {
     });
     mockUserUpdateMany.mockResolvedValue({ count: 1 });
 
-    for (const ttsModel of ["gemini-3.8-flash-lite-tts", " Gemini-3.8-Flash-TTS ", "inworld-tts-1.5-mini"]) {
+    for (const ttsModel of ["gemini-3.8-flash-lite-tts", " Gemini-3.8-Flash-TTS "]) {
       const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
         method: "PATCH",
         body: JSON.stringify({ ttsModel }),
@@ -522,7 +522,6 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany.mock.calls.map((call) => call[0])).toEqual([
       { where: { id: "user_123" }, data: { ttsModel: "gemini-3.8-flash-lite-tts" } },
       { where: { id: "user_123" }, data: { ttsModel: "gemini-3.8-flash-tts" } },
-      { where: { id: "user_123" }, data: { ttsModel: "inworld-tts-1.5-mini" } },
     ]);
   });
 

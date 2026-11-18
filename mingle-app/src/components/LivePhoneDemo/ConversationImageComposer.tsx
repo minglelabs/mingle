@@ -1,7 +1,7 @@
 'use client'
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react'
 import LanguageFlag from '@/components/language-flag'
-import { Headphones, Image as Photo, Keyboard, Loader2, Plus, Volume2, X } from 'lucide-react'
+import { FlipHorizontal2, Headphones, Image as Photo, Keyboard, Loader2, Plus, RotateCcw, Volume2, X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
 import { CONVERSATION_IMAGE_MAX_BYTES } from '@/lib/conversation-image'
@@ -10,6 +10,8 @@ import MessageMediaDialog from './MessageMediaDialog'
 import { chooseTooltipSide } from './CopyableBubbleSurface'
 import { captureRestorableFocus, scheduleFocusRestore } from './picker-focus-restore'
 import { createImageClientMessageId } from './image-client-message-id'
+import { applyImageTransform, flipHorizontal, IDENTITY_IMAGE_TRANSFORM, isIdentityTransform, rotateLeft, type ImageTransform } from './conversation-image-transform'
+import { decodeNativeShareImage, getPendingNativeShareVersion, subscribePendingNativeShare, takePendingNativeShareImage } from '@/lib/native-share-inbox'
 
 // ── Diagnostic constants ──────────────────────────────────────────────
 const DIAG_LS_KEY = '__mingle_diag_v1__'
@@ -49,12 +51,15 @@ export type ConversationImageComposerEarphoneMode = {
   onToggle: () => void
 }
 
-export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, onMenuOpenChange, voiceButtonSize = 33, earphoneMode, allowPhoto = true }: {
+export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, onMenuOpenChange, voiceButtonSize = 33, earphoneMode, allowPhoto = true, acceptSharedPhoto = false }: {
   conversationId: string; locale: string; onSent: () => void; onCloseKeyboard?: () => void; onMenuOpenChange?: (open: boolean) => void; voiceButtonSize?: number
   // Keyboard mode only: an "earphone mode" row between the photo and voice-mode rows.
   earphoneMode?: ConversationImageComposerEarphoneMode
   // false = no photo row (a room without a sendable conversation still gets the menu).
   allowPhoto?: boolean
+  // true while this room is on screen: a photo shared to HashChat from another
+  // app (system share sheet) opens here in the usual preview, ready to send.
+  acceptSharedPhoto?: boolean
 }) {
   const copy = resolveConversationImageCopy(locale)
   const [anchor, setAnchor] = useState<{ side: 'above'; bottom: number; left: number } | { side: 'below'; top: number; left: number }>({ side: 'above', bottom: 48, left: 120 })
@@ -63,6 +68,10 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
   const [chosen, setChosen] = useState<{ file: File; url: string; id: string } | null>(null)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Rotate / flip in the preview; `edited` is the baked file shown and sent.
+  const [transform, setTransform] = useState<ImageTransform>(IDENTITY_IMAGE_TRANSFORM)
+  const [edited, setEdited] = useState<{ file: File; url: string; key: string } | null>(null)
+  const [editing, setEditing] = useState(false)
   const request = useRef<AbortController | null>(null)
   const mounted = useRef(true)
 
@@ -214,7 +223,35 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     return () => onMenuOpenChange?.(false)
   }, [onMenuOpenChange, open])
   useEffect(() => () => { if (chosen) URL.revokeObjectURL(chosen.url) }, [chosen])
+  useEffect(() => () => { if (edited) URL.revokeObjectURL(edited.url) }, [edited])
+  // A new pick starts upright.
+  useEffect(() => { setTransform(IDENTITY_IMAGE_TRANSFORM); setEdited(null) }, [chosen])
+  useEffect(() => {
+    if (!chosen || isIdentityTransform(transform)) { setEdited(null); setEditing(false); return }
+    let cancelled = false
+    const key = `${chosen.id}:${transform.quarterTurns}:${transform.flipped}`
+    setEditing(true)
+    applyImageTransform(chosen.file, chosen.url, transform).then(file => {
+      if (cancelled) return
+      setEdited({ file, url: URL.createObjectURL(file), key })
+    }).catch(() => {
+      if (!cancelled) setError(copy.error)
+    }).finally(() => {
+      if (!cancelled) setEditing(false)
+    })
+    return () => { cancelled = true }
+  }, [chosen, copy.error, transform])
   const close = useCallback(() => { if (!request.current) { setOpen(false); setChosen(null); setError(null) } }, [])
+  const pendingShareVersion = useSyncExternalStore(subscribePendingNativeShare, getPendingNativeShareVersion, () => '')
+  useEffect(() => {
+    if (!pendingShareVersion || !acceptSharedPhoto || !allowPhoto || !conversationId || request.current) return
+    const image = takePendingNativeShareImage(conversationId)
+    if (!image) return
+    let file: File
+    try { file = decodeNativeShareImage(image) } catch { return }
+    if (!file.size || file.size > CONVERSATION_IMAGE_MAX_BYTES) { setError(copy.invalid); setOpen(true); return }
+    setError(null); setChosen({ file, url: URL.createObjectURL(file), id: createImageClientMessageId() }); setOpen(true)
+  }, [acceptSharedPhoto, allowPhoto, conversationId, copy.invalid, pendingShareVersion])
   useEffect(() => {
     if (!open || chosen) return
 
@@ -363,12 +400,16 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
   // ── End diagnostic event handlers ───────────────────────────────────
 
   const send = async () => {
-    if (!chosen || request.current) return
+    if (!chosen || request.current || editing) return
+    const editedKey = `${chosen.id}:${transform.quarterTurns}:${transform.flipped}`
+    const file = isIdentityTransform(transform) ? chosen.file : edited?.key === editedKey ? edited.file : undefined
+    if (!file) return
+    if (!file.size || file.size > CONVERSATION_IMAGE_MAX_BYTES) { setError(copy.invalid); return }
     const controller = new AbortController(); request.current = controller
     const deadline = setTimeout(() => controller.abort(), 45_000)
     setPending(true); setError(null)
     try {
-      const body = new FormData(); body.set('file', chosen.file); body.set('clientMessageId', chosen.id)
+      const body = new FormData(); body.set('file', file); body.set('clientMessageId', chosen.id)
       const response = await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/images`), { method: 'POST', body, signal: controller.signal })
       if (!response.ok) throw new Error('image_send_failed')
       await response.json()
@@ -487,8 +528,17 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       <>
         {/* Local file URLs are intentionally displayed without the Next image proxy. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={chosen.url} alt={copy.preview} className="max-h-[50dvh] w-full rounded-xl object-contain" />
-        <button type="button" disabled={pending} onClick={() => void send()} className="mt-4 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 font-medium text-white disabled:opacity-60">{pending && <Loader2 size={18} className="animate-spin" />}{pending ? copy.sending : copy.send}</button>
+        <img src={(!isIdentityTransform(transform) && edited?.url) || chosen.url} alt={copy.preview}
+          className={`max-h-[50dvh] w-full rounded-xl object-contain transition-opacity ${editing ? 'opacity-50' : ''}`} />
+        <div className="mt-3 flex items-center justify-center gap-3">
+          <button type="button" data-qa="live-demo-image-rotate" disabled={pending} aria-label={copy.rotatePhoto} title={copy.rotatePhoto}
+            onClick={() => { setError(null); setTransform(rotateLeft) }}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition active:scale-95 active:bg-slate-200 disabled:opacity-40"><RotateCcw size={20} /></button>
+          <button type="button" data-qa="live-demo-image-flip" disabled={pending} aria-label={copy.flipPhoto} title={copy.flipPhoto} aria-pressed={transform.flipped}
+            onClick={() => { setError(null); setTransform(flipHorizontal) }}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition active:scale-95 active:bg-slate-200 disabled:opacity-40"><FlipHorizontal2 size={20} /></button>
+        </div>
+        <button type="button" disabled={pending || editing} onClick={() => void send()} className="mt-4 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 font-medium text-white disabled:opacity-60">{pending && <Loader2 size={18} className="animate-spin" />}{pending ? copy.sending : copy.send}</button>
       </>
       {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
     </MessageMediaDialog>}

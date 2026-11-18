@@ -25,6 +25,7 @@ export type NativeShellCapabilities = {
   audioRoute: boolean;
   deviceAudioCapture: boolean;
   nativeTts: boolean;
+  ttsStream: boolean;
   contacts: boolean;
   earphoneMicrophoneChoice: boolean;
 };
@@ -37,6 +38,7 @@ export function buildNativeShellCapabilities(options: {
   audioRoute: boolean;
   deviceAudioCapture?: boolean;
   nativeTts?: boolean;
+  ttsStream?: boolean;
   contacts?: boolean;
   earphoneMicrophoneChoice?: boolean;
 }): NativeShellCapabilities {
@@ -46,6 +48,7 @@ export function buildNativeShellCapabilities(options: {
     audioRoute: options.audioRoute === true,
     deviceAudioCapture: options.deviceAudioCapture === true,
     nativeTts: options.nativeTts === true,
+    ttsStream: options.ttsStream === true,
     contacts: options.contacts === true,
     earphoneMicrophoneChoice: options.earphoneMicrophoneChoice === true,
   };

@@ -89,7 +89,9 @@ describe('resolveEarphoneModeGate', () => {
 describe('resolveEarphoneModeGate in speaker mode (earphones not required)', () => {
   it.each([
     // supported, enabled, connected -> visible, autoRead, waiting
-    [false, true, false, false, false, false],
+    // Not supported = Android 12 and older: speaker mode still shows and reads.
+    [false, false, false, true, false, false],
+    [false, true, false, true, true, false],
     [true, false, false, true, false, false],
     [true, true, false, true, true, false],
     [true, true, true, true, true, false],

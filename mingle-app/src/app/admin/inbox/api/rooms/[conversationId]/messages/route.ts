@@ -1,6 +1,7 @@
 import { requireAdminApi } from '@/server/admin/guard'
 import { normalizeInboxId, resolveInboxRoomAccess } from '@/server/operator-inbox/inbox'
-import { OperatorSendError, sendOperatorMessage } from '@/server/operator-inbox/send'
+import { isStaffAnsweredOfficialId, requireInboxAccount } from '@/server/operator-inbox/inbox-accounts'
+import { OperatorSendError, sendOfficialAccountMessage, sendOperatorMessage } from '@/server/operator-inbox/send'
 import { OperatorAccountRequiredError } from '@/server/operators/operator-guard'
 import { inboxAccessErrorStatus, inboxError, inboxJson, readInboxJsonBody, readInboxString } from '../../../_lib/http'
 
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic'
 type RouteContext = { params: Promise<{ conversationId: string }> }
 
 /**
- * Reply AS an operator account. Body: `{ text, as?, clientRequestId? }`.
+ * Reply AS an operator account (or as Hamzzi). Body: `{ text, as?, clientRequestId? }`.
  * `as` is required when the room has several operators. A retry with the
  * same `clientRequestId` returns the stored reply (200) instead of sending
  * twice (201 for a new reply). A failed persona-language translation is 503
@@ -43,12 +44,21 @@ export async function POST(request: Request, context: RouteContext) {
   if (!access.ok) return inboxError(access.error, inboxAccessErrorStatus(access.error))
 
   try {
-    const result = await sendOperatorMessage(auth.ctx, {
+    const input = {
       operatorUserId: access.room.operator.userId,
       conversationId: access.room.conversationId,
       text: body.text,
       clientRequestId,
-    })
+    }
+    // Hamzzi: an official account, sent in the language the room is talking in.
+    const result = isStaffAnsweredOfficialId(input.operatorUserId)
+      ? await sendOfficialAccountMessage({
+          ...input,
+          ctx: auth.ctx,
+          sender: await requireInboxAccount(input.operatorUserId),
+          sourceLanguage: access.room.operator.personaLanguage ?? 'en',
+        })
+      : await sendOperatorMessage(auth.ctx, input)
     return inboxJson({ message: result }, result.duplicate ? 200 : 201)
   } catch (error) {
     if (error instanceof OperatorAccountRequiredError) return inboxError('operator_required', 403)

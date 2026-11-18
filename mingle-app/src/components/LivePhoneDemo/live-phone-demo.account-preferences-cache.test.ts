@@ -35,7 +35,7 @@ function buildPreferences(): LivePhoneDemoAccountPreferences {
     sonioxEndpointMaxDelayMs: 2_500,
     sonioxEndpointTuningStep: 4,
     translationModel: 'gpt-6-luna',
-    ttsModel: 'inworld-tts-1.5-mini',
+    ttsModel: 'gemini-3.8-flash-lite-tts',
     adBannerPosition: 'bottom',
     inputMode: 'text',
     speakerEnabled: false,
@@ -211,7 +211,7 @@ describe('account preferences client cache', () => {
   })
 
   it('takes the server TTS model on a new account hydration unless the user picked one', () => {
-    const local = { ...buildPreferences(), ttsModel: 'inworld-tts-1.5-mini' as const }
+    const local = { ...buildPreferences(), ttsModel: 'gemini-3.8-flash-lite-tts' as const }
     const server = { ...local, ttsModel: 'gemini-3.8-flash-tts' as const }
     edit(local, { ...local, textSizeLevel: 3 })
 
@@ -226,7 +226,7 @@ describe('account preferences client cache', () => {
   })
 
   it('preserves a TTS model explicitly chosen during a new account hydration', () => {
-    const local = { ...buildPreferences(), ttsModel: 'inworld-tts-1.5-mini' as const }
+    const local = { ...buildPreferences(), ttsModel: 'gemini-3.8-flash-tts' as const }
     const server = { ...local, ttsModel: 'gemini-3.8-flash-tts' as const, translationModel: 'gpt-6-luna' as const }
     edit(local, { ...local, ttsModel: 'gemini-3.8-flash-lite-tts' })
 

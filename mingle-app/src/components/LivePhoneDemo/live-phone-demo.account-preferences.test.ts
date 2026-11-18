@@ -103,8 +103,8 @@ describe('buildHydratedAccountPreferences', () => {
   it('hydrates a stored TTS model and keeps null (no default fallback) for missing or invalid values', () => {
     expect(buildHydratedAccountPreferences({ ttsModel: 'gemini-3.8-flash-lite-tts' }, false).ttsModel)
       .toBe('gemini-3.8-flash-lite-tts')
-    expect(buildHydratedAccountPreferences({ ttsModel: 'inworld-tts-1.5-mini' }, false).ttsModel)
-      .toBe('inworld-tts-1.5-mini')
+    // The removed Inworld model hydrates as "no choice", which follows the server default.
+    expect(buildHydratedAccountPreferences({ ttsModel: 'inworld-tts-1.5-mini' }, false).ttsModel).toBeNull()
     expect(buildHydratedAccountPreferences({ ttsModel: ' GEMINI-3.8-FLASH-TTS ' }, true).ttsModel)
       .toBe('gemini-3.8-flash-tts')
     expect(buildHydratedAccountPreferences({ ttsModel: null }, false).ttsModel).toBeNull()
@@ -299,7 +299,7 @@ describe('resolveRequestTtsModel', () => {
   })
 
   it('sends an explicit choice under the shouldSendTtsModelPreference gating', () => {
-    expect(resolveRequestTtsModel('inworld-tts-1.5-mini', hydrated)).toBe('inworld-tts-1.5-mini')
+    expect(resolveRequestTtsModel('gemini-3.8-flash-lite-tts', hydrated)).toBe('gemini-3.8-flash-lite-tts')
     expect(resolveRequestTtsModel('gemini-3.8-flash-tts', { ...hydrated, successfulHydrationGeneration: 0 }))
       .toBeUndefined()
     expect(resolveRequestTtsModel('gemini-3.8-flash-tts', {

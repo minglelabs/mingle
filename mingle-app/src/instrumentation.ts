@@ -60,6 +60,17 @@ export function operatorAutomationWorkerEnabled(env: NodeJS.ProcessEnv = process
   return env.MINGLE_OPERATOR_AUTOMATION_WORKER !== 'off'
 }
 
+/**
+ * Whether this process may run Hamzzi's reply worker (a 10 s tick that
+ * answers DMs to the Hamzzi mascot account). `MINGLE_HAMZZI_WORKER=off` keeps
+ * it from starting; `HAMZZI_AUTO_REPLY=off` makes every run a no-op.
+ */
+export function hamzziWorkerEnabled(env: NodeJS.ProcessEnv = process.env, runtime: string | undefined = process.env.NEXT_RUNTIME): boolean {
+  if (runtime !== 'nodejs') return false
+  if (env.VITEST || env.NODE_ENV === 'test') return false
+  return env.MINGLE_HAMZZI_WORKER !== 'off'
+}
+
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     // Review photos drawn in the background by the previous process will never finish.
@@ -71,6 +82,10 @@ export async function register(): Promise<void> {
     if (operatorAutoReplyWorkerEnabled()) {
       const { startOperatorAutoReplyWorker } = await import('./server/operator-auto-reply/scheduler')
       startOperatorAutoReplyWorker()
+    }
+    if (hamzziWorkerEnabled()) {
+      const { startHamzziWorker } = await import('./server/hamzzi/scheduler')
+      startHamzziWorker()
     }
     if (operatorPostReserveWorkerEnabled()) {
       const { startOperatorPostReserveWorker } = await import('./server/operator-post-reserve/scheduler')

@@ -19,7 +19,9 @@ import {
   DeferredNativeProfileLinkOverlay,
 } from "@/components/deferred-native-overlays";
 import NativePushTapReceiver from "@/components/native-push-tap-receiver";
+import NativeShareInboxReceiver from "@/components/native-share-inbox-receiver";
 import WebViewStateRestore from "@/components/webview-state-restore";
+import NativeStartupReadyReporter from "@/components/native-startup-ready-reporter";
 import RouteTransitionCurtain from "@/components/route-transition-curtain";
 import PostHogAnalyticsProvider from "@/components/posthog-analytics-provider";
 import { DeviceAudioCaptureSwitchProvider } from "@/context/device-audio-capture-switch";
@@ -126,9 +128,11 @@ export default async function RootLayout({
                 <ProfileBasicsGate />
                 <LastSignInMethodRecorder />
                 <NativePushTapReceiver />
+                <NativeShareInboxReceiver />
                 <NativeBannerRouteGuard />
                 <UiDiagnosticsProbe />
                 <WebViewStateRestore />
+                <NativeStartupReadyReporter />
                 <RouteTransitionCurtain />
               </MobileCanvasShell>
               <Toaster

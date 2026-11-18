@@ -15,6 +15,7 @@ class NativeRuntimeConfigPackage : ReactPackage {
       NativeAudioRouteModule(reactContext),
       NativeTTSModule(reactContext),
       NativeContactsModule(reactContext),
+      NativeShareTargetModule(reactContext),
     )
 
   override fun createViewManagers(
