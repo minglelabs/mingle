@@ -131,6 +131,7 @@ import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
 import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
 import { buildInviteSharedLinkMessage } from '@/i18n/invite-ticket-copy'
+import { resolveInviteMessageLocale } from '@/lib/invite-message-locale'
 import { useOwnInviteCode } from '@/lib/own-invite-code'
 import { RETRANSLATE_TIP_SHOWN_STORAGE_KEY, messageRetranslateCopy } from '@/lib/message-retranslate'
 import PhoneFrame from './PhoneFrame'
@@ -6084,7 +6085,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleCopyShareLink = useCallback(async () => {
     if (!shareUrl) return
-    const shareText = buildInviteSharedLinkMessage(uiLocale, shareUrl, ownInviteCode)
+    const shareText = buildInviteSharedLinkMessage(resolveInviteMessageLocale(uiLocale), shareUrl, ownInviteCode)
     try {
       // navigator.clipboard only exists in a secure context (HTTPS or
       // localhost) — a LAN dev server reached over plain http:// (see

@@ -2,6 +2,14 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Invite ticket: one message language the user picks, and a My Page entry
+
+- Surface: `invite-ticket-sheet.tsx` (new language picker), `invite-ticket-copy.ts` (`buildInviteTicketMessage`, `buildInviteLinkFooter`, `buildInviteSharedLinkMessage`), `lib/invite-message-locale.ts`, My Page profile section (`my-page.tsx`), profile and room link copy (`profile-share-screen.tsx`, `LivePhoneDemo.tsx`).
+- Issue: With a Korean UI the copied invite started with a Japanese line, then a Korean one, whoever the friend was. The "send an invite ticket" button only showed on a chat list with 3 rooms or fewer and in the friend invite screen, so it was hard to find later.
+- Cause: The message joined two languages from the earlier Korea-Japan focus (`ko → ja + ko`, others → own + English).
+- Resolution: The message, link note and code line are in one language. The sheet has a compact picker of the 15 copy languages; the default is the UI language, English for a Korean UI, and the last pick is remembered (localStorage, wrapped in try/catch; without storage the default applies). Profile and room links copied elsewhere use the same language. My Page has a full-width "send an invite ticket" button under Edit/Share profile that opens the same sheet. The landing page `/i/{code}` is unchanged.
+- Verification: unit tests for single-language messages in all 15 languages, the Korean → English default and the storage fallback; `tsc`, `test:qa:i18n`. Not checked on a device.
+
 ## 2026-11-18 — Soniox is the default read-aloud voice
 
 - Surface: the TTS model row in settings (`lib/tts-models.ts`), `tts-provider.ts`, the Hash notice shown when voice interpreting is turned on (`coins-controller.ts` `readCoinWallet`).

@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Share2, Ticket, X } from "lucide-react";
+import { ChevronDown, Copy, Languages, Share2, Ticket, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -9,8 +9,10 @@ import {
   fillInviteTicketCopy,
   resolveInviteTicketCopy,
 } from "@/i18n/invite-ticket-copy";
+import { PRIMARY_UI_LANGUAGE_OPTIONS, isPrimaryUiLocale, type PrimaryUiLocale } from "@/i18n/mingle-locales";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
+import { resolveInviteMessageLocale, storeInviteMessageLocale } from "@/lib/invite-message-locale";
 import { REFERRAL_REWARD_COINS, buildInviteLinkUrl } from "@/lib/referral-code";
 
 type InviteTicketSheetProps = {
@@ -46,8 +48,9 @@ async function copyText(value: string): Promise<boolean> {
 
 /**
  * "Send a friend an invite ticket": shows the user's ticket and copies a short
- * message (partner's language first for Korean and Japanese users) with the
- * invite link, ready to paste into LINE, KakaoTalk or HelloTalk.
+ * message with the invite link, ready to paste into a messenger. The message
+ * is in one language the user picks (default: the UI language, English for a
+ * Korean UI), and the last pick is remembered.
  */
 export default function InviteTicketSheet({ open, onClose, locale }: InviteTicketSheetProps) {
   const { data: session } = useSession();
@@ -55,6 +58,13 @@ export default function InviteTicketSheet({ open, onClose, locale }: InviteTicke
   const [ticket, setTicket] = useState<{ code: string; rewardCoins: number } | null>(null);
   const [canShare, setCanShare] = useState(false);
   const senderName = session?.user?.name?.trim() || copy.userFallback;
+  const [pickedMessageLocale, setPickedMessageLocale] = useState<PrimaryUiLocale | null>(null);
+  const messageLocale = pickedMessageLocale ?? resolveInviteMessageLocale(locale);
+  const handleMessageLocaleChange = useCallback((value: string) => {
+    if (!isPrimaryUiLocale(value)) return;
+    setPickedMessageLocale(value);
+    storeInviteMessageLocale(value);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -83,8 +93,8 @@ export default function InviteTicketSheet({ open, onClose, locale }: InviteTicke
   const message = useMemo(() => {
     if (!ticket || typeof window === "undefined") return "";
     const link = buildInviteLinkUrl(window.location.origin, ticket.code);
-    return link ? buildInviteTicketMessage(locale, link, ticket.code) : "";
-  }, [locale, ticket]);
+    return link ? buildInviteTicketMessage(messageLocale, link, ticket.code) : "";
+  }, [messageLocale, ticket]);
 
   const handleCopy = useCallback(async () => {
     if (!message || !(await copyText(message))) return;
@@ -149,9 +159,33 @@ export default function InviteTicketSheet({ open, onClose, locale }: InviteTicke
           {fillInviteTicketCopy(copy.ticketBenefit, { coins: ticket?.rewardCoins ?? REFERRAL_REWARD_COINS })}
         </p>
 
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-gray-500">
+            <Languages size={15} strokeWidth={2.2} className="shrink-0" aria-hidden="true" />
+            <span className="truncate" data-qa-allow-truncate>{copy.messageLanguage}</span>
+          </span>
+          <label className="relative flex h-8 shrink-0 items-center rounded-full border border-gray-200 bg-white pl-3 pr-7 text-[13px] font-semibold text-slate-900">
+            <span aria-hidden="true">
+              {PRIMARY_UI_LANGUAGE_OPTIONS.find((option) => option.code === messageLocale)?.name ?? messageLocale}
+            </span>
+            <ChevronDown size={15} strokeWidth={2.2} className="pointer-events-none absolute right-2 text-gray-400" aria-hidden="true" />
+            <select
+              value={messageLocale}
+              onChange={(event) => handleMessageLocaleChange(event.target.value)}
+              aria-label={copy.messageLanguage}
+              data-testid="invite-ticket-message-language"
+              className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0"
+            >
+              {PRIMARY_UI_LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.code} value={option.code}>{option.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
         {message ? (
           <p
-            className="mt-3 max-h-28 overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-gray-50 px-3.5 py-3 text-[13px] leading-relaxed text-gray-700"
+            className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-gray-50 px-3.5 py-3 text-[13px] leading-relaxed text-gray-700"
             data-testid="invite-ticket-message"
           >
             {message}
