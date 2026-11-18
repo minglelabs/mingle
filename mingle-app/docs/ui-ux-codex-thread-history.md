@@ -2,6 +2,14 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-18 — Read-aloud translation starts while its audio is still arriving (Android)
+
+- Surface: `tts-inworld-handler.ts` and `tts-provider.ts` (`stream: true`), `tts-stream-clip.ts`, the room's TTS queue in `LivePhoneDemo.tsx`, the RN bridge (`native_tts_stream_start` / `_chunk` / `_end`), Android `NativeTtsPcmStreamPlayer` (PR #585, on top of #542).
+- Issue: After a translation appeared, its voice started only when the whole clip had been synthesized and downloaded (1.1-2.0 s for a short line on the devbox, about 5 s for a ~500-character one).
+- Resolution: A shell that reports `ttsStream` asks for a stream. The server passes Gemini's PCM on chunk by chunk (leading silence trimmed on the fly), the page dispatches the clip to the queue on its first audio, and the Android shell plays the pieces through an AudioTrack with the same ducking focus, earphone guard and events as whole clips. iOS, older Android builds and the web keep whole clips. Coins and the event log are settled when the stream ends.
+- Measurements: through the devbox tunnel the first audio of a short Korean line arrived after 0.81-1.37 s (whole clip: 1.31-1.50 s). The limit is now Gemini's time to first audio (about 0.85 s).
+- Verification: unit tests for the stream reader, silence trim, retry, handler, `StreamingTtsClip` and the bridge payloads. On a Galaxy S9 (Android 10) via devbox: a bubble's Listen and three spoken sentences in speaker mode each played as a stream and ended with `ttsPlaybackFinished`; a sentence queued behind another started 0.2 s after it. Not checked: Bluetooth earphones, stop mid-clip, other apps ducking. iOS not implemented. Needs an Android app release.
+
 ## 2026-11-18 — Speaker mode shows on Android 12 and older
 
 - Surface: `live-phone-demo.earphone-mode.logic.ts` (`resolveEarphoneModeGate`), the speaker-mode button in the room's bottom bar.
