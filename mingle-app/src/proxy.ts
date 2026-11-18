@@ -71,5 +71,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\..*).*)"],
+  // The marketing video upload route is skipped so its body (up to 200 MB) is
+  // not buffered under the proxy body-size limit; /admin already bypasses it.
+  matcher: ["/((?!api|admin/social/api/media|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\..*).*)"],
 };

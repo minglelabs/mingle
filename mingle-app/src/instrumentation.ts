@@ -71,6 +71,18 @@ export function hamzziWorkerEnabled(env: NodeJS.ProcessEnv = process.env, runtim
   return env.MINGLE_HAMZZI_WORKER !== 'off'
 }
 
+/**
+ * Whether this process may run the marketing video cross-posting worker (a
+ * 15 s tick that uploads /admin/social videos to Instagram, Threads, YouTube
+ * and TikTok, keeps their tokens alive and refreshes metrics).
+ * `MINGLE_MARKETING_SOCIAL_WORKER=off` keeps it from starting.
+ */
+export function marketingSocialWorkerEnabled(env: NodeJS.ProcessEnv = process.env, runtime: string | undefined = process.env.NEXT_RUNTIME): boolean {
+  if (runtime !== 'nodejs') return false
+  if (env.VITEST || env.NODE_ENV === 'test') return false
+  return env.MINGLE_MARKETING_SOCIAL_WORKER !== 'off'
+}
+
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     // Review photos drawn in the background by the previous process will never finish.
@@ -95,6 +107,10 @@ export async function register(): Promise<void> {
       const { startOperatorAutomationWorker } = await import('./server/operator-automation/scheduler')
       startOperatorAutomationWorker()
     }
+    if (marketingSocialWorkerEnabled()) {
+      const { startMarketingSocialWorker } = await import('./server/marketing-social/scheduler')
+      startMarketingSocialWorker()
+    }
   }
 }
 
@@ -112,6 +128,18 @@ export function kickOperatorPostWorker(): void {
         console.error('[operator-post-worker] kick_failed', {
           error: error instanceof Error ? error.name : 'unknown',
         })
+      })
+  }
+}
+
+/** Advance marketing video posts now (after a new post or a retry). Fire-and-forget. */
+export function kickMarketingSocialWorker(): void {
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    if (!marketingSocialWorkerEnabled()) return
+    void import('./server/marketing-social/scheduler')
+      .then(({ kickMarketingSocialWorker: kick }) => kick())
+      .catch((error: unknown) => {
+        console.error('[marketing-social] kick_failed', { error: error instanceof Error ? error.name : 'unknown' })
       })
   }
 }

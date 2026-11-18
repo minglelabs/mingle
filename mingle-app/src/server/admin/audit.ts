@@ -43,6 +43,10 @@ export type AdminAuditAction =
   | 'coins.product'
   | 'coins.polar_products'
   | 'coins.pricing_rate'
+  | 'social.connect'
+  | 'social.disconnect'
+  | 'social.video_create'
+  | 'social.retry'
 
 export type AdminAuditEntry = {
   action: AdminAuditAction

@@ -1426,3 +1426,80 @@ model AppCoinAdminGrant {
   @@index([userId, createdAt(sort: Desc)], map: "app_coin_admin_grants_user_created_at_idx")
   @@map("app_coin_admin_grants")
 }
+
+/// A marketing social account connected from /admin/social/accounts (one per
+/// platform: instagram | threads | youtube | tiktok). Tokens are stored
+/// AES-256-GCM encrypted (src/server/marketing-social/crypto.ts).
+model MarketingSocialAccount {
+  id                    String    @id @default(cuid())
+  platform              String    @unique
+  externalAccountId     String    @map("external_account_id")
+  username              String?
+  displayName           String?   @map("display_name")
+  accessTokenEnc        String    @map("access_token_enc") @db.Text
+  refreshTokenEnc       String?   @map("refresh_token_enc") @db.Text
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scopes                String?   @db.Text
+  /// Last token refresh failure; cleared on success.
+  lastError             String?   @map("last_error") @db.Text
+  connectedAt           DateTime  @default(now()) @map("connected_at")
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("app_marketing_social_accounts")
+}
+
+/// One marketing video uploaded once and cross-posted to several platforms.
+model MarketingVideo {
+  id              String   @id @default(cuid())
+  title           String
+  videoObjectKey  String   @map("video_object_key")
+  videoUrl        String   @map("video_url")
+  videoBytes      Int      @map("video_bytes")
+  durationMs      Int?     @map("duration_ms")
+  width           Int?
+  height          Int?
+  coverObjectKey  String?  @map("cover_object_key")
+  coverUrl        String?  @map("cover_url")
+  hashtags        String[] @default([])
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  targets MarketingVideoTarget[]
+
+  @@index([createdAt(sort: Desc)], map: "app_marketing_videos_created_at_idx")
+  @@map("app_marketing_videos")
+}
+
+/// The post of one MarketingVideo on one platform: a small state machine the
+/// marketing-social worker advances (queued -> processing -> published | failed).
+model MarketingVideoTarget {
+  id               String    @id @default(cuid())
+  videoId          String    @map("video_id")
+  platform         String
+  caption          String    @db.Text
+  /// Platform options, e.g. { privacy: "SELF_ONLY" } (TikTok) / { privacy: "public" } (YouTube).
+  options          Json?
+  /// queued | processing | published | failed
+  status           String    @default("queued")
+  /// Upload container / publish id while processing (IG / Threads container, TikTok publish_id).
+  containerId      String?   @map("container_id")
+  externalPostId   String?   @map("external_post_id")
+  permalink        String?   @db.Text
+  error            String?   @db.Text
+  attempts         Int       @default(0)
+  nextAttemptAt    DateTime  @default(now()) @map("next_attempt_at")
+  startedAt        DateTime? @map("started_at")
+  publishedAt      DateTime? @map("published_at")
+  /// Normalized metrics { views, likes, comments, shares, saves, reach } (only what the platform gives).
+  metrics          Json?
+  metricsFetchedAt DateTime? @map("metrics_fetched_at")
+  metricsError     String?   @map("metrics_error") @db.Text
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  video MarketingVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, platform], map: "app_marketing_video_targets_video_platform_key")
+  @@index([status, nextAttemptAt], map: "app_marketing_video_targets_status_next_idx")
+  @@map("app_marketing_video_targets")
+}
