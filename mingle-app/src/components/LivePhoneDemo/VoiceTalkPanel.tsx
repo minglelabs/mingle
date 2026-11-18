@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
 import { ChevronUp, Headphones, Languages, Mic, MicOff, PhoneOff, Phone, Plus, Volume2, VolumeX } from 'lucide-react'
 import LanguageFlag from '@/components/language-flag'
+import VoiceTalkParticipantStrip, { sameVoiceTalkParticipants, type VoiceTalkParticipantChip } from './VoiceTalkParticipantStrip'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { useRoomPresence } from '@/lib/room-presence'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
@@ -198,6 +199,8 @@ export type VoiceTalkPanelProps = {
   topOffset: string
   /** The room's call as this phone sees it; `connected` is a call this phone is in, `callId` the live call. */
   onAvailabilityChange?: (state: { live: boolean; joined: boolean; connected: boolean; callId: string | null }) => void
+  /** Who is in the room's live call (empty when none), for the room's "started a voice talk" message. */
+  onParticipantsChange?: (participants: VoiceTalkParticipantChip[]) => void
   /** Bumped by the room's voice talk button outside a call: asks whether to start (or join) one. */
   openSignal?: number
   /** Bumped by the room's voice talk button during a call: asks whether to leave. */
@@ -226,7 +229,7 @@ export type VoiceTalkPanelProps = {
 }
 
 export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
-  const { conversationId, conversationTitle, myLang, openSignal, leaveSignal, onAvailabilityChange, onListenOnlyChange, onOpenProfile } = props
+  const { conversationId, conversationTitle, myLang, openSignal, leaveSignal, onAvailabilityChange, onParticipantsChange, onListenOnlyChange, onOpenProfile } = props
   const listenOnly = props.listenOnly === true
   const interpretOn = props.interpretOn === true
   const { onInterpretChange, onListenChange } = props
@@ -463,6 +466,18 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     return people.slice(0, MAX_SEATS)
   }, [call, joined, listenOnly, myLang, room])
 
+  // The same people, small, for the join dialog and the room's call message.
+  const participantChips = useMemo<VoiceTalkParticipantChip[]>(
+    () => (live ? seats.map((seat) => ({ userId: seat.userId, name: seat.name, image: seat.image, lang: seat.lang })) : []),
+    [live, seats],
+  )
+  const lastChipsRef = useRef<VoiceTalkParticipantChip[] | null>(null)
+  useEffect(() => {
+    if (lastChipsRef.current && sameVoiceTalkParticipants(lastChipsRef.current, participantChips)) return
+    lastChipsRef.current = participantChips
+    onParticipantsChange?.(participantChips)
+  }, [onParticipantsChange, participantChips])
+
   // Room members who are not in the call, shown small under the seats.
   const presence = useRoomPresence(conversationId)
   const [roomMembers, setRoomMembers] = useState<RoomMemberSummary[]>([])
@@ -538,6 +553,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         onClick={(event) => event.stopPropagation()}
       >
         <p className="text-center text-[1.02rem] font-semibold text-gray-900">{live ? copy.joinTitle : copy.startTitle}</p>
+        {live ? <VoiceTalkParticipantStrip participants={participantChips} className="mt-3" /> : null}
         <div className="mt-4 grid grid-cols-2 gap-3">
           <button
             type="button"

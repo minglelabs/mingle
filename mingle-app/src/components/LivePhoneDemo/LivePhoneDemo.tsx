@@ -329,6 +329,7 @@ import VoiceTalkPanel, {
 } from './VoiceTalkPanel'
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
 import { VoiceTalkRoomContext, type VoiceTalkRoomState } from './voice-talk-room-context'
+import type { VoiceTalkParticipantChip } from './VoiceTalkParticipantStrip'
 import { HashRushRoomContext, type HashRushRoomState } from './hash-rush-room-context'
 import { HashRushRoomPrompts, useHashRushRoomGame } from './HashRushRoomPrompts'
 import { shouldOfferHashRushInvite } from '@/lib/hash-rush-message'
@@ -2219,6 +2220,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
     return drafts
   }, [voiceTalkCaptionClock, voiceTalkCaptionLines, voiceTalkInterpretOn, voiceTalkState.joined])
+  // Who is in the room's live call, for the "started a voice talk" message.
+  const [voiceTalkParticipants, setVoiceTalkParticipants] = useState<VoiceTalkParticipantChip[]>([])
   const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean, connected: boolean, callId: string | null }) => {
     setVoiceTalkState((prev) => (
       prev.live === next.live && prev.joined === next.joined && prev.connected === next.connected && prev.callId === next.callId ? prev : next
@@ -6661,10 +6664,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       ? {
           liveCallId: voiceTalkState.callId,
           joined: voiceTalkState.joined,
+          participants: voiceTalkParticipants,
           join: () => joinVoiceTalk({ conversationId, title: displayConversationTitle || undefined, lang: voiceTalkLang }),
         }
       : null
-  ), [conversationId, displayConversationTitle, headerMode, voiceTalkAvailable, voiceTalkLang, voiceTalkState.callId, voiceTalkState.joined])
+  ), [conversationId, displayConversationTitle, headerMode, voiceTalkAvailable, voiceTalkLang, voiceTalkParticipants, voiceTalkState.callId, voiceTalkState.joined])
 
   // A voice talk takes over the room's speech-to-text and read-aloud.
   // - While this phone is in a call, the Start/Stop button and the speaker
@@ -8759,6 +8763,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             myLang={voiceTalkLang}
             topOffset="calc(54px + env(safe-area-inset-top, 0px))"
             onAvailabilityChange={handleVoiceTalkAvailability}
+                onParticipantsChange={setVoiceTalkParticipants}
             openSignal={voiceTalkOpenSignal}
             leaveSignal={voiceTalkLeaveSignal}
             listenOnly={voiceTalkListenOnly}

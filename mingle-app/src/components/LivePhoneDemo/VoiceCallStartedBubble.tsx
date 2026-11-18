@@ -4,6 +4,7 @@ import { Phone, PhoneOff } from 'lucide-react'
 import { resolveVoiceCallMessageState, type VoiceCallMessage } from '@/lib/voice-call-message'
 import { useVoiceTalkRoom } from './voice-talk-room-context'
 import { voiceTalkCopy } from '@/i18n/voice-talk-copy'
+import VoiceTalkParticipantStrip from './VoiceTalkParticipantStrip'
 
 /**
  * The message a voice talk leaves when it starts: who started it, and a Join
@@ -45,6 +46,10 @@ export default function VoiceCallStartedBubble(props: {
           {title}
         </p>
       </div>
+      {/* Who is in it now: only for the live call (an ended call has nobody). */}
+      {live && room && room.participants.length > 0 ? (
+        <VoiceTalkParticipantStrip participants={room.participants} className="mt-2.5 justify-start" />
+      ) : null}
       {state === 'joinable' ? (
         <button
           type="button"

@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext } from 'react'
+import type { VoiceTalkParticipantChip } from './VoiceTalkParticipantStrip'
 
 // The room's voice talk as a message bubble needs it: which call is live,
 // whether this phone is in it, and how to join. Provided by the room; a
@@ -10,6 +11,8 @@ export type VoiceTalkRoomState = {
   liveCallId: string | null
   /** This phone is in the live call. */
   joined: boolean
+  /** Who is in the live call (empty when none). */
+  participants: VoiceTalkParticipantChip[]
   /** Joins the live call. */
   join: () => void
 }
