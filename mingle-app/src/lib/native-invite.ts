@@ -11,6 +11,8 @@ export const NATIVE_INVITE_EVENT = 'mingle:native-invite'
 export const NATIVE_INVITE_WINDOW_KEY = '__MINGLE_PENDING_NATIVE_INVITE'
 /** Opens the "send an invite ticket" sheet from anywhere (ContactSyncHost listens). */
 export const INVITE_TICKET_OPEN_EVENT = 'mingle:invite-ticket-open'
+/** Opens the invite page (ticket, own code, entering a code) from anywhere (ContactSyncHost listens). */
+export const INVITE_SCREEN_OPEN_EVENT = 'mingle:invite-screen-open'
 
 const PENDING_CHANGED_EVENT = 'mingle:invite-pending-changed'
 const PENDING_STORAGE_KEY = 'mingle.invite.pending.v1'
@@ -87,6 +89,11 @@ export function consumeWindowInvite(): { code: string; source: InviteSource } | 
 export function openInviteTicket(): void {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent(INVITE_TICKET_OPEN_EVENT))
+}
+
+export function openInviteScreen(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(INVITE_SCREEN_OPEN_EVENT))
 }
 
 function notifyPendingChanged(): void {

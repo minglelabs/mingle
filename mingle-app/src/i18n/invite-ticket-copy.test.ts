@@ -5,6 +5,7 @@ import {
   buildInviteSharedLinkMessage,
   buildInviteTicketMessage,
   fillInviteTicketCopy,
+  resolveDefaultInviteMessageLocale,
   resolveInviteLandingLocale,
   resolveInviteTicketCopy,
 } from "./invite-ticket-copy";
@@ -30,25 +31,42 @@ describe("invite-ticket-copy", () => {
     expect(fillInviteTicketCopy("{name}: {coins}", { name: "미나", coins: 1000 })).toBe("미나: 1,000");
   });
 
-  it("writes the pasted message for the Korean-Japanese pair in both languages, partner first", () => {
-    const fromKorean = buildInviteTicketMessage("ko", "https://x.test/i/ab3de", "ab3de").split("\n");
-    expect(fromKorean).toHaveLength(5);
-    expect(fromKorean[0]).toContain("招待券");
-    expect(fromKorean[1]).toContain("초대권");
-    expect(fromKorean[2]).toBe("https://x.test/i/ab3de");
-    expect(fromKorean[3]).toBe("招待コード ab3de · アプリをインストールしたら、このリンクをもう一度タップしてね");
-    expect(fromKorean[4]).toBe("초대 코드 ab3de · 앱을 설치한 뒤 이 링크를 한 번 더 눌러 주세요");
-    expect(buildInviteTicketMessage("ja", "L").split("\n")[0]).toContain("초대권");
-    expect(buildInviteTicketMessage("en", "L", "ab3de").split("\n")).toHaveLength(3);
-    expect(buildInviteTicketMessage("fr", "L", "ab3de").split("\n")).toHaveLength(5);
+  it("writes the pasted message in the one picked language only", () => {
+    const korean = buildInviteTicketMessage("ko", "https://x.test/i/ab3de", "ab3de").split("\n");
+    expect(korean).toEqual([
+      resolveInviteTicketCopy("ko").message,
+      "https://x.test/i/ab3de",
+      "초대 코드 ab3de · 앱을 설치한 뒤 이 링크를 한 번 더 눌러 주세요",
+    ]);
+    const japanese = buildInviteTicketMessage("ja", "L", "ab3de").split("\n");
+    expect(japanese[0]).toBe(resolveInviteTicketCopy("ja").message);
+    expect(japanese[2]).toBe("招待コード ab3de · アプリをインストールしたら、このリンクをもう一度タップしてね");
+    for (const locale of PRIMARY_UI_LOCALES) {
+      const copy = resolveInviteTicketCopy(locale);
+      expect(buildInviteTicketMessage(locale, "L", "ab3de"), locale).toBe(
+        [copy.message, "L", `${copy.codeLine.replaceAll("{code}", "ab3de")} · ${copy.reopenHint}`].join("\n"),
+      );
+    }
+    // Without a code only the reopen note follows the link.
+    expect(buildInviteTicketMessage("en", "L", null).split("\n")).toHaveLength(3);
+  });
+
+  it("defaults the message to the UI language, English for a Korean UI", () => {
+    expect(resolveDefaultInviteMessageLocale("ko")).toBe("en");
+    expect(resolveDefaultInviteMessageLocale("ko-KR")).toBe("en");
+    expect(resolveDefaultInviteMessageLocale("ja")).toBe("ja");
+    expect(resolveDefaultInviteMessageLocale("fr")).toBe("fr");
+    expect(resolveDefaultInviteMessageLocale("zh-TW")).toBe("zh-TW");
+    expect(resolveDefaultInviteMessageLocale("xx")).toBe("en");
   });
 
   it("puts the code and the reopen note under every shared link, in every locale", () => {
     for (const locale of PRIMARY_UI_LOCALES) {
       expect(resolveInviteTicketCopy(locale).codeLine, locale).toContain("{code}");
       const lines = buildInviteSharedLinkMessage(locale, "https://x.test/u/1", "ab3de").split("\n");
+      expect(lines).toHaveLength(2);
       expect(lines[0]).toBe("https://x.test/u/1");
-      expect(lines.slice(1).every((line) => line.includes("ab3de")), locale).toBe(true);
+      expect(lines[1], locale).toContain("ab3de");
     }
     // Without a code (signed out, offline) only the reopen note is added.
     expect(buildInviteSharedLinkMessage("en", "L", null)).toBe("L\nAfter installing the app, tap this link once more");

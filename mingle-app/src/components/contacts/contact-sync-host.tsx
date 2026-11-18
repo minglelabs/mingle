@@ -21,6 +21,7 @@ import {
   isNativeContactsSupported,
 } from "@/lib/native-contacts";
 import {
+  INVITE_SCREEN_OPEN_EVENT,
   INVITE_TICKET_OPEN_EVENT,
   NATIVE_INVITE_EVENT,
   clearPendingInvite,
@@ -33,6 +34,7 @@ import { captureMingleClientEvent } from "@/lib/posthog-client";
 
 const ContactSyncScreen = dynamic(() => import("@/components/contacts/contact-sync-screen"), { ssr: false });
 const InviteTicketSheet = dynamic(() => import("@/components/contacts/invite-ticket-sheet"), { ssr: false });
+const InviteScreen = dynamic(() => import("@/components/contacts/invite-screen"), { ssr: false });
 
 /**
  * Mounted once in the root layout. Owns three things around invites:
@@ -40,10 +42,11 @@ const InviteTicketSheet = dynamic(() => import("@/components/contacts/invite-tic
  * - The invite a person arrived with (a tapped invite link, or the Play
  *   install referrer): kept on the device until they are signed in and through
  *   onboarding, then accepted, and the room with the inviter opens.
- * - The "send an invite ticket" sheet (INVITE_TICKET_OPEN_EVENT).
+ * - The "send an invite ticket" sheet (INVITE_TICKET_OPEN_EVENT) and the
+ *   invite page with code entry (INVITE_SCREEN_OPEN_EVENT, from My Page).
  * - The contact-sync screen: opened from the My page menu and the follow list
  *   (CONTACT_SYNC_OPEN_EVENT), and once by itself in the app for someone who
- *   just signed up without an invite — it is also where an invite code is typed.
+ *   just signed up without an invite. It links to the invite page, where a code is typed.
  */
 export default function ContactSyncHost() {
   const { status } = useSession();
@@ -57,6 +60,8 @@ export default function ContactSyncHost() {
   const [prompt, setPrompt] = useState(false);
   const [ticketMounted, setTicketMounted] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
+  const [inviteScreenMounted, setInviteScreenMounted] = useState(false);
+  const [inviteScreenOpen, setInviteScreenOpen] = useState(false);
   const promptSettledRef = useRef(false);
   const busyRef = useRef(false);
 
@@ -158,11 +163,17 @@ export default function ContactSyncHost() {
       setTicketOpen(true);
     };
     window.addEventListener(CONTACT_SYNC_OPEN_EVENT, openScreen);
+    const openInviteScreenNow = () => {
+      setInviteScreenMounted(true);
+      setInviteScreenOpen(true);
+    };
     window.addEventListener(INVITE_TICKET_OPEN_EVENT, openTicket);
+    window.addEventListener(INVITE_SCREEN_OPEN_EVENT, openInviteScreenNow);
     return () => {
       window.removeEventListener(NATIVE_INVITE_EVENT, handleInvite);
       window.removeEventListener(CONTACT_SYNC_OPEN_EVENT, openScreen);
       window.removeEventListener(INVITE_TICKET_OPEN_EVENT, openTicket);
+      window.removeEventListener(INVITE_SCREEN_OPEN_EVENT, openInviteScreenNow);
     };
   }, [runPostSignup]);
 
@@ -189,6 +200,11 @@ export default function ContactSyncHost() {
       {ticketMounted ? (
         <LazyOverlayBoundary onFail={() => { setTicketOpen(false); setTicketMounted(false); }}>
           <InviteTicketSheet open={ticketOpen} onClose={() => setTicketOpen(false)} locale={locale} />
+        </LazyOverlayBoundary>
+      ) : null}
+      {inviteScreenMounted ? (
+        <LazyOverlayBoundary onFail={() => { setInviteScreenOpen(false); setInviteScreenMounted(false); }}>
+          <InviteScreen open={inviteScreenOpen} onClose={() => setInviteScreenOpen(false)} locale={locale} />
         </LazyOverlayBoundary>
       ) : null}
     </>
