@@ -37,6 +37,8 @@ import {
 } from './live-phone-demo.bubble-tts-indicator'
 import {
   getEarphoneModePreferenceServerSnapshot,
+  EARPHONE_MODE_PREFETCH_LIMIT,
+  EARPHONE_MODE_STREAM_PREFETCH_LIMIT,
   getEarphoneModePreferenceSnapshot,
   keepManualTtsQueueItems,
   resolveEarphoneModeGate,
@@ -7339,6 +7341,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       now: () => Date.now(),
       setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
       clearTimer: (handle) => window.clearTimeout(handle as number),
+      // Streamed clips (native stream player): one ahead, so a listener
+      // holds at most two Soniox requests.
+      prefetchLimit: () => (
+        isNativeApp() && parseNativeTtsStreamCapability(readCachedNativeShellCapabilities())
+          ? EARPHONE_MODE_STREAM_PREFETCH_LIMIT
+          : EARPHONE_MODE_PREFETCH_LIMIT
+      ),
       synthesize: (target, signal) => synthesizeBubbleTtsViaApiRef.current({
         playbackKey: target.playbackKey,
         text: target.text,

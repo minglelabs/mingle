@@ -1,6 +1,6 @@
 import type { Utterance } from './ChatBubble'
 import { compareUtteranceOrder } from './utterance-order'
-import type { TtsClipAudio } from './tts-stream-clip'
+import { isStreamingTtsClip, type TtsClipAudio } from './tts-stream-clip'
 import {
   EARPHONE_MODE_AUDIO_TIMEOUT_MS,
   EARPHONE_MODE_HISTORY_CLOCK_SKEW_MS,
@@ -47,7 +47,9 @@ export type EarphoneAutoReadControllerOptions = {
   readOwnMessages?: boolean
   stallTimeoutMs?: number
   audioTimeoutMs?: number
-  prefetchLimit?: number
+  // How many clips may be fetched ahead at once; read on every prefetch, so it
+  // can follow a capability that arrives later.
+  prefetchLimit?: number | (() => number)
   historyClockSkewMs?: number
 }
 
@@ -104,6 +106,12 @@ function isSameReadTarget(left: EarphoneModeReadTarget, right: EarphoneModeReadT
 // still incomplete holds the ones behind it until it completes, disappears,
 // or shows no progress for the stall timeout. Audio is prefetched as soon as
 // a candidate completes; playback stays strictly in order.
+function isArrivingStream(candidate: Candidate): boolean {
+  return candidate.audio === 'ready'
+    && isStreamingTtsClip(candidate.audioBlob)
+    && !candidate.audioBlob.isComplete
+}
+
 export class EarphoneAutoReadController {
   private readonly options: EarphoneAutoReadControllerOptions
   private armed = false
@@ -396,10 +404,12 @@ export class EarphoneAutoReadController {
   }
 
   private startPrefetches(now: number): void {
-    const limit = Math.max(1, this.options.prefetchLimit ?? EARPHONE_MODE_PREFETCH_LIMIT)
+    const option = this.options.prefetchLimit
+    const limit = Math.max(1, (typeof option === 'function' ? option() : option) ?? EARPHONE_MODE_PREFETCH_LIMIT)
     const open = this.sortedOpenCandidates()
     // Only open candidates hold a slot: a finished one has aborted its request.
-    let inFlight = open.filter((candidate) => candidate.audio === 'loading').length
+    // A streamed clip keeps its slot until it has fully arrived.
+    let inFlight = open.filter((candidate) => candidate.audio === 'loading' || isArrivingStream(candidate)).length
     for (const candidate of open) {
       if (inFlight >= limit) return
       if (candidate.status !== 'ready' || candidate.audio !== 'idle' || !candidate.target) continue
@@ -441,6 +451,8 @@ export class EarphoneAutoReadController {
         if (blob && blob.size > 0) {
           candidate.audio = 'ready'
           candidate.audioBlob = blob
+          // Its slot frees once the rest has arrived: prefetch the next then.
+          if (isStreamingTtsClip(blob) && !blob.isComplete) void blob.whenComplete().then(() => this.pump())
         } else {
           candidate.audio = 'failed'
         }

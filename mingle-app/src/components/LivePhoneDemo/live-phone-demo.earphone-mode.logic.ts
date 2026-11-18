@@ -26,6 +26,11 @@ export const EARPHONE_MODE_STALL_TIMEOUT_MS = 15_000
 // A prefetched clip that has not arrived by then is dropped.
 export const EARPHONE_MODE_AUDIO_TIMEOUT_MS = 15_000
 export const EARPHONE_MODE_PREFETCH_LIMIT = 3
+// With streamed clips (first audio in ~0.5 s) one clip ahead is enough. A
+// streamed clip holds its slot until it has fully arrived, not just until its
+// first audio: Soniox sends at speaking pace and its org allows only three
+// concurrent requests, so one listener uses at most two (playing + next).
+export const EARPHONE_MODE_STREAM_PREFETCH_LIMIT = 1
 // A message first seen after the rising edge that started more than this long
 // before it is history (older page, recovery hydration), not a new message.
 // The allowance absorbs clock offset between devices and the server.
