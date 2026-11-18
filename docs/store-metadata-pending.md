@@ -18,6 +18,8 @@ Google Play 스토어 정보는 앱 버전과 상관없이 언제든 올릴 수 
 
 ## 반영 완료
 
+- 2.4.3 (iOS 122, Android 117): 번역 음성 스트리밍 재생(Soniox 기본), 안드로이드 음성 인식 입력 변경(#585). Play versionCode 114~116은 출시 전 2.5.0 빌드가 이미 써서 117을 씀. 2.5.0은 이제 Android 118 이상, iOS 123 이상을 써야 한다.
+
 - 2.4.2 (iOS 121, Android 113): 공유 시트에 대화 추천(#554). 2026-11-16에 iOS는 릴리스 노트를 `ios-appstore-sync-metadata`로 올려 심사 제출, Android는 프로덕션 제출(#558). Play versionCode 110~112는 출시 전 2.5.0 빌드(`feat/voicetalk-windows-livekit-mvp`)가 이미 써서 113을 씀. 2.5.0은 Android 114 이상, iOS 122 이상을 써야 한다.
 
 - 초대 링크 앱 열기: 2.4.0이 App Store에 나간 뒤 2026-11-15에 Railway prod에 `IOS_INVITE_UNIVERSAL_LINKS=1`을 넣음. AASA에 `/i/*`가 들어간 것을 확인함. 같은 날 `IOS_CLIENT_LATEST_VERSION`도 2.3.4에서 2.4.0으로 올림. 2.4.1이 출시되면 2.4.1로 올린다.
