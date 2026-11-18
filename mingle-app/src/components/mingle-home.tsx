@@ -1451,6 +1451,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
             <div className="flex flex-col items-center justify-center gap-2 text-[#2D2A1E]/80">
               <Loader2 size={18} className="shrink-0 animate-spin" aria-hidden />
               <LoadingMessage
+                login
                 locale={props.locale}
                 className="min-h-10 max-w-[18rem] text-center text-sm font-semibold leading-5"
               />
@@ -1468,6 +1469,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
             <div className="flex flex-col items-center justify-center gap-2 py-3 text-sm text-white/60">
               <Loader2 size={18} className="animate-spin" aria-hidden />
               <LoadingMessage
+                login
                 locale={props.locale}
                 className="min-h-10 max-w-[18rem] text-center text-sm leading-5"
               />

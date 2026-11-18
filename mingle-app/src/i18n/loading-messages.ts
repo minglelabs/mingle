@@ -22,6 +22,27 @@ const quote = (ko: string, en: string, sourceKo: string, sourceEn: string): Load
 });
 const proverb = (ko: string): LoadingMessage => ({ text: { ko }, source: { ko: "한국 속담" } });
 
+/** The only line on the login screen while signing in (and one of the random lines elsewhere). */
+const LOGIN_LOADING_MESSAGE: LoadingMessage = {
+  text: {
+    ko: "로그인 각도 좁히는 중..",
+    en: "Lining up the login angle..",
+    ja: "ログインの角度を詰めています..",
+    "zh-CN": "正在缩小登录角度..",
+    "zh-TW": "正在縮小登入角度..",
+    fr: "On resserre l'angle de connexion..",
+    de: "Login-Winkel wird verengt..",
+    es: "Cerrando el ángulo del inicio de sesión..",
+    pt: "Fechando o ângulo do login..",
+    it: "Stringiamo l'angolo del login..",
+    ru: "Сужаем угол входа..",
+    ar: "نضيّق زاوية تسجيل الدخول..",
+    hi: "लॉगिन का एंगल कसा जा रहा है..",
+    th: "กำลังบีบมุมล็อกอิน..",
+    vi: "Đang khép góc đăng nhập..",
+  },
+};
+
 export const LOADING_MESSAGES: readonly LoadingMessage[] = [
   // Service tips
   tip(
@@ -62,25 +83,7 @@ export const LOADING_MESSAGES: readonly LoadingMessage[] = [
   tip("불편한 사용자는 차단하거나 신고할 수 있어요", "You can block or report users who bother you"),
 
   // Humor (every UI locale)
-  {
-    text: {
-      ko: "로그인 각도 좁히는 중..",
-      en: "Lining up the login angle..",
-      ja: "ログインの角度を詰めています..",
-      "zh-CN": "正在缩小登录角度..",
-      "zh-TW": "正在縮小登入角度..",
-      fr: "On resserre l'angle de connexion..",
-      de: "Login-Winkel wird verengt..",
-      es: "Cerrando el ángulo del inicio de sesión..",
-      pt: "Fechando o ângulo do login..",
-      it: "Stringiamo l'angolo del login..",
-      ru: "Сужаем угол входа..",
-      ar: "نضيّق زاوية تسجيل الدخول..",
-      hi: "लॉगिन का एंगल कसा जा रहा है..",
-      th: "กำลังบีบมุมล็อกอิน..",
-      vi: "Đang khép góc đăng nhập..",
-    },
-  },
+  LOGIN_LOADING_MESSAGE,
 
   // Quotes
   quote(
@@ -230,4 +233,10 @@ export function pickLoadingMessage(
   if (messages.length === 0) return null;
   const index = Math.min(messages.length - 1, Math.max(0, Math.floor(random() * messages.length)));
   return messages[index];
+}
+
+/** The login screen's line while signing in: always the login-angle one. */
+export function resolveLoginLoadingMessage(rawLocale: string | null | undefined): ResolvedLoadingMessage | null {
+  const text = LOGIN_LOADING_MESSAGE.text[resolveLocale(rawLocale)] ?? LOGIN_LOADING_MESSAGE.text.en;
+  return text ? { text, source: null } : null;
 }
