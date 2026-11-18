@@ -34,6 +34,7 @@ export const EARPHONE_MODE_HISTORY_CLOCK_SKEW_MS = 10_000
 // ── Gate ───────────────────────────────────────────────────────────────────
 
 export type EarphoneModeGateInput = {
+  // The shell reports earphones (`audioRoute`). Android 12 and older cannot.
   supported: boolean
   enabled: boolean
   earphonesConnected: boolean
@@ -49,11 +50,14 @@ export type EarphoneModeGate = {
 }
 
 // Auto-read needs the mode on and, unless earphones are not required, earphones
-// connected; unknown earphone state counts as not connected.
+// connected; unknown earphone state counts as not connected. Speaker mode needs
+// no earphone reading, so it is offered even where the shell cannot report
+// earphones (Android 12 and older), and plays out loud there.
 export function resolveEarphoneModeGate(input: EarphoneModeGateInput): EarphoneModeGate {
-  const controlVisible = input.supported === true
+  const speakerMode = input.earphonesRequired === false
+  const controlVisible = input.supported === true || speakerMode
   const enabled = controlVisible && input.enabled === true
-  const connected = controlVisible && (input.earphonesRequired === false || input.earphonesConnected === true)
+  const connected = controlVisible && (speakerMode || input.earphonesConnected === true)
   return {
     controlVisible,
     autoReadActive: enabled && connected,

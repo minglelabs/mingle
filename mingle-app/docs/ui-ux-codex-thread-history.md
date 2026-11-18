@@ -2,6 +2,14 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-18 — Speaker mode shows on Android 12 and older
+
+- Surface: `live-phone-demo.earphone-mode.logic.ts` (`resolveEarphoneModeGate`), the speaker-mode button in the room's bottom bar.
+- Issue: On Android 10-12 the room had no speaker-mode button, so translations were never read aloud automatically. Found on a Galaxy S9 (Android 10).
+- Cause: Since 2026-09-30 these shells report `audioRoute: false`, because they cannot tell whether earphones are in, and the gate hid the control for them. That was right for earphone mode. Speaker mode (default name since 2.3.2) plays out loud and needs no earphone reading, but it used the same gate.
+- Resolution: When earphones are not required (speaker mode), the control shows and auto-read runs even if the shell cannot report earphones. Earphone state stays "unknown = not connected", so those phones always get the speaker label. Earphone-only clients are unchanged. Web-only change; no app release.
+- Verification: gate tests for the unsupported shell in speaker mode. On the Galaxy S9 via devbox the button appeared, the notice opened, and spoken Korean was read aloud in English.
+
 ## 2026-11-13 — Sentence length: five levels, three stops with the default in the middle, and a "More" page
 
 - Surface: `lib/speech-length.ts`, `SpeechLengthScale.tsx`, `SpeechLengthCard.tsx`, the room settings and a new `speech-length` menu page in `LivePhoneDemo.tsx`, `i18n/first-run-copy.ts`.
