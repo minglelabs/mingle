@@ -156,7 +156,7 @@ import { shouldShowConversationEmptyState } from './conversation-empty-state.log
 import ChatAccountBadge from './ChatAccountBadge'
 import { labelNameWithAccountBadge, resolveRoomAccountBadge } from './chat-account-badge.logic'
 import { resolveAccountBadge } from '@/lib/account-badge'
-import type { ConversationChannelOtherMember } from '@/lib/app-conversations'
+import type { ConversationChannelOtherMember, ConversationChannelSummary } from '@/lib/app-conversations'
 import {
   mergeConversationMemberProfiles,
   type ConversationMemberProfile,
@@ -353,6 +353,7 @@ import { buildVoiceCaptionClientMessageId } from '@/lib/voice-caption'
 import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
 import { liveRoomsCopy } from '@/i18n/live-rooms-copy'
 import { roomMenuVoiceSettingsLabel } from '@/i18n/room-menu-copy'
+import { OpenRoomMenuSection, OpenRoomPeopleStrip, useOpenRoomInfo } from './OpenRoomExtras'
 import { formatRoomCode } from '@/lib/room-code'
 import { buildHashRushChatEntries } from './hash-rush-room-chat'
 import {
@@ -1644,6 +1645,13 @@ interface LivePhoneDemoProps {
   // a generic placeholder, the composer/mic are replaced with a "blocked"
   // message, and tapping the counterpart's avatar opens nothing.
   isBlockedCounterpart?: boolean
+  // The room is an open room (public, listed under Explore): it shows who has
+  // it open right now, and its menu has share / minimize / leave, host
+  // settings, report and the other rooms to move to.
+  initialIsPublicRoom?: boolean
+  // Move to another room from the open-room menu (a room the viewer is in, or
+  // one just joined, whose summary comes along).
+  onOpenOtherRoom?: (conversationId: string, joined?: ConversationChannelSummary) => void
   // Unread count captured when the room was opened (before mark-read zeroes
   // it). When > 0, entry anchors on the first unread message instead of the
   // bottom so the viewer resumes where they left off.
@@ -2133,6 +2141,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onDefaultDisplayLanguageChange,
   onOpenProfile,
   isBlockedCounterpart = false,
+  initialIsPublicRoom = false,
+  onOpenOtherRoom,
   initialUnreadMessageCount = 0,
   isMultiMember = false,
 }, ref) {
@@ -2443,7 +2453,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const ownInviteCode = useOwnInviteCode(Boolean(shareUrl))
   const [shareEnabled, setShareEnabled] = useState(false)
   // Public: listed with its name in the search tab and joinable by anyone.
-  const [isPublicRoom, setIsPublicRoom] = useState(false)
+  const [isPublicRoom, setIsPublicRoom] = useState(initialIsPublicRoom)
   const [isTogglingPublic, setIsTogglingPublic] = useState(false)
   // The number people type in Search to find this room.
   const [roomCode, setRoomCode] = useState<number | null>(null)
@@ -5871,8 +5881,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Lazily loads the room's current share link (if any) when the
   // management screen is opened, instead of threading shareUrl down as
   // another prop everywhere this component is rendered.
+  const { info: openRoomInfo, setInfo: setOpenRoomInfo } = useOpenRoomInfo(conversationId, isPublicRoom && menuOpen)
+  const shareStatusWanted = menuOpen && (menuScreen === 'root' || menuScreen === 'conversation-management')
   useEffect(() => {
-    if (menuScreen !== 'conversation-management' || !conversationId) return
+    if (!shareStatusWanted || !conversationId) return
     let cancelled = false
 
     void fetch(buildClientApiPath(`/conversations/${conversationId}/share`), {
@@ -5904,7 +5916,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [conversationId, menuScreen, nativeAppUpdate, resolveConversationSessionKey])
+  }, [conversationId, shareStatusWanted, nativeAppUpdate, resolveConversationSessionKey])
 
   const handleToggleShareEnabled = useCallback(async (nextEnabled: boolean) => {
     if (isTogglingSharing || !conversationId) return
@@ -9151,6 +9163,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </span>
                               </button>
                             )}
+                            {conversationId && isPublicRoom && openRoomInfo?.isPublic ? (
+                              <OpenRoomMenuSection
+                                locale={uiLocale}
+                                info={openRoomInfo}
+                                active={menuOpen && menuScreen === 'root'}
+                                shareLabel={roomManagementCopy.shareLinkCopyButtonLabel}
+                                leaveLabel={leaveConversationCopy.menuItemLabel}
+                                onInfoChange={setOpenRoomInfo}
+                                onShare={() => {
+                                  if (shareUrl) void handleCopyShareLink()
+                                  else handleConversationManagementMenuItemPress()
+                                }}
+                                // Minimize: back to where the room was opened from. A live call or live
+                                // speech recognition keeps running there (see the live room bubble).
+                                onMinimize={() => {
+                                  closeMenuPanel()
+                                  onBack?.()
+                                }}
+                                onLeave={() => setDeleteConversationDialogOpen(true)}
+                                onOpenRoom={onOpenOtherRoom}
+                              />
+                            ) : null}
                             {conversationId ? (
                               <div data-qa="live-demo-menu-people" className="rounded-2xl border border-gray-200 px-3 py-3">
                                 <button
@@ -10723,6 +10757,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         </SlideSurface>
 
         <div className="relative flex min-h-0 flex-1 flex-col">
+          {conversationId && isPublicRoom && headerMode === 'conversation' && isVisible ? (
+            <OpenRoomPeopleStrip conversationId={conversationId} viewerUserId={viewerUserId} locale={uiLocale} onOpenProfile={onOpenProfile} />
+          ) : null}
           {/* Chat Area */}
           <div
             className="relative min-h-0 flex-1 bg-gray-50/50"

@@ -4233,6 +4233,66 @@ export async function listOpenRooms(
   return sortOpenRooms(cards).slice(0, OPEN_ROOMS_LIMIT);
 }
 
+export type OpenRoomInfo = {
+  id: string;
+  title: string;
+  isPublic: boolean;
+  topic: string | null;
+  hasPassword: boolean;
+  /** The viewer made the room: they may change its topic and password. */
+  isHost: boolean;
+  hostUserId: string;
+};
+
+/** What a member sees about the room being open: topic, lock, and whether they are the host. */
+export async function getOpenRoomInfo(args: { conversationId: string; userId: string }): Promise<OpenRoomInfo | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: { id: args.conversationId, ...buildVisibleMembershipWhere(args.userId), ...buildVisibleConversationWhere() },
+    select: { id: true, title: true, isPublic: true, topic: true, passwordHash: true, ownerUserId: true },
+  });
+  if (!record) return null;
+  return {
+    id: record.id,
+    title: record.title,
+    isPublic: record.isPublic === true,
+    topic: record.topic?.trim() || null,
+    hasPassword: Boolean(record.passwordHash),
+    isHost: record.ownerUserId === args.userId,
+    hostUserId: record.ownerUserId,
+  };
+}
+
+/**
+ * The host changes the open room's topic or password. `topic`/`password`
+ * left undefined stay as they are; null clears them. Returns null when the
+ * caller is not the room's host (or not in it).
+ */
+export async function updateOpenRoomSettings(args: {
+  conversationId: string;
+  userId: string;
+  topic?: string | null;
+  password?: string | null;
+}): Promise<OpenRoomInfo | null> {
+  const info = await getOpenRoomInfo({ conversationId: args.conversationId, userId: args.userId });
+  if (!info || !info.isHost) return null;
+  const data: Prisma.AppConversationChannelUpdateInput = {};
+  if (args.topic !== undefined) data.topic = args.topic || null;
+  if (args.password !== undefined) data.passwordHash = args.password ? hashOpenRoomPassword(args.password) : null;
+  if (Object.keys(data).length > 0) {
+    await prisma.appConversationChannel.update({ where: { id: args.conversationId }, data });
+  }
+  return getOpenRoomInfo({ conversationId: args.conversationId, userId: args.userId });
+}
+
+/** The public room a report is about, with its host; null for a private or missing room. */
+export async function findOpenRoomForReport(conversationId: string): Promise<{ id: string; hostUserId: string } | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: { id: conversationId, isPublic: true, ...buildVisibleConversationWhere() },
+    select: { id: true, ownerUserId: true },
+  });
+  return record ? { id: record.id, hostUserId: record.ownerUserId } : null;
+}
+
 /** Makes an open room from Explore: a public room with the title its maker typed, and a topic and password when given. */
 export async function createOpenRoom(args: {
   userId: string;

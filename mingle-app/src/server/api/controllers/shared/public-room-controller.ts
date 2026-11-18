@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import {
   createOpenRoom,
+  findOpenRoomForReport,
+  getOpenRoomInfo,
+  updateOpenRoomSettings,
   decideConversationJoinRequest,
   findConversationByRoomCode,
   joinOrRequestByRoomCode,
@@ -19,6 +22,7 @@ import { sendPushNotificationForConversationJoinRequest } from "@/server/push-no
 import { parseRoomCode } from "@/lib/room-code";
 import { normalizeOpenRoomTitle, normalizeOpenRoomTopic, readOpenRoomPassword } from "@/lib/open-room";
 import { prisma } from "@/lib/prisma";
+import { createReport, normalizeReportMessage, normalizeReportReason } from "@/server/reports/report-service";
 
 export const runtime = "nodejs";
 
@@ -92,6 +96,58 @@ export async function postOpenRoomResponse(request: NextRequest) {
     password: password.kind === "ok" ? password.password : null,
   });
   return NextResponse.json({ conversation }, { status: 201 });
+}
+
+/** GET — the open-room facts a member sees in the room menu (topic, lock, whether they are the host). */
+export async function getOpenRoomInfoResponse(request: NextRequest, conversationId: string) {
+  const userId = await resolveUserId(request);
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const room = await getOpenRoomInfo({ conversationId, userId });
+  if (!room) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  return NextResponse.json({ room }, { headers: { "cache-control": "no-store" } });
+}
+
+/** PATCH { topic?, password? } — the host changes the topic or the password ("" or null clears it). */
+export async function patchOpenRoomSettingsResponse(request: NextRequest, conversationId: string) {
+  const userId = await resolveUserId(request);
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const body = await request.json().catch(() => null) as { topic?: unknown; password?: unknown } | null;
+  if (!body) return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  const password = body.password === undefined ? undefined : readOpenRoomPassword(body.password);
+  if (password?.kind === "invalid") return NextResponse.json({ error: "invalid_password" }, { status: 400 });
+  const room = await updateOpenRoomSettings({
+    conversationId,
+    userId,
+    topic: body.topic === undefined ? undefined : normalizeOpenRoomTopic(body.topic),
+    password: password === undefined ? undefined : password.kind === "ok" ? password.password : null,
+  });
+  if (!room) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  return NextResponse.json({ room });
+}
+
+/** POST { reason, message? } — report an open room. The report is filed on its host. */
+export async function postOpenRoomReportResponse(request: NextRequest, conversationId: string) {
+  const userId = await resolveUserId(request);
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const body = await request.json().catch(() => null) as { reason?: unknown; message?: unknown } | null;
+  if (!body) return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+  const reason = normalizeReportReason(body.reason);
+  if (!reason) return NextResponse.json({ error: "invalid_reason" }, { status: 400 });
+  const message = normalizeReportMessage(body.message);
+  if (!message.ok) return NextResponse.json({ error: "invalid_message" }, { status: 400 });
+  const room = await findOpenRoomForReport(conversationId);
+  if (!room) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (room.hostUserId === userId) return NextResponse.json({ error: "cannot_report_own_content" }, { status: 400 });
+  const result = await createReport(prisma, {
+    reporterId: userId,
+    reportedUserId: room.hostUserId,
+    targetType: "room",
+    targetRoomId: room.id,
+    reason,
+    message: message.message,
+  });
+  if (result.status === "duplicate") return NextResponse.json({ status: "already_reported", duplicate: true });
+  return NextResponse.json({ reportId: result.reportId, status: result.reportStatus }, { status: 201 });
 }
 
 /** POST { password? } — join a public room from the Explore tab. */

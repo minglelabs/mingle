@@ -4672,6 +4672,13 @@ export default function ConversationList({
   }, [clearConversationSurfaceHistory, closeConversationOverlay, conversationProfileId, openConversationSummary]);
 
 
+  // From an open room's menu: move straight to another room (one already in
+  // the list, or one just joined, whose summary comes along).
+  const openOtherRoom = useCallback((conversationId: string, joined?: ConversationChannelSummary) => {
+    const target = joined ?? conversationsRef.current.find((conversation) => conversation.id === conversationId);
+    if (target) void startDirectConversationFromProfile(target);
+  }, [startDirectConversationFromProfile]);
+
   const handleCreateConversation = useCallback(async () => {
     if (
       isCreatingConversationRef.current
@@ -6209,6 +6216,8 @@ export default function ConversationList({
                         }}
                         conversationTitle={conversation.title}
                         isBlockedCounterpart={conversation.isBlockedCounterpart}
+                        initialIsPublicRoom={conversation.isPublic === true}
+                        onOpenOtherRoom={openOtherRoom}
                         initialUnreadMessageCount={entryUnreadMessageCountByConversationId[conversation.id] ?? 0}
                         isMultiMember={conversation.isMultiMember}
                         conversationId={conversation.id}

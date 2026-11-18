@@ -71,7 +71,7 @@ import {
   captureMingleClientEvent,
   resetMinglePostHogIdentity,
 } from "@/lib/posthog-client";
-import type { ConversationChannelOtherMember } from "@/lib/app-conversations";
+import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -136,6 +136,9 @@ type MingleHomeProps = {
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
   onOpenProfile?: (userId: string) => void;
   isBlockedCounterpart?: boolean;
+  /** An open room (public, listed under Explore). */
+  initialIsPublicRoom?: boolean;
+  onOpenOtherRoom?: (conversationId: string, joined?: ConversationChannelSummary) => void;
   initialUnreadMessageCount?: number;
   isMultiMember?: boolean;
 };
@@ -2206,6 +2209,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
           onOpenProfile={props.onOpenProfile}
           isBlockedCounterpart={props.isBlockedCounterpart}
+          initialIsPublicRoom={props.initialIsPublicRoom}
+          onOpenOtherRoom={props.onOpenOtherRoom}
           initialUnreadMessageCount={props.initialUnreadMessageCount}
           isMultiMember={props.isMultiMember}
         />

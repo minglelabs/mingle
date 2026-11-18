@@ -53,7 +53,7 @@ export const metadata: Metadata = {
 
 const REPORT_PAGE_SIZE = 20;
 const REPORT_STATUSES: readonly ReportStatus[] = ["open", "in_review", "resolved", "rejected"] as const;
-const TARGET_TYPES = ["user", "post", "comment"] as const;
+const TARGET_TYPES = ["user", "post", "comment", "room"] as const;
 type TargetType = (typeof TARGET_TYPES)[number];
 
 type AdminReportsPageProps = {
@@ -293,6 +293,7 @@ async function loadReports(status: ReportStatus | "all", type: TargetType | "all
       targetType: true,
       targetPostId: true,
       targetCommentId: true,
+      targetKey: true,
       reason: true,
       message: true,
       status: true,
@@ -359,6 +360,7 @@ function targetTypeLabel(type: string): string {
   switch (type) {
     case "post": return "게시물";
     case "comment": return "댓글";
+    case "room": return "오픈방";
     default: return "사용자";
   }
 }
@@ -460,11 +462,13 @@ export default async function AdminReportsPage({ searchParams }: AdminReportsPag
               </div>
               <div className="space-y-1">
                 <PersonLine label="신고자" person={report.reporter} />
-                <PersonLine label={isContent ? "작성자" : "신고된 사용자"} person={report.reportedUser} />
+                <PersonLine label={isContent ? "작성자" : report.targetType === "room" ? "방장" : "신고된 사용자"} person={report.reportedUser} />
               </div>
               <time className="mt-1 block text-xs text-slate-500" dateTime={report.createdAt.toISOString()}>{REPORT_DATE_FORMATTER.format(report.createdAt)}</time>
               {report.targetPostId ? <p className="mt-1 break-all text-xs text-slate-400">게시물 {report.targetPostId}</p> : null}
               {report.targetCommentId ? <p className="mt-1 break-all text-xs text-slate-400">댓글 {report.targetCommentId}</p> : null}
+              {/* An open-room report is filed on the room's host; the room id is in the target key ("room:<id>"). */}
+              {report.targetType === "room" ? <p className="mt-1 break-all text-xs text-slate-400">오픈방 {report.targetKey.replace(/^room:/, "")}</p> : null}
 
               {isContent ? (
                 <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
