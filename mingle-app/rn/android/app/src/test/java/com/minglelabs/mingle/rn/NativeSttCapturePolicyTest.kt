@@ -1,5 +1,7 @@
 package com.minglelabs.mingle.rn
 
+import android.media.AudioManager
+import android.media.MediaRecorder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -27,5 +29,18 @@ class NativeSttCapturePolicyTest {
       assertFalse(profile.noiseSuppressorEnabled)
       assertFalse(profile.privacySensitive)
     }
+  }
+
+  @Test
+  fun `microphone records as voice recognition with priority and the foreground service`() {
+    val profile = NativeSttCapturePolicy.resolve(false, NativeSttCaptureSource.MICROPHONE)
+    assertEquals(NativeSttCaptureSource.MICROPHONE, profile.captureSource)
+    assertEquals("voice_recognition", profile.label)
+    assertEquals(MediaRecorder.AudioSource.VOICE_RECOGNITION, profile.audioSource)
+    assertEquals(AudioManager.MODE_NORMAL, profile.audioMode)
+    assertTrue(profile.privacySensitive)
+    assertTrue(profile.foregroundServiceEnabled)
+    assertFalse(profile.aecEnabled)
+    assertFalse(profile.noiseSuppressorEnabled)
   }
 }
