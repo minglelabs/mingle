@@ -1,6 +1,6 @@
 "use client";
 
-import { pickLoadingMessage } from "@/i18n/loading-messages";
+import { pickLoadingMessage, resolveLoginLoadingMessage } from "@/i18n/loading-messages";
 import { useMemo, useState, useSyncExternalStore } from "react";
 
 const subscribeToNothing = () => () => {};
@@ -17,9 +17,12 @@ function resolveBrowserLocale(): string {
  *
  * Nothing is rendered on the server or during hydration, so the markup
  * matches; the line appears right after.
+ *
+ * `login` (the login screen while signing in) always shows the login-angle
+ * line instead of a random one.
  */
-export function LoadingMessage(props: { locale?: string; className?: string }) {
-  const { locale } = props;
+export function LoadingMessage(props: { locale?: string; className?: string; login?: boolean }) {
+  const { locale, login = false } = props;
   // One roll per mount; the line stays put across re-renders.
   const [roll] = useState(() => Math.random());
   const resolvedLocale = useSyncExternalStore(
@@ -28,8 +31,11 @@ export function LoadingMessage(props: { locale?: string; className?: string }) {
     getServerLocale,
   );
   const message = useMemo(
-    () => (resolvedLocale === null ? null : pickLoadingMessage(resolvedLocale, () => roll)),
-    [resolvedLocale, roll],
+    () => {
+      if (resolvedLocale === null) return null;
+      return login ? resolveLoginLoadingMessage(resolvedLocale) : pickLoadingMessage(resolvedLocale, () => roll);
+    },
+    [login, resolvedLocale, roll],
   );
 
   return (

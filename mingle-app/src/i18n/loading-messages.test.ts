@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PRIMARY_UI_LOCALES } from "./mingle-locales";
-import { LOADING_MESSAGES, pickLoadingMessage, resolveLoadingMessages } from "./loading-messages";
+import { LOADING_MESSAGES, pickLoadingMessage, resolveLoadingMessages, resolveLoginLoadingMessage } from "./loading-messages";
 
 describe("loading messages", () => {
   it("every entry has Korean text", () => {
@@ -34,5 +34,13 @@ describe("loading messages", () => {
     expect(pickLoadingMessage("ko", () => 0)).toEqual(messages[0]);
     expect(pickLoadingMessage("ko", () => 0.999999)).toEqual(messages[messages.length - 1]);
     expect(pickLoadingMessage("ko", () => 1)).toEqual(messages[messages.length - 1]);
+  });
+
+  it("the login screen always gets the login-angle line", () => {
+    expect(resolveLoginLoadingMessage("ko")).toEqual({ text: "로그인 각도 좁히는 중..", source: null });
+    expect(resolveLoginLoadingMessage("en")).toEqual({ text: "Lining up the login angle..", source: null });
+    for (const locale of [...PRIMARY_UI_LOCALES, "xx-unknown", null]) {
+      expect(resolveLoginLoadingMessage(locale)?.text.trim()).toBeTruthy();
+    }
   });
 });
