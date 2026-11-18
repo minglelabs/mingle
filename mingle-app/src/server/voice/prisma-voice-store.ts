@@ -37,6 +37,8 @@ function bindTx(tx: PrismaTx): VoiceTx {
           interpretOn: true,
           speechLanguage: true,
           joinedAt: true,
+          role: true,
+          handRaisedAt: true,
           user: { select: { name: true, image: true } },
         },
       });
@@ -47,6 +49,8 @@ function bindTx(tx: PrismaTx): VoiceTx {
         interpretOn: row.interpretOn,
         speechLanguage: row.speechLanguage,
         joinedAt: row.joinedAt,
+        role: row.role,
+        handRaisedAt: row.handRaisedAt,
       }));
     },
     async upsertActiveParticipant(input) {
@@ -57,11 +61,31 @@ function bindTx(tx: PrismaTx): VoiceTx {
           userId: input.userId,
           interpretOn: input.interpretOn,
           speechLanguage: input.speechLanguage,
+          ...(input.role ? { role: input.role } : {}),
         },
         update: {
           leftAt: null,
           interpretOn: input.interpretOn,
           speechLanguage: input.speechLanguage,
+          // Coming back in: a raised hand from before does not carry over.
+          handRaisedAt: null,
+          ...(input.role ? { role: input.role } : {}),
+        },
+      });
+    },
+    async findParticipant(callId, userId) {
+      const row = await tx.appVoiceCallParticipant.findUnique({
+        where: { callId_userId: { callId, userId } },
+        select: { role: true, leftAt: true },
+      });
+      return row ? { role: row.role, active: row.leftAt === null } : null;
+    },
+    async updateParticipantStage(input) {
+      await tx.appVoiceCallParticipant.updateMany({
+        where: { callId: input.callId, userId: input.userId, leftAt: null },
+        data: {
+          ...(input.role ? { role: input.role } : {}),
+          ...(input.handRaisedAt !== undefined ? { handRaisedAt: input.handRaisedAt } : {}),
         },
       });
     },

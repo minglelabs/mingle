@@ -1625,7 +1625,12 @@ model AppVoiceCallParticipant {
   id             String    @id @default(cuid())
   callId         String    @map("call_id")
   userId         String    @map("user_id")
-  role           String    @default("speaker") // "speaker" (MVP: all speakers; "listener" reserved)
+  // "speaker": on the stage, may talk. "listener": hears the call only. A chat
+  // room's call has speakers only; an open room's call puts everyone but the
+  // host and the one who started it in as a listener (server/voice/voice-stage.ts).
+  role           String    @default("speaker")
+  // A listener asking for the stage; cleared when they get it or take it back.
+  handRaisedAt   DateTime? @map("hand_raised_at")
   interpretOn    Boolean   @default(true) @map("interpret_on")
   // The language this user speaks in the room (their STT source language).
   speechLanguage String?   @map("speech_language")
