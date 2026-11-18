@@ -1068,4 +1068,15 @@ td.wins {
   margin-top: 12px;
   min-height: 50px;
   font-size: 18px;
+  /* The lobby card scrolls (its scrollbar is hidden): the host's Start stays
+     at the card's bottom edge while the setup above it scrolls under, so it
+     is never below the fold. The cream glow fades the rows passing under it. */
+  position: sticky;
+  bottom: 4px;
+  z-index: 1;
+  box-shadow: 0 4px 0 #c98400, 0 -14px 14px 2px var(--cream);
+}
+
+.startButton:active {
+  box-shadow: 0 1px 0 #c98400, 0 -14px 14px 2px var(--cream);
 }
