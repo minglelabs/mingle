@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic'
 
 /**
  * Inbox rooms, newest first. Query: `operator` (one operator's rooms),
- * `cursor` (next page), `limit` (1-50), `ko=1` (Korean previews for staff).
+ * `cursor` (next page), `limit` (1-50), `ko=1` (Korean previews for staff),
+ * `unread=1` (unread rooms only), `q` (member name or handle contains).
  * Always also returns the operator chips and `unreadTotal`.
  */
 export async function GET(request: Request) {
@@ -29,6 +30,8 @@ export async function GET(request: Request) {
     cursor,
     limit: Number.isFinite(limit) ? limit : null,
     includeKorean: params.get('ko') === '1',
+    unreadOnly: params.get('unread') === '1',
+    query: params.get('q'),
   })
   return inboxJson(result)
 }

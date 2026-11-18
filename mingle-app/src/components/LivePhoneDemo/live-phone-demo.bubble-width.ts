@@ -141,6 +141,7 @@ const readViewportWidth = () => window.innerWidth
 const readServerViewportWidth = () => 0
 
 const BUBBLE_SLOT_SELECTOR = '[data-chat-bubble-content-switch]'
+const BUBBLE_SCROLLER_SELECTOR = '[data-qa="live-demo-chat-scroll"], .overflow-y-auto'
 
 function readShrinkTiming(): BubbleShrinkTiming {
   return typeof window !== 'undefined'
@@ -204,7 +205,12 @@ export function useMonotonicBubbleSize(
     const applyFloor = () => {
       const previous = readBubbleSizeFloor(messageId, resetKey)
       // The bubble's own size, with no floor on it. Nothing paints between
-      // this and the floor going back on below.
+      // this and the floor going back on below, but a list scrolled to its
+      // end gets its scroll position clamped while the bubble is shorter, and
+      // the clamp stays once the floor is back: the list then showed one
+      // frame shifted down by the difference. Put the position back.
+      const scroller = bubble.closest<HTMLElement>(BUBBLE_SCROLLER_SELECTOR)
+      const scrollTopBefore = scroller ? scroller.scrollTop : 0
       bubble.style.minWidth = ''
       bubble.style.minHeight = ''
       const natural = { width: bubble.offsetWidth, height: bubble.offsetHeight }
@@ -213,6 +219,7 @@ export function useMonotonicBubbleSize(
         previous.width = 0
       }
       put(resolveBubbleSizeFloor(previous, natural, Date.now(), timing), natural)
+      if (scroller && scroller.scrollTop !== scrollTopBefore) scroller.scrollTop = scrollTopBefore
     }
     applyFloor()
   })

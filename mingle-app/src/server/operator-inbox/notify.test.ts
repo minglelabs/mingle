@@ -19,6 +19,7 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/server/conversation-realtime', () => ({ publishAdminInboxEvent: m.publishAdminInboxEvent }))
 vi.mock('@/server/push-notifications', () => ({ sendPushToUsers: m.sendPushToUsers }))
 
+import { INBOX_ACCOUNT_USER_WHERE } from './inbox-accounts'
 import { notifyOperatorInboxActivity, OPERATOR_INBOX_BATCH_GAP_MS, type OperatorInboxActivity } from './notify'
 
 const { resolvePushCopy } = await vi.importActual<typeof import('@/server/push-notifications')>('@/server/push-notifications')
@@ -89,7 +90,7 @@ describe('notifyOperatorInboxActivity', () => {
     expect(byKey.where).toMatchObject({ sessionKey: 'sess_y' })
     expect(byKey.where.id).toBeUndefined()
     expect(byKey.where.OR).toEqual([{ isDeleted: false }, { isDeleted: null }])
-    expect(byKey.select.members.where).toEqual({ leftAt: null, user: { isOperator: true, isDeleted: false } })
+    expect(byKey.select.members.where).toEqual({ leftAt: null, user: INBOX_ACCOUNT_USER_WHERE })
   })
 
   it('only refreshes the admin inbox when an operator sends', async () => {

@@ -193,7 +193,7 @@ function canonicalTranslations(result: TranslateTextsResult, text: string, staff
 
 async function requestTranslation(input: Parameters<typeof translateTexts>[0]): Promise<TranslateTextsResult> {
   try {
-    return await translateTexts({ ...input, provider: operatorTextProvider() })
+    return await translateTexts(input)
   } catch (error) {
     throw new OperatorSendError('translation_failed', { cause: error })
   }
@@ -209,10 +209,17 @@ async function translateStaffReply(args: {
   text: string
   personaLanguage: string
   roomLanguages: string[]
+  /**
+   * A reply staff typed is translated by the app's own chat providers (a
+   * person is waiting for it to send). Only the AI's replies go through the
+   * ChatGPT pool, which takes 10-25 s an answer.
+   */
+  provider: 'chatgpt-pool' | undefined
 }): Promise<TranslatedReply> {
-  const { text, personaLanguage } = args
+  const { text, personaLanguage, provider } = args
   const targets = sanitizeSttLanguageUnion([personaLanguage, ...args.roomLanguages])
   const first = await requestTranslation({
+    provider,
     text,
     sourceLanguage: 'auto',
     targetLanguages: targets,
@@ -233,7 +240,7 @@ async function translateStaffReply(args: {
   if (missing.length > 0) {
     try {
       const retry = await translateTexts({
-        provider: operatorTextProvider(),
+        provider,
         text,
         sourceLanguage: staffLanguage || 'auto',
         targetLanguages: missing,
@@ -457,8 +464,11 @@ async function deliverCommittedReply(args: {
 type SenderKind =
   /** A staff-run operator account: audited, shown in the operator inbox. */
   | { badge: 'operator'; ctx: AdminContext }
-  /** HashChat's own official account (Hamzzi): not audited as staff, not in the inbox. */
-  | { badge: 'official'; sourceLanguage: string }
+  /**
+   * HashChat's own official account (Hamzzi). The AI's replies carry no ctx
+   * (no staff audit); a reply staff typed in the inbox does.
+   */
+  | { badge: 'official'; sourceLanguage: string; ctx?: AdminContext }
 
 async function composeAndSend(args: {
   sender: SenderKind
@@ -479,7 +489,13 @@ async function composeAndSend(args: {
     : resolvePersonaLanguage(operator)
   if (!personaLanguage) throw new OperatorSendError('persona_language_missing')
   const roomLanguages = sanitizeSttLanguageUnion(args.members.flatMap((member) => member.selectedLanguages), [personaLanguage])
-  const reply = await translateStaffReply({ text, personaLanguage, roomLanguages })
+  const typedByStaff = sender.badge === 'operator' || Boolean(sender.ctx)
+  const reply = await translateStaffReply({
+    text,
+    personaLanguage,
+    roomLanguages,
+    provider: typedByStaff ? undefined : operatorTextProvider(),
+  })
 
   const metadata: Prisma.InputJsonObject = {
     source: OPERATOR_REPLY_SOURCE,
@@ -560,7 +576,7 @@ async function composeAndSend(args: {
 
   // Audited right after the commit, so the record exists even if a later
   // delivery step hangs. The staff original lives only here.
-  if (sender.badge === 'operator') await writeAdminAudit(sender.ctx, {
+  if (sender.ctx) await writeAdminAudit(sender.ctx, {
     action: 'inbox.reply',
     operatorUserId: operator.id,
     targetType: 'message',
@@ -583,7 +599,8 @@ async function composeAndSend(args: {
     createdAt: message.createdAt,
     sourceText: reply.sourceText,
     utterance,
-    notifyInbox: sender.badge === 'operator',
+    // Refreshes the inbox; the sender is a room's inbox account, so it never alerts staff.
+    notifyInbox: true,
   })
 
   return {
@@ -615,14 +632,16 @@ export async function sendOperatorMessage(ctx: AdminContext, input: SendOperator
 /**
  * Sends `text` into the room as one of HashChat's official accounts (Hamzzi),
  * with `sourceLanguage` as the message's original language. Same storage,
- * translation and delivery as an operator reply, without the staff audit
- * and operator-inbox side effects.
+ * translation and delivery as an operator reply. The AI's replies pass no
+ * `ctx` (no staff audit); a staff reply from the inbox does.
  */
 export async function sendOfficialAccountMessage(input: SendOperatorMessageInput & {
   sender: OperatorAccountRecord
   sourceLanguage: string
+  /** Set when staff typed the reply in the inbox: audited as `inbox.reply`. */
+  ctx?: AdminContext
 }): Promise<SendOperatorMessageResult> {
-  return sendAsAccount({ badge: 'official', sourceLanguage: input.sourceLanguage }, input.sender, input)
+  return sendAsAccount({ badge: 'official', sourceLanguage: input.sourceLanguage, ctx: input.ctx }, input.sender, input)
 }
 
 async function sendAsAccount(

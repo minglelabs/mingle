@@ -12,7 +12,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from 'react'
-import { ArrowDown, ChevronLeft, Info, Loader2, SendHorizontal } from 'lucide-react'
+import { ArrowDown, ChevronLeft, Loader2, SendHorizontal, Trash2 } from 'lucide-react'
 import ChatBubble from '@/components/LivePhoneDemo/ChatBubble'
 import {
   ConversationImageSrcProvider,
@@ -35,6 +35,7 @@ import {
 import {
   STAFF_KOREAN,
   buildRoomTimeline,
+  isRevealedUnsent,
   mergeUtterancePages,
   staffKoreanCandidateId,
   toBubbleUtterance,
@@ -43,11 +44,13 @@ import {
   type RoomTimelineItem,
   type RoomUtterance,
 } from '../_lib/room-timeline'
+import { MessageReadReceiptsStaticProvider } from '@/components/LivePhoneDemo/MessageReadReceipts'
 import { InboxAvatar, KoreanViewSwitch } from './inbox-ui'
 import { useAdminInboxRealtime } from './use-admin-inbox-realtime'
 import { useStaffKoreanView } from './use-staff-korean-view'
 import { useVisualViewportBox } from './use-visual-viewport-box'
 import { useIsDesktop } from '../../_components/use-is-desktop'
+import { useEdgeSwipeBack } from '../../_components/use-edge-swipe-back'
 
 const KO_BADGE_COPY = accountBadgeCopy('ko')
 const REPLY_MAX_LENGTH = 2000
@@ -58,6 +61,11 @@ const ADMIN_INBOX_UPDATED_EVENT = 'mingle:admin-inbox-updated'
 
 // The admin reads chat photos through its own proxy (it has no member session).
 const resolveInboxImageSrc: ConversationImageSrcResolver = (image) => `/admin/inbox/api/images/${encodeURIComponent(image.messageId)}`
+
+/** A bubble's photo opens that member's app profile in a new tab, keeping the room open. */
+function openMemberProfile(userId: string): void {
+  window.open(`/ko/users/${encodeURIComponent(userId)}`, '_blank', 'noopener')
+}
 
 function goToLogin(): void {
   window.location.assign(`/admin?next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`)
@@ -149,6 +157,12 @@ const RoomMessageList = memo(function RoomMessageList({
         const koId = korean ? staffKoreanCandidateId(item.utterance) : null
         return (
           <div key={item.key} className="px-3 py-1">
+            {isRevealedUnsent(item.utterance) ? (
+              <p className="mb-1 flex items-center gap-1 pl-12 text-xs font-medium text-rose-600">
+                <Trash2 size={12} aria-hidden="true" />
+                보낸 사람이 삭제한 메시지 · 상대 화면에는 안 보입니다
+              </p>
+            ) : null}
             <ChatBubble
               utterance={koId ? withStaffKorean(bubble, koById[koId], !(koId in koById)) : bubble}
               uiLocale="ko"
@@ -156,6 +170,7 @@ const RoomMessageList = memo(function RoomMessageList({
               preferredDisplayLanguage={displayLanguage}
               languageOrder={languageOrder}
               viewerUserId={viewerUserId}
+              onOpenProfile={openMemberProfile}
               shouldAnimateEntrance={false}
               bubbleTextClassName="text-[15px]"
             />
@@ -264,6 +279,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
     invite: initialView.hydration.inviteNotices,
   })
   const [utterances, setUtterances] = useState<RoomUtterance[]>(initialView.hydration.utterances)
+  const [readReceiptMembers, setReadReceiptMembers] = useState(initialView.readReceiptMembers)
   const [olderCursor, setOlderCursor] = useState<ConversationHydrationCursor | null>(initialView.hydration.oldestMessageCursor)
   const [hasMoreOlder, setHasMoreOlder] = useState(initialView.hydration.hasMoreUtterances)
   const [loadingOlder, setLoadingOlder] = useState(false)
@@ -277,6 +293,11 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
   const box = useVisualViewportBox()
   // From `lg` up the room fills the detail pane beside the list instead of the whole screen.
   const desktop = useIsDesktop()
+  // On a phone, a swipe from the left edge leaves the room like the back button.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const backLinkRef = useRef<HTMLAnchorElement>(null)
+  const goBackToList = useCallback(() => backLinkRef.current?.click(), [])
+  useEdgeSwipeBack(rootRef, !desktop, goBackToList)
 
   const operator = room.operator
   const operatorId = operator.userId
@@ -317,6 +338,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
     }
     const next = await response.json() as InboxRoomView
     setRoom(next.room)
+    setReadReceiptMembers(next.readReceiptMembers)
     setConversation(next.hydration.conversation)
     setNotices({ leave: next.hydration.leaveNotices, invite: next.hydration.inviteNotices })
     setUtterances((current) => mergeUtterancePages(current, next.hydration.utterances))
@@ -516,6 +538,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
 
   return (
     <div
+      ref={rootRef}
       className="fixed inset-x-0 z-[60] flex flex-col bg-slate-50 text-slate-900 lg:absolute lg:inset-0 lg:z-0"
       style={desktop ? undefined : box ? { top: box.top, height: box.height } : { top: 0, bottom: 0 }}
     >
@@ -524,6 +547,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
         style={{ paddingTop: 'max(env(safe-area-inset-top), 4px)' }}
       >
         <Link
+          ref={backLinkRef}
           href="/admin/inbox"
           prefetch={false}
           aria-label="인박스로 돌아가기"
@@ -531,7 +555,14 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
         >
           <ChevronLeft size={24} aria-hidden="true" />
         </Link>
-        <InboxAvatar person={operator} size={32} />
+        <Link
+          href={`/admin/operators/${encodeURIComponent(operator.userId)}`}
+          prefetch={false}
+          aria-label={`${operatorName} 운영 계정 상세`}
+          className="shrink-0 rounded-full active:opacity-70"
+        >
+          <InboxAvatar person={operator} size={32} />
+        </Link>
         <div className="min-w-0 flex-1 pl-1">
           <p className="flex min-w-0 items-center gap-1 text-[15px] font-semibold leading-5">
             <span className="min-w-0 truncate">{operatorName}</span>
@@ -540,19 +571,11 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
             <span className="min-w-0 truncate">{counterpartTitle}</span>
           </p>
           <p className="truncate text-xs leading-4 text-sky-700">
-            {KO_BADGE_COPY.operator} · 답장 언어 {personaLanguageName}
+            {operator.isOfficial ? KO_BADGE_COPY.official : KO_BADGE_COPY.operator} · 답장 언어 {personaLanguageName}
           </p>
         </div>
         <KoreanViewSwitch enabled={korean} onChange={toggleKorean} />
       </header>
-
-      <div role="note" className="flex shrink-0 items-start gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2 text-xs leading-5 text-slate-600">
-        <Info size={14} className="mt-0.5 shrink-0 text-slate-500" aria-hidden="true" />
-        <p className="min-w-0 break-words">
-          {KO_BADGE_COPY.chatDisclosure}
-          <span className="text-slate-400"> · 상대방 화면에도 표시되는 안내입니다.</span>
-        </p>
-      </div>
 
       {room.operators.length > 1 ? (
         <nav aria-label="답장할 운영 계정" className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-slate-200 bg-white px-3 py-1">
@@ -602,6 +625,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
           {timeline.length === 0 && pending.length === 0 ? (
             <p className="px-6 py-10 text-center text-sm text-slate-500">아직 메시지가 없습니다.</p>
           ) : null}
+          <MessageReadReceiptsStaticProvider members={readReceiptMembers} viewerUserId={operatorId}>
           <RoomMessageList
             timeline={timeline}
             korean={korean}
@@ -610,6 +634,7 @@ export function InboxRoomView({ initialView }: { initialView: InboxRoomView }) {
             languageOrder={languageOrder}
             viewerUserId={operatorId}
           />
+          </MessageReadReceiptsStaticProvider>
           {pending.map((reply) => (
             <PendingReplyRow key={reply.requestId} reply={reply} onRetry={retryReply} onDiscard={discardReply} />
           ))}

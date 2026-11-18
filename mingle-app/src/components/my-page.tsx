@@ -113,6 +113,7 @@ import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { openContactSync } from "@/lib/native-contacts";
+import StaffAdminEntry from "@/components/staff-admin-entry";
 import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
@@ -1116,6 +1117,7 @@ function ProfileSettingsPanel({
               <UserRoundX size={15} strokeWidth={2} aria-hidden="true" />
               {copy.deactivateAccount}
             </button>
+            <StaffAdminEntry enabled={open} />
           </div>
           <button type="button" onClick={onClose} className="absolute right-3 top-[calc(env(safe-area-inset-top,44px)+8px)] flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100" aria-label={copy.close}>
             <X size={18} aria-hidden="true" />

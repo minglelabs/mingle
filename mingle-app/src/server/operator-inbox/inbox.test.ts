@@ -41,8 +41,10 @@ vi.mock('@/server/operator-inbox/staff-translate', async (importOriginal) => ({
   translateForStaff: m.translateForStaff,
 }))
 
+import { INBOX_ACCOUNT_USER_WHERE } from './inbox-accounts'
 import { OperatorAccountRequiredError } from '@/server/operators/operator-guard'
 import {
+  clearOperatorInboxCounts,
   countOperatorInboxUnread,
   decodeInboxCursor,
   encodeInboxCursor,
@@ -69,6 +71,8 @@ function memberRow(channelId: string, userId: string, options: MemberOptions = {
   return {
     channelId,
     userId,
+    joinedAt: new Date(0),
+    lastReadAt: null,
     displayLanguage: options.displayLanguage ?? null,
     user: {
       id: userId,
@@ -102,6 +106,7 @@ type RawHandlers = {
 function routeQueries(handlers: RawHandlers) {
   m.queryRaw.mockImplementation(async (query: unknown) => {
     const text = sqlText(query)
+    if (text.includes('"officialChannelId"')) return []
     if (text.includes('"latestMessageId"')) return handlers.page ?? []
     if (text.includes('"unreadTotal"')) return handlers.total ?? [{ unreadTotal: 0 }]
     if (text.includes('"roomCount"')) return handlers.perOperator ?? []
@@ -110,9 +115,15 @@ function routeQueries(handlers: RawHandlers) {
   })
 }
 
+/** The rooms page query (the shared Hamzzi room lookup may run before it). */
+function pageQuery(): unknown {
+  return m.queryRaw.mock.calls.map((call) => call[0]).find((query) => sqlText(query).includes('"latestMessageId"'))
+}
+
 describe('operator inbox queries', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearOperatorInboxCounts()
     m.blockFindMany.mockResolvedValue([])
     m.messageFindMany.mockResolvedValue([])
     m.memberFindMany.mockResolvedValue([])
@@ -123,7 +134,7 @@ describe('operator inbox queries', () => {
   it('only counts active, materialized operator memberships and unread from real users', async () => {
     routeQueries({})
     await listOperatorInboxRooms()
-    const memberships = sqlText(m.queryRaw.mock.calls[0][0])
+    const memberships = sqlText(pageQuery())
     // left_at IS NULL: a departed operator's room is not in the inbox; a pending
     // invitee has no member row at all, so it can never match this join.
     expect(memberships).toContain('member.left_at IS NULL')
@@ -137,7 +148,7 @@ describe('operator inbox queries', () => {
     expect(unreadSql).toContain('message.user_id <> membership.operator_user_id')
     expect(unreadSql).toContain('membership.last_read_at IS NULL OR message.created_at > membership.last_read_at')
     // A reply sent as another operator in the same room is not new for staff.
-    expect(unreadSql).toMatch(/message\.user_id NOT IN \(\s*SELECT staff\.id FROM app\.app_users AS staff WHERE staff\.is_operator = true/)
+    expect(unreadSql).toMatch(/message\.user_id NOT IN \(\s*SELECT staff\.id FROM app\.app_users AS staff\s+WHERE staff\.is_operator = true OR staff\.id IN \(/)
     // Each room counts once, with its most-behind operator.
     expect(unreadSql).toContain('MAX(unread_count)')
   })
@@ -220,9 +231,9 @@ describe('operator inbox queries', () => {
       memberRow('c1', 'user_1'),
     ])
     const result = await listOperatorInboxRooms({ operatorUserId: 'op_1', limit: 1, cursor: { activityMs: 5000, conversationId: 'c9' } })
-    const pageQuery = m.queryRaw.mock.calls[0][0] as Prisma.Sql
-    expect(pageQuery.text).toContain('AND member.user_id = $1')
-    expect(pageQuery.values).toEqual(expect.arrayContaining(['op_1', 5000, 'c9', 2]))
+    const page = pageQuery() as Prisma.Sql
+    expect(page.text).toMatch(/AND member\.user_id = \$\d+/)
+    expect(page.values).toEqual(expect.arrayContaining(['op_1', 5000, 'c9', 2]))
     expect(result.rooms.map((room) => [room.conversationId, room.unreadCount])).toEqual([['c1', 1]])
     expect(result.nextCursor).toBe('2000.c1')
     expect(decodeInboxCursor(result.nextCursor)).toEqual({ activityMs: 2000, conversationId: 'c1' })
@@ -284,6 +295,7 @@ describe('operator inbox queries', () => {
 describe('operator inbox room access', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearOperatorInboxCounts()
     m.blockFindMany.mockResolvedValue([])
     m.channelFindFirst.mockResolvedValue({ id: 'c1', sessionKey: 's1', pendingInviteeUserIds: [] })
     m.memberFindMany.mockResolvedValue([
@@ -348,7 +360,7 @@ describe('operator inbox room access', () => {
     const quiet = await loadInboxRoomView({ ctx, conversationId: 'c1' })
     expect(quiet.ok).toBe(true)
     expect(m.requireOperatorAccount).toHaveBeenCalledWith('op_1')
-    expect(m.hydrate).toHaveBeenCalledWith({ conversationId: 'c1', userId: 'op_1', before: null })
+    expect(m.hydrate).toHaveBeenCalledWith({ conversationId: 'c1', userId: 'op_1', before: null, revealRecalled: true })
     expect(m.writeAdminAudit).not.toHaveBeenCalled()
     if (quiet.ok) {
       expect(quiet.view.room).not.toHaveProperty('sessionKey')
@@ -392,7 +404,7 @@ describe('inbox photo proxy lookup', () => {
     m.memberFindFirst.mockResolvedValue({ id: 'mem_1' })
     await expect(resolveInboxPhotoObjectKey('m1')).resolves.toBe('conversation-images/abc-1.jpg')
     expect(m.memberFindFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ leftAt: null, user: { isOperator: true, isDeleted: false } }),
+      where: expect.objectContaining({ leftAt: null, user: INBOX_ACCOUNT_USER_WHERE }),
     }))
 
     m.memberFindFirst.mockResolvedValue(null)
