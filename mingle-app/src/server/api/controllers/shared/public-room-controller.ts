@@ -2,6 +2,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import {
+  createOpenRoom,
   decideConversationJoinRequest,
   findConversationByRoomCode,
   joinOrRequestByRoomCode,
@@ -9,12 +10,14 @@ import {
   listConversationJoinRequests,
   listChannelMemberUserIdsBySessionKey,
   listLiveRooms,
+  listOpenRooms,
   setConversationPublic,
 } from "@/lib/app-conversations";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { notifyConversationMessage } from "@/server/conversation-realtime";
 import { sendPushNotificationForConversationJoinRequest } from "@/server/push-notifications";
 import { parseRoomCode } from "@/lib/room-code";
+import { normalizeOpenRoomTitle, normalizeOpenRoomTopic, readOpenRoomPassword } from "@/lib/open-room";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -50,14 +53,58 @@ export async function getLiveRoomsResponse(request: NextRequest) {
   return NextResponse.json({ rooms }, { headers: { "cache-control": "no-store" } });
 }
 
-/** POST — join a public room from the search tab. */
+/** The answer for a missing or wrong open-room password, or null when the error is something else. */
+function passwordErrorResponse(error: unknown): NextResponse | null {
+  const code = error instanceof Error ? error.message : "";
+  if (code === "password_required" || code === "password_wrong") return NextResponse.json({ error: code }, { status: 403 });
+  if (code === "password_locked") return NextResponse.json({ error: code }, { status: 429 });
+  return null;
+}
+
+async function readPasswordFromBody(request: NextRequest): Promise<string | null> {
+  const body = await request.json().catch(() => null) as { password?: unknown } | null;
+  return typeof body?.password === "string" && body.password ? body.password : null;
+}
+
+/** GET ?q= — every public room for the Explore tab, the viewer's own first. */
+export async function getOpenRoomsResponse(request: NextRequest) {
+  const userId = await resolveUserId(request).catch(() => "");
+  const query = (request.nextUrl.searchParams.get("q") ?? "").slice(0, 80);
+  const rooms = await listOpenRooms(userId || null, { query });
+  return NextResponse.json({ rooms }, { headers: { "cache-control": "no-store" } });
+}
+
+/** POST { title, topic?, password?, locale? } — make an open room from Explore. */
+export async function postOpenRoomResponse(request: NextRequest) {
+  const userId = await resolveUserId(request);
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const body = await request.json().catch(() => null) as { title?: unknown; topic?: unknown; password?: unknown; locale?: unknown } | null;
+  if (!body) return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  const title = normalizeOpenRoomTitle(body.title);
+  if (!title) return NextResponse.json({ error: "invalid_title" }, { status: 400 });
+  const password = readOpenRoomPassword(body.password);
+  if (password.kind === "invalid") return NextResponse.json({ error: "invalid_password" }, { status: 400 });
+  const conversation = await createOpenRoom({
+    userId,
+    locale: typeof body.locale === "string" ? body.locale : undefined,
+    title,
+    topic: normalizeOpenRoomTopic(body.topic),
+    password: password.kind === "ok" ? password.password : null,
+  });
+  return NextResponse.json({ conversation }, { status: 201 });
+}
+
+/** POST { password? } — join a public room from the Explore tab. */
 export async function postPublicRoomJoinResponse(request: NextRequest, conversationId: string) {
   const userId = await resolveUserId(request);
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const password = await readPasswordFromBody(request);
   let conversation;
   try {
-    conversation = await joinPublicConversationChannel({ conversationId, userId });
+    conversation = await joinPublicConversationChannel({ conversationId, userId, password });
   } catch (error) {
+    const passwordError = passwordErrorResponse(error);
+    if (passwordError) return passwordError;
     const code = error instanceof Error ? error.message : "";
     if (code === "room_full") return NextResponse.json({ error: "room_full" }, { status: 400 });
     if (code === "target_user_blocked") return NextResponse.json({ error: "target_user_blocked" }, { status: 403 });
@@ -97,10 +144,13 @@ export async function postRoomByCodeJoinResponse(request: NextRequest, rawCode: 
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const code = readCode(rawCode);
   if (!code) return NextResponse.json({ error: "invalid_room_code" }, { status: 400 });
+  const password = await readPasswordFromBody(request);
   let result;
   try {
-    result = await joinOrRequestByRoomCode(code, userId);
+    result = await joinOrRequestByRoomCode(code, userId, password);
   } catch (error) {
+    const passwordError = passwordErrorResponse(error);
+    if (passwordError) return passwordError;
     const reason = error instanceof Error ? error.message : "";
     if (reason === "room_full") return NextResponse.json({ error: "room_full" }, { status: 400 });
     if (reason === "target_user_blocked") return NextResponse.json({ error: "target_user_blocked" }, { status: 403 });

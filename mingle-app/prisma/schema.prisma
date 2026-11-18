@@ -437,6 +437,11 @@ model AppConversationChannel {
   // anyone may join it from there (through the share link, which turning the
   // room public switches on). A private room is listed only as a locked card.
   isPublic                   Boolean   @default(false) @map("is_public")
+  // Open room (a public room, listed under Explore): its topic tag, and the
+  // password it asks for when it has one (scrypt, see
+  // src/server/open-room-password.ts). Both are null on a chat room.
+  topic                      String?   @map("topic")
+  passwordHash               String?   @map("password_hash")
   // The room number people type in Search to find the room: 7 digits, shown
   // as "482 1937". Random (not sequential) so neighbours are not guessable;
   // the database picks a free one (next_room_code() in the app schema).
@@ -462,6 +467,7 @@ model AppConversationChannel {
   @@index([ownerUserId, updatedAt], map: "app_conversation_channels_owner_updated_at_idx")
   @@index([ownerUserId, status], map: "app_conversation_channels_owner_status_idx")
   @@index([hashRushActiveAt], map: "app_conversation_channels_hash_rush_active_at_idx")
+  @@index([isPublic, updatedAt], map: "app_conversation_channels_public_updated_at_idx")
   @@map("app_conversation_channels")
 }
 

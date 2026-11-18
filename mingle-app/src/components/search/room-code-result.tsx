@@ -10,6 +10,9 @@ import LanguageFlag from "@/components/language-flag";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatRoomCode } from "@/lib/room-code";
 import { liveRoomsCopy } from "@/i18n/live-rooms-copy";
+import { openRoomsCopy } from "@/i18n/open-rooms-copy";
+import { OPEN_ROOM_PASSWORD_MAX } from "@/lib/open-room";
+import { openRoomJoinErrorText } from "./open-rooms";
 
 export type RoomCodeRoom = {
   id: string;
@@ -19,6 +22,8 @@ export type RoomCodeRoom = {
   memberCount: number;
   title: string | null;
   languages: string[];
+  /** A public room that asks for a password. */
+  hasPassword?: boolean;
   request: "none" | "pending" | "declined";
 };
 
@@ -34,6 +39,8 @@ export default function RoomCodeResult({
   onOpenRoom: (conversationId: string) => void;
 }) {
   const copy = liveRoomsCopy(locale);
+  const roomsCopy = openRoomsCopy(locale);
+  const [password, setPassword] = useState("");
   const [lookup, setLookup] = useState<Lookup>({ state: "loading" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,13 +73,14 @@ export default function RoomCodeResult({
       return;
     }
     if (busy || room.request === "pending") return;
+    if (room.hasPassword && !password) return;
     setBusy(true);
     setError(null);
     try {
       const response = await fetch(buildClientApiPath(`/conversations/by-code/${code}/join`), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: "{}",
+        body: JSON.stringify(room.hasPassword ? { password } : {}),
       });
       const body = await response.json().catch(() => null) as { joined?: boolean; requested?: boolean; error?: string } | null;
       if (response.ok && body?.joined) {
@@ -83,13 +91,13 @@ export default function RoomCodeResult({
         setLookup({ state: "found", room: { ...room, request: "pending" } });
         return;
       }
-      setError(body?.error === "room_full" ? copy.roomFull : copy.joinFailed);
+      setError(openRoomJoinErrorText(body?.error, { ...copy, ...roomsCopy }));
     } catch {
       setError(copy.joinFailed);
     } finally {
       setBusy(false);
     }
-  }, [busy, code, copy.joinFailed, copy.roomFull, onOpenRoom]);
+  }, [busy, code, copy, onOpenRoom, password, roomsCopy]);
 
   return (
     <section className="border-b border-gray-100 px-4 pb-3 pt-3" aria-label={copy.roomByNumber} data-qa="search-room-code-result">
@@ -99,7 +107,22 @@ export default function RoomCodeResult({
       ) : lookup.state === "missing" ? (
         <p className="py-3 text-[14px] text-gray-500">{copy.roomNotFound}</p>
       ) : (
-        <RoomCard room={lookup.room} copy={copy} busy={busy} onAct={() => void act(lookup.room)} />
+        <>
+          <RoomCard room={lookup.room} copy={copy} busy={busy} onAct={() => void act(lookup.room)} />
+          {lookup.room.hasPassword && !lookup.room.isMember ? (
+            <input
+              type="password"
+              autoComplete="off"
+              value={password}
+              maxLength={OPEN_ROOM_PASSWORD_MAX}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={roomsCopy.passwordPrompt}
+              aria-label={roomsCopy.passwordPrompt}
+              data-qa="search-room-code-password"
+              className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-[15px] text-slate-900 outline-none placeholder:text-gray-400 focus:border-gray-300 focus:bg-white"
+            />
+          ) : null}
+        </>
       )}
       {error ? <p className="pt-2 text-[13px] text-red-500" role="alert">{error}</p> : null}
     </section>
@@ -124,7 +147,7 @@ function RoomCard({ room, copy, busy, onAct }: {
     <div className="flex items-center gap-3 rounded-2xl border border-gray-200 px-3.5 py-3" data-room-code={room.roomCode}>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 truncate text-[15px] font-semibold text-slate-900">
-          {!room.isPublic ? <Lock size={13} strokeWidth={2.4} className="shrink-0 text-gray-400" aria-hidden="true" /> : null}
+          {!room.isPublic || room.hasPassword ? <Lock size={13} strokeWidth={2.4} className="shrink-0 text-gray-400" aria-hidden="true" /> : null}
           <span className="truncate">{named ? room.title : copy.privateRoom}</span>
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-gray-500">

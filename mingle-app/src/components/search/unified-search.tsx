@@ -11,7 +11,8 @@ import { feedSourceEndpoint } from "@/lib/feed-routes";
 import { isSearchExcludedHandle } from "@/lib/handles";
 import type { ConnectSearchResult } from "@/components/connect-search-cache";
 import PostGrid from "./post-grid";
-import LiveRooms from "./live-rooms";
+import OpenRooms from "./open-rooms";
+import { openRoomsCopy } from "@/i18n/open-rooms-copy";
 import RoomCodeResult from "./room-code-result";
 import { parseRoomCode } from "@/lib/room-code";
 import { buildConnectTrackingHeaders, PersonRow, usePeopleFollow, type PeopleSearchContext } from "./people-follow";
@@ -33,6 +34,28 @@ import {
 
 const PEOPLE_PREVIEW_LIMIT = 3;
 
+/** Explore with nothing typed: open rooms (the default) or the post grid. */
+export type ExploreTab = "rooms" | "posts";
+const EXPLORE_TAB_STORAGE_KEY = "mingle:explore-tab";
+
+// The tab is kept for the browser session, so coming back from a post lands on Posts again.
+function readStoredExploreTab(): ExploreTab | null {
+  try {
+    const value = window.sessionStorage.getItem(EXPLORE_TAB_STORAGE_KEY);
+    return value === "rooms" || value === "posts" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeExploreTab(tab: ExploreTab): void {
+  try {
+    window.sessionStorage.setItem(EXPLORE_TAB_STORAGE_KEY, tab);
+  } catch {
+    // The tab still works in memory.
+  }
+}
+
 export type UnifiedSearchProps = {
   locale: AppLocale;
   displayLanguage?: string | null;
@@ -48,7 +71,7 @@ export type UnifiedSearchProps = {
   onOpenBrowsePost?: (postId: string) => void;
   /** Open the full sliding people-list screen ("see all"). */
   onSeeAllPeople: (query: string) => void;
-  /** Open a room from "Live now" (after joining it, for a public room). Absent: the section is hidden. */
+  /** Open a room from the open-room list (after joining it). Absent: the list and its tab are hidden. */
   onOpenLiveRoom?: (conversationId: string) => void;
   /**
    * Controlled query so the parent can restore it on back-navigation (e.g.
@@ -75,7 +98,24 @@ export default function UnifiedSearch({
   scrollContainerRef,
 }: UnifiedSearchProps) {
   const copy = searchCopy(locale);
+  const roomsCopy = openRoomsCopy(locale);
   const postingFeedEnabled = clientSupportsPostingFeed;
+  const canBrowsePosts = postingFeedEnabled && Boolean(onOpenBrowsePost);
+  const canBrowseRooms = Boolean(onOpenLiveRoom);
+  const [exploreTab, setExploreTab] = useState<ExploreTab>("rooms");
+  useEffect(() => {
+    const stored = readStoredExploreTab();
+    if (!stored) return;
+    const timer = window.setTimeout(() => setExploreTab(stored), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const shownExploreTab: ExploreTab = !canBrowseRooms ? "posts" : !canBrowsePosts ? "rooms" : exploreTab;
+  const pickExploreTab = useCallback((tab: ExploreTab) => {
+    setExploreTab(tab);
+    storeExploreTab(tab);
+  }, []);
+  /** Open rooms matching the typed query; they count as a result. */
+  const [roomMatchCount, setRoomMatchCount] = useState(0);
   const [internalQuery, setInternalQuery] = useState("");
   const query = controlledQuery ?? internalQuery;
   const onQueryChange = controlledOnQueryChange ?? setInternalQuery;
@@ -351,7 +391,6 @@ export default function UnifiedSearch({
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
-        {!normalizedQuery && onOpenLiveRoom ? <LiveRooms locale={locale} onOpenRoom={onOpenLiveRoom} /> : null}
         {showRecent ? (
           <RecentSearches
             copy={copy}
@@ -362,10 +401,30 @@ export default function UnifiedSearch({
           />
         ) : null}
 
-        {/* Nothing typed: the explore tab shows the posts everyone sees (the former feed tab). */}
-        {postingFeedEnabled && !normalizedQuery && onOpenBrowsePost ? (
+        {/* Nothing typed: Explore is two tabs, open rooms (first) and the posts everyone sees. */}
+        {!normalizedQuery && canBrowseRooms && canBrowsePosts ? (
+          <div className="sticky top-0 z-10 flex border-b border-gray-100 bg-white px-4" role="tablist" data-qa="explore-tabs">
+            {(["rooms", "posts"] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={shownExploreTab === tab}
+                data-qa={`explore-tab-${tab}`}
+                onClick={() => pickExploreTab(tab)}
+                className={`relative h-11 flex-1 text-[15px] font-semibold transition ${shownExploreTab === tab ? "text-slate-950" : "text-gray-400"}`}
+              >
+                {tab === "rooms" ? roomsCopy.tabRooms : roomsCopy.tabPosts}
+                {shownExploreTab === tab ? <span className="absolute inset-x-6 bottom-0 h-[2px] rounded-full bg-slate-950" aria-hidden="true" /> : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {!normalizedQuery && onOpenLiveRoom && shownExploreTab === "rooms" ? (
+          <div className="pt-3"><OpenRooms locale={locale} onOpenRoom={onOpenLiveRoom} /></div>
+        ) : null}
+        {canBrowsePosts && !normalizedQuery && onOpenBrowsePost && shownExploreTab === "posts" ? (
           <section className="px-0.5 pt-2" aria-label={copy.postsHeading} data-qa="explore-posts">
-            <h2 className="px-3.5 pb-2 text-[13px] font-semibold uppercase tracking-wide text-gray-500">{copy.postsHeading}</h2>
             <PostGrid
               locale={locale}
               endpoint={feedSourceEndpoint({ kind: "home" }, { limit: 18, displayLanguage })}
@@ -382,6 +441,10 @@ export default function UnifiedSearch({
           <>
             {roomCodeQuery !== null && onOpenLiveRoom ? (
               <RoomCodeResult locale={locale} code={roomCodeQuery} onOpenRoom={onOpenLiveRoom} />
+            ) : null}
+            {/* Open rooms whose title or topic matches. */}
+            {onOpenLiveRoom && dispatchedQuery ? (
+              <OpenRooms locale={locale} query={dispatchedQuery} onOpenRoom={onOpenLiveRoom} onCountChange={setRoomMatchCount} />
             ) : null}
             {showPeople.length > 0 ? (
               <section className="border-b border-gray-100 pb-2" aria-label={copy.peopleHeading}>
@@ -443,7 +506,7 @@ export default function UnifiedSearch({
               </section>
             ) : null}
 
-            {showNoResults && roomCodeQuery === null ? (
+            {showNoResults && roomCodeQuery === null && roomMatchCount === 0 ? (
               <p className="px-6 pt-8 text-center text-[14px] text-gray-500" aria-live="polite">
                 {copy.noResults}
               </p>

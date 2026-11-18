@@ -132,6 +132,7 @@ import {
   CONVERSATION_LIST_SORT_MODES,
   isConversationListSortMode,
   sortConversationsForDisplay,
+  isChatListConversation,
   type ConversationListSortMode,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   findNativeSttRestoreConversation,
@@ -2468,7 +2469,7 @@ export default function ConversationList({
   }, [authenticatedUserId, languageOnboardingPhase, sessionStatus]);
 
   const conversationItems = useMemo(
-    () => sortConversationsForDisplay(conversations, conversationSortMode).map((conversation) => (
+    () => sortConversationsForDisplay(conversations.filter(isChatListConversation), conversationSortMode).map((conversation) => (
       mapConversationSummaryToItem(
         conversation,
         locale,
@@ -2512,7 +2513,7 @@ export default function ConversationList({
     }
   }, []);
   const unreadConversationMessageCount = useMemo(
-    () => conversations.reduce(
+    () => conversations.filter(isChatListConversation).reduce(
       (total, conversation) => total + Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0)),
       0,
     ),
