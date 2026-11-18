@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import LazyOverlayBoundary from "@/components/lazy-overlay-boundary";
 import { runAfterStartup } from "@/lib/after-startup";
 import {
   NATIVE_CONVERSATION_SHARE_EVENT,
@@ -52,10 +53,10 @@ function useDeferredOverlayMount(eventName: string, windowKey: string): boolean 
 
 export function DeferredNativeProfileLinkOverlay() {
   const mounted = useDeferredOverlayMount(NATIVE_PROFILE_LINK_EVENT, NATIVE_PROFILE_LINK_WINDOW_KEY);
-  return mounted ? <NativeProfileLinkOverlay /> : null;
+  return mounted ? <LazyOverlayBoundary><NativeProfileLinkOverlay /></LazyOverlayBoundary> : null;
 }
 
 export function DeferredNativeConversationShareOverlay() {
   const mounted = useDeferredOverlayMount(NATIVE_CONVERSATION_SHARE_EVENT, NATIVE_CONVERSATION_SHARE_WINDOW_KEY);
-  return mounted ? <NativeConversationShareOverlay /> : null;
+  return mounted ? <LazyOverlayBoundary><NativeConversationShareOverlay /></LazyOverlayBoundary> : null;
 }

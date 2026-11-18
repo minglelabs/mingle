@@ -18,6 +18,8 @@ Google Play 스토어 정보는 앱 버전과 상관없이 언제든 올릴 수 
 
 ## 반영 완료
 
+- 2.5.0 (iOS 127, Android 120): 보이스톡, 해시러시, 사진 회전·뒤집기(#377, #594). 2026-11-19에 iOS는 심사 대기 중이던 2.4.3 제출을 취소하고 그 버전을 2.5.0으로 바꿔 릴리스 노트를 `ios-appstore-sync-metadata`로 올린 뒤 제출, Android는 프로덕션 제출. 2.5.0 테스트 빌드가 iOS 122~126, Android 114~119(2.4.3은 117)를 썼으니 다음 버전은 iOS 128 이상(2.5.0 재빌드 시), Android 121 이상.
+
 - 2.4.3 (iOS 122, Android 117): 번역 음성 스트리밍 재생(Soniox 기본), 안드로이드 음성 인식 입력 변경(#585). Play versionCode 114~116은 출시 전 2.5.0 빌드가 이미 써서 117을 씀. 2.5.0은 이제 Android 118 이상, iOS 123 이상을 써야 한다.
 
 - 2.4.2 (iOS 121, Android 113): 공유 시트에 대화 추천(#554). 2026-11-16에 iOS는 릴리스 노트를 `ios-appstore-sync-metadata`로 올려 심사 제출, Android는 프로덕션 제출(#558). Play versionCode 110~112는 출시 전 2.5.0 빌드(`feat/voicetalk-windows-livekit-mvp`)가 이미 써서 113을 씀. 2.5.0은 Android 114 이상, iOS 122 이상을 써야 한다.

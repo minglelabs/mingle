@@ -9,6 +9,7 @@ import { hasConfirmedLanguageOnboarding } from "@/components/LivePhoneDemo/langu
 // The config module, not the "@/i18n" barrel (see coin-host.tsx).
 import { DEFAULT_LOCALE, resolveSupportedLocaleTag, type AppLocale } from "@/i18n/config";
 import { fillInviteTicketCopy, resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
+import LazyOverlayBoundary from "@/components/lazy-overlay-boundary";
 import { runAfterStartup } from "@/lib/after-startup";
 import { isFirstSpeakPending } from "@/lib/first-run";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -192,13 +193,19 @@ export default function ContactSyncHost() {
   return (
     <>
       {screenMounted ? (
-        <ContactSyncScreen open={screenOpen} onClose={() => setScreenOpen(false)} locale={locale} prompt={prompt} />
+        <LazyOverlayBoundary onFail={() => { setScreenOpen(false); setScreenMounted(false); }}>
+          <ContactSyncScreen open={screenOpen} onClose={() => setScreenOpen(false)} locale={locale} prompt={prompt} />
+        </LazyOverlayBoundary>
       ) : null}
       {ticketMounted ? (
-        <InviteTicketSheet open={ticketOpen} onClose={() => setTicketOpen(false)} locale={locale} />
+        <LazyOverlayBoundary onFail={() => { setTicketOpen(false); setTicketMounted(false); }}>
+          <InviteTicketSheet open={ticketOpen} onClose={() => setTicketOpen(false)} locale={locale} />
+        </LazyOverlayBoundary>
       ) : null}
       {inviteScreenMounted ? (
-        <InviteScreen open={inviteScreenOpen} onClose={() => setInviteScreenOpen(false)} locale={locale} />
+        <LazyOverlayBoundary onFail={() => { setInviteScreenOpen(false); setInviteScreenMounted(false); }}>
+          <InviteScreen open={inviteScreenOpen} onClose={() => setInviteScreenOpen(false)} locale={locale} />
+        </LazyOverlayBoundary>
       ) : null}
     </>
   );
