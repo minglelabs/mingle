@@ -18,7 +18,7 @@ Google Play 스토어 정보는 앱 버전과 상관없이 언제든 올릴 수 
 
 ## 반영 완료
 
-- 2.4.3 (iOS 122, Android 114): 번역 음성 스트리밍 재생(Soniox 기본), 안드로이드 음성 인식 입력 변경(#585). 2.5.0은 이제 Android 115 이상, iOS 123 이상을 써야 한다.
+- 2.4.3 (iOS 122, Android 117): 번역 음성 스트리밍 재생(Soniox 기본), 안드로이드 음성 인식 입력 변경(#585). Play versionCode 114~116은 출시 전 2.5.0 빌드가 이미 써서 117을 씀. 2.5.0은 이제 Android 118 이상, iOS 123 이상을 써야 한다.
 
 - 2.4.2 (iOS 121, Android 113): 공유 시트에 대화 추천(#554). 2026-11-16에 iOS는 릴리스 노트를 `ios-appstore-sync-metadata`로 올려 심사 제출, Android는 프로덕션 제출(#558). Play versionCode 110~112는 출시 전 2.5.0 빌드(`feat/voicetalk-windows-livekit-mvp`)가 이미 써서 113을 씀. 2.5.0은 Android 114 이상, iOS 122 이상을 써야 한다.
 
