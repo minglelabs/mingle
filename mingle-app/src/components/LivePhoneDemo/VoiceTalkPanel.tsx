@@ -22,7 +22,7 @@ import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
 import { ChevronUp, Headphones, Languages, Mic, MicOff, PhoneOff, Phone, Plus, Volume2, VolumeX } from 'lucide-react'
 import LanguageFlag from '@/components/language-flag'
 import VoiceTalkParticipantStrip, { sameVoiceTalkParticipants, type VoiceTalkParticipantChip } from './VoiceTalkParticipantStrip'
-import { buildClientApiPath } from '@/lib/api-contract'
+import { buildClientApiPath, clientApiNamespace, namespaceSupportsVoiceTalk } from '@/lib/api-contract'
 import { useRoomPresence } from '@/lib/room-presence'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import { VOICE_TALK_MAX_SEATS, voiceTalkCopy } from '@/i18n/voice-talk-copy'
@@ -136,7 +136,8 @@ const ABANDONED_CALL_CONFIRM_MS = 2_500
 const RESEAT_MIN_GAP_MS = 15_000
 
 export function isVoiceTalkAvailable(): boolean {
-  return bridge() !== null
+  // The app shell's bridge alone is not enough: apps before 2.5.0 have it but no voice host.
+  return bridge() !== null && namespaceSupportsVoiceTalk(clientApiNamespace)
 }
 
 function initial(name: string | null | undefined): string {

@@ -253,6 +253,26 @@ export function namespaceSupportsSpeakerMode(namespace: string): boolean {
   return true
 }
 
+/** First app release with group voice talk (the native LiveKit host). */
+const VOICE_TALK_MIN_VERSION = [2, 5, 0] as const
+
+/**
+ * Whether the app on this namespace can run a voice talk. An older app has the
+ * WebView bridge but no voice host: it would ignore the call and leave the
+ * panel connecting forever. Plain web (the '' namespace) never runs one.
+ */
+export function namespaceSupportsVoiceTalk(namespace: string): boolean {
+  const match = normalizeApiNamespace(namespace).match(/^(?:android|ios)\/v(\d+)\.(\d+)\.(\d+)$/)
+  if (!match) return false
+  const version = [Number(match[1]), Number(match[2]), Number(match[3])]
+  for (let index = 0; index < VOICE_TALK_MIN_VERSION.length; index += 1) {
+    if (version[index] !== VOICE_TALK_MIN_VERSION[index]) {
+      return version[index] > VOICE_TALK_MIN_VERSION[index]
+    }
+  }
+  return true
+}
+
 export function shouldRedetectFinalizeSourceLanguage(pathname: string, sourceLanguage?: string): boolean {
   const namespace = parseVersionedApiNamespaceFromFinalizePath(pathname)
   if (!namespace) {
