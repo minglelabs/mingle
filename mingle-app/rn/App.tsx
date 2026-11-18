@@ -47,11 +47,16 @@ import {
 
 import {
   addNativeTtsListener,
+  appendNativeTtsStream,
   buildNativeTtsStoppedEvent,
+  endNativeTtsStream,
   isNativeTtsAvailable,
+  isNativeTtsStreamAvailable,
   playNativeTts,
   resolveNativeTtsPlayRequest,
   resolveNativeTtsStartedEvent,
+  resolveNativeTtsStreamStartRequest,
+  startNativeTtsStream,
   stopNativeTts,
 } from './src/nativeTts';
 import {
@@ -114,6 +119,7 @@ import {
   resolveVersionPolicyLocale,
   resolveWebLocaleSegment,
 } from './src/i18n';
+import { pickLoadingMessage } from '../src/i18n/loading-messages';
 import {
   createCheckingNativeAppUpdateSnapshot,
   createUnknownNativeAppUpdateSnapshot,
@@ -175,6 +181,14 @@ import {
   buildNativeConversationShareEventScript,
   parseNativeConversationShareLink,
 } from './src/conversationShareLink';
+import {
+  buildNativeShareInboxEventScript,
+  isNativeShareInboxLink,
+  normalizeNativeShareInboxPayload,
+  normalizeNativeShareTargetConversationId,
+  normalizeNativeShareTargetDonation,
+  type NativeShareInboxPayload,
+} from './src/nativeShareInbox';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string; code?: number; domain?: string } };
@@ -246,6 +260,26 @@ type NativePushNotificationModule = {
   getPendingPushTap?: () => Promise<NativePendingPushTap | null>;
   clearPendingPushTap?: (sequence: number) => Promise<unknown>;
 };
+// Share-sheet integration (ios/mingle/NativeShareTargetModule.swift,
+// android/.../NativeShareTargetModule.kt): conversations suggested in the
+// system share sheet, and the content another app shared to this one.
+type NativeShareTargetModule = {
+  donateConversation?: (conversationId: string, displayName: string, avatarUrl: string | null) => Promise<unknown>;
+  removeConversation?: (conversationId: string) => Promise<unknown>;
+  removeAllConversations?: () => Promise<unknown>;
+  consumePendingShare?: () => Promise<unknown>;
+};
+const NATIVE_SHARE_TARGET_MODULE = (NativeModules as {
+  NativeShareTargetModule?: NativeShareTargetModule;
+}).NativeShareTargetModule;
+// The page acknowledges a share twice: "received" (it is listening) and
+// "done" (a room took it, or the user cancelled). Until "received" it is
+// injected again, because an injection can land on a page that is not
+// listening yet. Until "done" it is injected again after every page load,
+// because a reload (e.g. the cold-start redirect) drops what the page held.
+const SHARE_INBOX_REDISPATCH_INTERVAL_MS = 800;
+const SHARE_INBOX_REDISPATCH_MAX_ATTEMPTS = 25;
+const SHARE_INBOX_LIFETIME_MS = 10 * 60 * 1000;
 type NativePendingPushTap = {
   type?: unknown;
   url?: unknown;
@@ -526,6 +560,13 @@ const LAST_SCREEN_SNAPSHOT_FADE_MS = 180;
 // Fallbacks for a web build that never sends native_web_restore_ready.
 const LAST_SCREEN_SNAPSHOT_AFTER_LOAD_MAX_MS = 3000;
 const LAST_SCREEN_SNAPSHOT_MAX_MS = 10000;
+// The startup splash stays up past onLoadEnd until the web says its first
+// screen is drawn (native_web_ui_ready): onLoadEnd only means the HTML is in,
+// and hiding there showed the web's own loading screens (or a blank page)
+// right after the splash. These cap the wait for a web build that never
+// sends it, or a page that never settles.
+const STARTUP_SPLASH_AFTER_LOAD_MAX_MS = 6000;
+const STARTUP_SPLASH_MAX_MS = 15000;
 const RUNTIME_WEB_APP_BASE_URL = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.webAppBaseUrl,
   readRuntimeEnvValue(['NEXT_PUBLIC_SITE_URL', 'RN_WEB_APP_BASE_URL']),
@@ -793,6 +834,24 @@ type NativeTtsCommand =
       };
     }
   | {
+      // A clip that is still arriving: start, then pieces, then end.
+      type: 'native_tts_stream_start';
+      payload: {
+        utteranceId: string;
+        playbackId?: string;
+        sampleRate?: number;
+        stopOnEarphoneDisconnect?: boolean;
+      };
+    }
+  | {
+      type: 'native_tts_stream_chunk';
+      payload: { playbackId?: string; audioBase64?: string };
+    }
+  | {
+      type: 'native_tts_stream_end';
+      payload: { playbackId?: string };
+    }
+  | {
       type: 'native_tts_stop';
       payload?: {
         reason?: string;
@@ -867,6 +926,11 @@ type NativeAuthAckCommand = {
 
 type NativeAuthResetCommand = {
   type: 'native_auth_reset';
+};
+
+type NativeShareTargetCommand = {
+  type: 'native_share_target_donate' | 'native_share_target_remove' | 'native_share_inbox_ack';
+  payload?: unknown;
 };
 
 type NativeNavigationStateCommand = {
@@ -968,6 +1032,12 @@ type NativeWebRestoreReadyCommand = {
   type: 'native_web_restore_ready';
 };
 
+// The web's first screen is drawn: no loading shell or spinner is left on it.
+// The startup splash stays up until this arrives (or a fallback runs out).
+type NativeWebUiReadyCommand = {
+  type: 'native_web_ui_ready';
+};
+
 // Signed out or switched accounts: forget the last screen and its capture.
 type NativeWebRestoreResetCommand = {
   type: 'native_web_restore_reset';
@@ -997,6 +1067,7 @@ type NativePictureInPictureCommand = {
 
 type WebViewCommand =
   | NativeSttCommand
+  | NativeShareTargetCommand
   | NativeTtsCommand
   | NativeSttAecCommand
   | NativeSttEarphoneMicrophoneCommand
@@ -1021,6 +1092,7 @@ type WebViewCommand =
   | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand
   | NativeWebRestoreReadyCommand
+  | NativeWebUiReadyCommand
   | NativeWebRestoreResetCommand
   | NativeQaSetSttStatusCommand
   | NativeQaAudioInjectionCommand
@@ -1733,6 +1805,9 @@ function AppInner(): React.JSX.Element {
   const pendingConversationShareRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pendingConversationShareFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const conversationShareNavigationSequenceRef = useRef(0);
+  const pendingShareInboxRef = useRef<NativeShareInboxPayload | null>(null);
+  const pendingShareInboxReceivedAtRef = useRef(0);
+  const shareInboxRedispatchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Pending-slot reads are triggered from several places at once (mount,
   // retries, AppState, the iOS `opened` event). Run them one at a time so a
   // read never races the clear of the previous one and routes the tap twice.
@@ -2030,6 +2105,56 @@ function AppInner(): React.JSX.Element {
       // The pending tap remains for the next foreground/poll attempt.
     }
   }), [navigateWebViewToPushTap, webLocale]);
+  const stopShareInboxRedispatch = useCallback(() => {
+    if (shareInboxRedispatchTimerRef.current !== null) {
+      clearInterval(shareInboxRedispatchTimerRef.current);
+      shareInboxRedispatchTimerRef.current = null;
+    }
+  }, []);
+  // Content shared from another app (system share sheet). The page shows it in
+  // the conversation's composer and answers with `native_share_inbox_ack`.
+  const deliverShareInboxToWeb = useCallback((payload: NativeShareInboxPayload) => {
+    if (pendingShareInboxRef.current?.id !== payload.id) {
+      pendingShareInboxReceivedAtRef.current = Date.now();
+    }
+    pendingShareInboxRef.current = payload;
+    stopShareInboxRedispatch();
+    let attempts = 0;
+    const dispatch = () => {
+      const pending = pendingShareInboxRef.current;
+      if (
+        !pending
+        || attempts >= SHARE_INBOX_REDISPATCH_MAX_ATTEMPTS
+        || Date.now() - pendingShareInboxReceivedAtRef.current > SHARE_INBOX_LIFETIME_MS
+      ) {
+        pendingShareInboxRef.current = null;
+        stopShareInboxRedispatch();
+        return;
+      }
+      const webView = webViewRef.current;
+      if (!webView || !isPageReadyRef.current) return;
+      attempts += 1;
+      webView.injectJavaScript(buildNativeShareInboxEventScript(pending));
+    };
+    dispatch();
+    shareInboxRedispatchTimerRef.current = setInterval(dispatch, SHARE_INBOX_REDISPATCH_INTERVAL_MS);
+  }, [stopShareInboxRedispatch]);
+  const consumeNativeShareInbox = useCallback(() => {
+    const consumePendingShare = NATIVE_SHARE_TARGET_MODULE?.consumePendingShare;
+    if (!consumePendingShare) return;
+    void consumePendingShare().then((rawPayload) => {
+      const payload = normalizeNativeShareInboxPayload(rawPayload);
+      if (payload) deliverShareInboxToWeb(payload);
+    }).catch(() => {
+      // Nothing was shared, or the App Group container is unavailable.
+    });
+  }, [deliverShareInboxToWeb]);
+  // A new document finished loading while a share is still not "done".
+  const redeliverPendingShareInboxToWeb = useCallback(() => {
+    const pending = pendingShareInboxRef.current;
+    if (pending) deliverShareInboxToWeb(pending);
+  }, [deliverShareInboxToWeb]);
+  useEffect(() => stopShareInboxRedispatch, [stopShareInboxRedispatch]);
   const schedulePendingPushTapConsumption = useCallback(() => {
     pendingPushTapRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
     pendingPushTapRetryTimersRef.current = [];
@@ -2379,6 +2504,10 @@ function AppInner(): React.JSX.Element {
     const handleUrl = (rawUrl: string | null | undefined) => {
       if (!mounted || typeof rawUrl !== 'string') return;
       recordProfileLinkTrace('react_native_linking_event');
+      if (isNativeShareInboxLink(rawUrl)) {
+        consumeNativeShareInbox();
+        return;
+      }
       if (handleIncomingProfileLinkOnce(rawUrl)) return;
       if (handleIncomingConversationShareLinkOnce(rawUrl)) return;
       handleIncomingInviteLink(rawUrl);
@@ -2389,6 +2518,7 @@ function AppInner(): React.JSX.Element {
     });
     schedulePendingProfileLinkConsumption();
     schedulePendingPushTapConsumption();
+    consumeNativeShareInbox();
     const subscription = Linking.addEventListener('url', ({ url }) => {
       handleUrl(url);
       schedulePendingProfileLinkConsumption();
@@ -2406,7 +2536,7 @@ function AppInner(): React.JSX.Element {
       pendingPushTapRouteRetryTimersRef.current = [];
       clearPendingConversationShareRouteRetries();
     };
-  }, [clearPendingConversationShareRouteRetries, clearPendingProfileRouteRetries, handleIncomingConversationShareLinkOnce, handleIncomingInviteLink, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption, schedulePendingPushTapConsumption]);
+  }, [clearPendingConversationShareRouteRetries, clearPendingProfileRouteRetries, consumeNativeShareInbox, handleIncomingConversationShareLinkOnce, handleIncomingInviteLink, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption, schedulePendingPushTapConsumption]);
   useEffect(() => {
     let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -2418,13 +2548,16 @@ function AppInner(): React.JSX.Element {
         schedulePendingProfileRouteFlush(true);
         schedulePendingPushTapConsumption();
         schedulePendingPushTapFlush(true);
+        // Covers a share whose "open the app" step did not happen: the entry
+        // waits in the inbox until the app is next brought forward.
+        consumeNativeShareInbox();
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [schedulePendingProfileLinkConsumption, schedulePendingProfileRouteFlush, schedulePendingPushTapConsumption, schedulePendingPushTapFlush]);
+  }, [consumeNativeShareInbox, schedulePendingProfileLinkConsumption, schedulePendingProfileRouteFlush, schedulePendingPushTapConsumption, schedulePendingPushTapFlush]);
   useEffect(() => {
     // A tap on a banner shown while the app is already active never changes
     // AppState, so consume the pending slot when native reports the open.
@@ -2492,6 +2625,27 @@ function AppInner(): React.JSX.Element {
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startupSplashAfterLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearStartupSplashAfterLoadTimer = useCallback(() => {
+    if (!startupSplashAfterLoadTimerRef.current) return;
+    clearTimeout(startupSplashAfterLoadTimerRef.current);
+    startupSplashAfterLoadTimerRef.current = null;
+  }, []);
+  // The first screen is up (or the fallback ran out): drop the splash for good.
+  const settleStartupSplash = useCallback(() => {
+    clearStartupSplashAfterLoadTimer();
+    if (initialLoadSettledRef.current) return;
+    initialLoadSettledRef.current = true;
+    setStartupSplashVisible(false);
+  }, [clearStartupSplashAfterLoadTimer]);
+  const startStartupSplashAfterLoadTimer = useCallback(() => {
+    clearStartupSplashAfterLoadTimer();
+    startupSplashAfterLoadTimerRef.current = setTimeout(() => {
+      startupSplashAfterLoadTimerRef.current = null;
+      settleStartupSplash();
+    }, STARTUP_SPLASH_AFTER_LOAD_MAX_MS);
+  }, [clearStartupSplashAfterLoadTimer, settleStartupSplash]);
+  useEffect(() => clearStartupSplashAfterLoadTimer, [clearStartupSplashAfterLoadTimer]);
   // On a cold start that restores the previous screen, keep the splash over
   // the loading WebView until the page reports that its saved state is back.
   // It used to show a capture of the last screen instead; that picture looked
@@ -2501,6 +2655,13 @@ function AppInner(): React.JSX.Element {
     () => Platform.OS === 'ios' && Boolean(webUrl) && Boolean(initialRestoreUrlRef.current),
   );
   const lastScreenSnapshotOpacity = useRef(new Animated.Value(1)).current;
+  // The random line under the splash logo: a new one each time the splash
+  // comes up, the same one while it (and the fade that follows it) is showing.
+  const isStartupSplashShowing = startupSplashVisible || lastScreenSnapshotVisible;
+  const startupSplashMessage = useMemo(
+    () => (isStartupSplashShowing ? pickLoadingMessage(webLocale) : null),
+    [isStartupSplashShowing, webLocale],
+  );
   const lastScreenSnapshotHidingRef = useRef(false);
   const hideLastScreenSnapshot = useCallback((animated = true) => {
     if (lastScreenSnapshotHidingRef.current) return;
@@ -2607,7 +2768,7 @@ function AppInner(): React.JSX.Element {
     startupSplashTimeoutRef.current = setTimeout(() => {
       setStartupSplashVisible(false);
       startupSplashTimeoutRef.current = null;
-    }, 4000);
+    }, STARTUP_SPLASH_MAX_MS);
 
     return () => {
       if (startupSplashTimeoutRef.current) {
@@ -4500,6 +4661,11 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_web_ui_ready') {
+      settleStartupSplash();
+      return;
+    }
+
     if (parsed.type === 'native_web_restore_reset') {
       resetWebRestoreState();
       return;
@@ -4618,7 +4784,45 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_share_inbox_ack') {
+      const ackId = typeof (parsed.payload as { id?: unknown } | undefined)?.id === 'string'
+        ? (parsed.payload as { id: string }).id
+        : '';
+      if (pendingShareInboxRef.current && pendingShareInboxRef.current.id === ackId) {
+        stopShareInboxRedispatch();
+        if ((parsed.payload as { stage?: unknown } | undefined)?.stage === 'done') {
+          pendingShareInboxRef.current = null;
+        }
+      }
+      return;
+    }
+
+    if (parsed.type === 'native_share_target_donate') {
+      const donation = normalizeNativeShareTargetDonation(parsed.payload);
+      if (donation) {
+        void NATIVE_SHARE_TARGET_MODULE?.donateConversation?.(
+          donation.conversationId,
+          donation.displayName,
+          donation.avatarUrl,
+        )?.catch(() => {
+          // A suggestion is a convenience; the room works without it.
+        });
+      }
+      return;
+    }
+
+    if (parsed.type === 'native_share_target_remove') {
+      const conversationId = normalizeNativeShareTargetConversationId(parsed.payload);
+      if (conversationId) {
+        void NATIVE_SHARE_TARGET_MODULE?.removeConversation?.(conversationId)?.catch(() => {});
+      }
+      return;
+    }
+
     if (parsed.type === 'native_auth_reset') {
+      // Signed out: the next account must not get this account's
+      // conversations suggested in the share sheet.
+      void NATIVE_SHARE_TARGET_MODULE?.removeAllConversations?.()?.catch(() => {});
       // 웹이 로그아웃/세션 만료 시 전송하는 리셋 명령.
       // 이전 세션의 auth 결과(pendingAuthEventRef)와 retry 타이머를 클리어해서
       // 이전 로그인의 에러/성공 이벤트가 재전송되지 않도록 함.
@@ -4683,6 +4887,44 @@ function AppInner(): React.JSX.Element {
         }
         emitTtsToWeb({ type: 'tts_error', utteranceId, playbackId, message });
       });
+      return;
+    }
+
+    if (parsed.type === 'native_tts_stream_start') {
+      const request = resolveNativeTtsStreamStartRequest(parsed.payload);
+      const { utteranceId, playbackId } = request;
+      currentTtsPlaybackRef.current = { utteranceId, playbackId };
+      if (__DEV__) {
+        console.log(`[Web→NativeTTS] stream start utteranceId=${utteranceId} playbackId=${playbackId} sampleRate=${request.sampleRate}`);
+      }
+      void startNativeTtsStream(request).then((result) => {
+        const startedEvent = resolveNativeTtsStartedEvent(result, request, currentTtsPlaybackRef.current);
+        if (startedEvent) emitTtsToWeb(startedEvent);
+      }, (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (currentTtsPlaybackRef.current?.playbackId === playbackId) {
+          currentTtsPlaybackRef.current = null;
+        }
+        emitTtsToWeb({ type: 'tts_error', utteranceId, playbackId, message });
+      });
+      return;
+    }
+
+    if (parsed.type === 'native_tts_stream_chunk') {
+      const playbackId = typeof parsed.payload?.playbackId === 'string' ? parsed.payload.playbackId : '';
+      const audioBase64 = typeof parsed.payload?.audioBase64 === 'string' ? parsed.payload.audioBase64 : '';
+      // Pieces of a clip that was stopped or replaced meanwhile are dropped.
+      if (playbackId && audioBase64 && currentTtsPlaybackRef.current?.playbackId === playbackId) {
+        appendNativeTtsStream(playbackId, audioBase64);
+      }
+      return;
+    }
+
+    if (parsed.type === 'native_tts_stream_end') {
+      const playbackId = typeof parsed.payload?.playbackId === 'string' ? parsed.payload.playbackId : '';
+      if (playbackId && currentTtsPlaybackRef.current?.playbackId === playbackId) {
+        endNativeTtsStream(playbackId);
+      }
       return;
     }
 
@@ -4773,6 +5015,7 @@ function AppInner(): React.JSX.Element {
     handleDebugWebViewRemount,
     hideLastScreenSnapshot,
     resetWebRestoreState,
+    settleStartupSplash,
     handleNativeAuthStart,
     getNativeContactsBridge,
     handleNativeLocationCheck,
@@ -4785,6 +5028,7 @@ function AppInner(): React.JSX.Element {
     enqueueNativeSttCommand,
     flushPendingNativeSttMessagesToWeb,
     rememberCurrentWebUrl,
+    stopShareInboxRedispatch,
     syncLastScreenSnapshotCapture,
     updateSafeAreaPalette,
   ]);
@@ -5110,13 +5354,15 @@ function AppInner(): React.JSX.Element {
     cancelPendingProfileLinkFlush();
     cancelPendingConversationShareFlush();
     if (!initialLoadSettledRef.current) {
+      // A new document is coming; wait for its own load end.
+      clearStartupSplashAfterLoadTimer();
       setStartupSplashVisible(true);
     }
     const nextUrl = event?.nativeEvent?.url || webUrl;
     rememberCurrentWebUrl(nextUrl);
     setCurrentWebPathname(parseWebPathname(nextUrl));
     updateSafeAreaPalette(nextUrl);
-  }, [cancelPendingConversationShareFlush, cancelPendingProfileLinkFlush, loadAttemptTracker, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
+  }, [cancelPendingConversationShareFlush, cancelPendingProfileLinkFlush, clearStartupSplashAfterLoadTimer, loadAttemptTracker, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const replayNativeSttStatusToWeb = useCallback((nextUrl: string) => {
     const roomPayload = resolveConversationRestorePayloadFromUrl(nextUrl);
@@ -5176,14 +5422,15 @@ function AppInner(): React.JSX.Element {
     if (loadAttemptTracker.hasFailed()) return;
     isPageReadyRef.current = true;
     if (!initialLoadSettledRef.current) {
-      initialLoadSettledRef.current = true;
-      setStartupSplashVisible(false);
+      // Keep the splash until the web reports its first screen is drawn.
+      startStartupSplashAfterLoadTimer();
     }
     // onLoadEnd is NOT proof of success: on Android it fires BEFORE onError
     // for a failed load. The tracker only commits success (clearing the
     // overlay) once a short settle window passes, or the next load event
     // arrives, with no error for this attempt.
     loadAttemptTracker.loadFinished();
+    redeliverPendingShareInboxToWeb();
     const nextUrl = event?.nativeEvent?.url || webUrl;
     rememberCurrentWebUrl(nextUrl);
     setCurrentWebPathname(parseWebPathname(nextUrl));
@@ -5204,6 +5451,7 @@ function AppInner(): React.JSX.Element {
       audioRoute: nativeAudioRouteAvailable,
       deviceAudioCapture: nativeDeviceAudioCaptureAvailable,
       nativeTts: isNativeTtsAvailable(),
+      ttsStream: isNativeTtsStreamAvailable(),
       contacts: isNativeContactsAvailable(),
       earphoneMicrophoneChoice: nativeEarphoneMicrophoneChoiceAvailable,
       deviceId: NATIVE_RUNTIME_CONFIG.deviceId,
@@ -5273,7 +5521,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingInviteToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, nativeEarphoneMicrophoneChoiceAvailable, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingInviteToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, nativeEarphoneMicrophoneChoiceAvailable, redeliverPendingShareInboxToWeb, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, startStartupSplashAfterLoadTimer, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     // Record the failure before anything else: react-native-webview calls
@@ -5535,6 +5783,14 @@ function AppInner(): React.JSX.Element {
             fadeDuration={0}
             style={styles.startupSplashLogo}
           />
+          {startupSplashMessage ? (
+            <View style={styles.startupSplashMessageBox}>
+              <Text style={styles.startupSplashMessage}>{startupSplashMessage.text}</Text>
+              {startupSplashMessage.source ? (
+                <Text style={styles.startupSplashSource}>— {startupSplashMessage.source}</Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       ) : null}
       {lastScreenSnapshotVisible && !startupSplashVisible ? (
@@ -5546,6 +5802,14 @@ function AppInner(): React.JSX.Element {
             fadeDuration={0}
             style={styles.startupSplashLogo}
           />
+          {startupSplashMessage ? (
+            <View style={styles.startupSplashMessageBox}>
+              <Text style={styles.startupSplashMessage}>{startupSplashMessage.text}</Text>
+              {startupSplashMessage.source ? (
+                <Text style={styles.startupSplashSource}>— {startupSplashMessage.source}</Text>
+              ) : null}
+            </View>
+          ) : null}
         </Animated.View>
       ) : null}
       {canRenderNativeBanner && !isAppBackgrounded ? (
@@ -5638,6 +5902,27 @@ const styles = StyleSheet.create({
   startupSplashLogo: {
     width: 180,
     height: 180,
+  },
+  startupSplashMessageBox: {
+    position: 'absolute',
+    left: 32,
+    right: 32,
+    top: '50%',
+    marginTop: 112,
+    alignItems: 'center',
+  },
+  startupSplashMessage: {
+    textAlign: 'center',
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600',
+    color: '#2D2A1E',
+  },
+  startupSplashSource: {
+    marginTop: 6,
+    textAlign: 'center',
+    fontSize: 12,
+    color: 'rgba(45, 42, 30, 0.7)',
   },
   errorOverlay: {
     position: 'absolute',

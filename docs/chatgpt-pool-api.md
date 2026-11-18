@@ -98,8 +98,10 @@ Job status:
 - Pin an account (rarely needed): add `"account": "<email>"`.
 - Finished jobs are kept for **1 hour**. Fetch the result before then.
 - Most images finish in under 2 minutes. If an account fails or hangs, the
-  pool moves the job to another account (up to 4 accounts, up to 8 minutes
-  each). Poll for 10 minutes, then treat it as failed.
+  pool moves the job to another account (up to 4 failed tries, up to 8
+  minutes each; an account at its image limit does not count as a try, and
+  the pool opens a closed profile when every open one is limited). Poll for
+  10 minutes, then treat it as failed.
 
 `"async": true` works on `/v1/chat/completions` too, with the same polling.
 

@@ -99,6 +99,8 @@ export type OperatorAccountDetail = {
   primaryLanguage: string | null
   interestLanguages: InterestLanguage[]
   birthYear: number | null
+  /** 'female' | 'male', or null when the account has none. */
+  gender: string | null
   personaCountry: string | null
   city: string | null
   countryName: string | null
@@ -145,6 +147,7 @@ export async function getOperatorAccountDetail(userId: string): Promise<Operator
       interestLanguages: true,
       interestLanguageLevels: true,
       birthDate: true,
+      gender: true,
       locationCity: true,
       locationCountry: true,
       isActive: true,
@@ -165,6 +168,7 @@ export async function getOperatorAccountDetail(userId: string): Promise<Operator
     primaryLanguage: row.primaryLanguages[0] ?? null,
     interestLanguages: zipInterestLanguages(row.interestLanguages, row.interestLanguageLevels),
     birthYear: row.birthDate ? row.birthDate.getUTCFullYear() : null,
+    gender: row.gender,
     personaCountry: row.operatorAccount?.personaCountry ?? null,
     city: row.locationCity,
     countryName: row.locationCountry,

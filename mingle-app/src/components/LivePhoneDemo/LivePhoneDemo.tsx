@@ -38,6 +38,8 @@ import {
 } from './live-phone-demo.bubble-tts-indicator'
 import {
   getEarphoneModePreferenceServerSnapshot,
+  EARPHONE_MODE_PREFETCH_LIMIT,
+  EARPHONE_MODE_STREAM_PREFETCH_LIMIT,
   getEarphoneModePreferenceSnapshot,
   keepManualTtsQueueItems,
   resolveEarphoneModeGate,
@@ -95,7 +97,20 @@ import {
   writeEarphoneCaptureSourceAnswer,
   writeEarphoneMicrophonePick,
 } from '@/lib/native-earphone-microphone'
-import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
+import {
+  NATIVE_TTS_STREAM_WATCHDOG_TIMEOUT_MS,
+  estimateTtsAudioDurationMs,
+  resolveNativeTtsWatchdogTimeoutMs,
+} from '@/lib/tts-audio-duration'
+import {
+  isStreamingTtsClip,
+  parseNativeTtsStreamCapability,
+  parseStreamedPcmSampleRate,
+  readStreamingTtsResponse,
+  resolveTtsClipBlob,
+  type StreamingTtsClip,
+  type TtsClipAudio,
+} from './tts-stream-clip'
 import { TtsAgentTextScheduler } from './tts-agent-text'
 import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
@@ -235,6 +250,14 @@ import {
 } from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { requestNativeBannerZone } from '@/lib/native-banner-zone'
+import {
+  buildNativeShareTargetDonation,
+  getPendingNativeShareVersion,
+  postNativeShareTargetDonate,
+  postNativeShareTargetRemove,
+  subscribePendingNativeShare,
+  takePendingNativeShareText,
+} from '@/lib/native-share-inbox'
 import { reportUiDiagnostic } from '@/lib/ui-diagnostics'
 import { unreadDividerLabel } from '@/i18n/unread-divider-copy'
 import {
@@ -351,6 +374,8 @@ import {
 
 export { resolveKeyboardViewportInsetPx, resolveStableKeyboardViewportInsetPx }
 
+/** About as long as the iOS keyboard takes to slide down. */
+const KEYBOARD_CLOSE_EASE_MS = 250
 const VOLUME_THRESHOLD = 0.05
 // How long a "loaded" older-history page may go without changing the list before its loading state is released.
 const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
@@ -1619,7 +1644,8 @@ export function buildLatestUtterancePayload(
 type TtsQueueItem = {
   playbackKey: string
   utteranceId: string
-  audioBlob: Blob | null
+  // A streaming clip is dispatched as soon as its first audio is in.
+  audioBlob: TtsClipAudio | null
   language: string
   kind: 'original' | 'translation'
   // 'auto' items come from earphone mode (the legacy slot handlers below are
@@ -2452,6 +2478,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   ) => Promise<void>>(async () => {})
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
+  // The streamed clip now playing; its download is cancelled when it is cut.
+  const currentStreamClipRef = useRef<StreamingTtsClip | null>(null)
+  // Whether the last TTS answer was a stream (null: none yet). A server that
+  // answers with whole clips keeps the larger auto-read prefetch.
+  const lastTtsAnswerStreamedRef = useRef<boolean | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
   // Soniox v6 agent text: what the playing TTS clip says, sent to STT timed to
   // playback so the echo of our own voice is dropped from the transcript.
@@ -2473,6 +2504,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const processTtsQueueRef = useRef<() => void>(() => {})
   const stopClickResumeTimerIdsRef = useRef<number[]>([])
   const manualTtsRequestSeqRef = useRef(0)
+  // A Listen request still waiting for its answer; a newer tap aborts it.
+  const manualTtsAbortRef = useRef<AbortController | null>(null)
   const accountPreferencesSyncTimerRef = useRef<number | null>(null)
   const accountPreferencesSyncRetryTimerRef = useRef<number | null>(null)
   const accountPreferencesSyncRetryAttemptRef = useRef(0)
@@ -2635,7 +2668,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     translationModelUserSelectedSinceHydrationStart,
   ])
   // Sent on every TTS request (no DB lookup on the TTS path) once the user picked
-  // a model. Undefined -> server default (gemini-3.8-flash-lite-tts).
+  // a model. Undefined -> server default (soniox-tts-rt-v2).
   const requestTtsModel = useMemo<UserSelectableTtsModel | undefined>(() => {
     return resolveRequestTtsModel(ttsModel, {
       allowSync: enableAccountPreferencesSync,
@@ -4477,6 +4510,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // closed, so this only reports how far an interrupted clip got.
     ttsAgentText.interrupt()
     ttsAgentTextClipRef.current = null
+    // A cut stream stops downloading, so the server stops synthesizing it.
+    currentStreamClipRef.current?.cancel()
+    currentStreamClipRef.current = null
     const player = playerAudioRef.current
     if (player) {
       player.pause()
@@ -4602,7 +4638,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // Front item has audio — play it
     clearTtsWaitTimer()
     const next = queue.shift()!
-    const audioBlob = next.audioBlob!
+    const clipAudio = next.audioBlob!
     isTtsProcessingRef.current = true
     cleanupCurrentAudio()
     currentTtsClipSeqRef.current += 1
@@ -4641,8 +4677,62 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       processTtsQueueRef.current()
     }
 
+    // Shells with `ttsStream` play the pieces of a clip that is still
+    // arriving; the sentence starts before the clip is complete.
+    const playStreamViaNativeBridge = (clip: StreamingTtsClip) => {
+      const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
+      currentStreamClipRef.current = clip
+      const post = (type: string, payload: Record<string, unknown>) => {
+        window.ReactNativeWebView!.postMessage(JSON.stringify({ type, payload }))
+      }
+      if (agentTextClip) {
+        // The length is only known at the end; 0 lets agent text pace itself.
+        agentTextClip.durationMs = clip.isComplete ? clip.durationMs : 0
+        ttsAgentTextClipRef.current = agentTextClip
+      }
+      post('native_tts_stream_start', {
+        playbackId,
+        utteranceId: next.playbackKey,
+        sampleRate: clip.sampleRate,
+        ...(next.mode === 'auto' && !isSpeakerModeClient() ? { stopOnEarphoneDisconnect: true } : {}),
+      })
+      armNativeTtsEventTimeout(playbackId, next.playbackKey, NATIVE_TTS_STREAM_WATCHDOG_TIMEOUT_MS)
+      // `subscribe` replays the pieces already in before it returns.
+      let unsubscribe = () => {}
+      unsubscribe = clip.subscribe({
+        onChunk: (chunk) => {
+          if (!isCurrentClip()) {
+            unsubscribe()
+            clip.cancel()
+            return
+          }
+          post('native_tts_stream_chunk', { playbackId, audioBase64: bytesToBase64(chunk) })
+        },
+        onEnd: () => {
+          if (!isCurrentClip()) return
+          post('native_tts_stream_end', { playbackId })
+          // Now the length is known: the usual watchdog for a clip this long.
+          if (activeNativeTtsPlaybackIdRef.current === playbackId) {
+            armNativeTtsEventTimeout(playbackId, next.playbackKey, resolveNativeTtsWatchdogTimeoutMs({
+              durationMs: clip.durationMs,
+              byteLength: clip.size,
+            }))
+          }
+        },
+      })
+      if (shouldTreatNativeTtsPostAsStart(isNativeAudioRouteSupported(getNativeAudioRouteSnapshot()))) {
+        markPlaybackStarted()
+      }
+    }
+
     const playViaNativeBridge = async () => {
       try {
+        if (isStreamingTtsClip(clipAudio) && parseNativeTtsStreamCapability(readCachedNativeShellCapabilities())) {
+          playStreamViaNativeBridge(clipAudio)
+          return
+        }
+        const audioBlob = await resolveTtsClipBlob(clipAudio)
+        if (!isCurrentClip()) return
         const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
         const audioBytes = new Uint8Array(await audioBlob.arrayBuffer())
         const contentType = audioBlob.type || 'audio/mpeg'
@@ -4702,6 +4792,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
       }
 
+      const audioBlob = await resolveTtsClipBlob(clipAudio)
+      if (!isCurrentClip()) return
       const objectUrl = URL.createObjectURL(audioBlob)
       currentAudioUrlRef.current = objectUrl
       audio.src = objectUrl
@@ -4880,13 +4972,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     text: string
     language: string
     signal?: AbortSignal
-  }): Promise<Blob | null> => {
+  }): Promise<TtsClipAudio | null> => {
     const text = input.text.trim()
     const language = input.language.trim()
     if (!text || !language) return null
 
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
+    const wantsStream = isNativeApp() && parseNativeTtsStreamCapability(readCachedNativeShellCapabilities())
 
     try {
       const response = await fetch(TTS_API_PATH, {
@@ -4907,11 +5000,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           clientMessageId: input.playbackKey,
           // Same model as auto TTS; omitted while the user has not picked one (server default).
           ...(requestTtsModel ? { ttsModel: requestTtsModel } : {}),
+          // Only shells that play a clip while it is still arriving ask for a stream.
+          ...(wantsStream ? { stream: true } : {}),
         }),
       })
       if (response.status === 402) notifyCoinsExhausted({ userInitiated: true })
       if (!response.ok) return null
       applyCoinBalanceFromHeaders(response.headers)
+      // Streamed PCM: usable from its first audio. A server that answers with a
+      // whole clip anyway (streaming switched off) falls through to the blob.
+      const streamedSampleRate = wantsStream ? parseStreamedPcmSampleRate(response.headers.get('content-type')) : null
+      if (wantsStream) lastTtsAnswerStreamedRef.current = streamedSampleRate !== null
+      if (streamedSampleRate !== null && response.body) {
+        return await readStreamingTtsResponse(response.body, streamedSampleRate)
+      }
       const arrayBuffer = await response.arrayBuffer()
       if (!arrayBuffer || arrayBuffer.byteLength === 0) return null
       return new Blob([arrayBuffer], {
@@ -5438,6 +5540,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       clearConversationHistory()
       setDeleteConversationDialogOpen(false)
       requestCloseMenuPanel()
+      // Left or deleted: the system must stop suggesting it in the share sheet.
+      postNativeShareTargetRemove(conversationId)
       onConversationDeleted?.()
       toast.success(isMultiMember ? leaveConversationCopy.successToastLabel : deleteConversationCopy.successToastLabel)
     } catch {
@@ -5725,12 +5829,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       void primeAudioPlayback()
     }
 
+    manualTtsAbortRef.current?.abort()
+    const manualAbort = new AbortController()
+    manualTtsAbortRef.current = manualAbort
     const audioBlob = await synthesizeBubbleTtsViaApi({
       playbackKey: target.playbackKey,
       text: normalizedText,
       language: target.language,
+      signal: manualAbort.signal,
     })
-    if (manualTtsRequestSeqRef.current !== requestSeq) return
+    if (manualTtsAbortRef.current === manualAbort) manualTtsAbortRef.current = null
+    if (manualTtsRequestSeqRef.current !== requestSeq) {
+      // A newer tap won: stop downloading this one.
+      if (isStreamingTtsClip(audioBlob)) audioBlob.cancel()
+      return
+    }
 
     manualTtsPendingSeqRef.current = null
     setPendingManualTtsTarget(null)
@@ -6365,6 +6478,57 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setComposerHasDraft((current) => current === nextHasDraft ? current : nextHasDraft)
     syncComposerTextareaHeight(event.currentTarget)
   }, [composerDraftStorageKey, syncComposerTextareaHeight])
+
+  // System share sheet: suggest this room there (it lists the rooms the app
+  // reported as direct targets). Reported each time the room is opened, so iOS ranks the
+  // rooms the user actually uses first.
+  const shareTargetDonationKeyRef = useRef('')
+  useEffect(() => {
+    if (!isVisible || !conversationId || !viewerUserId || typeof window === 'undefined') return
+    const donation = buildNativeShareTargetDonation({
+      conversationId,
+      title: displayConversationTitle,
+      otherMembers: initialOtherMembers ?? [],
+      origin: window.location.origin,
+    })
+    if (!donation) return
+    const donationKey = JSON.stringify(donation)
+    if (shareTargetDonationKeyRef.current === donationKey) return
+    shareTargetDonationKeyRef.current = donationKey
+    postNativeShareTargetDonate(donation)
+  }, [conversationId, displayConversationTitle, initialOtherMembers, isVisible, viewerUserId])
+  useEffect(() => {
+    if (!isVisible) shareTargetDonationKeyRef.current = ''
+  }, [isVisible])
+
+  // Text or a link shared to HashChat from another app lands in the message
+  // box (after any draft already there) for the user to review and send.
+  const pendingNativeShareVersion = useSyncExternalStore(subscribePendingNativeShare, getPendingNativeShareVersion, () => '')
+  const sharedTextComposerOpenUntilRef = useRef(0)
+  const [sharedTextArrivalCount, setSharedTextArrivalCount] = useState(0)
+  useEffect(() => {
+    if (!pendingNativeShareVersion || !isVisible || !conversationId || !viewerUserId) return
+    const sharedText = takePendingNativeShareText(conversationId)
+    if (!sharedText) return
+    const currentDraft = composerTextareaRef.current?.value ?? composerDraftRef.current
+    const nextDraft = currentDraft.trim() ? `${currentDraft.replace(/\s+$/, '')}\n${sharedText}` : sharedText
+    composerDraftRef.current = nextDraft
+    persistComposerDraft(nextDraft, composerDraftStorageKey)
+    setComposerHasDraft(true)
+    if (composerTextareaRef.current) {
+      composerTextareaRef.current.value = nextDraft
+      syncComposerTextareaHeight(composerTextareaRef.current)
+    }
+    sharedTextComposerOpenUntilRef.current = Date.now() + 8_000
+    setSharedTextArrivalCount((count) => count + 1)
+  }, [composerDraftStorageKey, conversationId, isVisible, pendingNativeShareVersion, syncComposerTextareaHeight, viewerUserId])
+  // Voice mode has no message box on screen: show the keyboard-mode box, which
+  // mounts with this draft. A room that is still loading applies its saved
+  // input mode a moment later, so the box is reopened for a short while.
+  useEffect(() => {
+    if (isComposerOpen || Date.now() > sharedTextComposerOpenUntilRef.current) return
+    setIsComposerOpen(true)
+  }, [isComposerOpen, sharedTextArrivalCount])
 
   const handleComposerSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -7246,6 +7410,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       now: () => Date.now(),
       setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
       clearTimer: (handle) => window.clearTimeout(handle as number),
+      // Streamed clips (native stream player): one ahead, so a listener
+      // holds at most two Soniox requests.
+      prefetchLimit: () => (
+        isNativeApp()
+          && parseNativeTtsStreamCapability(readCachedNativeShellCapabilities())
+          && lastTtsAnswerStreamedRef.current !== false
+          ? EARPHONE_MODE_STREAM_PREFETCH_LIMIT
+          : EARPHONE_MODE_PREFETCH_LIMIT
+      ),
       synthesize: (target, signal) => synthesizeBubbleTtsViaApiRef.current({
         playbackKey: target.playbackKey,
         text: target.text,
@@ -7750,6 +7923,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? COMPOSER_MODE_BOTTOM_MARGIN_PX
     : VOICE_MODE_BOTTOM_MARGIN_PX
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
+  // iOS reports the keyboard's final height (0) as soon as it starts sliding
+  // down, so the bar used to drop at once and the chat jumped to full height
+  // while the keyboard was still on screen. Ease the bar down alongside the
+  // keyboard instead. Only the closing side animates: when the keyboard opens,
+  // iOS already scrolls the focused field into view, and a delayed bar would
+  // leave the field under the keyboard.
+  const bottomBarKeyboardTransition = isComposerOpen && keyboardViewportInsetPx === 0
+    ? `padding-bottom ${KEYBOARD_CLOSE_EASE_MS}ms cubic-bezier(0.25, 0.8, 0.3, 1)`
+    : undefined
   const composerCanSend = composerHasDraft
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
@@ -10021,6 +10203,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             layout={!isComposerOpen}
             layoutDependency={isComposerOpen}
             onLayoutAnimationComplete={syncNativeBottomBarClearance}
+            onTransitionEnd={syncNativeBottomBarClearance}
             ref={bottomBarRef}
             data-qa="live-demo-bottom-bar"
             className="relative shrink-0 border-t border-gray-100 bg-white"
@@ -10028,6 +10211,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             style={{
               paddingTop: `${bottomBarTopPaddingPx}px`,
               paddingBottom: bottomBarPaddingBottom,
+              transition: bottomBarKeyboardTransition,
               paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
@@ -10147,7 +10331,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
                         onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} /> : earphoneModeMenuItem ? (
+                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} acceptSharedPhoto={isVisible} /> : earphoneModeMenuItem ? (
                       // No sendable conversation: no photo row, but the "+" still
                       // carries the earphone-mode row and the voice-mode switch.
                       <ConversationImageComposer conversationId="" allowPhoto={false} locale={uiLocale}
@@ -10365,7 +10549,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                   <div className="flex items-center gap-1 self-end justify-self-end">
                     {conversationId && viewerUserId && <ConversationImageComposer voiceButtonSize={VOICE_MODE_SIDE_BUTTON_SIZE_PX} conversationId={conversationId} locale={uiLocale}
-                      onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} />}
+                      onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} acceptSharedPhoto={isVisible} />}
                     <motion.button
                       layoutId="live-phone-demo-keyboard-toggle"
                       data-qa="live-demo-keyboard-open"

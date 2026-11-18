@@ -8,8 +8,12 @@ import {
   parseClientContext,
 } from '@/lib/app-analytics'
 import { resolveUserIdForTrackedWrite } from '@/lib/request-user-identity'
-import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
-import { resolveTtsRuntimeSelection, synthesizeSpeech } from '@/server/api/shared/tts-provider'
+import {
+  canStreamSpeech,
+  resolveTtsRuntimeSelection,
+  synthesizeSpeech,
+  synthesizeSpeechStream,
+} from '@/server/api/shared/tts-provider'
 import { COIN_INSUFFICIENT_ERROR } from '@/lib/coin-units'
 import { randomUUID } from 'node:crypto'
 import { estimateTtsAudioSeconds, resolveCoinBillingUserId } from '@/server/coins/request-billing'
@@ -27,30 +31,24 @@ function normalizeLanguage(input?: string): string | null {
 export async function handleTtsInworldV1(request: NextRequest) {
   const body = await request.json().catch((): Record<string, unknown> => ({}))
   const text = typeof body?.text === 'string' ? body.text.trim() : ''
-  const requestedVoiceId = typeof body?.voiceId === 'string' ? body.voiceId.trim() : ''
   const language = normalizeLanguage(typeof body?.language === 'string' ? body.language : '')
   const sessionKeyHint = typeof body?.sessionKey === 'string' ? body.sessionKey.trim() : null
   const clientMessageId = typeof body?.clientMessageId === 'string' ? body.clientMessageId.trim().slice(0, 128) : null
   const clientContext = parseClientContext(body?.clientContext)
   // User-selected TTS model sent by the client; missing/invalid -> default (gemini-3.8-flash-lite-tts).
   const ttsSelection = resolveTtsRuntimeSelection(body?.ttsModel)
+  // Sent by clients that play audio while it is still arriving.
+  const wantsStream = body?.stream === true
 
   const buildMissingCredentialsResponse = () => {
     const response = NextResponse.json(
       {
-        error:
-          'INWORLD_BASIC (or INWORLD_RUNTIME_BASE64_CREDENTIAL / INWORLD_BASIC_CREDENTIAL) is required',
+        error: 'GEMINI_API_KEY is required',
       },
       { status: 500 },
     )
     ensureTrackingContext(request, response, { sessionKeyHint })
     return response
-  }
-
-  // Inworld path keeps the original check order (credentials, then text).
-  // Gemini can synthesize without Inworld credentials; it only needs them to fall back.
-  if (ttsSelection.provider === 'inworld' && !getInworldAuthHeaderValue()) {
-    return buildMissingCredentialsResponse()
   }
 
   if (!text) {
@@ -73,10 +71,104 @@ export async function handleTtsInworldV1(request: NextRequest) {
   const sessionPromise = getServerSession(getAuthOptions()).catch(() => null)
 
   try {
-    const result = await synthesizeSpeech({
+    const speech = wantsStream && canStreamSpeech(language, ttsSelection.value)
+      ? await synthesizeSpeechStream({ text, language, ttsModel: ttsSelection.value })
+      : null
+    if (speech?.ok) {
+      // Headerless PCM is handed on chunk by chunk while Gemini is still
+      // synthesizing. The clip length is only known at the end, so coins and
+      // the event log are settled then (no X-Coin-Balance header).
+      let pcmBytes = 0
+      let settled = false
+      const settle = (outcome: 'completed' | 'cancelled' | 'failed') => {
+        if (settled) return
+        settled = true
+        if (pcmBytes === 0) return
+        if (coinBillingUserId) {
+          void chargeCoinUsageSafely({
+            userId: coinBillingUserId,
+            kind: 'tts',
+            units: { char: text.length, second: pcmBytes / (speech.sampleRate * 2) },
+            model: speech.modelId,
+            provider: speech.provider,
+            sessionKey: sessionKeyHint,
+            idempotencyKey: `tts:${coinBillingUserId}:${randomUUID()}`,
+          })
+        }
+        fireAndForgetDbWrite('tts.inworld.success', async () => {
+          const userId = await resolveUserIdForTrackedWrite({
+            request,
+            session: await sessionPromise,
+            tracking,
+            clientContext,
+          })
+          if (!userId) return
+          await createTrackedEventLog({
+            userId,
+            tracking,
+            clientContext,
+            sessionKey: tracking.sessionKey,
+            eventType: 'tts_generated',
+            metadata: {
+              language,
+              voiceId: speech.voiceId,
+              modelId: speech.modelId,
+              textLength: text.length,
+              audioBytes: pcmBytes,
+              clientMessageId,
+              provider: speech.provider,
+              streamed: true,
+              ...(outcome === 'completed' ? {} : { streamOutcome: outcome }),
+              ...(speech.fallbackFrom ? { fallbackFrom: speech.fallbackFrom } : {}),
+            },
+          })
+        })
+      }
+      const pcmStream = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          try {
+            const next = await speech.chunks.next()
+            if (next.done) {
+              controller.close()
+              settle('completed')
+              return
+            }
+            pcmBytes += next.value.length
+            controller.enqueue(new Uint8Array(next.value))
+          } catch (error) {
+            // What was already sent stays playable; the clip ends early.
+            console.warn('[tts] stream ended early', {
+              modelId: speech.modelId,
+              pcmBytes,
+              error: error instanceof Error ? error.message : String(error),
+            })
+            controller.close()
+            settle('failed')
+          }
+        },
+        async cancel() {
+          await speech.chunks.return().catch(() => {})
+          settle('cancelled')
+        },
+      })
+      const streamHeaders: Record<string, string> = {
+        'Content-Type': `audio/L16;rate=${speech.sampleRate};channels=1`,
+        'Cache-Control': 'no-store, no-transform',
+        // Proxies must pass chunks on as they come.
+        'X-Accel-Buffering': 'no',
+        'X-TTS-Provider': speech.provider,
+        'X-TTS-Voice-Id': speech.voiceId,
+        'X-TTS-Stream': '1',
+      }
+      if (speech.fallbackFrom) streamHeaders['X-TTS-Fallback-From'] = speech.fallbackFrom
+      const streamResponse = new NextResponse(pcmStream, { headers: streamHeaders })
+      const tracking = ensureTrackingContext(request, streamResponse, { sessionKeyHint })
+      return streamResponse
+    }
+
+    const result = speech ?? await synthesizeSpeech({
       text,
       language,
-      requestedVoiceId,
       ttsModel: ttsSelection.value,
     })
     const fallbackMetadata = result.fallbackFrom ? { fallbackFrom: result.fallbackFrom } : {}

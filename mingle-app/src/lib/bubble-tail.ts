@@ -170,7 +170,12 @@ export function matchTailCutAfter(remaining: string, cutAfter: string): number {
   return ends[first + target.length - 1] as number
 }
 
-const CUT_PUNCTUATION = /[.,!?;:…。、，！？；：」』”"')\]]$/
+// Marks that end a sentence or a clause, across scripts: Latin, CJK (full and
+// half width), Arabic/Urdu, Devanagari, Myanmar, Khmer, Ethiopic, Armenian.
+// Scripts written without marks (Thai, Lao) rely on the length fallback below.
+const SENTENCE_MARKS = '.!?…。！？．｡؟۔।॥။។።։'
+const CLAUSE_MARKS = ',;:、，；：､،؛၊፣'
+const CUT_PUNCTUATION = new RegExp(`[${SENTENCE_MARKS}${CLAUSE_MARKS}」』”"')\\]]$`)
 
 /**
  * An interim cut is safe only when words already follow it, or when it ends
@@ -203,8 +208,8 @@ export function joinTailTranslations(
 // STT text is the surest sign of one, so a new mark triggers a request; speech
 // often has no marks, so a stretch of new text (about one clause) does too.
 
-const CUT_CANDIDATE = /[.,!?;:…。、，！？；：،؛؟।]/g
-const SENTENCE_END = /[.!?…。！？؟।]$/
+const CUT_CANDIDATE = new RegExp(`[${SENTENCE_MARKS}${CLAUSE_MARKS}]`, 'g')
+const SENTENCE_END = new RegExp(`[${SENTENCE_MARKS}]$`)
 const DENSE_SCRIPT_CHAR = /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Myanmar}\p{Script=Khmer}]/gu
 const LETTER = /\p{L}/gu
 

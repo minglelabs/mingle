@@ -11,6 +11,7 @@ import {
   EARPHONE_MODE_STALL_TIMEOUT_MS,
   type EarphoneModeReadContext,
 } from './live-phone-demo.earphone-mode.logic'
+import { StreamingTtsClip, type TtsClipAudio } from './tts-stream-clip'
 
 // The session reads Korean unless a test picks another language.
 const koRead: EarphoneModeReadContext = { readLanguage: 'ko', languageOrder: ['ko', 'en', 'ja'] }
@@ -46,10 +47,10 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
   let now = 10_000_000
   let nextTimerId = 1
   const timers = new Map<number, { at: number, callback: () => void }>()
-  const requests = new Map<string, { resolve: (blob: Blob | null) => void, signal: AbortSignal }>()
+  const requests = new Map<string, { resolve: (blob: TtsClipAudio | null) => void, signal: AbortSignal }>()
   const audioRequests: Array<{
     playbackKey: string
-    resolve: (blob: Blob | null) => void
+    resolve: (blob: TtsClipAudio | null) => void
     signal: AbortSignal
   }> = []
   const requestOrder: string[] = []
@@ -113,7 +114,7 @@ function createHarness(options: Partial<EarphoneAutoReadControllerOptions> = {})
       }
       await flushAsync()
     },
-    async resolveAudio(playbackKey: string, blob: Blob | null = new Blob(['audio'])) {
+    async resolveAudio(playbackKey: string, blob: TtsClipAudio | null = new Blob(['audio'])) {
       const request = requests.get(playbackKey)
       if (!request) throw new Error(`no request for ${playbackKey}`)
       request.resolve(blob)
@@ -438,6 +439,24 @@ describe('EarphoneAutoReadController ordering', () => {
     await h.resolveAudio(key('m1'))
     expect(h.requestOrder).toEqual([key('m1'), key('m2'), key('m3'), key('m4')])
   })
+
+  it('keeps a streamed clip in its slot until it has fully arrived', async () => {
+    const h = createHarness({ prefetchLimit: () => 1 })
+    h.controller.arm(h.snapshot([]))
+    h.state.engineIdle = false
+    h.controller.update(h.snapshot([1, 2, 3].map((n) => message(`m${n}`, h.now() + n))))
+    expect(h.requestOrder).toEqual([key('m1')])
+
+    const clip = new StreamingTtsClip(24000)
+    clip.append(new Uint8Array(4800))
+    await h.resolveAudio(key('m1'), clip)
+    // First audio is in, but the rest is still arriving: no second request.
+    expect(h.requestOrder).toEqual([key('m1')])
+
+    clip.finish()
+    await flushAsync()
+    expect(h.requestOrder).toEqual([key('m1'), key('m2')])
+  })
 })
 
 describe('EarphoneAutoReadController gate and manual preemption', () => {
@@ -527,7 +546,7 @@ describe('EarphoneAutoReadController read language', () => {
 
     await h.resolveAudioRequest(1, new Blob(['current audio']))
     expect(h.dispatched[0]).toMatchObject({ text: '수정된 번역' })
-    expect(await h.dispatched[0]!.audioBlob.text()).toBe('current audio')
+    expect(await (h.dispatched[0]!.audioBlob as Blob).text()).toBe('current audio')
   })
 
   it('re-synthesizes a revised ready prefetch while it waits behind an earlier message', async () => {
@@ -551,7 +570,7 @@ describe('EarphoneAutoReadController read language', () => {
     await h.resolveAudioRequest(1, new Blob(['current audio']))
     await h.finishPlayback()
     expect(h.dispatched[1]).toMatchObject({ utteranceId: 'prefetched', text: '최신 번역' })
-    expect(await h.dispatched[1]!.audioBlob.text()).toBe('current audio')
+    expect(await (h.dispatched[1]!.audioBlob as Blob).text()).toBe('current audio')
   })
 
   it('discards a pending translation when a same-ID message is reclassified as spoken in the read language', async () => {
@@ -604,7 +623,7 @@ describe('EarphoneAutoReadController read language', () => {
     expect(h.dispatchedIds()).toEqual([])
     await h.resolveAudioRequest(1, new Blob(['final audio']))
     expect(h.dispatched[0]).toMatchObject({ text: '확장된 최종 번역' })
-    expect(await h.dispatched[0]!.audioBlob.text()).toBe('final audio')
+    expect(await (h.dispatched[0]!.audioBlob as Blob).text()).toBe('final audio')
   })
 
   it('keeps pending audio when a row changes but resolves to the same immutable read target', async () => {

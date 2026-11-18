@@ -2,6 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { readCachedNativeShellCapabilities } from "@/lib/native-device-audio";
+import { parseNativeTtsStreamCapability } from "@/components/LivePhoneDemo/tts-stream-clip";
 
 // Client-side coin wallet (docs/coin-iap-spec.md 9). One module-level store so
 // the balance chip, the store panel and the conversation screen stay in sync.
@@ -96,7 +98,9 @@ export function refreshCoinWallet(options: { force?: boolean } = {}): Promise<vo
   if (inFlight) return inFlight;
   if (!options.force && Date.now() - lastLoadedAt < MIN_REFRESH_INTERVAL_MS) return Promise.resolve();
   if (state.status === "idle") setState({ ...state, status: "loading" });
-  inFlight = fetch(buildClientApiPath("/coins/wallet"), { cache: "no-store" })
+  // An app that plays streamed TTS is quoted at the user's own TTS model.
+  const query = parseNativeTtsStreamCapability(readCachedNativeShellCapabilities()) ? "?ttsStream=1" : "";
+  inFlight = fetch(`${buildClientApiPath("/coins/wallet")}${query}`, { cache: "no-store" })
     .then(async (response) => {
       if (response.status === 401) {
         sttBillingToken = null;

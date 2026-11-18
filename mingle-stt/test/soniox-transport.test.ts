@@ -25,6 +25,7 @@ async function fixture(t: TestContext, options: {
     delayHandshake?: boolean;
     handshakeTimeoutMs?: number;
     timing?: { keepaliveIntervalMs: number; firstAudioTimeoutMs: number; audioIdleTimeoutMs: number };
+    stallFinalizeMs?: number;
 } = {}) {
     const providerServer = createServer();
     const providerConnectionsToClose = new Set<Socket>();
@@ -52,6 +53,7 @@ async function fixture(t: TestContext, options: {
         sonioxUrl, sonioxApiKey: 'test-only-key',
         sonioxHandshakeTimeoutMs: options.handshakeTimeoutMs,
         sonioxRelayTiming: options.timing,
+        sonioxEndpointStallFinalizeMs: options.stallFinalizeMs,
     });
     let receivedClientMessages = 0;
     wss.on('connection', (socket) => socket.on('message', () => receivedClientMessages += 1));
@@ -357,4 +359,87 @@ test('a final turn reports every language its tokens were labelled with', async 
     assert.deepEqual(finals[1].data.utterance.languages, ['en']);
     const interims = f.messages.filter((msg) => msg.type === 'transcript' && !msg.data.is_final);
     assert.ok(interims.every((msg) => msg.data.utterance.languages === undefined));
+});
+
+const providerFinalizeRequests = (f: { providerFrames: { binary: boolean; data: Buffer }[] }) => (
+    f.providerFrames.filter((frame) => !frame.binary && JSON.parse(frame.data.toString()).type === 'finalize')
+);
+
+test('end mode: a turn that stops changing without <end> is finalized through Soniox', async (t) => {
+    const f = await fixture(t, { stallFinalizeMs: 120 });
+    f.sendConfig();
+    await f.ready();
+    f.audio(Buffer.alloc(320));
+    await waitFor(() => f.providerFrames.some((frame) => frame.binary));
+    f.providerSocket.on('message', (data, binary) => {
+        if (!binary && JSON.parse(data.toString()).type === 'finalize') {
+            f.providerSocket.send(JSON.stringify({ tokens: [
+                { text: "I'll do it online", language: 'en', is_final: true, speaker: '1', start_ms: 0, end_ms: 900 },
+                { text: '<fin>', is_final: true },
+            ] }));
+        }
+    });
+    // While the text keeps growing the turn stays open.
+    for (const text of ["I'll", "I'll do", "I'll do it", "I'll do it onlin"]) {
+        f.providerSocket.send(JSON.stringify({ tokens: [
+            { text, language: 'en', is_final: false, speaker: '1', start_ms: 0, end_ms: 800 },
+        ] }));
+        await new Promise((resolve) => setTimeout(resolve, 60));
+    }
+    assert.equal(providerFinalizeRequests(f).length, 0);
+    await waitFor(() => f.messages.some((msg) => msg.type === 'transcript' && msg.data.is_final));
+    const finals = f.messages.filter((msg) => msg.type === 'transcript' && msg.data.is_final);
+    assert.equal(finals.length, 1);
+    assert.equal(finals[0].data.utterance.text, "I'll do it online");
+    assert.equal(finals[0].data.finalize_source, 'soniox_manual');
+    assert.equal(providerFinalizeRequests(f).length, 1);
+    // Nothing is pending afterwards, so the watch stays quiet.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(providerFinalizeRequests(f).length, 1);
+    assert.ok(!f.messages.some((msg) => msg.type === 'error'));
+});
+
+test('end mode: a stalled turn is closed by the server when Soniox does not answer', async (t) => {
+    const f = await fixture(t, { stallFinalizeMs: 120 });
+    f.sendConfig();
+    await f.ready();
+    f.audio(Buffer.alloc(320));
+    await waitFor(() => f.providerFrames.some((frame) => frame.binary));
+    f.providerSocket.send(JSON.stringify({ tokens: [
+        { text: "I'll do it onlin", language: 'en', is_final: false, speaker: '1', start_ms: 0, end_ms: 800 },
+    ] }));
+    await waitFor(() => f.messages.some((msg) => msg.type === 'transcript' && msg.data.is_final));
+    const final = f.messages.find((msg) => msg.type === 'transcript' && msg.data.is_final);
+    assert.equal(final.data.utterance.text, "I'll do it onlin");
+    assert.equal(final.data.finalize_source, 'server_stall_fallback');
+    // The same audio arriving late must not open a second bubble.
+    f.providerSocket.send(JSON.stringify({ tokens: [
+        { text: "I'll do it onlin", language: 'en', is_final: true, speaker: '1', start_ms: 0, end_ms: 800 },
+    ] }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(f.messages.filter((msg) => msg.type === 'transcript').length, 2);
+});
+
+test('end mode: only the stalled speaker is closed while another keeps talking', async (t) => {
+    const f = await fixture(t, { stallFinalizeMs: 150 });
+    f.sendConfig();
+    await f.ready();
+    f.audio(Buffer.alloc(320));
+    await waitFor(() => f.providerFrames.some((frame) => frame.binary));
+    const stalled = { text: 'stuck words', language: 'en', is_final: false, speaker: '1', start_ms: 0, end_ms: 500 };
+    let live = '';
+    for (const word of ['one ', 'two ', 'three ', 'four ', 'five ', 'six ']) {
+        live += word;
+        f.providerSocket.send(JSON.stringify({ tokens: [
+            stalled,
+            { text: live, language: 'en', is_final: false, speaker: '2', start_ms: 600, end_ms: 600 + live.length * 10 },
+        ] }));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const finals = f.messages.filter((msg) => msg.type === 'transcript' && msg.data.is_final);
+    assert.equal(finals.length, 1);
+    assert.equal(finals[0].data.utterance.speaker, '1');
+    assert.equal(finals[0].data.utterance.text, 'stuck words');
+    assert.equal(finals[0].data.finalize_source, 'server_stall_fallback');
+    assert.equal(providerFinalizeRequests(f).length, 0);
 });

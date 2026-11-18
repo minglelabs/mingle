@@ -27,6 +27,8 @@ import java.util.UUID
  * Plays the translation read aloud natively, with the same bridge contract as
  * the iOS NativeTTSModule (`play` / `stop`, `ttsPlaybackFinished` /
  * `ttsPlaybackStopped` / `ttsError`, earphone guard of contract A.5).
+ * `playStream` / `appendStream` / `endStream` play a clip while its audio is
+ * still arriving (Android only so far; the shell reports it as `ttsStream`).
  *
  * While a clip plays it holds a transient "may duck" audio focus, so other
  * apps (a video, music) get quieter instead of pausing and come back to their
@@ -43,6 +45,7 @@ class NativeTTSModule(
   private val mainHandler = Handler(Looper.getMainLooper())
 
   private var player: MediaPlayer? = null
+  private var streamPlayer: NativeTtsPcmStreamPlayer? = null
   private var clipFile: File? = null
   private var currentPlaybackId: String? = null
   private var currentUtteranceId: String? = null
@@ -142,10 +145,100 @@ class NativeTTSModule(
     }
   }
 
+  /**
+   * Opens a clip whose audio is still arriving (`appendStream`, then
+   * `endStream`). Same events and earphone guard as `play`.
+   */
+  @ReactMethod
+  fun playStream(options: ReadableMap, promise: Promise) {
+    val rawPlaybackId = optionalString(options, "playbackId")
+    val rawUtteranceId = optionalString(options, "utteranceId")
+    val playbackId = rawPlaybackId ?: rawUtteranceId ?: UUID.randomUUID().toString()
+    val sampleRate = if (options.hasKey("sampleRate")) options.getInt("sampleRate") else DEFAULT_STREAM_SAMPLE_RATE
+    val stopsOnEarphoneDisconnect =
+      options.hasKey("stopOnEarphoneDisconnect") && options.getBoolean("stopOnEarphoneDisconnect")
+
+    mainHandler.post {
+      releasePlayer()
+      currentPlaybackId = playbackId
+      currentUtteranceId = rawUtteranceId
+      currentStopsOnEarphoneDisconnect = stopsOnEarphoneDisconnect
+
+      if (stopsOnEarphoneDisconnect && !earphonesConnected()) {
+        Log.i(TAG, "refused stream playbackId=$playbackId reason=$EARPHONES_DISCONNECTED_REASON")
+        val stopped = playbackPayload().apply { putString("reason", EARPHONES_DISCONNECTED_REASON) }
+        clearIdentity()
+        emit("ttsPlaybackStopped", stopped)
+        promise.resolve(Arguments.createMap().apply {
+          putBoolean("ok", false)
+          putString("reason", EARPHONES_DISCONNECTED_REASON)
+        })
+        return@post
+      }
+
+      try {
+        lateinit var opened: NativeTtsPcmStreamPlayer
+        opened = NativeTtsPcmStreamPlayer(
+          sampleRate = sampleRate,
+          attributes = PLAYBACK_ATTRIBUTES,
+          onFinished = { mainHandler.post { onStreamFinished(opened) } },
+          onError = { message -> mainHandler.post { onStreamError(opened, message) } },
+        )
+        streamPlayer = opened
+        requestDuckingFocus()
+        Log.i(TAG, "streaming playbackId=$playbackId sampleRate=$sampleRate")
+        promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
+      } catch (error: Throwable) {
+        Log.w(TAG, "playStream failed playbackId=$playbackId", error)
+        releasePlayer()
+        clearIdentity()
+        promise.reject("playback_error", "Failed to open audio stream: ${error.message ?: "unknown"}", error)
+      }
+    }
+  }
+
+  @ReactMethod
+  fun appendStream(playbackId: String, audioBase64: String) {
+    val pcm = try {
+      Base64.decode(audioBase64, Base64.DEFAULT)
+    } catch (_: IllegalArgumentException) {
+      return
+    }
+    mainHandler.post {
+      // Pieces of a clip that was stopped or replaced meanwhile are dropped.
+      if (currentPlaybackId == playbackId) streamPlayer?.append(pcm)
+    }
+  }
+
+  @ReactMethod
+  fun endStream(playbackId: String) {
+    mainHandler.post {
+      if (currentPlaybackId == playbackId) streamPlayer?.end()
+    }
+  }
+
+  private fun onStreamFinished(finished: NativeTtsPcmStreamPlayer) {
+    if (finished !== streamPlayer) return
+    Log.i(TAG, "stream finished playbackId=${currentPlaybackId ?: ""} bytes=${finished.writtenBytes}")
+    val payload = playbackPayload().apply { putBoolean("success", true) }
+    releasePlayer()
+    clearIdentity()
+    emit("ttsPlaybackFinished", payload)
+  }
+
+  private fun onStreamError(failed: NativeTtsPcmStreamPlayer, message: String) {
+    if (failed !== streamPlayer) return
+    Log.w(TAG, "stream error playbackId=${currentPlaybackId ?: ""} $message")
+    val payload = playbackPayload().apply { putString("message", message) }
+    releasePlayer()
+    clearIdentity()
+    emit("ttsError", payload)
+  }
+
   @ReactMethod
   fun stop(promise: Promise) {
     mainHandler.post {
-      val wasPlaying = runCatching { player?.isPlaying == true }.getOrDefault(false)
+      val wasPlaying = streamPlayer != null || runCatching { player?.isPlaying == true }.getOrDefault(false)
       val stopped = playbackPayload()
       releasePlayer()
       clearIdentity()
@@ -216,7 +309,7 @@ class NativeTTSModule(
   }
 
   private fun stopFlaggedClipIfEarphonesGone() {
-    if (!currentStopsOnEarphoneDisconnect || player == null) return
+    if (!currentStopsOnEarphoneDisconnect || (player == null && streamPlayer == null)) return
     if (earphonesConnected()) return
     Log.i(TAG, "stopped playbackId=${currentPlaybackId ?: ""} reason=$EARPHONES_DISCONNECTED_REASON")
     val stopped = playbackPayload().apply { putString("reason", EARPHONES_DISCONNECTED_REASON) }
@@ -256,6 +349,8 @@ class NativeTTSModule(
     }
     clipFile?.delete()
     clipFile = null
+    streamPlayer?.release()
+    streamPlayer = null
     abandonDuckingFocus()
   }
 
@@ -284,6 +379,7 @@ class NativeTTSModule(
     const val NAME = "NativeTTSModule"
     private const val TAG = "NativeTTS"
     private const val EARPHONES_DISCONNECTED_REASON = "earphones_disconnected"
+    private const val DEFAULT_STREAM_SAMPLE_RATE = 24000
 
     private val PLAYBACK_ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
       .setUsage(AudioAttributes.USAGE_MEDIA)

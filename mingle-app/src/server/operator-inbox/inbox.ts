@@ -1,3 +1,5 @@
+import type { MessageReadReceiptMember } from '@/lib/message-read-receipts'
+import { MESSAGE_RECALLED_AT_METADATA_KEY } from '@/lib/message-recall'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import {
@@ -11,7 +13,15 @@ import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages
 import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { USER_IDENTITY_SELECT, identityBadgeFlags, type IdentityBadgeFlags } from '@/server/identity/user-identity-select'
-import { OperatorAccountRequiredError, requireOperatorAccount } from '@/server/operators/operator-guard'
+import { OperatorAccountRequiredError } from '@/server/operators/operator-guard'
+import {
+  INBOX_ACCOUNT_USER_WHERE,
+  isInboxAccountUser,
+  isStaffAnsweredOfficialId,
+  requireInboxAccount,
+  STAFF_ANSWERED_OFFICIAL_IDS_SQL,
+} from '@/server/operator-inbox/inbox-accounts'
+import { resolveHamzziStaffReplyLanguage } from '@/server/hamzzi/staff-reply-language'
 import {
   STAFF_TRANSLATION_LANGUAGE,
   isPhotoMessageMetadata,
@@ -127,6 +137,8 @@ export type InboxRoomAccessResult = { ok: true; room: InboxRoomAccess } | { ok: 
 export type InboxRoomView = {
   room: InboxRoomDetail
   hydration: ConversationHydrationState
+  /** Active members' read cursors, for the per-message read mark (same as the app's). */
+  readReceiptMembers: MessageReadReceiptMember[]
 }
 
 export type InboxRoomViewResult =
@@ -160,13 +172,104 @@ function clampPageSize(limit: number | null | undefined): number {
 
 // ─── SQL building blocks ─────────────────────────────────────────────────────
 
+const SLOW_QUERY_LOG_MS = 1_000
+
+/** Runs one inbox query and logs it when it is slow, so a slow admin shows in the server log by name. */
+async function timedInboxQuery<T>(name: string, run: () => Promise<T>): Promise<T> {
+  const startedAt = Date.now()
+  try {
+    return await run()
+  } finally {
+    const ms = Date.now() - startedAt
+    if (ms >= SLOW_QUERY_LOG_MS) console.warn('[operator-inbox] slow_query', { name, ms })
+  }
+}
+
+/**
+ * A value that costs a search across every inbox room and is read on every
+ * refresh and badge poll: kept in memory for `ttlMs`. Once loaded, an expired
+ * value is still answered at once and renewed in the background, so only the
+ * first read (or the first after `clear`) waits for the search.
+ */
+function sharedInboxValue<T>(name: string, ttlMs: number, load: () => Promise<T>) {
+  let cached: { value: T; expiresAt: number } | null = null
+  let loading: Promise<T> | null = null
+  let generation = 0
+  const reload = (): Promise<T> => {
+    if (loading) return loading
+    const startedGeneration = generation
+    const current = timedInboxQuery(name, load).then((value) => {
+      // A `clear` during the load means this value may predate the change.
+      if (startedGeneration === generation) cached = { value, expiresAt: Date.now() + ttlMs }
+      return value
+    }).finally(() => {
+      if (loading === current) loading = null
+    })
+    loading = current
+    return current
+  }
+  return {
+    get(): Promise<T> {
+      if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value)
+      if (cached) {
+        void reload().catch(() => {})
+        return Promise.resolve(cached.value)
+      }
+      return reload()
+    },
+    clear(): void {
+      generation += 1
+      cached = null
+      loading = null
+    },
+  }
+}
+
+/**
+ * Hamzzi's rooms that belong in the inbox: those where a real user has written
+ * (not its welcome alone). Hamzzi is in a room with every user, so finding
+ * them costs a probe per user; every inbox query shares this list for 30 s
+ * instead of repeating the search. A first message to Hamzzi can therefore
+ * reach the list about a minute late.
+ */
+const staffAnsweredOfficialRoomIds = sharedInboxValue('official_rooms', 30_000, async () => {
+  const rows = await prisma.$queryRaw<Array<{ officialChannelId: string }>>(Prisma.sql`
+    SELECT member.channel_id AS "officialChannelId"
+    FROM app.app_conversation_channel_members AS member
+    JOIN app.app_conversation_channels AS channel
+      ON channel.id = member.channel_id
+      AND (channel.is_deleted = false OR channel.is_deleted IS NULL)
+    WHERE member.user_id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
+      AND member.left_at IS NULL
+      AND EXISTS (
+        SELECT 1 FROM app.app_messages AS written
+        WHERE written.session_key = channel.session_key
+          AND (written.is_deleted = false OR written.is_deleted IS NULL)
+          AND written.user_id IS NOT NULL
+          AND written.user_id NOT IN (
+            SELECT staff.id FROM app.app_users AS staff
+            WHERE staff.is_operator = true OR staff.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
+          )
+      )
+  `)
+  return rows.map((row) => row.officialChannelId)
+})
+
 /** Every active membership of a non-deleted operator in a non-deleted room. */
-function operatorMembershipsCte(filter: { operatorUserId?: string | null; channelIds?: string[] | null } = {}): Prisma.Sql {
+async function operatorMembershipsCte(filter: { operatorUserId?: string | null; channelIds?: string[] | null } = {}): Promise<Prisma.Sql> {
   const operatorFilter = filter.operatorUserId
     ? Prisma.sql`AND member.user_id = ${filter.operatorUserId}`
     : Prisma.empty
   const channelFilter = filter.channelIds && filter.channelIds.length > 0
     ? Prisma.sql`AND member.channel_id IN (${Prisma.join(filter.channelIds)})`
+    : Prisma.empty
+  const officialRoomIds = await staffAnsweredOfficialRoomIds.get()
+  // Hamzzi's rooms count only once a real user has written (see staffAnsweredOfficialRoomIds).
+  const officialRooms = officialRoomIds.length > 0
+    ? Prisma.sql`OR (
+          operator_user.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
+          AND member.channel_id = ANY(${officialRoomIds}::text[])
+        )`
     : Prisma.empty
   return Prisma.sql`memberships AS (
     SELECT
@@ -178,12 +281,15 @@ function operatorMembershipsCte(filter: { operatorUserId?: string | null; channe
     FROM app.app_conversation_channel_members AS member
     JOIN app.app_users AS operator_user
       ON operator_user.id = member.user_id
-      AND operator_user.is_operator = true
       AND operator_user.is_deleted = false
     JOIN app.app_conversation_channels AS channel
       ON channel.id = member.channel_id
       AND (channel.is_deleted = false OR channel.is_deleted IS NULL)
     WHERE member.left_at IS NULL
+      AND (
+        operator_user.is_operator = true
+        ${officialRooms}
+      )
       ${operatorFilter}
       ${channelFilter}
   )`
@@ -203,7 +309,8 @@ const UNREAD_CTE = Prisma.sql`unread AS (
     AND message.user_id <> membership.operator_user_id
     AND (membership.last_read_at IS NULL OR message.created_at > membership.last_read_at)
     AND message.user_id NOT IN (
-      SELECT staff.id FROM app.app_users AS staff WHERE staff.is_operator = true
+      SELECT staff.id FROM app.app_users AS staff
+      WHERE staff.is_operator = true OR staff.id IN (${STAFF_ANSWERED_OFFICIAL_IDS_SQL})
     )
   GROUP BY membership.channel_id, membership.operator_user_id
 )`
@@ -215,7 +322,7 @@ async function listOperatorUnreadByRoom(channelIds: string[]): Promise<Map<strin
   const result = new Map<string, Map<string, number>>()
   if (channelIds.length === 0) return result
   const rows = await prisma.$queryRaw<UnreadRow[]>(Prisma.sql`
-    WITH ${operatorMembershipsCte({ channelIds })}, ${UNREAD_CTE}
+    WITH ${await operatorMembershipsCte({ channelIds })}, ${UNREAD_CTE}
     SELECT channel_id AS "channelId", operator_user_id AS "operatorUserId", unread_count AS "unreadCount"
     FROM unread
   `)
@@ -268,8 +375,9 @@ async function listActiveMembersByChannelId(channelIds: string[]): Promise<Map<s
   return result
 }
 
+/** A member staff act as here: an operator account, or Hamzzi. */
 function isOperatorMember(row: InboxMemberRow): boolean {
-  return row.user.isOperator === true && row.user.isDeleted !== true
+  return isInboxAccountUser(row.user)
 }
 
 function toInboxPerson(user: InboxMemberUser): InboxPerson {
@@ -428,6 +536,10 @@ export async function listOperatorInboxRooms(args: {
   cursor?: InboxCursor | null
   limit?: number | null
   includeKorean?: boolean
+  /** Only rooms with a message the operator has not read. */
+  unreadOnly?: boolean
+  /** Only rooms with a real member whose name or handle contains this text. */
+  query?: string | null
 } = {}): Promise<InboxListResult> {
   const limit = clampPageSize(args.limit)
   const operatorUserId = args.operatorUserId ? normalizeInboxId(args.operatorUserId) : null
@@ -436,10 +548,35 @@ export async function listOperatorInboxRooms(args: {
     ? Prisma.sql`WHERE (activity_ms, channel_id) < (${args.cursor.activityMs}::bigint, ${args.cursor.conversationId}::text)`
     : Prisma.empty
 
-  const pageRows = await prisma.$queryRaw<RoomPageRow[]>(Prisma.sql`
-    WITH ${operatorMembershipsCte({ operatorUserId })},
+  const unreadFilter = args.unreadOnly
+    ? Prisma.sql`AND EXISTS (
+        SELECT 1 FROM unread
+        WHERE unread.channel_id = membership.channel_id
+          AND unread.operator_user_id = membership.operator_user_id
+          AND unread.unread_count > 0
+      )`
+    : Prisma.empty
+  const query = (args.query ?? '').trim().slice(0, 60)
+  const queryPattern = `%${query.replace(/[\\%_]/g, (char) => `\\${char}`)}%`
+  const queryFilter = query
+    ? Prisma.sql`AND EXISTS (
+        SELECT 1 FROM app.app_conversation_channel_members AS other
+        JOIN app.app_users AS other_user ON other_user.id = other.user_id
+        WHERE other.channel_id = membership.channel_id
+          AND other.left_at IS NULL
+          AND other_user.is_operator = false
+          AND (other_user.name ILIKE ${queryPattern} OR other_user.handle ILIKE ${queryPattern})
+      )`
+    : Prisma.empty
+
+  const pageSql = Prisma.sql`
+    WITH ${await operatorMembershipsCte({ operatorUserId })},${args.unreadOnly ? Prisma.sql` ${UNREAD_CTE},` : Prisma.empty}
     rooms AS (
-      SELECT DISTINCT channel_id, session_key, channel_created_at FROM memberships
+      SELECT DISTINCT membership.channel_id, membership.session_key, membership.channel_created_at
+      FROM memberships AS membership
+      WHERE true
+        ${unreadFilter}
+        ${queryFilter}
     ),
     activity AS (
       SELECT
@@ -466,7 +603,8 @@ export async function listOperatorInboxRooms(args: {
     ${cursorFilter}
     ORDER BY activity_ms DESC, channel_id DESC
     LIMIT ${limit + 1}
-  `)
+  `
+  const pageRows = await timedInboxQuery('rooms_page', () => prisma.$queryRaw<RoomPageRow[]>(pageSql))
 
   const hasMore = pageRows.length > limit
   const page = pageRows.slice(0, limit)
@@ -537,10 +675,11 @@ export async function listOperatorInboxRooms(args: {
 
 // ─── Summary / unread total ──────────────────────────────────────────────────
 
-/** Unread across every inbox room; a room counts once, with its most-behind operator. */
-export async function countOperatorInboxUnread(): Promise<number> {
+const INBOX_COUNTS_TTL_MS = 10_000
+
+const inboxUnreadTotal = sharedInboxValue('unread_total', INBOX_COUNTS_TTL_MS, async () => {
   const rows = await prisma.$queryRaw<Array<{ unreadTotal: number | bigint | null }>>(Prisma.sql`
-    WITH ${operatorMembershipsCte()}, ${UNREAD_CTE}
+    WITH ${await operatorMembershipsCte()}, ${UNREAD_CTE}
     SELECT COALESCE(SUM(room_unread), 0)::int AS "unreadTotal"
     FROM (
       SELECT channel_id, MAX(unread_count) AS room_unread FROM unread GROUP BY channel_id
@@ -548,22 +687,44 @@ export async function countOperatorInboxUnread(): Promise<number> {
   `)
   const total = Number(rows[0]?.unreadTotal ?? 0)
   return Number.isFinite(total) && total > 0 ? Math.floor(total) : 0
+})
+
+const inboxOperatorCounts = sharedInboxValue('operator_counts', INBOX_COUNTS_TTL_MS, async () => (
+  prisma.$queryRaw<Array<{ operatorUserId: string; roomCount: number | bigint; unreadCount: number | bigint }>>(Prisma.sql`
+    WITH ${await operatorMembershipsCte()}, ${UNREAD_CTE}
+    SELECT
+      operator_user_id AS "operatorUserId",
+      COUNT(*)::int AS "roomCount",
+      COALESCE(SUM(unread_count), 0)::int AS "unreadCount"
+    FROM unread
+    GROUP BY operator_user_id
+  `)
+))
+
+/** Forgets the shared inbox counts (after a read changes them; and between tests). */
+export function clearOperatorInboxCounts(): void {
+  inboxUnreadTotal.clear()
+  inboxOperatorCounts.clear()
+}
+
+/** Forgets every shared inbox value, the Hamzzi room list included (the speed check times them from scratch). */
+export function clearOperatorInboxCaches(): void {
+  staffAnsweredOfficialRoomIds.clear()
+  clearOperatorInboxCounts()
+}
+
+/**
+ * Unread across every inbox room; a room counts once, with its most-behind
+ * operator. Every admin screen polls this for the tab badge, so it is shared
+ * for 10 s (see sharedInboxValue); a read by staff refreshes it at once.
+ */
+export function countOperatorInboxUnread(): Promise<number> {
+  return inboxUnreadTotal.get()
 }
 
 /** unreadTotal plus one entry per operator that has at least one inbox room (for the filter chips). */
 export async function getOperatorInboxSummary(): Promise<InboxSummary> {
-  const [operatorRows, unreadTotal] = await Promise.all([
-    prisma.$queryRaw<Array<{ operatorUserId: string; roomCount: number | bigint; unreadCount: number | bigint }>>(Prisma.sql`
-      WITH ${operatorMembershipsCte()}, ${UNREAD_CTE}
-      SELECT
-        operator_user_id AS "operatorUserId",
-        COUNT(*)::int AS "roomCount",
-        COALESCE(SUM(unread_count), 0)::int AS "unreadCount"
-      FROM unread
-      GROUP BY operator_user_id
-    `),
-    countOperatorInboxUnread(),
-  ])
+  const [operatorRows, unreadTotal] = await Promise.all([inboxOperatorCounts.get(), inboxUnreadTotal.get()])
   if (operatorRows.length === 0) return { unreadTotal, operators: [] }
 
   const users = await prisma.user.findMany({
@@ -635,7 +796,11 @@ export async function resolveInboxRoomAccess(args: {
   ])
   const unread = unreadByRoom.get(channel.id) ?? new Map<string, number>()
   const operators = operatorRows.map((member) => toInboxOperator(member, unread.get(member.userId) ?? 0))
-  const operator = operators.find((candidate) => candidate.userId === actingUserId) ?? operators[0]
+  const actingOperator = operators.find((candidate) => candidate.userId === actingUserId) ?? operators[0]
+  // Hamzzi has no fixed persona language: staff replies follow the room's conversation.
+  const operator = isStaffAnsweredOfficialId(actingOperator.userId)
+    ? { ...actingOperator, personaLanguage: await resolveHamzziStaffReplyLanguage(channel.sessionKey) }
+    : actingOperator
   const blocked = blockedRooms.has(channel.id)
   const recipientCount = members.length - 1 + channel.pendingInviteeUserIds.length
   const replyUnavailableReason: InboxReplyUnavailableReason | null = !operator.isActive
@@ -683,7 +848,7 @@ export async function loadInboxRoomView(args: {
   if (!access.ok) return access
   const operatorUserId = access.room.operator.userId
   try {
-    await requireOperatorAccount(operatorUserId)
+    await requireInboxAccount(operatorUserId)
   } catch (error) {
     if (error instanceof OperatorAccountRequiredError) return { ok: false, error: 'operator_required' }
     throw error
@@ -693,8 +858,19 @@ export async function loadInboxRoomView(args: {
     conversationId: access.room.conversationId,
     userId: operatorUserId,
     before: args.before ?? null,
+    // Staff can still read a message its sender unsent (shown marked as deleted).
+    revealRecalled: true,
   })
   if (!hydration) return { ok: false, error: 'not_found' }
+  const memberRows = await prisma.appConversationChannelMember.findMany({
+    where: { channelId: access.room.conversationId, leftAt: null },
+    select: { userId: true, joinedAt: true, lastReadAt: true },
+  })
+  const readReceiptMembers = memberRows.map((member) => ({
+    userId: member.userId,
+    joinedAtMs: member.joinedAt.getTime(),
+    lastReadAtMs: member.lastReadAt ? member.lastReadAt.getTime() : null,
+  }))
 
   if (args.auditOpen) {
     await writeAdminAudit(args.ctx, {
@@ -704,7 +880,7 @@ export async function loadInboxRoomView(args: {
       targetId: access.room.conversationId,
     })
   }
-  return { ok: true, view: { room: toRoomDetail(access.room), hydration } }
+  return { ok: true, view: { room: toRoomDetail(access.room), hydration, readReceiptMembers } }
 }
 
 /** Marks the room read AS the operator (their own lastReadAt only) and audits it. */
@@ -721,7 +897,7 @@ export async function markInboxRoomRead(args: {
   if (!access.ok) return access
   const operatorUserId = access.room.operator.userId
   try {
-    await requireOperatorAccount(operatorUserId)
+    await requireInboxAccount(operatorUserId)
   } catch (error) {
     if (error instanceof OperatorAccountRequiredError) return { ok: false, error: 'operator_required' }
     throw error
@@ -732,6 +908,7 @@ export async function markInboxRoomRead(args: {
     userId: operatorUserId,
   })
   if (!updated) return { ok: false, error: 'not_found' }
+  clearOperatorInboxCounts()
   await writeAdminAudit(args.ctx, {
     action: 'inbox.mark_read',
     operatorUserId,
@@ -747,6 +924,8 @@ export async function loadInboxList(args: {
   cursor?: InboxCursor | null
   limit?: number | null
   includeKorean?: boolean
+  unreadOnly?: boolean
+  query?: string | null
 } = {}): Promise<InboxListResult & InboxSummary & { serverNowMs: number }> {
   const [list, summary] = await Promise.all([
     listOperatorInboxRooms(args),
@@ -756,10 +935,16 @@ export async function loadInboxList(args: {
 }
 
 // Same key shape the photo upload path issues (conversation-image-controller.ts).
+/** A message its sender unsent: soft-deleted, but staff can still read it. */
+const RECALLED_MESSAGE_WHERE = {
+  isDeleted: true,
+  metadata: { path: [MESSAGE_RECALLED_AT_METADATA_KEY], gt: 0 },
+} satisfies Prisma.AppMessageWhereInput
+
 const CONVERSATION_IMAGE_KEY_PATTERN = /^conversation-images\/[\w-]+\.jpg$/
 
 /**
- * Storage key of a chat photo the admin may view: a visible photo message in
+ * Storage key of a chat photo the admin may view: a visible (or unsent) photo message in
  * a non-deleted room that has an active operator member. Anything else is
  * null, so the admin image proxy can never serve a photo from a room outside
  * the inbox.
@@ -768,7 +953,7 @@ export async function resolveInboxPhotoObjectKey(rawMessageId: string): Promise<
   const messageId = normalizeInboxId(rawMessageId)
   if (!messageId) return null
   const message = await prisma.appMessage.findFirst({
-    where: { id: messageId, OR: [{ isDeleted: false }, { isDeleted: null }] },
+    where: { id: messageId, OR: [{ isDeleted: false }, { isDeleted: null }, RECALLED_MESSAGE_WHERE] },
     select: { sessionKey: true, metadata: true },
   })
   if (!message?.sessionKey || !isPhotoMessageMetadata(message.metadata)) return null
@@ -780,7 +965,7 @@ export async function resolveInboxPhotoObjectKey(rawMessageId: string): Promise<
     where: {
       leftAt: null,
       channel: { sessionKey: message.sessionKey, OR: [{ isDeleted: false }, { isDeleted: null }] },
-      user: { isOperator: true, isDeleted: false },
+      user: INBOX_ACCOUNT_USER_WHERE,
     },
     select: { id: true },
   })

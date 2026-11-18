@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight, Ban, Megaphone, Newspaper, Bell, Bot, Images, Layers, UsersRound, Wand2, ChartLine, Coins, Flag, LogOut, MessageCircleHeart, MessagesSquare } from "lucide-react";
+import { ArrowUpRight, Ban, Gauge, Megaphone, Newspaper, Bell, Bot, Images, Layers, UsersRound, Wand2, ChartLine, Coins, Flag, LogOut, MessageCircleHeart, MessagesSquare } from "lucide-react";
 import { requireAdmin } from "@/server/admin/guard";
 import { logoutAdminAction } from "../_components/session-actions";
 import { AdminButton, AdminCard, AdminListLink, AdminPage, AdminPageHeader } from "../_components/ui";
@@ -23,6 +23,7 @@ const MORE_LINKS = [
   { href: "/admin/settings/automation", icon: Wand2, title: "자동 생성", description: "사진·계정·글 자동 생성 규칙과 수동 실행" },
   { href: "/admin/operators/avatars", icon: Images, title: "사진 검수", description: "운영 계정 프로필 사진 모아 보기·다시 만들기" },
   { href: "/admin/settings/post-reserve", icon: Layers, title: "잠재 글", description: "계정별 미리 써 둔 글과 하루 발행 비율" },
+  { href: "/admin/diagnostics", icon: Gauge, title: "속도 진단", description: "운영툴이 느릴 때 어디서 시간이 걸리는지 재기" },
   { href: "/admin/operators/seed", icon: UsersRound, title: "계정 대량 생성", description: "국가별 인원을 정해 운영 계정을 한 번에 생성" },
 ] as const;
 

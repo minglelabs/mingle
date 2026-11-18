@@ -101,6 +101,8 @@ describe('admin inbox API routes', () => {
       cursor: { activityMs: 123, conversationId: 'conv_9' },
       limit: 30,
       includeKorean: true,
+      unreadOnly: false,
+      query: null,
     })
     expect((await getRooms(new Request('https://example.com/admin/inbox/api/rooms?cursor=nope'))).status).toBe(400)
     expect((await getRooms(new Request('https://example.com/admin/inbox/api/rooms?operator=a%20b'))).status).toBe(400)

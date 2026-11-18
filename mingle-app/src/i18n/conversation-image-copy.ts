@@ -42,6 +42,9 @@ export type ConversationImageCopy = {
   sameAsOriginal: string
   /** Accessible hint: tap cycles, touch and hold opens the language menu. */
   translateHint: string
+  /** Preview before sending: turn the photo a quarter turn left / mirror it. */
+  rotatePhoto: string
+  flipPhoto: string
 }
 
 const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
@@ -74,6 +77,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: '다음 사진',
     sameAsOriginal: '원문과 같음',
     translateHint: '탭하면 언어가 바뀌고, 길게 누르면 모든 언어를 볼 수 있습니다.',
+    rotatePhoto: '왼쪽으로 회전',
+    flipPhoto: '좌우 반전',
   },
   en: {
     attach: 'Attach',
@@ -104,6 +109,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: 'Next photo',
     sameAsOriginal: 'Same as original',
     translateHint: 'Tap to switch languages. Touch and hold to see all languages.',
+    rotatePhoto: 'Rotate left',
+    flipPhoto: 'Flip horizontally',
   },
   ja: {
     attach: '添付',
@@ -134,6 +141,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: '次の写真',
     sameAsOriginal: '原文と同じ',
     translateHint: 'タップで言語を切り替え、長押しですべての言語を表示します。',
+    rotatePhoto: '左に回転',
+    flipPhoto: '左右反転',
   },
   'zh-CN': {
     attach: '附件',
@@ -164,6 +173,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: '下一张照片',
     sameAsOriginal: '与原文相同',
     translateHint: '轻点切换语言，长按查看所有语言。',
+    rotatePhoto: '向左旋转',
+    flipPhoto: '水平翻转',
   },
   'zh-TW': {
     attach: '附件',
@@ -194,6 +205,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: '下一張照片',
     sameAsOriginal: '與原文相同',
     translateHint: '輕點切換語言，長按查看所有語言。',
+    rotatePhoto: '向左旋轉',
+    flipPhoto: '水平翻轉',
   },
   fr: {
     attach: 'Joindre',
@@ -224,6 +237,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: 'Photo suivante',
     sameAsOriginal: 'Identique à l’original',
     translateHint: 'Touchez pour changer de langue. Maintenez appuyé pour voir toutes les langues.',
+    rotatePhoto: 'Pivoter à gauche',
+    flipPhoto: 'Retourner horizontalement',
   },
   de: {
     attach: 'Anhängen',
@@ -254,6 +269,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: 'Nächstes Foto',
     sameAsOriginal: 'Wie im Original',
     translateHint: 'Tippen, um die Sprache zu wechseln. Gedrückt halten, um alle Sprachen zu sehen.',
+    rotatePhoto: 'Nach links drehen',
+    flipPhoto: 'Horizontal spiegeln',
   },
   es: {
     attach: 'Adjuntar',
@@ -284,6 +301,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: 'Foto siguiente',
     sameAsOriginal: 'Igual que el original',
     translateHint: 'Toca para cambiar de idioma. Mantén pulsado para ver todos los idiomas.',
+    rotatePhoto: 'Girar a la izquierda',
+    flipPhoto: 'Voltear horizontalmente',
   },
   pt: {
     attach: 'Anexar',
@@ -314,6 +333,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: 'Foto seguinte',
     sameAsOriginal: 'Igual ao original',
     translateHint: 'Toque para mudar de idioma. Mantenha premido para ver todos os idiomas.',
+    rotatePhoto: 'Rodar para a esquerda',
+    flipPhoto: 'Inverter horizontalmente',
   },
   it: {
     attach: 'Allega',
@@ -344,6 +365,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: 'Foto successiva',
     sameAsOriginal: 'Uguale all’originale',
     translateHint: 'Tocca per cambiare lingua. Tieni premuto per vedere tutte le lingue.',
+    rotatePhoto: 'Ruota a sinistra',
+    flipPhoto: 'Capovolgi orizzontalmente',
   },
   ru: {
     attach: 'Вложение',
@@ -374,6 +397,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: 'Следующее фото',
     sameAsOriginal: 'Как в оригинале',
     translateHint: 'Нажмите, чтобы сменить язык. Удерживайте, чтобы увидеть все языки.',
+    rotatePhoto: 'Повернуть влево',
+    flipPhoto: 'Отразить по горизонтали',
   },
   ar: {
     attach: 'إرفاق',
@@ -404,6 +429,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: 'الصورة التالية',
     sameAsOriginal: 'مطابق للأصل',
     translateHint: 'اضغط لتغيير اللغة، واضغط مطولًا لعرض كل اللغات.',
+    rotatePhoto: 'تدوير لليسار',
+    flipPhoto: 'قلب أفقي',
   },
   hi: {
     attach: 'अटैच करें',
@@ -434,6 +461,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: 'अगली तस्वीर',
     sameAsOriginal: 'मूल जैसा',
     translateHint: 'भाषा बदलने के लिए टैप करें। सभी भाषाएँ देखने के लिए दबाकर रखें।',
+    rotatePhoto: 'बाएँ घुमाएँ',
+    flipPhoto: 'क्षैतिज रूप से पलटें',
   },
   th: {
     attach: 'แนบไฟล์',
@@ -464,6 +493,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: 'รูปภาพถัดไป',
     sameAsOriginal: 'เหมือนต้นฉบับ',
     translateHint: 'แตะเพื่อเปลี่ยนภาษา แตะค้างไว้เพื่อดูทุกภาษา',
+    rotatePhoto: 'หมุนไปทางซ้าย',
+    flipPhoto: 'พลิกแนวนอน',
   },
   vi: {
     attach: 'Đính kèm',
@@ -494,6 +525,8 @@ const CONVERSATION_IMAGE_COPY_BY_LOCALE = {
     nextPhoto: 'Ảnh tiếp theo',
     sameAsOriginal: 'Giống bản gốc',
     translateHint: 'Chạm để đổi ngôn ngữ. Chạm và giữ để xem tất cả ngôn ngữ.',
+    rotatePhoto: 'Xoay trái',
+    flipPhoto: 'Lật ngang',
   },
 } satisfies Record<LegalDocumentLocale, ConversationImageCopy>
 
