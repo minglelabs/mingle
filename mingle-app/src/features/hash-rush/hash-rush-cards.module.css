@@ -215,16 +215,40 @@
 }
 
 /* The viewer's own row, so on a crowded list they find themselves (#224). */
+/* My row: ringed in my own colour (my team's in a team game), never a fixed
+   blue that reads as the blue team; the `나` badge says it is me. */
 .seatMe {
-  border-color: #2f6fed;
-  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.3);
+  border-color: var(--c);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 35%, transparent);
+}
+
+/* The `나` badge: the app's amber, softly pulsing so my row is found at a glance. */
+.meBadge {
+  flex-shrink: 0;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fbbf24 0%, #f97316 100%);
+  color: #fff;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  animation: meBadgePulse 1.4s ease-in-out infinite;
+}
+
+@keyframes meBadgePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.55); }
+  50% { box-shadow: 0 0 0 5px rgba(249, 115, 22, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meBadge { animation: none; }
 }
 
 .meTag {
   flex-shrink: 0;
   padding: 0.05em 0.5em;
   border-radius: 999px;
-  background: #2f6fed;
+  background: #94a3b8;
   color: #fff;
   font-size: 12px;
   font-style: normal;

@@ -156,7 +156,7 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
               <span className={styles.seatName}>
                 <b>{seat.name}</b>
                 {seat.host ? <i className={styles.hostTag} data-qa="hash-rush-host-tag">👑 {copy.host}</i> : null}
-                {seat.me ? <i className={styles.meTag}>{view.words.me}</i> : null}
+                {seat.me ? <i className={styles.meBadge} data-qa="hash-rush-me-badge">{view.words.me}</i> : null}
                 {seat.team >= 0 ? <i className={styles.teamDot} style={{ '--t': seat.color } as CSSProperties} /> : null}
               </span>
               {hosting?.amHost && !seat.me && onHandHost ? (
