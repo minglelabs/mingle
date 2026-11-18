@@ -7839,8 +7839,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     declinedSessionId: declinedHashRushSessionId,
   }) ? hashRushRoomGame : null
   const hashRushRoom = useMemo<HashRushRoomState | null>(() => (
-    hashRushRoomEnabled ? { liveSessionId: hashRushLiveSessionId, joined: hashRushGameActive, join: enterHashRushGame } : null
-  ), [enterHashRushGame, hashRushGameActive, hashRushLiveSessionId, hashRushRoomEnabled])
+    hashRushRoomEnabled
+      ? { liveSessionId: hashRushLiveSessionId, joined: hashRushGameActive, join: enterHashRushGame, open: hashRushGameOpen, reopen: () => setHashRushGameOpen(true) }
+      : null
+  ), [enterHashRushGame, hashRushGameActive, hashRushGameOpen, hashRushLiveSessionId, hashRushRoomEnabled])
 
   const hashRushChatEntries = useMemo(() => (
     hashRushGameActive

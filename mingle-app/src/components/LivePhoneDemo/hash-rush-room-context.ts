@@ -12,6 +12,10 @@ export type HashRushRoomState = {
   joined: boolean
   /** Joins the running game. */
   join: () => void
+  /** The game is up on screen (false while it is lowered to the chat). */
+  open?: boolean
+  /** Brings a lowered game back up. */
+  reopen?: () => void
 }
 
 export const HashRushRoomContext = createContext<HashRushRoomState | null>(null)

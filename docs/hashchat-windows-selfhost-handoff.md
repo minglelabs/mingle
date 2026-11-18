@@ -210,3 +210,9 @@ Host hashchat-win
 ```
 
 Mac에도 `cloudflared`가 있어야 한다(`brew install cloudflared`). 그다음 `ssh hashchat-win '~/hashchat/deploy.sh <커밋>'`.
+
+## 해시러시 게임 서버의 허용 출처 (2026-11-19)
+
+- 게임은 앱 화면(`https://hashchat-win.minglelabs.app`) 안에서 게임 서버에 웹소켓으로 붙는다. 게임 서버는 `ALLOWED_ORIGINS`에 없는 출처를 403으로 거부하고, 앱에는 "게임 서버에 연결하지 못했어요"로 보인다.
+- `~/hashchat/hashrush.env`의 `ALLOWED_ORIGINS`는 `https://minglelabs.github.io,https://hashchat-win.minglelabs.app`이다. 바꾼 뒤에는 `hashrush` 컨테이너를 같은 설정(`--restart unless-stopped -p 127.0.0.1:8090:8090 --env-file ~/hashchat/hashrush.env hashrush-server node server/index.js`)으로 다시 만든다.
+- prod(Railway hash-rush)에도 prod 앱 주소를 넣어야 한다.

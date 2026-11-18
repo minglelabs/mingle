@@ -38,3 +38,13 @@ describe('hash rush started from the room, like a voice talk', () => {
     expect(liveDemo).toContain('onQuit={quitHashRushGame}')
   })
 })
+
+describe('a lowered game comes back from its room message', () => {
+  const bubble = read('../../components/LivePhoneDemo/HashRushStartedBubble.tsx')
+  const demo = liveDemo
+  it('shows "back to the game" on the card while this phone plays with the game lowered', () => {
+    expect(bubble).toContain("state === 'joined' && room?.reopen && room.open === false ? (")
+    expect(bubble).toContain('{copy.backToGame}')
+    expect(demo).toContain('open: hashRushGameOpen, reopen: () => setHashRushGameOpen(true)')
+  })
+})

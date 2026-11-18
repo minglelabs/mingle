@@ -54,6 +54,16 @@ export default function HashRushStartedBubble(props: {
         >
           {copy.join}
         </button>
+      ) : state === 'joined' && room?.reopen && room.open === false ? (
+        // In the game but lowered to the chat: the card brings it back up.
+        <button
+          type="button"
+          data-qa="hash-rush-message-back"
+          onClick={() => room.reopen?.()}
+          className="mt-2.5 flex h-11 w-full items-center justify-center rounded-xl bg-emerald-500 text-[0.92rem] font-semibold text-white active:bg-emerald-600"
+        >
+          {copy.backToGame}
+        </button>
       ) : (
         <p
           data-qa="hash-rush-message-status"
