@@ -747,3 +747,159 @@ describe('synthesizeSpeech — gemini post-processing', () => {
     expect(wavSeconds(result.audio)).toBeCloseTo(1.56, 1)
   })
 })
+
+async function collect(chunks: AsyncIterable<Buffer>): Promise<Buffer[]> {
+  const out: Buffer[] = []
+  for await (const chunk of chunks) out.push(chunk)
+  return out
+}
+
+async function* fromChunks(chunks: Buffer[]): AsyncGenerator<Buffer, void, void> {
+  for (const chunk of chunks) yield chunk
+}
+
+/** 16-bit mono PCM: `ms` of a constant sample value at 24 kHz. */
+function pcm(ms: number, value: number): Buffer {
+  const samples = Math.round(24000 * ms / 1000)
+  const buffer = Buffer.alloc(samples * 2)
+  for (let i = 0; i < samples; i++) buffer.writeInt16LE(value, i * 2)
+  return buffer
+}
+
+describe('trimLeadingSilencePcm16', () => {
+  it('drops silence before the first sound but keeps 80 ms of it', async () => {
+    const { trimLeadingSilencePcm16 } = await loadModule()
+    const out = Buffer.concat(await collect(trimLeadingSilencePcm16(
+      fromChunks([pcm(200, 0), pcm(100, 0), pcm(50, 8000), pcm(40, 8000)]),
+      24000,
+    )))
+    // 300 ms of silence in, 80 ms kept, then the 90 ms of sound.
+    expect(out.length).toBe(pcm(80, 0).length + pcm(90, 0).length)
+    expect(out.readInt16LE(pcm(80, 0).length)).toBe(8000)
+    expect(out.readInt16LE(pcm(80, 0).length - 2)).toBe(0)
+  })
+
+  it('passes sound through as it comes once the clip has started', async () => {
+    const { trimLeadingSilencePcm16 } = await loadModule()
+    const out = await collect(trimLeadingSilencePcm16(
+      fromChunks([pcm(20, 8000), pcm(30, 0), pcm(10, 8000)]),
+      24000,
+    ))
+    expect(out.map((chunk) => chunk.length)).toEqual([pcm(20, 0).length, pcm(30, 0).length, pcm(10, 0).length])
+  })
+
+  it('never ends a chunk in the middle of a sample', async () => {
+    const { trimLeadingSilencePcm16 } = await loadModule()
+    const whole = pcm(30, 8000)
+    const out = await collect(trimLeadingSilencePcm16(
+      fromChunks([whole.subarray(0, 101), whole.subarray(101, 444), whole.subarray(444)]),
+      24000,
+    ))
+    for (const chunk of out) expect(chunk.length % 2).toBe(0)
+    expect(Buffer.concat(out).equals(whole)).toBe(true)
+  })
+
+  it('hands on a clip that is silent throughout, and stops holding after one second', async () => {
+    const { trimLeadingSilencePcm16 } = await loadModule()
+    const quiet = await collect(trimLeadingSilencePcm16(fromChunks([pcm(100, 0), pcm(100, 0)]), 24000))
+    expect(Buffer.concat(quiet).length).toBe(pcm(200, 0).length)
+
+    const long = await collect(trimLeadingSilencePcm16(fromChunks([pcm(600, 0), pcm(600, 0), pcm(50, 8000)]), 24000))
+    expect(long.map((chunk) => chunk.length)).toEqual([pcm(1200, 0).length, pcm(50, 0).length])
+  })
+})
+
+describe('synthesizeSpeechStream', () => {
+  it('resolves with the first audio and yields the rest in order', async () => {
+    const chunks = [pcm(20, 8000), pcm(20, 4000), pcm(10, 2000)]
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiStreamResponse(chunks))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = await synthesizeSpeechStream({ text: 'hello', language: 'ko' })
+
+    if (!speech.ok) throw new Error('expected a stream')
+    expect(speech).toMatchObject({
+      provider: 'gemini',
+      modelId: 'gemini-3.8-flash-lite-tts',
+      voiceId: 'ko-kr-csagent-8',
+      sampleRate: 24000,
+    })
+    expect(speech.fallbackFrom).toBeUndefined()
+    expect(Buffer.concat(await collect(speech.chunks)).equals(Buffer.concat(chunks))).toBe(true)
+    // Always asks Gemini to stream, even with GEMINI_TTS_STREAM unset.
+    expect(bodyOf(fetchMock.mock.calls[0]).stream).toBe(true)
+  })
+
+  it('retries the other model when the first fails before any audio', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { message: 'overloaded' } }, 503))
+      .mockResolvedValueOnce(geminiStreamResponse([pcm(20, 8000)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = await synthesizeSpeechStream({ text: 'hello', language: 'en' })
+
+    expect(speech).toMatchObject({ ok: true, modelId: 'gemini-3.8-flash-tts', fallbackFrom: 'gemini-3.8-flash-lite-tts' })
+    expect(bodyOf(fetchMock.mock.calls[1]).model).toBe('gemini-3.8-flash-tts')
+    if (speech.ok) await collect(speech.chunks)
+  })
+
+  it('reports a failure when the stream has an error event or no audio before any chunk', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sseResponse([sseEvent('error', { error: { code: 429, message: 'quota' } })]))
+      .mockResolvedValueOnce(geminiStreamResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = await synthesizeSpeechStream({ text: 'hello', language: 'en' })
+
+    expect(speech).toMatchObject({
+      ok: false,
+      reason: 'invalid_audio',
+      modelId: 'gemini-3.8-flash-tts',
+      fallbackFrom: 'gemini-3.8-flash-lite-tts',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('throws from the iterator when the stream fails after audio was handed on', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(sseResponse([
+      sseEvent('step.delta', { index: 0, delta: { type: 'audio', data: pcm(20, 8000).toString('base64') } }),
+      sseEvent('error', { error: { code: 500, message: 'internal' } }),
+    ]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = await synthesizeSpeechStream({ text: 'hello', language: 'en' })
+
+    if (!speech.ok) throw new Error('expected a stream')
+    const first = await speech.chunks.next()
+    expect(first.done).toBe(false)
+    await expect(speech.chunks.next()).rejects.toThrow('internal')
+  })
+
+  it('does not call Gemini without an API key', async () => {
+    delete process.env.GEMINI_API_KEY
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    expect(await synthesizeSpeechStream({ text: 'hello', language: 'en' }))
+      .toMatchObject({ ok: false, reason: 'missing_credentials' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('canStreamSpeech', () => {
+  it('is on by default, off with GEMINI_TTS_STREAM=off or a time-stretch for that language', async () => {
+    const { canStreamSpeech } = await loadModule()
+    expect(canStreamSpeech('ko')).toBe(true)
+    process.env.GEMINI_TTS_SPEED = 'ko=1.2,*=1'
+    expect(canStreamSpeech('ko')).toBe(false)
+    expect(canStreamSpeech('en')).toBe(true)
+    delete process.env.GEMINI_TTS_SPEED
+    process.env.GEMINI_TTS_STREAM = 'off'
+    expect(canStreamSpeech('en')).toBe(false)
+  })
+})
