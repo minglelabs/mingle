@@ -24,6 +24,14 @@ function gamePath(conversationId: string, suffix = ''): `/${string}` {
   return `/conversations/${encodeURIComponent(conversationId)}/hash-rush${suffix}` as `/${string}`
 }
 
+export function sameHashRushRoomGame(left: HashRushRoomGame | null, right: HashRushRoomGame | null): boolean {
+  if (left === right) return true
+  if (!left || !right) return false
+  return left.sessionId === right.sessionId
+    && (left.startedBy?.userId ?? null) === (right.startedBy?.userId ?? null)
+    && (left.startedBy?.name ?? null) === (right.startedBy?.name ?? null)
+}
+
 export async function fetchHashRushRoomGame(conversationId: string): Promise<HashRushRoomGame | null> {
   const response = await fetch(buildClientApiPath(gamePath(conversationId)), { credentials: 'include', cache: 'no-store' })
   if (!response.ok) throw new Error(`hash_rush_game_${response.status}`)
@@ -71,7 +79,14 @@ export function useHashRushRoomGame(input: {
   // Kept with the room it is about: another room starts from nothing.
   const [known, setKnown] = useState<{ conversationId: string | null, game: HashRushRoomGame | null }>({ conversationId: null, game: null })
   const game = known.conversationId === conversationId ? known.game : null
-  const setGame = useCallback((next: HashRushRoomGame | null) => setKnown({ conversationId, game: next }), [conversationId])
+  // A read that says the same keeps the same state: every poll (each 5 s) and
+  // heartbeat would otherwise re-render the whole room, which stuttered the
+  // game drawn over it.
+  const setGame = useCallback((next: HashRushRoomGame | null) => setKnown((current) => (
+    current.conversationId === conversationId && sameHashRushRoomGame(current.game, next)
+      ? current
+      : { conversationId, game: next }
+  )), [conversationId])
   const gameRef = useRef<HashRushRoomGame | null>(null)
   useEffect(() => { gameRef.current = game }, [game])
 
