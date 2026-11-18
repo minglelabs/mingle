@@ -6,6 +6,7 @@ import { BAN_NOTICE_CATEGORIES, resolveHomeCopy } from "@/i18n/home-copy";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/server/admin/guard";
 import { createBanNotice, createGeneralNotice, deleteNotice, pickNoticeText } from "@/server/notices";
+import { sendImportantNoticePush } from "@/server/notice-push";
 import {
   AdminButton,
   AdminCard,
@@ -59,6 +60,10 @@ async function createGeneralAction(formData: FormData) {
   });
   if (!id) redirect(`${PATH}?result=empty`);
   await prisma.adminAuditLog.create({ data: { action: "notice.create", sessionId: ctx.sessionId, targetType: "notice", targetId: id } });
+  // An important notice is pushed once to every device. Not awaited: the page must not wait for every delivery.
+  if (formData.get("important") === "on") {
+    void sendImportantNoticePush(id).catch((error) => console.error("[notices] important notice push failed", error));
+  }
   revalidatePath(PATH);
   redirect(`${PATH}?result=created`);
 }
@@ -148,7 +153,7 @@ export default async function AdminNoticesPage({ searchParams }: PageProps) {
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" name="important" className="h-4 w-4" />
-            중요 공지로 표시
+            중요 공지로 표시 (올리면 모든 사용자에게 푸시가 한 번 갑니다)
           </label>
           <AdminButton type="submit" variant="primary">올리기</AdminButton>
         </form>

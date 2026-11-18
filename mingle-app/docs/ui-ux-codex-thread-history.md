@@ -2,6 +2,17 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-18 — Grid tiles load a small copy of the photo, an important notice is pushed, phone sign-in uses the device's account
+
+- Surface: `components/posts/post-grid-tile.tsx`, `lib/post-image-thumbnail.ts`, `server/posts/post-image-thumbnail.ts`, `GET /posts/{id}/image`; `server/notice-push.ts`, `components/home/home-notices.tsx`, `/admin/notices`; `lib/auth-options.ts`, `server/identity/phone-claim.ts`, `components/mingle-home.tsx`.
+- Issue (grid): Every tile of the Explore, profile and search grids loaded the full photo for a tile a third of the screen wide, so the grid filled in slowly.
+- Resolution (grid): Tiles ask for `?size=thumb`: a copy with a longest edge of 400 px, made on first request and kept in server memory. The feed and the full-screen view still load the full photo.
+- Issue (notice): A notice marked important only showed in the list; nobody was told.
+- Resolution (notice): Posting an important notice pushes it once to every account with a registered device, in the recipient's language. Tapping the push opens Home with the notice list (`?notices=1`), also in a week with no ban strip.
+- Issue (sign-in): Signing in with a new number on a phone that already had an account made a second account.
+- Resolution (sign-in): The app sends its device value with the code. A number nobody has, proved on a phone that has an account, signs in that account; the number is saved on it and the owner gets a notification.
+- Not checked on a phone: the push itself (needs APNs/FCM keys), and the device rule at sign-in (needs a build with the device value on a second number).
+
 ## 2026-11-16 — Home tab: people first, tabs are Home, Chats, Explore, My, and one new chat a day
 
 - Surface: new `components/home/` (`home-page.tsx`, `home-notices.tsx`, `profile-start-card.tsx`) at `/[locale]/home`, `bottom-tab-bar.tsx`, `search/unified-search.tsx` and `connect-page.tsx` (Explore), `public-user-profile-screen.tsx`, `server/people-discovery.ts`, `server/notices.ts`, `server/daily-new-chat-limit.ts`, admin `/admin/notices`. Plan: `docs/home-explore-rooms-plan.md`.

@@ -6,6 +6,8 @@ import { ownPostWhere, visibleSinglePostWhere } from '@/server/posts/post-visibi
 import { visibleAuthorWhere } from '@/server/posts/block-visibility'
 import { deletePostImage, getPostImage } from '@/server/posts/post-image-storage'
 import { isOwnedPostImageKey } from '@/server/posts/post-image-keys'
+import { getPostImageThumbnail } from '@/server/posts/post-image-thumbnail'
+import { POST_IMAGE_THUMBNAIL_PARAM, POST_IMAGE_THUMBNAIL_VALUE } from '@/lib/post-image-thumbnail'
 import { contentLengthTooLarge, storeUploadedPostImage } from '@/server/posts/post-image-upload'
 import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 import { rateLimitGuard } from '@/server/rate-limit/rate-limit'
@@ -137,7 +139,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const bytes = await getPostImage(key)
+    // Grid tiles ask for a small copy (`?size=thumb`); anything else gets the stored photo.
+    const wantsThumbnail = request.nextUrl.searchParams.get(POST_IMAGE_THUMBNAIL_PARAM) === POST_IMAGE_THUMBNAIL_VALUE
+    const bytes = wantsThumbnail
+      ? await getPostImageThumbnail(key, () => getPostImage(key))
+      : await getPostImage(key)
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
         'Content-Type': 'image/jpeg',

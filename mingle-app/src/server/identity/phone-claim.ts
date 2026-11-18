@@ -94,10 +94,10 @@ export async function isEmptyAccount(userId: string, now: Date = new Date()): Pr
   return messages + posts + follows + purchases === 0
 }
 
-/** The first live, ordinary account seen on the device, other than `selfId`. */
-async function findDeviceOwner(deviceId: string, selfId: string): Promise<PhoneClaimFacts['deviceOwner']> {
+/** The first live, ordinary account seen on the device, other than `selfId` (null: any account). */
+async function findDeviceOwner(deviceId: string, selfId: string | null): Promise<PhoneClaimFacts['deviceOwner']> {
   const rows = await prisma.appDeviceUser.findMany({
-    where: { deviceId, userId: { not: selfId } },
+    where: selfId ? { deviceId, userId: { not: selfId } } : { deviceId },
     orderBy: { firstSeenAt: 'asc' },
     select: { userId: true },
     take: 20,
@@ -247,4 +247,81 @@ export async function claimVerifiedPhone(
   }
   await recordIdentityLink({ userId, method: 'phone', rawKey: phoneE164, event: 'phone_verified', context })
   return { phoneE164 }
+}
+
+// Signing in with a number (no account yet), docs/one-account-per-person.md 5 (1-1):
+// a number nobody has, proved on a phone that already has an account, signs in
+// that account instead of making a new one.
+
+export type PhoneSignInOnDeviceDecision =
+  | { kind: 'new_account' }
+  | { kind: 'device_account'; userId: string; phone: 'set_own' | 'attach' }
+
+export function decidePhoneSignInOnDevice(facts: {
+  /** A strong device value, and the device is not marked as an exception. */
+  deviceApplies: boolean
+  /** A store-review number: never folded by device. */
+  reviewNumber: boolean
+  deviceOwner: PhoneClaimFacts['deviceOwner']
+}): PhoneSignInOnDeviceDecision {
+  if (!facts.deviceApplies || facts.reviewNumber || !facts.deviceOwner) return { kind: 'new_account' }
+  return { kind: 'device_account', userId: facts.deviceOwner.userId, phone: facts.deviceOwner.hasOwnPhone ? 'attach' : 'set_own' }
+}
+
+/**
+ * For a proved number that no live account holds: the id of this device's
+ * account, with the number saved on it (as its own when it had none, else as
+ * an extra one), or null when a new account should be made.
+ */
+export async function signInDeviceAccountWithNewPhone(input: {
+  phoneE164: string
+  reviewNumber: boolean
+  context: RequestIdentityContext
+}): Promise<string | null> {
+  const { phoneE164, context } = input
+  const device = context.device
+  const deviceApplies = Boolean(device && device.strong && !device.exempt)
+  const deviceOwner = deviceApplies && !input.reviewNumber && device ? await findDeviceOwner(device.id, null) : null
+  const decision = decidePhoneSignInOnDevice({ deviceApplies, reviewNumber: input.reviewNumber, deviceOwner })
+  if (decision.kind === 'new_account') return null
+
+  const now = new Date()
+  const phoneKeyHash = identityKeyHash('phone', phoneE164)
+  if (decision.phone === 'set_own') {
+    await prisma.$transaction([
+      // A deleted or banned account may still hold the number: the column is unique.
+      prisma.user.updateMany({
+        where: { phoneE164, id: { not: decision.userId } },
+        data: { phoneE164: null, phoneHash: null, phoneVerifiedAt: null },
+      }),
+      prisma.user.update({
+        where: { id: decision.userId },
+        data: { phoneE164, phoneHash: contactPhoneHash(phoneE164), phoneVerifiedAt: now },
+      }),
+    ])
+  } else {
+    await prisma.appUserPhone.upsert({
+      where: { phoneKeyHash },
+      create: { userId: decision.userId, phoneKeyHash, last4: phoneE164.slice(-4), attachedViaDeviceId: device?.id ?? null, verifiedAt: now },
+      // The row can be left from a deleted account: the number is this account's now.
+      update: { userId: decision.userId, attachedViaDeviceId: device?.id ?? null, verifiedAt: now },
+    })
+    // Tell the owner: if it was not them, they can take it off in Settings.
+    await notifyUserFromTeam({ recipientId: decision.userId, type: 'sign_in_attached', body: '', targetId: decision.userId })
+  }
+  if (device) {
+    await prisma.appDevicePhone.upsert({
+      where: { deviceId_phoneKeyHash: { deviceId: device.id, phoneKeyHash } },
+      create: { deviceId: device.id, phoneKeyHash, verifiedAt: now },
+      update: { verifiedAt: now },
+    }).catch(() => null)
+  }
+  await recordIdentityLink({
+    userId: decision.userId,
+    method: 'phone',
+    rawKey: phoneE164,
+    event: decision.phone === 'attach' ? 'attached' : 'phone_verified',
+    context,
+  })
+  return decision.userId
 }

@@ -42,6 +42,30 @@ export function readRequestIp(headers: HeaderReader): string | null {
   return (forwarded || headers.get('x-real-ip') || '').slice(0, 64) || null
 }
 
+/** Notes the device alone (no account yet: a phone sign-in before the account is known), and returns it. Never throws. */
+export async function noteDevice(header: DeviceHeader | null): Promise<RequestIdentityContext['device']> {
+  if (!header) return null
+  try {
+    const now = new Date()
+    const deviceKeyHash = identityKeyHash('device', header.rawKey)
+    const device = await prisma.appDevice.upsert({
+      where: { deviceKeyHash },
+      create: { deviceKeyHash, keyKind: header.keyKind, platform: header.platform, firstSeenAt: now, lastSeenAt: now },
+      update: { lastSeenAt: now },
+      select: { id: true, keyKind: true, exemptAt: true, blockedAt: true },
+    })
+    return {
+      id: device.id,
+      strong: isStrongDeviceKeyKind(device.keyKind) && isDeviceLinkOn(),
+      exempt: Boolean(device.exemptAt),
+      blocked: Boolean(device.blockedAt),
+    }
+  } catch (error) {
+    console.error('[identity] device note failed', error)
+    return null
+  }
+}
+
 /** Notes that this account is on this device, and returns the device. Never throws: a failed note must not block the request. */
 export async function touchDevice(userId: string, header: DeviceHeader | null): Promise<RequestIdentityContext['device']> {
   if (!header) return null

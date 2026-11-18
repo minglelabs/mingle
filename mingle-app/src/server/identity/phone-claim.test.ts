@@ -44,7 +44,7 @@ vi.mock('@/lib/prisma', () => {
 
 import { prisma } from '@/lib/prisma'
 import { identityKeyHash } from '@/server/identity/keys'
-import { PhoneClaimRefused, claimVerifiedPhone, decidePhoneClaim, isEmptyAccount, type PhoneClaimFacts } from './phone-claim'
+import { PhoneClaimRefused, claimVerifiedPhone, decidePhoneClaim, decidePhoneSignInOnDevice, isEmptyAccount, type PhoneClaimFacts } from './phone-claim'
 
 const PHONE = '+821012345678'
 const base: PhoneClaimFacts = { selfId: 'me', selfEmpty: false, selfExempt: false, blocked: false, numberOwnerId: null, deviceOwner: null }
@@ -202,5 +202,22 @@ describe('claimVerifiedPhone', () => {
     await expect(claimVerifiedPhone('me', PHONE, { context: { device: { ...strongDevice, strong: false } } })).resolves.toEqual({ phoneE164: PHONE })
     await expect(claimVerifiedPhone('me', PHONE, { context: { device: { ...strongDevice, exempt: true } } })).resolves.toEqual({ phoneE164: PHONE })
     expect(db.accountUpdateMany).not.toHaveBeenCalled()
+  })
+})
+
+describe('decidePhoneSignInOnDevice', () => {
+  const owner = { userId: 'a', hasOwnPhone: true }
+
+  it('signs in the account the phone already has: the number becomes its own, or an extra one', () => {
+    expect(decidePhoneSignInOnDevice({ deviceApplies: true, reviewNumber: false, deviceOwner: owner }))
+      .toEqual({ kind: 'device_account', userId: 'a', phone: 'attach' })
+    expect(decidePhoneSignInOnDevice({ deviceApplies: true, reviewNumber: false, deviceOwner: { userId: 'a', hasOwnPhone: false } }))
+      .toEqual({ kind: 'device_account', userId: 'a', phone: 'set_own' })
+  })
+
+  it('makes a new account on a phone with no account, without a strong device value, and for a review number', () => {
+    expect(decidePhoneSignInOnDevice({ deviceApplies: true, reviewNumber: false, deviceOwner: null })).toEqual({ kind: 'new_account' })
+    expect(decidePhoneSignInOnDevice({ deviceApplies: false, reviewNumber: false, deviceOwner: owner })).toEqual({ kind: 'new_account' })
+    expect(decidePhoneSignInOnDevice({ deviceApplies: true, reviewNumber: true, deviceOwner: owner })).toEqual({ kind: 'new_account' })
   })
 })

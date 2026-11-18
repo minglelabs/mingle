@@ -13,10 +13,11 @@ import { prisma } from "@/lib/prisma";
 import { createWithDefaultHandle } from "@/lib/handles";
 import { ensureSignupWelcomeOnboarding } from "@/lib/signup-welcome-onboarding";
 import { NEW_REGISTERED_USER_TRANSLATION_MODEL } from "@/lib/translation-models";
-import { hashPhoneE164, verifyPhoneSignIn } from "@/server/phone-verification";
+import { hashPhoneE164, isReviewPhoneNumber, verifyPhoneSignIn } from "@/server/phone-verification";
 import { identityMethodForProvider } from "@/server/identity/keys";
-import { isIdentityBlocked, recordIdentityLink, recordSignIn, resolveMergedUser } from "@/server/identity/links";
-import { findPhoneOwnerId } from "@/server/identity/phone-claim";
+import { isIdentityBlocked, noteDevice, readDeviceHeader, recordIdentityLink, recordSignIn, resolveMergedUser, touchDevice, type DeviceHeader } from "@/server/identity/links";
+import { findPhoneOwnerId, signInDeviceAccountWithNewPhone } from "@/server/identity/phone-claim";
+import { CLIENT_PLATFORM_HEADER, DEVICE_ID_HEADER, DEVICE_KIND_HEADER } from "@/lib/native-device-identity";
 
 function normalizeEmail(rawValue: unknown): string | null {
   if (typeof rawValue !== "string") return null;
@@ -133,11 +134,19 @@ async function upsertUserForCredentialsSignIn(args: {
  * holding the number gives it up first, so the number starts a fresh account
  * (as a new OAuth sign-in would). Null when a permanent ban closed the number.
  */
-export async function findOrCreateUserForPhoneSignIn(phoneE164: string) {
+export async function findOrCreateUserForPhoneSignIn(phoneE164: string, deviceHeader: DeviceHeader | null = null) {
   const now = new Date();
   const select = { id: true, name: true, email: true, externalUserId: true, isDeleted: true } as const;
   if (await isIdentityBlocked("phone", phoneE164)) return null;
-  const ownerId = await findPhoneOwnerId(phoneE164);
+  // The phone it is done on: a banned device is refused, and a number nobody
+  // has signs in the account this device already has (section 5, 1-1).
+  const device = await noteDevice(deviceHeader);
+  if (device?.blocked) return null;
+  const context = { device };
+  let ownerId = await findPhoneOwnerId(phoneE164);
+  if (!ownerId) {
+    ownerId = await signInDeviceAccountWithNewPhone({ phoneE164, reviewNumber: isReviewPhoneNumber(phoneE164), context });
+  }
   if (ownerId) {
     const owner = await prisma.user.findUnique({ where: { id: ownerId }, select: { ...select, phoneE164: true } });
     if (owner) {
@@ -145,7 +154,8 @@ export async function findOrCreateUserForPhoneSignIn(phoneE164: string) {
         where: { id: owner.id },
         data: owner.phoneE164 === phoneE164 ? { lastSeenAt: now, phoneVerifiedAt: now } : { lastSeenAt: now },
       }).catch(() => null);
-      await recordIdentityLink({ userId: owner.id, method: "phone", rawKey: phoneE164, event: "sign_in" });
+      await touchDevice(owner.id, deviceHeader);
+      await recordIdentityLink({ userId: owner.id, method: "phone", rawKey: phoneE164, event: "sign_in", context });
       return owner;
     }
   }
@@ -171,7 +181,8 @@ export async function findOrCreateUserForPhoneSignIn(phoneE164: string) {
       select,
     }),
   ).then(async (created) => {
-    await recordIdentityLink({ userId: created.id, method: "phone", rawKey: phoneE164, event: "sign_up" });
+    await touchDevice(created.id, deviceHeader);
+    await recordIdentityLink({ userId: created.id, method: "phone", rawKey: phoneE164, event: "sign_up", context });
     return created;
   });
 }
@@ -313,7 +324,12 @@ function buildProviders(): NextAuthOptions["providers"] {
       async authorize(credentials) {
         const phoneE164 = await verifyPhoneSignIn(credentials?.phone, credentials?.code);
         if (!phoneE164) return null;
-        const user = await findOrCreateUserForPhoneSignIn(phoneE164);
+        // The app sends its device value with the code (a browser sends none).
+        const fields = (credentials ?? {}) as Record<string, string | undefined>;
+        const deviceHeader = readDeviceHeader({
+          get: (name) => (name === DEVICE_ID_HEADER ? fields.deviceId : name === DEVICE_KIND_HEADER ? fields.deviceKind : name === CLIENT_PLATFORM_HEADER ? fields.devicePlatform : null) ?? null,
+        });
+        const user = await findOrCreateUserForPhoneSignIn(phoneE164, deviceHeader);
         if (!user) return null;
         return {
           id: user.id,

@@ -59,6 +59,13 @@ export default function HomeNoticeStrip({ locale }: { locale: string }) {
   const [notices, setNotices] = useState<HomeNotice[] | null>(null);
   const [failed, setFailed] = useState(false);
 
+  // The important-notice push opens Home with `?notices=1`: show the list at once.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("notices") !== "1") return;
+    const timer = window.setTimeout(() => setOpen(true), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void fetch(`${buildClientApiPath("/notices")}?locale=${encodeURIComponent(locale)}`, { cache: "no-store" })
