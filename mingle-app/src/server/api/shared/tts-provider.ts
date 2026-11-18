@@ -24,7 +24,9 @@ import {
 } from '@/server/api/shared/audio-dsp'
 import {
   getFallbackTtsModel,
+  getGeminiTtsModel,
   resolveTtsRuntimeSelection,
+  type GeminiTtsModel,
   type TtsProviderId,
 } from '@/lib/tts-models'
 
@@ -135,15 +137,6 @@ export function getGeminiTtsStyle(language?: string | null): string | null {
   const globalStyle = readStyleEnv('GEMINI_TTS_STYLE')
   if (globalStyle !== undefined) return globalStyle
   return (lang && GEMINI_TTS_LANGUAGE_STYLES[lang]) || DEFAULT_GEMINI_TTS_STYLE
-}
-
-/**
- * `GEMINI_TTS_STREAM=off` (or `0` / `false`) asks for one unary answer instead
- * of a stream, for A/B checks and as a kill switch. Default: stream.
- */
-function isGeminiTtsStreamEnabled(): boolean {
-  const value = (process.env.GEMINI_TTS_STREAM || '').trim().toLowerCase()
-  return !['off', '0', 'false'].includes(value)
 }
 
 function getGeminiTtsTimeoutMs(): number {
@@ -365,7 +358,6 @@ function buildGeminiTtsRequestBody(input: {
   modelId: string
   voiceId: string
   style: string | null
-  stream: boolean
 }): string {
   return JSON.stringify({
     model: input.modelId,
@@ -383,9 +375,9 @@ function buildGeminiTtsRequestBody(input: {
     },
     // Do not retain user utterances server-side (default is store=true).
     store: false,
-    // Streamed audio arrives as it is synthesized: for a short line the
-    // whole clip is in about 1.5 s instead of 2.5 s unary.
-    ...(input.stream ? { stream: true } : {}),
+    // Always streamed: audio arrives as it is synthesized, so even a whole
+    // clip is in about 1.5 s instead of 2.5 s unary for a short line.
+    stream: true,
   })
 }
 
@@ -423,7 +415,7 @@ export async function synthesizeWithGemini(
         'x-goog-api-key': apiKey,
         'Content-Type': 'application/json',
       },
-      body: buildGeminiTtsRequestBody({ text: input.text, modelId, voiceId, style, stream: isGeminiTtsStreamEnabled() }),
+      body: buildGeminiTtsRequestBody({ text: input.text, modelId, voiceId, style }),
       cache: 'no-store',
       signal: controller.signal,
     })
@@ -480,7 +472,8 @@ export async function synthesizeWithGemini(
 }
 
 /**
- * Synthesize with the model the user selected (`ttsModel`, default gemini-3.8-flash-lite-tts).
+ * Synthesize a whole clip with the user's Gemini model (`ttsModel`; a Soniox
+ * selection, the default, speaks with gemini-3.8-flash-lite-tts here).
  * A failure is retried once with the other Gemini model, whose result
  * (success or failure) is returned with `fallbackFrom` set to the first model.
  * A missing API key is not retried: the other model needs the same key.
@@ -488,11 +481,13 @@ export async function synthesizeWithGemini(
 export async function synthesizeSpeech(
   input: TtsSynthesisInput & { ttsModel?: unknown },
 ): Promise<TtsSynthesisResult> {
-  const selection = resolveTtsRuntimeSelection(input.ttsModel)
-  const first = await synthesizeWithGemini({ ...input, modelId: selection.runtimeModel })
+  // Whole clips always come from Gemini: Soniox speaks at reading pace, so a
+  // whole Soniox clip would only be in after its full playback time.
+  const model = getGeminiTtsModel(resolveTtsRuntimeSelection(input.ttsModel).value)
+  const first = await synthesizeWithGemini({ ...input, modelId: model })
   if (first.ok || first.reason === 'missing_credentials') return first
 
-  const retryModel = getFallbackTtsModel(selection.value)
+  const retryModel = getFallbackTtsModel(model)
   console.warn('[tts] gemini failed, retrying with the other model', {
     reason: first.reason,
     status: first.status,
@@ -587,11 +582,13 @@ export async function* trimLeadingSilencePcm16(
 }
 
 /**
- * Whether speech for this language can be handed on as a stream: streaming is
- * on and no time-stretch is configured (WSOLA needs the whole clip).
+ * Whether speech for this language and model can be handed on as a stream.
+ * Soniox always streams. Gemini streams unless a time-stretch is configured
+ * for the language (WSOLA needs the whole clip).
  */
-export function canStreamSpeech(language?: string | null): boolean {
-  return isGeminiTtsStreamEnabled() && getGeminiTtsSpeed(language) === 1
+export function canStreamSpeech(language?: string | null, ttsModel?: unknown): boolean {
+  if (resolveTtsRuntimeSelection(ttsModel).provider === 'soniox') return true
+  return getGeminiTtsSpeed(language) === 1
 }
 
 /**
@@ -636,7 +633,7 @@ export async function openGeminiSpeechStream(
         'x-goog-api-key': apiKey,
         'Content-Type': 'application/json',
       },
-      body: buildGeminiTtsRequestBody({ text: input.text, modelId, voiceId, style, stream: true }),
+      body: buildGeminiTtsRequestBody({ text: input.text, modelId, voiceId, style }),
       cache: 'no-store',
       signal: controller.signal,
     })
@@ -679,25 +676,16 @@ export async function openGeminiSpeechStream(
   }
 }
 
-// ── Soniox (streamed speech only) ──────────────────────────────────────────
+// ── Soniox (streamed speech only; whole clips use Gemini) ──────────────────────────────────────────
 
 const SONIOX_TTS_URL = 'https://tts-rt.soniox.com/tts'
 const SONIOX_TTS_MODEL = 'tts-rt-v2'
 const DEFAULT_SONIOX_TTS_VOICE = 'Adrian'
-// Soniox reads at a normal pace by default; Gemini is asked to speak rapidly.
-const DEFAULT_SONIOX_TTS_SPEED = 1.2
+// Soniox reads at a normal pace by default; Gemini is asked to speak rapidly,
+// so Soniox runs at its fastest allowed speed.
+const DEFAULT_SONIOX_TTS_SPEED = 1.3
 const MIN_SONIOX_TTS_SPEED = 0.7
 const MAX_SONIOX_TTS_SPEED = 1.3
-
-/**
- * `TTS_STREAM_PROVIDER=soniox` (with SONIOX_API_KEY) makes streamed speech
- * come from Soniox, whose first audio arrives sooner than Gemini's. Soniox
- * delivers at speaking pace, so whole clips always stay on Gemini.
- */
-export function getTtsStreamProvider(): TtsProviderId {
-  const wanted = (process.env.TTS_STREAM_PROVIDER || '').trim().toLowerCase()
-  return wanted === 'soniox' && (process.env.SONIOX_API_KEY || '').trim() ? 'soniox' : 'gemini'
-}
 
 function getSonioxTtsSpeed(): number {
   const value = Number((process.env.SONIOX_TTS_SPEED || '').trim() || DEFAULT_SONIOX_TTS_SPEED)
@@ -800,14 +788,16 @@ export async function openSonioxSpeechStream(
 }
 
 /**
- * Streamed counterpart of `synthesizeSpeech`: the selected model, retried once
- * with the other Gemini model when it fails before any audio arrives. With
- * TTS_STREAM_PROVIDER=soniox, Soniox goes first and Gemini is the fallback.
+ * Streamed counterpart of `synthesizeSpeech`: the selected model, and when it
+ * fails before any audio arrives, Gemini (Flash-Lite for Soniox, the other
+ * Gemini model for a Gemini selection). Soniox fails fast on its concurrency
+ * limit (429), so the fallback keeps speech going.
  */
 export async function synthesizeSpeechStream(
   input: TtsSynthesisInput & { ttsModel?: unknown },
 ): Promise<TtsSpeechStream | TtsSynthesisFailure> {
-  if (getTtsStreamProvider() === 'soniox') {
+  const selection = resolveTtsRuntimeSelection(input.ttsModel)
+  if (selection.provider === 'soniox') {
     const soniox = await openSonioxSpeechStream(input)
     if (soniox.ok) return soniox
     console.warn('[tts] soniox stream failed, falling back to gemini', {
@@ -815,20 +805,20 @@ export async function synthesizeSpeechStream(
       status: soniox.status,
       detail: soniox.detail,
     })
-    const gemini = await synthesizeGeminiSpeechStream(input)
+    const gemini = await synthesizeGeminiSpeechStream(input, getGeminiTtsModel(selection.value))
     return { ...gemini, fallbackFrom: gemini.fallbackFrom ?? soniox.modelId }
   }
-  return await synthesizeGeminiSpeechStream(input)
+  return await synthesizeGeminiSpeechStream(input, getGeminiTtsModel(selection.value))
 }
 
 async function synthesizeGeminiSpeechStream(
-  input: TtsSynthesisInput & { ttsModel?: unknown },
+  input: TtsSynthesisInput,
+  model: GeminiTtsModel,
 ): Promise<TtsSpeechStream | TtsSynthesisFailure> {
-  const selection = resolveTtsRuntimeSelection(input.ttsModel)
-  const first = await openGeminiSpeechStream({ ...input, modelId: selection.runtimeModel })
+  const first = await openGeminiSpeechStream({ ...input, modelId: model })
   if (first.ok || first.reason === 'missing_credentials') return first
 
-  const retryModel = getFallbackTtsModel(selection.value)
+  const retryModel = getFallbackTtsModel(model)
   console.warn('[tts] gemini stream failed, retrying with the other model', {
     reason: first.reason,
     status: first.status,

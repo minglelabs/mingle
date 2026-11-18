@@ -2649,7 +2649,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     translationModelUserSelectedSinceHydrationStart,
   ])
   // Sent on every TTS request (no DB lookup on the TTS path) once the user picked
-  // a model. Undefined -> server default (gemini-3.8-flash-lite-tts).
+  // a model. Undefined -> server default (soniox-tts-rt-v2).
   const requestTtsModel = useMemo<UserSelectableTtsModel | undefined>(() => {
     return resolveRequestTtsModel(ttsModel, {
       allowSync: enableAccountPreferencesSync,

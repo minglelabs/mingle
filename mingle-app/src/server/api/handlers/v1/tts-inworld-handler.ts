@@ -71,7 +71,7 @@ export async function handleTtsInworldV1(request: NextRequest) {
   const sessionPromise = getServerSession(getAuthOptions()).catch(() => null)
 
   try {
-    const speech = wantsStream && canStreamSpeech(language)
+    const speech = wantsStream && canStreamSpeech(language, ttsSelection.value)
       ? await synthesizeSpeechStream({ text, language, ttsModel: ttsSelection.value })
       : null
     if (speech?.ok) {

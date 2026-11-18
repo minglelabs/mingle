@@ -2,6 +2,14 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-18 — Soniox is the default read-aloud voice
+
+- Surface: the TTS model row in settings (`lib/tts-models.ts`), `tts-provider.ts`, the Hash notice shown when voice interpreting is turned on (`coins-controller.ts` `readCoinWallet`).
+- Issue: Read-aloud on a streaming Android build could only use Soniox through a server switch (`TTS_STREAM_PROVIDER`), while the settings menu still showed a Gemini model. All TTS was priced at one flat rate whatever the model.
+- Cause: Soniox was added as a server-side experiment, not as a model users can pick.
+- Resolution: Settings lists `soniox-tts-rt-v2` (new default, first), `gemini-3.8-flash-lite-tts` and `gemini-3.8-flash-tts`. Users who never picked a model follow the new default. A streamed request speaks with the selected model; Soniox at speed 1.3, its fastest. If Soniox fails before any audio (for example its concurrency limit), Gemini Flash-Lite speaks instead. Clients that need a whole clip (iOS, older Android builds) always get Gemini, Flash-Lite for a Soniox selection, because a Soniox clip only finishes after its full playback time. The `GEMINI_TTS_STREAM` and `TTS_STREAM_PROVIDER` switches are removed: the server always streams from Gemini. TTS is priced per model (Soniox 17.5, Flash-Lite 13.5, Flash 20.25 Hash per audio minute), and the turn-on notice quotes the user's model.
+- Verification: unit tests for the catalog, provider routing and fallback, the handler and the wallet quote.
+
 ## 2026-11-18 — Read-aloud translation starts while its audio is still arriving (Android)
 
 - Surface: `tts-inworld-handler.ts` and `tts-provider.ts` (`stream: true`), `tts-stream-clip.ts`, the room's TTS queue in `LivePhoneDemo.tsx`, the RN bridge (`native_tts_stream_start` / `_chunk` / `_end`), Android `NativeTtsPcmStreamPlayer` (PR #585, on top of #542).

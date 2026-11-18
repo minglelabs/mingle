@@ -28,6 +28,7 @@ import { resolveCoinBillingMode, resolveUserCoinBillingMode } from '@/server/coi
 import { AppleConsumptionRetryableError, respondToAppleConsumptionRequest } from '@/server/coins/apple-consumption'
 import { CoinGiftError, getCoinGiftInfo, sendCoinGift } from '@/server/coins/gifts'
 import { prisma } from '@/lib/prisma'
+import { resolveTtsRuntimeSelection } from '@/lib/tts-models'
 import { parseApiNamespaceVersion } from '@/lib/api-namespace-version'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' }
@@ -63,12 +64,18 @@ export async function readCoinWallet() {
   if (!userId) return json({ error: 'unauthorized' }, 401)
   // Off = nothing is recorded: no wallet row, no daily refill, no STT billing identity.
   if (resolveCoinBillingMode() === 'off') return json({ ...disabledCoinWallet(), sttBillingToken: null })
-  const [wallet, rates] = await Promise.all([getCoinWallet(userId), loadCoinPricingRates()])
+  const [wallet, rates, user] = await Promise.all([
+    getCoinWallet(userId),
+    loadCoinPricingRates(),
+    prisma.user.findUnique({ where: { id: userId }, select: { ttsModel: true } }),
+  ])
   const coinsFor = (quote: { chargedMicro: bigint }) => Number(quote.chargedMicro) / 1_000_000
   const now = new Date()
   const voicePerMinute = coinsFor(quoteCoinUsage(rates, { kind: 'stt', units: { second: 60 }, at: now }))
+  // Priced at the user's TTS model (rates differ per model; Soniox is the default).
   const playbackPerMinute = coinsFor(quoteCoinUsage(rates, {
     kind: 'tts',
+    model: resolveTtsRuntimeSelection(user?.ttsModel).runtimeModel,
     units: { second: TTS_AUDIO_SECONDS_PER_CONVERSATION_MINUTE },
     at: now,
   }))

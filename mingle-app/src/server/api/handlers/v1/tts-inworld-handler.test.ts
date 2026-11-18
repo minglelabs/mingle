@@ -28,7 +28,7 @@ const ENV_KEYS = [
   'GEMINI_API_KEY',
   'GEMINI_TTS_VOICE',
   'GEMINI_TTS_TIMEOUT_MS',
-  'GEMINI_TTS_STREAM',
+  'SONIOX_API_KEY',
   'GEMINI_TTS_SPEED',
   'INWORLD_RUNTIME_BASE64_CREDENTIAL',
 ] as const
@@ -166,7 +166,7 @@ describe('handleTtsInworldV1', () => {
     })
   })
 
-  it('serves the gemini-3.8-flash-lite-tts default when the body has no ttsModel', async () => {
+  it('serves a whole clip for the Soniox default (no ttsModel) with gemini-3.8-flash-lite-tts', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(geminiWavResponse())
     vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
@@ -184,7 +184,7 @@ describe('handleTtsInworldV1', () => {
     })
   })
 
-  it('resolves an invalid or removed ttsModel (and the removed provider field) to the Gemini default', async () => {
+  it('resolves an invalid or removed ttsModel (and the removed provider field) to the default, spoken by Gemini as a whole clip', async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(geminiWavResponse()))
     vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
@@ -233,7 +233,7 @@ describe('handleTtsInworldV1', () => {
     vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
 
-    const res = await handler(makeRequest({ text: 'hello', language: 'en', stream: true, clientMessageId: 'm1' }) as never)
+    const res = await handler(makeRequest({ text: 'hello', language: 'en', stream: true, clientMessageId: 'm1', ttsModel: 'gemini-3.8-flash-lite-tts' }) as never)
 
     expect(res.status).toBe(200)
     expect(res.headers.get('Content-Type')).toBe('audio/L16;rate=24000;channels=1')
@@ -257,17 +257,44 @@ describe('handleTtsInworldV1', () => {
     expect(bodyOfCall(fetchMock.mock.calls[0]).stream).toBe(true)
   })
 
-  it('answers stream: true with a whole clip when streaming is switched off', async () => {
-    process.env.GEMINI_TTS_STREAM = 'off'
+  it('answers stream: true with a whole clip when a time-stretch is set for a Gemini model', async () => {
+    process.env.GEMINI_TTS_SPEED = 'en=1.2'
     const fetchMock = vi.fn().mockResolvedValueOnce(geminiWavResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    const handler = await loadHandler()
+
+    const res = await handler(makeRequest({ text: 'hello', language: 'en', stream: true, ttsModel: 'gemini-3.8-flash-lite-tts' }) as never)
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toBe('audio/wav')
+    expect(res.headers.get('X-TTS-Stream')).toBeNull()
+  })
+
+  it('streams the Soniox default for stream: true and charges it as tts-rt-v2', async () => {
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    const chunks = [Buffer.alloc(960, 1), Buffer.alloc(480, 2)]
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(new Uint8Array(chunk))
+        controller.close()
+      },
+    }), { status: 200, headers: { 'Content-Type': 'audio/pcm' } }))
     vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
 
     const res = await handler(makeRequest({ text: 'hello', language: 'en', stream: true }) as never)
 
     expect(res.status).toBe(200)
-    expect(res.headers.get('Content-Type')).toBe('audio/wav')
-    expect(res.headers.get('X-TTS-Stream')).toBeNull()
+    expect(res.headers.get('Content-Type')).toBe('audio/L16;rate=24000;channels=1')
+    expect(res.headers.get('X-TTS-Provider')).toBe('soniox')
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://tts-rt.soniox.com/tts')
+    expect(Buffer.from(await res.arrayBuffer()).equals(Buffer.concat(chunks))).toBe(true)
+    await flushAsync()
+    expect(createTrackedEventLogMock.mock.calls[0][0].metadata).toMatchObject({
+      provider: 'soniox',
+      modelId: 'tts-rt-v2',
+      streamed: true,
+    })
   })
 
   it('keeps the upstream error response when a stream fails before any audio', async () => {
@@ -277,7 +304,7 @@ describe('handleTtsInworldV1', () => {
     vi.stubGlobal('fetch', fetchMock)
     const handler = await loadHandler()
 
-    const res = await handler(makeRequest({ text: 'hello', language: 'en', stream: true }) as never)
+    const res = await handler(makeRequest({ text: 'hello', language: 'en', stream: true, ttsModel: 'gemini-3.8-flash-lite-tts' }) as never)
 
     expect(res.status).toBe(400)
     expect(await res.json()).toEqual({ error: 'inworld_tts_failed', status: 400, detail: 'bad request' })
