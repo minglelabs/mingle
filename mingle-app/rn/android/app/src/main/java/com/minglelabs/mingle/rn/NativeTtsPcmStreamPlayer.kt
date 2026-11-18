@@ -15,7 +15,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * A writer thread feeds the AudioTrack (its writes block while the buffer is
  * full). `onFinished` is called on that thread once everything handed over
  * has been played; `onError` when the track fails. Neither is called after
- * `release`.
+ * `release`. The owner calls `release` in every case, including after
+ * `onFinished` / `onError`.
  */
 class NativeTtsPcmStreamPlayer(
   private val sampleRate: Int,
@@ -70,14 +71,19 @@ class NativeTtsPcmStreamPlayer(
     queue.put(END)
   }
 
+  /**
+   * Stops the sound at once. The track itself is freed by the writer thread
+   * when it exits: releasing it here could pull it out from under a write
+   * that is still blocked on the other thread.
+   */
   fun release() {
     if (!released.compareAndSet(false, true)) return
     queue.clear()
     queue.offer(END)
-    writer.interrupt()
+    // A paused, flushed track makes a blocked write return.
     runCatching { track.pause() }
     runCatching { track.flush() }
-    runCatching { track.release() }
+    writer.interrupt()
   }
 
   private fun runWriter() {
@@ -106,6 +112,9 @@ class NativeTtsPcmStreamPlayer(
     } catch (error: Throwable) {
       Log.w(TAG, "stream writer failed", error)
       if (!released.get()) onError("audio_track_error(${error.message ?: "unknown"})")
+    } finally {
+      // The only place the track is freed (see `release`).
+      runCatching { track.release() }
     }
   }
 

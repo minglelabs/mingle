@@ -4674,7 +4674,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         ...(next.mode === 'auto' && !isSpeakerModeClient() ? { stopOnEarphoneDisconnect: true } : {}),
       })
       armNativeTtsEventTimeout(playbackId, next.playbackKey, NATIVE_TTS_STREAM_WATCHDOG_TIMEOUT_MS)
-      const unsubscribe = clip.subscribe({
+      // `subscribe` replays the pieces already in before it returns.
+      let unsubscribe = () => {}
+      unsubscribe = clip.subscribe({
         onChunk: (chunk) => {
           if (!isCurrentClip()) {
             unsubscribe()
