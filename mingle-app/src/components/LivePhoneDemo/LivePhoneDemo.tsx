@@ -125,7 +125,8 @@ import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare, Volume2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
-import SlideSurface from '@/components/slide-surface'
+import SlideSurface, { isNativeEdgeSwipeSuppressed } from '@/components/slide-surface'
+import { CONVERSATION_HISTORY_ROUTE_STATE_KEY } from '@/components/conversation-list.logic'
 import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
 import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
@@ -4056,9 +4057,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     // Temporary (see src/lib/ui-diagnostics.ts): what the room menu looked like to JS around a
     // back navigation, and whether its panel is still on screen 600 ms later.
+    // Also a back with the menu closed (it may leave the room): the one-swipe
+    // "menu page straight to the conversation list" case happens there.
     const reportMenuPopStateDiagnostic = (depthBefore: number, requestedDepth: number | null) => {
-      if (depthBefore <= 0 && requestedDepth === null) return
       const stateBefore = window.history.state as Record<string, unknown> | null
+      const edgeSwipeSuppressed = isNativeEdgeSwipeSuppressed()
+      const historyLength = window.history.length
+      const conversationRoute = stateBefore && typeof stateBefore === 'object'
+        ? stateBefore[CONVERSATION_HISTORY_ROUTE_STATE_KEY] ?? null
+        : null
       window.setTimeout(() => {
         const panel = document.querySelector('[data-qa="live-demo-menu-panel"]')
         const rect = panel?.getBoundingClientRect()
@@ -4068,6 +4075,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           stateDepth: stateBefore && typeof stateBefore === 'object' ? stateBefore[MENU_HISTORY_STATE_KEY] ?? null : null,
           depthAfter: menuHistoryDepthRef.current,
           isNativeIosApp: isNativeIosAppRuntime(),
+          edgeSwipeSuppressed,
+          historyLength,
+          conversationRoute,
           settleState: menuIosHistorySettleRef.current,
           panelInDom: Boolean(panel),
           panelRect: rect ? [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)] : null,
