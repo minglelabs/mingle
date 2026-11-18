@@ -107,7 +107,7 @@ PORT=8090
 HASH_RUSH_TICKET_SECRET=<app.env의 HASH_RUSH_TICKET_SECRET와 같은 값>
 RESULTS_SECRET=<app.env의 HASH_RUSH_RESULTS_SECRET와 같은 값>
 RESULTS_URL=https://hashchat-win.minglelabs.app/api/hash-rush/results
-ALLOWED_ORIGINS=https://minglelabs.github.io
+ALLOWED_ORIGINS=https://minglelabs.github.io,https://hashchat-win.minglelabs.app
 ```
 
 ```bash
