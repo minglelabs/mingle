@@ -149,6 +149,39 @@ describe('voice controller LiveKit wiring', () => {
     expect(humanPub.track!.setVolume).toHaveBeenLastCalledWith(0.15);
   });
 
+  it('tells which line is being read aloud in my listen language, until that lane stops', async () => {
+    const humanKo = participant('u_ko', { lang: 'ko' }, [pub({ trackName: 'mic' })]);
+    const { room, handlers } = makeFakeRoom([humanKo]);
+    const controller = createVoiceController({ api: fakeApi(), createRoom: () => room, myLang: 'ja', localUserId: 'me' });
+    await controller.connect('c1');
+    await controller.setInterpret(true);
+    const send = (obj: unknown) =>
+      handlers[ROOM_EVENTS.DataReceived](new TextEncoder().encode(JSON.stringify(obj)), humanKo, 0, 'interpreter');
+
+    send({ type: 'final', id: 'f1', text: '안녕', lang: 'ko', speakerName: 'KoUser' });
+    send({ type: 'play', id: 'f1', lang: 'en' });
+    expect(controller.getSnapshot().readingLineId).toBeNull();
+    send({ type: 'play', id: 'f1', lang: 'ja' });
+    expect(controller.getSnapshot().readingLineId).toBe('f1');
+    send({ type: 'lane', lang: 'ja', playing: false });
+    expect(controller.getSnapshot().readingLineId).toBeNull();
+  });
+
+  it('reads aloud in a picked listen language and tells the interpreter', async () => {
+    const { room, handlers } = makeFakeRoom([]);
+    const controller = createVoiceController({ api: fakeApi(), createRoom: () => room, myLang: 'ko', localUserId: 'me' });
+    await controller.setListenLang('en-US');
+    await controller.connect('c1');
+    expect(room.localParticipant.setAttributes).toHaveBeenCalledWith({ listenLang: 'en' });
+    expect(controller.getSnapshot().listenLang).toBe('en');
+    await controller.setInterpret(true);
+    const send = (obj: unknown) =>
+      handlers[ROOM_EVENTS.DataReceived](new TextEncoder().encode(JSON.stringify(obj)), room.localParticipant, 0, 'interpreter');
+    send({ type: 'final', id: 'f2', text: 'hi', lang: 'ja', speakerName: 'Ja' });
+    send({ type: 'play', id: 'f2', lang: 'en' });
+    expect(controller.getSnapshot().readingLineId).toBe('f2');
+  });
+
   it('carries original voices only and quiets them while the room reads aloud', async () => {
     const humanKo = participant('u_ko', { lang: 'ko' }, [pub({ trackName: 'mic' })]);
     const humanJa = participant('u_ja', { lang: 'ja' }, [pub({ trackName: 'mic' })]);

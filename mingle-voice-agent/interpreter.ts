@@ -99,6 +99,14 @@ function isInterpreting(participant: RemoteParticipant): boolean {
 }
 
 /** Interpreting and hearing translations read aloud (`listen` is "off" for captions only). */
+/**
+ * The language a person hears translations in: their pick (`listenLang`, the
+ * room's speaker / earphone mode language) or else the language they speak.
+ */
+function listenLangOf(participant: RemoteParticipant): string | null {
+    return normalizeLang(participant.attributes.listenLang) || normalizeLang(participant.attributes.lang);
+}
+
 function isListening(participant: RemoteParticipant): boolean {
     return isInterpreting(participant) && participant.attributes.listen !== 'off';
 }
@@ -174,7 +182,7 @@ export class Interpreter {
     private refreshParticipants(): void {
         const readers = this.humans().filter(isInterpreting);
         for (const participant of readers) {
-            const lang = normalizeLang(participant.attributes.lang);
+            const lang = listenLangOf(participant);
             if (lang) void this.ensureLane(lang);
         }
         if (readers.length === 0 && !this.idleTimer) {
@@ -255,15 +263,16 @@ export class Interpreter {
         for (const participant of this.humans()) {
             if (participant.identity === speakerIdentity) continue;
             if (!isInterpreting(participant)) continue;
-            const lang = normalizeLang(participant.attributes.lang);
-            if (lang && lang !== sourceLang) targets.add(lang);
+            for (const lang of new Set([normalizeLang(participant.attributes.lang), listenLangOf(participant)])) {
+                if (lang && lang !== sourceLang) targets.add(lang);
+            }
         }
         return [...targets];
     }
 
     private listenersFor(lang: string): string[] {
         return this.humans()
-            .filter((participant) => isListening(participant) && normalizeLang(participant.attributes.lang) === lang)
+            .filter((participant) => isListening(participant) && listenLangOf(participant) === lang)
             .map((participant) => participant.identity);
     }
 
@@ -317,7 +326,7 @@ export class Interpreter {
         const langs = new Set<string>();
         for (const participant of this.humans()) {
             if (participant.identity === speaker.identity || !isListening(participant)) continue;
-            const lang = normalizeLang(participant.attributes.lang);
+            const lang = listenLangOf(participant);
             if (lang && lang !== sourceLang) langs.add(lang);
         }
         return [...langs];

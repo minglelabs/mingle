@@ -325,6 +325,7 @@ import VoiceTalkPanel, {
   resolveVoiceTalkMic,
   setVoiceTalkInterpret,
   setVoiceTalkListen,
+  setVoiceTalkListenLang,
   setVoiceTalkMic,
 } from './VoiceTalkPanel'
 import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
@@ -2151,6 +2152,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [voiceTalkInterpretOn, setVoiceTalkInterpretOn] = useState(false)
   // Translations read aloud while interpreting; a person may want captions only.
   const [voiceTalkListenOn, setVoiceTalkListenOn] = useState(true)
+  // The line the call is reading aloud to this phone, for the bubble's playing indicator.
+  const [voiceTalkReading, setVoiceTalkReading] = useState<{ lineId: string, lang: string } | null>(null)
+  // Turning read-aloud on in a call asks the language, as speaker / earphone mode does.
+  const [voiceTalkListenNoticeOpen, setVoiceTalkListenNoticeOpen] = useState(false)
   const [voiceTalkState, setVoiceTalkState] = useState<{ live: boolean, joined: boolean, connected: boolean, callId: string | null }>(
     { live: false, joined: false, connected: false, callId: null },
   )
@@ -6719,6 +6724,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     voiceTalkPressedRef.current.listenOn = { value: on, until: Date.now() + 3000 }
     setVoiceTalkListenOn(on)
     setVoiceTalkListen(on)
+    if (on) setVoiceTalkListenNoticeOpen(true)
   }, [])
 
   const handleVoiceTalkInterpretChange = useCallback((on: boolean) => {
@@ -7807,6 +7813,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     conversationKey: earphoneModeConversationKey,
     display: earphoneModeDisplay,
   })
+  // A call reads translations aloud in the same language speaker / earphone
+  // mode would: the notice pick, otherwise the room's display language.
+  useEffect(() => {
+    if (!voiceTalkState.connected || !earphoneModeReadLanguage) return
+    setVoiceTalkListenLang(earphoneModeReadLanguage)
+  }, [earphoneModeReadLanguage, voiceTalkState.connected])
   const earphoneAutoReadSnapshot = useMemo<EarphoneAutoReadSnapshot>(() => ({
     conversationKey: earphoneModeConversationKey,
     committed: utterances,
@@ -8275,13 +8287,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const showScrollToBottom = scrollMetrics.distanceToBottom > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX
   // "…" while requested / queued / synthesizing (manual and auto), animated
   // bars only while the current clip's audio is really playing.
+  // In a call the interpreter reads aloud: its line plays like a bubble read by this phone.
+  const voiceTalkReadingPlaybackKey = voiceTalkState.joined && voiceTalkReading
+    ? buildTranslationBubblePlaybackKey(buildVoiceCaptionClientMessageId(voiceTalkReading.lineId), voiceTalkReading.lang)
+    : null
   const bubbleTtsIndicatorsByUtteranceId = useMemo(() => groupBubbleTtsIndicatorsByUtterance(
     resolveBubbleTtsIndicatorKeys({
-      current: speakingItem ? { playbackKey: speakingItem.playbackKey, started: speakingItem.started } : null,
+      current: speakingItem
+        ? { playbackKey: speakingItem.playbackKey, started: speakingItem.started }
+        : voiceTalkReadingPlaybackKey ? { playbackKey: voiceTalkReadingPlaybackKey, started: true } : null,
       pendingManualPlaybackKey: pendingManualTtsTarget?.playbackKey,
       queuedAutoPlaybackKeys: earphoneQueuedPlaybackKeys,
     }),
-  ), [earphoneQueuedPlaybackKeys, pendingManualTtsTarget, speakingItem])
+  ), [earphoneQueuedPlaybackKeys, pendingManualTtsTarget, speakingItem, voiceTalkReadingPlaybackKey])
   const scrollDateTop = Math.max(
     16,
     Math.min(
@@ -8777,6 +8795,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             onListenChange={handleVoiceTalkListenChange}
             onInterpretSync={handleVoiceTalkInterpretSync}
             onCaptions={setVoiceTalkCaptionLines}
+            onReadingChange={setVoiceTalkReading}
             earphonesConnected={nativeAudioRoute.earphonesConnected}
             onOpenProfile={handleOpenProfileForBubble}
             viewerUserId={viewerUserId}
@@ -11298,6 +11317,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 onSelectCaptureSource={setSttCaptureSourcePick}
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
                 onConfirm={closeEarphoneModeNotice}
+                coinCostNotice={coinTtsCostNotice}
+              />
+            </MessageMediaDialog>
+          )}
+          {voiceTalkListenNoticeOpen && voiceTalkState.joined && !earphoneModeNoticeOpen && (
+            // Read-aloud turned on in a call: the language question of speaker /
+            // earphone mode. The call carries the audio, so no earphones and no
+            // capture source are asked.
+            <MessageMediaDialog title={earphoneModeCopy.label} onClose={() => setVoiceTalkListenNoticeOpen(false)}>
+              <EarphoneModeNoticeContent
+                uiLocale={uiLocale}
+                copy={earphoneModeCopy}
+                earphonesConnected={nativeAudioRoute.earphonesConnected}
+                earphonesRequired={false}
+                languages={normalizedDisplayLanguageOptions}
+                readLanguage={earphoneModeReadLanguage}
+                onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
+                onConfirm={() => setVoiceTalkListenNoticeOpen(false)}
                 coinCostNotice={coinTtsCostNotice}
               />
             </MessageMediaDialog>

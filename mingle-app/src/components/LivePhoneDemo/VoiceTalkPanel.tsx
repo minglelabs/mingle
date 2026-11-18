@@ -53,6 +53,10 @@ type RoomSnapshot = {
   listenOn?: boolean
   /** The interpreter's lines, newest first (partial while being said). */
   captions?: VoiceTalkCaptionLine[]
+  /** Builds from 2026-11-18 on: the language translations are read aloud in. */
+  listenLang?: string
+  /** Builds from 2026-11-18 on: the line being read aloud to this phone now. */
+  readingLineId?: string | null
 }
 
 /** One line the call's interpreter is writing down (or just wrote down). */
@@ -169,6 +173,11 @@ export async function setVoiceTalkInterpret(conversationId: string, on: boolean)
   }).catch(() => undefined)
 }
 
+/** The language the call reads translations aloud in (the room's speaker mode pick). */
+export function setVoiceTalkListenLang(lang: string): void {
+  post({ type: 'native_voice_set', payload: { listenLang: lang } })
+}
+
 /** Turns the translations read aloud on or off; interpretation (captions) stays as it is. */
 export function setVoiceTalkListen(on: boolean): void {
   post({ type: 'native_voice_set', payload: { listen: on } })
@@ -220,6 +229,8 @@ export type VoiceTalkPanelProps = {
   onInterpretSync?: (state: { interpretOn: boolean; listenOn: boolean }) => void
   /** The interpreter's lines as the app has them, on every room update. */
   onCaptions?: (lines: VoiceTalkCaptionLine[]) => void
+  /** The line being read aloud to this phone (and in which language), or null. */
+  onReadingChange?: (reading: { lineId: string, lang: string } | null) => void
   /** Earphones are in: the read-aloud button shows them instead of the speaker. */
   earphonesConnected?: boolean
   /** Opens a member's profile when their seat is tapped. */
@@ -287,6 +298,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
   useEffect(() => { onInterpretSyncRef.current = props.onInterpretSync }, [props.onInterpretSync])
   const onCaptionsRef = useRef(props.onCaptions)
   useEffect(() => { onCaptionsRef.current = props.onCaptions }, [props.onCaptions])
+  const onReadingChangeRef = useRef(props.onReadingChange)
+  useEffect(() => { onReadingChangeRef.current = props.onReadingChange }, [props.onReadingChange])
 
   useEffect(() => {
     if (!conversationId || !bridge()) return
@@ -332,6 +345,9 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         // this screen is closed and opened.
         if (detail.snapshot && typeof detail.snapshot.micOn === 'boolean') onListenOnlySyncRef.current?.(!detail.snapshot.micOn)
         onCaptionsRef.current?.(Array.isArray(detail.snapshot?.captions) ? detail.snapshot.captions : [])
+        const readingLineId = typeof detail.snapshot?.readingLineId === 'string' ? detail.snapshot.readingLineId : null
+        const listenLang = typeof detail.snapshot?.listenLang === 'string' ? detail.snapshot.listenLang : ''
+        onReadingChangeRef.current?.(readingLineId && listenLang ? { lineId: readingLineId, lang: listenLang } : null)
         // Interpretation and read-aloud too: they go on with the room closed.
         if (detail.snapshot && typeof detail.snapshot.interpretOn === 'boolean') {
           onInterpretSyncRef.current?.({ interpretOn: detail.snapshot.interpretOn, listenOn: detail.snapshot.listenOn !== false })
@@ -347,7 +363,10 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
         setPhase(detail.phase)
         if (detail.phase === 'error') setError(detail.errorKind === 'voice_room_full' ? copy.full : copy.error)
         if (detail.phase === 'connecting') setError(null)
-        if (detail.phase === 'left' || detail.phase === 'error') setRoom(null)
+        if (detail.phase === 'left' || detail.phase === 'error') {
+          setRoom(null)
+          onReadingChangeRef.current?.(null)
+        }
       }
     }
     window.addEventListener(NATIVE_VOICE_EVENT, onEvent)

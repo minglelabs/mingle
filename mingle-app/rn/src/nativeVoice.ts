@@ -127,6 +127,10 @@ export type VoiceSnapshot = {
   origVol: number;
   trVol: number;
   captions: CaptionLine[];
+  /** The language translations are read aloud in (my language unless I picked another). */
+  listenLang: string;
+  /** The caption line the interpreter is reading aloud in my listen language, or null. */
+  readingLineId: string | null;
 };
 
 export type VoiceControllerDeps = {
@@ -162,6 +166,8 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     trVol: 1,
     callVol: 1,
     lanePlaying: false,
+    listenLang: deps.myLang,
+    readingLineId: null as string | null,
     maxParticipants: DEFAULT_MAX,
     apiParticipants: [] as VoiceParticipant[],
     speakingIdentities: new Set<string>(),
@@ -172,7 +178,8 @@ export function createVoiceController(deps: VoiceControllerDeps) {
   }
 
   function subscriptionState(): SubscriptionState {
-    return { interpretOn: state.interpretOn, listenOn: state.listenOn, myLang: deps.myLang };
+    // The lane I hear is the one in my listen language.
+    return { interpretOn: state.interpretOn, listenOn: state.listenOn, myLang: state.listenLang };
   }
 
   function volumeState(): VolumeState {
@@ -226,13 +233,17 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     const msg = decodeCaptionPayload(payload);
     if (!msg) return;
     if (msg.type === 'lane') {
-      if (msg.lang === deps.myLang) {
+      if (msg.lang === state.listenLang) {
         state.lanePlaying = msg.playing;
+        if (!msg.playing) state.readingLineId = null;
         applyVolumes();
+        emit();
       }
       return;
     }
-    applyCaption(captionStore, msg, deps.myLang);
+    const lineId = applyCaption(captionStore, msg, state.listenLang);
+    // A piece of a line starts playing in my language: that bubble is being read.
+    if (msg.type === 'play' && lineId) state.readingLineId = lineId;
     emit();
   }
 
@@ -299,6 +310,10 @@ export function createVoiceController(deps: VoiceControllerDeps) {
         state.micAvailable = false;
       }
       await r.startAudio?.().catch(() => undefined);
+      // A listen language picked before the call connected (the token carries the speech language only).
+      if (state.listenLang !== deps.myLang) {
+        await r.localParticipant.setAttributes?.({ listenLang: state.listenLang }).catch(() => undefined);
+      }
 
       state.status = 'connected';
       syncSubscriptions();
@@ -337,9 +352,23 @@ export function createVoiceController(deps: VoiceControllerDeps) {
   }
 
   /** Translations read aloud on my language's lane; off keeps captions only. */
+  /** Read translations aloud in this language (the room's speaker mode pick). */
+  async function setListenLang(lang: string): Promise<void> {
+    const next = (lang || '').trim().toLowerCase().split('-')[0] || deps.myLang;
+    if (next === state.listenLang) return;
+    state.listenLang = next;
+    state.lanePlaying = false;
+    state.readingLineId = null;
+    syncSubscriptions();
+    applyVolumes();
+    emit();
+    await room?.localParticipant.setAttributes?.({ listenLang: next }).catch(() => undefined);
+  }
+
   async function setListen(on: boolean): Promise<void> {
     state.listenOn = on;
     state.lanePlaying = false;
+    if (!on) state.readingLineId = null;
     syncSubscriptions();
     applyVolumes();
     emit();
@@ -462,6 +491,8 @@ export function createVoiceController(deps: VoiceControllerDeps) {
       origVol: state.origVol,
       trVol: state.trVol,
       captions: captionLinesNewestFirst(captionStore, deps.maxCaptions ?? 50),
+      listenLang: state.listenLang,
+      readingLineId: state.readingLineId,
     };
   }
 
@@ -476,6 +507,7 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     setCallVol,
     setTrVol,
     setReadingAloud,
+    setListenLang,
     getSnapshot,
     subscribe(listener: () => void): () => void {
       listeners.add(listener);

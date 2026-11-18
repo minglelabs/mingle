@@ -13,7 +13,7 @@
 //   { type: 'native_voice_close' }                                                        // leave
 //   { type: 'native_voice_status_request', payload: { conversationId } }                 // poll GET /voice
 //   { type: 'native_voice_status_stop' }                                                  // stop polling
-//   { type: 'native_voice_set', payload: { mic?, interpret?, listen?, mode?, origVol? } }
+//   { type: 'native_voice_set', payload: { mic?, interpret?, listen?, listenLang?, mode?, origVol? } }
 //
 // native -> web events (dispatched on window as CustomEvent detail):
 //   { type: 'state', phase: 'idle'|'connecting'|'connected'|'left'|'error', conversationId, errorKind? }
@@ -51,6 +51,8 @@ export type VoiceSetCommand = {
     origVol?: number;
     /** The viewer's volume for the whole call (0..1). */
     volume?: number;
+    /** The language translations are read aloud in (the room's speaker mode pick). */
+    listenLang?: string;
   };
 };
 
@@ -104,6 +106,9 @@ export function parseVoiceBridgeCommand(parsed: unknown): VoiceBridgeCommand | n
     if (typeof payload.mic === 'boolean') out.mic = payload.mic;
     if (typeof payload.interpret === 'boolean') out.interpret = payload.interpret;
     if (typeof payload.listen === 'boolean') out.listen = payload.listen;
+    if (typeof payload.listenLang === 'string' && /^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?$/.test(payload.listenLang.trim())) {
+      out.listenLang = payload.listenLang.trim();
+    }
     if (payload.mode === 'static' || payload.mode === 'dynamic') out.mode = payload.mode;
     if (typeof payload.origVol === 'number' && Number.isFinite(payload.origVol)) {
       out.origVol = Math.max(0, Math.min(1, payload.origVol));

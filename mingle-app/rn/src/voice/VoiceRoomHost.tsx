@@ -172,6 +172,7 @@ export const VoiceRoomHost = React.forwardRef<VoiceRoomHostHandle, VoiceRoomHost
       if (payload.mode !== undefined) controller.setMode(payload.mode);
       if (payload.origVol !== undefined) controller.setOrigVol(payload.origVol);
       if (payload.volume !== undefined) controller.setCallVol(payload.volume);
+      if (payload.listenLang !== undefined) void controller.setListenLang(payload.listenLang);
     }, []);
 
     const requestStatus = useCallback(
