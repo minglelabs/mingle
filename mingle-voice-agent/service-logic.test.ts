@@ -15,8 +15,10 @@ test('only voice rooms where a human has interpretation on get an interpreter', 
 });
 
 test('a line is read by the humans with interpretation on, never by the one who said it', () => {
-    assert.deepEqual(readersOf({ speaker: 'a', interpreting: ['a', 'b', 'interpreter-x'] }), ['b']);
-    assert.deepEqual(readersOf({ speaker: 'a', interpreting: ['a'] }), []);
+    assert.deepEqual(readersOf({ speaker: 'a', interpreting: ['a', 'b', 'interpreter-x'] }), ['a', 'b']);
+    assert.deepEqual(readersOf({ speaker: 'a', interpreting: ['a'] }), ['a']);
+    assert.deepEqual(readersOf({ speaker: 'a', interpreting: ['b'] }), ['b']);
+    assert.deepEqual(readersOf({ speaker: 'a', interpreting: [] }), []);
 });
 
 test('usage adds per language and per listener, and ignores empty plays', () => {

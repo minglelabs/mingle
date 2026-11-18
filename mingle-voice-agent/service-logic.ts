@@ -41,7 +41,9 @@ export function roomsNeedingInterpreter(rooms: RoomSnapshot[]): string[] {
 
 /** Readers of a line: the humans with interpretation on, other than the one who said it. */
 export function readersOf(input: { speaker: string; interpreting: string[] }): string[] {
-    return input.interpreting.filter((identity) => isHumanIdentity(identity) && identity !== input.speaker);
+    // The speaker counts too: with interpretation on they read their own
+    // lines (and pay for them), as in a room with speech-to-text.
+    return input.interpreting.filter((identity) => isHumanIdentity(identity));
 }
 
 export type UsageReport = {

@@ -261,9 +261,12 @@ export class Interpreter {
     private targetsFor(speakerIdentity: string, sourceLang: string): string[] {
         const targets = new Set<string>();
         for (const participant of this.humans()) {
-            if (participant.identity === speakerIdentity) continue;
             if (!isInterpreting(participant)) continue;
-            for (const lang of new Set([normalizeLang(participant.attributes.lang), listenLangOf(participant)])) {
+            // The speaker reads their own line in the language they listen in.
+            const langs = participant.identity === speakerIdentity
+                ? [listenLangOf(participant)]
+                : [normalizeLang(participant.attributes.lang), listenLangOf(participant)];
+            for (const lang of new Set(langs)) {
                 if (lang && lang !== sourceLang) targets.add(lang);
             }
         }
@@ -396,8 +399,8 @@ export class Interpreter {
             : { id, tail: { translatedSource: '', translations: {} }, lastRequestedText: '', inflight: null, spoken: {}, shown: {} };
         speaker.lineId = null;
         speaker.line = null;
-        // Written down only for someone else who reads it: a line nobody else
-        // has interpretation on for is dropped (not saved, not paid).
+        // Written down only for someone who reads it (the speaker included): a
+        // line nobody has interpretation on for is dropped (not saved, not paid).
         if (!this.hasReaders(speaker)) return;
         const sourceLang = normalizeLang(segment.lang) || speaker.lang;
         this.stats.segments++;

@@ -166,7 +166,8 @@ describe('interpretation in a call', () => {
   it('charges the speaker when they read too, else the first other reader, else nobody', () => {
     expect(voiceCaptionPayer(people({ a: true, b: true }), 'a')).toBe('a')
     expect(voiceCaptionPayer(people({ a: false, b: true, c: true }), 'a')).toBe('b')
-    expect(voiceCaptionPayer(people({ a: true, b: false }), 'a')).toBeNull()
+    expect(voiceCaptionPayer(people({ a: true, b: false }), 'a')).toBe('a')
+    expect(voiceCaptionPayer(people({ a: true }), 'a')).toBe('a')
     expect(voiceCaptionPayer(people({ a: false, b: false }), 'a')).toBeNull()
     expect(voiceCaptionPayer(people({ b: true }), 'a')).toBeNull()
   })

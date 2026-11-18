@@ -304,15 +304,14 @@ export function voiceCaptionViewers(call: { participants: ReadonlyArray<{ userId
 
 /**
  * Who pays for writing down `speakerUserId`'s speech: the speaker when they
- * have interpretation on themselves, else the first other person who has it
- * on (in joining order). Null when nobody else reads it, so it is not written
- * down at all.
+ * have interpretation on themselves (also when nobody else has: they read
+ * their own lines), else the first other person who has it on (in joining
+ * order). Null when nobody has it on, so it is not written down at all.
  */
 export function voiceCaptionPayer(call: { participants: ReadonlyArray<{ userId: string; interpretOn: boolean }> } | null, speakerUserId: string): string | null {
   const participants = call?.participants ?? [];
-  if (!participants.some((participant) => participant.userId === speakerUserId)) return null;
-  const others = participants.filter((participant) => participant.interpretOn && participant.userId !== speakerUserId);
-  if (others.length === 0) return null;
   const self = participants.find((participant) => participant.userId === speakerUserId);
-  return self?.interpretOn ? speakerUserId : others[0].userId;
+  if (!self) return null;
+  if (self.interpretOn) return speakerUserId;
+  return participants.find((participant) => participant.interpretOn && participant.userId !== speakerUserId)?.userId ?? null;
 }
