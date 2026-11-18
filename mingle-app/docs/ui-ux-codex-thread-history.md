@@ -2,6 +2,14 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Contact sync no longer crashes the page after a deploy
+
+- Surface: `contact-sync-host.tsx` (contact-sync screen, invite ticket sheet), `deferred-native-overlays.tsx`, new `lazy-overlay-boundary.tsx` and `lib/chunk-load-recovery.ts`.
+- Issue: On the store app (2.4.3), My Page → 연락처 연동 showed "Application error: a client-side exception has occurred".
+- Cause: These overlays load with `next/dynamic` only when opened. A WebView left open across a deploy asks for chunk names the new server no longer has. The `ChunkLoadError` was thrown in render with no error boundary, so React dropped the whole page. The inline script-load recovery does not help because it stops once the page is hydrated.
+- Resolution: Each lazy overlay sits in an error boundary. A chunk error reloads the page (at most once per 2 minutes, so a broken server cannot loop), which picks up the new build. Any other error in the overlay closes it instead of taking the page down. Web-only; no app release.
+- Verification: production build (`next build --webpack`) on localhost, signed in with the QA account. With main, removing the contact-sync chunk and opening the screen reproduced the exact "Application error" (`ChunkLoadError: Loading chunk 33958 failed`). With the fix, the same test on the invite sheet chunk reloaded the page once with no error, and a second open within 2 minutes closed the sheet and kept the page. Unit tests for chunk-error detection and the reload cap. Not checked on a phone; the user's crash was not confirmed to be this one (see the PR).
+
 ## 2026-11-18 — Soniox is the default read-aloud voice
 
 - Surface: the TTS model row in settings (`lib/tts-models.ts`), `tts-provider.ts`, the Hash notice shown when voice interpreting is turned on (`coins-controller.ts` `readCoinWallet`).
