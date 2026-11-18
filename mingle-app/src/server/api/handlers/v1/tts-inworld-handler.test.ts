@@ -270,6 +270,23 @@ describe('handleTtsInworldV1', () => {
     expect(res.headers.get('X-TTS-Stream')).toBeNull()
   })
 
+  it('answers with a stretched whole clip when Soniox fails and Gemini has a time-stretch for the language', async () => {
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    process.env.GEMINI_TTS_SPEED = 'en=1.2'
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('quota', { status: 429 }))
+      .mockResolvedValueOnce(geminiWavResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    const handler = await loadHandler()
+
+    const res = await handler(makeRequest({ text: 'hello', language: 'en', stream: true }) as never)
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toBe('audio/wav')
+    expect(res.headers.get('X-TTS-Provider')).toBe('gemini')
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://generativelanguage.googleapis.com/v1beta/interactions')
+  })
+
   it('streams the Soniox default for stream: true and charges it as tts-rt-v2', async () => {
     process.env.SONIOX_API_KEY = 'soniox-key'
     const chunks = [Buffer.alloc(960, 1), Buffer.alloc(480, 2)]

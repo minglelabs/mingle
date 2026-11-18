@@ -686,6 +686,10 @@ const DEFAULT_SONIOX_TTS_VOICE = 'Adrian'
 const DEFAULT_SONIOX_TTS_SPEED = 1.3
 const MIN_SONIOX_TTS_SPEED = 0.7
 const MAX_SONIOX_TTS_SPEED = 1.3
+// Soniox ends every request at 2 minutes of audio, a limit that cannot be
+// raised. At speed 1.3 that is roughly 1,200 Korean or 900 Japanese/Chinese
+// characters; longer texts go to Gemini, which has no such cap.
+export const SONIOX_TTS_MAX_TEXT_CHARS = 700
 
 function getSonioxTtsSpeed(): number {
   const value = Number((process.env.SONIOX_TTS_SPEED || '').trim() || DEFAULT_SONIOX_TTS_SPEED)
@@ -749,7 +753,12 @@ export async function openSonioxSpeechStream(
       const detail = await response.text().catch(() => '')
       return failure('upstream_error', { status: response.status, detail: detail.slice(0, 300) })
     }
-    if (!response.body) return failure('invalid_audio')
+    // Audio comes as audio/pcm; anything else (an error page, JSON) must not
+    // be played as sound.
+    const contentType = (response.headers.get('content-type') || '').toLowerCase()
+    if (!contentType.startsWith('audio/') || !response.body) {
+      return failure('invalid_audio', { detail: contentType.slice(0, 100) })
+    }
 
     const reader = response.body.getReader()
     const readAudio = async (): Promise<Buffer | null> => {
@@ -791,13 +800,20 @@ export async function openSonioxSpeechStream(
  * Streamed counterpart of `synthesizeSpeech`: the selected model, and when it
  * fails before any audio arrives, Gemini (Flash-Lite for Soniox, the other
  * Gemini model for a Gemini selection). Soniox fails fast on its concurrency
- * limit (429), so the fallback keeps speech going.
+ * limit (429), so the fallback keeps speech going. Texts over
+ * SONIOX_TTS_MAX_TEXT_CHARS skip Soniox. Resolves to null when Gemini has to
+ * speak for Soniox but a time-stretch is set for the language: the caller then
+ * synthesizes a whole clip.
  */
 export async function synthesizeSpeechStream(
   input: TtsSynthesisInput & { ttsModel?: unknown },
-): Promise<TtsSpeechStream | TtsSynthesisFailure> {
+): Promise<TtsSpeechStream | TtsSynthesisFailure | null> {
   const selection = resolveTtsRuntimeSelection(input.ttsModel)
-  if (selection.provider === 'soniox') {
+  const geminiModel = getGeminiTtsModel(selection.value)
+  if (selection.provider !== 'soniox') return await synthesizeGeminiSpeechStream(input, geminiModel)
+
+  let fallbackFrom: string | undefined
+  if (input.text.length <= SONIOX_TTS_MAX_TEXT_CHARS) {
     const soniox = await openSonioxSpeechStream(input)
     if (soniox.ok) return soniox
     console.warn('[tts] soniox stream failed, falling back to gemini', {
@@ -805,10 +821,13 @@ export async function synthesizeSpeechStream(
       status: soniox.status,
       detail: soniox.detail,
     })
-    const gemini = await synthesizeGeminiSpeechStream(input, getGeminiTtsModel(selection.value))
-    return { ...gemini, fallbackFrom: gemini.fallbackFrom ?? soniox.modelId }
+    fallbackFrom = soniox.modelId
   }
-  return await synthesizeGeminiSpeechStream(input, getGeminiTtsModel(selection.value))
+  // WSOLA time-stretch needs the whole clip.
+  if (getGeminiTtsSpeed(input.language) !== 1) return null
+  const gemini = await synthesizeGeminiSpeechStream(input, geminiModel)
+  const from = gemini.fallbackFrom ?? fallbackFrom
+  return from ? { ...gemini, fallbackFrom: from } : gemini
 }
 
 async function synthesizeGeminiSpeechStream(

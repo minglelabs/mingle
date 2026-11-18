@@ -24,6 +24,8 @@ export class StreamingTtsClip {
   private ended = false
   private readonly listeners = new Set<StreamingTtsClipListener>()
   private completeWaiters: Array<(blob: Blob) => void> = []
+  private endWaiters: Array<() => void> = []
+  private canceller: (() => void) | null = null
 
   constructor(sampleRate: number) {
     this.sampleRate = sampleRate
@@ -58,6 +60,10 @@ export class StreamingTtsClip {
     this.ended = true
     for (const listener of [...this.listeners]) listener.onEnd()
     this.listeners.clear()
+    this.canceller = null
+    const ended = this.endWaiters
+    this.endWaiters = []
+    for (const resolve of ended) resolve()
     const waiters = this.completeWaiters
     this.completeWaiters = []
     if (waiters.length > 0) {
@@ -78,6 +84,29 @@ export class StreamingTtsClip {
     }
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
+  }
+
+  /** Resolves once no more audio will come, without building the WAV. */
+  whenEnded(): Promise<void> {
+    if (this.ended) return Promise.resolve()
+    return new Promise((resolve) => { this.endWaiters.push(resolve) })
+  }
+
+  /** What `cancel` calls to stop the download (set by whoever reads it). */
+  setCanceller(canceller: () => void): void {
+    this.canceller = this.ended ? null : canceller
+  }
+
+  /**
+   * Stops the download (the server then stops synthesizing) and ends the clip
+   * with what it has. For a clip that is stopped or no longer wanted.
+   */
+  cancel(): void {
+    if (this.ended) return
+    const canceller = this.canceller
+    this.canceller = null
+    canceller?.()
+    this.finish()
   }
 
   /** The whole clip as a WAV, once it has ended. */
@@ -171,6 +200,7 @@ export async function readStreamingTtsResponse(
   } catch {
     return null
   }
+  clip.setCanceller(() => { void reader.cancel().catch(() => {}) })
   void (async () => {
     try {
       for (;;) {

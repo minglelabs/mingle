@@ -18,6 +18,11 @@ const TTS_ENV_KEYS = [
 
 const savedEnv: Record<string, string | undefined> = {}
 
+function nonNull<T>(value: T | null): T {
+  if (value === null) throw new Error('expected a result, got null')
+  return value
+}
+
 function wavBytes(): Buffer {
   const b = Buffer.alloc(48)
   b.write('RIFF', 0, 'ascii')
@@ -810,7 +815,7 @@ describe('synthesizeSpeechStream — gemini', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeechStream } = await loadModule()
 
-    const speech = await synthesizeSpeechStream({ text: 'hello', language: 'ko', ttsModel: 'gemini-3.8-flash-lite-tts' })
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'ko', ttsModel: 'gemini-3.8-flash-lite-tts' }))
 
     if (!speech.ok) throw new Error('expected a stream')
     expect(speech).toMatchObject({
@@ -831,7 +836,7 @@ describe('synthesizeSpeechStream — gemini', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeechStream } = await loadModule()
 
-    const speech = await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' })
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' }))
 
     expect(speech).toMatchObject({ ok: true, modelId: 'gemini-3.8-flash-tts', fallbackFrom: 'gemini-3.8-flash-lite-tts' })
     expect(bodyOf(fetchMock.mock.calls[1]).model).toBe('gemini-3.8-flash-tts')
@@ -845,7 +850,7 @@ describe('synthesizeSpeechStream — gemini', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeechStream } = await loadModule()
 
-    const speech = await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' })
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' }))
 
     expect(speech).toMatchObject({
       ok: false,
@@ -864,7 +869,7 @@ describe('synthesizeSpeechStream — gemini', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeechStream } = await loadModule()
 
-    const speech = await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' })
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' }))
 
     if (!speech.ok) throw new Error('expected a stream')
     const first = await speech.chunks.next()
@@ -878,7 +883,7 @@ describe('synthesizeSpeechStream — gemini', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeechStream } = await loadModule()
 
-    expect(await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' }))
+    expect(nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' })))
       .toMatchObject({ ok: false, reason: 'missing_credentials' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -913,7 +918,7 @@ describe('synthesizeSpeechStream — soniox (default)', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeechStream } = await loadModule()
 
-    const speech = await synthesizeSpeechStream({ text: '안녕하세요', language: 'ko-KR' })
+    const speech = nonNull(await synthesizeSpeechStream({ text: '안녕하세요', language: 'ko-KR' }))
 
     if (!speech.ok) throw new Error('expected a stream')
     expect(speech).toMatchObject({ provider: 'soniox', modelId: 'tts-rt-v2', voiceId: 'Adrian', sampleRate: 24000 })
@@ -941,7 +946,7 @@ describe('synthesizeSpeechStream — soniox (default)', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeechStream } = await loadModule()
 
-    const speech = await synthesizeSpeechStream({ text: 'hello', language: 'en' })
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en' }))
 
     expect(speech).toMatchObject({
       ok: true,
@@ -954,6 +959,46 @@ describe('synthesizeSpeechStream — soniox (default)', () => {
     if (speech.ok) await collect(speech.chunks)
   })
 
+  it('sends texts over the Soniox length cap straight to Gemini', async () => {
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiStreamResponse([pcm(20, 8000)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream, SONIOX_TTS_MAX_TEXT_CHARS } = await loadModule()
+
+    const speech = nonNull(await synthesizeSpeechStream({ text: '가'.repeat(SONIOX_TTS_MAX_TEXT_CHARS + 1), language: 'ko' }))
+
+    expect(speech).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts' })
+    expect(speech.fallbackFrom).toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(urlOf(fetchMock.mock.calls[0])).not.toContain('soniox')
+    if (speech.ok) await collect(speech.chunks)
+  })
+
+  it('never plays a non-audio Soniox body; Gemini speaks instead', async () => {
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error_message: 'oops' }))
+      .mockResolvedValueOnce(geminiStreamResponse([pcm(20, 8000)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en' }))
+
+    expect(speech).toMatchObject({ ok: true, provider: 'gemini', fallbackFrom: 'tts-rt-v2' })
+    if (speech.ok) await collect(speech.chunks)
+  })
+
+  it('asks for a whole clip when Gemini must speak for Soniox and a time-stretch is set', async () => {
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    process.env.GEMINI_TTS_SPEED = 'ko=1.2'
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response('quota', { status: 429 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    expect(await synthesizeSpeechStream({ text: '안녕', language: 'ko' })).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('falls back to Gemini without a Soniox key, and never calls Soniox for a Gemini model', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(geminiStreamResponse([pcm(20, 8000)]))
@@ -961,12 +1006,12 @@ describe('synthesizeSpeechStream — soniox (default)', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeechStream } = await loadModule()
 
-    const fallback = await synthesizeSpeechStream({ text: 'hello', language: 'en' })
+    const fallback = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en' }))
     expect(fallback).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts', fallbackFrom: 'tts-rt-v2' })
     if (fallback.ok) await collect(fallback.chunks)
 
     process.env.SONIOX_API_KEY = 'soniox-key'
-    const gemini = await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-tts' })
+    const gemini = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-tts' }))
     expect(gemini).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-tts' })
     if (gemini.ok) await collect(gemini.chunks)
     expect(fetchMock.mock.calls.map(urlOf).some((url) => url.includes('soniox'))).toBe(false)

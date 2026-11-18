@@ -133,7 +133,7 @@ describe('coins controller', () => {
       expect((await readCoinWallet()).status).toBe(401)
     })
 
-    it('quotes voice with TTS at the user\'s TTS model, Soniox by default', async () => {
+    it('quotes voice with TTS at the model that will speak: the user\'s own when the app streams, Gemini otherwise', async () => {
       m.session.mockResolvedValue({ user: { id: 'user-1' } })
       m.getCoinWallet.mockResolvedValue({ billingMode: 'enforce', balance: 100 })
       const rate = (id: string, kind: string, model: string, usdMicroPerMillionUnits: bigint) => ({
@@ -146,15 +146,19 @@ describe('coins controller', () => {
         rate('soniox', 'tts', 'tts-rt-v2', 194444444n),
         rate('flash', 'tts', 'gemini-3.8-flash-tts', 225000000n),
       ])
-      const rates = async (ttsModel: string | null) => {
+      const rates = async (ttsModel: string | null, ttsStream = true) => {
         m.findUser.mockResolvedValue({ ttsModel })
-        return (await (await readCoinWallet()).json()).rates
+        const request = new NextRequest(`http://app.test/api/coins/wallet${ttsStream ? '?ttsStream=1' : ''}`)
+        return (await (await readCoinWallet(request)).json()).rates
       }
       // 22 s of audio per conversation minute on top of 8 Hash of voice.
       expect((await rates(null)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 6.417, 2)
       expect((await rates('gemini-3.8-flash-tts')).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 7.425, 2)
       expect((await rates('gemini-3.8-flash-lite-tts')).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 5, 2)
       expect((await rates(null)).sttCoinsPerMinute).toBeCloseTo(8, 2)
+      // Whole-clip apps always hear Gemini Flash-Lite (here the flat * rate).
+      expect((await rates(null, false)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 5, 2)
+      expect((await rates('gemini-3.8-flash-tts', false)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 7.425, 2)
     })
   })
 })

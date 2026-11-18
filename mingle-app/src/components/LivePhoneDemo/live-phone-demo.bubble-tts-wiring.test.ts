@@ -58,6 +58,8 @@ function buildContext(
       parseNativeTtsStreamCapability,
       parseStreamedPcmSampleRate,
       readStreamingTtsResponse,
+      // Read by the auto-read prefetch limit; the request only records the answer kind.
+      lastTtsAnswerStreamedRef: { current: null },
       TTS_API_PATH: '/api/ios/v2.1.0/tts/inworld',
       requestTtsModel,
       nativeAppUpdate: null,

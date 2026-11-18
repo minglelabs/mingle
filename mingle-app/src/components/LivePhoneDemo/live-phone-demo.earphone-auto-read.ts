@@ -452,7 +452,7 @@ export class EarphoneAutoReadController {
           candidate.audio = 'ready'
           candidate.audioBlob = blob
           // Its slot frees once the rest has arrived: prefetch the next then.
-          if (isStreamingTtsClip(blob) && !blob.isComplete) void blob.whenComplete().then(() => this.pump())
+          if (isStreamingTtsClip(blob) && !blob.isComplete) void blob.whenEnded().then(() => this.pump())
         } else {
           candidate.audio = 'failed'
         }

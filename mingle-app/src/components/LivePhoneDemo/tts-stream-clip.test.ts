@@ -146,3 +146,42 @@ describe('stream helpers', () => {
     expect(parseNativeTtsStreamCapability(null)).toBe(false)
   })
 })
+
+describe('StreamingTtsClip cancel and whenEnded', () => {
+  it('cancels the download once and ends the clip with what it has', async () => {
+    const clip = new StreamingTtsClip(24000)
+    let cancels = 0
+    clip.setCanceller(() => { cancels += 1 })
+    clip.append(new Uint8Array(4800))
+    const ended = clip.whenEnded()
+    clip.cancel()
+    clip.cancel()
+    await ended
+    expect(cancels).toBe(1)
+    expect(clip.isComplete).toBe(true)
+    expect(clip.size).toBe(4800)
+  })
+
+  it('stops reading the response body when cancelled', async () => {
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new Uint8Array(2400)) },
+      cancel() { cancelled = true },
+    })
+    const clip = await readStreamingTtsResponse(body, 24000)
+    if (!clip) throw new Error('expected a clip')
+    clip.cancel()
+    await clip.whenEnded()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(cancelled).toBe(true)
+  })
+
+  it('never calls the canceller of a clip that already ended', () => {
+    const clip = new StreamingTtsClip(24000)
+    let cancels = 0
+    clip.setCanceller(() => { cancels += 1 })
+    clip.finish()
+    clip.cancel()
+    expect(cancels).toBe(0)
+  })
+})

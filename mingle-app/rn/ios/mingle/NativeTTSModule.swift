@@ -662,17 +662,27 @@ class NativeTTSModule: RCTEventEmitter, AVAudioPlayerDelegate {
 /// Plays 16-bit mono PCM while it is still arriving: each piece is scheduled
 /// on an AVAudioPlayerNode right away (louder by `gain`, like whole clips), and
 /// `onFinished` fires (on the main queue) once `end()` was called and the last
-/// piece has played.
-/// A gap in the stream is silence, not an end. Main queue only.
+/// piece has played. A gap in the stream is silence, not an end. Main queue only.
+///
+/// When the session changes under the engine (STT switching modes, a route
+/// change) the engine stops and may drop what was scheduled, so the pieces not
+/// yet played are kept and scheduled again on the restarted engine (the one
+/// that was playing starts over). If the engine cannot restart, the clip ends
+/// so the queue moves on.
 final class NativeTtsPcmStreamPlayer {
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
     private let format: AVAudioFormat
     private let gain: Float
     private let onFinished: (NativeTtsPcmStreamPlayer) -> Void
-    private var pendingBuffers = 0
+    /// Scheduled pieces not yet played, oldest first.
+    private var unplayed: [(id: Int, buffer: AVAudioPCMBuffer)] = []
+    private var nextPieceId = 0
+    /// Bumped on every restart: callbacks from before it are ignored.
+    private var generation = 0
     private var ended = false
     private var stopped = false
+    private var finished = false
     private var leftover: UInt8?
     private var configurationObserver: NSObjectProtocol?
     private(set) var receivedBytes = 0
@@ -693,21 +703,14 @@ final class NativeTtsPcmStreamPlayer {
         engine.prepare()
         try engine.start()
         node.play()
-        // The session changing under the engine (STT switching modes, a route
-        // change) stops it; start it again and keep playing what is scheduled.
         configurationObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: engine,
             queue: .main
         ) { [weak self] _ in
-            guard let self, !self.stopped, !self.engine.isRunning else { return }
-            do {
-                try self.engine.start()
-                self.node.play()
-                NSLog("[NativeTTSModule] stream engine restarted after a configuration change")
-            } catch {
-                NSLog("[NativeTTSModule] stream engine restart failed: %@", error.localizedDescription)
-            }
+            // Only a stopped engine lost its pieces; a running one plays on.
+            guard let self, !self.engine.isRunning else { return }
+            self.restart(reason: "configuration_change")
         }
     }
 
@@ -739,17 +742,14 @@ final class NativeTtsPcmStreamPlayer {
             let raw = Int16(bitPattern: UInt16(bytes[frame * 2]) | (UInt16(bytes[frame * 2 + 1]) << 8))
             samples[frame] = NativeTTSModule.amplified(Float(raw) / 32768, gain: gain)
         }
-        pendingBuffers += 1
-        node.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-            DispatchQueue.main.async {
-                guard let self, !self.stopped else { return }
-                self.pendingBuffers -= 1
-                self.finishIfDone()
-            }
-        }
-        if !engine.isRunning {
-            try? engine.start()
-            node.play()
+        let id = nextPieceId
+        nextPieceId += 1
+        unplayed.append((id, buffer))
+        if engine.isRunning {
+            schedule(id: id, buffer: buffer)
+        } else {
+            // Stopped without a notification: restarting schedules it too.
+            restart(reason: "engine_not_running")
         }
     }
 
@@ -766,9 +766,38 @@ final class NativeTtsPcmStreamPlayer {
         engine.stop()
     }
 
+    private func schedule(id: Int, buffer: AVAudioPCMBuffer) {
+        let scheduledGeneration = generation
+        node.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self, !self.stopped, self.generation == scheduledGeneration else { return }
+                self.unplayed.removeAll { $0.id == id }
+                self.finishIfDone()
+            }
+        }
+    }
+
+    private func restart(reason: String) {
+        guard !stopped, !finished else { return }
+        generation += 1
+        // Drops whatever the stopped engine still held; its callbacks are ignored.
+        node.stop()
+        do {
+            if !engine.isRunning { try engine.start() }
+            for piece in unplayed { schedule(id: piece.id, buffer: piece.buffer) }
+            node.play()
+            NSLog("[NativeTTSModule] stream engine restarted reason=%@ pieces=%d", reason, unplayed.count)
+        } catch {
+            NSLog("[NativeTTSModule] stream engine restart failed reason=%@: %@", reason, error.localizedDescription)
+            unplayed.removeAll()
+            ended = true
+            finishIfDone()
+        }
+    }
+
     private func finishIfDone() {
-        guard ended, pendingBuffers == 0, !stopped else { return }
+        guard ended, unplayed.isEmpty, !stopped, !finished else { return }
+        finished = true
         onFinished(self)
     }
 }
-

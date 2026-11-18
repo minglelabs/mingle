@@ -2468,6 +2468,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   ) => Promise<void>>(async () => {})
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
+  // The streamed clip now playing; its download is cancelled when it is cut.
+  const currentStreamClipRef = useRef<StreamingTtsClip | null>(null)
+  // Whether the last TTS answer was a stream (null: none yet). A server that
+  // answers with whole clips keeps the larger auto-read prefetch.
+  const lastTtsAnswerStreamedRef = useRef<boolean | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
   // Soniox v6 agent text: what the playing TTS clip says, sent to STT timed to
   // playback so the echo of our own voice is dropped from the transcript.
@@ -2489,6 +2494,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const processTtsQueueRef = useRef<() => void>(() => {})
   const stopClickResumeTimerIdsRef = useRef<number[]>([])
   const manualTtsRequestSeqRef = useRef(0)
+  // A Listen request still waiting for its answer; a newer tap aborts it.
+  const manualTtsAbortRef = useRef<AbortController | null>(null)
   const accountPreferencesSyncTimerRef = useRef<number | null>(null)
   const accountPreferencesSyncRetryTimerRef = useRef<number | null>(null)
   const accountPreferencesSyncRetryAttemptRef = useRef(0)
@@ -4493,6 +4500,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // closed, so this only reports how far an interrupted clip got.
     ttsAgentText.interrupt()
     ttsAgentTextClipRef.current = null
+    // A cut stream stops downloading, so the server stops synthesizing it.
+    currentStreamClipRef.current?.cancel()
+    currentStreamClipRef.current = null
     const player = playerAudioRef.current
     if (player) {
       player.pause()
@@ -4661,6 +4671,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // arriving; the sentence starts before the clip is complete.
     const playStreamViaNativeBridge = (clip: StreamingTtsClip) => {
       const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
+      currentStreamClipRef.current = clip
       const post = (type: string, payload: Record<string, unknown>) => {
         window.ReactNativeWebView!.postMessage(JSON.stringify({ type, payload }))
       }
@@ -4682,6 +4693,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         onChunk: (chunk) => {
           if (!isCurrentClip()) {
             unsubscribe()
+            clip.cancel()
             return
           }
           post('native_tts_stream_chunk', { playbackId, audioBase64: bytesToBase64(chunk) })
@@ -4988,6 +5000,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       // Streamed PCM: usable from its first audio. A server that answers with a
       // whole clip anyway (streaming switched off) falls through to the blob.
       const streamedSampleRate = wantsStream ? parseStreamedPcmSampleRate(response.headers.get('content-type')) : null
+      if (wantsStream) lastTtsAnswerStreamedRef.current = streamedSampleRate !== null
       if (streamedSampleRate !== null && response.body) {
         return await readStreamingTtsResponse(response.body, streamedSampleRate)
       }
@@ -5806,12 +5819,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       void primeAudioPlayback()
     }
 
+    manualTtsAbortRef.current?.abort()
+    const manualAbort = new AbortController()
+    manualTtsAbortRef.current = manualAbort
     const audioBlob = await synthesizeBubbleTtsViaApi({
       playbackKey: target.playbackKey,
       text: normalizedText,
       language: target.language,
+      signal: manualAbort.signal,
     })
-    if (manualTtsRequestSeqRef.current !== requestSeq) return
+    if (manualTtsAbortRef.current === manualAbort) manualTtsAbortRef.current = null
+    if (manualTtsRequestSeqRef.current !== requestSeq) {
+      // A newer tap won: stop downloading this one.
+      if (isStreamingTtsClip(audioBlob)) audioBlob.cancel()
+      return
+    }
 
     manualTtsPendingSeqRef.current = null
     setPendingManualTtsTarget(null)
@@ -7344,7 +7366,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       // Streamed clips (native stream player): one ahead, so a listener
       // holds at most two Soniox requests.
       prefetchLimit: () => (
-        isNativeApp() && parseNativeTtsStreamCapability(readCachedNativeShellCapabilities())
+        isNativeApp()
+          && parseNativeTtsStreamCapability(readCachedNativeShellCapabilities())
+          && lastTtsAnswerStreamedRef.current !== false
           ? EARPHONE_MODE_STREAM_PREFETCH_LIMIT
           : EARPHONE_MODE_PREFETCH_LIMIT
       ),
