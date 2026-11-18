@@ -214,6 +214,7 @@ import {
   replaceSlideSurfaceHistory,
 } from "@/lib/slide-surface-history";
 import { DIRECT_CONVERSATION_NAVIGATION_GUARD_MS } from "@/lib/direct-conversation-navigation";
+import { publishLiveStt, publishVisibleRoom, rememberLiveRoom, setLiveRoomHandlers } from "@/lib/live-room-bubble";
 import {
   REALTIME_FALLBACK_POLL_INTERVAL_MS,
   shouldRunRealtimeFallbackRefresh,
@@ -4677,6 +4678,40 @@ export default function ConversationList({
   const openOtherRoom = useCallback((conversationId: string, joined?: ConversationChannelSummary) => {
     const target = joined ?? conversationsRef.current.find((conversation) => conversation.id === conversationId);
     if (target) void startDirectConversationFromProfile(target);
+  }, [startDirectConversationFromProfile]);
+
+  // The live room bubble (components/live-room-bubble.tsx) hides for the room
+  // on screen, shows the room whose speech recognition is running, and asks
+  // this list to open a room or stop that recognition.
+  const activeConversationIdForBubble = activeConversation?.id ?? null;
+  const activeConversationTitleForBubble = activeConversation?.title ?? "";
+  useEffect(() => {
+    publishVisibleRoom(activeConversationIdForBubble);
+    if (activeConversationIdForBubble) rememberLiveRoom(activeConversationIdForBubble, { title: activeConversationTitleForBubble });
+  }, [activeConversationIdForBubble, activeConversationTitleForBubble]);
+  const liveConversationTitle = liveConversationId
+    ? conversations.find((conversation) => conversation.id === liveConversationId)?.title ?? ""
+    : "";
+  useEffect(() => {
+    publishLiveStt(liveConversationId ? { conversationId: liveConversationId, title: liveConversationTitle } : null);
+  }, [liveConversationId, liveConversationTitle]);
+  useEffect(() => {
+    setLiveRoomHandlers({
+      openRoom: (conversationId) => {
+        const target = conversationsRef.current.find((conversation) => conversation.id === conversationId);
+        if (!target) return false;
+        void startDirectConversationFromProfile(target);
+        return true;
+      },
+      stopStt: (conversationId) => {
+        void conversationRoomRefs.current.get(conversationId)?.stopRecording({ forceNativeStop: isNativeAppRuntime() });
+      },
+    });
+    return () => {
+      setLiveRoomHandlers(null);
+      publishVisibleRoom(null);
+      publishLiveStt(null);
+    };
   }, [startDirectConversationFromProfile]);
 
   const handleCreateConversation = useCallback(async () => {

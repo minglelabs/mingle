@@ -24,6 +24,7 @@ import LanguageFlag from '@/components/language-flag'
 import VoiceTalkParticipantStrip, { sameVoiceTalkParticipants, type VoiceTalkParticipantChip } from './VoiceTalkParticipantStrip'
 import { buildClientApiPath, clientApiNamespace, namespaceSupportsVoiceTalk } from '@/lib/api-contract'
 import { useRoomPresence } from '@/lib/room-presence'
+import { rememberLiveRoom } from '@/lib/live-room-bubble'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import { VOICE_TALK_MAX_SEATS, voiceTalkCopy } from '@/i18n/voice-talk-copy'
 import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
@@ -147,6 +148,8 @@ function initial(name: string | null | undefined): string {
 
 /** Joins the room's call, starting it when none is live (one call per room, kept by the server). */
 export function joinVoiceTalk(input: { conversationId: string; title?: string; lang: string }) {
+  // The live room bubble names the room, and "undo" after leaving from it joins again in this language.
+  rememberLiveRoom(input.conversationId, { title: input.title, lang: input.lang })
   post({
     type: 'native_voice_open',
     payload: { conversationId: input.conversationId, title: input.title, lang: input.lang, interpret: false },

@@ -5,6 +5,7 @@ import { Compass, Home, MessageCircle, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import LiveRoomBubble from "@/components/live-room-bubble";
 import { useContext, useEffect, useState } from "react";
 import { FeedGlyphToneContext } from "@/components/feed/feed-glyph-tone";
 import { buildConversationRequestIdentityHeaders } from "@/components/conversation-list.logic";
@@ -320,6 +321,12 @@ export default function BottomTabBar({
   }, [isMypageActive, sessionUserId]);
 
   return (
+    <>
+    {/* A call (or live speech recognition) running in a room that is not on screen: drawn over every tab. */}
+    <LiveRoomBubble
+      locale={locale}
+      conversationListHref={buildNativeAwareTabPath(`/${locale}/conversations`, searchParams, { skipConversationRestore: true, tabRoot: true })}
+    />
     <nav
       aria-label={dictionary.titles.my}
       className={
@@ -433,5 +440,6 @@ export default function BottomTabBar({
         />
       </button>
     </nav>
+    </>
   );
 }
