@@ -44,6 +44,17 @@ export async function postHashRushRoomJoin(conversationId: string, sessionId?: s
   return parseHashRushRoomGame(body?.game)
 }
 
+/** This phone was the last one in game `sessionId` and left it: it ends now. */
+export async function postHashRushRoomLeave(conversationId: string, sessionId: string): Promise<void> {
+  await fetch(buildClientApiPath(gamePath(conversationId, '/leave')), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId }),
+    keepalive: true,
+  }).catch(() => undefined)
+}
+
 /**
  * The room's running game, kept fresh while the room is open: read every few
  * seconds and at once when a new announcement arrives. While this phone plays,
@@ -109,7 +120,15 @@ export function useHashRushRoomGame(input: {
     }
   }, [conversationId, setGame])
 
-  return { game, join, refresh }
+  /** The last player left: ends the game now and reads the room again. */
+  const leave = useCallback(async () => {
+    const sessionId = gameRef.current?.sessionId
+    if (!conversationId || !sessionId) return
+    await postHashRushRoomLeave(conversationId, sessionId)
+    void refresh()
+  }, [conversationId, refresh])
+
+  return { game, join, refresh, leave }
 }
 
 /** The invite card, low on the screen where the thumb is: someone else's game, once. */

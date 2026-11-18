@@ -11,7 +11,7 @@ import { hashRushRoomId, issueHashRushTicket } from "@/server/hash-rush/ticket";
 import { newHashRushGuest, signHashRushInvite, verifyHashRushInvite } from "@/server/hash-rush/invite";
 import { buildHashRushPcLink, HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from "@/features/hash-rush/config";
 import { listHashRushRankings, parseHashRushRoundReport, recordHashRushRound } from "@/server/hash-rush/rankings";
-import { isHashRushGameLive, joinHashRushGame, prismaHashRushGameStore, type HashRushGameStore } from "@/server/hash-rush/room-game";
+import { endHashRushGame, isHashRushGameLive, joinHashRushGame, prismaHashRushGameStore, type HashRushGameStore } from "@/server/hash-rush/room-game";
 
 export const runtime = "nodejs";
 
@@ -114,6 +114,23 @@ export async function postHashRushJoinResponse(request: NextRequest, conversatio
     });
   }
   return NextResponse.json({ game: await describeGame(result.sessionId, result.startedByUserId), started: result.started });
+}
+
+/**
+ * POST { sessionId }: this phone was the last one in the room's game and left
+ * it, so the game ends now (the room's card stops offering it).
+ */
+export async function postHashRushLeaveResponse(request: NextRequest, conversationId: string) {
+  const member = await requireChannelMember(request, conversationId);
+  if ("response" in member) return member.response;
+  const body = await request.json().catch(() => null) as { sessionId?: unknown } | null;
+  const sessionId = typeof body?.sessionId === "string" && body.sessionId.trim() ? body.sessionId.trim() : null;
+  if (!sessionId) return NextResponse.json({ error: "invalid_session" }, { status: 400 });
+  const ended = await endHashRushGame(store, { channelId: conversationId, sessionId }).catch((error) => {
+    console.error("[hash-rush] leave_failed", error instanceof Error ? error.message : "unknown");
+    return false;
+  });
+  return NextResponse.json({ ended });
 }
 
 // ---------- invite link ----------

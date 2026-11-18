@@ -114,6 +114,21 @@ export const prismaHashRushGameStore: HashRushGameStore = {
   },
 };
 
+/**
+ * The last player left game `sessionId`: it is over now, not once its
+ * heartbeat runs out. Done by dating its last-seen time past the live window,
+ * so a phone still in it (it said it was alone, but was not) brings it back
+ * with its next heartbeat. False when the room runs another game.
+ */
+export async function endHashRushGame(
+  store: HashRushGameStore,
+  input: { channelId: string; sessionId: string; now?: Date },
+): Promise<boolean> {
+  const now = input.now ?? new Date();
+  const stale = new Date(now.getTime() - HASH_RUSH_LIVE_WINDOW_MS - 1_000);
+  return store.touch(input.channelId, { sessionId: input.sessionId, now: stale, cutoff: new Date(0), revive: true });
+}
+
 export function createMemoryHashRushGameStore(): HashRushGameStore & { records: Map<string, HashRushGameRecord> } {
   const records = new Map<string, HashRushGameRecord>();
   return {

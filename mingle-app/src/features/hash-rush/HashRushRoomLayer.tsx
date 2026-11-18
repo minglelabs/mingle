@@ -61,15 +61,18 @@ type Props = {
   chat?: HashRushRoomChat
   onClose: () => void
   /** Quit, once confirmed: the game ends for this phone and the layer goes. */
-  onQuit?: () => void
+  /** `alone`: nobody else was in the game room. */
+  onQuit?: (alone: boolean) => void
+  /** How many other people are in the game room (null before it is known). */
+  onOthersHere?: (count: number | null) => void
 }
 
-export default function HashRushRoomLayer({ open, conversationId, viewerKey, playerName, uiLocale, voiceActive, chat, onClose, onQuit }: Props) {
+export default function HashRushRoomLayer({ open, conversationId, viewerKey, playerName, uiLocale, voiceActive, chat, onClose, onQuit, onOthersHere }: Props) {
   const copy = hashRushGameCopy(uiLocale)
   const inviteCopy = hashRushInviteCopy(uiLocale)
-  const [confirmQuit, setConfirmQuit] = useState(false)
+  const [confirmQuit, setConfirmQuit] = useState<{ alone: boolean } | null>(null)
   const [howTo, setHowTo] = useState(false)
-  if (confirmQuit && !open) setConfirmQuit(false)
+  if (confirmQuit && !open) setConfirmQuit(null)
   if (howTo && !open) setHowTo(false)
   const chatOpen = !!chat?.open
   const closeChat = chat?.onClose
@@ -86,7 +89,7 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
     if (!open) return
     return registerNativeBackHandler(() => {
       if (howTo) setHowTo(false)
-      else if (confirmQuit) setConfirmQuit(false)
+      else if (confirmQuit) setConfirmQuit(null)
       else if (chatOpen && closeChat) closeChat()
       else onClose()
       return true
@@ -126,7 +129,8 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
         voiceActive={voiceActive}
         chat={chat}
         onBack={onClose}
-        onQuit={onQuit ? () => setConfirmQuit(true) : undefined}
+        onQuit={onQuit ? (alone: boolean) => setConfirmQuit({ alone }) : undefined}
+        onOthersHere={onOthersHere}
         onHowTo={() => setHowTo(true)}
       />
       {howTo ? (
@@ -145,7 +149,7 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
         <div
           className="absolute inset-0 z-[10] flex items-end justify-center bg-black/40 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+96px)]"
           data-qa="hash-rush-quit-confirm"
-          onClick={() => setConfirmQuit(false)}
+          onClick={() => setConfirmQuit(null)}
         >
           <div
             role="dialog"
@@ -160,7 +164,7 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
               <button
                 type="button"
                 data-qa="hash-rush-quit-cancel"
-                onClick={() => setConfirmQuit(false)}
+                onClick={() => setConfirmQuit(null)}
                 className="h-12 rounded-xl bg-gray-100 text-[0.95rem] font-semibold text-gray-700 active:bg-gray-200"
               >
                 {inviteCopy.cancel}
@@ -168,7 +172,7 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
               <button
                 type="button"
                 data-qa="hash-rush-quit-confirm-button"
-                onClick={() => { setConfirmQuit(false); onQuit() }}
+                onClick={() => { const alone = confirmQuit ? confirmQuit.alone : false; setConfirmQuit(null); onQuit(alone) }}
                 className="h-12 rounded-xl bg-rose-500 text-[0.95rem] font-semibold text-white active:bg-rose-600"
               >
                 {inviteCopy.quit}

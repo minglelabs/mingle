@@ -271,6 +271,8 @@ export type HashRushGameClient = {
   /** Out of sight the round goes on, silent, and this hamster stands still. */
   setVisible(visible: boolean): void
   /** A voice talk is on in the room: the music makes way, the effects stay. */
+  /** People in the game room besides this phone (seated or watching); null before the first lobby. */
+  othersHere(): number | null
   setVoice(active: boolean): void
   /** Turns the sound on or off; returns whether it is off now. */
   toggleSound(): boolean
@@ -1157,6 +1159,11 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       }
       syncInput()
       if (!next) standStill()
+    },
+    othersHere() {
+      if (!lobby) return null
+      const people = lobby.seats.filter((seat) => seat.kind === 'remote' || seat.kind === 'human').length + lobby.spectators.length
+      return Math.max(0, people - 1)
     },
     setVoice(active) {
       audio.setVoice(active)

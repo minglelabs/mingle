@@ -16,6 +16,8 @@ export type HashRushRoomState = {
   open?: boolean
   /** Brings a lowered game back up. */
   reopen?: () => void
+  /** Leaves the game (from the card, while it is lowered). */
+  quit?: () => void
 }
 
 export const HashRushRoomContext = createContext<HashRushRoomState | null>(null)

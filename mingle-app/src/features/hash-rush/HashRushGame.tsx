@@ -119,7 +119,10 @@ type Props = {
   /** Back to the chat: lowers the game. */
   onBack: () => void
   /** Quit: asks, then ends the game for this phone. */
-  onQuit?: () => void
+  /** How many other people are in the game room (null before it is known), on every change of screen. */
+  onOthersHere?: (count: number | null) => void
+  /** Quit; `alone`: nobody else is in the game room (so the room's game can end now). */
+  onQuit?: (alone: boolean) => void
   /** How to play, from the lobby. */
   onHowTo?: () => void
 }
@@ -137,7 +140,7 @@ const typing = () => {
   return node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || (node instanceof HTMLElement && node.isContentEditable)
 }
 
-export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive, chat, onBack, onQuit, onHowTo }: Props) {
+export default function HashRushGame({ conversationId, viewerKey, playerName, uiLocale, visible, voiceActive, chat, onBack, onQuit, onHowTo, onOthersHere }: Props) {
   const copy = hashRushGameCopy(uiLocale)
   const inviteCopy = hashRushInviteCopy(uiLocale)
   const chatOpen = !!chat?.open
@@ -175,6 +178,10 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
   // The arena's box in the stage, for what is placed by the map from outside it.
   const [arenaAt, setArenaAt] = useState({ left: 0, top: 0, width: 0 })
   const [view, setView] = useState<HashRushGameView>({ kind: 'connecting', again: false })
+  // The room learns whether this phone is alone in the game (its card's quit ends the game then).
+  const onOthersHereRef = useRef(onOthersHere)
+  useEffect(() => { onOthersHereRef.current = onOthersHere }, [onOthersHere])
+  useEffect(() => { onOthersHereRef.current?.(clientRef.current?.othersHere() ?? null) }, [view])
   const [art, setArt] = useState<HashRushArt | null>(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [soundOff, setSoundOff] = useState(false)
@@ -901,7 +908,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
         <button
           ref={quitRef}
           type="button"
-          onClick={onQuit}
+          onClick={() => onQuit(clientRef.current?.othersHere() === 0)}
           className={styles.quit}
           aria-label={inviteCopy.quit}
           title={inviteCopy.quit}

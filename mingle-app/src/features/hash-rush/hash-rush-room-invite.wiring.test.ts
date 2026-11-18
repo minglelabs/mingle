@@ -30,9 +30,11 @@ describe('hash rush started from the room, like a voice talk', () => {
 
   it('has a Quit next to the back pill that asks, then ends the game for this phone', () => {
     expect(game).toContain('data-qa="hash-rush-game-quit"')
-    expect(layer).toContain('onQuit={onQuit ? () => setConfirmQuit(true) : undefined}')
-    expect(layer).toContain('onClick={() => { setConfirmQuit(false); onQuit() }}')
-    const quit = liveDemo.slice(liveDemo.indexOf('const quitHashRushGame = useCallback(() => {'))
+    expect(layer).toContain('onQuit={onQuit ? (alone: boolean) => setConfirmQuit({ alone }) : undefined}')
+    expect(layer).toContain('onClick={() => { const alone = confirmQuit ? confirmQuit.alone : false; setConfirmQuit(null); onQuit(alone) }}')
+    // The last one out ends the room's game now.
+    expect(liveDemo).toContain('if (alone ?? hashRushOthersHereRef.current === 0) void leaveHashRushRoomGame()')
+    const quit = liveDemo.slice(liveDemo.indexOf('const quitHashRushGame = useCallback((alone?: boolean) => {'))
     expect(quit.slice(0, 400)).toContain('setHashRushGameActive(false)')
     expect(quit.slice(0, 400)).toContain('setDeclinedHashRushSessionId(hashRushLiveSessionId)')
     expect(liveDemo).toContain('onQuit={quitHashRushGame}')
@@ -45,6 +47,7 @@ describe('a lowered game comes back from its room message', () => {
   it('shows "back to the game" on the card while this phone plays with the game lowered', () => {
     expect(bubble).toContain("state === 'joined' && room?.reopen && room.open === false ? (")
     expect(bubble).toContain('{copy.backToGame}')
-    expect(demo).toContain('open: hashRushGameOpen, reopen: () => setHashRushGameOpen(true)')
+    expect(demo).toContain('open: hashRushGameOpen, reopen: () => setHashRushGameOpen(true), quit: () => quitHashRushGame()')
+    expect(bubble).toContain('data-qa="hash-rush-message-quit"')
   })
 })

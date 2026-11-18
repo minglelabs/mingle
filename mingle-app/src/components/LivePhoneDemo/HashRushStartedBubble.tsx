@@ -55,15 +55,27 @@ export default function HashRushStartedBubble(props: {
           {copy.join}
         </button>
       ) : state === 'joined' && room?.reopen && room.open === false ? (
-        // In the game but lowered to the chat: the card brings it back up.
-        <button
-          type="button"
-          data-qa="hash-rush-message-back"
-          onClick={() => room.reopen?.()}
-          className="mt-2.5 flex h-11 w-full items-center justify-center rounded-xl bg-emerald-500 text-[0.92rem] font-semibold text-white active:bg-emerald-600"
-        >
-          {copy.backToGame}
-        </button>
+        // In the game but lowered to the chat: the card brings it back up, or leaves it.
+        <div className="mt-2.5 grid grid-cols-[1fr_auto] gap-2">
+          <button
+            type="button"
+            data-qa="hash-rush-message-back"
+            onClick={() => room.reopen?.()}
+            className="flex h-11 items-center justify-center rounded-xl bg-emerald-500 text-[0.92rem] font-semibold text-white active:bg-emerald-600"
+          >
+            {copy.backToGame}
+          </button>
+          {room.quit ? (
+            <button
+              type="button"
+              data-qa="hash-rush-message-quit"
+              onClick={() => room.quit?.()}
+              className="flex h-11 items-center justify-center rounded-xl bg-gray-100 px-3.5 text-[0.88rem] font-semibold text-gray-700 active:bg-gray-200"
+            >
+              {copy.quit}
+            </button>
+          ) : null}
+        </div>
       ) : (
         <p
           data-qa="hash-rush-message-status"

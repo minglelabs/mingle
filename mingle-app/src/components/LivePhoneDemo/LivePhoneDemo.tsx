@@ -7806,7 +7806,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
     return null
   }, [displayUtterances])
-  const { game: hashRushRoomGame, join: joinHashRushRoomGame } = useHashRushRoomGame({
+  const { game: hashRushRoomGame, join: joinHashRushRoomGame, leave: leaveHashRushRoomGame } = useHashRushRoomGame({
     conversationId: conversationId ?? null,
     enabled: hashRushRoomEnabled,
     playing: hashRushGameActive,
@@ -7830,12 +7830,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [joinHashRushRoomGame])
   // Quit: the game ends for this phone (not lowered), back to the chat. The
   // same game is not offered to this viewer again; its message still joins.
-  const quitHashRushGame = useCallback(() => {
+  // Others in the game room besides this phone, as the game last saw (null: not known).
+  const hashRushOthersHereRef = useRef<number | null>(null)
+  const quitHashRushGame = useCallback((alone?: boolean) => {
     setDeclinedHashRushSessionId(hashRushLiveSessionId)
     setHashRushGameOpen(false)
     setHashRushGameActive(false)
     setHashRushGameChatMode(null)
-  }, [hashRushLiveSessionId, setDeclinedHashRushSessionId])
+    // The last one out ends the room's game now, so its card stops offering it.
+    if (alone ?? hashRushOthersHereRef.current === 0) void leaveHashRushRoomGame()
+    hashRushOthersHereRef.current = null
+  }, [hashRushLiveSessionId, leaveHashRushRoomGame, setDeclinedHashRushSessionId])
   // The Hash Rush page's main button: it was pressed on purpose, so no second question.
   const handleHashRushPageEnter = useCallback(() => {
     requestCloseMenuPanel()
@@ -7850,9 +7855,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }) ? hashRushRoomGame : null
   const hashRushRoom = useMemo<HashRushRoomState | null>(() => (
     hashRushRoomEnabled
-      ? { liveSessionId: hashRushLiveSessionId, joined: hashRushGameActive, join: enterHashRushGame, open: hashRushGameOpen, reopen: () => setHashRushGameOpen(true) }
+      ? { liveSessionId: hashRushLiveSessionId, joined: hashRushGameActive, join: enterHashRushGame, open: hashRushGameOpen, reopen: () => setHashRushGameOpen(true), quit: () => quitHashRushGame() }
       : null
-  ), [enterHashRushGame, hashRushGameActive, hashRushGameOpen, hashRushLiveSessionId, hashRushRoomEnabled])
+  ), [enterHashRushGame, hashRushGameActive, hashRushGameOpen, hashRushLiveSessionId, hashRushRoomEnabled, quitHashRushGame])
 
   const hashRushChatEntries = useMemo(() => (
     hashRushGameActive
@@ -8885,6 +8890,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             chat={hashRushGameChat}
             onClose={closeHashRushGame}
             onQuit={quitHashRushGame}
+            onOthersHere={(count) => { hashRushOthersHereRef.current = count }}
           />
         ) : null}
 
