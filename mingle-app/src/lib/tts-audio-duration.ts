@@ -7,6 +7,10 @@
 // Old fixed timeout; still the floor so short clips behave as before.
 export const NATIVE_TTS_WATCHDOG_MIN_TIMEOUT_MS = 15_000
 export const NATIVE_TTS_WATCHDOG_MAX_TIMEOUT_MS = 10 * 60_000
+// A clip that is still streaming has no known length yet. This covers the
+// stream itself (the server gives up on an idle one after 8 s); once it ends
+// the watchdog is re-armed with the usual length-based timeout.
+export const NATIVE_TTS_STREAM_WATCHDOG_TIMEOUT_MS = 60_000
 const NATIVE_TTS_WATCHDOG_MARGIN_MS = 5_000
 const NATIVE_TTS_WATCHDOG_MARGIN_RATIO = 1.25
 // Used only when the header cannot be read: no TTS voice encodes below this,

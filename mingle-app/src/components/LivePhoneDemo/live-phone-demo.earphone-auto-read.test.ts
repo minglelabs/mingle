@@ -527,7 +527,7 @@ describe('EarphoneAutoReadController read language', () => {
 
     await h.resolveAudioRequest(1, new Blob(['current audio']))
     expect(h.dispatched[0]).toMatchObject({ text: '수정된 번역' })
-    expect(await h.dispatched[0]!.audioBlob.text()).toBe('current audio')
+    expect(await (h.dispatched[0]!.audioBlob as Blob).text()).toBe('current audio')
   })
 
   it('re-synthesizes a revised ready prefetch while it waits behind an earlier message', async () => {
@@ -551,7 +551,7 @@ describe('EarphoneAutoReadController read language', () => {
     await h.resolveAudioRequest(1, new Blob(['current audio']))
     await h.finishPlayback()
     expect(h.dispatched[1]).toMatchObject({ utteranceId: 'prefetched', text: '최신 번역' })
-    expect(await h.dispatched[1]!.audioBlob.text()).toBe('current audio')
+    expect(await (h.dispatched[1]!.audioBlob as Blob).text()).toBe('current audio')
   })
 
   it('discards a pending translation when a same-ID message is reclassified as spoken in the read language', async () => {
@@ -604,7 +604,7 @@ describe('EarphoneAutoReadController read language', () => {
     expect(h.dispatchedIds()).toEqual([])
     await h.resolveAudioRequest(1, new Blob(['final audio']))
     expect(h.dispatched[0]).toMatchObject({ text: '확장된 최종 번역' })
-    expect(await h.dispatched[0]!.audioBlob.text()).toBe('final audio')
+    expect(await (h.dispatched[0]!.audioBlob as Blob).text()).toBe('final audio')
   })
 
   it('keeps pending audio when a row changes but resolves to the same immutable read target', async () => {

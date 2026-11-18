@@ -1,5 +1,6 @@
 import type { Utterance } from './ChatBubble'
 import { compareUtteranceOrder } from './utterance-order'
+import type { TtsClipAudio } from './tts-stream-clip'
 import {
   EARPHONE_MODE_AUDIO_TIMEOUT_MS,
   EARPHONE_MODE_HISTORY_CLOCK_SKEW_MS,
@@ -29,13 +30,13 @@ export type EarphoneAutoReadSnapshot = {
   viewerUserId: string | null
 }
 
-export type EarphoneAutoReadDispatchItem = EarphoneModeReadTarget & { audioBlob: Blob }
+export type EarphoneAutoReadDispatchItem = EarphoneModeReadTarget & { audioBlob: TtsClipAudio }
 
 export type EarphoneAutoReadControllerOptions = {
   now: () => number
   setTimer: (callback: () => void, delayMs: number) => unknown
   clearTimer: (handle: unknown) => void
-  synthesize: (target: EarphoneModeReadTarget, signal: AbortSignal) => Promise<Blob | null>
+  synthesize: (target: EarphoneModeReadTarget, signal: AbortSignal) => Promise<TtsClipAudio | null>
   // The room's player has nothing to play and no manual request in flight.
   isEngineIdle: () => boolean
   // Checked synchronously right before a clip is handed over, so a gate that
@@ -65,7 +66,7 @@ type Candidate = {
   targetFullText: string
   targetIsPiece: boolean
   audio: 'idle' | 'loading' | 'ready' | 'failed'
-  audioBlob: Blob | null
+  audioBlob: TtsClipAudio | null
   audioRequestedAtMs: number
   abort: AbortController | null
 }
@@ -425,7 +426,7 @@ export class EarphoneAutoReadController {
     candidate.audio = 'loading'
     candidate.audioRequestedAtMs = now
 
-    let request: Promise<Blob | null>
+    let request: Promise<TtsClipAudio | null>
     try {
       request = this.options.synthesize(target, abort.signal)
     } catch {
