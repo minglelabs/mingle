@@ -1,3 +1,4 @@
+import { useCallback, useState } from "react";
 import { resolveDefaultInviteMessageLocale } from "@/i18n/invite-ticket-copy";
 import { isPrimaryUiLocale, type PrimaryUiLocale } from "@/i18n/mingle-locales";
 
@@ -25,4 +26,17 @@ export function storeInviteMessageLocale(locale: PrimaryUiLocale): void {
 /** The user's last pick, else the UI language (English for a Korean UI). */
 export function resolveInviteMessageLocale(rawUiLocale: string): PrimaryUiLocale {
   return readStoredInviteMessageLocale() ?? resolveDefaultInviteMessageLocale(rawUiLocale);
+}
+
+/**
+ * The message language for a screen: starts at the stored pick or the UI
+ * default, and a new pick is stored for next time.
+ */
+export function useInviteMessageLocale(rawUiLocale: string): [PrimaryUiLocale, (locale: PrimaryUiLocale) => void] {
+  const [picked, setPicked] = useState<PrimaryUiLocale | null>(null);
+  const pick = useCallback((locale: PrimaryUiLocale) => {
+    setPicked(locale);
+    storeInviteMessageLocale(locale);
+  }, []);
+  return [picked ?? resolveInviteMessageLocale(rawUiLocale), pick];
 }

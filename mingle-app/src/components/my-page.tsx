@@ -55,7 +55,7 @@ import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { unregisterNativePushToken } from "@/lib/native-push";
-import { openInviteTicket } from "@/lib/native-invite";
+import { openInviteScreen } from "@/lib/native-invite";
 import { resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
 import { resetMinglePostHogIdentity } from "@/lib/posthog-client";
 import SlideSurface from "@/components/slide-surface";
@@ -931,6 +931,16 @@ function ProfileSettingsPanel({
                 <ChevronRight size={19} strokeWidth={2} className="text-amber-500" aria-hidden="true" />
               </button>
             ) : null}
+            <button
+              type="button"
+              onClick={openInviteScreen}
+              data-testid="menu-invite"
+              className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 text-left transition active:bg-gray-50"
+            >
+              <Ticket size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+              <span data-qa-allow-truncate className="min-w-0 flex-1 truncate text-[15px] font-semibold">{resolveInviteTicketCopy(locale).inviteScreenEntry}</span>
+              <ChevronRight size={19} strokeWidth={2} className="shrink-0 text-gray-400" aria-hidden="true" />
+            </button>
             <button
               type="button"
               onClick={openContactSync}
@@ -2655,16 +2665,17 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
               {dictionary.profile.shareProfile}
             </button>
           </div>
-          {/* The invite ticket is always one tap away here; the chat list only
-              shows it while there are few rooms. */}
+          {/* The invite page (ticket, own code, entering a code) is always one
+              tap away here; the chat list only shows the ticket while there
+              are few rooms. */}
           <button
             type="button"
-            onClick={openInviteTicket}
-            data-testid="my-page-invite-ticket"
+            onClick={openInviteScreen}
+            data-testid="my-page-invite"
             className="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-blue-50 px-2 text-[13px] font-bold text-blue-700 transition active:bg-blue-100"
           >
             <Ticket size={16} strokeWidth={2.2} aria-hidden="true" />
-            <span className="truncate">{resolveInviteTicketCopy(locale).sendTicket}</span>
+            <span className="truncate">{resolveInviteTicketCopy(locale).inviteScreenEntry}</span>
           </button>
         </section>
 

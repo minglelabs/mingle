@@ -1,20 +1,20 @@
 "use client";
 
-import { Check, ChevronLeft, Copy, Gift, Loader2, MessageSquareText, Search, ShieldCheck, UserRound, Users, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Check, ChevronLeft, ChevronRight, Gift, Loader2, Search, ShieldCheck, Ticket, UserRound, Users, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import InviteMessageLanguagePicker from "@/components/contacts/invite-message-language-picker";
 import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
 import SlideSurface from "@/components/slide-surface";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
 import { fillPhoneFriendsCopy, resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
-import { refreshCoinWallet } from "@/lib/coin-wallet-client";
 import { matchContactsOnServer, type MatchedContact } from "@/lib/contact-match-client";
 import { formatHandle } from "@/lib/handles";
-import { replaceWithConversationListThenPush } from "@/lib/direct-conversation-navigation";
+import { useInviteMessageLocale } from "@/lib/invite-message-locale";
+import { openInviteScreen } from "@/lib/native-invite";
 import {
   filterContacts,
   isNativeContactsSupported,
@@ -33,8 +33,6 @@ import { requestProfileBasics } from "@/lib/profile-basics";
 import {
   buildInviteLinkUrl,
   fillReferralInviteMessage,
-  normalizeReferralCode,
-  REFERRAL_CODE_LENGTH,
   REFERRAL_REWARD_COINS,
 } from "@/lib/referral-code";
 
@@ -48,41 +46,14 @@ type ContactSyncScreenProps = {
 
 type ReferralState = {
   code: string;
-  redeemed: boolean;
   rewardCoins: number;
 };
 
 // Rows drawn at once; the rest appear as the list is scrolled.
 const CONTACT_PAGE_SIZE = 80;
 
-async function copyText(value: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value);
-      return true;
-    }
-  } catch {
-    // Fall through to the textarea copy below.
-  }
-  try {
-    const textarea = document.createElement("textarea");
-    textarea.value = value;
-    textarea.setAttribute("readonly", "true");
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    const copied = document.execCommand("copy");
-    textarea.remove();
-    return copied;
-  } catch {
-    return false;
-  }
-}
-
 export default function ContactSyncScreen({ open, onClose, locale, prompt = false }: ContactSyncScreenProps) {
   const { data: session } = useSession();
-  const router = useRouter();
   const copy = useMemo(() => resolveContactSyncCopy(locale), [locale]);
   const [referral, setReferral] = useState<ReferralState | null>(null);
   const rewardCoins = referral?.rewardCoins ?? REFERRAL_REWARD_COINS;
@@ -90,9 +61,9 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
     (template: string) => fillReferralInviteMessage(template, { name: "", code: "", link: "", coins: rewardCoins }),
     [rewardCoins],
   );
-  const [codeInput, setCodeInput] = useState("");
-  const [redeemError, setRedeemError] = useState<string | null>(null);
-  const [isRedeeming, setIsRedeeming] = useState(false);
+  const ticketCopy = useMemo(() => resolveInviteTicketCopy(locale), [locale]);
+  // The text message to a contact is in one language the user picks (shared with the invite page).
+  const [messageLocale, setMessageLocale] = useInviteMessageLocale(locale);
 
   const [nativeSupported, setNativeSupported] = useState(false);
   const [permission, setPermission] = useState<NativeContactsPermission | "unknown">("unknown");
@@ -119,15 +90,15 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
 
   const inviteMessage = useMemo(() => {
     if (!referral?.code || typeof window === "undefined") return "";
-    const message = fillReferralInviteMessage(copy.inviteMessage, {
+    const message = fillReferralInviteMessage(resolveContactSyncCopy(messageLocale).inviteMessage, {
       name: senderName,
       code: referral.code,
       link: buildInviteLinkUrl(window.location.origin, referral.code) || window.location.origin,
       coins: rewardCoins,
     });
     // A link tapped before install is lost in the store, so say to tap it again.
-    return `${message}\n${resolveInviteTicketCopy(locale).reopenHint}`;
-  }, [copy.inviteMessage, locale, referral?.code, rewardCoins, senderName]);
+    return `${message}\n${resolveInviteTicketCopy(messageLocale).reopenHint}`;
+  }, [messageLocale, referral?.code, rewardCoins, senderName]);
 
   const loadContacts = useCallback(() => {
     requestSequenceRef.current += 1;
@@ -150,7 +121,6 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
         if (!cancelled && typeof body.code === "string") {
           setReferral({
             code: body.code,
-            redeemed: body.redeemed === true,
             rewardCoins: typeof body.rewardCoins === "number" ? body.rewardCoins : REFERRAL_REWARD_COINS,
           });
         }
@@ -206,64 +176,6 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
       unsubscribe();
     };
   }, [loadContacts, open]);
-
-  const handleCopy = useCallback(async (value: string, message: string) => {
-    if (!value) return;
-    if (await copyText(value)) toast(message);
-  }, []);
-
-  const handleRedeem = useCallback(async () => {
-    if (isRedeeming) return;
-    const code = normalizeReferralCode(codeInput);
-    if (!code) {
-      setRedeemError(copy.errorInvalid);
-      return;
-    }
-    setIsRedeeming(true);
-    setRedeemError(null);
-    try {
-      const response = await fetch(buildClientApiPath("/referral/redeem"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, source: "code", openRoom: true, locale }),
-      });
-      const body = await response.json().catch(() => ({})) as {
-        error?: string; rewarded?: boolean; conversationId?: string | null;
-      };
-      if (response.ok && body.rewarded === false) {
-        // The code is real but this account already accepted an invite.
-        setReferral((current) => (current ? { ...current, redeemed: true } : current));
-        setRedeemError(copy.errorAlready);
-        return;
-      }
-      if (response.ok) {
-        setReferral((current) => (current ? { ...current, redeemed: true } : current));
-        setCodeInput("");
-        toast(fill(copy.redeemSuccess));
-        void refreshCoinWallet({ force: true });
-        if (body.conversationId) {
-          // The room with the friend who invited them is where they wanted to go.
-          onClose();
-          replaceWithConversationListThenPush(router, `/${locale}/conversations`, body.conversationId);
-        }
-        return;
-      }
-      if (body.error === "already_redeemed") {
-        setReferral((current) => (current ? { ...current, redeemed: true } : current));
-      }
-      setRedeemError(
-        body.error === "invalid_code" ? copy.errorInvalid
-          : body.error === "not_found" ? copy.errorNotFound
-            : body.error === "own_code" ? copy.errorOwn
-              : body.error === "already_redeemed" ? copy.errorAlready
-                : copy.errorGeneric,
-      );
-    } catch {
-      setRedeemError(copy.errorGeneric);
-    } finally {
-      setIsRedeeming(false);
-    }
-  }, [codeInput, copy, fill, isRedeeming, locale, onClose, router]);
 
   const handleInvite = useCallback((contact: NativeContact) => {
     const phone = contact.phones[0];
@@ -381,76 +293,17 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
               <p className="mt-1 text-[13.5px] leading-relaxed text-amber-900/80">{fill(copy.description)}</p>
             </div>
           </div>
-          <div className="mt-4 flex items-center gap-3 rounded-xl bg-white px-4 py-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-medium text-gray-500">{copy.myCodeLabel}</p>
-              <p className="mt-0.5 font-mono text-[24px] font-bold tracking-[0.22em] text-slate-950" data-testid="contact-sync-my-code">
-                {referral?.code ?? "·····"}
-              </p>
-            </div>
-            <button
-              type="button"
-              disabled={!referral?.code}
-              onClick={() => void handleCopy(referral?.code ?? "", copy.codeCopied)}
-              className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-slate-950 px-4 text-[13.5px] font-semibold text-white transition active:opacity-80 disabled:opacity-40"
-            >
-              <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
-              {copy.copyCode}
-            </button>
-          </div>
+          {/* Sending a ticket, the user's own code and entering a code live on the invite page. */}
           <button
             type="button"
-            disabled={!inviteMessage}
-            onClick={() => void handleCopy(inviteMessage, copy.messageCopied)}
-            className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white/60 text-[14px] font-semibold text-amber-900 transition active:bg-white disabled:opacity-40"
+            onClick={openInviteScreen}
+            data-testid="contact-sync-open-invite"
+            className="mt-4 flex h-11 w-full items-center gap-2 rounded-xl bg-white px-4 text-left text-[14px] font-semibold text-amber-900 transition active:bg-amber-100"
           >
-            <MessageSquareText size={17} strokeWidth={2} aria-hidden="true" />
-            {copy.copyMessage}
+            <Ticket size={17} strokeWidth={2} className="shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">{ticketCopy.inviteScreenEntry}</span>
+            <ChevronRight size={18} strokeWidth={2} className="shrink-0 text-amber-500" aria-hidden="true" />
           </button>
-        </section>
-
-        <section className="mt-4 rounded-2xl border border-gray-100 px-4 py-4">
-          <p className="text-[14px] font-bold">{copy.enterCodeLabel}</p>
-          {referral?.redeemed ? (
-            <p className="mt-2 flex items-center gap-1.5 text-[13.5px] text-gray-500">
-              <Check size={16} strokeWidth={2.4} className="text-emerald-600" aria-hidden="true" />
-              {copy.redeemedDone}
-            </p>
-          ) : (
-            <>
-              <form
-                className="mt-2 flex gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void handleRedeem();
-                }}
-              >
-                <input
-                  value={codeInput}
-                  onChange={(event) => {
-                    setCodeInput(event.target.value.replace(/[^a-zA-Z0-9]/g, "").toLowerCase().slice(0, REFERRAL_CODE_LENGTH));
-                    setRedeemError(null);
-                  }}
-                  placeholder={copy.enterCodePlaceholder}
-                  aria-label={copy.enterCodeLabel}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  autoComplete="off"
-                  spellCheck={false}
-                  maxLength={REFERRAL_CODE_LENGTH}
-                  className="h-11 min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3.5 font-mono text-[16px] tracking-[0.16em] outline-none placeholder:font-sans placeholder:tracking-normal placeholder:text-gray-400 focus:border-slate-400"
-                />
-                <button
-                  type="submit"
-                  disabled={isRedeeming || codeInput.length !== REFERRAL_CODE_LENGTH}
-                  className="flex h-11 min-w-[72px] shrink-0 items-center justify-center rounded-xl bg-slate-950 px-4 text-[14px] font-semibold text-white transition active:opacity-80 disabled:opacity-40"
-                >
-                  {isRedeeming ? <Loader2 size={17} className="animate-spin" aria-hidden="true" /> : copy.submit}
-                </button>
-              </form>
-              {redeemError ? <p className="mt-2 text-[13px] text-rose-600" role="alert">{redeemError}</p> : null}
-            </>
-          )}
         </section>
 
         {nativeSupported && ownPhone !== undefined ? (
@@ -575,6 +428,12 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
                 ) : null}
               </label>
               <p className="mt-2 px-1 text-[12px] leading-relaxed text-gray-400">{copy.privacyNote}</p>
+              <InviteMessageLanguagePicker
+                value={messageLocale}
+                onChange={setMessageLocale}
+                label={ticketCopy.messageLanguage}
+                className="mt-2 px-1"
+              />
               {filteredContacts.length === 0 ? (
                 <p className="py-10 text-center text-[14px] text-gray-400">
                   {contacts.length === 0 ? copy.noContacts : copy.noResults}

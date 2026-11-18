@@ -2,13 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
-## 2026-11-19 — Invite ticket: one message language the user picks, and a My Page entry
+## 2026-11-19 — Invite page on My Page, and invite messages in one language the user picks
 
-- Surface: `invite-ticket-sheet.tsx` (new language picker), `invite-ticket-copy.ts` (`buildInviteTicketMessage`, `buildInviteLinkFooter`, `buildInviteSharedLinkMessage`), `lib/invite-message-locale.ts`, My Page profile section (`my-page.tsx`), profile and room link copy (`profile-share-screen.tsx`, `LivePhoneDemo.tsx`).
-- Issue: With a Korean UI the copied invite started with a Japanese line, then a Korean one, whoever the friend was. The "send an invite ticket" button only showed on a chat list with 3 rooms or fewer and in the friend invite screen, so it was hard to find later.
-- Cause: The message joined two languages from the earlier Korea-Japan focus (`ko → ja + ko`, others → own + English).
-- Resolution: The message, link note and code line are in one language. The sheet has a compact picker of the 15 copy languages; the default is the UI language, English for a Korean UI, and the last pick is remembered (localStorage, wrapped in try/catch; without storage the default applies). Profile and room links copied elsewhere use the same language. My Page has a full-width "send an invite ticket" button under Edit/Share profile that opens the same sheet. The landing page `/i/{code}` is unchanged.
-- Verification: unit tests for single-language messages in all 15 languages, the Korean → English default and the storage fallback; `tsc`, `test:qa:i18n`. Not checked on a device.
+- Surface: new `contacts/invite-screen.tsx` (invite page), `invite-ticket-panel.tsx` (shared with the quick sheet), `invite-message-language-picker.tsx`, `lib/invite-message-locale.ts`, `invite-ticket-copy.ts`, `contact-sync-screen.tsx`, My Page (`my-page.tsx`: profile button and menu row), profile and room link copy (`profile-share-screen.tsx`, `LivePhoneDemo.tsx`).
+- Issue: With a Korean UI the copied invite started with a Japanese line, then a Korean one, whoever the friend was. The ticket button only showed on a chat list with 3 rooms or fewer and in the friend invite screen. Your own code and the field for entering a code were inside 연락처 연동.
+- Cause: The message joined two languages from the earlier Korea-Japan focus (`ko → ja + ko`, others → own + English). Invites had no page of their own.
+- Resolution: My Page opens a new invite page ("친구 초대 · 초대 코드 입력"), from a button under Edit/Share profile and a menu row above 연락처 연동. The page holds the ticket with Copy and Share, a message-language picker, your own code with Copy code, and the code-entry field (moved out of contact sync). Every invite text is in one language: the ticket message, the code and reopen line, the SMS invite from contact sync, and profile and room links. The default is the UI language, English for a Korean UI. The last pick is shared by the invite page, the quick sheet and contact sync (localStorage in try/catch; without storage the default applies). Contact sync keeps texting contacts and finding friends, and links to the invite page. The quick sheet from the chat list uses the same panel. The landing page `/i/{code}` is unchanged.
+- Verification: unit tests for single-language messages in all 15 languages, the Korean → English default and the storage fallback; `tsc`, `test:qa:i18n`, 156 vitest files. Local dev server at 375px with the QA account and a Korean UI: the page opened from My Page, the message defaulted to English, picking 日本語 switched the whole message and was remembered by the quick sheet, and contact sync showed the link to the invite page. Not checked on a phone.
 
 ## 2026-11-18 — Soniox is the default read-aloud voice
 
