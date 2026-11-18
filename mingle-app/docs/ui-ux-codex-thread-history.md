@@ -2,6 +2,20 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Open room, inside: people here now, its menu, the live room bubble, and a stage for voice talk
+
+- Surface: `components/LivePhoneDemo/OpenRoomExtras.tsx`, `LivePhoneDemo.tsx`, `GET/PATCH /conversations/{id}/open-room`, `POST /conversations/{id}/report`, `/admin/reports`; `components/live-room-bubble.tsx`, `lib/live-room-bubble.ts`, `bottom-tab-bar.tsx`, `conversation-list.tsx`; `VoiceTalkPanel.tsx`, `voice-talk-stage.ts`, `server/voice/voice-stage.ts`, `POST /conversations/{id}/voice/stage`.
+- Issue (people): An open room did not show who was in it right now; the only list was the member list three taps into the menu.
+- Resolution (people): Under the room's header, a row of the faces of everyone who has the room open now (from the messaging server's presence), with the count. A face opens that person's profile.
+- Issue (menu): An open room's menu was a chat room's menu: nothing to share it, step out of it, change its topic or password, report it, or move to another room.
+- Resolution (menu): In an open room the menu starts with three buttons (Copy link, Minimize, Leave), the topic and the lock, and "Host settings" for the host (topic, new password, remove the password) or "Report room" for everyone else (the report is filed on the host and shows as "오픈방" in the admin report list). Below: "Rooms you are in" and "Rooms to try"; a tap moves there without asking. A room that asks for a password is not offered there.
+- Issue (bubble): Leaving a room's screen during a voice talk kept the call running with nothing on screen to show it or get back to it.
+- Resolution (bubble): A call running in a room that is not on screen shows as a small dark bubble on every tab: the face of whoever is speaking (it glows while they speak), the room's name, and a red "Leave" strip along its whole bottom edge. A tap returns to the room. It can be dragged: let go and it rests on the nearer side, clear of the tab bar and the keyboard; thrown past an edge it folds into a thin handle (a tap unfolds it); dropped on the ✕ circle at the bottom centre it leaves. Leaving asks nothing and shows "You left · Undo" for five seconds. On the Chats tab the same bubble shows a room whose speech recognition is still running, with "Stop". It is drawn by the page (no system picture-in-picture, no app release).
+- Issue (stage): In an open room every person in the voice talk was a speaker, with eight seats in all.
+- Resolution (stage): An open room's call has a stage. The host and whoever starts the call speak; everyone else joins as a listener, shown in a "Listening" row under the seats, and is not counted against the eight seats. A listener has a raise-hand button where the mic button is. The host sees an up arrow on each listener (a tap puts them on the stage) and a down arrow on each speaker (a tap takes them off). A listener's pass cannot send a voice, and the media server stops the voice of someone taken off the stage. Someone put on the stage reconnects (about a second) to get a pass that can talk. A chat room's call is unchanged.
+- Checked in a phone-width browser on the local server (2026-11-19): the people row, the open-room menu, host settings (topic saved, "Saved"), and the bubble with made-up call events (shows on Home with the speaker's name and glow, rests on the left after a drag, folds past the edge, unfolds on a tap, leaves with "You left · Undo", the notice goes after five seconds).
+- Not checked: the stage in a real call (needs two accounts in one call), the report sheet's submit, moving between rooms, the bubble's keyboard avoidance on a phone.
+
 ## 2026-11-19 — Explore is Open rooms and Posts; the room menu starts with people and keeps settings on their own page
 
 - Surface: `components/search/open-rooms.tsx`, `components/search/unified-search.tsx`, `components/search/room-code-result.tsx`, `lib/open-room.ts`, `server/open-room-password.ts`, `GET/POST /conversations/open-rooms`, `POST /conversations/{id}/public-join`; `components/conversation-list.tsx`; `components/LivePhoneDemo/LivePhoneDemo.tsx` (menu).
