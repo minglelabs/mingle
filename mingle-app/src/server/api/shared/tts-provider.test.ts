@@ -10,9 +10,18 @@ const TTS_ENV_KEYS = [
   'GEMINI_TTS_STYLE_KO',
   'GEMINI_TTS_STYLE_JA',
   'GEMINI_TTS_TIMEOUT_MS',
+  'SONIOX_API_KEY',
+  'SONIOX_TTS_VOICE',
+  'SONIOX_TTS_SPEED',
+  'INWORLD_RUNTIME_BASE64_CREDENTIAL',
 ] as const
 
 const savedEnv: Record<string, string | undefined> = {}
+
+function nonNull<T>(value: T | null): T {
+  if (value === null) throw new Error('expected a result, got null')
+  return value
+}
 
 function wavBytes(): Buffer {
   const b = Buffer.alloc(48)
@@ -28,6 +37,11 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+/** A successful answer for the retry with the other Gemini model. */
+function retryAudioResponse(): Response {
+  return geminiAudioResponse(wavBytes(), 'audio/wav')
+}
+
 function geminiAudioResponse(audio: Buffer, mimeType?: string): Response {
   return jsonResponse({
     id: 'interaction-1',
@@ -40,31 +54,30 @@ function geminiAudioResponse(audio: Buffer, mimeType?: string): Response {
   })
 }
 
-/** Gemini's streamed answer: headerless 24 kHz PCM pieces as server-sent events. */
-function geminiStreamResponse(pieces: Buffer[], extraEvents: unknown[] = []): Response {
-  const events: unknown[] = [
-    { event_type: 'interaction.created' },
-    { event_type: 'step.start', index: 0 },
-    ...pieces.map((piece) => ({
-      event_type: 'step.delta',
-      index: 0,
-      delta: { type: 'audio', mime_type: 'audio/l16', sample_rate: 24000, channels: 1, data: piece.toString('base64') },
-    })),
-    ...extraEvents,
-    { event_type: 'interaction.completed' },
-  ]
-  // CRLF and a split in the middle of a line, as a real network delivers it.
-  const text = events.map((event) => `data: ${JSON.stringify(event)}\r\n\r\n`).join('')
-  const bytes = new TextEncoder().encode(text)
-  const cut = Math.floor(bytes.length / 2)
-  const body = new ReadableStream<Uint8Array>({
+/** SSE body of a `stream: true` interaction; each string is sent as its own network chunk. */
+function sseResponse(blocks: string[]): Response {
+  const encoder = new TextEncoder()
+  return new Response(new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(bytes.slice(0, cut))
-      controller.enqueue(bytes.slice(cut))
+      for (const block of blocks) controller.enqueue(encoder.encode(block))
       controller.close()
     },
-  })
-  return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+  }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+}
+
+function sseEvent(eventType: string, data: Record<string, unknown>): string {
+  return `event: ${eventType}\ndata: ${JSON.stringify({ event_type: eventType, ...data })}\n\n`
+}
+
+function geminiStreamResponse(pcmChunks: Buffer[], delta: Record<string, unknown> = {}): Response {
+  return sseResponse([
+    sseEvent('interaction.created', { interaction: { id: 'interaction-1' } }),
+    sseEvent('step.start', { index: 0, step: { type: 'model_output' } }),
+    ...pcmChunks.map((chunk) => sseEvent('step.delta', { index: 0, delta: { type: 'audio', data: chunk.toString('base64'), ...delta } })),
+    sseEvent('step.stop', { index: 0 }),
+    sseEvent('interaction.completed', {}),
+    'event: done\ndata: [DONE]\n\n',
+  ])
 }
 
 function urlOf(call: unknown[]): string {
@@ -99,59 +112,75 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('synthesizeSpeech — the one model', () => {
-  it('always uses gemini-3.8-flash-lite-tts', async () => {
-    const wav = wavBytes()
-    const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wav, 'audio/wav'))
-    vi.stubGlobal('fetch', fetchMock)
-    const { synthesizeSpeech, TTS_MODEL } = await loadModule()
+describe('resolveTtsRuntimeSelection (re-exported from @/lib/tts-models)', () => {
+  it('maps each model to its provider and runtime id, Soniox by default', async () => {
+    const { resolveTtsRuntimeSelection } = await loadModule()
+    expect(resolveTtsRuntimeSelection(undefined)).toEqual({
+      value: 'soniox-tts-rt-v2', provider: 'soniox', runtimeModel: 'tts-rt-v2',
+    })
+    expect(resolveTtsRuntimeSelection('gemini-3.8-flash-lite-tts')).toEqual({
+      value: 'gemini-3.8-flash-lite-tts', provider: 'gemini', runtimeModel: 'gemini-3.8-flash-lite-tts',
+    })
+    expect(resolveTtsRuntimeSelection('gemini-3.8-flash-tts')).toEqual({
+      value: 'gemini-3.8-flash-tts', provider: 'gemini', runtimeModel: 'gemini-3.8-flash-tts',
+    })
+  })
 
-    const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
-
-    expect(TTS_MODEL).toBe('gemini-3.8-flash-lite-tts')
-    expect(result).toMatchObject({ ok: true, provider: 'gemini' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(bodyOf(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-lite-tts')
+  it('resolves invalid and removed values to the soniox-tts-rt-v2 default', async () => {
+    const { resolveTtsRuntimeSelection } = await loadModule()
+    expect(resolveTtsRuntimeSelection('gemini').value).toBe('soniox-tts-rt-v2')
+    expect(resolveTtsRuntimeSelection(123).value).toBe('soniox-tts-rt-v2')
+    expect(resolveTtsRuntimeSelection('inworld-tts-1.5-mini').value).toBe('soniox-tts-rt-v2')
   })
 })
 
-describe('synthesizeSpeech — streamed answer', () => {
-  it('asks Gemini for a stream and joins the PCM pieces into one WAV', async () => {
-    // Loud samples throughout, so silence trimming removes nothing.
-    const pieceA = Buffer.alloc(4800)
-    const pieceB = Buffer.alloc(9600)
-    for (let i = 0; i < pieceA.length; i += 2) pieceA.writeInt16LE(i % 4 === 0 ? 12000 : -12000, i)
-    for (let i = 0; i < pieceB.length; i += 2) pieceB.writeInt16LE(i % 4 === 0 ? 9000 : -9000, i)
-    const fetchMock = vi.fn().mockResolvedValueOnce(geminiStreamResponse([pieceA, pieceB]))
+describe('synthesizeSpeech — default (no ttsModel)', () => {
+  it('speaks a whole clip for the Soniox default with gemini-3.8-flash-lite-tts', async () => {
+    const wav = wavBytes()
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wav, 'audio/wav'))
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
     const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
 
-    expect(bodyOf(fetchMock.mock.calls[0]).stream).toBe(true)
-    if (!result.ok) throw new Error('expected success')
-    expect(result.mime).toBe('audio/wav')
-    expect(result.audio.subarray(0, 4).toString('ascii')).toBe('RIFF')
-    expect(result.audio.readUInt32LE(24)).toBe(24000)
-    expect(result.audio.subarray(44).equals(Buffer.concat([pieceA, pieceB]))).toBe(true)
+    expect(result).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts' })
+    expect(result.fallbackFrom).toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(urlOf(fetchMock.mock.calls[0])).not.toContain('soniox')
+    expect(bodyOf(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-lite-tts')
   })
 
-  it('returns invalid_audio when the stream carries no audio', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(geminiStreamResponse([])))
+  it('treats the removed Inworld model as the default and retries Flash when Flash-Lite fails', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { message: 'quota' } }, 429))
+      .mockResolvedValueOnce(retryAudioResponse())
+    vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    expect(await synthesizeSpeech({ text: 'hello', language: 'en' }))
-      .toMatchObject({ ok: false, reason: 'invalid_audio' })
+    const result = await synthesizeSpeech({ text: 'hello', language: null, ttsModel: 'inworld-tts-1.5-mini' })
+
+    expect(result).toMatchObject({
+      ok: true,
+      provider: 'gemini',
+      modelId: 'gemini-3.8-flash-tts',
+      fallbackFrom: 'gemini-3.8-flash-lite-tts',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(bodyOf(fetchMock.mock.calls[0]).model).toBe('gemini-3.8-flash-lite-tts')
+    expect(bodyOf(fetchMock.mock.calls[1]).model).toBe('gemini-3.8-flash-tts')
   })
 
-  it('fails when the stream reports an error', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(
-      geminiStreamResponse([Buffer.alloc(480, 1)], [{ event_type: 'error', error: { message: 'overloaded' } }]),
-    ))
+  it('reports missing credentials without calling fetch or retrying when GEMINI_API_KEY is missing', async () => {
+    delete process.env.GEMINI_API_KEY
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    expect(await synthesizeSpeech({ text: 'hello', language: 'en' }))
-      .toMatchObject({ ok: false, provider: 'gemini', reason: 'exception' })
+    const result = await synthesizeSpeech({ text: 'hello', language: null })
+
+    expect(result).toMatchObject({ ok: false, provider: 'gemini', reason: 'missing_credentials' })
+    expect(result.fallbackFrom).toBeUndefined()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 
@@ -162,14 +191,18 @@ describe('synthesizeSpeech — gemini', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: '빠른 답장 감사합니다.', language: 'ko' })
+    const result = await synthesizeSpeech({
+      text: '빠른 답장 감사합니다.',
+      language: 'ko',
+      ttsModel: 'gemini-3.8-flash-tts',
+    })
 
     expect(result).toMatchObject({
       ok: true,
       provider: 'gemini',
       mime: 'audio/wav',
       voiceId: 'ko-kr-csagent-8',
-      modelId: 'gemini-3.8-flash-lite-tts',
+      modelId: 'gemini-3.8-flash-tts',
     })
     if (!result.ok) throw new Error('expected success')
     // The fake WAV has no fmt chunk, so post-processing leaves it untouched.
@@ -179,9 +212,11 @@ describe('synthesizeSpeech — gemini', () => {
     const init = fetchMock.mock.calls[0][1] as RequestInit
     expect((init.headers as Record<string, string>)['x-goog-api-key']).toBe('test-gemini-key')
     const body = bodyOf(fetchMock.mock.calls[0])
-    expect(body.model).toBe('gemini-3.8-flash-lite-tts')
+    expect(body.model).toBe('gemini-3.8-flash-tts')
     expect(body.response_format).toEqual({ type: 'audio' })
     expect(body.generation_config).toEqual({ speech_config: [{ voice: 'ko-kr-csagent-8' }] })
+    expect(body.stream).toBe(true)
+    expect(body.store).toBe(false)
     // Text is verbatim; pace rides in the structured (never spoken) style annotation.
     expect(body.input).toEqual([{
       type: 'user_input',
@@ -231,7 +266,7 @@ describe('synthesizeSpeech — gemini', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
+    const result = await synthesizeSpeech({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' })
 
     if (!result.ok) throw new Error('expected success')
     expect(result.mime).toBe('audio/wav')
@@ -267,7 +302,7 @@ describe('synthesizeSpeech — gemini', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
+    const result = await synthesizeSpeech({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-tts' })
 
     if (!result.ok) throw new Error('expected success')
     expect(result.provider).toBe('gemini')
@@ -295,66 +330,204 @@ describe('synthesizeSpeech — gemini', () => {
     expect(normalizeGeminiAudio(wav, '')).toEqual({ audio: wav, mime: 'audio/wav' })
   })
 
-  it('returns the failure of a non-2xx Gemini response: there is no fallback', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ error: { message: 'quota' } }, 429))
+  it('falls back to the other model on a non-2xx Gemini response', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { message: 'quota' } }, 429))
+      .mockResolvedValueOnce(retryAudioResponse())
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: null })
+    const result = await synthesizeSpeech({
+      text: 'hello',
+      language: null,
+      ttsModel: 'gemini-3.8-flash-tts',
+    })
 
-    expect(result).toMatchObject({ ok: false, provider: 'gemini', reason: 'upstream_error', status: 429 })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts', fallbackFrom: 'gemini-3.8-flash-tts' })
     expect(urlOf(fetchMock.mock.calls[0])).toContain('generativelanguage.googleapis.com')
+    expect(bodyOf(fetchMock.mock.calls[1]).model).toBe('gemini-3.8-flash-lite-tts')
   })
 
-  it('returns a timeout failure when Gemini does not answer in time', async () => {
+  it('falls back to the other model when Gemini times out', async () => {
     process.env.GEMINI_TTS_TIMEOUT_MS = '20'
     const fetchMock = vi.fn()
       .mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
         init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
       }))
+      .mockResolvedValueOnce(retryAudioResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeech, synthesizeWithGemini } = await loadModule()
+
+    const result = await synthesizeSpeech({ text: 'hello', language: null, ttsModel: 'gemini-3.8-flash-tts' })
+    expect(result).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts', fallbackFrom: 'gemini-3.8-flash-tts' })
+
+    fetchMock.mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+    }))
+    const direct = await synthesizeWithGemini({ text: 'hello', language: null, modelId: 'gemini-3.8-flash-tts' })
+    expect(direct).toMatchObject({ ok: false, reason: 'timeout' })
+  })
+
+  it('always asks Gemini to stream, even for a whole clip', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiAudioResponse(wavBytes(), 'audio/wav'))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeWithGemini } = await loadModule()
+    await synthesizeWithGemini({ text: 'hello', language: 'en', modelId: 'gemini-3.8-flash-lite-tts' })
+    expect(bodyOf(fetchMock.mock.calls[0]).stream).toBe(true)
+  })
+
+  it('joins streamed PCM chunks in order into one 24 kHz WAV', async () => {
+    const chunks = [Buffer.alloc(960, 1), Buffer.alloc(960, 2), Buffer.alloc(480, 3)]
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiStreamResponse(chunks))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeWithGemini } = await loadModule()
+
+    const result = await synthesizeWithGemini({ text: 'hello', language: 'en', modelId: 'gemini-3.8-flash-lite-tts' })
+
+    if (!result.ok) throw new Error('expected success')
+    expect(result.mime).toBe('audio/wav')
+    expect(result.audio.readUInt32LE(24)).toBe(24000)
+    // Constant non-zero samples are never trimmed as silence.
+    expect(result.audio.subarray(44).equals(Buffer.concat(chunks))).toBe(true)
+  })
+
+  it('keeps the streamed rate when the first delta declares one', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      geminiStreamResponse([Buffer.alloc(320, 1), Buffer.alloc(320, 1)], { mime_type: 'audio/l16;rate=16000' }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeWithGemini } = await loadModule()
+
+    const result = await synthesizeWithGemini({ text: 'hello', language: 'en', modelId: 'gemini-3.8-flash-lite-tts' })
+
+    if (!result.ok) throw new Error('expected success')
+    expect(result.audio.readUInt32LE(24)).toBe(16000)
+    expect(result.audio.readUInt32LE(40)).toBe(640)
+  })
+
+  it('parses SSE events split across network chunks and CRLF line endings', async () => {
+    const pcm = Buffer.alloc(960, 5)
+    const event = sseEvent('step.delta', { index: 0, delta: { type: 'audio', data: pcm.toString('base64') } }).replace(/\n/g, '\r\n')
+    const mid = Math.floor(event.length / 2)
+    const fetchMock = vi.fn().mockResolvedValueOnce(sseResponse([event.slice(0, mid), event.slice(mid)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeWithGemini } = await loadModule()
+
+    const result = await synthesizeWithGemini({ text: 'hello', language: 'en', modelId: 'gemini-3.8-flash-lite-tts' })
+
+    if (!result.ok) throw new Error('expected success')
+    expect(result.audio.subarray(44).equals(pcm)).toBe(true)
+  })
+
+  it('falls back to the other model when the stream carries an error event', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sseResponse([
+        sseEvent('step.delta', { index: 0, delta: { type: 'audio', data: Buffer.alloc(960, 1).toString('base64') } }),
+        sseEvent('error', { error: { code: 500, message: 'internal' } }),
+      ]))
+      .mockResolvedValueOnce(retryAudioResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeech, synthesizeWithGemini } = await loadModule()
+
+    const result = await synthesizeSpeech({ text: 'hello', language: null })
+    expect(result).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-tts', fallbackFrom: 'gemini-3.8-flash-lite-tts' })
+
+    fetchMock.mockResolvedValueOnce(sseResponse([sseEvent('error', { error: { code: 429, message: 'quota' } })]))
+    const direct = await synthesizeWithGemini({ text: 'hello', language: null, modelId: 'gemini-3.8-flash-lite-tts' })
+    expect(direct).toMatchObject({ ok: false, reason: 'upstream_error' })
+    if (direct.ok) throw new Error('expected failure')
+    expect(direct.detail).toContain('quota')
+  })
+
+  it('falls back to the other model when the stream ends without audio', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(geminiStreamResponse([]))
+      .mockResolvedValueOnce(retryAudioResponse())
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
     const result = await synthesizeSpeech({ text: 'hello', language: null })
 
-    expect(result).toMatchObject({ ok: false, provider: 'gemini', reason: 'timeout' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-tts', fallbackFrom: 'gemini-3.8-flash-lite-tts' })
   })
 
-  it('returns invalid_audio when Gemini returns no audio', async () => {
+  it('times out when the stream stalls between chunks, but not while chunks keep coming', async () => {
+    process.env.GEMINI_TTS_TIMEOUT_MS = '40'
+    const encoder = new TextEncoder()
+    const chunk = sseEvent('step.delta', { index: 0, delta: { type: 'audio', data: Buffer.alloc(960, 1).toString('base64') } })
+    // Five chunks 25 ms apart: 125 ms in total, longer than the 40 ms idle limit.
+    const steady = (_url: string, init: RequestInit) => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+      async start(controller) {
+        for (let i = 0; i < 5; i++) {
+          if (init.signal?.aborted) return controller.error(new DOMException('aborted', 'AbortError'))
+          controller.enqueue(encoder.encode(chunk))
+          await new Promise((resolve) => setTimeout(resolve, 25))
+        }
+        controller.close()
+      },
+    }), { headers: { 'Content-Type': 'text/event-stream' } }))
+    // One chunk, then silence until aborted.
+    const stalled = (_url: string, init: RequestInit) => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(chunk))
+        init.signal?.addEventListener('abort', () => controller.error(new DOMException('aborted', 'AbortError')))
+      },
+    }), { headers: { 'Content-Type': 'text/event-stream' } }))
+    const fetchMock = vi.fn().mockImplementationOnce(steady).mockImplementationOnce(stalled)
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeWithGemini } = await loadModule()
+
+    const ok = await synthesizeWithGemini({ text: 'hello', language: 'en', modelId: 'gemini-3.8-flash-lite-tts' })
+    expect(ok).toMatchObject({ ok: true, provider: 'gemini' })
+    if (!ok.ok) throw new Error('expected success')
+    expect(ok.audio.length).toBe(44 + 5 * 960)
+
+    const timedOut = await synthesizeWithGemini({ text: 'hello', language: 'en', modelId: 'gemini-3.8-flash-lite-tts' })
+    expect(timedOut).toMatchObject({ ok: false, reason: 'timeout' })
+  })
+
+  it('falls back to the other model when Gemini returns no audio', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ steps: [{ type: 'model_output', content: [{ type: 'text', text: 'hi' }] }] }))
+      .mockResolvedValueOnce(retryAudioResponse())
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: null })
+    const result = await synthesizeSpeech({ text: 'hello', language: null, ttsModel: 'gemini-3.8-flash-tts' })
 
-    expect(result).toMatchObject({ ok: false, provider: 'gemini', reason: 'invalid_audio' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts', fallbackFrom: 'gemini-3.8-flash-tts' })
   })
 
-  it('returns an exception failure on a Gemini fetch exception', async () => {
-    const fetchMock = vi.fn().mockRejectedValueOnce(new Error('network down'))
-    vi.stubGlobal('fetch', fetchMock)
-    const { synthesizeSpeech } = await loadModule()
-
-    const result = await synthesizeSpeech({ text: 'hello', language: null })
-
-    expect(result).toMatchObject({ ok: false, provider: 'gemini', reason: 'exception' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports missing credentials without calling fetch when GEMINI_API_KEY is missing', async () => {
-    delete process.env.GEMINI_API_KEY
+  it('returns the retry failure, with fallbackFrom, when both models fail', async () => {
     const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { message: 'overloaded' } }, 503))
+      .mockResolvedValueOnce(jsonResponse({ error: { message: 'overloaded' } }, 503))
     vi.stubGlobal('fetch', fetchMock)
     const { synthesizeSpeech } = await loadModule()
 
-    const result = await synthesizeSpeech({ text: 'hello', language: null })
+    const result = await synthesizeSpeech({ text: 'hello', language: 'en' })
 
-    expect(result).toMatchObject({ ok: false, provider: 'gemini', reason: 'missing_credentials' })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      ok: false,
+      provider: 'gemini',
+      reason: 'upstream_error',
+      status: 503,
+      modelId: 'gemini-3.8-flash-tts',
+      fallbackFrom: 'gemini-3.8-flash-lite-tts',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('falls back to the other model on a Gemini fetch exception', async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce(retryAudioResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeech } = await loadModule()
+
+    const result = await synthesizeSpeech({ text: 'hello', language: null, ttsModel: 'gemini-3.8-flash-tts' })
+
+    expect(result).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts', fallbackFrom: 'gemini-3.8-flash-tts' })
   })
 })
 
@@ -571,5 +744,276 @@ describe('synthesizeSpeech — gemini post-processing', () => {
     expect(result.mime).toBe('audio/wav')
     // 1.4 s tone + 2 x 80 ms padding.
     expect(wavSeconds(result.audio)).toBeCloseTo(1.56, 1)
+  })
+})
+
+async function collect(chunks: AsyncIterable<Buffer>): Promise<Buffer[]> {
+  const out: Buffer[] = []
+  for await (const chunk of chunks) out.push(chunk)
+  return out
+}
+
+async function* fromChunks(chunks: Buffer[]): AsyncGenerator<Buffer, void, void> {
+  for (const chunk of chunks) yield chunk
+}
+
+/** 16-bit mono PCM: `ms` of a constant sample value at 24 kHz. */
+function pcm(ms: number, value: number): Buffer {
+  const samples = Math.round(24000 * ms / 1000)
+  const buffer = Buffer.alloc(samples * 2)
+  for (let i = 0; i < samples; i++) buffer.writeInt16LE(value, i * 2)
+  return buffer
+}
+
+describe('trimLeadingSilencePcm16', () => {
+  it('drops silence before the first sound but keeps 80 ms of it', async () => {
+    const { trimLeadingSilencePcm16 } = await loadModule()
+    const out = Buffer.concat(await collect(trimLeadingSilencePcm16(
+      fromChunks([pcm(200, 0), pcm(100, 0), pcm(50, 8000), pcm(40, 8000)]),
+      24000,
+    )))
+    // 300 ms of silence in, 80 ms kept, then the 90 ms of sound.
+    expect(out.length).toBe(pcm(80, 0).length + pcm(90, 0).length)
+    expect(out.readInt16LE(pcm(80, 0).length)).toBe(8000)
+    expect(out.readInt16LE(pcm(80, 0).length - 2)).toBe(0)
+  })
+
+  it('passes sound through as it comes once the clip has started', async () => {
+    const { trimLeadingSilencePcm16 } = await loadModule()
+    const out = await collect(trimLeadingSilencePcm16(
+      fromChunks([pcm(20, 8000), pcm(30, 0), pcm(10, 8000)]),
+      24000,
+    ))
+    expect(out.map((chunk) => chunk.length)).toEqual([pcm(20, 0).length, pcm(30, 0).length, pcm(10, 0).length])
+  })
+
+  it('never ends a chunk in the middle of a sample', async () => {
+    const { trimLeadingSilencePcm16 } = await loadModule()
+    const whole = pcm(30, 8000)
+    const out = await collect(trimLeadingSilencePcm16(
+      fromChunks([whole.subarray(0, 101), whole.subarray(101, 444), whole.subarray(444)]),
+      24000,
+    ))
+    for (const chunk of out) expect(chunk.length % 2).toBe(0)
+    expect(Buffer.concat(out).equals(whole)).toBe(true)
+  })
+
+  it('hands on a clip that is silent throughout, and stops holding after one second', async () => {
+    const { trimLeadingSilencePcm16 } = await loadModule()
+    const quiet = await collect(trimLeadingSilencePcm16(fromChunks([pcm(100, 0), pcm(100, 0)]), 24000))
+    expect(Buffer.concat(quiet).length).toBe(pcm(200, 0).length)
+
+    const long = await collect(trimLeadingSilencePcm16(fromChunks([pcm(600, 0), pcm(600, 0), pcm(50, 8000)]), 24000))
+    expect(long.map((chunk) => chunk.length)).toEqual([pcm(1200, 0).length, pcm(50, 0).length])
+  })
+})
+
+describe('synthesizeSpeechStream — gemini', () => {
+  it('resolves with the first audio and yields the rest in order', async () => {
+    const chunks = [pcm(20, 8000), pcm(20, 4000), pcm(10, 2000)]
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiStreamResponse(chunks))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'ko', ttsModel: 'gemini-3.8-flash-lite-tts' }))
+
+    if (!speech.ok) throw new Error('expected a stream')
+    expect(speech).toMatchObject({
+      provider: 'gemini',
+      modelId: 'gemini-3.8-flash-lite-tts',
+      voiceId: 'ko-kr-csagent-8',
+      sampleRate: 24000,
+    })
+    expect(speech.fallbackFrom).toBeUndefined()
+    expect(Buffer.concat(await collect(speech.chunks)).equals(Buffer.concat(chunks))).toBe(true)
+    expect(bodyOf(fetchMock.mock.calls[0]).stream).toBe(true)
+  })
+
+  it('retries the other model when the first fails before any audio', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { message: 'overloaded' } }, 503))
+      .mockResolvedValueOnce(geminiStreamResponse([pcm(20, 8000)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' }))
+
+    expect(speech).toMatchObject({ ok: true, modelId: 'gemini-3.8-flash-tts', fallbackFrom: 'gemini-3.8-flash-lite-tts' })
+    expect(bodyOf(fetchMock.mock.calls[1]).model).toBe('gemini-3.8-flash-tts')
+    if (speech.ok) await collect(speech.chunks)
+  })
+
+  it('reports a failure when the stream has an error event or no audio before any chunk', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sseResponse([sseEvent('error', { error: { code: 429, message: 'quota' } })]))
+      .mockResolvedValueOnce(geminiStreamResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' }))
+
+    expect(speech).toMatchObject({
+      ok: false,
+      reason: 'invalid_audio',
+      modelId: 'gemini-3.8-flash-tts',
+      fallbackFrom: 'gemini-3.8-flash-lite-tts',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('throws from the iterator when the stream fails after audio was handed on', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(sseResponse([
+      sseEvent('step.delta', { index: 0, delta: { type: 'audio', data: pcm(20, 8000).toString('base64') } }),
+      sseEvent('error', { error: { code: 500, message: 'internal' } }),
+    ]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' }))
+
+    if (!speech.ok) throw new Error('expected a stream')
+    const first = await speech.chunks.next()
+    expect(first.done).toBe(false)
+    await expect(speech.chunks.next()).rejects.toThrow('internal')
+  })
+
+  it('does not call Gemini without an API key', async () => {
+    delete process.env.GEMINI_API_KEY
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    expect(nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-lite-tts' })))
+      .toMatchObject({ ok: false, reason: 'missing_credentials' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('canStreamSpeech', () => {
+  it('always streams Soniox; Gemini unless a time-stretch is set for that language', async () => {
+    const { canStreamSpeech } = await loadModule()
+    expect(canStreamSpeech('ko', 'gemini-3.8-flash-lite-tts')).toBe(true)
+    process.env.GEMINI_TTS_SPEED = 'ko=1.2,*=1'
+    expect(canStreamSpeech('ko', 'gemini-3.8-flash-lite-tts')).toBe(false)
+    expect(canStreamSpeech('en', 'gemini-3.8-flash-tts')).toBe(true)
+    expect(canStreamSpeech('ko', 'soniox-tts-rt-v2')).toBe(true)
+    expect(canStreamSpeech('ko')).toBe(true)
+  })
+})
+
+describe('synthesizeSpeechStream — soniox (default)', () => {
+  function pcmResponse(chunks: Buffer[]): Response {
+    return new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(new Uint8Array(chunk))
+        controller.close()
+      },
+    }), { status: 200, headers: { 'Content-Type': 'audio/pcm' } })
+  }
+
+  it('streams from Soniox with the language, voice, speed and raw 24 kHz PCM', async () => {
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    const chunks = [pcm(20, 8000), pcm(20, 4000)]
+    const fetchMock = vi.fn().mockResolvedValueOnce(pcmResponse(chunks))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = nonNull(await synthesizeSpeechStream({ text: '안녕하세요', language: 'ko-KR' }))
+
+    if (!speech.ok) throw new Error('expected a stream')
+    expect(speech).toMatchObject({ provider: 'soniox', modelId: 'tts-rt-v2', voiceId: 'Adrian', sampleRate: 24000 })
+    expect(Buffer.concat(await collect(speech.chunks)).equals(Buffer.concat(chunks))).toBe(true)
+    expect(urlOf(fetchMock.mock.calls[0])).toBe('https://tts-rt.soniox.com/tts')
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer soniox-key')
+    expect(bodyOf(fetchMock.mock.calls[0])).toEqual({
+      model: 'tts-rt-v2',
+      language: 'ko',
+      voice: 'Adrian',
+      audio_format: 'pcm_s16le',
+      sample_rate: 24000,
+      speed: 1.3,
+      text: '안녕하세요',
+    })
+  })
+
+  it('falls back to Gemini Flash-Lite when Soniox fails before any audio (e.g. its 429 limit)', async () => {
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    process.env.SONIOX_TTS_SPEED = '9'
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('quota', { status: 429 }))
+      .mockResolvedValueOnce(geminiStreamResponse([pcm(20, 8000)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en' }))
+
+    expect(speech).toMatchObject({
+      ok: true,
+      provider: 'gemini',
+      modelId: 'gemini-3.8-flash-lite-tts',
+      fallbackFrom: 'tts-rt-v2',
+    })
+    // An out-of-range speed is clamped to what Soniox accepts.
+    expect(bodyOf(fetchMock.mock.calls[0]).speed).toBe(1.3)
+    if (speech.ok) await collect(speech.chunks)
+  })
+
+  it('sends texts over the Soniox length cap straight to Gemini', async () => {
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiStreamResponse([pcm(20, 8000)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream, SONIOX_TTS_MAX_TEXT_CHARS } = await loadModule()
+
+    const speech = nonNull(await synthesizeSpeechStream({ text: '가'.repeat(SONIOX_TTS_MAX_TEXT_CHARS + 1), language: 'ko' }))
+
+    expect(speech).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts' })
+    expect(speech.fallbackFrom).toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(urlOf(fetchMock.mock.calls[0])).not.toContain('soniox')
+    if (speech.ok) await collect(speech.chunks)
+  })
+
+  it('never plays a non-audio Soniox body; Gemini speaks instead', async () => {
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error_message: 'oops' }))
+      .mockResolvedValueOnce(geminiStreamResponse([pcm(20, 8000)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en' }))
+
+    expect(speech).toMatchObject({ ok: true, provider: 'gemini', fallbackFrom: 'tts-rt-v2' })
+    if (speech.ok) await collect(speech.chunks)
+  })
+
+  it('asks for a whole clip when Gemini must speak for Soniox and a time-stretch is set', async () => {
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    process.env.GEMINI_TTS_SPEED = 'ko=1.2'
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response('quota', { status: 429 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    expect(await synthesizeSpeechStream({ text: '안녕', language: 'ko' })).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to Gemini without a Soniox key, and never calls Soniox for a Gemini model', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(geminiStreamResponse([pcm(20, 8000)]))
+      .mockResolvedValueOnce(geminiStreamResponse([pcm(20, 8000)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const fallback = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en' }))
+    expect(fallback).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-lite-tts', fallbackFrom: 'tts-rt-v2' })
+    if (fallback.ok) await collect(fallback.chunks)
+
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    const gemini = nonNull(await synthesizeSpeechStream({ text: 'hello', language: 'en', ttsModel: 'gemini-3.8-flash-tts' }))
+    expect(gemini).toMatchObject({ ok: true, provider: 'gemini', modelId: 'gemini-3.8-flash-tts' })
+    if (gemini.ok) await collect(gemini.chunks)
+    expect(fetchMock.mock.calls.map(urlOf).some((url) => url.includes('soniox'))).toBe(false)
   })
 })

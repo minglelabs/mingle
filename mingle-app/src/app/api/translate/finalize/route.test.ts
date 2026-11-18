@@ -96,6 +96,14 @@ vi.mock('@google/generative-ai', () => {
   }
 })
 
+/** A minimal RIFF/WAVE container, base64, as a Gemini TTS audio block carries it. */
+function testWavBase64(): string {
+  const wav = Buffer.alloc(48)
+  wav.write('RIFF', 0, 'ascii')
+  wav.write('WAVE', 8, 'ascii')
+  return wav.toString('base64')
+}
+
 function clearTranslationEnv() {
   delete process.env.TRANSLATE_PROVIDER
   delete process.env.TRANSLATE_MODEL
@@ -510,7 +518,7 @@ describe('/api/translate/finalize route', () => {
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
-  it('never synthesizes speech with a translation, even when an older client asks for it', async () => {
+  it('returns translations and inline Gemini TTS audio for the removed Inworld model', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '{"ko":"안녕하세요"}',
@@ -522,7 +530,13 @@ describe('/api/translate/finalize route', () => {
       },
     })
 
-    const fetchMock = vi.fn()
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          steps: [{ type: 'model_output', content: [{ type: 'audio', data: testWavBase64(), mime_type: 'audio/wav' }] }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithEnv()
 
@@ -533,7 +547,6 @@ describe('/api/translate/finalize route', () => {
       tts: {
         enabled: true,
         language: 'ko',
-        voiceId: 'KoVoice',
         ttsModel: 'inworld-tts-1.5-mini',
       },
     }) as never)
@@ -542,12 +555,142 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
     expect(json.translations).toEqual({ ko: '안녕하세요' })
     expect(json.provider).toBe('gemini')
-    expect(json).not.toHaveProperty('ttsAudioBase64')
-    expect(json).not.toHaveProperty('ttsAudioMime')
-    expect(json).not.toHaveProperty('ttsLanguage')
-    expect(json).not.toHaveProperty('ttsVoiceId')
-    // No request leaves for a TTS provider.
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(json.ttsLanguage).toBe('ko')
+    expect(json.ttsVoiceId).toBe('ko-kr-csagent-8')
+    expect(typeof json.ttsAudioBase64).toBe('string')
+    expect(json.ttsAudioMime).toBe('audio/wav')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-lite-tts')
+  })
+
+  it('uses Gemini TTS for inline audio when tts.ttsModel is a Gemini model and ignores the client voiceId', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+    const wav = Buffer.alloc(48)
+    wav.write('RIFF', 0, 'ascii')
+    wav.write('WAVE', 8, 'ascii')
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
+      JSON.stringify({
+        steps: [{ type: 'model_output', content: [{ type: 'audio', data: wav.toString('base64'), mime_type: 'audio/wav' }] }],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'gemini-3.8-flash-tts' },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.ttsAudioMime).toBe('audio/wav')
+    // Korean inline audio uses the male Korean Gemini voice.
+    expect(json.ttsVoiceId).toBe('ko-kr-csagent-8')
+    expect(Buffer.from(json.ttsAudioBase64, 'base64').equals(wav)).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://generativelanguage.googleapis.com/v1beta/interactions')
+    const geminiBody = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))
+    expect(geminiBody.model).toBe('gemini-3.8-flash-tts')
+    expect(geminiBody.generation_config).toEqual({ speech_config: [{ voice: 'ko-kr-csagent-8' }] })
+    expect(geminiBody.input[0].content[0].annotations).toEqual([{ type: 'speech_metadata', style: 'speaking rapidly' }])
+  })
+
+  it('uses the gemini-3.8-flash-lite-tts default for inline audio when tts.ttsModel is missing', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+    const wav = Buffer.alloc(48)
+    wav.write('RIFF', 0, 'ascii')
+    wav.write('WAVE', 8, 'ascii')
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
+      JSON.stringify({
+        steps: [{ type: 'model_output', content: [{ type: 'audio', data: wav.toString('base64'), mime_type: 'audio/wav' }] }],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko' },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.ttsAudioMime).toBe('audio/wav')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).model).toBe('gemini-3.8-flash-lite-tts')
+  })
+
+  it('retries inline audio with the other Gemini model and resolves an invalid tts.ttsModel to the default', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          steps: [{ type: 'model_output', content: [{ type: 'audio', data: testWavBase64(), mime_type: 'audio/wav' }] }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          steps: [{ type: 'model_output', content: [{ type: 'audio', data: testWavBase64(), mime_type: 'audio/wav' }] }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
+
+    const modelOf = (index: number) => JSON.parse(String((fetchMock.mock.calls[index][1] as RequestInit).body)).model
+    const retryRes = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'gemini-3.8-flash-tts' },
+    }) as never)
+    const retryJson = await retryRes.json()
+    expect(retryJson.ttsAudioMime).toBe('audio/wav')
+    expect(retryJson.ttsVoiceId).toBe('ko-kr-csagent-8')
+    expect(modelOf(0)).toBe('gemini-3.8-flash-tts')
+    expect(modelOf(1)).toBe('gemini-3.8-flash-lite-tts')
+
+    const invalidRes = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      tts: { enabled: true, language: 'ko', voiceId: 'KoVoice', ttsModel: 'bogus' },
+    }) as never)
+    const invalidJson = await invalidRes.json()
+    expect(invalidJson.ttsAudioMime).toBe('audio/wav')
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(modelOf(2)).toBe('gemini-3.8-flash-lite-tts')
+    expect(modelOf(3)).toBe('gemini-3.8-flash-tts')
   })
 
   it('uses previous-state fallback when provider returns empty response', async () => {
@@ -558,9 +701,16 @@ describe('/api/translate/finalize route', () => {
       },
     })
 
-    const fetchMock = vi.fn()
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          steps: [{ type: 'model_output', content: [{ type: 'audio', data: testWavBase64(), mime_type: 'audio/wav' }] }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithEnv()
+    process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-gemini-key'
 
     const res = await POST(makeJsonRequest({
       text: 'hello',
@@ -574,13 +724,18 @@ describe('/api/translate/finalize route', () => {
           ko: '이전 번역',
         },
       },
+      tts: {
+        enabled: true,
+        language: 'ko',
+      },
     }) as never)
     const json = await res.json()
 
     expect(res.status).toBe(200)
     expect(json.usedFallbackFromPreviousState).toBe(true)
     expect(json.translations).toEqual({ ko: '이전 번역' })
-    expect(json).not.toHaveProperty('ttsAudioBase64')
+    expect(typeof json.ttsAudioBase64).toBe('string')
+    expect(json.ttsAudioMime).toBe('audio/wav')
   })
 
   it('uses previous-state fallback for blank interim Gemini JSON without translation logs', async () => {

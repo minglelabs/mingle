@@ -14,31 +14,26 @@ type NativeTtsPlayOptions = {
   stopOnEarphoneDisconnect?: boolean;
 };
 
-/**
- * A clip whose audio arrives while it is generated: 16-bit little-endian mono
- * PCM at `sampleRate`. `pcmBase64` is the first piece; the rest follows through
- * `appendNativeTtsStream`, and `endNativeTtsStream` says no more will come.
- */
-type NativeTtsStreamStartOptions = {
-  playbackId: string;
-  utteranceId?: string;
-  sampleRate: number;
-  pcmBase64: string;
-  stopOnEarphoneDisconnect?: boolean;
-};
-
 export type NativeTtsPlayResult = {
   ok: boolean;
   reason?: string;
 };
 
+type NativeTtsStreamOptions = {
+  playbackId: string;
+  utteranceId?: string;
+  sampleRate: number;
+  stopOnEarphoneDisconnect?: boolean;
+};
+
 type NativeTtsModuleType = {
   play(options: NativeTtsPlayOptions): Promise<unknown>;
   stop(): Promise<{ ok: boolean }>;
-  /** Absent on native builds that only play whole clips. */
-  streamStart?(options: NativeTtsStreamStartOptions): Promise<unknown>;
-  streamAppend?(playbackId: string, pcmBase64: string): void;
-  streamEnd?(playbackId: string): void;
+  // Streamed playback (headerless 16-bit mono PCM handed over in pieces).
+  // Only shells that implement it have these methods.
+  playStream?(options: NativeTtsStreamOptions): Promise<unknown>;
+  appendStream?(playbackId: string, audioBase64: string): void;
+  endStream?(playbackId: string): void;
 };
 
 type NativeTtsEventMap = {
@@ -93,28 +88,31 @@ export async function playNativeTts(options: NativeTtsPlayOptions): Promise<Nati
   return normalizeNativeTtsPlayResult(await nativeModule.play(options));
 }
 
-/** True when this native build plays streamed clips (`native_tts_stream_*`). */
+/**
+ * True when this shell plays a clip that is still arriving
+ * (`native_tts_stream_*`), reported to the page as `ttsStream`.
+ */
 export function isNativeTtsStreamAvailable(): boolean {
   return isNativeTtsAvailable()
-    && typeof nativeModule?.streamStart === 'function'
-    && typeof nativeModule?.streamAppend === 'function'
-    && typeof nativeModule?.streamEnd === 'function';
+    && typeof nativeModule?.playStream === 'function'
+    && typeof nativeModule?.appendStream === 'function'
+    && typeof nativeModule?.endStream === 'function';
 }
 
-/** Resolves once the native player really started (or refused) the streamed clip. */
-export async function startNativeTtsStream(options: NativeTtsStreamStartOptions): Promise<NativeTtsPlayResult> {
-  if (!nativeModule?.streamStart) {
+/** Opens a streamed clip; resolves once the player is ready for audio (or refused it). */
+export async function startNativeTtsStream(options: NativeTtsStreamOptions): Promise<NativeTtsPlayResult> {
+  if (!nativeModule?.playStream) {
     throw new Error('NativeTTSModule streaming is unavailable on this runtime.');
   }
-  return normalizeNativeTtsPlayResult(await nativeModule.streamStart(options));
+  return normalizeNativeTtsPlayResult(await nativeModule.playStream(options));
 }
 
-export function appendNativeTtsStream(playbackId: string, pcmBase64: string): void {
-  nativeModule?.streamAppend?.(playbackId, pcmBase64);
+export function appendNativeTtsStream(playbackId: string, audioBase64: string): void {
+  nativeModule?.appendStream?.(playbackId, audioBase64);
 }
 
 export function endNativeTtsStream(playbackId: string): void {
-  nativeModule?.streamEnd?.(playbackId);
+  nativeModule?.endStream?.(playbackId);
 }
 
 export async function stopNativeTts(): Promise<void> {
@@ -170,6 +168,41 @@ export function resolveNativeTtsPlayRequest(payload: NativeTtsPlayCommandPayload
   };
 }
 
+export type NativeTtsStreamStartCommandPayload = {
+  utteranceId: string;
+  playbackId?: string;
+  sampleRate?: number;
+  stopOnEarphoneDisconnect?: boolean;
+};
+
+export type NativeTtsStreamStartRequest = {
+  utteranceId: string;
+  playbackId: string;
+  sampleRate: number;
+  stopOnEarphoneDisconnect: boolean;
+};
+
+const DEFAULT_TTS_STREAM_SAMPLE_RATE = 24000;
+
+/** The web's `native_tts_stream_start` payload, as handed to NativeTTSModule.playStream. */
+export function resolveNativeTtsStreamStartRequest(
+  payload: NativeTtsStreamStartCommandPayload,
+): NativeTtsStreamStartRequest {
+  const playbackId = typeof payload.playbackId === 'string' && payload.playbackId.trim()
+    ? payload.playbackId.trim()
+    : payload.utteranceId;
+  const sampleRate = typeof payload.sampleRate === 'number'
+    && Number.isFinite(payload.sampleRate) && payload.sampleRate >= 8000 && payload.sampleRate <= 48000
+    ? Math.round(payload.sampleRate)
+    : DEFAULT_TTS_STREAM_SAMPLE_RATE;
+  return {
+    utteranceId: payload.utteranceId,
+    playbackId,
+    sampleRate,
+    stopOnEarphoneDisconnect: payload.stopOnEarphoneDisconnect === true,
+  };
+}
+
 export type NativeTtsPlaybackIdentity = {
   utteranceId: string;
   playbackId: string;
@@ -218,41 +251,5 @@ export function buildNativeTtsStoppedEvent(
     utteranceId: identity.utteranceId || '',
     playbackId: identity.playbackId || '',
     ...(normalizedReason ? { reason: normalizedReason } : {}),
-  };
-}
-
-export type NativeTtsStreamStartCommandPayload = {
-  utteranceId: string;
-  playbackId?: string;
-  sampleRate?: number;
-  pcmBase64: string;
-  stopOnEarphoneDisconnect?: boolean;
-};
-
-export type NativeTtsStreamStartRequest = {
-  utteranceId: string;
-  playbackId: string;
-  sampleRate: number;
-  pcmBase64: string;
-  stopOnEarphoneDisconnect: boolean;
-};
-
-/** The web's `native_tts_stream_start` payload, as handed to NativeTTSModule.streamStart. */
-export function resolveNativeTtsStreamStartRequest(
-  payload: NativeTtsStreamStartCommandPayload,
-): NativeTtsStreamStartRequest {
-  const playbackId = typeof payload.playbackId === 'string' && payload.playbackId.trim()
-    ? payload.playbackId.trim()
-    : payload.utteranceId;
-  const sampleRate = typeof payload.sampleRate === 'number' && Number.isFinite(payload.sampleRate)
-    && payload.sampleRate >= 8000 && payload.sampleRate <= 48000
-    ? Math.round(payload.sampleRate)
-    : 24000;
-  return {
-    utteranceId: payload.utteranceId,
-    playbackId,
-    sampleRate,
-    pcmBase64: typeof payload.pcmBase64 === 'string' ? payload.pcmBase64 : '',
-    stopOnEarphoneDisconnect: payload.stopOnEarphoneDisconnect === true,
   };
 }

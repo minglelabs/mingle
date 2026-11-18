@@ -37,6 +37,8 @@ import {
 } from './live-phone-demo.bubble-tts-indicator'
 import {
   getEarphoneModePreferenceServerSnapshot,
+  EARPHONE_MODE_PREFETCH_LIMIT,
+  EARPHONE_MODE_STREAM_PREFETCH_LIMIT,
   getEarphoneModePreferenceSnapshot,
   keepManualTtsQueueItems,
   resolveEarphoneModeGate,
@@ -77,7 +79,6 @@ import {
   setDeviceAudioOptIn,
   setSttCaptureSourcePick,
   shouldPlayTtsViaNativeShell,
-  shouldStreamTtsToNativeShell,
   subscribeDeviceAudioOptIn,
   subscribeNativeDeviceAudioCapability,
   subscribeSttCaptureSourcePick,
@@ -95,24 +96,22 @@ import {
   writeEarphoneCaptureSourceAnswer,
   writeEarphoneMicrophonePick,
 } from '@/lib/native-earphone-microphone'
-import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
 import {
-  isTtsStreamClip,
-  isTtsStreamResponse,
-  readTtsStreamResponse,
+  NATIVE_TTS_STREAM_WATCHDOG_TIMEOUT_MS,
+  estimateTtsAudioDurationMs,
+  resolveNativeTtsWatchdogTimeoutMs,
+} from '@/lib/tts-audio-duration'
+import {
+  isStreamingTtsClip,
+  parseNativeTtsStreamCapability,
+  parseStreamedPcmSampleRate,
+  readStreamingTtsResponse,
+  resolveTtsClipBlob,
+  type StreamingTtsClip,
   type TtsClipAudio,
-  type TtsStreamClip,
-} from '@/lib/tts-stream-clip'
-import type { TtsStreamEnd } from '@/lib/tts-stream-format'
-import {
-  readTtsDeliveryMode,
-  ttsDeliverySplitsSentences,
-  ttsDeliveryStreams,
-  writeTtsDeliveryMode,
-  type TtsDeliveryMode,
-} from '@/lib/tts-delivery-mode'
+} from './tts-stream-clip'
 import { TtsAgentTextScheduler } from './tts-agent-text'
-import { applyCoinBalance, applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
+import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
 import CoinBalanceChip, { formatCoinCount } from '@/components/coins/coin-balance-chip'
 import HashSeedIcon from '@/components/coins/hash-seed-icon'
@@ -220,6 +219,7 @@ import {
   shouldRetryAccountPreferencesSync,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
+  resolveRequestTtsModel,
   type AccountPreferencesResponse,
   type AccountPreferencesCacheIdentity,
   type LivePhoneDemoAccountPreferences,
@@ -242,6 +242,11 @@ import {
   type TranslationModelBadge,
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
+import {
+  DEFAULT_SELECTABLE_TTS_MODEL,
+  TTS_MODEL_OPTIONS,
+  type UserSelectableTtsModel,
+} from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { requestNativeBannerZone } from '@/lib/native-banner-zone'
 import {
@@ -1550,6 +1555,7 @@ interface LivePhoneDemoProps {
   endpointTuningShortLabel: string
   endpointTuningLongLabel: string
   translationModelLabel: string
+  ttsModelLabel: string
   adBannerPositionLabel: string
   adBannerPositionTopLabel: string
   adBannerPositionBottomLabel: string
@@ -1632,32 +1638,6 @@ interface LivePhoneDemoProps {
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
-// Streamed clips: pieces smaller than this are joined before they cross the
-// bridge to the shell, and a clip whose length is not known yet is given this
-// long before the watchdog gives up on it.
-const NATIVE_TTS_STREAM_MIN_PIECE_SECONDS = 0.1
-const NATIVE_TTS_STREAM_OPEN_WATCHDOG_MS = 30_000
-
-// Experiment switch in the room menu; the labels are not translated.
-const TTS_DELIVERY_MODE_LABEL = 'TTS 방식 (실험)'
-const TTS_DELIVERY_MODE_OPTIONS: ReadonlyArray<{ value: TtsDeliveryMode, label: string }> = [
-  { value: 'sentence', label: '문장 단위' },
-  { value: 'stream', label: '스트리밍' },
-  { value: 'sentence_stream', label: '둘 다' },
-]
-
-function shouldRequestTtsStream(): boolean {
-  return ttsDeliveryStreams(readTtsDeliveryMode()) && shouldStreamTtsToNativeShell({
-    isNativeApp: isNativeApp(),
-    isIOS: isLikelyIOSPlatform(),
-    capabilities: readCachedNativeShellCapabilities(),
-  })
-}
-
-function applyCoinBalanceFromTtsStreamEnd(end: TtsStreamEnd) {
-  if (typeof end.coinBalance === 'number') applyCoinBalance(end.coinBalance)
-  if (end.coinExhausted) notifyCoinsExhausted()
-}
 const LIVE_UTTERANCE_PREVIEW_DEBOUNCE_MS = 250
 
 // Mirrors ChatBubble's own display-language resolution (same helpers, same
@@ -1712,7 +1692,7 @@ export function buildLatestUtterancePayload(
 type TtsQueueItem = {
   playbackKey: string
   utteranceId: string
-  // A complete clip, or one still arriving that plays as it arrives.
+  // A streaming clip is dispatched as soon as its first audio is in.
   audioBlob: TtsClipAudio | null
   language: string
   kind: 'original' | 'translation'
@@ -2082,6 +2062,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   endpointTuningShortLabel,
   endpointTuningLongLabel,
   translationModelLabel,
+  ttsModelLabel,
   adBannerPositionLabel,
   adBannerPositionTopLabel,
   adBannerPositionBottomLabel,
@@ -2398,13 +2379,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const menuContentScreen: LivePhoneDemoMenuScreen = menuScreen
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
+  const [ttsModelMenuOpen, setTtsModelMenuOpen] = useState(false)
   const [bubbleDisplayModeMenuOpen, setBubbleDisplayModeMenuOpen] = useState(false)
-  // Experiment switch (per device): sentence by sentence, streamed, or both.
-  const [ttsDeliveryMode, setTtsDeliveryMode] = useState<TtsDeliveryMode>(() => readTtsDeliveryMode())
-  const handleTtsDeliveryModeSelect = useCallback((mode: TtsDeliveryMode) => {
-    writeTtsDeliveryMode(mode)
-    setTtsDeliveryMode(mode)
-  }, [])
   const [textSizeLevel, setTextSizeLevel] = useState<number>(
     initialCachedAccountPreferences?.textSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
   )
@@ -2422,6 +2398,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(
     initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+  )
+  // null = never picked; the settings row shows the effective default instead.
+  const [ttsModel, setTtsModel] = useState<UserSelectableTtsModel | null>(
+    initialCachedAccountPreferences?.ttsModel ?? null,
   )
   const [bubbleDisplayMode, setBubbleDisplayMode] = useState<LivePhoneDemoBubbleDisplayMode>(
     initialCachedAccountPreferences?.bubbleDisplayMode ?? DEFAULT_BUBBLE_DISPLAY_MODE,
@@ -2669,9 +2649,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   ) => Promise<void>>(async () => {})
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
+  // The streamed clip now playing; its download is cancelled when it is cut.
+  const currentStreamClipRef = useRef<StreamingTtsClip | null>(null)
+  // Whether the last TTS answer was a stream (null: none yet). A server that
+  // answers with whole clips keeps the larger auto-read prefetch.
+  const lastTtsAnswerStreamedRef = useRef<boolean | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
-  // The clip being played, while its audio is still arriving.
-  const currentTtsStreamClipRef = useRef<TtsStreamClip | null>(null)
   // Soniox v6 agent text: what the playing TTS clip says, sent to STT timed to
   // playback so the echo of our own voice is dropped from the transcript.
   const sendAgentTextRef = useRef<((text: string, endOfSegment: boolean) => void) | null>(null)
@@ -2692,6 +2675,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const processTtsQueueRef = useRef<() => void>(() => {})
   const stopClickResumeTimerIdsRef = useRef<number[]>([])
   const manualTtsRequestSeqRef = useRef(0)
+  // A Listen request still waiting for its answer; a newer tap aborts it.
+  const manualTtsAbortRef = useRef<AbortController | null>(null)
   const accountPreferencesSyncTimerRef = useRef<number | null>(null)
   const accountPreferencesSyncRetryTimerRef = useRef<number | null>(null)
   const accountPreferencesSyncRetryAttemptRef = useRef(0)
@@ -2718,6 +2703,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizeButtonRef = useRef<HTMLButtonElement | null>(null)
   const translationModelDropdownRef = useRef<HTMLDivElement | null>(null)
   const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const ttsModelDropdownRef = useRef<HTMLDivElement | null>(null)
+  const ttsModelButtonRef = useRef<HTMLButtonElement | null>(null)
   const bubbleDisplayModeDropdownRef = useRef<HTMLDivElement | null>(null)
   const bubbleDisplayModeButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuHistoryDepthRef = useRef(readInitialMenuHistoryDepth().depth)
@@ -2756,9 +2743,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const [accountPreferencesSuccessfulHydrationGeneration, setAccountPreferencesSuccessfulHydrationGeneration] = useState(0)
   const [translationModelUserSelectedSinceHydrationStart, setTranslationModelUserSelectedSinceHydrationStart] = useState(false)
+  const [ttsModelUserSelectedSinceHydrationStart, setTtsModelUserSelectedSinceHydrationStart] = useState(false)
   const initialAccountHydrationWithoutCacheRef = useRef(false)
   const accountPreferencesHydratedFromServerRef = useRef(false)
   const translationModelUserSelectedSinceHydrationStartRef = useRef(false)
+  const ttsModelUserSelectedSinceHydrationStartRef = useRef(false)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const accountPreferencesPendingSyncRef = useRef(
     initialCachedAccountPreferencesSnapshot?.pendingSync === true,
@@ -2766,6 +2755,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const silenceFinalizeLockedDescriptionId = useId()
   const textSizeListboxId = useId()
   const translationModelListboxId = useId()
+  const ttsModelListboxId = useId()
   const bubbleDisplayModeListboxId = useId()
   const legacyNativeBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeBannerPosition')
   const nativeConversationBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeConversationBannerPosition')
@@ -2792,6 +2782,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       initialCachedAccountPreferences?.sonioxEndpointTuningStep ?? DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
     translationModel:
       initialCachedAccountPreferences?.translationModel ?? DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+    ttsModel: initialCachedAccountPreferences?.ttsModel ?? null,
     adBannerPosition: initialCachedAccountPreferences?.adBannerPosition ?? null,
     inputMode: initialCachedAccountPreferences?.inputMode ?? DEFAULT_INPUT_MODE,
     speakerEnabled: initialCachedAccountPreferences?.speakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
@@ -2807,13 +2798,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sonioxEndpointMaxDelayMs,
     sonioxEndpointTuningStep,
     translationModel,
+    ttsModel,
     adBannerPosition,
     inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
     bubbleDisplayMode,
     sttSegmentationMode,
-  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel])
+  }), [adBannerPosition, aecEnabled, bubbleDisplayMode, isComposerOpen, isSoundEnabled, sonioxEndpointMaxDelayMs, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode, textSizeLevel, translationModel, ttsModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -2825,6 +2817,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
+  )
+  // What the server will actually use: the explicit choice, else the default.
+  const effectiveTtsModel: UserSelectableTtsModel = ttsModel ?? DEFAULT_SELECTABLE_TTS_MODEL
+  const selectedTtsModelOption = useMemo(
+    () => TTS_MODEL_OPTIONS.find((option) => option.value === effectiveTtsModel) || TTS_MODEL_OPTIONS[0],
+    [effectiveTtsModel],
   )
   const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
     return shouldSendTranslationModelPreference({
@@ -2839,6 +2837,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableAccountPreferencesSync,
     translationModel,
     translationModelUserSelectedSinceHydrationStart,
+  ])
+  // Sent on every TTS request (no DB lookup on the TTS path) once the user picked
+  // a model. Undefined -> server default (soniox-tts-rt-v2).
+  const requestTtsModel = useMemo<UserSelectableTtsModel | undefined>(() => {
+    return resolveRequestTtsModel(ttsModel, {
+      allowSync: enableAccountPreferencesSync,
+      requestedHydrationGeneration: accountPreferencesRequestedHydrationGeneration,
+      successfulHydrationGeneration: accountPreferencesSuccessfulHydrationGeneration,
+      userSelectedSinceHydrationStart: ttsModelUserSelectedSinceHydrationStart,
+    })
+  }, [
+    accountPreferencesRequestedHydrationGeneration,
+    accountPreferencesSuccessfulHydrationGeneration,
+    enableAccountPreferencesSync,
+    ttsModel,
+    ttsModelUserSelectedSinceHydrationStart,
   ])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root' || isAttachmentMenuOpen
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
@@ -2875,6 +2889,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setSonioxEndpointMaxDelayMs(preferences.sonioxEndpointMaxDelayMs)
     setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
     setTranslationModel(preferences.translationModel)
+    setTtsModel(preferences.ttsModel ?? null)
     setBubbleDisplayMode(preferences.bubbleDisplayMode)
     setAdBannerPosition(preferences.adBannerPosition)
   }, [])
@@ -3381,10 +3396,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       initialAccountHydrationWithoutCacheRef.current = false
       accountPreferencesHydratedFromServerRef.current = false
       translationModelUserSelectedSinceHydrationStartRef.current = false
+      ttsModelUserSelectedSinceHydrationStartRef.current = false
       accountPreferencesLastSyncedStateKeyRef.current = null
       setAccountPreferencesRequestedHydrationGeneration(0)
       setAccountPreferencesSuccessfulHydrationGeneration(0)
       setTranslationModelUserSelectedSinceHydrationStart(false)
+      setTtsModelUserSelectedSinceHydrationStart(false)
       return () => {
         cancelled = true
       }
@@ -3399,8 +3416,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     initialAccountHydrationWithoutCacheRef.current = hydrationStartedSavedAt === null
     accountPreferencesHydratedFromServerRef.current = false
     translationModelUserSelectedSinceHydrationStartRef.current = false
+    ttsModelUserSelectedSinceHydrationStartRef.current = false
     setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
     setTranslationModelUserSelectedSinceHydrationStart(false)
+    setTtsModelUserSelectedSinceHydrationStart(false)
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
@@ -3431,6 +3450,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           startedSavedAt: hydrationStartedSavedAt,
           isLegacyNamespace: isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
           preserveLocalTranslationModel: translationModelUserSelectedSinceHydrationStartRef.current,
+          preserveLocalTtsModel: ttsModelUserSelectedSinceHydrationStartRef.current,
         })
         accountPreferencesPendingSyncRef.current = snapshot.pendingSync
         accountPreferencesLastSyncedStateKeyRef.current = snapshot.pendingSync
@@ -3523,6 +3543,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             includeTranslationModel: !initialAccountHydrationWithoutCacheRef.current
               || accountPreferencesHydratedFromServerRef.current
               || translationModelUserSelectedSinceHydrationStartRef.current,
+            includeTtsModel: !initialAccountHydrationWithoutCacheRef.current
+              || accountPreferencesHydratedFromServerRef.current
+              || ttsModelUserSelectedSinceHydrationStartRef.current,
           })),
         })
         if (!response.ok) throw new Error(`account_preferences_patch_failed:${response.status}`)
@@ -3718,6 +3741,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     menuHistoryDepthRef.current = boundedDepth
     setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
+    setTtsModelMenuOpen(false)
     setBubbleDisplayModeMenuOpen(false)
     setMenuScreenTransitionMode(nextScreenTransitionMode)
     setMenuScreenDirection(nextDirection)
@@ -3879,6 +3903,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return false
     }
 
+    if (ttsModelMenuOpen) {
+      setTtsModelMenuOpen(false)
+      return false
+    }
+
     if (bubbleDisplayModeMenuOpen) {
       setBubbleDisplayModeMenuOpen(false)
       return false
@@ -3899,7 +3928,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
 
     return true
-  }, [bubbleDisplayModeMenuOpen, closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+  }, [bubbleDisplayModeMenuOpen, closeLanguageSelector, closeMenuPanel, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, langSelectorOpen, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen, ttsModelMenuOpen])
 
   const requestCloseTopmostOverlay = useCallback(() => (
     !handleMenuSurfaceRequestClose()
@@ -4069,6 +4098,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     syncAccountPreferencesOverride(nextPreferences)
   }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
+  // Mirrors handleTranslationModelSelect. Called by the TTS model row in the settings menu.
+  // Any tap is an explicit choice, including the option shown as the default:
+  // null -> value counts as a change, so it is cached with pendingSync and PATCHed.
+  const handleTtsModelSelect = useCallback((nextTtsModel: UserSelectableTtsModel) => {
+    setTtsModelMenuOpen(false)
+    setTtsModelUserSelectedSinceHydrationStart(true)
+    ttsModelUserSelectedSinceHydrationStartRef.current = true
+    const wasAlreadySelected = latestAccountPreferencesRef.current.ttsModel === nextTtsModel
+    const nextPreferences = commitLocalAccountPreferences({
+      ...latestAccountPreferencesRef.current,
+      ttsModel: nextTtsModel,
+    })
+    if (wasAlreadySelected && initialAccountHydrationWithoutCacheRef.current && !accountPreferencesHydratedFromServerRef.current) {
+      writeCachedAccountPreferences(accountPreferencesCacheIdentity, nextPreferences, { pendingSync: true })
+      accountPreferencesPendingSyncRef.current = true
+    }
+    setTtsModel(nextTtsModel)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride(nextPreferences)
+  }, [accountPreferencesCacheIdentity, clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
   const handleBubbleDisplayModeSelect = useCallback((nextBubbleDisplayMode: LivePhoneDemoBubbleDisplayMode) => {
     setBubbleDisplayModeMenuOpen(false)
@@ -4352,6 +4401,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
         return
       }
+      if (ttsModelMenuOpen) {
+        setTtsModelMenuOpen(false)
+        try {
+          ttsModelButtonRef.current?.focus({ preventScroll: true })
+        } catch {
+          ttsModelButtonRef.current?.focus()
+        }
+        return
+      }
       if (bubbleDisplayModeMenuOpen) {
         setBubbleDisplayModeMenuOpen(false)
         try {
@@ -4368,7 +4426,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [bubbleDisplayModeButtonRef, bubbleDisplayModeMenuOpen, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+  }, [bubbleDisplayModeButtonRef, bubbleDisplayModeMenuOpen, conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen, ttsModelMenuOpen])
 
   useEffect(() => {
     if (!textSizeMenuOpen) return
@@ -4408,6 +4466,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('pointerdown', handlePointerDown)
     }
   }, [translationModelMenuOpen])
+
+  useEffect(() => {
+    if (!ttsModelMenuOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return
+      if (ttsModelDropdownRef.current?.contains(event.target)) return
+      setTtsModelMenuOpen(false)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [ttsModelMenuOpen])
 
   useEffect(() => {
     if (!bubbleDisplayModeMenuOpen) return
@@ -4495,6 +4568,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return true
     }
 
+    if (ttsModelMenuOpen) {
+      setTtsModelMenuOpen(false)
+      return true
+    }
+
     if (bubbleDisplayModeMenuOpen) {
       setBubbleDisplayModeMenuOpen(false)
       return true
@@ -4534,6 +4612,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     requestMenuBackStep,
     textSizeMenuOpen,
     translationModelMenuOpen,
+    ttsModelMenuOpen,
     bubbleDisplayModeMenuOpen,
   ])
 
@@ -4625,9 +4704,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // closed, so this only reports how far an interrupted clip got.
     ttsAgentText.interrupt()
     ttsAgentTextClipRef.current = null
-    // A clip still arriving stops loading (and stops feeding the shell).
-    currentTtsStreamClipRef.current?.cancel()
-    currentTtsStreamClipRef.current = null
+    // A cut stream stops downloading, so the server stops synthesizing it.
+    currentStreamClipRef.current?.cancel()
+    currentStreamClipRef.current = null
     const player = playerAudioRef.current
     if (player) {
       player.pause()
@@ -4753,7 +4832,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // Front item has audio — play it
     clearTtsWaitTimer()
     const next = queue.shift()!
-    const audioBlob = next.audioBlob!
+    const clipAudio = next.audioBlob!
     isTtsProcessingRef.current = true
     cleanupCurrentAudio()
     currentTtsClipSeqRef.current += 1
@@ -4783,8 +4862,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const onPlaybackDone = () => {
       if (!isCurrentClip()) return
-      currentTtsStreamClipRef.current?.cancel()
-      currentTtsStreamClipRef.current = null
       clearNativeTtsEventTimer()
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
@@ -4794,79 +4871,49 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       processTtsQueueRef.current()
     }
 
-    // A clip that is still arriving goes to the shell piece by piece: the
-    // first piece starts it, the rest follows as it arrives.
-    const playStreamViaNativeBridge = (clip: TtsStreamClip) => {
+    // Shells with `ttsStream` play the pieces of a clip that is still
+    // arriving; the sentence starts before the clip is complete.
+    const playStreamViaNativeBridge = (clip: StreamingTtsClip) => {
       const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
+      currentStreamClipRef.current = clip
       const post = (type: string, payload: Record<string, unknown>) => {
         window.ReactNativeWebView!.postMessage(JSON.stringify({ type, payload }))
       }
-      // Until the clip has ended its length is unknown: allow a long clip,
-      // then tighten once the length is known.
-      const armWatchdog = () => {
-        armNativeTtsEventTimeout(playbackId, next.playbackKey, resolveNativeTtsWatchdogTimeoutMs({
-          durationMs: clip.isEnded ? clip.durationMs : NATIVE_TTS_STREAM_OPEN_WATCHDOG_MS,
-          byteLength: clip.byteLength,
-        }))
-      }
       if (agentTextClip) {
-        // `tts_started` from the shell starts the agent text (see the listener).
-        agentTextClip.durationMs = clip.isEnded ? clip.durationMs : 0
+        // The length is only known at the end; 0 lets agent text pace itself.
+        agentTextClip.durationMs = clip.isComplete ? clip.durationMs : 0
         ttsAgentTextClipRef.current = agentTextClip
       }
-      currentTtsStreamClipRef.current = clip
-      let started = false
-      // Small pieces are joined so the bridge carries fewer messages.
-      let pending: Uint8Array[] = []
-      let pendingBytes = 0
-      const flush = () => {
-        if (pendingBytes === 0) return
-        const joined = new Uint8Array(pendingBytes)
-        let offset = 0
-        for (const piece of pending) {
-          joined.set(piece, offset)
-          offset += piece.byteLength
-        }
-        pending = []
-        pendingBytes = 0
-        const pcmBase64 = bytesToBase64(joined)
-        if (!started) {
-          started = true
-          post('native_tts_stream_start', {
-            playbackId,
-            utteranceId: next.playbackKey,
-            sampleRate: clip.sampleRate,
-            pcmBase64,
-            ...(next.mode === 'auto' && !isSpeakerModeClient() ? { stopOnEarphoneDisconnect: true } : {}),
-          })
-        } else {
-          post('native_tts_stream_chunk', { playbackId, pcmBase64 })
-        }
-      }
-      const minBytes = Math.round(clip.sampleRate * 2 * NATIVE_TTS_STREAM_MIN_PIECE_SECONDS)
-      clip.consume({
-        onPcm: (pcm) => {
-          if (!isCurrentClip()) return
-          pending.push(pcm)
-          pendingBytes += pcm.byteLength
-          if (pendingBytes >= minBytes) flush()
+      post('native_tts_stream_start', {
+        playbackId,
+        utteranceId: next.playbackKey,
+        sampleRate: clip.sampleRate,
+        ...(next.mode === 'auto' && !isSpeakerModeClient() ? { stopOnEarphoneDisconnect: true } : {}),
+      })
+      armNativeTtsEventTimeout(playbackId, next.playbackKey, NATIVE_TTS_STREAM_WATCHDOG_TIMEOUT_MS)
+      // `subscribe` replays the pieces already in before it returns.
+      let unsubscribe = () => {}
+      unsubscribe = clip.subscribe({
+        onChunk: (chunk) => {
+          if (!isCurrentClip()) {
+            unsubscribe()
+            clip.cancel()
+            return
+          }
+          post('native_tts_stream_chunk', { playbackId, audioBase64: bytesToBase64(chunk) })
         },
         onEnd: () => {
           if (!isCurrentClip()) return
-          flush()
-          if (!started) {
-            onPlaybackDone()
-            return
-          }
           post('native_tts_stream_end', { playbackId })
-          armWatchdog()
+          // Now the length is known: the usual watchdog for a clip this long.
+          if (activeNativeTtsPlaybackIdRef.current === playbackId) {
+            armNativeTtsEventTimeout(playbackId, next.playbackKey, resolveNativeTtsWatchdogTimeoutMs({
+              durationMs: clip.durationMs,
+              byteLength: clip.size,
+            }))
+          }
         },
       })
-      if (!isCurrentClip()) return
-      // What had already arrived is sent at once, whatever its size.
-      flush()
-      if (!clip.isEnded) armWatchdog()
-      // Shells that report audio routes also report `tts_started`.
       if (shouldTreatNativeTtsPostAsStart(isNativeAudioRouteSupported(getNativeAudioRouteSnapshot()))) {
         markPlaybackStarted()
       }
@@ -4874,10 +4921,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const playViaNativeBridge = async () => {
       try {
-        if (isTtsStreamClip(audioBlob)) {
-          playStreamViaNativeBridge(audioBlob)
+        if (isStreamingTtsClip(clipAudio) && parseNativeTtsStreamCapability(readCachedNativeShellCapabilities())) {
+          playStreamViaNativeBridge(clipAudio)
           return
         }
+        const audioBlob = await resolveTtsClipBlob(clipAudio)
+        if (!isCurrentClip()) return
         const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
         const audioBytes = new Uint8Array(await audioBlob.arrayBuffer())
         const contentType = audioBlob.type || 'audio/mpeg'
@@ -4937,21 +4986,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
       }
 
-      // The page's own player needs the clip whole.
-      let wholeClip: Blob | null
-      if (isTtsStreamClip(audioBlob)) {
-        currentTtsStreamClipRef.current = audioBlob
-        wholeClip = await audioBlob.toWavBlob()
-        if (!isCurrentClip()) return
-        currentTtsStreamClipRef.current = null
-      } else {
-        wholeClip = audioBlob
-      }
-      if (!wholeClip) {
-        onPlaybackDone()
-        return
-      }
-      const objectUrl = URL.createObjectURL(wholeClip)
+      const audioBlob = await resolveTtsClipBlob(clipAudio)
+      if (!isCurrentClip()) return
+      const objectUrl = URL.createObjectURL(audioBlob)
       currentAudioUrlRef.current = objectUrl
       audio.src = objectUrl
 
@@ -5136,6 +5173,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
+    const wantsStream = isNativeApp() && parseNativeTtsStreamCapability(readCachedNativeShellCapabilities())
 
     try {
       const response = await fetch(TTS_API_PATH, {
@@ -5154,17 +5192,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           language,
           sessionKey,
           clientMessageId: input.playbackKey,
-          // A shell that plays audio as it arrives gets it as it is generated.
-          ...(shouldRequestTtsStream() ? { stream: true } : {}),
+          // Same model as auto TTS; omitted while the user has not picked one (server default).
+          ...(requestTtsModel ? { ttsModel: requestTtsModel } : {}),
+          // Only shells that play a clip while it is still arriving ask for a stream.
+          ...(wantsStream ? { stream: true } : {}),
         }),
       })
       if (response.status === 402) notifyCoinsExhausted({ userInitiated: true })
       if (!response.ok) return null
-      if (isTtsStreamResponse(response)) {
-        // Resolves at the first audio; the balance comes in the end frame.
-        return await readTtsStreamResponse(response, { onEnd: applyCoinBalanceFromTtsStreamEnd })
-      }
       applyCoinBalanceFromHeaders(response.headers)
+      // Streamed PCM: usable from its first audio. A server that answers with a
+      // whole clip anyway (streaming switched off) falls through to the blob.
+      const streamedSampleRate = wantsStream ? parseStreamedPcmSampleRate(response.headers.get('content-type')) : null
+      if (wantsStream) lastTtsAnswerStreamedRef.current = streamedSampleRate !== null
+      if (streamedSampleRate !== null && response.body) {
+        return await readStreamingTtsResponse(response.body, streamedSampleRate)
+      }
       const arrayBuffer = await response.arrayBuffer()
       if (!arrayBuffer || arrayBuffer.byteLength === 0) return null
       return new Blob([arrayBuffer], {
@@ -5173,7 +5216,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       return null
     }
-  }, [nativeAppUpdate, resolveConversationSessionKey])
+  }, [nativeAppUpdate, requestTtsModel, resolveConversationSessionKey])
 
   const {
     utterances,
@@ -5233,6 +5276,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sessionKeyOverride,
     storageNamespace,
     translationModel: requestTranslationModel,
+    ttsModel: requestTtsModel,
     viewerUserId,
     viewerImage,
   })
@@ -6110,14 +6154,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       void primeAudioPlayback()
     }
 
+    manualTtsAbortRef.current?.abort()
+    const manualAbort = new AbortController()
+    manualTtsAbortRef.current = manualAbort
     const audioBlob = await synthesizeBubbleTtsViaApi({
       playbackKey: target.playbackKey,
       text: normalizedText,
       language: target.language,
+      signal: manualAbort.signal,
     })
+    if (manualTtsAbortRef.current === manualAbort) manualTtsAbortRef.current = null
     if (manualTtsRequestSeqRef.current !== requestSeq) {
-      // Superseded while it loaded: a clip still arriving stops loading.
-      if (isTtsStreamClip(audioBlob)) audioBlob.cancel()
+      // A newer tap won: stop downloading this one.
+      if (isStreamingTtsClip(audioBlob)) audioBlob.cancel()
       return
     }
 
@@ -7855,7 +7904,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       now: () => Date.now(),
       setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
       clearTimer: (handle) => window.clearTimeout(handle as number),
-      splitSentences: () => ttsDeliverySplitsSentences(readTtsDeliveryMode()),
+      // Streamed clips (native stream player): one ahead, so a listener
+      // holds at most two Soniox requests.
+      prefetchLimit: () => (
+        isNativeApp()
+          && parseNativeTtsStreamCapability(readCachedNativeShellCapabilities())
+          && lastTtsAnswerStreamedRef.current !== false
+          ? EARPHONE_MODE_STREAM_PREFETCH_LIMIT
+          : EARPHONE_MODE_PREFETCH_LIMIT
+      ),
       synthesize: (target, signal) => synthesizeBubbleTtsViaApiRef.current({
         playbackKey: target.playbackKey,
         text: target.text,
@@ -9077,6 +9134,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     type="button"
                                     onClick={() => {
                                       setTranslationModelMenuOpen(false)
+                                      setTtsModelMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen(false)
                                       setTextSizeMenuOpen((open) => !open)
                                     }}
@@ -9238,6 +9296,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     onClick={() => {
                                       setTextSizeMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen(false)
+                                      setTtsModelMenuOpen(false)
                                       setTranslationModelMenuOpen((open) => !open)
                                     }}
                                     aria-label={translationModelLabel}
@@ -9336,6 +9395,110 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
+                                <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{ttsModelLabel}</span>
+                                <div ref={ttsModelDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
+                                  <button
+                                    ref={ttsModelButtonRef}
+                                    type="button"
+                                    onClick={() => {
+                                      setTextSizeMenuOpen(false)
+                                      setTranslationModelMenuOpen(false)
+                                      setBubbleDisplayModeMenuOpen(false)
+                                      setTtsModelMenuOpen((open) => !open)
+                                    }}
+                                    aria-label={ttsModelLabel}
+                                    aria-haspopup="listbox"
+                                    aria-expanded={ttsModelMenuOpen}
+                                    aria-controls={ttsModelListboxId}
+                                    className="group relative flex h-full w-full items-center overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                                  >
+                                    <div className="min-w-0 flex-1 text-center">
+                                      <div className="truncate text-[0.95rem] font-semibold text-gray-900">
+                                        {selectedTtsModelOption.label}
+                                      </div>
+                                    </div>
+                                    <span
+                                      className={`ml-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
+                                        ttsModelMenuOpen
+                                          ? 'bg-transparent text-amber-700'
+                                          : 'bg-transparent text-gray-500 group-hover:text-amber-600'
+                                      }`}
+                                    >
+                                      <ChevronDown
+                                        size={16}
+                                        strokeWidth={2.3}
+                                        className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                          ttsModelMenuOpen ? 'rotate-180' : 'rotate-0'
+                                        }`}
+                                      />
+                                    </span>
+                                  </button>
+                                  <AnimatePresence initial={false}>
+                                    {ttsModelMenuOpen && (
+                                      <motion.div
+                                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: -6, scale: 0.985 }}
+                                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                        className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[272px] max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
+                                      >
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: 'auto' }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                          className="overflow-hidden"
+                                        >
+                                          <div
+                                            id={ttsModelListboxId}
+                                            role="listbox"
+                                            aria-label={ttsModelLabel}
+                                            className="space-y-1.5 p-2.5"
+                                          >
+                                            {TTS_MODEL_OPTIONS.map((option) => {
+                                              const isSelected = option.value === effectiveTtsModel
+
+                                              return (
+                                                <button
+                                                  key={option.value}
+                                                  type="button"
+                                                  role="option"
+                                                  aria-selected={isSelected}
+                                                  onClick={() => handleTtsModelSelect(option.value)}
+                                                  className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+                                                    isSelected
+                                                      ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
+                                                      : 'bg-white text-gray-800 hover:bg-gray-50'
+                                                  }`}
+                                                >
+                                                  <div className="min-w-0 flex flex-1 items-center justify-center gap-2.5 text-center">
+                                                    <span className="truncate text-[0.94rem] font-semibold">
+                                                      {option.label}
+                                                    </span>
+                                                  </div>
+                                                  <span
+                                                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                                                      isSelected
+                                                        ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
+                                                        : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
+                                                    }`}
+                                                  >
+                                                    <Check size={14} strokeWidth={2.6} />
+                                                  </span>
+                                                </button>
+                                              )
+                                            })}
+                                          </div>
+                                        </motion.div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="block">
+                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
                                 <span className="min-w-0 flex-1 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{bubbleDisplayCopy.displayModeLabel}</span>
                                 <div ref={bubbleDisplayModeDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
                                   <button
@@ -9345,6 +9508,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     onClick={() => {
                                       setTextSizeMenuOpen(false)
                                       setTranslationModelMenuOpen(false)
+                                      setTtsModelMenuOpen(false)
                                       setBubbleDisplayModeMenuOpen((open) => !open)
                                     }}
                                     aria-label={bubbleDisplayCopy.displayModeLabel}
@@ -9471,34 +9635,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </div>
                               </div>
                             )}
-
-                            <div className="block">
-                              <div className="mb-2 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
-                                <span className="shrink-0 whitespace-nowrap pl-1 text-[0.98rem] font-medium text-gray-900">{TTS_DELIVERY_MODE_LABEL}</span>
-                              </div>
-                              <div className="grid grid-cols-3 gap-2">
-                                {TTS_DELIVERY_MODE_OPTIONS.map((option) => {
-                                  const isSelected = ttsDeliveryMode === option.value
-
-                                  return (
-                                    <button
-                                      key={option.value}
-                                      data-qa={`live-demo-tts-delivery-${option.value}`}
-                                      type="button"
-                                      aria-pressed={isSelected}
-                                      onClick={() => handleTtsDeliveryModeSelect(option.value)}
-                                      className={`flex h-11 items-center justify-center rounded-2xl border text-[0.92rem] font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${
-                                        isSelected
-                                          ? 'border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
-                                          : 'border-[#E5E7EB] bg-white text-gray-700 hover:border-[#D1D5DB] hover:bg-gray-50'
-                                      }`}
-                                    >
-                                      {option.label}
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            </div>
 
                           </div>
                         </div>

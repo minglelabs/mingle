@@ -15,6 +15,8 @@ import {
   shouldRetryAccountPreferencesSync,
   shouldScheduleAccountPreferencesSync,
   shouldSendTranslationModelPreference,
+  shouldSendTtsModelPreference,
+  resolveRequestTtsModel,
   type LivePhoneDemoAccountPreferences,
 } from './live-phone-demo.account-preferences'
 
@@ -37,6 +39,7 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxEndpointMaxDelayMs: 1800,
       sonioxEndpointTuningStep: 4,
       translationModel: 'gpt-6-luna',
+      ttsModel: null,
       adBannerPosition: 'bottom',
       inputMode: 'text',
       speakerEnabled: true,
@@ -63,6 +66,7 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxEndpointMaxDelayMs: DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
       sonioxEndpointTuningStep: DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
       translationModel: 'gpt-6-luna',
+      ttsModel: null,
       adBannerPosition: 'bottom',
       inputMode: 'voice',
       speakerEnabled: false,
@@ -86,6 +90,7 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxEndpointMaxDelayMs: 1400,
       sonioxEndpointTuningStep: 1,
       translationModel: 'gpt-6-luna',
+      ttsModel: null,
       adBannerPosition: 'top',
       inputMode: 'voice',
       speakerEnabled: false,
@@ -95,11 +100,19 @@ describe('buildHydratedAccountPreferences', () => {
     })
   })
 
-  it('drops a TTS model stored by an older build: there is no choice any more', () => {
-    expect(buildHydratedAccountPreferences({ ttsModel: 'inworld-tts-1.5-mini' } as never, false)).not.toHaveProperty('ttsModel')
-    expect(buildAccountPreferencesPatchBody(
-      buildHydratedAccountPreferences({ ttsModel: 'gemini-3.8-flash-tts' } as never, false),
-    )).not.toHaveProperty('ttsModel')
+  it('hydrates a stored TTS model and keeps null (no default fallback) for missing or invalid values', () => {
+    expect(buildHydratedAccountPreferences({ ttsModel: 'gemini-3.8-flash-lite-tts' }, false).ttsModel)
+      .toBe('gemini-3.8-flash-lite-tts')
+    // The removed Inworld model hydrates as "no choice", which follows the server default.
+    expect(buildHydratedAccountPreferences({ ttsModel: 'inworld-tts-1.5-mini' }, false).ttsModel).toBeNull()
+    expect(buildHydratedAccountPreferences({ ttsModel: ' GEMINI-3.8-FLASH-TTS ' }, true).ttsModel)
+      .toBe('gemini-3.8-flash-tts')
+    expect(buildHydratedAccountPreferences({ ttsModel: null }, false).ttsModel).toBeNull()
+    expect(buildHydratedAccountPreferences({ ttsModel: 'gemini' }, false).ttsModel).toBeNull()
+    expect(buildHydratedAccountPreferences({ ttsModel: 3 }, false).ttsModel).toBeNull()
+    // Cache records written before ttsModel existed.
+    expect(buildHydratedAccountPreferences({ translationModel: 'gpt-6-luna' }, false).ttsModel)
+      .toBeNull()
   })
 
   it('normalizes a stored STT segmentation mode during hydration', () => {
@@ -270,6 +283,57 @@ describe('shouldApplyAccountPreferencesHydration', () => {
   })
 })
 
+describe('resolveRequestTtsModel', () => {
+  const hydrated = {
+    allowSync: true,
+    requestedHydrationGeneration: 1,
+    successfulHydrationGeneration: 1,
+    userSelectedSinceHydrationStart: false,
+  }
+
+  it('omits a never-picked (null) model from TTS requests so the server default applies', () => {
+    expect(resolveRequestTtsModel(null, hydrated)).toBeUndefined()
+    expect(resolveRequestTtsModel(undefined, hydrated)).toBeUndefined()
+    expect(resolveRequestTtsModel(null, { ...hydrated, allowSync: false })).toBeUndefined()
+    expect(resolveRequestTtsModel(null, { ...hydrated, userSelectedSinceHydrationStart: true })).toBeUndefined()
+  })
+
+  it('sends an explicit choice under the shouldSendTtsModelPreference gating', () => {
+    expect(resolveRequestTtsModel('gemini-3.8-flash-lite-tts', hydrated)).toBe('gemini-3.8-flash-lite-tts')
+    expect(resolveRequestTtsModel('gemini-3.8-flash-tts', { ...hydrated, successfulHydrationGeneration: 0 }))
+      .toBeUndefined()
+    expect(resolveRequestTtsModel('gemini-3.8-flash-tts', {
+      ...hydrated,
+      successfulHydrationGeneration: 0,
+      userSelectedSinceHydrationStart: true,
+    })).toBe('gemini-3.8-flash-tts')
+  })
+})
+
+describe('shouldSendTtsModelPreference', () => {
+  it('follows the translation model send rule', () => {
+    const base = {
+      allowSync: true,
+      requestedHydrationGeneration: 1,
+      successfulHydrationGeneration: 0,
+      userSelectedSinceHydrationStart: false,
+    }
+    expect(shouldSendTtsModelPreference(base)).toBe(false)
+    expect(shouldSendTtsModelPreference({ ...base, successfulHydrationGeneration: 1 })).toBe(true)
+    expect(shouldSendTtsModelPreference({ ...base, userSelectedSinceHydrationStart: true })).toBe(true)
+    expect(shouldSendTtsModelPreference({ ...base, allowSync: false })).toBe(true)
+  })
+})
+
+describe('serializeAccountPreferencesSyncState', () => {
+  it('changes when only the TTS model changes', () => {
+    const preferences = buildHydratedAccountPreferences({}, false)
+    expect(serializeAccountPreferencesSyncState(preferences)).not.toBe(
+      serializeAccountPreferencesSyncState({ ...preferences, ttsModel: 'gemini-3.8-flash-tts' }),
+    )
+  })
+})
+
 describe('shouldSendTranslationModelPreference', () => {
   it('does not send the local default before server preferences hydrate', () => {
     expect(shouldSendTranslationModelPreference({
@@ -323,6 +387,33 @@ describe('buildAccountPreferencesPatchBody', () => {
     const body = buildAccountPreferencesPatchBody(preferences, { includeTranslationModel: false })
     expect(body).not.toHaveProperty('translationModel')
     expect(body.textSizeLevel).toBe(preferences.textSizeLevel)
+  })
+
+  it('omits a null ttsModel after a speaker or text-size change even when TTS models are included', () => {
+    const preferences = buildHydratedAccountPreferences({ ttsModel: null }, false)
+    expect(preferences.ttsModel).toBeNull()
+    for (const edited of [
+      { ...preferences, speakerEnabled: !preferences.speakerEnabled },
+      { ...preferences, textSizeLevel: 5 },
+    ]) {
+      expect(buildAccountPreferencesPatchBody(edited, { includeTtsModel: true })).not.toHaveProperty('ttsModel')
+    }
+  })
+
+  it('includes ttsModel after an explicit selection', () => {
+    const preferences = buildHydratedAccountPreferences({ ttsModel: null }, false)
+    const selected = { ...preferences, ttsModel: 'gemini-3.8-flash-tts' as const, speakerEnabled: true }
+    const body = buildAccountPreferencesPatchBody(selected, { includeTtsModel: true })
+    expect(body.ttsModel).toBe('gemini-3.8-flash-tts')
+    expect(body.speakerEnabled).toBe(true)
+  })
+
+  it('sends ttsModel only when explicitly included (Legacy passes no options)', () => {
+    const preferences = buildHydratedAccountPreferences({ ttsModel: 'gemini-3.8-flash-tts' }, false)
+    expect(buildAccountPreferencesPatchBody(preferences)).not.toHaveProperty('ttsModel')
+    expect(buildAccountPreferencesPatchBody(preferences, { includeTtsModel: false })).not.toHaveProperty('ttsModel')
+    expect(buildAccountPreferencesPatchBody(preferences, { includeTtsModel: true }).ttsModel)
+      .toBe('gemini-3.8-flash-tts')
   })
 
   it('includes audio flags alongside the rest of the persisted preferences', () => {

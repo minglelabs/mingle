@@ -838,23 +838,22 @@ type NativeTtsCommand =
       };
     }
   | {
-      // A clip whose PCM arrives in pieces; `pcmBase64` is the first piece.
+      // A clip that is still arriving: start, then pieces, then end.
       type: 'native_tts_stream_start';
       payload: {
         utteranceId: string;
         playbackId?: string;
         sampleRate?: number;
-        pcmBase64: string;
         stopOnEarphoneDisconnect?: boolean;
       };
     }
   | {
       type: 'native_tts_stream_chunk';
-      payload: { playbackId: string; pcmBase64: string };
+      payload: { playbackId?: string; audioBase64?: string };
     }
   | {
       type: 'native_tts_stream_end';
-      payload: { playbackId: string };
+      payload: { playbackId?: string };
     }
   | {
       type: 'native_tts_stop';
@@ -4944,21 +4943,13 @@ function AppInner(): React.JSX.Element {
       const { utteranceId, playbackId } = request;
       currentTtsPlaybackRef.current = { utteranceId, playbackId };
       if (__DEV__) {
-        console.log(`[Web→NativeTTS] stream start utteranceId=${utteranceId} playbackId=${playbackId} sampleRate=${request.sampleRate} base64Len=${request.pcmBase64.length} stopOnEarphoneDisconnect=${request.stopOnEarphoneDisconnect}`);
+        console.log(`[Web→NativeTTS] stream start utteranceId=${utteranceId} playbackId=${playbackId} sampleRate=${request.sampleRate}`);
       }
       void startNativeTtsStream(request).then((result) => {
-        // Resolves once sound really started, like NativeTTSModule.play.
         const startedEvent = resolveNativeTtsStartedEvent(result, request, currentTtsPlaybackRef.current);
-        if (startedEvent) {
-          emitTtsToWeb(startedEvent);
-        } else if (__DEV__) {
-          console.log(`[NativeTTS] no tts_started (stream) playbackId=${playbackId} ok=${result.ok} reason=${result.reason ?? ''}`);
-        }
+        if (startedEvent) emitTtsToWeb(startedEvent);
       }, (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
-        if (__DEV__) {
-          console.log(`[NativeTTS] stream start error playbackId=${playbackId}: ${message}`);
-        }
         if (currentTtsPlaybackRef.current?.playbackId === playbackId) {
           currentTtsPlaybackRef.current = null;
         }
@@ -4969,10 +4960,10 @@ function AppInner(): React.JSX.Element {
 
     if (parsed.type === 'native_tts_stream_chunk') {
       const playbackId = typeof parsed.payload?.playbackId === 'string' ? parsed.payload.playbackId : '';
-      const pcmBase64 = typeof parsed.payload?.pcmBase64 === 'string' ? parsed.payload.pcmBase64 : '';
+      const audioBase64 = typeof parsed.payload?.audioBase64 === 'string' ? parsed.payload.audioBase64 : '';
       // Pieces of a clip that was stopped or replaced meanwhile are dropped.
-      if (playbackId && pcmBase64 && currentTtsPlaybackRef.current?.playbackId === playbackId) {
-        appendNativeTtsStream(playbackId, pcmBase64);
+      if (playbackId && audioBase64 && currentTtsPlaybackRef.current?.playbackId === playbackId) {
+        appendNativeTtsStream(playbackId, audioBase64);
       }
       return;
     }
@@ -5509,7 +5500,7 @@ function AppInner(): React.JSX.Element {
       audioRoute: nativeAudioRouteAvailable,
       deviceAudioCapture: nativeDeviceAudioCaptureAvailable,
       nativeTts: isNativeTtsAvailable(),
-      nativeTtsStream: isNativeTtsStreamAvailable(),
+      ttsStream: isNativeTtsStreamAvailable(),
       contacts: isNativeContactsAvailable(),
       earphoneMicrophoneChoice: nativeEarphoneMicrophoneChoiceAvailable,
     }));

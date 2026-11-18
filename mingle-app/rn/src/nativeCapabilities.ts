@@ -10,9 +10,6 @@
  * (lowering other apps' volume meanwhile); absent or false means the web plays
  * them itself. iOS shells always played natively, so the web keeps doing that
  * there even when the flag is absent.
- * `nativeTtsStream` is true when the shell also plays clips that arrive in
- * pieces (`native_tts_stream_start` / `_chunk` / `_end`); absent or false
- * means whole clips only.
  * `contacts` is true when the shell can read the address book and open a
  * written text message (`native_contacts_request`, `native_sms_compose`);
  * absent or false means the contact-sync screen offers neither.
@@ -28,7 +25,7 @@ export type NativeShellCapabilities = {
   audioRoute: boolean;
   deviceAudioCapture: boolean;
   nativeTts: boolean;
-  nativeTtsStream: boolean;
+  ttsStream: boolean;
   contacts: boolean;
   earphoneMicrophoneChoice: boolean;
 };
@@ -41,7 +38,7 @@ export function buildNativeShellCapabilities(options: {
   audioRoute: boolean;
   deviceAudioCapture?: boolean;
   nativeTts?: boolean;
-  nativeTtsStream?: boolean;
+  ttsStream?: boolean;
   contacts?: boolean;
   earphoneMicrophoneChoice?: boolean;
 }): NativeShellCapabilities {
@@ -51,7 +48,7 @@ export function buildNativeShellCapabilities(options: {
     audioRoute: options.audioRoute === true,
     deviceAudioCapture: options.deviceAudioCapture === true,
     nativeTts: options.nativeTts === true,
-    nativeTtsStream: options.nativeTtsStream === true,
+    ttsStream: options.ttsStream === true,
     contacts: options.contacts === true,
     earphoneMicrophoneChoice: options.earphoneMicrophoneChoice === true,
   };

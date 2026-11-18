@@ -15,6 +15,7 @@ export const koDictionary: BaseAppDictionarySource = {
     endpointTuningShortLabel: "짧게",
     endpointTuningLongLabel: "길게",
     translationModelLabel: "번역 모델",
+    ttsModelLabel: "TTS 모델",
     adBannerPositionLabel: "광고 위치",
     adBannerPositionTopLabel: "상단",
     adBannerPositionBottomLabel: "하단",

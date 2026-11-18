@@ -4,7 +4,6 @@ import {
   normalizeNativeTtsPlayResult,
   playNativeTts,
   resolveNativeTtsPlayRequest,
-  resolveNativeTtsStreamStartRequest,
   resolveNativeTtsStartedEvent,
 } from '../src/nativeTts';
 
@@ -107,29 +106,20 @@ describe('tts_stopped reason (contract A.5)', () => {
 });
 
 describe('resolveNativeTtsStreamStartRequest', () => {
-  const base = { utteranceId: 'translation:u1:ko', pcmBase64: 'AAAA' };
+  const { resolveNativeTtsStreamStartRequest } = require('../src/nativeTts');
 
-  it('falls back to the utterance id, 24 kHz and no earphone guard', () => {
-    expect(resolveNativeTtsStreamStartRequest(base)).toEqual({
-      utteranceId: 'translation:u1:ko',
-      playbackId: 'translation:u1:ko',
-      sampleRate: 24000,
-      pcmBase64: 'AAAA',
-      stopOnEarphoneDisconnect: false,
-    });
-  });
-
-  it('keeps a valid playback id, sample rate and the earphone guard', () => {
+  it('keeps the playback id, sample rate and earphone flag of the web payload', () => {
     expect(resolveNativeTtsStreamStartRequest({
-      ...base,
-      playbackId: ' p1 ',
+      utteranceId: 'u1:en',
+      playbackId: ' u1:en::3 ',
       sampleRate: 16000,
       stopOnEarphoneDisconnect: true,
-    })).toMatchObject({ playbackId: 'p1', sampleRate: 16000, stopOnEarphoneDisconnect: true });
+    })).toEqual({ utteranceId: 'u1:en', playbackId: 'u1:en::3', sampleRate: 16000, stopOnEarphoneDisconnect: true });
   });
 
-  it('replaces a sample rate the players cannot use', () => {
-    expect(resolveNativeTtsStreamStartRequest({ ...base, sampleRate: 96000 }).sampleRate).toBe(24000);
-    expect(resolveNativeTtsStreamStartRequest({ ...base, sampleRate: Number.NaN }).sampleRate).toBe(24000);
+  it('falls back to the utterance id and 24 kHz', () => {
+    expect(resolveNativeTtsStreamStartRequest({ utteranceId: 'u1:en' }))
+      .toEqual({ utteranceId: 'u1:en', playbackId: 'u1:en', sampleRate: 24000, stopOnEarphoneDisconnect: false });
+    expect(resolveNativeTtsStreamStartRequest({ utteranceId: 'u1:en', sampleRate: 1 }).sampleRate).toBe(24000);
   });
 });

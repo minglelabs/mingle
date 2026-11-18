@@ -1,6 +1,6 @@
 import type { Utterance } from './ChatBubble'
-import { isPlayableTtsClipAudio, isTtsStreamClip, type TtsClipAudio } from '@/lib/tts-stream-clip'
 import { compareUtteranceOrder } from './utterance-order'
+import { isStreamingTtsClip, type TtsClipAudio } from './tts-stream-clip'
 import {
   EARPHONE_MODE_AUDIO_TIMEOUT_MS,
   EARPHONE_MODE_HISTORY_CLOCK_SKEW_MS,
@@ -10,7 +10,6 @@ import {
   buildEarphoneModeProgressSignature,
   classifyEarphoneModeUtterance,
   createEarphoneModeWatermark,
-  firstEarphoneModeSentenceEnd,
   isEarphoneModeCandidate,
   isEarphoneModeUtteranceSettled,
   remainingEarphoneModeText,
@@ -31,7 +30,6 @@ export type EarphoneAutoReadSnapshot = {
   viewerUserId: string | null
 }
 
-// `audioBlob` is a complete clip or one still arriving (it plays as it arrives).
 export type EarphoneAutoReadDispatchItem = EarphoneModeReadTarget & { audioBlob: TtsClipAudio }
 
 export type EarphoneAutoReadControllerOptions = {
@@ -47,12 +45,11 @@ export type EarphoneAutoReadControllerOptions = {
   dispatch: (item: EarphoneAutoReadDispatchItem) => void
   onQueuedPlaybackKeysChange?: (playbackKeys: readonly string[]) => void
   readOwnMessages?: boolean
-  // Read a text one sentence at a time (default). When it answers false the
-  // whole remaining text is one clip. Asked for every clip, so it can change.
-  splitSentences?: () => boolean
   stallTimeoutMs?: number
   audioTimeoutMs?: number
-  prefetchLimit?: number
+  // How many clips may be fetched ahead at once; read on every prefetch, so it
+  // can follow a capability that arrives later.
+  prefetchLimit?: number | (() => number)
   historyClockSkewMs?: number
 }
 
@@ -65,9 +62,8 @@ type Candidate = {
   signature: string
   lastProgressAtMs: number
   target: EarphoneModeReadTarget | null
-  // Pieces: the text already read aloud, and what has been read once the
-  // current target is (a prefix of the row's text). A piece target (a fixed
-  // part, or one sentence of several) leaves the row open for the rest.
+  // Pieces: the fixed text already read aloud, and the full text the current
+  // target was cut from. A piece target leaves the row open for the rest.
   readText: string
   targetFullText: string
   targetIsPiece: boolean
@@ -110,6 +106,12 @@ function isSameReadTarget(left: EarphoneModeReadTarget, right: EarphoneModeReadT
 // still incomplete holds the ones behind it until it completes, disappears,
 // or shows no progress for the stall timeout. Audio is prefetched as soon as
 // a candidate completes; playback stays strictly in order.
+function isArrivingStream(candidate: Candidate): boolean {
+  return candidate.audio === 'ready'
+    && isStreamingTtsClip(candidate.audioBlob)
+    && !candidate.audioBlob.isComplete
+}
+
 export class EarphoneAutoReadController {
   private readonly options: EarphoneAutoReadControllerOptions
   private armed = false
@@ -239,8 +241,6 @@ export class EarphoneAutoReadController {
       if (candidate.audio === 'ready' && candidate.audioBlob && candidate.target) {
         if (this.options.isEngineIdle() && this.options.canDispatch()) {
           const item: EarphoneAutoReadDispatchItem = { ...candidate.target, audioBlob: candidate.audioBlob }
-          // The clip now belongs to the player: releasing the candidate must not cancel it.
-          candidate.audioBlob = null
           if (candidate.targetIsPiece) {
             // A fixed piece of a row still open: read it now, then wait for the rest.
             candidate.readText = candidate.targetFullText
@@ -254,10 +254,8 @@ export class EarphoneAutoReadController {
           }
           this.emitQueuedPlaybackKeys()
           this.options.dispatch(item)
-          // What is left of that row may already be readable: synthesize its
-          // next sentence while this one plays.
+          // What is left of that row may already be readable.
           if (this.lastSnapshot) this.reconcile(this.lastSnapshot)
-          this.startPrefetches(now)
         }
         // Either handed over or waiting for the player to go idle, which
         // pumps again.
@@ -342,18 +340,10 @@ export class EarphoneAutoReadController {
       const full = classified.state === 'ready'
         ? classified.target
         : resolveEarphoneModeFixedTarget(utterance, snapshot.read)
-      const isIncomplete = classified.state !== 'ready'
+      const isPiece = classified.state !== 'ready'
       const remainder = full ? remainingEarphoneModeText(full.text, candidate.readText) : null
       if (full && remainder) {
-        // Read the remainder one sentence at a time.
-        const fullText = full.text.trim()
-        const sentenceEnd = (this.options.splitSentences?.() ?? true) ? firstEarphoneModeSentenceEnd(remainder) : null
-        const pieceText = sentenceEnd === null ? remainder : remainder.slice(0, sentenceEnd).trim()
-        const readAfter = sentenceEnd === null
-          ? fullText
-          : fullText.slice(0, fullText.length - remainder.length + sentenceEnd)
-        const isPiece = isIncomplete || sentenceEnd !== null
-        const next: EarphoneModeReadTarget = { ...full, text: pieceText }
+        const next: EarphoneModeReadTarget = { ...full, text: remainder }
         // A queued piece stays queued while the fixed part only grows after it.
         const keepQueuedPiece = candidate.status === 'ready' && candidate.target && candidate.targetIsPiece
           && candidate.target.playbackKey === next.playbackKey && remainder.startsWith(candidate.target.text)
@@ -362,11 +352,11 @@ export class EarphoneAutoReadController {
             this.discardPrefetch(candidate)
           }
           candidate.target = next
-          candidate.targetFullText = readAfter
+          candidate.targetFullText = full.text.trim()
           candidate.targetIsPiece = isPiece
         }
         candidate.status = 'ready'
-      } else if (!isIncomplete && candidate.readText) {
+      } else if (!isPiece && candidate.readText) {
         // Everything final was read as pieces (or it changed after them): done.
         this.finishCandidate(candidate, 'dispatched')
       } else {
@@ -407,7 +397,6 @@ export class EarphoneAutoReadController {
       // Pieces read in the old language say nothing about the new one.
       candidate.readText = ''
       candidate.audio = 'idle'
-      if (isTtsStreamClip(candidate.audioBlob)) candidate.audioBlob.cancel()
       candidate.audioBlob = null
       // Waiting for the new language's translation starts now.
       candidate.lastProgressAtMs = now
@@ -415,10 +404,12 @@ export class EarphoneAutoReadController {
   }
 
   private startPrefetches(now: number): void {
-    const limit = Math.max(1, this.options.prefetchLimit ?? EARPHONE_MODE_PREFETCH_LIMIT)
+    const option = this.options.prefetchLimit
+    const limit = Math.max(1, (typeof option === 'function' ? option() : option) ?? EARPHONE_MODE_PREFETCH_LIMIT)
     const open = this.sortedOpenCandidates()
     // Only open candidates hold a slot: a finished one has aborted its request.
-    let inFlight = open.filter((candidate) => candidate.audio === 'loading').length
+    // A streamed clip keeps its slot until it has fully arrived.
+    let inFlight = open.filter((candidate) => candidate.audio === 'loading' || isArrivingStream(candidate)).length
     for (const candidate of open) {
       if (inFlight >= limit) return
       if (candidate.status !== 'ready' || candidate.audio !== 'idle' || !candidate.target) continue
@@ -454,16 +445,14 @@ export class EarphoneAutoReadController {
     void request
       .catch(() => null)
       .then((blob) => {
-        if (candidate.abort !== abort || abort.signal.aborted || candidate.status !== 'ready') {
-          // Nobody will play it: a clip still arriving stops loading.
-          if (isTtsStreamClip(blob)) blob.cancel()
-          if (candidate.abort === abort) candidate.abort = null
-          return
-        }
+        if (candidate.abort !== abort || abort.signal.aborted) return
         candidate.abort = null
-        if (isPlayableTtsClipAudio(blob)) {
+        if (candidate.status !== 'ready') return
+        if (blob && blob.size > 0) {
           candidate.audio = 'ready'
           candidate.audioBlob = blob
+          // Its slot frees once the rest has arrived: prefetch the next then.
+          if (isStreamingTtsClip(blob) && !blob.isComplete) void blob.whenEnded().then(() => this.pump())
         } else {
           candidate.audio = 'failed'
         }
@@ -475,20 +464,16 @@ export class EarphoneAutoReadController {
     candidate.status = status
     // Abort a prefetch still in flight and release its slot: a finished
     // candidate holds neither audio nor a request.
-    this.releaseAudio(candidate)
-  }
-
-  private discardPrefetch(candidate: Candidate): void {
-    this.releaseAudio(candidate)
-  }
-
-  // Drops the candidate's request and clip. A clip still arriving that was
-  // not handed to the player stops loading.
-  private releaseAudio(candidate: Candidate): void {
     candidate.abort?.abort()
     candidate.abort = null
     candidate.audio = 'idle'
-    if (isTtsStreamClip(candidate.audioBlob)) candidate.audioBlob.cancel()
+    candidate.audioBlob = null
+  }
+
+  private discardPrefetch(candidate: Candidate): void {
+    candidate.abort?.abort()
+    candidate.abort = null
+    candidate.audio = 'idle'
     candidate.audioBlob = null
   }
 
@@ -502,7 +487,9 @@ export class EarphoneAutoReadController {
     this.clearTimer()
     this.lastSnapshot = null
     for (const candidate of this.candidates.values()) {
-      this.releaseAudio(candidate)
+      candidate.abort?.abort()
+      candidate.abort = null
+      candidate.audioBlob = null
     }
     this.candidates = new Map()
   }

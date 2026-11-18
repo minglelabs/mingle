@@ -29,10 +29,8 @@ data class NativeSttCaptureProfile(
 )
 
 object NativeSttCapturePolicy {
-  // Keep the default policy isolated in one file so capture behavior can be
+  // Keep the capture policy isolated in one file so capture behavior can be
   // re-tuned later without touching the bridge or recorder implementation.
-  private const val DEFAULT_PROFILE = "priority_translation"
-
   private val preferredSampleRates = intArrayOf(48_000, 44_100, 16_000)
 
   fun resolve(
@@ -55,32 +53,28 @@ object NativeSttCapturePolicy {
         captureSource = NativeSttCaptureSource.DEVICE_AUDIO,
       )
     }
-    return when (DEFAULT_PROFILE) {
-      "standard_recognition" -> NativeSttCaptureProfile(
-        label = "standard_recognition",
-        audioSource = MediaRecorder.AudioSource.VOICE_RECOGNITION,
-        audioMode = AudioManager.MODE_NORMAL,
-        privacySensitive = false,
-        foregroundServiceEnabled = false,
-        aecEnabled = aecEnabled && AcousticEchoCanceler.isAvailable(),
-        noiseSuppressorEnabled = aecEnabled && NoiseSuppressor.isAvailable(),
-      )
-      else -> NativeSttCaptureProfile(
-        label = "priority_translation",
-        audioSource = MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-        // Use MODE_NORMAL (not MODE_IN_COMMUNICATION) to avoid pausing background media audio (e.g. Spotify)
-        // while STT is active. MODE_IN_COMMUNICATION triggers system-level VoIP routing which silences
-        // media playback from other apps.
-        audioMode = AudioManager.MODE_NORMAL,
-        // privacySensitive=true gives HashChat highest mic priority on Android 11+, ensuring STT always
-        // receives audio even if another app (e.g. Discord) is also trying to capture.
-        // Trade-off: the other app's mic will be silenced while HashChat is recording.
-        privacySensitive = true,
-        foregroundServiceEnabled = true,
-        aecEnabled = aecEnabled && AcousticEchoCanceler.isAvailable(),
-        noiseSuppressorEnabled = aecEnabled && NoiseSuppressor.isAvailable(),
-      )
-    }
+    return NativeSttCaptureProfile(
+      label = "voice_recognition",
+      // VOICE_RECOGNITION, not VOICE_COMMUNICATION: the call-tuned source runs
+      // the vendor's voice-call processing, which on some phones (seen on a
+      // Galaxy S9, Android 10) strips the speaker's voice from the capture while
+      // taps and knocks still come through, so STT hears nothing. iOS likewise
+      // records in .default and uses .voiceChat only for speaker playback.
+      // Echo of our own read-aloud is dropped by Soniox agent text; the
+      // AEC/NS effects below only help when speaker mode turns them on.
+      audioSource = MediaRecorder.AudioSource.VOICE_RECOGNITION,
+      // Use MODE_NORMAL (not MODE_IN_COMMUNICATION) to avoid pausing background media audio (e.g. Spotify)
+      // while STT is active. MODE_IN_COMMUNICATION triggers system-level VoIP routing which silences
+      // media playback from other apps.
+      audioMode = AudioManager.MODE_NORMAL,
+      // privacySensitive=true gives HashChat highest mic priority on Android 11+, ensuring STT always
+      // receives audio even if another app (e.g. Discord) is also trying to capture.
+      // Trade-off: the other app's mic will be silenced while HashChat is recording.
+      privacySensitive = true,
+      foregroundServiceEnabled = true,
+      aecEnabled = aecEnabled && AcousticEchoCanceler.isAvailable(),
+      noiseSuppressorEnabled = aecEnabled && NoiseSuppressor.isAvailable(),
+    )
   }
 
   fun preferredSampleRates(

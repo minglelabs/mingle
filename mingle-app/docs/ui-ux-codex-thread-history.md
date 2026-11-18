@@ -2,6 +2,39 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-18 — Soniox is the default read-aloud voice
+
+- Surface: the TTS model row in settings (`lib/tts-models.ts`), `tts-provider.ts`, the Hash notice shown when voice interpreting is turned on (`coins-controller.ts` `readCoinWallet`).
+- Issue: Read-aloud on a streaming Android build could only use Soniox through a server switch (`TTS_STREAM_PROVIDER`), while the settings menu still showed a Gemini model. All TTS was priced at one flat rate whatever the model.
+- Cause: Soniox was added as a server-side experiment, not as a model users can pick.
+- Resolution: Settings lists `soniox-tts-rt-v2` (new default, first), `gemini-3.8-flash-lite-tts` and `gemini-3.8-flash-tts`. Users who never picked a model follow the new default. A streamed request speaks with the selected model; Soniox at speed 1.3, its fastest. If Soniox fails before any audio (for example its concurrency limit), Gemini Flash-Lite speaks instead. Clients that need a whole clip (iOS, older Android builds) always get Gemini, Flash-Lite for a Soniox selection, because a Soniox clip only finishes after its full playback time. The `GEMINI_TTS_STREAM` and `TTS_STREAM_PROVIDER` switches are removed: the server always streams from Gemini. TTS is priced per model (Soniox 17.5, Flash-Lite 13.5, Flash 20.25 Hash per audio minute), and the turn-on notice quotes the user's model.
+- Verification: unit tests for the catalog, provider routing and fallback, the handler and the wallet quote.
+
+## 2026-11-18 — Read-aloud translation starts while its audio is still arriving (Android)
+
+- Surface: `tts-inworld-handler.ts` and `tts-provider.ts` (`stream: true`), `tts-stream-clip.ts`, the room's TTS queue in `LivePhoneDemo.tsx`, the RN bridge (`native_tts_stream_start` / `_chunk` / `_end`), Android `NativeTtsPcmStreamPlayer` (PR #585, on top of #542).
+- Issue: After a translation appeared, its voice started only when the whole clip had been synthesized and downloaded (1.1-2.0 s for a short line on the devbox, about 5 s for a ~500-character one).
+- Resolution: A shell that reports `ttsStream` asks for a stream. The server passes Gemini's PCM on chunk by chunk (leading silence trimmed on the fly), the page dispatches the clip to the queue on its first audio, and the Android shell plays the pieces through an AudioTrack with the same ducking focus, earphone guard and events as whole clips. iOS, older Android builds and the web keep whole clips. Coins and the event log are settled when the stream ends.
+- Measurements: through the devbox tunnel the first audio of a short Korean line arrived after 0.81-1.37 s (whole clip: 1.31-1.50 s). The limit is now Gemini's time to first audio (about 0.85 s).
+- Verification: unit tests for the stream reader, silence trim, retry, handler, `StreamingTtsClip` and the bridge payloads. On a Galaxy S9 (Android 10) via devbox: a bubble's Listen and three spoken sentences in speaker mode each played as a stream and ended with `ttsPlaybackFinished`; a sentence queued behind another started 0.2 s after it. Not checked: Bluetooth earphones, stop mid-clip, other apps ducking. iOS not implemented. Needs an Android app release.
+
+## 2026-11-18 — Speaker mode shows on Android 12 and older
+
+- Surface: `live-phone-demo.earphone-mode.logic.ts` (`resolveEarphoneModeGate`), the speaker-mode button in the room's bottom bar.
+- Issue: On Android 10-12 the room had no speaker-mode button, so translations were never read aloud automatically. Found on a Galaxy S9 (Android 10).
+- Cause: Since 2026-09-30 these shells report `audioRoute: false`, because they cannot tell whether earphones are in, and the gate hid the control for them. That was right for earphone mode. Speaker mode (default name since 2.3.2) plays out loud and needs no earphone reading, but it used the same gate.
+- Resolution: When earphones are not required (speaker mode), the control shows and auto-read runs even if the shell cannot report earphones. Earphone state stays "unknown = not connected", so those phones always get the speaker label. Earphone-only clients are unchanged. Web-only change; no app release.
+- Verification: gate tests for the unsupported shell in speaker mode. On the Galaxy S9 via devbox the button appeared, the notice opened, and spoken Korean was read aloud in English.
+## 2026-11-14 — Read-aloud translation starts about a second sooner, long lines get audio again, and Inworld is gone
+
+- Surface: `server/api/shared/tts-provider.ts`, `lib/tts-models.ts`, `tts-inworld-handler.ts` (the `/tts/inworld` path is kept for installed apps), the TTS model row in settings (PR #542).
+- Issue: A short read-aloud line took about 2.4 s before it played, and lines over about 1,000 characters got no audio at all. In prod over 14 days, 12 of the 15 Gemini TTS failures were lines of 861-3,375 characters. Each failure fell back to Inworld, which has answered 402 on every call since 10-28.
+- Cause: The Gemini call waited for the whole clip in one response, and the 8 s timeout capped the whole request, while long lines take 12-26 s to synthesize. The Inworld fallback depended on an account that no longer works.
+- Resolution: The server asks Gemini to stream (`stream: true`) and joins the 24 kHz PCM chunks into the same WAV clip, so apps and native players are unchanged. `GEMINI_TTS_TIMEOUT_MS` now ends a call only after 8 s with no data. A failed synthesis is retried once with the other Gemini model (Flash-Lite ↔ Flash). The Inworld provider, its credentials and its voice lookup are removed. Settings offers `gemini-3.8-flash-lite-tts` (default, listed first) and `gemini-3.8-flash-tts`. A stored `inworld-tts-1.5-mini` (one user) now follows the default.
+- Measurements (same 30 lines in 15 languages, back to back, from Seoul): short-line clip ready in 1.45 s instead of 2.38 s; ~500-character lines 5.2 s instead of 5.4 s. A 2,207-character line returned 155 s of audio in 22.8 s.
+- Investigated, not adopted: Soniox `tts-rt-v2` gave a first sound in 0.4-0.5 s, but its REST stream is paced at real time (a short clip is complete only after about 4.5 s). Same-text cost is about 1.7× Gemini's. Content errors were similar (27 vs 23 over 30 clips, judged by gpt-4o-transcribe + gpt-5.4-mini). Streaming playback in the app (first sound about 0.85 s with Gemini) would need native player changes and a store release.
+- Verification: `tts-provider`, `tts-models`, `tts-inworld-handler`, `translate/finalize` and account-preference suites; full unit suite (5,135 pass; the two `integration/live` files need a running server). Live calls returned 24 kHz WAV, and the transcription matched the text. Not checked on a device.
+
 ## 2026-11-13 — Sentence length: five levels, three stops with the default in the middle, and a "More" page
 
 - Surface: `lib/speech-length.ts`, `SpeechLengthScale.tsx`, `SpeechLengthCard.tsx`, the room settings and a new `speech-length` menu page in `LivePhoneDemo.tsx`, `i18n/first-run-copy.ts`.
@@ -18,7 +51,6 @@ One entry per UI/UX fix, newest first. This is the only copy; add new entries he
 - Issue 3: "Short" and "Long" under six number buttons did not read as a direction, and the numbers looked like buttons to tap rather than a scale to slide.
 - Resolution: The card offers levels 1-4 (`SPEECH_LENGTH_FIRST_RUN_LEVELS`; a longer current setting starts on 4); the room settings keep 1-6. The card's holder stops below the header (and a top ad banner), and the example scales down whole when the room is short. The scale is a slider: a rail filled up to a round numbered thumb that follows the finger, dots for the stops, a many-small-bubbles icon at the short end and one long bubble at the long end, and `← Short` / `Long →` under them (mirrored in RTL). On the card the example follows the finger; in the room settings the stop the finger lets go on is applied. Arrow keys, Home and End move it.
 - Verification: `speech-length.test.ts`, `tsc`; rendered alone in a browser at 760px and 560px room heights, dragged to 1 (six bubbles) and past the end (stops at 4). Not tried on a device.
-
 ## 2026-11-13 — Live STT keeps running across a tab switch and room re-entry
 
 - Surface: `use-realtime-stt.ts` (room hook unmount), `bottom-tab-bar.tsx`, `conversation-list.tsx`, `lib/tab-navigation.ts`.

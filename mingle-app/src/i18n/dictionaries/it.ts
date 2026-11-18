@@ -15,6 +15,7 @@ export const itDictionary: BaseAppDictionarySource = {
     endpointTuningShortLabel: "Breve",
     endpointTuningLongLabel: "Lungo",
     translationModelLabel: "Modello di traduzione",
+    ttsModelLabel: "Modello TTS",
     adBannerPositionLabel: "Posizione dell'annuncio",
     adBannerPositionTopLabel: "In alto",
     adBannerPositionBottomLabel: "In basso",

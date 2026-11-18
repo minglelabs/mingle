@@ -61,6 +61,7 @@ export type BaseAppDictionarySource = {
     endpointTuningShortLabel?: string;
     endpointTuningLongLabel?: string;
     translationModelLabel?: string;
+    ttsModelLabel?: string;
     adBannerPositionLabel?: string;
     adBannerPositionTopLabel?: string;
     adBannerPositionBottomLabel?: string;
@@ -351,6 +352,7 @@ export type AppDictionary = Omit<BaseAppDictionarySource, "demo"> & {
     endpointTuningShortLabel: string;
     endpointTuningLongLabel: string;
     translationModelLabel: string;
+    ttsModelLabel: string;
     adBannerPositionLabel: string;
     adBannerPositionTopLabel: string;
     adBannerPositionBottomLabel: string;
