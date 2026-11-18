@@ -10959,7 +10959,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onPointerUp={handleMicPointerUp}
                       onPointerCancel={handleMicPointerCancel}
                       onClick={handleMicClick}
-                      disabled={isPreparingStart && !isConnecting}
+                      // Same as voice mode: in a voice talk the call runs speech-to-text itself.
+                      disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}
                       className="relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
                       style={{
                         width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,

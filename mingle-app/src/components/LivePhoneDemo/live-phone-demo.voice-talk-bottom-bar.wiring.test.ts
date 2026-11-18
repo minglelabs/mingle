@@ -62,7 +62,8 @@ describe('voice talk and STT are separate switches', () => {
 
   it('locks Start/Stop and the speaker button in a call, and runs no speech-to-text of its own there', () => {
     expect(liveDemoSource).toContain('if (voiceTalkState.joined) return\n')
-    expect(liveDemoSource).toContain('disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}')
+    // Both the voice-mode and the keyboard-mode mic buttons.
+    expect(liveDemoSource.split('disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}').length - 1).toBe(2)
     expect(liveDemoSource).toContain('disabled={voiceTalkState.joined}')
     expect(liveDemoSource).toContain('if (voiceTalkState.joined && isSttSessionRunning) void handleStopRecording()')
     expect(liveDemoSource).not.toContain('shouldTranscribeForVoiceTalk')
