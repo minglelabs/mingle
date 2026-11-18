@@ -53,29 +53,48 @@ MINGLE_OPERATOR_POST_WORKER=off
 MINGLE_OPERATOR_AUTO_REPLY_WORKER=off
 MINGLE_OPERATOR_POST_RESERVE_WORKER=off
 MINGLE_OPERATOR_AUTOMATION_WORKER=off
+MINGLE_HAMZZI_WORKER=off
 LIVEKIT_URL=wss://voice.minglelabs.app
 LIVEKIT_API_KEY=<livekit.yaml keys: 의 키>
 LIVEKIT_API_SECRET=<livekit.yaml keys: 의 시크릿>
 ```
 
+`MINGLE_HAMZZI_WORKER=off`: 햄찌 자동 답장 워커도 Railway에서 돌고 있어서 여기서는 끈다.
+
+### 실제로 쓰는 파일은 `~/hashchat/app.env.json`
+
+`app.env`는 셸에서 불러올 수 없다. 공백이나 `<`, `>`가 들어간 값이 있고(예: `RESEND_FROM_EMAIL`), `APPLE_IAP_PRIVATE_KEY`, `FCM_PRIVATE_KEY`처럼 여러 줄인 값도 있다. 그래서 컨테이너와 빌드는 `app.env.json`(권한 600)을 쓴다.
+
+`scripts/hashchat-win/hashchat-env.mjs`가 Railway 값(JSON)에서 `RAILWAY_*`를 빼고 위 값을 덮어써서 `app.env.json`을 만든다. 한 줄짜리 값만 모은 `app.env`도 같이 만든다(참고용).
+
+```bash
+cp ~/src/mingle/scripts/hashchat-win/*.mjs ~/src/mingle/scripts/hashchat-win/deploy.sh ~/hashchat/
+railway variables --json > ~/hashchat/railway.json          # 출력하지 않는다
+node ~/hashchat/hashchat-env.mjs ~/hashchat/railway.json ~/hashchat/app.env ~/hashchat/app.env.json ~/hashchat/app.env
+rm ~/hashchat/railway.json
+```
+
+- `hashchat-env.mjs`는 LiveKit 키를 기존 `app.env`에서 가져온다. 처음이면 `app.env`에 `LIVEKIT_API_KEY=`, `LIVEKIT_API_SECRET=` 두 줄을 먼저 넣어 둔다.
+- 스크립트는 키 개수와 여러 줄인 키의 이름만 출력한다.
+
 ## 3. 앱 서버 이미지 빌드와 실행
 
 `NEXT_PUBLIC_*` 값은 빌드할 때 이미지에 박힌다. 그래서 `--build-arg`로 넘겨야 한다.
+`app.env`를 `set -a; . app.env`로 불러오면 위 이유로 문법 오류가 나서 빌드가 시작되지 않는다. 대신 아래처럼 한다.
+
+- 빌드: 빌드 인자 5개(`NEXT_PUBLIC_WS_PATH`, `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY`, `MINGLE_RELEASE_TARGET`, `NEXT_PUBLIC_HASH_RUSH_URL`, `NEXT_PUBLIC_HASH_RUSH_SERVER`)를 `app.env.json`에서 읽어 자식 프로세스 env에만 넣는다. `docker build`에는 `--build-arg 이름`만 넘긴다. 값은 명령줄과 로그에 남지 않는다.
+- 실행: `~/hashchat/run-app.mjs`가 `app.env.json`의 모든 변수를 `-e 이름`으로만 넘긴다. 여러 줄 값도 그대로 들어간다. 포트 `127.0.0.1:8080`, 기본 bridge 네트워크, `--restart unless-stopped`.
+
+이 절차는 `~/hashchat/deploy.sh`(`scripts/hashchat-win/deploy.sh`)가 그대로 한다. 7번을 본다.
+
+처음 한 번 손으로 띄울 때:
 
 ```bash
 cd ~/src/mingle
-set -a; . ~/hashchat/app.env; set +a
-docker build -f Dockerfile.railway -t hashchat-app:2.5.0 \
-  --build-arg NEXT_PUBLIC_WS_PATH="$NEXT_PUBLIC_WS_PATH" \
-  --build-arg NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY="$NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY" \
-  --build-arg MINGLE_RELEASE_TARGET="$MINGLE_RELEASE_TARGET" \
-  --build-arg NEXT_PUBLIC_HASH_RUSH_URL="$NEXT_PUBLIC_HASH_RUSH_URL" \
-  --build-arg NEXT_PUBLIC_HASH_RUSH_SERVER="$NEXT_PUBLIC_HASH_RUSH_SERVER" .
-docker builder prune -f            # 빌드 캐시 정리(디스크)
-docker run -d --name hashchat-app --restart unless-stopped \
-  --env-file ~/hashchat/app.env -p 127.0.0.1:8080:8080 hashchat-app:2.5.0
+node ~/hashchat/run-app.mjs ~/hashchat/app.env.json hashchat-app:2.5.0   # 이미지는 deploy.sh가 만든 것
 ```
 
+- `node`는 22 이상이 필요하다(`~/.nvm/versions/node/v22.9.0/bin/node`). WSL 기본 `/usr/bin/node`는 v10이라 안 된다.
 - 컨테이너 안의 통역 서버는 `wss://voice.minglelabs.app`에 접속한다. 같은 PC로 되돌아오는 연결(헤어핀 NAT)이 막히면 `--add-host voice.minglelabs.app:<Windows 호스트 IP>`를 붙여 다시 띄운다.
 - 확인 방법: `docker logs hashchat-app`에 `mingle-voice-agent not started`가 없어야 한다.
 
@@ -119,8 +138,14 @@ ingress:
     service: http://127.0.0.1:8080
   - hostname: hashrush-win.minglelabs.app
     service: http://127.0.0.1:8090
+  - hostname: ssh-win.minglelabs.app
+    service: ssh://127.0.0.1:22
   - service: http_status:404
 ```
+
+- 지금은 `hashchat-tunnel` 컨테이너(`cloudflare/cloudflared`, `--network host`, `--restart unless-stopped`)가 이 파일을 `/etc/cloudflared/config.yml`로 읽기 전용 마운트해서 쓴다. 토큰은 `TUNNEL_TOKEN` 환경변수로 넘긴다.
+- 파일을 고친 뒤에는 `cloudflared tunnel --config ~/hashchat/cloudflared.yml ingress validate`로 확인하고 `docker restart hashchat-tunnel`로 다시 읽힌다. 몇 초 동안 두 주소가 끊긴다.
+- 파일은 제자리에서 고친다(`cat > 파일`). `sed -i`처럼 새 파일로 바꾸면 마운트가 옛 파일을 계속 볼 수 있다.
 
 4. 실행하고, 재부팅해도 자동으로 뜨게 한다(systemd 서비스 또는 작업 스케줄러).
 
@@ -138,8 +163,50 @@ cloudflared tunnel --config ~/hashchat/cloudflared.yml run --token "$(cat ~/hash
 ## 7. 업데이트할 때
 
 ```bash
-git pull
-docker build ...       # 3번과 같은 명령
-docker rm -f hashchat-app
-docker run ...         # 3번과 같은 명령
+~/hashchat/deploy.sh <커밋>
 ```
+
+`deploy.sh`가 하는 일:
+
+1. `~/src/mingle`에 커밋 안 된 변경이 있거나 브랜치가 `feat/voicetalk-windows-livekit-mvp`가 아니면 멈춘다.
+2. `git pull --ff-only` 후 HEAD가 인자로 준 커밋과 다르면 멈춘다. 아직 아무것도 바꾸지 않은 상태다.
+3. 지금 이미지 `hashchat-app:2.5.0`에 `hashchat-app:2.5.0-prev` 태그를 붙인다.
+4. 3번 방법으로 빌드한다. 빌드가 실패하면 컨테이너는 그대로 두고 멈춘다.
+5. `hashchat-app` 컨테이너를 지우고 `run-app.mjs`로 다시 띄운다.
+6. `http://127.0.0.1:8080/railway/health`가 2분 안에 200이 아니면 `2.5.0-prev`로 컨테이너를 다시 띄운다.
+7. 마지막에 커밋, 이미지 ID, health 결과만 출력한다. 빌드 출력과 자세한 기록은 `~/hashchat/deploy-<시각>.log`(권한 600)에 남는다.
+
+한 번에 하나만 돈다(`~/hashchat/.deploy.lock`).
+
+## 8. Mac에서 SSH로 접속하기
+
+공유기 포트는 열지 않는다. sshd는 WSL 안에서만 듣고, 밖에서는 Cloudflare 터널(`ssh-win.minglelabs.app`)로만 들어온다.
+
+- `/etc/ssh/sshd_config.d/10-hashchat-win.conf`:
+
+```
+ListenAddress 127.0.0.1
+ListenAddress ::1
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+PermitRootLogin no
+```
+
+- 이 WSL은 systemd가 꺼져 있다. sshd는 `/etc/wsl.conf`의 `[boot] command`에 있는 `service ssh start`로 WSL이 켜질 때 뜬다.
+- 터널 컨테이너가 `--network host`라서 `ssh://127.0.0.1:22`로 닿는다.
+- 공개키는 `nam`의 `~/.ssh/authorized_keys`에 넣는다(`~/.ssh` 700, 파일 600).
+- `ssh-win.minglelabs.app`의 DNS(터널로 가는 CNAME)는 Cloudflare 대시보드에서 만든다.
+
+Mac의 `~/.ssh/config`:
+
+```
+Host hashchat-win
+  HostName ssh-win.minglelabs.app
+  User nam
+  IdentityFile ~/.ssh/<공개키를 등록한 개인키>
+  ProxyCommand cloudflared access ssh --hostname %h
+```
+
+Mac에도 `cloudflared`가 있어야 한다(`brew install cloudflared`). 그다음 `ssh hashchat-win '~/hashchat/deploy.sh <커밋>'`.
