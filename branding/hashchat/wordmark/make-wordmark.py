@@ -75,7 +75,21 @@ def write_png(fg, bg, name, width=2400):
     img.resize((width, round(width * mask.size[1] / mask.size[0])), Image.LANCZOS).save(os.path.join(HERE, name))
 
 
+def write_banner(fg, bg, name, size=(2560, 1440), logo_w=1240):
+    """YouTube channel banner: 2560x1440 (min 2048x1152 recommended, 1024x576 floor).
+    Every device shows only the centre 1546x423, so the wordmark sits well inside it."""
+    src = os.path.join(HERE, '_tmp-mark.png')
+    write_png(fg, None, '_tmp-mark.png', width=logo_w)
+    mark = Image.open(src)
+    img = Image.new('RGBA', size, bg)
+    img.paste(mark, ((size[0] - mark.width) // 2, (size[1] - mark.height) // 2), mark)
+    img.convert('RGB').save(os.path.join(HERE, name))
+    os.remove(src)
+
+
 if __name__ == '__main__':
+    write_banner(INK, YELLOW, 'hashchat-youtube-banner.png')
+    write_banner(WHITE, INK, 'hashchat-youtube-banner-dark.png')
     path_d, box, upm = outlines()
     ratio = write_svg(path_d, box, upm, INK, 'hashchat-wordmark.svg')
     write_svg(path_d, box, upm, WHITE, 'hashchat-wordmark-white.svg')
