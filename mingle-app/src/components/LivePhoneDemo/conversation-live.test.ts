@@ -155,6 +155,28 @@ describe('remote live message lifecycle', () => {
     sender.flush(send, Date.now() + 2000)
     expect(send).toHaveBeenCalledTimes(2)
   })
+  it('stops repeating a draft that no longer changes, and resumes when it does', () => {
+    const sender = new LivePreviewSender()
+    const send = vi.fn((frame: Record<string, unknown>) => Boolean(frame))
+    const start = Date.now()
+    sender.setPartials([utterance])
+    sender.flush(send, start + 1000)
+    sender.flush(send, start + 14_000)
+    expect(send).toHaveBeenCalledTimes(2)
+    // The same draft handed over again is not a change.
+    sender.setPartials([utterance])
+    sender.flush(send, start + 16_000)
+    sender.flush(send, start + 60_000)
+    expect(send).toHaveBeenCalledTimes(2)
+    sender.setPartials([{ ...utterance, originalText: 'hello again' }])
+    sender.flush(send, Date.now() + 1000)
+    expect(send).toHaveBeenCalledTimes(3)
+    expect(send.mock.calls[2][0]).toMatchObject({ originalText: 'hello again', final: false })
+    // A finished message is still repeated until it is committed.
+    sender.update({ ...utterance, originalText: 'done' }, true)
+    sender.flush(send, Date.now() + 20_000)
+    expect(send.mock.calls[3][0]).toMatchObject({ originalText: 'done', final: true })
+  })
   it('uses the same authenticated start-order receipt for live display and durable persistence', () => {
     vi.stubEnv('MINGLE_REALTIME_SECRET', 'live-order-test')
     try {

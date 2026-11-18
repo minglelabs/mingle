@@ -78,6 +78,12 @@ const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN = 500;
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX = 5000;
 const SONIOX_ENDPOINT_MAX_DELAY_MS_MIN = 500;
 const SONIOX_ENDPOINT_MAX_DELAY_MS_MAX = 3000;
+// End mode closes a turn only on Soniox's <end>. A pending turn whose text has
+// not changed for this long without one (audio stopped arriving, or an <end>
+// no speaker could be matched to) is closed by the server instead, so a
+// half-written bubble never stays open on either side of the conversation.
+const SONIOX_ENDPOINT_STALL_FINALIZE_MS_MIN = 4000;
+const SONIOX_ENDPOINT_STALL_FINALIZE_BUFFER_MS = 1500;
 const SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_MIN_MS = 1200;
 const SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_BUFFER_MS = 700;
 const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
@@ -92,6 +98,7 @@ type SttServerOptions = {
     sonioxApiKey?: string;
     sonioxHandshakeTimeoutMs?: number;
     sonioxRelayTiming?: SonioxRelayTiming;
+    sonioxEndpointStallFinalizeMs?: number;
 };
 
 // Injectable provider transport lets regression tests use a local WebSocket
@@ -696,6 +703,10 @@ function handleSttConnection(
             );
             const usesSonioxEndpointDetection = segmentationRuntime.effective === 'end';
             const endpointDelayMs = segmentationRuntime.endpointDelayMs;
+            const endpointStallFinalizeMs = options.sonioxEndpointStallFinalizeMs ?? Math.max(
+                SONIOX_ENDPOINT_STALL_FINALIZE_MS_MIN,
+                endpointDelayMs + SONIOX_ENDPOINT_STALL_FINALIZE_BUFFER_MS,
+            );
             if (segmentationRuntime.requested === 'llm') {
                 console.warn('[stt-server] llm segmentation not yet implemented; using effective=fin');
             }
@@ -771,6 +782,7 @@ function handleSttConnection(
                 state.mode === 'fin'
             );
             let globalFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
+            let endpointStallTimer: ReturnType<typeof setTimeout> | null = null;
             let globalFinalizeLastSentAtMs = 0;
             let activeFinalizeRequest: SonioxFinalizeRequest | null = null;
             let activeStopFinalizePromise: Promise<MingleSttFinalTurnPayload> | null = null;
@@ -817,8 +829,15 @@ function handleSttConnection(
                     globalFinalizeTimer = null;
                 }
             };
+            const clearEndpointStallTimer = () => {
+                if (endpointStallTimer) {
+                    clearTimeout(endpointStallTimer);
+                    endpointStallTimer = null;
+                }
+            };
             const resetGlobalFinalizeScheduler = () => {
                 clearGlobalFinalizeTimer();
+                clearEndpointStallTimer();
                 globalFinalizeLastSentAtMs = 0;
                 if (activeFinalizeRequest?.timeout) {
                     clearTimeout(activeFinalizeRequest.timeout);
@@ -1006,9 +1025,98 @@ function handleSttConnection(
                     }
                 }
             };
+            const listPendingEndTurns = () => (
+                buildPendingTurnSnapshots().filter((snapshot) => (
+                    hasPendingSonioxTurnText(snapshot.currentSnapshotText)
+                    && snapshot.lastProgressAtMs > 0
+                ))
+            );
+            const flushStalledEndTurns = (speakers: Iterable<string>) => {
+                const now = Date.now();
+                for (const speaker of speakers) {
+                    const state = speakerStates.get(speaker);
+                    if (!state || state.lastProgressAtMs <= 0) continue;
+                    // A speaker who started talking again keeps the turn open.
+                    if (now - state.lastProgressAtMs < endpointStallFinalizeMs) continue;
+                    console.warn(
+                        `[conn:${connId}] soniox_end_stall_flush speaker=${speaker} stalledMs=${now - state.lastProgressAtMs}`,
+                    );
+                    finalizeSpeakerTurn(speaker, 'server_stall_fallback');
+                }
+            };
+            const refreshEndpointStallWatch = () => {
+                clearEndpointStallTimer();
+                if (!usesSonioxEndpointDetection || sonioxStopRequested) return;
+                const pending = listPendingEndTurns();
+                if (pending.length === 0) return;
+                const now = Date.now();
+                const wait = Math.min(...pending.map((snapshot) => (
+                    endpointStallFinalizeMs - (now - snapshot.lastProgressAtMs)
+                )));
+                endpointStallTimer = setTimeout(() => {
+                    endpointStallTimer = null;
+                    closeStalledEndTurns();
+                }, Math.max(1, wait));
+            };
+            const closeStalledEndTurns = () => {
+                if (sonioxStopRequested) return;
+                if (activeFinalizeRequest) {
+                    // Its <fin> or its timeout reschedules this watch.
+                    return;
+                }
+                const now = Date.now();
+                const pending = listPendingEndTurns();
+                const stalled = pending.filter((snapshot) => (
+                    now - snapshot.lastProgressAtMs >= endpointStallFinalizeMs
+                ));
+                if (stalled.length === 0) {
+                    refreshEndpointStallWatch();
+                    return;
+                }
+
+                // Soniox finalize is global: ask for it only when nobody is
+                // still talking, otherwise close the stalled turns locally.
+                if (stalled.length < pending.length || !sttWs || sttWs.readyState !== WebSocket.OPEN) {
+                    flushStalledEndTurns(stalled.map((snapshot) => snapshot.speaker));
+                    refreshEndpointStallWatch();
+                    return;
+                }
+
+                const cohort = buildSonioxFinalizeRequestCohort(buildPendingTurnSnapshots());
+                const request: SonioxFinalizeRequest = {
+                    requestId: ++finalizeRequestSeq,
+                    requestedAtMs: now,
+                    cause: 'idle-fin',
+                    lastFinalizedPayload: null,
+                    speakers: new Map(cohort.map((entry) => [entry.speaker, entry])),
+                };
+                const finishLocally = () => {
+                    if (activeFinalizeRequest?.requestId !== request.requestId) return;
+                    activeFinalizeRequest = null;
+                    flushStalledEndTurns(request.speakers.keys());
+                    refreshEndpointStallWatch();
+                };
+                request.timeout = setTimeout(
+                    finishLocally,
+                    getSonioxManualFinalizeResponseTimeoutMs(sonioxManualFinalizeSilenceMs),
+                );
+                activeFinalizeRequest = request;
+                globalFinalizeLastSentAtMs = now;
+                console.warn(
+                    `[conn:${connId}] soniox_end_stall_finalize speakers=${cohort.map((entry) => entry.speaker).join(',')} stallMs=${endpointStallFinalizeMs}`,
+                );
+                try {
+                    sttWs.send(JSON.stringify({ type: 'finalize' }));
+                } catch (error) {
+                    console.error('Soniox stall finalize send failed:', error);
+                    clearTimeout(request.timeout);
+                    finishLocally();
+                }
+            };
             const refreshGlobalFinalizeScheduling = () => {
                 if (usesSonioxEndpointDetection) {
                     clearGlobalFinalizeTimer();
+                    refreshEndpointStallWatch();
                     return;
                 }
                 const now = Date.now();

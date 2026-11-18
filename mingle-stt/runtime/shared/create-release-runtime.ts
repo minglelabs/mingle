@@ -18,7 +18,8 @@ export type MingleSttFinalizeSource =
     | 'server_stop_fallback'
     | 'server_timeout_fallback'
     | 'server_provider_close_fallback'
-    | 'server_carry_expiry';
+    | 'server_carry_expiry'
+    | 'server_stall_fallback';
 
 export type MingleSttClientConfig = {
     sample_rate: number;
