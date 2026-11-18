@@ -18,6 +18,8 @@ type Deps = {
   readConfig: () => LiveKitConfig | null;
   listIdentities: (config: LiveKitConfig, room: string) => Promise<string[] | null>;
   findLiveCallChannelIds: (channelIds: string[] | null) => Promise<string[]>;
+  /** A room's call changed (seats freed or the call ended): its members' lists refresh. */
+  onCallChanged: (channelId: string) => Promise<void>;
   now: () => number;
 };
 
@@ -31,6 +33,15 @@ const defaultDeps: Deps = {
       select: { channelId: true },
     });
     return calls.map((call) => call.channelId);
+  },
+  onCallChanged: async (channelId) => {
+    const channel = await prisma.appConversationChannel.findUnique({ where: { id: channelId }, select: { sessionKey: true } });
+    if (!channel?.sessionKey) return;
+    // Imported here: app-conversations imports this module.
+    const { listChannelMemberUserIdsBySessionKey } = await import("@/lib/app-conversations");
+    const { notifyConversationMessage } = await import("@/server/conversation-realtime");
+    const memberUserIds = await listChannelMemberUserIdsBySessionKey(channel.sessionKey);
+    await notifyConversationMessage("", memberUserIds, undefined, { timeoutMs: 3000 });
   },
   now: () => Date.now(),
 };
@@ -67,6 +78,9 @@ export async function reconcileListedLiveCalls(channelIds: string[] | null): Pro
     reconcileLiveCall(deps.store, {
       channelId,
       listIdentities: (room) => deps.listIdentities(config, room),
+    }).then((result) => {
+      // The other members' lists still show the old count: tell them.
+      if (result.dropped.length > 0) void deps.onCallChanged(channelId).catch(() => undefined);
     }).catch((error) => console.warn("[voice] list_reconcile_failed", error instanceof Error ? error.name : "unknown")),
   ));
   let timer: ReturnType<typeof setTimeout> | undefined;

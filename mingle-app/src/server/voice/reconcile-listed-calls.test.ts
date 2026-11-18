@@ -30,20 +30,32 @@ describe("reconcileListedLiveCalls", () => {
       listIdentities,
       findLiveCallChannelIds: async () => ["chan-1"],
     });
+    const onCallChanged = vi.fn(async () => {})
+    setListedCallReconcileDepsForTests({
+      store,
+      readConfig: () => CONFIG,
+      listIdentities,
+      findLiveCallChannelIds: async () => ["chan-1"],
+      onCallChanged,
+    });
     await reconcileListedLiveCalls(["chan-1", "chan-2"]);
     const view = await getLiveCallView(store, "chan-1");
     expect(view?.participants.map((p) => p.userId)).toEqual(["here"]);
+    // The other members' lists are told to refresh.
+    expect(onCallChanged).toHaveBeenCalledWith("chan-1");
   });
 
   it("asks LiveKit about a room at most once per interval", async () => {
     const store = await storeWithDroppedPhone();
     let now = 1_000_000;
     const listIdentities = vi.fn(async () => ["here", "gone"]);
+    const onCallChanged = vi.fn(async () => {})
     setListedCallReconcileDepsForTests({
       store,
       readConfig: () => CONFIG,
       listIdentities,
       findLiveCallChannelIds: async () => ["chan-1"],
+      onCallChanged,
       now: () => now,
     });
     await reconcileListedLiveCalls(["chan-1"]);
@@ -52,6 +64,8 @@ describe("reconcileListedLiveCalls", () => {
     now += LISTED_CALL_RECONCILE_INTERVAL_MS;
     await reconcileListedLiveCalls(["chan-1"]);
     expect(listIdentities).toHaveBeenCalledTimes(2);
+    // Nobody dropped: no list refresh is sent.
+    expect(onCallChanged).not.toHaveBeenCalled();
   });
 
   it("does nothing without LiveKit settings or when LiveKit cannot be asked", async () => {
