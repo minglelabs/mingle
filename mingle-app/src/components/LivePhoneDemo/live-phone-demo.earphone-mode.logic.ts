@@ -26,6 +26,11 @@ export const EARPHONE_MODE_STALL_TIMEOUT_MS = 15_000
 // A prefetched clip that has not arrived by then is dropped.
 export const EARPHONE_MODE_AUDIO_TIMEOUT_MS = 15_000
 export const EARPHONE_MODE_PREFETCH_LIMIT = 3
+// With streamed clips (first audio in ~0.5 s) one clip ahead is enough. A
+// streamed clip holds its slot until it has fully arrived, not just until its
+// first audio: Soniox sends at speaking pace and its org allows only three
+// concurrent requests, so one listener uses at most two (playing + next).
+export const EARPHONE_MODE_STREAM_PREFETCH_LIMIT = 1
 // A message first seen after the rising edge that started more than this long
 // before it is history (older page, recovery hydration), not a new message.
 // The allowance absorbs clock offset between devices and the server.
@@ -34,6 +39,7 @@ export const EARPHONE_MODE_HISTORY_CLOCK_SKEW_MS = 10_000
 // ── Gate ───────────────────────────────────────────────────────────────────
 
 export type EarphoneModeGateInput = {
+  // The shell reports earphones (`audioRoute`). Android 12 and older cannot.
   supported: boolean
   enabled: boolean
   earphonesConnected: boolean
@@ -49,11 +55,14 @@ export type EarphoneModeGate = {
 }
 
 // Auto-read needs the mode on and, unless earphones are not required, earphones
-// connected; unknown earphone state counts as not connected.
+// connected; unknown earphone state counts as not connected. Speaker mode needs
+// no earphone reading, so it is offered even where the shell cannot report
+// earphones (Android 12 and older), and plays out loud there.
 export function resolveEarphoneModeGate(input: EarphoneModeGateInput): EarphoneModeGate {
-  const controlVisible = input.supported === true
+  const speakerMode = input.earphonesRequired === false
+  const controlVisible = input.supported === true || speakerMode
   const enabled = controlVisible && input.enabled === true
-  const connected = controlVisible && (input.earphonesRequired === false || input.earphonesConnected === true)
+  const connected = controlVisible && (speakerMode || input.earphonesConnected === true)
   return {
     controlVisible,
     autoReadActive: enabled && connected,

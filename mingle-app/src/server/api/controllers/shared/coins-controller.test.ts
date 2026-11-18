@@ -6,13 +6,19 @@ const m = vi.hoisted(() => ({
   canSpendCoins: vi.fn(),
   chargeCoinUsage: vi.fn(),
   getCoinWallet: vi.fn(),
+  findUser: vi.fn(),
+  loadRates: vi.fn(),
 }))
 
 vi.mock('next-auth', () => ({ getServerSession: m.session }))
 vi.mock('@/lib/auth-options', () => ({ getAuthOptions: () => ({}) }))
-vi.mock('@/lib/prisma', () => ({ prisma: {} }))
+vi.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: m.findUser } } }))
 vi.mock('@/server/coins/purchases', () => ({ listCoinProducts: vi.fn(), refundPurchase: vi.fn(), verifyAndGrantPurchase: vi.fn() }))
 vi.mock('@/server/coins/queries', () => ({ getCoinHistory: vi.fn(), getCoinUsageSummary: vi.fn(), normalizeCoinUsageRange: vi.fn() }))
+vi.mock('@/server/coins/pricing', async () => ({
+  ...(await vi.importActual<typeof import('@/server/coins/pricing')>('@/server/coins/pricing')),
+  loadCoinPricingRates: m.loadRates,
+}))
 vi.mock('@/server/coins/wallet', async () => ({
   ...(await vi.importActual<typeof import('@/server/coins/wallet')>('@/server/coins/wallet')),
   canSpendCoins: m.canSpendCoins,
@@ -125,6 +131,34 @@ describe('coins controller', () => {
     it('requires a session', async () => {
       m.session.mockResolvedValue(null)
       expect((await readCoinWallet()).status).toBe(401)
+    })
+
+    it('quotes voice with TTS at the model that will speak: the user\'s own when the app streams, Gemini otherwise', async () => {
+      m.session.mockResolvedValue({ user: { id: 'user-1' } })
+      m.getCoinWallet.mockResolvedValue({ billingMode: 'enforce', balance: 100 })
+      const rate = (id: string, kind: string, model: string, usdMicroPerMillionUnits: bigint) => ({
+        id, kind, model, unit: 'second', usdMicroPerMillionUnits, marginBps: 15000,
+        effectiveFrom: new Date('2026-01-01'), effectiveTo: null,
+      })
+      m.loadRates.mockResolvedValue([
+        rate('voice', 'stt', '*', 88888889n),
+        rate('flat', 'tts', '*', 151515152n),
+        rate('soniox', 'tts', 'tts-rt-v2', 194444444n),
+        rate('flash', 'tts', 'gemini-3.8-flash-tts', 225000000n),
+      ])
+      const rates = async (ttsModel: string | null, ttsStream = true) => {
+        m.findUser.mockResolvedValue({ ttsModel })
+        const request = new NextRequest(`http://app.test/api/coins/wallet${ttsStream ? '?ttsStream=1' : ''}`)
+        return (await (await readCoinWallet(request)).json()).rates
+      }
+      // 22 s of audio per conversation minute on top of 8 Hash of voice.
+      expect((await rates(null)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 6.417, 2)
+      expect((await rates('gemini-3.8-flash-tts')).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 7.425, 2)
+      expect((await rates('gemini-3.8-flash-lite-tts')).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 5, 2)
+      expect((await rates(null)).sttCoinsPerMinute).toBeCloseTo(8, 2)
+      // Whole-clip apps always hear Gemini Flash-Lite (here the flat * rate).
+      expect((await rates(null, false)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 5, 2)
+      expect((await rates('gemini-3.8-flash-tts', false)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 7.425, 2)
     })
   })
 })

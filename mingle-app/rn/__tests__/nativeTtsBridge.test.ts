@@ -104,3 +104,22 @@ describe('tts_stopped reason (contract A.5)', () => {
     expect('reason' in buildNativeTtsStoppedEvent({ playbackId: 'pb', utteranceId: 'u' }, '  ')).toBe(false);
   });
 });
+
+describe('resolveNativeTtsStreamStartRequest', () => {
+  const { resolveNativeTtsStreamStartRequest } = require('../src/nativeTts');
+
+  it('keeps the playback id, sample rate and earphone flag of the web payload', () => {
+    expect(resolveNativeTtsStreamStartRequest({
+      utteranceId: 'u1:en',
+      playbackId: ' u1:en::3 ',
+      sampleRate: 16000,
+      stopOnEarphoneDisconnect: true,
+    })).toEqual({ utteranceId: 'u1:en', playbackId: 'u1:en::3', sampleRate: 16000, stopOnEarphoneDisconnect: true });
+  });
+
+  it('falls back to the utterance id and 24 kHz', () => {
+    expect(resolveNativeTtsStreamStartRequest({ utteranceId: 'u1:en' }))
+      .toEqual({ utteranceId: 'u1:en', playbackId: 'u1:en', sampleRate: 24000, stopOnEarphoneDisconnect: false });
+    expect(resolveNativeTtsStreamStartRequest({ utteranceId: 'u1:en', sampleRate: 1 }).sampleRate).toBe(24000);
+  });
+});

@@ -393,14 +393,12 @@ function resolveTranslationProviderFromEnv(): TranslationProvider {
 async function synthesizeTtsInline(args: {
   text: string
   language: string
-  requestedVoiceId?: string
   ttsModel?: unknown
 }): Promise<{ audioBase64: string, audioMime: string, voiceId: string, provider: string, modelId: string, audioSeconds: number } | null> {
   if (!args.text.trim() || !args.language.trim()) return null
   const result = await synthesizeSpeech({
     text: args.text,
     language: args.language,
-    requestedVoiceId: args.requestedVoiceId,
     ttsModel: args.ttsModel,
   })
   if (!result.ok) return null
@@ -485,7 +483,6 @@ async function runTranslateFinalize(
   const targetLanguagesRaw: unknown[] = Array.isArray(body.targetLanguages) ? body.targetLanguages : []
   const ttsPayload = (typeof body.tts === 'object' && body.tts !== null) ? body.tts as Record<string, unknown> : null
   const ttsLanguage = normalizeLang(typeof ttsPayload?.language === 'string' ? ttsPayload.language : '')
-  const ttsVoiceId = typeof ttsPayload?.voiceId === 'string' ? ttsPayload.voiceId.trim() : ''
   // User-selected TTS model; missing/invalid values resolve to the default (gemini-3.8-flash-lite-tts) downstream.
   const ttsModel = ttsPayload?.ttsModel
   const enableTts = ttsPayload?.enabled === true
@@ -780,7 +777,6 @@ async function runTranslateFinalize(
           const ttsResult = await synthesizeTtsInline({
             text: ttsText,
             language: ttsLanguage,
-            requestedVoiceId: ttsVoiceId,
             ttsModel,
           })
 
