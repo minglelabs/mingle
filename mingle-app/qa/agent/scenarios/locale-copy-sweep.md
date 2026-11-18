@@ -37,6 +37,7 @@ For each of ko, en, ja, es and de, plus ar (right to left) and any locale the di
    language selector header with its "Popular / All languages" section titles, and the sign-up survey
    ("How did you hear about HashChat?") option list when reachable.
 3. Note any string in another language, any clipped or ellipsised label, and any button whose text wraps onto two lines.
+   Layout overflow across all 15 locales is measured by the `locale-text-overflow` scenario; run it alongside.
 
 Switch back to Korean at the end.
 

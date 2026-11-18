@@ -2241,7 +2241,7 @@ describe('/api/translate/finalize route', () => {
   it('builds compact prompt with previous state first and no recent-turns section', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
-        text: () => '{"ko":"안녕하세요"}',
+        text: () => '{"sentence":"just before this hello","ko":"안녕하세요"}',
         usageMetadata: {},
       },
     })
@@ -2280,6 +2280,8 @@ describe('/api/translate/finalize route', () => {
     }) as never)
 
     expect(res.status).toBe(200)
+    // The joined sentence is asked for first and never comes back as a translation.
+    expect((await res.json()).translations).toEqual({ ko: '안녕하세요' })
 
     const userPrompt = readGeminiUserPrompt(0)
     const immediateIndex = userPrompt.indexOf('Immediate previous turn (~3s ago):')
@@ -2293,13 +2295,19 @@ describe('/api/translate/finalize route', () => {
     expect(userPrompt).toContain('  Translations:')
     expect(userPrompt).not.toContain('old recent context should be ignored')
 
-    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as { systemInstruction?: string }
+    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as {
+      systemInstruction?: string
+      generationConfig?: { responseSchema?: { required?: string[] } }
+    }
+    expect(modelConfig.generationConfig?.responseSchema?.required).toEqual(['sentence', 'ko'])
+    const { CONTINUED_SENTENCE_RULE } = await import('@/server/translation/translate-texts')
     expect(modelConfig.systemInstruction).toBe([
       'You are an expert live-conversation translator.',
       'Return ONLY strict JSON with keys exactly matching target language codes.',
       'No explanations, no markdown, no extra keys.',
-      'Always translate the ENTIRE current text as a standalone translation for each target language.',
-      'Never return only a suffix, delta, patch, completion fragment, or continuation.',
+      'Always translate the ENTIRE current text for each target language.',
+      'Never return only a suffix, delta or patch of the current text.',
+      CONTINUED_SENTENCE_RULE,
       'If is_final=yes, translate the full final text from scratch, not an incremental update.',
     ].join('\n'))
   })

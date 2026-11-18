@@ -84,6 +84,10 @@
 	<string>$(NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX)</string>
 	<key>MingleAdBannerUnitIdIos</key>
 	<string>$(NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS)</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INSendMessageIntent</string>
+	</array>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>

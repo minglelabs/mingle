@@ -116,3 +116,74 @@ export function auditLocaleTables(
     locales,
   ));
 }
+
+export type LongLabel = {
+  source: string;
+  path: string;
+  locale: PrimaryUiLocale;
+  value: string;
+  /** Estimated width in em at the label's font size. */
+  widthEm: number;
+  /** Width relative to the Korean string, which the layouts were designed around. */
+  vsKorean: number;
+};
+
+// Rough advance widths in em. Good enough to rank which labels will be widest, not to lay out.
+function charWidthEm(char: string): number {
+  const code = char.codePointAt(0) ?? 0;
+  if (/\p{M}/u.test(char)) return 0; // combining marks (Thai, Devanagari, Vietnamese tones)
+  if (char === " ") return 0.28;
+  if ((code >= 0x1100 && code <= 0x11ff) || (code >= 0x3000 && code <= 0x9fff) || (code >= 0xac00 && code <= 0xd7af) || (code >= 0xff00 && code <= 0xffef)) return 1;
+  if (/[A-ZÀ-ÞА-Я]/u.test(char)) return 0.66;
+  if (/[mwMWшщжмюы]/u.test(char)) return 0.8;
+  if (/[iljtf.,:;'!|]/.test(char)) return 0.3;
+  return 0.55;
+}
+
+export function estimateWidthEm(text: string): number {
+  let width = 0;
+  for (const char of text.normalize("NFC")) width += charWidthEm(char);
+  return Math.round(width * 10) / 10;
+}
+
+// Keys that name buttons, tabs, titles, chips and menu items: places with a fixed width.
+const CONTROL_KEY = /(Label|Action|Button|Tab|Title|title|label|action|button|tab|Cta|cta|Chip|chip|Menu|menu|Option|option|Placeholder|placeholder|Step|step)s?(\(\))?$|^tabs\.|^titles\./;
+
+/**
+ * Short UI labels that grow the most against Korean in another locale: the watch list for the
+ * on-device overflow sweep. Only labels that are short in Korean (≤ 12 em) are considered, since
+ * long body copy wraps by design.
+ */
+export function findLongLabels(
+  sources: CopySource[],
+  { minWidthEm = 7, minVsKorean = 1.8, limit = 60 }: { minWidthEm?: number; minVsKorean?: number; limit?: number } = {},
+): LongLabel[] {
+  const labels: LongLabel[] = [];
+  for (const source of sources) {
+    let ko: Map<string, string>;
+    try {
+      ko = flattenStrings(source.resolve("ko"));
+    } catch {
+      continue;
+    }
+    for (const locale of PRIMARY_UI_LOCALES) {
+      if (locale === "ko") continue;
+      let strings: Map<string, string>;
+      try {
+        strings = flattenStrings(source.resolve(locale));
+      } catch {
+        continue;
+      }
+      for (const [path, value] of strings) {
+        const koValue = ko.get(path);
+        if (!koValue || !CONTROL_KEY.test(path) || /Toast|toast|Notice|notice|Message$|Description|description|Hint|hint/.test(path) || /(^|\.)(code|id|key|value)$/.test(path)) continue;
+        const koWidth = estimateWidthEm(koValue);
+        if (koWidth > 12 || koWidth === 0) continue;
+        const widthEm = estimateWidthEm(value);
+        const vsKorean = Math.round((widthEm / koWidth) * 10) / 10;
+        if (widthEm >= minWidthEm && vsKorean >= minVsKorean) labels.push({ source: source.name, path, locale, value, widthEm, vsKorean });
+      }
+    }
+  }
+  return labels.sort((a, b) => b.widthEm - a.widthEm || b.vsKorean - a.vsKorean).slice(0, limit);
+}

@@ -3,9 +3,9 @@
 // An earphone microphone hears its wearer only: the person being translated,
 // who talks toward the phone, comes in faint or not at all. So a shell that
 // reports `earphoneMicrophoneChoice: true` in its `capabilities` message
-// records from the phone's microphone while earphones are in, and the web asks
-// once (the first time earphones show up) whether to keep it that way or use
-// the earphones' microphone. The answer is kept per device.
+// records from the phone's microphone while earphones are in. The earphones'
+// microphone can be picked instead from the room menu or my page (never asked
+// unprompted). The pick is kept per device.
 
 import {
   NATIVE_SHELL_CAPABILITIES_EVENT,
@@ -32,13 +32,61 @@ export function parseEarphoneMicrophonePick(raw: unknown): EarphoneMicrophonePic
   return raw === 'phone' || raw === 'earphone' ? raw : null
 }
 
-// Asked once, on a shell that can switch, the first time earphones are in.
-export function shouldAskEarphoneMicrophone(input: {
-  shellCapable: boolean
+export const EARPHONE_CAPTURE_SOURCE_ANSWER_STORAGE_KEY = 'mingle_earphone_capture_source_answer'
+
+export type EarphoneListeningNotice = {
+  open: boolean
+  // "The earphones only play; the phone's microphone listens", with Change.
+  showMicrophone: boolean
+  // Other apps' sound left the microphone's reach: translate it directly?
+  showCaptureSource: boolean
+}
+
+// One modal per earphone connection, the first time STT listens with them in
+// (it started with them in, or they went in while listening). Never while STT
+// is off. Each part shows only when it applies; with neither, nothing opens.
+// Both parts start on the last answer (first time: phone microphone, and the
+// microphone only).
+export function resolveEarphoneListeningNotice(input: {
+  visible: boolean
   earphonesConnected: boolean
-  pick: EarphoneMicrophonePick | null
-}): boolean {
-  return input.shellCapable && input.earphonesConnected && input.pick === null
+  sessionRunning: boolean
+  askedThisConnection: boolean
+  microphoneChoiceCapable: boolean
+  deviceAudioSupported: boolean
+  captureSource: 'microphone' | 'device_audio'
+}): EarphoneListeningNotice {
+  const showMicrophone = input.microphoneChoiceCapable
+  const showCaptureSource = input.deviceAudioSupported && input.captureSource === 'microphone'
+  const open = input.visible
+    && input.earphonesConnected
+    && input.sessionRunning
+    && !input.askedThisConnection
+    && (showMicrophone || showCaptureSource)
+  return { open, showMicrophone, showCaptureSource }
+}
+
+export function readEarphoneCaptureSourceAnswer(
+  storage?: Pick<Storage, 'getItem'> | null,
+): 'microphone' | 'device_audio' {
+  try {
+    const target = storage ?? (typeof window === 'undefined' ? null : window.localStorage)
+    return target?.getItem(EARPHONE_CAPTURE_SOURCE_ANSWER_STORAGE_KEY) === 'device_audio' ? 'device_audio' : 'microphone'
+  } catch {
+    return 'microphone'
+  }
+}
+
+export function writeEarphoneCaptureSourceAnswer(
+  answer: 'microphone' | 'device_audio',
+  storage?: Pick<Storage, 'setItem'> | null,
+): void {
+  try {
+    const target = storage ?? (typeof window === 'undefined' ? null : window.localStorage)
+    target?.setItem(EARPHONE_CAPTURE_SOURCE_ANSWER_STORAGE_KEY, answer)
+  } catch {
+    // Private mode: the next question starts on the microphone again.
+  }
 }
 
 // The `earphoneMicrophone` start option: only an explicit earphone pick.

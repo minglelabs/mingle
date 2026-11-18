@@ -105,7 +105,13 @@ function formatLanguageName(
   fallbackLabel: string,
 ): string {
   const formatted = displayNames?.of(languageCode)?.trim();
-  return formatted || fallbackLabel;
+  if (!formatted) return fallbackLabel;
+  // Engines disagree on the capitalization of a standalone language name (Node's ICU gives
+  // "español", WebKit "Español"). The server-rendered label must match the one the WebView
+  // hydrates with, or React rebuilds the whole tree and drops the canvas scale. Names are list
+  // items here, so always start them with a capital.
+  const locale = displayNames?.resolvedOptions().locale;
+  return formatted.charAt(0).toLocaleUpperCase(locale) + formatted.slice(1);
 }
 
 function areLabelsEquivalent(left: string, right: string): boolean {

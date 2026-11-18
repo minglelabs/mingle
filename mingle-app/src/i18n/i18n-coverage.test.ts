@@ -1,8 +1,12 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { getDictionary } from "@/i18n/get-dictionary";
 import {
   auditCopySources,
   auditLocaleTables,
+  estimateWidthEm,
+  findLongLabels,
   isLocaleKeyedTable,
   type CopySource,
   type I18nCoverageFinding,
@@ -67,5 +71,24 @@ describe("i18n coverage across the 15 primary UI locales", () => {
       console.log(JSON.stringify(findings, null, 1));
     }
     expect(fresh.map((f) => `${findingKey(f)} = ${JSON.stringify(f.value)}`)).toEqual([]);
+  });
+});
+
+describe("long labels (watch list for the on-device overflow sweep)", () => {
+  it("estimates CJK wider per character than Latin", () => {
+    expect(estimateWidthEm("팔로잉")).toBe(3);
+    expect(estimateWidthEm("Đang theo dõi")).toBeGreaterThan(estimateWidthEm("팔로잉") * 2);
+  });
+
+  it("ranks the labels that grow most against Korean", () => {
+    const { resolvers } = collectSources();
+    const labels = findLongLabels(resolvers);
+    expect(labels.every((label) => label.vsKorean >= 1.8)).toBe(true);
+    // `pnpm qa:i18n:long-labels` writes the list for the /qa agent.
+    const out = process.env.I18N_LONG_LABELS_OUT;
+    if (out) {
+      fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
+      fs.writeFileSync(out, `${JSON.stringify(labels, null, 2)}\n`);
+    }
   });
 });

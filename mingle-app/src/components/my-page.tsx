@@ -113,6 +113,7 @@ import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wallet-client";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { openContactSync } from "@/lib/native-contacts";
+import StaffAdminEntry from "@/components/staff-admin-entry";
 import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
@@ -935,8 +936,9 @@ function ProfileSettingsPanel({
               className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 text-left transition active:bg-gray-50"
             >
               <Contact size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
-              <span className="min-w-0 flex-1 text-[15px] font-semibold">{contactSyncCopy.title}</span>
-              <span className="truncate text-[13px] text-gray-400">{contactSyncCopy.headline}</span>
+              {/* The title stays whole; the reward headline gives way (it is long in fr/de). */}
+              <span className="shrink-0 text-[15px] font-semibold">{contactSyncCopy.title}</span>
+              <span data-qa-allow-truncate className="min-w-0 flex-1 truncate text-right text-[13px] text-gray-400">{contactSyncCopy.headline}</span>
               <ChevronRight size={19} strokeWidth={2} className="shrink-0 text-gray-400" aria-hidden="true" />
             </button>
             {postingFeedSupported !== false ? (
@@ -1115,6 +1117,7 @@ function ProfileSettingsPanel({
               <UserRoundX size={15} strokeWidth={2} aria-hidden="true" />
               {copy.deactivateAccount}
             </button>
+            <StaffAdminEntry enabled={open} />
           </div>
           <button type="button" onClick={onClose} className="absolute right-3 top-[calc(env(safe-area-inset-top,44px)+8px)] flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100" aria-label={copy.close}>
             <X size={18} aria-hidden="true" />

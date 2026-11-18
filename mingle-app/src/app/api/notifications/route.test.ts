@@ -4,8 +4,10 @@ import { NextRequest } from "next/server";
 const {
   mockGetServerSession,
   mockNotificationFindMany,
+  mockFollowFindMany,
   mockNotificationUpdateMany,
 } = vi.hoisted(() => ({
+  mockFollowFindMany: vi.fn(),
   mockGetServerSession: vi.fn(),
   mockNotificationFindMany: vi.fn(),
   mockNotificationUpdateMany: vi.fn(),
@@ -21,6 +23,9 @@ vi.mock("@/lib/auth-options", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    userFollow: {
+      findMany: mockFollowFindMany,
+    },
     userNotification: {
       findMany: mockNotificationFindMany,
       updateMany: mockNotificationUpdateMany,
@@ -40,6 +45,22 @@ describe("/api/notifications route", () => {
     vi.clearAllMocks();
     mockGetServerSession.mockResolvedValue({ user: { id: "user_123" } });
     mockNotificationUpdateMany.mockResolvedValue({ count: 3 });
+    mockFollowFindMany.mockResolvedValue([]);
+  });
+
+  it("marks follow rows whose actor the viewer already follows (follow back done)", async () => {
+    mockNotificationFindMany.mockResolvedValue([
+      { id: "n2", type: "follow", postId: null, commentId: null, readAt: null, createdAt: new Date("2026-11-14T08:50:00.000Z"), actor: actor("mutual") },
+      { id: "n1", type: "follow", postId: null, commentId: null, readAt: null, createdAt: new Date("2026-11-14T08:49:00.000Z"), actor: actor("fan") },
+    ]);
+    mockFollowFindMany.mockResolvedValue([{ followingId: "mutual" }]);
+
+    const body = await (await GET(new NextRequest("https://example.com/api/notifications"))).json();
+
+    expect(mockFollowFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { followerId: "user_123", followingId: { in: ["mutual", "fan"] } },
+    }));
+    expect(body.notifications.map((n: { isFollowing: boolean }) => n.isFollowing)).toEqual([true, false]);
   });
 
   it("returns all notification types and groups likes per target", async () => {

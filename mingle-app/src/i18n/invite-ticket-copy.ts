@@ -155,7 +155,7 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     reopenHint: "Después de instalar la app, vuelve a tocar este enlace",
   },
   pt: {
-    sendTicket: "Enviar um ingresso de convite a um amigo", ticketTitle: "Ingresso de convite do HashChat", ticketFrom: "Um ingresso de convite de {name}",
+    sendTicket: "Enviar convite a um amigo", ticketTitle: "Ingresso de convite do HashChat", ticketFrom: "Um ingresso de convite de {name}",
     ticketBenefit: "Quando seu amigo abrir o link, a sala de vocês dois abre na hora e ambos ganham {coins} Hash.",
     copyTicket: "Copiar ingresso", ticketCopied: "Ingresso copiado. Cole em uma conversa para enviar.", share: "Compartilhar",
     landingHeadline: "{name} enviou um ingresso de convite do HashChat para você",
@@ -185,7 +185,7 @@ const INVITE_TICKET_COPY_BY_LOCALE: Record<PrimaryUiLocale, InviteTicketCopy> = 
     reopenHint: "Dopo aver installato l'app, tocca di nuovo questo link",
   },
   ru: {
-    sendTicket: "Отправить другу пригласительный билет", ticketTitle: "Пригласительный билет HashChat", ticketFrom: "Пригласительный билет от {name}",
+    sendTicket: "Пригласить друга", ticketTitle: "Пригласительный билет HashChat", ticketFrom: "Пригласительный билет от {name}",
     ticketBenefit: "Когда друг откроет ссылку, сразу откроется ваш чат на двоих, и вы оба получите {coins} Хэш.",
     copyTicket: "Скопировать билет", ticketCopied: "Билет скопирован. Вставьте его в чат и отправьте.", share: "Поделиться",
     landingHeadline: "{name} прислал(а) вам пригласительный билет HashChat",

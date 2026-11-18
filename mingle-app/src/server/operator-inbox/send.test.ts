@@ -48,7 +48,7 @@ vi.mock('@/server/operator-inbox/notify', () => ({ notifyOperatorInboxActivity: 
 vi.mock('@/lib/app-analytics', () => ({ createTrackedEventLog: m.trackedEventLog, recordTrackedUserActivity: m.trackedActivity }))
 
 import { OperatorAccountRequiredError } from '@/server/operators/operator-guard'
-import { OperatorSendError, sendOperatorMessage } from '@/server/operator-inbox/send'
+import { OperatorSendError, sendOfficialAccountMessage, sendOperatorMessage } from '@/server/operator-inbox/send'
 
 const ctx = { sessionId: 'adm_1', ip: '127.0.0.1', userAgent: 'test' }
 const OPERATOR = {
@@ -131,6 +131,55 @@ describe('sendOperatorMessage', () => {
     expect(m.listMembers).not.toHaveBeenCalled()
     expect(m.translateTexts).not.toHaveBeenCalled()
     expect(m.txMessageCreate).not.toHaveBeenCalled()
+  })
+
+  it('sends as an official account in the language it wrote in, without staff audit', async () => {
+    m.listMembers.mockResolvedValue([member('hamzzi', ['en']), member('user_1', ['ko', 'en'])])
+    m.listMemberIds.mockResolvedValue(['hamzzi', 'user_1'])
+    m.translateTexts.mockResolvedValue({
+      translations: { ko: '맛있었어? 매웠어?', en: 'Was it tasty? Spicy?' },
+      detectedSourceLanguage: 'en',
+      provider: 'chatgpt-pool',
+      model: 'chatgpt-web',
+    })
+    const result = await sendOfficialAccountMessage({
+      sender: { ...OPERATOR, id: 'hamzzi', name: 'Hamzzi', primaryLanguages: ['en'] },
+      sourceLanguage: 'en',
+      operatorUserId: 'hamzzi',
+      conversationId: 'conv_1',
+      text: 'Was it tasty? Spicy?',
+      clientRequestId: 'hamzzi-msg9',
+    })
+    expect(m.requireOperatorAccount).not.toHaveBeenCalled()
+    expect(m.txMessageCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ userId: 'hamzzi', sourceLanguage: 'en' }),
+    }))
+    expect(contentRows()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ contentType: 'SOURCE', language: 'en', text: 'Was it tasty? Spicy?' }),
+      expect.objectContaining({ contentType: 'TRANSLATION_FINAL', language: 'ko', text: '맛있었어? 매웠어?' }),
+    ]))
+    expect(result.utterance.speakerBadge).toBe('official')
+    expect(m.writeAdminAudit).not.toHaveBeenCalled()
+    // Refreshes the inbox (Hamzzi rooms are in it); never a staff alert, the sender is the room's inbox account.
+    expect(m.notifyInbox).toHaveBeenCalledWith(expect.objectContaining({ senderUserId: 'hamzzi' }))
+    expect(m.sendPush).toHaveBeenCalled()
+
+    // Typed by staff in the inbox: audited like an operator reply.
+    vi.clearAllMocks()
+    await sendOfficialAccountMessage({
+      sender: { ...OPERATOR, id: 'hamzzi', name: 'Hamzzi', primaryLanguages: ['en'] },
+      sourceLanguage: 'en',
+      operatorUserId: 'hamzzi',
+      conversationId: 'conv_1',
+      text: '안녕 반가워',
+      clientRequestId: 'staff-reply-1',
+      ctx,
+    })
+    expect(m.writeAdminAudit).toHaveBeenCalledWith(ctx, expect.objectContaining({
+      action: 'inbox.reply',
+      operatorUserId: 'hamzzi',
+      metadata: expect.objectContaining({ staffOriginal: '안녕 반가워' }),
+    }))
   })
 
   it('refuses an inactive operator', async () => {

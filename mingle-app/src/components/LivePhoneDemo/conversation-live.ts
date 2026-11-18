@@ -260,8 +260,14 @@ export class RemotePreviews {
 
 // Latest-value coalescing: no per-token HTTP/DB requests and no backlog of old
 // partials after reconnect. Final previews have priority and remain ephemeral.
+// A draft that has not changed for this long is no longer being spoken: the
+// speech server closes a stalled turn within a few seconds. Repeating it would
+// keep a half-written bubble on the other person's screen for as long as the
+// sender stays in the room, so it is left to expire there instead.
+const STALE_PARTIAL_RESEND_MS = 15_000
+
 export class LivePreviewSender {
-  private records = new Map<string, { utterance: Utterance; final: boolean; lastSent: number; until: number }>()
+  private records = new Map<string, { utterance: Utterance; final: boolean; lastSent: number; until: number; changedAt: number }>()
   private lastPartialIds = new Set<string>()
   clear(): void { this.records.clear(); this.lastPartialIds.clear() }
   setPartials(utterances: readonly Utterance[]): void {
@@ -276,7 +282,8 @@ export class LivePreviewSender {
     if (previous?.final && !final) return
     if (previous?.final === final && JSON.stringify(previous.utterance) === JSON.stringify(utterance)) return
     if (this.records.size >= 100 && !previous) this.records.delete(this.records.keys().next().value!)
-    this.records.set(utterance.id, { utterance, final, lastSent: 0, until: Date.now() + (final ? 120_000 : 30 * 60_000) })
+    const changedAt = Date.now()
+    this.records.set(utterance.id, { utterance, final, lastSent: 0, until: changedAt + (final ? 120_000 : 30 * 60_000), changedAt })
   }
   committed(id: string): void { this.records.delete(id) }
   flush(send: (frame: Record<string, unknown>) => boolean, now = Date.now()): void {
@@ -284,6 +291,7 @@ export class LivePreviewSender {
     const pending = [...this.records.values()].sort((a, b) => a.lastSent - b.lastSent)
     for (const item of pending) {
       if (now - item.lastSent < 1000) continue
+      if (!item.final && now - item.changedAt >= STALE_PARTIAL_RESEND_MS) continue
       sequence = Math.max(sequence + 1, Date.now())
       if (send({ type: 'utterance_preview', id: item.utterance.id, originalText: item.utterance.originalText,
         originalLang: item.utterance.originalLang, translations: item.utterance.translations,

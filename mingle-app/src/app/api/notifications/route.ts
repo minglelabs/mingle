@@ -84,8 +84,20 @@ export async function GET(request: NextRequest) {
 
   const { items, unreadCount } = buildNotificationListResponse(pageRows as RawNotificationRow[]);
 
+  // Follow rows show "follow back" or, once the viewer follows the actor, a finished state.
+  const followActorIds = [...new Set(items.filter((item) => item.type === "follow").flatMap((item) => item.actorIds))];
+  const followedActorIds = followActorIds.length
+    ? new Set((await prisma.userFollow.findMany({
+      where: { followerId: viewerId, followingId: { in: followActorIds } },
+      select: { followingId: true },
+    })).map((row) => row.followingId))
+    : new Set<string>();
+  const notifications = items.map((item) => (
+    item.type === "follow" ? { ...item, isFollowing: followedActorIds.has(item.actorIds[0] ?? "") } : item
+  ));
+
   return responseJson({
-    notifications: items,
+    notifications,
     unreadCount,
     nextCursor,
     hasMore,

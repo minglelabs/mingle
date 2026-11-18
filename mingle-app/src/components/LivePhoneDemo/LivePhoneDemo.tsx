@@ -3,8 +3,7 @@
 import ConversationImageComposer, { type ConversationImageComposerEarphoneMode } from './ConversationImageComposer'
 import MessageMediaDialog from './MessageMediaDialog'
 import EarphoneModeNoticeContent from './EarphoneModeNotice'
-import EarphoneMicrophoneNoticeContent from './EarphoneMicrophoneNotice'
-import EarphoneCaptureSourceNoticeContent from './EarphoneCaptureSourceNotice'
+import EarphoneCaptureSourceNoticeContent, { type EarphoneListeningNoticeResult } from './EarphoneCaptureSourceNotice'
 import { EarphoneMicrophoneSettingControl } from './EarphoneMicrophoneSetting'
 import LanguageRadioOption from './LanguageRadioOption'
 
@@ -18,10 +17,14 @@ import { captureMingleClientEvent } from '@/lib/posthog-client'
 import SpeechLengthScale from '@/components/LivePhoneDemo/SpeechLengthScale'
 import {
   DEFAULT_SPEECH_LENGTH_LEVEL,
+  RECOMMENDED_SPEECH_LENGTH_LEVEL,
+  SPEECH_LENGTH_SIMPLE_LEVELS,
   isExactSpeechLengthLevel,
+  simpleSpeechLengthLevel,
   matchSpeechLengthLevel,
   resolveSpeechLengthPreferences,
   shouldShowSpeechLengthCard,
+  type SpeechLengthPreferences,
   type SpeechLengthLevel,
 } from '@/lib/speech-length'
 import type { MessageReplyReference } from '@/lib/message-reply'
@@ -73,25 +76,23 @@ import {
   resolveNativeDeviceAudioSupported,
   setDeviceAudioOptIn,
   setSttCaptureSourcePick,
-  shouldOfferDeviceAudioOnEarphonesIn,
   shouldPlayTtsViaNativeShell,
   subscribeDeviceAudioOptIn,
   subscribeNativeDeviceAudioCapability,
   subscribeSttCaptureSourcePick,
-  type SttCaptureSource,
 } from '@/lib/native-device-audio'
 import {
   getEarphoneMicrophonePickServerSnapshot,
   getEarphoneMicrophonePickSnapshot,
   getNativeEarphoneMicrophoneCapabilityServerSnapshot,
   getNativeEarphoneMicrophoneCapabilitySnapshot,
+  readEarphoneCaptureSourceAnswer,
   resolveEarphoneMicrophoneEnabled,
-  shouldAskEarphoneMicrophone,
+  resolveEarphoneListeningNotice,
   subscribeEarphoneMicrophonePick,
   subscribeNativeEarphoneMicrophoneCapability,
+  writeEarphoneCaptureSourceAnswer,
   writeEarphoneMicrophonePick,
-  DEFAULT_EARPHONE_MICROPHONE_PICK,
-  type EarphoneMicrophonePick,
 } from '@/lib/native-earphone-microphone'
 import { estimateTtsAudioDurationMs, resolveNativeTtsWatchdogTimeoutMs } from '@/lib/tts-audio-duration'
 import { TtsAgentTextScheduler } from './tts-agent-text'
@@ -171,6 +172,8 @@ import {
   DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_ENDPOINT_MAX_DELAY_MS,
   DEFAULT_SONIOX_ENDPOINT_TUNING_STEP,
+  MAX_SONIOX_SILENCE_MS,
+  MIN_SONIOX_SILENCE_MS,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   LS_KEY_AD_BANNER_POSITION,
@@ -231,6 +234,14 @@ import {
 } from '@/lib/tts-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import { requestNativeBannerZone } from '@/lib/native-banner-zone'
+import {
+  buildNativeShareTargetDonation,
+  getPendingNativeShareVersion,
+  postNativeShareTargetDonate,
+  postNativeShareTargetRemove,
+  subscribePendingNativeShare,
+  takePendingNativeShareText,
+} from '@/lib/native-share-inbox'
 import { reportUiDiagnostic } from '@/lib/ui-diagnostics'
 import { unreadDividerLabel } from '@/i18n/unread-divider-copy'
 import {
@@ -347,6 +358,8 @@ import {
 
 export { resolveKeyboardViewportInsetPx, resolveStableKeyboardViewportInsetPx }
 
+/** About as long as the iOS keyboard takes to slide down. */
+const KEYBOARD_CLOSE_EASE_MS = 250
 const VOLUME_THRESHOLD = 0.05
 // How long a "loaded" older-history page may go without changing the list before its loading state is released.
 const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
@@ -1281,7 +1294,13 @@ type FeedbackHistoryResponse = {
   threads: FeedbackHistoryThread[]
 }
 
-type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite'
+type CustomSpeechSplit = {
+  sttSegmentationMode: 'end' | 'fin'
+  sonioxEndpointTuningStep?: number
+  sonioxManualFinalizeSilenceMs?: number
+}
+
+type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite' | 'speech-length'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 
@@ -1347,6 +1366,7 @@ function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuSc
     || value === 'participants'
     || value === 'display-language'
     || value === 'invite'
+    || value === 'speech-length'
 }
 
 function resolveMenuScreenForDepth(
@@ -1361,6 +1381,7 @@ function resolveMenuScreenForDepth(
     return 'conversation-management'
   }
   if (preferredScreen === 'display-language') return 'display-language'
+  if (preferredScreen === 'speech-length') return 'speech-length'
   if (preferredScreen === 'conversation-management') return 'conversation-management'
   if (preferredScreen === 'participants') return 'participants'
   return 'feedback'
@@ -1961,6 +1982,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   connectionFailedLabel,
   switchLiveRoomToastLabel,
   textSizeLabel,
+  silenceFinalizeLabel,
+  sttSegmentationModeLabel,
+  sttSegmentationModeEndLabel,
+  sttSegmentationModeFinLabel,
+  endpointTuningLabel,
+  endpointTuningShortLabel,
+  endpointTuningLongLabel,
   translationModelLabel,
   ttsModelLabel,
   adBannerPositionLabel,
@@ -2379,8 +2407,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     deviceAudioOptIn,
     pick: sttCaptureSourcePick,
   })
-  // Which microphone records while earphones are in: the phone's by default,
-  // asked once the first time earphones show up (shells that can switch).
+  // Which microphone records while earphones are in: the phone's, unless the
+  // earphones were picked in the room menu or on my page. Never asked: the
+  // phone's is what translation needs almost always.
   const nativeEarphoneMicrophoneCapable = useSyncExternalStore(
     subscribeNativeEarphoneMicrophoneCapability,
     getNativeEarphoneMicrophoneCapabilitySnapshot,
@@ -5409,6 +5438,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       clearConversationHistory()
       setDeleteConversationDialogOpen(false)
       requestCloseMenuPanel()
+      // Left or deleted: the system must stop suggesting it in the share sheet.
+      postNativeShareTargetRemove(conversationId)
       onConversationDeleted?.()
       toast.success(isMultiMember ? leaveConversationCopy.successToastLabel : deleteConversationCopy.successToastLabel)
     } catch {
@@ -5956,39 +5987,74 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (isSttSessionRunning) void handleStopRecording()
   }, [handleStopRecording, isSttSessionRunning, sttCaptureSource])
 
-  // Earphones went in while a microphone-only session ran: other apps' sound
-  // left the microphone's reach, so ask whether to translate it directly.
+  // Once per earphone connection, when STT listens with them in (started with
+  // them in, or they went in while listening), one modal: the phone's
+  // microphone still listens (Change to pick the earphones'), and, when the
+  // microphone alone is listening, whether to translate this device's sound
+  // now that other apps play in the earphones only. Both start on the last
+  // answer.
   const [earphoneCaptureNoticeOpen, setEarphoneCaptureNoticeOpen] = useState(false)
+  const [earphoneCaptureNoticeParts, setEarphoneCaptureNoticeParts] = useState({
+    showMicrophone: false,
+    showCaptureSource: false,
+    initialSource: 'microphone' as 'microphone' | 'device_audio',
+  })
+  const earphoneListeningNoticeAskedRef = useRef(false)
   // Set when that question switched a running session: listen again once the
   // old session is gone.
   const captureSourceRestartPendingRef = useRef(false)
-  const previousEarphonesConnectedRef = useRef(nativeAudioRoute.earphonesConnected)
   useEffect(() => {
-    const wasConnected = previousEarphonesConnectedRef.current
-    previousEarphonesConnectedRef.current = nativeAudioRoute.earphonesConnected
     if (!nativeAudioRoute.earphonesConnected) {
+      // Earphones out: the next connection asks again, and the answer given
+      // for this one (this device's sound) ends with it.
+      earphoneListeningNoticeAskedRef.current = false
       setEarphoneCaptureNoticeOpen(false)
+      if (getDeviceAudioOptInSnapshot()) setDeviceAudioOptIn(false)
       return
     }
-    if (shouldOfferDeviceAudioOnEarphonesIn({
-      earphonesJustConnected: !wasConnected,
-      supported: nativeDeviceAudioSupported && isVisible,
+    if (earphoneCaptureNoticeOpen || earphoneModeNoticeOpen || screenCaptureNoticeOpen) return
+    const notice = resolveEarphoneListeningNotice({
+      visible: isVisible,
+      earphonesConnected: nativeAudioRoute.earphonesConnected,
       sessionRunning: isSttSessionRunning,
+      askedThisConnection: earphoneListeningNoticeAskedRef.current,
+      microphoneChoiceCapable: nativeEarphoneMicrophoneCapable,
+      deviceAudioSupported: nativeDeviceAudioSupported,
       captureSource: sttCaptureSource,
-    })) {
-      setEarphoneCaptureNoticeOpen(true)
-    }
-  }, [isSttSessionRunning, isVisible, nativeAudioRoute.earphonesConnected, nativeDeviceAudioSupported, sttCaptureSource])
+    })
+    if (!notice.open) return
+    earphoneListeningNoticeAskedRef.current = true
+    setEarphoneCaptureNoticeParts({
+      showMicrophone: notice.showMicrophone,
+      showCaptureSource: notice.showCaptureSource,
+      initialSource: readEarphoneCaptureSourceAnswer(),
+    })
+    setEarphoneCaptureNoticeOpen(true)
+  }, [
+    earphoneCaptureNoticeOpen,
+    earphoneModeNoticeOpen,
+    isSttSessionRunning,
+    isVisible,
+    nativeAudioRoute.earphonesConnected,
+    nativeDeviceAudioSupported,
+    nativeEarphoneMicrophoneCapable,
+    screenCaptureNoticeOpen,
+    sttCaptureSource,
+  ])
 
-  const confirmEarphoneCaptureNotice = useCallback((source: SttCaptureSource) => {
+  const confirmEarphoneCaptureNotice = useCallback(({ source, microphonePick }: EarphoneListeningNoticeResult) => {
     setEarphoneCaptureNoticeOpen(false)
+    if (earphoneCaptureNoticeParts.showMicrophone && microphonePick !== (earphoneMicrophonePick ?? 'phone')) {
+      writeEarphoneMicrophonePick(microphonePick)
+    }
+    if (earphoneCaptureNoticeParts.showCaptureSource) writeEarphoneCaptureSourceAnswer(source)
     if (source !== 'device_audio') return
     // This question is the warning: Start goes straight to the system prompt.
     screenCaptureNoticeAcknowledgedRef.current = true
     captureSourceRestartPendingRef.current = isSttSessionRunning
     setSttCaptureSourcePick('device_audio')
     setDeviceAudioOptIn(true)
-  }, [isSttSessionRunning])
+  }, [earphoneCaptureNoticeParts.showCaptureSource, earphoneCaptureNoticeParts.showMicrophone, earphoneMicrophonePick, isSttSessionRunning])
 
   const dismissEarphoneCaptureNotice = useCallback(() => {
     setEarphoneCaptureNoticeOpen(false)
@@ -6003,7 +6069,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [handleStartRecording, isConnecting, isPreparingStart, isSttSessionRunning, sttCaptureSource])
 
   // ── Sentence length ───────────────────────────────────────────────────
-  // One 1-6 scale (see @/lib/speech-length) stands for the two speech split
+  // One five-level scale (see @/lib/speech-length) stands for the two speech split
   // settings, in the room settings and on the first-run card. A new user (no
   // split ever chosen) starts on the default level before the room first
   // listens, then sees the scale after a few finished bubbles
@@ -6019,21 +6085,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const onFirstSpeakCompletedRef = useRef(onFirstSpeakCompleted)
   onFirstSpeakCompletedRef.current = onFirstSpeakCompleted
 
-  const applySpeechLengthPreferences = useCallback((level: SpeechLengthLevel) => {
-    const preferences = resolveSpeechLengthPreferences(level)
+  // A level, or the "Set it myself" controls (any mode, step or silence).
+  const applySpeechSplitPreferences = useCallback((preferences: SpeechLengthPreferences | CustomSpeechSplit) => {
     const nextPreferences = commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
       ...preferences,
     })
     setSttSegmentationMode(preferences.sttSegmentationMode)
-    if (preferences.sttSegmentationMode === 'end') {
+    if ('sonioxEndpointTuningStep' in preferences && typeof preferences.sonioxEndpointTuningStep === 'number') {
       setSonioxEndpointTuningStep(preferences.sonioxEndpointTuningStep)
-    } else {
+    }
+    if ('sonioxManualFinalizeSilenceMs' in preferences && typeof preferences.sonioxManualFinalizeSilenceMs === 'number') {
       setSonioxManualFinalizeSilenceMs(preferences.sonioxManualFinalizeSilenceMs)
     }
     clearAccountPreferencesSyncTimer()
     syncAccountPreferencesOverride(nextPreferences)
   }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
+  const applySpeechLengthPreferences = useCallback((level: SpeechLengthLevel) => {
+    applySpeechSplitPreferences(resolveSpeechLengthPreferences(level))
+  }, [applySpeechSplitPreferences])
 
   useEffect(() => {
     if (!speechLengthIntro || speechLengthDefaultAppliedRef.current) return
@@ -6121,6 +6191,51 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     selectedSpeechLengthLevel,
     showFloatingToast,
   ])
+
+  // The "More" page: all five levels, and below them the two underlying
+  // settings (automatic detection step, silence time). Those follow the level
+  // and stay locked until "Set it myself" is turned on; a setting that is no
+  // level's (saved before the scale, or set by hand) opens with it on.
+  const [speechLengthCustom, setSpeechLengthCustom] = useState(false)
+  const [speechSplitDraft, setSpeechSplitDraft] = useState<{ step?: number; silenceMs?: number } | null>(null)
+  const isSpeechLengthLevelExactRef = useRef(isSpeechLengthLevelExact)
+  isSpeechLengthLevelExactRef.current = isSpeechLengthLevelExact
+  useEffect(() => {
+    if (menuScreen !== 'speech-length') return
+    setSpeechLengthCustom(!isSpeechLengthLevelExactRef.current)
+    setSpeechSplitDraft(null)
+  }, [menuScreen])
+
+  const handleSpeechLengthMorePress = useCallback(() => {
+    if (!menuOpen || menuScreen === 'speech-length') return
+    pushMenuHistoryEntry(2, 'speech-length')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleCustomSpeechSplitCommit = useCallback(async (preferences: CustomSpeechSplit) => {
+    setSpeechSplitDraft(null)
+    if (isApplyingSpeechLength) return
+    const unchanged = preferences.sttSegmentationMode === (sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE)
+      && (preferences.sonioxEndpointTuningStep ?? sonioxEndpointTuningStep) === sonioxEndpointTuningStep
+      && (preferences.sonioxManualFinalizeSilenceMs ?? sonioxManualFinalizeSilenceMs) === sonioxManualFinalizeSilenceMs
+    if (unchanged) return
+    captureMingleClientEvent('mingle_first_run_step', { step: 'length_custom_set', mode: preferences.sttSegmentationMode })
+    setIsApplyingSpeechLength(true)
+    try {
+      const wasRunning = isSttSessionRunning
+      if (wasRunning) await handleStopRecording()
+      applySpeechSplitPreferences(preferences)
+      speechLengthRestartPendingRef.current = wasRunning
+    } finally {
+      setIsApplyingSpeechLength(false)
+    }
+  }, [applySpeechSplitPreferences, handleStopRecording, isApplyingSpeechLength, isSttSessionRunning, sonioxEndpointTuningStep, sonioxManualFinalizeSilenceMs, sttSegmentationMode])
+
+  const handleSpeechLengthCustomToggle = useCallback((next: boolean) => {
+    setSpeechLengthCustom(next)
+    setSpeechSplitDraft(null)
+    // Turning it off puts a hand-made setting back on the nearest level.
+    if (!next && !isSpeechLengthLevelExact) void handleSpeechLengthSelect(selectedSpeechLengthLevel, 'settings')
+  }, [handleSpeechLengthSelect, isSpeechLengthLevelExact, selectedSpeechLengthLevel])
 
   // Listen again once the stopped session is gone and the new setting is in.
   useEffect(() => {
@@ -6219,6 +6334,57 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setComposerHasDraft((current) => current === nextHasDraft ? current : nextHasDraft)
     syncComposerTextareaHeight(event.currentTarget)
   }, [composerDraftStorageKey, syncComposerTextareaHeight])
+
+  // System share sheet: suggest this room there (it lists the rooms the app
+  // reported as direct targets). Reported each time the room is opened, so iOS ranks the
+  // rooms the user actually uses first.
+  const shareTargetDonationKeyRef = useRef('')
+  useEffect(() => {
+    if (!isVisible || !conversationId || !viewerUserId || typeof window === 'undefined') return
+    const donation = buildNativeShareTargetDonation({
+      conversationId,
+      title: displayConversationTitle,
+      otherMembers: initialOtherMembers ?? [],
+      origin: window.location.origin,
+    })
+    if (!donation) return
+    const donationKey = JSON.stringify(donation)
+    if (shareTargetDonationKeyRef.current === donationKey) return
+    shareTargetDonationKeyRef.current = donationKey
+    postNativeShareTargetDonate(donation)
+  }, [conversationId, displayConversationTitle, initialOtherMembers, isVisible, viewerUserId])
+  useEffect(() => {
+    if (!isVisible) shareTargetDonationKeyRef.current = ''
+  }, [isVisible])
+
+  // Text or a link shared to HashChat from another app lands in the message
+  // box (after any draft already there) for the user to review and send.
+  const pendingNativeShareVersion = useSyncExternalStore(subscribePendingNativeShare, getPendingNativeShareVersion, () => '')
+  const sharedTextComposerOpenUntilRef = useRef(0)
+  const [sharedTextArrivalCount, setSharedTextArrivalCount] = useState(0)
+  useEffect(() => {
+    if (!pendingNativeShareVersion || !isVisible || !conversationId || !viewerUserId) return
+    const sharedText = takePendingNativeShareText(conversationId)
+    if (!sharedText) return
+    const currentDraft = composerTextareaRef.current?.value ?? composerDraftRef.current
+    const nextDraft = currentDraft.trim() ? `${currentDraft.replace(/\s+$/, '')}\n${sharedText}` : sharedText
+    composerDraftRef.current = nextDraft
+    persistComposerDraft(nextDraft, composerDraftStorageKey)
+    setComposerHasDraft(true)
+    if (composerTextareaRef.current) {
+      composerTextareaRef.current.value = nextDraft
+      syncComposerTextareaHeight(composerTextareaRef.current)
+    }
+    sharedTextComposerOpenUntilRef.current = Date.now() + 8_000
+    setSharedTextArrivalCount((count) => count + 1)
+  }, [composerDraftStorageKey, conversationId, isVisible, pendingNativeShareVersion, syncComposerTextareaHeight, viewerUserId])
+  // Voice mode has no message box on screen: show the keyboard-mode box, which
+  // mounts with this draft. A room that is still loading applies its saved
+  // input mode a moment later, so the box is reopened for a short while.
+  useEffect(() => {
+    if (isComposerOpen || Date.now() > sharedTextComposerOpenUntilRef.current) return
+    setIsComposerOpen(true)
+  }, [isComposerOpen, sharedTextArrivalCount])
 
   const handleComposerSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -7226,23 +7392,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setEarphoneModeNoticeOpen(false)
   }, [])
 
-  // Only the visible room asks, and never on top of another notice.
-  const earphoneMicrophoneNoticeOpen = isVisible
-    && !earphoneModeNoticeOpen
-    && !screenCaptureNoticeOpen
-    && shouldAskEarphoneMicrophone({
-      shellCapable: nativeEarphoneMicrophoneCapable,
-      earphonesConnected: nativeAudioRoute.earphonesConnected,
-      pick: earphoneMicrophonePick,
-    })
-  const confirmEarphoneMicrophoneNotice = useCallback((pick: EarphoneMicrophonePick) => {
-    writeEarphoneMicrophonePick(pick)
-  }, [])
-  // Dismissed without a pick: keep the default and do not ask again.
-  const dismissEarphoneMicrophoneNotice = useCallback(() => {
-    writeEarphoneMicrophonePick(DEFAULT_EARPHONE_MICROPHONE_PICK)
-  }, [])
-
   const isEarphoneModeOn = earphoneModeGate.controlVisible && earphoneModeEnabled
   const earphoneModeControlLabel = earphoneModeGate.waitingForEarphones
     ? `${earphoneModeCopy.label}, ${earphoneModeCopy.waitingLabel}`
@@ -7617,6 +7766,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? COMPOSER_MODE_BOTTOM_MARGIN_PX
     : VOICE_MODE_BOTTOM_MARGIN_PX
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
+  // iOS reports the keyboard's final height (0) as soon as it starts sliding
+  // down, so the bar used to drop at once and the chat jumped to full height
+  // while the keyboard was still on screen. Ease the bar down alongside the
+  // keyboard instead. Only the closing side animates: when the keyboard opens,
+  // iOS already scrolls the focused field into view, and a delayed bar would
+  // leave the field under the keyboard.
+  const bottomBarKeyboardTransition = isComposerOpen && keyboardViewportInsetPx === 0
+    ? `padding-bottom ${KEYBOARD_CLOSE_EASE_MS}ms cubic-bezier(0.25, 0.8, 0.3, 1)`
+    : undefined
   const composerCanSend = composerHasDraft
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
@@ -8237,14 +8395,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </div>
 
                             <div className="block">
-                              {/* One 1-6 scale instead of the two speech split settings
-                                  (automatic detection steps, silence time). */}
-                              <div className="mb-2 pl-1 pt-1.5 text-[0.98rem] font-medium text-gray-900">{firstRunCopy.lengthMenuLabel}</div>
+                              {/* Three stops (short, recommended, long) for the two speech
+                                  split settings; "More" opens all five levels and the
+                                  settings themselves. */}
+                              <div className="mb-2 flex items-center justify-between gap-3 pl-1 pt-1.5">
+                                <span className="min-w-0 text-[0.98rem] font-medium text-gray-900">{firstRunCopy.lengthMenuLabel}</span>
+                                <button
+                                  type="button"
+                                  data-qa="speech-length-more"
+                                  onClick={handleSpeechLengthMorePress}
+                                  className="-mr-1 inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-1 text-[0.85rem] font-semibold text-gray-500 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                                >
+                                  {firstRunCopy.lengthMore}
+                                  <ChevronRight size={16} strokeWidth={2.4} aria-hidden />
+                                </button>
+                              </div>
                               <div className="relative">
                                 <SpeechLengthScale
                                   copy={firstRunCopy}
-                                  selected={selectedSpeechLengthLevel}
+                                  selected={simpleSpeechLengthLevel(selectedSpeechLengthLevel)}
                                   disabled={isApplyingSpeechLength}
+                                  levels={SPEECH_LENGTH_SIMPLE_LEVELS}
+                                  showNumbers={false}
+                                  recommended={RECOMMENDED_SPEECH_LENGTH_LEVEL}
                                   onSelect={(level) => { void handleSpeechLengthSelect(level, 'settings') }}
                                 />
                                 {isSilenceFinalizeSliderLocked && (
@@ -9123,6 +9296,179 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                     <motion.section
                       initial={false}
+                      animate={menuContentScreen === 'speech-length' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuContentScreen !== 'speech-length'}
+                      data-qa="speech-length-page"
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuContentScreen === 'speech-length' ? 'auto' : 'none',
+                        zIndex: menuContentScreen === 'speech-length'
+                          ? 3
+                          : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
+                      }}
+                    >
+                      <LivePhoneDemoPanelHeader
+                        title={firstRunCopy.lengthMenuLabel}
+                        backLabel={roomManagementCopy.backButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
+                      <div
+                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                        style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}
+                      >
+                        <div className="px-4 py-5">
+                          <div className="relative">
+                            <SpeechLengthScale
+                              copy={firstRunCopy}
+                              selected={selectedSpeechLengthLevel}
+                              disabled={isApplyingSpeechLength}
+                              recommended={RECOMMENDED_SPEECH_LENGTH_LEVEL}
+                              onSelect={(level) => {
+                                setSpeechLengthCustom(false)
+                                setSpeechSplitDraft(null)
+                                void handleSpeechLengthSelect(level, 'settings')
+                              }}
+                            />
+                            {isSilenceFinalizeSliderLocked && (
+                              <button
+                                type="button"
+                                aria-label={silenceFinalizeLockedButtonLabel}
+                                onClick={handleSilenceFinalizeLockedInteraction}
+                                className="absolute inset-0 z-10 cursor-not-allowed rounded-xl bg-white/40"
+                              />
+                            )}
+                          </div>
+
+                          <div className="mt-6 flex items-center justify-between gap-3 rounded-2xl border border-gray-200 px-3.5 py-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[0.98rem] font-medium text-gray-900">{firstRunCopy.lengthCustom}</p>
+                              <p className="mt-0.5 text-[0.8rem] leading-5 text-gray-500">{firstRunCopy.lengthCustomHint}</p>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              data-qa="speech-length-custom"
+                              aria-checked={speechLengthCustom}
+                              aria-label={firstRunCopy.lengthCustom}
+                              disabled={isApplyingSpeechLength}
+                              onClick={() => {
+                                if (isSilenceFinalizeSliderLocked) {
+                                  handleSilenceFinalizeLockedInteraction()
+                                  return
+                                }
+                                handleSpeechLengthCustomToggle(!speechLengthCustom)
+                              }}
+                              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border-0 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 ${speechLengthCustom ? 'bg-amber-500' : 'bg-gray-300'}`}
+                            >
+                              <span
+                                className="absolute left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+                                style={{ transform: speechLengthCustom ? 'translateX(20px)' : 'translateX(0px)' }}
+                              />
+                            </button>
+                          </div>
+
+                          {(() => {
+                            const locked = !speechLengthCustom || isApplyingSpeechLength
+                            const mode = sttSegmentationMode ?? DEFAULT_STT_SEGMENTATION_MODE
+                            const step = speechSplitDraft?.step ?? sonioxEndpointTuningStep
+                            const silenceMs = speechSplitDraft?.silenceMs ?? sonioxManualFinalizeSilenceMs
+                            const commitStep = () => {
+                              if (speechSplitDraft?.step !== undefined) void handleCustomSpeechSplitCommit({ sttSegmentationMode: 'end', sonioxEndpointTuningStep: speechSplitDraft.step })
+                            }
+                            const commitSilence = () => {
+                              if (speechSplitDraft?.silenceMs !== undefined) void handleCustomSpeechSplitCommit({ sttSegmentationMode: 'fin', sonioxManualFinalizeSilenceMs: speechSplitDraft.silenceMs })
+                            }
+                            return (
+                              <div data-qa="speech-length-detail" aria-disabled={locked} className={`mt-4 transition-opacity ${locked ? 'opacity-45' : ''}`}>
+                                <div className="mb-1 pl-1 text-[0.9rem] font-medium text-gray-700">{sttSegmentationModeLabel}</div>
+                                <div role="radiogroup" aria-label={sttSegmentationModeLabel} className="space-y-2">
+                                  {([
+                                    { value: 'end' as const, label: sttSegmentationModeEndLabel },
+                                    { value: 'fin' as const, label: sttSegmentationModeFinLabel },
+                                  ]).map((option) => {
+                                    const isSelected = mode === option.value
+                                    return (
+                                      <div
+                                        key={option.value}
+                                        className={`overflow-hidden rounded-[1.25rem] border transition ${isSelected ? 'border-amber-300 bg-amber-50/60' : 'border-gray-200 bg-gray-50'}`}
+                                      >
+                                        <button
+                                          type="button"
+                                          role="radio"
+                                          aria-checked={isSelected}
+                                          disabled={locked}
+                                          onClick={() => void handleCustomSpeechSplitCommit({ sttSegmentationMode: option.value })}
+                                          className="flex min-h-11 w-full items-center gap-3 px-3.5 py-2.5 text-left disabled:cursor-not-allowed"
+                                        >
+                                          <span aria-hidden className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 bg-white ${isSelected ? 'border-amber-500' : 'border-gray-300'}`}>
+                                            {isSelected && <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />}
+                                          </span>
+                                          <span className={`text-[0.9rem] font-semibold leading-tight ${isSelected ? 'text-amber-900' : 'text-gray-500'}`}>{option.label}</span>
+                                        </button>
+                                        {isSelected && option.value === 'end' && (
+                                          <label className="block px-3.5 pb-3">
+                                            <span className="flex items-center justify-between gap-3 pl-1 text-[0.9rem] text-gray-800">
+                                              <span>{endpointTuningLabel}</span>
+                                              <span className="shrink-0 font-semibold tabular-nums">{step + 1}/5</span>
+                                            </span>
+                                            <span className="mt-1 flex items-center gap-2">
+                                              <span className="shrink-0 text-[0.7rem] text-gray-500">{endpointTuningShortLabel}</span>
+                                              <input
+                                                type="range"
+                                                min={0}
+                                                max={4}
+                                                step={1}
+                                                value={step}
+                                                disabled={locked}
+                                                data-qa="speech-length-endpoint-step"
+                                                aria-label={endpointTuningLabel}
+                                                onChange={(event) => setSpeechSplitDraft({ step: Number(event.target.value) })}
+                                                onPointerUp={commitStep}
+                                                onKeyUp={commitStep}
+                                                onBlur={commitStep}
+                                                className="h-8 min-w-0 flex-1 accent-amber-500 disabled:cursor-not-allowed"
+                                              />
+                                              <span className="shrink-0 text-[0.7rem] text-gray-500">{endpointTuningLongLabel}</span>
+                                            </span>
+                                          </label>
+                                        )}
+                                        {isSelected && option.value === 'fin' && (
+                                          <label className="block px-3.5 pb-3">
+                                            <span className="flex items-center justify-between gap-3 pl-1 text-[0.9rem] text-gray-800">
+                                              <span>{silenceFinalizeLabel}</span>
+                                              <span className="shrink-0 font-semibold tabular-nums">{(silenceMs / 1000).toFixed(1)}s</span>
+                                            </span>
+                                            <input
+                                              type="range"
+                                              min={MIN_SONIOX_SILENCE_MS}
+                                              max={MAX_SONIOX_SILENCE_MS}
+                                              step={100}
+                                              value={silenceMs}
+                                              disabled={locked}
+                                              data-qa="speech-length-silence"
+                                              aria-label={silenceFinalizeLabel}
+                                              onChange={(event) => setSpeechSplitDraft({ silenceMs: Number(event.target.value) })}
+                                              onPointerUp={commitSilence}
+                                              onKeyUp={commitSilence}
+                                              onBlur={commitSilence}
+                                              className="mt-1 h-8 w-full accent-amber-500 disabled:cursor-not-allowed"
+                                            />
+                                          </label>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      </div>
+                    </motion.section>
+
+                    <motion.section
+                      initial={false}
                       animate={menuContentScreen === 'participants' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
                       transition={resolveMenuContentTransition(menuScreenTransitionMode)}
                       aria-hidden={menuContentScreen !== 'participants'}
@@ -9492,8 +9838,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             ) : null}
             {speechLengthCardOpen ? (
               <div
-                className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3"
-                style={{ bottom: copyToastBottomOffsetPx }}
+                className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-end justify-center px-3"
+                style={{ bottom: copyToastBottomOffsetPx, paddingTop: nativeChatTopSpacerPx + 12 }}
               >
                 <SpeechLengthCard
                   copy={firstRunCopy}
@@ -9699,6 +10045,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             layout={!isComposerOpen}
             layoutDependency={isComposerOpen}
             onLayoutAnimationComplete={syncNativeBottomBarClearance}
+            onTransitionEnd={syncNativeBottomBarClearance}
             ref={bottomBarRef}
             data-qa="live-demo-bottom-bar"
             className="relative shrink-0 border-t border-gray-100 bg-white"
@@ -9706,6 +10053,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             style={{
               paddingTop: `${bottomBarTopPaddingPx}px`,
               paddingBottom: bottomBarPaddingBottom,
+              transition: bottomBarKeyboardTransition,
               paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
@@ -9825,7 +10173,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
                         onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} /> : earphoneModeMenuItem ? (
+                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} acceptSharedPhoto={isVisible} /> : earphoneModeMenuItem ? (
                       // No sendable conversation: no photo row, but the "+" still
                       // carries the earphone-mode row and the voice-mode switch.
                       <ConversationImageComposer conversationId="" allowPhoto={false} locale={uiLocale}
@@ -10043,7 +10391,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                   <div className="flex items-center gap-1 self-end justify-self-end">
                     {conversationId && viewerUserId && <ConversationImageComposer voiceButtonSize={VOICE_MODE_SIDE_BUTTON_SIZE_PX} conversationId={conversationId} locale={uiLocale}
-                      onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} />}
+                      onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} acceptSharedPhoto={isVisible} />}
                     <motion.button
                       layoutId="live-phone-demo-keyboard-toggle"
                       data-qa="live-demo-keyboard-open"
@@ -10084,20 +10432,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               />
             </MessageMediaDialog>
           )}
-          {earphoneCaptureNoticeOpen && !earphoneMicrophoneNoticeOpen && !earphoneModeNoticeOpen && (
+          {earphoneCaptureNoticeOpen && !earphoneModeNoticeOpen && (
             <MessageMediaDialog title={earphoneModeBaseCopy.earphoneCaptureNoticeTitle} onClose={dismissEarphoneCaptureNotice}>
               <EarphoneCaptureSourceNoticeContent
                 copy={earphoneModeBaseCopy}
                 deviceAudioViaBroadcast={isLikelyIOSPlatform()}
+                showMicrophone={earphoneCaptureNoticeParts.showMicrophone}
+                showCaptureSource={earphoneCaptureNoticeParts.showCaptureSource}
+                initialMicrophonePick={earphoneMicrophonePick ?? 'phone'}
+                initialSource={earphoneCaptureNoticeParts.initialSource}
                 onConfirm={confirmEarphoneCaptureNotice}
-              />
-            </MessageMediaDialog>
-          )}
-          {earphoneMicrophoneNoticeOpen && (
-            <MessageMediaDialog title={earphoneModeBaseCopy.microphoneNoticeTitle} onClose={dismissEarphoneMicrophoneNotice}>
-              <EarphoneMicrophoneNoticeContent
-                copy={earphoneModeBaseCopy}
-                onConfirm={confirmEarphoneMicrophoneNotice}
               />
             </MessageMediaDialog>
           )}

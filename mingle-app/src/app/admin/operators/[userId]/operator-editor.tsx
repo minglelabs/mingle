@@ -286,7 +286,10 @@ export function OperatorEditor({
               <OperatorChip />
               {!account.isActive ? <InactiveChip /> : null}
             </div>
-            <p className="break-all text-sm font-medium text-slate-600">@{account.handle}</p>
+            <p className="break-all text-sm font-medium text-slate-600">
+              @{account.handle}
+              {account.gender === 'female' || account.gender === 'male' ? ` · ${account.gender === 'female' ? '여성' : '남성'}` : ' · 성별 없음'}
+            </p>
             <p className="mt-0.5 text-xs text-slate-500">{CREATED_AT_FORMAT.format(new Date(account.createdAt))} 생성</p>
           </div>
         </div>

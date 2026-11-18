@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw, Search } from 'lucide-react'
 import type { InboxListResult, InboxOperatorStat, InboxRoomSummary, InboxSummary } from '@/server/operator-inbox/inbox'
 import {
   formatInboxRelativeTime,
@@ -23,6 +23,9 @@ const OPERATOR_ID_PATTERN = /^[\w-]{1,128}$/
 const PAGE_SIZE = 20
 const MAX_REFRESH_SIZE = 50
 const CLOCK_TICK_MS = 30_000
+const SEARCH_DEBOUNCE_MS = 300
+
+type InboxFilters = { operatorId: string | null; unreadOnly: boolean; query: string }
 
 class InboxUnauthorizedError extends Error {}
 
@@ -30,9 +33,11 @@ function goToLogin(): void {
   window.location.assign(`/admin?next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`)
 }
 
-async function fetchInboxList(args: { operatorId: string | null; cursor?: string | null; limit?: number; korean: boolean }): Promise<InboxListData> {
+async function fetchInboxList(args: InboxFilters & { cursor?: string | null; limit?: number; korean: boolean }): Promise<InboxListData> {
   const params = new URLSearchParams()
   if (args.operatorId) params.set('operator', args.operatorId)
+  if (args.unreadOnly) params.set('unread', '1')
+  if (args.query) params.set('q', args.query)
   if (args.cursor) params.set('cursor', args.cursor)
   if (args.limit) params.set('limit', String(args.limit))
   if (args.korean) params.set('ko', '1')
@@ -165,6 +170,9 @@ export function InboxListView({ initialData, initialOperatorId }: {
   initialOperatorId: string | null
 }) {
   const [operatorId, setOperatorId] = useState<string | null>(initialOperatorId)
+  const [unreadOnly, setUnreadOnly] = useState(false)
+  const [query, setQuery] = useState('')
+  const [queryInput, setQueryInput] = useState('')
   const [data, setData] = useState<InboxListData>(initialData)
   const [nowMs, setNowMs] = useState(initialData.serverNowMs)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -190,6 +198,8 @@ export function InboxListView({ initialData, initialOperatorId }: {
     try {
       const next = await fetchInboxList({
         operatorId,
+        unreadOnly,
+        query,
         limit: Math.min(MAX_REFRESH_SIZE, Math.max(PAGE_SIZE, loadedCountRef.current)),
         korean,
       })
@@ -202,7 +212,7 @@ export function InboxListView({ initialData, initialOperatorId }: {
       else if (seq === requestSeqRef.current) setRefreshFailed(true)
       throw error
     }
-  }, [operatorId, korean])
+  }, [operatorId, unreadOnly, query, korean])
 
   useAdminInboxRealtime(refresh)
 
@@ -227,17 +237,19 @@ export function InboxListView({ initialData, initialOperatorId }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const selectOperator = useCallback((next: string | null) => {
-    if (next === operatorId) return
-    setOperatorId(next)
+  /** Loads the first page for a new filter (operator chip, unread only, name search). */
+  const applyFilters = useCallback((next: InboxFilters) => {
+    setOperatorId(next.operatorId)
+    setUnreadOnly(next.unreadOnly)
+    setQuery(next.query)
     setSwitching(true)
     // Shareable URL without a second server render (this component fetches the list itself).
     // Beside an open room (wide screens) the URL belongs to that room.
     if (window.location.pathname === LIST_PATH) {
-      window.history.replaceState(null, '', next ? `${LIST_PATH}?operator=${encodeURIComponent(next)}` : LIST_PATH)
+      window.history.replaceState(null, '', next.operatorId ? `${LIST_PATH}?operator=${encodeURIComponent(next.operatorId)}` : LIST_PATH)
     }
     const seq = ++requestSeqRef.current
-    void fetchInboxList({ operatorId: next, korean }).then((result) => {
+    void fetchInboxList({ ...next, korean }).then((result) => {
       if (seq !== requestSeqRef.current) return
       setData(result)
       setNowMs(Date.now())
@@ -248,14 +260,26 @@ export function InboxListView({ initialData, initialOperatorId }: {
     }).finally(() => {
       if (seq === requestSeqRef.current) setSwitching(false)
     })
-  }, [korean, operatorId])
+  }, [korean])
+
+  const selectOperator = useCallback((next: string | null) => {
+    if (next !== operatorId) applyFilters({ operatorId: next, unreadOnly, query })
+  }, [applyFilters, operatorId, query, unreadOnly])
+
+  // The name search applies shortly after typing stops.
+  useEffect(() => {
+    const next = queryInput.trim()
+    if (next === query) return
+    const timer = window.setTimeout(() => applyFilters({ operatorId, unreadOnly, query: next }), SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [applyFilters, operatorId, query, queryInput, unreadOnly])
 
   const loadMore = useCallback(async () => {
     if (!data.nextCursor || loadingMore) return
     setLoadingMore(true)
     const seq = requestSeqRef.current
     try {
-      const next = await fetchInboxList({ operatorId, cursor: data.nextCursor, korean })
+      const next = await fetchInboxList({ operatorId, unreadOnly, query, cursor: data.nextCursor, korean })
       if (seq !== requestSeqRef.current) return
       setData((current) => {
         const known = new Set(current.rooms.map((room) => room.conversationId))
@@ -270,7 +294,7 @@ export function InboxListView({ initialData, initialOperatorId }: {
     } finally {
       setLoadingMore(false)
     }
-  }, [data.nextCursor, korean, loadingMore, operatorId])
+  }, [data.nextCursor, korean, loadingMore, operatorId, query, unreadOnly])
 
   // The list is rendered by the layout, which cannot read the query: apply `?operator=` once.
   useEffect(() => {
@@ -335,6 +359,31 @@ export function InboxListView({ initialData, initialOperatorId }: {
           </nav>
         ) : null}
 
+        <div className="flex items-center gap-2">
+          <label className="relative min-w-0 flex-1">
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            <input
+              type="search"
+              value={queryInput}
+              onChange={(event) => setQueryInput(event.target.value)}
+              placeholder="상대 이름 검색"
+              aria-label="상대 이름 검색"
+              maxLength={60}
+              className="min-h-11 w-full min-w-0 rounded-full border border-slate-200 bg-white pl-9 pr-3 text-base text-slate-900 outline-none placeholder:text-slate-400 focus:border-sky-500"
+            />
+          </label>
+          <button
+            type="button"
+            aria-pressed={unreadOnly}
+            onClick={() => applyFilters({ operatorId, unreadOnly: !unreadOnly, query })}
+            className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-3 text-sm font-medium transition-colors ${
+              unreadOnly ? 'border-sky-500 bg-sky-500 text-white' : 'border-slate-200 bg-white text-slate-700 active:bg-slate-100'
+            }`}
+          >
+            안 읽음만
+          </button>
+        </div>
+
         {refreshFailed ? (
           <p role="status" className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200 break-words">
             목록을 새로 고치지 못했습니다. 잠시 후 자동으로 다시 시도합니다.
@@ -347,7 +396,9 @@ export function InboxListView({ initialData, initialOperatorId }: {
           </div>
         ) : data.rooms.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500 break-words">
-            {activeOperator
+            {unreadOnly || query
+              ? '조건에 맞는 대화가 없습니다.'
+              : activeOperator
               ? `${inboxPersonLabel(activeOperator)} 계정의 대화방이 아직 없습니다.`
               : '아직 운영 계정으로 들어온 대화가 없습니다.'}
           </div>

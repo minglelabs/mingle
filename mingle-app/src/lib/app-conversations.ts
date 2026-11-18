@@ -2722,6 +2722,9 @@ export async function getConversationHydrationStateForUser(args: {
   conversationId: string;
   userId: string;
   before?: ConversationHydrationCursor | null;
+  // Admin inbox only: an unsent message keeps its text, translations and photo
+  // (still flagged `recalled`). Never set for a member's own app.
+  revealRecalled?: boolean;
 }): Promise<ConversationHydrationState | null> {
   const conversationRecord = await prisma.appConversationChannel.findFirst({
     where: {
@@ -2740,6 +2743,7 @@ export async function getConversationHydrationStateForUser(args: {
     conversationRecord,
     viewerUserId: args.userId,
     before: args.before,
+    revealRecalled: args.revealRecalled,
   });
 }
 
@@ -3075,6 +3079,8 @@ async function getConversationHydrationStateForRecord(args: {
   // showing the latest — used only by the share/snapshot path above; the
   // member path never passes this, so its behavior is unchanged.
   upperBoundCreatedAt?: Date | null;
+  // See getConversationHydrationStateForUser.
+  revealRecalled?: boolean;
 }): Promise<ConversationHydrationState> {
   const conversationRecord = args.conversationRecord;
 
@@ -3145,12 +3151,14 @@ async function getConversationHydrationStateForRecord(args: {
         metadata: true,
         userId: true,
         contents: {
-          where: buildVisibleMessageContentWhere(),
+          // Unsending soft-deletes the contents too; the admin reveal reads them.
+          ...(args.revealRecalled ? {} : { where: buildVisibleMessageContentWhere() }),
           orderBy: { createdAt: "asc" },
           select: {
             contentType: true,
             language: true,
             text: true,
+            isDeleted: true,
           },
         },
       },
@@ -3245,13 +3253,20 @@ async function getConversationHydrationStateForRecord(args: {
     recalledMessages.map((message) => (message.clientMessageId || "").trim() || `db-${message.id}`),
   );
   const utterances: ConversationHydrationUtterance[] = orderedMessages.map((message) => {
-    const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
+    const metadata = readJsonObject(message.metadata);
+    const recalled = readMessageRecalledAtMs(metadata) !== null;
+    // Unsent and not revealed: an empty placeholder.
+    const hidden = recalled && !args.revealRecalled;
+    const contents = recalled && args.revealRecalled
+      ? message.contents
+      : message.contents.filter((content) => content.isDeleted !== true);
+    const sourceContents = contents.filter((content) => content.contentType === "SOURCE");
     const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
       || sourceContents[0]
       || null;
     const storedTranslations: Record<string, string> = {};
 
-    for (const content of message.contents) {
+    for (const content of contents) {
       if (content.contentType !== "TRANSLATION_FINAL") continue;
       const language = content.language.trim();
       const text = content.text.trim();
@@ -3259,12 +3274,10 @@ async function getConversationHydrationStateForRecord(args: {
       storedTranslations[language] = text;
     }
 
-    const metadata = readJsonObject(message.metadata);
     const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
-    const recalled = readMessageRecalledAtMs(metadata) !== null;
     // A quote of a message its sender later unsent must not keep its text.
-    const replyTo = recalled ? null : normalizeMessageReplyReference(metadata?.replyTo);
-    const originalText = recalled ? "" : sourceContent?.text?.trim() || "";
+    const replyTo = hidden ? null : normalizeMessageReplyReference(metadata?.replyTo);
+    const originalText = hidden ? "" : sourceContent?.text?.trim() || "";
     const storedTargetLanguages = readStringArray(metadata?.translationTargetLanguages);
     // Repairs legacy rows stored as a collapsed `zh` and keeps every Chinese
     // value in its variant's script. The stored source text is never changed.
@@ -3282,7 +3295,7 @@ async function getConversationHydrationStateForRecord(args: {
     );
     const targetLanguages = normalizedContent.targetLanguages;
     const storedImage = readJsonObject((metadata?.image as Prisma.JsonValue | undefined) ?? null);
-    const image = recalled ? null : normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
+    const image = hidden ? null : normalizeConversationMessageImage({ ...storedImage, conversationId: conversationRecord.id, messageId: message.id });
     // Point-in-time, not the room's current membership — see
     // countActiveRealMembersAt's doc comment. Also intentionally excludes
     // pending invitees (real members only): inviting someone shouldn't, by

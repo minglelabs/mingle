@@ -142,7 +142,10 @@ translations stack inside one bubble, with compact flags inline.
 ### T16. Labels fit and say exactly what happens
 No clipping or ugly wrapping in any locale. Copy matches the real behaviour, names HashChat when it means the app,
 and has no filler or exclamation marks. Translated photo labels fit their region in at most two lines.
+Layouts are drawn in Korean, but vi, es, de, fr, ru and en labels run 2–3× wider: a label is not done until it fits
+in those too (`locale-text-overflow`).
 - P2 2026-08-17 Shared English US/UK flag in language selectors (selector header clipped in narrower locales)
+- 2026-08-14 - Profile language selector horizontal overflow
 - 2026-09-26 - Align share-toggle copy with the link's real capability and revoke old links
 - 2026-09-02 - Clarify new conversation-room creation labels
 - 2026-09-30 — English label for a vertical Japanese photo banner

@@ -1546,7 +1546,7 @@ const BRANCH_PROFILE_COPY_BY_LOCALE: Record<PrimaryUiLocale, Partial<AppDictiona
     profileShareQrSettingsLabel: "Open settings",
   },
   ja: {
-    messageAction: "メッセージを送る",
+    messageAction: "メッセージ",
     messageError: "会話を開始できませんでした。",
     selfLabel: "自分",
     noFollowersLabel: "フォロワーはまだいません。",

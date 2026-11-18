@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingMessage } from "@/components/loading-message";
 import { resolveLastUsedSignInCopy } from "@/i18n/last-sign-in-method-copy";
 import {
   markPendingSignInMethod,
@@ -1445,6 +1446,16 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           ) : props.authNotice ? (
             <p className="text-lg font-bold leading-snug text-[#2D2A1E]">{props.authNotice}</p>
           ) : null}
+          {/* Social sign-in in progress: the buttons below only dim, so say so here. */}
+          {signingInProvider !== null ? (
+            <div className="flex flex-col items-center justify-center gap-2 text-[#2D2A1E]/80">
+              <Loader2 size={18} className="shrink-0 animate-spin" aria-hidden />
+              <LoadingMessage
+                locale={props.locale}
+                className="min-h-10 max-w-[18rem] text-center text-sm font-semibold leading-5"
+              />
+            </div>
+          ) : null}
         </div>
 
         {/* Bottom panel stays mounted; only its inner content swaps conditionally */}
@@ -1453,10 +1464,13 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           className={AUTH_GATE_PANEL_CLASSNAME}
         >
           {isLoading ? (
-            /* Loading state: spinner only */
-            <div className="flex items-center justify-center gap-3 py-3 text-sm text-white/60">
+            /* Loading state: spinner and a random loading line */
+            <div className="flex flex-col items-center justify-center gap-2 py-3 text-sm text-white/60">
               <Loader2 size={18} className="animate-spin" aria-hidden />
-              <span>{props.dictionary.profile.loginLoading}</span>
+              <LoadingMessage
+                locale={props.locale}
+                className="min-h-10 max-w-[18rem] text-center text-sm leading-5"
+              />
             </div>
           ) : (
             /* Sliding area for buttons and legal-agreement content */
