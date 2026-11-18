@@ -12,6 +12,7 @@ One entry per UI/UX fix, newest first. This is the only copy; add new entries he
 - Issue (sign-in): Signing in with a new number on a phone that already had an account made a second account.
 - Resolution (sign-in): The app sends its device value with the code. A number nobody has, proved on a phone that has an account, signs in that account; the number is saved on it and the owner gets a notification.
 - Not checked on a phone: the push itself (needs APNs/FCM keys), and the device rule at sign-in (needs a build with the device value on a second number).
+- iPhone 11 Pro (2026-11-18): the grid loaded 19 of 19 photos as small copies (longest edge 400), and `/home?notices=1` opened the notice list. The 2026-11-17 device fixes were re-run there too: the sign-out question, Remove in sign-in methods (question, then "removed"), the filled Explore tab over the feed, and a Message button that stays put (y=408 on three reads).
 
 ## 2026-11-16 — Home tab: people first, tabs are Home, Chats, Explore, My, and one new chat a day
 
