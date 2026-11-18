@@ -7618,8 +7618,11 @@ export default function useRealtimeSTT({
       const time = remotePreviews.orderFor(viewerUserId, u.id)
       return time ? { ...u, serverCreatedAtMs: time } : u
     })
+    // A line of my own from outside (a voice talk's caption) shows only while
+    // this phone's own speech-to-text draws nothing: in a call the room's STT
+    // is off, so the call's caption is the only live view of what I say.
     const external = (externalPreviews ?? []).filter((u) => (
-      u.speakerUserId !== viewerUserId && !utterances.some((committed) => committed.id === u.id)
+      (u.speakerUserId !== viewerUserId || own.length === 0) && !utterances.some((committed) => committed.id === u.id)
     )).map((u) => {
       const knownSpeaker = utterances.find((committed) => committed.speakerUserId === u.speakerUserId)
       return knownSpeaker?.speakerImage && !u.speakerImage ? { ...u, speakerImage: knownSpeaker.speakerImage } : u

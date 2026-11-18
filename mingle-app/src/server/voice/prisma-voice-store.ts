@@ -113,7 +113,7 @@ export const prismaVoiceStore: VoiceStore = {
     return prisma.$transaction(async (tx) => {
       // Serialize joins/leaves per channel so the 8-person cap and the
       // single-live-call rule hold under concurrent requests.
-      await tx.$queryRaw`SELECT id FROM app_conversation_channels WHERE id = ${channelId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM app.app_conversation_channels WHERE id = ${channelId} FOR UPDATE`;
       return fn(bindTx(tx));
     });
   },
