@@ -200,6 +200,9 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
             onOpenSearchPost={(postQuery, postId) =>
               router.push(postViewerHref(locale, { kind: "search", query: postQuery }, postId))}
             onSeeAllPeople={openConnectPeople}
+            onOpenLiveRoom={authenticatedUserId
+              ? (conversationId) => void startDirectConversationFromConnectProfile({ id: conversationId } as ConversationChannelSummary)
+              : undefined}
           />
         </div>
 

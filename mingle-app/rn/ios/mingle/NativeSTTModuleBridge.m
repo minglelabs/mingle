@@ -15,6 +15,7 @@ RCT_EXTERN_METHOD(setAec:(BOOL)enabled
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(setVoiceCallActive:(BOOL)active)
 RCT_EXTERN_METHOD(setEarphoneMicrophone:(BOOL)enabled
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)

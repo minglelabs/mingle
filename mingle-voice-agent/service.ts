@@ -1,0 +1,109 @@
+import http from 'http';
+import { RoomServiceClient } from 'livekit-server-sdk';
+import { env, missingProviderKeys } from './env';
+import { closeAllInterpreters, ensureInterpreter, onInterpreterClosed, runningRoomNames } from './interpreter';
+import { buildUsageReport, roomsNeedingInterpreter, toHttpUrl, type RoomSnapshot } from './service-logic';
+import { appReportsEnabled } from './app-report';
+
+// Production entry. Watches the LiveKit server for app voice rooms
+// ("voice-*") and keeps one hidden interpreter in each room that has a human.
+// The interpreter leaves by itself 30 s after the last human (IDLE_LEAVE_MS).
+// No POC page is served here; only /health for Railway.
+//
+// Back in use (2026-11-11, evening): in a voice talk the room's own
+// speech-to-text and speaker mode are locked, and a person turns
+// interpretation on in the call panel. The interpreter joins a room only
+// while someone there has it on, writes down each speaker from the call
+// audio once, reads translations on per-language lanes that only those
+// listeners subscribe to, and reports each line to the app (app-report.ts).
+// VOICE_AGENT_INTERPRETER=off stops it from joining any room.
+
+const POLL_MS = Math.max(1000, Number(process.env.VOICE_AGENT_POLL_MS) || 3000);
+const INTERPRETER_ENABLED = (process.env.VOICE_AGENT_INTERPRETER || '').trim().toLowerCase() !== 'off';
+const PORT = Number(process.env.PORT) || 8080;
+
+const rooms = new RoomServiceClient(toHttpUrl(env.livekitUrl), env.livekitApiKey, env.livekitApiSecret);
+let lastPollOk = 0;
+let lastPollError = '';
+let stopping = false;
+let pollTimer: NodeJS.Timeout | null = null;
+
+async function snapshot(): Promise<RoomSnapshot[]> {
+    const list = await rooms.listRooms();
+    const voiceRooms = list.filter((room) => room.name.startsWith('voice-') && room.numParticipants > 0);
+    return Promise.all(voiceRooms.map(async (room) => {
+        const participants = await rooms.listParticipants(room.name);
+        return {
+            name: room.name,
+            participantIdentities: participants.map((participant) => participant.identity),
+            interpretingIdentities: participants
+                .filter((participant) => participant.attributes?.interpret === 'on')
+                .map((participant) => participant.identity),
+        };
+    }));
+}
+
+async function poll(): Promise<void> {
+    if (stopping) return;
+    try {
+        const needing = INTERPRETER_ENABLED ? roomsNeedingInterpreter(await snapshot()) : [];
+        for (const name of needing) {
+            void ensureInterpreter(name).catch(() => undefined);
+        }
+        lastPollOk = Date.now();
+        lastPollError = '';
+    } catch (error) {
+        lastPollError = error instanceof Error ? error.message : String(error);
+        console.warn(`[service] poll failed: ${lastPollError}`);
+    } finally {
+        if (!stopping) pollTimer = setTimeout(() => void poll(), POLL_MS);
+    }
+}
+
+// The room's usage, logged when the interpreter leaves. Billing goes to the
+// app line by line instead (app-report.ts: caption and playback).
+onInterpreterClosed((interpreter) => {
+    const report = buildUsageReport({
+        room: interpreter.roomName,
+        startedAtMs: interpreter.startedAt,
+        endedAtMs: Date.now(),
+        usage: interpreter.usage,
+        stats: interpreter.stats,
+    });
+    console.log(`[service] usage ${JSON.stringify(report)}`);
+});
+
+const server = http.createServer((request, response) => {
+    if (request.url === '/health') {
+        // Healthy once the LiveKit server has answered at least once recently.
+        const fresh = Date.now() - lastPollOk < Math.max(30_000, POLL_MS * 5);
+        response.writeHead(fresh ? 200 : 503, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ ok: fresh, rooms: runningRoomNames().length, lastPollError: lastPollError || undefined }));
+        return;
+    }
+    response.writeHead(404).end();
+});
+
+async function shutdown(signal: string): Promise<void> {
+    if (stopping) return;
+    stopping = true;
+    console.log(`[service] ${signal}: leaving ${runningRoomNames().length} room(s)`);
+    if (pollTimer) clearTimeout(pollTimer);
+    server.close();
+    await Promise.race([closeAllInterpreters(), new Promise((resolve) => setTimeout(resolve, 8000))]);
+    process.exit(0);
+}
+
+const missing = missingProviderKeys();
+if (missing.length) {
+    console.error(`[service] missing keys: ${missing.join(', ')}`);
+    process.exit(1);
+}
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`[service] watching ${env.livekitUrl} every ${POLL_MS} ms, health on :${PORT}/health`
+        + (INTERPRETER_ENABLED ? '' : ' (interpreter off: VOICE_AGENT_INTERPRETER=off)')
+        + (appReportsEnabled() ? '' : ' (no app reports: APP_INTERNAL_URL / VOICE_INTERNAL_SECRET unset)'));
+    void poll();
+});

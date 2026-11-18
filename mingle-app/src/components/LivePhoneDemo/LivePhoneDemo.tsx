@@ -1,6 +1,6 @@
 'use client'
 
-import ConversationImageComposer, { type ConversationImageComposerEarphoneMode } from './ConversationImageComposer'
+import ConversationImageComposer, { type ConversationImageComposerEarphoneMode, type ConversationImageComposerVoiceTalk } from './ConversationImageComposer'
 import MessageMediaDialog from './MessageMediaDialog'
 import EarphoneModeNoticeContent from './EarphoneModeNotice'
 import EarphoneCaptureSourceNoticeContent, { type EarphoneListeningNoticeResult } from './EarphoneCaptureSourceNotice'
@@ -125,7 +125,8 @@ import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare, Volume2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
-import SlideSurface from '@/components/slide-surface'
+import SlideSurface, { isNativeEdgeSwipeSuppressed } from '@/components/slide-surface'
+import { CONVERSATION_HISTORY_ROUTE_STATE_KEY } from '@/components/conversation-list.logic'
 import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
 import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
@@ -321,6 +322,37 @@ import {
 } from '@/components/native-app-update-card'
 import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
+import VoiceTalkPanel, {
+  type VoiceTalkCaptionLine,
+  VoiceTalkButton,
+  isVoiceTalkAvailable,
+  joinVoiceTalk,
+  resolveVoiceTalkButtonPress,
+  resolveVoiceTalkMic,
+  setVoiceTalkInterpret,
+  setVoiceTalkListen,
+  setVoiceTalkListenLang,
+  setVoiceTalkMic,
+} from './VoiceTalkPanel'
+import HashRushRoomLayer from '@/features/hash-rush/HashRushRoomLayer'
+import { VoiceTalkRoomContext, type VoiceTalkRoomState } from './voice-talk-room-context'
+import type { VoiceTalkParticipantChip } from './VoiceTalkParticipantStrip'
+import { HashRushRoomContext, type HashRushRoomState } from './hash-rush-room-context'
+import { HashRushRoomPrompts, useHashRushRoomGame } from './HashRushRoomPrompts'
+import { shouldOfferHashRushInvite } from '@/lib/hash-rush-message'
+import { HashRushQuickChatBar } from '@/features/hash-rush/QuickChatBar'
+import type { HashRushChatEntry, HashRushRoomChat } from '@/features/hash-rush/room-chat'
+import { isHashRushGameConfigured } from '@/features/hash-rush/config'
+import { hashRushInviteCopy } from '@/features/hash-rush/invite-copy'
+import HashRushMenuPage from '@/features/hash-rush/HashRushMenuPage'
+import HashRushHowToPage from '@/features/hash-rush/HashRushHowToPage'
+import HashRushRankingPage from '@/features/hash-rush/HashRushRankingPage'
+import { HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/config'
+import { buildVoiceCaptionClientMessageId } from '@/lib/voice-caption'
+import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
+import { liveRoomsCopy } from '@/i18n/live-rooms-copy'
+import { formatRoomCode } from '@/lib/room-code'
+import { buildHashRushChatEntries } from './hash-rush-room-chat'
 import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
@@ -670,6 +702,8 @@ const CHAT_MESSAGE_ROW_STYLE: CSSProperties = {
   contain: 'layout style',
   isolation: 'isolate',
 }
+
+const NO_HASH_RUSH_CHAT_ENTRIES: readonly HashRushChatEntry[] = []
 
 function buildQaSeededUtterances(count: number): Utterance[] {
   const safeCount = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 48
@@ -1149,12 +1183,21 @@ function isSpeakerModeClient(): boolean {
   return namespaceSupportsSpeakerMode(apiNamespace)
 }
 
+// Speaker mode needs no earphone detection: it reads aloud and the
+// microphone path removes that sound. So any shell that has speaker mode
+// shows the button, also Android below 13, which cannot tell where media
+// plays and so reports no audio route. Earphone mode (and device-audio
+// capture) still needs a reported route.
+function isEarphoneModeControlSupported(route: ReturnType<typeof getNativeAudioRouteSnapshot>): boolean {
+  return isNativeAudioRouteSupported(route) || isSpeakerModeClient()
+}
+
 // The earphone-mode gate as the stores report it right now (not as of the last
 // render), for decisions that must not wait for React.
 function isEarphoneAutoReadGateOpenNow(): boolean {
   const route = getNativeAudioRouteSnapshot()
   return resolveEarphoneModeGate({
-    supported: isNativeAudioRouteSupported(route),
+    supported: isEarphoneModeControlSupported(route),
     enabled: getEarphoneModePreferenceSnapshot(),
     earphonesConnected: route.earphonesConnected,
     earphonesRequired: !isSpeakerModeClient(),
@@ -1316,6 +1359,8 @@ type CustomSpeechSplit = {
 }
 
 type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite' | 'speech-length'
+  // The room's Hash Rush page (depth 2) and the two pages it opens (depth 3).
+  | 'hash-rush' | 'hash-rush-ranking' | 'hash-rush-howto'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 
@@ -1343,6 +1388,12 @@ type LivePhoneDemoPanelHeaderProps = {
   onBack: () => void
   className?: string
 }
+
+
+// Live caption lines this app has seen (by id), kept across room screens so a
+// line seen once never comes back as new; see voiceTalkCaptionDrafts.
+const VOICE_TALK_CAPTION_SEEN = new Map<string, { firstAt: number, text: string, changedAt: number }>()
+const voiceTalkCaptionBaseline = { taken: false }
 
 function LivePhoneDemoPanelHeader({
   title,
@@ -1381,6 +1432,9 @@ function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuSc
     || value === 'participants'
     || value === 'display-language'
     || value === 'invite'
+    || value === 'hash-rush'
+    || value === 'hash-rush-ranking'
+    || value === 'hash-rush-howto'
     || value === 'speech-length'
 }
 
@@ -1390,12 +1444,15 @@ function resolveMenuScreenForDepth(
 ): LivePhoneDemoMenuScreen {
   if (depth <= 1) return 'root'
   if (depth >= 3) {
+    if (preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return preferredScreen
+    if (preferredScreen === 'hash-rush') return 'hash-rush'
     if (preferredScreen === 'display-language') return 'display-language'
     if (preferredScreen === 'invite') return 'invite'
     if (preferredScreen === 'participants') return 'participants'
     return 'conversation-management'
   }
   if (preferredScreen === 'display-language') return 'display-language'
+  if (preferredScreen === 'hash-rush' || preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return 'hash-rush'
   if (preferredScreen === 'speech-length') return 'speech-length'
   if (preferredScreen === 'conversation-management') return 'conversation-management'
   if (preferredScreen === 'participants') return 'participants'
@@ -2065,6 +2122,111 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // than one real account — the solo room's own layout never depends on it.
   const { data: session } = useSession()
   const viewerUserId = typeof session?.user?.id === 'string' ? session.user.id : null
+  // Group voice talk runs in the native app; the web only draws its panel.
+  const [voiceTalkAvailable, setVoiceTalkAvailable] = useState(false)
+  useEffect(() => setVoiceTalkAvailable(isVoiceTalkAvailable()), [])
+  const [voiceTalkOpenSignal, setVoiceTalkOpenSignal] = useState(0)
+  const [voiceTalkLeaveSignal, setVoiceTalkLeaveSignal] = useState(0)
+  // Listen only: a seat in the call that sends no voice (speech-to-text as the room has it).
+  const [voiceTalkListenOnly, setVoiceTalkListenOnly] = useState(false)
+  // Interpretation in the call: captions and the interpreted voice of what
+  // the others say, for this viewer.
+  const [voiceTalkInterpretOn, setVoiceTalkInterpretOn] = useState(false)
+  // Translations read aloud while interpreting; a person may want captions only.
+  const [voiceTalkListenOn, setVoiceTalkListenOn] = useState(true)
+  // The line the call is reading aloud to this phone, for the bubble's playing indicator.
+  const [voiceTalkReading, setVoiceTalkReading] = useState<{ lineId: string, lang: string } | null>(null)
+  // Turning read-aloud on in a call asks the language, as speaker / earphone mode does.
+  const [voiceTalkListenNoticeOpen, setVoiceTalkListenNoticeOpen] = useState(false)
+  const [voiceTalkState, setVoiceTalkState] = useState<{ live: boolean, joined: boolean, connected: boolean, callId: string | null }>(
+    { live: false, joined: false, connected: false, callId: null },
+  )
+  // The interpreter's lines while they are being said (or just were), drawn
+  // as live bubbles for this viewer while interpretation is on.
+  const [voiceTalkCaptionLines, setVoiceTalkCaptionLines] = useState<VoiceTalkCaptionLine[]>([])
+  // Live lines age out even when the call sends nothing new (the interpreter
+  // may leave mid-line), so the list is looked at again every second.
+  const [voiceTalkCaptionClock, setVoiceTalkCaptionClock] = useState(0)
+  const voiceTalkCaptionsLive = voiceTalkState.joined && voiceTalkInterpretOn && voiceTalkCaptionLines.length > 0
+  useEffect(() => {
+    if (!voiceTalkCaptionsLive) return
+    const timer = window.setInterval(() => setVoiceTalkCaptionClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [voiceTalkCaptionsLive])
+  const voiceTalkCaptionDrafts = useMemo<Utterance[]>(() => {
+    const seen = VOICE_TALK_CAPTION_SEEN
+    const now = Math.max(Date.now(), voiceTalkCaptionClock)
+    // The call keeps its recent lines, and they come back whole when the room
+    // reopens or interpretation is turned on: a line is live only while its
+    // words keep changing in front of this viewer. So every line is noted,
+    // even while interpretation is off, and the lines already there the first
+    // time this app sees the call count as old (their time is unknown).
+    const baseline = !voiceTalkCaptionBaseline.taken && voiceTalkCaptionLines.length > 0
+    if (baseline) voiceTalkCaptionBaseline.taken = true
+    for (const line of voiceTalkCaptionLines) {
+      const id = buildVoiceCaptionClientMessageId(line.id)
+      const known = seen.get(id)
+      if (!known) seen.set(id, { firstAt: now, text: line.original, changedAt: baseline ? 0 : now })
+      else if (known.text !== line.original) seen.set(id, { ...known, text: line.original, changedAt: now })
+    }
+    if (seen.size > 300) {
+      for (const [id, entry] of seen) if (now - entry.changedAt > 60_000) seen.delete(id)
+    }
+    if (!voiceTalkState.joined || !voiceTalkInterpretOn) return []
+    const drafts: Utterance[] = []
+    const speakingNow = new Set<string>()
+    // Newest first: a person says one line at a time, so only their newest
+    // unfinished line is live; an older unfinished one was cut off.
+    for (const line of voiceTalkCaptionLines) {
+      if (line.isEcho || !line.speaker || !line.original.trim()) continue
+      const id = buildVoiceCaptionClientMessageId(line.id)
+      const entry = seen.get(id)
+      if (!entry) continue
+      if (line.isPartial) {
+        if (speakingNow.has(line.speaker)) continue
+        speakingNow.add(line.speaker)
+        // Words that stopped coming: the line was cut off (its saved message never comes).
+        if (now - entry.changedAt > 6_000) continue
+      } else if (now - entry.changedAt > 15_000) {
+        // Finished: its saved message replaces it within a moment, or it was not saved.
+        continue
+      }
+      const translations = Object.fromEntries(Object.entries(line.translations ?? {})
+        .filter(([language, text]) => language !== line.lang && typeof text === 'string' && text.trim()))
+      drafts.push({
+        id,
+        originalText: line.original,
+        originalLang: line.lang || 'unknown',
+        translations,
+        targetLanguages: Object.keys(translations),
+        speakerUserId: line.speaker,
+        speakerName: line.speakerName,
+        createdAtMs: entry.firstAt,
+        voiceCaption: true,
+      })
+    }
+    return drafts
+  }, [voiceTalkCaptionClock, voiceTalkCaptionLines, voiceTalkInterpretOn, voiceTalkState.joined])
+  // Who is in the room's live call, for the "started a voice talk" message.
+  const [voiceTalkParticipants, setVoiceTalkParticipants] = useState<VoiceTalkParticipantChip[]>([])
+  const handleVoiceTalkAvailability = useCallback((next: { live: boolean, joined: boolean, connected: boolean, callId: string | null }) => {
+    setVoiceTalkState((prev) => (
+      prev.live === next.live && prev.joined === next.joined && prev.connected === next.connected && prev.callId === next.callId ? prev : next
+    ))
+  }, [])
+  // The native game (src/features/hash-rush): `hashRushGameActive` keeps it
+  // alive in this room, also while lowered; `hashRushGameOpen` is it being up.
+  const [hashRushGameActive, setHashRushGameActive] = useState(false)
+  const [hashRushGameOpen, setHashRushGameOpen] = useState(false)
+  // The room's composer up over the native game (its 💬), in a mode of the
+  // game's own: 'text' with the keyboard, 'voice' with Start. The input mode
+  // the viewer keeps for the room is never written by it.
+  const [hashRushGameChatMode, setHashRushGameChatMode] = useState<'text' | 'voice' | null>(null)
+  const closeHashRushGame = useCallback(() => {
+    setHashRushGameOpen(false)
+    setHashRushGameChatMode(null)
+  }, [])
+  const liveDemoRootRef = useRef<HTMLDivElement | null>(null)
   const viewerImage = typeof session?.user?.image === 'string' ? session.user.image : null
   const accountPreferencesTrackingUserId = useMemo(() => getOrCreateTrackingUserId(), [])
   const initialLanguageSelectorMembers = useMemo<ConversationMemberProfile[]>(() => {
@@ -2261,6 +2423,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Pasted under the room link, so a friend who installs first can still type it in.
   const ownInviteCode = useOwnInviteCode(Boolean(shareUrl))
   const [shareEnabled, setShareEnabled] = useState(false)
+  // Public: listed with its name in the search tab and joinable by anyone.
+  const [isPublicRoom, setIsPublicRoom] = useState(false)
+  const [isTogglingPublic, setIsTogglingPublic] = useState(false)
+  // The number people type in Search to find this room.
+  const [roomCode, setRoomCode] = useState<number | null>(null)
+  // Private-room join requests waiting for a member (room management screen).
+  const [joinRequests, setJoinRequests] = useState<Array<{ id: string, userId: string, name: string | null, image: string | null }>>([])
+  const [decidingJoinRequestId, setDecidingJoinRequestId] = useState<string | null>(null)
   const [isTogglingSharing, setIsTogglingSharing] = useState(false)
   const [isRefreshingShareLink, setIsRefreshingShareLink] = useState(false)
   const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>('compose')
@@ -2280,6 +2450,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
+  // The game's composer is up (only while the game is, in a room the viewer can write to).
+  const hashRushGameChatShown = hashRushGameOpen && hashRushGameChatMode !== null && Boolean(conversationId) && !isBlockedCounterpart
+  // What the bottom bar shows: the keyboard composer or voice (Start). Over the
+  // game it is the game's own mode; the room's saved one (isComposerOpen) stays.
+  const composerShown = hashRushGameChatShown ? hashRushGameChatMode === 'text' : isComposerOpen
+  // The composer's text box has focus (its keyboard, not the game's, is up).
+  const [isComposerTextareaFocused, setIsComposerTextareaFocused] = useState(false)
   // The message the next typed send replies to (set from a bubble's menu).
   const [replyTarget, setReplyTarget] = useState<MessageReplyReference | null>(null)
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false)
@@ -2353,23 +2530,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [speakingItem, setSpeakingItem] = useState<SpeakingTtsItem | null>(null)
   const [pendingManualTtsTarget, setPendingManualTtsTarget] = useState<BubbleTtsTarget | null>(null)
   // Earphone mode (auto-read). Separate from the fixed-off TTS setting above.
-  const earphoneModeEnabled = useSyncExternalStore(
+  const earphoneModePreference = useSyncExternalStore(
     subscribeEarphoneModePreference,
     getEarphoneModePreferenceSnapshot,
     getEarphoneModePreferenceServerSnapshot,
   )
+  // In a voice talk the room's speaker button is locked and off: the
+  // interpreter reads translations on the call itself. The kept preference
+  // is untouched and applies again after the call.
+  const earphoneModeEnabled = voiceTalkState.joined ? false : earphoneModePreference
   const nativeAudioRoute = useSyncExternalStore(
     subscribeNativeAudioRoute,
     getNativeAudioRouteSnapshot,
     getNativeAudioRouteServerSnapshot,
   )
-  const earphoneModeSupported = isNativeAudioRouteSupported(nativeAudioRoute)
+  const earphoneModeSupported = isEarphoneModeControlSupported(nativeAudioRoute)
   const speakerMode = isSpeakerModeClient()
   const earphoneModeGate = resolveEarphoneModeGate({
     supported: earphoneModeSupported,
     enabled: earphoneModeEnabled,
     earphonesConnected: nativeAudioRoute.earphonesConnected,
-    earphonesRequired: !speakerMode,
+    earphonesRequired: !speakerMode && !voiceTalkState.joined,
   })
   // Speaker mode is the default name in 2.3.2+; with earphones in, the same
   // mode is earphone mode again (and may also capture other apps' sound).
@@ -2418,7 +2599,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Without earphones, speaker mode listens to the microphone only: no screen
   // broadcast, no capture of other apps' sound.
   const sttCaptureSource = resolveEffectiveSttCaptureSource({
-    supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker,
+    // A call writes down the microphone only, never other apps' sound.
+    supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker && !voiceTalkState.joined,
     earphoneModeEnabled,
     deviceAudioOptIn,
     pick: sttCaptureSourcePick,
@@ -3065,7 +3247,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.clearTimeout(timeout180Id)
       window.clearTimeout(timeout360Id)
     }
-  }, [composerTextareaHeightPx, isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
+  }, [composerTextareaHeightPx, composerShown, keyboardViewportInsetPx, syncNativeBottomBarClearance])
 
   // The native bottom banner only moves when the web reports a new clearance.
   // While the keyboard is up, iOS can move the composer (textarea growing on
@@ -3075,7 +3257,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // catches up; unchanged values are not re-sent.
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (!isComposerOpen || keyboardViewportInsetPx <= 0) return
+    if (!composerShown || keyboardViewportInsetPx <= 0) return
 
     const intervalId = window.setInterval(() => {
       syncNativeBottomBarClearance()
@@ -3084,10 +3266,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
+  }, [composerShown, keyboardViewportInsetPx, syncNativeBottomBarClearance])
 
   useEffect(() => {
-    if (!isComposerOpen) {
+    if (!composerShown) {
       composerFocusRequestedRef.current = false
       return
     }
@@ -3107,7 +3289,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.clearTimeout(timerId)
     }
-  }, [focusComposerTextarea, isComposerOpen, syncComposerTextareaHeight])
+  }, [composerShown, focusComposerTextarea, syncComposerTextareaHeight])
 
   useEffect(() => {
     const textarea = composerTextareaRef.current
@@ -3119,12 +3301,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useLayoutEffect(() => {
     syncComposerTextareaHeight(composerTextareaRef.current)
-  }, [isComposerOpen, syncComposerTextareaHeight])
+  }, [composerShown, syncComposerTextareaHeight])
 
   useEffect(() => {
-    if (isComposerOpen) return
+    if (composerShown) return
     setComposerTextareaHeightPx(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
-  }, [isComposerOpen])
+  }, [composerShown])
 
   // Persist selected languages
   useEffect(() => {
@@ -3861,6 +4043,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     pushMenuHistoryEntry(2, 'display-language')
   }, [conversationId, menuOpen, menuScreen, pushMenuHistoryEntry])
 
+  // The room's Hash Rush page, and its rankings and how-to pages over it.
+  const handleHashRushPageOpen = useCallback(() => {
+    if (!menuOpen || menuScreen === 'hash-rush' || !conversationId) return
+    pushMenuHistoryEntry(2, 'hash-rush')
+  }, [conversationId, menuOpen, menuScreen, pushMenuHistoryEntry])
+  const handleHashRushRankingOpen = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'hash-rush') return
+    pushMenuHistoryEntry(3, 'hash-rush-ranking')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+  const handleHashRushHowToOpen = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'hash-rush') return
+    pushMenuHistoryEntry(3, 'hash-rush-howto')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+
   const handleDefaultDisplayLanguageSelect = useCallback((nextLanguage: string) => {
     const normalizedLanguage = canonicalizeSttLanguageCode(nextLanguage)
     if (!normalizedLanguage || !normalizedDisplayLanguageOptions.includes(normalizedLanguage)) return
@@ -3964,6 +4160,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [closeLanguageSelector, closeMenuPanel, isVisible])
 
+  // Leaving the room (back to the list, or another room on top) ends the game
+  // here; lowering the game inside the room does not.
+  useEffect(() => {
+    if (isVisible) return
+    setHashRushGameOpen(false)
+    setHashRushGameActive(false)
+    setHashRushGameChatMode(null)
+  }, [isVisible])
+
   useEffect(() => {
     if (!enableNativeBannerBridge || !isVisible) return
     if (!isNativeApp()) return
@@ -4056,9 +4261,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     // Temporary (see src/lib/ui-diagnostics.ts): what the room menu looked like to JS around a
     // back navigation, and whether its panel is still on screen 600 ms later.
+    // Also a back with the menu closed (it may leave the room): the one-swipe
+    // "menu page straight to the conversation list" case happens there.
     const reportMenuPopStateDiagnostic = (depthBefore: number, requestedDepth: number | null) => {
-      if (depthBefore <= 0 && requestedDepth === null) return
       const stateBefore = window.history.state as Record<string, unknown> | null
+      const edgeSwipeSuppressed = isNativeEdgeSwipeSuppressed()
+      const historyLength = window.history.length
+      const conversationRoute = stateBefore && typeof stateBefore === 'object'
+        ? stateBefore[CONVERSATION_HISTORY_ROUTE_STATE_KEY] ?? null
+        : null
       window.setTimeout(() => {
         const panel = document.querySelector('[data-qa="live-demo-menu-panel"]')
         const rect = panel?.getBoundingClientRect()
@@ -4068,6 +4279,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           stateDepth: stateBefore && typeof stateBefore === 'object' ? stateBefore[MENU_HISTORY_STATE_KEY] ?? null : null,
           depthAfter: menuHistoryDepthRef.current,
           isNativeIosApp: isNativeIosAppRuntime(),
+          edgeSwipeSuppressed,
+          historyLength,
+          conversationRoute,
           settleState: menuIosHistorySettleRef.current,
           panelInDom: Boolean(panel),
           panelRect: rect ? [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)] : null,
@@ -5055,7 +5269,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTtsAudio: handleTtsAudio,
     onTtsCanceled: handleTtsCanceled,
     enableTts: enableAutoTTS && isSoundEnabled,
-    enableAec: aecEnabled || speakerModeAecEnabled,
+    // In a call the other voices come out of this phone: without the echo
+    // canceller the microphone would transcribe them as this viewer's words.
+    enableAec: aecEnabled || speakerModeAecEnabled || voiceTalkState.joined,
+    // What is said in a call is a caption for some people in the call only.
+    suppressLivePreview: voiceTalkState.joined,
+    externalPreviews: voiceTalkCaptionDrafts,
     captureSource: sttCaptureSource,
     earphoneMicrophone: earphoneMicrophoneEnabled,
     sonioxManualFinalizeSilenceMs,
@@ -5637,13 +5856,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`conversation_share_status_failed:${response.status}`)
-        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown }>
+        return response.json() as Promise<{ shareToken?: unknown; shareEnabled?: unknown; isPublic?: unknown; roomCode?: unknown }>
       })
       .then((body) => {
         if (cancelled) return
         const nextShareToken = typeof body.shareToken === 'string' ? body.shareToken : null
         setShareUrl(nextShareToken ? buildConversationShareUrl(window.location.origin, nextShareToken) : null)
         setShareEnabled(body.shareEnabled === true)
+        setIsPublicRoom(body.isPublic === true)
+        setRoomCode(typeof body.roomCode === 'number' ? body.roomCode : null)
       })
       .catch(() => {
         // Leave whatever was already shown — the toggle below surfaces its
@@ -5736,6 +5957,130 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     roomManagementCopy.shareErrorToastLabel,
     roomManagementCopy.shareRefreshedToastLabel,
   ])
+
+  const liveRoomCopy = useMemo(() => liveRoomsCopy(uiLocale), [uiLocale])
+
+  const handleTogglePublicRoom = useCallback(async (nextPublic: boolean) => {
+    if (isTogglingPublic || !conversationId) return
+    setIsTogglingPublic(true)
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}/visibility`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildTrackingRequestHeaders({
+            sessionKey: resolveConversationSessionKey(),
+            trackingUserId: getOrCreateTrackingUserId(),
+            nativeAppUpdate,
+          }),
+        },
+        body: JSON.stringify({ isPublic: nextPublic }),
+      })
+      if (!response.ok) throw new Error(`conversation_visibility_failed:${response.status}`)
+      const body = await response.json() as { isPublic?: unknown; conversation?: { shareToken?: unknown; shareEnabled?: unknown } }
+      setIsPublicRoom(body.isPublic === true)
+      // Going public switches the share link on.
+      const nextShareToken = typeof body.conversation?.shareToken === 'string' ? body.conversation.shareToken : null
+      if (nextShareToken) setShareUrl(buildConversationShareUrl(window.location.origin, nextShareToken))
+      if (body.conversation?.shareEnabled === true) setShareEnabled(true)
+    } catch {
+      toast.error(roomManagementCopy.shareErrorToastLabel)
+    } finally {
+      setIsTogglingPublic(false)
+    }
+  }, [conversationId, isTogglingPublic, nativeAppUpdate, resolveConversationSessionKey, roomManagementCopy.shareErrorToastLabel])
+
+  const loadJoinRequests = useCallback(async () => {
+    if (!conversationId) return
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}/join-requests`), { cache: 'no-store' })
+      if (!response.ok) return
+      const body = await response.json() as { requests?: Array<{ id: string, userId: string, name: string | null, image: string | null }> }
+      setJoinRequests(Array.isArray(body.requests) ? body.requests : [])
+    } catch {
+      // Shown again on the next visit to the screen.
+    }
+  }, [conversationId])
+
+  useEffect(() => {
+    if (menuScreen !== 'conversation-management') return
+    void loadJoinRequests()
+  }, [loadJoinRequests, menuScreen])
+
+  const handleDecideJoinRequest = useCallback(async (requestId: string, accept: boolean) => {
+    if (!conversationId || decidingJoinRequestId) return
+    setDecidingJoinRequestId(requestId)
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}/join-requests/${requestId}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accept }),
+      })
+      const body = await response.json().catch(() => null) as { error?: string } | null
+      if (!response.ok) {
+        toast.error(body?.error === 'room_full' ? liveRoomCopy.roomFull : liveRoomCopy.joinFailed)
+        return
+      }
+      setJoinRequests((current) => current.filter((request) => request.id !== requestId))
+      toast.success(accept ? liveRoomCopy.requestAccepted : liveRoomCopy.requestDeclined)
+    } catch {
+      toast.error(liveRoomCopy.joinFailed)
+    } finally {
+      setDecidingJoinRequestId(null)
+    }
+  }, [conversationId, decidingJoinRequestId, liveRoomCopy.joinFailed, liveRoomCopy.requestAccepted, liveRoomCopy.requestDeclined, liveRoomCopy.roomFull])
+
+  const handleCopyRoomCode = useCallback(async () => {
+    const text = formatRoomCode(roomCode)
+    if (!text) return
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+      toast.success(liveRoomCopy.roomNumberCopied)
+    } catch {
+      toast.error(roomManagementCopy.shareErrorToastLabel)
+    }
+  }, [liveRoomCopy.roomNumberCopied, roomCode, roomManagementCopy.shareErrorToastLabel])
+
+  // Copies the room's Hash Rush invite link: anyone who opens it plays, on a
+  // computer or a phone browser, for as long as this chat room exists.
+  const handleCopyHashRushPcLink = useCallback(async () => {
+    if (!conversationId || !HASH_RUSH_PAGE_URL || !HASH_RUSH_SERVER) return
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/hash-rush/invite`), { credentials: 'include', cache: 'no-store' })
+      if (!response.ok) throw new Error(String(response.status))
+      const { url } = await response.json() as { url?: string }
+      if (!url) throw new Error('no_url')
+      const link = `${url}?lang=${encodeURIComponent(uiLocale)}`
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = link
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+      toast.success(liveRoomCopy.hashRushPcLinkCopied)
+    } catch {
+      toast.error(liveRoomCopy.hashRushPcLinkFailed)
+    }
+  }, [conversationId, liveRoomCopy.hashRushPcLinkCopied, liveRoomCopy.hashRushPcLinkFailed, uiLocale])
 
   const handleCopyShareLink = useCallback(async () => {
     if (!shareUrl) return
@@ -6351,6 +6696,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [isVisible])
 
   const performMicAction = useCallback((source: SttStopSource) => {
+    // Locked in a voice talk: the call starts and stops speech-to-text itself.
+    if (voiceTalkState.joined) return
     const shouldStopConnectingSession = isConnecting
       && (!isNativeAppRuntime || isNativeSttSessionOwner)
     if (isSttSessionRunning || shouldStopConnectingSession) {
@@ -6371,7 +6718,87 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
     void handleStartRecording()
-  }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning, sttCaptureSource])
+  }, [handleStartRecording, handleStopRecording, isConnecting, isNativeAppRuntime, isNativeSttSessionOwner, isSttSessionRunning, sttCaptureSource, voiceTalkState.joined])
+
+  // The language this viewer speaks in a call, and the call as a message
+  // bubble needs it (the "started a voice talk" message's Join button).
+  const voiceTalkLang = ((speechLanguages[0] || ownSelectedLanguages[0] || uiLocale || 'en').split('-')[0] || 'en').toLowerCase()
+  const voiceTalkRoom = useMemo<VoiceTalkRoomState | null>(() => (
+    headerMode === 'conversation' && conversationId && voiceTalkAvailable
+      ? {
+          liveCallId: voiceTalkState.callId,
+          joined: voiceTalkState.joined,
+          participants: voiceTalkParticipants,
+          join: () => joinVoiceTalk({ conversationId, title: displayConversationTitle || undefined, lang: voiceTalkLang }),
+        }
+      : null
+  ), [conversationId, displayConversationTitle, headerMode, voiceTalkAvailable, voiceTalkLang, voiceTalkParticipants, voiceTalkState.callId, voiceTalkState.joined])
+
+  // A voice talk takes over the room's speech-to-text and read-aloud.
+  // - While this phone is in a call, the Start/Stop button and the speaker
+  //   button are locked. Speech-to-text that was running stops on joining.
+  // - The panel has the two switches: the mic (the voice sent into the call)
+  //   and interpret (captions and the interpreted voice of the others).
+  // - Interpretation runs on the server (mingle-voice-agent): while someone
+  //   in the call has it on, the interpreter writes each speaker down from
+  //   the call audio, saves each line as a caption only the people with it
+  //   on read (src/lib/voice-caption.ts), and reads translations on a
+  //   language track of the call that only they listen to. No phone runs
+  //   speech-to-text for the call, and a translation read aloud is call
+  //   audio, so the echo canceller keeps it out of the microphone.
+  // - The app owns the call and its mic: they go on while the room screen is
+  //   closed and in the background, until the app quits. This screen only
+  //   switches the mic when the viewer presses the button, and otherwise
+  //   shows what the app reports, so coming back to the room never turns a
+  //   muted mic back on. Writing down runs while this room screen is open.
+  const handleVoiceTalkListenOnlyChange = useCallback((listenOnly: boolean) => {
+    setVoiceTalkListenOnly(listenOnly)
+    setVoiceTalkMic(resolveVoiceTalkMic({ listenOnly }))
+  }, [])
+  // A new call starts with the mic on (the app turns it on when it connects).
+  useEffect(() => {
+    if (voiceTalkState.joined) return
+    setVoiceTalkListenOnly(false)
+    setVoiceTalkInterpretOn(false)
+    setVoiceTalkListenOn(true)
+  }, [voiceTalkState.joined])
+
+  // A press shows at once, and the app's next reports are not allowed to flip
+  // it back while the app is still applying it (the reports run ahead of the
+  // press: the button flashed off and on, as Start once did). A report that
+  // agrees, or one after a few seconds, is the truth again.
+  const voiceTalkPressedRef = useRef<{ interpretOn?: { value: boolean, until: number }, listenOn?: { value: boolean, until: number } }>({})
+  const handleVoiceTalkInterpretSync = useCallback((state: { interpretOn: boolean, listenOn: boolean }) => {
+    const pressed = voiceTalkPressedRef.current
+    const now = Date.now()
+    for (const key of ['interpretOn', 'listenOn'] as const) {
+      const press = pressed[key]
+      if (press && (press.value === state[key] || now > press.until)) delete pressed[key]
+    }
+    if (!pressed.interpretOn) setVoiceTalkInterpretOn(state.interpretOn)
+    if (!pressed.listenOn) setVoiceTalkListenOn(state.listenOn)
+  }, [])
+
+  const handleVoiceTalkListenChange = useCallback((on: boolean) => {
+    voiceTalkPressedRef.current.listenOn = { value: on, until: Date.now() + 3000 }
+    setVoiceTalkListenOn(on)
+    setVoiceTalkListen(on)
+    if (on) setVoiceTalkListenNoticeOpen(true)
+  }, [])
+
+  const handleVoiceTalkInterpretChange = useCallback((on: boolean) => {
+    voiceTalkPressedRef.current.interpretOn = { value: on, until: Date.now() + 3000 }
+    setVoiceTalkInterpretOn(on)
+    if (conversationId) void setVoiceTalkInterpret(conversationId, on)
+  }, [conversationId])
+
+  // The room's own speech-to-text does not run in a call: one that was on
+  // stops on joining (and Start stays locked until the call ends).
+  const voiceTalkJoinedRef = useRef(false)
+  useEffect(() => {
+    voiceTalkJoinedRef.current = voiceTalkState.joined
+    if (voiceTalkState.joined && isSttSessionRunning) void handleStopRecording()
+  }, [handleStopRecording, isSttSessionRunning, voiceTalkState.joined])
 
   const confirmScreenCaptureNotice = useCallback(() => {
     screenCaptureNoticeAcknowledgedRef.current = true
@@ -6409,6 +6836,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const handleToggleComposer = useCallback(() => {
+    // Over the Hash Rush game the switch is the game's own: keyboard or Start.
+    // The input mode kept for the room stays as it is.
+    if (hashRushGameChatShown) {
+      const nextMode = hashRushGameChatMode === 'text' ? 'voice' : 'text'
+      composerFocusRequestedRef.current = nextMode === 'text'
+      if (nextMode === 'voice') composerTextareaRef.current?.blur()
+      setHashRushGameChatMode(nextMode)
+      return
+    }
     const next = !isComposerOpen
     commitLocalAccountPreferences({
       ...latestAccountPreferencesRef.current,
@@ -6425,7 +6861,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       composerTextareaRef.current?.blur()
     }
     setIsComposerOpen(next)
-  }, [commitLocalAccountPreferences, isComposerOpen])
+  }, [commitLocalAccountPreferences, hashRushGameChatMode, hashRushGameChatShown, isComposerOpen])
+
+  // The game's 💬: the room's composer comes up over the game, in the input
+  // mode the viewer keeps for the room (keyboard or Start) unless one is asked.
+  const openHashRushGameChat = useCallback((mode?: 'text' | 'voice') => {
+    const nextMode = mode ?? (isComposerOpen ? 'text' : 'voice')
+    composerFocusRequestedRef.current = nextMode === 'text'
+    setHashRushGameChatMode(nextMode)
+    // Already drawn under the game: focus it now, inside the tap (iOS only
+    // raises the keyboard from a touch).
+    if (nextMode === 'text' && composerTextareaRef.current) focusComposerTextarea()
+  }, [focusComposerTextarea, isComposerOpen])
+
+  const closeHashRushGameChat = useCallback(() => {
+    composerFocusRequestedRef.current = false
+    composerTextareaRef.current?.blur()
+    setHashRushGameChatMode(null)
+  }, [])
 
   const handleComposerDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextDraft = event.currentTarget.value
@@ -6523,15 +6976,35 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, focusComposerTextarea, replyTarget, submitExternalUtterance, syncComposerTextareaHeight])
 
+  // A quick chat line under Hash Rush goes the same way as typed text: a
+  // normal room message (history, translation, push and coins as always). The
+  // draft and a reply being written stay as they are.
+  const handleHashRushQuickChat = useCallback((text: string) => {
+    submitExternalUtterance({
+      text,
+      sourceLanguage: 'unknown',
+      speaker: composerCopy.manualSpeakerLabel,
+    })
+  }, [composerCopy.manualSpeakerLabel, submitExternalUtterance])
+
+  // Quick chat sits right above the composer while Hash Rush is up, in rooms
+  // the viewer can still write to.
+  const hashRushQuickChatVisible = hashRushGameChatShown && Boolean(conversationId) && !isBlockedCounterpart
+
+  const handleComposerTextareaFocus = useCallback(() => setIsComposerTextareaFocused(true), [])
+  const handleComposerTextareaBlur = useCallback(() => setIsComposerTextareaFocused(false), [])
+
   useEffect(() => {
     setReplyTarget(null)
   }, [conversationId])
 
   const handleReplyToMessage = useCallback((reference: MessageReplyReference) => {
     setReplyTarget(reference)
-    if (isComposerOpen) focusComposerTextarea()
+    // From the talk read back over the game: the game's composer, with the keyboard.
+    if (hashRushGameOpen && hashRushGameChatMode !== 'text') openHashRushGameChat('text')
+    else if (composerShown) focusComposerTextarea()
     else handleToggleComposer()
-  }, [focusComposerTextarea, handleToggleComposer, isComposerOpen])
+  }, [composerShown, focusComposerTextarea, handleToggleComposer, hashRushGameChatMode, hashRushGameOpen, openHashRushGameChat])
 
   const handleCancelReply = useCallback(() => setReplyTarget(null), [])
 
@@ -7320,6 +7793,85 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     preferredDisplayLanguage,
     resolvedDefaultDisplayLanguage,
   ])
+  // The room's talk as the Hash Rush game hears it, in the language the
+  // room's one-bubble view shows this viewer. Only while the game is here.
+  // The room's Hash Rush game around the game itself, like a voice talk:
+  // ask before starting or joining, offer someone else's game once, one game
+  // per room (HashRushRoomPrompts.tsx, src/server/hash-rush/room-game.ts).
+  const hashRushRoomEnabled = headerMode === 'conversation' && Boolean(conversationId) && isHashRushGameConfigured() && !isBlockedCounterpart && isVisible
+  const latestAnnouncedHashRushSessionId = useMemo(() => {
+    for (let index = displayUtterances.length - 1; index >= 0; index -= 1) {
+      const sessionId = displayUtterances[index]?.hashRush?.sessionId
+      if (sessionId) return sessionId
+    }
+    return null
+  }, [displayUtterances])
+  const { game: hashRushRoomGame, join: joinHashRushRoomGame, leave: leaveHashRushRoomGame } = useHashRushRoomGame({
+    conversationId: conversationId ?? null,
+    enabled: hashRushRoomEnabled,
+    playing: hashRushGameActive,
+    latestAnnouncedSessionId: latestAnnouncedHashRushSessionId,
+  })
+  const hashRushLiveSessionId = hashRushRoomGame?.sessionId ?? null
+  // The game this viewer turned down in this room: not offered again, also
+  // after the app restarts (kept on the device).
+  const [declinedHashRush, setDeclinedHashRush] = useState<{ conversationId: string | null, sessionId: string | null } | null>(null)
+  const declinedHashRushSessionId = declinedHashRush && declinedHashRush.conversationId === conversationId
+    ? declinedHashRush.sessionId
+    : readDeclinedInvite('hash-rush', conversationId)
+  const setDeclinedHashRushSessionId = useCallback((sessionId: string | null) => {
+    writeDeclinedInvite('hash-rush', conversationId, sessionId)
+    setDeclinedHashRush({ conversationId: conversationId ?? null, sessionId })
+  }, [conversationId])
+  const enterHashRushGame = useCallback(() => {
+    setHashRushGameActive(true)
+    setHashRushGameOpen(true)
+    void joinHashRushRoomGame()
+  }, [joinHashRushRoomGame])
+  // Quit: the game ends for this phone (not lowered), back to the chat. The
+  // same game is not offered to this viewer again; its message still joins.
+  // Others in the game room besides this phone, as the game last saw (null: not known).
+  const hashRushOthersHereRef = useRef<number | null>(null)
+  const quitHashRushGame = useCallback((alone?: boolean) => {
+    setDeclinedHashRushSessionId(hashRushLiveSessionId)
+    setHashRushGameOpen(false)
+    setHashRushGameActive(false)
+    setHashRushGameChatMode(null)
+    // The last one out ends the room's game now, so its card stops offering it.
+    if (alone ?? hashRushOthersHereRef.current === 0) void leaveHashRushRoomGame()
+    hashRushOthersHereRef.current = null
+  }, [hashRushLiveSessionId, leaveHashRushRoomGame, setDeclinedHashRushSessionId])
+  // The Hash Rush page's main button: it was pressed on purpose, so no second question.
+  const handleHashRushPageEnter = useCallback(() => {
+    requestCloseMenuPanel()
+    if (hashRushGameActive) setHashRushGameOpen(true)
+    else enterHashRushGame()
+  }, [enterHashRushGame, hashRushGameActive, requestCloseMenuPanel])
+  const hashRushInvite = hashRushRoomEnabled && shouldOfferHashRushInvite({
+    game: hashRushRoomGame,
+    playing: hashRushGameActive,
+    viewerUserId,
+    declinedSessionId: declinedHashRushSessionId,
+  }) ? hashRushRoomGame : null
+  const hashRushRoom = useMemo<HashRushRoomState | null>(() => (
+    hashRushRoomEnabled
+      ? { liveSessionId: hashRushLiveSessionId, joined: hashRushGameActive, join: enterHashRushGame, open: hashRushGameOpen, reopen: () => setHashRushGameOpen(true), quit: () => quitHashRushGame() }
+      : null
+  ), [enterHashRushGame, hashRushGameActive, hashRushGameOpen, hashRushLiveSessionId, hashRushRoomEnabled, quitHashRushGame])
+
+  const hashRushChatEntries = useMemo(() => (
+    hashRushGameActive
+      ? buildHashRushChatEntries({
+          utterances: displayUtterances,
+          draftIds: draftUtteranceIds,
+          display: earphoneModeDisplay,
+          viewerUserId,
+          isSharedRoom: isMultiMember,
+          // The native game floats every line over the map, whoever said it.
+          keepUnknownSenders: true,
+        })
+      : NO_HASH_RUSH_CHAT_ENTRIES
+  ), [displayUtterances, draftUtteranceIds, earphoneModeDisplay, hashRushGameActive, isMultiMember, viewerUserId])
   // L: the notice pick for this room while it is still a room language,
   // otherwise the room's display language.
   const earphoneModeReadLanguage = resolveEarphoneModeReadLanguage({
@@ -7327,6 +7879,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     conversationKey: earphoneModeConversationKey,
     display: earphoneModeDisplay,
   })
+  // A call reads translations aloud in the same language speaker / earphone
+  // mode would: the notice pick, otherwise the room's display language.
+  useEffect(() => {
+    if (!voiceTalkState.connected || !earphoneModeReadLanguage) return
+    setVoiceTalkListenLang(earphoneModeReadLanguage)
+  }, [earphoneModeReadLanguage, voiceTalkState.connected])
   const earphoneAutoReadSnapshot = useMemo<EarphoneAutoReadSnapshot>(() => ({
     conversationKey: earphoneModeConversationKey,
     committed: utterances,
@@ -7481,6 +8039,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const handleEarphoneModeToggle = useCallback(() => {
+    // Locked in a voice talk: the panel's interpret button decides.
+    if (voiceTalkJoinedRef.current) return
     const toggle = resolveEarphoneModeToggle(getEarphoneModePreferenceSnapshot())
     writeEarphoneModeEnabled(toggle.nextEnabled)
     if (toggle.requestRoute) requestNativeAudioRoute()
@@ -7506,6 +8066,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const earphoneModeControlLabel = earphoneModeGate.waitingForEarphones
     ? `${earphoneModeCopy.label}, ${earphoneModeCopy.waitingLabel}`
     : earphoneModeCopy.label
+  // The voice-mode phone button and the keyboard-mode "+" menu item do the
+  // same: during a call ask to leave, otherwise ask to start (or join) one.
+  const handleVoiceTalkPress = useCallback(() => {
+    if (resolveVoiceTalkButtonPress(voiceTalkState) === 'confirm_leave') {
+      setVoiceTalkLeaveSignal((n) => n + 1)
+    } else {
+      setVoiceTalkOpenSignal((n) => n + 1)
+    }
+  }, [voiceTalkState])
+  const voiceTalkMenuItem = useMemo<ConversationImageComposerVoiceTalk | undefined>(() => (
+    headerMode === 'conversation' && conversationId && voiceTalkAvailable
+      ? {
+          label: roomManagementCopy.voiceTalkMenuItemLabel,
+          active: voiceTalkState.live || voiceTalkState.joined,
+          onSelect: handleVoiceTalkPress,
+        }
+      : undefined
+  ), [conversationId, handleVoiceTalkPress, headerMode, roomManagementCopy.voiceTalkMenuItemLabel, voiceTalkAvailable, voiceTalkState.joined, voiceTalkState.live])
   const earphoneModeMenuItem = useMemo<ConversationImageComposerEarphoneMode | undefined>(() => (
     earphoneModeGate.controlVisible
       ? {
@@ -7516,10 +8094,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           label: earphoneModeCopy.label,
           stateLabel: earphoneModeEnabled ? earphoneModeCopy.onStateLabel : earphoneModeCopy.offStateLabel,
           waitingLabel: earphoneModeCopy.waitingLabel,
+          disabled: voiceTalkState.joined,
           onToggle: handleEarphoneModeToggle,
         }
       : undefined
   ), [
+    voiceTalkState.joined,
     earphoneModeCopy,
     earphoneModeEnabled,
     earphoneModeGate.controlVisible,
@@ -7781,13 +8361,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const showScrollToBottom = scrollMetrics.distanceToBottom > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX
   // "…" while requested / queued / synthesizing (manual and auto), animated
   // bars only while the current clip's audio is really playing.
+  // In a call the interpreter reads aloud: its line plays like a bubble read by this phone.
+  const voiceTalkReadingPlaybackKey = voiceTalkState.joined && voiceTalkReading
+    ? buildTranslationBubblePlaybackKey(buildVoiceCaptionClientMessageId(voiceTalkReading.lineId), voiceTalkReading.lang)
+    : null
   const bubbleTtsIndicatorsByUtteranceId = useMemo(() => groupBubbleTtsIndicatorsByUtterance(
     resolveBubbleTtsIndicatorKeys({
-      current: speakingItem ? { playbackKey: speakingItem.playbackKey, started: speakingItem.started } : null,
+      current: speakingItem
+        ? { playbackKey: speakingItem.playbackKey, started: speakingItem.started }
+        : voiceTalkReadingPlaybackKey ? { playbackKey: voiceTalkReadingPlaybackKey, started: true } : null,
       pendingManualPlaybackKey: pendingManualTtsTarget?.playbackKey,
       queuedAutoPlaybackKeys: earphoneQueuedPlaybackKeys,
     }),
-  ), [earphoneQueuedPlaybackKeys, pendingManualTtsTarget, speakingItem])
+  ), [earphoneQueuedPlaybackKeys, pendingManualTtsTarget, speakingItem, voiceTalkReadingPlaybackKey])
   const scrollDateTop = Math.max(
     16,
     Math.min(
@@ -7830,7 +8416,93 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     bottomBarClearancePx: nativeBottomBarClearancePx,
     estimatedBottomBannerInsetPx: estimatedNativeBannerInsetPx,
   })
-  const activeKeyboardInsetPx = isComposerOpen ? keyboardViewportInsetPx : 0
+  // While the composer is up over Hash Rush, only its own keyboard lifts it;
+  // a keyboard the game opens is the game's.
+  const activeKeyboardInsetPx = composerShown && (!hashRushGameChatShown || isComposerTextareaFocused) ? keyboardViewportInsetPx : 0
+  // The room's talk and composer inside the native game (room-chat.ts). How
+  // much of the game's foot the quick chat and the composer cover while up
+  // (the keyboard under them included): the game stands its conversation on it.
+  const hashRushQuickChatRef = useRef<HTMLDivElement | null>(null)
+  const [hashRushGameDockHeightPx, setHashRushGameDockHeightPx] = useState(0)
+  useLayoutEffect(() => {
+    if (!hashRushGameChatShown) return
+    const root = liveDemoRootRef.current
+    const quickChat = hashRushQuickChatRef.current
+    const bottomBar = bottomBarRef.current
+    if (!root || !quickChat) return
+    const measure = () => {
+      const height = Math.max(0, Math.round(root.getBoundingClientRect().bottom - quickChat.getBoundingClientRect().top))
+      setHashRushGameDockHeightPx((current) => (current === height ? current : height))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(root)
+    observer.observe(quickChat)
+    if (bottomBar) observer.observe(bottomBar)
+    return () => observer.disconnect()
+  }, [activeKeyboardInsetPx, composerShown, hashRushGameChatShown])
+  const hashRushGameUtterancesById = useMemo(() => (
+    hashRushGameActive ? new Map(displayUtterances.map((utterance) => [utterance.id, utterance])) : null
+  ), [displayUtterances, hashRushGameActive])
+  // One room message the room's own way, always as one bubble in this viewer's language.
+  const renderHashRushGameMessage = useCallback((id: string) => {
+    const utterance = hashRushGameUtterancesById?.get(id)
+    if (!utterance) return null
+    return (
+      <MemoizedLivePhoneDemoChatMessageRow
+        utterance={utterance}
+        uiLocale={uiLocale}
+        preferredDisplayLanguage={preferredDisplayLanguage}
+        preferredDisplayLanguages={normalizedPreferredDisplayLanguages}
+        defaultDisplayLanguage={resolvedDefaultDisplayLanguage}
+        languageOrder={normalizedDisplayLanguageOptions}
+        hiddenLanguages={othersOnlyLanguages}
+        isDraft={false}
+        onPlayOriginal={handlePlayOriginalBubbleTts}
+        onPlayTranslation={handlePlayTranslationBubbleTts}
+        bubbleTextClassName={chatBubbleTextClassName}
+        shouldAnimateEntrance={false}
+        viewerUserId={viewerUserId}
+        onOpenProfile={handleOpenProfileForBubble}
+        bubbleDisplayMode="collapsed"
+        isGroupContinuation={false}
+      />
+    )
+  }, [
+    chatBubbleTextClassName,
+    handleOpenProfileForBubble,
+    handlePlayOriginalBubbleTts,
+    handlePlayTranslationBubbleTts,
+    hashRushGameUtterancesById,
+    normalizedDisplayLanguageOptions,
+    normalizedPreferredDisplayLanguages,
+    othersOnlyLanguages,
+    preferredDisplayLanguage,
+    resolvedDefaultDisplayLanguage,
+    uiLocale,
+    viewerUserId,
+  ])
+  const hashRushGameChat = useMemo<HashRushRoomChat>(() => ({
+    entries: hashRushChatEntries,
+    renderMessage: renderHashRushGameMessage,
+    canWrite: Boolean(conversationId) && !isBlockedCounterpart,
+    open: hashRushGameChatShown,
+    dockHeightPx: hashRushGameDockHeightPx,
+    interpreting: isReady,
+    onOpen: openHashRushGameChat,
+    onClose: closeHashRushGameChat,
+  }), [
+    closeHashRushGameChat,
+    conversationId,
+    hashRushChatEntries,
+    hashRushGameChatShown,
+    hashRushGameDockHeightPx,
+    isBlockedCounterpart,
+    isReady,
+    openHashRushGameChat,
+    renderHashRushGameMessage,
+  ])
   const scrollToBottomButtonBottomPx = resolveScrollToBottomButtonBottomPx({
     baseBottomPx: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX,
     isNativeAppRuntime,
@@ -7869,10 +8541,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     isLimitReached,
     hasComposerDraft: composerHasDraft,
   })
-  const bottomBarTopPaddingPx = isComposerOpen
+  const bottomBarTopPaddingPx = composerShown
     ? COMPOSER_MODE_TOP_MARGIN_PX
     : VOICE_MODE_TOP_MARGIN_PX
-  const bottomBarBottomMarginPx = isComposerOpen
+  const bottomBarBottomMarginPx = composerShown
     ? COMPOSER_MODE_BOTTOM_MARGIN_PX
     : VOICE_MODE_BOTTOM_MARGIN_PX
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
@@ -8158,7 +8830,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   return (
     <PhoneFrame>
       <MessageReplyProvider value={replyRoomContext}>
+      <VoiceTalkRoomContext.Provider value={voiceTalkRoom}>
+      <HashRushRoomContext.Provider value={hashRushRoom}>
       <div
+        ref={liveDemoRootRef}
         data-qa="live-demo-root"
         className="relative flex h-full min-h-0 flex-col overflow-hidden"
       >
@@ -8171,6 +8846,61 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           >
             <CoinRoomBanner locale={coinLocale} />
           </div>
+        ) : null}
+
+        {/* Group voice talk: slides down from under the top bar while a call is live. */}
+        {headerMode === 'conversation' && conversationId && voiceTalkAvailable ? (
+          <VoiceTalkPanel
+            conversationId={conversationId}
+            conversationTitle={displayConversationTitle || undefined}
+            uiLocale={uiLocale}
+            myLang={voiceTalkLang}
+            topOffset="calc(54px + env(safe-area-inset-top, 0px))"
+            onAvailabilityChange={handleVoiceTalkAvailability}
+                onParticipantsChange={setVoiceTalkParticipants}
+            openSignal={voiceTalkOpenSignal}
+            leaveSignal={voiceTalkLeaveSignal}
+            listenOnly={voiceTalkListenOnly}
+            onListenOnlyChange={handleVoiceTalkListenOnlyChange}
+            onListenOnlySync={setVoiceTalkListenOnly}
+            interpretOn={voiceTalkInterpretOn}
+            onInterpretChange={handleVoiceTalkInterpretChange}
+            listenOn={voiceTalkListenOn}
+            onListenChange={handleVoiceTalkListenChange}
+            onInterpretSync={handleVoiceTalkInterpretSync}
+            onCaptions={setVoiceTalkCaptionLines}
+            onReadingChange={setVoiceTalkReading}
+            earphonesConnected={nativeAudioRoute.earphonesConnected}
+            onOpenProfile={handleOpenProfileForBubble}
+            viewerUserId={viewerUserId}
+          />
+        ) : null}
+
+        {/* Hash Rush, played natively in this room: a layer over the whole room
+            under its own thin top bar, kept while lowered, dropped on leaving. */}
+        {hashRushGameActive && conversationId ? (
+          <HashRushRoomLayer
+            key={conversationId}
+            open={hashRushGameOpen}
+            conversationId={conversationId}
+            viewerKey={viewerUserId || 'guest'}
+            playerName={(session?.user?.name || '').trim()}
+            uiLocale={uiLocale}
+            voiceActive={voiceTalkState.connected}
+            chat={hashRushGameChat}
+            onClose={closeHashRushGame}
+            onQuit={quitHashRushGame}
+            onOthersHere={(count) => { hashRushOthersHereRef.current = count }}
+          />
+        ) : null}
+
+        {hashRushRoomEnabled ? (
+          <HashRushRoomPrompts
+            uiLocale={uiLocale}
+            invite={hashRushInvite}
+            onConfirm={enterHashRushGame}
+            onDecline={() => setDeclinedHashRushSessionId(hashRushLiveSessionId)}
+          />
         ) : null}
 
         {/* Header */}
@@ -8386,6 +9116,32 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </button>
                               )}
                             />
+
+                            <div
+                              data-qa="live-demo-menu-usage"
+                              className="flex w-full items-center justify-between gap-3 px-1 py-1 text-[0.98rem] font-medium text-gray-900"
+                            >
+                              <span className="min-w-0 flex-1">{roomManagementCopy.usageMenuItemLabel}</span>
+                              <span className="flex shrink-0 items-center gap-2 text-sm font-normal tabular-nums text-gray-500">
+                                {isUsageLimited ? (
+                                  <>
+                                    <span className="h-2 w-20 overflow-hidden rounded-full bg-gray-200">
+                                      <span
+                                        className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                                        style={{ width: `${usagePercent}%` }}
+                                      />
+                                    </span>
+                                    <span className={isLimitReached ? 'font-semibold text-red-400' : ''}>
+                                      {formatLivePhoneDemoUsageDuration(remainingSec)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span>{formatLivePhoneDemoUsageDuration(usageSec)}</span>
+                                )}
+                                <span aria-hidden="true">·</span>
+                                <span>{storedMessageCountLabel}</span>
+                              </span>
+                            </div>
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
@@ -8946,6 +9702,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </div>
                         ) : null}
 
+                        {conversationId && isHashRushGameConfigured() ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              data-qa="live-demo-hash-rush-menu-item"
+                              // One item; its page holds the game, the computer link,
+                              // the rankings and how to play.
+                              onClick={handleHashRushPageOpen}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                            >
+                              <span className="min-w-0 flex-1">{hashRushInviteCopy(uiLocale).menuItem}</span>
+                              <span className="shrink-0 text-gray-500">
+                                <ChevronRight size={18} strokeWidth={2.4} />
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
+
                         <div className="px-4 pb-4">
                           <button
                             type="button"
@@ -9340,6 +10114,81 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </span>
                           </button>
 
+                          {roomCode ? (
+                            <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-gray-200 px-3.5 py-3" data-qa="live-demo-room-code">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[0.8rem] text-gray-500">{liveRoomCopy.roomNumber}</p>
+                                <p className="text-[1.35rem] font-semibold tabular-nums tracking-wide text-gray-900">{formatRoomCode(roomCode)}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void handleCopyRoomCode()}
+                                className="shrink-0 text-[0.85rem] font-semibold text-amber-600"
+                              >
+                                {roomManagementCopy.shareLinkCopyButtonLabel}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {joinRequests.length > 0 ? (
+                            <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50/60 px-3.5 py-3" data-qa="live-demo-join-requests">
+                              <p className="pb-2 text-[0.98rem] font-medium text-gray-900">{liveRoomCopy.requestsHeading} · {joinRequests.length}</p>
+                              <ul className="space-y-2">
+                                {joinRequests.map((request) => (
+                                  <li key={request.id} className="flex items-center gap-2.5">
+                                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-100 text-[0.8rem] font-bold text-amber-800">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      {request.image ? <img src={request.image} alt="" className="h-full w-full object-cover" /> : (Array.from((request.name || '?').trim())[0] || '?').toUpperCase()}
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-[0.92rem] text-gray-900">{request.name || '?'}</span>
+                                    <button
+                                      type="button"
+                                      data-qa="live-demo-join-request-decline"
+                                      disabled={decidingJoinRequestId === request.id}
+                                      onClick={() => void handleDecideJoinRequest(request.id, false)}
+                                      className="shrink-0 rounded-full bg-white px-3 py-1 text-[0.8rem] font-semibold text-gray-600 ring-1 ring-gray-200 disabled:opacity-60"
+                                    >
+                                      {liveRoomCopy.decline}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      data-qa="live-demo-join-request-accept"
+                                      disabled={decidingJoinRequestId === request.id}
+                                      onClick={() => void handleDecideJoinRequest(request.id, true)}
+                                      className="shrink-0 rounded-full bg-amber-500 px-3 py-1 text-[0.8rem] font-semibold text-white disabled:opacity-60"
+                                    >
+                                      {liveRoomCopy.accept}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+
+                          <div className="mb-3 rounded-2xl border border-gray-200 px-3.5 py-3" data-qa="live-demo-public-room">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[0.98rem] font-medium text-gray-900">{liveRoomCopy.publicMenuLabel}</p>
+                                <p className="mt-0.5 text-[0.8rem] leading-5 text-gray-500">{liveRoomCopy.publicHint}</p>
+                              </div>
+                              <button
+                                type="button"
+                                role="switch"
+                                data-qa="live-demo-public-room-switch"
+                                aria-checked={isPublicRoom}
+                                aria-label={liveRoomCopy.publicMenuLabel}
+                                onClick={() => void handleTogglePublicRoom(!isPublicRoom)}
+                                disabled={!conversationId || isTogglingPublic}
+                                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border-0 p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 ${isPublicRoom ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                              >
+                                <span
+                                  className="absolute left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+                                  style={{ transform: isPublicRoom ? 'translateX(20px)' : 'translateX(0px)' }}
+                                />
+                              </button>
+                            </div>
+                          </div>
+
                           <div className="mb-3 rounded-2xl border border-gray-200 px-3.5 py-3">
                             <div className="flex items-center justify-between gap-3">
                               <div className="min-w-0 flex-1">
@@ -9662,6 +10511,84 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         </div>
                       </div>
                     </SlideSurface>
+
+                    {conversationId && isHashRushGameConfigured() ? (
+                      <>
+                        <SlideSurface
+                          open={menuOpen && (menuScreen === 'hash-rush' || menuScreen === 'hash-rush-ranking' || menuScreen === 'hash-rush-howto')}
+                          onClose={requestMenuBackStep}
+                          onRequestClose={handleMenuSurfaceRequestClose}
+                          ariaLabel={hashRushInviteCopy(uiLocale).pageTitle}
+                          nativeBackPriority={30}
+                          className="absolute inset-0 z-[70] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                          style={{ touchAction: 'pan-y' }}
+                          stopPropagation
+                        >
+                          <LivePhoneDemoPanelHeader
+                            title={hashRushInviteCopy(uiLocale).pageTitle}
+                            backLabel={roomManagementCopy.backButtonLabel}
+                            onBack={requestMenuBackStep}
+                          />
+                          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+                            <HashRushMenuPage
+                              uiLocale={uiLocale}
+                              game={hashRushRoomGame}
+                              playing={hashRushGameActive}
+                              viewerUserId={viewerUserId}
+                              onEnter={handleHashRushPageEnter}
+                              onCopyPcLink={HASH_RUSH_PAGE_URL ? () => void handleCopyHashRushPcLink() : undefined}
+                              onOpenRanking={handleHashRushRankingOpen}
+                              onOpenHowTo={handleHashRushHowToOpen}
+                            />
+                          </div>
+                        </SlideSurface>
+
+                        <SlideSurface
+                          open={menuOpen && menuScreen === 'hash-rush-ranking'}
+                          onClose={requestMenuBackStep}
+                          onRequestClose={handleMenuSurfaceRequestClose}
+                          ariaLabel={hashRushInviteCopy(uiLocale).ranking}
+                          nativeBackPriority={40}
+                          className="absolute inset-0 z-[80] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                          style={{ touchAction: 'pan-y' }}
+                          stopPropagation
+                        >
+                          <LivePhoneDemoPanelHeader
+                            title={hashRushInviteCopy(uiLocale).ranking}
+                            backLabel={roomManagementCopy.backButtonLabel}
+                            onBack={requestMenuBackStep}
+                          />
+                          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+                            <HashRushRankingPage
+                              uiLocale={uiLocale}
+                              conversationId={conversationId}
+                              viewerUserId={viewerUserId}
+                              active={menuOpen && menuScreen === 'hash-rush-ranking'}
+                            />
+                          </div>
+                        </SlideSurface>
+
+                        <SlideSurface
+                          open={menuOpen && menuScreen === 'hash-rush-howto'}
+                          onClose={requestMenuBackStep}
+                          onRequestClose={handleMenuSurfaceRequestClose}
+                          ariaLabel={hashRushInviteCopy(uiLocale).howTo}
+                          nativeBackPriority={40}
+                          className="absolute inset-0 z-[80] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                          style={{ touchAction: 'pan-y' }}
+                          stopPropagation
+                        >
+                          <LivePhoneDemoPanelHeader
+                            title={hashRushInviteCopy(uiLocale).howTo}
+                            backLabel={roomManagementCopy.backButtonLabel}
+                            onBack={requestMenuBackStep}
+                          />
+                          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}>
+                            <HashRushHowToPage uiLocale={uiLocale} />
+                          </div>
+                        </SlideSurface>
+                      </>
+                    ) : null}
                       </div>
                     </SlideSurface>
           </div>
@@ -9695,6 +10622,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               className="relative min-h-0 h-full overflow-y-auto no-scrollbar py-2.5"
               style={chatViewportStyle}
             >
+              {/* The ad banner is hidden while Hash Rush is up, so the strip keeps no room for it. */}
               {nativeChatTopSpacerPx > 0 && (
                 <div
                   aria-hidden="true"
@@ -9887,6 +10815,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             </AnimatePresence>
 
             <AnimatePresence>
+              {/* The strip under Hash Rush is too short for it; a new message brings the strip down anyway. */}
               {showScrollToBottom && (
                 <motion.div
                   initial={{ opacity: 0, y: 8, scale: 0.98 }}
@@ -10150,15 +11079,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             )}
           </AnimatePresence>
 
+          {/* Hash Rush's 💬 up: the game's ready-made lines right above the
+              composer, over the game (47), sent as normal room messages. */}
+          {hashRushQuickChatVisible ? (
+            <div ref={hashRushQuickChatRef} className={`relative z-[48] shrink-0 border-t border-gray-100 bg-white`}>
+              <HashRushQuickChatBar uiLocale={uiLocale} onSend={handleHashRushQuickChat} />
+            </div>
+          ) : null}
+
           {/* Bottom Bar with STT / Text Composer Toggle */}
           <motion.div
-            layout={!isComposerOpen}
-            layoutDependency={isComposerOpen}
+            layout={!composerShown}
+            layoutDependency={composerShown}
             onLayoutAnimationComplete={syncNativeBottomBarClearance}
             onTransitionEnd={syncNativeBottomBarClearance}
             ref={bottomBarRef}
             data-qa="live-demo-bottom-bar"
-            className="relative shrink-0 border-t border-gray-100 bg-white"
+            // Above the Hash Rush game while its 💬 has the composer up. Quick
+            // chat above it carries the line.
+            className={`relative shrink-0 border-t bg-white ${hashRushGameChatShown ? 'z-[48] ' : ''}${
+              hashRushQuickChatVisible ? 'border-white' : 'border-gray-100'
+            }`}
             transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
             style={{
               paddingTop: `${bottomBarTopPaddingPx}px`,
@@ -10180,11 +11121,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               </div>
             ) : (
             <AnimatePresence initial={false} mode="popLayout">
-              {isComposerOpen ? (
+              {composerShown ? (
                 <motion.div
                   key="composer-bottom-bar"
                   layout={false}
-                  layoutDependency={isComposerOpen}
+                  layoutDependency={composerShown}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
@@ -10198,7 +11139,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onPointerUp={handleMicPointerUp}
                       onPointerCancel={handleMicPointerCancel}
                       onClick={handleMicClick}
-                      disabled={isPreparingStart && !isConnecting}
+                      // Same as voice mode: in a voice talk the call runs speech-to-text itself.
+                      disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}
                       className="relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
                       style={{
                         width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
@@ -10259,6 +11201,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           data-qa="live-demo-composer-textarea"
                           defaultValue={composerDraftRef.current}
                           onChange={handleComposerDraftChange}
+                          onFocus={handleComposerTextareaFocus}
+                          onBlur={handleComposerTextareaBlur}
                           onKeyDown={(event) => {
                             // PC keyboard: Enter sends, Shift+Enter is a newline.
                             // Touch keyboard keeps Enter as a newline; IME Enter only commits.
@@ -10283,7 +11227,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
                         onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} acceptSharedPhoto={isVisible} /> : earphoneModeMenuItem ? (
+                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} voiceTalk={voiceTalkMenuItem} acceptSharedPhoto={isVisible} /> : earphoneModeMenuItem ? (
                       // No sendable conversation: no photo row, but the "+" still
                       // carries the earphone-mode row and the voice-mode switch.
                       <ConversationImageComposer conversationId="" allowPhoto={false} locale={uiLocale}
@@ -10345,7 +11289,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <motion.div
                   key="default-bottom-bar"
                   layout
-                  layoutDependency={isComposerOpen}
+                  layoutDependency={composerShown}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
@@ -10363,43 +11307,31 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -12 }}
                     transition={{ duration: 0.09, ease: 'easeOut' }}
-                    className={earphoneModeGate.controlVisible
-                      ? 'flex min-w-0 items-end justify-between gap-1 self-end pl-2'
-                      : 'self-end justify-self-start pl-2'}
+                    // Mirrors the right cell (image + keyboard): same gap, no
+                    // extra inset, so both sides sit at equal distances.
+                    className="flex min-w-0 items-center gap-1 self-end justify-self-start"
                   >
-                    <div className={`flex h-[33px] flex-col items-start justify-end gap-0${earphoneModeGate.controlVisible ? ' min-w-0' : ''}`}>
-                      <div className={`flex items-center gap-1.5${earphoneModeGate.controlVisible ? ' min-w-0 max-w-full' : ''}`}>
-                        {isUsageLimited ? (
-                          <>
-                            <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
-                              <div
-                                className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                                style={{ width: `${usagePercent}%` }}
-                              />
-                            </div>
-                            <span className={`text-sm leading-4 tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}${earphoneModeGate.controlVisible ? ' shrink-0' : ''}`}>
-                              {formatLivePhoneDemoUsageDuration(remainingSec)}
-                            </span>
-                          </>
-                        ) : (
-                          <span className={`text-sm leading-4 tabular-nums text-gray-400${earphoneModeGate.controlVisible ? ' min-w-0 truncate' : ''}`}>
-                            {formatLivePhoneDemoUsageDuration(usageSec)}
-                          </span>
-                        )}
-                      </div>
-                      <span className={`text-sm leading-4 tabular-nums text-gray-400${earphoneModeGate.controlVisible ? ' max-w-full truncate' : ''}`}>
-                        {storedMessageCountLabel}
-                      </span>
-                    </div>
+                    {/* Group voice talk lives where the usage counters used to be;
+                        the counters moved into the menu's usage row. */}
+                    {headerMode === 'conversation' && conversationId && voiceTalkAvailable ? (
+                      <VoiceTalkButton
+                        uiLocale={uiLocale}
+                        active={voiceTalkState.live || voiceTalkState.joined}
+                        onPress={handleVoiceTalkPress}
+                        sizePx={VOICE_MODE_SIDE_BUTTON_SIZE_PX}
+                      />
+                    ) : null}
                     {earphoneModeGate.controlVisible && (
                       <button
                         type="button"
                         data-qa="live-demo-earphone-mode-toggle"
                         onPointerDown={(event) => event.preventDefault()}
                         onClick={handleEarphoneModeToggle}
+                        disabled={voiceTalkState.joined}
                         aria-label={earphoneModeControlLabel}
                         aria-pressed={isEarphoneModeOn}
-                        className={`relative inline-flex shrink-0 items-center justify-center transition-all duration-200 active:scale-95 ${
+                        // Dimmed like the mic button while the call decides what is read aloud.
+                        className={`relative inline-flex shrink-0 items-center justify-center transition-all duration-200 active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
                           isEarphoneModeOn ? 'text-amber-500' : 'text-gray-500 hover:text-gray-700'
                         }`}
                         style={{
@@ -10436,7 +11368,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onPointerUp={handleMicPointerUp}
                       onPointerCancel={handleMicPointerCancel}
                       onClick={handleMicClick}
-                      disabled={isPreparingStart && !isConnecting}
+                      // In a voice talk the call runs speech-to-text itself.
+                      disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}
                       aria-label={isReady || isConnecting ? VOICE_MODE_STOP_LABEL : VOICE_MODE_START_LABEL}
                       className="relative flex items-center justify-center px-[18px] transition-all duration-200 active:scale-95 disabled:opacity-50"
                       style={{
@@ -10542,6 +11475,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               />
             </MessageMediaDialog>
           )}
+          {voiceTalkListenNoticeOpen && voiceTalkState.joined && !earphoneModeNoticeOpen && (
+            // Read-aloud turned on in a call: the language question of speaker /
+            // earphone mode. The call carries the audio, so no earphones and no
+            // capture source are asked.
+            <MessageMediaDialog title={earphoneModeCopy.label} onClose={() => setVoiceTalkListenNoticeOpen(false)}>
+              <EarphoneModeNoticeContent
+                uiLocale={uiLocale}
+                copy={earphoneModeCopy}
+                earphonesConnected={nativeAudioRoute.earphonesConnected}
+                earphonesRequired={false}
+                languages={normalizedDisplayLanguageOptions}
+                readLanguage={earphoneModeReadLanguage}
+                onSelectReadLanguage={handleEarphoneModeReadLanguageSelect}
+                onConfirm={() => setVoiceTalkListenNoticeOpen(false)}
+                coinCostNotice={coinTtsCostNotice}
+              />
+            </MessageMediaDialog>
+          )}
           {earphoneCaptureNoticeOpen && !earphoneModeNoticeOpen && (
             <MessageMediaDialog title={earphoneModeBaseCopy.earphoneCaptureNoticeTitle} onClose={dismissEarphoneCaptureNotice}>
               <EarphoneCaptureSourceNoticeContent
@@ -10614,6 +11565,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           )}
         </div>
       </div>
+      </HashRushRoomContext.Provider>
+      </VoiceTalkRoomContext.Provider>
       </MessageReplyProvider>
     </PhoneFrame>
   )

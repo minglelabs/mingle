@@ -14,6 +14,9 @@ import {
 import { normalizeConversationMessageImage } from '@/lib/conversation-image'
 import { MESSAGE_REACTIONS_REFRESH_EVENT } from '@/lib/message-reactions'
 import { MESSAGE_READ_RECEIPTS_REFRESH_EVENT } from '@/lib/message-read-receipts'
+import { publishRoomPresence } from '@/lib/room-presence'
+import { normalizeVoiceCallMessage } from '@/lib/voice-call-message'
+import { normalizeHashRushMessage } from '@/lib/hash-rush-message'
 import { normalizeMessageReplyReference, type MessageReplyReference } from '@/lib/message-reply'
 import { MESSAGE_RECALLED_EVENT, normalizeRecalledMessageIds, type MessageRecalledEventDetail } from '@/lib/message-recall'
 import { MESSAGE_RETRANSLATED_EVENT, applyRetranslationToUtterance, type MessageRetranslatedEventDetail } from '@/lib/message-retranslate'
@@ -1128,6 +1131,9 @@ export function normalizeConversationHydrationUtterances(
         ...(record.recalled === true ? { recalled: true } : {}),
         ...(record.sentByViewer === true ? { sentByViewer: true } : {}),
         ...(normalizeConversationMessageImage(record.image) ? { image: normalizeConversationMessageImage(record.image) } : {}),
+        ...(normalizeVoiceCallMessage(record.voiceCall) ? { voiceCall: normalizeVoiceCallMessage(record.voiceCall)! } : {}),
+        ...(normalizeHashRushMessage(record.hashRush) ? { hashRush: normalizeHashRushMessage(record.hashRush)! } : {}),
+        ...(record.voiceCaption === true ? { voiceCaption: true as const } : {}),
         originalText: typeof record.originalText === 'string' ? record.originalText : '',
         ...(typeof record.originalDisplayText === 'string' && record.originalDisplayText.trim()
           && record.originalDisplayText !== record.originalText
@@ -1585,6 +1591,18 @@ interface UseRealtimeSTTOptions {
   onTtsCanceled?: (utteranceId: string) => void
   enableTts?: boolean
   enableAec?: boolean
+  /**
+   * In a voice talk: what this phone says is a call caption, read only by
+   * some people in the call. Its live drafts are not sent on the room's
+   * channel, which everyone watching the room receives.
+   */
+  suppressLivePreview?: boolean
+  /**
+   * Live lines from elsewhere, drawn like the room's own live bubbles until a
+   * message with the same id lands (a voice talk's interpreter, for the
+   * people with interpretation on).
+   */
+  externalPreviews?: readonly Utterance[]
   // What a native session transcribes. Fixed when the session starts.
   captureSource?: SttCaptureSource
   // Record from the earphones' microphone instead of the phone's (shells
@@ -3194,6 +3212,8 @@ export default function useRealtimeSTT({
   onTtsCanceled,
   enableTts,
   enableAec = false,
+  suppressLivePreview = false,
+  externalPreviews,
   captureSource = 'microphone',
   earphoneMicrophone = false,
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
@@ -3271,6 +3291,8 @@ export default function useRealtimeSTT({
   const finalizationApiNamespace = resolveRuntimeApiNamespace()
   const realtimeScope = JSON.stringify([clientMessageOutboxOwnerIdentity, finalizationApiNamespace, conversationId])
   const livePreviewSender = useMemo(() => { void realtimeScope; return new LivePreviewSender() }, [realtimeScope])
+  const suppressLivePreviewRef = useRef(suppressLivePreview)
+  useEffect(() => { suppressLivePreviewRef.current = suppressLivePreview }, [suppressLivePreview])
   const remotePreviews = useMemo(() => { void realtimeScope; return new RemotePreviews() }, [realtimeScope])
   const [remotePreviewVersion, setRemotePreviewVersion] = useState(0)
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
@@ -4337,6 +4359,11 @@ export default function useRealtimeSTT({
               window.dispatchEvent(new CustomEvent(MESSAGE_READ_RECEIPTS_REFRESH_EVENT, { detail: conversationId }))
               return
             }
+            if (frame.type === 'presence') {
+              // Who has the room open right now (the voice talk panel shows it).
+              if (conversationId) publishRoomPresence(conversationId, frame.userIds)
+              return
+            }
             if (frame.type === 'utterance_preview') {
               if (frame.utterance?.speakerUserId === viewerUserId && typeof frame.orderReceipt === 'string') {
                 rememberLiveVoiceOrder({ ownerIdentity: clientMessageOutboxOwnerIdentity, apiNamespace: finalizationApiNamespace,
@@ -4389,6 +4416,8 @@ export default function useRealtimeSTT({
     const liveTimer = window.setInterval(() => {
       if (cancelled) return
       livePreviewSender.flush(frame => {
+        // Dropped, not kept for later: a caption's draft never goes out.
+        if (suppressLivePreviewRef.current) return true
         if (!writerToken || socket?.readyState !== WebSocket.OPEN || socket.bufferedAmount > 256_000) return false
         const orderReceipt = getVoiceOrderReceipt({ ownerIdentity: clientMessageOutboxOwnerIdentity,
           apiNamespace: finalizationApiNamespace, sessionKey: socketSessionKey, clientMessageId: String(frame.id) })
@@ -7609,8 +7638,17 @@ export default function useRealtimeSTT({
       const time = remotePreviews.orderFor(viewerUserId, u.id)
       return time ? { ...u, serverCreatedAtMs: time } : u
     })
-    return [...own, ...remotePreviews.visible(utterances, viewerUserId)].sort(compareUtteranceOrder)
-  }, [localLiveUtterances, remotePreviews, remotePreviewVersion, utterances, viewerUserId])
+    // A line of my own from outside (a voice talk's caption) shows only while
+    // this phone's own speech-to-text draws nothing: in a call the room's STT
+    // is off, so the call's caption is the only live view of what I say.
+    const external = (externalPreviews ?? []).filter((u) => (
+      (u.speakerUserId !== viewerUserId || own.length === 0) && !utterances.some((committed) => committed.id === u.id)
+    )).map((u) => {
+      const knownSpeaker = utterances.find((committed) => committed.speakerUserId === u.speakerUserId)
+      return knownSpeaker?.speakerImage && !u.speakerImage ? { ...u, speakerImage: knownSpeaker.speakerImage } : u
+    })
+    return [...own, ...remotePreviews.visible(utterances, viewerUserId), ...external].sort(compareUtteranceOrder)
+  }, [externalPreviews, localLiveUtterances, remotePreviews, remotePreviewVersion, utterances, viewerUserId])
   const liveUtterance = useMemo(() => buildLiveUtterance({
     pendingTurn: activePendingTurn,
     partialTranscript: activePendingTurn?.text || partialTranscript,

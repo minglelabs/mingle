@@ -124,7 +124,8 @@ test('live subscriptions expire, cannot renew into another account and legacy to
         `/conversation-events?live=1&token=${token({ ...writer, liveWriter: undefined, liveReader: true, exp: Date.now() + 100 })}`, secret, bus);
     socket.emit('message', Buffer.from(JSON.stringify({ type: 'utterance_preview', writerToken: token({ ...writer, userId: 'bob' }),
         id: 'forged', sequence: 1, originalText: 'spoof' })), false);
-    assert.deepEqual(socket.messages, []);
+    // Only the presence frame every live reader gets on entering; the forged preview is dropped.
+    assert.deepEqual(socket.messages.filter((message) => message.type !== 'presence'), []);
     socket.emit('message', Buffer.from(JSON.stringify({ type: 'renew', token: token({ ...writer, userId: 'bob', liveReader: true }) })), false);
     const closed = once(socket, 'close');
     // Keep the test alive while the production expiry timer remains unref'ed.

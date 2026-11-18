@@ -54,6 +54,24 @@ export type CoinCopy = {
   // Room participants list: Hash each member has spent in this room.
   roomUsageTitle: string;
   roomUsed: string;
+  priceTitle: string;
+  priceVoice: string;
+  priceVoiceNote: string;
+  priceReadAloud: string;
+  priceReadAloudNote: string;
+  priceTyped: string;
+  priceTypedNote: string;
+  pricePhoto: string;
+  pricePhotoValue: string;
+  pricePerMinute: string;
+  pricePerConversationMinute: string;
+  pricePerMessage: string;
+  freeTitle: string;
+  freeCall: string;
+  freeSend: string;
+  freeSameLanguage: string;
+  freeReading: string;
+  priceWhoPays: string;
   // Gifting purchased Hash from another user's profile.
   gift: string;
   giftTitle: string;
@@ -85,6 +103,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "내역", sourceDailyFree: "무료 충전", sourcePurchase: "구매", sourceAdmin: "운영자 지급", sourceBonus: "보너스",
     sourceRefund: "환불", sourceExpired: "만료", conversationFallback: "대화", noHistory: "아직 내역이 없어요", loadMore: "더 보기",
     roomUsageTitle: "이 대화방에서 쓴 해씨", roomUsed: "{coins} 사용",
+    priceTitle: "해씨는 이렇게 쓰여요", priceVoice: "음성 인식", priceVoiceNote: "말한 내용의 자막과 번역 포함. 시작 버튼이 켜져 있는 동안 들어요.", priceReadAloud: "번역 읽어 주기", priceReadAloudNote: "스피커 모드·말풍선 스피커. 음성 1분에 {coins}해씨", priceTyped: "입력한 메시지 번역", priceTypedNote: "다시 번역하기도 같아요", pricePhoto: "사진 번역", pricePhotoValue: "글자 양에 따라 달라요", pricePerMinute: "1분", pricePerConversationMinute: "대화 1분", pricePerMessage: "1개", freeTitle: "무료", freeCall: "보이스톡 통화", freeSend: "메시지·사진 보내기", freeSameLanguage: "번역이 필요 없는 메시지", freeReading: "번역된 내용 보기", priceWhoPays: "말하거나 보낸 사람이 내고, 읽어 주기는 듣는 사람이 내요.",
     gift: "선물하기", giftTitle: "{name}님에게 해씨 선물하기", giftAmountLabel: "선물할 해씨", giftAvailable: "선물 가능 {coins}", giftRule: "구매한 해씨만 선물할 수 있어요. 무료로 받은 해씨는 선물할 수 없어요.",
     giftFeeNotice: "수수료 {fee}%를 뺀 {coins}해씨가 전달돼요", giftNotEnough: "선물할 수 있는 해씨가 부족해요", giftSuccess: "{name}님에게 해씨 {coins}개를 선물했어요", giftFailed: "선물을 보내지 못했어요", sourceGiftReceived: "선물 받음", sourceGiftSent: "선물 보냄", giftRefundNotice: "선물한 해씨가 들어 있던 패키지는 환불되지 않아요.",
   },
@@ -103,6 +122,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "History", sourceDailyFree: "Free top-up", sourcePurchase: "Purchase", sourceAdmin: "From HashChat", sourceBonus: "Bonus",
     sourceRefund: "Refund", sourceExpired: "Expired", conversationFallback: "Conversation", noHistory: "No history yet", loadMore: "Show more",
     roomUsageTitle: "Hash used in this chat", roomUsed: "{coins} used",
+    priceTitle: "How Hash is used", priceVoice: "Speech recognition", priceVoiceNote: "Includes captions and translation of what you say. Charged while Start is on.", priceReadAloud: "Translation read aloud", priceReadAloudNote: "Speaker mode and the bubble speaker. {coins} Hash per minute of audio", priceTyped: "Typed message translation", priceTypedNote: "Re-translating costs the same", pricePhoto: "Photo translation", pricePhotoValue: "Depends on how much text", pricePerMinute: "per min", pricePerConversationMinute: "per conversation min", pricePerMessage: "each", freeTitle: "Free", freeCall: "Voice talk calls", freeSend: "Sending messages and photos", freeSameLanguage: "Messages that need no translation", freeReading: "Reading translations", priceWhoPays: "Whoever speaks or sends pays; read-aloud is paid by the listener.",
     gift: "Send a gift", giftTitle: "Gift Hash to {name}", giftAmountLabel: "Hash to gift", giftAvailable: "Giftable: {coins}", giftRule: "Only Hash you purchased can be gifted. Free Hash cannot be gifted.",
     giftFeeNotice: "After a {fee}% fee, {coins} Hash will be delivered", giftNotEnough: "You don't have enough giftable Hash", giftSuccess: "You gifted {coins} Hash to {name}", giftFailed: "The gift could not be sent", sourceGiftReceived: "Gift received", sourceGiftSent: "Gift sent", giftRefundNotice: "A pack you gift Hash from can no longer be refunded.",
   },
@@ -121,6 +141,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "履歴", sourceDailyFree: "無料チャージ", sourcePurchase: "購入", sourceAdmin: "運営からの付与", sourceBonus: "ボーナス",
     sourceRefund: "返金", sourceExpired: "期限切れ", conversationFallback: "会話", noHistory: "履歴はまだありません", loadMore: "もっと見る",
     roomUsageTitle: "このトークで使ったハッシュ", roomUsed: "{coins} 使用",
+    priceTitle: "ハッシュの使いみち", priceVoice: "音声認識", priceVoiceNote: "話した内容の字幕と翻訳を含みます。スタートがオンの間かかります。", priceReadAloud: "翻訳の読み上げ", priceReadAloudNote: "スピーカーモード・吹き出しのスピーカー。音声1分あたり{coins}ハッシュ", priceTyped: "入力メッセージの翻訳", priceTypedNote: "再翻訳も同じです", pricePhoto: "写真翻訳", pricePhotoValue: "文字の量によります", pricePerMinute: "1分", pricePerConversationMinute: "会話1分", pricePerMessage: "1件", freeTitle: "無料", freeCall: "ボイストーク通話", freeSend: "メッセージ・写真の送信", freeSameLanguage: "翻訳が不要なメッセージ", freeReading: "翻訳を読むこと", priceWhoPays: "話した人・送った人が払い、読み上げは聞く人が払います。",
     gift: "ギフトを贈る", giftTitle: "{name}さんにハッシュを贈る", giftAmountLabel: "贈るハッシュ", giftAvailable: "贈れるハッシュ {coins}", giftRule: "購入したハッシュのみ贈れます。無料でもらったハッシュは贈れません。",
     giftFeeNotice: "手数料{fee}%を差し引いた{coins}ハッシュが届きます", giftNotEnough: "贈れるハッシュが足りません", giftSuccess: "{name}さんにハッシュを{coins}個贈りました", giftFailed: "ギフトを送信できませんでした", sourceGiftReceived: "ギフト受け取り", sourceGiftSent: "ギフト送信", giftRefundNotice: "ハッシュを贈ったパックは返金できなくなります。",
   },
@@ -139,6 +160,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "记录", sourceDailyFree: "免费补充", sourcePurchase: "购买", sourceAdmin: "官方赠送", sourceBonus: "奖励",
     sourceRefund: "退款", sourceExpired: "已过期", conversationFallback: "对话", noHistory: "暂无记录", loadMore: "查看更多",
     roomUsageTitle: "本聊天已用哈希", roomUsed: "已用 {coins}",
+    priceTitle: "哈希的用途", priceVoice: "语音识别", priceVoiceNote: "包含所说内容的字幕和翻译。开始按钮开启期间计费。", priceReadAloud: "朗读翻译", priceReadAloudNote: "扬声器模式和气泡扬声器。每分钟音频 {coins} 哈希", priceTyped: "输入消息翻译", priceTypedNote: "重新翻译价格相同", pricePhoto: "图片翻译", pricePhotoValue: "取决于文字多少", pricePerMinute: "每分钟", pricePerConversationMinute: "每分钟对话", pricePerMessage: "每条", freeTitle: "免费", freeCall: "语音通话", freeSend: "发送消息和图片", freeSameLanguage: "无需翻译的消息", freeReading: "查看翻译", priceWhoPays: "说话或发送的人付费，朗读由收听的人付费。",
     gift: "赠送", giftTitle: "向{name}赠送哈希", giftAmountLabel: "赠送数量", giftAvailable: "可赠送 {coins}", giftRule: "只能赠送购买的哈希，免费获得的哈希无法赠送。",
     giftFeeNotice: "扣除 {fee}% 手续费后，对方将收到 {coins} 哈希", giftNotEnough: "可赠送的哈希不足", giftSuccess: "已向{name}赠送 {coins} 哈希", giftFailed: "赠送失败", sourceGiftReceived: "收到赠送", sourceGiftSent: "已赠送", giftRefundNotice: "赠出哈希的套餐将无法退款。",
   },
@@ -157,6 +179,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "紀錄", sourceDailyFree: "免費補充", sourcePurchase: "購買", sourceAdmin: "官方贈送", sourceBonus: "獎勵",
     sourceRefund: "退款", sourceExpired: "已過期", conversationFallback: "對話", noHistory: "尚無紀錄", loadMore: "查看更多",
     roomUsageTitle: "本聊天已用哈希", roomUsed: "已用 {coins}",
+    priceTitle: "哈希的用途", priceVoice: "語音辨識", priceVoiceNote: "包含所說內容的字幕與翻譯。開始按鈕開啟期間計費。", priceReadAloud: "朗讀翻譯", priceReadAloudNote: "喇叭模式與泡泡喇叭。每分鐘音訊 {coins} 哈希", priceTyped: "輸入訊息翻譯", priceTypedNote: "重新翻譯價格相同", pricePhoto: "圖片翻譯", pricePhotoValue: "依文字多寡而定", pricePerMinute: "每分鐘", pricePerConversationMinute: "每分鐘對話", pricePerMessage: "每則", freeTitle: "免費", freeCall: "語音通話", freeSend: "傳送訊息與照片", freeSameLanguage: "不需翻譯的訊息", freeReading: "查看翻譯", priceWhoPays: "說話或傳送的人付費，朗讀由收聽的人付費。",
     gift: "贈送", giftTitle: "向{name}贈送哈希", giftAmountLabel: "贈送數量", giftAvailable: "可贈送 {coins}", giftRule: "只能贈送購買的哈希，免費獲得的哈希無法贈送。",
     giftFeeNotice: "扣除 {fee}% 手續費後，對方將收到 {coins} 哈希", giftNotEnough: "可贈送的哈希不足", giftSuccess: "已向{name}贈送 {coins} 哈希", giftFailed: "贈送失敗", sourceGiftReceived: "收到贈送", sourceGiftSent: "已贈送", giftRefundNotice: "贈出哈希的套餐將無法退款。",
   },
@@ -175,6 +198,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Historique", sourceDailyFree: "Recharge gratuite", sourcePurchase: "Achat", sourceAdmin: "Offert par HashChat", sourceBonus: "Bonus",
     sourceRefund: "Remboursement", sourceExpired: "Expiré", conversationFallback: "Conversation", noHistory: "Aucun historique", loadMore: "Voir plus",
     roomUsageTitle: "Hash utilisés dans cette discussion", roomUsed: "{coins} utilisés",
+    priceTitle: "À quoi sert le Hash", priceVoice: "Reconnaissance vocale", priceVoiceNote: "Sous-titres et traduction de ce que vous dites inclus. Facturé tant que Démarrer est activé.", priceReadAloud: "Traduction lue à voix haute", priceReadAloudNote: "Mode haut-parleur et haut-parleur de bulle. {coins} Hash par minute d'audio", priceTyped: "Traduction des messages écrits", priceTypedNote: "Retraduire coûte pareil", pricePhoto: "Traduction de photo", pricePhotoValue: "Dépend de la quantité de texte", pricePerMinute: "par min", pricePerConversationMinute: "par min de conversation", pricePerMessage: "l'unité", freeTitle: "Gratuit", freeCall: "Appels vocaux", freeSend: "Envoyer messages et photos", freeSameLanguage: "Messages sans traduction", freeReading: "Lire les traductions", priceWhoPays: "Celui qui parle ou envoie paie ; la lecture à voix haute est payée par celui qui écoute.",
     gift: "Offrir", giftTitle: "Offrir des Hash à {name}", giftAmountLabel: "Hash à offrir", giftAvailable: "Offrables : {coins}", giftRule: "Seuls les Hash achetés peuvent être offerts. Les Hash gratuits ne peuvent pas l'être.",
     giftFeeNotice: "Après {fee} % de frais, {coins} Hash seront remis", giftNotEnough: "Vous n'avez pas assez de Hash offrables", giftSuccess: "Vous avez offert {coins} Hash à {name}", giftFailed: "Le cadeau n'a pas pu être envoyé", sourceGiftReceived: "Cadeau reçu", sourceGiftSent: "Cadeau envoyé", giftRefundNotice: "Un pack dont vous offrez des Hash n’est plus remboursable.",
   },
@@ -193,6 +217,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Verlauf", sourceDailyFree: "Gratis-Auffüllung", sourcePurchase: "Kauf", sourceAdmin: "Von HashChat", sourceBonus: "Bonus",
     sourceRefund: "Erstattung", sourceExpired: "Abgelaufen", conversationFallback: "Unterhaltung", noHistory: "Noch kein Verlauf", loadMore: "Mehr anzeigen",
     roomUsageTitle: "In diesem Chat verbrauchte Hash", roomUsed: "{coins} verbraucht",
+    priceTitle: "Wofür Hash verwendet wird", priceVoice: "Spracherkennung", priceVoiceNote: "Untertitel und Übersetzung des Gesagten inklusive. Berechnet, solange Start an ist.", priceReadAloud: "Übersetzung vorlesen", priceReadAloudNote: "Lautsprechermodus und Blasen-Lautsprecher. {coins} Hash pro Audiominute", priceTyped: "Übersetzung getippter Nachrichten", priceTypedNote: "Neu übersetzen kostet gleich viel", pricePhoto: "Fotoübersetzung", pricePhotoValue: "Hängt von der Textmenge ab", pricePerMinute: "pro Min.", pricePerConversationMinute: "pro Gesprächsminute", pricePerMessage: "pro Stück", freeTitle: "Kostenlos", freeCall: "Sprachanrufe", freeSend: "Nachrichten und Fotos senden", freeSameLanguage: "Nachrichten ohne Übersetzung", freeReading: "Übersetzungen lesen", priceWhoPays: "Wer spricht oder sendet, zahlt; das Vorlesen zahlt, wer zuhört.",
     gift: "Verschenken", giftTitle: "Hash an {name} verschenken", giftAmountLabel: "Hash zum Verschenken", giftAvailable: "Verschenkbar: {coins}", giftRule: "Nur gekaufte Hash können verschenkt werden. Kostenlose Hash nicht.",
     giftFeeNotice: "Nach {fee} % Gebühr kommen {coins} Hash an", giftNotEnough: "Du hast nicht genug verschenkbare Hash", giftSuccess: "Du hast {name} {coins} Hash geschenkt", giftFailed: "Das Geschenk konnte nicht gesendet werden", sourceGiftReceived: "Geschenk erhalten", sourceGiftSent: "Geschenk gesendet", giftRefundNotice: "Ein Paket, aus dem du Hash verschenkst, ist nicht mehr erstattungsfähig.",
   },
@@ -211,6 +236,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Historial", sourceDailyFree: "Recarga gratis", sourcePurchase: "Compra", sourceAdmin: "Regalo de HashChat", sourceBonus: "Bono",
     sourceRefund: "Reembolso", sourceExpired: "Caducado", conversationFallback: "Conversación", noHistory: "Aún no hay historial", loadMore: "Ver más",
     roomUsageTitle: "Hash usados en este chat", roomUsed: "{coins} usados",
+    priceTitle: "En qué se usa el Hash", priceVoice: "Reconocimiento de voz", priceVoiceNote: "Incluye subtítulos y traducción de lo que dices. Se cobra mientras Iniciar está activado.", priceReadAloud: "Traducción leída en voz alta", priceReadAloudNote: "Modo altavoz y altavoz de burbuja. {coins} Hash por minuto de audio", priceTyped: "Traducción de mensajes escritos", priceTypedNote: "Volver a traducir cuesta lo mismo", pricePhoto: "Traducción de fotos", pricePhotoValue: "Depende de la cantidad de texto", pricePerMinute: "por min", pricePerConversationMinute: "por min de conversación", pricePerMessage: "cada uno", freeTitle: "Gratis", freeCall: "Llamadas de voz", freeSend: "Enviar mensajes y fotos", freeSameLanguage: "Mensajes que no necesitan traducción", freeReading: "Leer traducciones", priceWhoPays: "Paga quien habla o envía; la lectura en voz alta la paga quien escucha.",
     gift: "Regalar", giftTitle: "Regalar Hash a {name}", giftAmountLabel: "Hash para regalar", giftAvailable: "Regalables: {coins}", giftRule: "Solo puedes regalar Hash comprados. Los Hash gratuitos no se pueden regalar.",
     giftFeeNotice: "Tras una comisión del {fee} %, se entregarán {coins} Hash", giftNotEnough: "No tienes suficientes Hash regalables", giftSuccess: "Regalaste {coins} Hash a {name}", giftFailed: "No se pudo enviar el regalo", sourceGiftReceived: "Regalo recibido", sourceGiftSent: "Regalo enviado", giftRefundNotice: "Un paquete del que regalas Hash ya no se puede reembolsar.",
   },
@@ -229,6 +255,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Histórico", sourceDailyFree: "Recarga grátis", sourcePurchase: "Compra", sourceAdmin: "Presente do HashChat", sourceBonus: "Bônus",
     sourceRefund: "Reembolso", sourceExpired: "Expirado", conversationFallback: "Conversa", noHistory: "Ainda não há histórico", loadMore: "Ver mais",
     roomUsageTitle: "Hash usados nesta conversa", roomUsed: "{coins} usados",
+    priceTitle: "Para que serve o Hash", priceVoice: "Reconhecimento de voz", priceVoiceNote: "Inclui legendas e tradução do que você diz. Cobrado enquanto Iniciar está ligado.", priceReadAloud: "Tradução lida em voz alta", priceReadAloudNote: "Modo alto-falante e alto-falante do balão. {coins} Hash por minuto de áudio", priceTyped: "Tradução de mensagens digitadas", priceTypedNote: "Traduzir de novo custa o mesmo", pricePhoto: "Tradução de foto", pricePhotoValue: "Depende da quantidade de texto", pricePerMinute: "por min", pricePerConversationMinute: "por min de conversa", pricePerMessage: "cada", freeTitle: "Grátis", freeCall: "Chamadas de voz", freeSend: "Enviar mensagens e fotos", freeSameLanguage: "Mensagens sem tradução", freeReading: "Ler traduções", priceWhoPays: "Quem fala ou envia paga; a leitura em voz alta é paga por quem ouve.",
     gift: "Presentear", giftTitle: "Presentear {name} com Hash", giftAmountLabel: "Hash para presentear", giftAvailable: "Disponível para presente: {coins}", giftRule: "Só é possível presentear Hash comprados. Hash gratuitos não podem ser presenteados.",
     giftFeeNotice: "Após a taxa de {fee}%, {coins} Hash serão entregues", giftNotEnough: "Você não tem Hash suficientes para presentear", giftSuccess: "Você presenteou {name} com {coins} Hash", giftFailed: "Não foi possível enviar o presente", sourceGiftReceived: "Presente recebido", sourceGiftSent: "Presente enviado", giftRefundNotice: "Um pacote do qual você presenteia Hash não pode mais ser reembolsado.",
   },
@@ -247,6 +274,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Cronologia", sourceDailyFree: "Ricarica gratis", sourcePurchase: "Acquisto", sourceAdmin: "Regalo di HashChat", sourceBonus: "Bonus",
     sourceRefund: "Rimborso", sourceExpired: "Scaduto", conversationFallback: "Conversazione", noHistory: "Nessuna cronologia", loadMore: "Mostra altro",
     roomUsageTitle: "Hash usati in questa chat", roomUsed: "{coins} usati",
+    priceTitle: "A cosa serve l'Hash", priceVoice: "Riconoscimento vocale", priceVoiceNote: "Include sottotitoli e traduzione di ciò che dici. Addebitato finché Avvia è attivo.", priceReadAloud: "Traduzione letta ad alta voce", priceReadAloudNote: "Modalità altoparlante e altoparlante del fumetto. {coins} Hash per minuto di audio", priceTyped: "Traduzione dei messaggi scritti", priceTypedNote: "Ritradurre costa uguale", pricePhoto: "Traduzione di foto", pricePhotoValue: "Dipende dalla quantità di testo", pricePerMinute: "al min", pricePerConversationMinute: "per min di conversazione", pricePerMessage: "ciascuno", freeTitle: "Gratis", freeCall: "Chiamate vocali", freeSend: "Inviare messaggi e foto", freeSameLanguage: "Messaggi senza traduzione", freeReading: "Leggere le traduzioni", priceWhoPays: "Paga chi parla o invia; la lettura ad alta voce la paga chi ascolta.",
     gift: "Regala", giftTitle: "Regala Hash a {name}", giftAmountLabel: "Hash da regalare", giftAvailable: "Regalabili: {coins}", giftRule: "Puoi regalare solo gli Hash acquistati. Gli Hash gratuiti non si possono regalare.",
     giftFeeNotice: "Dopo una commissione del {fee}%, verranno consegnati {coins} Hash", giftNotEnough: "Non hai abbastanza Hash regalabili", giftSuccess: "Hai regalato {coins} Hash a {name}", giftFailed: "Impossibile inviare il regalo", sourceGiftReceived: "Regalo ricevuto", sourceGiftSent: "Regalo inviato", giftRefundNotice: "Un pacchetto da cui regali Hash non è più rimborsabile.",
   },
@@ -265,6 +293,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "История", sourceDailyFree: "Бесплатное пополнение", sourcePurchase: "Покупка", sourceAdmin: "Подарок от HashChat", sourceBonus: "Бонус",
     sourceRefund: "Возврат", sourceExpired: "Истекло", conversationFallback: "Разговор", noHistory: "Истории пока нет", loadMore: "Показать ещё",
     roomUsageTitle: "Хэш, потраченный в этом чате", roomUsed: "Потрачено {coins}",
+    priceTitle: "На что тратится Hash", priceVoice: "Распознавание речи", priceVoiceNote: "Включает субтитры и перевод сказанного. Списывается, пока включён «Старт».", priceReadAloud: "Чтение перевода вслух", priceReadAloudNote: "Режим динамика и динамик в сообщении. {coins} Hash за минуту аудио", priceTyped: "Перевод набранных сообщений", priceTypedNote: "Повторный перевод стоит так же", pricePhoto: "Перевод фото", pricePhotoValue: "Зависит от объёма текста", pricePerMinute: "в мин", pricePerConversationMinute: "за мин разговора", pricePerMessage: "за шт.", freeTitle: "Бесплатно", freeCall: "Голосовые звонки", freeSend: "Отправка сообщений и фото", freeSameLanguage: "Сообщения без перевода", freeReading: "Чтение переводов", priceWhoPays: "Платит тот, кто говорит или отправляет; чтение вслух оплачивает слушатель.",
     gift: "Подарить", giftTitle: "Подарить Хэш: {name}", giftAmountLabel: "Сколько подарить", giftAvailable: "Доступно для подарка: {coins}", giftRule: "Дарить можно только купленный Хэш. Бесплатный Хэш подарить нельзя.",
     giftFeeNotice: "За вычетом комиссии {fee}% будет доставлено {coins} Хэш", giftNotEnough: "Недостаточно Хэша для подарка", giftSuccess: "Вы подарили {coins} Хэш: {name}", giftFailed: "Не удалось отправить подарок", sourceGiftReceived: "Получен подарок", sourceGiftSent: "Отправлен подарок", giftRefundNotice: "Пакет, из которого вы дарите Хэш, больше нельзя вернуть.",
   },
@@ -283,6 +312,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "السجل", sourceDailyFree: "تعبئة مجانية", sourcePurchase: "شراء", sourceAdmin: "هدية من HashChat", sourceBonus: "مكافأة",
     sourceRefund: "استرداد", sourceExpired: "منتهية", conversationFallback: "محادثة", noHistory: "لا يوجد سجل بعد", loadMore: "عرض المزيد",
     roomUsageTitle: "هاش المستخدم في هذه المحادثة", roomUsed: "استخدم {coins}",
+    priceTitle: "كيف يُستخدم الهاش", priceVoice: "التعرّف على الكلام", priceVoiceNote: "يشمل الترجمة النصية لما تقوله. يُحتسب ما دام زر البدء مفعّلاً.", priceReadAloud: "قراءة الترجمة بصوت عالٍ", priceReadAloudNote: "وضع مكبّر الصوت ومكبّر الفقاعة. {coins} هاش لكل دقيقة صوت", priceTyped: "ترجمة الرسائل المكتوبة", priceTypedNote: "إعادة الترجمة بالسعر نفسه", pricePhoto: "ترجمة الصور", pricePhotoValue: "يعتمد على كمية النص", pricePerMinute: "للدقيقة", pricePerConversationMinute: "لكل دقيقة محادثة", pricePerMessage: "لكل واحدة", freeTitle: "مجاني", freeCall: "المكالمات الصوتية", freeSend: "إرسال الرسائل والصور", freeSameLanguage: "الرسائل التي لا تحتاج إلى ترجمة", freeReading: "قراءة الترجمات", priceWhoPays: "يدفع من يتحدث أو يرسل، والقراءة بصوت عالٍ يدفعها المستمع.",
     gift: "إهداء", giftTitle: "إهداء هاش إلى {name}", giftAmountLabel: "الهاش المراد إهداؤه", giftAvailable: "المتاح للإهداء: {coins}", giftRule: "يمكن إهداء الهاش الذي اشتريته فقط. لا يمكن إهداء الهاش المجاني.",
     giftFeeNotice: "بعد خصم رسوم {fee}٪ سيصل {coins} هاش", giftNotEnough: "ليس لديك هاش كافٍ للإهداء", giftSuccess: "أهديت {coins} هاش إلى {name}", giftFailed: "تعذر إرسال الهدية", sourceGiftReceived: "هدية مستلمة", sourceGiftSent: "هدية مرسلة", giftRefundNotice: "لا يمكن استرداد الحزمة التي تهدي منها الهاش.",
   },
@@ -301,6 +331,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "इतिहास", sourceDailyFree: "मुफ़्त रीफ़िल", sourcePurchase: "खरीदारी", sourceAdmin: "HashChat की ओर से", sourceBonus: "बोनस",
     sourceRefund: "रिफ़ंड", sourceExpired: "समाप्त", conversationFallback: "बातचीत", noHistory: "अभी कोई इतिहास नहीं", loadMore: "और देखें",
     roomUsageTitle: "इस चैट में इस्तेमाल हुए हैश", roomUsed: "{coins} इस्तेमाल",
+    priceTitle: "हैश कहाँ खर्च होता है", priceVoice: "वाक् पहचान", priceVoiceNote: "आपकी बात के कैप्शन और अनुवाद शामिल। स्टार्ट चालू रहने तक शुल्क लगता है।", priceReadAloud: "अनुवाद पढ़कर सुनाना", priceReadAloudNote: "स्पीकर मोड और बबल स्पीकर। ऑडियो के प्रति मिनट {coins} हैश", priceTyped: "टाइप किए संदेश का अनुवाद", priceTypedNote: "दोबारा अनुवाद का भी यही शुल्क", pricePhoto: "फ़ोटो अनुवाद", pricePhotoValue: "टेक्स्ट की मात्रा पर निर्भर", pricePerMinute: "प्रति मिनट", pricePerConversationMinute: "बातचीत के प्रति मिनट", pricePerMessage: "प्रति संदेश", freeTitle: "मुफ़्त", freeCall: "वॉयस कॉल", freeSend: "संदेश और फ़ोटो भेजना", freeSameLanguage: "जिन संदेशों को अनुवाद नहीं चाहिए", freeReading: "अनुवाद पढ़ना", priceWhoPays: "बोलने या भेजने वाला भुगतान करता है; पढ़कर सुनाने का भुगतान सुनने वाला करता है।",
     gift: "उपहार दें", giftTitle: "{name} को हैश उपहार दें", giftAmountLabel: "उपहार में देने वाले हैश", giftAvailable: "उपहार योग्य: {coins}", giftRule: "केवल खरीदे गए हैश उपहार में दिए जा सकते हैं। मुफ़्त हैश उपहार में नहीं दिए जा सकते।",
     giftFeeNotice: "{fee}% शुल्क के बाद {coins} हैश पहुँचेंगे", giftNotEnough: "उपहार देने के लिए पर्याप्त हैश नहीं हैं", giftSuccess: "आपने {name} को {coins} हैश उपहार में दिए", giftFailed: "उपहार नहीं भेजा जा सका", sourceGiftReceived: "उपहार मिला", sourceGiftSent: "उपहार भेजा", giftRefundNotice: "जिस पैक से आप हैश उपहार में देते हैं, उसका रिफ़ंड नहीं हो सकता।",
   },
@@ -319,6 +350,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "ประวัติ", sourceDailyFree: "เติมฟรี", sourcePurchase: "ซื้อ", sourceAdmin: "จาก HashChat", sourceBonus: "โบนัส",
     sourceRefund: "คืนเงิน", sourceExpired: "หมดอายุ", conversationFallback: "การสนทนา", noHistory: "ยังไม่มีประวัติ", loadMore: "ดูเพิ่มเติม",
     roomUsageTitle: "แฮชที่ใช้ในแชทนี้", roomUsed: "ใช้ไป {coins}",
+    priceTitle: "แฮชใช้กับอะไรบ้าง", priceVoice: "การรู้จำเสียง", priceVoiceNote: "รวมคำบรรยายและคำแปลของสิ่งที่คุณพูด คิดค่าบริการขณะเปิดปุ่มเริ่ม", priceReadAloud: "อ่านคำแปลออกเสียง", priceReadAloudNote: "โหมดลำโพงและลำโพงในข้อความ {coins} แฮชต่อเสียง 1 นาที", priceTyped: "แปลข้อความที่พิมพ์", priceTypedNote: "แปลใหม่ราคาเท่ากัน", pricePhoto: "แปลรูปภาพ", pricePhotoValue: "ขึ้นอยู่กับปริมาณข้อความ", pricePerMinute: "ต่อนาที", pricePerConversationMinute: "ต่อการสนทนา 1 นาที", pricePerMessage: "ต่อข้อความ", freeTitle: "ฟรี", freeCall: "การโทรด้วยเสียง", freeSend: "ส่งข้อความและรูปภาพ", freeSameLanguage: "ข้อความที่ไม่ต้องแปล", freeReading: "อ่านคำแปล", priceWhoPays: "ผู้พูดหรือผู้ส่งเป็นผู้จ่าย ส่วนการอ่านออกเสียงผู้ฟังเป็นผู้จ่าย",
     gift: "ส่งของขวัญ", giftTitle: "ส่งแฮชเป็นของขวัญให้ {name}", giftAmountLabel: "จำนวนแฮชที่จะส่ง", giftAvailable: "ส่งเป็นของขวัญได้ {coins}", giftRule: "ส่งเป็นของขวัญได้เฉพาะแฮชที่ซื้อเท่านั้น แฮชที่ได้รับฟรีส่งไม่ได้",
     giftFeeNotice: "หลังหักค่าธรรมเนียม {fee}% ผู้รับจะได้ {coins} แฮช", giftNotEnough: "แฮชที่ส่งเป็นของขวัญได้มีไม่พอ", giftSuccess: "คุณส่ง {coins} แฮชให้ {name} แล้ว", giftFailed: "ส่งของขวัญไม่สำเร็จ", sourceGiftReceived: "ได้รับของขวัญ", sourceGiftSent: "ส่งของขวัญ", giftRefundNotice: "แพ็กที่คุณส่งแฮชเป็นของขวัญจะขอคืนเงินไม่ได้อีก",
   },
@@ -337,6 +369,7 @@ const COIN_COPY: Record<PrimaryUiLocale, CoinCopy> = {
     history: "Lịch sử", sourceDailyFree: "Nạp miễn phí", sourcePurchase: "Mua", sourceAdmin: "HashChat tặng", sourceBonus: "Thưởng",
     sourceRefund: "Hoàn tiền", sourceExpired: "Hết hạn", conversationFallback: "Cuộc trò chuyện", noHistory: "Chưa có lịch sử", loadMore: "Xem thêm",
     roomUsageTitle: "Hash đã dùng trong cuộc trò chuyện này", roomUsed: "Đã dùng {coins}",
+    priceTitle: "Hash được dùng cho gì", priceVoice: "Nhận dạng giọng nói", priceVoiceNote: "Bao gồm phụ đề và bản dịch những gì bạn nói. Tính phí khi nút Bắt đầu đang bật.", priceReadAloud: "Đọc to bản dịch", priceReadAloudNote: "Chế độ loa và loa trong tin nhắn. {coins} Hash mỗi phút âm thanh", priceTyped: "Dịch tin nhắn đã gõ", priceTypedNote: "Dịch lại cũng cùng giá", pricePhoto: "Dịch ảnh", pricePhotoValue: "Tùy lượng chữ", pricePerMinute: "mỗi phút", pricePerConversationMinute: "mỗi phút trò chuyện", pricePerMessage: "mỗi tin", freeTitle: "Miễn phí", freeCall: "Cuộc gọi thoại", freeSend: "Gửi tin nhắn và ảnh", freeSameLanguage: "Tin nhắn không cần dịch", freeReading: "Đọc bản dịch", priceWhoPays: "Người nói hoặc người gửi trả phí; đọc to do người nghe trả.",
     gift: "Tặng quà", giftTitle: "Tặng Hash cho {name}", giftAmountLabel: "Số Hash muốn tặng", giftAvailable: "Có thể tặng: {coins}", giftRule: "Chỉ có thể tặng Hash đã mua. Hash miễn phí không thể tặng.",
     giftFeeNotice: "Sau khi trừ phí {fee}%, {coins} Hash sẽ được gửi đi", giftNotEnough: "Bạn không đủ Hash có thể tặng", giftSuccess: "Bạn đã tặng {coins} Hash cho {name}", giftFailed: "Không gửi được quà", sourceGiftReceived: "Nhận quà", sourceGiftSent: "Đã tặng quà", giftRefundNotice: "Gói mà bạn tặng Hash sẽ không thể hoàn tiền nữa.",
   },

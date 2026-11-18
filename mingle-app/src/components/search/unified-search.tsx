@@ -11,6 +11,9 @@ import { feedSourceEndpoint } from "@/lib/feed-routes";
 import { isSearchExcludedHandle } from "@/lib/handles";
 import type { ConnectSearchResult } from "@/components/connect-search-cache";
 import PostGrid from "./post-grid";
+import LiveRooms from "./live-rooms";
+import RoomCodeResult from "./room-code-result";
+import { parseRoomCode } from "@/lib/room-code";
 import { buildConnectTrackingHeaders, PersonRow, usePeopleFollow, type PeopleSearchContext } from "./people-follow";
 import {
   createRecentSearchRecorder,
@@ -43,6 +46,8 @@ export type UnifiedSearchProps = {
   onOpenSearchPost: (query: string, postId: string) => void;
   /** Open the full sliding people-list screen ("see all"). */
   onSeeAllPeople: (query: string) => void;
+  /** Open a room from "Live now" (after joining it, for a public room). Absent: the section is hidden. */
+  onOpenLiveRoom?: (conversationId: string) => void;
   /**
    * Controlled query so the parent can restore it on back-navigation (e.g.
    * from `?q=`). The value present at mount is treated as an already-run
@@ -61,6 +66,7 @@ export default function UnifiedSearch({
   onOpenPerson,
   onOpenSearchPost,
   onSeeAllPeople,
+  onOpenLiveRoom,
   query: controlledQuery,
   onQueryChange: controlledOnQueryChange,
   scrollContainerRef,
@@ -251,6 +257,8 @@ export default function UnifiedSearch({
 
   const showPostGrid = postingFeedEnabled && Boolean(normalizedQuery) && Boolean(dispatchedQuery);
   const showPeople = normalizedQuery ? people : [];
+  // A 7-digit query ("482 1937") is also a room number.
+  const roomCodeQuery = parseRoomCode(normalizedQuery);
   const showRecent = postingFeedEnabled && canUseRecentSearches && !normalizedQuery && recent.length > 0;
   const showNoResults = shouldShowNoResults({
     query: normalizedQuery,
@@ -340,6 +348,7 @@ export default function UnifiedSearch({
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+        {!normalizedQuery && onOpenLiveRoom ? <LiveRooms locale={locale} onOpenRoom={onOpenLiveRoom} /> : null}
         {showRecent ? (
           <RecentSearches
             copy={copy}
@@ -352,6 +361,9 @@ export default function UnifiedSearch({
 
         {normalizedQuery ? (
           <>
+            {roomCodeQuery !== null && onOpenLiveRoom ? (
+              <RoomCodeResult locale={locale} code={roomCodeQuery} onOpenRoom={onOpenLiveRoom} />
+            ) : null}
             {showPeople.length > 0 ? (
               <section className="border-b border-gray-100 pb-2" aria-label={copy.peopleHeading}>
                 <div className="flex items-center justify-between px-4 pb-1 pt-3">
@@ -412,7 +424,7 @@ export default function UnifiedSearch({
               </section>
             ) : null}
 
-            {showNoResults ? (
+            {showNoResults && roomCodeQuery === null ? (
               <p className="px-6 pt-8 text-center text-[14px] text-gray-500" aria-live="polite">
                 {copy.noResults}
               </p>

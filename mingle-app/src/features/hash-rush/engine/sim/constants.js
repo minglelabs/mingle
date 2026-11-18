@@ -1,0 +1,60 @@
+// Tuning values for the simulation. Distances are world pixels, times are seconds.
+
+export const TICK_RATE = 60;
+export const DT = 1 / TICK_RATE;
+
+export const HAMSTER_R = 15;
+export const SPEED = 185;
+// A hamster with a seed in its cheeks is a touch slower, so chasers stay relevant.
+export const CARRY_SPEED = 0.85;
+// A seed carrier this close to the home edge is "almost home": the alarm goes off,
+// and stopping it there is a big play.
+export const ALARM_RANGE = 190;
+// From where the alarm goes off, the seed weighs heavier still.
+export const LAST_STRETCH = { range: ALARM_RANGE, speed: 0.7 };
+
+export const COUNTDOWN = 3;
+
+// Stalemate breaker: after `start` seconds the burrow's edge creeps towards the
+// flower at `speed`, and the round is pushed to a finish three ways.
+// - A seed comes loose quicker and quicker, down to `nibble` of the usual time
+//   by the time of `rush`.
+// - Whoever is knocked out sits dazed at its nest for `daze` seconds, so taking a
+//   defender down opens a real gap.
+// - From `rush` on the edge comes on at `rushSpeed`. It is over the flower well
+//   before `end`, and there a seed is home the moment it is nibbled loose.
+// At `end` the round is called on bonks instead; that should now be rare.
+export const OVERTIME = { start: 40, speed: 6.5, rush: 70, rushSpeed: 20, nibble: 0.45, daze: 1.5, end: 105 };
+
+export const GATHER_TIME = 2.2;
+// The more hamsters crowd the flower, the quicker a seed comes loose: four is
+// the baseline, and eight nibble in half the time. In overtime it gets quicker
+// still as the clock runs.
+export const gatherTime = (players, time = 0) => {
+  const late = Math.max(0, Math.min(1, (time - OVERTIME.start) / (OVERTIME.rush - OVERTIME.start)));
+  return ((GATHER_TIME * 4) / Math.max(4, players)) * (1 - (1 - OVERTIME.nibble) * late);
+};
+
+export const BONK = {
+  windup: 0.14, // standing still before the hit lands
+  recovery: 0.42, // stuck in place after the hit; a whiff is punishable
+  cooldown: 0.8, // from swing start until the next swing
+  // Centre-to-centre distance that still hits at impact. Two hamsters touch at
+  // 2 * HAMSTER_R, so the target has to be right next to the attacker.
+  reach: 2 * HAMSTER_R + 10,
+  arcCos: Math.cos((75 * Math.PI) / 180),
+  recoveryMove: 0.15,
+  chain: 2, // a bonk this soon after the last one makes it a double, then a triple
+  assist: 80, // auto-aim picks the nearest enemy inside this radius
+};
+
+// A seed carrier can give the seed up as a weapon: hold the bonk button to wind up,
+// let go to throw it the way the hamster faces. It can turn freely while winding
+// up, and a wind-up held for `max` seconds lets go by itself. It knocks out every rival along
+// its path, four hamsters long. `friendlyFire` decides whether team-mates in the
+// way go down too.
+export const THROW = { charge: 0.4, max: 1.6, range: 8 * HAMSTER_R, width: HAMSTER_R + 6, friendlyFire: false };
+
+// On ice a hamster cannot change its speed at once: it takes this long to get up
+// to full speed from standing, and as long again to stop.
+export const ICE = { ramp: 0.55 };

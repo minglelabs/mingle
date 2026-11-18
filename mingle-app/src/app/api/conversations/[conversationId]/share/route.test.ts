@@ -72,7 +72,12 @@ describe("/api/conversations/[conversationId]/share route", () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json).toEqual({ shareToken: "tok-a", shareEnabled: true, sharedAt: "2026-01-01T00:00:00.000Z" });
+    expect(json).toEqual({
+      shareToken: "tok-a",
+      shareEnabled: true,
+      sharedAt: "2026-01-01T00:00:00.000Z",
+      isPublic: false,
+    });
     expect(mockGetConversationChannelSharing).toHaveBeenCalledWith({
       conversationId: "conv-a",
       userId: "user-a",
