@@ -679,11 +679,149 @@ export async function openGeminiSpeechStream(
   }
 }
 
+// ── Soniox (streamed speech only) ──────────────────────────────────────────
+
+const SONIOX_TTS_URL = 'https://tts-rt.soniox.com/tts'
+const SONIOX_TTS_MODEL = 'tts-rt-v2'
+const DEFAULT_SONIOX_TTS_VOICE = 'Adrian'
+// Soniox reads at a normal pace by default; Gemini is asked to speak rapidly.
+const DEFAULT_SONIOX_TTS_SPEED = 1.2
+const MIN_SONIOX_TTS_SPEED = 0.7
+const MAX_SONIOX_TTS_SPEED = 1.3
+
+/**
+ * `TTS_STREAM_PROVIDER=soniox` (with SONIOX_API_KEY) makes streamed speech
+ * come from Soniox, whose first audio arrives sooner than Gemini's. Soniox
+ * delivers at speaking pace, so whole clips always stay on Gemini.
+ */
+export function getTtsStreamProvider(): TtsProviderId {
+  const wanted = (process.env.TTS_STREAM_PROVIDER || '').trim().toLowerCase()
+  return wanted === 'soniox' && (process.env.SONIOX_API_KEY || '').trim() ? 'soniox' : 'gemini'
+}
+
+function getSonioxTtsSpeed(): number {
+  const value = Number((process.env.SONIOX_TTS_SPEED || '').trim() || DEFAULT_SONIOX_TTS_SPEED)
+  if (!Number.isFinite(value)) return DEFAULT_SONIOX_TTS_SPEED
+  return Math.min(MAX_SONIOX_TTS_SPEED, Math.max(MIN_SONIOX_TTS_SPEED, value))
+}
+
+/**
+ * Starts a Soniox synthesis (raw 16-bit PCM at 24 kHz) and resolves once the
+ * first audio is in, like `openGeminiSpeechStream`.
+ */
+export async function openSonioxSpeechStream(
+  input: TtsSynthesisInput,
+): Promise<TtsSpeechStream | TtsSynthesisFailure> {
+  const modelId = SONIOX_TTS_MODEL
+  const voiceId = (process.env.SONIOX_TTS_VOICE || '').trim() || DEFAULT_SONIOX_TTS_VOICE
+  const apiKey = (process.env.SONIOX_API_KEY || '').trim()
+  if (!apiKey) {
+    return { ok: false, provider: 'soniox', reason: 'missing_credentials', modelId, voiceId }
+  }
+
+  const controller = new AbortController()
+  const timeoutMs = getGeminiTtsTimeoutMs()
+  let timer = setTimeout(() => controller.abort(), timeoutMs)
+  const resetTimer = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => controller.abort(), timeoutMs)
+  }
+  const close = () => {
+    clearTimeout(timer)
+    controller.abort()
+  }
+  const failure = (
+    reason: TtsSynthesisFailure['reason'],
+    extra: Partial<TtsSynthesisFailure> = {},
+  ): TtsSynthesisFailure => {
+    close()
+    return { ok: false, provider: 'soniox', reason, voiceId, modelId, ...extra }
+  }
+
+  try {
+    const response = await fetch(SONIOX_TTS_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: modelId,
+        language: baseLanguage(input.language) || 'en',
+        voice: voiceId,
+        audio_format: 'pcm_s16le',
+        sample_rate: DEFAULT_PCM_SAMPLE_RATE,
+        speed: getSonioxTtsSpeed(),
+        text: input.text,
+      }),
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      return failure('upstream_error', { status: response.status, detail: detail.slice(0, 300) })
+    }
+    if (!response.body) return failure('invalid_audio')
+
+    const reader = response.body.getReader()
+    const readAudio = async (): Promise<Buffer | null> => {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) return null
+        resetTimer()
+        if (value && value.byteLength > 0) return Buffer.from(value)
+      }
+    }
+    resetTimer()
+    const first = await readAudio()
+    if (!first) return failure('invalid_audio')
+
+    const raw = async function* (): AsyncGenerator<Buffer, void, void> {
+      try {
+        yield first
+        for (let chunk = await readAudio(); chunk; chunk = await readAudio()) yield chunk
+      } finally {
+        await reader.cancel().catch(() => {})
+        close()
+      }
+    }
+    return {
+      ok: true,
+      provider: 'soniox',
+      modelId,
+      voiceId,
+      sampleRate: DEFAULT_PCM_SAMPLE_RATE,
+      chunks: trimLeadingSilencePcm16(raw(), DEFAULT_PCM_SAMPLE_RATE),
+    }
+  } catch (error) {
+    const aborted = controller.signal.aborted
+    return failure(aborted ? 'timeout' : 'exception', { error })
+  }
+}
+
 /**
  * Streamed counterpart of `synthesizeSpeech`: the selected model, retried once
- * with the other Gemini model when it fails before any audio arrives.
+ * with the other Gemini model when it fails before any audio arrives. With
+ * TTS_STREAM_PROVIDER=soniox, Soniox goes first and Gemini is the fallback.
  */
 export async function synthesizeSpeechStream(
+  input: TtsSynthesisInput & { ttsModel?: unknown },
+): Promise<TtsSpeechStream | TtsSynthesisFailure> {
+  if (getTtsStreamProvider() === 'soniox') {
+    const soniox = await openSonioxSpeechStream(input)
+    if (soniox.ok) return soniox
+    console.warn('[tts] soniox stream failed, falling back to gemini', {
+      reason: soniox.reason,
+      status: soniox.status,
+      detail: soniox.detail,
+    })
+    const gemini = await synthesizeGeminiSpeechStream(input)
+    return { ...gemini, fallbackFrom: gemini.fallbackFrom ?? soniox.modelId }
+  }
+  return await synthesizeGeminiSpeechStream(input)
+}
+
+async function synthesizeGeminiSpeechStream(
   input: TtsSynthesisInput & { ttsModel?: unknown },
 ): Promise<TtsSpeechStream | TtsSynthesisFailure> {
   const selection = resolveTtsRuntimeSelection(input.ttsModel)

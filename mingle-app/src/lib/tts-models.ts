@@ -1,7 +1,8 @@
 // Single source of truth for user-selectable TTS models.
 // Shared by the server (tts-provider, handlers, account preferences) and the client.
 
-export type TtsProviderId = 'gemini'
+// 'soniox' only synthesizes streamed speech (TTS_STREAM_PROVIDER); it is not a selectable model.
+export type TtsProviderId = 'gemini' | 'soniox'
 
 export type UserSelectableTtsModel =
   | 'gemini-3.8-flash-lite-tts'

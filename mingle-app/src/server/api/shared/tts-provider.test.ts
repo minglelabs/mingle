@@ -11,6 +11,10 @@ const TTS_ENV_KEYS = [
   'GEMINI_TTS_STYLE_JA',
   'GEMINI_TTS_TIMEOUT_MS',
   'GEMINI_TTS_STREAM',
+  'TTS_STREAM_PROVIDER',
+  'SONIOX_API_KEY',
+  'SONIOX_TTS_VOICE',
+  'SONIOX_TTS_SPEED',
   'INWORLD_RUNTIME_BASE64_CREDENTIAL',
 ] as const
 
@@ -901,5 +905,76 @@ describe('canStreamSpeech', () => {
     delete process.env.GEMINI_TTS_SPEED
     process.env.GEMINI_TTS_STREAM = 'off'
     expect(canStreamSpeech('en')).toBe(false)
+  })
+})
+
+describe('synthesizeSpeechStream — TTS_STREAM_PROVIDER=soniox', () => {
+  function pcmResponse(chunks: Buffer[]): Response {
+    return new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(new Uint8Array(chunk))
+        controller.close()
+      },
+    }), { status: 200, headers: { 'Content-Type': 'audio/pcm' } })
+  }
+
+  it('streams from Soniox with the language, voice, speed and raw 24 kHz PCM', async () => {
+    process.env.TTS_STREAM_PROVIDER = 'soniox'
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    const chunks = [pcm(20, 8000), pcm(20, 4000)]
+    const fetchMock = vi.fn().mockResolvedValueOnce(pcmResponse(chunks))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = await synthesizeSpeechStream({ text: '안녕하세요', language: 'ko-KR' })
+
+    if (!speech.ok) throw new Error('expected a stream')
+    expect(speech).toMatchObject({ provider: 'soniox', modelId: 'tts-rt-v2', voiceId: 'Adrian', sampleRate: 24000 })
+    expect(Buffer.concat(await collect(speech.chunks)).equals(Buffer.concat(chunks))).toBe(true)
+    expect(urlOf(fetchMock.mock.calls[0])).toBe('https://tts-rt.soniox.com/tts')
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer soniox-key')
+    expect(bodyOf(fetchMock.mock.calls[0])).toEqual({
+      model: 'tts-rt-v2',
+      language: 'ko',
+      voice: 'Adrian',
+      audio_format: 'pcm_s16le',
+      sample_rate: 24000,
+      speed: 1.2,
+      text: '안녕하세요',
+    })
+  })
+
+  it('falls back to Gemini when Soniox fails before any audio', async () => {
+    process.env.TTS_STREAM_PROVIDER = 'soniox'
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    process.env.SONIOX_TTS_SPEED = '9'
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('quota', { status: 429 }))
+      .mockResolvedValueOnce(geminiStreamResponse([pcm(20, 8000)]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { synthesizeSpeechStream } = await loadModule()
+
+    const speech = await synthesizeSpeechStream({ text: 'hello', language: 'en' })
+
+    expect(speech).toMatchObject({
+      ok: true,
+      provider: 'gemini',
+      modelId: 'gemini-3.8-flash-lite-tts',
+      fallbackFrom: 'tts-rt-v2',
+    })
+    // An out-of-range speed is clamped to what Soniox accepts.
+    expect(bodyOf(fetchMock.mock.calls[0]).speed).toBe(1.3)
+    if (speech.ok) await collect(speech.chunks)
+  })
+
+  it('stays on Gemini without a Soniox key or with any other provider value', async () => {
+    const { getTtsStreamProvider } = await loadModule()
+    process.env.TTS_STREAM_PROVIDER = 'soniox'
+    expect(getTtsStreamProvider()).toBe('gemini')
+    process.env.SONIOX_API_KEY = 'soniox-key'
+    expect(getTtsStreamProvider()).toBe('soniox')
+    process.env.TTS_STREAM_PROVIDER = 'azure'
+    expect(getTtsStreamProvider()).toBe('gemini')
   })
 })
