@@ -267,11 +267,13 @@ export function createVoiceController(deps: VoiceControllerDeps) {
     state.errorKind = undefined;
     state.conversationId = conversationId;
     emit();
+    let gotToken = false;
     try {
       const tokenRes = await deps.api.requestToken(conversationId, {
         lang: deps.myLang,
         interpret: state.interpretOn,
       });
+      gotToken = true;
       state.roomName = tokenRes.room;
       applyCall(tokenRes.call);
 
@@ -304,9 +306,16 @@ export function createVoiceController(deps: VoiceControllerDeps) {
       updateSpeaking();
       emit();
     } catch (error) {
+      // The token already took a seat on the server. Give it back, or the
+      // room and the conversation list show this phone in the call.
+      const failedRoom = room;
+      room = null;
+      if (gotToken) {
+        await failedRoom?.disconnect().catch(() => undefined);
+        await deps.api.leave(conversationId).catch(() => undefined);
+      }
       state.status = 'error';
       state.errorKind = (error as { kind?: string })?.kind ?? 'error';
-      room = null;
       emit();
       throw error;
     }

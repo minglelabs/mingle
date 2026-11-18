@@ -13,6 +13,7 @@ import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
 import { resolveAccountBadge, type AccountBadgeKind } from "@/lib/account-badge";
 import { normalizeChineseContent } from "@/server/chinese-script-conversion";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
+import { reconcileListedLiveCalls } from "@/server/voice/reconcile-listed-calls";
 import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
 import type { ConversationExportMessage, ConversationExportTranscript } from "@/lib/conversation-export";
 import { MESSAGE_RECALLED_AT_METADATA_KEY, RECALLED_MESSAGE_ID_LIMIT, readMessageRecalledAtMs } from "@/lib/message-recall";
@@ -1479,6 +1480,9 @@ async function listConversationChannelsForMember(
 async function listLiveVoiceCallParticipantCountsByChannelId(channelIds: string[]): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   if (channelIds.length === 0) return counts;
+  // Free seats of phones that dropped out of a call, so the row does not
+  // keep showing them in it.
+  await reconcileListedLiveCalls(channelIds).catch(() => undefined);
   try {
     const calls = await prisma.appVoiceCall.findMany({
       where: { channelId: { in: channelIds }, status: "live" },
@@ -4053,6 +4057,7 @@ export type LiveRoomCard = LiveRoomActivity & {
 
 /** Rooms with a live voice talk call or a running Hash Rush game, public first, busiest first. */
 export async function listLiveRooms(viewerUserId: string | null, now: Date = new Date()): Promise<LiveRoomCard[]> {
+  await reconcileListedLiveCalls(null).catch(() => undefined);
   const [calls, games] = await Promise.all([
     prisma.appVoiceCall.findMany({
       where: { status: "live" },

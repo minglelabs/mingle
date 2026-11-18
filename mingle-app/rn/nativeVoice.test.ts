@@ -224,6 +224,26 @@ describe('voice controller LiveKit wiring', () => {
     expect(controller.getSnapshot()).toMatchObject({ status: 'error', errorKind: 'voice_room_full' });
   });
 
+  it('a room it could not get a seat in has nothing to give back', async () => {
+    const api = fakeApi();
+    (api.requestToken as jest.Mock).mockRejectedValueOnce(Object.assign(new Error('full'), { kind: 'voice_room_full' }));
+    const { room } = makeFakeRoom([]);
+    const controller = createVoiceController({ api, createRoom: () => room, myLang: 'ja', localUserId: 'me' });
+    await expect(controller.connect('c1')).rejects.toBeDefined();
+    expect(api.leave).not.toHaveBeenCalled();
+  });
+
+  it('gives its seat back when LiveKit cannot be reached after the token', async () => {
+    const api = fakeApi();
+    const { room } = makeFakeRoom([]);
+    (room.connect as jest.Mock).mockRejectedValueOnce(new Error('could not establish pc connection'));
+    const controller = createVoiceController({ api, createRoom: () => room, myLang: 'ja', localUserId: 'me' });
+    await expect(controller.connect('c1')).rejects.toBeDefined();
+    expect(room.disconnect).toHaveBeenCalled();
+    expect(api.leave).toHaveBeenCalledWith('c1');
+    expect(controller.getSnapshot().status).toBe('error');
+  });
+
   it('leave disconnects the room and calls the API', async () => {
     const api = fakeApi();
     const { room } = makeFakeRoom([]);
