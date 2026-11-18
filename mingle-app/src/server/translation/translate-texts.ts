@@ -755,6 +755,15 @@ function selectPromptImmediatePreviousTurn(turn: RecentTurnContext | null): Rece
   return turn
 }
 
+/** Whether the prompt shows a previous bubble the current text may finish (and asks for the joined sentence). */
+function hasPreviousBubbleContext(ctx: TranslateContext): boolean {
+  if (ctx.systemPromptOverride && ctx.userPromptOverride) return false
+  if (ctx.bubbleTail && !ctx.shouldRedetectSourceLanguage) {
+    return !ctx.bubbleTail.fixedSource && Boolean(ctx.bubbleTail.previousSource)
+  }
+  return Boolean(selectPromptImmediatePreviousTurn(ctx.immediatePreviousTurn))
+}
+
 function formatSingleTurnForPromptWithOptions(
   label: string,
   turn: RecentTurnContext,
@@ -786,9 +795,18 @@ const CHINESE_VARIANT_GLOSSARY_LINE = `Chinese language codes: zh-CN = ${CHINESE
  * The recognizer sometimes ends a bubble in the middle of a sentence ("..., and
  * I'm also.") and the rest opens the next bubble ("One of these people that
  * I, ..."). The previous bubble's translation is already out, so the next one
- * has to carry the sentence's meaning.
+ * has to carry the sentence's meaning: continue it when it stops mid-sentence,
+ * otherwise restate the whole sentence. Asking for the joined sentence first
+ * (`sentence` key) is what made the model actually restate: as a bare rule it
+ * kept answering the ending alone ("혹시 그 어느 나라 사람." + "이라고 했죠?" →
+ * "I said, right?").
  */
-const CONTINUED_SENTENCE_RULE = 'The recognizer sometimes splits one sentence across bubbles (a period or dash ending the previous one may be wrong). If the previous bubble\'s end and the current text make one sentence, even when the current text could stand alone, translate it as that sentence\'s ending: the previous translation + yours must read as one grammatical sentence, so start where it stopped and never repeat its words ("...was because—" + "I wanted to meet new people." → ko "새로운 사람들을 만나고 싶었기 때문이에요.").'
+/** The joined source sentence, written before the translations so the model decides whether to restate it. */
+export const WHOLE_SENTENCE_KEY = 'sentence'
+
+export const CONTINUED_SENTENCE_RULE = `The recognizer sometimes splits one sentence across bubbles and ends the first part with a wrong period. Before translating, set ${WHOLE_SENTENCE_KEY}: if the previous bubble's end and the current text make one sentence, even when the current text could stand alone, write that joined source sentence ("어제 만난 그 친구." + "가 한국 사람이라고요?" → "어제 만난 그 친구가 한국 사람이라고요?"); otherwise "". When it is not "", look at how the previous translation ends. If it stops mid-sentence, in any language (no final ".", "?", "!" or "。", or it ends in a connective like "and", "because", "—", "는데", "건", or a comma), continue it: translate only the rest and never repeat its words ("I wanted to go, but" + "시간이 없었어요." → "I didn't have time."). If it ends a sentence, translate the whole ${WHOLE_SENTENCE_KEY} afresh as one sentence (→ en "The friend you met yesterday is Korean?"), never quoting or reusing the previous translation, which may be wrong. This applies only to other languages: a key in the source language itself keeps just the current text.`
+
+const WHOLE_SENTENCE_DESCRIPTION = 'The previous bubble\'s end joined with the current text, in the source language, when they make one sentence; otherwise "".'
 
 const SOURCE_LANGUAGE_CODE_RULE = 'Use one of the requested codes when it matches; for Chinese always answer zh-CN or zh-TW, never zh.'
 
@@ -835,7 +853,6 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
       formatSingleTurnForPromptWithOptions('Immediate previous turn', immediatePreviousTurn, {
         includeSourceLanguage,
       }),
-      CONTINUED_SENTENCE_RULE,
     )
   }
 
@@ -854,6 +871,7 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
         'Set sourceLanguagesMixed=true only when the current text itself meaningfully mixes two or more languages within the same utterance; otherwise set it to false. For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceLanguagesMixed should be true.',
         'Set sourceTextHasForeignScript=true only when the current text contains substantive non-source-language characters or script for the chosen sourceLanguage; otherwise set it to false. Ignore spaces, punctuation, and digits. For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceTextHasForeignScript should be true, and if sourceLanguage is Japanese, "료카이데스" should also set sourceTextHasForeignScript=true because it is written in Hangul rather than Japanese script. Simplified and Traditional Chinese characters are the same script: never set sourceTextHasForeignScript=true only because of Simplified/Traditional differences.',
         'Only if the provided sourceLanguage clearly seems wrong for the current text, replace it with the source language that best matches the current text. For example, if "료카이데스" is given sourceLanguage=ko, it should be corrected to Japanese because it is Korean script that phonetically represents Japanese speech.',
+        ...(immediatePreviousTurn ? [CONTINUED_SENTENCE_RULE] : []),
         ...chineseGlossaryLines,
       ].join('\n')
       : [
@@ -864,6 +882,7 @@ export function buildPrompt(ctx: TranslateContext): { systemPrompt: string, user
           ? [
             'Always translate the ENTIRE current text for each target language.',
             'Never return only a suffix, delta or patch of the current text.',
+            CONTINUED_SENTENCE_RULE,
           ]
           : [
             'Always translate the ENTIRE current text as a standalone translation for each target language.',
@@ -906,7 +925,6 @@ function buildBubbleTailFillPrompt(
       ...ctx.targetLanguages
         .filter((language) => Boolean(tail.previousTranslations?.[language]))
         .map((language) => `  ${language}: "${tail.previousTranslations?.[language]}"`),
-      CONTINUED_SENTENCE_RULE,
     )
   }
   userPromptLines.push(`blank: "${ctx.text}"`)
@@ -934,7 +952,11 @@ function buildBubbleTailFillPrompt(
   return {
     systemPrompt: [
       'You are a live-conversation translator. Return ONLY strict JSON, no extra keys.',
-      'The blank continues a speech bubble whose previous part is already translated and fixed. Translate only the blank so it continues the fixed translation naturally; never repeat or change the fixed part.',
+      // After a previous bubble, "translate only the blank" made the model answer a bare
+      // ending ("이라고 했죠?" → "you said, right?"): the rule there decides when to restate.
+      !tail.fixedSource && tail.previousSource
+        ? CONTINUED_SENTENCE_RULE
+        : 'The blank continues a speech bubble whose previous part is already translated and fixed. Translate only the blank so it continues the fixed translation naturally; never repeat or change the fixed part.',
       ...tailRules,
       ...chineseGlossaryLines,
     ].join('\n'),
@@ -957,7 +979,8 @@ export function parseTailCutAfter(content: string): string {
 function withoutTailCutAfterKey(translations: Record<string, string>): Record<string, string> {
   const output: Record<string, string> = {}
   for (const [key, value] of Object.entries(translations)) {
-    if (key.toLowerCase() === TAIL_CUT_AFTER_KEY.toLowerCase()) continue
+    const lowered = key.toLowerCase()
+    if (lowered === TAIL_CUT_AFTER_KEY.toLowerCase() || lowered === WHOLE_SENTENCE_KEY) continue
     output[key] = value
   }
   return output
@@ -968,9 +991,14 @@ function withoutTailCutAfterKey(translations: Record<string, string>): Record<st
 function buildGeminiResponseSchema(targetLanguages: string[], options?: {
   shouldRedetectSourceLanguage: boolean
   interimBubbleTail?: boolean
+  wholeSentence?: boolean
 }): ResponseSchema {
   const properties: Record<string, ResponseSchema> = {}
   const required = [...targetLanguages]
+  if (options?.wholeSentence) {
+    properties[WHOLE_SENTENCE_KEY] = { type: SchemaType.STRING, description: WHOLE_SENTENCE_DESCRIPTION }
+    required.unshift(WHOLE_SENTENCE_KEY)
+  }
   if (options?.interimBubbleTail) {
     properties[TAIL_CUT_AFTER_KEY] = {
       type: SchemaType.STRING,
@@ -1080,6 +1108,7 @@ export async function translateWithGemini(
   const responseSchema = buildGeminiResponseSchema(ctx.targetLanguages, {
     shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
     interimBubbleTail: isInterimBubbleTail(ctx),
+    wholeSentence: hasPreviousBubbleContext(ctx),
   })
   const model = genAI.getGenerativeModel({
     model: config.model,
@@ -1203,6 +1232,10 @@ function buildTranslationResponseJsonSchema(ctx: TranslateContext): Record<strin
     properties.sourceLanguagesMixed = { type: 'boolean', description: 'Whether the current utterance meaningfully mixes multiple source languages.' }
     properties.sourceTextHasForeignScript = { type: 'boolean', description: 'Whether the current utterance contains substantive foreign script for the detected source language.' }
     required.push('sourceLanguage', 'sourceLanguagesMixed', 'sourceTextHasForeignScript')
+  }
+  if (hasPreviousBubbleContext(ctx)) {
+    properties[WHOLE_SENTENCE_KEY] = { type: 'string', description: WHOLE_SENTENCE_DESCRIPTION }
+    required.push(WHOLE_SENTENCE_KEY)
   }
   if (isInterimBubbleTail(ctx)) {
     properties[TAIL_CUT_AFTER_KEY] = { type: 'string', description: 'The last 2-4 words (or 4-8 characters without spaces) of the source translated in this answer, copied exactly from the blank and appearing only once in it ("" when none).' }

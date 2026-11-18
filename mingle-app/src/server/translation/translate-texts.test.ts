@@ -289,9 +289,10 @@ describe('translate-texts', () => {
         isFinal: true,
       }
       const previous = { sourceLanguage: 'en', sourceText: 'but, um, and I\'m also.', translations: { ko: '하지만, 음, 저도 그래요.' }, ageMs: 500, isFinalized: true }
-      expect(buildPrompt({ ...base, immediatePreviousTurn: previous }).userPrompt).toContain('splits one sentence across bubbles')
-      expect(buildPrompt({ ...base, shouldRedetectSourceLanguage: true, immediatePreviousTurn: previous }).userPrompt).toContain('splits one sentence across bubbles')
-      expect(buildPrompt({ ...base, immediatePreviousTurn: null }).userPrompt).not.toContain('splits one sentence across bubbles')
+      const rule = 'splits one sentence across bubbles'
+      expect(buildPrompt({ ...base, immediatePreviousTurn: previous }).systemPrompt).toContain(rule)
+      expect(buildPrompt({ ...base, shouldRedetectSourceLanguage: true, immediatePreviousTurn: previous }).systemPrompt).toContain(rule)
+      expect(buildPrompt({ ...base, immediatePreviousTurn: null }).systemPrompt).not.toContain(rule)
 
       const tail = buildPrompt({
         ...base,
@@ -300,7 +301,13 @@ describe('translate-texts', () => {
         bubbleTail: { fixedSource: '', fixedTranslations: {}, previousSource: 'but, um, and I\'m also.', previousTranslations: { ko: '하지만, 음, 저도 그래요.' } },
       })
       expect(tail.userPrompt).toContain('previous bubble ended with')
-      expect(tail.userPrompt).toContain('splits one sentence across bubbles')
+      expect(tail.systemPrompt).toContain(rule)
+      // "Translate only the blank" made the model answer a bare ending ("이라고 했죠?" → "you said, right?").
+      expect(tail.systemPrompt).not.toContain('Translate only the blank')
+
+      const fixedTail = buildPrompt({ ...base, isFinal: false, immediatePreviousTurn: null, bubbleTail: { fixedSource: 'Hi.', fixedTranslations: { ko: '안녕.' } } })
+      expect(fixedTail.systemPrompt).toContain('Translate only the blank')
+      expect(fixedTail.systemPrompt).not.toContain(rule)
     })
 
     it('builds redetection prompt when enabled', async () => {
