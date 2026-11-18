@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { __setSocialFetchForTests } from './http'
-import { pickTikTokPrivacy, runPublishStep, youtubeTags, type PublishInput } from './publishers'
+import { findPublishedMedia, pickTikTokPrivacy, runPublishStep, tiktokChunkPlan, youtubeResumeOffset, youtubeTags, type PublishInput } from './publishers'
 
 type Call = { url: string; method: string; body: string | null; headers: Record<string, string> }
 
@@ -27,6 +27,7 @@ function input(platform: string, overrides: Partial<PublishInput> = {}): Publish
     caption: '말하면 바로 번역 #HashChat',
     options: null,
     containerId: null,
+    startedAt: null,
     video: { title: '해시챗 소개', videoUrl: 'https://cdn.example.com/marketing-videos/a/video.mp4', videoBytes: 4, coverUrl: null, hashtags: ['#HashChat'] },
     account: { platform: platform as PublishInput['account']['platform'], externalAccountId: 'acct-1', username: 'hashchat', accessToken: 'tok' },
     ...overrides,
@@ -78,20 +79,52 @@ describe('publishers', () => {
     expect(await runPublishStep('threads', input('threads', { containerId: 't1' }))).toMatchObject({ kind: 'published', externalPostId: 'tp1' })
   })
 
-  it('YouTube: resumable upload with title, description and privacy', async () => {
+  it('YouTube: opens a resumable session first and saves its URL, then uploads under it', async () => {
     const calls = mockFetch((call) => {
-      if (call.url.endsWith('video.mp4')) return new Response(new Uint8Array([1, 2, 3, 4]))
       if (call.url.includes('uploadType=resumable')) return new Response(null, { status: 200, headers: { location: 'https://upload.example/session-1' } })
+      if (call.url === 'https://upload.example/session-1' && call.headers['content-range'] === 'bytes */4') return new Response(null, { status: 308 })
+      if (call.url.endsWith('video.mp4')) return new Response(new Uint8Array([1, 2, 3, 4]))
       if (call.url === 'https://upload.example/session-1') return json({ id: 'yt1' })
       return json({}, { status: 404 })
     })
-    const result = await runPublishStep('youtube', input('youtube', { options: { privacy: 'unlisted' } }))
-    expect(result).toEqual({ kind: 'published', externalPostId: 'yt1', permalink: 'https://www.youtube.com/shorts/yt1' })
-    const init = calls.find((c) => c.url.includes('uploadType=resumable'))!
+    const started = await runPublishStep('youtube', input('youtube', { options: { privacy: 'unlisted' } }))
+    expect(started).toEqual({ kind: 'processing', containerId: 'https://upload.example/session-1', retryInMs: 0 })
+    expect(calls.some((c) => c.url.endsWith('video.mp4'))).toBe(false)
+    const init = calls[0]
     const meta = JSON.parse(init.body!)
     expect(meta.snippet).toMatchObject({ title: '해시챗 소개', description: '말하면 바로 번역 #HashChat', tags: ['HashChat'] })
     expect(meta.status.privacyStatus).toBe('unlisted')
     expect(init.headers['x-upload-content-length']).toBe('4')
+
+    const done = await runPublishStep('youtube', input('youtube', { containerId: 'https://upload.example/session-1' }))
+    expect(done).toEqual({ kind: 'published', externalPostId: 'yt1', permalink: 'https://www.youtube.com/shorts/yt1' })
+    expect(calls.filter((c) => c.url.includes('uploadType=resumable'))).toHaveLength(1)
+    expect(calls.at(-1)!.headers['content-range']).toBe('bytes 0-3/4')
+  })
+
+  it('YouTube: a retry after a lost answer resumes or finishes without a second upload', async () => {
+    // The session already holds 2 of 4 bytes: only the rest is sent.
+    let calls = mockFetch((call) => {
+      if (call.headers['content-range'] === 'bytes */4') return new Response(null, { status: 308, headers: { range: 'bytes=0-1' } })
+      if (call.url.endsWith('video.mp4')) return new Response(new Uint8Array([1, 2, 3, 4]))
+      return json({ id: 'yt1' })
+    })
+    await runPublishStep('youtube', input('youtube', { containerId: 'https://upload.example/s' }))
+    expect(calls.at(-1)!.headers['content-range']).toBe('bytes 2-3/4')
+    expect(calls.at(-1)!.headers['content-length']).toBe('2')
+
+    // The upload had completed: the status query returns the video, nothing is re-sent.
+    calls = mockFetch(() => json({ id: 'yt1' }))
+    expect(await runPublishStep('youtube', input('youtube', { containerId: 'https://upload.example/s' }))).toMatchObject({ kind: 'published', externalPostId: 'yt1' })
+    expect(calls).toHaveLength(1)
+
+    mockFetch(() => new Response(null, { status: 404 }))
+    await expect(runPublishStep('youtube', input('youtube', { containerId: 'https://upload.example/s' }))).rejects.toMatchObject({ transient: false })
+  })
+
+  it('reads the YouTube resume offset', () => {
+    expect(youtubeResumeOffset('bytes=0-1048575')).toBe(1048576)
+    expect(youtubeResumeOffset(null)).toBe(0)
   })
 
   it('TikTok: FILE_UPLOAD direct post with an allowed privacy level, then status poll', async () => {
@@ -114,6 +147,46 @@ describe('publishers', () => {
 
     const done = await runPublishStep('tiktok', input('tiktok', { containerId: 'pub1' }))
     expect(done).toMatchObject({ kind: 'published', externalPostId: '7300000000000000001', permalink: 'https://www.tiktok.com/@hashchat/video/7300000000000000001' })
+  })
+
+  it('splits TikTok uploads over 64 MB into 10 MB chunks, the last taking the remainder', () => {
+    const MB = 1024 * 1024
+    expect(tiktokChunkPlan(4)).toEqual({ chunkSize: 4, count: 1, ranges: [[0, 3]] })
+    expect(tiktokChunkPlan(64 * MB).count).toBe(1)
+    const plan = tiktokChunkPlan(105 * MB + 7)
+    expect(plan.chunkSize).toBe(10 * MB)
+    expect(plan.count).toBe(10)
+    expect(plan.ranges[0]).toEqual([0, 10 * MB - 1])
+    expect(plan.ranges.at(-1)).toEqual([90 * MB, 105 * MB + 6])
+    for (let i = 1; i < plan.ranges.length; i += 1) expect(plan.ranges[i][0]).toBe(plan.ranges[i - 1][1] + 1)
+  })
+
+  it('Instagram / Threads: a container already PUBLISHED is not published again', async () => {
+    const startedAt = new Date('2026-11-18T03:00:00Z')
+    const calls = mockFetch((call) => {
+      if (call.url.includes('/c1?')) return json({ status_code: 'PUBLISHED' })
+      if (call.url.includes('/acct-1/media?')) {
+        return json({ data: [
+          { id: 'old', caption: '말하면 바로 번역 #HashChat', timestamp: '2026-11-17T00:00:00+0000' },
+          { id: 'm9', caption: '말하면 바로 번역 #HashChat', permalink: 'https://ig/m9', timestamp: '2026-11-18T03:01:00+0000' },
+        ] })
+      }
+      return json({}, { status: 500 })
+    })
+    expect(await runPublishStep('instagram', input('instagram', { containerId: 'c1', startedAt }))).toEqual({ kind: 'published', externalPostId: 'm9', permalink: 'https://ig/m9' })
+    expect(calls.some((c) => c.url.endsWith('/media_publish'))).toBe(false)
+
+    mockFetch((call) => (call.url.includes('/t1?') ? json({ status: 'PUBLISHED' }) : json({ data: [] })))
+    const threads = await runPublishStep('threads', input('threads', { containerId: 't1', startedAt }))
+    expect(threads).toMatchObject({ kind: 'published', externalPostId: null })
+    expect((threads as { note?: string }).note).toContain('쓰레드')
+  })
+
+  it('matches a published post by caption and time', () => {
+    const at = new Date('2026-11-18T03:00:00Z')
+    expect(findPublishedMedia([{ id: 'a', text: ' x ', timestamp: '2026-11-18T03:00:30Z' }], 'x', at)?.id).toBe('a')
+    expect(findPublishedMedia([{ id: 'a', text: 'x', timestamp: '2026-11-18T02:00:00Z' }], 'x', at)).toBeNull()
+    expect(findPublishedMedia([{ id: 'a', caption: 'y' }], 'x', at)).toBeNull()
   })
 
   it('picks a TikTok privacy level the creator allows', () => {

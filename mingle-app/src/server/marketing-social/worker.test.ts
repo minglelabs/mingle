@@ -15,7 +15,7 @@ const metricsMock = vi.hoisted(() => ({ fetchPostMetrics: vi.fn() }))
 vi.mock('./metrics', () => metricsMock)
 
 import { SocialApiError } from './http'
-import { advanceTarget, backoffMs, metricsDue, refreshTargetMetrics, runMarketingSocialWorker } from './worker'
+import { advanceTarget, backoffMs, metricsDue, refreshTargetMetrics, runMarketingSocialWorker, runPlatformLane } from './worker'
 
 const NOW = new Date('2026-11-18T03:00:00Z')
 
@@ -114,11 +114,52 @@ describe('marketing social worker', () => {
     expect(await refreshTargetMetrics(target({ status: 'published', externalPostId: null }) as never, NOW)).toBe(false)
   })
 
+  it('treats unknown (non-platform) errors as permanent', async () => {
+    publishMock.runPublishStep.mockRejectedValue(new TypeError('Cannot read properties of undefined'))
+    expect(await advanceTarget(target(), NOW)).toBe('failed')
+    expect(lastUpdate()).toMatchObject({ status: 'failed', attempts: 1 })
+  })
+
+  it('keeps the note of a post that went live without a known link', async () => {
+    publishMock.runPublishStep.mockResolvedValue({ kind: 'published', externalPostId: null, permalink: null, note: '링크를 찾지 못했습니다' })
+    await advanceTarget(target({ status: 'processing', containerId: 'c1', startedAt: NOW }), NOW)
+    expect(lastUpdate()).toMatchObject({ status: 'published', error: '링크를 찾지 못했습니다' })
+  })
+
   it('skips a target another run already claimed', async () => {
-    prismaMock.marketingVideoTarget.findMany.mockResolvedValueOnce([target()]).mockResolvedValueOnce([])
+    prismaMock.marketingVideoTarget.findMany.mockResolvedValue([])
     prismaMock.marketingVideoTarget.updateMany.mockResolvedValue({ count: 0 })
-    const summary = await runMarketingSocialWorker(NOW)
+    prismaMock.marketingVideoTarget.findMany.mockResolvedValueOnce([target()])
+    expect(await runPlatformLane('instagram', NOW)).toEqual({ published: 0, processing: 0, failed: 0, retried: 0, metrics: 0, tokens: 0 })
     expect(publishMock.runPublishStep).not.toHaveBeenCalled()
-    expect(summary).toEqual({ published: 0, processing: 0, failed: 0, retried: 0, metrics: 0, tokens: 0 })
+  })
+
+  it('runs platforms in parallel: a slow upload does not hold up another platform', async () => {
+    let releaseYouTube: () => void = () => {}
+    prismaMock.marketingVideoTarget.updateMany.mockResolvedValue({ count: 1 })
+    prismaMock.marketingVideoTarget.findMany.mockImplementation(async (args: { where: { platform?: string; status?: unknown } }) => {
+      if (args.where.platform === 'youtube') return [target({ id: 'yt', platform: 'youtube' })]
+      if (args.where.platform === 'instagram') return [target({ id: 'ig', platform: 'instagram', status: 'processing', containerId: 'c1', startedAt: NOW })]
+      return []
+    })
+    const order: string[] = []
+    publishMock.runPublishStep.mockImplementation(async (platform: string) => {
+      if (platform === 'youtube') {
+        await new Promise<void>((resolve) => {
+          releaseYouTube = resolve
+        })
+        order.push('youtube')
+        return { kind: 'published', externalPostId: 'y', permalink: null }
+      }
+      order.push(platform)
+      return { kind: 'published', externalPostId: 'i', permalink: null }
+    })
+    const run = runMarketingSocialWorker(NOW)
+    await vi.waitFor(() => expect(order).toEqual(['instagram']))
+    releaseYouTube()
+    const summary = await run
+    expect(order).toEqual(['instagram', 'youtube'])
+    expect(summary.published).toBe(2)
+    expect(prismaMock.marketingVideoTarget.findMany.mock.calls.map((c) => c[0].where.platform)).toEqual(expect.arrayContaining(['instagram', 'threads', 'youtube', 'tiktok']))
   })
 })

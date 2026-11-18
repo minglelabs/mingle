@@ -24,7 +24,13 @@ export function normalizeHashtags(input: unknown): string[] {
 export function composeCaption(platform: SocialPlatform, base: string, hashtags: string[]): string {
   const tags = platform === 'threads' ? hashtags.slice(0, 1) : hashtags
   const text = [base.trim(), tags.join(' ')].filter(Boolean).join('\n\n')
-  return text.slice(0, SOCIAL_CAPTION_LIMIT[platform])
+  return clipToCodePoints(text, SOCIAL_CAPTION_LIMIT[platform])
+}
+
+/** Cut by code points (as `captionTooLong` counts), never splitting an emoji's surrogate pair. */
+export function clipToCodePoints(text: string, limit: number): string {
+  const points = [...text]
+  return points.length <= limit ? text : points.slice(0, limit).join('')
 }
 
 export function captionTooLong(platform: SocialPlatform, caption: string): boolean {

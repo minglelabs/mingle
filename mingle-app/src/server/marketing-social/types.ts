@@ -54,8 +54,12 @@ export type YouTubePrivacy = 'public' | 'unlisted' | 'private'
 
 export type TargetOptions = { privacy?: string }
 
-/** Video limits checked on upload (all four platforms accept this). */
-export const VIDEO_MAX_BYTES = 200 * 1024 * 1024
+/**
+ * Video limits checked on upload (all four platforms accept this). 64 MB keeps
+ * TikTok on one chunk and bounds the in-memory copies (the upload body, and the
+ * worker's download for YouTube / TikTok); a 15 s 1080x1920 clip is a few MB.
+ */
+export const VIDEO_MAX_BYTES = 64 * 1024 * 1024
 export const VIDEO_MAX_DURATION_MS = 90_000
 export const COVER_MAX_BYTES = 8 * 1024 * 1024
 

@@ -19,4 +19,11 @@ describe('captions', () => {
     expect(captionTooLong('threads', '가'.repeat(500))).toBe(false)
     expect(captionTooLong('threads', '가'.repeat(501))).toBe(true)
   })
+
+  it('never splits an emoji when clipping', () => {
+    const clipped = composeCaption('threads', '😀'.repeat(600), [])
+    expect([...clipped]).toHaveLength(500)
+    expect(clipped).toBe('😀'.repeat(500))
+    expect(captionTooLong('threads', clipped)).toBe(false)
+  })
 })

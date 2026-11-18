@@ -31,7 +31,7 @@ export function formatKst(iso: string | null): string {
 /** Upload / create errors from the admin API, in Korean. */
 export const SOCIAL_ERROR_COPY: Record<string, string> = {
   not_mp4: "mp4 영상만 올릴 수 있습니다.",
-  video_too_large: "영상이 너무 큽니다 (최대 200MB).",
+  video_too_large: "영상이 너무 큽니다 (최대 64MB).",
   video_too_long: "영상이 너무 깁니다 (최대 90초).",
   cover_too_large: "커버 이미지가 너무 큽니다 (최대 8MB).",
   cover_not_image: "커버는 JPG 또는 PNG만 됩니다.",

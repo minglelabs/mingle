@@ -4,7 +4,7 @@ import { getActiveAccount, refreshExpiringAccounts } from './accounts'
 import { SocialApiError } from './http'
 import { fetchPostMetrics } from './metrics'
 import { runPublishStep } from './publishers'
-import type { SocialPlatform, TargetOptions } from './types'
+import { SOCIAL_PLATFORMS, type SocialPlatform, type TargetOptions } from './types'
 
 /**
  * Advances marketing video targets one step per tick:
@@ -51,6 +51,7 @@ export async function advanceTarget(target: TargetWithVideo, now = new Date()): 
       caption: target.caption,
       options: (target.options as TargetOptions | null) ?? null,
       containerId: target.containerId,
+      startedAt: target.startedAt ?? now,
       video: {
         title: target.video.title,
         videoUrl: target.video.videoUrl,
@@ -74,14 +75,15 @@ export async function advanceTarget(target: TargetWithVideo, now = new Date()): 
         externalPostId: result.externalPostId,
         permalink: result.permalink,
         ...(result.containerId ? { containerId: result.containerId } : {}),
-        error: null,
+        error: result.note ?? null,
         publishedAt: new Date(),
         nextAttemptAt: new Date(),
       },
     })
     return 'published'
   } catch (error) {
-    const transient = error instanceof SocialApiError ? error.transient : true
+    // Only errors a platform call marked transient (429 / 5xx / network) are retried; unknown errors are not.
+    const transient = error instanceof SocialApiError && error.transient
     const attempts = target.attempts + 1
     if (transient && attempts < MAX_TRANSIENT_ATTEMPTS) {
       await prisma.marketingVideoTarget.update({
@@ -127,12 +129,11 @@ export function metricsDue(target: Pick<MarketingVideoTarget, 'publishedAt' | 'm
   return now.getTime() - target.metricsFetchedAt.getTime() >= interval
 }
 
-export async function runMarketingSocialWorker(now = new Date()): Promise<WorkerSummary> {
-  const summary: WorkerSummary = { published: 0, processing: 0, failed: 0, retried: 0, metrics: 0, tokens: 0 }
-  summary.tokens = await refreshExpiringAccounts(now)
-
+/** Upload / poll the due posts of ONE platform, oldest first. */
+export async function runPlatformLane(platform: SocialPlatform, now = new Date()): Promise<WorkerSummary> {
+  const summary = emptySummary()
   const due = await prisma.marketingVideoTarget.findMany({
-    where: { status: { in: ['queued', 'processing'] }, nextAttemptAt: { lte: now } },
+    where: { platform, status: { in: ['queued', 'processing'] }, nextAttemptAt: { lte: now } },
     orderBy: { nextAttemptAt: 'asc' },
     take: BATCH,
     include: { video: true },
@@ -142,15 +143,47 @@ export async function runMarketingSocialWorker(now = new Date()): Promise<Worker
     const outcome = await advanceTarget(target, now)
     summary[outcome] += 1
   }
+  return summary
+}
 
+/** Token upkeep and metrics of recent posts. */
+export async function runMaintenanceLane(now = new Date()): Promise<WorkerSummary> {
+  const summary = emptySummary()
+  summary.tokens = await refreshExpiringAccounts(now)
   const since = new Date(now.getTime() - 30 * 24 * 3600_000)
   const published = await prisma.marketingVideoTarget.findMany({
     where: { status: 'published', externalPostId: { not: null }, publishedAt: { gte: since } },
     orderBy: [{ metricsFetchedAt: { sort: 'asc', nulls: 'first' } }],
     take: 50,
   })
-  for (const target of published.filter((t) => metricsDue(t, now)).slice(0, BATCH)) {
-    if (await refreshTargetMetrics(target, now)) summary.metrics += 1
+  const due = published.filter((t) => metricsDue(t, now)).slice(0, BATCH)
+  const results = await Promise.allSettled(due.map((target) => refreshTargetMetrics(target, now)))
+  summary.metrics = results.filter((r) => r.status === 'fulfilled' && r.value).length
+  return summary
+}
+
+export const WORKER_LANES = [...SOCIAL_PLATFORMS, 'maintenance'] as const
+export type WorkerLane = (typeof WORKER_LANES)[number]
+
+export function runWorkerLane(lane: WorkerLane, now = new Date()): Promise<WorkerSummary> {
+  return lane === 'maintenance' ? runMaintenanceLane(now) : runPlatformLane(lane, now)
+}
+
+function emptySummary(): WorkerSummary {
+  return { published: 0, processing: 0, failed: 0, retried: 0, metrics: 0, tokens: 0 }
+}
+
+/**
+ * Every lane once, in parallel: a slow YouTube upload never holds up
+ * Instagram / Threads polling or metrics. (The scheduler runs lanes
+ * independently across ticks; this is the one-shot form.)
+ */
+export async function runMarketingSocialWorker(now = new Date()): Promise<WorkerSummary> {
+  const results = await Promise.allSettled(WORKER_LANES.map((lane) => runWorkerLane(lane, now)))
+  const summary = emptySummary()
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue
+    for (const key of Object.keys(summary) as (keyof WorkerSummary)[]) summary[key] += result.value[key]
   }
   return summary
 }
