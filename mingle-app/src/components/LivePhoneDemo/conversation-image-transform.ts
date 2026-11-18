@@ -20,19 +20,21 @@ export function isIdentityTransform(transform: ImageTransform): boolean {
   return transform.quarterTurns % 4 === 0 && !transform.flipped
 }
 
+// The server stores every photo as a JPEG of at most 2048px on the long edge
+// (white behind transparency), so the edit is baked the same way. Drawing at
+// full size would also break on large phone photos: iOS WebKit caps a canvas at
+// ~16.7M pixels (a 48MP photo is 48M) and toBlob then fails.
+export const TRANSFORM_MAX_EDGE_PX = 2048
+
 export function transformedSize(width: number, height: number, transform: ImageTransform) {
-  return transform.quarterTurns % 2 === 1 ? { width: height, height: width } : { width, height }
+  const scale = Math.min(1, TRANSFORM_MAX_EDGE_PX / Math.max(width, height))
+  const w = Math.max(1, Math.round(width * scale))
+  const h = Math.max(1, Math.round(height * scale))
+  return transform.quarterTurns % 2 === 1 ? { width: h, height: w, scale } : { width: w, height: h, scale }
 }
 
-// JPEG/WebP keep their type; PNG stays PNG so transparency survives.
-export function transformedImageType(type: string): 'image/jpeg' | 'image/png' | 'image/webp' {
-  return type === 'image/png' || type === 'image/webp' ? type : 'image/jpeg'
-}
-
-function renamedFor(name: string, type: string) {
-  const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg'
-  const base = name.replace(/\.[^./]+$/, '') || 'photo'
-  return `${base}.${ext}`
+function renamedFor(name: string) {
+  return `${name.replace(/\.[^./]+$/, '') || 'photo'}.jpg`
 }
 
 function loadImage(url: string) {
@@ -59,17 +61,16 @@ export async function applyImageTransform(file: File, url: string, transform: Im
   canvas.height = size.height
   const context = canvas.getContext('2d')
   if (!context) throw new Error('canvas_unavailable')
-  const type = transformedImageType(file.type)
-  if (type === 'image/jpeg') {
-    context.fillStyle = '#fff'
-    context.fillRect(0, 0, size.width, size.height)
-  }
+  context.fillStyle = '#fff'
+  context.fillRect(0, 0, size.width, size.height)
   context.translate(size.width / 2, size.height / 2)
   // Flip is applied on screen axes, after the rotation.
   if (transform.flipped) context.scale(-1, 1)
   context.rotate((transform.quarterTurns % 4) * Math.PI / 2)
-  context.drawImage(image, -sourceWidth / 2, -sourceHeight / 2)
-  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, type, 0.92))
-  if (!blob) throw new Error('image_encode_failed')
-  return new File([blob], renamedFor(file.name, type), { type, lastModified: Date.now() })
+  const drawWidth = sourceWidth * size.scale
+  const drawHeight = sourceHeight * size.scale
+  context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
+  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+  if (!blob || !blob.size) throw new Error('image_encode_failed')
+  return new File([blob], renamedFor(file.name), { type: 'image/jpeg', lastModified: Date.now() })
 }
