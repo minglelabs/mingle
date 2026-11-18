@@ -162,7 +162,7 @@ describe('earphone mode wiring', () => {
     expect(notice).toContain('deviceAudioViaBroadcast={isLikelyIOSPlatform()}')
     // What the session captures: shell support + earphone mode on + the pick.
     const effective = between(liveDemoSource, 'const sttCaptureSource = resolveEffectiveSttCaptureSource({', '})')
-    expect(effective).toContain('supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker,')
+    expect(effective).toContain('supported: nativeDeviceAudioSupported && !speakerModeOnSpeaker && !voiceTalkState.joined,')
     expect(effective).toContain('earphoneModeEnabled,')
     expect(effective).toContain('pick: sttCaptureSourcePick,')
     expect(liveDemoSource).toContain('captureSource: sttCaptureSource,')
@@ -226,9 +226,9 @@ describe('earphone mode wiring', () => {
     expect(composerSource).toContain('{onCloseKeyboard && earphoneMode?.enabled && (')
   })
 
-  it('turns the system echo canceller on only while speaker mode is reading aloud', () => {
+  it('turns the system echo canceller on only while speaker mode is reading aloud or a call is on', () => {
     expect(liveDemoSource).toContain('const speakerModeAecEnabled = speakerModeOnSpeaker && earphoneModeGate.autoReadActive')
-    expect(liveDemoSource).toContain('enableAec: aecEnabled || speakerModeAecEnabled,')
+    expect(liveDemoSource).toContain('enableAec: aecEnabled || speakerModeAecEnabled || voiceTalkState.joined,')
     // The persisted account preference still follows the user's own setting.
     expect(liveDemoSource).toContain('echoAllowed: !aecEnabled,')
   })

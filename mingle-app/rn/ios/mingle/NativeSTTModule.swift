@@ -32,6 +32,9 @@ final class MingleAudioSessionCoordinator {
     private var sttOwners: Int = 0
     private var ttsOwners: Int = 0
     private var pipOwners: Int = 0
+    /// 1 while a group voice call (LiveKit) uses the session. STT stopping must
+    /// not release or switch the session under the call.
+    private var voiceCallOwners: Int = 0
     /// 1 while the background keep-alive player holds the session.
     private var keepAliveOwners: Int = 0
     private var pendingDeactivationWorkItem: DispatchWorkItem?
@@ -166,6 +169,24 @@ final class MingleAudioSessionCoordinator {
         }
     }
 
+    /// A group voice call started or ended. While it runs the session stays a
+    /// recording session: no idle deactivation and no background keep-alive.
+    func setVoiceCallActive(_ active: Bool) {
+        withLock {
+            if active {
+                cancelPendingDeactivationLocked(reason: "acquire_voice_call")
+            }
+            voiceCallOwners = active ? 1 : 0
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.updateBackgroundKeepAlive(trigger: active ? "voice_call_started" : "voice_call_ended")
+        }
+    }
+
+    var isVoiceCallActive: Bool {
+        withLock { voiceCallOwners != 0 }
+    }
+
     func acquirePiP() {
         withLock {
             cancelPendingDeactivationLocked(reason: "acquire_pip")
@@ -188,7 +209,7 @@ final class MingleAudioSessionCoordinator {
 
         withLock {
             cancelPendingDeactivationLocked(reason: "schedule_deactivate_\(trigger)")
-            if sttOwners != 0 || ttsOwners != 0 || pipOwners != 0 {
+            if sttOwners != 0 || ttsOwners != 0 || pipOwners != 0 || voiceCallOwners != 0 {
                 NSLog(
                     "[MingleAudioSessionCoordinator] skip deactivate trigger=%@ owners stt=%d tts=%d pip=%d keepAlive=%d routeProfile=%@ outputs=[%@]",
                     trigger,
@@ -233,12 +254,12 @@ final class MingleAudioSessionCoordinator {
         lock.lock()
         defer { lock.unlock() }
         pendingDeactivationWorkItem = nil
-        guard sttOwners == 0 && ttsOwners == 0 && pipOwners == 0 else { return }
+        guard sttOwners == 0 && ttsOwners == 0 && pipOwners == 0 && voiceCallOwners == 0 else { return }
 
         if keepAliveInstalled && MingleBackgroundAudioPolicy.shouldRunKeepAlive(
             isEnabled: keepAliveEnabled,
             isInBackground: isAppInBackground,
-            sttOwners: sttOwners
+            sttOwners: sttOwners + voiceCallOwners
         ) {
             // Releasing the session here would let iOS suspend the app.
             startKeepAliveLocked(trigger: "idle_\(trigger)")
@@ -334,7 +355,7 @@ final class MingleAudioSessionCoordinator {
         if MingleBackgroundAudioPolicy.shouldRunKeepAlive(
             isEnabled: keepAliveEnabled,
             isInBackground: isAppInBackground,
-            sttOwners: sttOwners
+            sttOwners: sttOwners + voiceCallOwners
         ) {
             startKeepAliveLocked(trigger: trigger)
         } else {
@@ -1034,12 +1055,15 @@ class NativeSTTModule: RCTEventEmitter {
         // .default   → no system AEC, full speaker volume, echo allowed
         // Earphones leak no echo into the phone's microphone, and .voiceChat
         // turns the hands-free profile back on by itself, so they get .default.
-        let mode: AVAudioSession.Mode = (aecEnabled && !usePhoneMicrophone) ? .voiceChat : .default
+        // A live voice call already runs the session in `.voiceChat`; keep it
+        // there so starting STT does not switch the call's audio route.
+        let voiceCallActive = MingleAudioSessionCoordinator.shared.isVoiceCallActive
+        let mode: AVAudioSession.Mode = ((aecEnabled && !usePhoneMicrophone) || voiceCallActive) ? .voiceChat : .default
         // .allowBluetooth is the hands-free profile: it moves both playback and
         // the microphone to the earphones at 16 kHz. Without it Bluetooth
-        // earphones stay on A2DP and the phone records.
+        // earphones stay on A2DP and the phone records. A voice call keeps it.
         var options: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers]
-        if !usePhoneMicrophone {
+        if !usePhoneMicrophone || voiceCallActive {
             options.insert(.allowBluetooth)
         }
         NSLog("[NativeSTTModule] configureAudioSession aec=%d mode=%@ category=%@ sampleRate=%.0f route=%@ phoneMic=%d",
@@ -1272,7 +1296,7 @@ class NativeSTTModule: RCTEventEmitter {
             self.removeTapIfNeeded()
 
             let inputNode = self.audioEngine.inputNode
-            if #available(iOS 17.0, *) { try? inputNode.setVoiceProcessingEnabled(self.isAecEnabled) }
+            if #available(iOS 17.0, *) { try? inputNode.setVoiceProcessingEnabled(self.engineVoiceProcessing(self.isAecEnabled)) }
             let inputFormat = inputNode.inputFormat(forBus: 0)
             // While another app or a call holds the microphone the input can
             // report an empty format; installing a tap with it raises an exception.
@@ -1789,7 +1813,7 @@ class NativeSTTModule: RCTEventEmitter {
         // AEC (voice processing): toggled by user via aecEnabled flag.
         // When enabled, cancels TTS echo from mic input (volume reduction compensated in NativeTTSModule).
         // When disabled, allows echo feedback (intentional use case for echo effect).
-        if #available(iOS 17.0, *) { try? inputNode.setVoiceProcessingEnabled(isAecEnabled) }
+        if #available(iOS 17.0, *) { try? inputNode.setVoiceProcessingEnabled(engineVoiceProcessing(isAecEnabled)) }
         let inputFormat = inputNode.inputFormat(forBus: 0)
         let sampleRate = Int(inputFormat.sampleRate.rounded())
         declaredStreamSampleRate = sampleRate
@@ -2690,6 +2714,26 @@ class NativeSTTModule: RCTEventEmitter {
         }
     }
 
+    /// The call's own audio unit already does echo cancellation; a second
+    /// voice-processing unit on the STT engine would fight it for the mic.
+    private func engineVoiceProcessing(_ aecEnabled: Bool) -> Bool {
+        aecEnabled && !MingleAudioSessionCoordinator.shared.isVoiceCallActive
+    }
+
+    /// A group voice call started (true) or ended (false). STT keeps running
+    /// across both: its capture is restarted so it shares the mic with the
+    /// call, and gets the session back when the call lets go of it.
+    @objc(setVoiceCallActive:)
+    func setVoiceCallActive(_ active: Bool) {
+        NSLog("[NativeSTTModule] setVoiceCallActive %d isRunning=%d", active ? 1 : 0, isRunning ? 1 : 0)
+        MingleAudioSessionCoordinator.shared.setVoiceCallActive(active)
+        if isRunning && !deviceAudioActive {
+            restartAudioCapture(reason: active ? "voice_call_started" : "voice_call_ended", bypassThrottle: true)
+        } else if !active {
+            MingleAudioSessionCoordinator.shared.scheduleDeactivateAudioSessionIfIdle(trigger: "voice_call_ended")
+        }
+    }
+
     /// The microphone pick changed (the web's earphone-microphone question).
     /// A running microphone session re-reads it through a capture restart;
     /// a device-audio session applies it from its next start.
@@ -2742,7 +2786,7 @@ class NativeSTTModule: RCTEventEmitter {
         audioEngine.reset()
 
         let inputNode = audioEngine.inputNode
-        if #available(iOS 17.0, *) { try? inputNode.setVoiceProcessingEnabled(enabled) }
+        if #available(iOS 17.0, *) { try? inputNode.setVoiceProcessingEnabled(engineVoiceProcessing(enabled)) }
         let inputFormat = inputNode.inputFormat(forBus: 0)
         installInputTap(format: inputFormat)
 

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Copied Hash Rush engine, kept as its source wrote it (see its README).
+    "src/features/hash-rush/engine/**",
   ]),
 ]);
 

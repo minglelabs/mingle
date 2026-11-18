@@ -10,7 +10,8 @@
       "railway/**",
       "mingle-app/**",
       "mingle-stt/**",
-      "mingle-messaging/**"
+      "mingle-messaging/**",
+      "mingle-voice-agent/**"
     ]
   },
   "deploy": {

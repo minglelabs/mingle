@@ -300,3 +300,47 @@ test('handleConversationEventsPublish accepts keys with no sessionKey', async ()
     assert.equal(response.statusCode, 204);
     assert.equal(listSocket.sent.length, 1);
 });
+
+test('tells everyone with the room open who else has it open, and when someone leaves', () => {
+    const bus = new ConversationEventBus();
+    const liveToken = (userId: string) => signToken(
+        { sessionKey: 'room-1', userId, exp: Date.now() + 60_000, liveReader: true } as never,
+        SECRET,
+    );
+    const open = (userId: string) => {
+        const socket = Object.assign(new FakeSocket(), { bufferedAmount: 0 });
+        handleConversationEventsConnection(socket as never, `/conversation-events?token=${liveToken(userId)}&live=1`, SECRET, bus);
+        return socket;
+    };
+    const presence = (socket: FakeSocket) => socket.sent
+        .map((raw) => JSON.parse(raw))
+        .filter((frame) => frame.type === 'presence')
+        .map((frame) => frame.userIds);
+
+    const a = open('user-a');
+    assert.deepEqual(presence(a), [['user-a']]);
+
+    const b = open('user-b');
+    // The newcomer learns who is here; the one already here learns of the newcomer.
+    assert.deepEqual(presence(b), [['user-a', 'user-b']]);
+    assert.deepEqual(presence(a).at(-1), ['user-a', 'user-b']);
+
+    // A second device of the same user counts once, and closing one keeps them here.
+    const a2 = open('user-a');
+    assert.deepEqual(bus.viewerIds('room-1'), ['user-a', 'user-b']);
+    a2.emit('close');
+    assert.deepEqual(presence(b).at(-1), ['user-a', 'user-b']);
+
+    a.emit('close');
+    assert.deepEqual(presence(b).at(-1), ['user-b']);
+    assert.deepEqual(bus.viewerIds('room-1'), ['user-b']);
+});
+
+test('a socket that is not a live room reader is not counted as having the room open', () => {
+    const bus = new ConversationEventBus();
+    const socket = Object.assign(new FakeSocket(), { bufferedAmount: 0 });
+    const token = signToken({ sessionKey: 'room-1', userId: 'user-a', exp: Date.now() + 60_000 }, SECRET);
+    handleConversationEventsConnection(socket as never, `/conversation-events?token=${token}`, SECRET, bus);
+    assert.deepEqual(bus.viewerIds('room-1'), []);
+    assert.equal(socket.sent.length, 0);
+});
