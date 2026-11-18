@@ -952,9 +952,9 @@ export function VoiceTalkSeatView(props: {
           <>
             {/* Two translucent rings spreading out in turn, over a faint steady glow.
                 Neutral gray: a tinted ring read as a stain around the photo. */}
-            <span aria-hidden="true" data-qa="voice-talk-seat-speaking" className="mingle-voice-ripple pointer-events-none absolute inset-0 rounded-full bg-slate-400/25" />
-            <span aria-hidden="true" className="mingle-voice-ripple mingle-voice-ripple-late pointer-events-none absolute inset-0 rounded-full bg-slate-400/25" />
-            <span aria-hidden="true" className="pointer-events-none absolute -inset-[3px] rounded-full bg-slate-300/30" />
+            <span aria-hidden="true" data-qa="voice-talk-seat-speaking" className="mingle-voice-ripple pointer-events-none absolute inset-0 rounded-full bg-slate-500/35" />
+            <span aria-hidden="true" className="mingle-voice-ripple mingle-voice-ripple-late pointer-events-none absolute inset-0 rounded-full bg-slate-500/35" />
+            <span aria-hidden="true" className="pointer-events-none absolute -inset-[3px] rounded-full bg-slate-400/35" />
           </>
         ) : null}
         {seat && onOpenProfile ? (
