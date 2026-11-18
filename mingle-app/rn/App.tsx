@@ -552,6 +552,13 @@ const LAST_SCREEN_SNAPSHOT_FADE_MS = 180;
 // Fallbacks for a web build that never sends native_web_restore_ready.
 const LAST_SCREEN_SNAPSHOT_AFTER_LOAD_MAX_MS = 3000;
 const LAST_SCREEN_SNAPSHOT_MAX_MS = 10000;
+// The startup splash stays up past onLoadEnd until the web says its first
+// screen is drawn (native_web_ui_ready): onLoadEnd only means the HTML is in,
+// and hiding there showed the web's own loading screens (or a blank page)
+// right after the splash. These cap the wait for a web build that never
+// sends it, or a page that never settles.
+const STARTUP_SPLASH_AFTER_LOAD_MAX_MS = 6000;
+const STARTUP_SPLASH_MAX_MS = 15000;
 const RUNTIME_WEB_APP_BASE_URL = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.webAppBaseUrl,
   readRuntimeEnvValue(['NEXT_PUBLIC_SITE_URL', 'RN_WEB_APP_BASE_URL']),
@@ -999,6 +1006,12 @@ type NativeWebRestoreReadyCommand = {
   type: 'native_web_restore_ready';
 };
 
+// The web's first screen is drawn: no loading shell or spinner is left on it.
+// The startup splash stays up until this arrives (or a fallback runs out).
+type NativeWebUiReadyCommand = {
+  type: 'native_web_ui_ready';
+};
+
 // Signed out or switched accounts: forget the last screen and its capture.
 type NativeWebRestoreResetCommand = {
   type: 'native_web_restore_reset';
@@ -1053,6 +1066,7 @@ type WebViewCommand =
   | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand
   | NativeWebRestoreReadyCommand
+  | NativeWebUiReadyCommand
   | NativeWebRestoreResetCommand
   | NativeQaSetSttStatusCommand
   | NativeQaAudioInjectionCommand
@@ -2585,6 +2599,27 @@ function AppInner(): React.JSX.Element {
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startupSplashAfterLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearStartupSplashAfterLoadTimer = useCallback(() => {
+    if (!startupSplashAfterLoadTimerRef.current) return;
+    clearTimeout(startupSplashAfterLoadTimerRef.current);
+    startupSplashAfterLoadTimerRef.current = null;
+  }, []);
+  // The first screen is up (or the fallback ran out): drop the splash for good.
+  const settleStartupSplash = useCallback(() => {
+    clearStartupSplashAfterLoadTimer();
+    if (initialLoadSettledRef.current) return;
+    initialLoadSettledRef.current = true;
+    setStartupSplashVisible(false);
+  }, [clearStartupSplashAfterLoadTimer]);
+  const startStartupSplashAfterLoadTimer = useCallback(() => {
+    clearStartupSplashAfterLoadTimer();
+    startupSplashAfterLoadTimerRef.current = setTimeout(() => {
+      startupSplashAfterLoadTimerRef.current = null;
+      settleStartupSplash();
+    }, STARTUP_SPLASH_AFTER_LOAD_MAX_MS);
+  }, [clearStartupSplashAfterLoadTimer, settleStartupSplash]);
+  useEffect(() => clearStartupSplashAfterLoadTimer, [clearStartupSplashAfterLoadTimer]);
   // On a cold start that restores the previous screen, keep the splash over
   // the loading WebView until the page reports that its saved state is back.
   // It used to show a capture of the last screen instead; that picture looked
@@ -2707,7 +2742,7 @@ function AppInner(): React.JSX.Element {
     startupSplashTimeoutRef.current = setTimeout(() => {
       setStartupSplashVisible(false);
       startupSplashTimeoutRef.current = null;
-    }, 4000);
+    }, STARTUP_SPLASH_MAX_MS);
 
     return () => {
       if (startupSplashTimeoutRef.current) {
@@ -4600,6 +4635,11 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_web_ui_ready') {
+      settleStartupSplash();
+      return;
+    }
+
     if (parsed.type === 'native_web_restore_reset') {
       resetWebRestoreState();
       return;
@@ -4911,6 +4951,7 @@ function AppInner(): React.JSX.Element {
     handleDebugWebViewRemount,
     hideLastScreenSnapshot,
     resetWebRestoreState,
+    settleStartupSplash,
     handleNativeAuthStart,
     getNativeContactsBridge,
     handleNativeLocationCheck,
@@ -5249,13 +5290,15 @@ function AppInner(): React.JSX.Element {
     cancelPendingProfileLinkFlush();
     cancelPendingConversationShareFlush();
     if (!initialLoadSettledRef.current) {
+      // A new document is coming; wait for its own load end.
+      clearStartupSplashAfterLoadTimer();
       setStartupSplashVisible(true);
     }
     const nextUrl = event?.nativeEvent?.url || webUrl;
     rememberCurrentWebUrl(nextUrl);
     setCurrentWebPathname(parseWebPathname(nextUrl));
     updateSafeAreaPalette(nextUrl);
-  }, [cancelPendingConversationShareFlush, cancelPendingProfileLinkFlush, loadAttemptTracker, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
+  }, [cancelPendingConversationShareFlush, cancelPendingProfileLinkFlush, clearStartupSplashAfterLoadTimer, loadAttemptTracker, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const replayNativeSttStatusToWeb = useCallback((nextUrl: string) => {
     const roomPayload = resolveConversationRestorePayloadFromUrl(nextUrl);
@@ -5315,8 +5358,8 @@ function AppInner(): React.JSX.Element {
     if (loadAttemptTracker.hasFailed()) return;
     isPageReadyRef.current = true;
     if (!initialLoadSettledRef.current) {
-      initialLoadSettledRef.current = true;
-      setStartupSplashVisible(false);
+      // Keep the splash until the web reports its first screen is drawn.
+      startStartupSplashAfterLoadTimer();
     }
     // onLoadEnd is NOT proof of success: on Android it fires BEFORE onError
     // for a failed load. The tracker only commits success (clearing the
@@ -5411,7 +5454,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingInviteToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, nativeEarphoneMicrophoneChoiceAvailable, redeliverPendingShareInboxToWeb, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingConversationShareToWeb, flushPendingInviteToWeb, flushPendingNativeLocationEventsToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, loadAttemptTracker, nativeAudioRouteAvailable, nativeDeviceAudioCaptureAvailable, nativeEarphoneMicrophoneChoiceAvailable, redeliverPendingShareInboxToWeb, rememberCurrentWebUrl, replayNativePipToWeb, replayNativeSttStatusToWeb, startStartupSplashAfterLoadTimer, updateSafeAreaPalette, webUrl, schedulePendingPushTapFlush]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     // Record the failure before anything else: react-native-webview calls
