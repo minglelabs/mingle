@@ -123,7 +123,7 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare, Volume2 } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare, Volume2, UserRound, UserPlus, Link2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface, { isNativeEdgeSwipeSuppressed } from '@/components/slide-surface'
@@ -352,6 +352,7 @@ import { HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/confi
 import { buildVoiceCaptionClientMessageId } from '@/lib/voice-caption'
 import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
 import { liveRoomsCopy } from '@/i18n/live-rooms-copy'
+import { roomMenuVoiceSettingsLabel } from '@/i18n/room-menu-copy'
 import { formatRoomCode } from '@/lib/room-code'
 import { buildHashRushChatEntries } from './hash-rush-room-chat'
 import {
@@ -1360,6 +1361,9 @@ type CustomSpeechSplit = {
 }
 
 type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite' | 'speech-length'
+  // Interpreting and voice settings (depth 2); the display language and the
+  // sentence length pages open from it (depth 3).
+  | 'voice-settings'
   // The room's Hash Rush page (depth 2) and the two pages it opens (depth 3).
   | 'hash-rush' | 'hash-rush-ranking' | 'hash-rush-howto'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
@@ -1437,6 +1441,7 @@ function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuSc
     || value === 'hash-rush-ranking'
     || value === 'hash-rush-howto'
     || value === 'speech-length'
+    || value === 'voice-settings'
 }
 
 function resolveMenuScreenForDepth(
@@ -1448,10 +1453,14 @@ function resolveMenuScreenForDepth(
     if (preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return preferredScreen
     if (preferredScreen === 'hash-rush') return 'hash-rush'
     if (preferredScreen === 'display-language') return 'display-language'
+    if (preferredScreen === 'speech-length') return 'speech-length'
     if (preferredScreen === 'invite') return 'invite'
     if (preferredScreen === 'participants') return 'participants'
     return 'conversation-management'
   }
+  if (preferredScreen === 'voice-settings') return 'voice-settings'
+  // "Invite" on the first screen of the menu opens the picker directly.
+  if (preferredScreen === 'invite') return 'invite'
   if (preferredScreen === 'display-language') return 'display-language'
   if (preferredScreen === 'hash-rush' || preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return 'hash-rush'
   if (preferredScreen === 'speech-length') return 'speech-length'
@@ -2078,12 +2087,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   silenceFinalizeLockedMessage,
   silenceFinalizeLockedButtonLabel,
   menuLabel,
-  logoutLabel,
+  // Sign out and account deletion are on the My tab; the room menu no longer offers them.
   deleteAccountLabel,
   deleteAccountConfirmMessage,
   deleteAccountConfirmLabel,
   deleteAccountCancelLabel,
-  onLogout,
   onDeleteAccount,
   defaultFeedbackEmail = '',
   isAuthActionPending = false,
@@ -2373,6 +2381,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       inviteButtonLabel: roomManagementCopy.participantsInviteButtonLabel,
     }
   }, [roomManagementCopy])
+  const voiceSettingsLabel = useMemo(() => roomMenuVoiceSettingsLabel(uiLocale), [uiLocale])
   const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
@@ -4050,8 +4059,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleDefaultDisplayLanguageMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'display-language' || !conversationId) return
-    pushMenuHistoryEntry(2, 'display-language')
+    // Opened from the voice settings page, it sits one level deeper, so back returns there.
+    pushMenuHistoryEntry(menuScreen === 'voice-settings' ? 3 : 2, 'display-language')
   }, [conversationId, menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleVoiceSettingsMenuItemPress = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'root') return
+    pushMenuHistoryEntry(2, 'voice-settings')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleInviteFromMenuRoot = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'root') return
+    pushMenuHistoryEntry(2, 'invite')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
   // The room's Hash Rush page, and its rankings and how-to pages over it.
   const handleHashRushPageOpen = useCallback(() => {
@@ -6697,7 +6717,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleSpeechLengthMorePress = useCallback(() => {
     if (!menuOpen || menuScreen === 'speech-length') return
-    pushMenuHistoryEntry(2, 'speech-length')
+    pushMenuHistoryEntry(menuScreen === 'voice-settings' ? 3 : 2, 'speech-length')
   }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
   const handleCustomSpeechSplitCommit = useCallback(async (preferences: CustomSpeechSplit) => {
@@ -9112,7 +9132,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <div
                         className={LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME}
                         style={{
-                          paddingBottom: showAccountMenuItems ? '16px' : 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
+                          paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
                         }}
                       >
                         <div className="px-4 py-4">
@@ -9131,6 +9151,246 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </span>
                               </button>
                             )}
+                            {conversationId ? (
+                              <div data-qa="live-demo-menu-people" className="rounded-2xl border border-gray-200 px-3 py-3">
+                                <button
+                                  type="button"
+                                  data-qa="live-demo-menu-people-all"
+                                  onClick={handleParticipantsMenuItemPress}
+                                  className="flex w-full items-center justify-between gap-3 text-left text-[0.98rem] font-medium text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                                >
+                                  <span className="min-w-0 flex-1">{participantsCopy.menuItemLabel}</span>
+                                  <span className="flex shrink-0 items-center gap-1 text-gray-500">
+                                    <span className="text-[0.9rem] tabular-nums">{initialLanguageSelectorMembers.length}</span>
+                                    <ChevronRight size={18} strokeWidth={2.4} />
+                                  </span>
+                                </button>
+                                {/* Faces of the people in the room: a tap opens that person's profile (and from there a message). */}
+                                <div className="mt-2.5 flex gap-2 overflow-x-auto [scrollbar-width:none]">
+                                  {initialLanguageSelectorMembers.slice(0, 12).map((member) => (
+                                    <button
+                                      key={member.userId}
+                                      type="button"
+                                      data-qa="live-demo-menu-person"
+                                      aria-label={member.name || participantsCopy.menuItemLabel}
+                                      onClick={() => {
+                                        if (member.userId === viewerUserId) return
+                                        onOpenProfile?.(member.userId)
+                                      }}
+                                      className="flex w-12 shrink-0 flex-col items-center gap-1 focus-visible:outline-none"
+                                    >
+                                      <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-gray-400">
+                                        {member.image ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img src={member.image} alt="" className="h-full w-full object-cover" draggable={false} />
+                                        ) : (
+                                          <UserRound size={22} strokeWidth={2} aria-hidden="true" />
+                                        )}
+                                      </span>
+                                      <span className="w-full truncate text-center text-[0.7rem] text-gray-600">{member.name || ''}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    data-qa="live-demo-menu-invite"
+                                    onClick={handleInviteFromMenuRoot}
+                                    className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-gray-100 text-[0.88rem] font-semibold text-gray-800 transition-colors active:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                                  >
+                                    <UserPlus size={16} strokeWidth={2.2} aria-hidden="true" />
+                                    {participantsCopy.inviteButtonLabel}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    data-qa="live-demo-menu-share-link"
+                                    // With sharing off there is no link yet: its switch is on the room management page.
+                                    onClick={() => {
+                                      if (shareUrl) void handleCopyShareLink()
+                                      else handleConversationManagementMenuItemPress()
+                                    }}
+                                    className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-gray-100 text-[0.88rem] font-semibold text-gray-800 transition-colors active:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                                  >
+                                    <Link2 size={16} strokeWidth={2.2} aria-hidden="true" />
+                                    {roomManagementCopy.shareLinkCopyButtonLabel}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                            <div
+                              data-qa="live-demo-menu-usage"
+                              className="flex w-full items-center justify-between gap-3 px-1 py-1 text-[0.98rem] font-medium text-gray-900"
+                            >
+                              <span className="min-w-0 flex-1">{roomManagementCopy.usageMenuItemLabel}</span>
+                              <span className="flex shrink-0 items-center gap-2 text-sm font-normal tabular-nums text-gray-500">
+                                {isUsageLimited ? (
+                                  <>
+                                    <span className="h-2 w-20 overflow-hidden rounded-full bg-gray-200">
+                                      <span
+                                        className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                                        style={{ width: `${usagePercent}%` }}
+                                      />
+                                    </span>
+                                    <span className={isLimitReached ? 'font-semibold text-red-400' : ''}>
+                                      {formatLivePhoneDemoUsageDuration(remainingSec)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span>{formatLivePhoneDemoUsageDuration(usageSec)}</span>
+                                )}
+                                <span aria-hidden="true">·</span>
+                                <span>{storedMessageCountLabel}</span>
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              data-qa="live-demo-menu-voice-settings"
+                              onClick={handleVoiceSettingsMenuItemPress}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-1 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                            >
+                              <span className="min-w-0 flex-1">{voiceSettingsLabel}</span>
+                              <span className="shrink-0 text-gray-500">
+                                <ChevronRight size={18} strokeWidth={2.4} />
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="px-4 pb-4">
+                          <button
+                            type="button"
+                            onClick={handleConversationManagementMenuItemPress}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                          >
+                            <span className="min-w-0 flex-1">{roomManagementCopy.menuItemLabel}</span>
+                            <span className="shrink-0 text-gray-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+                        </div>
+
+                        {conversationId && isHashRushGameConfigured() ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              data-qa="live-demo-hash-rush-menu-item"
+                              // One item; its page holds the game, the computer link,
+                              // the rankings and how to play.
+                              onClick={handleHashRushPageOpen}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                            >
+                              <span className="min-w-0 flex-1">{hashRushInviteCopy(uiLocale).menuItem}</span>
+                              <span className="shrink-0 text-gray-500">
+                                <ChevronRight size={18} strokeWidth={2.4} />
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {conversationId ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              onClick={() => { void handleExportConversationMenuItemPress() }}
+                              disabled={isExportingConversation}
+                              aria-busy={isExportingConversation}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:opacity-60"
+                            >
+                              <span className="min-w-0 flex-1">{conversationExportCopy.menuLabel}</span>
+                              <span className="shrink-0 text-gray-500">
+                                {isExportingConversation
+                                  ? <Loader2 size={18} strokeWidth={2.4} className="animate-spin" />
+                                  : <Share size={18} strokeWidth={2.2} />}
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
+
+                        <div className="px-4 pb-4">
+                          <button
+                            type="button"
+                            onClick={handleFeedbackMenuItemPress}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                          >
+                            <span className="min-w-0 flex-1">{feedbackCopy.feedbackMenuItemLabel}</span>
+                            <span className="shrink-0 text-gray-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+                        </div>
+
+                        {isNativeAppRuntime && (
+                          <div className="px-4 py-4">
+                            <NativeAppUpdateCard
+                              {...nativeAppUpdateCardContent}
+                              onUpdate={handleNativeAppUpdatePress}
+                            />
+                          </div>
+                        )}
+
+                        {shouldShowDebugWebViewRemountMenuItem && (
+                          <div className="px-4 pt-0 pb-4">
+                            <button
+                              type="button"
+                              onClick={handleDebugWebViewRemountMenuItemPress}
+                              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-3.5 py-3 text-left transition duration-200 hover:border-amber-300 hover:shadow-[0_10px_24px_rgba(245,158,11,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[0.94rem] font-semibold text-gray-900">
+                                  {DEBUG_WEBVIEW_REMOUNT_MENU_LABEL}
+                                </div>
+                                <div className="mt-0.5 text-[0.78rem] text-amber-700">
+                                  Local and dev only
+                                </div>
+                              </div>
+                              <span className="shrink-0 text-amber-600">
+                                <ChevronRight size={18} strokeWidth={2.4} />
+                              </span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                    </motion.section>
+
+                    <SlideSurface
+                      open={menuOpen && menuScreen !== 'root'}
+                      transitionMode={menuScreenTransitionMode}
+                      onClose={requestMenuBackStep}
+                      onRequestClose={handleMenuSurfaceRequestClose}
+                      ariaLabel={menuLabel}
+                      nativeBackPriority={20}
+                      className="absolute inset-0 z-[60] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white will-change-transform"
+                      style={{ touchAction: 'pan-y' }}
+                      stopPropagation
+                    >
+                      <div className="relative h-full overflow-hidden">
+                    {/* Interpreting and voice settings: what used to fill the first screen of the menu. */}
+                    <motion.section
+                      initial={false}
+                      animate={menuContentScreen === 'voice-settings' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuContentScreen !== 'voice-settings'}
+                      data-qa="live-demo-voice-settings-page"
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuContentScreen === 'voice-settings' ? 'auto' : 'none',
+                        zIndex: menuContentScreen === 'voice-settings'
+                          ? 3
+                          : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
+                      }}
+                    >
+                      <LivePhoneDemoPanelHeader
+                        title={voiceSettingsLabel}
+                        backLabel={roomManagementCopy.backButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
+                      <div
+                        className={LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME}
+                        style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}
+                      >
+                        <div className="px-4 py-4">
+                          <div className="space-y-4">
                             {conversationId && (
                               <button
                                 type="button"
@@ -9164,32 +9424,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </button>
                               )}
                             />
-
-                            <div
-                              data-qa="live-demo-menu-usage"
-                              className="flex w-full items-center justify-between gap-3 px-1 py-1 text-[0.98rem] font-medium text-gray-900"
-                            >
-                              <span className="min-w-0 flex-1">{roomManagementCopy.usageMenuItemLabel}</span>
-                              <span className="flex shrink-0 items-center gap-2 text-sm font-normal tabular-nums text-gray-500">
-                                {isUsageLimited ? (
-                                  <>
-                                    <span className="h-2 w-20 overflow-hidden rounded-full bg-gray-200">
-                                      <span
-                                        className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                                        style={{ width: `${usagePercent}%` }}
-                                      />
-                                    </span>
-                                    <span className={isLimitReached ? 'font-semibold text-red-400' : ''}>
-                                      {formatLivePhoneDemoUsageDuration(remainingSec)}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span>{formatLivePhoneDemoUsageDuration(usageSec)}</span>
-                                )}
-                                <span aria-hidden="true">·</span>
-                                <span>{storedMessageCountLabel}</span>
-                              </span>
-                            </div>
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
@@ -9701,165 +9935,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </div>
                               </div>
                             )}
-
                           </div>
                         </div>
-
-                        <div className="px-4 pb-4">
-                          <button
-                            type="button"
-                            onClick={handleConversationManagementMenuItemPress}
-                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                          >
-                            <span className="min-w-0 flex-1">{roomManagementCopy.menuItemLabel}</span>
-                            <span className="shrink-0 text-gray-500">
-                              <ChevronRight size={18} strokeWidth={2.4} />
-                            </span>
-                          </button>
-                        </div>
-
-                        <div className="px-4 pb-4">
-                          <button
-                            type="button"
-                            onClick={handleParticipantsMenuItemPress}
-                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                          >
-                            <span className="min-w-0 flex-1">{participantsCopy.menuItemLabel}</span>
-                            <span className="shrink-0 text-gray-500">
-                              <ChevronRight size={18} strokeWidth={2.4} />
-                            </span>
-                          </button>
-                        </div>
-
-                        {conversationId ? (
-                          <div className="px-4 pb-4">
-                            <button
-                              type="button"
-                              onClick={() => { void handleExportConversationMenuItemPress() }}
-                              disabled={isExportingConversation}
-                              aria-busy={isExportingConversation}
-                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:opacity-60"
-                            >
-                              <span className="min-w-0 flex-1">{conversationExportCopy.menuLabel}</span>
-                              <span className="shrink-0 text-gray-500">
-                                {isExportingConversation
-                                  ? <Loader2 size={18} strokeWidth={2.4} className="animate-spin" />
-                                  : <Share size={18} strokeWidth={2.2} />}
-                              </span>
-                            </button>
-                          </div>
-                        ) : null}
-
-                        {conversationId && isHashRushGameConfigured() ? (
-                          <div className="px-4 pb-4">
-                            <button
-                              type="button"
-                              data-qa="live-demo-hash-rush-menu-item"
-                              // One item; its page holds the game, the computer link,
-                              // the rankings and how to play.
-                              onClick={handleHashRushPageOpen}
-                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                            >
-                              <span className="min-w-0 flex-1">{hashRushInviteCopy(uiLocale).menuItem}</span>
-                              <span className="shrink-0 text-gray-500">
-                                <ChevronRight size={18} strokeWidth={2.4} />
-                              </span>
-                            </button>
-                          </div>
-                        ) : null}
-
-                        <div className="px-4 pb-4">
-                          <button
-                            type="button"
-                            onClick={handleFeedbackMenuItemPress}
-                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                          >
-                            <span className="min-w-0 flex-1">{feedbackCopy.feedbackMenuItemLabel}</span>
-                            <span className="shrink-0 text-gray-500">
-                              <ChevronRight size={18} strokeWidth={2.4} />
-                            </span>
-                          </button>
-                        </div>
-
-                        {isNativeAppRuntime && (
-                          <div className="px-4 py-4">
-                            <NativeAppUpdateCard
-                              {...nativeAppUpdateCardContent}
-                              onUpdate={handleNativeAppUpdatePress}
-                            />
-                          </div>
-                        )}
-
-                        {shouldShowDebugWebViewRemountMenuItem && (
-                          <div className="px-4 pt-0 pb-4">
-                            <button
-                              type="button"
-                              onClick={handleDebugWebViewRemountMenuItemPress}
-                              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-3.5 py-3 text-left transition duration-200 hover:border-amber-300 hover:shadow-[0_10px_24px_rgba(245,158,11,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="text-[0.94rem] font-semibold text-gray-900">
-                                  {DEBUG_WEBVIEW_REMOUNT_MENU_LABEL}
-                                </div>
-                                <div className="mt-0.5 text-[0.78rem] text-amber-700">
-                                  Local and dev only
-                                </div>
-                              </div>
-                              <span className="shrink-0 text-amber-600">
-                                <ChevronRight size={18} strokeWidth={2.4} />
-                              </span>
-                            </button>
-                          </div>
-                        )}
                       </div>
-
-                      {showAccountMenuItems && (
-                        <div
-                          className="shrink-0 border-t border-gray-200 px-4 pt-4"
-                          style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 12px), 16px)' }}
-                        >
-                          <div className="space-y-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                closeMenuPanel()
-                                onLogout()
-                              }}
-                              disabled={isAuthActionPending || !showAccountActions}
-                              className="inline-flex w-full items-center gap-2 rounded-2xl border border-gray-200 px-3 py-3 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              <LogOut size={16} strokeWidth={2} />
-                              <span>{logoutLabel}</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                closeMenuPanel()
-                                setDeleteAccountDialogOpen(true)
-                              }}
-                              disabled={isAuthActionPending || !showAccountActions}
-                              className="inline-flex w-full items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-3 text-left text-sm font-medium text-rose-600 transition-colors hover:bg-rose-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              <Trash2 size={16} strokeWidth={2} />
-                              <span>{deleteAccountLabel}</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </motion.section>
 
-                    <SlideSurface
-                      open={menuOpen && menuScreen !== 'root'}
-                      transitionMode={menuScreenTransitionMode}
-                      onClose={requestMenuBackStep}
-                      onRequestClose={handleMenuSurfaceRequestClose}
-                      ariaLabel={menuLabel}
-                      nativeBackPriority={20}
-                      className="absolute inset-0 z-[60] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white will-change-transform"
-                      style={{ touchAction: 'pan-y' }}
-                      stopPropagation
-                    >
-                      <div className="relative h-full overflow-hidden">
                     <motion.section
                       initial={false}
                       animate={menuContentScreen === 'feedback' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
@@ -10529,8 +10609,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onClose={requestMenuBackStep}
                       onRequestClose={handleMenuSurfaceRequestClose}
                       ariaLabel={defaultDisplayLanguageCopy.pageTitle}
-                      nativeBackPriority={30}
-                      className="absolute inset-0 z-[70] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                      nativeBackPriority={40}
+                      className="absolute inset-0 z-[80] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
                       style={{ touchAction: 'pan-y' }}
                       stopPropagation
                     >

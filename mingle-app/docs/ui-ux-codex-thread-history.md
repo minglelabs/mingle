@@ -2,6 +2,20 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Explore is Open rooms and Posts; the room menu starts with people and keeps settings on their own page
+
+- Surface: `components/search/open-rooms.tsx`, `components/search/unified-search.tsx`, `components/search/room-code-result.tsx`, `lib/open-room.ts`, `server/open-room-password.ts`, `GET/POST /conversations/open-rooms`, `POST /conversations/{id}/public-join`; `components/conversation-list.tsx`; `components/LivePhoneDemo/LivePhoneDemo.tsx` (menu).
+- Issue (Explore): Explore showed a strip of rooms with a live call or game above the post grid. A public room with nothing live was not listed anywhere, and a room could only be made from the chat list.
+- Resolution (Explore): With nothing typed, Explore has two tabs, Open rooms (first) and Posts. Open rooms lists every public room, one per row: language flags, topic tag, title, what is going on (voice talk with the head count, Hash Rush, or chatting), the host, a few faces and the member count, and a lock for a room with a password. "Rooms you are in" come first. "Make a room" takes a title, an optional topic and an optional password (4 to 32 characters), and opens the new room. The tab is remembered for the session, so coming back from a post lands on Posts.
+- Resolution (password): A room with a password asks for it before a new person joins, from the list and from the room-number card. Five wrong tries lock that person out of that room for ten minutes. The share link still lets its holder in without the password.
+- Resolution (search): A typed query also finds open rooms by title or topic, shown above people and posts; a room that matched counts as a result.
+- Resolution (chat list): Open rooms no longer show in the chat list or its unread total. They are under Explore, in "Rooms you are in".
+- Removed: the "Live now" strip, and with it the locked cards for private rooms with a live call (nobody could enter them from there).
+- Issue (menu): The room menu opened on a long page of settings, with people, invite and the share link several taps away, and sign out and account deletion at the bottom.
+- Resolution (menu): The menu starts with the people in the room (a face opens the profile), Invite and Copy link. Then usage, one row "Interpreting & voice settings", room management, Hash Rush, export and feedback. The settings page holds the display language, earphone and microphone, text size, sentence length, the translation and read-aloud models, the bubble style and the ad banner position; the display language and "More" sentence length pages open one level under it, and back returns to it. Sign out and account deletion are on the My tab only.
+- Checked in a phone-width browser on the local server (2026-11-19): making a room with a topic and a password, the card under "Rooms you are in", the room missing from the chat list, the room found by its topic, the menu's first screen, the settings page and back from the display language page.
+- Not checked: joining a password room as a second account (wrong password, lockout), on a phone, and the ad banner position still being in the room menu (the plan moves it to the My tab).
+
 ## 2026-11-18 — Grid tiles load a small copy of the photo, an important notice is pushed, phone sign-in uses the device's account
 
 - Surface: `components/posts/post-grid-tile.tsx`, `lib/post-image-thumbnail.ts`, `server/posts/post-image-thumbnail.ts`, `GET /posts/{id}/image`; `server/notice-push.ts`, `components/home/home-notices.tsx`, `/admin/notices`; `lib/auth-options.ts`, `server/identity/phone-claim.ts`, `components/mingle-home.tsx`.
