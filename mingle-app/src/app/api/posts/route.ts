@@ -6,6 +6,7 @@ import { accountRestrictionGuard } from '@/server/reports/account-restriction'
 import { parseImageKeyInput, parseImageListInput } from '@/server/posts/post-image-keys'
 import { parseImageDimensions } from '@/server/posts/post-image-dimensions'
 import { POST_BODY_MAX_LENGTH, publishPost } from '@/server/posts/publish-post'
+import { queueOperatorAppPostForReview } from '@/server/operator-post-reserve/queue-app-post'
 
 export const runtime = 'nodejs'
 
@@ -22,6 +23,10 @@ function json(payload: object, init?: ResponseInit): NextResponse {
  * (idempotency, background, detection, translations, atomic insert) lives in
  * `publishPost`, shared with the launch seed script.
  */
+function widthHeight(dimensions: { imageWidth: number; imageHeight: number } | null): { width: number | null; height: number | null } {
+  return dimensions ? { width: dimensions.imageWidth, height: dimensions.imageHeight } : { width: null, height: null }
+}
+
 export async function POST(request: NextRequest) {
   const session = await getServerSession(getAuthOptions())
   const userId = typeof session?.user?.id === 'string' ? session.user.id.trim() : ''
@@ -60,6 +65,21 @@ export async function POST(request: NextRequest) {
 
   // Client-supplied language is only a fallback hint; the server detects.
   const clientHint = typeof sourceLanguage === 'string' && sourceLanguage.trim() ? sourceLanguage.trim() : null
+
+  // An operator account never posts straight from the app: what staff write
+  // there goes to the admin review queue like every other operator post, and
+  // only the review release publishes it. `postId: null` keeps older clients
+  // on their success path (they only use it for a "view post" link).
+  const queued = await queueOperatorAppPostForReview({
+    authorId: userId,
+    text: hasText ? text : null,
+    images: imageList.kind === 'set'
+      ? imageList.images.map((image) => ({ objectKey: image.key, width: image.width, height: image.height }))
+      : imageObjectKey
+        ? [{ objectKey: imageObjectKey, ...widthHeight(parseImageDimensions(input)) }]
+        : [],
+  })
+  if (queued) return json({ postId: null, queuedForReview: true, reserveId: queued.reserveId }, { status: 202 })
 
   const result = await publishPost({
     authorId: userId,
