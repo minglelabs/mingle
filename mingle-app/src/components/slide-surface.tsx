@@ -72,6 +72,11 @@ function postNativeNavigationState(suppressEdgeSwipe: boolean): void {
   }
 }
 
+/** A slide surface has asked the native shell to turn its own edge-swipe back off. */
+export function isNativeEdgeSwipeSuppressed(): boolean {
+  return nativeSuppressedSurfaceTokens.size > 0;
+}
+
 export function registerNativeEdgeSwipeSuppression(): () => void {
   const token = `slide-surface-${nativeSuppressionTokenSequence}`;
   nativeSuppressionTokenSequence += 1;

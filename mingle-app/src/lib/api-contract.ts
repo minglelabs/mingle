@@ -68,6 +68,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v2.4.0', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.4.2', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v2.4.3', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v2.5.0', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.2', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.3', enablesFinalizeSourceRedetection: false },
@@ -102,6 +103,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'ios/v2.4.1', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.4.2', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v2.4.3', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v2.5.0', enablesFinalizeSourceRedetection: true },
 ] as const
 const ALLOWED_API_NAMESPACES = new Set<string>([
   DEFAULT_API_NAMESPACE,
@@ -246,6 +248,26 @@ export function namespaceSupportsSpeakerMode(namespace: string): boolean {
   for (let index = 0; index < SPEAKER_MODE_MIN_VERSION.length; index += 1) {
     if (version[index] !== SPEAKER_MODE_MIN_VERSION[index]) {
       return version[index] > SPEAKER_MODE_MIN_VERSION[index]
+    }
+  }
+  return true
+}
+
+/** First app release with group voice talk (the native LiveKit host). */
+const VOICE_TALK_MIN_VERSION = [2, 5, 0] as const
+
+/**
+ * Whether the app on this namespace can run a voice talk. An older app has the
+ * WebView bridge but no voice host: it would ignore the call and leave the
+ * panel connecting forever. Plain web (the '' namespace) never runs one.
+ */
+export function namespaceSupportsVoiceTalk(namespace: string): boolean {
+  const match = normalizeApiNamespace(namespace).match(/^(?:android|ios)\/v(\d+)\.(\d+)\.(\d+)$/)
+  if (!match) return false
+  const version = [Number(match[1]), Number(match[2]), Number(match[3])]
+  for (let index = 0; index < VOICE_TALK_MIN_VERSION.length; index += 1) {
+    if (version[index] !== VOICE_TALK_MIN_VERSION[index]) {
+      return version[index] > VOICE_TALK_MIN_VERSION[index]
     }
   }
   return true

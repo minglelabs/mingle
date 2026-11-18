@@ -30,6 +30,8 @@ import { pickSourceLanguageBubbleFlags } from '@/lib/source-language-bubble-flag
 import { normalizeChineseContent } from '@/server/chinese-script-conversion'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 import { notifyConversationMessage, reserveConversationVoiceOrder } from '@/server/conversation-realtime'
+import { readVoiceCaptionTag } from '@/lib/voice-caption'
+import { resolveVoiceCaptionTagForSpeech } from '@/server/voice/voice-caption-lookup'
 import { verifyVoiceOrderReceipt } from '@/lib/voice-order-receipt'
 import { sendPushNotificationForConversationMessage } from '@/server/push-notifications'
 import { claimConversationMessagePush, MESSAGE_PUSH_TRANSLATION_WAIT_MS, readMessageFinalTranslations } from '@/server/conversation-message-push'
@@ -307,6 +309,12 @@ export async function handleLogClientEventV1(request: NextRequest) {
       }
       if (orderStartedAtMs !== null) messageMetadata.orderStartedAtMs = orderStartedAtMs
       addDurationAnomalyMetadata(messageMetadata, durationValidation.anomaly)
+      // Speech in a voice talk (never typed text) is a caption: only the
+      // people in the call with interpretation on, and the speaker, read it.
+      // Decided when the message is first written; later updates keep it.
+      const voiceCaptionForNewMessage = clientMetadata?.reason !== 'manual_text_input'
+        ? await resolveVoiceCaptionTagForSpeech({ sessionKey: tracking.sessionKey, speakerUserId: userId }).catch(() => null)
+        : null
 
       if (
         process.env.NODE_ENV !== 'production'
@@ -354,6 +362,10 @@ export async function handleLogClientEventV1(request: NextRequest) {
             messageMetadata.orderStartedAtMs = typeof savedOrder === 'number' && Number.isFinite(savedOrder) && savedOrder > 0
               ? savedOrder : existing.createdAt.getTime()
             if (!carriesTranslationResult) Object.assign(messageMetadata, pickSourceLanguageBubbleFlags(metadata))
+            const savedCaption = readVoiceCaptionTag(metadata)
+            if (savedCaption) messageMetadata.voiceCaption = savedCaption
+          } else if (voiceCaptionForNewMessage) {
+            messageMetadata.voiceCaption = voiceCaptionForNewMessage
           }
           return tx.appMessage.upsert({
             where: {
@@ -407,6 +419,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         orderStartedAtMs = typeof persistedOrder === 'number' && Number.isFinite(persistedOrder) && persistedOrder > 0
           ? persistedOrder : message.createdAt.getTime()
         const persistedMetadata = sanitizeJsonObject(message.metadata)
+        const voiceCaption = readVoiceCaptionTag(persistedMetadata)
         const persistedTargetLanguages = sanitizeTargetLanguages(
           persistedMetadata?.translationTargetLanguages ?? messageMetadata.translationTargetLanguages,
         )
@@ -510,7 +523,13 @@ export async function handleLogClientEventV1(request: NextRequest) {
               OR: [{ leftAt: null }, { leftAt: { gt: message.createdAt } }] },
           }).then(count => count >= 2).catch(() => false)
           const replyTo = normalizeMessageReplyReference(persistedMetadata?.replyTo)
-          if (sharedAtMessage) {
+          if (voiceCaption) {
+            // A call caption: no text goes out on the room's channel (people
+            // outside the call watch it too) and the room lists do not move.
+            // Open rooms reload, and the server gives each viewer what they
+            // may read.
+            await notifyConversationMessage(tracking.sessionKey, [])
+          } else if (sharedAtMessage) {
             // An operator / official sender stays labeled on the live bubble
             // too (`speakerBadge`, only present when the sender has a badge).
             const speakerBadge = resolveAccountBadge(message.user)
@@ -532,7 +551,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         } catch (error) {
           console.error('Conversation realtime notification failed:', error)
         }
-        if (messageId) {
+        if (messageId && !voiceCaption) {
           const pushArgs = {
             messageId,
             sessionKey: tracking.sessionKey,
@@ -568,7 +587,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         }
         // The AI title can take minutes (the ChatGPT pool waits up to 120s and retries),
         // so it runs after the response and never holds the sender's write.
-        if (body.translationPending !== true) {
+        if (body.translationPending !== true && !voiceCaption) {
           after(async () => {
             try {
               await maybeGenerateConversationTitleForSession({ sessionKey: tracking.sessionKey })
@@ -577,7 +596,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
             }
           })
         }
-        if (messageId && body.translationUpdate !== true) {
+        if (messageId && body.translationUpdate !== true && !voiceCaption) {
           const committedMessageId = messageId
           // Staff alerts run after the response so their realtime publication
           // cannot delay the sender.

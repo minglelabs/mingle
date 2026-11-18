@@ -365,7 +365,7 @@ export function replaceConversationLists(
     if (!previousConversation) {
       return conversation;
     }
-    return {
+    const replaced: ConversationChannelSummary = {
       ...previousConversation,
       ...conversation,
       latestMessagePreview:
@@ -379,6 +379,10 @@ export function replaceConversationLists(
       latestSpeakerAvatarIndex:
         conversation.latestSpeakerAvatarIndex ?? previousConversation.latestSpeakerAvatarIndex,
     };
+    // Live state, not kept from the previous snapshot: the server leaves the
+    // field out once the call is over, which must clear the row's badge.
+    if (conversation.voiceCallParticipantCount === undefined) delete replaced.voiceCallParticipantCount;
+    return replaced;
   }).sort(compareConversationRecency);
   return areConversationListsEqual(current, next) ? current : next;
 }

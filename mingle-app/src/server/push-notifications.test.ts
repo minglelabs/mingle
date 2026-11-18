@@ -367,3 +367,24 @@ describe('pickMessagePushText', () => {
     expect(pickMessagePushText({ sourceText: '안녕', recipientLanguage: 'en' })).toBe('안녕')
   })
 })
+
+describe("voice_call_started push copy", () => {
+  it("names the starter in the recipient's language", async () => {
+    const { resolvePushCopy: resolve } = await import("./push-notifications");
+    const base = { notificationId: "call-1", type: "voice_call_started", actorId: "u1", actorLabel: "Mina" };
+    expect(resolve({ ...base, recipientLanguage: "ko" })).toEqual({ title: "보이스톡", body: "Mina님이 보이스톡을 시작했어요" });
+    expect(resolve({ ...base, recipientLanguage: "en" })).toEqual({ title: "Voice talk", body: "Mina started a voice talk" });
+    expect(resolve({ ...base, recipientLanguage: "xx" }).title).toBe("Voice talk");
+  });
+});
+
+describe("join request push copy", () => {
+  it("names the person and the room", async () => {
+    const { resolvePushCopy: resolve } = await import("./push-notifications");
+    const base = { notificationId: "r1:request", actorId: "u1", actorLabel: "Mina", messagePreview: "Tokyo trip" };
+    expect(resolve({ ...base, type: "conversation_join_request", recipientLanguage: "ko" }))
+      .toEqual({ title: "참여 요청", body: "Mina님이 'Tokyo trip' 방에 참여를 요청했어요" });
+    expect(resolve({ ...base, type: "conversation_join_accepted", recipientLanguage: "en" }))
+      .toEqual({ title: "Request accepted", body: "You can now enter 'Tokyo trip'" });
+  });
+});

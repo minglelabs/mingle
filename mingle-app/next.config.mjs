@@ -59,6 +59,12 @@ const nextConfig = {
       // 2.4.2 (share sheet: conversations as direct share targets) adds none
       // either. Nor does 2.4.3 (read-aloud plays while it arrives, Android
       // STT records as voice recognition).
+      // 2.5.0 (voice talk with live interpreting, Hash Rush in rooms) keeps
+      // its new routes inside the v2.2.0 tree too.
+      ...['ios', 'android'].flatMap(platform => [
+        { source: `/api/${platform}/v2.5.0`, destination: `/api/${platform}/v2.2.0` },
+        { source: `/api/${platform}/v2.5.0/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },
+      ]),
       ...['ios', 'android'].flatMap(platform => [
         { source: `/api/${platform}/v2.4.3`, destination: `/api/${platform}/v2.2.0` },
         { source: `/api/${platform}/v2.4.3/:path*`, destination: `/api/${platform}/v2.2.0/:path*` },

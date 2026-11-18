@@ -5,6 +5,7 @@ import ReactAppDependencyProvider
 import UserNotifications
 import CoreSpotlight
 import UniformTypeIdentifiers
+import livekit_react_native
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -17,6 +18,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+    // LiveKit (group voice talk) must set up its WebRTC audio before any other
+    // React Native initialization.
+    LivekitReactNative.setup()
     UNUserNotificationCenter.current().delegate = self
     MingleLastScreenSnapshotStore.shared.install()
     // Keeps the audio session alive while the app is in the background, so
@@ -63,21 +67,28 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       RCTLinkingManager.application(application, open: launchURL, options: [:])
     }
 
-    indexLegacyNameForSpotlight()
+    indexSearchKeywordsForSpotlight()
 
     return true
   }
 
-  // The app was renamed Mingle -> HashChat. Spotlight only matches the
-  // display name, so index one item carrying the old name as hidden keywords:
-  // searching "mingle" / "밍글" still surfaces HashChat, while nothing in the
-  // UI shows the old name. Tapping it just opens the app.
-  private func indexLegacyNameForSpotlight() {
+  // The phone's own search (Spotlight) matches an app by its display name
+  // only. One hidden item carries every other word people type to find the
+  // app, so each of them surfaces HashChat; tapping it just opens the app.
+  // - Korean spellings of the name and of its two halves: the display name is
+  //   "HashChat" in every language, but on a Korean keyboard people type
+  //   해시챗 / 해쉬 / 해씨 / 해쒸, the halves alone (해시, 챗) and 쳇 / 채팅.
+  // - The old name (the app was renamed Mingle -> HashChat), which nothing in
+  //   the UI shows any more.
+  private func indexSearchKeywordsForSpotlight() {
     let attributes = CSSearchableItemAttributeSet(contentType: UTType.application)
     attributes.title = "HashChat"
     attributes.displayName = "HashChat"
     attributes.keywords = [
-      "HashChat", "해시챗", "mingle", "밍글", "ミングル", "明格尔", "明格爾", "Мингл", "مينغل", "मिंगल", "มิงเกิล",
+      "HashChat", "Hash Chat", "hash", "chat",
+      "해시챗", "해쉬챗", "해씨챗", "해쒸챗", "해시쳇", "해쉬쳇", "해시 챗", "해쉬 챗",
+      "해시", "해쉬", "해씨", "해쒸", "챗", "쳇", "채팅", "해시채팅", "해쉬채팅",
+      "mingle", "밍글", "ミングル", "明格尔", "明格爾", "Мингл", "مينغل", "मिंगल", "มิงเกิล",
     ]
     let item = CSSearchableItem(
       uniqueIdentifier: "hashchat.app.legacy-name",

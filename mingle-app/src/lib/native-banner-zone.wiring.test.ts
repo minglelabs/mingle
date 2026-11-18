@@ -53,6 +53,7 @@ describe("native banner policy wiring", () => {
       "components/native-conversation-share-overlay.tsx",
       "components/native-profile-link-overlay.tsx",
       "components/notification-screen.tsx",
+      "features/hash-rush/HashRushRoomLayer.tsx",
     ]) {
       expect(readSource(relativePath), relativePath).toContain("useNativeBannerSuppression(");
     }

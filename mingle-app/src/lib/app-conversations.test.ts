@@ -1288,6 +1288,8 @@ describe("app-conversations", () => {
           { isDeleted: false },
           { isDeleted: null },
         ],
+        // Call captions are not counted.
+        AND: [{ metadata: { path: ["voiceCaption"], equals: Prisma.AnyNull } }],
       },
       _count: {
         _all: true,
@@ -1581,13 +1583,25 @@ describe("app-conversations", () => {
       },
       orderBy: { createdAt: "desc" },
     }));
+    // This viewer's captions and everyone's ordinary messages.
+    const captionVisible = {
+      OR: [
+        { metadata: { path: ["voiceCaption"], equals: Prisma.AnyNull } },
+        { metadata: { path: ["voiceCaption", "viewers"], array_contains: ["user-1"] } },
+      ],
+    };
     expect(mockAppMessageFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
-        sessionKey: "session-a",
-        OR: [
-          { isDeleted: false },
-          { isDeleted: null },
-          { isDeleted: true, metadata: { path: ['recalledAtMs'], gt: 0 } },
+        AND: [
+          {
+            sessionKey: "session-a",
+            OR: [
+              { isDeleted: false },
+              { isDeleted: null },
+              { isDeleted: true, metadata: { path: ['recalledAtMs'], gt: 0 } },
+            ],
+          },
+          captionVisible,
         ],
       },
       orderBy: [
@@ -1614,6 +1628,7 @@ describe("app-conversations", () => {
           { isDeleted: false },
           { isDeleted: null },
         ],
+        AND: [captionVisible],
       },
     });
     expect(state?.usageSec).toBe(42);
@@ -2108,20 +2123,25 @@ describe("app-conversations", () => {
     });
 
     expect(mockAppMessageFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
-        sessionKey: "session-a",
+      where: {
         AND: [
-          {
-            OR: [
-              { createdAt: { lt: new Date(beforeCreatedAtMs) } },
+          expect.objectContaining({
+            sessionKey: "session-a",
+            AND: [
               {
-                createdAt: new Date(beforeCreatedAtMs),
-                id: { lt: "msg-cursor" },
+                OR: [
+                  { createdAt: { lt: new Date(beforeCreatedAtMs) } },
+                  {
+                    createdAt: new Date(beforeCreatedAtMs),
+                    id: { lt: "msg-cursor" },
+                  },
+                ],
               },
             ],
-          },
+          }),
+          expect.anything(),
         ],
-      }),
+      },
       take: CONVERSATION_HYDRATION_MESSAGE_LIMIT + 1,
     }));
     expect(state?.messageCount).toBe(101);

@@ -630,3 +630,12 @@ describe("createMutationVersionTracker", () => {
     });
   });
 });
+
+describe("replaceConversationLists and a finished voice talk", () => {
+  it("drops the call badge when the new snapshot has no call (pull to refresh)", () => {
+    const current = [buildConversationSummary({ id: "conv-a", sessionKey: "session-1", sequenceNumber: 1, voiceCallParticipantCount: 2 })];
+    const incoming = [buildConversationSummary({ id: "conv-a", sessionKey: "session-1", sequenceNumber: 1 })];
+    expect(replaceConversationLists(current, incoming)[0]?.voiceCallParticipantCount).toBeUndefined();
+    expect(mergeConversationLists(current, incoming)[0]?.voiceCallParticipantCount).toBeUndefined();
+  });
+});

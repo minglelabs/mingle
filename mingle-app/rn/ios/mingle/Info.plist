@@ -50,6 +50,8 @@
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>HashChat uses your microphone to interpret your voice talks with friends in real time.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>HashChat uses your local network to connect voice talk calls.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>HashChat uses your camera to scan profile QR codes.</string>
 	<key>NSContactsUsageDescription</key>

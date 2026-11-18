@@ -12,6 +12,12 @@ const m = vi.hoisted(() => ({
 
 vi.mock('next-auth', () => ({ getServerSession: m.session }))
 vi.mock('@/lib/auth-options', () => ({ getAuthOptions: () => ({}) }))
+// The flat rates of migration 20261029140000 (base prices before the 1.5x margin).
+const RATE_ROWS = [
+  { id: 'voice', kind: 'stt', model: '*', unit: 'second', usdMicroPerMillionUnits: 88_888_889n, marginBps: 15000, effectiveFrom: new Date('2026-10-29T00:00:00Z'), effectiveTo: null },
+  { id: 'tts', kind: 'tts', model: '*', unit: 'second', usdMicroPerMillionUnits: 151_515_152n, marginBps: 15000, effectiveFrom: new Date('2026-10-29T00:00:00Z'), effectiveTo: null },
+  { id: 'typed', kind: 'translation', model: '*', unit: 'message', usdMicroPerMillionUnits: 200_000_000n, marginBps: 15000, effectiveFrom: new Date('2026-10-29T00:00:00Z'), effectiveTo: null },
+]
 vi.mock('@/lib/prisma', () => ({ prisma: { user: { findUnique: m.findUser } } }))
 vi.mock('@/server/coins/purchases', () => ({ listCoinProducts: vi.fn(), refundPurchase: vi.fn(), verifyAndGrantPurchase: vi.fn() }))
 vi.mock('@/server/coins/queries', () => ({ getCoinHistory: vi.fn(), getCoinUsageSummary: vi.fn(), normalizeCoinUsageRange: vi.fn() }))
@@ -28,7 +34,8 @@ vi.mock('@/server/coins/wallet', async () => ({
 
 import { mintSttBillingToken } from '@/server/coins/stt-token'
 import { verifyAndGrantPurchase } from '@/server/coins/purchases'
-import { chargeCoinsInternally, createCoinPurchase, readCoinWallet } from './coins-controller'
+import { chargeCoinsInternally, createCoinPurchase, readCoinProducts, readCoinWallet } from './coins-controller'
+import { listCoinProducts } from '@/server/coins/purchases'
 
 function chargeRequest(body: Record<string, unknown>, authorization = 'Bearer secret') {
   return new NextRequest('http://app.test/api/internal/coins/charge', {
@@ -159,6 +166,21 @@ describe('coins controller', () => {
       // Whole-clip apps always hear Gemini Flash-Lite (here the flat * rate).
       expect((await rates(null, false)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 5, 2)
       expect((await rates('gemini-3.8-flash-tts', false)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 7.425, 2)
+    })
+  })
+
+  describe('GET /coins/products', () => {
+    it('sends the store a price list of every paid feature at today\'s rates', async () => {
+      m.session.mockResolvedValue({ user: { id: 'user-1' } })
+      vi.mocked(listCoinProducts).mockResolvedValue([])
+      m.loadRates.mockResolvedValue(RATE_ROWS)
+      const body = await (await readCoinProducts(new NextRequest('http://app.test/api/ios/v2.3.4/coins/products?platform=ios'))).json()
+      expect(body.priceList.voicePerMinute).toBeCloseTo(8, 2)
+      expect(body.priceList.readAloudPerAudioMinute).toBeCloseTo(13.64, 1)
+      // About 22 s of audio in a conversation minute.
+      expect(body.priceList.readAloudPerConversationMinute).toBeCloseTo(5, 0)
+      expect(body.priceList.typedMessage).toBeCloseTo(0.3, 3)
+      expect(body.sttCoinsPerMinute).toBeCloseTo(8, 2)
     })
   })
 })
