@@ -8008,10 +8008,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           label: earphoneModeCopy.label,
           stateLabel: earphoneModeEnabled ? earphoneModeCopy.onStateLabel : earphoneModeCopy.offStateLabel,
           waitingLabel: earphoneModeCopy.waitingLabel,
+          disabled: voiceTalkState.joined,
           onToggle: handleEarphoneModeToggle,
         }
       : undefined
   ), [
+    voiceTalkState.joined,
     earphoneModeCopy,
     earphoneModeEnabled,
     earphoneModeGate.controlVisible,
@@ -11155,7 +11157,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         disabled={voiceTalkState.joined}
                         aria-label={earphoneModeControlLabel}
                         aria-pressed={isEarphoneModeOn}
-                        className={`relative inline-flex shrink-0 items-center justify-center transition-all duration-200 active:scale-95 ${
+                        // Dimmed like the mic button while the call decides what is read aloud.
+                        className={`relative inline-flex shrink-0 items-center justify-center transition-all duration-200 active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
                           isEarphoneModeOn ? 'text-amber-500' : 'text-gray-500 hover:text-gray-700'
                         }`}
                         style={{

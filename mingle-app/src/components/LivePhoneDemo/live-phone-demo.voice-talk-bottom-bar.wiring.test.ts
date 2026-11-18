@@ -65,6 +65,9 @@ describe('voice talk and STT are separate switches', () => {
     // Both the voice-mode and the keyboard-mode mic buttons.
     expect(liveDemoSource.split('disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}').length - 1).toBe(2)
     expect(liveDemoSource).toContain('disabled={voiceTalkState.joined}')
+    // The speaker / earphone button looks disabled too, in voice mode and in the keyboard's + menu.
+    expect(liveDemoSource).toContain('active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${')
+    expect(liveDemoSource).toContain('disabled: voiceTalkState.joined,\n          onToggle: handleEarphoneModeToggle,')
     expect(liveDemoSource).toContain('if (voiceTalkState.joined && isSttSessionRunning) void handleStopRecording()')
     expect(liveDemoSource).not.toContain('shouldTranscribeForVoiceTalk')
     expect(liveDemoSource).toContain('suppressLivePreview: voiceTalkState.joined,')

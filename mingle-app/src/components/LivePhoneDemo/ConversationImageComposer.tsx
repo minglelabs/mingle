@@ -47,6 +47,9 @@ export type ConversationImageComposerEarphoneMode = {
   label: string
   stateLabel: string
   waitingLabel: string
+  // In a voice talk the call decides what is read aloud: the row is shown
+  // dimmed and does nothing.
+  disabled?: boolean
   onToggle: () => void
 }
 
@@ -462,10 +465,11 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
                 data-qa="live-demo-earphone-mode-menu-item"
                 aria-label={earphoneMode.waiting ? `${earphoneMode.label}, ${earphoneMode.waitingLabel}` : earphoneMode.label}
                 aria-pressed={earphoneMode.enabled}
+                disabled={earphoneMode.disabled}
                 // Keep the textarea focused; the notice dialog restores focus to it.
                 onPointerDown={event => { event.preventDefault() }}
-                onClick={event => { event.preventDefault(); event.stopPropagation(); close(); earphoneMode.onToggle() }}
-                className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${allowPhoto ? '' : 'rounded-t-2xl'}`}
+                onClick={event => { event.preventDefault(); event.stopPropagation(); if (earphoneMode.disabled) return; close(); earphoneMode.onToggle() }}
+                className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 disabled:pointer-events-none disabled:opacity-40 ${allowPhoto ? '' : 'rounded-t-2xl'}`}
               >
                 <span>{earphoneMode.label}</span>
                 <span className="flex shrink-0 items-center gap-1.5">
