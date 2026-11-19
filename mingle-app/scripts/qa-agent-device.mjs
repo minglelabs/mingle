@@ -52,12 +52,15 @@ import { buildCollectExpression, buildFingerprintExpression, buildTapExpression,
 const APP_LOCALE_STORAGE_KEY = 'mingle.appLocale';
 
 import { goldenFixture, goldenFixtures, wavDurationMs } from './qa-agent-peer.lib.mjs';
+import { EXPECTED_RN_API_NAMESPACE_BY_OS } from './rn-api-namespaces.mjs';
 
 const APP_ROOT = path.resolve(import.meta.dirname, '..');
 const REPO_ROOT = path.resolve(APP_ROOT, '..');
 const LOCAL_DIR = path.join(APP_ROOT, 'qa/agent/local');
-const STATE_PATH = path.join(LOCAL_DIR, 'device-session.json');
-const APPIUM_LOG_PATH = path.join(LOCAL_DIR, 'appium.log');
+// MINGLE_QA_SESSION=<name> keeps a second session (another phone, its own --port) apart from the default one.
+const SESSION_SUFFIX = (process.env.MINGLE_QA_SESSION || '').replace(/[^a-z0-9-]/gi, '');
+const STATE_PATH = path.join(LOCAL_DIR, SESSION_SUFFIX ? `device-session.${SESSION_SUFFIX}.json` : 'device-session.json');
+const APPIUM_LOG_PATH = path.join(LOCAL_DIR, SESSION_SUFFIX ? `appium.${SESSION_SUFFIX}.log` : 'appium.log');
 const BUNDLE_ID = 'com.minglelabs.mingle.rn';
 const DEFAULT_APPIUM_PORT = Number(process.env.MINGLE_QA_APPIUM_PORT || 4724);
 const DEFAULT_TEAM_ID = process.env.MINGLE_UI_QA_IOS_XCODE_ORG_ID || '3RFBMN8TKZ';
@@ -673,8 +676,8 @@ async function inWebView(state, run) {
   await appium(state, 'POST', '/session/:session/context', { name: webview });
   // Android: every WebView in the app process (the AdMob banner's included) is a window of one
   // chromedriver context, so pick the app page, not the ad page.
-  if (state.platform === 'android') await selectAndroidAppWindow(state);
   try {
+    if (state.platform === 'android') await selectAndroidAppWindow(state);
     return await run();
   } finally {
     await appium(state, 'POST', '/session/:session/context', { name: 'NATIVE_APP' }).catch(() => {});
@@ -1195,7 +1198,12 @@ function cmdBuild(args) {
 
 // Google's published AdMob test banner unit for Android.
 const ADMOB_TEST_BANNER_UNIT_ANDROID = 'ca-app-pub-3940256099942544/6300978111';
-const ANDROID_RN_API_NAMESPACE = 'android/v2.3.0';
+// The namespace the Android app of this checkout requires, from scripts/devbox.sh (bumped with each release), so the
+// QA APK never asks for an API namespace the web build rejects.
+function androidRnApiNamespace() {
+  const devbox = fs.readFileSync(path.join(REPO_ROOT, 'scripts/devbox.sh'), 'utf8');
+  return /^ANDROID_RN_REQUIRED_API_NAMESPACE="([^"]+)"/m.exec(devbox)?.[1] ?? fail('ANDROID_RN_REQUIRED_API_NAMESPACE missing from scripts/devbox.sh');
+}
 const QA_APK_PATH = path.join(APP_ROOT, 'rn/android/app/build/outputs/apk/release/app-release.apk');
 
 // gradle reads the upload keystore from <worktree>/.credentials/android. A worktree has none, so
@@ -1230,7 +1238,7 @@ function cmdBuildAndroid() {
       ...process.env,
       NEXT_PUBLIC_SITE_URL: siteUrl,
       NEXT_PUBLIC_WS_URL: wsUrl,
-      NEXT_PUBLIC_API_NAMESPACE: ANDROID_RN_API_NAMESPACE,
+      NEXT_PUBLIC_API_NAMESPACE: androidRnApiNamespace(),
       RN_QA_BRIDGE_ENABLED: '1',
       RN_ADMOB_BANNER_UNIT_ID_ANDROID: ADMOB_TEST_BANNER_UNIT_ANDROID,
     },

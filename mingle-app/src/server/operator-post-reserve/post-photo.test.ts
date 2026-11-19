@@ -13,8 +13,14 @@ describe('post photo kinds', () => {
   })
 
   it('round-trips the kind through the stored description', () => {
-    expect(decodePostPhoto(encodePostPhoto('friends', 'three friends at a table'))).toEqual({ kind: 'friends', description: 'three friends at a table' })
+    expect(decodePostPhoto(encodePostPhoto('friends', 'three friends at a table'))).toEqual({ kind: 'friends', description: 'three friends at a table', place: null })
     expect(encodePostPhoto('scene', 'a street')).toBe('a street')
     expect(decodePostPhoto('a street').kind).toBe('scene')
+  })
+
+  it('keeps the place of a photo taken away from home', () => {
+    expect(encodePostPhoto('self', 'by the palace gate', 'Seoul, South Korea')).toBe('[self] [at: Seoul, South Korea] by the palace gate')
+    expect(decodePostPhoto('[self] [at: Seoul, South Korea] by the palace gate')).toEqual({ kind: 'self', description: 'by the palace gate', place: 'Seoul, South Korea' })
+    expect(decodePostPhoto('[at: Busan, South Korea] a beach')).toEqual({ kind: 'scene', description: 'a beach', place: 'Busan, South Korea' })
   })
 })

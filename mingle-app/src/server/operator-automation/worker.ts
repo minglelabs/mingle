@@ -4,7 +4,7 @@ import { generateOperatorAvatar, type AvatarGenerationResult } from '@/server/op
 import { createOperatorAccount, type CreatedOperatorAccount } from '@/server/operators/create-operator'
 import { generatePersonaDrafts } from '@/server/operators/persona-draft'
 import { mostUnderrepresentedCountry } from '@/server/operators/seed-plan'
-import { generateReservePosts, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
+import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { loadExistingReserveTexts, loadReservePersona } from '@/server/operator-post-reserve/worker'
 import { canDrawImagesHere } from '@/server/operator-avatars/generate'
@@ -169,7 +169,7 @@ export async function writeDailyOperatorPosts(chancePercent: number, now: Date, 
       if (!persona) { result.failed += 1; continue }
       const [post] = await generateReservePosts({
         persona,
-        topics: pickReserveTopics(1, random, reservePosterProfile(id).topicFactors),
+        topics: pickReserveTopics(1, random, reservePosterProfile(id).topicFactors, { korea: !isKoreaCountry(persona.country) }),
         existingTexts: await loadExistingReserveTexts(id),
         random,
         seed: id,
@@ -183,7 +183,8 @@ export async function writeDailyOperatorPosts(chancePercent: number, now: Date, 
           language: post.language === persona.language ? null : post.language,
           imagePrompt: post.imagePrompt,
           state: 'review',
-          reviewRank: await frontOfReviewRank(),
+          // Photo posts go to the front; a text-only one waits in the default order, behind the photo posts.
+          reviewRank: post.imagePrompt ? await frontOfReviewRank() : null,
         },
         select: { id: true },
       })

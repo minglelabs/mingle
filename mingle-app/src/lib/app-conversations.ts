@@ -9,11 +9,19 @@ import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { resolveNationalityCountry } from "@/lib/nationality";
 import { formatLocalizedConversationTitle } from "@/i18n/conversations";
-import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
+import { MAX_CONVERSATION_MEMBERS, maxRoomMembers } from "@/lib/conversation-limits";
 import { resolveAccountBadge, type AccountBadgeKind } from "@/lib/account-badge";
 import { normalizeChineseContent } from "@/server/chinese-script-conversion";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
 import { reconcileListedLiveCalls } from "@/server/voice/reconcile-listed-calls";
+import { sortOpenRooms, type OpenRoomCard, type OpenRoomPerson } from "@/lib/open-room";
+import {
+  clearOpenRoomPasswordWrong,
+  hashOpenRoomPassword,
+  noteOpenRoomPasswordWrong,
+  openRoomPasswordRetryAfter,
+  verifyOpenRoomPassword,
+} from "@/server/open-room-password";
 import { pickSourceLanguageBubbleFlags } from "@/lib/source-language-bubble-flags";
 import type { ConversationExportMessage, ConversationExportTranscript } from "@/lib/conversation-export";
 import { MESSAGE_RECALLED_AT_METADATA_KEY, RECALLED_MESSAGE_ID_LIMIT, readMessageRecalledAtMs } from "@/lib/message-recall";
@@ -2672,12 +2680,13 @@ export async function inviteMembersToConversationChannel(args: {
       ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
-    select: { id: true, pendingInviteeUserIds: true },
+    select: { id: true, pendingInviteeUserIds: true, isPublic: true },
   });
 
   if (!existing) {
     return null;
   }
+  const memberCap = maxRoomMembers(existing);
 
   const membersByChannelId = await listChannelMembersByChannelId([args.conversationId]);
   const activeMembers = filterActiveMembers(membersByChannelId.get(args.conversationId));
@@ -2689,7 +2698,7 @@ export async function inviteMembersToConversationChannel(args: {
   if (newInviteeUserIds.length === 0) {
     throw new Error("already_members");
   }
-  if (existingUserIds.size + newInviteeUserIds.length > MAX_CONVERSATION_MEMBERS) {
+  if (existingUserIds.size + newInviteeUserIds.length > memberCap) {
     throw new Error("too_many_invitees");
   }
 
@@ -2746,7 +2755,7 @@ export async function inviteMembersToConversationChannel(args: {
     if (freshNewInviteeUserIds.length === 0) {
       throw new Error("already_members");
     }
-    if (freshExistingUserIds.size + freshNewInviteeUserIds.length > MAX_CONVERSATION_MEMBERS) {
+    if (freshExistingUserIds.size + freshNewInviteeUserIds.length > memberCap) {
       throw new Error("too_many_invitees");
     }
 
@@ -3016,7 +3025,7 @@ async function joinConversationChannel(args: {
   const initialEffectiveCount = isInitiallyOccupied
     ? initialOccupiedUserIds.size
     : initialOccupiedUserIds.size + 1;
-  if (initialEffectiveCount > MAX_CONVERSATION_MEMBERS) {
+  if (initialEffectiveCount > maxRoomMembers(conversationRecord)) {
     throw new Error("room_full");
   }
 
@@ -3080,7 +3089,7 @@ async function joinConversationChannel(args: {
 
     const isAlreadyOccupied = occupiedUserIds.has(args.userId);
     const effectiveCount = isAlreadyOccupied ? occupiedUserIds.size : occupiedUserIds.size + 1;
-    if (effectiveCount > MAX_CONVERSATION_MEMBERS) {
+    if (effectiveCount > maxRoomMembers(freshChannel)) {
       throw new Error("room_full");
     }
 
@@ -4057,28 +4066,7 @@ export type LiveRoomCard = LiveRoomActivity & {
 
 /** Rooms with a live voice talk call or a running Hash Rush game, public first, busiest first. */
 export async function listLiveRooms(viewerUserId: string | null, now: Date = new Date()): Promise<LiveRoomCard[]> {
-  await reconcileListedLiveCalls(null).catch(() => undefined);
-  const [calls, games] = await Promise.all([
-    prisma.appVoiceCall.findMany({
-      where: { status: "live" },
-      select: { channelId: true, _count: { select: { participants: { where: { leftAt: null } } } } },
-    }).catch(() => []),
-    prisma.appConversationChannel.findMany({
-      // A time far ahead of now is not a live game (see room-game.ts).
-      where: { hashRushActiveAt: { gte: new Date(now.getTime() - HASH_RUSH_ACTIVE_WINDOW_MS), lte: new Date(now.getTime() + 60_000) } },
-      select: { id: true },
-    }),
-  ]);
-  const activity = new Map<string, LiveRoomActivity>();
-  for (const call of calls) {
-    if (call._count.participants <= 0) continue;
-    activity.set(call.channelId, { voiceCallParticipantCount: call._count.participants, hashRushActive: false });
-  }
-  for (const game of games) {
-    const entry = activity.get(game.id) ?? { voiceCallParticipantCount: 0, hashRushActive: false };
-    entry.hashRushActive = true;
-    activity.set(game.id, entry);
-  }
+  const activity = await loadLiveRoomActivity(now);
   if (activity.size === 0) return [];
 
   const records = await prisma.appConversationChannel.findMany({
@@ -4108,17 +4096,225 @@ export async function listLiveRooms(viewerUserId: string | null, now: Date = new
     .slice(0, LIVE_ROOMS_LIMIT);
 }
 
-/** Anyone joins a public room (the same checks as the share link: capacity, blocks). */
+/** Which rooms have a live voice talk call or a running Hash Rush game right now. */
+async function loadLiveRoomActivity(now: Date): Promise<Map<string, LiveRoomActivity>> {
+  await reconcileListedLiveCalls(null).catch(() => undefined);
+  const [calls, games] = await Promise.all([
+    prisma.appVoiceCall.findMany({
+      where: { status: "live" },
+      select: { channelId: true, _count: { select: { participants: { where: { leftAt: null } } } } },
+    }).catch(() => []),
+    prisma.appConversationChannel.findMany({
+      // A time far ahead of now is not a live game (see room-game.ts).
+      where: { hashRushActiveAt: { gte: new Date(now.getTime() - HASH_RUSH_ACTIVE_WINDOW_MS), lte: new Date(now.getTime() + 60_000) } },
+      select: { id: true },
+    }),
+  ]);
+  const activity = new Map<string, LiveRoomActivity>();
+  for (const call of calls) {
+    if (call._count.participants <= 0) continue;
+    activity.set(call.channelId, { voiceCallParticipantCount: call._count.participants, hashRushActive: false });
+  }
+  for (const game of games) {
+    const entry = activity.get(game.id) ?? { voiceCallParticipantCount: 0, hashRushActive: false };
+    entry.hashRushActive = true;
+    activity.set(game.id, entry);
+  }
+  return activity;
+}
+
+/**
+ * A public room's password, checked for someone who is not in it yet. Throws
+ * "password_required", "password_wrong" or "password_locked" (too many wrong
+ * guesses; see open-room-password.ts). A member, or a room without a
+ * password, passes.
+ */
+async function assertOpenRoomPassword(args: {
+  conversationId: string;
+  userId: string;
+  passwordHash: string | null;
+  password?: string | null;
+}): Promise<void> {
+  if (!args.passwordHash) return;
+  const member = await prisma.appConversationChannelMember.findFirst({
+    where: { channelId: args.conversationId, userId: args.userId, leftAt: null },
+    select: { id: true },
+  });
+  if (member) return;
+  if (openRoomPasswordRetryAfter(args.userId, args.conversationId) > 0) throw new Error("password_locked");
+  if (!args.password) throw new Error("password_required");
+  if (!verifyOpenRoomPassword(args.password, args.passwordHash)) {
+    noteOpenRoomPasswordWrong(args.userId, args.conversationId);
+    throw new Error("password_wrong");
+  }
+  clearOpenRoomPasswordWrong(args.userId, args.conversationId);
+}
+
+/** Anyone joins a public room (the same checks as the share link: capacity, blocks), with its password when it has one. */
 export async function joinPublicConversationChannel(args: {
   conversationId: string;
   userId: string;
+  password?: string | null;
 }): Promise<ConversationChannelSummary | null> {
   const record = await prisma.appConversationChannel.findFirst({
     where: { id: args.conversationId, isPublic: true, ...buildVisibleConversationWhere() },
-    select: { id: true },
+    select: { id: true, passwordHash: true },
   });
   if (!record) return null;
+  await assertOpenRoomPassword({ conversationId: record.id, userId: args.userId, passwordHash: record.passwordHash, password: args.password });
   return joinConversationChannelById({ conversationId: args.conversationId, userId: args.userId });
+}
+
+// ---------------------------------------------------------------------------
+// Open rooms: every public room, listed under Explore
+// ---------------------------------------------------------------------------
+
+const OPEN_ROOMS_LIMIT = 60;
+
+function toOpenRoomPerson(member: ChannelMemberProfile): OpenRoomPerson {
+  return { userId: member.userId, name: member.name ?? null, image: member.image ?? null };
+}
+
+/**
+ * Public rooms with what is going on in each (call, game, or plain chat):
+ * the viewer's own first, then the busiest, then the most recently changed.
+ * `query` narrows by title or topic.
+ */
+export async function listOpenRooms(
+  viewerUserId: string | null,
+  options: { query?: string; now?: Date } = {},
+): Promise<OpenRoomCard[]> {
+  const query = (options.query ?? "").replace(/^#+/, "").trim();
+  const [activity, records] = await Promise.all([
+    loadLiveRoomActivity(options.now ?? new Date()),
+    prisma.appConversationChannel.findMany({
+      where: {
+        isPublic: true,
+        ...buildVisibleConversationWhere(),
+        ...(query
+          ? {
+            AND: [{
+              OR: [
+                { title: { contains: query, mode: "insensitive" as const } },
+                { topic: { contains: query, mode: "insensitive" as const } },
+              ],
+            }],
+          }
+          : {}),
+      },
+      orderBy: { updatedAt: "desc" },
+      // Rooms with a call or a game may be older than the newest ones: read a
+      // few more than are shown, so they are not cut before sorting.
+      take: OPEN_ROOMS_LIMIT * 3,
+      select: { id: true, title: true, topic: true, passwordHash: true, ownerUserId: true, selectedLanguages: true, updatedAt: true },
+    }),
+  ]);
+  if (records.length === 0) return [];
+  const membersByChannelId = await listChannelMembersByChannelId(records.map((record) => record.id));
+  const cards = records.map((record): OpenRoomCard => {
+    const members = filterActiveMembers(membersByChannelId.get(record.id) ?? []);
+    const owner = members.find((member) => member.userId === record.ownerUserId) ?? null;
+    const faces = [...(owner ? [owner] : []), ...members.filter((member) => member !== owner)].slice(0, 4);
+    const live = activity.get(record.id);
+    return {
+      id: record.id,
+      title: record.title,
+      topic: record.topic?.trim() || null,
+      languages: record.selectedLanguages.slice(0, 5),
+      hasPassword: Boolean(record.passwordHash),
+      isMember: !!viewerUserId && members.some((member) => member.userId === viewerUserId),
+      memberCount: members.length,
+      owner: owner ? toOpenRoomPerson(owner) : null,
+      members: faces.map(toOpenRoomPerson),
+      voiceCallParticipantCount: live?.voiceCallParticipantCount ?? 0,
+      hashRushActive: live?.hashRushActive === true,
+      updatedAt: record.updatedAt.toISOString(),
+    };
+  });
+  return sortOpenRooms(cards).slice(0, OPEN_ROOMS_LIMIT);
+}
+
+export type OpenRoomInfo = {
+  id: string;
+  title: string;
+  isPublic: boolean;
+  topic: string | null;
+  hasPassword: boolean;
+  /** The viewer made the room: they may change its topic and password. */
+  isHost: boolean;
+  hostUserId: string;
+};
+
+/** What a member sees about the room being open: topic, lock, and whether they are the host. */
+export async function getOpenRoomInfo(args: { conversationId: string; userId: string }): Promise<OpenRoomInfo | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: { id: args.conversationId, ...buildVisibleMembershipWhere(args.userId), ...buildVisibleConversationWhere() },
+    select: { id: true, title: true, isPublic: true, topic: true, passwordHash: true, ownerUserId: true },
+  });
+  if (!record) return null;
+  return {
+    id: record.id,
+    title: record.title,
+    isPublic: record.isPublic === true,
+    topic: record.topic?.trim() || null,
+    hasPassword: Boolean(record.passwordHash),
+    isHost: record.ownerUserId === args.userId,
+    hostUserId: record.ownerUserId,
+  };
+}
+
+/**
+ * The host changes the open room's topic or password. `topic`/`password`
+ * left undefined stay as they are; null clears them. Returns null when the
+ * caller is not the room's host (or not in it).
+ */
+export async function updateOpenRoomSettings(args: {
+  conversationId: string;
+  userId: string;
+  topic?: string | null;
+  password?: string | null;
+}): Promise<OpenRoomInfo | null> {
+  const info = await getOpenRoomInfo({ conversationId: args.conversationId, userId: args.userId });
+  if (!info || !info.isHost) return null;
+  const data: Prisma.AppConversationChannelUpdateInput = {};
+  if (args.topic !== undefined) data.topic = args.topic || null;
+  if (args.password !== undefined) data.passwordHash = args.password ? hashOpenRoomPassword(args.password) : null;
+  if (Object.keys(data).length > 0) {
+    await prisma.appConversationChannel.update({ where: { id: args.conversationId }, data });
+  }
+  return getOpenRoomInfo({ conversationId: args.conversationId, userId: args.userId });
+}
+
+/** The public room a report is about, with its host; null for a private or missing room. */
+export async function findOpenRoomForReport(conversationId: string): Promise<{ id: string; hostUserId: string } | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: { id: conversationId, isPublic: true, ...buildVisibleConversationWhere() },
+    select: { id: true, ownerUserId: true },
+  });
+  return record ? { id: record.id, hostUserId: record.ownerUserId } : null;
+}
+
+/** Makes an open room from Explore: a public room with the title its maker typed, and a topic and password when given. */
+export async function createOpenRoom(args: {
+  userId: string;
+  locale?: string;
+  title: string;
+  topic?: string | null;
+  password?: string | null;
+}): Promise<ConversationChannelSummary> {
+  const created = await createConversationChannelRecordForUser(args.userId, { locale: args.locale });
+  const record = await prisma.appConversationChannel.update({
+    where: { id: created.id },
+    data: {
+      title: args.title,
+      userEditedTitleAt: new Date(),
+      isPublic: true,
+      topic: args.topic || null,
+      passwordHash: args.password ? hashOpenRoomPassword(args.password) : null,
+    },
+    select: conversationChannelSelect,
+  });
+  return serializeConversationChannelWithPreview(record, args.userId);
 }
 
 
@@ -4135,6 +4331,8 @@ export type RoomCodeLookup = {
   /** Shown for a public room or to a member; a private room stays nameless to others. */
   title: string | null;
   languages: string[];
+  /** A public room that asks for a password before a new person gets in. */
+  hasPassword: boolean;
   /** This viewer's join request for a private room. */
   request: "none" | "pending" | "declined";
 };
@@ -4142,7 +4340,7 @@ export type RoomCodeLookup = {
 export async function findConversationByRoomCode(code: number, viewerUserId: string): Promise<RoomCodeLookup | null> {
   const record = await prisma.appConversationChannel.findFirst({
     where: { roomCode: code, ...buildVisibleConversationWhere() },
-    select: { id: true, roomCode: true, title: true, isPublic: true, selectedLanguages: true },
+    select: { id: true, roomCode: true, title: true, isPublic: true, selectedLanguages: true, passwordHash: true },
   });
   if (!record) return null;
   const members = filterActiveMembers((await listChannelMembersByChannelId([record.id])).get(record.id) ?? []);
@@ -4162,6 +4360,7 @@ export async function findConversationByRoomCode(code: number, viewerUserId: str
     memberCount: members.length,
     title: visible ? record.title : null,
     languages: visible ? record.selectedLanguages.slice(0, 5) : [],
+    hasPassword: record.isPublic && Boolean(record.passwordHash),
     request: request?.status === "pending" ? "pending" : request?.status === "declined" ? "declined" : "none",
   };
 }
@@ -4172,10 +4371,14 @@ export type RoomCodeJoinResult =
   | { kind: "not_found" };
 
 /** Public room or a member: in. Private room: a pending join request (asked again after a decline). */
-export async function joinOrRequestByRoomCode(code: number, userId: string): Promise<RoomCodeJoinResult> {
+export async function joinOrRequestByRoomCode(code: number, userId: string, password?: string | null): Promise<RoomCodeJoinResult> {
   const found = await findConversationByRoomCode(code, userId);
   if (!found) return { kind: "not_found" };
   if (found.isPublic || found.isMember) {
+    if (found.hasPassword && !found.isMember) {
+      const room = await prisma.appConversationChannel.findUnique({ where: { id: found.id }, select: { passwordHash: true } });
+      await assertOpenRoomPassword({ conversationId: found.id, userId, passwordHash: room?.passwordHash ?? null, password });
+    }
     const conversation = await joinConversationChannelById({ conversationId: found.id, userId });
     return conversation ? { kind: "joined", conversation } : { kind: "not_found" };
   }

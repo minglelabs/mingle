@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { isE164 } from '@/lib/phone-number'
 import { KoreanSmsError, koreanSmsProvider, sendKoreanSms } from '@/server/korean-sms'
 import { buildSmsCodeText, checkSmsCode, issueSmsCode } from '@/server/sms-codes'
+import { isIdentityBlocked, type RequestIdentityContext } from '@/server/identity/links'
+import { PhoneClaimRefused, claimVerifiedPhone } from '@/server/identity/phone-claim'
 
 // A user proves a phone number with a 6-digit SMS code. The code is made,
 // sent and checked by Twilio Verify (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
@@ -33,6 +35,10 @@ export type PhoneVerificationError =
   | 'wrong_code'
   | 'too_many_requests'
   | 'unavailable'
+  /** Another account with a history holds the number: sign in to that one. */
+  | 'phone_in_use'
+  /** A permanent ban closed the number (or the device). */
+  | 'blocked'
 
 export class PhoneVerificationFailure extends Error {
   constructor(readonly code: PhoneVerificationError) {
@@ -109,6 +115,7 @@ export async function startPhoneVerification(userId: string, rawPhone: unknown, 
   const phone = typeof rawPhone === 'string' ? rawPhone.trim() : ''
   if (!isE164(phone)) throw new PhoneVerificationFailure('invalid_phone')
   if (isReviewPhoneNumber(phone)) return
+  if (await isIdentityBlocked('phone', phone)) throw new PhoneVerificationFailure('blocked')
   const route = resolveCodeRoute(phone)
   if (!route) throw new PhoneVerificationFailure('unavailable')
 
@@ -169,29 +176,30 @@ async function checkCode(phone: string, code: string): Promise<boolean> {
 }
 
 /**
- * Checks the code and makes the number this account's. A number belongs to
- * one account: proving it here takes it off any other account (a number that
- * changed hands, or a second account of the same person).
+ * Checks the code and saves the number on this account. A number belongs to
+ * one account and never moves: when another account already has it, an empty
+ * new account is folded into that one (`switchedTo`; the caller then renews
+ * the session) and an account with a history gets 'phone_in_use'. The rules
+ * are in @/server/identity/phone-claim.
  */
-export async function confirmPhoneVerification(userId: string, rawPhone: unknown, rawCode: unknown): Promise<{ phoneE164: string }> {
+export async function confirmPhoneVerification(
+  userId: string,
+  rawPhone: unknown,
+  rawCode: unknown,
+  options: { context?: RequestIdentityContext; selfExempt?: boolean } = {},
+): Promise<{ phoneE164: string; switchedTo?: string }> {
   const phone = typeof rawPhone === 'string' ? rawPhone.trim() : ''
   if (!isE164(phone)) throw new PhoneVerificationFailure('invalid_phone')
   const code = typeof rawCode === 'string' ? rawCode.replace(/\D/g, '') : ''
   if (code.length !== 6) throw new PhoneVerificationFailure('invalid_code')
   if (!(await checkCode(phone, code))) throw new PhoneVerificationFailure('wrong_code')
 
-  const phoneHash = hashPhoneE164(phone)
-  await prisma.$transaction([
-    prisma.user.updateMany({
-      where: { phoneE164: phone, id: { not: userId } },
-      data: { phoneE164: null, phoneHash: null, phoneVerifiedAt: null },
-    }),
-    prisma.user.update({
-      where: { id: userId },
-      data: { phoneE164: phone, phoneHash, phoneVerifiedAt: new Date() },
-    }),
-  ])
-  return { phoneE164: phone }
+  try {
+    return await claimVerifiedPhone(userId, phone, options)
+  } catch (error) {
+    if (error instanceof PhoneClaimRefused) throw new PhoneVerificationFailure(error.code)
+    throw error
+  }
 }
 
 /**
@@ -246,6 +254,7 @@ export async function startPhoneSignIn(rawPhone: unknown, options: { locale?: st
   const phone = typeof rawPhone === 'string' ? rawPhone.trim() : ''
   if (!isE164(phone)) throw new PhoneVerificationFailure('invalid_phone')
   if (isReviewPhoneNumber(phone)) return
+  if (await isIdentityBlocked('phone', phone)) throw new PhoneVerificationFailure('blocked')
   const route = resolveCodeRoute(phone)
   if (!route) throw new PhoneVerificationFailure('unavailable')
   const now = options.now ?? Date.now()

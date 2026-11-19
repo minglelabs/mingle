@@ -92,6 +92,8 @@ export type HashRushGameElements = {
   hintTouch: HTMLElement
   /** What lies over the map and fades while a hamster runs under it. */
   overMap: HTMLElement[]
+  /** The ‹ 채팅 and 나가기 pills over the map's top left: the round's news keeps right of them. */
+  topLeft?: HTMLElement
 }
 
 /** The stylesheet's class names for what this draws and toggles. */
@@ -125,6 +127,8 @@ export type HashRushLobbySeat = {
   fresh: boolean
   /** This seat hosts the room. */
   host: boolean
+  /** A web page (invite link): no host controls, so the room is never handed to it. */
+  web: boolean
 }
 
 /** A hosted room's lobby: who hosts, how it is set up, and what this viewer may change. */
@@ -142,6 +146,8 @@ export type HashRushLobbyHosting = {
   /** The sides to pick from in team play, with this viewer's. */
   teamChoices: { team: number, label: string, color: string }[]
   myTeam: number
+  /** The computers' side colour (people against computers), else ''. */
+  computersColor: string
   /** Why the last start was turned down, '' when it was not. */
   notice: string
   /** The game's own words for these (its i18n); the app's are in copy.ts. */
@@ -198,6 +204,10 @@ export type HashRushGameView =
       verdict: HashRushVerdict
       board: HashRushScoreboard
       nextAt: number
+      /** A hosted room: the next round starts when the host starts it, not by itself. */
+      hosted: boolean
+      /** This viewer hosts it: they start the next round themselves. */
+      amHost: boolean
       /** When the card first came up (performance.now()), for taps meant for something else. */
       at: number
     }
@@ -593,6 +603,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
         winsText: String(t('tally', wins[index] || 0)),
         fresh: (freshUntil.get(index) ?? 0) > now,
         host: !!at?.hosted && at.hostSeat === index,
+        web: seat.web,
       }))
     const open = seats.filter((seat) => seat.kind === 'open').length
     const map = at?.map ?? 'meadow'
@@ -642,6 +653,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       fillMax: HASH_RUSH_FILL_MAX,
       teamChoices: Array.from({ length: HASH_RUSH_TEAMS }, (_, team) => ({ team, label: teamNames[team] ?? String(team + 1), color: seatColor(true, team, team) })),
       myTeam: at.you >= 0 ? at.seats[at.you]?.team ?? -1 : -1,
+      computersColor: at.teams && at.computersTeam >= 0 ? seatColor(true, at.computersTeam, at.computersTeam) : '',
       notice: nope,
       words: {
         start: String(t('start')),
@@ -730,7 +742,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       return
     }
     card = 'result'
-    show({ kind: 'result', round: session.round, verdict: verdictOf(round, meId), board, nextAt, at: cardAt })
+    show({ kind: 'result', round: session.round, verdict: verdictOf(round, meId), board, nextAt, hosted: !!lobby?.hosted, amHost: !!lobby?.amHost, at: cardAt })
   }
 
   // A round's numbers go into the totals once, when it is won (main.js addCareer).
@@ -755,7 +767,35 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
     span.addEventListener('animationend', () => span.remove())
   }
 
+  // On a tall screen the news strip runs along the map's top edge between the
+  // top-left pills and the clock. The pills' width depends on the language, so
+  // the gap is measured each time (it covered the 나가기 pill when centred).
+  function placeBanner() {
+    const style = el.banner.style
+    style.left = style.right = style.transform = style.maxWidth = style.width = style.fontSize = style.padding = ''
+    const hud = el.banner.parentElement?.getBoundingClientRect()
+    const pills = el.topLeft?.getBoundingClientRect()
+    const side = el.clock.parentElement?.getBoundingClientRect()
+    if (!hud || !pills || !side || getComputedStyle(el.banner).whiteSpace !== 'normal') return
+    if (pills.bottom <= hud.top || pills.width === 0) return
+    const left = Math.max(0, pills.right - hud.left + 6)
+    const right = Math.max(0, hud.right - side.left + 6)
+    if (hud.width - left - right < 80) return
+    style.left = `${left}px`
+    style.right = `${right}px`
+    style.transform = 'none'
+    style.maxWidth = 'none'
+    style.width = 'auto'
+    // A narrow gap: smaller type and edge to edge, so a long line stays on the
+    // hedge above the sunflower instead of wrapping down over it.
+    if (hud.width - left - right < 140) {
+      style.fontSize = '11px'
+      style.padding = '0.2em 0.4em'
+    }
+  }
+
   function banner(words: string, alarm = false) {
+    placeBanner()
     el.banner.textContent = words
     el.banner.classList.add(classes.bannerShow)
     el.banner.classList.toggle(classes.bannerAlarm, alarm)
@@ -846,6 +886,21 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       else audio.play.double()
     } else if (ev.type === 'spawn' || ev.type === 'warp') {
       if (id === meId) audio.play.spawn()
+    } else if (ev.type === 'steal') {
+      // Pickpocketed: the seed changed hands without a bonk (hash-rush #237).
+      audio.play.seed()
+      if (by === meId) buzz.buzz([20, 40, 20])
+      if (id === meId) buzz.buzz([70, 50, 110])
+      if (players[by] && players[id]) feed(nameTag(players[by]), ` 🌻${t('stealWord')} `, nameTag(players[id]))
+      if (id === meId) banner(t('seedStolen'))
+      else if (players[by]) {
+        const mate = meId >= 0 && !!players[meId] && allied(players[meId], players[by])
+        banner(by === meId ? t('gotSeedMe') : t(mate ? 'gotSeedMate' : 'gotSeedOther', players[by].name))
+      }
+      if (ev.close && players[by]) {
+        callout(players[by], [t('superPlay')])
+        audio.play.superplay()
+      }
     } else if (ev.type === 'seed') {
       audio.play.seed()
       if (id === meId) buzz.buzz([20, 40, 20])

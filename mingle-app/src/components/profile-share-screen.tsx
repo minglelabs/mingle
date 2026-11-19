@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useRouter } from "next/navigation";
 import SlideSurface from "@/components/slide-surface";
 import { buildInviteSharedLinkMessage } from "@/i18n/invite-ticket-copy";
+import { resolveInviteMessageLocale } from "@/lib/invite-message-locale";
 import { useOwnInviteCode } from "@/lib/own-invite-code";
 import { postNativeAndroidBackCapability } from "@/lib/native-back-handler";
 
@@ -236,7 +237,7 @@ export default function ProfileShareScreen({
       return;
     }
     try {
-      await copyTextToClipboard(buildInviteSharedLinkMessage(locale, profileUrl, ownInviteCode));
+      await copyTextToClipboard(buildInviteSharedLinkMessage(resolveInviteMessageLocale(locale), profileUrl, ownInviteCode));
       showStatus(copy.copied);
     } catch {
       showStatus(copy.copyFailed);

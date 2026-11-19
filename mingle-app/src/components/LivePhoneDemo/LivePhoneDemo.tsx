@@ -114,7 +114,7 @@ import {
 import { TtsAgentTextScheduler } from './tts-agent-text'
 import { applyCoinBalanceFromHeaders, isCoinBillingActive, notifyCoinsExhausted, openCoinStore, useCoinWallet } from '@/lib/coin-wallet-client'
 import { fillCoinCopy, getCoinCopy } from '@/i18n/coin-copy'
-import CoinBalanceChip, { formatCoinCount } from '@/components/coins/coin-balance-chip'
+import { formatCoinCount } from '@/components/coins/coin-balance-chip'
 import HashSeedIcon from '@/components/coins/hash-seed-icon'
 import CoinRoomBanner from '@/components/coins/coin-room-banner'
 import { resolveLivePhoneDemoEarphoneModeCopy } from '@/i18n/live-phone-demo-earphone-mode-copy'
@@ -123,7 +123,7 @@ import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { EXPECTED_ACCOUNT_HEADER } from '@/lib/request-account-guard'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Instagram, PictureInPicture2, RotateCw, Headphones, ScreenShare, Volume2 } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, ChevronLeft, Share, ChevronRight, Keyboard, Users, Instagram, PictureInPicture2, Phone, Image as ImageIcon, RotateCw, Headphones, ScreenShare, Volume2, UserRound, UserPlus, Link2 } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import InviteFriendsScreen from '@/components/invite-friends-screen'
 import SlideSurface, { isNativeEdgeSwipeSuppressed } from '@/components/slide-surface'
@@ -132,6 +132,7 @@ import { DEFAULT_LOCALE, type AppDictionary } from '@/i18n'
 import { resolveAppSupportedLocaleTag } from '@/i18n/mingle-locales'
 import { toast } from 'sonner'
 import { buildInviteSharedLinkMessage } from '@/i18n/invite-ticket-copy'
+import { resolveInviteMessageLocale } from '@/lib/invite-message-locale'
 import { useOwnInviteCode } from '@/lib/own-invite-code'
 import { RETRANSLATE_TIP_SHOWN_STORAGE_KEY, messageRetranslateCopy } from '@/lib/message-retranslate'
 import PhoneFrame from './PhoneFrame'
@@ -152,11 +153,14 @@ import {
 import LanguageSelector from './LanguageSelector'
 import { useLanguageSelectorNavigation } from './use-language-selector-navigation'
 import ConversationEmptyState from './ConversationEmptyState'
+import ConversationPeerProfileCard from './ConversationPeerProfileCard'
+import ChatActionPanel, { ChatActionPlusButton, resolveChatActionPanelHeightPx, type ChatActionPanelItem } from './ChatActionPanel'
+import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
 import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
 import ChatAccountBadge from './ChatAccountBadge'
 import { labelNameWithAccountBadge, resolveRoomAccountBadge } from './chat-account-badge.logic'
 import { resolveAccountBadge } from '@/lib/account-badge'
-import type { ConversationChannelOtherMember } from '@/lib/app-conversations'
+import type { ConversationChannelOtherMember, ConversationChannelSummary } from '@/lib/app-conversations'
 import {
   mergeConversationMemberProfiles,
   type ConversationMemberProfile,
@@ -325,7 +329,6 @@ import { resolveConversationExportCopy } from '@/i18n/conversation-export-copy'
 import { fetchConversationExport, shareConversationExport } from './conversation-export.client'
 import VoiceTalkPanel, {
   type VoiceTalkCaptionLine,
-  VoiceTalkButton,
   isVoiceTalkAvailable,
   joinVoiceTalk,
   resolveVoiceTalkButtonPress,
@@ -352,6 +355,8 @@ import { HASH_RUSH_PAGE_URL, HASH_RUSH_SERVER } from '@/features/hash-rush/confi
 import { buildVoiceCaptionClientMessageId } from '@/lib/voice-caption'
 import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
 import { liveRoomsCopy } from '@/i18n/live-rooms-copy'
+import { roomMenuVoiceSettingsLabel } from '@/i18n/room-menu-copy'
+import { OpenRoomMenuSection, OpenRoomPeopleStrip, useOpenRoomInfo } from './OpenRoomExtras'
 import { formatRoomCode } from '@/lib/room-code'
 import { buildHashRushChatEntries } from './hash-rush-room-chat'
 import {
@@ -411,6 +416,9 @@ const KEYBOARD_CLOSE_EASE_MS = 250
 const VOLUME_THRESHOLD = 0.05
 // How long a "loaded" older-history page may go without changing the list before its loading state is released.
 const OLDER_LOAD_RELEASE_FALLBACK_MS = 1_500
+const HEADER_LANGUAGE_FLAG_LIMIT = 3
+const VOICE_MODE_PLUS_BUTTON_SIZE_PX = 36
+const ACTION_PANEL_KEYBOARD_RETURN_HOLD_MS = 900
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const FEEDBACK_INSTAGRAM_CONTACT_URL = 'https://www.instagram.com/mingle.labs/'
@@ -1360,6 +1368,9 @@ type CustomSpeechSplit = {
 }
 
 type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language' | 'invite' | 'speech-length'
+  // Interpreting and voice settings (depth 2); the display language and the
+  // sentence length pages open from it (depth 3).
+  | 'voice-settings'
   // The room's Hash Rush page (depth 2) and the two pages it opens (depth 3).
   | 'hash-rush' | 'hash-rush-ranking' | 'hash-rush-howto'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
@@ -1437,6 +1448,7 @@ function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuSc
     || value === 'hash-rush-ranking'
     || value === 'hash-rush-howto'
     || value === 'speech-length'
+    || value === 'voice-settings'
 }
 
 function resolveMenuScreenForDepth(
@@ -1448,10 +1460,14 @@ function resolveMenuScreenForDepth(
     if (preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return preferredScreen
     if (preferredScreen === 'hash-rush') return 'hash-rush'
     if (preferredScreen === 'display-language') return 'display-language'
+    if (preferredScreen === 'speech-length') return 'speech-length'
     if (preferredScreen === 'invite') return 'invite'
     if (preferredScreen === 'participants') return 'participants'
     return 'conversation-management'
   }
+  if (preferredScreen === 'voice-settings') return 'voice-settings'
+  // "Invite" on the first screen of the menu opens the picker directly.
+  if (preferredScreen === 'invite') return 'invite'
   if (preferredScreen === 'display-language') return 'display-language'
   if (preferredScreen === 'hash-rush' || preferredScreen === 'hash-rush-ranking' || preferredScreen === 'hash-rush-howto') return 'hash-rush'
   if (preferredScreen === 'speech-length') return 'speech-length'
@@ -1635,6 +1651,13 @@ interface LivePhoneDemoProps {
   // a generic placeholder, the composer/mic are replaced with a "blocked"
   // message, and tapping the counterpart's avatar opens nothing.
   isBlockedCounterpart?: boolean
+  // The room is an open room (public, listed under Explore): it shows who has
+  // it open right now, and its menu has share / minimize / leave, host
+  // settings, report and the other rooms to move to.
+  initialIsPublicRoom?: boolean
+  // Move to another room from the open-room menu (a room the viewer is in, or
+  // one just joined, whose summary comes along).
+  onOpenOtherRoom?: (conversationId: string, joined?: ConversationChannelSummary) => void
   // Unread count captured when the room was opened (before mark-read zeroes
   // it). When > 0, entry anchors on the first unread message instead of the
   // bottom so the viewer resumes where they left off.
@@ -2072,18 +2095,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   endpointTuningLongLabel,
   translationModelLabel,
   ttsModelLabel,
-  adBannerPositionLabel,
-  adBannerPositionTopLabel,
-  adBannerPositionBottomLabel,
+  // The ad banner position is set on the My tab (components/account/ad-banner-position-setting.tsx).
   silenceFinalizeLockedMessage,
   silenceFinalizeLockedButtonLabel,
   menuLabel,
-  logoutLabel,
+  // Sign out and account deletion are on the My tab; the room menu no longer offers them.
   deleteAccountLabel,
   deleteAccountConfirmMessage,
   deleteAccountConfirmLabel,
   deleteAccountCancelLabel,
-  onLogout,
   onDeleteAccount,
   defaultFeedbackEmail = '',
   isAuthActionPending = false,
@@ -2125,6 +2145,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onDefaultDisplayLanguageChange,
   onOpenProfile,
   isBlockedCounterpart = false,
+  initialIsPublicRoom = false,
+  onOpenOtherRoom,
   initialUnreadMessageCount = 0,
   isMultiMember = false,
 }, ref) {
@@ -2266,6 +2288,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => resolveRoomAccountBadge(initialOtherMembers),
     [initialOtherMembers],
   )
+  // A 1:1 room with another account shows that person's profile above the
+  // first message (once the history reaches its start).
+  // Everyone in the room, the viewer included, for the header's participants button.
+  const participantCount = (initialOtherMembers?.length ?? 0) + 1
+  // Any room with another account, 1:1 included (an invitee who has not
+  // written yet counts too, through isMultiMember).
+  const hasOtherParticipants = isMultiMember || (initialOtherMembers?.length ?? 0) > 0
+  const directPeerMember = !isBlockedCounterpart && initialOtherMembers?.length === 1
+    ? initialOtherMembers[0]
+    : null
   const accountPreferencesCacheIdentity = useMemo<AccountPreferencesCacheIdentity>(() => ({
     apiNamespace: clientApiNamespace,
     userId: viewerUserId,
@@ -2373,6 +2405,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       inviteButtonLabel: roomManagementCopy.participantsInviteButtonLabel,
     }
   }, [roomManagementCopy])
+  const voiceSettingsLabel = useMemo(() => roomMenuVoiceSettingsLabel(uiLocale), [uiLocale])
   const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
@@ -2434,7 +2467,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const ownInviteCode = useOwnInviteCode(Boolean(shareUrl))
   const [shareEnabled, setShareEnabled] = useState(false)
   // Public: listed with its name in the search tab and joinable by anyone.
-  const [isPublicRoom, setIsPublicRoom] = useState(false)
+  const [isPublicRoom, setIsPublicRoom] = useState(initialIsPublicRoom)
   const [isTogglingPublic, setIsTogglingPublic] = useState(false)
   // The number people type in Search to find this room.
   const [roomCode, setRoomCode] = useState<number | null>(null)
@@ -2473,6 +2506,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [composerHasDraft, setComposerHasDraft] = useState(false)
   const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
   const [keyboardViewportInsetPx, setKeyboardViewportInsetPx] = useState(0)
+  // The keyboard's height the last time it was up: the "+" panel takes its place.
+  const [lastKeyboardHeightPx, setLastKeyboardHeightPx] = useState(0)
+  const [actionPanelOpenFor, setActionPanelOpenFor] = useState<'text' | 'voice' | null>(null)
+  // Closing the "+" panel back to the keyboard: its room stays reserved until
+  // the keyboard has risen into it, so the bar does not drop and rise again.
+  const [actionPanelKeyboardReturnPending, setActionPanelKeyboardReturnPending] = useState(false)
+  const actionPanelKeyboardReturnTimerRef = useRef<number | null>(null)
+  const actionPanelOpenForRef = useRef<'text' | 'voice' | null>(null)
+  useEffect(() => {
+    actionPanelOpenForRef.current = actionPanelOpenFor
+  }, [actionPanelOpenFor])
+  const holdActionPanelRoomForKeyboard = useCallback(() => {
+    setActionPanelKeyboardReturnPending(true)
+    if (actionPanelKeyboardReturnTimerRef.current !== null) window.clearTimeout(actionPanelKeyboardReturnTimerRef.current)
+    actionPanelKeyboardReturnTimerRef.current = window.setTimeout(() => {
+      actionPanelKeyboardReturnTimerRef.current = null
+      setActionPanelKeyboardReturnPending(false)
+    }, ACTION_PANEL_KEYBOARD_RETURN_HOLD_MS)
+  }, [])
+  useEffect(() => () => {
+    if (actionPanelKeyboardReturnTimerRef.current !== null) window.clearTimeout(actionPanelKeyboardReturnTimerRef.current)
+  }, [])
   const [floatingToastMessage, setFloatingToastMessage] = useState('')
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const floatingToastTimerRef = useRef<number | null>(null)
@@ -2720,6 +2775,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const bubbleDisplayModeButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuHistoryDepthRef = useRef(readInitialMenuHistoryDepth().depth)
   const menuHistoryTargetDepthRef = useRef<number | null>(null)
+  // Menu depths opened without their own history entry: the header's
+  // participants button jumps straight to depth 2, so depth 1 (the menu root)
+  // was never pushed and going back from there closes the menu.
+  const menuHistorySkippedDepthRef = useRef(0)
   const menuIosHistorySettleRef = useRef<{ depth: number, expiresAt: number } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const deleteConversationCancelButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -3158,6 +3217,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const syncKeyboardInset = () => {
       const nextInsetPx = resolveKeyboardViewportInsetPx(viewport)
+      if (nextInsetPx > 120) setLastKeyboardHeightPx(nextInsetPx)
       setKeyboardViewportInsetPx((currentInsetPx) => resolveStableKeyboardViewportInsetPx(currentInsetPx, nextInsetPx))
     }
 
@@ -3758,6 +3818,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setMenuScreenDirection(nextDirection)
 
     if (boundedDepth === 0) {
+      menuHistorySkippedDepthRef.current = 0
       setDeleteAccountDialogOpen(false)
       setDeleteConversationDialogOpen(false)
       setMenuScreen('root')
@@ -3793,7 +3854,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [applyMenuNavigationDepth])
 
   const requestMenuBackStep = useCallback(() => {
-    const nextDepth = Math.max(0, menuHistoryDepthRef.current - 1)
+    const steppedDepth = Math.max(0, menuHistoryDepthRef.current - 1)
+    const nextDepth = steppedDepth <= menuHistorySkippedDepthRef.current ? 0 : steppedDepth
     if (typeof window === 'undefined' || menuHistoryDepthRef.current <= 0) {
       applyMenuNavigationDepth(nextDepth)
       return
@@ -3809,7 +3871,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
     menuHistoryTargetDepthRef.current = 0
-    window.history.go(-currentDepth)
+    window.history.go(-Math.max(1, currentDepth - menuHistorySkippedDepthRef.current))
   }, [applyMenuNavigationDepth])
 
   const resetNavigationOverlays = useCallback(async () => {
@@ -4030,6 +4092,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     pushMenuHistoryEntry(2, 'conversation-management')
   }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
+  // Header shortcut (KakaoTalk-style): the participants list in one tap,
+  // without going through the menu root.
+  const handleParticipantsHeaderPress = useCallback(() => {
+    closeLanguageSelector({ syncHistory: 'replace' })
+    if (menuOpen) return
+    menuHistorySkippedDepthRef.current = 1
+    pushMenuHistoryEntry(2, 'participants')
+  }, [closeLanguageSelector, menuOpen, pushMenuHistoryEntry])
+
   const handleParticipantsMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'participants') return
     pushMenuHistoryEntry(2, 'participants')
@@ -4050,8 +4121,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleDefaultDisplayLanguageMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'display-language' || !conversationId) return
-    pushMenuHistoryEntry(2, 'display-language')
+    // Opened from the voice settings page, it sits one level deeper, so back returns there.
+    pushMenuHistoryEntry(menuScreen === 'voice-settings' ? 3 : 2, 'display-language')
   }, [conversationId, menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleVoiceSettingsMenuItemPress = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'root') return
+    pushMenuHistoryEntry(2, 'voice-settings')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleInviteFromMenuRoot = useCallback(() => {
+    if (!menuOpen || menuScreen !== 'root') return
+    pushMenuHistoryEntry(2, 'invite')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
   // The room's Hash Rush page, and its rankings and how-to pages over it.
   const handleHashRushPageOpen = useCallback(() => {
@@ -4142,20 +4224,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     syncAccountPreferencesOverride(nextPreferences)
   }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
-  const handleAdBannerPositionSelect = useCallback((nextAdBannerPosition: LivePhoneDemoAdBannerPosition) => {
-    setSessionAdBannerPositionOverride(nextAdBannerPosition)
-    if (latestAccountPreferencesRef.current.adBannerPosition === nextAdBannerPosition) {
-      setAdBannerPosition(nextAdBannerPosition)
-      return
-    }
-    const nextPreferences = commitLocalAccountPreferences({
-      ...latestAccountPreferencesRef.current,
-      adBannerPosition: nextAdBannerPosition,
-    })
-    setAdBannerPosition(nextAdBannerPosition)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride(nextPreferences)
-  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
   useEffect(() => {
     if (isVisible) return
@@ -5314,27 +5382,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
     : (isConnecting || isReady || isActive)
   nativePipSttRunningRef.current = isSttSessionRunning
-  // One-time tip (per device) for the long-press "translate again", shown
-  // the first time a room shows a finished translation.
-  const retranslateTipCheckedRef = useRef(false)
-  useEffect(() => {
-    if (retranslateTipCheckedRef.current || !isVisible || !conversationId || !isStorageHydrated) return
-    const hasFinishedTranslation = utterances.some((utterance) => (
-      !utterance.recalled && !utterance.image
-      && Object.entries(utterance.translations || {}).some(([language, text]) => (
-        Boolean(text?.trim()) && utterance.translationFinalized?.[language] !== false
-      ))
-    ))
-    if (!hasFinishedTranslation) return
-    retranslateTipCheckedRef.current = true
-    try {
-      if (window.localStorage.getItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY)) return
-      window.localStorage.setItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY, String(Date.now()))
-    } catch {
-      return
-    }
-    toast.message(messageRetranslateCopy(uiLocale).tip, { duration: 6000 })
-  }, [conversationId, isStorageHydrated, isVisible, uiLocale, utterances])
   const onSttSessionRunningChangeRef = useRef(onSttSessionRunningChange)
 
   useEffect(() => {
@@ -5851,8 +5898,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Lazily loads the room's current share link (if any) when the
   // management screen is opened, instead of threading shareUrl down as
   // another prop everywhere this component is rendered.
+  const { info: openRoomInfo, setInfo: setOpenRoomInfo } = useOpenRoomInfo(conversationId, isPublicRoom && menuOpen)
+  const shareStatusWanted = menuOpen && (menuScreen === 'root' || menuScreen === 'conversation-management')
   useEffect(() => {
-    if (menuScreen !== 'conversation-management' || !conversationId) return
+    if (!shareStatusWanted || !conversationId) return
     let cancelled = false
 
     void fetch(buildClientApiPath(`/conversations/${conversationId}/share`), {
@@ -5884,7 +5933,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [conversationId, menuScreen, nativeAppUpdate, resolveConversationSessionKey])
+  }, [conversationId, shareStatusWanted, nativeAppUpdate, resolveConversationSessionKey])
 
   const handleToggleShareEnabled = useCallback(async (nextEnabled: boolean) => {
     if (isTogglingSharing || !conversationId) return
@@ -6094,7 +6143,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleCopyShareLink = useCallback(async () => {
     if (!shareUrl) return
-    const shareText = buildInviteSharedLinkMessage(uiLocale, shareUrl, ownInviteCode)
+    const shareText = buildInviteSharedLinkMessage(resolveInviteMessageLocale(uiLocale), shareUrl, ownInviteCode)
     try {
       // navigator.clipboard only exists in a secure context (HTTPS or
       // localhost) — a LAN dev server reached over plain http:// (see
@@ -6697,7 +6746,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleSpeechLengthMorePress = useCallback(() => {
     if (!menuOpen || menuScreen === 'speech-length') return
-    pushMenuHistoryEntry(2, 'speech-length')
+    pushMenuHistoryEntry(menuScreen === 'voice-settings' ? 3 : 2, 'speech-length')
   }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
   const handleCustomSpeechSplitCommit = useCallback(async (preferences: CustomSpeechSplit) => {
@@ -7034,7 +7083,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // the viewer can still write to.
   const hashRushQuickChatVisible = hashRushGameChatShown && Boolean(conversationId) && !isBlockedCounterpart
 
-  const handleComposerTextareaFocus = useCallback(() => setIsComposerTextareaFocused(true), [])
+  const handleComposerTextareaFocus = useCallback(() => {
+    setIsComposerTextareaFocused(true)
+    // Typing again: the keyboard takes the "+" panel's place.
+    if (actionPanelOpenForRef.current) holdActionPanelRoomForKeyboard()
+    setActionPanelOpenFor(null)
+  }, [holdActionPanelRoomForKeyboard])
   const handleComposerTextareaBlur = useCallback(() => setIsComposerTextareaFocused(false), [])
 
   useEffect(() => {
@@ -7900,6 +7954,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     viewerUserId,
     declinedSessionId: declinedHashRushSessionId,
   }) ? hashRushRoomGame : null
+  // One-time tip (per device) for the long-press "translate again", shown
+  // the first time a room shows a finished translation. Held while a Hash Rush
+  // invite card is up: the toast sat over the card's buttons.
+  const retranslateTipCheckedRef = useRef(false)
+  useEffect(() => {
+    if (retranslateTipCheckedRef.current || !isVisible || !conversationId || !isStorageHydrated || hashRushInvite) return
+    const hasFinishedTranslation = utterances.some((utterance) => (
+      !utterance.recalled && !utterance.image
+      && Object.entries(utterance.translations || {}).some(([language, text]) => (
+        Boolean(text?.trim()) && utterance.translationFinalized?.[language] !== false
+      ))
+    ))
+    if (!hasFinishedTranslation) return
+    retranslateTipCheckedRef.current = true
+    try {
+      if (window.localStorage.getItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY)) return
+      window.localStorage.setItem(RETRANSLATE_TIP_SHOWN_STORAGE_KEY, String(Date.now()))
+    } catch {
+      return
+    }
+    toast.message(messageRetranslateCopy(uiLocale).tip, { duration: 6000 })
+  }, [conversationId, hashRushInvite, isStorageHydrated, isVisible, uiLocale, utterances])
   const hashRushRoom = useMemo<HashRushRoomState | null>(() => (
     hashRushRoomEnabled
       ? { liveSessionId: hashRushLiveSessionId, joined: hashRushGameActive, join: enterHashRushGame, open: hashRushGameOpen, reopen: () => setHashRushGameOpen(true), quit: () => quitHashRushGame() }
@@ -8211,6 +8287,107 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       payload: state,
     })
   }, [isNativeIosPipAvailable])
+  // From the hamburger menu: close it first so the room is what goes into the PiP window.
+  const handlePipMenuItemPress = useCallback(() => {
+    requestCloseMenuPanel()
+    window.setTimeout(handleNativePipStart, 250)
+  }, [handleNativePipStart, requestCloseMenuPanel])
+  const pipMenuItem = useMemo(() => (
+    isNativeIosPipAvailable && headerMode === 'conversation' && conversationId
+      ? { label: roomManagementCopy.pictureInPictureButtonLabel, onSelect: handleNativePipStart }
+      : undefined
+  ), [conversationId, handleNativePipStart, headerMode, isNativeIosPipAvailable, roomManagementCopy.pictureInPictureButtonLabel])
+
+  // The bottom bar's round "+": a KakaoTalk-style panel in the keyboard's
+  // place with photo, voice talk, PiP, earphone mode and the input-mode switch.
+  // Open for the input mode it was opened in; switching modes or the menu /
+  // game covering the bar hides it.
+  const actionPanelOpen = actionPanelOpenFor === (composerShown ? 'text' : 'voice')
+    && !menuOpen
+    && !hashRushGameChatShown
+  const setActionPanelOpen = useCallback((open: boolean) => {
+    setActionPanelOpenFor(open ? (composerShown ? 'text' : 'voice') : null)
+  }, [composerShown])
+  const photoPickerRef = useRef<(() => void) | null>(null)
+  const actionPanelHeightPx = resolveChatActionPanelHeightPx(lastKeyboardHeightPx)
+  const conversationImageCopy = useMemo(() => resolveConversationImageCopy(uiLocale), [uiLocale])
+  const handleActionPanelToggle = useCallback(() => {
+    if (actionPanelOpen) {
+      if (composerShown) holdActionPanelRoomForKeyboard()
+      setActionPanelOpen(false)
+      if (composerShown) focusComposerTextarea()
+      return
+    }
+    if (composerShown) composerTextareaRef.current?.blur()
+    setActionPanelOpen(true)
+  }, [actionPanelOpen, composerShown, focusComposerTextarea, holdActionPanelRoomForKeyboard, setActionPanelOpen])
+  const actionPanelItems = useMemo<ChatActionPanelItem[]>(() => {
+    const items: ChatActionPanelItem[] = []
+    const closeThen = (action: () => void) => () => { setActionPanelOpen(false); action() }
+    if (conversationId && viewerUserId) {
+      items.push({
+        key: 'photo',
+        label: conversationImageCopy.choose,
+        icon: <ImageIcon size={22} strokeWidth={2} />,
+        onSelect: closeThen(() => photoPickerRef.current?.()),
+      })
+    }
+    if (voiceTalkMenuItem) {
+      items.push({
+        key: 'voice-talk',
+        label: voiceTalkMenuItem.label,
+        icon: <Phone size={21} strokeWidth={2} />,
+        active: voiceTalkMenuItem.active,
+        onSelect: closeThen(voiceTalkMenuItem.onSelect),
+      })
+    }
+    if (pipMenuItem) {
+      items.push({
+        key: 'pip',
+        label: pipMenuItem.label,
+        icon: <PictureInPicture2 size={21} strokeWidth={2} />,
+        onSelect: closeThen(pipMenuItem.onSelect),
+      })
+    }
+    // Voice mode keeps the earphone / speaker button in the bar itself.
+    if (composerShown && earphoneModeMenuItem) {
+      items.push({
+        key: 'earphone-mode',
+        label: earphoneModeMenuItem.label,
+        icon: earphoneModeMenuItem.speaker ? <Volume2 size={21} strokeWidth={2} /> : <Headphones size={21} strokeWidth={2} />,
+        active: earphoneModeMenuItem.enabled,
+        disabled: earphoneModeMenuItem.disabled,
+        // Stays open: the state shows on the icon, and its notice may follow.
+        onSelect: earphoneModeMenuItem.onToggle,
+      })
+    }
+    items.push(composerShown
+      ? {
+          key: 'voice-mode',
+          label: composerCopy.switchToVoiceModeLabel,
+          icon: <Mic size={21} strokeWidth={2} />,
+          onSelect: closeThen(handleToggleComposer),
+        }
+      : {
+          key: 'keyboard-mode',
+          label: composerCopy.switchToKeyboardModeLabel,
+          icon: <Keyboard size={21} strokeWidth={2} />,
+          onSelect: closeThen(handleToggleComposer),
+        })
+    return items
+  }, [
+    composerCopy.switchToKeyboardModeLabel,
+    composerCopy.switchToVoiceModeLabel,
+    composerShown,
+    conversationId,
+    conversationImageCopy.choose,
+    earphoneModeMenuItem,
+    handleToggleComposer,
+    pipMenuItem,
+    setActionPanelOpen,
+    viewerUserId,
+    voiceTalkMenuItem,
+  ])
 
   const syncNativePipPlaybackState = useCallback((playing: boolean, scopedConversationId?: string) => {
     if (!isNativeIosPipAvailable) return
@@ -8594,7 +8771,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const bottomBarBottomMarginPx = composerShown
     ? COMPOSER_MODE_BOTTOM_MARGIN_PX
     : VOICE_MODE_BOTTOM_MARGIN_PX
-  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
+  // The "+" panel and the keyboard share one room under the bar: the bar sits
+  // on whichever is taller, so it stays put while one slides out and the
+  // other comes in (the panel is the last keyboard's height).
+  const actionPanelRoomPx = actionPanelOpen || (composerShown && actionPanelKeyboardReturnPending)
+    ? actionPanelHeightPx
+    : 0
+  const bottomBarLiftPx = Math.max(activeKeyboardInsetPx, actionPanelRoomPx)
+  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + bottomBarLiftPx}px), ${bottomBarBottomMarginPx + bottomBarLiftPx}px)`
   // iOS reports the keyboard's final height (0) as soon as it starts sliding
   // down, so the bar used to drop at once and the chat jumped to full height
   // while the keyboard was still on screen. Ease the bar down alongside the
@@ -8996,7 +9180,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           )}
           <div className="relative z-20 flex items-center gap-1">
             {headerAccessory}
-            {headerAccessory ? null : <CoinBalanceChip locale={coinLocale} size="compact" />}
             <div className="relative mr-1.5">
               <button
                 ref={langSelectorButtonRef}
@@ -9009,15 +9192,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 className={LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME}
                 style={{ backgroundColor: '#ffffff' }}
               >
-                {languageSelectorButtonLanguages.map((lang) => (
-                  <span
-                    key={lang}
-                    className="text-[1.35rem]"
-                    title={lang.toUpperCase()}
-                  >
-                    <LanguageFlag language={lang} className="text-[1.35rem] leading-none" />
-                  </span>
-                ))}
+                {/* Flags overlap (three at most, then +N) so the header keeps room for the title. */}
+                <span className="flex items-center">
+                  {languageSelectorButtonLanguages.slice(0, HEADER_LANGUAGE_FLAG_LIMIT).map((lang, index) => (
+                    <span
+                      key={lang}
+                      className={`relative text-[1.35rem] ${index > 0 ? '-ml-2' : ''}`}
+                      style={index > 0 ? { zIndex: index, filter: 'drop-shadow(-1.5px 0 0 #ffffff)' } : undefined}
+                      title={lang.toUpperCase()}
+                    >
+                      <LanguageFlag language={lang} className="text-[1.35rem] leading-none" />
+                    </span>
+                  ))}
+                  {languageSelectorButtonLanguages.length > HEADER_LANGUAGE_FLAG_LIMIT ? (
+                    <span className="ml-0.5 text-[0.72rem] font-semibold tabular-nums text-gray-500">
+                      +{languageSelectorButtonLanguages.length - HEADER_LANGUAGE_FLAG_LIMIT}
+                    </span>
+                  ) : null}
+                </span>
                 <ChevronDown
                   data-qa={LIVE_DEMO_LANGUAGE_CHEVRON_DATA_QA}
                   size={14}
@@ -9045,16 +9237,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               ) : null}
             </div>
-            {isNativeIosPipAvailable && headerMode === 'conversation' && conversationId ? (
+            {headerMode === 'conversation' && conversationId && hasOtherParticipants && showMenuButton ? (
               <button
-                data-qa="live-demo-picture-in-picture-button"
+                data-qa="live-demo-participants-button"
                 type="button"
-                onClick={handleNativePipStart}
-                aria-label={roomManagementCopy.pictureInPictureButtonLabel}
-                title={roomManagementCopy.pictureInPictureButtonLabel}
-                className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-950 active:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
+                onClick={handleParticipantsHeaderPress}
+                disabled={isAuthActionPending}
+                aria-label={participantsCopy.menuItemLabel}
+                title={participantsCopy.menuItemLabel}
+                className={`inline-flex h-9 min-w-9 items-center justify-center gap-0.5 rounded-full px-1.5 text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-950 active:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
               >
-                <PictureInPicture2 size={17} strokeWidth={2} />
+                <Users size={17} strokeWidth={2} aria-hidden="true" />
+                {participantCount > 1 ? (
+                  <span className="text-[0.78rem] font-semibold tabular-nums">{participantCount}</span>
+                ) : null}
               </button>
             ) : null}
             {showMenuButton ? (
@@ -9112,7 +9308,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <div
                         className={LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME}
                         style={{
-                          paddingBottom: showAccountMenuItems ? '16px' : 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
+                          paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
                         }}
                       >
                         <div className="px-4 py-4">
@@ -9131,6 +9327,284 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </span>
                               </button>
                             )}
+                            {conversationId && isPublicRoom && openRoomInfo?.isPublic ? (
+                              <OpenRoomMenuSection
+                                locale={uiLocale}
+                                info={openRoomInfo}
+                                active={menuOpen && menuScreen === 'root'}
+                                shareLabel={roomManagementCopy.shareLinkCopyButtonLabel}
+                                leaveLabel={leaveConversationCopy.menuItemLabel}
+                                onInfoChange={setOpenRoomInfo}
+                                onShare={() => {
+                                  if (shareUrl) void handleCopyShareLink()
+                                  else handleConversationManagementMenuItemPress()
+                                }}
+                                // Minimize: back to where the room was opened from. A live call or live
+                                // speech recognition keeps running there (see the live room bubble).
+                                onMinimize={() => {
+                                  closeMenuPanel()
+                                  onBack?.()
+                                }}
+                                onLeave={() => setDeleteConversationDialogOpen(true)}
+                                onOpenRoom={onOpenOtherRoom}
+                              />
+                            ) : null}
+                            {conversationId ? (
+                              <div data-qa="live-demo-menu-people" className="rounded-2xl border border-gray-200 px-3 py-3">
+                                <button
+                                  type="button"
+                                  data-qa="live-demo-menu-people-all"
+                                  onClick={handleParticipantsMenuItemPress}
+                                  className="flex w-full items-center justify-between gap-3 text-left text-[0.98rem] font-medium text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                                >
+                                  <span className="min-w-0 flex-1">{participantsCopy.menuItemLabel}</span>
+                                  <span className="flex shrink-0 items-center gap-1 text-gray-500">
+                                    <span className="text-[0.9rem] tabular-nums">{initialLanguageSelectorMembers.length}</span>
+                                    <ChevronRight size={18} strokeWidth={2.4} />
+                                  </span>
+                                </button>
+                                {/* Faces of the people in the room: a tap opens that person's profile (and from there a message). */}
+                                <div className="mt-2.5 flex gap-2 overflow-x-auto [scrollbar-width:none]">
+                                  {initialLanguageSelectorMembers.slice(0, 12).map((member) => (
+                                    <button
+                                      key={member.userId}
+                                      type="button"
+                                      data-qa="live-demo-menu-person"
+                                      aria-label={member.name || participantsCopy.menuItemLabel}
+                                      onClick={() => {
+                                        if (member.userId === viewerUserId) return
+                                        onOpenProfile?.(member.userId)
+                                      }}
+                                      className="flex w-12 shrink-0 flex-col items-center gap-1 focus-visible:outline-none"
+                                    >
+                                      <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-gray-100 text-gray-400">
+                                        {member.image ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img src={member.image} alt="" className="h-full w-full object-cover" draggable={false} />
+                                        ) : (
+                                          <UserRound size={22} strokeWidth={2} aria-hidden="true" />
+                                        )}
+                                      </span>
+                                      <span className="w-full truncate text-center text-[0.7rem] text-gray-600">{member.name || ''}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    data-qa="live-demo-menu-invite"
+                                    onClick={handleInviteFromMenuRoot}
+                                    className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-gray-100 text-[0.88rem] font-semibold text-gray-800 transition-colors active:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                                  >
+                                    <UserPlus size={16} strokeWidth={2.2} aria-hidden="true" />
+                                    {participantsCopy.inviteButtonLabel}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    data-qa="live-demo-menu-share-link"
+                                    // With sharing off there is no link yet: its switch is on the room management page.
+                                    onClick={() => {
+                                      if (shareUrl) void handleCopyShareLink()
+                                      else handleConversationManagementMenuItemPress()
+                                    }}
+                                    className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-gray-100 text-[0.88rem] font-semibold text-gray-800 transition-colors active:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                                  >
+                                    <Link2 size={16} strokeWidth={2.2} aria-hidden="true" />
+                                    {roomManagementCopy.shareLinkCopyButtonLabel}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                            <div
+                              data-qa="live-demo-menu-usage"
+                              className="flex w-full items-center justify-between gap-3 px-1 py-1 text-[0.98rem] font-medium text-gray-900"
+                            >
+                              <span className="min-w-0 flex-1">{roomManagementCopy.usageMenuItemLabel}</span>
+                              <span className="flex shrink-0 items-center gap-2 text-sm font-normal tabular-nums text-gray-500">
+                                {isUsageLimited ? (
+                                  <>
+                                    <span className="h-2 w-20 overflow-hidden rounded-full bg-gray-200">
+                                      <span
+                                        className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                                        style={{ width: `${usagePercent}%` }}
+                                      />
+                                    </span>
+                                    <span className={isLimitReached ? 'font-semibold text-red-400' : ''}>
+                                      {formatLivePhoneDemoUsageDuration(remainingSec)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span>{formatLivePhoneDemoUsageDuration(usageSec)}</span>
+                                )}
+                                <span aria-hidden="true">·</span>
+                                <span>{storedMessageCountLabel}</span>
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              data-qa="live-demo-menu-voice-settings"
+                              onClick={handleVoiceSettingsMenuItemPress}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-1 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                            >
+                              <span className="min-w-0 flex-1">{voiceSettingsLabel}</span>
+                              <span className="shrink-0 text-gray-500">
+                                <ChevronRight size={18} strokeWidth={2.4} />
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="px-4 pb-4">
+                          <button
+                            type="button"
+                            onClick={handleConversationManagementMenuItemPress}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                          >
+                            <span className="min-w-0 flex-1">{roomManagementCopy.menuItemLabel}</span>
+                            <span className="shrink-0 text-gray-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+                        </div>
+
+                        {conversationId && isHashRushGameConfigured() ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              data-qa="live-demo-hash-rush-menu-item"
+                              // One item; its page holds the game, the computer link,
+                              // the rankings and how to play.
+                              onClick={handleHashRushPageOpen}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                            >
+                              <span className="min-w-0 flex-1">{hashRushInviteCopy(uiLocale).menuItem}</span>
+                              <span className="shrink-0 text-gray-500">
+                                <ChevronRight size={18} strokeWidth={2.4} />
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {isNativeIosPipAvailable && headerMode === 'conversation' && conversationId ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              data-qa="live-demo-picture-in-picture-menu-item"
+                              onClick={handlePipMenuItemPress}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                            >
+                              <span className="min-w-0 flex-1">{roomManagementCopy.pictureInPictureButtonLabel}</span>
+                              <span className="shrink-0 text-gray-500">
+                                <PictureInPicture2 size={18} strokeWidth={2} />
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {conversationId ? (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              onClick={() => { void handleExportConversationMenuItemPress() }}
+                              disabled={isExportingConversation}
+                              aria-busy={isExportingConversation}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:opacity-60"
+                            >
+                              <span className="min-w-0 flex-1">{conversationExportCopy.menuLabel}</span>
+                              <span className="shrink-0 text-gray-500">
+                                {isExportingConversation
+                                  ? <Loader2 size={18} strokeWidth={2.4} className="animate-spin" />
+                                  : <Share size={18} strokeWidth={2.2} />}
+                              </span>
+                            </button>
+                          </div>
+                        ) : null}
+
+                        <div className="px-4 pb-4">
+                          <button
+                            type="button"
+                            onClick={handleFeedbackMenuItemPress}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                          >
+                            <span className="min-w-0 flex-1">{feedbackCopy.feedbackMenuItemLabel}</span>
+                            <span className="shrink-0 text-gray-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+                        </div>
+
+                        {isNativeAppRuntime && (
+                          <div className="px-4 py-4">
+                            <NativeAppUpdateCard
+                              {...nativeAppUpdateCardContent}
+                              onUpdate={handleNativeAppUpdatePress}
+                            />
+                          </div>
+                        )}
+
+                        {shouldShowDebugWebViewRemountMenuItem && (
+                          <div className="px-4 pt-0 pb-4">
+                            <button
+                              type="button"
+                              onClick={handleDebugWebViewRemountMenuItemPress}
+                              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-3.5 py-3 text-left transition duration-200 hover:border-amber-300 hover:shadow-[0_10px_24px_rgba(245,158,11,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[0.94rem] font-semibold text-gray-900">
+                                  {DEBUG_WEBVIEW_REMOUNT_MENU_LABEL}
+                                </div>
+                                <div className="mt-0.5 text-[0.78rem] text-amber-700">
+                                  Local and dev only
+                                </div>
+                              </div>
+                              <span className="shrink-0 text-amber-600">
+                                <ChevronRight size={18} strokeWidth={2.4} />
+                              </span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                    </motion.section>
+
+                    <SlideSurface
+                      open={menuOpen && menuScreen !== 'root'}
+                      transitionMode={menuScreenTransitionMode}
+                      onClose={requestMenuBackStep}
+                      onRequestClose={handleMenuSurfaceRequestClose}
+                      ariaLabel={menuLabel}
+                      nativeBackPriority={20}
+                      className="absolute inset-0 z-[60] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white will-change-transform"
+                      style={{ touchAction: 'pan-y' }}
+                      stopPropagation
+                    >
+                      <div className="relative h-full overflow-hidden">
+                    {/* Interpreting and voice settings: what used to fill the first screen of the menu. */}
+                    <motion.section
+                      initial={false}
+                      animate={menuContentScreen === 'voice-settings' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuContentScreen !== 'voice-settings'}
+                      data-qa="live-demo-voice-settings-page"
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuContentScreen === 'voice-settings' ? 'auto' : 'none',
+                        zIndex: menuContentScreen === 'voice-settings'
+                          ? 3
+                          : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
+                      }}
+                    >
+                      <LivePhoneDemoPanelHeader
+                        title={voiceSettingsLabel}
+                        backLabel={roomManagementCopy.backButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
+                      <div
+                        className={LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME}
+                        style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)' }}
+                      >
+                        <div className="px-4 py-4">
+                          <div className="space-y-4">
                             {conversationId && (
                               <button
                                 type="button"
@@ -9164,32 +9638,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </button>
                               )}
                             />
-
-                            <div
-                              data-qa="live-demo-menu-usage"
-                              className="flex w-full items-center justify-between gap-3 px-1 py-1 text-[0.98rem] font-medium text-gray-900"
-                            >
-                              <span className="min-w-0 flex-1">{roomManagementCopy.usageMenuItemLabel}</span>
-                              <span className="flex shrink-0 items-center gap-2 text-sm font-normal tabular-nums text-gray-500">
-                                {isUsageLimited ? (
-                                  <>
-                                    <span className="h-2 w-20 overflow-hidden rounded-full bg-gray-200">
-                                      <span
-                                        className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                                        style={{ width: `${usagePercent}%` }}
-                                      />
-                                    </span>
-                                    <span className={isLimitReached ? 'font-semibold text-red-400' : ''}>
-                                      {formatLivePhoneDemoUsageDuration(remainingSec)}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span>{formatLivePhoneDemoUsageDuration(usageSec)}</span>
-                                )}
-                                <span aria-hidden="true">·</span>
-                                <span>{storedMessageCountLabel}</span>
-                              </span>
-                            </div>
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
@@ -9669,197 +10117,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </div>
                             </div>
 
-                            {isNativeAppRuntime && (
-                              <div className="block">
-                                <div className="mb-2 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
-                                  <span className="shrink-0 whitespace-nowrap pl-1 text-[0.98rem] font-medium text-gray-900">{adBannerPositionLabel}</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                  {([
-                                    { value: 'top', label: adBannerPositionTopLabel },
-                                    { value: 'bottom', label: adBannerPositionBottomLabel },
-                                  ] satisfies Array<{ value: LivePhoneDemoAdBannerPosition, label: string }>).map((option) => {
-                                    const isSelected = displayedAdBannerPosition === option.value
-
-                                    return (
-                                      <button
-                                        key={option.value}
-                                        data-qa={`live-demo-ad-banner-${option.value}`}
-                                        type="button"
-                                        aria-pressed={isSelected}
-                                        onClick={() => handleAdBannerPositionSelect(option.value)}
-                                        className={`flex h-11 items-center justify-center rounded-2xl border text-[0.92rem] font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
-                                          isSelected
-                                            ? 'border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
-                                            : 'border-[#E5E7EB] bg-white text-gray-700 hover:border-[#D1D5DB] hover:bg-gray-50'
-                                        }`}
-                                      >
-                                        {option.label}
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
                           </div>
                         </div>
-
-                        <div className="px-4 pb-4">
-                          <button
-                            type="button"
-                            onClick={handleConversationManagementMenuItemPress}
-                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                          >
-                            <span className="min-w-0 flex-1">{roomManagementCopy.menuItemLabel}</span>
-                            <span className="shrink-0 text-gray-500">
-                              <ChevronRight size={18} strokeWidth={2.4} />
-                            </span>
-                          </button>
-                        </div>
-
-                        <div className="px-4 pb-4">
-                          <button
-                            type="button"
-                            onClick={handleParticipantsMenuItemPress}
-                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                          >
-                            <span className="min-w-0 flex-1">{participantsCopy.menuItemLabel}</span>
-                            <span className="shrink-0 text-gray-500">
-                              <ChevronRight size={18} strokeWidth={2.4} />
-                            </span>
-                          </button>
-                        </div>
-
-                        {conversationId ? (
-                          <div className="px-4 pb-4">
-                            <button
-                              type="button"
-                              onClick={() => { void handleExportConversationMenuItemPress() }}
-                              disabled={isExportingConversation}
-                              aria-busy={isExportingConversation}
-                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:opacity-60"
-                            >
-                              <span className="min-w-0 flex-1">{conversationExportCopy.menuLabel}</span>
-                              <span className="shrink-0 text-gray-500">
-                                {isExportingConversation
-                                  ? <Loader2 size={18} strokeWidth={2.4} className="animate-spin" />
-                                  : <Share size={18} strokeWidth={2.2} />}
-                              </span>
-                            </button>
-                          </div>
-                        ) : null}
-
-                        {conversationId && isHashRushGameConfigured() ? (
-                          <div className="px-4 pb-4">
-                            <button
-                              type="button"
-                              data-qa="live-demo-hash-rush-menu-item"
-                              // One item; its page holds the game, the computer link,
-                              // the rankings and how to play.
-                              onClick={handleHashRushPageOpen}
-                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                            >
-                              <span className="min-w-0 flex-1">{hashRushInviteCopy(uiLocale).menuItem}</span>
-                              <span className="shrink-0 text-gray-500">
-                                <ChevronRight size={18} strokeWidth={2.4} />
-                              </span>
-                            </button>
-                          </div>
-                        ) : null}
-
-                        <div className="px-4 pb-4">
-                          <button
-                            type="button"
-                            onClick={handleFeedbackMenuItemPress}
-                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                          >
-                            <span className="min-w-0 flex-1">{feedbackCopy.feedbackMenuItemLabel}</span>
-                            <span className="shrink-0 text-gray-500">
-                              <ChevronRight size={18} strokeWidth={2.4} />
-                            </span>
-                          </button>
-                        </div>
-
-                        {isNativeAppRuntime && (
-                          <div className="px-4 py-4">
-                            <NativeAppUpdateCard
-                              {...nativeAppUpdateCardContent}
-                              onUpdate={handleNativeAppUpdatePress}
-                            />
-                          </div>
-                        )}
-
-                        {shouldShowDebugWebViewRemountMenuItem && (
-                          <div className="px-4 pt-0 pb-4">
-                            <button
-                              type="button"
-                              onClick={handleDebugWebViewRemountMenuItemPress}
-                              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-3.5 py-3 text-left transition duration-200 hover:border-amber-300 hover:shadow-[0_10px_24px_rgba(245,158,11,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="text-[0.94rem] font-semibold text-gray-900">
-                                  {DEBUG_WEBVIEW_REMOUNT_MENU_LABEL}
-                                </div>
-                                <div className="mt-0.5 text-[0.78rem] text-amber-700">
-                                  Local and dev only
-                                </div>
-                              </div>
-                              <span className="shrink-0 text-amber-600">
-                                <ChevronRight size={18} strokeWidth={2.4} />
-                              </span>
-                            </button>
-                          </div>
-                        )}
                       </div>
-
-                      {showAccountMenuItems && (
-                        <div
-                          className="shrink-0 border-t border-gray-200 px-4 pt-4"
-                          style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 12px), 16px)' }}
-                        >
-                          <div className="space-y-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                closeMenuPanel()
-                                onLogout()
-                              }}
-                              disabled={isAuthActionPending || !showAccountActions}
-                              className="inline-flex w-full items-center gap-2 rounded-2xl border border-gray-200 px-3 py-3 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              <LogOut size={16} strokeWidth={2} />
-                              <span>{logoutLabel}</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                closeMenuPanel()
-                                setDeleteAccountDialogOpen(true)
-                              }}
-                              disabled={isAuthActionPending || !showAccountActions}
-                              className="inline-flex w-full items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-3 text-left text-sm font-medium text-rose-600 transition-colors hover:bg-rose-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              <Trash2 size={16} strokeWidth={2} />
-                              <span>{deleteAccountLabel}</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </motion.section>
 
-                    <SlideSurface
-                      open={menuOpen && menuScreen !== 'root'}
-                      transitionMode={menuScreenTransitionMode}
-                      onClose={requestMenuBackStep}
-                      onRequestClose={handleMenuSurfaceRequestClose}
-                      ariaLabel={menuLabel}
-                      nativeBackPriority={20}
-                      className="absolute inset-0 z-[60] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white will-change-transform"
-                      style={{ touchAction: 'pan-y' }}
-                      stopPropagation
-                    >
-                      <div className="relative h-full overflow-hidden">
                     <motion.section
                       initial={false}
                       animate={menuContentScreen === 'feedback' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
@@ -10497,6 +10759,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         onOpenProfile={onOpenProfile}
                         onBack={requestMenuBackStep}
                         conversationId={conversationId}
+                        initialOtherMembers={initialOtherMembers}
                         inviteButtonLabel={participantsCopy.inviteButtonLabel}
                         onInvite={handleInviteFromParticipantsPanel}
                       />
@@ -10529,8 +10792,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onClose={requestMenuBackStep}
                       onRequestClose={handleMenuSurfaceRequestClose}
                       ariaLabel={defaultDisplayLanguageCopy.pageTitle}
-                      nativeBackPriority={30}
-                      className="absolute inset-0 z-[70] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
+                      nativeBackPriority={40}
+                      className="absolute inset-0 z-[80] flex h-full min-w-0 w-full flex-col overflow-hidden bg-white"
                       style={{ touchAction: 'pan-y' }}
                       stopPropagation
                     >
@@ -10643,6 +10906,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         </SlideSurface>
 
         <div className="relative flex min-h-0 flex-1 flex-col">
+          {conversationId && isPublicRoom && headerMode === 'conversation' && isVisible ? (
+            <OpenRoomPeopleStrip conversationId={conversationId} viewerUserId={viewerUserId} locale={uiLocale} onOpenProfile={onOpenProfile} />
+          ) : null}
           {/* Chat Area */}
           <div
             className="relative min-h-0 flex-1 bg-gray-50/50"
@@ -10686,6 +10952,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 >
                   ···
                 </button>
+              )}
+              {directPeerMember && !hasOlderUtterances && (
+                <ConversationPeerProfileCard
+                  member={directPeerMember}
+                  uiLocale={uiLocale}
+                  onOpenProfile={handleOpenProfileForBubble}
+                />
               )}
               {timelineItems.map((item, index) => {
                 const previousItem = timelineItems[index - 1]
@@ -10937,7 +11210,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               </div>
             ) : null}
-            {showEmptyState && (
+            {showEmptyState && !directPeerMember && (
               <ConversationEmptyState uiLocale={uiLocale} />
             )}
             <AnimatePresence>
@@ -11181,58 +11454,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   className="flex items-end gap-1.5"
                 >
                   <motion.div className="flex shrink-0 items-end justify-center self-end">
-                    <button
-                      data-qa="live-demo-mic-button"
-                      onPointerDown={handleMicPointerDown}
-                      onPointerUp={handleMicPointerUp}
-                      onPointerCancel={handleMicPointerCancel}
-                      onClick={handleMicClick}
-                      // Same as voice mode: in a voice talk the call runs speech-to-text itself.
-                      disabled={(isPreparingStart && !isConnecting) || voiceTalkState.joined}
-                      className="relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
-                      style={{
-                        width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
-                        height: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
-                      }}
-                    >
-                      {showRipple && (
-                        <span
-                          className="pointer-events-none absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
-                          style={{ transform: `scale(${rippleScale})`, opacity: 0.22 }}
-                        />
-                      )}
-
-                      {isReady && (
-                        <span className="pointer-events-none absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
-                      )}
-
-                      <span
-                        className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
-                          isLimitReached
-                            ? 'bg-gray-300'
-                            : isReady
-                              ? 'bg-red-500'
-                              : showConnectingOverlay
-                                ? 'bg-gray-300'
-                                : 'bg-gradient-to-br from-amber-400 to-orange-500'
-                        }`}
-                      >
-                        {showConnectingOverlay ? (
-                          <Loader2 size={16} className="animate-spin text-white" />
-                        ) : isReady ? (
-                          <span
-                            aria-hidden
-                            className="rounded-[3px] bg-white"
-                            style={{
-                              width: `${Math.round(COMPOSER_MODE_CONTROL_SIZE_PX * 0.28)}px`,
-                              height: `${Math.round(COMPOSER_MODE_CONTROL_SIZE_PX * 0.28)}px`,
-                            }}
-                          />
-                        ) : (
-                          <Mic size={16} className="text-white" />
-                        )}
-                      </span>
-                    </button>
+                    <ChatActionPlusButton
+                      open={actionPanelOpen}
+                      label={conversationImageCopy.attach}
+                      sizePx={COMPOSER_MODE_CONTROL_SIZE_PX}
+                      onToggle={handleActionPanelToggle}
+                    />
                   </motion.div>
 
                   <motion.form
@@ -11273,30 +11500,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         />
                       </div>
 
-                      {conversationId && viewerUserId ? <ConversationImageComposer conversationId={conversationId} locale={uiLocale}
-                        onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} voiceTalk={voiceTalkMenuItem} acceptSharedPhoto={isVisible} /> : earphoneModeMenuItem ? (
-                      // No sendable conversation: no photo row, but the "+" still
-                      // carries the earphone-mode row and the voice-mode switch.
-                      <ConversationImageComposer conversationId="" allowPhoto={false} locale={uiLocale}
-                        onSent={() => void refreshConversationMessages('push')} onCloseKeyboard={handleToggleComposer}
-                        onMenuOpenChange={setIsAttachmentMenuOpen} earphoneMode={earphoneModeMenuItem} />
-                      ) : (
-                      <motion.button
-                        layoutId="live-phone-demo-keyboard-toggle"
-                        data-qa="live-demo-keyboard-close"
-                        type="button"
-                        onClick={handleToggleComposer}
-                        aria-label={composerCopy.switchToVoiceModeLabel}
-                        className="inline-flex shrink-0 items-center justify-center self-end rounded-full text-gray-500 transition-colors hover:bg-gray-50 active:scale-95"
-                        style={{
-                          width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
-                          height: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
-                        }}
-                      >
-                        <Keyboard size={18} strokeWidth={2.2} />
-                      </motion.button>
-                      )}
                     </div>
 
                     <button
@@ -11347,7 +11550,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     // minmax(0, 1fr) keeps Start centered once the left cell
                     // also holds the earphone button; without it the layout
                     // stays exactly as before.
-                    gridTemplateColumns: earphoneModeGate.controlVisible ? 'minmax(0, 1fr) auto minmax(0, 1fr)' : '1fr auto 1fr',
+                    gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
                   }}
                 >
                   <motion.div
@@ -11355,20 +11558,33 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -12 }}
                     transition={{ duration: 0.09, ease: 'easeOut' }}
-                    // Mirrors the right cell (image + keyboard): same gap, no
-                    // extra inset, so both sides sit at equal distances.
-                    className="flex min-w-0 items-center gap-1 self-end justify-self-start"
+                    // This room's talk time and message count on the far left,
+                    // the speaker / earphone button next to Start (voice talk,
+                    // photo and PiP are in the "+").
+                    className="flex w-full min-w-0 items-center justify-between gap-1 self-end pl-1"
                   >
-                    {/* Group voice talk lives where the usage counters used to be;
-                        the counters moved into the menu's usage row. */}
-                    {headerMode === 'conversation' && conversationId && voiceTalkAvailable ? (
-                      <VoiceTalkButton
-                        uiLocale={uiLocale}
-                        active={voiceTalkState.live || voiceTalkState.joined}
-                        onPress={handleVoiceTalkPress}
-                        sizePx={VOICE_MODE_SIDE_BUTTON_SIZE_PX}
-                      />
-                    ) : null}
+                    <div data-qa="live-demo-voice-usage" className="flex min-w-0 flex-col items-start justify-center leading-4">
+                      {isUsageLimited ? (
+                        <span className="flex min-w-0 max-w-full items-center gap-1.5">
+                          <span className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200">
+                            <span
+                              className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                              style={{ width: `${usagePercent}%` }}
+                            />
+                          </span>
+                          <span className={`text-[0.78rem] tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                            {formatLivePhoneDemoUsageDuration(remainingSec)}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
+                          {formatLivePhoneDemoUsageDuration(usageSec)}
+                        </span>
+                      )}
+                      <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
+                        {storedMessageCountLabel}
+                      </span>
+                    </div>
                     {earphoneModeGate.controlVisible && (
                       <button
                         type="button"
@@ -11481,28 +11697,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   </motion.div>
 
                   <div className="flex items-center gap-1 self-end justify-self-end">
-                    {conversationId && viewerUserId && <ConversationImageComposer voiceButtonSize={VOICE_MODE_SIDE_BUTTON_SIZE_PX} conversationId={conversationId} locale={uiLocale}
-                      onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} acceptSharedPhoto={isVisible} />}
-                    <motion.button
-                      layoutId="live-phone-demo-keyboard-toggle"
-                      data-qa="live-demo-keyboard-open"
-                      type="button"
-                      onPointerDown={(event) => event.preventDefault()}
-                      onClick={handleToggleComposer}
-                      aria-label={composerCopy.switchToKeyboardModeLabel}
-                      className="inline-flex items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
-                      style={{
-                        width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
-                        height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
-                      }}
-                    >
-                      <Keyboard size={18} strokeWidth={2.15} />
-                    </motion.button>
+                    <ChatActionPlusButton
+                      open={actionPanelOpen}
+                      label={conversationImageCopy.attach}
+                      sizePx={VOICE_MODE_PLUS_BUTTON_SIZE_PX}
+                      onToggle={handleActionPanelToggle}
+                    />
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
             )}
+            {/* Photo picking and its preview (one for both input modes); the "+" panel opens the chooser. */}
+            {conversationId && viewerUserId && !isBlockedCounterpart ? (
+              <ConversationImageComposer conversationId={conversationId} locale={uiLocale} hideTrigger photoPickerRef={photoPickerRef}
+                onSent={() => void refreshConversationMessages('push')} onMenuOpenChange={setIsAttachmentMenuOpen} acceptSharedPhoto={isVisible} />
+            ) : null}
+            {actionPanelOpen && !isBlockedCounterpart ? (
+              <ChatActionPanel
+                items={actionPanelItems}
+                heightPx={actionPanelHeightPx}
+                bottomOffset={`max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx}px), ${bottomBarBottomMarginPx}px)`}
+              />
+            ) : null}
           </motion.div>
           {earphoneModeNoticeOpen && (
             <MessageMediaDialog title={earphoneModeCopy.label} onClose={closeEarphoneModeNotice}>

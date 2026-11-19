@@ -5,18 +5,18 @@ import { zipInterestLanguages } from '@/lib/interest-languages'
 import { canonicalizeSttLanguageCode, sanitizeSttLanguageSelection } from '@/lib/stt-languages'
 import { generateJson, type GenerateJsonRequest } from '@/server/llm/generate-json'
 import { isPhotoMessageMetadata } from '@/server/operator-inbox/staff-translate'
-import { AUTO_REPLY_DEFAULT_MODEL } from '@/server/operator-auto-reply/generate'
 import { HAMZZI_SYSTEM_PROMPT } from './prompt'
 
 /**
  * Writes Hamzzi's next message in a one-to-one room: a language-practice
- * buddy that also explains HashChat. With CHATGPT_POOL_KEY set the text comes
- * from the ChatGPT pool, like every operator text (generate-json.ts).
+ * buddy that also explains HashChat. Always on the Anthropic API (Claude
+ * Sonnet 5.5), never the ChatGPT pool (staff decided 2026-11-19).
  */
 export const HAMZZI_TRANSCRIPT_TURNS = 30
 export const HAMZZI_MAX_REPLY_CHARS = 800
 const MESSAGE_MAX_CHARS = 1000
 const CALL_TIMEOUT_MS = 90_000
+export const HAMZZI_DEFAULT_MODEL = 'claude-sonnet-5-5'
 
 export type HamzziReplyContext = {
   profile: {
@@ -145,7 +145,8 @@ export async function generateHamzziReply(context: HamzziReplyContext, deps: { g
     input: context,
     responseSchema: RESPONSE_SCHEMA,
     validate: validateHamzziReply,
-    model: process.env.HAMZZI_REPLY_MODEL?.trim() || AUTO_REPLY_DEFAULT_MODEL,
+    model: process.env.HAMZZI_REPLY_MODEL?.trim() || HAMZZI_DEFAULT_MODEL,
+    provider: 'direct',
     temperature: 0.8,
     maxOutputTokens: 1024,
     timeoutMs: CALL_TIMEOUT_MS,

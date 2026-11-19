@@ -31,8 +31,9 @@ history:
 The HashChat 2.3.0 onboarding has four steps: the most comfortable language ("Choose your most comfortable
 language"), the interest language ("Who would you like to meet?" with a level picker), the age check
 ("When were you born?") and the discovery source ("How did you hear about HashChat?"). Steps 1-3 end with
-"Continue" / "계속"; step 4 ends with "Get started" / "시작하기". A fresh install opens on the Feed and the
-onboarding starts when the Chats tab is opened (owner: intended, 2026-10-31).
+"Continue" / "계속"; step 4 ends with "Get started" / "시작하기". A fresh install opens on the Home tab
+(people to meet, with a sign-in prompt; it was the Feed until 2026-11-16) and the onboarding starts when the
+Chats tab is opened (owner: intended, 2026-10-31).
 
 1. Install and launch. Screenshot every ~500 ms for the first 4 s.
 2. Note every system prompt that appears, and what you did before it.

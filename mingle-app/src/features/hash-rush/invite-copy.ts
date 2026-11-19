@@ -17,6 +17,8 @@ export type HashRushInviteCopy = {
   quit: string
   quitTitle: string
   quitBody: string
+  /** Others are still in the game: it goes on without this phone. */
+  quitBodyOthers: string
   /** The room menu's Hash Rush page. */
   menuItem: string
   pageTitle: string
@@ -58,6 +60,7 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushInviteCopy> = {
     quit: '나가기',
     quitTitle: '해시러시에서 나가시겠습니까?',
     quitBody: '게임을 종료하고 채팅으로 돌아가요.',
+    quitBodyOthers: '게임에서 나와 채팅으로 돌아가요. 다른 사람들은 계속해요.',
     menuItem: '🌻 Hash Rush',
     pageTitle: 'Hash Rush',
     statusNone: '지금 진행 중인 게임이 없어요',
@@ -95,6 +98,7 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushInviteCopy> = {
     quit: 'Quit',
     quitTitle: 'Quit Hash Rush?',
     quitBody: 'The game ends for you and you go back to the chat.',
+    quitBodyOthers: 'You leave the game and go back to the chat. The others play on.',
     menuItem: '🌻 Hash Rush',
     pageTitle: 'Hash Rush',
     statusNone: 'No game is running right now',
@@ -132,6 +136,7 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushInviteCopy> = {
     quit: '退出',
     quitTitle: 'Hash Rushから退出しますか？',
     quitBody: 'ゲームを終了してチャットに戻ります。',
+    quitBodyOthers: 'ゲームから抜けてチャットに戻ります。ほかの人は続けます。',
     menuItem: '🌻 Hash Rush',
     pageTitle: 'Hash Rush',
     statusNone: 'いま進行中のゲームはありません',

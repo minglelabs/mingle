@@ -19,11 +19,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ChevronUp, Headphones, Languages, Mic, MicOff, PhoneOff, Phone, Plus, Volume2, VolumeX } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronUp, Hand, Headphones, Languages, Mic, MicOff, PhoneOff, Phone, Plus, Volume2, VolumeX } from 'lucide-react'
 import LanguageFlag from '@/components/language-flag'
 import VoiceTalkParticipantStrip, { sameVoiceTalkParticipants, type VoiceTalkParticipantChip } from './VoiceTalkParticipantStrip'
 import { buildClientApiPath, clientApiNamespace, namespaceSupportsVoiceTalk } from '@/lib/api-contract'
 import { useRoomPresence } from '@/lib/room-presence'
+import { rememberLiveRoom } from '@/lib/live-room-bubble'
+import { voiceStageCopy } from '@/i18n/voice-stage-copy'
+import { resolveVoiceStage, voiceStageTransition, type VoiceStageRole } from './voice-talk-stage'
 import { useNativeBannerSuppression } from '@/lib/use-native-banner-suppression'
 import { VOICE_TALK_MAX_SEATS, voiceTalkCopy } from '@/i18n/voice-talk-copy'
 import { readDeclinedInvite, writeDeclinedInvite } from '@/lib/declined-invites'
@@ -35,9 +38,10 @@ import { isCoinBillingActive, useCoinWallet } from '@/lib/coin-wallet-client'
 export const NATIVE_VOICE_EVENT = 'mingle:native-voice'
 const MAX_SEATS = VOICE_TALK_MAX_SEATS
 
-type CallParticipant = { userId: string; name: string | null; image: string | null; speechLanguage?: string | null }
+// `role` and `handRaised` come with an open room's call (it has a stage).
+type CallParticipant = { userId: string; name: string | null; image: string | null; speechLanguage?: string | null; role?: string; handRaised?: boolean }
 // `startedBy` comes from servers that send it.
-type StatusCall = { id: string; participants: CallParticipant[]; maxParticipants: number; startedBy?: { userId: string; name: string | null } | null } | null
+type StatusCall = { id: string; participants: CallParticipant[]; maxParticipants: number; startedBy?: { userId: string; name: string | null } | null; stage?: { hostUserId: string } | null } | null
 // `lang` and `micOn` come from app builds that share them; older builds send neither.
 // `interpretOff` is false only for a member who turned interpretation on.
 type RoomMember = { identity: string; userId: string; name: string; isLocal: boolean; isSpeaking: boolean; lang?: string; micOn?: boolean; interpretOff?: boolean }
@@ -147,6 +151,8 @@ function initial(name: string | null | undefined): string {
 
 /** Joins the room's call, starting it when none is live (one call per room, kept by the server). */
 export function joinVoiceTalk(input: { conversationId: string; title?: string; lang: string }) {
+  // The live room bubble names the room, and "undo" after leaving from it joins again in this language.
+  rememberLiveRoom(input.conversationId, { title: input.title, lang: input.lang })
   post({
     type: 'native_voice_open',
     payload: { conversationId: input.conversationId, title: input.title, lang: input.lang, interpret: false },
@@ -486,6 +492,64 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     return people.slice(0, MAX_SEATS)
   }, [call, joined, listenOnly, myLang, room])
 
+  // An open room's call has a stage: speakers on it, listeners below.
+  const stageCopy = voiceStageCopy(props.uiLocale)
+  const stage = useMemo(() => resolveVoiceStage(call, viewerUserId), [call, viewerUserId])
+  const stageSeats = useMemo(
+    () => (stage.enabled ? seats.filter((seat) => !stage.listenerIds.has(seat.userId)) : seats),
+    [seats, stage],
+  )
+  const [stageNote, setStageNote] = useState<string | null>(null)
+  useEffect(() => {
+    if (!stageNote) return
+    const timer = window.setTimeout(() => setStageNote(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [stageNote])
+  const [stageBusy, setStageBusy] = useState(false)
+  const stageAct = useCallback(async (action: 'raise' | 'lower' | 'invite' | 'remove' | 'step_down', userId?: string) => {
+    if (stageBusy) return
+    setStageBusy(true)
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/voice/stage`), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action, ...(userId ? { userId } : {}) }),
+      })
+      const body = await response.json().catch(() => null) as { call?: StatusCall; error?: string } | null
+      if (response.ok && body?.call) setCall(body.call)
+      else setStageNote(body?.error === 'stage_full' ? stageCopy.stageFull : stageCopy.failed)
+    } catch {
+      setStageNote(stageCopy.failed)
+    }
+    setStageBusy(false)
+  }, [conversationId, stageBusy, stageCopy.failed, stageCopy.stageFull])
+
+  // Put on the stage: the app joined with a listener's pass, so it joins
+  // again for one that may send its voice. Taken off it: the mic goes off.
+  const lastStageRoleRef = useRef<VoiceStageRole | null>(null)
+  const stageRole = joined ? stage.myRole : null
+  useEffect(() => {
+    const change = voiceStageTransition(lastStageRoleRef.current, stageRole)
+    lastStageRoleRef.current = stageRole
+    if (change === 'promoted') {
+      post({ type: 'native_voice_close' })
+      // Not cleared when this effect runs again: closing the call changes the
+      // role to "not in it", and the rejoin must still happen.
+      if (stageRejoinTimerRef.current !== null) window.clearTimeout(stageRejoinTimerRef.current)
+      stageRejoinTimerRef.current = window.setTimeout(() => {
+        stageRejoinTimerRef.current = null
+        setStageNote(stageCopy.onStageNow)
+        onListenOnlyChange?.(false)
+        joinVoiceTalk({ conversationId, title: conversationTitle, lang: myLangRef.current })
+      }, 700)
+    }
+    if (change === 'demoted') onListenOnlyChange?.(true)
+  }, [conversationId, conversationTitle, onListenOnlyChange, stageCopy.onStageNow, stageRole])
+  const stageRejoinTimerRef = useRef<number | null>(null)
+  useEffect(() => () => {
+    if (stageRejoinTimerRef.current !== null) window.clearTimeout(stageRejoinTimerRef.current)
+  }, [])
+
   // The same people, small, for the join dialog and the room's call message.
   const participantChips = useMemo<VoiceTalkParticipantChip[]>(
     () => (live ? seats.map((seat) => ({ userId: seat.userId, name: seat.name, image: seat.image, lang: seat.lang })) : []),
@@ -656,7 +720,8 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
     return <>{startDialog}{incomingCard}</>
   }
 
-  const count = joined && room ? room.members.length : call?.participants.length ?? 0
+  // With a stage the count is the people on it (the seats); listeners are listed below.
+  const count = stage.enabled ? stageSeats.length : joined && room ? room.members.length : call?.participants.length ?? 0
 
   return (
     <>
@@ -695,7 +760,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
           ) : null}
           {folded ? (
             <div className="flex -space-x-2">
-              {seats.slice(0, 4).map((s) => (
+              {stageSeats.slice(0, 4).map((s) => (
                 <span key={s.key} className={`inline-flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border-2 bg-amber-100 text-[0.65rem] font-bold text-amber-800 ${s.isSpeaking ? 'border-slate-400' : 'border-white'}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {s.image ? <img src={s.image} alt="" className="h-full w-full object-cover" /> : initial(s.name)}
@@ -731,19 +796,105 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                   room: a 1:1 call is two faces, not two faces and six blanks.
                   The top row already says how many fit. */}
               <div className="flex flex-wrap justify-center gap-x-2 gap-y-2.5 px-3 pb-2 pt-1">
-                {visibleVoiceTalkSeats(seats, MAX_SEATS).map((s, i) => (
-                  <div key={s?.key ?? `empty-${i}`} className="w-[calc(25%-6px)]">
+                {visibleVoiceTalkSeats(stageSeats, MAX_SEATS).map((s, i) => (
+                  <div key={s?.key ?? `empty-${i}`} className="relative w-[calc(25%-6px)]">
                     <VoiceTalkSeatView
                       seat={s}
                       label={s ? (s.isLocal ? copy.me : s.name) : copy.empty}
                       mutedLabel={copy.micMuted}
                       onOpenProfile={onOpenProfile}
                     />
+                    {/* The host takes a speaker off the stage. */}
+                    {stage.enabled && stage.isHost && s && s.userId !== viewerUserId ? (
+                      <button
+                        type="button"
+                        data-qa="voice-stage-remove"
+                        aria-label={stageCopy.offStage}
+                        title={stageCopy.offStage}
+                        disabled={stageBusy}
+                        onClick={() => void stageAct('remove', s.userId)}
+                        className="absolute right-0 top-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white shadow disabled:opacity-50"
+                      >
+                        <ArrowDown size={12} strokeWidth={2.6} />
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>
 
               {error ? <p className="px-3 pb-2 text-[0.8rem] text-rose-600">{error}</p> : null}
+              {stageNote ? <p data-qa="voice-stage-note" role="status" className="px-3 pb-2 text-center text-[0.8rem] text-emerald-700">{stageNote}</p> : null}
+              {/* Someone the host put on the stage can step off it themselves. */}
+              {stage.enabled && joined && stage.myRole === 'speaker' && !stage.isHost ? (
+                <div className="flex justify-center px-3 pb-2">
+                  <button
+                    type="button"
+                    data-qa="voice-stage-step-down"
+                    disabled={stageBusy}
+                    onClick={() => void stageAct('step_down')}
+                    className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-[0.78rem] font-semibold text-gray-700 active:bg-gray-200 disabled:opacity-50"
+                  >
+                    <ArrowDown size={13} strokeWidth={2.4} />
+                    {stageCopy.stepDown}
+                  </button>
+                </div>
+              ) : null}
+
+              {stage.enabled && stage.listeners.length > 0 ? (
+                // The people who only listen. A raised hand shows on the face; the
+                // host's tap puts that person on the stage.
+                <div data-qa="voice-stage-listeners" className="border-t border-gray-100 px-3 pb-2 pt-2">
+                  <p className="pb-1.5 text-[0.72rem] font-semibold text-gray-500">{stageCopy.listeners} {stage.listeners.length}</p>
+                  <div className="flex flex-wrap gap-x-2.5 gap-y-2">
+                    {stage.listeners.map((listener) => {
+                      const face = (
+                        <span className="relative inline-flex h-9 w-9 items-center justify-center overflow-visible">
+                          <span className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-amber-100 text-[0.75rem] font-bold text-amber-800">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            {listener.image ? <img src={listener.image} alt="" className="h-full w-full object-cover" /> : initial(listener.name)}
+                          </span>
+                          {listener.handRaised ? (
+                            <span data-qa="voice-stage-hand" aria-label={stageCopy.raiseHand} className="absolute -right-1 -top-1 inline-flex h-4.5 w-4.5 items-center justify-center rounded-full bg-amber-400 p-0.5 text-white shadow">
+                              <Hand size={11} strokeWidth={2.6} />
+                            </span>
+                          ) : null}
+                          {stage.isHost ? (
+                            <span aria-hidden="true" className="absolute -bottom-1 -right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white shadow">
+                              <ArrowUp size={10} strokeWidth={2.8} />
+                            </span>
+                          ) : null}
+                        </span>
+                      )
+                      return stage.isHost ? (
+                        <button
+                          key={listener.userId}
+                          type="button"
+                          data-qa="voice-stage-invite"
+                          aria-label={`${stageCopy.toStage}: ${listener.name || ''}`}
+                          title={stageCopy.toStage}
+                          disabled={stageBusy}
+                          onClick={() => void stageAct('invite', listener.userId)}
+                          className="disabled:opacity-50"
+                        >
+                          {face}
+                        </button>
+                      ) : (
+                        <button
+                          key={listener.userId}
+                          type="button"
+                          data-qa="voice-stage-listener"
+                          aria-label={listener.name || stageCopy.listeners}
+                          onClick={() => {
+                            if (listener.userId !== viewerUserId) onOpenProfile?.(listener.userId)
+                          }}
+                        >
+                          {face}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               {bystanders.length > 0 ? (
                 // Everyone in the room who is not in the call: a small plain
@@ -770,7 +921,23 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                 // Four round buttons, icons only (color says on or off), with
                 // room between them so a thumb does not hit the neighbor.
                 <div className="flex items-center justify-center gap-4 border-t border-gray-100 px-3 py-3">
-                  {/* The voice this phone sends into the call. */}
+                  {/* A listener asks for the stage here; a speaker has the mic button. */}
+                  {stage.enabled && stage.myRole === 'listener' ? (
+                    <button
+                      type="button"
+                      data-qa="voice-stage-raise-hand"
+                      aria-pressed={stage.myHandRaised}
+                      aria-label={stage.myHandRaised ? stageCopy.lowerHand : stageCopy.raiseHand}
+                      title={stage.myHandRaised ? stageCopy.lowerHand : stageCopy.raiseHand}
+                      disabled={stageBusy}
+                      onClick={() => void stageAct(stage.myHandRaised ? 'lower' : 'raise')}
+                      className={`inline-flex h-12 w-16 items-center justify-center rounded-full transition-colors disabled:opacity-50 ${
+                        stage.myHandRaised ? 'bg-amber-400 text-white shadow-sm active:bg-amber-500' : 'bg-gray-100 text-gray-500 active:bg-gray-200'
+                      }`}
+                    >
+                      <Hand size={22} />
+                    </button>
+                  ) : (
                   <button
                     type="button"
                     data-qa="voice-talk-mic-toggle"
@@ -784,6 +951,7 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
                   >
                     {listenOnly ? <MicOff size={22} /> : <Mic size={22} />}
                   </button>
+                  )}
                   {/* Interpretation: captions of what the others say. */}
                   <button
                     type="button"

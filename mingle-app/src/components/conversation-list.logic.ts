@@ -197,6 +197,15 @@ export function compareConversationRecency(a: ConversationChannelSummary, b: Con
   return rightTimestamp - leftTimestamp;
 }
 
+/**
+ * Open rooms (public rooms) live under Explore, in "Rooms you are in"; the chat
+ * list shows chat rooms only. The room stays in the loaded list, so it still
+ * opens from Explore or a notification.
+ */
+export function isChatListConversation(conversation: Pick<ConversationChannelSummary, "isPublic">): boolean {
+  return conversation.isPublic !== true;
+}
+
 export type ConversationListSortMode = "recent" | "unreadFirst";
 
 export const CONVERSATION_LIST_SORT_MODES: readonly ConversationListSortMode[] = ["recent", "unreadFirst"];

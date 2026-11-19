@@ -1,11 +1,14 @@
 "use client";
 
+import AdBannerPositionSetting from "@/components/account/ad-banner-position-setting";
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import ProfileImageCropper, {
   type ProfileImageCropperChange,
 } from "@/components/profile-image-cropper";
 import ProfileImagePreview from "@/components/profile-image-preview";
+import SignInMethodsSheet from "@/components/account/sign-in-methods-sheet";
+import { resolveSignInMethodsCopy } from "@/i18n/sign-in-methods-copy";
 import {
   clearMyPageProfileCache,
   createEmptyMyPageProfile,
@@ -55,6 +58,8 @@ import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { unregisterNativePushToken } from "@/lib/native-push";
+import { openInviteScreen } from "@/lib/native-invite";
+import { resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
 import { resetMinglePostHogIdentity } from "@/lib/posthog-client";
 import SlideSurface from "@/components/slide-surface";
 import {
@@ -114,7 +119,7 @@ import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wa
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { openContactSync } from "@/lib/native-contacts";
 import StaffAdminEntry from "@/components/staff-admin-entry";
-import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Ticket, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
 import { feedCopy } from "@/i18n/feed-copy";
@@ -432,6 +437,10 @@ function ProfileSettingsPanel({
   const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState<boolean | null>(null);
   const [isSavingNotificationsPreference, setIsSavingNotificationsPreference] = useState(false);
   const [isAccountActionModalOpen, setIsAccountActionModalOpen] = useState(false);
+  const [isSignInMethodsOpen, setIsSignInMethodsOpen] = useState(false);
+  // Sign out sits at the end of a long menu next to other actions, so it asks first.
+  // Drawn in the page: window.confirm shows nothing in the app's WebView.
+  const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
@@ -931,6 +940,16 @@ function ProfileSettingsPanel({
             ) : null}
             <button
               type="button"
+              onClick={openInviteScreen}
+              data-testid="menu-invite"
+              className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 text-left transition active:bg-gray-50"
+            >
+              <Ticket size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+              <span data-qa-allow-truncate className="min-w-0 flex-1 truncate text-[15px] font-semibold">{resolveInviteTicketCopy(locale).inviteScreenEntry}</span>
+              <ChevronRight size={19} strokeWidth={2} className="shrink-0 text-gray-400" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
               onClick={openContactSync}
               data-testid="menu-contact-sync"
               className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-4 text-left transition active:bg-gray-50"
@@ -1092,6 +1111,14 @@ function ProfileSettingsPanel({
               </div>
             </div>
             {isNativeAppRuntime ? (
+              // Moved here from the room menu: where the ad banner sits in a chat room.
+              <AdBannerPositionSetting
+                label={dictionary.demo.adBannerPositionLabel}
+                topLabel={dictionary.demo.adBannerPositionTopLabel}
+                bottomLabel={dictionary.demo.adBannerPositionBottomLabel}
+              />
+            ) : null}
+            {isNativeAppRuntime ? (
               <div className="mt-4 px-0">
                 <NativeAppUpdateCard
                   {...nativeAppUpdateCardContent}
@@ -1101,9 +1128,35 @@ function ProfileSettingsPanel({
             ) : null}
             <button
               type="button"
-              onClick={onSignOut}
+              data-qa="open-sign-in-methods"
+              onClick={() => setIsSignInMethodsOpen(true)}
               disabled={sessionStatus !== "authenticated"}
-              className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-8 flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {resolveSignInMethodsCopy(locale).title}
+            </button>
+            {isSignInMethodsOpen ? <SignInMethodsSheet locale={locale} onClose={() => setIsSignInMethodsOpen(false)} /> : null}
+            {isSignOutConfirmOpen ? (
+              <div className="fixed inset-0 z-[150] flex items-center justify-center px-8" role="alertdialog" aria-modal="true" aria-label={resolveSignInMethodsCopy(locale).signOutConfirm} data-qa="sign-out-confirm">
+                <button type="button" className="absolute inset-0 bg-black/45" aria-label={resolveSignInMethodsCopy(locale).close} onClick={() => setIsSignOutConfirmOpen(false)} />
+                <div className="relative w-full max-w-[320px] rounded-2xl bg-white p-5 text-center shadow-xl">
+                  <p className="text-[15px] font-semibold text-slate-900">{resolveSignInMethodsCopy(locale).signOutConfirm}</p>
+                  <div className="mt-4 flex gap-2">
+                    <button type="button" onClick={() => setIsSignOutConfirmOpen(false)} className="flex h-11 flex-1 items-center justify-center rounded-xl border border-gray-200 bg-white text-[14px] font-semibold text-slate-700 active:bg-gray-100">
+                      {resolveSignInMethodsCopy(locale).close}
+                    </button>
+                    <button type="button" data-qa="sign-out-confirm-yes" onClick={() => { setIsSignOutConfirmOpen(false); onSignOut(); }} className="flex h-11 flex-1 items-center justify-center rounded-xl bg-slate-950 text-[14px] font-semibold text-white active:bg-slate-800">
+                      {copy.logout}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setIsSignOutConfirmOpen(true)}
+              disabled={sessionStatus !== "authenticated"}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <LogOut size={17} strokeWidth={2.1} aria-hidden="true" />
               {copy.logout}
@@ -2653,6 +2706,18 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
               {dictionary.profile.shareProfile}
             </button>
           </div>
+          {/* The invite page (ticket, own code, entering a code) is always one
+              tap away here; the chat list only shows the ticket while there
+              are few rooms. */}
+          <button
+            type="button"
+            onClick={openInviteScreen}
+            data-testid="my-page-invite"
+            className="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-blue-50 px-2 text-[13px] font-bold text-blue-700 transition active:bg-blue-100"
+          >
+            <Ticket size={16} strokeWidth={2.2} aria-hidden="true" />
+            <span className="truncate">{resolveInviteTicketCopy(locale).inviteScreenEntry}</span>
+          </button>
         </section>
 
           {sessionUserId && postingFeedSupported !== false ? (

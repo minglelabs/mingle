@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import type { FeedPostDto } from "@/lib/feed-post-dto";
 import { resolveBackgroundPreset } from "@/lib/post-backgrounds";
+import { postImageThumbnailUrl } from "@/lib/post-image-thumbnail";
 import { searchCopy } from "@/i18n/search-copy";
 import { resolveGridTilePreview } from "./post-grid-tile-text";
 
@@ -37,7 +38,8 @@ export default function PostGridTile({ post, locale, onSelect, badge }: PostGrid
   const accessibleName = previewText || searchCopy(locale).postTileLabel;
   // Remember WHICH url failed, so a post whose image changes is tried again.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const imageUrl = post.image?.url ?? null;
+  // A tile is a third of the screen wide: ask for the small copy, not the full photo.
+  const imageUrl = post.image?.url ? postImageThumbnailUrl(post.image.url) : null;
   const showImage = imageUrl !== null && failedUrl !== imageUrl;
 
   return (

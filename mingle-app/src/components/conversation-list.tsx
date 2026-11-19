@@ -132,6 +132,7 @@ import {
   CONVERSATION_LIST_SORT_MODES,
   isConversationListSortMode,
   sortConversationsForDisplay,
+  isChatListConversation,
   type ConversationListSortMode,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   findNativeSttRestoreConversation,
@@ -213,6 +214,7 @@ import {
   replaceSlideSurfaceHistory,
 } from "@/lib/slide-surface-history";
 import { DIRECT_CONVERSATION_NAVIGATION_GUARD_MS } from "@/lib/direct-conversation-navigation";
+import { publishLiveStt, publishVisibleRoom, rememberLiveRoom, setLiveRoomHandlers } from "@/lib/live-room-bubble";
 import {
   REALTIME_FALLBACK_POLL_INTERVAL_MS,
   shouldRunRealtimeFallbackRefresh,
@@ -235,6 +237,7 @@ const MingleHome = lazy(() => import("@/components/mingle-home"));
 const SpeakTrial = lazy(() => import("@/components/onboarding/speak-trial"));
 const InviteGate = lazy(() => import("@/components/onboarding/invite-gate"));
 const PhoneGate = lazy(() => import("@/components/onboarding/phone-gate"));
+const BannedGate = lazy(() => import("@/components/onboarding/banned-gate"));
 
 const LS_KEY_CONVERSATION_LIST_SORT_MODE = "mingle:conversation-list-sort-mode";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
@@ -2467,7 +2470,7 @@ export default function ConversationList({
   }, [authenticatedUserId, languageOnboardingPhase, sessionStatus]);
 
   const conversationItems = useMemo(
-    () => sortConversationsForDisplay(conversations, conversationSortMode).map((conversation) => (
+    () => sortConversationsForDisplay(conversations.filter(isChatListConversation), conversationSortMode).map((conversation) => (
       mapConversationSummaryToItem(
         conversation,
         locale,
@@ -2511,7 +2514,7 @@ export default function ConversationList({
     }
   }, []);
   const unreadConversationMessageCount = useMemo(
-    () => conversations.reduce(
+    () => conversations.filter(isChatListConversation).reduce(
       (total, conversation) => total + Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0)),
       0,
     ),
@@ -4670,6 +4673,47 @@ export default function ConversationList({
   }, [clearConversationSurfaceHistory, closeConversationOverlay, conversationProfileId, openConversationSummary]);
 
 
+  // From an open room's menu: move straight to another room (one already in
+  // the list, or one just joined, whose summary comes along).
+  const openOtherRoom = useCallback((conversationId: string, joined?: ConversationChannelSummary) => {
+    const target = joined ?? conversationsRef.current.find((conversation) => conversation.id === conversationId);
+    if (target) void startDirectConversationFromProfile(target);
+  }, [startDirectConversationFromProfile]);
+
+  // The live room bubble (components/live-room-bubble.tsx) hides for the room
+  // on screen, shows the room whose speech recognition is running, and asks
+  // this list to open a room or stop that recognition.
+  const activeConversationIdForBubble = activeConversation?.id ?? null;
+  const activeConversationTitleForBubble = activeConversation?.title ?? "";
+  useEffect(() => {
+    publishVisibleRoom(activeConversationIdForBubble);
+    if (activeConversationIdForBubble) rememberLiveRoom(activeConversationIdForBubble, { title: activeConversationTitleForBubble });
+  }, [activeConversationIdForBubble, activeConversationTitleForBubble]);
+  const liveConversationTitle = liveConversationId
+    ? conversations.find((conversation) => conversation.id === liveConversationId)?.title ?? ""
+    : "";
+  useEffect(() => {
+    publishLiveStt(liveConversationId ? { conversationId: liveConversationId, title: liveConversationTitle } : null);
+  }, [liveConversationId, liveConversationTitle]);
+  useEffect(() => {
+    setLiveRoomHandlers({
+      openRoom: (conversationId) => {
+        const target = conversationsRef.current.find((conversation) => conversation.id === conversationId);
+        if (!target) return false;
+        void startDirectConversationFromProfile(target);
+        return true;
+      },
+      stopStt: (conversationId) => {
+        void conversationRoomRefs.current.get(conversationId)?.stopRecording({ forceNativeStop: isNativeAppRuntime() });
+      },
+    });
+    return () => {
+      setLiveRoomHandlers(null);
+      publishVisibleRoom(null);
+      publishLiveStt(null);
+    };
+  }, [startDirectConversationFromProfile]);
+
   const handleCreateConversation = useCallback(async () => {
     if (
       isCreatingConversationRef.current
@@ -5772,9 +5816,11 @@ export default function ConversationList({
 
       {sessionStatus === "authenticated" && !inviteOnboarding && appAccess && !appAccess.allowed ? (
         <Suspense fallback={null}>
-          {appAccess.reason === "needs_phone"
-            ? <PhoneGate locale={locale} onAccess={setAppAccess} />
-            : <InviteGate locale={locale} onAccess={setAppAccess} />}
+          {appAccess.reason === "banned"
+            ? <BannedGate locale={locale} />
+            : appAccess.reason === "needs_phone"
+              ? <PhoneGate locale={locale} onAccess={setAppAccess} />
+              : <InviteGate locale={locale} onAccess={setAppAccess} />}
         </Suspense>
       ) : null}
 
@@ -6205,6 +6251,8 @@ export default function ConversationList({
                         }}
                         conversationTitle={conversation.title}
                         isBlockedCounterpart={conversation.isBlockedCounterpart}
+                        initialIsPublicRoom={conversation.isPublic === true}
+                        onOpenOtherRoom={openOtherRoom}
                         initialUnreadMessageCount={entryUnreadMessageCountByConversationId[conversation.id] ?? 0}
                         isMultiMember={conversation.isMultiMember}
                         conversationId={conversation.id}

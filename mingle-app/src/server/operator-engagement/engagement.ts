@@ -15,8 +15,9 @@ import { visiblePostWhere } from '@/server/posts/post-visibility'
  * Each post and each comment has a fixed plan seeded by its id (how many, and
  * at what delay), so a run only adds what is due by now and is missing:
  * running it again, or after a restart, never doubles anything. Only operator
- * accounts act, and only on operator content: a real person's comment is never
- * answered or liked here (that is the auto-reply feature, kept off).
+ * accounts act. A real person's comment on an operator post gets its own plan
+ * (`planRealCommentEngagement`): the operator it was left for likes it and,
+ * now and then, answers it (Claude Sonnet 5.5, `operator-comments/generate.ts`).
  * Comments and replies are AI-written, so each run writes at most a few.
  */
 
@@ -26,6 +27,8 @@ const MINUTE_MS = 60_000
 export const ENGAGEMENT_WINDOW_MS = 4 * 24 * HOUR_MS
 /** AI-written comments and replies per run; the rest wait for the next run. */
 const MAX_WRITTEN_PER_RUN = 2
+/** Replies to real people's comments per run, on top of `MAX_WRITTEN_PER_RUN`. */
+const MAX_REAL_REPLIES_PER_RUN = 3
 
 type Random = () => number
 const WORKER_CONTEXT: AdminContext = { sessionId: null, ip: null, userAgent: 'operator-engagement' }
@@ -98,6 +101,22 @@ export function planCommentEngagement(commentId: string, isRoot: boolean): Comme
   }
 }
 
+export type RealCommentEngagementPlan = {
+  /** The operator the comment was left for likes it after this delay. */
+  like: number
+  /** That operator answers it after this delay (null: no answer). Root comments only. */
+  reply: number | null
+}
+
+/** How a real person's comment on an operator post is liked and answered. */
+export function planRealCommentEngagement(commentId: string, isRoot: boolean): RealCommentEngagementPlan {
+  const random = seededRandom(`engage-real:${commentId}`)
+  const like = delay(random, 3 * MINUTE_MS, 3 * HOUR_MS)
+  const replies = random() < 0.6
+  const replyAt = delay(random, 10 * MINUTE_MS, 6 * HOUR_MS)
+  return { like, reply: isRoot && replies ? replyAt : null }
+}
+
 /** `ids` in an order fixed by `seed`, so the same accounts are picked again on the next run. */
 export function seededOrder(ids: readonly string[], seed: string): string[] {
   const random = seededRandom(seed)
@@ -109,13 +128,13 @@ export function seededOrder(ids: readonly string[], seed: string): string[] {
   return order
 }
 
-export type EngagementRunResult = { likes: number; comments: number; replies: number; commentLikes: number }
+export type EngagementRunResult = { likes: number; comments: number; replies: number; commentLikes: number; realLikes: number; realReplies: number }
 
 type CommentRow = { id: string; postId: string; authorId: string; parentId: string | null; createdAt: Date; likes: Array<{ userId: string }> }
 
 /** One run: adds every reaction that is due and missing on recent operator posts. */
 export async function runOperatorEngagement(now: Date = new Date(), options: { maxWritten?: number } = {}): Promise<EngagementRunResult> {
-  const result: EngagementRunResult = { likes: 0, comments: 0, replies: 0, commentLikes: 0 }
+  const result: EngagementRunResult = { likes: 0, comments: 0, replies: 0, commentLikes: 0, realLikes: 0, realReplies: 0 }
   let writeBudget = options.maxWritten ?? MAX_WRITTEN_PER_RUN
   const nowMs = now.getTime()
   const since = new Date(nowMs - ENGAGEMENT_WINDOW_MS)
@@ -124,8 +143,10 @@ export async function runOperatorEngagement(now: Date = new Date(), options: { m
     where: { isOperator: true, isActive: true, isDeleted: false, operatorAccount: { reviewState: 'approved' } },
     select: { id: true },
   })).map((user) => user.id)
-  if (operators.length < 2) return result
+  if (operators.length === 0) return result
   const isOperator = new Set(operators)
+  await engageRealComments(now, isOperator, result)
+  if (operators.length < 2) return result
 
   const posts = await prisma.post.findMany({
     where: { ...visiblePostWhere(null), author: { isOperator: true }, publishedAt: { gte: since, lte: now } },
@@ -223,4 +244,52 @@ export async function runOperatorEngagement(now: Date = new Date(), options: { m
     }
   }
   return result
+}
+
+/**
+ * Real people's comments on operator posts from the last `ENGAGEMENT_WINDOW_MS`
+ * (on a post of any age): a root comment is liked and maybe answered by the
+ * post's author; a reply is liked by the operator it answers (else the post's
+ * author). Due steps only, and each step at most once, like the rest.
+ */
+async function engageRealComments(now: Date, isOperator: Set<string>, result: EngagementRunResult): Promise<void> {
+  const nowMs = now.getTime()
+  let replyBudget = MAX_REAL_REPLIES_PER_RUN
+  const comments = await prisma.postComment.findMany({
+    where: {
+      createdAt: { gte: new Date(nowMs - ENGAGEMENT_WINDOW_MS), lte: now },
+      author: { isOperator: false, isDeleted: false },
+      post: { ...visiblePostWhere(null), author: { isOperator: true } },
+      moderationHiddenAt: null,
+      OR: [{ isDeleted: null }, { isDeleted: false }],
+    },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true, parentId: true, replyToUserId: true, createdAt: true,
+      post: { select: { authorId: true } },
+      likes: { select: { userId: true } },
+      replies: { where: { OR: [{ isDeleted: null }, { isDeleted: false }] }, select: { authorId: true } },
+    },
+  })
+  for (const comment of comments) {
+    const plan = planRealCommentEngagement(comment.id, comment.parentId === null)
+    const start = comment.createdAt.getTime()
+    const operatorId = comment.replyToUserId && isOperator.has(comment.replyToUserId) ? comment.replyToUserId : comment.post.authorId
+    if (!isOperator.has(operatorId)) continue
+
+    if (start + plan.like <= nowMs && !comment.likes.some((like) => like.userId === operatorId)) {
+      const createdAt = new Date(Math.min(nowMs, start + plan.like))
+      const created = await prisma.postCommentLike.createMany({ data: [{ commentId: comment.id, userId: operatorId, createdAt }], skipDuplicates: true })
+      if (created.count) {
+        await prisma.postComment.update({ where: { id: comment.id }, data: { likeCount: { increment: created.count } } })
+        result.realLikes += 1
+      }
+    }
+
+    if (replyBudget > 0 && plan.reply !== null && start + plan.reply <= nowMs && !comment.replies.some((reply) => reply.authorId === operatorId)) {
+      replyBudget -= 1
+      const written = await replyToCommentAsOperator(WORKER_CONTEXT, { operatorUserId: operatorId, commentId: comment.id, now })
+      if (written.ok) result.realReplies += 1
+    }
+  }
 }

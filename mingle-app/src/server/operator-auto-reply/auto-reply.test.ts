@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   settingUpsert: vi.fn(),
   userFindFirst: vi.fn(),
   postFindMany: vi.fn(),
+  commentFindMany: vi.fn(),
   messageFindMany: vi.fn(),
   messageFindFirst: vi.fn(),
   queryRaw: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('@/lib/prisma', () => ({
     adminSetting: { findUnique: mocks.settingFindUnique, upsert: mocks.settingUpsert },
     user: { findFirst: mocks.userFindFirst },
     post: { findMany: mocks.postFindMany },
+    postComment: { findMany: mocks.commentFindMany },
     appMessage: { findMany: mocks.messageFindMany, findFirst: mocks.messageFindFirst },
     $queryRaw: mocks.queryRaw,
   },
@@ -30,6 +32,11 @@ import { ageOn, buildAutoReplyInstructions, loadAutoReplyContext, resolveAutoRep
 import { normalizeAutoReplySettings, parseAutoReplyDelayMinutes, updateAutoReplySettings } from './settings'
 import {
   __resetAutoReplyAttemptsForTests,
+  autoReplyDelayMs,
+  autoReplySkipChance,
+  autoReplySkips,
+  popularityFactor,
+  replyDelayFactor,
   autoReplyRequestId,
   autoReplyToCandidate,
   findAutoReplyCandidates,
@@ -39,7 +46,8 @@ import {
 const NOW = new Date('2026-10-02T12:00:00.000Z')
 const ctx = { sessionId: 'sess_1', ip: null, userAgent: null }
 const candidate = {
-  conversationId: 'conv_1', sessionKey: 'sess_key', operatorUserId: 'op_1', messageId: 'msg9', createdAt: new Date('2026-10-02T11:50:00.000Z'),
+  // Waited past the 12 h ceiling, so it is due whatever the drawn delay.
+  conversationId: 'conv_1', sessionKey: 'sess_key', operatorUserId: 'op_1', messageId: 'msg9', createdAt: new Date('2026-10-01T23:30:00.000Z'), followers: 0, activeRooms: 0,
 }
 
 function message(id: string, userId: string, text: string, minute: number, metadata: unknown = null) {
@@ -84,8 +92,8 @@ describe('auto-reply settings', () => {
 describe('auto-reply prompt', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('uses gemini-3.8-flash-lite unless overridden', () => {
-    expect(resolveAutoReplyModel({} as NodeJS.ProcessEnv)).toBe('gemini-3.5-flash-lite')
+  it('uses Claude Sonnet 5.5 unless overridden', () => {
+    expect(resolveAutoReplyModel({} as NodeJS.ProcessEnv)).toBe('claude-sonnet-5-5')
     expect(resolveAutoReplyModel({ OPERATOR_AUTO_REPLY_MODEL: 'x' } as unknown as NodeJS.ProcessEnv)).toBe('x')
   })
 
@@ -98,9 +106,10 @@ describe('auto-reply prompt', () => {
   it('gives the model the profile, the posts and the last 30 messages, oldest first', async () => {
     mocks.userFindFirst.mockResolvedValue({
       name: 'Mina', handle: 'mina', bio: 'Café e praia', birthDate: new Date('2000-01-01'), nationality: 'BR',
-      locationCity: 'Rio', locationCountry: 'Brazil', primaryLanguages: ['pt'],
+      locationCity: 'Rio', locationCountry: 'Brazil', primaryLanguages: ['pt'], createdAt: NOW,
     })
     mocks.postFindMany.mockResolvedValue([{ sourceText: 'Dia de praia!', publishedAt: NOW }, { sourceText: '  ', publishedAt: NOW }])
+    mocks.commentFindMany.mockResolvedValue([{ sourceText: 'Que lindo!', createdAt: NOW, post: { sourceText: 'Pôr do sol em Lisboa' } }])
     mocks.messageFindMany.mockResolvedValue([
       message('m3', 'user_1', '📷 Photo', 3, { image: { key: 'k' } }),
       message('m2', 'op_1', 'Oi! Tudo bem?', 2),
@@ -111,11 +120,13 @@ describe('auto-reply prompt', () => {
     expect(context).toMatchObject({
       profile: { name: 'Mina', bio: 'Café e praia', age: 26, city: 'Rio', language: 'pt' },
       posts: [{ text: 'Dia de praia!' }],
+      comments: [{ text: 'Que lindo!', onPost: 'Pôr do sol em Lisboa' }],
       counterpartName: 'João',
     })
     expect(context?.transcript.map((turn) => [turn.from, turn.text])).toEqual([
       ['them', 'Olá'], ['me', 'Oi! Tudo bem?'], ['them', '[photo]'],
     ])
+    expect(context?.voice.habits.length).toBeGreaterThan(0)
     expect(buildAutoReplyInstructions(context!)).toContain('(pt)')
   })
 
@@ -137,9 +148,10 @@ describe('auto-reply worker', () => {
     vi.clearAllMocks()
     __resetAutoReplyAttemptsForTests()
     mocks.userFindFirst.mockResolvedValue({
-      name: 'Mina', handle: 'mina', bio: null, birthDate: null, nationality: null, locationCity: null, locationCountry: null, primaryLanguages: ['pt'],
+      name: 'Mina', handle: 'mina', bio: null, birthDate: null, nationality: null, locationCity: null, locationCountry: null, primaryLanguages: ['pt'], createdAt: NOW,
     })
     mocks.postFindMany.mockResolvedValue([])
+    mocks.commentFindMany.mockResolvedValue([])
     mocks.messageFindMany.mockResolvedValue([message('msg9', 'user_1', 'Olá', 50)])
     mocks.messageFindFirst.mockResolvedValue({ id: 'msg9' })
     mocks.generateJson.mockImplementation(async (request: { validate: (value: unknown) => string }) => request.validate({ reply: 'Oi!' }))
@@ -151,6 +163,55 @@ describe('auto-reply worker', () => {
     expect(autoReplyRequestId('x'.repeat(80))).toHaveLength(64)
   })
 
+  it('waits longer for popular accounts, answers about one in five almost at once, with a long tail, within 20 s-12 h', () => {
+    expect(popularityFactor(0, 0)).toBe(1)
+    expect(popularityFactor(100, 0)).toBeCloseTo(1 + Math.log(21), 5)
+    expect(popularityFactor(0, 10)).toBeGreaterThan(popularityFactor(10, 0))
+    const draws = Array.from({ length: 4000 }, (_, i) => replyDelayFactor(() => (i + 0.5) / 4000)).sort((a, b) => a - b)
+    expect(draws[799]).toBeLessThan(0.2)
+    expect(draws[800]).toBeGreaterThanOrEqual(1)
+    expect(draws[2400]).toBeCloseTo(1.62, 1)
+    expect(draws[3680]).toBeCloseTo(5, 0)
+    expect(draws[3999]).toBe(12)
+    const delays = (followers: number) => Array.from({ length: 500 }, (_, i) => autoReplyDelayMs({ messageId: `m${i}`, followers, activeRooms: 0 }, 5))
+    const median = (values: number[]) => [...values].sort((a, b) => a - b)[250]
+    expect(median(delays(500))).toBeGreaterThan(3 * median(delays(0)))
+    expect(delays(0).filter((delay) => delay < 60_000).length / 500).toBeGreaterThan(0.12)
+    for (const delay of [...delays(0), ...delays(5000)]) {
+      expect(delay).toBeGreaterThanOrEqual(20_000)
+      expect(delay).toBeLessThanOrEqual(12 * 3_600_000)
+    }
+    expect(autoReplyDelayMs({ messageId: 'same', followers: 3, activeRooms: 1 }, 5)).toBe(autoReplyDelayMs({ messageId: 'same', followers: 3, activeRooms: 1 }, 5))
+  })
+
+  it('leaves some messages unanswered on popular accounts only, the same way on every run', async () => {
+    expect(autoReplySkipChance(0, 0)).toBe(0)
+    expect(autoReplySkipChance(100, 0)).toBeCloseTo(0.12 * Math.log(11), 5)
+    expect(autoReplySkipChance(100_000, 0)).toBe(0.5)
+    const share = (followers: number) => Array.from({ length: 2000 }, (_, i) => autoReplySkips({ messageId: `s${i}`, followers, activeRooms: 0 })).filter(Boolean).length / 2000
+    expect(share(0)).toBe(0)
+    expect(share(100)).toBeCloseTo(0.29, 1)
+    expect(autoReplySkips({ messageId: 'x1', followers: 300, activeRooms: 5 })).toBe(autoReplySkips({ messageId: 'x1', followers: 300, activeRooms: 5 }))
+
+    mocks.settingFindUnique.mockResolvedValue({ value: { enabled: true, delayMinutes: 5, enabledAt: '2026-10-02T09:00:00.000Z' } })
+    const skipped = Array.from({ length: 50 }, (_, i) => `m${i}`).find((id) => autoReplySkips({ messageId: id, followers: 100_000, activeRooms: 0 }))!
+    mocks.queryRaw.mockResolvedValue([{ ...candidate, messageId: skipped, followers: 100_000 }])
+    expect(await runOperatorAutoReplies({ now: () => NOW })).toMatchObject({ candidates: 0, ignored: 1 })
+    expect(mocks.generateJson).not.toHaveBeenCalled()
+  })
+
+  it('asks for one reply to a burst of messages, not one per message', () => {
+    expect(buildAutoReplyInstructions({ profile: { language: 'pt', languageName: 'Portuguese' } } as never)).toContain('Do not answer each message one by one')
+  })
+
+  it('leaves a waiting message alone until its own delay has passed', async () => {
+    mocks.settingFindUnique.mockResolvedValue({ value: { enabled: true, delayMinutes: 5, enabledAt: '2026-10-02T09:00:00.000Z' } })
+    // Message 25 s old: only an instant draw on an account nobody follows could be due.
+    mocks.queryRaw.mockResolvedValue([{ ...candidate, messageId: 'slow-one', createdAt: new Date(NOW.getTime() - 25_000), followers: 400, activeRooms: 30 }])
+    expect(await runOperatorAutoReplies({ now: () => NOW })).toMatchObject({ enabled: true, candidates: 0 })
+    expect(mocks.generateJson).not.toHaveBeenCalled()
+  })
+
   it('does nothing while auto-reply is off', async () => {
     mocks.settingFindUnique.mockResolvedValue(null)
     expect(await runOperatorAutoReplies({ now: () => NOW })).toMatchObject({ enabled: false, candidates: 0 })
@@ -158,7 +219,7 @@ describe('auto-reply worker', () => {
   })
 
   it('skips the query when nothing can have waited long enough since it was turned on', async () => {
-    expect(await findAutoReplyCandidates({ now: NOW, delayMinutes: 5, enabledAt: new Date(NOW.getTime() - 60_000) })).toEqual([])
+    expect(await findAutoReplyCandidates({ now: NOW, enabledAt: new Date(NOW.getTime() - 10_000) })).toEqual([])
     expect(mocks.queryRaw).not.toHaveBeenCalled()
   })
 
@@ -167,7 +228,7 @@ describe('auto-reply worker', () => {
     mocks.queryRaw.mockResolvedValue([candidate])
     const summary = await runOperatorAutoReplies({ now: () => NOW })
     expect(summary).toMatchObject({ enabled: true, candidates: 1, sent: 1 })
-    expect(mocks.generateJson.mock.calls[0][0]).toMatchObject({ model: 'gemini-3.5-flash-lite' })
+    expect(mocks.generateJson.mock.calls[0][0]).toMatchObject({ model: 'claude-sonnet-5-5', provider: 'direct' })
     expect(mocks.send).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: null }),
       { operatorUserId: 'op_1', conversationId: 'conv_1', text: 'Oi!', clientRequestId: 'auto-msg9' },

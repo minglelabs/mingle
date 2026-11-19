@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { ContactMatchFailure, matchContactHashes, type ContactMatchError } from '@/server/contact-match'
+import { prisma } from '@/lib/prisma'
+import { isReviewAccount } from '@/server/app-access'
+import { buildRequestIdentityContext } from '@/server/identity/links'
 import {
   PhoneVerificationFailure,
   confirmPhoneVerification,
@@ -22,6 +25,8 @@ const PHONE_ERROR_STATUS: Record<PhoneVerificationError, number> = {
   wrong_code: 400,
   too_many_requests: 429,
   unavailable: 503,
+  phone_in_use: 409,
+  blocked: 403,
 }
 
 const MATCH_ERROR_STATUS: Record<ContactMatchError, number> = {
@@ -105,13 +110,20 @@ export async function startPhoneSignInRequest(request: NextRequest) {
   }
 }
 
-/** POST /phone/verification/confirm { phone, code } — checks the code and saves the number. */
+/** POST /phone/verification/confirm { phone, code } — checks the code and saves the number (or lands on the number's account). */
 export async function confirmPhone(request: NextRequest) {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
   const body = await readJsonBody(request)
   try {
-    return json({ ok: true, ...(await confirmPhoneVerification(userId, body.phone, body.code)) })
+    const [context, self] = await Promise.all([
+      buildRequestIdentityContext(userId, request.headers),
+      prisma.user.findUnique({ where: { id: userId }, select: { isOperator: true, isOfficial: true, phoneE164: true, email: true } }),
+    ])
+    const selfExempt = Boolean(self && (self.isOperator || self.isOfficial || isReviewAccount(self)))
+    const result = await confirmPhoneVerification(userId, body.phone, body.code, { context, selfExempt })
+    // `switched`: this sign-in was folded into the account that already had the number (or the device). The app renews its session and reloads.
+    return json({ ok: true, phoneE164: result.phoneE164, switched: Boolean(result.switchedTo) })
   } catch (error) {
     if (error instanceof PhoneVerificationFailure) return json({ error: error.code }, PHONE_ERROR_STATUS[error.code])
     throw error

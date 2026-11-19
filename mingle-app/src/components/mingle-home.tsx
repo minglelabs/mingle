@@ -31,6 +31,7 @@ import { MessageRecallProvider } from "./LivePhoneDemo/MessageRecall";
 import { MessageRetranslateProvider } from "./LivePhoneDemo/MessageRetranslate";
 import { MessageReadReceiptsProvider } from "./LivePhoneDemo/MessageReadReceipts";
 import { signIn, signOut, useSession } from "next-auth/react";
+import { waitForNativeDeviceIdentity } from "@/lib/native-device-identity";
 import {
   clearNativeAuthAttempt,
   readNativeAuthAttempt,
@@ -70,7 +71,7 @@ import {
   captureMingleClientEvent,
   resetMinglePostHogIdentity,
 } from "@/lib/posthog-client";
-import type { ConversationChannelOtherMember } from "@/lib/app-conversations";
+import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -135,6 +136,9 @@ type MingleHomeProps = {
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
   onOpenProfile?: (userId: string) => void;
   isBlockedCounterpart?: boolean;
+  /** An open room (public, listed under Explore). */
+  initialIsPublicRoom?: boolean;
+  onOpenOtherRoom?: (conversationId: string, joined?: ConversationChannelSummary) => void;
   initialUnreadMessageCount?: number;
   isMultiMember?: boolean;
 };
@@ -1403,7 +1407,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   // Checks the SMS code by signing in with it; a new number makes an account.
   const confirmPhoneSignIn = useCallback(async (phone: string, code: string): Promise<string | null> => {
     try {
-      const result = await signIn("phone-code", { phone, code, callbackUrl, redirect: false });
+      // The device value lets the server sign in the account this phone already has (one account per person).
+      const device = await waitForNativeDeviceIdentity().catch(() => null);
+      const deviceFields = device
+        ? { deviceId: device.deviceId, deviceKind: device.deviceKind, devicePlatform: device.deviceKind === "keychain" ? "ios" : "android" }
+        : {};
+      const result = await signIn("phone-code", { phone, code, callbackUrl, redirect: false, ...deviceFields });
       if (!result?.ok || result.error) return "wrong_code";
       saveLastSignInMethod("phone");
       window.location.assign(typeof result.url === "string" && result.url ? result.url : callbackUrl);
@@ -2200,6 +2209,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
           onOpenProfile={props.onOpenProfile}
           isBlockedCounterpart={props.isBlockedCounterpart}
+          initialIsPublicRoom={props.initialIsPublicRoom}
+          onOpenOtherRoom={props.onOpenOtherRoom}
           initialUnreadMessageCount={props.initialUnreadMessageCount}
           isMultiMember={props.isMultiMember}
         />

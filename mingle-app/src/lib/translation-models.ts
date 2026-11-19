@@ -37,9 +37,9 @@ export type TranslationRuntimeSelection = {
 }
 
 // Fallback for users whose stored preference is unset (app_users.translation_model is NULL).
-export const DEFAULT_SELECTABLE_TRANSLATION_MODEL: UserSelectableTranslationModel = 'gpt-6-luna'
+export const DEFAULT_SELECTABLE_TRANSLATION_MODEL: UserSelectableTranslationModel = 'claude-haiku-5-5'
 // Written to the account at creation.
-export const NEW_REGISTERED_USER_TRANSLATION_MODEL: UserSelectableTranslationModel = 'gpt-6-luna'
+export const NEW_REGISTERED_USER_TRANSLATION_MODEL: UserSelectableTranslationModel = 'claude-haiku-5-5'
 
 export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
   {

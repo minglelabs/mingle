@@ -231,10 +231,11 @@ async function findUserSelectedTranslationModel(identity: SessionUserIdentity): 
   return null
 }
 
-async function resolveSelectedTranslationModel(
+/** The model stored on the requesting account, or null when there is no account or no stored model. */
+async function resolveStoredTranslationModel(
   request: NextRequest,
   sessionKeyHint?: string | null,
-): Promise<UserSelectableTranslationModel> {
+): Promise<UserSelectableTranslationModel | null> {
   const externalUserId = resolveTrackingExternalUserId(request)
   const sessionKey = resolveTrackingSessionKey(request, sessionKeyHint)
   try {
@@ -259,7 +260,12 @@ async function resolveSelectedTranslationModel(
     }
   }
 
-  return resolveDefaultSelectableTranslationModel()
+  return null
+}
+
+/** True when the text has no letter or digit in any script: only marks and spaces. */
+export function isPunctuationOnlyText(text: string): boolean {
+  return Boolean(text.trim()) && !/[\p{L}\p{N}]/u.test(text)
 }
 
 // When the selected model errors or answers nothing usable, the request moves on to the
@@ -510,9 +516,12 @@ async function runTranslateFinalize(
     isFinal,
     sourceLanguage,
   })
+  // The account's stored model wins over the one the app sends: an app keeps the model it
+  // loaded at launch, so a model changed on the server would otherwise wait for a relaunch.
   const requestedTranslationModel = normalizeSelectableTranslationModel(body.translationModel)
-  const selectedTranslationModel = requestedTranslationModel
-    ?? await resolveSelectedTranslationModel(request, sessionKeyHint)
+  const selectedTranslationModel = await resolveStoredTranslationModel(request, sessionKeyHint)
+    ?? requestedTranslationModel
+    ?? resolveDefaultSelectableTranslationModel()
   const providerResolution = resolveTranslationProviderConfig(selectedTranslationModel)
 
   if (!providerResolution.ok) {
@@ -857,6 +866,20 @@ async function runTranslateFinalize(
       // Nothing after the fixed part: nothing to ask the model.
       return await buildResponseWithOptionalTts({ ...bubbleTailPlan.fixedTranslations }, {
         provider: 'bubble-tail',
+        infrastructureProvider: 'none',
+        model: 'none',
+      })
+    }
+
+    if (isPunctuationOnlyText(ctx.text)) {
+      // Only marks (a lone "。"): nothing to translate, and the model answers it
+      // with unparseable JSON. A bubble keeps its fixed part (an empty fill leaves
+      // it as it is); otherwise the marks stand for themselves in every language.
+      const passthrough = bubbleTailPlan
+        ? {}
+        : Object.fromEntries(targetLanguages.map((language) => [language, ctx.text.trim()]))
+      return await buildResponseWithOptionalTts(passthrough, {
+        provider: 'punctuation-only',
         infrastructureProvider: 'none',
         model: 'none',
       })

@@ -6,8 +6,10 @@ import { buildClientApiPath } from '@/lib/api-contract'
 import { BIO_CHANGED_EVENT, DISPLAY_LANGUAGE_CHANGED_EVENT, sameBioLanguage, type ProfileBioSnapshot } from '@/lib/profile-bio'
 import { profileBioCopy } from '@/i18n/profile-bio-copy'
 
-export default function ProfileBio({ userId, initialBio, locale, dark = false, editing = false }: {
+export default function ProfileBio({ userId, initialBio, locale, dark = false, editing = false, expectTranslate = false }: {
   userId: string; initialBio?: string | null; locale: string; dark?: boolean; editing?: boolean
+  /** The bio is probably in another language: keep the translate row's place while it loads, so what sits below does not move. */
+  expectTranslate?: boolean
 }) {
   const { data: session } = useSession()
   const viewerId = session?.user?.id
@@ -102,6 +104,7 @@ export default function ProfileBio({ userId, initialBio, locale, dark = false, e
       className={`-ml-2 inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-lg px-2 py-2 text-left text-xs ${dark ? 'text-white/75 hover:bg-white/10' : 'text-slate-500 hover:bg-slate-50'} disabled:opacity-70`}>
       <Languages size={15} className="shrink-0" aria-hidden="true" /><span>{pending ? copy.translating : translated && !showOriginal ? copy.original : copy.translate}</span>
     </button>}
+    {!snapshot && expectTranslate && viewerId ? <div className="min-h-11" aria-hidden="true" /> : null}
     {(error || snapshot?.status === 'failed') && <p role="status" className={`text-xs ${dark ? 'text-white/75' : 'text-slate-500'}`}>{copy.failed}</p>}
   </div>
 }
