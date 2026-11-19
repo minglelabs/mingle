@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { useTranslation } from '@/lib/i18n'
-import { Mic, Users, Zap, Globe } from 'lucide-react'
+import { Languages, ShieldCheck, Gamepad2, MapPin } from 'lucide-react'
 import { fadeInUp } from '@/components/sections/shared'
 
 export default function FeaturesSection() {
@@ -34,10 +34,10 @@ export default function FeaturesSection() {
           variants={{ animate: { transition: { staggerChildren: 0.1 } } }}
         >
           {[
-            { icon: Zap, color: 'amber', key: 'realtime' },
-            { icon: Mic, color: 'green', key: 'continuous' },
-            { icon: Globe, color: 'orange', key: 'autoDetect' },
-            { icon: Users, color: 'pink', key: 'speaker' }
+            { icon: Languages, color: 'amber', key: 'interpret' },
+            { icon: ShieldCheck, color: 'green', key: 'honest' },
+            { icon: Gamepad2, color: 'orange', key: 'together' },
+            { icon: MapPin, color: 'pink', key: 'localTips' }
           ].map((feature, i) => (
             <motion.div
               key={i}

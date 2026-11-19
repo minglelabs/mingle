@@ -6,6 +6,7 @@ import {
   isFirstSpeakPending,
   markFirstSpeakPending,
   shouldOpenConversationsInsteadOfFeed,
+  speakTrialNeedsSessionCheck,
 } from '@/lib/first-run'
 
 function memoryStorage() {
@@ -69,5 +70,23 @@ describe('shouldOpenConversationsInsteadOfFeed', () => {
 
   it('leaves the web feed alone', () => {
     expect(shouldOpenConversationsInsteadOfFeed({ ...base, isNativeApp: false })).toBe(false)
+  })
+
+  it('sends a signed-out device that owes the speak trial to the conversation list, even after it picked a language', () => {
+    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, speakTrialDue: true })).toBe(true)
+    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, speakTrialDue: false })).toBe(false)
+  })
+
+  it('does not move a post launch or the web for the speak trial either', () => {
+    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, speakTrialDue: true, hasPostTarget: true })).toBe(false)
+    expect(shouldOpenConversationsInsteadOfFeed({ ...base, onboardingConfirmed: true, speakTrialDue: true, isNativeApp: false })).toBe(false)
+  })
+})
+
+describe('speakTrialNeedsSessionCheck', () => {
+  it('asks for the session only on a device that never signed in and has not done the trial', () => {
+    expect(speakTrialNeedsSessionCheck({ speakTrialDone: false, hasSignedInBefore: false })).toBe(true)
+    expect(speakTrialNeedsSessionCheck({ speakTrialDone: true, hasSignedInBefore: false })).toBe(false)
+    expect(speakTrialNeedsSessionCheck({ speakTrialDone: false, hasSignedInBefore: true })).toBe(false)
   })
 })

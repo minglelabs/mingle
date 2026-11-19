@@ -9,7 +9,7 @@ import {
   type SignInMethod,
 } from "@/lib/last-sign-in-method";
 import { resolveSignInFailedCopy } from "@/i18n/sign-in-failed-copy";
-import { ArrowLeft, Check, Loader2, Mail, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Mail, Smartphone, X } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -19,12 +19,19 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
+import type { SpeechLengthLevel } from "@/lib/speech-length";
+import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
+import { resolvePhoneFriendsCopy } from "@/i18n/phone-friends-copy";
+import { resolvePhoneSignInCopy } from "@/i18n/phone-sign-in-copy";
+import { buildClientApiPath } from "@/lib/api-contract";
 import { MessageReactionsProvider } from "./LivePhoneDemo/MessageReactions";
 import { MessageRecallProvider } from "./LivePhoneDemo/MessageRecall";
 import { MessageRetranslateProvider } from "./LivePhoneDemo/MessageRetranslate";
 import { MessageReadReceiptsProvider } from "./LivePhoneDemo/MessageReadReceipts";
 import { signIn, signOut, useSession } from "next-auth/react";
+import { waitForNativeDeviceIdentity } from "@/lib/native-device-identity";
 import {
   clearNativeAuthAttempt,
   readNativeAuthAttempt,
@@ -64,7 +71,7 @@ import {
   captureMingleClientEvent,
   resetMinglePostHogIdentity,
 } from "@/lib/posthog-client";
-import type { ConversationChannelOtherMember } from "@/lib/app-conversations";
+import type { ConversationChannelOtherMember, ConversationChannelSummary } from "@/lib/app-conversations";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -97,6 +104,12 @@ type MingleHomeProps = {
   isVisible?: boolean;
   /** Render only the existing authentication surface without mounting a room. */
   authOnly?: boolean;
+  /**
+   * The speak trial before sign-in: a room without the sign-in gate, the menu
+   * or saved settings, starting on `speechLength`, with `headerAccessory`
+   * (the countdown) in the header.
+   */
+  trial?: { speechLength: SpeechLengthLevel; headerAccessory: ReactNode };
   /** Auth-only: a line under the logo, e.g. why sign-in is needed. */
   authNotice?: string | null;
   /**
@@ -123,6 +136,9 @@ type MingleHomeProps = {
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
   onOpenProfile?: (userId: string) => void;
   isBlockedCounterpart?: boolean;
+  /** An open room (public, listed under Explore). */
+  initialIsPublicRoom?: boolean;
+  onOpenOtherRoom?: (conversationId: string, joined?: ConversationChannelSummary) => void;
   initialUnreadMessageCount?: number;
   isMultiMember?: boolean;
 };
@@ -367,6 +383,15 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const [signingInProvider, setSigningInProvider] =
     useState<NativeAuthProvider | null>(null);
   const [authPanelStep, setAuthPanelStep] = useState<AuthPanelStep>("provider");
+  // Sign-in by phone number: offered once the server says it can send codes.
+  const [phoneSignInAvailable, setPhoneSignInAvailable] = useState(false);
+  const [isPhoneSheetOpen, setIsPhoneSheetOpen] = useState(false);
+  const phoneSignInCopy = useMemo(() => resolvePhoneSignInCopy(props.locale), [props.locale]);
+  const phoneSheetCopy = useMemo(() => ({
+    ...resolvePhoneFriendsCopy(props.locale),
+    sheetTitle: phoneSignInCopy.sheetTitle,
+    sheetBody: phoneSignInCopy.sheetBody,
+  }), [phoneSignInCopy, props.locale]);
   const [selectedProvider, setSelectedProvider] =
     useState<AuthProvider | null>(null);
   const [agreedPrivacy, setAgreedPrivacy] = useState(false);
@@ -1228,6 +1253,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       handleOpenEmailSheet();
       return;
     }
+    if (selectedProvider === "phone") {
+      setIsPhoneSheetOpen(true);
+      return;
+    }
     handleSocialSignIn(selectedProvider);
   }, [
     handleOpenEmailSheet,
@@ -1363,10 +1392,40 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     signedOutCallbackUrl,
   ]);
 
+  useEffect(() => {
+    if (status !== "unauthenticated") return;
+    let cancelled = false;
+    void fetch(buildClientApiPath("/phone/sign-in"), { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { available?: unknown } | null) => {
+        if (!cancelled) setPhoneSignInAvailable(body?.available === true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [status]);
+
+  // Checks the SMS code by signing in with it; a new number makes an account.
+  const confirmPhoneSignIn = useCallback(async (phone: string, code: string): Promise<string | null> => {
+    try {
+      // The device value lets the server sign in the account this phone already has (one account per person).
+      const device = await waitForNativeDeviceIdentity().catch(() => null);
+      const deviceFields = device
+        ? { deviceId: device.deviceId, deviceKind: device.deviceKind, devicePlatform: device.deviceKind === "keychain" ? "ios" : "android" }
+        : {};
+      const result = await signIn("phone-code", { phone, code, callbackUrl, redirect: false, ...deviceFields });
+      if (!result?.ok || result.error) return "wrong_code";
+      saveLastSignInMethod("phone");
+      window.location.assign(typeof result.url === "string" && result.url ? result.url : callbackUrl);
+      return null;
+    } catch {
+      return "generic";
+    }
+  }, [callbackUrl]);
+
   // Keep loading and unauthenticated states within one stable layout.
   // The panel always stays mounted and only its inner content changes to avoid pop-in.
   const authGateVisualState = resolveAuthGateVisualState({
-    requireAuthGate: REQUIRE_AUTH_FOR_TRANSLATOR,
+    requireAuthGate: REQUIRE_AUTH_FOR_TRANSLATOR && !props.trial,
     status,
     isSigningIn,
     isEmailSubmitting,
@@ -1488,6 +1547,22 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                 <div className="w-1/2 shrink-0">
                   {/* The "last used" badge sits on a button's top edge; room for it on the first one. */}
                   <div className={`space-y-3 ${lastSignInMethod ? "pt-2.5" : ""}`}>
+                    {phoneSignInAvailable ? (
+                      <button
+                        type="button"
+                        data-qa="auth-phone-button"
+                        aria-label={phoneSignInCopy.button}
+                        onClick={() => handleProviderSelect("phone")}
+                        disabled={disabled}
+                        className="relative inline-flex w-full items-center justify-center rounded-2xl bg-[#FBBC32] py-[0.92rem] text-[0.95rem] font-bold text-slate-950 transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span className="absolute left-5">
+                          <Smartphone className="h-5 w-5" aria-hidden />
+                        </span>
+                        {phoneSignInCopy.button}
+                        {lastSignInMethod === "phone" ? lastUsedBadge : null}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       aria-label={
@@ -1683,6 +1758,16 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
               />
             </section>
           </div>
+        ) : null}
+        {isPhoneSheetOpen ? (
+          <PhoneVerifySheet
+            copy={phoneSheetCopy}
+            locale={props.locale}
+            sendPath="/phone/sign-in"
+            confirmCode={confirmPhoneSignIn}
+            onClose={() => setIsPhoneSheetOpen(false)}
+            onVerified={() => {}}
+          />
         ) : null}
         {isEmailSheetOpen ? (
           <div
@@ -2085,8 +2170,11 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onDeleteAccount={handleDeleteAccount}
           defaultFeedbackEmail={typeof session?.user?.email === "string" ? session.user.email : ""}
           isAuthActionPending={isDeletingAccount}
-          showMenuButton
-          showAccountActions={status === "authenticated"}
+          showMenuButton={!props.trial}
+          showAccountActions={status === "authenticated" && !props.trial}
+          enableAccountPreferencesSync={!props.trial}
+          headerAccessory={props.trial?.headerAccessory}
+          trialSpeechLength={props.trial?.speechLength}
           headerMode={props.headerMode}
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}
@@ -2121,6 +2209,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
           onOpenProfile={props.onOpenProfile}
           isBlockedCounterpart={props.isBlockedCounterpart}
+          initialIsPublicRoom={props.initialIsPublicRoom}
+          onOpenOtherRoom={props.onOpenOtherRoom}
           initialUnreadMessageCount={props.initialUnreadMessageCount}
           isMultiMember={props.isMultiMember}
         />

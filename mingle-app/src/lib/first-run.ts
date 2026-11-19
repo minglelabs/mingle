@@ -73,13 +73,28 @@ export function clearDiscoveryPromptDue(storage: FirstRunStorage | null = resolv
  * The app opens on the feed. A device still in its first run is sent to the
  * conversation list instead, where the "say something" card is, unless the
  * launch points at a specific post (a shared link or a push).
+ *
+ * `speakTrialDue`: a signed-out device that never signed in and has not done
+ * the ten-second speak trial (`@/lib/speak-trial`). The trial lives on the
+ * conversation list's sign-in screen, so such a device starts there too, even
+ * when it picked its language on an earlier launch.
  */
 export function shouldOpenConversationsInsteadOfFeed(input: {
   isNativeApp: boolean
   onboardingConfirmed: boolean
   firstSpeakPending: boolean
   hasPostTarget: boolean
+  speakTrialDue?: boolean
 }): boolean {
   if (!input.isNativeApp || input.hasPostTarget) return false
-  return !input.onboardingConfirmed || input.firstSpeakPending
+  return !input.onboardingConfirmed || input.firstSpeakPending || input.speakTrialDue === true
+}
+
+/**
+ * Whether the first-run decision has to wait for the session: only a device
+ * that might owe the speak trial (never signed in here, trial not done) needs
+ * to know if it is signed out. Everyone else is judged at once.
+ */
+export function speakTrialNeedsSessionCheck(input: { speakTrialDone: boolean; hasSignedInBefore: boolean }): boolean {
+  return !input.speakTrialDone && !input.hasSignedInBefore
 }

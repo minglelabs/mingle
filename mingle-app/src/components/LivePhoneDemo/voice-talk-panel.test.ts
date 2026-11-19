@@ -87,7 +87,8 @@ describe('voice talk panel', () => {
     expect(panelSource).toContain('if (leaveSignal && joined) setConfirmLeave(true)')
     expect(copySource).toContain("leaveTitle: '보이스톡에서 나가시겠습니까?'")
     expect(panelSource).toContain('data-qa="voice-talk-leave-confirm-button"')
-    expect(panelSource.split("post({ type: 'native_voice_close' })").length - 1).toBe(1)
+    // Twice: the leave button, and the reconnect when the host puts a listener on the stage.
+    expect(panelSource.split("post({ type: 'native_voice_close' })").length - 1).toBe(2)
   })
 
   it('has a mic switch for listening only, in both languages', () => {
@@ -105,9 +106,11 @@ describe('voice talk panel', () => {
   })
 
   it('shows four round icon buttons with room between them: mic, interpret, read-aloud, leave', () => {
-    const row = panelSource.slice(panelSource.indexOf('data-qa="voice-talk-mic-toggle"') - 400, panelSource.indexOf('data-qa="voice-talk-leave"') + 900)
+    // The row starts at the raise-hand button, which a listener in an open room's call has in the mic's place.
+    const row = panelSource.slice(panelSource.indexOf('data-qa="voice-stage-raise-hand"') - 600, panelSource.indexOf('data-qa="voice-talk-leave"') + 900)
     expect(row).toContain('gap-4')
-    expect(row.split('h-12 w-16').length - 1).toBe(4)
+    expect(row.split('h-12 w-16').length - 1).toBe(5)
+    expect(row).toContain("{stage.enabled && stage.myRole === 'listener' ? (")
     expect(row).not.toContain('{copy.micOnState}</span>')
     expect(row).toContain('aria-label={listenOnly ? copy.micOffState : copy.micOnState}')
   })

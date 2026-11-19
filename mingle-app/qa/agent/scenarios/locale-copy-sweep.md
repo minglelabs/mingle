@@ -32,7 +32,8 @@ history:
 
 For each of ko, en, ja, es and de, plus ar (right to left) and any locale the diff touched or the static check flagged:
 1. Switch the app language in My Page.
-2. Screenshot: the bottom tab bar (Feed, Chats, Explore, My in English), the conversation list with its header
+2. Screenshot: the bottom tab bar (Home, Chats, Explore, My in English), the Home tab (heading, card badges,
+   notice strip), the conversation list with its header
    (search, bell, gear) and the gear menu, the feed, a room (header, composer, menu), My Page and its settings, and the
    language selector header with its "Popular / All languages" section titles, and the sign-up survey
    ("How did you hear about HashChat?") option list when reachable.

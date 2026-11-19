@@ -52,6 +52,7 @@ import { buildCollectExpression, buildFingerprintExpression, buildTapExpression,
 const APP_LOCALE_STORAGE_KEY = 'mingle.appLocale';
 
 import { goldenFixture, goldenFixtures, wavDurationMs } from './qa-agent-peer.lib.mjs';
+import { EXPECTED_RN_API_NAMESPACE_BY_OS } from './rn-api-namespaces.mjs';
 
 const APP_ROOT = path.resolve(import.meta.dirname, '..');
 const REPO_ROOT = path.resolve(APP_ROOT, '..');
@@ -675,8 +676,8 @@ async function inWebView(state, run) {
   await appium(state, 'POST', '/session/:session/context', { name: webview });
   // Android: every WebView in the app process (the AdMob banner's included) is a window of one
   // chromedriver context, so pick the app page, not the ad page.
-  if (state.platform === 'android') await selectAndroidAppWindow(state);
   try {
+    if (state.platform === 'android') await selectAndroidAppWindow(state);
     return await run();
   } finally {
     await appium(state, 'POST', '/session/:session/context', { name: 'NATIVE_APP' }).catch(() => {});

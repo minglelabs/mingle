@@ -1,4 +1,4 @@
-export type AdminTabKey = "inbox" | "activity" | "review" | "feed" | "operators" | "more";
+export type AdminTabKey = "inbox" | "activity" | "review" | "feed" | "operators" | "waitlist" | "more";
 
 /** Optional count per tab (e.g. unread inbox rooms). 0 / undefined shows nothing. */
 export type AdminTabBadges = Partial<Record<AdminTabKey, number>>;
@@ -12,6 +12,7 @@ export const ADMIN_TABS: readonly AdminTabDefinition[] = [
   { key: "review", href: "/admin/operators/review", label: "검토" },
   { key: "feed", href: "/admin/feed", label: "피드" },
   { key: "operators", href: "/admin/operators", label: "계정" },
+  { key: "waitlist", href: "/admin/waitlist", label: "대기열" },
   { key: "more", href: "/admin/more", label: "더보기" },
 ];
 

@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { getAuthOptions } from '@/lib/auth-options'
 import { ContactMatchFailure, matchContactHashes, type ContactMatchError } from '@/server/contact-match'
+import { prisma } from '@/lib/prisma'
+import { isReviewAccount } from '@/server/app-access'
+import { buildRequestIdentityContext } from '@/server/identity/links'
 import {
   PhoneVerificationFailure,
   confirmPhoneVerification,
   isPhoneVerificationAvailable,
+  readReviewPhoneLogins,
   readVerifiedPhone,
   removeVerifiedPhone,
+  startPhoneSignIn,
   startPhoneVerification,
   type PhoneVerificationError,
 } from '@/server/phone-verification'
@@ -20,6 +25,8 @@ const PHONE_ERROR_STATUS: Record<PhoneVerificationError, number> = {
   wrong_code: 400,
   too_many_requests: 429,
   unavailable: 503,
+  phone_in_use: 409,
+  blocked: 403,
 }
 
 const MATCH_ERROR_STATUS: Record<ContactMatchError, number> = {
@@ -74,13 +81,49 @@ export async function startPhone(request: NextRequest) {
   }
 }
 
-/** POST /phone/verification/confirm { phone, code } — checks the code and saves the number. */
+/** The caller's address, for the per-client cap on sign-in codes. */
+function readClientKey(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+  return (forwarded || request.headers.get('x-real-ip') || '').slice(0, 64)
+}
+
+/** GET /phone/sign-in — whether the sign-in screen offers the phone number button. */
+export async function readPhoneSignInAvailability() {
+  return json({ available: isPhoneVerificationAvailable() || readReviewPhoneLogins().size > 0 })
+}
+
+/**
+ * POST /phone/sign-in { phone, locale? } — texts a sign-in code; no account
+ * needed. The code is then checked by the "phone-code" NextAuth provider.
+ */
+export async function startPhoneSignInRequest(request: NextRequest) {
+  const body = await readJsonBody(request)
+  try {
+    await startPhoneSignIn(body.phone, {
+      locale: typeof body.locale === 'string' ? body.locale.slice(0, 16) : undefined,
+      clientKey: readClientKey(request),
+    })
+    return json({ ok: true })
+  } catch (error) {
+    if (error instanceof PhoneVerificationFailure) return json({ error: error.code }, PHONE_ERROR_STATUS[error.code])
+    throw error
+  }
+}
+
+/** POST /phone/verification/confirm { phone, code } — checks the code and saves the number (or lands on the number's account). */
 export async function confirmPhone(request: NextRequest) {
   const userId = await readSessionUserId()
   if (!userId) return json({ error: 'unauthorized' }, 401)
   const body = await readJsonBody(request)
   try {
-    return json({ ok: true, ...(await confirmPhoneVerification(userId, body.phone, body.code)) })
+    const [context, self] = await Promise.all([
+      buildRequestIdentityContext(userId, request.headers),
+      prisma.user.findUnique({ where: { id: userId }, select: { isOperator: true, isOfficial: true, phoneE164: true, email: true } }),
+    ])
+    const selfExempt = Boolean(self && (self.isOperator || self.isOfficial || isReviewAccount(self)))
+    const result = await confirmPhoneVerification(userId, body.phone, body.code, { context, selfExempt })
+    // `switched`: this sign-in was folded into the account that already had the number (or the device). The app renews its session and reloads.
+    return json({ ok: true, phoneE164: result.phoneE164, switched: Boolean(result.switchedTo) })
   } catch (error) {
     if (error instanceof PhoneVerificationFailure) return json({ error: error.code }, PHONE_ERROR_STATUS[error.code])
     throw error

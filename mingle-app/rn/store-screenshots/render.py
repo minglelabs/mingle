@@ -212,6 +212,81 @@ def render(html_text: str, out: Path, work: Path) -> None:
     subprocess.run(["pngquant", "--quality=80-95", "--speed=1", "--force", "--ext=.png", str(out)], check=True)
 
 
+# 08: a statement slide with no phone: the headline, a large "no entry" badge,
+# the three kinds of users who are banned, and a line on how reporting works.
+STATEMENT_PAGE = """<!doctype html>
+<html lang="{lang}" dir="{dir}"><head><meta charset="utf-8"><style>
+html,body{{margin:0;width:{W}px;height:{H}px;overflow:hidden}}
+body{{background:linear-gradient(180deg,#FFFBF0 0%,#FFF1CC 55%,#FDE3A0 100%);
+  font-family:{font},-apple-system,"SF Pro Display","Helvetica Neue",sans-serif;color:#1F2430}}
+h1{{position:absolute;top:220px;left:60px;right:60px;margin:0;text-align:center;
+  font-size:112px;line-height:1.2;font-weight:800;letter-spacing:-1px;color:#1F2430;white-space:pre}}
+.badge{{position:absolute;left:50%;top:760px;width:760px;height:760px;margin-left:-380px}}
+.points{{position:absolute;left:80px;right:80px;top:1660px;display:flex;flex-direction:column;gap:44px;align-items:center}}
+.point{{display:flex;align-items:center;justify-content:center;gap:36px;min-width:760px;padding:34px 56px;border-radius:999px;background:#fff;
+  box-shadow:0 18px 40px rgba(120,80,0,.14);font-size:84px;font-weight:800}}
+.point s{{text-decoration:none;position:relative}}
+.point s::after{{content:"";position:absolute;left:-8px;right:-8px;top:52%;height:12px;border-radius:6px;background:#EF4444}}
+.x{{flex:none;width:92px;height:92px;border-radius:50%;background:#EF4444;color:#fff;display:flex;align-items:center;justify-content:center;font-size:62px;font-weight:900}}
+.note{{position:absolute;left:90px;right:90px;bottom:250px;text-align:center;font-size:60px;line-height:1.35;font-weight:700;color:#7A5A1A}}
+</style></head><body>
+<h1 id="t">{caption}</h1>
+<svg class="badge" viewBox="0 0 200 200" aria-hidden="true">
+  <path d="M100 14 L170 40 V96 C170 140 140 172 100 188 C60 172 30 140 30 96 V40 Z" fill="#F29A0E"/>
+  <path d="M100 30 L156 51 V96 C156 131 133 157 100 171 C67 157 44 131 44 96 V51 Z" fill="#FFF8E6"/>
+  <circle cx="100" cy="88" r="20" fill="#1F2430"/>
+  <path d="M64 146 C66 120 82 110 100 110 C118 110 134 120 136 146 Z" fill="#1F2430"/>
+  <circle cx="100" cy="104" r="62" fill="none" stroke="#EF4444" stroke-width="13"/>
+  <line x1="57" y1="61" x2="143" y2="147" stroke="#EF4444" stroke-width="13" stroke-linecap="round"/>
+</svg>
+<div class="points">{points}</div>
+<div class="note">{note}</div>
+<script>
+const t=document.getElementById('t');let s=112;
+while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
+</script></body></html>"""
+
+
+# 05: trip planning. A photo of friends looking at a phone, the trip chat on a
+# tilted phone over it, and the route (Incheon Airport -> Gwanghwamun -> Gangnam
+# -> Han River) as a card of connected stops.
+TRIP_PAGE = """<!doctype html>
+<html lang="{lang}" dir="{dir}"><head><meta charset="utf-8"><style>
+html,body{{margin:0;width:{W}px;height:{H}px;overflow:hidden}}
+body{{background:linear-gradient(180deg,#FFFBF0 0%,#FFF1CC 55%,#FDE3A0 100%);
+  font-family:{font},-apple-system,"SF Pro Display","Helvetica Neue",sans-serif}}
+h1{{position:absolute;top:150px;left:60px;right:60px;margin:0;text-align:center;
+  font-size:118px;line-height:1.16;font-weight:800;letter-spacing:-1px;color:#F29A0E;white-space:pre}}
+.photo{{position:absolute;left:70px;right:70px;top:500px;height:894px;border-radius:64px;overflow:hidden;
+  background:url("{photo}") center/cover;box-shadow:0 30px 70px rgba(120,80,0,.25)}}
+.phone{{position:absolute;{phone_side}:58px;top:1150px;width:600px;height:1305px;border-radius:80px;background:#1F2430;
+  box-shadow:0 40px 90px rgba(60,40,0,.35);transform:rotate({tilt}deg)}}
+.screen{{position:absolute;left:19px;top:19px;width:562px;height:1267px;border-radius:63px;overflow:hidden;background:#fff}}
+.bar{{height:67px;background:{bar};color:{ink};position:relative;font-family:-apple-system,"SF Pro Text",sans-serif}}
+.bar .time{{position:absolute;left:58px;top:20px;font-size:25px;font-weight:600}}
+.screen img{{width:100%;display:block}}
+.island{{position:absolute;left:50%;top:16px;width:156px;height:45px;margin-left:-78px;border-radius:23px;background:#000}}
+.route{{position:absolute;{route_side}:70px;top:1500px;width:520px;padding:44px 40px;border-radius:52px;background:#fff;
+  box-shadow:0 26px 60px rgba(120,80,0,.22)}}
+.stop{{position:relative;display:flex;align-items:center;gap:30px;height:150px}}
+.stop + .stop::before{{content:"";position:absolute;{line_side}:46px;top:-58px;height:66px;border-left:8px dashed #F5B640}}
+.pin{{position:relative;flex:none;width:100px;height:100px;border-radius:50%;background:#FFF1CC;display:flex;align-items:center;justify-content:center;font-size:54px}}
+.pin b{{position:absolute;{badge_side}:-8px;top:-8px;width:44px;height:44px;border-radius:50%;background:#F29A0E;color:#fff;font-size:26px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;font-family:-apple-system,"SF Pro Text",sans-serif}}
+.name{{font-size:58px;font-weight:800;color:#1F2430;white-space:nowrap;overflow:hidden;min-width:0;flex:1}}
+</style></head><body>
+<h1 id="t">{caption}</h1>
+<div class="photo"></div>
+<div class="route">{stops}</div>
+<div class="phone"><div class="screen"><div class="bar" dir="ltr"><span class="time">9:41</span></div>
+<img src="{img}"><div class="island"></div></div></div>
+<script>
+const t=document.getElementById('t');let s=118;
+while(t.scrollWidth>t.clientWidth&&s>56){{s-=2;t.style.fontSize=s+'px';}}
+document.querySelectorAll('.name').forEach((n)=>{{let z=58;while(n.scrollWidth>n.clientWidth&&z>30){{z-=2;n.style.fontSize=z+'px';}}}});
+</script></body></html>"""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", help="comma-separated caption languages (e.g. ko,en)")
@@ -238,8 +313,42 @@ def main() -> None:
                     ), out, work)
                     rendered[(lang, shot["id"])] = out
                     continue
+                if shot.get("statement"):
+                    statement = shot["statement"]
+                    points = "".join(
+                        f'<div class="point"><span class="x">✕</span><s>{html.escape(word)}</s></div>'
+                        for word in statement["points"][lang]
+                    )
+                    render(STATEMENT_PAGE.format(
+                        lang=lang, dir="rtl" if lang == "ar" else "ltr", W=W, H=H,
+                        font=FONT.get(lang, '"SF Pro Display"'),
+                        caption=html.escape(shot["caption"][lang]),
+                        points=points,
+                        note=html.escape(statement["note"][lang]),
+                    ), out, work)
+                    rendered[(lang, shot["id"])] = out
+                    continue
                 capture = HERE / shot["capture"].format(lang=lang)
                 bar, ink = status_bar_colors(capture)
+                if shot.get("tripScene"):
+                    rtl = lang == "ar"
+                    stops = "".join(
+                        f'<div class="stop"><span class="pin">{stop["icon"]}<b>{i + 1}</b></span>'
+                        f'<span class="name">{html.escape(stop["name"][lang])}</span></div>'
+                        for i, stop in enumerate(dm["tripStops"])
+                    )
+                    render(TRIP_PAGE.format(
+                        bar=bar, ink=ink, lang=lang, dir="rtl" if rtl else "ltr", W=W, H=H,
+                        font=FONT.get(lang, '"SF Pro Display"'),
+                        caption=html.escape(shot["caption"][lang]),
+                        photo=(HERE / "trip/friends.jpg").as_uri(),
+                        img=capture.as_uri(), stops=stops,
+                        phone_side="left" if rtl else "right", route_side="right" if rtl else "left",
+                        line_side="right" if rtl else "left", badge_side="left" if rtl else "right",
+                        tilt=-4 if rtl else 4,
+                    ), out, work)
+                    rendered[(lang, shot["id"])] = out
+                    continue
                 if shot.get("photo"):
                     render(PHOTO_PAGE.format(
                         bar=bar, ink=ink, lang=lang, dir="rtl" if lang == "ar" else "ltr", W=W, H=H,
@@ -252,7 +361,8 @@ def main() -> None:
                     continue
                 if shot.get("scene"):
                     scene = shot["scene"]
-                    lines = dm[scene["lines"]][: scene.get("count", 4)]
+                    # A viewer can have its own lines (the Korean viewer talks with a foreign friend).
+                    lines = (dm.get("viewerOverrides", {}).get(lang, {}).get(scene["lines"]) or dm[scene["lines"]])[: scene.get("count", 4)]
                     band = scene.get("band", 370)
                     render(BOOKING_PAGE.format(
                         bar=bar, ink=ink, lang=lang, dir="rtl" if lang == "ar" else "ltr", W=W, H=H,
@@ -283,7 +393,11 @@ def main() -> None:
                 d.mkdir(parents=True, exist_ok=True)
                 for old in d.glob("*.png"):
                     old.unlink()
+                # Google Play takes at most 8 phone screenshots; the App Store takes 10.
+                play = "google-play" in target.name or "google-play" in str(target)
                 for shot in cfg["shots"]:
+                    if play and shot.get("iosOnly"):
+                        continue
                     shutil.copy(rendered[(lang, shot["id"])], d / f"{shot['id']}.png")
         print("done")
 

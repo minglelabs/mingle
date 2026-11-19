@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { hasConfirmedLanguageOnboarding } from "@/components/LivePhoneDemo/language-onboarding.storage";
 import { conversationsHref } from "@/lib/posting-feed-guard";
-import { isFirstSpeakPending, shouldOpenConversationsInsteadOfFeed } from "@/lib/first-run";
+import { homeHref } from "@/lib/home-routes";
+import { isFirstSpeakPending, shouldOpenConversationsInsteadOfFeed, speakTrialNeedsSessionCheck } from "@/lib/first-run";
+import { readLastSignInMethod } from "@/lib/last-sign-in-method";
+import { isSpeakTrialDone } from "@/lib/speak-trial";
 
-export type FirstRunHomeStatus = "checking" | "feed" | "conversations";
+export type FirstRunHomeStatus = "checking" | "feed" | "conversations" | "home";
 
 function scheduleMicrotask(callback: () => void): void {
   if (typeof queueMicrotask === "function") queueMicrotask(callback);
@@ -22,14 +26,32 @@ function isNativeAppRuntime(): boolean {
 }
 
 /**
+ * Whether this page load itself started on the current path (the app shell
+ * or a browser opened `/feed`), as opposed to arriving here by a tap inside
+ * the app after starting somewhere else (home, then the explore tab's posts).
+ */
+function isDocumentEntry(): boolean {
+  try {
+    const entry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    if (!entry?.name) return true;
+    return new URL(entry.name).pathname === window.location.pathname;
+  } catch {
+    return true;
+  }
+}
+
+/**
  * The app shell opens the feed as its first screen. A device still in its
  * first run (see `@/lib/first-run`) starts on the conversation list instead,
- * where it is asked to say something. Decided on the client after mount, like
+ * where it is asked to say something: signed in, by the "say something" card;
+ * signed out on a device that never signed in, by the ten-second speak trial
+ * in front of the sign-in screen. Decided on the client after mount, like
  * the posting guard, so the first paint matches the server render; the caller
  * shows blank chrome while "checking" and after "conversations".
  */
 export function useFirstRunHome(locale: string): FirstRunHomeStatus {
   const router = useRouter();
+  const { status: sessionStatus } = useSession();
   const [status, setStatus] = useState<FirstRunHomeStatus>(() => (launchJudged ? "feed" : "checking"));
 
   useEffect(() => {
@@ -40,15 +62,37 @@ export function useFirstRunHome(locale: string): FirstRunHomeStatus {
         setStatus("feed");
         return;
       }
-      launchJudged = true;
       const params = new URLSearchParams(window.location.search);
-      const moveToConversations = shouldOpenConversationsInsteadOfFeed({
+      const base = {
         isNativeApp: isNativeAppRuntime(),
         onboardingConfirmed: hasConfirmedLanguageOnboarding(),
         firstSpeakPending: isFirstSpeakPending(),
         hasPostTarget: params.has("postId") || params.has("commentId"),
+      };
+      // Only a device that may owe the speak trial waits for the session; the
+      // rest is judged at once, as before.
+      const mayOweSpeakTrial = base.isNativeApp
+        && !base.hasPostTarget
+        && !shouldOpenConversationsInsteadOfFeed(base)
+        && speakTrialNeedsSessionCheck({
+          speakTrialDone: isSpeakTrialDone(),
+          hasSignedInBefore: readLastSignInMethod() !== null,
+        });
+      if (mayOweSpeakTrial && sessionStatus === "loading") return;
+      launchJudged = true;
+      const moveToConversations = shouldOpenConversationsInsteadOfFeed({
+        ...base,
+        speakTrialDue: mayOweSpeakTrial && sessionStatus === "unauthenticated",
       });
       if (!moveToConversations) {
+        // The app shell (and the site root) still opens `/feed` first. The
+        // first screen is the home tab now: a launch that names no post goes
+        // there. Later visits to the feed in this page load stay on the feed.
+        if (!base.hasPostTarget && isDocumentEntry()) {
+          setStatus("home");
+          router.replace(`${homeHref(locale)}${window.location.search}`);
+          return;
+        }
         setStatus("feed");
         return;
       }
@@ -58,7 +102,7 @@ export function useFirstRunHome(locale: string): FirstRunHomeStatus {
     return () => {
       cancelled = true;
     };
-  }, [locale, router]);
+  }, [locale, router, sessionStatus]);
 
   return status;
 }

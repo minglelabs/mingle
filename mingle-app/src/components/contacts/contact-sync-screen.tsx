@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import InviteMessageLanguagePicker from "@/components/contacts/invite-message-language-picker";
-import PhoneVerifySheet from "@/components/contacts/phone-verify-sheet";
+import PhoneVerifySheet, { PHONE_VERIFIED_EVENT } from "@/components/contacts/phone-verify-sheet";
 import SlideSurface from "@/components/slide-surface";
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { resolveInviteTicketCopy } from "@/i18n/invite-ticket-copy";
@@ -85,6 +85,16 @@ export default function ContactSyncScreen({ open, onClose, locale, prompt = fals
   const [isMatching, setIsMatching] = useState(false);
   const [followingIds, setFollowingIds] = useState<Set<string>>(() => new Set());
   const [pendingFollowIds, setPendingFollowIds] = useState<Set<string>>(() => new Set());
+
+  // This screen can be open under the phone gate: take the number the gate just verified.
+  useEffect(() => {
+    const onVerified = (event: Event) => {
+      const phone = (event as CustomEvent<unknown>).detail;
+      if (typeof phone === "string" && phone) setOwnPhone(phone);
+    };
+    window.addEventListener(PHONE_VERIFIED_EVENT, onVerified);
+    return () => window.removeEventListener(PHONE_VERIFIED_EVENT, onVerified);
+  }, []);
 
   const senderName = session?.user?.name?.trim() || "HashChat";
 

@@ -4,6 +4,7 @@ import Foundation
 import os
 import React
 import ReplayKit
+import Security
 import UIKit
 import UserNotifications
 
@@ -3162,6 +3163,46 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
         #endif
     }
 
+    private static let deviceIdKeychainService = "com.minglelabs.mingle.device-id"
+    private static let deviceIdKeychainAccount = "device-id-v1"
+    private static var cachedDeviceId: String?
+
+    /// A UUID made once and stored in this device's keychain. It is not an
+    /// advertising id and reads nothing about the hardware; it only tells the
+    /// server that two installs are the same phone. `ThisDeviceOnly` keeps it
+    /// out of backups and off a new phone restored from one.
+    private static func readOrCreateDeviceId() -> String {
+        if let cached = cachedDeviceId { return cached }
+        let baseQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: deviceIdKeychainService,
+            kSecAttrAccount as String: deviceIdKeychainAccount,
+        ]
+        var readQuery = baseQuery
+        readQuery[kSecReturnData as String] = true
+        readQuery[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let readStatus = SecItemCopyMatching(readQuery as CFDictionary, &item)
+        if readStatus == errSecSuccess,
+           let data = item as? Data,
+           let stored = String(data: data, encoding: .utf8),
+           stored.count >= 8 {
+            cachedDeviceId = stored
+            return stored
+        }
+        // Anything but "not found" (for example the keychain is still locked
+        // right after a reboot): send no value now rather than overwrite one.
+        guard readStatus == errSecItemNotFound else { return "" }
+
+        let created = UUID().uuidString.lowercased()
+        var addQuery = baseQuery
+        addQuery[kSecValueData as String] = Data(created.utf8)
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        guard SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess else { return "" }
+        cachedDeviceId = created
+        return created
+    }
+
     private static func runtimeConfigPayload() -> [String: Any] {
         let payload: [String: Any] = [
             "webAppBaseUrl": NativeSTTModule.readRuntimeConfigURL(
@@ -3188,6 +3229,11 @@ class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
             "conversationRestoreConversationId": UserDefaults.standard.string(forKey: conversationRestoreConversationIdKey) ?? "",
             "conversationRestoreCreatedAtMs": readConversationRestoreCreatedAtMs(),
             "launchedFromExternalIntent": launchedFromExternalIntent ? "1" : "0",
+            // One account per person (docs/one-account-per-person.md): a random
+            // id kept in the keychain, so it survives a reinstall. Empty when
+            // the keychain cannot be used; the web then sends no device value.
+            "deviceId": readOrCreateDeviceId(),
+            "deviceKind": "keychain",
         ]
         return payload.merging(MingleLastScreenSnapshotStore.runtimeConfigPayload()) { current, _ in current }
     }

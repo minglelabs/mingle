@@ -2,6 +2,7 @@
 
 import { requestProfileBasics } from "@/lib/profile-basics";
 import ProfileBio from "@/components/profile-bio";
+import { sameBioLanguage } from "@/lib/profile-bio";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
@@ -22,6 +23,7 @@ import { sanitizeInterestLanguages } from "@/lib/interest-languages";
 import ProfileShareScreen from "@/components/profile-share-screen";
 import SlideSurface from "@/components/slide-surface";
 import CoinGiftSheet from "@/components/coins/coin-gift-sheet";
+import { fillHomeCount, resolveHomeCopy } from "@/i18n/home-copy";
 import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import { getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, useCoinWallet } from "@/lib/coin-wallet-client";
@@ -43,6 +45,7 @@ import {
   ChevronLeft,
   Loader2,
   MessageCircle,
+  MoreHorizontal,
   UserRound,
   UserX,
   X,
@@ -176,6 +179,9 @@ function ProfileAvatar({
   size?: number;
   onClick?: () => void;
 }) {
+  // Remember WHICH url failed, so a changed photo is tried again.
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const showImage = Boolean(image) && failedImage !== image;
   return (
     <button
       type="button"
@@ -185,13 +191,14 @@ function ProfileAvatar({
       aria-label={label}
     >
       <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
-        {image ? (
+        {showImage && image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={image}
-            alt={label}
+            alt=""
             width={size}
             height={size}
+            onError={() => setFailedImage(image)}
             className="h-full w-full object-cover"
             style={{ transform: buildProfileImageTransform(size, crop) }}
           />
@@ -231,6 +238,9 @@ export default function PublicUserProfileScreen({
   const [actionError, setActionError] = useState(false);
   const [isMessagePending, setIsMessagePending] = useState(false);
   const [messageError, setMessageError] = useState(false);
+  /** Set when the server says today's new people are used up: the number allowed per day. */
+  const [dailyLimit, setDailyLimit] = useState<number | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<ReportReason>("spam");
   const [reportMessage, setReportMessage] = useState("");
@@ -425,6 +435,14 @@ export default function PublicUserProfileScreen({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ targetUserId: profile.id, locale, force }),
     });
+    if (response.status === 429) {
+      // The free daily number of new people is used up (server/daily-new-chat-limit).
+      const limited = await response.json().catch(() => ({})) as { error?: string; limit?: number };
+      if (limited.error === "daily_new_chat_limit") {
+        setDailyLimit(typeof limited.limit === "number" && limited.limit > 0 ? limited.limit : 1);
+        throw new Error("daily_new_chat_limit");
+      }
+    }
     if (!response.ok) throw new Error("direct_conversation_failed");
     const data = await response.json() as {
       conversation?: ConversationChannelSummary;
@@ -453,6 +471,7 @@ export default function PublicUserProfileScreen({
     if (!(await requestProfileBasics())) return;
     setIsMessagePending(true);
     setMessageError(false);
+    setDailyLimit(null);
     try {
       const { conversation, reused } = await requestDirectConversation(false);
       if (reused) {
@@ -460,8 +479,8 @@ export default function PublicUserProfileScreen({
         return;
       }
       await openDirectConversation(conversation);
-    } catch {
-      setMessageError(true);
+    } catch (error) {
+      if (!(error instanceof Error && error.message === "daily_new_chat_limit")) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -471,11 +490,12 @@ export default function PublicUserProfileScreen({
     if (!existingConversation || isMessagePending) return;
     setIsMessagePending(true);
     setMessageError(false);
+    setDailyLimit(null);
     try {
       await openDirectConversation(existingConversation);
       setExistingConversation(null);
-    } catch {
-      setMessageError(true);
+    } catch (error) {
+      if (!(error instanceof Error && error.message === "daily_new_chat_limit")) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -485,12 +505,13 @@ export default function PublicUserProfileScreen({
     if (isMessagePending) return;
     setIsMessagePending(true);
     setMessageError(false);
+    setDailyLimit(null);
     try {
       const { conversation } = await requestDirectConversation(true);
       await openDirectConversation(conversation);
       setExistingConversation(null);
-    } catch {
-      setMessageError(true);
+    } catch (error) {
+      if (!(error instanceof Error && error.message === "daily_new_chat_limit")) setMessageError(true);
     } finally {
       setIsMessagePending(false);
     }
@@ -669,9 +690,15 @@ export default function PublicUserProfileScreen({
                     isOwnProfile={false}
                   />
                 ) : null}
-                <ProfileBio userId={profile.id} initialBio={bio} locale={locale} />
+                <ProfileBio
+                  userId={profile.id}
+                  initialBio={bio}
+                  locale={locale}
+                  expectTranslate={Boolean(bio) && Boolean(languageOption) && !sameBioLanguage(languageOption?.code ?? null, locale)}
+                />
               </div>
 
+              {/* Row 1: follow and share. Row 2: message (the main action) and gift. Block and report sit behind "…". */}
               <div className="mt-4 flex gap-2">
                 {!isOwnProfile ? (
                   <button
@@ -679,25 +706,10 @@ export default function PublicUserProfileScreen({
                     onClick={() => void handleToggleFollow()}
                     disabled={isActionPending || profile.isBlocked}
                     className={`flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border px-2 text-[13px] font-semibold transition disabled:opacity-50 ${
-                      profile.isFollowing ? "border-amber-200 bg-amber-50 text-amber-700" : "bg-amber-500 text-white active:bg-amber-600"
+                      profile.isFollowing ? "border-amber-200 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-slate-900 active:bg-gray-100"
                     }`}
                   >
                     {isActionPending ? "…" : profile.isFollowing ? copy.following : copy.follow}
-                  </button>
-                ) : null}
-                {!isOwnProfile ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleMessage()}
-                    disabled={isMessagePending || profile.isBlocked}
-                    className="flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100 disabled:opacity-50"
-                  >
-                    {isMessagePending ? "…" : (
-                      <>
-                        <MessageCircle size={16} strokeWidth={2} aria-hidden="true" />
-                        {copy.message}
-                      </>
-                    )}
                   </button>
                 ) : null}
                 <button
@@ -707,20 +719,55 @@ export default function PublicUserProfileScreen({
                 >
                   {dictionary.profile.shareProfileShort ?? dictionary.profile.shareProfile}
                 </button>
+                {!isOwnProfile ? (
+                  <button
+                    type="button"
+                    onClick={() => setMoreOpen((value) => !value)}
+                    aria-label={resolveHomeCopy(locale).more}
+                    aria-expanded={moreOpen}
+                    data-qa="profile-more"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-slate-700 transition active:bg-gray-100"
+                  >
+                    <MoreHorizontal size={18} strokeWidth={2.2} aria-hidden="true" />
+                  </button>
+                ) : null}
               </div>
 
-              {!isOwnProfile && coinBillingActive && !profile.isBlocked ? (
-                <button
-                  type="button"
-                  onClick={() => setGiftOpen(true)}
-                  className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 text-[13px] font-semibold text-amber-800 transition active:bg-amber-100"
-                >
-                  <HashSeedIcon size={17} />
-                  {getCoinCopy(locale).gift}
-                </button>
-              ) : null}
               {!isOwnProfile ? (
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    data-qa="profile-message"
+                    onClick={() => void handleMessage()}
+                    disabled={isMessagePending || profile.isBlocked}
+                    className="flex h-12 min-w-0 flex-[2] items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-2 text-[15px] font-bold text-white transition active:bg-amber-600 disabled:opacity-50"
+                  >
+                    {isMessagePending ? "…" : (
+                      <>
+                        <MessageCircle size={18} strokeWidth={2.2} aria-hidden="true" />
+                        {copy.message}
+                      </>
+                    )}
+                  </button>
+                  {coinBillingActive && !profile.isBlocked ? (
+                    <button
+                      type="button"
+                      onClick={() => setGiftOpen(true)}
+                      className="flex h-12 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 text-[13px] font-semibold text-amber-800 transition active:bg-amber-100"
+                    >
+                      <HashSeedIcon size={17} />
+                      {getCoinCopy(locale).gift}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              {dailyLimit !== null ? (
+                <p className="mt-2 text-center text-[13px] leading-relaxed text-slate-700" role="status" data-qa="profile-daily-limit">
+                  {fillHomeCount(resolveHomeCopy(locale).dailyLimit, dailyLimit)}
+                </p>
+              ) : null}
+              {!isOwnProfile && (moreOpen || profile.isBlocked) ? (
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => void handleToggleBlock()}

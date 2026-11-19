@@ -91,6 +91,10 @@ import {
   markFirstSpeakPending,
 } from "@/lib/first-run";
 import { resolveFirstRunCopy } from "@/i18n/first-run-copy";
+import { readLastSignInMethod } from "@/lib/last-sign-in-method";
+import { resolveSpeakTrialCopy } from "@/i18n/speak-trial-copy";
+import { isSpeakTrialDone } from "@/lib/speak-trial";
+import { useAppAccess } from "@/components/onboarding/invite-gate";
 import { captureMingleClientEvent } from "@/lib/posthog-client";
 import {
   resolveLanguageSelectorOwnSelectedLanguages,
@@ -128,6 +132,7 @@ import {
   CONVERSATION_LIST_SORT_MODES,
   isConversationListSortMode,
   sortConversationsForDisplay,
+  isChatListConversation,
   type ConversationListSortMode,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   findNativeSttRestoreConversation,
@@ -209,6 +214,7 @@ import {
   replaceSlideSurfaceHistory,
 } from "@/lib/slide-surface-history";
 import { DIRECT_CONVERSATION_NAVIGATION_GUARD_MS } from "@/lib/direct-conversation-navigation";
+import { publishLiveStt, publishVisibleRoom, rememberLiveRoom, setLiveRoomHandlers } from "@/lib/live-room-bubble";
 import {
   REALTIME_FALLBACK_POLL_INTERVAL_MS,
   shouldRunRealtimeFallbackRefresh,
@@ -225,9 +231,13 @@ import { useUnreadNotifications } from "@/components/notifications/use-unread-no
 import { feedHref } from "@/lib/feed-routes";
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { feedCopy } from "@/i18n/feed-copy";import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
-import { clearTopLevelTabSwitch, NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
+import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
+const SpeakTrial = lazy(() => import("@/components/onboarding/speak-trial"));
+const InviteGate = lazy(() => import("@/components/onboarding/invite-gate"));
+const PhoneGate = lazy(() => import("@/components/onboarding/phone-gate"));
+const BannedGate = lazy(() => import("@/components/onboarding/banned-gate"));
 
 const LS_KEY_CONVERSATION_LIST_SORT_MODE = "mingle:conversation-list-sort-mode";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
@@ -1049,7 +1059,7 @@ function mapConversationSummaryToItem(
     status: conversation.status,
     statusLabel,
     avatarSrc: avatar.src,
-    avatarAlt: title,
+    avatarAlt: `${title} ${avatar.name} avatar`,
     otherMembers: conversation.otherMembers,
     titleAccountBadge: resolveRoomAccountBadge(conversation.otherMembers),
     titleAccountBadgeLocale: locale,
@@ -1785,8 +1795,7 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
             paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
           }}
         >
-          {/* min-w-0: an input's default width would otherwise push a long "Cancel" (de) off-screen. */}
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
+          <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
             <Search size={16} className="shrink-0 text-gray-400" />
             <input
               ref={inputRef}
@@ -1794,7 +1803,7 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={copy.searchPlaceholder}
-              className={`min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400 ${
+              className={`flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400 ${
                 caretHidden ? "caret-transparent" : ""
               }`}
               enterKeyHint="search"
@@ -2163,15 +2172,24 @@ export default function ConversationList({
   // length choice. Read from storage after mount, so the server render matches.
   const [firstSpeakPending, setFirstSpeakPending] = useState(false);
   const showFirstSpeakCard = firstSpeakPending && sessionStatus === "authenticated";
+  // Signed out on a device that never signed in: speak for ten seconds first,
+  // then the sign-in screen. Read after mount, so the server render matches.
+  const [speakTrialPending, setSpeakTrialPending] = useState(false);
+  const [speakTrialJustDone, setSpeakTrialJustDone] = useState(false);
+  useEffect(() => {
+    setSpeakTrialPending(!isSpeakTrialDone() && readLastSignInMethod() === null);
+  }, []);
+  // Invite-only (server INVITE_GATE): a signed-in account without an invite
+  // sees the invite gate. Asked again once a pending invite link is accepted.
+  const { access: appAccess, setAccess: setAppAccess } = useAppAccess(sessionStatus === "authenticated" && !inviteOnboarding, locale);
+  const handleSpeakTrialDone = useCallback(() => {
+    setSpeakTrialPending(false);
+    setSpeakTrialJustDone(true);
+  }, []);
   // Where the user heard of the app, asked once when they leave their first room.
   const [discoveryPromptOpen, setDiscoveryPromptOpen] = useState(false);
   const firstRunCopy = useMemo(() => resolveFirstRunCopy(locale), [locale]);
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
-  useEffect(() => {
-    // Back on the conversations page: a later room unmount is a normal
-    // session boundary again, not a tab switch.
-    clearTopLevelTabSwitch();
-  }, []);
   // A mount that starts with a conversation already active (SSR props, a
   // deep link, or a client-side remount after a real route round trip like
   // returning from add-members) isn't the user "opening" a room — it's the
@@ -2452,7 +2470,7 @@ export default function ConversationList({
   }, [authenticatedUserId, languageOnboardingPhase, sessionStatus]);
 
   const conversationItems = useMemo(
-    () => sortConversationsForDisplay(conversations, conversationSortMode).map((conversation) => (
+    () => sortConversationsForDisplay(conversations.filter(isChatListConversation), conversationSortMode).map((conversation) => (
       mapConversationSummaryToItem(
         conversation,
         locale,
@@ -2496,7 +2514,7 @@ export default function ConversationList({
     }
   }, []);
   const unreadConversationMessageCount = useMemo(
-    () => conversations.reduce(
+    () => conversations.filter(isChatListConversation).reduce(
       (total, conversation) => total + Math.max(0, Math.floor(conversation.unreadMessageCount ?? 0)),
       0,
     ),
@@ -4655,6 +4673,47 @@ export default function ConversationList({
   }, [clearConversationSurfaceHistory, closeConversationOverlay, conversationProfileId, openConversationSummary]);
 
 
+  // From an open room's menu: move straight to another room (one already in
+  // the list, or one just joined, whose summary comes along).
+  const openOtherRoom = useCallback((conversationId: string, joined?: ConversationChannelSummary) => {
+    const target = joined ?? conversationsRef.current.find((conversation) => conversation.id === conversationId);
+    if (target) void startDirectConversationFromProfile(target);
+  }, [startDirectConversationFromProfile]);
+
+  // The live room bubble (components/live-room-bubble.tsx) hides for the room
+  // on screen, shows the room whose speech recognition is running, and asks
+  // this list to open a room or stop that recognition.
+  const activeConversationIdForBubble = activeConversation?.id ?? null;
+  const activeConversationTitleForBubble = activeConversation?.title ?? "";
+  useEffect(() => {
+    publishVisibleRoom(activeConversationIdForBubble);
+    if (activeConversationIdForBubble) rememberLiveRoom(activeConversationIdForBubble, { title: activeConversationTitleForBubble });
+  }, [activeConversationIdForBubble, activeConversationTitleForBubble]);
+  const liveConversationTitle = liveConversationId
+    ? conversations.find((conversation) => conversation.id === liveConversationId)?.title ?? ""
+    : "";
+  useEffect(() => {
+    publishLiveStt(liveConversationId ? { conversationId: liveConversationId, title: liveConversationTitle } : null);
+  }, [liveConversationId, liveConversationTitle]);
+  useEffect(() => {
+    setLiveRoomHandlers({
+      openRoom: (conversationId) => {
+        const target = conversationsRef.current.find((conversation) => conversation.id === conversationId);
+        if (!target) return false;
+        void startDirectConversationFromProfile(target);
+        return true;
+      },
+      stopStt: (conversationId) => {
+        void conversationRoomRefs.current.get(conversationId)?.stopRecording({ forceNativeStop: isNativeAppRuntime() });
+      },
+    });
+    return () => {
+      setLiveRoomHandlers(null);
+      publishVisibleRoom(null);
+      publishLiveStt(null);
+    };
+  }, [startDirectConversationFromProfile]);
+
   const handleCreateConversation = useCallback(async () => {
     if (
       isCreatingConversationRef.current
@@ -5733,15 +5792,36 @@ export default function ConversationList({
               </div>
             )}
           >
-            <MingleHome
-              authOnly
-              dictionary={dictionary}
-              appleOAuthEnabled={appleOAuthEnabled}
-              googleOAuthEnabled={googleOAuthEnabled}
-              locale={locale}
-            />
+            {speakTrialPending ? (
+              <SpeakTrial
+                dictionary={dictionary}
+                locale={locale}
+                appleOAuthEnabled={appleOAuthEnabled}
+                googleOAuthEnabled={googleOAuthEnabled}
+                onDone={handleSpeakTrialDone}
+              />
+            ) : (
+              <MingleHome
+                authOnly
+                dictionary={dictionary}
+                appleOAuthEnabled={appleOAuthEnabled}
+                googleOAuthEnabled={googleOAuthEnabled}
+                locale={locale}
+                authNotice={speakTrialJustDone ? resolveSpeakTrialCopy(locale).signInNotice : null}
+              />
+            )}
           </Suspense>
         </div>
+      ) : null}
+
+      {sessionStatus === "authenticated" && !inviteOnboarding && appAccess && !appAccess.allowed ? (
+        <Suspense fallback={null}>
+          {appAccess.reason === "banned"
+            ? <BannedGate locale={locale} />
+            : appAccess.reason === "needs_phone"
+              ? <PhoneGate locale={locale} onAccess={setAppAccess} />
+              : <InviteGate locale={locale} onAccess={setAppAccess} />}
+        </Suspense>
       ) : null}
 
       {isClientReady ? (
@@ -6171,6 +6251,8 @@ export default function ConversationList({
                         }}
                         conversationTitle={conversation.title}
                         isBlockedCounterpart={conversation.isBlockedCounterpart}
+                        initialIsPublicRoom={conversation.isPublic === true}
+                        onOpenOtherRoom={openOtherRoom}
                         initialUnreadMessageCount={entryUnreadMessageCountByConversationId[conversation.id] ?? 0}
                         isMultiMember={conversation.isMultiMember}
                         conversationId={conversation.id}

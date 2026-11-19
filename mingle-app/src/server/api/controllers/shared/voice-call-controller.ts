@@ -6,7 +6,8 @@ import { notifyConversationMessage } from "@/server/conversation-realtime";
 import { sendPushNotificationForVoiceCallStarted } from "@/server/push-notifications";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { prisma } from "@/lib/prisma";
-import { listRoomIdentities, mintVoiceJoinToken, readLiveKitConfig, verifyLiveKitWebhook } from "@/server/voice/livekit-auth";
+import { listRoomIdentities, mintVoiceJoinToken, readLiveKitConfig, setRoomParticipantCanPublish, verifyLiveKitWebhook } from "@/server/voice/livekit-auth";
+import { changeVoiceStage, isVoiceStageAction } from "@/server/voice/voice-stage";
 import { prismaVoiceStore } from "@/server/voice/prisma-voice-store";
 import { VOICE_CALL_MESSAGE_TEXT, buildVoiceCallMessageClientId } from "@/lib/voice-call-message";
 import {
@@ -18,6 +19,7 @@ import {
   setVoiceInterpret,
   voiceCaptionViewers,
   type LiveKitWebhookEvent,
+  type VoiceCallView,
   type VoiceStore,
   VoiceRoomFullError,
 } from "@/server/voice/voice-calls";
@@ -30,6 +32,26 @@ let listIdentities: typeof listRoomIdentities = listRoomIdentities;
 export function setVoiceStoreForTests(next: VoiceStore | null, lookup?: typeof listRoomIdentities) {
   store = next ?? prismaVoiceStore;
   listIdentities = lookup ?? listRoomIdentities;
+}
+
+// An open room's call has a stage (server/voice/voice-stage.ts): its host is
+// the one who made the room. A chat room's call has none (null).
+let findStage = async (conversationId: string): Promise<{ hostUserId: string } | null> => {
+  const channel = await prisma.appConversationChannel.findUnique({
+    where: { id: conversationId },
+    select: { isPublic: true, ownerUserId: true },
+  });
+  return channel?.isPublic ? { hostUserId: channel.ownerUserId } : null;
+};
+let updateCanPublish: typeof setRoomParticipantCanPublish = setRoomParticipantCanPublish;
+export function setVoiceStageForTests(next: { findStage?: typeof findStage; updateCanPublish?: typeof setRoomParticipantCanPublish } | null) {
+  if (next?.findStage) findStage = next.findStage;
+  if (next?.updateCanPublish) updateCanPublish = next.updateCanPublish;
+}
+
+/** The call as the app reads it: with `stage` (who the host is) when the room's call has one. */
+function withStage<T extends VoiceCallView>(call: T, stage: { hostUserId: string } | null): T & { stage: { hostUserId: string } | null } {
+  return { ...call, stage };
 }
 
 type MemberCheck = { userId: string; sessionKey: string } | { response: NextResponse };
@@ -123,7 +145,8 @@ export async function getVoiceCallResponse(request: NextRequest, conversationId:
     const starter = await prisma.user.findUnique({ where: { id: call.startedBy.userId }, select: { name: true } }).catch(() => null);
     call.startedBy = { ...call.startedBy, name: starter?.name ?? null };
   }
-  return NextResponse.json({ call });
+  const stage = call ? await findStage(conversationId).catch(() => null) : null;
+  return NextResponse.json({ call: call ? withStage(call, stage) : null });
 }
 
 function readLang(value: unknown): string | null {
@@ -159,9 +182,10 @@ export async function postVoiceCallTokenResponse(request: NextRequest, conversat
     listIdentities: (room) => listIdentities(config, room),
   }).catch((error) => console.warn("[voice] reconcile_failed", error));
 
+  const stage = await findStage(conversationId).catch(() => null);
   let joined;
   try {
-    joined = await joinVoiceCall(store, { channelId: conversationId, userId: member.userId, lang, interpretOn });
+    joined = await joinVoiceCall(store, { channelId: conversationId, userId: member.userId, lang, interpretOn, ...(stage ? { stage } : {}) });
   } catch (error) {
     if (error instanceof VoiceRoomFullError) {
       return NextResponse.json({ error: "voice_room_full" }, { status: 409 });
@@ -201,10 +225,47 @@ export async function postVoiceCallTokenResponse(request: NextRequest, conversat
     room: call.room,
     identity: member.userId,
     name: displayName,
-    attributes: { lang, interpret: interpretOn ? "on" : "off", role: "speaker" },
+    attributes: { lang, interpret: interpretOn ? "on" : "off", role: self?.role ?? "speaker" },
+    // A listener hears the call; the stage (and so the voice) is the host's to give.
+    canPublish: self?.role !== "listener",
   });
 
-  return NextResponse.json({ url: config.url, token, room: call.room, identity: member.userId, call });
+  return NextResponse.json({ url: config.url, token, room: call.room, identity: member.userId, call: withStage(call, stage) });
+}
+
+/**
+ * POST { action, userId? }: the stage of an open room's call. A listener
+ * raises or lowers a hand, a speaker steps down, and the host puts someone on
+ * the stage (`invite`) or takes them off it (`remove`). Answers the call as it
+ * is afterwards.
+ */
+export async function postVoiceCallStageResponse(request: NextRequest, conversationId: string) {
+  const member = await requireChannelMember(request, conversationId);
+  if ("response" in member) return member.response;
+  const body = await request.json().catch(() => null) as { action?: unknown; userId?: unknown } | null;
+  if (!isVoiceStageAction(body?.action)) return NextResponse.json({ error: "invalid_action" }, { status: 400 });
+  const stage = await findStage(conversationId);
+  if (!stage) return NextResponse.json({ error: "no_stage" }, { status: 409 });
+  const result = await changeVoiceStage(store, {
+    channelId: conversationId,
+    actorUserId: member.userId,
+    hostUserId: stage.hostUserId,
+    action: body.action,
+    targetUserId: typeof body.userId === "string" ? body.userId : null,
+  });
+  if (!result.ok) {
+    const status = result.error === "forbidden" ? 403 : result.error === "invalid_target" ? 400 : 409;
+    return NextResponse.json({ error: result.error }, { status });
+  }
+  if (result.changed) {
+    // The media server takes the voice away at once (or allows it again).
+    const config = readLiveKitConfig();
+    if (config) {
+      await updateCanPublish(config, { room: result.call.room, identity: result.changed.userId, canPublish: result.changed.role === "speaker" });
+    }
+    refreshMemberLists(member.sessionKey);
+  }
+  return NextResponse.json({ call: withStage(result.call, stage), changed: result.changed });
 }
 
 export async function postVoiceCallLeaveResponse(request: NextRequest, conversationId: string) {

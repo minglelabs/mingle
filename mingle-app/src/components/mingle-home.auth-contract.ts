@@ -1,5 +1,5 @@
 export type AuthPanelStep = "provider" | "terms";
-export type AuthProvider = "apple" | "google" | "email";
+export type AuthProvider = "apple" | "google" | "email" | "phone";
 export type EmailAuthSheetMode = "login" | "signup" | "forgot";
 export type EmailAuthErrorCode =
   | "required"

@@ -60,7 +60,8 @@ export async function postVoiceTranslateResponse(request: NextRequest) {
         immediatePreviousTurn: body.recentTurns[body.recentTurns.length - 1],
       } : {}),
       ...(Array.isArray(body.sttLanguages) && body.sttLanguages.length ? { sttLanguages: body.sttLanguages } : {}),
-      ...(typeof body.translationModel === "string" && body.translationModel ? { translationModel: body.translationModel } : {}),
+      // No model is passed on: voice talk interpretation always runs on the
+      // default translation model, whatever a speaker picked for their own rooms.
       // Spoken, not typed: no per-message translation charge.
       sttDurationMs: 1,
       sessionKey: `voice-interpreter:${room}`.slice(0, 200),

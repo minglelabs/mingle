@@ -22,7 +22,8 @@ type PushTarget = {
 export type PushMessage = {
   notificationId: string;
   /**
-   * conversation_message | follow | comment | comment_reply | voice_call_started |
+   * conversation_message | follow | comment | comment_reply | important_notice |
+   * voice_call_started | conversation_join_request | conversation_join_accepted |
    * operator_inbox_message (staff alert, copy from
    * `resolveOperatorInboxPushCopy`). Any other type gets a generic copy.
    */
@@ -32,6 +33,8 @@ export type PushMessage = {
   actorLabel: string;
   recipientLanguage: string;
   messagePreview?: string;
+  /** important_notice only: the notice's title in the recipient's language (the body is `messagePreview`). */
+  noticeTitle?: string;
   sessionKey?: string;
   conversationId?: string;
   /** In-app destination the tap should open (e.g. feedHref with post/comment). */
@@ -238,6 +241,13 @@ export function resolvePushCopy(message: PushMessage): { title: string; body: st
       : (message.messagePreview || "").replace(/\s+/g, " ").trim() || "…";
     const copy = CONVERSATION_MESSAGE_PUSH_COPY[locale];
     return { title: copy.title, body: `${label}${copy.separator}${preview}` };
+  }
+  if (message.type === "important_notice") {
+    // The notice's own words, already picked for the recipient's language.
+    return {
+      title: (message.noticeTitle || "HashChat").slice(0, 120),
+      body: (message.messagePreview || "").replace(/\s+/g, " ").trim().slice(0, 240) || "…",
+    };
   }
   if (message.type === "conversation_join_request" || message.type === "conversation_join_accepted") {
     const locale = resolveLegalDocumentLocale(resolveSupportedLocaleTag(message.recipientLanguage.trim()) ?? "en");

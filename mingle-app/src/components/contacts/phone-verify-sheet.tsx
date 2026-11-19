@@ -1,30 +1,50 @@
 "use client";
 
 import { Loader2, X } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { fillPhoneFriendsCopy, type PhoneFriendsCopy } from "@/i18n/phone-friends-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { resolveSignInMethodsCopy } from "@/i18n/sign-in-methods-copy";
+import { resolveDeviceIdentityHeaders } from "@/lib/native-device-identity";
+import { useKeyboardInset } from "@/components/compose/compose-chrome";
 import { PHONE_COUNTRIES, maskE164, normalizePhoneNumber, resolveDefaultPhoneCountry } from "@/lib/phone-number";
 
 const RESEND_AFTER_MS = 30_000;
 
 type Step = { kind: "phone" } | { kind: "code"; phone: string; sentAt: number };
 
+/** Fired on `window` when this account's number was just verified (detail: the E.164 number). */
+export const PHONE_VERIFIED_EVENT = "mingle:phone-verified";
+
+function announcePhoneVerified(phoneE164: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(PHONE_VERIFIED_EVENT, { detail: phoneE164 }));
+}
+
 /**
  * Proves the user's own phone number with a 6-digit SMS code: pick the
  * country, type the number, get the code, type it. Resolves the verified
  * E.164 number through `onVerified`.
+ *
+ * Sign-in uses the same sheet: `sendPath` "/phone/sign-in" texts a code with
+ * no account, and `confirmCode` checks it (signing in) instead of saving the
+ * number to the current account; it resolves an error code, or null.
  */
 export default function PhoneVerifySheet({
   copy,
   locale,
   onClose,
   onVerified,
+  sendPath = "/phone/verification",
+  confirmCode,
 }: {
   copy: PhoneFriendsCopy;
   locale: string;
   onClose: () => void;
   onVerified: (phoneE164: string) => void;
+  sendPath?: "/phone/verification" | "/phone/sign-in";
+  confirmCode?: (phoneE164: string, code: string) => Promise<string | null>;
 }) {
   const defaultCountry = useMemo(() => resolveDefaultPhoneCountry(locale), [locale]);
   const [countryIso, setCountryIso] = useState(defaultCountry.iso);
@@ -34,8 +54,11 @@ export default function PhoneVerifySheet({
   const [step, setStep] = useState<Step>({ kind: "phone" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [switchedNotice, setSwitchedNotice] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const codeInputRef = useRef<HTMLInputElement | null>(null);
+  const keyboardInset = useKeyboardInset();
+  const { update: renewSession } = useSession();
 
   const phone = normalizePhoneNumber(number, country.callingCode);
 
@@ -44,7 +67,9 @@ export default function PhoneVerifySheet({
       : value === "invalid_code" || value === "wrong_code" ? copy.errorCode
         : value === "too_many_requests" ? copy.errorTooMany
           : value === "unavailable" ? copy.errorUnavailable
-            : copy.errorGeneric
+            : value === "phone_in_use" ? copy.errorInUse
+              : value === "blocked" ? copy.errorBlocked
+                : copy.errorGeneric
   ), [copy]);
 
   const sendCode = useCallback(async (target: string) => {
@@ -52,7 +77,7 @@ export default function PhoneVerifySheet({
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(buildClientApiPath("/phone/verification"), {
+      const response = await fetch(buildClientApiPath(sendPath), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: target, locale }),
@@ -74,30 +99,53 @@ export default function PhoneVerifySheet({
     } finally {
       setBusy(false);
     }
-  }, [busy, copy.errorGeneric, errorText, locale]);
+  }, [busy, copy.errorGeneric, errorText, locale, sendPath]);
 
   const confirm = useCallback(async () => {
     if (busy || step.kind !== "code" || code.length !== 6) return;
     setBusy(true);
     setError(null);
     try {
+      if (confirmCode) {
+        const failure = await confirmCode(step.phone, code);
+        if (failure) {
+          setError(errorText(failure));
+          return;
+        }
+        announcePhoneVerified(step.phone);
+        onVerified(step.phone);
+        return;
+      }
       const response = await fetch(buildClientApiPath("/phone/verification/confirm"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        // The device headers let the server apply the one-account rules for this phone.
+        headers: { "Content-Type": "application/json", ...(await resolveDeviceIdentityHeaders()) },
         body: JSON.stringify({ phone: step.phone, code }),
       });
-      const body = await response.json().catch(() => ({})) as { error?: string; phoneE164?: string };
+      const body = await response.json().catch(() => ({})) as { error?: string; phoneE164?: string; switched?: boolean };
       if (!response.ok || !body.phoneE164) {
         setError(errorText(body.error));
         return;
       }
+      if (body.switched) {
+        // The number (or this device) already had an account: this sign-in was
+        // folded into it. Renew the session so it becomes that account's, then
+        // start the app over as that account.
+        setSwitchedNotice(resolveSignInMethodsCopy(locale).switched);
+        await renewSession({}).catch(() => null);
+        // Long enough to read the one line before the app starts over.
+        await new Promise((resolve) => setTimeout(resolve, 1600));
+        window.location.reload();
+        return;
+      }
+      announcePhoneVerified(body.phoneE164);
       onVerified(body.phoneE164);
     } catch {
       setError(copy.errorGeneric);
     } finally {
       setBusy(false);
     }
-  }, [busy, code, copy.errorGeneric, errorText, onVerified, step]);
+  }, [busy, code, confirmCode, copy.errorGeneric, errorText, locale, onVerified, renewSession, step]);
 
   const canResend = step.kind === "code" && now - step.sentAt >= RESEND_AFTER_MS;
 
@@ -106,7 +154,11 @@ export default function PhoneVerifySheet({
       <button type="button" className="absolute inset-0 bg-black/45" aria-label={copy.close} onClick={onClose} />
       <div
         className="relative w-full max-w-[520px] rounded-t-[1.6rem] bg-white px-5 pt-4 text-slate-950"
-        style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }}
+        style={{
+          // Above the keyboard while typing; the safe area only when it is closed.
+          marginBottom: keyboardInset,
+          paddingBottom: keyboardInset > 0 ? 16 : "calc(20px + env(safe-area-inset-bottom, 0px))",
+        }}
       >
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
@@ -218,6 +270,7 @@ export default function PhoneVerifySheet({
           </>
         )}
         {error ? <p className="mt-2 text-[13px] text-rose-600" role="alert">{error}</p> : null}
+        {switchedNotice ? <p className="mt-2 text-[13px] font-semibold text-slate-800" role="status" data-qa="phone-switched-notice">{switchedNotice}</p> : null}
       </div>
     </div>
   );
