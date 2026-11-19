@@ -17,7 +17,10 @@ import { getAutoReplySettings } from './settings'
  *   staff-set delay is the typical wait, a popular account (followers, rooms
  *   with real people this week) answers more slowly, about one reply in five
  *   comes almost at once, and now and then one takes much longer, as
- *   people's do. The wait is seeded by the message id,
+ *   people's do. A popular account also leaves some messages unanswered
+ *   (`autoReplySkipChance`). A burst of messages gets one reply: only the
+ *   room's latest message is ever answered, and its wait starts when it was
+ *   sent. The wait and the skip are seeded by the message id,
  *   so every run agrees on when a message is due.
  * - Only 1:1 rooms with an active operator account, only messages that
  *   arrived after auto-reply was turned on, and never ones older than a day.
@@ -62,6 +65,21 @@ export function popularityFactor(followers: number, activeRooms: number): number
 }
 
 /**
+ * The share of messages an account leaves unanswered: none for an account
+ * nobody follows or talks to, about 8% at 10 points, 29% at 100, 41% at 300,
+ * at most 50% (a room counts 3).
+ */
+export function autoReplySkipChance(followers: number, activeRooms: number): number {
+  const score = Math.max(0, followers) + 3 * Math.max(0, activeRooms)
+  return Math.min(0.5, 0.12 * Math.log(1 + score / 10))
+}
+
+/** Whether this message is one the account leaves unanswered (fixed per message). */
+export function autoReplySkips(candidate: Pick<AutoReplyCandidate, 'messageId' | 'followers' | 'activeRooms'>): boolean {
+  return seededRandom(`auto-reply-skip:${candidate.messageId}`)() < autoReplySkipChance(candidate.followers, candidate.activeRooms)
+}
+
+/**
  * One draw in five is an almost instant answer (0-0.2x). The rest have a long
  * tail: half stay under 1.6x, one in ten passes 5x (capped at 12x).
  */
@@ -82,6 +100,8 @@ export function autoReplyDelayMs(candidate: Pick<AutoReplyCandidate, 'messageId'
 export type AutoReplyRunSummary = {
   enabled: boolean
   candidates: number
+  /** Due messages a popular account leaves unanswered. */
+  ignored: number
   sent: number
   declined: number
   skipped: number
@@ -258,7 +278,7 @@ export async function autoReplyToCandidate(candidate: AutoReplyCandidate, now: D
 export async function runOperatorAutoReplies(options: { now?: () => Date } = {}): Promise<AutoReplyRunSummary> {
   const now = options.now ?? (() => new Date())
   const settings = await getAutoReplySettings()
-  const summary: AutoReplyRunSummary = { enabled: settings.enabled, candidates: 0, sent: 0, declined: 0, skipped: 0, failed: 0 }
+  const summary: AutoReplyRunSummary = { enabled: settings.enabled, candidates: 0, ignored: 0, sent: 0, declined: 0, skipped: 0, failed: 0 }
   if (!settings.enabled || !settings.enabledAt) return summary
 
   const checkedAt = now()
@@ -267,9 +287,9 @@ export async function runOperatorAutoReplies(options: { now?: () => Date } = {})
     enabledAt: new Date(settings.enabledAt),
     limit: AUTO_REPLY_SCAN_LIMIT,
   })
-  const candidates = waiting
-    .filter((candidate) => new Date(candidate.createdAt).getTime() + autoReplyDelayMs(candidate, settings.delayMinutes) <= checkedAt.getTime())
-    .slice(0, AUTO_REPLY_MAX_ROOMS_PER_RUN)
+  const due = waiting.filter((candidate) => new Date(candidate.createdAt).getTime() + autoReplyDelayMs(candidate, settings.delayMinutes) <= checkedAt.getTime())
+  const candidates = due.filter((candidate) => !autoReplySkips(candidate)).slice(0, AUTO_REPLY_MAX_ROOMS_PER_RUN)
+  summary.ignored = due.length - due.filter((candidate) => !autoReplySkips(candidate)).length
   summary.candidates = candidates.length
   // One at a time: an operator in several rooms keeps a steady pace, and the model is not flooded.
   for (const candidate of candidates) {

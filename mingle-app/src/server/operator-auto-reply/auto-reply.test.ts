@@ -33,6 +33,8 @@ import { normalizeAutoReplySettings, parseAutoReplyDelayMinutes, updateAutoReply
 import {
   __resetAutoReplyAttemptsForTests,
   autoReplyDelayMs,
+  autoReplySkipChance,
+  autoReplySkips,
   popularityFactor,
   replyDelayFactor,
   autoReplyRequestId,
@@ -180,6 +182,26 @@ describe('auto-reply worker', () => {
       expect(delay).toBeLessThanOrEqual(12 * 3_600_000)
     }
     expect(autoReplyDelayMs({ messageId: 'same', followers: 3, activeRooms: 1 }, 5)).toBe(autoReplyDelayMs({ messageId: 'same', followers: 3, activeRooms: 1 }, 5))
+  })
+
+  it('leaves some messages unanswered on popular accounts only, the same way on every run', async () => {
+    expect(autoReplySkipChance(0, 0)).toBe(0)
+    expect(autoReplySkipChance(100, 0)).toBeCloseTo(0.12 * Math.log(11), 5)
+    expect(autoReplySkipChance(100_000, 0)).toBe(0.5)
+    const share = (followers: number) => Array.from({ length: 2000 }, (_, i) => autoReplySkips({ messageId: `s${i}`, followers, activeRooms: 0 })).filter(Boolean).length / 2000
+    expect(share(0)).toBe(0)
+    expect(share(100)).toBeCloseTo(0.29, 1)
+    expect(autoReplySkips({ messageId: 'x1', followers: 300, activeRooms: 5 })).toBe(autoReplySkips({ messageId: 'x1', followers: 300, activeRooms: 5 }))
+
+    mocks.settingFindUnique.mockResolvedValue({ value: { enabled: true, delayMinutes: 5, enabledAt: '2026-10-02T09:00:00.000Z' } })
+    const skipped = Array.from({ length: 50 }, (_, i) => `m${i}`).find((id) => autoReplySkips({ messageId: id, followers: 100_000, activeRooms: 0 }))!
+    mocks.queryRaw.mockResolvedValue([{ ...candidate, messageId: skipped, followers: 100_000 }])
+    expect(await runOperatorAutoReplies({ now: () => NOW })).toMatchObject({ candidates: 0, ignored: 1 })
+    expect(mocks.generateJson).not.toHaveBeenCalled()
+  })
+
+  it('asks for one reply to a burst of messages, not one per message', () => {
+    expect(buildAutoReplyInstructions({ profile: { language: 'pt', languageName: 'Portuguese' } } as never)).toContain('Do not answer each message one by one')
   })
 
   it('leaves a waiting message alone until its own delay has passed', async () => {
