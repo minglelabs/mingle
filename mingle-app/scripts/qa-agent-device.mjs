@@ -52,6 +52,7 @@ import { buildCollectExpression, buildFingerprintExpression, buildTapExpression,
 const APP_LOCALE_STORAGE_KEY = 'mingle.appLocale';
 
 import { goldenFixture, goldenFixtures, wavDurationMs } from './qa-agent-peer.lib.mjs';
+import { EXPECTED_RN_API_NAMESPACE_BY_OS } from './rn-api-namespaces.mjs';
 
 const APP_ROOT = path.resolve(import.meta.dirname, '..');
 const REPO_ROOT = path.resolve(APP_ROOT, '..');
@@ -1195,7 +1196,8 @@ function cmdBuild(args) {
 
 // Google's published AdMob test banner unit for Android.
 const ADMOB_TEST_BANNER_UNIT_ANDROID = 'ca-app-pub-3940256099942544/6300978111';
-const ANDROID_RN_API_NAMESPACE = 'android/v2.4.0';
+// The namespace the app shell accepts (it refuses to load the page with any other).
+const ANDROID_RN_API_NAMESPACE = EXPECTED_RN_API_NAMESPACE_BY_OS.android;
 const QA_APK_PATH = path.join(APP_ROOT, 'rn/android/app/build/outputs/apk/release/app-release.apk');
 
 // gradle reads the upload keystore from <worktree>/.credentials/android. A worktree has none, so
