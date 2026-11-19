@@ -5,17 +5,22 @@
  * head, so this tells a live person from a picture. The straight frames give
  * the face description that is compared with the profile photo.
  *
+ * Left and right are the person's own: in the camera's frame (not mirrored)
+ * a head turned to its own left has a negative yaw (measured with Human on a
+ * Galaxy S9: the nose sits toward the frame's right, yaw -0.44). The preview
+ * is mirrored, so it also moves to the left of the screen.
+ *
  * Everything runs on the phone (the free Human library, MIT); no frame or
  * face description leaves it. Only "verified" is sent to the server.
  */
-export type LivenessStep = 'center' | 'turn_first' | 'turn_other' | 'return' | 'done'
+export type LivenessStep = 'center' | 'turn_left' | 'turn_right' | 'return' | 'done'
 
 export type LivenessHint = LivenessStep | 'no_face' | 'one_face' | 'closer'
 
 export type LivenessFrame = {
   /** Faces found in the frame. */
   faces: number
-  /** Head turn in radians (left/right), null when unknown. */
+  /** Head turn in radians, negative to the person's own left; null when unknown. */
   yaw: number | null
   /** Width of the face as a share of the frame's width. */
   faceWidth: number
@@ -27,7 +32,6 @@ export type LivenessFrame = {
 
 export type LivenessState = {
   step: LivenessStep
-  firstSide: -1 | 1 | null
   centerEmbedding: number[] | null
   centerScore: number
 }
@@ -54,7 +58,7 @@ export const FACE_MATCH_THRESHOLD = 0.55
 export const MIN_PHOTO_FACE_WIDTH = 0.15
 
 export function initialLivenessState(): LivenessState {
-  return { step: 'center', firstSide: null, centerEmbedding: null, centerScore: 0 }
+  return { step: 'center', centerEmbedding: null, centerScore: 0 }
 }
 
 function keepBestCenter(state: LivenessState, frame: LivenessFrame): LivenessState {
@@ -75,16 +79,15 @@ export function advanceLiveness(state: LivenessState, frame: LivenessFrame): { s
       if (!straight) return { state, hint: 'center' }
       const next = keepBestCenter(state, frame)
       return next.centerEmbedding
-        ? { state: { ...next, step: 'turn_first' }, hint: 'turn_first' }
+        ? { state: { ...next, step: 'turn_left' }, hint: 'turn_left' }
         : { state: next, hint: 'center' }
     }
-    case 'turn_first': {
-      if (Math.abs(yaw) < YAW_TURN) return { state: straight ? keepBestCenter(state, frame) : state, hint: 'turn_first' }
-      return { state: { ...state, step: 'turn_other', firstSide: yaw < 0 ? -1 : 1 }, hint: 'turn_other' }
+    case 'turn_left': {
+      if (yaw > -YAW_TURN) return { state: straight ? keepBestCenter(state, frame) : state, hint: 'turn_left' }
+      return { state: { ...state, step: 'turn_right' }, hint: 'turn_right' }
     }
-    case 'turn_other': {
-      const side = yaw < 0 ? -1 : 1
-      if (Math.abs(yaw) < YAW_TURN || side === state.firstSide) return { state, hint: 'turn_other' }
+    case 'turn_right': {
+      if (yaw < YAW_TURN) return { state, hint: 'turn_right' }
       return { state: { ...state, step: 'return' }, hint: 'return' }
     }
     case 'return': {
@@ -96,4 +99,17 @@ export function advanceLiveness(state: LivenessState, frame: LivenessFrame): { s
 
 export function isSameFace(similarity: number): boolean {
   return Number.isFinite(similarity) && similarity >= FACE_MATCH_THRESHOLD
+}
+
+/**
+ * Where the head is on the gauge under the camera, -1 (far left) to 1 (far
+ * right), as the person sees it in the mirrored preview. The target of a
+ * turn sits at TURN_GAUGE_TARGET on each side.
+ */
+export const TURN_GAUGE_RANGE = YAW_TURN * 1.5
+export const TURN_GAUGE_TARGET = YAW_TURN / TURN_GAUGE_RANGE
+
+export function turnGaugePosition(yaw: number | null): number {
+  if (yaw === null || !Number.isFinite(yaw)) return 0
+  return Math.max(-1, Math.min(1, yaw / TURN_GAUGE_RANGE))
 }

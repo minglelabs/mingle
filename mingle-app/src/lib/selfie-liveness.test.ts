@@ -4,9 +4,12 @@ import { PRIMARY_UI_LOCALES } from '@/i18n/mingle-locales'
 import { SELFIE_VERIFY_COPY_LOCALES, resolveSelfieVerifyCopy } from '@/i18n/selfie-verify-copy'
 import {
   FACE_MATCH_THRESHOLD,
+  TURN_GAUGE_TARGET,
+  YAW_TURN,
   advanceLiveness,
   initialLivenessState,
   isSameFace,
+  turnGaugePosition,
   type LivenessFrame,
   type LivenessHint,
   type LivenessState,
@@ -29,24 +32,33 @@ function run(frames: LivenessFrame[]): { state: LivenessState; hints: LivenessHi
 }
 
 describe('selfie check steps', () => {
-  it('passes straight, one side, the other side, straight again', () => {
+  it('passes straight, left, right, straight again (negative yaw is the person\'s own left)', () => {
     const { state, hints } = run([face(0), face(-0.4), face(0.4), face(0.02)])
-    expect(hints).toEqual(['turn_first', 'turn_other', 'return', 'done'])
+    expect(hints).toEqual(['turn_left', 'turn_right', 'return', 'done'])
     expect(state.step).toBe('done')
     expect(state.centerEmbedding).toEqual([0.1, 0.2])
   })
 
-  it('takes either side first', () => {
-    expect(run([face(0), face(0.5), face(-0.5), face(0)]).state.step).toBe('done')
+  it('asks for left first: turning right first does not count', () => {
+    expect(run([face(0), face(0.5)]).hints).toEqual(['turn_left', 'turn_left'])
+    expect(run([face(0), face(0.5), face(-0.5), face(0)]).state.step).toBe('turn_right')
   })
 
-  it('does not count turning the same way twice, or a small turn', () => {
-    expect(run([face(0), face(-0.4), face(-0.5), face(0)]).state.step).toBe('turn_other')
-    expect(run([face(0), face(-0.2), face(0.2), face(0)]).state.step).toBe('turn_first')
+  it('does not count a small turn', () => {
+    expect(run([face(0), face(-0.2), face(0.2), face(0)]).state.step).toBe('turn_left')
+    expect(run([face(0), face(-0.4), face(0.2), face(0)]).state.step).toBe('turn_right')
   })
 
   it('a still photo never finishes: it cannot turn', () => {
-    expect(run(Array.from({ length: 30 }, () => face(0.01))).state.step).toBe('turn_first')
+    expect(run(Array.from({ length: 30 }, () => face(0.01))).state.step).toBe('turn_left')
+  })
+
+  it('puts the head on the gauge: left of the middle for a left turn, the target at the turn needed', () => {
+    expect(turnGaugePosition(0)).toBe(0)
+    expect(turnGaugePosition(-YAW_TURN)).toBeCloseTo(-TURN_GAUGE_TARGET)
+    expect(turnGaugePosition(YAW_TURN)).toBeCloseTo(TURN_GAUGE_TARGET)
+    expect(turnGaugePosition(-5)).toBe(-1)
+    expect(turnGaugePosition(null)).toBe(0)
   })
 
   it('stops on no face, two faces, or a face too far away', () => {
@@ -54,7 +66,7 @@ describe('selfie check steps', () => {
     expect(run([face(0, { faces: 2 })]).hints).toEqual(['one_face'])
     expect(run([face(0, { faceWidth: 0.1 })]).hints).toEqual(['closer'])
     // A second person stepping in midway does not move the steps on.
-    expect(run([face(0), face(-0.4), face(0.4, { faces: 2 })]).state.step).toBe('turn_other')
+    expect(run([face(0), face(-0.4), face(0.4, { faces: 2 })]).state.step).toBe('turn_right')
   })
 
   it('keeps the clearest straight face for the comparison', () => {
@@ -90,6 +102,8 @@ describe('selfie check steps', () => {
     expect(read('../components/public-user-profile-screen.tsx')).toContain('<FaceVerifiedBadge')
     expect(read('../components/my-page.tsx')).toContain('<SelfieVerifyScreen')
     const screen = read('../components/selfie-verify-screen.tsx')
+    expect(screen).toContain('<TurnGauge step={step} position={gauge} />')
+    expect(screen).toContain('<TurnArrows step={step} />')
     expect(screen).toContain('const MODEL_PATH = "/models/human/"')
     // Only the similarity goes to the server, never a frame or a face description.
     expect(screen).toContain('JSON.stringify({ similarity })')

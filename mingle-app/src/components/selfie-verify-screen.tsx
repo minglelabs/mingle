@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, ShieldCheck, X } from "lucide-react";
+import { Check, ChevronsLeft, ChevronsRight, Loader2, ShieldCheck, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveSelfieVerifyCopy, type SelfieVerifyCopy } from "@/i18n/selfie-verify-copy";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -10,8 +10,11 @@ import {
   initialLivenessState,
   isSameFace,
   MIN_PHOTO_FACE_WIDTH,
+  TURN_GAUGE_TARGET,
+  turnGaugePosition,
   type LivenessHint,
   type LivenessState,
+  type LivenessStep,
 } from "@/lib/selfie-liveness";
 import { useNativeBannerSuppression } from "@/lib/use-native-banner-suppression";
 
@@ -70,8 +73,8 @@ function hintText(copy: SelfieVerifyCopy, hint: LivenessHint): string {
     case "no_face": return copy.noFace;
     case "one_face": return copy.oneFace;
     case "closer": return copy.closer;
-    case "turn_first": return copy.turnFirst;
-    case "turn_other": return copy.turnOther;
+    case "turn_left": return copy.turnLeft;
+    case "turn_right": return copy.turnRight;
     case "return": return copy.returnCenter;
     case "done": return copy.comparing;
     default: return copy.center;
@@ -122,6 +125,9 @@ export default function SelfieVerifyScreen({
   const copy = useMemo(() => resolveSelfieVerifyCopy(locale), [locale]);
   const [phase, setPhase] = useState<Phase>(hasPhoto ? "intro" : "need_photo");
   const [hint, setHint] = useState<LivenessHint>("center");
+  const [step, setStep] = useState<LivenessStep>("center");
+  /** Head position on the gauge, -1 (left) to 1 (right), as seen in the mirrored preview. */
+  const [gauge, setGauge] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const runRef = useRef(0);
@@ -178,6 +184,8 @@ export default function SelfieVerifyScreen({
     }
     setPhase("loading");
     setHint("center");
+    setStep("center");
+    setGauge(0);
     captureMingleClientEvent("mingle_selfie_verify", { step: "started" });
     let stream: MediaStream;
     try {
@@ -227,6 +235,8 @@ export default function SelfieVerifyScreen({
         });
         state = next.state;
         setHint(next.hint);
+        setStep(state.step);
+        if (face) setGauge(turnGaugePosition(face.rotation?.angle?.yaw ?? null));
         if (state.step === "done") {
           await finishWith(human, state);
           return;
@@ -273,6 +283,7 @@ export default function SelfieVerifyScreen({
           className="h-full w-full object-cover"
           style={{ transform: "scaleX(-1)", visibility: phase === "camera" ? "visible" : "hidden" }}
         />
+        {phase === "camera" ? <TurnArrows step={step} /> : null}
         {phase === "loading" || phase === "comparing" ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <Loader2 size={34} className="animate-spin text-white/80" aria-label={copy.loading} />
@@ -283,6 +294,8 @@ export default function SelfieVerifyScreen({
           </div>
         ) : null}
       </div>
+
+      {phase === "camera" ? <TurnGauge step={step} position={gauge} /> : null}
 
       <div className="mx-auto mt-6 w-full max-w-[400px] flex-1 px-6 text-center">
         {phase === "intro" ? (
@@ -326,6 +339,76 @@ export default function SelfieVerifyScreen({
           </button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+const LEFT_DONE: readonly LivenessStep[] = ["turn_right", "return", "done"];
+const RIGHT_DONE: readonly LivenessStep[] = ["return", "done"];
+
+/** Arrows on the side to turn toward, and a check on each side already done. */
+function TurnArrows({ step }: { step: LivenessStep }) {
+  const side = (which: "left" | "right") => {
+    const active = step === (which === "left" ? "turn_left" : "turn_right");
+    const done = (which === "left" ? LEFT_DONE : RIGHT_DONE).includes(step);
+    if (!active && !done) return null;
+    const Icon = which === "left" ? ChevronsLeft : ChevronsRight;
+    return (
+      <div
+        data-qa={`selfie-verify-arrow-${which}`}
+        data-state={done ? "done" : "active"}
+        className={`absolute inset-y-0 ${which === "left" ? "left-0 bg-gradient-to-r" : "right-0 bg-gradient-to-l"} flex w-[28%] items-center ${which === "left" ? "justify-start pl-2" : "justify-end pr-2"} ${done ? "from-emerald-600/70" : "from-[#F97316]/80"} to-transparent`}
+      >
+        {done ? (
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg">
+            <Check size={24} strokeWidth={3} aria-hidden />
+          </span>
+        ) : (
+          <Icon size={46} strokeWidth={2.6} className="animate-pulse text-white drop-shadow" aria-hidden />
+        )}
+      </div>
+    );
+  };
+  return (
+    <>
+      {side("left")}
+      {side("right")}
+    </>
+  );
+}
+
+/**
+ * How far the head is turned: a dot on a bar, with the target mark on each
+ * side. The side to reach now is orange; a side reached turns green.
+ */
+function TurnGauge({ step, position }: { step: LivenessStep; position: number }) {
+  const toPercent = (value: number) => `${50 + value * 50}%`;
+  const target = TURN_GAUGE_TARGET;
+  const leftDone = LEFT_DONE.includes(step);
+  const rightDone = RIGHT_DONE.includes(step);
+  const reached = (step === "turn_left" && position <= -target) || (step === "turn_right" && position >= target);
+  return (
+    <div data-qa="selfie-verify-gauge" className="relative mx-auto mt-5 h-8 w-[min(76vw,320px)]" aria-hidden>
+      <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-white/15" />
+      {/* The stretch to cover on each side, from the middle to its target mark. */}
+      <div
+        className={`absolute top-1/2 h-2 -translate-y-1/2 rounded-l-full ${leftDone ? "bg-emerald-500" : step === "turn_left" ? "bg-[#F97316]/70" : "bg-white/10"}`}
+        style={{ left: toPercent(-target), width: `${target * 50}%` }}
+      />
+      <div
+        className={`absolute top-1/2 h-2 -translate-y-1/2 rounded-r-full ${rightDone ? "bg-emerald-500" : step === "turn_right" ? "bg-[#F97316]/70" : "bg-white/10"}`}
+        style={{ left: "50%", width: `${target * 50}%` }}
+      />
+      {/* Target marks and the middle. */}
+      <div className="absolute top-0 h-8 w-1 -translate-x-1/2 rounded-full bg-white/80" style={{ left: toPercent(-target) }} />
+      <div className="absolute top-0 h-8 w-1 -translate-x-1/2 rounded-full bg-white/80" style={{ left: toPercent(target) }} />
+      <div className="absolute top-2 h-4 w-0.5 -translate-x-1/2 bg-white/40" style={{ left: "50%" }} />
+      {/* Where the head is now. */}
+      <div
+        data-qa="selfie-verify-gauge-dot"
+        className={`absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-[left] duration-150 ${reached ? "bg-emerald-500" : "bg-[#F97316]"}`}
+        style={{ left: toPercent(position) }}
+      />
     </div>
   );
 }
