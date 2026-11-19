@@ -9,14 +9,14 @@ import { HAMZZI_SYSTEM_PROMPT } from './prompt'
 
 /**
  * Writes Hamzzi's next message in a one-to-one room: a language-practice
- * buddy that also explains HashChat. Always on the Gemini API, never the
- * ChatGPT pool (staff decided 2026-11-19), on the newest flash-lite.
+ * buddy that also explains HashChat. Always on the Anthropic API (Claude
+ * Sonnet 5.5), never the ChatGPT pool (staff decided 2026-11-19).
  */
 export const HAMZZI_TRANSCRIPT_TURNS = 30
 export const HAMZZI_MAX_REPLY_CHARS = 800
 const MESSAGE_MAX_CHARS = 1000
 const CALL_TIMEOUT_MS = 90_000
-export const HAMZZI_DEFAULT_MODEL = 'gemini-3.5-flash-lite'
+export const HAMZZI_DEFAULT_MODEL = 'claude-sonnet-5-5'
 
 export type HamzziReplyContext = {
   profile: {

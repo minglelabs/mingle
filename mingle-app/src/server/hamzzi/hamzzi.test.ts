@@ -112,7 +112,7 @@ describe('hamzzi worker', () => {
     })
     await expect(replyAsHamzzi(candidate)).resolves.toBe('skipped')
     expect(mocks.send).toHaveBeenCalledTimes(1)
-    expect(mocks.generateJson).toHaveBeenCalledWith(expect.objectContaining({ model: 'gemini-3.5-flash-lite', provider: 'direct' }))
+    expect(mocks.generateJson).toHaveBeenCalledWith(expect.objectContaining({ model: 'claude-sonnet-5-5', provider: 'direct' }))
   })
 
   it('leaves a message alone when the model declines', async () => {
