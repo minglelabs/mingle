@@ -1439,8 +1439,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           <span className="text-[2.8rem] font-extrabold leading-[1.08] text-[#2D2A1E]">
             HashChat
           </span>
-          {socialSignInFailed ? (
-            <p role="alert" className="text-lg font-bold leading-snug text-[#2D2A1E]">
+          {/* A failed sign-in shows in red on a white pill so it stands out on the orange background. */}
+          {socialSignInFailed || (props.authNotice && props.authNotice === resolveSignInFailedCopy(props.locale)) ? (
+            <p
+              role="alert"
+              className="rounded-2xl bg-white px-4 py-2.5 text-base font-bold leading-snug text-[#E5262D] shadow-sm"
+            >
               {resolveSignInFailedCopy(props.locale)}
             </p>
           ) : props.authNotice ? (
