@@ -834,6 +834,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
           board={view.board}
           nextAt={view.nextAt}
           hosted={view.hosted}
+          amHost={view.amHost}
           at={view.at}
           copy={copy}
           scoreView={scoreView}

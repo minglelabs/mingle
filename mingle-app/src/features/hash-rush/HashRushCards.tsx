@@ -453,13 +453,15 @@ type ResultProps = TableProps & {
   nextAt: number
   /** A hosted room: no next round by itself; the host starts it. */
   hosted?: boolean
+  /** This viewer is that host. */
+  amHost?: boolean
   at: number
   copy: HashRushGameCopy
   onClose: () => void
 }
 
 /** The round's verdict and its table, until the room goes back to the lobby by itself. */
-export function HashRushResultCard({ verdict, board, nextAt, hosted, at, copy, scoreView, onScoreView, onClose }: ResultProps) {
+export function HashRushResultCard({ verdict, board, nextAt, hosted, amHost, at, copy, scoreView, onScoreView, onClose }: ResultProps) {
   const seconds = useSecondsLeft(nextAt)
   const { close, onBackdrop } = useCardClose(at, onClose)
   return (
@@ -478,7 +480,7 @@ export function HashRushResultCard({ verdict, board, nextAt, hosted, at, copy, s
         {verdict.why ? <p className={styles.why}>{verdict.why}</p> : null}
         <HashRushScoreTable board={board} scoreView={scoreView} onScoreView={onScoreView} />
         <p className={styles.nextLine} data-qa="hash-rush-next-round">
-          {seconds != null ? copy.nextRoundIn(seconds) : hosted ? copy.nextRoundByHost : copy.nextRoundSoon}
+          {seconds != null ? copy.nextRoundIn(seconds) : hosted ? (amHost ? copy.nextRoundByMe : copy.nextRoundByHost) : copy.nextRoundSoon}
         </p>
       </div>
     </div>
