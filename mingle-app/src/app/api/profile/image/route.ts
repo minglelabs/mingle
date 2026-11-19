@@ -122,6 +122,8 @@ export async function POST(request: NextRequest) {
         imageCropX,
         imageCropY,
         imageFaceCheck,
+        // The badge vouches for this photo's face; a new photo needs a new selfie check.
+        faceVerifiedAt: null,
       },
       select: userProfileSelect,
     });

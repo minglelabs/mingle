@@ -2,6 +2,7 @@
 
 import { requestProfileBasics } from "@/lib/profile-basics";
 import { parseFirstMessageSetupNeeds, requestFirstMessageSetup } from "@/lib/first-message-setup";
+import FaceVerifiedBadge from "@/components/face-verified-badge";
 import ProfileBio from "@/components/profile-bio";
 import { sameBioLanguage } from "@/lib/profile-bio";
 import ProfileGenderAgeBadge from "@/components/profile-gender-age-badge";
@@ -104,6 +105,8 @@ type PublicUserProfile = {
   isOfficial?: boolean;
   /** An account run by HashChat staff; absent means false. */
   isOperator?: boolean;
+  /** Passed the selfie check for the current photo; absent means false. */
+  faceVerified?: boolean;
 };
 
 type ReportReason = "spam" | "harassment" | "inappropriate" | "impersonation" | "ai_generated" | "other";
@@ -621,6 +624,7 @@ export default function PublicUserProfileScreen({
         <h1 className="flex min-w-0 items-center justify-center gap-1.5 text-[17px] font-bold">
           <span className="truncate">{name}</span>
           <AccountBadge kind={repeatedNameBadge} locale={locale} tone="dark" />
+          {profile?.faceVerified ? <FaceVerifiedBadge locale={locale} /> : null}
         </h1>
         <div aria-hidden="true" />
       </header>

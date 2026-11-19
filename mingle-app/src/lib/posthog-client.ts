@@ -32,6 +32,7 @@ export type MingleClientEvent =
   | "mingle_first_run_step"
   | "mingle_profile_basics_step"
   | "mingle_first_message_gate"
+  | "mingle_selfie_verify"
   // Posting-feed events; names and allowed properties live in `@/lib/feed-analytics`.
   | FeedEventName;
 

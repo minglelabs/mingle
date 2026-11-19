@@ -5761,6 +5761,9 @@ function AppInner(): React.JSX.Element {
             cacheMode={Platform.OS === 'android' && shouldUseAggressiveWebViewCacheBypass ? 'LOAD_NO_CACHE' : 'LOAD_DEFAULT'}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
+            // The selfie check opens the front camera from the page; the app's own
+            // camera permission is still asked by the system the first time.
+            mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
             keyboardDisplayRequiresUserAction={false}
             setSupportMultipleWindows={false}
             scrollEnabled={Platform.OS !== 'ios' || !shouldDisableIosScroll}

@@ -41,6 +41,7 @@ export const userProfileSelect = {
   // profile to other people, so an operator account must stay labeled.
   isOfficial: true,
   isOperator: true,
+  faceVerifiedAt: true,
   _count: {
     select: {
       followerRelations: {
@@ -82,6 +83,7 @@ type SelectedUserProfile = {
   /** Optional so hand-built rows (tests, older selects) still type-check. */
   isOfficial?: boolean | null;
   isOperator?: boolean | null;
+  faceVerifiedAt?: Date | null;
   _count: {
     followerRelations: number;
     followingRelations: number;
@@ -115,6 +117,8 @@ export type UserProfile = {
   followingCount: number;
   /** The HashChat team's official account; present (true) only then. */
   isOfficial?: boolean;
+  /** Passed the selfie check for the current photo; present (true) only then. */
+  faceVerified?: boolean;
 };
 
 export function calculateProfileAge(
@@ -173,6 +177,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     locationCountryCode,
     isOfficial,
     isOperator,
+    faceVerifiedAt,
   } = profile;
   const location = typeof locationLatitude === "number"
     && Number.isFinite(locationLatitude)
@@ -216,6 +221,7 @@ export function serializeUserProfile(profile: SelectedUserProfile, now: Date = n
     followersCount: _count.followerRelations,
     followingCount: _count.followingRelations,
     ...identityBadgeFlags({ isOfficial }),
+    ...(faceVerifiedAt ? { faceVerified: true } : {}),
   };
 }
 

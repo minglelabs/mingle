@@ -49,6 +49,7 @@ const userProfileSelect = {
   locationCity: true,
   locationCountry: true,
   locationCountryCode: true,
+  faceVerifiedAt: true,
   _count: {
     select: {
       followerRelations: {
@@ -161,5 +162,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     isBlocked: block?.blockerId === viewerId,
     // Badge flags (official / operator) only when true; absent means false.
     ...identityBadgeFlags(user),
+    // Passed the selfie check for the current photo.
+    ...(user.faceVerifiedAt ? { faceVerified: true } : {}),
   });
 }

@@ -120,7 +120,10 @@ import { isCoinBillingActive, openCoinStore, useCoinWallet } from "@/lib/coin-wa
 import { resolveContactSyncCopy } from "@/i18n/contact-sync-copy";
 import { openContactSync } from "@/lib/native-contacts";
 import StaffAdminEntry from "@/components/staff-admin-entry";
-import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, Siren, SquarePen, Ticket, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, ShieldCheck, Siren, SquarePen, Ticket, Trash2, UserRound, UserRoundX, X } from "lucide-react";
+import { resolveSelfieVerifyCopy } from "@/i18n/selfie-verify-copy";
+import dynamic from "next/dynamic";
+const SelfieVerifyScreen = dynamic(() => import("@/components/selfie-verify-screen"), { ssr: false });
 import { myPostsHref } from "@/lib/feed-routes";
 import ComposeOverlay from "@/components/compose/compose-overlay";
 import { feedCopy } from "@/i18n/feed-copy";
@@ -1909,6 +1912,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     };
   });
   const [profile, setProfile] = useState<ProfileRecord>(initialProfileSeed.profile);
+  const [selfieVerifyOpen, setSelfieVerifyOpen] = useState(false);
   // The account whose data `profile` currently holds. Empty until a snapshot or
   // an API response arrives, so a placeholder is never cached as a real profile.
   const profileOwnerUserIdRef = useRef(initialProfileSeed.ownerUserId);
@@ -2201,6 +2205,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
           isOfficial: data.isOfficial === true,
+          faceVerified: data.faceVerified === true,
         });
       })
       .catch(() => {
@@ -2720,6 +2725,27 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             <Ticket size={16} strokeWidth={2.2} aria-hidden="true" />
             <span className="truncate">{resolveInviteTicketCopy(locale).inviteScreenEntry}</span>
           </button>
+          {/* Optional selfie check: a verified badge on the profile (see @/lib/selfie-liveness). */}
+          <button
+            type="button"
+            onClick={() => setSelfieVerifyOpen(true)}
+            disabled={profile.faceVerified === true}
+            data-qa="my-page-selfie-verify"
+            className={`mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-lg px-2 text-[13px] font-bold transition ${profile.faceVerified ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-slate-900 active:bg-gray-200"}`}
+          >
+            <ShieldCheck size={16} strokeWidth={2.2} aria-hidden="true" />
+            <span className="truncate">
+              {profile.faceVerified ? resolveSelfieVerifyCopy(locale).entryDone : resolveSelfieVerifyCopy(locale).entry}
+            </span>
+          </button>
+          {selfieVerifyOpen ? (
+            <SelfieVerifyScreen
+              locale={locale}
+              hasPhoto={Boolean(profile.image)}
+              onClose={() => setSelfieVerifyOpen(false)}
+              onVerified={() => setProfile((current) => ({ ...current, faceVerified: true }))}
+            />
+          ) : null}
         </section>
 
           {sessionUserId && postingFeedSupported !== false ? (

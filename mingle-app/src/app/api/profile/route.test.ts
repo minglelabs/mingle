@@ -138,6 +138,7 @@ describe("/api/profile route", () => {
         locationCountryCode: true,
         isOfficial: true,
         isOperator: true,
+        faceVerifiedAt: true,
         _count: {
           select: {
             followerRelations: {
@@ -218,6 +219,7 @@ describe("/api/profile route", () => {
         locationCountryCode: true,
         isOfficial: true,
         isOperator: true,
+        faceVerifiedAt: true,
         _count: {
           select: {
             followerRelations: {
