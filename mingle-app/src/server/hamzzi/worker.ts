@@ -7,8 +7,8 @@ import { generateHamzziReply, loadHamzziReplyContext } from './reply'
 
 /**
  * Hamzzi answers every one-to-one room whose latest message is from the other
- * person, a few seconds after it arrived (so a burst of short messages gets
- * one reply). Always on; `HAMZZI_AUTO_REPLY=off` turns it off.
+ * person once they have been quiet for `HAMZZI_REPLY_DELAY_MS`, so a burst of
+ * short messages gets one reply that answers them together (prompt.ts). Always on; `HAMZZI_AUTO_REPLY=off` turns it off.
  *
  * - The request id is derived from the answered message, so two runs (or two
  *   replicas) never answer the same message twice.
@@ -158,7 +158,7 @@ export async function replyAsHamzzi(candidate: HamzziCandidate): Promise<Outcome
   }
 }
 
-/** One worker run: up to `HAMZZI_CONCURRENCY` rooms at a time (pool answers take 10-70 s). */
+/** One worker run: up to `HAMZZI_CONCURRENCY` rooms at a time. */
 export async function runHamzziAutoReplies(options: { now?: () => Date } = {}): Promise<HamzziRunSummary> {
   const now = options.now ?? (() => new Date())
   const summary: HamzziRunSummary = { candidates: 0, sent: 0, declined: 0, skipped: 0, failed: 0 }

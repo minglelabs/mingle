@@ -47,6 +47,9 @@ const TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS = 250
 const MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS = 2_000
 const OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS = 4_000
 const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 8_000
+// A final answer that timed out is asked once more with this longer wait; an interim
+// answer is soon replaced by the final one.
+const OPENAI_COMPATIBLE_FINAL_TIMEOUT_RETRY_MS = 12_000
 const ANTHROPIC_TRANSLATION_MAX_TOKENS = 16_000
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
@@ -1311,8 +1314,7 @@ async function createOpenAICompatibleCompletion(
     if (openRouterTitle) headers['X-Title'] = openRouterTitle
   }
 
-  const executeRequest = async () => {
-    const timeoutMs = resolveOpenAICompatibleRequestTimeoutMs(ctx.isFinal)
+  const executeRequest = async (timeoutMs = resolveOpenAICompatibleRequestTimeoutMs(ctx.isFinal)) => {
     const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
       ? AbortSignal.timeout(timeoutMs)
       : undefined
@@ -1362,8 +1364,15 @@ async function createOpenAICompatibleCompletion(
   try {
     return await executeRequest()
   } catch (error) {
-    // A slow provider stays slow on an immediate retry, so a timeout goes straight
-    // to the fallback provider instead of making the user wait a second timeout.
+    if (ctx.isFinal && isProviderTimeoutError(error)) {
+      logWarning('provider_timeout_retry', {
+        ...buildLogContext(ctx),
+        provider: config.provider,
+        model: config.model,
+        timeoutMs: OPENAI_COMPATIBLE_FINAL_TIMEOUT_RETRY_MS,
+      })
+      return await executeRequest(OPENAI_COMPATIBLE_FINAL_TIMEOUT_RETRY_MS)
+    }
     if (!ctx.isFinal || isProviderTimeoutError(error) || !isRetryableOpenAICompatibleError(error)) throw error
     const retryInMs = resolveProviderRetryDelayMs(error)
     if (!shouldRetryProviderError(error)) {

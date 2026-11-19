@@ -30,7 +30,10 @@ export function buildPostImagePrompt(
   person: PostPhotoPerson | null = null,
   style: PostImageStyle = 'photo',
 ): string {
-  const { kind, description } = decodePostPhoto(stored)
+  const decoded = decodePostPhoto(stored)
+  const { kind, description } = decoded
+  // A photo from a trip is drawn where it was taken, not in the author's city.
+  place = decoded.place ?? place
   // A photo of the poster stays one even when it mentions a screen ("looking down into the phone screen").
   if (kind === 'scene' && isScreenshot(description)) return buildScreenshotPrompt(description, place)
   const placeLine = place ? [`Taken in ${place}: the street, shops, packaging and objects look like that place, and any writing that happens to be visible is in the local language and script, small and incidental.`] : []

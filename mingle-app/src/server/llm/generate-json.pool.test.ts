@@ -30,6 +30,12 @@ describe('text through the ChatGPT pool', () => {
     expect(resolveJsonProvider({ CHATGPT_POOL_KEY: 'k', LLM_JSON_PROVIDER: 'gemini' } as unknown as NodeJS.ProcessEnv)).toBe('gemini')
   })
 
+  it('skips the pool for a direct request', async () => {
+    vi.stubEnv('GEMINI_API_KEY', '')
+    await expect(generateJson({ ...request, model: 'gemini-3.5-flash-lite', provider: 'direct' })).rejects.toMatchObject({ code: 'llm_unavailable' })
+    expect(pool.chat).not.toHaveBeenCalled()
+  })
+
   it('reads the JSON out of a chat answer', () => {
     expect(extractJsonText('```json\n{"a":1}\n```')).toBe('{"a":1}')
     expect(extractJsonText('Sure! {"a":{"b":2}} hope it helps')).toBe('{"a":{"b":2}}')

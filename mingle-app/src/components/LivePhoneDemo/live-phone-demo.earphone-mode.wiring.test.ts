@@ -31,7 +31,7 @@ describe('earphone mode wiring', () => {
     expect(voiceBar).toContain('{earphoneModeGate.controlVisible && (')
     expect(voiceBar).toContain('data-qa="live-demo-earphone-mode-toggle"')
     expect(voiceBar).toContain('aria-pressed={isEarphoneModeOn}')
-    expect(voiceBar).toContain("gridTemplateColumns: earphoneModeGate.controlVisible ? 'minmax(0, 1fr) auto minmax(0, 1fr)' : '1fr auto 1fr'")
+    expect(voiceBar).toContain("gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)'")
     const menuItem = between(liveDemoSource, 'const earphoneModeMenuItem = useMemo', '), [')
     expect(menuItem).toContain('earphoneModeGate.controlVisible')
     expect(menuItem).toContain(': undefined')

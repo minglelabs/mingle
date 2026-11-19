@@ -42,6 +42,13 @@
  * never serves the extensions' /agent endpoints. A tunnel's requests arrive from
  * 127.0.0.1 too, so the main port must never be the one exposed.
  *
+ * Where it runs: the pool lives on the home Windows PC, behind
+ * https://chatgpt-pool.minglelabs.app. On a Mac, `serve` and `install` refuse to
+ * start (a Mac pool made the staff's own Chrome open ChatGPT tabs by itself);
+ * CHATGPT_POOL_ALLOW_MAC=1 overrides. The clients (`mcp`, `accounts`, `chat`,
+ * `image`) talk to CHATGPT_POOL_URL, which on a Mac defaults to the Windows pool,
+ * with CHATGPT_POOL_KEY or the key in ~/.mingle/chatgpt-pool/api-key.
+ *
  * Profile rotation (on by default on Windows; CHATGPT_POOL_ROTATE=1/0 to force):
  * every open profile costs a Chrome profile's memory, so only
  * CHATGPT_POOL_MIN_OPEN (5) stay open. A profile idle for
@@ -744,15 +751,50 @@ function serve() {
 
 // ---- clients of `serve`: CLI and MCP -----------------------------------
 
+const WINDOWS_POOL_URL = 'https://chatgpt-pool.minglelabs.app'
+const MAC_ALLOWED = process.env.CHATGPT_POOL_ALLOW_MAC === '1'
+
+/** Where the clients send requests: CHATGPT_POOL_URL, else the Windows pool on a Mac, else this machine. */
+function poolBase() {
+  const url = process.env.CHATGPT_POOL_URL?.trim()
+  if (url) return url.replace(/\/+$/, '')
+  return process.platform === 'darwin' && !MAC_ALLOWED ? WINDOWS_POOL_URL : `http://${HOST}:${PORT}`
+}
+
+async function clientKey() {
+  if (KEY) return KEY
+  try {
+    return (await readFile(join(homedir(), '.mingle', 'chatgpt-pool', 'api-key'), 'utf8')).trim()
+  } catch {
+    return ''
+  }
+}
+
 async function callPool(path, body) {
-  const response = await fetch(`http://${HOST}:${PORT}${path}`, {
+  const base = poolBase()
+  const key = await clientKey()
+  const response = await fetch(`${base}${path}`, {
     method: body ? 'POST' : 'GET',
-    headers: { 'content-type': 'application/json', ...(KEY ? { authorization: `Bearer ${KEY}` } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  }).catch(() => { throw new Error(`ChatGPT pool is not running on ${HOST}:${PORT}; start it with \`node scripts/chatgpt-pool.mjs serve\` (or \`install\`)`) })
+    headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
+    // Through the tunnel a long request is cut, so a remote POST is a job that is polled.
+    body: body ? JSON.stringify(remote(base) ? { ...body, async: true } : body) : undefined,
+  }).catch(() => { throw new Error(`ChatGPT pool is not reachable at ${base}`) })
   const payload = await response.json()
   if (!response.ok) throw new Error(payload.error?.message ?? `pool answered ${response.status}`)
-  return payload
+  if (!(body && remote(base) && response.status === 202 && payload.id)) return payload
+  const deadline = Date.now() + 10 * 60_000
+  while (Date.now() < deadline) {
+    await new Promise((done) => setTimeout(done, 5_000))
+    const job = await fetch(`${base}/v1/jobs/${encodeURIComponent(payload.id)}`, { headers: key ? { authorization: `Bearer ${key}` } : {} })
+      .then((res) => res.json()).catch(() => null)
+    if (job?.status === 'done') return job.result
+    if (job?.status === 'error') throw new Error(job.error?.message ?? 'pool job failed')
+  }
+  throw new Error('pool job timed out')
+}
+
+function remote(base) {
+  return !/^http:\/\/(127\.0\.0\.1|localhost|\[::1\])[:/]/.test(base)
 }
 
 const dataUrlOf = async (file) => `data:image/${file.endsWith('.png') ? 'png' : 'jpeg'};base64,${(await readFile(file)).toString('base64')}`
@@ -760,7 +802,7 @@ const dataUrlOf = async (file) => `data:image/${file.endsWith('.png') ? 'png' : 
 const MCP_TOOLS = [
   {
     name: 'chatgpt_chat',
-    description: "Ask ChatGPT through the staff's own Chrome profiles on this Mac (no paid API) and get its text answer. Each call is a fresh temporary chat.",
+    description: "Ask ChatGPT through the staff's own Chrome profiles on the home Windows PC pool (no paid API) and get its text answer. Each call is a fresh temporary chat.",
     inputSchema: { type: 'object', properties: { prompt: { type: 'string' }, account: { type: 'string', description: 'Optional account email to use' } }, required: ['prompt'] },
   },
   {
@@ -984,6 +1026,10 @@ async function uninstallMac() {
 
 const [command, ...rest] = process.argv.slice(2)
 const option = (name) => { const at = rest.indexOf(name); return at >= 0 ? rest.splice(at, 2)[1] : null }
+if ((!command || command === 'serve' || command === 'install') && process.platform === 'darwin' && !MAC_ALLOWED) {
+  console.error(`The ChatGPT pool runs on the home Windows PC (${WINDOWS_POOL_URL}), not on this Mac: a Mac pool makes this Chrome open ChatGPT by itself. Use it through \`mcp\`, \`chat\` or \`image\`; set CHATGPT_POOL_ALLOW_MAC=1 only if staff asked for a Mac pool.`)
+  process.exit(1)
+}
 if (!command || command === 'serve') serve()
 else if (command === 'mcp') mcp()
 else if (command === 'install') await install()

@@ -5,6 +5,7 @@ import {
   buildInviteSharedLinkMessage,
   buildInviteTicketMessage,
   fillInviteTicketCopy,
+  resolveDefaultInviteMessageLocale,
   resolveInviteLandingLocale,
   resolveInviteTicketCopy,
 } from "./invite-ticket-copy";
@@ -30,7 +31,7 @@ describe("invite-ticket-copy", () => {
     expect(fillInviteTicketCopy("{name}: {coins}", { name: "미나", coins: 1000 })).toBe("미나: 1,000");
   });
 
-  it("writes the pasted message in four plain lines, in the sender's language", () => {
+  it("writes the pasted message in four plain lines, in the one picked language", () => {
     expect(buildInviteTicketMessage("ko", "https://x.test/i/ab3de", "ab3de").split("\n")).toEqual([
       "해시챗 초대권",
       "초대코드 ab3de",
@@ -38,13 +39,21 @@ describe("invite-ticket-copy", () => {
       "앱스토어(플레이스토어)에서 설치한 뒤 다시 링크를 눌러 들어가 보세요",
     ]);
     for (const locale of PRIMARY_UI_LOCALES) {
+      const copy = resolveInviteTicketCopy(locale);
       const lines = buildInviteTicketMessage(locale, "L", "ab3de").split("\n");
-      expect(lines, locale).toHaveLength(4);
-      expect(lines[1], locale).toContain("ab3de");
-      expect(lines[2], locale).toBe("L");
+      expect(lines, locale).toEqual([copy.message, copy.codeLine.replaceAll("{code}", "ab3de"), "L", copy.reopenHint]);
     }
     // Without a code the code line is left out.
-    expect(buildInviteTicketMessage("en", "L").split("\n")).toHaveLength(3);
+    expect(buildInviteTicketMessage("en", "L", null).split("\n")).toHaveLength(3);
+  });
+
+  it("defaults the message to the UI language, English for a Korean UI", () => {
+    expect(resolveDefaultInviteMessageLocale("ko")).toBe("en");
+    expect(resolveDefaultInviteMessageLocale("ko-KR")).toBe("en");
+    expect(resolveDefaultInviteMessageLocale("ja")).toBe("ja");
+    expect(resolveDefaultInviteMessageLocale("fr")).toBe("fr");
+    expect(resolveDefaultInviteMessageLocale("zh-TW")).toBe("zh-TW");
+    expect(resolveDefaultInviteMessageLocale("xx")).toBe("en");
   });
 
   it("puts the code and the reopen note under every shared link, in every locale", () => {

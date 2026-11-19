@@ -14,7 +14,8 @@ describe('mic button decoration hit area', () => {
       .split('\n')
       .filter((line) => /absolute inset-0 .*(animate-ping|bg-red-400 transition-transform)/.test(line))
 
-    expect(decorationLines).toHaveLength(4)
+    // Voice mode's Start/Stop only: the keyboard mode's mic became the "+" button.
+    expect(decorationLines).toHaveLength(2)
     for (const line of decorationLines) {
       expect(line).toContain('pointer-events-none')
     }

@@ -35,6 +35,10 @@ export type HashRushGameCopy = {
   /** Under the result: the next round needs nobody to press anything. */
   nextRoundIn: (seconds: number) => string
   nextRoundSoon: string
+  /** A hosted room: the round after starts when the host presses Start. */
+  nextRoundByHost: string
+  /** The host's own card: they start it. */
+  nextRoundByMe: string
   /** By the clock while the result card is put away. */
   nextChip: (seconds: number) => string
   autoStart: string
@@ -94,6 +98,8 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     startsIn: (s) => `⏱ ${s}초 뒤 시작`,
     nextRoundIn: (s) => `다음 판은 ${s}초 뒤 자동으로 시작해요`,
     nextRoundSoon: '다음 판은 곧 자동으로 시작해요',
+    nextRoundByHost: '방장이 시작하면 다음 판이 시작돼요',
+    nextRoundByMe: '게임 시작을 누르면 다음 판이 시작돼요',
     nextChip: (s) => `⏱ 다음 판 ${s}초`,
     autoStart: '판은 자동으로 시작돼요',
     botsFill: (n) => `빈자리는 컴퓨터 ${n}명이 채워요`,
@@ -145,6 +151,8 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     startsIn: (s) => `⏱ Starts in ${s}s`,
     nextRoundIn: (s) => `The next round starts by itself in ${s}s`,
     nextRoundSoon: 'The next round starts by itself soon',
+    nextRoundByHost: 'The next round starts when the host starts it',
+    nextRoundByMe: 'Press Start game for the next round',
     nextChip: (s) => `⏱ Next round ${s}s`,
     autoStart: 'Rounds start by themselves',
     botsFill: (n) => (n === 1 ? 'A computer takes the empty seat' : `${n} computers take the empty seats`),
@@ -196,6 +204,8 @@ const COPY: Record<'ko' | 'en' | 'ja', HashRushGameCopy> = {
     startsIn: (s) => `⏱ ${s}秒後にスタート`,
     nextRoundIn: (s) => `次のラウンドは${s}秒後に自動で始まります`,
     nextRoundSoon: '次のラウンドはまもなく自動で始まります',
+    nextRoundByHost: 'ホストが始めると次のラウンドが始まります',
+    nextRoundByMe: 'ゲームスタートを押すと次のラウンドが始まります',
     nextChip: (s) => `⏱ 次まで${s}秒`,
     autoStart: 'ラウンドは自動で始まります',
     botsFill: (n) => `空いた席にはコンピューター${n}人が入ります`,

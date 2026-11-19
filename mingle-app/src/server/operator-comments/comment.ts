@@ -148,7 +148,7 @@ export async function replyToCommentAsOperator(
 
     const root = await prisma.postComment.findFirst({
       where: { ...visibleSingleCommentWhere(input.commentId, operatorUserId), parentId: null, OR: [{ isDeleted: null }, { isDeleted: false }] },
-      select: { id: true, postId: true, authorId: true, sourceText: true, sourceLanguage: true },
+      select: { id: true, postId: true, authorId: true, sourceText: true, sourceLanguage: true, author: { select: { isOperator: true } } },
     })
     if (!root) return { ok: false, error: 'not_found' }
     if (root.authorId === operatorUserId) return { ok: false, error: 'own_comment' }
@@ -182,6 +182,7 @@ export async function replyToCommentAsOperator(
         thread: thread.map((reply) => reply.sourceText ?? '').filter(Boolean),
         asPostAuthor: post.authorId === operatorUserId,
       },
+      toRealUser: root.author?.isOperator !== true,
     })
     if (!generated) return { ok: false, error: 'generation_failed' }
 

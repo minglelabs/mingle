@@ -18,6 +18,7 @@ const hosting = (amHost: boolean, fill: number): HashRushLobbyHosting => ({
   fillMax: 8,
   teamChoices: [],
   myTeam: -1,
+  computersColor: "",
   notice: '',
   words: { start: 'Start', waitingHost: 'Waiting', solo: 'Solo', team: 'Team', map: 'Map' },
 })
@@ -25,7 +26,7 @@ const hosting = (amHost: boolean, fill: number): HashRushLobbyHosting => ({
 const view = (h: HashRushLobbyHosting): HashRushLobbyView => ({
   kind: 'lobby',
   mode: 'Meadow',
-  seats: [{ seat: 0, name: 'Mia', team: -1, color: '#f00', me: h.amHost, winsText: '', fresh: false, host: true }],
+  seats: [{ seat: 0, name: 'Mia', team: -1, color: '#f00', me: h.amHost, winsText: '', fresh: false, host: true, web: false }],
   open: 7,
   bots: Math.max(0, h.fill - 1),
   spectators: '',

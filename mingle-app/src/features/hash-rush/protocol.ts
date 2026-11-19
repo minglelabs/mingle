@@ -43,6 +43,8 @@ export type HashRushSeat = {
   team: number
   /** The mingle user in the seat (from their ticket), '' otherwise. */
   userId: string
+  /** A web page from the invite link: it cannot host (hash-rush #240). */
+  web: boolean
 }
 
 /** The race to the title: the first to `wins` wins, `lead` clear of every other side. */
@@ -74,6 +76,8 @@ export type HashRushLobby = {
   seasons: HashRushSeason[]
   /** A host runs the room: nothing starts until they say so. */
   hosted: boolean
+  /** People against computers in a team game: the computers' side, else -1. */
+  computersTeam: number
   /** The host's seat, -1 when the host watches (or there is none). */
   hostSeat: number
   hostName: string
@@ -137,6 +141,13 @@ export type HashRushPlayer = {
   wet: number
   stops: number
   dazed: number
+  /** Pickpocketing: how far this hamster is into robbing a carrier (s). */
+  pick: number
+  /** The carrier being robbed, or -1. */
+  pickOn: number
+  /** Just robbed: this hamster cannot steal back for a moment (s). */
+  pickBlock: number
+  steals: number
   pid: string
   pub: string
 }
@@ -160,7 +171,7 @@ export type HashRushRound = {
 
 export type HashRushEvent = { type: string, [field: string]: unknown }
 
-/** A player in a snapshot: [x, y, vx, vy, fx, fy, carrying, gather, queued, swing, cooldown, kills, deaths, seeds, supers, charge, throws, wet, stops, dazed]. */
+/** A player in a snapshot: [x, y, vx, vy, fx, fy, carrying, gather, queued, swing, cooldown, kills, deaths, seeds, supers, charge, throws, wet, stops, dazed, pick, pickOn, pickBlock, steals]. A server from before pickpocketing stops at dazed. */
 export type HashRushPlayerRow = unknown[]
 
 export type HashRushSnapshot = {
@@ -357,6 +368,7 @@ export function readLobby(message: unknown): HashRushLobby | null {
       name: PEOPLE_KINDS.has(kind) ? name : localHamsterName(name),
       team: num(seat.team, -1),
       userId: typeof seat.userId === 'string' ? seat.userId : '',
+      web: seat.web === true,
     }
   })
   return {
@@ -373,6 +385,7 @@ export function readLobby(message: unknown): HashRushLobby | null {
     title: readTitleRule(m.title),
     seasons: readSeasons(m.hist),
     hosted: m.hosted === true,
+    computersTeam: Number.isInteger(m.ct) ? m.ct as number : -1,
     hostSeat: Number.isInteger(m.host) ? m.host as number : -1,
     hostName: text(m.hostName),
     amHost: m.me === true,
@@ -465,6 +478,10 @@ export function readStart(message: unknown): HashRushStart | null {
       wet: 0,
       stops: 0,
       dazed: 0,
+      pick: 0,
+      pickOn: -1,
+      pickBlock: 0,
+      steals: 0,
       pid: typeof p.pid === 'string' ? p.pid : '',
       pub: typeof p.pub === 'string' ? p.pub : '',
     }
@@ -511,6 +528,10 @@ export function readPlayerRow(p: HashRushPlayer, row: HashRushPlayerRow): void {
   p.wet = s[17] ?? 0
   p.stops = s[18] ?? 0
   p.dazed = s[19] ?? 0
+  p.pick = s[20] ?? 0
+  p.pickOn = s[21] ?? -1
+  p.pickBlock = s[22] ?? 0
+  p.steals = s[23] ?? 0
 }
 
 export function isSnapshot(message: unknown): message is HashRushSnapshot {

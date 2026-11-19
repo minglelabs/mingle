@@ -72,3 +72,15 @@ folder.
 - `client/cards.js`: new in mingle, `drawAvatar` (with a `size`) and
   `drawTrophy` lifted out of the page's `main.js`, unchanged otherwise.
 - `client/mvp.js`: copied as it is (hash-rush `feat/g2-server-rooms` 7004a49).
+
+## Taken from hash-rush since the copy
+
+- Pickpocketing (hash-rush #237, 2026-11-19): `sim/game.js`, `sim/constants.js`,
+  `ai/bot.js` and the five languages' strings in `client/i18n.js` as they are;
+  in `client/render.js` the red gauge and the "소매치기 중" note, fitted to the
+  mingle label placement above. The web page's part (`main.js`: the snapshot
+  fields, the start roster, the `steal` event's feed line, banner, sound and
+  buzz) lives in `protocol.ts` and `client.ts`. hash-rush
+  `test/pickpocket.test.js` runs against this copy as `../pickpocket.test.ts`.
+  The game server sends the gauge from hash-rush #239 on; an older server
+  leaves it empty (steals still happen and show).

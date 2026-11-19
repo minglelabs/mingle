@@ -159,7 +159,7 @@ export default function HashRushRoomLayer({ open, conversationId, viewerKey, pla
             onClick={(event) => event.stopPropagation()}
           >
             <p className="text-center text-[1.02rem] font-semibold text-gray-900">{inviteCopy.quitTitle}</p>
-            <p className="mt-1.5 text-center text-[0.86rem] text-gray-500">{inviteCopy.quitBody}</p>
+            <p className="mt-1.5 text-center text-[0.86rem] text-gray-500">{confirmQuit.alone ? inviteCopy.quitBody : inviteCopy.quitBodyOthers}</p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <button
                 type="button"

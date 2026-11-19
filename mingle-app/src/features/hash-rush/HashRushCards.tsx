@@ -71,6 +71,8 @@ type LobbyProps = {
   view: HashRushLobbyView
   copy: HashRushGameCopy
   art: HashRushArt | null
+  /** The game's 💬 button sits at the screen's foot: the card ends above it. */
+  chatBelow?: boolean
   onSit: () => void
   onStand: () => void
   /** A hosted room (the app's): the host's controls, a side to pick, how to play. */
@@ -81,7 +83,7 @@ type LobbyProps = {
   onHowTo?: () => void
 }
 
-export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, onGo, onHandHost, onPickTeam, onHowTo }: LobbyProps) {
+export function HashRushLobbyCard({ view, copy, art, chatBelow, onSit, onStand, onSetup, onGo, onHandHost, onPickTeam, onHowTo }: LobbyProps) {
   const seconds = useSecondsLeft(view.nextAt)
   const [handTo, setHandTo] = useState<number | null>(null)
   const hosting = view.hosting
@@ -126,7 +128,7 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
   const canAddComputer = !!hosting && humans + computers < Math.min(hosting.fillMax, humans + view.open)
   const canRemoveComputer = !!hosting && computers > 0 && humans + computers - 1 >= hosting.fillMin
   return (
-    <div className={cx(styles.cover, styles.coverLobby)} data-qa="hash-rush-lobby">
+    <div className={cx(styles.cover, styles.coverLobby, chatBelow && styles.coverChatBelow)} data-qa="hash-rush-lobby">
       <div className={cx(styles.card, styles.lobbyCard)}>
         <div className={styles.lobbyChips}>
           <span className={styles.chip} data-qa="hash-rush-mode">{view.mode}</span>
@@ -159,7 +161,7 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
                 {seat.me ? <i className={styles.meBadge} data-qa="hash-rush-me-badge">{view.words.me}</i> : null}
                 {seat.team >= 0 ? <i className={styles.teamDot} style={{ '--t': seat.color } as CSSProperties} /> : null}
               </span>
-              {hosting?.amHost && !seat.me && onHandHost ? (
+              {hosting?.amHost && !seat.me && !seat.web && onHandHost ? (
                 <button type="button" className={styles.handHost} onClick={() => setHandTo(seat.seat)} data-qa="hash-rush-hand-host">
                   {copy.handHost}
                 </button>
@@ -173,7 +175,11 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
               {Array.from({ length: computers }, (_, index) => (
                 <li key={`bot-${index}`} className={cx(styles.seat, styles.seatBot)} data-qa="hash-rush-seat-bot">
                   <span className={styles.botFace} aria-hidden="true">🤖</span>
-                  <span className={styles.seatName}><b>{copy.computer}</b>{botLabel ? <i className={styles.meTag}>{botLabel}</i> : null}</span>
+                  <span className={styles.seatName}>
+                    <b>{copy.computer}</b>
+                    {botLabel ? <i className={styles.meTag}>{botLabel}</i> : null}
+                    {hosting.computersColor ? <i className={styles.teamDot} style={{ '--t': hosting.computersColor } as CSSProperties} /> : null}
+                  </span>
                   {amHost ? (
                     <button type="button" className={styles.handHost} disabled={!canRemoveComputer} onClick={() => setFill(humans + computers - 1)} data-qa="hash-rush-remove-bot">
                       {copy.removeComputer}
@@ -193,17 +199,6 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
             </>
           ) : view.open > 0 ? <li className={cx(styles.seat, styles.seatOpen)}>{copy.openSeats(view.open)}</li> : null}
         </ul>
-        {handSeat && onHandHost ? (
-          <div className={styles.confirmRow} data-qa="hash-rush-hand-host-confirm">
-            <p>{copy.handHostTo(handSeat.name)}</p>
-            <div>
-              <button type="button" className={styles.button} onClick={() => setHandTo(null)}>{copy.close}</button>
-              <button type="button" className={cx(styles.button, styles.primary)} onClick={() => { onHandHost(handSeat.seat); setHandTo(null) }}>
-                {copy.handHostConfirm}
-              </button>
-            </div>
-          </div>
-        ) : null}
 
         {teams && hosting && seated && onPickTeam ? (
           <div className={styles.setupRow} data-qa="hash-rush-pick-team">
@@ -258,12 +253,7 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
               </div>
             </div>
             {!amHost ? <p className={styles.note} data-qa="hash-rush-host-only">{copy.hostOnly}</p> : null}
-            {hosting.notice ? <p className={styles.notice} data-qa="hash-rush-start-notice">{hosting.notice}</p> : null}
-            {amHost && onGo ? (
-              <button type="button" className={cx(styles.button, styles.primary, styles.startButton)} onClick={onGo} data-qa="hash-rush-start">
-                {hosting.words.start}
-              </button>
-            ) : null}
+            {!(hosting.amHost && onGo) && hosting.notice ? <p className={styles.notice} data-qa="hash-rush-start-notice">{hosting.notice}</p> : null}
           </div>
         ) : null}
 
@@ -287,7 +277,33 @@ export function HashRushLobbyCard({ view, copy, art, onSit, onStand, onSetup, on
           {view.bots > 0 && !hosting ? ` · ${copy.botsFill(view.bots)}` : ''}
         </p>
         {view.lastTitle ? <p className={styles.note}>{copy.lastTitle} {view.lastTitle}</p> : null}
+        {/* The host's Start, and why a start was turned down, in a dock stuck to
+            the card's foot: a direct child of the scrolling card, so it stays in
+            view wherever the setup above is scrolled to. */}
+        {hosting?.amHost && onGo ? (
+          <div className={styles.startDock}>
+            {hosting.notice ? <p className={styles.startNotice} role="alert" data-qa="hash-rush-start-notice">{hosting.notice}</p> : null}
+            <button type="button" className={cx(styles.button, styles.primary, styles.startButton)} onClick={onGo} data-qa="hash-rush-start">
+              {hosting.words.start}
+            </button>
+          </div>
+        ) : null}
       </div>
+      {/* Over the card, not at the foot of the seat list: there it was below
+          the fold of a full lobby, and 방장 넘기기 looked like it did nothing. */}
+      {handSeat && onHandHost ? (
+        <div className={styles.confirmLayer} onClick={() => setHandTo(null)}>
+          <div className={styles.confirmRow} role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()} data-qa="hash-rush-hand-host-confirm">
+            <p>{copy.handHostTo(handSeat.name)}</p>
+            <div>
+              <button type="button" className={styles.button} onClick={() => setHandTo(null)}>{copy.close}</button>
+              <button type="button" className={cx(styles.button, styles.primary)} onClick={() => { onHandHost(handSeat.seat); setHandTo(null) }} data-qa="hash-rush-hand-host-yes">
+                {copy.handHostConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -435,13 +451,17 @@ function useCardClose(at: number, onClose: () => void) {
 type ResultProps = TableProps & {
   verdict: HashRushVerdict
   nextAt: number
+  /** A hosted room: no next round by itself; the host starts it. */
+  hosted?: boolean
+  /** This viewer is that host. */
+  amHost?: boolean
   at: number
   copy: HashRushGameCopy
   onClose: () => void
 }
 
 /** The round's verdict and its table, until the room goes back to the lobby by itself. */
-export function HashRushResultCard({ verdict, board, nextAt, at, copy, scoreView, onScoreView, onClose }: ResultProps) {
+export function HashRushResultCard({ verdict, board, nextAt, hosted, amHost, at, copy, scoreView, onScoreView, onClose }: ResultProps) {
   const seconds = useSecondsLeft(nextAt)
   const { close, onBackdrop } = useCardClose(at, onClose)
   return (
@@ -460,7 +480,7 @@ export function HashRushResultCard({ verdict, board, nextAt, at, copy, scoreView
         {verdict.why ? <p className={styles.why}>{verdict.why}</p> : null}
         <HashRushScoreTable board={board} scoreView={scoreView} onScoreView={onScoreView} />
         <p className={styles.nextLine} data-qa="hash-rush-next-round">
-          {seconds != null ? copy.nextRoundIn(seconds) : copy.nextRoundSoon}
+          {seconds != null ? copy.nextRoundIn(seconds) : hosted ? (amHost ? copy.nextRoundByMe : copy.nextRoundByHost) : copy.nextRoundSoon}
         </p>
       </div>
     </div>

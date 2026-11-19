@@ -109,7 +109,7 @@ describe('reviewOperatorPost', () => {
     mocks.reserveFindUnique.mockResolvedValue(REVIEW_POST)
     mocks.publishNow.mockResolvedValue({ ok: true, postId: 'p1' })
     await expect(reviewOperatorPost(null, 'r1', 'publish', null)).resolves.toEqual({ ok: true, state: 'published', postId: 'p1' })
-    expect(mocks.publishNow).toHaveBeenCalledWith('r1', 'review', expect.any(Date))
+    expect(mocks.publishNow).toHaveBeenCalledWith('r1', 'review', expect.any(Date), { background: true })
   })
 
   it('rewrites the post with the feedback and draws its photo for review', async () => {
@@ -223,13 +223,17 @@ describe('where this server can draw (the ChatGPT pool)', () => {
 
 describe('releaseOrphanedDrawings', () => {
   it('puts drawings and rewrites a previous process left behind back in review', async () => {
-    mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 3 }).mockResolvedValueOnce({ count: 2 })
-    await expect(releaseOrphanedDrawings()).resolves.toBe(5)
+    mocks.reserveUpdateMany.mockResolvedValueOnce({ count: 3 }).mockResolvedValueOnce({ count: 2 }).mockResolvedValueOnce({ count: 1 })
+    await expect(releaseOrphanedDrawings()).resolves.toBe(6)
     expect(mocks.reserveUpdateMany).toHaveBeenNthCalledWith(1, {
       where: { state: 'regenerating', error: 'photo_drawing' },
       data: { state: 'review', error: 'photo_draw_failed' },
     })
     expect(mocks.reserveUpdateMany).toHaveBeenNthCalledWith(2, { where: { state: 'regenerating' }, data: { state: 'review' } })
+    expect(mocks.reserveUpdateMany).toHaveBeenNthCalledWith(3, {
+      where: { state: 'publishing', releaseAt: null },
+      data: { state: 'review', error: 'publish_interrupted' },
+    })
   })
 })
 

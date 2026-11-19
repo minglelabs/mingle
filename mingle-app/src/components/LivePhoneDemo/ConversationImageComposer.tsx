@@ -1,12 +1,13 @@
 'use client'
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react'
 import LanguageFlag from '@/components/language-flag'
-import { FlipHorizontal2, Headphones, Image as Photo, Keyboard, Loader2, Phone, Plus, RotateCcw, Volume2, X } from 'lucide-react'
+import { FlipHorizontal2, Headphones, Image as Photo, Keyboard, Loader2, Phone, PictureInPicture2, Plus, RotateCcw, Volume2, X } from 'lucide-react'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { resolveConversationImageCopy } from '@/i18n/conversation-image-copy'
 import { CONVERSATION_IMAGE_MAX_BYTES } from '@/lib/conversation-image'
 import { createPortal } from 'react-dom'
 import MessageMediaDialog from './MessageMediaDialog'
+import { toast } from 'sonner'
 import { chooseTooltipSide } from './CopyableBubbleSurface'
 import { captureRestorableFocus, scheduleFocusRestore } from './picker-focus-restore'
 import { createImageClientMessageId } from './image-client-message-id'
@@ -62,17 +63,30 @@ export type ConversationImageComposerVoiceTalk = {
   onSelect: () => void
 }
 
-export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, onMenuOpenChange, voiceButtonSize = 33, earphoneMode, voiceTalk, allowPhoto = true, acceptSharedPhoto = false }: {
+// Keyboard mode only: puts the room in a picture-in-picture window (iOS app).
+export type ConversationImageComposerPip = {
+  label: string
+  onSelect: () => void
+}
+
+export default function ConversationImageComposer({ conversationId, locale, onSent, onCloseKeyboard, onMenuOpenChange, voiceButtonSize = 33, earphoneMode, voiceTalk, pip, allowPhoto = true, acceptSharedPhoto = false, hideTrigger = false, photoPickerRef }: {
   conversationId: string; locale: string; onSent: () => void; onCloseKeyboard?: () => void; onMenuOpenChange?: (open: boolean) => void; voiceButtonSize?: number
   // Keyboard mode only: an "earphone mode" row between the photo and voice-mode rows.
   earphoneMode?: ConversationImageComposerEarphoneMode
   // Keyboard mode only: a "voice talk" row after the earphone row.
   voiceTalk?: ConversationImageComposerVoiceTalk
+  // Keyboard mode only: a "picture in picture" row after the voice talk row.
+  pip?: ConversationImageComposerPip
   // false = no photo row (a room without a sendable conversation still gets the menu).
   allowPhoto?: boolean
   // true while this room is on screen: a photo shared to HashChat from another
   // app (system share sheet) opens here in the usual preview, ready to send.
   acceptSharedPhoto?: boolean
+  // The bottom bar's action panel owns the "+": this draws no button and
+  // opens the photo chooser through photoPickerRef (called inside the tap,
+  // which iOS requires for a file chooser).
+  hideTrigger?: boolean
+  photoPickerRef?: MutableRefObject<(() => void) | null>
 }) {
   const copy = resolveConversationImageCopy(locale)
   const [anchor, setAnchor] = useState<{ side: 'above'; bottom: number; left: number } | { side: 'below'; top: number; left: number }>({ side: 'above', bottom: 48, left: 120 })
@@ -262,9 +276,9 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     if (!image) return
     let file: File
     try { file = decodeNativeShareImage(image) } catch { return }
-    if (!file.size || file.size > CONVERSATION_IMAGE_MAX_BYTES) { setError(copy.invalid); setOpen(true); return }
+    if (!file.size || file.size > CONVERSATION_IMAGE_MAX_BYTES) { if (hideTrigger) { toast.error(copy.invalid); return } setError(copy.invalid); setOpen(true); return }
     setError(null); setChosen({ file, url: URL.createObjectURL(file), id: createImageClientMessageId() }); setOpen(true)
-  }, [acceptSharedPhoto, allowPhoto, conversationId, copy.invalid, pendingShareVersion])
+  }, [acceptSharedPhoto, allowPhoto, conversationId, copy.invalid, hideTrigger, pendingShareVersion])
   useEffect(() => {
     if (!open || chosen) return
 
@@ -319,6 +333,12 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       : null
     input.current?.click()
   }, [onCloseKeyboard])
+
+  useEffect(() => {
+    if (!photoPickerRef) return
+    photoPickerRef.current = allowPhoto && conversationId ? openFilePicker : null
+    return () => { photoPickerRef.current = null }
+  }, [allowPhoto, conversationId, openFilePicker, photoPickerRef])
 
   const restorePickerFocus = useCallback(() => {
     const element = pickerFocusRestoreRef.current
@@ -431,7 +451,7 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
     finally { clearTimeout(deadline); request.current = null; if (mounted.current) setPending(false) }
   }
   return <>
-    <button type="button" data-qa="live-demo-attachment-open" aria-label={onCloseKeyboard ? copy.attach : copy.choose}
+    {!hideTrigger && <button type="button" data-qa="live-demo-attachment-open" aria-label={onCloseKeyboard ? copy.attach : copy.choose}
       aria-expanded={onCloseKeyboard ? open : undefined}
       onTouchStart={e => { handleLongPressStart(e); if (diagEnabled) handleDiagTouchStart() }}
       onTouchMove={handleTouchMove}
@@ -449,12 +469,12 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
       className="relative inline-flex h-[33px] w-[33px] shrink-0 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95">{onCloseKeyboard ? <Plus size={20} /> : <Photo size={18} strokeWidth={2.15} />}
       {onCloseKeyboard && earphoneMode?.enabled && (
         <span aria-hidden="true" data-earphone-mode-dot className="pointer-events-none absolute right-[4px] top-[4px] h-[7px] w-[7px] rounded-full bg-amber-500 ring-2 ring-white" />
-      )}</button>
+      )}</button>}
     <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" aria-label={copy.choose} className="hidden"
       onChange={event => {
         const file = event.target.files?.[0]; event.target.value = ''
         if (!file) { restorePickerFocus(); return }
-        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > CONVERSATION_IMAGE_MAX_BYTES || !file.size) { setError(copy.invalid); setOpen(true); errorMenuFocusRestorePendingRef.current = true; return }
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > CONVERSATION_IMAGE_MAX_BYTES || !file.size) { if (hideTrigger) { toast.error(copy.invalid); restorePickerFocus(); return } setError(copy.invalid); setOpen(true); errorMenuFocusRestorePendingRef.current = true; return }
         // A valid pick opens the preview; focus returns when that preview closes.
         setOpen(true); setChosen({ file, url: URL.createObjectURL(file), id: createImageClientMessageId() }); setError(null)
       }} />
@@ -539,14 +559,30 @@ export default function ConversationImageComposer({ conversationId, locale, onSe
               </button>
             </>
           )}
-          {onCloseKeyboard && (
+          {onCloseKeyboard && pip && (
             <>
               {(allowPhoto || earphoneMode || voiceTalk) && <div className="h-px bg-gray-100" />}
               <button
                 type="button"
+                data-qa="live-demo-picture-in-picture-composer-item"
+                aria-label={pip.label}
+                onPointerDown={event => { event.preventDefault() }}
+                onClick={event => { event.preventDefault(); event.stopPropagation(); close(); pip.onSelect() }}
+                className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${(allowPhoto || earphoneMode || voiceTalk) ? '' : 'rounded-t-2xl'}`}
+              >
+                <span>{pip.label}</span>
+                <PictureInPicture2 className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2.15} />
+              </button>
+            </>
+          )}
+          {onCloseKeyboard && (
+            <>
+              {(allowPhoto || earphoneMode || voiceTalk || pip) && <div className="h-px bg-gray-100" />}
+              <button
+                type="button"
                 aria-label={copy.switchToVoiceMode}
                 onClick={event => { event.preventDefault(); event.stopPropagation(); close(); onCloseKeyboard() }}
-                className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${(allowPhoto || earphoneMode || voiceTalk) ? 'rounded-b-2xl' : 'rounded-2xl'}`}
+                className={`flex w-full items-center justify-between px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 ${(allowPhoto || earphoneMode || voiceTalk || pip) ? 'rounded-b-2xl' : 'rounded-2xl'}`}
               >
                 <span>{copy.switchToVoiceMode}</span>
                 <Keyboard className="h-4 w-4 shrink-0 text-slate-400" />

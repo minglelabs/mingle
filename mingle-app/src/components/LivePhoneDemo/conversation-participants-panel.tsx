@@ -16,6 +16,7 @@ import { resolveAccountBadge, withAccountBadgeLabel, type AccountBadgeKind } fro
 import IdentityRow from "@/components/posts/identity-row";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ChatAccountBadge from "./ChatAccountBadge";
+import type { ConversationChannelOtherMember } from "@/lib/app-conversations";
 import HashSeedIcon from "@/components/coins/hash-seed-icon";
 import { fillCoinCopy, getCoinCopy } from "@/i18n/coin-copy";
 import { isCoinBillingActive, useCoinWallet } from "@/lib/coin-wallet-client";
@@ -39,7 +40,31 @@ type ConversationParticipantsPanelProps = {
   // the button entirely (e.g. when there's no conversationId to invite into).
   inviteButtonLabel?: string;
   onInvite?: () => void;
+  // The room's members as the chat list already knows them: the list shows
+  // these at once and fills in the rest when the members request answers.
+  initialOtherMembers?: ConversationChannelOtherMember[];
 };
+
+// The last members list per room while the app is open, so reopening the
+// panel shows it at once instead of a spinner.
+const MEMBERS_CACHE = new Map<string, ParticipantProfile[]>();
+
+function seedMembersFromChannel(members: ConversationChannelOtherMember[] | undefined): ParticipantProfile[] {
+  return (members ?? []).map((member) => ({
+    id: member.userId,
+    name: member.name,
+    image: member.image,
+    imageCropScale: member.imageCropScale,
+    imageCropX: member.imageCropX,
+    imageCropY: member.imageCropY,
+    handle: null,
+    nationality: null,
+    nationalityCountry: null,
+    primaryLanguages: [],
+    blocked: false,
+    accountBadge: resolveAccountBadge(member),
+  }));
+}
 
 type ParticipantProfile = {
   id: string;
@@ -308,6 +333,7 @@ export default function ConversationParticipantsPanel({
   conversationId,
   inviteButtonLabel,
   onInvite,
+  initialOtherMembers,
 }: ConversationParticipantsPanelProps) {
   const { data: session } = useSession();
   const fallbackProfile = useMemo(
@@ -316,9 +342,11 @@ export default function ConversationParticipantsPanel({
   );
   const [profile, setProfile] = useState<ParticipantProfile | null>(fallbackProfile);
   const [loadState, setLoadState] = useState<ProfileLoadState>("idle");
-  const [otherMembers, setOtherMembers] = useState<ParticipantProfile[]>([]);
-  const [membersLoadState, setMembersLoadState] = useState<ProfileLoadState>("idle");
   const normalizedConversationId = conversationId?.trim() || "";
+  const [otherMembers, setOtherMembers] = useState<ParticipantProfile[]>(
+    () => MEMBERS_CACHE.get(normalizedConversationId) ?? seedMembersFromChannel(initialOtherMembers),
+  );
+  const [membersLoadState, setMembersLoadState] = useState<ProfileLoadState>("idle");
   const coinBillingActive = isCoinBillingActive(useCoinWallet().wallet);
   const [roomCoinUsage, setRoomCoinUsage] = useState<RoomCoinUsage>(null);
 
@@ -352,10 +380,12 @@ export default function ConversationParticipantsPanel({
       if (!response.ok) throw new Error("participant_members_load_failed");
       const members = parseConversationMemberList(await response.json());
       const selfId = profile?.id || fallbackProfile?.id || "";
-      setOtherMembers(members.filter((member) => member.id !== selfId));
+      const others = members.filter((member) => member.id !== selfId);
+      MEMBERS_CACHE.set(normalizedConversationId, others);
+      setOtherMembers(others);
       setMembersLoadState("ready");
     } catch {
-      setOtherMembers([]);
+      // Keep what is already shown (cache or the chat list's members).
       setMembersLoadState("error");
     }
   }, [normalizedConversationId, profile?.id, fallbackProfile?.id]);
@@ -467,14 +497,14 @@ export default function ConversationParticipantsPanel({
           ))}
         </div>
 
-        {membersLoadState === "loading" ? (
+        {membersLoadState === "loading" && otherMembers.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-6 text-[0.94rem] text-gray-500" role="status">
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             <span>{loadingLabel}</span>
           </div>
         ) : null}
 
-        {membersLoadState === "error" ? (
+        {membersLoadState === "error" && otherMembers.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
             <p className="text-[0.94rem] text-gray-500">{errorLabel}</p>
             <button

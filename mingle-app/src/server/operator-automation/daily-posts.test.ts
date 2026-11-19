@@ -23,6 +23,7 @@ vi.mock('@/server/operator-post-reserve/worker', () => ({ loadReservePersona: m.
 vi.mock('@/server/operator-post-reserve/generate', () => ({
   generateReservePosts: m.generate,
   pickReserveTopics: () => ['food'],
+  isKoreaCountry: () => true,
   reservePosterProfile: () => ({ topicFactors: {} }),
 }))
 vi.mock('@/server/operator-post-reserve/post-image', () => ({ drawReservePostImage: m.draw }))
