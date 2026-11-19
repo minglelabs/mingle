@@ -5,7 +5,7 @@ import { writeAdminAudit } from '@/server/admin/audit'
 import type { AdminContext } from '@/server/admin/guard'
 import { ageOn } from '@/server/operator-auto-reply/generate'
 import { canDrawImagesHere, generateOperatorAvatar, planOperatorAvatar } from '@/server/operator-avatars/generate'
-import { generateReservePosts, pickReserveTopics, reservePosterProfile, rewriteReservePostText } from '@/server/operator-post-reserve/generate'
+import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, rewriteReservePostText } from '@/server/operator-post-reserve/generate'
 import { drawReservePostImage } from '@/server/operator-post-reserve/post-image'
 import { MAX_RESERVE_EXTRA_IMAGES, reserveExtraImages, type ReserveExtraImage } from '@/server/operator-post-reserve/extra-images'
 import { decodePostPhoto } from '@/server/operator-post-reserve/post-photo'
@@ -93,7 +93,15 @@ export async function releaseOrphanedDrawings(): Promise<number> {
     })
     // A rewrite cut off mid-way keeps its old text; it only goes back to review.
     const rewrites = await prisma.operatorPostReserve.updateMany({ where: { state: 'regenerating' }, data: { state: 'review' } })
-    const released = { count: drawings.count + rewrites.count }
+    // 게시 runs in the background too (publishReservePostNow); one cut off by a
+    // restart goes back to review. Queued posts always carry a releaseAt, so
+    // only posts taken from review match. A post that did go out is matched by
+    // its clientPostId on the next 게시 and settles as published.
+    const publishes = await prisma.operatorPostReserve.updateMany({
+      where: { state: 'publishing', releaseAt: null },
+      data: { state: 'review', error: 'publish_interrupted' },
+    })
+    const released = { count: drawings.count + rewrites.count + publishes.count }
     if (released.count) console.warn('[operator-review] released_orphaned_drawings', { count: released.count })
     return released.count
   } catch (error) {
@@ -476,7 +484,8 @@ export async function reviewOperatorPost(
     if (!row.operatorUser.isActive) return { ok: false, error: 'profile_pending' }
     if (row.imagePrompt && !row.imageObjectKey) return { ok: false, error: 'photo_pending' }
     if (feedback) await prisma.operatorPostReserve.update({ where: { id: reserveId }, data: { reviewFeedback: feedback } })
-    const result = await publishReservePostNow(reserveId, 'review', now)
+    // Answered once claimed; the release finishes in the background (worker.ts).
+    const result = await publishReservePostNow(reserveId, 'review', now, { background: true })
     if (!result.ok) return { ok: false, error: result.error === 'reserve_empty' ? 'not_found' : 'publish_failed' }
     await audit('publish', { postId: result.postId })
     return { ok: true, state: 'published', postId: result.postId }
@@ -536,7 +545,7 @@ export async function reviewOperatorPost(
     if (!persona) throw new Error('persona_unavailable')
     const [generated] = await generateReservePosts({
       persona,
-      topics: [row.topic ?? pickReserveTopics(1, Math.random, reservePosterProfile(row.operatorUserId).topicFactors)[0]],
+      topics: [row.topic ?? pickReserveTopics(1, Math.random, reservePosterProfile(row.operatorUserId).topicFactors, { korea: !isKoreaCountry(persona.country) })[0]],
       existingTexts: await loadExistingReserveTexts(row.operatorUserId),
       seed: row.operatorUserId,
       revision: { previousText: row.text, feedback },
