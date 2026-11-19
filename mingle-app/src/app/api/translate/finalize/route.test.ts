@@ -1523,22 +1523,40 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back from GPT-6 Luna to Claude Haiku when OpenAI rejects the request', async () => {
+  it('returns 502 when GPT-6 Luna rejects the request: Claude Haiku is no longer a fallback', async () => {
     setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(
+      .mockResolvedValue(new Response(
         JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
         { status: 401, headers: { 'Content-Type': 'application/json' } },
       ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+
+    expect(res.status).toBe(502)
+    expect(await res.json()).toEqual({ error: 'empty_translation_response' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('api.openai.com')
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
+  it('runs an account that stored Claude Haiku on GPT-6 Luna', async () => {
+    setAuthenticatedTranslationModel('claude-haiku-5-5')
+    const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
-          id: 'msg_1',
-          type: 'message',
-          role: 'assistant',
-          model: 'claude-haiku-5-5',
-          content: [{ type: 'text', text: '{"ko":"안녕하세요"}' }],
-          stop_reason: 'end_turn',
-          usage: { input_tokens: 10, output_tokens: 5 },
+          choices: [{ message: { content: '{"ko":"안녕하세요"}' }, finish_reason: 'stop' }],
+          usage: {},
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ))
@@ -1557,26 +1575,20 @@ describe('/api/translate/finalize route', () => {
     const json = await res.json()
 
     expect(res.status).toBe(200)
-    expect(json.provider).toBe('claude')
+    expect(json.provider).toBe('openai')
     expect(json.translations).toEqual({ ko: '안녕하세요' })
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    // Gemini is no longer a fallback.
-    expect(mockGenerateContent).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('api.openai.com')
   })
 
-  it('falls back from a timed-out final GPT-6 Luna request to Claude Haiku without retrying OpenAI', async () => {
+  it('asks GPT-6 Luna once more with a longer wait when a final request times out', async () => {
     setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockRejectedValueOnce(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
-          id: 'msg_1',
-          type: 'message',
-          role: 'assistant',
-          model: 'claude-haiku-5-5',
-          content: [{ type: 'text', text: '{"ko":"안녕하세요"}' }],
-          stop_reason: 'end_turn',
-          usage: { input_tokens: 10, output_tokens: 5 },
+          choices: [{ message: { content: '{"ko":"오."}' }, finish_reason: 'stop' }],
+          usage: {},
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ))
@@ -1597,92 +1609,83 @@ describe('/api/translate/finalize route', () => {
       const json = await res.json()
 
       expect(res.status).toBe(200)
-      expect(json.provider).toBe('claude')
-      expect(timeoutSpy).toHaveBeenCalledWith(8_000)
+      expect(json.provider).toBe('openai')
+      expect(json.translations).toEqual({ ko: '오.' })
+      expect(timeoutSpy).toHaveBeenNthCalledWith(1, 8_000)
+      expect(timeoutSpy).toHaveBeenNthCalledWith(2, 12_000)
       expect(fetchMock).toHaveBeenCalledTimes(2)
-      expect(String(fetchMock.mock.calls[0]?.[0])).toContain('api.openai.com')
-      expect(String(fetchMock.mock.calls[1]?.[0])).toContain('api.anthropic.com')
-      expect(mockGenerateContent).not.toHaveBeenCalled()
+      for (const call of fetchMock.mock.calls) expect(String(call[0])).toContain('api.openai.com')
     } finally {
       timeoutSpy.mockRestore()
     }
   })
 
-  it('falls back to Claude Haiku when GPT-6 Luna fails, skipping Gemini', async () => {
+  it('does not ask again when an interim request times out', async () => {
     setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(
-        JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } },
-      ))
-      .mockResolvedValueOnce(new Response(
-        JSON.stringify({
-          id: 'msg_1',
-          type: 'message',
-          role: 'assistant',
-          model: 'claude-haiku-5-5',
-          content: [{ type: 'text', text: '{"ko":"안녕하세요"}' }],
-          stop_reason: 'end_turn',
-          usage: { input_tokens: 10, output_tokens: 5 },
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ))
-    mockGenerateContent.mockRejectedValue(new Error(
-      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com: [400 Bad Request] API key not valid.',
-    ))
+      .mockRejectedValue(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
 
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithEnv()
     process.env.OPENAI_API_KEY = 'test-openai-key'
-    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
 
     const res = await POST(makeJsonRequest({
-      text: 'hello',
+      text: 'Oh',
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
+      isFinal: false,
+      currentTurnPreviousState: { sourceLanguage: 'en', sourceText: 'Oh', translations: { ko: '오' } },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.usedFallbackFromPreviousState).toBe(true)
+    expect(json.translations).toEqual({ ko: '오' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers text with only punctuation marks without calling the model', async () => {
+    setAuthenticatedTranslationModel('gpt-6-luna')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+    process.env.OPENAI_API_KEY = 'test-openai-key'
+
+    const res = await POST(makeJsonRequest({
+      text: ' 。',
+      sourceLanguage: 'zh-CN',
+      targetLanguages: ['en', 'ko'],
       isFinal: true,
     }) as never)
     const json = await res.json()
 
     expect(res.status).toBe(200)
-    expect(json.provider).toBe('claude')
-    expect(json.translations).toEqual({ ko: '안녕하세요' })
-    // The app names the failing model to the user.
-    expect(json.unavailableModel).toBe('gpt-6-luna')
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('api.anthropic.com')
+    expect(json.translations).toEqual({ en: '。', ko: '。' })
+    expect(json.provider).toBe('punctuation-only')
+    expect(fetchMock).not.toHaveBeenCalled()
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
-  it('returns 502 after every fallback provider fails', async () => {
+  it('keeps a bubble as it is when only a punctuation mark follows its fixed part', async () => {
     setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
-      .mockResolvedValue(new Response(
-        JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } },
-      ))
-    mockGenerateContent.mockRejectedValue(new Error(
-      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com: [400 Bad Request] API key not valid.',
-    ))
-
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithEnv()
     process.env.OPENAI_API_KEY = 'test-openai-key'
-    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key'
 
     const res = await POST(makeJsonRequest({
-      text: 'hello',
-      sourceLanguage: 'en',
-      targetLanguages: ['ko'],
+      text: '你好。',
+      sourceLanguage: 'zh-CN',
+      targetLanguages: ['en'],
       isFinal: true,
+      bubbleTail: { translatedSource: '你好', translations: { en: 'Hello.' } },
     }) as never)
+    const json = await res.json()
 
-    expect(res.status).toBe(502)
-    expect(await res.json()).toEqual({ error: 'empty_translation_response' })
-    // GPT-6 Luna (selected), then Claude Haiku; Gemini is not a fallback.
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ en: 'Hello.' })
+    expect(fetchMock).not.toHaveBeenCalled()
     expect(mockGenerateContent).not.toHaveBeenCalled()
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('api.openai.com')
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('api.anthropic.com')
   })
 
   it('falls back to the default model when the user has no stored translation model', async () => {

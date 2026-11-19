@@ -18,9 +18,9 @@ const CHART_LABEL = "번역 모델별 메시지수";
  * a silently reused colour. */
 const TRANSLATION_MODEL_COLORS: Record<UserSelectableTranslationModel | RetiredTranslationModel, string> = {
   "gpt-6-luna": "#8b5cf6",
-  "claude-haiku-5-5": "#e0457b",
-  // Retired; still shown for the messages it translated.
+  // Retired; still shown for the messages they translated.
   "gemini-2.5-flash-lite": "#2a78d6",
+  "claude-haiku-5-5": "#e0457b",
 };
 const OTHER_TRANSLATION_MODEL_COLOR = "#898781";
 
