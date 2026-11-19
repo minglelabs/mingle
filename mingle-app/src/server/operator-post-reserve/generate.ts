@@ -45,13 +45,54 @@ export const RESERVE_TOPICS: ReadonlyArray<{ key: string; weight: number; brief:
   { key: 'self_intro', weight: 4, brief: 'introducing themself: where they are from, what they study or do, what they like; sometimes as a short list of facts on separate lines (age band, city, a personality trait, hobbies)' },
   { key: 'place_request', weight: 3, brief: 'asking about real places or plans: where to go, what to eat or see in a named city or neighborhood, or whether anyone wants to study or talk together' },
   { key: 'photo_caption', weight: 4, brief: 'a caption of a few words for the attached photo, nothing more' },
+  // Only for accounts outside Korea (pickReserveTopics `korea`): the app is where they meet Koreans.
+  { key: 'korea_trip', weight: 0, brief: 'a trip to Korea they are on right now or just came back from: a named spot (a Seoul neighborhood, a palace, a market, a café street, a beach in Busan or Jeju), a Korean dish they tried there, something that surprised them; written by someone who loves Korea' },
+  { key: 'korean_study', weight: 0, brief: 'studying Korean: one concrete Korean word, expression, ending or 반말/존댓말 nuance that confused or amused them, a K-drama or K-pop line they looked up, or asking Koreans how they really say something; quote the Korean itself' },
+  { key: 'korean_friends', weight: 0, brief: 'Korean friends: wanting to make Korean friends or a Korean language partner, or a small concrete moment with a Korean friend (what they ate together, a phrase the friend taught them, a culture gap that made them laugh)' },
 ]
+
+/** Topics of accounts outside Korea, by weight (the others sum to about 62, so these are about a quarter of their posts). */
+export const KOREA_TOPIC_WEIGHTS: Readonly<Record<string, number>> = { korea_trip: 8, korean_study: 6, korean_friends: 6 }
+
+/** Topics that always go out with a photo, and the place the photo was taken when it is not the author's city. */
+const PHOTO_TOPICS = new Set(['photo_caption', 'korea_trip', 'korean_friends'])
+const KOREA_TRIP_PLACES: ReadonlyArray<{ place: string; weight: number }> = [
+  { place: 'Seoul, South Korea', weight: 6 },
+  { place: 'Busan, South Korea', weight: 2 },
+  { place: 'Jeju Island, South Korea', weight: 1.5 },
+  { place: 'Gyeongju, South Korea', weight: 0.5 },
+  { place: 'Jeonju, South Korea', weight: 0.5 },
+]
+
+function pickKoreaTripPlace(random: Random): string {
+  const total = KOREA_TRIP_PLACES.reduce((sum, entry) => sum + entry.weight, 0)
+  let roll = random() * total
+  for (const entry of KOREA_TRIP_PLACES) {
+    roll -= entry.weight
+    if (roll < 0) return entry.place
+  }
+  return KOREA_TRIP_PLACES[0].place
+}
+
+/** True for a persona living in Korea (country code or name). */
+export function isKoreaCountry(country: string | null | undefined): boolean {
+  const value = (country ?? '').trim().toLowerCase()
+  return value === 'kr' || value === 'kor' || value === 'korea' || value === 'south korea' || value === 'republic of korea' || value === '대한민국' || value === '한국'
+}
 
 type Random = () => number
 
 /** `count` topic keys by weight. `factors` are the account's tastes; a favored topic may repeat more within a chunk. */
-export function pickReserveTopics(count: number, random: Random = Math.random, factors: Record<string, number> = {}): string[] {
-  const weighted = RESERVE_TOPICS.map((topic) => ({ key: topic.key, weight: topic.weight * (factors[topic.key] ?? 1) }))
+export function pickReserveTopics(
+  count: number,
+  random: Random = Math.random,
+  factors: Record<string, number> = {},
+  options: { korea?: boolean } = {},
+): string[] {
+  const weighted = RESERVE_TOPICS.map((topic) => ({
+    key: topic.key,
+    weight: (options.korea ? KOREA_TOPIC_WEIGHTS[topic.key] ?? topic.weight : topic.weight) * (factors[topic.key] ?? 1),
+  })).filter((topic) => topic.weight > 0)
   const total = weighted.reduce((sum, topic) => sum + topic.weight, 0)
   const used = new Map<string, number>()
   const picked: string[] = []
@@ -154,6 +195,7 @@ export function buildReserveInstructions(persona: Pick<ReservePersona, 'language
     'A slot in any other language is written by this person as a learner of it, at the level in "learner". Make the level audible: the mistakes and stiffness that a native speaker of the persona\'s own language really makes in that language, not random errors. Learner posts are simpler and more polite than the person\'s native posts, the poster quirks mostly do not carry over, and a learner may add the same line in their own language underneath.',
     'When a slot has "photo", the post goes out with one phone photo of that kind; when "photo" is false there is no photo and "photo" stays empty. Write the text as a caption or remark that fits the photo, and describe the photo in "photo" in English, in one or two sentences, as a casual phone snapshot: what is in it, where, and how it is framed.',
     'Photo kinds: "self" shows the poster with their face; "self_faceless" shows the poster but not their face; "self_back" shows the poster from behind; "friends" shows the poster with friends; "scene" shows no recognizable person (a street, a view, a shop front, a pet, an object, a desk, a hand holding something, or food or a drink, which is at most one scene in three). A slot with the poster in it also has a "setup" (who took it, framing, pose): follow it, and pick a concrete place in the persona\'s city and an outfit that fit the post and the person. Refer to the poster as "the poster" and never describe their face, hair or body: that is added later. Everyone is an adult; no school uniforms.',
+    'When a slot has "photoPlace", the poster is on a trip there: the photo was taken in that place, not in the persona\'s city, so pick a concrete real spot there (a named street, palace, market, café, beach or view) and write the post as a visitor.',
     'Get the real world right in the photo: a landmark is only where it really stands as seen from that spot, and anything the description says about the body is anatomically possible. Most photos are taken in ordinary daylight, indoors or at night; a sunset, dusk or evening-sun photo is rare (at most one post in fifteen), and when there is one it faces west (an east-facing beach like Haeundae or Gwangalli has sunrises, not sunsets).',
     'What is on their own screen (notes, a chat, a map, a playlist, a score) is a screenshot, not a "scene": start the description with "Screenshot of", and never describe a photo of a phone or computer screen.',
     'Never a photo of handwriting or study material (a notebook, handwritten notes, flashcards, a textbook or worksheet page): drawn, they look fake. For a study or language post, show something else around it (the café or desk, a drink, the view) or make the post about something else.',
@@ -237,7 +279,8 @@ export async function generateReservePosts(args: {
       topic: briefs.get(topic) ?? topic,
       shape: pickShape(random, profile.shapeFactors).brief,
       language,
-      photo: topic === 'photo_caption' || random() < profile.photoShare ? pickPostPhoto(random) : null,
+      photo: PHOTO_TOPICS.has(topic) || random() < profile.photoShare ? pickPostPhoto(random) : null,
+      photoPlace: topic === 'korea_trip' ? pickKoreaTripPlace(random) : null,
     }
   })
   const seen = new Set(args.existingTexts.map(reservePostKey))
@@ -251,7 +294,12 @@ export async function generateReservePosts(args: {
       persona: modelPersona(args.persona),
       poster: { type: profile.type.brief, length: profile.length.brief, voice: profile.voice },
       learner: { language: learner.language, level: learner.level.brief },
-      slots: slots.map((slot) => ({ ...slot, photo: slot.photo ? slot.photo.kind : false, ...(slot.photo?.setup ? { setup: slot.photo.setup } : {}) })),
+      slots: slots.map(({ photoPlace, ...slot }) => ({
+        ...slot,
+        photo: slot.photo ? slot.photo.kind : false,
+        ...(slot.photo?.setup ? { setup: slot.photo.setup } : {}),
+        ...(slot.photo && photoPlace ? { photoPlace } : {}),
+      })),
       alreadyWritten: args.existingTexts.slice(-AVOID_SAMPLE_MAX).map((text) => Array.from(text).slice(0, AVOID_SAMPLE_CHARS).join('')),
       ...(args.revision ? { revision: { previousText: args.revision.previousText, ...(args.revision.feedback ? { feedback: args.revision.feedback } : {}) } } : {}),
     },
@@ -350,7 +398,7 @@ export async function rewriteReservePostText(args: {
 
 function collectGeneratedPosts(
   items: Array<{ slot?: unknown; text?: unknown; photo?: unknown }>,
-  slots: Array<{ language: string; photo: ReturnType<typeof pickPostPhoto> | null }>,
+  slots: Array<{ language: string; photo: ReturnType<typeof pickPostPhoto> | null; photoPlace: string | null }>,
   topics: string[],
   seen: Set<string>,
 ): GeneratedReservePost[] {
@@ -367,7 +415,7 @@ function collectGeneratedPosts(
     usedSlots.add(slot)
     const plan = slots[slot - 1].photo
     const photo = plan && typeof item.photo === 'string' ? item.photo.replace(/\s+/g, ' ').trim().slice(0, IMAGE_PROMPT_MAX_CHARS) : ''
-    result.push({ topic: topics[slot - 1], text, language: slots[slot - 1].language, imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo) : null })
+    result.push({ topic: topics[slot - 1], text, language: slots[slot - 1].language, imagePrompt: plan && photo ? encodePostPhoto(plan.kind, photo, slots[slot - 1].photoPlace) : null })
   }
   return result
 }

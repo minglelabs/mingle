@@ -10,7 +10,7 @@ import { publishPost } from '@/server/posts/publish-post'
 import { reviewTranslationsFor } from './review-translations'
 import { drawReservePostImage } from './post-image'
 import { reserveExtraImages } from './extra-images'
-import { generateReservePosts, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE, type ReservePersona } from './generate'
+import { generateReservePosts, isKoreaCountry, pickReserveTopics, reservePosterProfile, RESERVE_CHUNK_SIZE, type ReservePersona } from './generate'
 import { nextReleaseAt } from './schedule'
 import { getPostReserveSettings, postsPerDay, type PostReserveSettings } from './settings'
 import { operatorTextProvider } from '@/server/translation/translate-texts'
@@ -298,7 +298,7 @@ export async function refillOperatorReserve(operatorUserId: string, now: Date, r
 
     const generated = await generateReservePosts({
       persona,
-      topics: pickReserveTopics(RESERVE_CHUNK_SIZE, random, reservePosterProfile(operatorUserId).topicFactors),
+      topics: pickReserveTopics(RESERVE_CHUNK_SIZE, random, reservePosterProfile(operatorUserId).topicFactors, { korea: !isKoreaCountry(persona.country) }),
       existingTexts,
       random,
       seed: operatorUserId,
@@ -376,8 +376,17 @@ export async function publishNextReservePost(operatorUserId: string, now: Date =
 /**
  * Publishes one reserve post in `fromState` right away (staff review's "게시"
  * takes it from `review`). `reserve_empty` when it is no longer in that state.
+ * With `background`, answers as soon as the post is claimed (postId null) and
+ * finishes in the background: language detection and translation go through
+ * the ChatGPT pool and can take minutes, longer than the HTTP proxy waits.
+ * A failure there puts the post back in review with the error.
  */
-export async function publishReservePostNow(reserveId: string, fromState: 'queued' | 'review', now: Date = new Date()): Promise<PublishNowResult> {
+export async function publishReservePostNow(
+  reserveId: string,
+  fromState: 'queued' | 'review',
+  now: Date = new Date(),
+  options: { background?: boolean } = {},
+): Promise<PublishNowResult> {
   // Same atomic claim as the worker, so a tick racing this click cannot publish it twice.
   const claimed = await prisma.$queryRaw<ClaimedReservePost[]>`
     UPDATE app.app_operator_post_reserve
@@ -388,6 +397,10 @@ export async function publishReservePostNow(reserveId: string, fromState: 'queue
       extra_images AS "extraImages"
   `
   if (!claimed[0]) return { ok: false, error: 'reserve_empty' }
+  if (options.background) {
+    void releaseOne(claimed[0], now, fromState).catch(() => {})
+    return { ok: true, postId: null }
+  }
   if (!(await releaseOne(claimed[0], now, fromState))) return { ok: false, error: 'publish_failed' }
   const row = await prisma.operatorPostReserve.findUnique({ where: { id: reserveId }, select: { postId: true } })
   return { ok: true, postId: row?.postId ?? null }

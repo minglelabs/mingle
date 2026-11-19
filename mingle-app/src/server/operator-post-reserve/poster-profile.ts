@@ -290,7 +290,8 @@ function basePosterProfile(seed: string, topicKeys: readonly string[]): PosterPr
     topicFactors[key] = (topicFactors[key] ?? 1) * factor
   }
 
-  const photoShare = type.key === 'minimalist' || type.key === 'foodie' ? 0.8 : [0.35, 0.5, 0.65, 0.8][Math.floor(random() * 4)]
+  // Staff want most posts with a photo (2026-11-19: "사진 포스팅 왤케 적냐").
+  const photoShare = type.key === 'minimalist' || type.key === 'foodie' ? 0.9 : [0.6, 0.7, 0.8, 0.9][Math.floor(random() * 4)]
   return { type, length, voice, shapeFactors: type.shapes, topicFactors, photoShare, labelKo: `${type.ko} · ${length.ko}` }
 }
 

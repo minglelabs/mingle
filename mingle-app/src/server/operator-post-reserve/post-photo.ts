@@ -86,14 +86,23 @@ export function pickPostPhoto(random: Random): PostPhotoPlan {
 }
 
 const MARKER = /^\[(self|self_faceless|self_back|friends)\]\s*/
+const PLACE_MARKER = /^\[at: ([^\]]{1,120})\]\s*/
 
-/** The stored photo description: the kind as a leading tag, so the drawing step knows who is in it. */
-export function encodePostPhoto(kind: PostPhotoKind, description: string): string {
-  return kind === 'scene' ? description : `[${kind}] ${description}`
+/**
+ * The stored photo description: the kind as a leading tag, so the drawing step
+ * knows who is in it, and, for a photo taken away from the author's city (a
+ * trip to Korea), the place as `[at: …]`.
+ */
+export function encodePostPhoto(kind: PostPhotoKind, description: string, place: string | null = null): string {
+  const at = place ? `[at: ${place.replace(/[\[\]]/g, '').trim()}] ` : ''
+  return kind === 'scene' ? `${at}${description}` : `[${kind}] ${at}${description}`
 }
 
-/** A stored description split into kind and text. Untagged (older) descriptions are scenes. */
-export function decodePostPhoto(stored: string): { kind: PostPhotoKind; description: string } {
+/** A stored description split into kind, place and text. Untagged (older) descriptions are scenes in the author's city. */
+export function decodePostPhoto(stored: string): { kind: PostPhotoKind; description: string; place: string | null } {
   const match = MARKER.exec(stored)
-  return match ? { kind: match[1] as PostPhotoKind, description: stored.slice(match[0].length) } : { kind: 'scene', description: stored }
+  const kind = match ? match[1] as PostPhotoKind : 'scene'
+  const rest = match ? stored.slice(match[0].length) : stored
+  const at = PLACE_MARKER.exec(rest)
+  return { kind, description: at ? rest.slice(at[0].length) : rest, place: at ? at[1].trim() : null }
 }
