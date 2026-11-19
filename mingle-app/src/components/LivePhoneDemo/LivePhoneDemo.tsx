@@ -152,6 +152,7 @@ import {
 import LanguageSelector from './LanguageSelector'
 import { useLanguageSelectorNavigation } from './use-language-selector-navigation'
 import ConversationEmptyState from './ConversationEmptyState'
+import ConversationPeerProfileCard from './ConversationPeerProfileCard'
 import { shouldShowConversationEmptyState } from './conversation-empty-state.logic'
 import ChatAccountBadge from './ChatAccountBadge'
 import { labelNameWithAccountBadge, resolveRoomAccountBadge } from './chat-account-badge.logic'
@@ -2257,6 +2258,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => resolveRoomAccountBadge(initialOtherMembers),
     [initialOtherMembers],
   )
+  // A 1:1 room with another account shows that person's profile above the
+  // first message (once the history reaches its start).
+  const directPeerMember = !isBlockedCounterpart && initialOtherMembers?.length === 1
+    ? initialOtherMembers[0]
+    : null
   const accountPreferencesCacheIdentity = useMemo<AccountPreferencesCacheIdentity>(() => ({
     apiNamespace: clientApiNamespace,
     userId: viewerUserId,
@@ -10640,6 +10646,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   ···
                 </button>
               )}
+              {directPeerMember && !hasOlderUtterances && (
+                <ConversationPeerProfileCard
+                  member={directPeerMember}
+                  uiLocale={uiLocale}
+                  onOpenProfile={handleOpenProfileForBubble}
+                />
+              )}
               {timelineItems.map((item, index) => {
                 const previousItem = timelineItems[index - 1]
                 const spacingClass = item.kind === 'message' && previousItem?.kind === 'message'
@@ -10890,7 +10903,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               </div>
             ) : null}
-            {showEmptyState && (
+            {showEmptyState && !directPeerMember && (
               <ConversationEmptyState uiLocale={uiLocale} />
             )}
             <AnimatePresence>
