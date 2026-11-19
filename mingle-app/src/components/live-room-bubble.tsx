@@ -39,6 +39,8 @@ const TOP_CLEAR_PX = 64;
 const BOTTOM_CLEAR_PX = 52 + 34;
 const DRAG_START_PX = 6;
 const UNDO_MS = 5000;
+// Where the bubble was left, kept across tabs (each tab draws its own bubble).
+let lastRest: BubbleRest = { side: "right", y: 420, folded: false };
 
 function readArea(): BubbleArea {
   // The visual viewport shrinks with the keyboard, so the bubble stays above it.
@@ -70,7 +72,11 @@ export default function LiveRoomBubble({
   const voiceCopy = voiceTalkCopy(locale);
   const [mounted, setMounted] = useState(false);
   const [area, setArea] = useState<BubbleArea>({ width: 375, height: 812, top: TOP_CLEAR_PX, bottom: BOTTOM_CLEAR_PX });
-  const [rest, setRest] = useState<BubbleRest>({ side: "right", y: 420, folded: false });
+  const [rest, setRestState] = useState<BubbleRest>(lastRest);
+  const setRest = useCallback((next: BubbleRest) => {
+    lastRest = next;
+    setRestState(next);
+  }, []);
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const [left, setLeft] = useState<{ conversationId: string } | null>(null);
   const pointerRef = useRef<{ id: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
