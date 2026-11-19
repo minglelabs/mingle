@@ -297,7 +297,7 @@ describe('both voice talk entry points', () => {
     expect(handler).toContain('setVoiceTalkLeaveSignal((n) => n + 1)')
     expect(handler).toContain('setVoiceTalkOpenSignal((n) => n + 1)')
     expect(liveDemoSource).toContain('onSelect: handleVoiceTalkPress,')
-    expect(liveDemoSource).toContain('onPress={handleVoiceTalkPress}')
+    expect(liveDemoSource).toContain('onSelect: closeThen(voiceTalkMenuItem.onSelect)')
   })
 })
 
