@@ -127,6 +127,8 @@ export type HashRushLobbySeat = {
   fresh: boolean
   /** This seat hosts the room. */
   host: boolean
+  /** A web page (invite link): no host controls, so the room is never handed to it. */
+  web: boolean
 }
 
 /** A hosted room's lobby: who hosts, how it is set up, and what this viewer may change. */
@@ -204,6 +206,8 @@ export type HashRushGameView =
       nextAt: number
       /** A hosted room: the next round starts when the host starts it, not by itself. */
       hosted: boolean
+      /** This viewer hosts it: they start the next round themselves. */
+      amHost: boolean
       /** When the card first came up (performance.now()), for taps meant for something else. */
       at: number
     }
@@ -599,6 +603,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
         winsText: String(t('tally', wins[index] || 0)),
         fresh: (freshUntil.get(index) ?? 0) > now,
         host: !!at?.hosted && at.hostSeat === index,
+        web: seat.web,
       }))
     const open = seats.filter((seat) => seat.kind === 'open').length
     const map = at?.map ?? 'meadow'
@@ -737,7 +742,7 @@ export function createHashRushGameClient(el: HashRushGameElements, options: Hash
       return
     }
     card = 'result'
-    show({ kind: 'result', round: session.round, verdict: verdictOf(round, meId), board, nextAt, hosted: !!lobby?.hosted, at: cardAt })
+    show({ kind: 'result', round: session.round, verdict: verdictOf(round, meId), board, nextAt, hosted: !!lobby?.hosted, amHost: !!lobby?.amHost, at: cardAt })
   }
 
   // A round's numbers go into the totals once, when it is won (main.js addCareer).

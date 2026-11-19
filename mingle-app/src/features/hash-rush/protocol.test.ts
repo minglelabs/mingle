@@ -177,6 +177,7 @@ describe('hash rush protocol: server to app', () => {
       slots: [
         { kind: 'remote', name: 'Mia', team: 0, pid: 'x', userId: 'user-1' },
         { kind: 'open', name: 'Cloud', team: 1, pid: '', userId: '' },
+        { kind: 'remote', name: 'Pc', team: 1, pid: 'y', userId: '', web: true },
       ],
       spect: ['Noah'],
       teams: false,
@@ -193,8 +194,9 @@ describe('hash rush protocol: server to app', () => {
     })
     expect(lobby).toEqual({
       seats: [
-        { kind: 'remote', name: 'Mia', team: 0, userId: 'user-1' },
-        { kind: 'open', name: 'Cloud', team: 1, userId: '' },
+        { kind: 'remote', name: 'Mia', team: 0, userId: 'user-1', web: false },
+        { kind: 'open', name: 'Cloud', team: 1, userId: '', web: false },
+        { kind: 'remote', name: 'Pc', team: 1, userId: '', web: true },
       ],
       spectators: ['Noah'],
       teams: false,
