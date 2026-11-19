@@ -153,7 +153,7 @@ describe("upsertNativeAppleUser", () => {
       data: expect.objectContaining({
         externalUserId: "apple:apple_subject_3",
         handle: "apple-user",
-        translationModel: "gpt-6-luna",
+        translationModel: "claude-haiku-5-5",
       }),
       select: {
         id: true,

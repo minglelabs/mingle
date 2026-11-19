@@ -47,8 +47,8 @@ const TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS = 250
 const MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS = 2_000
 const OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS = 4_000
 const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 8_000
-// A final answer that timed out is asked once more with this longer wait: there is no
-// other model to fall back to, and an interim answer is soon replaced by the final one.
+// A final answer that timed out is asked once more with this longer wait; an interim
+// answer is soon replaced by the final one.
 const OPENAI_COMPATIBLE_FINAL_TIMEOUT_RETRY_MS = 12_000
 const ANTHROPIC_TRANSLATION_MAX_TOKENS = 16_000
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000

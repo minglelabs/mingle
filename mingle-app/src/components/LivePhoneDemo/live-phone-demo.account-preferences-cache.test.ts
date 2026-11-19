@@ -183,8 +183,7 @@ describe('account preferences client cache', () => {
   })
 
   it('keeps an early settings edit without replacing a new account model seeded by the server', () => {
-    // A model saved on the device before Claude Haiku was retired.
-    const local = { ...buildPreferences(), translationModel: 'claude-haiku-5-5' as unknown as 'gpt-6-luna' }
+    const local = { ...buildPreferences(), translationModel: 'claude-haiku-5-5' as const }
     const server = { ...local, translationModel: 'gpt-6-luna' as const }
     edit(local, { ...local, textSizeLevel: 3 })
 
@@ -198,8 +197,7 @@ describe('account preferences client cache', () => {
   })
 
   it('preserves a model explicitly chosen during a new account hydration', () => {
-    // A model saved on the device before Claude Haiku was retired.
-    const local = { ...buildPreferences(), translationModel: 'claude-haiku-5-5' as unknown as 'gpt-6-luna' }
+    const local = { ...buildPreferences(), translationModel: 'claude-haiku-5-5' as const }
     const server = { ...local, translationModel: 'gpt-6-luna' as const }
     edit(local, { ...local, translationModel: 'gpt-6-luna' })
 
