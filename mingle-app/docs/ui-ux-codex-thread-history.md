@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Gender and birth date are set once, then locked
+
+- Surface: `api/profile` (PATCH), profile edit (`my-page.tsx` ProfileEditPanel), new `i18n/profile-locked-copy.ts` (15 languages).
+- Issue: Anyone could change their gender and birth date at any time in profile edit (owner decision: lock them).
+- Resolution: The server lets a request fill an empty gender or birth date, or repeat the stored value, but refuses to change or clear one (`409 gender_locked` / `birth_date_locked`). In profile edit a set value shows as plain text instead of the picker, with the note "성별과 생년월일은 한 번 정하면 바꿀 수 없어요." A value not set yet can still be picked once (signup and the profile basics questions fill it as before).
+- Checked on a Galaxy S9 (local devbox): an account with a birth date and no gender showed the birth date as text with the note, and the gender choice still open. Route tests cover refuse, repeat and fill.
+
 ## 2026-11-19 — Selfie check on the phone for a "Verified" badge (free, nothing leaves the phone)
 
 - Surface: new `components/selfie-verify-screen.tsx`, `components/face-verified-badge.tsx`, `lib/selfie-liveness.ts`, `i18n/selfie-verify-copy.ts` (15 languages), `api/profile/face-verification` (+ ios/android v2.2.0), `public/models/human/` (three model pairs), My page button (`my-page.tsx`), the badge next to the name on a profile (`public-user-profile-screen.tsx`), `User.faceVerifiedAt`, app shell WebView camera grant (`rn/App.tsx`) and the iOS camera text.

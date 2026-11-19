@@ -419,9 +419,21 @@ export async function PATCH(request: NextRequest) {
     data.defaultConversationLanguages = defaultConversationLanguages.value;
   }
 
+  // Gender and birth date are set once and then locked (owner decision
+  // 2026-11-19): a request may fill an empty one, or repeat the stored value,
+  // but never change or clear it.
+  const touchesLockedFields = Object.prototype.hasOwnProperty.call(body, "birthDate")
+    || Object.prototype.hasOwnProperty.call(body, "gender");
+  const lockedFields = touchesLockedFields
+    ? await prisma.user.findUnique({ where: { id: userId }, select: { gender: true, birthDate: true } })
+    : null;
+
   if (Object.prototype.hasOwnProperty.call(body, "birthDate")) {
+    const storedBirthDate = lockedFields?.birthDate ?? null;
     if (body.birthDate === null) {
-      data.birthDate = null;
+      if (storedBirthDate) {
+        return NextResponse.json({ error: "birth_date_locked" }, { status: 409 });
+      }
     } else {
       const birthDate = parseBirthDate(body.birthDate);
       if (!birthDate) {
@@ -432,19 +444,30 @@ export async function PATCH(request: NextRequest) {
         month: birthDate.getUTCMonth() + 1,
         day: birthDate.getUTCDate(),
       };
-      if (!isOldEnoughForSignup(birthDateParts)) {
-        return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
+      if (storedBirthDate) {
+        if (storedBirthDate.getTime() !== birthDate.getTime()) {
+          return NextResponse.json({ error: "birth_date_locked" }, { status: 409 });
+        }
+      } else {
+        if (!isOldEnoughForSignup(birthDateParts)) {
+          return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
+        }
+        data.birthDate = birthDate;
       }
-      data.birthDate = birthDate;
     }
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "gender")) {
+    const storedGender = lockedFields?.gender ?? null;
     if (body.gender === null) {
-      data.gender = null;
+      if (storedGender) {
+        return NextResponse.json({ error: "gender_locked" }, { status: 409 });
+      }
     } else if (!isProfileGender(body.gender)) {
       return NextResponse.json({ error: "invalid_gender" }, { status: 400 });
-    } else {
+    } else if (storedGender && storedGender !== body.gender) {
+      return NextResponse.json({ error: "gender_locked" }, { status: 409 });
+    } else if (!storedGender) {
       data.gender = body.gender;
     }
   }

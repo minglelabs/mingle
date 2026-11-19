@@ -122,6 +122,7 @@ import { openContactSync } from "@/lib/native-contacts";
 import StaffAdminEntry from "@/components/staff-admin-entry";
 import { Archive, BarChart3, Bell, Check, ChevronLeft, ChevronRight, Contact, EyeOff, Headphones, Languages, Loader2, LogOut, Menu, MessageCircle, Plus, ShieldCheck, Siren, SquarePen, Ticket, Trash2, UserRound, UserRoundX, X } from "lucide-react";
 import { resolveSelfieVerifyCopy } from "@/i18n/selfie-verify-copy";
+import { resolveProfileLockedNote } from "@/i18n/profile-locked-copy";
 import dynamic from "next/dynamic";
 const SelfieVerifyScreen = dynamic(() => import("@/components/selfie-verify-screen"), { ssr: false });
 import { myPostsHref } from "@/lib/feed-routes";
@@ -1813,7 +1814,14 @@ function ProfileEditPanel({
 
               <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{genderCopy.label}</legend>
-                <ProfileGenderPicker value={gender} onChange={setGender} copy={genderCopy} disabled={isSaving} />
+                {initialGender ? (
+                  // Set once, then locked (the server refuses a change).
+                  <p data-qa="profile-edit-gender-locked" className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] text-gray-500">
+                    {initialGender === "female" ? genderCopy.female : genderCopy.male}
+                  </p>
+                ) : (
+                  <ProfileGenderPicker value={gender} onChange={setGender} copy={genderCopy} disabled={isSaving} />
+                )}
               </fieldset>
 
               <fieldset className="min-w-0 w-full max-w-full">
@@ -1832,20 +1840,26 @@ function ProfileEditPanel({
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">
                   {signupCopy.birthDateTitle}
                 </legend>
-                <SignupBirthDatePicker
-                  value={birthDate}
-                  onChange={(nextBirthDate) => {
-                    setBirthDate(nextBirthDate);
-                    setHasBirthDate(true);
-                  }}
-                  yearLabel={signupCopy.yearLabel}
-                  monthLabel={signupCopy.monthLabel}
-                  dayLabel={signupCopy.dayLabel}
-                />
+                {initialBirthDate ? (
+                  <p data-qa="profile-edit-birth-date-locked" className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] tabular-nums text-gray-500">
+                    {formatBirthDate(initialBirthDate)}
+                  </p>
+                ) : (
+                  <SignupBirthDatePicker
+                    value={birthDate}
+                    onChange={(nextBirthDate) => {
+                      setBirthDate(nextBirthDate);
+                      setHasBirthDate(true);
+                    }}
+                    yearLabel={signupCopy.yearLabel}
+                    monthLabel={signupCopy.monthLabel}
+                    dayLabel={signupCopy.dayLabel}
+                  />
+                )}
                 <p className="mt-2 text-[12px] leading-relaxed text-gray-400">
-                  {signupCopy.birthDateDescription}
+                  {initialBirthDate || initialGender ? resolveProfileLockedNote(locale) : signupCopy.birthDateDescription}
                 </p>
-                {!isEligibleAge ? (
+                {!initialBirthDate && !isEligibleAge ? (
                   <p className="mt-2 text-[12px] font-medium text-rose-600" role="alert">
                     {signupCopy.birthDateUnderage}
                   </p>
