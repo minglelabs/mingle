@@ -11411,10 +11411,33 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -12 }}
                     transition={{ duration: 0.09, ease: 'easeOut' }}
-                    // Speaker / earphone mode, then this room's talk time and
-                    // message count (voice talk, photo and PiP are in the "+").
-                    className="flex min-w-0 items-center gap-1.5 self-end justify-self-start"
+                    // This room's talk time and message count on the far left,
+                    // the speaker / earphone button next to Start (voice talk,
+                    // photo and PiP are in the "+").
+                    className="flex w-full min-w-0 items-center justify-between gap-1 self-end pl-1"
                   >
+                    <div data-qa="live-demo-voice-usage" className="flex min-w-0 flex-col items-start justify-center leading-4">
+                      {isUsageLimited ? (
+                        <span className="flex min-w-0 max-w-full items-center gap-1.5">
+                          <span className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200">
+                            <span
+                              className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                              style={{ width: `${usagePercent}%` }}
+                            />
+                          </span>
+                          <span className={`text-[0.78rem] tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                            {formatLivePhoneDemoUsageDuration(remainingSec)}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
+                          {formatLivePhoneDemoUsageDuration(usageSec)}
+                        </span>
+                      )}
+                      <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
+                        {storedMessageCountLabel}
+                      </span>
+                    </div>
                     {earphoneModeGate.controlVisible && (
                       <button
                         type="button"
@@ -11453,28 +11476,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         )}
                       </button>
                     )}
-                    <div data-qa="live-demo-voice-usage" className="flex min-w-0 flex-col items-start justify-center leading-4">
-                      {isUsageLimited ? (
-                        <span className="flex min-w-0 max-w-full items-center gap-1.5">
-                          <span className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-gray-200">
-                            <span
-                              className={`block h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                              style={{ width: `${usagePercent}%` }}
-                            />
-                          </span>
-                          <span className={`text-[0.78rem] tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
-                            {formatLivePhoneDemoUsageDuration(remainingSec)}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
-                          {formatLivePhoneDemoUsageDuration(usageSec)}
-                        </span>
-                      )}
-                      <span className="max-w-full truncate text-[0.78rem] tabular-nums text-gray-400">
-                        {storedMessageCountLabel}
-                      </span>
-                    </div>
                   </motion.div>
 
                   <motion.div className="flex self-end justify-center">
