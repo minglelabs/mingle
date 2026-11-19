@@ -1,5 +1,6 @@
 "use client";
 
+import AdBannerPositionSetting from "@/components/account/ad-banner-position-setting";
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import ProfileImageCropper, {
@@ -1097,6 +1098,14 @@ function ProfileSettingsPanel({
                 </button>
               </div>
             </div>
+            {isNativeAppRuntime ? (
+              // Moved here from the room menu: where the ad banner sits in a chat room.
+              <AdBannerPositionSetting
+                label={dictionary.demo.adBannerPositionLabel}
+                topLabel={dictionary.demo.adBannerPositionTopLabel}
+                bottomLabel={dictionary.demo.adBannerPositionBottomLabel}
+              />
+            ) : null}
             {isNativeAppRuntime ? (
               <div className="mt-4 px-0">
                 <NativeAppUpdateCard

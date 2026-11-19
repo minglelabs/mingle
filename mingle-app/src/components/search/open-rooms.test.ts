@@ -110,6 +110,17 @@ describe('open rooms: getting in', () => {
   })
 })
 
+describe('open rooms hold more people', () => {
+  it('lets an open room take up to 200 members, a chat room 10', async () => {
+    const { maxRoomMembers } = await import('@/lib/conversation-limits')
+    expect(maxRoomMembers({ isPublic: true })).toBe(200)
+    expect(maxRoomMembers({ isPublic: false })).toBe(10)
+    expect(maxRoomMembers({})).toBe(10)
+    expect(serverSource).toContain('if (initialEffectiveCount > maxRoomMembers(conversationRecord)) {')
+    expect(serverSource).toContain('if (effectiveCount > maxRoomMembers(freshChannel)) {')
+  })
+})
+
 describe('explore tabs and the chat list', () => {
   it('shows Open rooms and Posts as two tabs when nothing is typed, rooms first', () => {
     expect(searchSource).toContain('const [exploreTab, setExploreTab] = useState<ExploreTab>("rooms")')

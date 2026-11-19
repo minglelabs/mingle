@@ -2089,9 +2089,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   endpointTuningLongLabel,
   translationModelLabel,
   ttsModelLabel,
-  adBannerPositionLabel,
-  adBannerPositionTopLabel,
-  adBannerPositionBottomLabel,
+  // The ad banner position is set on the My tab (components/account/ad-banner-position-setting.tsx).
   silenceFinalizeLockedMessage,
   silenceFinalizeLockedButtonLabel,
   menuLabel,
@@ -4172,20 +4170,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     syncAccountPreferencesOverride(nextPreferences)
   }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
-  const handleAdBannerPositionSelect = useCallback((nextAdBannerPosition: LivePhoneDemoAdBannerPosition) => {
-    setSessionAdBannerPositionOverride(nextAdBannerPosition)
-    if (latestAccountPreferencesRef.current.adBannerPosition === nextAdBannerPosition) {
-      setAdBannerPosition(nextAdBannerPosition)
-      return
-    }
-    const nextPreferences = commitLocalAccountPreferences({
-      ...latestAccountPreferencesRef.current,
-      adBannerPosition: nextAdBannerPosition,
-    })
-    setAdBannerPosition(nextAdBannerPosition)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride(nextPreferences)
-  }, [clearAccountPreferencesSyncTimer, commitLocalAccountPreferences, syncAccountPreferencesOverride])
 
   useEffect(() => {
     if (isVisible) return
@@ -9937,38 +9921,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </div>
                             </div>
 
-                            {isNativeAppRuntime && (
-                              <div className="block">
-                                <div className="mb-2 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
-                                  <span className="shrink-0 whitespace-nowrap pl-1 text-[0.98rem] font-medium text-gray-900">{adBannerPositionLabel}</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                  {([
-                                    { value: 'top', label: adBannerPositionTopLabel },
-                                    { value: 'bottom', label: adBannerPositionBottomLabel },
-                                  ] satisfies Array<{ value: LivePhoneDemoAdBannerPosition, label: string }>).map((option) => {
-                                    const isSelected = displayedAdBannerPosition === option.value
-
-                                    return (
-                                      <button
-                                        key={option.value}
-                                        data-qa={`live-demo-ad-banner-${option.value}`}
-                                        type="button"
-                                        aria-pressed={isSelected}
-                                        onClick={() => handleAdBannerPositionSelect(option.value)}
-                                        className={`flex h-11 items-center justify-center rounded-2xl border text-[0.92rem] font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
-                                          isSelected
-                                            ? 'border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
-                                            : 'border-[#E5E7EB] bg-white text-gray-700 hover:border-[#D1D5DB] hover:bg-gray-50'
-                                        }`}
-                                      >
-                                        {option.label}
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>

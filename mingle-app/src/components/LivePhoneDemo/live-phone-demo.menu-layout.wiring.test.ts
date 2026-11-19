@@ -41,6 +41,15 @@ describe('room menu layout', () => {
     expect([...positions].sort((left, right) => left - right)).toEqual(positions)
   })
 
+  it('keeps the ad banner position on the My tab, through the rooms\' preferences cache', () => {
+    const settingSource = readFileSync(new URL('../account/ad-banner-position-setting.tsx', import.meta.url), 'utf8')
+    const myPageSource = readFileSync(new URL('../my-page.tsx', import.meta.url), 'utf8')
+    expect(source).not.toContain('handleAdBannerPositionSelect')
+    expect(myPageSource).toContain('<AdBannerPositionSetting')
+    expect(settingSource).toContain('commitAccountPreferencesEdit(identity, cached.preferences, { ...cached.preferences, adBannerPosition: next }, isLegacy)')
+    expect(settingSource).toContain('body: JSON.stringify({ adBannerPosition: next })')
+  })
+
   it('has no sign-out or account deletion: those are on the My tab', () => {
     expect(source).not.toContain('onLogout()')
     expect(source).not.toContain('setDeleteAccountDialogOpen(true)')

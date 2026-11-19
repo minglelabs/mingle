@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { deriveDefaultSttLanguagesForLocale, sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import { resolveNationalityCountry } from "@/lib/nationality";
 import { formatLocalizedConversationTitle } from "@/i18n/conversations";
-import { MAX_CONVERSATION_MEMBERS } from "@/lib/conversation-limits";
+import { MAX_CONVERSATION_MEMBERS, maxRoomMembers } from "@/lib/conversation-limits";
 import { resolveAccountBadge, type AccountBadgeKind } from "@/lib/account-badge";
 import { normalizeChineseContent } from "@/server/chinese-script-conversion";
 import { identityBadgeFlags } from "@/server/identity/user-identity-select";
@@ -2680,12 +2680,13 @@ export async function inviteMembersToConversationChannel(args: {
       ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
-    select: { id: true, pendingInviteeUserIds: true },
+    select: { id: true, pendingInviteeUserIds: true, isPublic: true },
   });
 
   if (!existing) {
     return null;
   }
+  const memberCap = maxRoomMembers(existing);
 
   const membersByChannelId = await listChannelMembersByChannelId([args.conversationId]);
   const activeMembers = filterActiveMembers(membersByChannelId.get(args.conversationId));
@@ -2697,7 +2698,7 @@ export async function inviteMembersToConversationChannel(args: {
   if (newInviteeUserIds.length === 0) {
     throw new Error("already_members");
   }
-  if (existingUserIds.size + newInviteeUserIds.length > MAX_CONVERSATION_MEMBERS) {
+  if (existingUserIds.size + newInviteeUserIds.length > memberCap) {
     throw new Error("too_many_invitees");
   }
 
@@ -2754,7 +2755,7 @@ export async function inviteMembersToConversationChannel(args: {
     if (freshNewInviteeUserIds.length === 0) {
       throw new Error("already_members");
     }
-    if (freshExistingUserIds.size + freshNewInviteeUserIds.length > MAX_CONVERSATION_MEMBERS) {
+    if (freshExistingUserIds.size + freshNewInviteeUserIds.length > memberCap) {
       throw new Error("too_many_invitees");
     }
 
@@ -3024,7 +3025,7 @@ async function joinConversationChannel(args: {
   const initialEffectiveCount = isInitiallyOccupied
     ? initialOccupiedUserIds.size
     : initialOccupiedUserIds.size + 1;
-  if (initialEffectiveCount > MAX_CONVERSATION_MEMBERS) {
+  if (initialEffectiveCount > maxRoomMembers(conversationRecord)) {
     throw new Error("room_full");
   }
 
@@ -3088,7 +3089,7 @@ async function joinConversationChannel(args: {
 
     const isAlreadyOccupied = occupiedUserIds.has(args.userId);
     const effectiveCount = isAlreadyOccupied ? occupiedUserIds.size : occupiedUserIds.size + 1;
-    if (effectiveCount > MAX_CONVERSATION_MEMBERS) {
+    if (effectiveCount > maxRoomMembers(freshChannel)) {
       throw new Error("room_full");
     }
 

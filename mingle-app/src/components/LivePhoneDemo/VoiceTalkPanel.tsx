@@ -824,6 +824,21 @@ export default function VoiceTalkPanel(props: VoiceTalkPanelProps) {
 
               {error ? <p className="px-3 pb-2 text-[0.8rem] text-rose-600">{error}</p> : null}
               {stageNote ? <p data-qa="voice-stage-note" role="status" className="px-3 pb-2 text-center text-[0.8rem] text-emerald-700">{stageNote}</p> : null}
+              {/* Someone the host put on the stage can step off it themselves. */}
+              {stage.enabled && joined && stage.myRole === 'speaker' && !stage.isHost ? (
+                <div className="flex justify-center px-3 pb-2">
+                  <button
+                    type="button"
+                    data-qa="voice-stage-step-down"
+                    disabled={stageBusy}
+                    onClick={() => void stageAct('step_down')}
+                    className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-[0.78rem] font-semibold text-gray-700 active:bg-gray-200 disabled:opacity-50"
+                  >
+                    <ArrowDown size={13} strokeWidth={2.4} />
+                    {stageCopy.stepDown}
+                  </button>
+                </div>
+              ) : null}
 
               {stage.enabled && stage.listeners.length > 0 ? (
                 // The people who only listen. A raised hand shows on the face; the

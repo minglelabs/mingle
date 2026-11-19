@@ -62,6 +62,11 @@ describe('voice talk stage: the panel', () => {
     expect(panelSource).toContain('stage.enabled && stage.isHost && s && s.userId !== viewerUserId')
   })
 
+  it('lets someone the host put on the stage step off it', () => {
+    expect(panelSource).toContain("stage.enabled && joined && stage.myRole === 'speaker' && !stage.isHost")
+    expect(panelSource).toContain("stageAct('step_down')")
+  })
+
   it('joins again when put on the stage, and turns the mic off when taken off it', () => {
     expect(panelSource).toContain("if (change === 'promoted') {\n      post({ type: 'native_voice_close' })")
     expect(panelSource).toContain("if (change === 'demoted') onListenOnlyChange?.(true)")
