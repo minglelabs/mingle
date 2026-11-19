@@ -3,6 +3,7 @@ import { ChevronRight, UserRound } from 'lucide-react'
 import ProfileGenderAgeBadge from '@/components/profile-gender-age-badge'
 import ProfileNationalityBadge from '@/components/profile-nationality-badge'
 import { DEFAULT_LOCALE, resolveSupportedLocaleTag } from '@/i18n/config'
+import { getPrimaryUiCopy } from '@/i18n/primary-ui-copy'
 import { buildClientApiPath } from '@/lib/api-contract'
 import type { ConversationChannelOtherMember } from '@/lib/app-conversations'
 import { resolveNationalityCountry } from '@/lib/nationality'
@@ -70,7 +71,7 @@ function ConversationPeerProfileCard({ member, uiLocale, onOpenProfile }: Conver
     return () => { cancelled = true }
   }, [member.userId])
 
-  const name = member.name?.trim() || (locale === 'ko' ? '사용자' : 'User')
+  const name = member.name?.trim() || getPrimaryUiCopy(locale).connect.userFallbackLabel || 'HashChat user'
   const primaryLanguages = sanitizeSttLanguageSelection(
     details?.primaryLanguages,
     details?.nationality ? [details.nationality] : [],
