@@ -18,6 +18,7 @@ const hosting = (amHost: boolean, fill: number): HashRushLobbyHosting => ({
   fillMax: 8,
   teamChoices: [],
   myTeam: -1,
+  computersColor: "",
   notice: '',
   words: { start: 'Start', waitingHost: 'Waiting', solo: 'Solo', team: 'Team', map: 'Map' },
 })

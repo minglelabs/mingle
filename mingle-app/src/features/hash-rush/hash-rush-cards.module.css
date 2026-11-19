@@ -25,7 +25,9 @@
      it, so a tall card scrolls inside instead of running off the screen. */
   grid-template-rows: minmax(0, 1fr);
   place-items: center;
-  padding: 14px 8px max(14px, env(safe-area-inset-bottom, 0px));
+  /* The top clears the ‹ 채팅 and 나가기 pills (36px, 5px down) that stay over
+     every card. */
+  padding: 46px 8px max(14px, env(safe-area-inset-bottom, 0px));
   color: var(--ink);
   animation: appear 0.3s;
 }
@@ -33,6 +35,12 @@
 /* Between rounds the map behind is only a hint. */
 .coverLobby {
   background: rgba(36, 87, 47, 0.88);
+}
+
+/* The game's 💬 button (44px, at the foot) stays below the card, so it never
+   lands on the sticky Start. */
+.coverChatBelow {
+  padding-bottom: calc(max(6px, env(safe-area-inset-bottom, 0px)) + 54px);
 }
 
 /* After a round the map stays in view around the card. */
@@ -1086,21 +1094,38 @@ td.wins {
   text-align: center;
 }
 
-.startButton {
-  display: block;
-  width: 100%;
-  margin-top: 12px;
-  min-height: 50px;
-  font-size: 18px;
-  /* The lobby card scrolls (its scrollbar is hidden): the host's Start stays
-     at the card's bottom edge while the setup above it scrolls under, so it
-     is never below the fold. The cream glow fades the rows passing under it. */
+/* The lobby card scrolls (its scrollbar is hidden): the host's Start, and why
+   a start was turned down, stay at the card's bottom edge while the setup
+   above scrolls under, so neither is ever below the fold. The cream glow fades
+   the rows passing under it. */
+.startDock {
   position: sticky;
   bottom: 4px;
   z-index: 1;
-  box-shadow: 0 4px 0 #c98400, 0 -14px 14px 2px var(--cream);
+  margin-top: 12px;
+  box-shadow: 0 -14px 14px 2px var(--cream);
+  background: var(--cream);
+}
+
+.startNotice {
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #fde8e8;
+  color: #c62828;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.startButton {
+  display: block;
+  width: 100%;
+  min-height: 50px;
+  font-size: 18px;
+  box-shadow: 0 4px 0 #c98400;
 }
 
 .startButton:active {
-  box-shadow: 0 1px 0 #c98400, 0 -14px 14px 2px var(--cream);
+  box-shadow: 0 1px 0 #c98400;
 }

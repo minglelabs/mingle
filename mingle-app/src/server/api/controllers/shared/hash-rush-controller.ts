@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { after, NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
-import { getConversationSessionKeyForMember, listChannelMemberUserIdsBySessionKey } from "@/lib/app-conversations";
+import { getConversationSessionKeyForMember, listChannelMemberUserIdsBySessionKey, materializePendingConversationInvitees } from "@/lib/app-conversations";
 import { HASH_RUSH_MESSAGE_TEXT, buildHashRushMessageClientId, type HashRushRoomGame } from "@/lib/hash-rush-message";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { prisma } from "@/lib/prisma";
@@ -24,7 +24,7 @@ export function setHashRushGameStoreForTests(next: HashRushGameStore | null) {
 // it at once; room lists show it as the latest message.
 let announceGameStarted = async (input: { sessionKey: string; sessionId: string; starterUserId: string }) => {
   const clientMessageId = buildHashRushMessageClientId(input.sessionId);
-  await prisma.appMessage.upsert({
+  const message = await prisma.appMessage.upsert({
     where: { sessionKey_clientMessageId: { sessionKey: input.sessionKey, clientMessageId } },
     update: {},
     create: {
@@ -36,7 +36,11 @@ let announceGameStarted = async (input: { sessionKey: string; sessionId: string;
       contents: { create: { contentType: "SOURCE", language: "en", text: HASH_RUSH_MESSAGE_TEXT } },
     },
   });
-  const memberUserIds = await listChannelMemberUserIdsBySessionKey(input.sessionKey);
+  // A room whose invitees have not joined yet (they do with the owner's first
+  // message) takes them in now: a game started before anyone wrote reached
+  // nobody, as the room and its card did not exist for them yet.
+  const committedMemberUserIds = await materializePendingConversationInvitees(input.sessionKey, message.createdAt);
+  const memberUserIds = committedMemberUserIds ?? await listChannelMemberUserIdsBySessionKey(input.sessionKey);
   await notifyConversationMessage(input.sessionKey, memberUserIds, undefined, { timeoutMs: 3000 });
 };
 export function setHashRushAnnouncerForTests(next: typeof announceGameStarted | null) {

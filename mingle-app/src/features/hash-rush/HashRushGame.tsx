@@ -148,6 +148,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
   const stageRef = useRef<HTMLDivElement | null>(null)
   const arenaRef = useRef<HTMLDivElement | null>(null)
   const backRef = useRef<HTMLButtonElement | null>(null)
+  const topLeftRef = useRef<HTMLDivElement | null>(null)
   const quitRef = useRef<HTMLButtonElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const padRef = useRef<HTMLDivElement | null>(null)
@@ -300,7 +301,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
     const scoreButton = scoreButtonRef.current
     const chatButton = chatButtonRef.current
     if (Object.values(parts).some((node) => !node) || !toolsMore || !back || !scoreButton) return
-    const elements = { ...parts, overMap: [] } as unknown as HashRushGameElements
+    const elements = { ...parts, overMap: [], topLeft: topLeftRef.current ?? undefined } as unknown as HashRushGameElements
     elements.overMap = [elements.pad, elements.bonk, elements.throwButton, toolsMore, back, scoreButton]
     if (quitRef.current) elements.overMap.push(quitRef.current)
     // On a wide screen the chat button lies over the map as well.
@@ -817,6 +818,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
           view={view}
           copy={copy}
           art={art}
+          chatBelow={!!chat?.canWrite}
           onSit={sit}
           onStand={stand}
           onSetup={setup}
@@ -831,6 +833,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
           verdict={view.verdict}
           board={view.board}
           nextAt={view.nextAt}
+          hosted={view.hosted}
           at={view.at}
           copy={copy}
           scoreView={scoreView}
@@ -888,7 +891,7 @@ export default function HashRushGame({ conversationId, viewerKey, playerName, ui
       ) : null}
 
       {/* The way back to the chat, over the map's top left corner and over every card; then Quit. */}
-      <div className={styles.topLeft}>
+      <div ref={topLeftRef} className={styles.topLeft}>
       <button
         ref={backRef}
         type="button"

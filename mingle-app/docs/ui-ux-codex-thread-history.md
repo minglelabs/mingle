@@ -2,6 +2,20 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Hash Rush: pickpocketing in the app
+
+- Surface: the Hash Rush field (`src/features/hash-rush/engine`), `protocol.ts`, `client.ts`; game server hash-rush #239.
+- Issue: The web game got pickpocketing (hash-rush #237): an empty-handed rival rubbing against a seed carrier fills a red gauge and takes the seed. The app's copy of the engine did not have it, so the app predicted its own hamster without it and could not show the gauge, the feed line or the banner.
+- Resolution: The engine change is taken as it is (rules, bots, strings in five languages, the gauge and "소매치기 중" over the hamster). Room snapshots carry each hamster's gauge (hash-rush #239), and the app reads it. A steal plays the seed sound, buzzes both phones, adds "🌻소매치기!" to the feed and says "해씨를 소매치기 당했어요!" to the one robbed; one at the door is a super play.
+- Verification: hash-rush's pickpocket tests run against the app's engine copy (7 pass); Hash Rush unit tests; server room tests. Not yet played on a phone against the new server.
+
+## 2026-11-19 — Hash Rush QA fixes: Start under the 💬 button, a silent refused start, banner under 나가기, invite reach
+
+- Surface: Hash Rush lobby card (`HashRushCards.tsx`, `hash-rush-cards.module.css`), the round banner (`client.ts`), the result card, the quit confirm (`HashRushRoomLayer.tsx`, `invite-copy.ts`), the room's retranslate tip (`LivePhoneDemo.tsx`), the start announcement (`hash-rush-controller.ts`); game server hash-rush #239.
+- Issue: Agent QA on an iPhone 11 and a Galaxy S9 (run 20261119-1455-hash-rush). (1) The 💬 button sat on the middle of the sticky 게임 시작 button; a tap there opened the chat. (2) Alone on 블루, Start did nothing visible: the computers always played blue, the server refused with "팀이 둘 이상이어야 해요", and that line rendered below the screen. (3) The ‹ 채팅 / 나가기 pills overlapped the top of every card. (4) The round banner ran under the 나가기 pill. (5) The result card said the next round starts by itself; in the app's rooms the host starts it. (6) The quit confirm said "게임을 종료하고" even when others play on. (7) In a new room, starting Hash Rush before anyone wrote reached nobody: the invitee's copy of the room only appeared with the owner's first message. (8) The first-visit retranslate tip covered the invite card's buttons.
+- Resolution: (1) The lobby card ends above the 💬 button. (2) The computers take a side nobody picked (server), each computer row shows that side's colour, and a refusal shows in red right above Start, which stays in a dock at the card's foot. (3) Cards start below the pills. (4) The banner is placed between the pills and the clock each time it shows. (5) Hosted rooms say "방장이 시작하면 다음 판이 시작돼요". (6) "게임에서 나와 채팅으로 돌아가요. 다른 사람들은 계속해요." when others stay. (7) The start announcement takes pending invitees in, like a first message. (8) The tip waits until the invite card is gone.
+- Verification: Hash Rush and controller unit tests, server room tests, `tsc`; on the iPhone 11 the card clears the pills and computer rows show blue (re-check of the Start dock after a devbox restart pending at the time of writing).
+
 ## 2026-11-19 — Live translation runs on GPT-6 Luna only; a lone "。" no longer fails
 
 - Surface: the translation model row in settings (`lib/translation-models.ts`), `translate-finalize-handler.ts`, `translate-texts.ts`, the admin translation-model chart.
