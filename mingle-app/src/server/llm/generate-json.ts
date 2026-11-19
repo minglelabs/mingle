@@ -54,6 +54,8 @@ export type GenerateJsonRequest<T> = {
   /** Per-call deadline, clamped to 1-90 s. Defaults to 30 s. */
   timeoutMs?: number
   signal?: AbortSignal
+  /** `direct`: skip the ChatGPT pool and call the model's own API even when CHATGPT_POOL_KEY is set. */
+  provider?: 'direct'
 }
 
 function clampTimeout(value: number | undefined): number {
@@ -160,7 +162,7 @@ async function generateJsonWithOpenAI<T>(request: GenerateJsonRequest<T>, model:
 }
 
 export async function generateJson<T>(request: GenerateJsonRequest<T>): Promise<T> {
-  if (resolveJsonProvider() === 'chatgpt-pool') return generateJsonWithPool(request)
+  if (request.provider !== 'direct' && resolveJsonProvider() === 'chatgpt-pool') return generateJsonWithPool(request)
   const modelId = resolveJsonModel(request.model)
   if (isOpenAITextModel(modelId)) return generateJsonWithOpenAI(request, modelId)
   const apiKey = process.env.GEMINI_API_KEY?.trim()

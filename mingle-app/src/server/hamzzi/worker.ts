@@ -158,7 +158,7 @@ export async function replyAsHamzzi(candidate: HamzziCandidate): Promise<Outcome
   }
 }
 
-/** One worker run: up to `HAMZZI_CONCURRENCY` rooms at a time (pool answers take 10-70 s). */
+/** One worker run: up to `HAMZZI_CONCURRENCY` rooms at a time. */
 export async function runHamzziAutoReplies(options: { now?: () => Date } = {}): Promise<HamzziRunSummary> {
   const now = options.now ?? (() => new Date())
   const summary: HamzziRunSummary = { candidates: 0, sent: 0, declined: 0, skipped: 0, failed: 0 }
