@@ -120,6 +120,10 @@ export default function SlideSurface({
   const surfaceRef = useRef<HTMLElement | null>(null);
   const edgeSwipeTouchActionRef = useRef<string | null>(null);
   const edgeSwipeStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  // Bumped by every edge-swipe start and every handleDragEnd, so the release
+  // safety net below can tell whether framer-motion settled the gesture.
+  const edgeSwipeGestureSequenceRef = useRef(0);
+  const releaseSettleFrameRef = useRef<number | null>(null);
   const [edgeSwipeActive, setEdgeSwipeActive] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(1);
   // True once a closed surface has finished sliding out. On PC web the app is
@@ -197,6 +201,7 @@ export default function SlideSurface({
     if (!open || !canClose || !isLeftEdgeSwipeStart(clientX)) return false;
     surfaceRef.current = surfaceNode;
     edgeSwipeStartPointRef.current = { x: clientX, y: clientY };
+    edgeSwipeGestureSequenceRef.current += 1;
     if (edgeSwipeTouchActionRef.current === null) {
       edgeSwipeTouchActionRef.current = surfaceNode.style.touchAction;
     }
@@ -213,7 +218,41 @@ export default function SlideSurface({
     dragControls.start(event);
   }, [dragControls, prepareEdgeSwipeTouchAction]);
 
+  useEffect(() => () => {
+    if (releaseSettleFrameRef.current !== null) {
+      window.cancelAnimationFrame(releaseSettleFrameRef.current);
+    }
+  }, []);
+
+  // Safety net for a released edge swipe. Only framer-motion's onDragEnd
+  // (handleDragEnd) puts the surface back, and it does not always run: iOS can
+  // cancel the touch before framer counts it as a drag, and onDragEnd is skipped
+  // then. The surface would stay where the finger left it, half slid out over a
+  // live screen. Two frames after the release (onDragEnd runs in framer's
+  // postRender of the next frame) a gesture nobody settled snaps back to 0.
+  const scheduleReleasedEdgeSwipeSettle = useCallback(() => {
+    const gestureSequence = edgeSwipeGestureSequenceRef.current;
+    if (releaseSettleFrameRef.current !== null) {
+      window.cancelAnimationFrame(releaseSettleFrameRef.current);
+    }
+    releaseSettleFrameRef.current = window.requestAnimationFrame(() => {
+      releaseSettleFrameRef.current = window.requestAnimationFrame(() => {
+        releaseSettleFrameRef.current = null;
+        if (
+          !isMountedRef.current
+          || isLeavingRef.current
+          || !open
+          || edgeSwipeGestureSequenceRef.current !== gestureSequence
+        ) {
+          return;
+        }
+        void motionControls.start({ x: 0, transition: SURFACE_TRANSITION });
+      });
+    });
+  }, [motionControls, open]);
+
   const restoreEdgeSwipeTouchAction = useCallback(() => {
+    const wasEdgeSwipe = edgeSwipeStartPointRef.current !== null;
     const surfaceNode = surfaceRef.current;
     if (surfaceNode && edgeSwipeTouchActionRef.current !== null) {
       surfaceNode.style.touchAction = edgeSwipeTouchActionRef.current;
@@ -222,7 +261,8 @@ export default function SlideSurface({
     surfaceRef.current = null;
     edgeSwipeStartPointRef.current = null;
     setEdgeSwipeActive(false);
-  }, []);
+    if (wasEdgeSwipe) scheduleReleasedEdgeSwipeSettle();
+  }, [scheduleReleasedEdgeSwipeSettle]);
 
   const shouldPreventEdgeScroll = useCallback((clientX: number, clientY: number) => {
     if (!edgeSwipeActive) return false;
@@ -252,6 +292,8 @@ export default function SlideSurface({
   const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (!open || !canClose || !isMountedRef.current || isLeavingRef.current) return;
     restoreEdgeSwipeTouchAction();
+    // framer settled this gesture: the release safety net must not undo a close.
+    edgeSwipeGestureSequenceRef.current += 1;
     const threshold = Math.max(SURFACE_SWIPE_THRESHOLD_PX, viewportWidth * 0.2);
     if (info.offset.x >= threshold || info.velocity.x >= SURFACE_SWIPE_VELOCITY_PX_PER_SECOND) {
       void requestClose();
