@@ -34,7 +34,7 @@ import {
   __resetAutoReplyAttemptsForTests,
   autoReplyDelayMs,
   popularityFactor,
-  slowReplyFactor,
+  replyDelayFactor,
   autoReplyRequestId,
   autoReplyToCandidate,
   findAutoReplyCandidates,
@@ -161,19 +161,22 @@ describe('auto-reply worker', () => {
     expect(autoReplyRequestId('x'.repeat(80))).toHaveLength(64)
   })
 
-  it('waits longer for popular accounts, with a long random tail, never under the minimum or over 12 h', () => {
+  it('waits longer for popular accounts, answers about one in five almost at once, with a long tail, within 20 s-12 h', () => {
     expect(popularityFactor(0, 0)).toBe(1)
     expect(popularityFactor(100, 0)).toBeCloseTo(1 + Math.log(21), 5)
     expect(popularityFactor(0, 10)).toBeGreaterThan(popularityFactor(10, 0))
-    const draws = Array.from({ length: 4000 }, (_, i) => slowReplyFactor(() => (i + 0.5) / 4000)).sort((a, b) => a - b)
-    expect(draws[2000]).toBeCloseTo(1.62, 1)
-    expect(draws[3600]).toBeCloseTo(5, 0)
+    const draws = Array.from({ length: 4000 }, (_, i) => replyDelayFactor(() => (i + 0.5) / 4000)).sort((a, b) => a - b)
+    expect(draws[799]).toBeLessThan(0.2)
+    expect(draws[800]).toBeGreaterThanOrEqual(1)
+    expect(draws[2400]).toBeCloseTo(1.62, 1)
+    expect(draws[3680]).toBeCloseTo(5, 0)
     expect(draws[3999]).toBe(12)
     const delays = (followers: number) => Array.from({ length: 500 }, (_, i) => autoReplyDelayMs({ messageId: `m${i}`, followers, activeRooms: 0 }, 5))
     const median = (values: number[]) => [...values].sort((a, b) => a - b)[250]
     expect(median(delays(500))).toBeGreaterThan(3 * median(delays(0)))
+    expect(delays(0).filter((delay) => delay < 60_000).length / 500).toBeGreaterThan(0.12)
     for (const delay of [...delays(0), ...delays(5000)]) {
-      expect(delay).toBeGreaterThanOrEqual(5 * 60_000)
+      expect(delay).toBeGreaterThanOrEqual(20_000)
       expect(delay).toBeLessThanOrEqual(12 * 3_600_000)
     }
     expect(autoReplyDelayMs({ messageId: 'same', followers: 3, activeRooms: 1 }, 5)).toBe(autoReplyDelayMs({ messageId: 'same', followers: 3, activeRooms: 1 }, 5))
@@ -181,8 +184,8 @@ describe('auto-reply worker', () => {
 
   it('leaves a waiting message alone until its own delay has passed', async () => {
     mocks.settingFindUnique.mockResolvedValue({ value: { enabled: true, delayMinutes: 5, enabledAt: '2026-10-02T09:00:00.000Z' } })
-    // Popular account, message 5 minutes old: the delay is always longer than that.
-    mocks.queryRaw.mockResolvedValue([{ ...candidate, createdAt: new Date(NOW.getTime() - 5 * 60_000), followers: 400, activeRooms: 30 }])
+    // Message 25 s old: only an instant draw on an account nobody follows could be due.
+    mocks.queryRaw.mockResolvedValue([{ ...candidate, messageId: 'slow-one', createdAt: new Date(NOW.getTime() - 25_000), followers: 400, activeRooms: 30 }])
     expect(await runOperatorAutoReplies({ now: () => NOW })).toMatchObject({ enabled: true, candidates: 0 })
     expect(mocks.generateJson).not.toHaveBeenCalled()
   })
@@ -194,7 +197,7 @@ describe('auto-reply worker', () => {
   })
 
   it('skips the query when nothing can have waited long enough since it was turned on', async () => {
-    expect(await findAutoReplyCandidates({ now: NOW, delayMinutes: 5, enabledAt: new Date(NOW.getTime() - 60_000) })).toEqual([])
+    expect(await findAutoReplyCandidates({ now: NOW, enabledAt: new Date(NOW.getTime() - 10_000) })).toEqual([])
     expect(mocks.queryRaw).not.toHaveBeenCalled()
   })
 
