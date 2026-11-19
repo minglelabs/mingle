@@ -32,6 +32,9 @@ import { ageOn, buildAutoReplyInstructions, loadAutoReplyContext, resolveAutoRep
 import { normalizeAutoReplySettings, parseAutoReplyDelayMinutes, updateAutoReplySettings } from './settings'
 import {
   __resetAutoReplyAttemptsForTests,
+  autoReplyDelayMs,
+  popularityFactor,
+  slowReplyFactor,
   autoReplyRequestId,
   autoReplyToCandidate,
   findAutoReplyCandidates,
@@ -41,7 +44,8 @@ import {
 const NOW = new Date('2026-10-02T12:00:00.000Z')
 const ctx = { sessionId: 'sess_1', ip: null, userAgent: null }
 const candidate = {
-  conversationId: 'conv_1', sessionKey: 'sess_key', operatorUserId: 'op_1', messageId: 'msg9', createdAt: new Date('2026-10-02T11:50:00.000Z'),
+  // Waited past the 12 h ceiling, so it is due whatever the drawn delay.
+  conversationId: 'conv_1', sessionKey: 'sess_key', operatorUserId: 'op_1', messageId: 'msg9', createdAt: new Date('2026-10-01T23:30:00.000Z'), followers: 0, activeRooms: 0,
 }
 
 function message(id: string, userId: string, text: string, minute: number, metadata: unknown = null) {
@@ -155,6 +159,32 @@ describe('auto-reply worker', () => {
   it('derives a stable request id from the answered message', () => {
     expect(autoReplyRequestId('msg_9')).toBe('auto-msg9')
     expect(autoReplyRequestId('x'.repeat(80))).toHaveLength(64)
+  })
+
+  it('waits longer for popular accounts, with a long random tail, never under the minimum or over 12 h', () => {
+    expect(popularityFactor(0, 0)).toBe(1)
+    expect(popularityFactor(100, 0)).toBeCloseTo(1 + Math.log(21), 5)
+    expect(popularityFactor(0, 10)).toBeGreaterThan(popularityFactor(10, 0))
+    const draws = Array.from({ length: 4000 }, (_, i) => slowReplyFactor(() => (i + 0.5) / 4000)).sort((a, b) => a - b)
+    expect(draws[2000]).toBeCloseTo(1.62, 1)
+    expect(draws[3600]).toBeCloseTo(5, 0)
+    expect(draws[3999]).toBe(12)
+    const delays = (followers: number) => Array.from({ length: 500 }, (_, i) => autoReplyDelayMs({ messageId: `m${i}`, followers, activeRooms: 0 }, 5))
+    const median = (values: number[]) => [...values].sort((a, b) => a - b)[250]
+    expect(median(delays(500))).toBeGreaterThan(3 * median(delays(0)))
+    for (const delay of [...delays(0), ...delays(5000)]) {
+      expect(delay).toBeGreaterThanOrEqual(5 * 60_000)
+      expect(delay).toBeLessThanOrEqual(12 * 3_600_000)
+    }
+    expect(autoReplyDelayMs({ messageId: 'same', followers: 3, activeRooms: 1 }, 5)).toBe(autoReplyDelayMs({ messageId: 'same', followers: 3, activeRooms: 1 }, 5))
+  })
+
+  it('leaves a waiting message alone until its own delay has passed', async () => {
+    mocks.settingFindUnique.mockResolvedValue({ value: { enabled: true, delayMinutes: 5, enabledAt: '2026-10-02T09:00:00.000Z' } })
+    // Popular account, message 5 minutes old: the delay is always longer than that.
+    mocks.queryRaw.mockResolvedValue([{ ...candidate, createdAt: new Date(NOW.getTime() - 5 * 60_000), followers: 400, activeRooms: 30 }])
+    expect(await runOperatorAutoReplies({ now: () => NOW })).toMatchObject({ enabled: true, candidates: 0 })
+    expect(mocks.generateJson).not.toHaveBeenCalled()
   })
 
   it('does nothing while auto-reply is off', async () => {
