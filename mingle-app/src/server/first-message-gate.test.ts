@@ -16,44 +16,57 @@ const verified: FirstMessageGateUser = {
   imageFaceCheck: 'face',
 }
 const env = {} as unknown as NodeJS.ProcessEnv
+const world = { worldwide: true, korea: true }
+const koreaOnly = { worldwide: false, korea: true }
+const none = { worldwide: false, korea: false }
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
 describe('first message gate: what an account still needs', () => {
   it('needs nothing with a verified number and a photo with a face', () => {
-    expect(resolveFirstMessageNeeds(verified, { env, canSendCodes: true })).toEqual([])
+    expect(resolveFirstMessageNeeds(verified, { env, reach: world })).toEqual([])
   })
 
   it('asks for the number when it is missing or not verified', () => {
-    expect(resolveFirstMessageNeeds({ ...verified, phoneE164: null, phoneVerifiedAt: null }, { env, canSendCodes: true })).toEqual(['phone'])
-    expect(resolveFirstMessageNeeds({ ...verified, phoneVerifiedAt: null }, { env, canSendCodes: true })).toEqual(['phone'])
+    expect(resolveFirstMessageNeeds({ ...verified, phoneE164: null, phoneVerifiedAt: null }, { env, reach: world })).toEqual(['phone'])
+    expect(resolveFirstMessageNeeds({ ...verified, phoneVerifiedAt: null }, { env, reach: world })).toEqual(['phone'])
+  })
+
+  it('asks the number only of people a code can reach: Korean users while only the Korean provider is set up', () => {
+    const unverified = { ...verified, phoneE164: null, phoneVerifiedAt: null }
+    expect(resolveFirstMessageNeeds({ ...unverified, nationalityCountry: 'KR' }, { env, reach: koreaOnly })).toEqual(['phone'])
+    expect(resolveFirstMessageNeeds({ ...unverified, nationalityCountry: null, primaryLanguages: ['ko'] }, { env, reach: koreaOnly })).toEqual(['phone'])
+    // A foreigner is not stopped by a number that could not get a code.
+    expect(resolveFirstMessageNeeds({ ...unverified, nationalityCountry: 'JP', primaryLanguages: ['ja'] }, { env, reach: koreaOnly })).toEqual([])
+    // With an international provider, everyone.
+    expect(resolveFirstMessageNeeds({ ...unverified, nationalityCountry: 'JP', primaryLanguages: ['ja'] }, { env, reach: world })).toEqual(['phone'])
   })
 
   it('skips the number while the server cannot send codes', () => {
-    expect(resolveFirstMessageNeeds({ ...verified, phoneE164: null, phoneVerifiedAt: null }, { env, canSendCodes: false })).toEqual([])
+    expect(resolveFirstMessageNeeds({ ...verified, phoneE164: null, phoneVerifiedAt: null }, { env, reach: none })).toEqual([])
   })
 
   it('asks for a photo when there is none or the phone found no face', () => {
-    expect(resolveFirstMessageNeeds({ ...verified, image: null, imageFaceCheck: null }, { env, canSendCodes: true })).toEqual(['face_photo'])
-    expect(resolveFirstMessageNeeds({ ...verified, image: '  ' }, { env, canSendCodes: true })).toEqual(['face_photo'])
-    expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck: 'no_face' }, { env, canSendCodes: true })).toEqual(['face_photo'])
+    expect(resolveFirstMessageNeeds({ ...verified, image: null, imageFaceCheck: null }, { env, reach: world })).toEqual(['face_photo'])
+    expect(resolveFirstMessageNeeds({ ...verified, image: '  ' }, { env, reach: world })).toEqual(['face_photo'])
+    expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck: 'no_face' }, { env, reach: world })).toEqual(['face_photo'])
   })
 
   it('checks a photo that was never checked, and lets an unchecked upload through', () => {
-    expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck: null }, { env, canSendCodes: true })).toEqual(['face_check'])
-    expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck: 'unchecked' }, { env, canSendCodes: true })).toEqual([])
+    expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck: null }, { env, reach: world })).toEqual(['face_check'])
+    expect(resolveFirstMessageNeeds({ ...verified, imageFaceCheck: 'unchecked' }, { env, reach: world })).toEqual([])
   })
 
   it('asks for both at once, number first', () => {
-    expect(resolveFirstMessageNeeds({ ...verified, phoneE164: null, phoneVerifiedAt: null, image: null }, { env, canSendCodes: true }))
+    expect(resolveFirstMessageNeeds({ ...verified, phoneE164: null, phoneVerifiedAt: null, image: null }, { env, reach: world }))
       .toEqual(['phone', 'face_photo'])
   })
 
   it('skips operators, the official account, review accounts, and everyone when switched off', () => {
     const bare = { ...verified, phoneE164: null, phoneVerifiedAt: null, image: null }
-    expect(resolveFirstMessageNeeds({ ...bare, isOperator: true }, { env, canSendCodes: true })).toEqual([])
-    expect(resolveFirstMessageNeeds({ ...bare, isOfficial: true }, { env, canSendCodes: true })).toEqual([])
-    expect(resolveFirstMessageNeeds(bare, { env: { REVIEW_ACCOUNT_EMAILS: 'a@example.com' } as unknown as NodeJS.ProcessEnv, canSendCodes: true })).toEqual([])
-    expect(resolveFirstMessageNeeds(bare, { env: { FIRST_MESSAGE_GATE: 'off' } as unknown as NodeJS.ProcessEnv, canSendCodes: true })).toEqual([])
+    expect(resolveFirstMessageNeeds({ ...bare, isOperator: true }, { env, reach: world })).toEqual([])
+    expect(resolveFirstMessageNeeds({ ...bare, isOfficial: true }, { env, reach: world })).toEqual([])
+    expect(resolveFirstMessageNeeds(bare, { env: { REVIEW_ACCOUNT_EMAILS: 'a@example.com' } as unknown as NodeJS.ProcessEnv, reach: world })).toEqual([])
+    expect(resolveFirstMessageNeeds(bare, { env: { FIRST_MESSAGE_GATE: 'off' } as unknown as NodeJS.ProcessEnv, reach: world })).toEqual([])
     expect(isFirstMessageGateOn(env)).toBe(true)
   })
 

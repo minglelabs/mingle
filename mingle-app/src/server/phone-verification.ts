@@ -207,6 +207,16 @@ export async function confirmPhoneVerification(
  * a non-production server that takes the dev code. When false the app hides
  * the whole "find friends by number" part instead of offering a dead button.
  */
+/**
+ * Where this server can text a code: every number (an international
+ * provider, or dev codes), or Korean (+82) numbers only (a Korean SMS
+ * provider). Production had only the Korean provider on 2026-11-19.
+ */
+export function phoneCodeReach(): { worldwide: boolean; korea: boolean } {
+  const worldwide = readTwilioConfig() !== null || devCodesAllowed()
+  return { worldwide, korea: worldwide || koreanSmsProvider() !== null }
+}
+
 export function isPhoneVerificationAvailable(): boolean {
   return readTwilioConfig() !== null || koreanSmsProvider() !== null || devCodesAllowed()
 }

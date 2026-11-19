@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { isReviewAccount } from '@/server/app-access'
-import { isPhoneVerificationAvailable } from '@/server/phone-verification'
+import { resolveNationalityCountry } from '@/lib/nationality'
+import { phoneCodeReach } from '@/server/phone-verification'
 
 /**
  * Before someone opens a first room with a person they have no room with yet
@@ -15,8 +16,12 @@ import { isPhoneVerificationAvailable } from '@/server/phone-verification'
  * runs (a browser, an older app) is 'unchecked' and passes, so nobody is locked
  * out by the device they use.
  *
- * Operators, the official account and store-review accounts skip it. While the
- * server cannot send a code (no SMS provider) the phone step is skipped.
+ * The phone step is asked only of people the server can text a code to:
+ * everyone once an international SMS provider is set up, and until then only
+ * Korean users (nationality KR, or Korean as the first language), since the
+ * Korean provider reaches +82 numbers only. Nobody is asked for a number that
+ * cannot get a code. Operators, the official account and store-review
+ * accounts skip it.
  * FIRST_MESSAGE_GATE=off turns the whole gate off.
  */
 export type FirstMessageNeed = 'phone' | 'face_photo' | 'face_check'
@@ -39,20 +44,24 @@ export type FirstMessageGateUser = {
   email: string | null
   phoneE164: string | null
   phoneVerifiedAt: Date | null
+  nationalityCountry?: string | null
+  primaryLanguages?: string[]
   image: string | null
   imageFaceCheck: string | null
 }
 
 export function resolveFirstMessageNeeds(
   user: FirstMessageGateUser,
-  options: { env?: NodeJS.ProcessEnv; canSendCodes?: boolean } = {},
+  options: { env?: NodeJS.ProcessEnv; reach?: { worldwide: boolean; korea: boolean } } = {},
 ): FirstMessageNeed[] {
   const env = options.env ?? process.env
   if (!isFirstMessageGateOn(env)) return []
   if (user.isOperator || user.isOfficial || isReviewAccount(user, env)) return []
   const needs: FirstMessageNeed[] = []
-  const canSendCodes = options.canSendCodes ?? isPhoneVerificationAvailable()
-  if (canSendCodes && !(user.phoneE164 && user.phoneVerifiedAt)) needs.push('phone')
+  const reach = options.reach ?? phoneCodeReach()
+  const korean = resolveNationalityCountry(user.nationalityCountry ?? null, user.primaryLanguages ?? []) === 'KR'
+  const canAsk = reach.worldwide || (reach.korea && korean)
+  if (canAsk && !(user.phoneE164 && user.phoneVerifiedAt)) needs.push('phone')
   const check = parseImageFaceCheck(user.imageFaceCheck)
   if (!user.image?.trim() || check === 'no_face') needs.push('face_photo')
   else if (check === null) needs.push('face_check')
@@ -83,7 +92,8 @@ export async function readFirstMessageNeeds(userId: string): Promise<FirstMessag
     where: { id: userId },
     select: {
       isOperator: true, isOfficial: true, email: true,
-      phoneE164: true, phoneVerifiedAt: true, image: true, imageFaceCheck: true,
+      phoneE164: true, phoneVerifiedAt: true, nationalityCountry: true, primaryLanguages: true,
+      image: true, imageFaceCheck: true,
     },
   })
   return user ? resolveFirstMessageNeeds(user) : []
