@@ -2262,6 +2262,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // first message (once the history reaches its start).
   // Everyone in the room, the viewer included, for the header's participants button.
   const participantCount = (initialOtherMembers?.length ?? 0) + 1
+  // Any room with another account, 1:1 included (an invitee who has not
+  // written yet counts too, through isMultiMember).
+  const hasOtherParticipants = isMultiMember || (initialOtherMembers?.length ?? 0) > 0
   const directPeerMember = !isBlockedCounterpart && initialOtherMembers?.length === 1
     ? initialOtherMembers[0]
     : null
@@ -9021,7 +9024,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               ) : null}
             </div>
-            {headerMode === 'conversation' && conversationId && isMultiMember && showMenuButton ? (
+            {headerMode === 'conversation' && conversationId && hasOtherParticipants && showMenuButton ? (
               <button
                 data-qa="live-demo-participants-button"
                 type="button"
