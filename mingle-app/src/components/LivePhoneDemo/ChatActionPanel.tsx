@@ -14,7 +14,7 @@ export type ChatActionPanelItem = {
 // Used until the keyboard has been up once, so its height is known.
 export const CHAT_ACTION_PANEL_DEFAULT_HEIGHT_PX = 260
 const CHAT_ACTION_PANEL_MIN_HEIGHT_PX = 200
-const CHAT_ACTION_PANEL_MAX_HEIGHT_PX = 340
+const CHAT_ACTION_PANEL_MAX_HEIGHT_PX = 440
 
 export function resolveChatActionPanelHeightPx(lastKeyboardHeightPx: number): number {
   if (!Number.isFinite(lastKeyboardHeightPx) || lastKeyboardHeightPx <= 0) return CHAT_ACTION_PANEL_DEFAULT_HEIGHT_PX
@@ -65,15 +65,19 @@ export function ChatActionPlusButton({
 export default function ChatActionPanel({
   items,
   heightPx,
+  bottomOffset,
 }: {
   items: ChatActionPanelItem[]
   heightPx: number
+  // The bar's own bottom inset: the panel fills the room the bar keeps for
+  // it (the keyboard's place), so it adds no height of its own.
+  bottomOffset: string
 }) {
   return (
     <div
       data-qa="live-demo-action-panel"
-      className="no-scrollbar -mx-1 mt-2 overflow-y-auto overscroll-contain"
-      style={{ height: heightPx }}
+      className="no-scrollbar absolute inset-x-0 overflow-y-auto overscroll-contain bg-white px-3"
+      style={{ height: heightPx, bottom: bottomOffset }}
     >
       <div className="grid grid-cols-4 gap-x-2 gap-y-4 px-1 pb-2 pt-3">
         {items.map((item) => (
