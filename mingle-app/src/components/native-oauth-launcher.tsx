@@ -1,6 +1,6 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { getSession, signIn, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AppLocale, AppDictionary } from "@/i18n";
@@ -43,6 +43,15 @@ export default function NativeOAuthLauncher({
     if (!safeCallbackUrl) {
       router.replace(`/${locale}`);
       return;
+    }
+    // This sheet shares Safari's cookies, so a website session left here (an
+    // earlier sign-in in the sheet or in Safari) would ride along to the OAuth
+    // callback: NextAuth then refuses the chosen Google account
+    // (OAuthAccountNotLinked) or links it to that old user. The app signs in
+    // through the bridge token, never this cookie, so sign the sheet out first.
+    // Signing out here does not touch the app's own WebView session.
+    if (await getSession().catch(() => null)) {
+      await signOut({ redirect: false }).catch(() => undefined);
     }
     await signIn(provider, { callbackUrl: safeCallbackUrl });
   }, [callbackUrl, locale, provider, router]);
