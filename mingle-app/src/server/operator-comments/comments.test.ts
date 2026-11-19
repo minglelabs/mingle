@@ -38,6 +38,16 @@ describe('generated comments', () => {
       commenter, post: { text: '상추튀김 먹음', language: 'ko' }, existingComments: [], generate: generate as never, random: () => 0,
     })
     expect(result).toEqual({ text: '상추튀김 진짜 맛있죠', language: 'ko', kind: 'answer' })
+    expect(generate.mock.calls[0][0]).toMatchObject({ model: 'claude-sonnet-5-5', provider: 'direct' })
+  })
+
+  it('answers a real person with Claude Sonnet 5.5, off the ChatGPT pool', async () => {
+    const generate = vi.fn(async (request: { validate: (value: unknown) => unknown }) => request.validate({ text: '고마워요!' }))
+    await generateOperatorComment({
+      commenter, post: { text: '상추튀김 먹음', language: 'ko' }, existingComments: [], generate: generate as never, random: () => 0,
+      replyTo: { text: '맛있겠다', language: 'ko', thread: [], asPostAuthor: true }, toRealUser: true,
+    })
+    expect(generate.mock.calls[0][0]).toMatchObject({ model: 'claude-sonnet-5-5', provider: 'direct' })
     const request = generate.mock.calls[0][0] as unknown as { instructions: string; input: { asLearner: boolean } }
     expect(request.instructions).toContain('(ko)')
     expect(request.input.asLearner).toBe(false)

@@ -48,7 +48,7 @@ export function AutoReplyForm({ initialSettings, model }: { initialSettings: Aut
       setEnabled(payload.settings.enabled)
       setMinutes(String(payload.settings.delayMinutes))
       setNotice(payload.settings.enabled
-        ? `저장했습니다. ${payload.settings.delayMinutes}분 안에 답하지 않은 대화에 AI가 답합니다.`
+        ? `저장했습니다. 최소 ${payload.settings.delayMinutes}분 동안 답하지 않은 대화에 AI가 답합니다.`
         : '저장했습니다. AI 자동 답장이 꺼져 있습니다.')
     } catch {
       setError('저장하지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.')
@@ -84,10 +84,10 @@ export function AutoReplyForm({ initialSettings, model }: { initialSettings: Aut
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <label htmlFor="auto-reply-minutes" className="block text-[15px] font-semibold text-slate-900">
-          기다리는 시간 (분)
+          최소 기다리는 시간 (분)
         </label>
         <p className="mt-0.5 break-words text-sm text-slate-500">
-          사용자의 마지막 메시지 후 이 시간 동안 스태프 답장이 없으면 AI가 답합니다. {MIN_MINUTES}~{MAX_MINUTES}분.
+          사용자의 마지막 메시지 후 최소 이 시간 동안 스태프 답장이 없으면 AI가 답합니다. 인기 많은 계정일수록 더 늦게, 가끔은 훨씬 늦게 답합니다(최대 12시간). {MIN_MINUTES}~{MAX_MINUTES}분.
         </p>
         <div className="mt-3 flex items-center gap-2">
           <input

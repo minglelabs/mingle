@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planCommentEngagement, planPostEngagement, seededOrder } from './engagement'
+import { planCommentEngagement, planPostEngagement, planRealCommentEngagement, seededOrder } from './engagement'
 
 describe('post engagement plan', () => {
   it('is fixed per post, with likes and comments that come in over time', () => {
@@ -32,6 +32,18 @@ describe('comment engagement plan', () => {
     const replies = Array.from({ length: 2000 }, (_, index) => planCommentEngagement(`r-${index}`, false))
     expect(replies.every((plan) => plan.authorReply === null && plan.otherReply === null)).toBe(true)
     expect(replies.filter((plan) => plan.closeLike !== null).length / replies.length).toBeCloseTo(0.5, 1)
+  })
+})
+
+describe('real comment engagement plan', () => {
+  it('likes every real comment within hours and answers about 60% of root comments', () => {
+    expect(planRealCommentEngagement('c1', true)).toEqual(planRealCommentEngagement('c1', true))
+    const roots = Array.from({ length: 2000 }, (_, index) => planRealCommentEngagement(`rc-${index}`, true))
+    expect(roots.every((plan) => plan.like >= 3 * 60_000 && plan.like <= 3 * 3_600_000)).toBe(true)
+    expect(roots.filter((plan) => plan.reply !== null).length / roots.length).toBeCloseTo(0.6, 1)
+    expect(roots.every((plan) => plan.reply === null || (plan.reply >= 10 * 60_000 && plan.reply <= 6 * 3_600_000))).toBe(true)
+    const replies = Array.from({ length: 200 }, (_, index) => planRealCommentEngagement(`rr-${index}`, false))
+    expect(replies.every((plan) => plan.reply === null)).toBe(true)
   })
 })
 
