@@ -13,6 +13,12 @@ import { hasContactDetails } from '@/server/operators/persona-rules'
  */
 export const OPERATOR_COMMENT_GENERATED_MAX_CHARS = 200
 const CALL_TIMEOUT_MS = 60_000
+/** Replies to a real person's comment: Claude Sonnet 5.5 on the Anthropic API, not the ChatGPT pool (staff decided 2026-11-19). */
+export const REAL_USER_REPLY_DEFAULT_MODEL = 'claude-sonnet-5-5'
+
+export function resolveRealUserReplyModel(env: NodeJS.ProcessEnv = process.env): string {
+  return env.OPERATOR_REAL_REPLY_MODEL?.trim() || REAL_USER_REPLY_DEFAULT_MODEL
+}
 
 export const COMMENT_KINDS: ReadonlyArray<{ key: string; weight: number; brief: string }> = [
   { key: 'answer', weight: 4, brief: 'answer what the post asks, or add one concrete thing from their own life' },
@@ -133,6 +139,8 @@ export async function generateOperatorComment(args: {
   existingComments: string[]
   /** Set for a reply: the comment answered, what is already under it, and whether the replier wrote the post. */
   replyTo?: { text: string; language: string | null; thread: string[]; asPostAuthor: boolean }
+  /** The comment answered was written by a real person: write it with `resolveRealUserReplyModel`. */
+  toRealUser?: boolean
   generate?: GenerateFn
   random?: Random
 }): Promise<{ text: string; language: string; kind: string } | null> {
@@ -157,7 +165,7 @@ export async function generateOperatorComment(args: {
     },
     responseSchema: RESPONSE_SCHEMA,
     validate: (value) => (value as { text?: unknown } | null)?.text,
-    model: resolveReserveModel(),
+    ...(args.toRealUser ? { model: resolveRealUserReplyModel(), provider: 'direct' as const } : { model: resolveReserveModel() }),
     temperature: 1,
     maxOutputTokens: 1024,
     timeoutMs: CALL_TIMEOUT_MS,
