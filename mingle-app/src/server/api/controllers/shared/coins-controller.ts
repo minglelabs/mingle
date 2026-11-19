@@ -29,7 +29,7 @@ import { resolveCoinBillingMode, resolveUserCoinBillingMode } from '@/server/coi
 import { AppleConsumptionRetryableError, respondToAppleConsumptionRequest } from '@/server/coins/apple-consumption'
 import { CoinGiftError, getCoinGiftInfo, sendCoinGift } from '@/server/coins/gifts'
 import { prisma } from '@/lib/prisma'
-import { getGeminiTtsModel, resolveTtsRuntimeSelection, servedTtsModel } from '@/lib/tts-models'
+import { getGeminiTtsModel, resolveTtsRuntimeSelection } from '@/lib/tts-models'
 import { parseApiNamespaceVersion } from '@/lib/api-namespace-version'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' }
@@ -69,16 +69,17 @@ export async function readCoinWallet(request?: NextRequest) {
   if (!userId) return json({ error: 'unauthorized' }, 401)
   // Off = nothing is recorded: no wallet row, no daily refill, no STT billing identity.
   if (resolveCoinBillingMode() === 'off') return json({ ...disabledCoinWallet(), sttBillingToken: null })
-  const [wallet, rates] = await Promise.all([
+  const [wallet, rates, user] = await Promise.all([
     getCoinWallet(userId),
     loadCoinPricingRates(),
+    prisma.user.findUnique({ where: { id: userId }, select: { ttsModel: true } }),
   ])
   const coinsFor = (quote: { chargedMicro: bigint }) => Number(quote.chargedMicro) / 1_000_000
   const now = new Date()
   const voicePerMinute = coinsFor(quoteCoinUsage(rates, { kind: 'stt', units: { second: 60 }, at: now }))
-  // Priced at the model that will speak: the served one (Soniox) for an app
-  // that plays streams, Gemini for whole clips. The price list shows the read-aloud model everyone is served (an old pick on the account is ignored).
-  const ttsSelection = resolveTtsRuntimeSelection(servedTtsModel())
+  // Priced at the model that will speak: the user's own (Soniox by default)
+  // for an app that plays streams, Gemini for whole clips.
+  const ttsSelection = resolveTtsRuntimeSelection(user?.ttsModel)
   const streamsTts = request?.nextUrl.searchParams.get('ttsStream') === '1'
   const playbackPerMinute = coinsFor(quoteCoinUsage(rates, {
     kind: 'tts',

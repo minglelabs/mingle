@@ -140,7 +140,7 @@ describe('coins controller', () => {
       expect((await readCoinWallet()).status).toBe(401)
     })
 
-    it('quotes voice with TTS at the model that will speak: the served one (Soniox) when the app streams, Gemini otherwise; an account\'s old pick is ignored', async () => {
+    it('quotes voice with TTS at the model that will speak: the user\'s own when the app streams, Gemini otherwise', async () => {
       m.session.mockResolvedValue({ user: { id: 'user-1' } })
       m.getCoinWallet.mockResolvedValue({ billingMode: 'enforce', balance: 100 })
       const rate = (id: string, kind: string, model: string, usdMicroPerMillionUnits: bigint) => ({
@@ -160,13 +160,12 @@ describe('coins controller', () => {
       }
       // 22 s of audio per conversation minute on top of 8 Hash of voice.
       expect((await rates(null)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 6.417, 2)
-      // Nobody picks the read-aloud model any more: a saved Gemini pick prices the same as none.
-      expect((await rates('gemini-3.8-flash-tts')).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 6.417, 2)
-      expect((await rates('gemini-3.8-flash-lite-tts')).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 6.417, 2)
+      expect((await rates('gemini-3.8-flash-tts')).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 7.425, 2)
+      expect((await rates('gemini-3.8-flash-lite-tts')).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 5, 2)
       expect((await rates(null)).sttCoinsPerMinute).toBeCloseTo(8, 2)
       // Whole-clip apps always hear Gemini Flash-Lite (here the flat * rate).
       expect((await rates(null, false)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 5, 2)
-      expect((await rates('gemini-3.8-flash-tts', false)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 5, 2)
+      expect((await rates('gemini-3.8-flash-tts', false)).voiceWithTtsCoinsPerMinute).toBeCloseTo(8 + 7.425, 2)
     })
   })
 

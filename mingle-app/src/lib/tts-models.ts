@@ -55,15 +55,6 @@ export function normalizeSelectableTtsModel(value: unknown): UserSelectableTtsMo
 }
 
 /** Missing or invalid values resolve to the default (soniox-tts-rt-v2). */
-/**
- * The read-aloud model people are served. Nobody picks one any more
- * (2026-11-19): the app does not send one, and a model saved on an account
- * from before is ignored.
- */
-export function servedTtsModel(): UserSelectableTtsModel {
-  return DEFAULT_SELECTABLE_TTS_MODEL
-}
-
 export function resolveTtsRuntimeSelection(value: unknown): TtsRuntimeSelection {
   const selected = normalizeSelectableTtsModel(value) ?? DEFAULT_SELECTABLE_TTS_MODEL
   return { value: selected, ...TTS_MODEL_RUNTIME[selected] }

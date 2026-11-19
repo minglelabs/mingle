@@ -5,9 +5,7 @@ const {
   mockUserFindUnique,
   mockAppEventLogFindFirst,
   mockAppMessageFindFirst,
-  mockDefaultTranslationModel,
 } = vi.hoisted(() => ({
-  mockDefaultTranslationModel: vi.fn((): string | null => null),
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
@@ -78,9 +76,7 @@ vi.mock('@/lib/app-analytics', () => {
 // returns no model here; the real default (GPT-6 Luna) is asserted in translation-models.test.ts.
 vi.mock('@/lib/translation-models', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/translation-models')>()),
-  // The served model. null lets a test run on the provider from env; a test
-  // that needs one names it with setServedTranslationModel.
-  resolveDefaultSelectableTranslationModel: () => mockDefaultTranslationModel(),
+  resolveDefaultSelectableTranslationModel: () => null,
 }))
 
 vi.mock('@google/generative-ai', () => {
@@ -168,16 +164,16 @@ function makeJsonRequest(
   })
 }
 
-// Nobody picks the model any more: the model a signed-in person is served is
-// the app's default, whatever their account once saved.
-function setServedTranslationModel(model: string | null) {
+function setAuthenticatedTranslationModel(model: string | null) {
   mockGetServerSession.mockResolvedValue({
     user: {
       id: 'user_123',
       email: 'user@example.com',
     },
   })
-  mockDefaultTranslationModel.mockReturnValue(model)
+  mockUserFindUnique.mockResolvedValue({
+    translationModel: model,
+  })
 }
 
 describe('/api/translate/finalize route', () => {
@@ -200,7 +196,6 @@ describe('/api/translate/finalize route', () => {
     })
     mockGetServerSession.mockResolvedValue(null)
     mockUserFindUnique.mockResolvedValue(null)
-    mockDefaultTranslationModel.mockReturnValue(null)
     mockAppEventLogFindFirst.mockResolvedValue(null)
     mockAppMessageFindFirst.mockResolvedValue(null)
   })
@@ -1034,7 +1029,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('does not retry openai-compatible 429 errors when no retry delay is provided', async () => {
-    setServedTranslationModel('gpt-6-luna')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1095,7 +1090,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('uses a longer timeout for non-final GPT-6 Luna requests', async () => {
-    setServedTranslationModel('gpt-6-luna')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1142,7 +1137,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('runs the retired gemini-2.5-flash-lite request model on GPT-6 Luna without the DB preference lookup', async () => {
-    setServedTranslationModel('claude-haiku-5-5')
+    setAuthenticatedTranslationModel('claude-haiku-5-5')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1174,9 +1169,8 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('ignores a saved model on the account and serves GPT-6 Luna in Fast mode', async () => {
-    setServedTranslationModel('gpt-6-luna')
-    mockUserFindUnique.mockResolvedValue({ translationModel: 'gemini-2.5-flash-lite' })
+  it('runs a stored retired gemini-2.5-flash-lite preference on GPT-6 Luna in Fast mode', async () => {
+    setAuthenticatedTranslationModel('gemini-2.5-flash-lite')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1204,14 +1198,12 @@ describe('/api/translate/finalize route', () => {
     expect(mockGenerateContent).not.toHaveBeenCalled()
     const payload = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))
     expect(payload.model).toBe('gpt-6-luna')
-    expect(mockUserFindUnique).not.toHaveBeenCalled()
     // Live translation always runs on the fast tier.
     expect(payload.service_tier).toBe('priority')
   })
 
-  it('does not look up a tracking user\'s saved model: the served one applies without an auth session', async () => {
+  it('uses the tracking user translation model from DB for non-final requests without an auth session', async () => {
     mockGetServerSession.mockResolvedValue(null)
-    mockDefaultTranslationModel.mockReturnValue('gpt-6-luna')
     mockUserFindUnique.mockImplementation(async (args: { where?: Record<string, string> }) => {
       if (args.where?.externalUserId === 'anon_test_user') {
         return { translationModel: 'gpt-6-luna' }
@@ -1260,9 +1252,8 @@ describe('/api/translate/finalize route', () => {
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
-  it('does not look up the session-linked user\'s saved model either', async () => {
+  it('uses the session-linked tracking user translation model for non-final requests when user id cookies are unavailable', async () => {
     mockGetServerSession.mockResolvedValue(null)
-    mockDefaultTranslationModel.mockReturnValue('gpt-6-luna')
     mockAppEventLogFindFirst.mockResolvedValue({ userId: 'user_from_session' })
     mockUserFindUnique.mockImplementation(async (args: { where?: Record<string, string> }) => {
       if (args.where?.id === 'user_from_session') {
@@ -1309,15 +1300,20 @@ describe('/api/translate/finalize route', () => {
     expect(json.provider).toBe('openai')
     expect(json.infrastructureProvider).toBe('openai')
     expect(json.model).toBe('gpt-6-luna')
-    // No lookup of who the session belongs to, nor of their saved model.
-    expect(mockAppEventLogFindFirst).not.toHaveBeenCalled()
-    expect(mockUserFindUnique).not.toHaveBeenCalled()
+    expect(mockAppEventLogFindFirst).toHaveBeenCalledWith({
+      where: {
+        sessionKey: 'sess_test_user',
+        userId: { not: null },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { userId: true },
+    })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
   it('uses the OpenAI API with no reasoning and a strict JSON schema for GPT-6 Luna', async () => {
-    setServedTranslationModel('gpt-6-luna')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
       choices: [{
         message: { content: '{"ko":"안녕하세요"}' },
@@ -1370,7 +1366,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('rejects GPT-6 Luna when the OpenAI key is missing', async () => {
-    setServedTranslationModel('gpt-6-luna')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     const POST = await importRouteWithEnv()
@@ -1390,7 +1386,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('uses a redetect json schema for GPT-6 Luna requests on versioned routes', async () => {
-    setServedTranslationModel('gpt-6-luna')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1485,7 +1481,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('falls back to previous-state translations for non-final GPT-6 Luna provider errors', async () => {
-    setServedTranslationModel('gpt-6-luna')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -1528,7 +1524,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('falls back from GPT-6 Luna to Claude Haiku when OpenAI rejects the request', async () => {
-    setServedTranslationModel('gpt-6-luna')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
@@ -1569,7 +1565,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('falls back from a timed-out final GPT-6 Luna request to Claude Haiku without retrying OpenAI', async () => {
-    setServedTranslationModel('gpt-6-luna')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockRejectedValueOnce(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
       .mockResolvedValueOnce(new Response(
@@ -1613,7 +1609,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('falls back to Claude Haiku when GPT-6 Luna fails, skipping Gemini', async () => {
-    setServedTranslationModel('gpt-6-luna')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({ error: { message: 'Incorrect API key provided' } }),
@@ -1658,7 +1654,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('returns 502 after every fallback provider fails', async () => {
-    setServedTranslationModel('gpt-6-luna')
+    setAuthenticatedTranslationModel('gpt-6-luna')
     const fetchMock = vi.fn()
       .mockResolvedValue(new Response(
         JSON.stringify({ error: { message: 'Incorrect API key provided' } }),

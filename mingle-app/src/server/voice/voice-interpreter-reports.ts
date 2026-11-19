@@ -227,15 +227,14 @@ export async function readVoiceSpeakerStt(room: string, userId: string): Promise
   if (!call || !call.participants.some((participant) => participant.userId === userId)) return null;
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { sttSegmentationMode: true, demoEndpointTuningStep: true, demoEndpointMaxDelayMs: true, demoSilenceFinalizeMs: true },
+    select: { sttSegmentationMode: true, demoEndpointTuningStep: true, demoEndpointMaxDelayMs: true, demoSilenceFinalizeMs: true, translationModel: true },
   });
   return {
     mode: user?.sttSegmentationMode === "fin" ? "fin" : "end",
     tuningStep: clampInt(user?.demoEndpointTuningStep, 0, 4, 2),
     maxDelayMs: clampInt(user?.demoEndpointMaxDelayMs, 500, 3000, 3000),
     silenceMs: clampInt(user?.demoSilenceFinalizeMs, 500, 5000, 1000),
-    // Nobody picks the model any more: null is the app's default.
-    translationModel: null,
+    translationModel: user?.translationModel?.trim() || null,
   };
 }
 
