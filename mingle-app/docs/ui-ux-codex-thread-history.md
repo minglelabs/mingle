@@ -2,6 +2,18 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Open rooms hold 200, a speaker can step off the stage, the ad banner position is on the My tab
+
+- Surface: `lib/conversation-limits.ts`, `lib/app-conversations.ts` (join and invite caps); `VoiceTalkPanel.tsx`; `components/account/ad-banner-position-setting.tsx`, `my-page.tsx`, `LivePhoneDemo.tsx` (room settings page).
+- Issue (cap): An open room took 10 members like a chat room, so its call's listeners and its readers ran out of room at once.
+- Resolution (cap): An open room holds up to 200 members (join from Explore, by number, by link, and invites). A chat room stays at 10. The call's stage still has 8 seats.
+- Issue (stage): Someone the host put on the stage could only get off it by leaving the call.
+- Resolution (stage): A speaker who is not the host has "Step off the stage" under the seats.
+- Issue (ad banner): The plan moves the ad banner position out of the room menu to the My tab.
+- Resolution (ad banner): The setting (Top / Bottom) is in the My tab menu, in the app only. It writes through the same preferences cache the rooms use, merging only this field, so a room never writes an older value back, then saves to the server. The room settings page no longer has it.
+- Galaxy S9 (2026-11-19, devbox, second test account): the My tab setting showed Bottom, a tap on Top saved `top` in the local database, and the room screen then loaded `adBannerPosition: 'top'` (the test ad did not fill, so the banner itself was not seen). A voice talk alone in an open room, then Android back: the bubble showed on the chat list with the room's name and Leave, rested at x=8 after a drag, stayed there on Home, and its Leave ended the call with "You left · Undo". In the first account's room as a guest the menu had "Report room" and no host settings; the report was saved as `room:<id>`, reason spam, on the host. "Rooms you are in" moved to the other room at once, and Android back from there went to the chat list. iPhone 11 Pro, first account, on a new password room: five wrong passwords were refused (`password_wrong`), the sixth and then the right one answered `password_locked`, and the password dialog said "여러 번 틀렸어요. 잠시 뒤에 다시 해 주세요".
+- Not checked: the step-off button on a phone, 200 members (unit tests only), the banner drawn at the top.
+
 ## 2026-11-19 — Open room, inside: people here now, its menu, the live room bubble, and a stage for voice talk
 
 - Surface: `components/LivePhoneDemo/OpenRoomExtras.tsx`, `LivePhoneDemo.tsx`, `GET/PATCH /conversations/{id}/open-room`, `POST /conversations/{id}/report`, `/admin/reports`; `components/live-room-bubble.tsx`, `lib/live-room-bubble.ts`, `bottom-tab-bar.tsx`, `conversation-list.tsx`; `VoiceTalkPanel.tsx`, `voice-talk-stage.ts`, `server/voice/voice-stage.ts`, `POST /conversations/{id}/voice/stage`.
