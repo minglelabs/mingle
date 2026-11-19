@@ -53,8 +53,9 @@ Lower, return, quit:
    seat or out of the game, never twice.
 
 Sound and visibility:
-8. Unmute the game. Send the app to the background for 10 s, then return: the round went on, and no game sound played
-   while the app was hidden (web #227, #228). Lower the game to the room: game music stops.
+8. With the phone on silent and the volume down (the agent never plays sound itself), check the game's audio state
+   via `eval`: background the app for 10 s and return; the round went on and the audio was suspended while hidden
+   (web #227, #228). Lower the game to the room: music stops. Listening is in `hash-rush-sound-and-haptics`.
 9. Assisted: join a voice talk in the room, then open the game: the back pill shows the green dot
    (`hash-rush-voice-dot`) and the background music is off; effects may still play. End the call: music returns if it
    was on.
