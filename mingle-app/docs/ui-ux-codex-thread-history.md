@@ -2,6 +2,13 @@
 
 One entry per UI/UX fix, newest first. This is the only copy; add new entries here.
 
+## 2026-11-19 — Voice talk interpretation runs on the default translation model
+
+- Surface: `server/voice/voice-interpreter-reports.ts`, `server/api/controllers/shared/voice-interpreter-controller.ts`.
+- Issue: The voice talk interpreter translated each speaker with the translation model that speaker had picked for their own rooms, so one call could run several models.
+- Resolution: Voice talk interpretation always uses the default translation model (`gpt-6-luna`): the interpreter is handed no speaker model, and a model it sends is not passed on. Chat rooms keep each person's own pick, and the room settings still have both pickers. The read-aloud voice in a call was already the voice agent's own (`VOICE_TTS_MODEL`), never a person's pick.
+- Earlier the same day the pickers were removed for every room by mistake (the owner meant voice talk only); that commit was reverted.
+
 ## 2026-11-19 — Open rooms hold 200, a speaker can step off the stage, the ad banner position is on the My tab
 
 - Surface: `lib/conversation-limits.ts`, `lib/app-conversations.ts` (join and invite caps); `VoiceTalkPanel.tsx`; `components/account/ad-banner-position-setting.tsx`, `my-page.tsx`, `LivePhoneDemo.tsx` (room settings page).
