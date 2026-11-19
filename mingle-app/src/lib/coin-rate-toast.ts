@@ -35,6 +35,8 @@ export function buildCoinRateToast(input: {
 export function showCoinRateToast(feature: CoinRateFeature, on: boolean, locale: string | null | undefined): void {
   const wallet = getCoinWalletState().wallet;
   if (!isCoinBillingActive(wallet)) return;
+  // Cut off for having no Hash: the "out of Hash" sheet says so, and a toast would sit on its buttons.
+  if (!on && wallet.exhausted) return;
   const message = buildCoinRateToast({ feature, on, rates: wallet.rates, locale });
   // One toast per switch: a quick on-off replaces the first instead of stacking.
   if (message) toast(message, { id: `coin-rate:${feature}`, duration: 2600 });

@@ -2603,14 +2603,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // canceller is on only while it reads aloud without earphones; every other
   // mode, and the same mode with earphones in, keeps it off.
   const speakerModeAecEnabled = speakerModeOnSpeaker && earphoneModeGate.autoReadActive
-  // Reading translations aloud uses Hash: say so when the mode goes on or off
-  // (not when a room opens with it already on, and not inside a voice talk,
-  // whose own switches say it).
+  // Reading translations aloud uses Hash. Turning it on opens the mode's own
+  // notice, which states the rates (a toast there sat on its confirm button),
+  // so only turning it off is a toast. Not inside a voice talk, whose own
+  // switches say it.
   const coinRateReadAloudRef = useRef(earphoneModeGate.autoReadActive)
   useEffect(() => {
     if (coinRateReadAloudRef.current === earphoneModeGate.autoReadActive) return
     coinRateReadAloudRef.current = earphoneModeGate.autoReadActive
-    if (!voiceTalkState.joined) showCoinRateToast('read_aloud', earphoneModeGate.autoReadActive, uiLocale)
+    if (!earphoneModeGate.autoReadActive && !voiceTalkState.joined) showCoinRateToast('read_aloud', false, uiLocale)
   }, [earphoneModeGate.autoReadActive, uiLocale, voiceTalkState.joined])
   const [earphoneModeNoticeOpen, setEarphoneModeNoticeOpen] = useState(false)
   // Warns, once per earphone-mode session, that Start is about to open the
